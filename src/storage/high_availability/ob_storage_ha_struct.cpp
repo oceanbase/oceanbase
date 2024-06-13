@@ -27,6 +27,7 @@ namespace oceanbase
 namespace storage
 {
 ERRSIM_POINT_DEF(EN_REBUILD_FAILED_STATUS);
+ERRSIM_POINT_DEF(ALLOW_MIGRATION_STATUS_CHANGED);
 
 /******************ObMigrationOpType*********************/
 static const char *migration_op_type_strs[] = {
@@ -384,7 +385,8 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc(
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != dest_ls_status
       && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT != dest_ls_status
       && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != dest_ls_status
-      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != dest_ls_status) {
+      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != dest_ls_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != dest_ls_status) {
     allow_gc = true;
     LOG_INFO("transfer dest ls check transfer status passed", K(ret), K(transfer_ls_id), K(dest_ls_status));
   } else if (OB_FAIL(check_transfer_dest_tablet_for_ls_gc(dest_ls, tablet_id, transfer_scn, need_wait_dest_ls_replay, allow_gc))) {
@@ -774,6 +776,17 @@ int ObMigrationStatusHelper::check_can_change_status(
     }
     }
   }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = ALLOW_MIGRATION_STATUS_CHANGED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        can_change = true;
+        ret = OB_SUCCESS;
+      }
+    }
+#endif
+
   return ret;
 }
 
@@ -1092,6 +1105,38 @@ int ObMigrationUtils::get_ls_rebuild_seq(const uint64_t tenant_id,
         K(ret), KPC(ls), K(status));
   } else {
     rebuild_seq = ls->get_rebuild_seq();
+  }
+  return ret;
+}
+
+int ObMigrationUtils::get_dag_priority(
+    const ObMigrationOpType::TYPE &type,
+    ObDagPrio::ObDagPrioEnum &prio)
+{
+  int ret = OB_SUCCESS;
+  if (!ObMigrationOpType::is_valid(type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(type));
+  } else {
+    switch (type) {
+      case ObMigrationOpType::TYPE::ADD_LS_OP: {
+        prio = ObDagPrio::DAG_PRIO_HA_HIGH;
+        break;
+      }
+      case ObMigrationOpType::TYPE::MIGRATE_LS_OP: {
+        prio = ObDagPrio::DAG_PRIO_HA_MID;
+        break;
+      }
+      case ObMigrationOpType::TYPE::REBUILD_LS_OP: {
+        prio = ObDagPrio::DAG_PRIO_HA_HIGH;
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("migration op type not expected", K(ret), K(type));
+        break;
+      }
+    }
   }
   return ret;
 }

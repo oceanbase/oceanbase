@@ -1511,6 +1511,20 @@ int ObFtsIndexBuilderUtil::get_doc_id_col(
   return ret;
 }
 
+int ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(
+    ObTableSchema &data_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!data_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(data_schema));
+  } else if (data_schema.is_partitioned_table() && data_schema.is_heap_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create full-text or multi-value index on partition table without primary key");
+  }
+  return ret;
+}
+
 int ObFtsIndexBuilderUtil::get_word_segment_col(
     const ObTableSchema &data_schema,
     const obrpc::ObCreateIndexArg *index_arg,

@@ -79,14 +79,16 @@ struct ObBackupTabletCtx final {
       const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupPhysicalID &physical_id);
   TO_STRING_KV(K_(total_tablet_meta_count), K_(finish_tablet_meta_count), K_(total_sstable_meta_count),
       K_(finish_sstable_meta_count), K_(reused_macro_block_count), K_(total_macro_block_count),
-      K_(finish_macro_block_count), K_(is_all_loaded));
+      K_(finish_macro_block_count), K_(total_check_count), K_(finish_check_count), K_(is_all_loaded));
   int64_t total_tablet_meta_count_;
   int64_t total_sstable_meta_count_;
   int64_t reused_macro_block_count_;
   int64_t total_macro_block_count_;
+  int64_t total_check_count_;
   int64_t finish_tablet_meta_count_;
   int64_t finish_sstable_meta_count_;
   int64_t finish_macro_block_count_;
+  int64_t finish_check_count_;
   bool is_all_loaded_;
   ObBackupMacroBlockIDMappingsMeta mappings_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletCtx);
@@ -196,9 +198,10 @@ private:
 };
 
 enum ObBackupProviderItemType {
-  PROVIDER_ITEM_MACRO_ID = 0,
-  PROVIDER_ITEM_SSTABLE_META = 1,
-  PROVIDER_ITEM_TABLET_META = 2,
+  PROVIDER_ITEM_CHECK = 0,
+  PROVIDER_ITEM_MACRO_ID = 1,
+  PROVIDER_ITEM_SSTABLE_META = 2,
+  PROVIDER_ITEM_TABLET_META = 3,
   PROVIDER_ITEM_MAX,
 };
 
@@ -299,8 +302,8 @@ private:
 
   // make sure clog checkpoint scn of the returned tablet is >= consistent_scn.
   int get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
-      storage::ObTabletHandle &tablet_handle);
-  int get_tablet_handle_without_memtables_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
+      ObBackupTabletHandleRef *&tablet_ref);
+  int inner_get_tablet_handle_without_memtables_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       ObBackupTabletHandleRef *&tablet_ref);
   int get_consistent_scn_(share::SCN &consistent_scn) const;
   int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type,
@@ -318,6 +321,7 @@ private:
       const storage::ObITable::TableKey &table_key, const blocksstable::ObSSTable &sstable, int64_t &total_count);
   int add_macro_block_id_item_list_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
       const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count);
+  int add_check_tablet_item_(const common::ObTabletID &tablet_id);
   int add_sstable_item_(const common::ObTabletID &tablet_id);
   int add_tablet_item_(const common::ObTabletID &tablet_id);
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
@@ -328,12 +332,6 @@ private:
   int check_tablet_continuity_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       const storage::ObTabletHandle &tablet_handle);
   int check_tx_data_can_explain_user_data_(const storage::ObTabletHandle &tablet_handle, bool &can_explain);
-  int build_tenant_meta_index_store_(const share::ObBackupDataType &backup_data_type);
-  int get_tenant_meta_index_turn_id_(int64_t &turn_id);
-  int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type,
-      const int64_t turn_id, int64_t &retry_id);
-  int check_tablet_replica_validity_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type);
   int compare_prev_item_(const ObBackupProviderItem &item);
 
 private:
@@ -368,7 +366,8 @@ class ObBackupMacroBlockTaskMgr {
 public:
   ObBackupMacroBlockTaskMgr();
   virtual ~ObBackupMacroBlockTaskMgr();
-  int init(const share::ObBackupDataType &backup_data_type, const int64_t batch_size);
+  int init(const share::ObBackupDataType &backup_data_type, const int64_t batch_size,
+      ObLSBackupCtx &ls_backup_ctx);
   void set_backup_data_type(const share::ObBackupDataType &backup_data_type);
   share::ObBackupDataType get_backup_data_type() const;
   int receive(const int64_t task_id, const common::ObIArray<ObBackupProviderItem> &id_list);
@@ -402,7 +401,37 @@ private:
   volatile int64_t cur_task_id_;
   ObArray<ObBackupProviderItem> pending_list_;
   ObArray<ObBackupProviderItem> ready_list_;
+  ObLSBackupCtx *ls_backup_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupMacroBlockTaskMgr);
+};
+
+class ObBackupTabletChecker final
+{
+public:
+  ObBackupTabletChecker();
+  ~ObBackupTabletChecker();
+  int init(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
+      common::ObMySQLProxy &sql_proxy, ObBackupIndexKVCache &index_kv_cache);
+  int check_tablet_valid(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle);
+
+private:
+  int check_tablet_replica_validity_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id);
+  int check_tablet_continuity_(const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle);
+  int build_tenant_minor_meta_index_store_();
+  int get_tenant_meta_index_turn_id_(int64_t &turn_id);
+  int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, int64_t &retry_id);
+
+private:
+  bool is_inited_;
+  ObLSBackupParam param_;
+  common::ObMySQLProxy *sql_proxy_;
+  ObBackupIndexKVCache *index_kv_cache_;
+  ObBackupMetaIndexStore meta_index_store_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackupTabletChecker);
 };
 
 }  // namespace backup

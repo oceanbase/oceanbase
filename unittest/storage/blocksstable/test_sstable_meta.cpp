@@ -604,6 +604,70 @@ TEST_F(TestSSTableMeta, test_sstable_deep_copy)
   ASSERT_EQ(full_sstable.meta_->is_inited_, tiny_sstable->meta_->is_inited_);
 }
 
+TEST_F(TestSSTableMeta, test_sstable_meta_deep_copy)
+{
+  int ret = OB_SUCCESS;
+  ObSSTableMeta src_meta;
+  // add salt
+  src_meta.basic_meta_.data_checksum_ = 20240514;
+
+  src_meta.column_checksum_count_ = 3;
+  src_meta.column_checksums_ = (int64_t*)ob_malloc_align(4<<10, 3 * sizeof(int64_t), ObMemAttr());
+  src_meta.column_checksums_[0] = 1111;
+  src_meta.column_checksums_[1] = 2222;
+  src_meta.column_checksums_[2] = 3333;
+
+  src_meta.tx_ctx_.tx_descs_ = (ObTxContext::ObTxDesc*)ob_malloc_align(4<<10, 2 * sizeof(ObTxContext::ObTxDesc), ObMemAttr());
+  ret = src_meta.tx_ctx_.push_back({987, 654});
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = src_meta.tx_ctx_.push_back({123, 456});
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(2, src_meta.tx_ctx_.count_);
+  ASSERT_EQ(2 * sizeof(ObTxContext::ObTxDesc), src_meta.tx_ctx_.get_variable_size());
+  src_meta.tx_ctx_.len_ = src_meta.tx_ctx_.get_serialize_size();
+
+  // test deep copy from dynamic memory meta to flat memory meta
+  const int64_t buf_size = 8 << 10; //8K
+  int64_t pos = 0;
+  char *flat_buf_1 = (char*)ob_malloc(buf_size, ObMemAttr());
+  int64_t deep_copy_size = src_meta.get_deep_copy_size();
+  ObSSTableMeta *flat_meta_1;
+  ret = src_meta.deep_copy(flat_buf_1, deep_copy_size, pos, flat_meta_1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(deep_copy_size, pos);
+  OB_LOG(INFO, "cooper", K(src_meta), K(sizeof(ObSSTableMeta)), K(deep_copy_size));
+  OB_LOG(INFO, "cooper", K(*flat_meta_1));
+  // can't use MEMCMP between dynamic memory and flat memory, because one is stack, the other is heap
+  ASSERT_EQ(src_meta.basic_meta_, flat_meta_1->basic_meta_);
+  // ASSERT_EQ(0, MEMCMP((char*)&src_meta.data_root_info_, (char*)&flat_meta_1->data_root_info_, sizeof(src_meta.data_root_info_)));
+  // ASSERT_EQ(0, MEMCMP((char*)&src_meta.macro_info_, (char*)&dst_meta->macro_info_, sizeof(src_meta.macro_info_)));
+  // ASSERT_EQ(0, MEMCMP((char*)&src_meta.cg_sstables_, (char*)&dst_meta->cg_sstables_, sizeof(src_meta.cg_sstables_)));
+  ASSERT_EQ(0, MEMCMP(src_meta.column_checksums_, flat_meta_1->column_checksums_, src_meta.column_checksum_count_ * sizeof(int64_t)));
+  ASSERT_EQ(src_meta.tx_ctx_.len_, flat_meta_1->tx_ctx_.len_);
+  ASSERT_EQ(src_meta.tx_ctx_.count_, flat_meta_1->tx_ctx_.count_);
+  ASSERT_EQ(0, MEMCMP(src_meta.tx_ctx_.tx_descs_, flat_meta_1->tx_ctx_.tx_descs_, flat_meta_1->tx_ctx_.get_variable_size()));
+
+  // test deep copy from flat memory meta to flat memory meta
+  pos = 0;
+  char *flat_buf_2 = (char*)ob_malloc_align(4<<10, buf_size, ObMemAttr());
+  deep_copy_size = flat_meta_1->get_deep_copy_size();
+  ObSSTableMeta *flat_meta_2;
+  ret = flat_meta_1->deep_copy(flat_buf_2, deep_copy_size, pos, flat_meta_2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(deep_copy_size, pos);
+  OB_LOG(INFO, "cooper", K(*flat_meta_1));
+  OB_LOG(INFO, "cooper", K(*flat_meta_2));
+  ASSERT_EQ(0, MEMCMP((char*)&flat_meta_1->basic_meta_, (char*)&flat_meta_2->basic_meta_, sizeof(flat_meta_1->basic_meta_)));
+  ASSERT_EQ(0, MEMCMP(&flat_meta_1->data_root_info_, &flat_meta_2->data_root_info_, sizeof(flat_meta_1->data_root_info_)));
+  ASSERT_EQ(0, MEMCMP(&flat_meta_1->macro_info_, &flat_meta_2->macro_info_, sizeof(flat_meta_1->macro_info_)));
+  ASSERT_EQ(0, MEMCMP((char*)&flat_meta_1->cg_sstables_, (char*)&flat_meta_2->cg_sstables_, sizeof(flat_meta_1->cg_sstables_)));
+  ASSERT_EQ(0, MEMCMP(flat_meta_1->column_checksums_, flat_meta_2->column_checksums_, flat_meta_1->column_checksum_count_ * sizeof(int64_t)));
+  ASSERT_EQ(flat_meta_2->tx_ctx_.len_, flat_meta_1->tx_ctx_.len_);
+  ASSERT_EQ(flat_meta_2->tx_ctx_.count_, flat_meta_1->tx_ctx_.count_);
+  ASSERT_NE(flat_meta_1->tx_ctx_.tx_descs_, flat_meta_2->tx_ctx_.tx_descs_);
+  ASSERT_EQ(0, MEMCMP(flat_meta_2->tx_ctx_.tx_descs_, flat_meta_1->tx_ctx_.tx_descs_, flat_meta_1->tx_ctx_.get_variable_size()));
+}
+
 TEST_F(TestMigrationSSTableParam, test_empty_sstable_serialize_and_deserialize)
 {
   ObMigrationSSTableParam mig_param;
@@ -698,7 +762,6 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
 
   ASSERT_TRUE(dest_sstable_param.encrypt_id_ == src_sstable_param.encrypt_id_);
 }
-
 } // end namespace unittest
 } // end namespace oceanbase
 

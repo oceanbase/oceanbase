@@ -393,7 +393,7 @@ int ObMultipleMerge::project2output_exprs(ObDatumRow &unprojected_row, ObDatumRo
               nop_pos_.nops_, nop_pos_.count_))) {
     LOG_WARN("Fail to project row", K(unprojected_row), K(cur_row));
   } else {
-    LOG_DEBUG("Project row", K(unprojected_row), K(cur_row));
+    LOG_DEBUG("Project row", K(unprojected_row));
   }
   return ret;
 }
@@ -1321,7 +1321,8 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
       } else if (table_ptr->is_memtable()) {
         ++memtable_cnt;
         read_released_memtable = read_released_memtable ||
-            TabletMemtableFreezeState::RELEASED == (static_cast<ObITabletMemtable *>(table_ptr))->get_freeze_state();
+          TabletMemtableFreezeState::FORCE_RELEASED == (static_cast<ObITabletMemtable *>(table_ptr))->get_freeze_state() ||
+          TabletMemtableFreezeState::RELEASED == (static_cast<ObITabletMemtable *>(table_ptr))->get_freeze_state();
       }
       if (OB_FAIL(tables_.push_back(table_ptr))) {
         LOG_WARN("add table fail", K(ret), K(*table_ptr));

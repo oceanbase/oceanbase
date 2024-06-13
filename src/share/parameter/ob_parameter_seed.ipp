@@ -1302,11 +1302,6 @@ DEF_STR(plsql_code_type, OB_TENANT_PARAMETER, "native",
 DEF_BOOL(plsql_debug, OB_TENANT_PARAMETER, "False",
          "specifies whether or not PL/SQL library units will be compiled for debugging",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(plsql_optimize_level, OB_TENANT_PARAMETER, "1",
-        "specifies the optimization level that will be used to"
-        "compile PL/SQL library units. The higher the setting of this parameter, the more effort"
-        "the compiler makes to optimize PL/SQL library units",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(plsql_v2_compatibility, OB_TENANT_PARAMETER, "False",
          "allows some abnormal behavior that Version 8 disallows, not available",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1961,3 +1956,12 @@ DEF_BOOL(_enable_dbms_lob_partial_update, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_dbms_job_package, OB_CLUSTER_PARAMETER, "True",
          "Control whether can use DBMS_JOB package.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// obkv feature switch
+DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
+         "Enable or disable OBKV feature.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_ob_pl_compile_max_concurrency, OB_CLUSTER_PARAMETER, "4", "[0,)",
+        "The maximum number of threads that an observer node can compile PL concurrently.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -259,7 +259,15 @@ public:
     }
     const double l = obj1.get_double();
     const double r = obj2.get_double();
-    if (l == r || fabs(l - r) < p) {
+    if (isnan(l) || isnan(r)) {
+      if (isnan(l) && isnan(r)) {
+        ret = 0;
+      } else if (isnan(l)) {
+        ret = 1;
+      } else {
+        ret = -1;
+      }
+    } else if (l == r || fabs(l - r) < p) {
       ret = 0;
     } else {
       ret = (l < r ? -1 : 1);

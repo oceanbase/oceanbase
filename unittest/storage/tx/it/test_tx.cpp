@@ -340,29 +340,6 @@ TEST_F(ObTestTx, rollback_savepoint_with_need_retry_error)
   }
 }
 
-TEST_F(ObTestTx, create_savepoint_with_sanity_check_tx_abort)
-{
-  START_ONE_TX_NODE(n1);
-  PREPARE_TX(n1, tx);
-  PREPARE_TX_PARAM(tx_param);
-  GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
-  tx.flags_.PART_ABORTED_ = 1;
-  ObTxSEQ sp;
-  ASSERT_EQ(OB_TRANS_NEED_ROLLBACK, n1->create_implicit_savepoint(tx, tx_param, sp));
-
-}
-
-TEST_F(ObTestTx, rollback_savepoint_with_sanity_check_tx_abort)
-{
-  START_ONE_TX_NODE(n1);
-  PREPARE_TX(n1, tx);
-  PREPARE_TX_PARAM(tx_param);
-  GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
-  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp);
-  tx.flags_.PART_ABORTED_ = 1;
-  ASSERT_EQ(OB_TRANS_NEED_ROLLBACK, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr));
-}
-
 TEST_F(ObTestTx, switch_to_follower_gracefully)
 {
   int ret = OB_SUCCESS;
@@ -2487,6 +2464,59 @@ TEST_F(ObTestTx, rollback_with_branch_savepoint)
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 206, val));
   ROLLBACK_TX(n1, tx);
 }
+
+
+#define TEST_MARK_ABORT_AND_COMMIT(FLG)                         \
+  TEST_F(ObTestTx, commit_tx_sanity_check_flag_ ## FLG)         \
+  {                                                             \
+    START_ONE_TX_NODE(n1);                                      \
+    PREPARE_TX(n1, tx);                                         \
+    PREPARE_TX_PARAM(tx_param);                                 \
+    CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, global_sp1);    \
+    ASSERT_EQ(n1->write(tx, 1, 1), OB_SUCCESS);                 \
+    ASSERT_EQ(tx.state_, ObTxDesc::State::IMPLICIT_ACTIVE);     \
+    tx.flags_.FLG = true;                                       \
+    const int commit_ret = COMMIT_TX(n1, tx, 50000);            \
+    EXPECT_EQ(commit_ret, OB_TRANS_ROLLBACKED);                 \
+  }
+TEST_MARK_ABORT_AND_COMMIT(PART_ABORTED_)
+TEST_MARK_ABORT_AND_COMMIT(PART_EPOCH_MISMATCH_)
+TEST_MARK_ABORT_AND_COMMIT(PARTS_INCOMPLETE_)
+#undef _MARK_ABORT_AND_COMMIT
+
+TEST_F(ObTestTx, participant_abort_asynchronously)
+{
+  START_TWO_TX_NODE(n1, n2);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, global_sp1);
+  ASSERT_EQ(n1->write(tx, 1, 1), OB_SUCCESS);
+  ASSERT_EQ(n2->write(tx, 2, 2), OB_SUCCESS);
+  // n1 switch to follower forcedly, then switch to leader
+  FLUSH_REDO(n1);
+  n1->wait_tx_log_synced();
+  SWITCH_TO_FOLLOWER_FORCEDLY(n1);
+  SWITCH_TO_LEADER(n1);
+  // check received participant aborted notify from n1
+  n1->wait_all_msg_consumed();
+  ASSERT_TRUE(tx.flags_.PART_ABORTED_);
+  ASSERT_EQ(tx.abort_cause_, ObTxAbortCause::PARTICIPANT_SWITCH_LEADER_DATA_INCOMPLETE);
+  share::ObLSArray extra_touched_ls;
+  extra_touched_ls.push_back(ObLSID(111));
+  ASSERT_EQ(ROLLBACK_TO_IMPLICIT_SAVEPOINT_X(n1, tx, global_sp1, 2000, &extra_touched_ls),
+            OB_TRANS_NEED_ROLLBACK);
+  ASSERT_EQ(tx.state_, ObTxDesc::State::ABORTED);
+  bool found_touched_ls_id_in_participant_set = false;
+  for (int i = 0; i< tx.parts_.count(); i++) {
+    if (tx.parts_[i].id_.id() == 111) {
+      found_touched_ls_id_in_participant_set = true;
+    }
+  }
+  ASSERT_TRUE(found_touched_ls_id_in_participant_set);
+  const int commit_ret = COMMIT_TX(n1, tx, 5000);
+  EXPECT_EQ(commit_ret, OB_TRANS_ROLLBACKED);
+}
+
 ////
 /// APPEND NEW TEST HERE, USE PRE DEFINED MACRO IN FILE `test_tx.dsl`
 /// SEE EXAMPLE: TEST_F(ObTestTx, rollback_savepoint_timeout)

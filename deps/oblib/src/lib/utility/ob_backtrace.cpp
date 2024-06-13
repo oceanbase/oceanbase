@@ -29,7 +29,13 @@ namespace common
 {
 int light_backtrace(void **buffer, int size)
 {
-  return light_backtrace(buffer, size, (int64_t)__builtin_frame_address(0));
+  int64_t rbp = 0;
+#if defined(__x86_64__)
+  asm("mov %%rbp, %0" : "=r"(rbp));
+#elif defined(__aarch64__)
+  asm("mov %0, x29" : "=r"(rbp));
+#endif
+  return light_backtrace(buffer, size, rbp);
 }
 
 int light_backtrace(void **buffer, int size, int64_t rbp)

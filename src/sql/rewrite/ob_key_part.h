@@ -307,7 +307,8 @@ public:
   void reset_key();
   typedef common::hash::ObHashMap<int64_t, ObSEArray<int64_t, 16>> SameValIdxMap;
   static int try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
-                            const ObKeyPartPos &pos, ObObj &value, int64_t &cmp);
+                            const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
+                            common::ObCmpOp cmp_op = CO_EQ, bool left_border = true);
   inline bool operator <=(const ObKeyPart &other) const { return pos_.offset_ <= other.pos_.offset_; }
 
   inline void set_normal_start(ObKeyPart *other)

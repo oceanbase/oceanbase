@@ -1050,7 +1050,8 @@ public:
   static int generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
                                                  ObDMLStmt *stmt,
                                                  TableItem *item,
-                                                 ObIArray<ObRawExpr *> &unique_keys);
+                                                 ObIArray<ObRawExpr *> &unique_keys,
+                                                 int64_t *rowkey_count = NULL);
 
   static int check_loseless_join(ObDMLStmt *stmt,
                                  ObTransformerCtx *ctx,

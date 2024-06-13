@@ -284,5 +284,27 @@ bool ObTableStatParam::is_specify_column_gather() const
   return is_specify;
 }
 
+int64_t ObTableStatParam::get_need_gather_column() const
+{
+  int64_t valid_column = 0;
+  for (int64_t i = 0; i < column_params_.count(); ++i) {
+    if (column_params_.at(i).need_basic_stat()) {
+      ++ valid_column;
+    }
+  }
+  return valid_column;
+}
+
+int64_t ObOptStatGatherParam::get_need_gather_column() const
+{
+  int64_t valid_column = 0;
+  for (int64_t i = 0; i < column_params_.count(); ++i) {
+    if (column_params_.at(i).need_basic_stat()) {
+      ++ valid_column;
+    }
+  }
+  return valid_column;
+}
+
 }
 }

@@ -4029,7 +4029,7 @@ int ObJoinOrder::get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
                                                       min_cost_range_count,
                                                       cost))) {
           LOG_WARN("failed to calculate range expr cost", K(ret));
-        } else if (cost >= min_cost) {
+        } else if (cost >= min_cost && min_cost_range_count > 500) {
           //increase cost, ignore in expr
           range_exprs.pop_back();
           if (OB_FAIL(ignore_predicates.push_back(min_cost_in_expr))) {
@@ -8925,6 +8925,10 @@ int ObJoinOrder::classify_paths_based_on_sharding(const ObIArray<Path*> &input_p
           LOG_WARN("get unexpected error", K(path_list.count()), K(second_path), K(ret));
         } else if (first_path->parallel_ != second_path->parallel_) {
           /*do nothing*/
+        } else if (first_path->exchange_allocated_ != second_path->exchange_allocated_) {
+          /*do nothing*/
+        } else if (first_path->contain_pw_merge_op() != second_path->contain_pw_merge_op()) {
+          /*do nothing*/
         } else if (OB_FAIL(ObShardingInfo::is_sharding_equal(first_path->get_strong_sharding(),
                                                              first_path->get_weak_sharding(),
                                                              second_path->get_strong_sharding(),
@@ -9279,10 +9283,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                  OB_SUCC(ret) && k < DistAlgo::DIST_MAX_JOIN_METHOD; k = k << 1) {
               if (dist_method & k) {
                 DistAlgo dist_algo = get_dist_algo(k);
-                if ((DistAlgo::DIST_PARTITION_WISE != dist_algo ||
-                     is_partition_wise_valid(*left_path, *right_path)) &&
-                    is_repart_valid(*left_path, *right_path, dist_algo, false /* is_nl */) &&
-                    OB_FAIL(create_and_add_hash_path(left_path,
+                if (OB_FAIL(create_and_add_hash_path(left_path,
                                                      right_path,
                                                      path_info.join_type_,
                                                      dist_algo,
@@ -9498,11 +9499,7 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
            OB_SUCC(ret) && j < DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
         if (dist_method & j) {
           DistAlgo dist_algo = get_dist_algo(j);
-          if ((DistAlgo::DIST_PARTITION_WISE != dist_algo ||
-               (is_partition_wise_valid(*left_paths.at(i), *right_path) &&
-                !right_path->exchange_allocated_)) &&
-                is_repart_valid(*left_paths.at(i), *right_path, dist_algo, true /* is_nl */) &&
-               OB_FAIL(create_and_add_nl_path(left_paths.at(i),
+          if (OB_FAIL(create_and_add_nl_path(left_paths.at(i),
                                               right_path,
                                               path_info.join_type_,
                                               dist_algo,
@@ -9570,9 +9567,7 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
       for (int64_t j = DistAlgo::DIST_BASIC_METHOD;
            OB_SUCC(ret) && j < DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
         DistAlgo dist_algo = get_dist_algo(j);
-        if ((dist_method & j) && (DistAlgo::DIST_PARTITION_WISE != dist_algo ||
-             is_partition_wise_valid(*left_paths.at(i), *right_path))
-             && is_repart_valid(*left_paths.at(i), *right_path, dist_algo, true /* is_nl */)) {
+        if (dist_method & j) {
           bool right_need_exchange = (dist_algo == DIST_HASH_HASH ||
                                       dist_algo == DIST_NONE_BROADCAST ||
                                       dist_algo == DIST_NONE_PARTITION ||
@@ -9662,7 +9657,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       OPT_TRACE("right naaj can not use NONE PKEY/HASH");
     }
   }
-
   if (OB_SUCC(ret)) {
     if (HASH_JOIN == join_algo) {
       if (use_shared_hash_join) {
@@ -9792,7 +9786,10 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   // check if match partition wise join
   if (OB_SUCC(ret) && (distributed_methods & DIST_PARTITION_WISE)) {
     OPT_TRACE("check partition wise method");
-    if (OB_FAIL(check_if_match_partition_wise(equal_sets,
+    if (!is_partition_wise_valid(left_path, right_path)) {
+      distributed_methods &= ~DistAlgo::DIST_PARTITION_WISE;
+      OPT_TRACE("contain merge op, can not use PARTITION WISE");
+    } else if (OB_FAIL(check_if_match_partition_wise(equal_sets,
                                               left_path,
                                               right_path,
                                               left_join_keys,
@@ -9880,7 +9877,13 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   // check if match left re-partition
   if (OB_SUCC(ret) && (distributed_methods & DIST_PARTITION_NONE)) {
     OPT_TRACE("check partition none method");
-    if (NULL == right_path.get_strong_sharding()) {
+    if (!is_repart_valid(left_path,
+                        right_path,
+                        DistAlgo::DIST_PARTITION_NONE,
+                        NESTED_LOOP_JOIN == join_algo)) {
+      distributed_methods &= ~DistAlgo::DIST_PARTITION_NONE;
+      OPT_TRACE("contain merge op, can not use PARTITION NONE");
+    } else if (NULL == right_path.get_strong_sharding()) {
       OPT_TRACE("strong sharding of right path is null, not use partition none");
       distributed_methods &= ~DIST_PARTITION_NONE;
     } else if (!right_path.get_sharding()->is_distributed_with_table_location_and_partitioning()
@@ -9918,7 +9921,13 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   // check if match right re-partition
   if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_PARTITION)) {
     OPT_TRACE("check none partition method");
-    if (NULL == left_path.get_strong_sharding()) {
+    if (!is_repart_valid(left_path,
+                        right_path,
+                        DistAlgo::DIST_NONE_PARTITION,
+                        NESTED_LOOP_JOIN == join_algo)) {
+      distributed_methods &= ~DistAlgo::DIST_NONE_PARTITION;
+      OPT_TRACE("contain merge op, can not use NONE PARTITION");
+    } else if (NULL == left_path.get_strong_sharding()) {
       OPT_TRACE("strong sharding of left path is null, not use none partition");
       distributed_methods &= ~DIST_NONE_PARTITION;
     } else if (!left_path.get_sharding()->is_distributed_with_table_location_and_partitioning()
@@ -10245,11 +10254,6 @@ int ObJoinOrder::find_minimal_cost_merge_path(const Path &left_path,
         OB_ISNULL(sharding = right_path->get_sharding())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(right_path), K(sharding), K(ret));
-    } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo &&
-               !is_partition_wise_valid(left_path, *right_path)) {
-      /*do nothing*/
-    } else if (!is_repart_valid(left_path, *right_path, join_dist_algo, false /* is_nl */)) {
-      /*do nothing*/
     } else if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_mapping(right_join_exprs,
                                                                 left_merge_key.map_array_,
                                                                 right_order_exprs))) {

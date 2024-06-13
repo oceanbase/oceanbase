@@ -96,6 +96,49 @@ struct SampleInfo
   OB_UNIS_VERSION(1);
 };
 
+struct ObTableScanOption
+{
+  OB_UNIS_VERSION(1);
+public:
+  static const int64_t MAX_IO_READ_BATCH_SIZE = 16_MB;
+  static const int64_t MAX_STORAGE_ROWSETS_SIZE = (1 << 20);
+  ObTableScanOption() :
+      io_read_batch_size_(0),
+      io_read_gap_size_(0),
+      storage_rowsets_size_(1)
+  {}
+  bool is_io_valid() const
+  {
+    return (io_read_batch_size_ >= 0 && io_read_batch_size_ <= MAX_IO_READ_BATCH_SIZE &&
+            io_read_gap_size_ >= 0 && io_read_gap_size_ < io_read_batch_size_);
+  }
+  bool is_rowsets_valid() const
+  {
+    return storage_rowsets_size_ > 0 && storage_rowsets_size_ <= MAX_STORAGE_ROWSETS_SIZE;
+  }
+  void reset()
+  {
+    io_read_batch_size_ = 0;
+    io_read_gap_size_ = 0;
+    storage_rowsets_size_ = 1;
+  }
+  ObTableScanOption &operator=(const ObTableScanOption &opt)
+  {
+    if (this == &opt) {
+    } else {
+      io_read_batch_size_ = opt.io_read_batch_size_;
+      io_read_gap_size_ = opt.io_read_gap_size_;
+      storage_rowsets_size_ = opt.storage_rowsets_size_;
+    }
+    return *this;
+  }
+  TO_STRING_KV(K_(io_read_batch_size), K_(io_read_gap_size), K_(storage_rowsets_size));
+
+  int64_t io_read_batch_size_;
+  int64_t io_read_gap_size_;
+  int64_t storage_rowsets_size_;
+};
+
 struct ObLimitParam
 {
   int64_t offset_;

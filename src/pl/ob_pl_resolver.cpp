@@ -2635,9 +2635,11 @@ int ObPLResolver::collect_dep_info_by_schema(const ObPLResolveCtx &ctx,
     if (table_schema->is_view_table() && !table_schema->is_materialized_view()) {
       OZ (collect_dep_info_by_view_schema(ctx, table_schema, dependency_objects));
     } else {
-      OZ(dependency_objects.push_back(ObSchemaObjVersion(table_schema->get_table_id(),
-                                                         table_schema->get_schema_version(),
-                                                         ObDependencyTableType::DEPENDENCY_TABLE)));
+      ObSchemaObjVersion version(table_schema->get_table_id(),
+                                  table_schema->get_schema_version(),
+                                  ObDependencyTableType::DEPENDENCY_TABLE);
+      version.is_db_explicit_ = ctx.session_info_.get_database_id() != table_schema->get_database_id();
+      OZ(dependency_objects.push_back(version));
     }
   }
   return ret;
@@ -2674,9 +2676,11 @@ int ObPLResolver::build_record_type_by_schema(
       OZ (build_record_type_by_table_schema(
         resolve_ctx.schema_guard_, resolve_ctx.allocator_, table_schema, record_type, with_rowid));
       if (OB_NOT_NULL(dependency_objects)) {
-        OZ(dependency_objects->push_back(ObSchemaObjVersion(table_schema->get_table_id(),
-                                                            table_schema->get_schema_version(),
-                                                            ObDependencyTableType::DEPENDENCY_TABLE)));
+        ObSchemaObjVersion version(table_schema->get_table_id(),
+                                  table_schema->get_schema_version(),
+                                  ObDependencyTableType::DEPENDENCY_TABLE);
+        version.is_db_explicit_ = resolve_ctx.session_info_.get_database_id() != table_schema->get_database_id();
+        OZ(dependency_objects->push_back(version));
       }
     }
   }
@@ -5517,6 +5521,7 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_SHOW_TABLEGROUPS:
     case stmt::T_HELP:
     case stmt::T_SHOW_RECYCLEBIN:
+    case stmt::T_SHOW_PROFILE:
     case stmt::T_SHOW_RESTORE_PREVIEW:
     case stmt::T_SHOW_TENANT:
     case stmt::T_SHOW_SEQUENCES:
@@ -5524,6 +5529,8 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_SHOW_CREATE_TENANT:
     case stmt::T_SHOW_TRACE:
     case stmt::T_SHOW_ENGINES:
+    case stmt::T_SHOW_ENGINE:
+    case stmt::T_SHOW_OPEN_TABLES:
     case stmt::T_SHOW_PRIVILEGES:
     case stmt::T_SHOW_CREATE_PROCEDURE:
     case stmt::T_SHOW_CREATE_FUNCTION:
@@ -14544,23 +14551,14 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     if (OB_FAIL(ret)) {
     } else if ((ObPLExternalNS::LOCAL_TYPE == type || ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type)
                 && (is_routine || (access_ident.has_brackets_))) {
-      if (ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type) {
-        OZ (resolve_routine(access_ident, ns, access_idxs, func));
-        if (OB_FAIL(ret)) {
-          ret = OB_SUCCESS;
-          ob_reset_tsi_warning_buffer();
-          OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
-            K(is_routine), K(is_resolve_rowtype), K(type),
-            K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
-        }
-      } else {
-        OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
-          K(is_routine), K(is_resolve_rowtype), K(type),
-          K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
-      }
+      OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
+        K(is_routine), K(is_resolve_rowtype), K(type),
+        K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
     } else if (ObPLExternalNS::INVALID_VAR == type
                || (ObPLExternalNS::SELF_ATTRIBUTE == type)
                || (ObPLExternalNS::UDT_MEMBER_ROUTINE == type && is_routine)
+               || (ObPLExternalNS::INTERNAL_PROC == type && is_routine)
+               || (ObPLExternalNS::NESTED_PROC == type && is_routine)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
                || (ObPLExternalNS::TABLE_NS == type && is_routine)
                || (ObPLExternalNS::LABEL_NS == type && is_routine)
@@ -16249,6 +16247,7 @@ int ObPLResolver::make_block(ObPLPackageAST &package_ast, ObPLStmtBlock *&block)
     block->get_namespace().set_package_name(package_ast.get_name());
     block->get_namespace().set_package_id(package_ast.get_id());
     block->get_namespace().set_package_version(package_ast.get_version());
+    block->get_namespace().set_compile_flag(package_ast.get_compile_flag());
   }
   return ret;
 }

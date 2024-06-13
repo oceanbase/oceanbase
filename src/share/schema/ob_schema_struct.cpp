@@ -8370,6 +8370,15 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_CREATE_ROUTINE) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" CREATE ROUTINE,");
   }
+  if ((priv_set_ & OB_PRIV_CREATE_TABLESPACE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" CREATE TABLESPACE,");
+  }
+  if ((priv_set_ & OB_PRIV_SHUTDOWN) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" SHUTDOWN,");
+  }
+  if ((priv_set_ & OB_PRIV_RELOAD) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" RELOAD,");
+  }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
   }
@@ -8492,6 +8501,42 @@ int ObProxyInfo::assign(const ObProxyInfo &other)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObProxyInfo::add_role_id(const uint64_t role_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  }else if (0 == role_id_capacity_) {
+    if (NULL == (role_ids_ = static_cast<uint64_t*>(
+        allocator_->alloc(sizeof(uint64_t) * DEFAULT_ARRAY_CAPACITY)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to allocate memory for array_.", K(ret));
+    } else {
+      role_id_capacity_ = DEFAULT_ARRAY_CAPACITY;
+      MEMSET(role_ids_, 0, sizeof(uint64_t*) * DEFAULT_ARRAY_CAPACITY);
+    }
+  } else if (role_id_cnt_ >= role_id_capacity_) {
+    int64_t tmp_size = 2 * role_id_capacity_;
+    uint64_t *tmp = NULL;
+    if (NULL == (tmp = static_cast<uint64_t*>(
+        allocator_->alloc(sizeof(uint64_t) * tmp_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to allocate memory for array_, ", K(tmp_size), K(ret));
+    } else {
+      MEMCPY(tmp, role_ids_, sizeof(uint64_t) * role_id_capacity_);
+      free(role_ids_);
+      role_ids_ = tmp;
+      role_id_capacity_ = tmp_size;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    role_ids_[role_id_cnt_++] = role_id;
   }
   return ret;
 }
@@ -8744,6 +8789,101 @@ bool ObUserInfo::is_valid() const
   return ObSchema::is_valid() && ObPriv::is_valid();
 }
 
+int ObUserInfo::add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info)
+{
+  int ret = OB_SUCCESS;
+  if (0 == capacity) {
+    if (NULL == (arr = static_cast<ObProxyInfo**>(
+        alloc(sizeof(ObProxyInfo*) * DEFAULT_ARRAY_CAPACITY)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Fail to allocate memory for array_.", KR(ret));
+    } else {
+      capacity = DEFAULT_ARRAY_CAPACITY;
+      MEMSET(arr, 0, sizeof(ObProxyInfo*) * DEFAULT_ARRAY_CAPACITY);
+    }
+  } else if (cnt >= capacity) {
+    int64_t tmp_size = 2 * capacity;
+    ObProxyInfo **tmp = NULL;
+    if (NULL == (tmp = static_cast<ObProxyInfo**>(
+        alloc(sizeof(ObProxyInfo*) * tmp_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Fail to allocate memory for array_, ", K(tmp_size), KR(ret));
+    } else {
+      MEMCPY(tmp, arr, sizeof(ObProxyInfo*) * capacity);
+      free(arr);
+      arr = tmp;
+      capacity = tmp_size;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObProxyInfo *info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator());
+    if (NULL == info) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret), K(get_allocator()));
+    } else if (OB_FAIL(info->assign(proxy_info))) {
+      LOG_WARN("failed to assign proxy info", K(ret));
+    } else {
+      arr[cnt++] = info;
+    }
+  }
+  return ret;
+}
+
+int ObUserInfo::add_proxied_user_info(const ObProxyInfo& proxy_info)
+{
+  return add_proxy_info_(proxied_user_info_, proxied_user_info_capacity_, proxied_user_info_cnt_, proxy_info);
+}
+
+int ObUserInfo::add_proxy_user_info(const ObProxyInfo& proxy_info)
+{
+  return add_proxy_info_(proxy_user_info_, proxy_user_info_capacity_, proxy_user_info_cnt_, proxy_info);
+}
+
+const ObProxyInfo* ObUserInfo::get_proxied_user_info_by_idx(uint64_t idx) const
+{
+  const ObProxyInfo *proxy_info = NULL;
+  if (idx < 0 || idx >= proxied_user_info_cnt_) {
+    proxy_info = NULL;
+  } else {
+    proxy_info = proxied_user_info_[idx];
+  }
+  return proxy_info;
+}
+
+ObProxyInfo* ObUserInfo::get_proxied_user_info_by_idx_for_update(uint64_t idx)
+{
+  ObProxyInfo *proxy_info = NULL;
+  if (idx < 0 || idx >= proxied_user_info_cnt_) {
+    proxy_info = NULL;
+  } else {
+    proxy_info = proxied_user_info_[idx];
+  }
+  return proxy_info;
+}
+
+const ObProxyInfo* ObUserInfo::get_proxy_user_info_by_idx(uint64_t idx) const
+{
+  const ObProxyInfo *proxy_info = NULL;
+  if (idx < 0 || idx >= proxy_user_info_cnt_) {
+    proxy_info = NULL;
+  } else {
+    proxy_info = proxy_user_info_[idx];
+  }
+  return proxy_info;
+}
+
+ObProxyInfo* ObUserInfo::get_proxy_user_info_by_idx_for_update(uint64_t idx)
+{
+  ObProxyInfo *proxy_info = NULL;
+  if (idx < 0 || idx >= proxy_user_info_cnt_) {
+    proxy_info = NULL;
+  } else {
+    proxy_info = proxy_user_info_[idx];
+  }
+  return proxy_info;
+}
+
 void ObUserInfo::reset()
 {
   user_name_.reset();
@@ -8758,6 +8898,12 @@ void ObUserInfo::reset()
   grantee_id_array_.reset();
   role_id_array_.reset();
   role_id_option_array_.reset();
+  proxied_user_info_ = NULL;
+  proxied_user_info_cnt_ = 0;
+  proxied_user_info_capacity_ = 0;
+  proxy_user_info_ = NULL;
+  proxy_user_info_cnt_ = 0;
+  proxy_user_info_capacity_ = 0;
   profile_id_ = OB_INVALID_ID;
   password_last_changed_timestamp_ = OB_INVALID_TIMESTAMP;
   max_connections_ = 0;
@@ -8952,6 +9098,19 @@ OB_DEF_DESERIALIZE(ObUserInfo)
     if (OB_SUCC(ret)) {
       LST_DO_CODE(OB_UNIS_DECODE, user_flags_);
     }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(deserialize_proxy_info_array_(proxied_user_info_, proxied_user_info_cnt_, proxied_user_info_capacity_,
+                                              buf, data_len, pos))) {
+      LOG_WARN("deserialize proxi info array failed", K(ret));
+    } else if (OB_FAIL(deserialize_proxy_info_array_(proxy_user_info_, proxy_user_info_cnt_, proxy_user_info_capacity_,
+                                              buf, data_len, pos))) {
+      LOG_WARN("deserialize proxi info array failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, user_flags_);
   }
 
   return ret;

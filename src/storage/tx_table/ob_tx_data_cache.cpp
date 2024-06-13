@@ -12,6 +12,7 @@
 
 #include "ob_tx_data_cache.h"
 #include "share/rc/ob_tenant_base.h"
+#include "storage/tx/ob_tx_data_op.h"
 
 namespace oceanbase {
 namespace storage {
@@ -30,7 +31,7 @@ int ObTxDataCacheValue::init(const ObTxData &tx_data)
     STORAGE_LOG(WARN, "init tx data cache value twice", KR(ret), KPC(this));
   } else {
     // reserve or allocate buf to store tx data
-    int64_t size = tx_data.size();
+    int64_t size = tx_data.size_need_cache();
     void *tx_data_buf = nullptr;
     if (TX_DATA_SLICE_SIZE == size) {
       // this tx data do not have undo actions, use reserved memory
@@ -114,17 +115,24 @@ int ObTxDataCacheValue::inner_deep_copy_(void *tx_data_buf, const ObTxData &rhs)
   } else {
     tx_data_ = new (tx_data_buf) ObTxData();
     tx_data_->assign_without_undo(rhs);
+    tx_data_->tx_data_allocator_ = rhs.tx_data_allocator_;
+    tx_data_->op_allocator_ = rhs.op_allocator_;
+    if (rhs.op_guard_.is_valid()) {
+      ObTxDataOp *tx_data_op = new ((char*)tx_data_buf + TX_DATA_SLICE_SIZE) ObTxDataOp(tx_data_->tx_data_allocator_,
+        tx_data_->op_allocator_);
+      tx_data_->op_guard_.init(tx_data_op);
+    }
 
-    if (OB_LIKELY(nullptr == rhs.undo_status_list_.head_)) {
+    if (OB_LIKELY(!rhs.op_guard_.is_valid() || OB_ISNULL(rhs.op_guard_->get_undo_status_list().head_))) {
       // this tx data do not have undo status
     } else {
-      undo_node_array_ = (ObUndoStatusNode *)((char *)tx_data_buf + TX_DATA_SLICE_SIZE);
+      undo_node_array_ = (ObUndoStatusNode *)((char *)tx_data_buf + TX_DATA_SLICE_SIZE + TX_DATA_SLICE_SIZE);
+      // ignore mds op
       if (OB_FAIL(inner_deep_copy_undo_status_(rhs))) {
         STORAGE_LOG(WARN, "deep copy undo status node for tx data kv cache failed", KR(ret), K(rhs));
       }
     }
   }
-
   return ret;
 }
 
@@ -134,21 +142,21 @@ int ObTxDataCacheValue::inner_deep_copy_undo_status_(const ObTxData &rhs)
 
   // use dummy head point to the first undo node
   ObUndoStatusNode dummy_head;
-  dummy_head.next_ = rhs.undo_status_list_.head_;
+  dummy_head.next_ = rhs.op_guard_->get_undo_status_list().head_;
   ObUndoStatusNode *pre_node = &dummy_head;
-  tx_data_->undo_status_list_.undo_node_cnt_ = rhs.undo_status_list_.undo_node_cnt_;
-  for (int64_t i = 0; OB_SUCC(ret) && i < rhs.undo_status_list_.undo_node_cnt_; i++) {
+  tx_data_->op_guard_->get_undo_status_list().undo_node_cnt_ = rhs.op_guard_->get_undo_status_list().undo_node_cnt_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < rhs.op_guard_->get_undo_status_list().undo_node_cnt_; i++) {
     ObUndoStatusNode *rhs_node = pre_node->next_;
     pre_node = rhs_node;
     if (OB_ISNULL(rhs_node)) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "undo status list node count dismatach", KR(ret), K(i), K(rhs.undo_status_list_.undo_node_cnt_));
+      STORAGE_LOG(ERROR, "undo status list node count dismatach", KR(ret), K(i), K(rhs.op_guard_->get_undo_status_list().undo_node_cnt_));
     } else {
       undo_node_array_[i].assign_value(*rhs_node);
       undo_node_array_[i].next_ = nullptr;
 
       if (0 == i) {
-        tx_data_->undo_status_list_.head_ = undo_node_array_;
+        tx_data_->op_guard_->get_undo_status_list().head_ = undo_node_array_;
       } else {
         undo_node_array_[i-1].next_ = &undo_node_array_[i];
       }

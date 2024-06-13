@@ -906,7 +906,7 @@ int ObCOSSTableRowScanner::check_limit(
   limit_end = false;
   if (nullptr != access_ctx_->limit_param_) {
     int64_t row_count = nullptr == bitmap ? end_idx - begin_idx : bitmap->popcnt();
-    if (access_ctx_->out_cnt_ + row_count >= access_ctx_->limit_param_->offset_ + access_ctx_->limit_param_->limit_) {
+    if (access_ctx_->out_cnt_ + row_count - access_ctx_->limit_param_->offset_ >= access_ctx_->limit_param_->limit_) {
       limit_end = true;
     }
     if (access_ctx_->out_cnt_ + row_count <= access_ctx_->limit_param_->offset_) {

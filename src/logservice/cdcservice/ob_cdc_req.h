@@ -458,6 +458,7 @@ private:
   int8_t flag_;
   common::ObCompressorType compressor_type_;
   uint64_t tenant_id_;
+  int64_t progress_;
 };
 
 } // namespace obrpc

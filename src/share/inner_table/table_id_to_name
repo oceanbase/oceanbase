@@ -348,6 +348,12 @@
 # 506: __all_column_privilege_history
 # 506: __all_column_privilege  # BASE_TABLE_NAME
 # 507: __all_tenant_snapshot_ls_replica_history
+# 512: __all_user_proxy_info
+# 513: __all_user_proxy_info_history
+# 513: __all_user_proxy_info  # BASE_TABLE_NAME
+# 514: __all_user_proxy_role_info
+# 515: __all_user_proxy_role_info_history
+# 515: __all_user_proxy_role_info  # BASE_TABLE_NAME
 # 518: __all_mview_dep
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
@@ -1098,6 +1104,17 @@
 # 12464: __all_tenant_snapshot_ls_replica_history  # BASE_TABLE_NAME
 # 12466: ENABLED_ROLES
 # 12469: __all_virtual_tracepoint_info
+# 12473: __all_virtual_compatibility_control
+# 12474: __all_virtual_user_proxy_info
+# 12474: __all_user_proxy_info  # BASE_TABLE_NAME
+# 12475: __all_virtual_user_proxy_info_history
+# 12475: __all_user_proxy_info  # BASE_TABLE_NAME
+# 12475: __all_user_proxy_info_history  # BASE_TABLE_NAME1
+# 12476: __all_virtual_user_proxy_role_info
+# 12476: __all_user_proxy_role_info  # BASE_TABLE_NAME
+# 12477: __all_virtual_user_proxy_role_info_history
+# 12477: __all_user_proxy_role_info  # BASE_TABLE_NAME
+# 12477: __all_user_proxy_role_info_history  # BASE_TABLE_NAME1
 # 12481: __all_virtual_tenant_resource_limit
 # 12482: __all_virtual_tenant_resource_limit_detail
 # 12487: __all_virtual_nic_info
@@ -1690,6 +1707,10 @@
 # 15440: __all_index_usage_info  # BASE_TABLE_NAME
 # 15445: ALL_VIRTUAL_TRACEPOINT_INFO
 # 15445: __all_virtual_tracepoint_info  # BASE_TABLE_NAME
+# 15446: ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT
+# 15446: __all_user_proxy_info  # BASE_TABLE_NAME
+# 15447: ALL_VIRTUAL_USER_PROXY_ROLE_INFO_REAL_AGENT
+# 15447: __all_user_proxy_role_info  # BASE_TABLE_NAME
 # 15450: ALL_VIRTUAL_TENANT_RESOURCE_LIMIT
 # 15450: __all_virtual_tenant_resource_limit  # BASE_TABLE_NAME
 # 15451: ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL
@@ -1710,6 +1731,7 @@
 # 20012: KEY_COLUMN_USAGE
 # 20014: ENGINES
 # 20015: ROUTINES
+# 20016: PROFILING
 # 21000: GV$SESSION_EVENT
 # 21001: GV$SESSION_WAIT
 # 21002: GV$SESSION_WAIT_HISTORY
@@ -2105,10 +2127,30 @@
 # 21540: DBA_MVREF_STMT_STATS
 # 21543: GV$OB_TRACEPOINT_INFO
 # 21544: V$OB_TRACEPOINT_INFO
+# 21545: V$OB_COMPATIBILITY_CONTROL
 # 21550: GV$OB_TENANT_RESOURCE_LIMIT
 # 21551: V$OB_TENANT_RESOURCE_LIMIT
 # 21552: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
 # 21553: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 21562: TABLESPACES
+# 21563: INNODB_BUFFER_PAGE
+# 21564: INNODB_BUFFER_PAGE_LRU
+# 21565: INNODB_BUFFER_POOL_STATS
+# 21566: INNODB_CMP
+# 21567: INNODB_CMP_PER_INDEX
+# 21568: INNODB_CMP_PER_INDEX_RESET
+# 21569: INNODB_CMP_RESET
+# 21570: INNODB_CMPMEM
+# 21571: INNODB_CMPMEM_RESET
+# 21572: INNODB_SYS_DATAFILES
+# 21573: INNODB_SYS_INDEXES
+# 21574: INNODB_SYS_TABLES
+# 21575: INNODB_SYS_TABLESPACES
+# 21576: INNODB_SYS_TABLESTATS
+# 21577: INNODB_SYS_VIRTUAL
+# 21578: INNODB_TEMP_TABLE_INFO
+# 21579: INNODB_METRICS
+# 21580: EVENTS
 # 21581: V$OB_NIC_INFO
 # 21586: GV$OB_NIC_INFO
 # 25001: DBA_SYNONYMS
@@ -2386,6 +2428,7 @@
 # 25298: USER_MVREF_CHANGE_STATS
 # 25299: DBA_MVREF_STMT_STATS
 # 25300: USER_MVREF_STMT_STATS
+# 25301: PROXY_USERS
 # 28002: GV$OB_SQL_AUDIT
 # 28003: V$OB_SQL_AUDIT
 # 28004: GV$INSTANCE
@@ -2963,6 +3006,17 @@
 # 101100: __idx_505_idx_column_privilege_name
 # 101100: idx_column_privilege_name  # INDEX_NAME
 # 101100: __all_column_privilege  # DATA_BASE_TABLE_NAME
+# 101101: __idx_512_idx_user_proxy_info_proxy_user_id
+# 101101: idx_user_proxy_info_proxy_user_id  # INDEX_NAME
+# 101101: __all_user_proxy_info  # DATA_BASE_TABLE_NAME
+# 101102: __idx_513_idx_user_proxy_info_proxy_user_id_history
+# 101102: idx_user_proxy_info_proxy_user_id_history  # INDEX_NAME
+# 101102: __all_user_proxy_info  # DATA_BASE_TABLE_NAME
+# 101102: __all_user_proxy_info_history  # DATA_BASE_TABLE_NAME1
+# 101103: __idx_515_idx_user_proxy_role_info_proxy_user_id_history
+# 101103: idx_user_proxy_role_info_proxy_user_id_history  # INDEX_NAME
+# 101103: __all_user_proxy_role_info  # DATA_BASE_TABLE_NAME
+# 101103: __all_user_proxy_role_info_history  # DATA_BASE_TABLE_NAME1
 # 15306: __idx_15120_idx_data_table_id_real_agent
 # 15306: idx_data_table_id_real_agent  # INDEX_NAME
 # 15306: __all_table  # DATA_BASE_TABLE_NAME
@@ -3251,3 +3305,7 @@
 # 15416: idx_dbms_lock_allocated_expiration_real_agent  # INDEX_NAME
 # 15416: __all_dbms_lock_allocated  # DATA_BASE_TABLE_NAME
 # 15416: ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15448: __idx_15446_idx_user_proxy_info_proxy_user_id_real_agent
+# 15448: idx_user_proxy_info_proxy_user_id_real_agent  # INDEX_NAME
+# 15448: __all_user_proxy_info  # DATA_BASE_TABLE_NAME
+# 15448: ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT  # DATA_BASE_TABLE_NAME1

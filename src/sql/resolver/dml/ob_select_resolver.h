@@ -221,7 +221,6 @@ protected:
                                    ObRawExpr *&coalesce_expr);
   int resolve_having_clause(const ParseNode *node);
   int resolve_named_windows_clause(const ParseNode *node);
-  int check_nested_aggr_in_having(ObRawExpr* expr);
   int resolve_start_with_clause(const ParseNode *node);
   int check_connect_by_expr_validity(const ObRawExpr *raw_expr, bool is_prior);
   int resolve_connect_by_clause(const ParseNode *node);
@@ -347,7 +346,7 @@ private:
 
   int check_rollup_items_valid(const common::ObIArray<ObRollupItem> &rollup_items);
   int check_cube_items_valid(const common::ObIArray<ObCubeItem> &cube_items);
-  int recursive_check_grouping_columns(ObSelectStmt *stmt, ObRawExpr *expr);
+  int recursive_check_grouping_columns(ObSelectStmt *stmt, ObRawExpr *expr, bool is_in_aggr_expr);
 
   int is_need_check_col_dup(const ObRawExpr *expr, bool &need_check);
 
@@ -358,6 +357,12 @@ private:
   int check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr);
 
   int add_alias_from_dot_notation(ObRawExpr *sel_expr, SelectItem& select_item);
+
+  int check_and_mark_aggr_in_having_scope(ObSelectStmt *select_stmt);
+  int mark_aggr_in_order_by_scope(ObSelectStmt *select_stmt);
+  int check_aggr_in_select_scope(ObSelectStmt *select_stmt);
+  int mark_aggr_in_select_scope(ObSelectStmt *select_stmt);
+
 protected:
   // data members
   /*these member is only for with clause*/

@@ -133,6 +133,8 @@
 #define FETCH_ALL_RLS_GROUP_HISTORY_SQL                   COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_RLS_CONTEXT_HISTORY_SQL                 COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_RLS_SEC_COLUMN_HISTORY_SQL              COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_PROXY_INFO_HISTORY_SQL                       COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_PROXY_ROLE_INFO_HISTORY_SQL                  COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_CASCADE_OBJECT_ID_HISTORY_SQL "SELECT %s object_id, is_deleted FROM %s " \
     "WHERE tenant_id = %lu AND %s = %lu AND schema_version <= %lu " \
     "ORDER BY object_id desc, schema_version desc"
@@ -2719,6 +2721,29 @@ int ObSchemaServiceSQLImpl::fetch_all_tenant_info(
     ret; \
   })
 
+#define SQL_APPEND_PROXY_USERS_ID(schema_keys, tenant_id, schema_key_size, sql) \
+({                                                                 \
+    int ret = OB_SUCCESS; \
+    if (OB_FAIL(sql.append("("))) { \
+      LOG_WARN("append sql failed", K(ret)); \
+    } else { \
+      for (int64_t i = 0; OB_SUCC(ret) && i < schema_key_size; ++i) {  \
+        if (OB_FAIL(sql.append_fmt("%s(%lu, %lu, %lu)", 0 == i ? "" : ", ", \
+                                   fill_extract_tenant_id(schema_status, tenant_id), \
+                                   schema_keys[i].client_user_id_,    \
+                                   schema_keys[i].proxy_user_id_))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } \
+      } \
+      if (OB_SUCC(ret)) { \
+        if (OB_FAIL(sql.append(")"))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } \
+      } \
+    } \
+    ret; \
+  })
+
 #define SQL_APPEND_OBJ_PRIV_ID(schema_keys, tenant_id, schema_key_size, sql) \
   ({                                                                 \
     int ret = OB_SUCCESS; \
@@ -4593,6 +4618,24 @@ int ObSchemaServiceSQLImpl::fetch_all_user_info(
               user_keys,
               users_size))) {
         LOG_WARN("failed to fetch_role_grantee_map_info", K(ret));
+      } else if (OB_FAIL(fetch_proxy_user_info(schema_status,
+                                               schema_version,
+                                               tenant_id,
+                                               sql_client,
+                                               user_array,
+                                               true, /*get proxy info*/
+                                               user_keys,
+                                               users_size))) {
+        LOG_WARN("fetch proxy user info failed", K(ret));
+      } else if (OB_FAIL(fetch_proxy_user_info(schema_status,
+                                               schema_version,
+                                               tenant_id,
+                                               sql_client,
+                                               user_array,
+                                               false, /*get proxied info*/
+                                               user_keys,
+                                               users_size))) {
+        LOG_WARN("fetch proxy user info failed", K(ret));
       }
     }
   }
@@ -4812,6 +4855,199 @@ int ObSchemaServiceSQLImpl::fetch_role_grantee_map_info(
       }
     }
 
+  }
+  return ret;
+}
+
+
+// fill ObUserInfo
+// 1. If user info is a user, get the users info which the user can proxy and be proxied.
+// 2. If user info is a role, do nothing
+int ObSchemaServiceSQLImpl::fetch_proxy_user_info(
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObISQLClient &sql_client,
+    ObArray<ObUserInfo> &user_array,
+    const bool is_fetch_proxy,
+    const uint64_t *user_keys,
+    const int64_t users_size)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    const bool is_full_schema = (NULL != user_keys && users_size > 0) ? false : true;
+    const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+    bool printed = false;
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_PROXY_INFO_HISTORY_SQL, OB_ALL_USER_PROXY_INFO_HISTORY_TNAME, 0UL))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (!is_full_schema) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < users_size; ++i) {
+        const uint64_t user_id = user_keys[i];
+        ObUserInfo *user_info = NULL;
+        if (OB_FAIL(ObSchemaRetrieveUtils::find_user_info(user_id, user_array, user_info))) {
+          LOG_WARN("find user info failed", K(user_id), K(ret));
+        } else if (OB_ISNULL(user_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(user_id), K(ret));
+        } else if (user_info->is_role()) {
+          //do nothing
+        } else if (user_info->get_proxy_activated_flag() == ObProxyActivatedFlag::PROXY_NERVER_BEEN_ACTIVATED) {
+          //skip
+        } else {
+          if (!printed) {
+            printed = true;
+            if (is_fetch_proxy) {
+              if (OB_FAIL(sql.append_fmt(" AND proxy_user_id IN (%lu", user_id))) {
+                LOG_WARN("append sql failed", K(ret), K(user_id));
+              }
+            } else {
+              if (OB_FAIL(sql.append_fmt(" AND client_user_id IN (%lu", user_id))) {
+                LOG_WARN("append sql failed", K(ret), K(user_id));
+              }
+            }
+          } else if (OB_FAIL(sql.append_fmt(", %lu", user_id))) {
+            LOG_WARN("append sql failed", K(ret), K(i), K(user_id));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (printed) {
+          if (OB_FAIL(sql.append(")"))) {
+            LOG_WARN("append sql failed", K(ret));
+          }
+        } else {
+          // reset sql if no schema objects need to be fetched from inner table.
+          sql.reset();
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && !sql.empty()) {
+      if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+        LOG_WARN("append failed", K(ret));
+      } else if (OB_FAIL(sql.append(is_fetch_proxy ?
+                                    " ORDER BY TENANT_ID DESC, PROXY_USER_ID DESC, CLIENT_USER_ID DESC, SCHEMA_VERSION DESC" :
+                                    " ORDER BY TENANT_ID DESC, CLIENT_USER_ID DESC, PROXY_USER_ID DESC, SCHEMA_VERSION DESC"))) {
+        LOG_WARN("sql append failed", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && !sql.empty()) {
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Fail to get result", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_proxy_info_schema(tenant_id, *result, is_fetch_proxy, user_array))) {
+        LOG_WARN("Failed to retrieve user infos", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !sql.empty()) { //may existed proxy user
+    if (OB_FAIL(fetch_proxy_role_info(schema_status,
+                                      schema_version,
+                                      tenant_id,
+                                      sql_client,
+                                      user_array,
+                                      is_fetch_proxy,
+                                      user_keys,
+                                      users_size))) {
+      LOG_WARN("fetch proxy role info failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+// fill ObUserInfo
+// 1. If user info is a user, get the users info which the user can proxy and be proxied.
+// 2. If user info is a role, do nothing
+int ObSchemaServiceSQLImpl::fetch_proxy_role_info(
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObISQLClient &sql_client,
+    ObArray<ObUserInfo> &user_array,
+    const bool is_fetch_proxy,
+    const uint64_t *user_keys /* = NULL */,
+    const int64_t users_size /* = 0 */)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    const bool is_full_schema = (NULL != user_keys && users_size > 0) ? false : true;
+    const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+    bool printed = false;
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_PROXY_ROLE_INFO_HISTORY_SQL, OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TNAME, 0UL))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (!is_full_schema) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < users_size; ++i) {
+        const uint64_t user_id = user_keys[i];
+        ObUserInfo *user_info = NULL;
+        if (OB_FAIL(ObSchemaRetrieveUtils::find_user_info(user_id, user_array, user_info))) {
+          LOG_WARN("find user info failed", K(user_id), K(ret));
+        } else if (OB_ISNULL(user_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(user_id), K(ret));
+        } else if (user_info->is_role()) {
+          //do nothing
+        } else if (user_info->get_proxy_activated_flag() == ObProxyActivatedFlag::PROXY_NERVER_BEEN_ACTIVATED) {
+          //skip
+        } else {
+          if (!printed) {
+            printed = true;
+            if (is_fetch_proxy) {
+              if (OB_FAIL(sql.append_fmt(" AND proxy_user_id IN (%lu", user_id))) {
+                LOG_WARN("append sql failed", K(ret), K(user_id));
+              }
+            } else {
+              if (OB_FAIL(sql.append_fmt(" AND client_user_id IN (%lu", user_id))) {
+                LOG_WARN("append sql failed", K(ret), K(user_id));
+              }
+            }
+          } else if (OB_FAIL(sql.append_fmt(", %lu", user_id))) {
+            LOG_WARN("append sql failed", K(ret), K(i), K(user_id));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (printed) {
+          if (OB_FAIL(sql.append(")"))) {
+            LOG_WARN("append sql failed", K(ret));
+          }
+        } else {
+          // reset sql if no schema objects need to be fetched from inner table.
+          sql.reset();
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && !sql.empty()) {
+      if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+        LOG_WARN("append failed", K(ret));
+      } else if (OB_FAIL(sql.append(is_fetch_proxy ?
+                                    " ORDER BY TENANT_ID DESC, PROXY_USER_ID DESC, CLIENT_USER_ID DESC, ROLE_ID DESC, SCHEMA_VERSION DESC" :
+                                    " ORDER BY TENANT_ID DESC, CLIENT_USER_ID DESC, PROXY_USER_ID DESC, ROLE_ID DESC, SCHEMA_VERSION DESC"))) {
+        LOG_WARN("sql append failed", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && !sql.empty()) {
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Fail to get result", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_proxy_role_info_schema(tenant_id, *result, is_fetch_proxy, user_array))) {
+        LOG_WARN("Failed to retrieve user infos", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -5818,7 +6054,6 @@ int ObSchemaServiceSQLImpl::fetch_rls_columns(const ObRefreshSchemaStatus &schem
   }
   return ret;
 }
-
 /*
   new schema_cache related
 */

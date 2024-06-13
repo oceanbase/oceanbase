@@ -1699,6 +1699,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_for_dbms_sql_ = params_.is_dbms_sql_;
     ctx.view_ref_id_ = view_ref_id_;
     ctx.is_variable_allowed_ = !(is_mysql_mode() && params_.is_from_create_view_);
+    ctx.is_from_show_resolver_ = params_.is_from_show_resolver_;
     ctx.is_expanding_view_ = params_.is_expanding_view_;
     ctx.is_in_system_view_ = params_.is_in_sys_view_;
     ObRawExprResolverImpl expr_resolver(ctx);
@@ -4668,11 +4669,10 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
   JoinedTable *cur_table = NULL;
   JoinedTable *child_table = NULL;
   TableItem *table_item = NULL;
-  ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt_);
   bool reverse_parse = false;
-  if (OB_ISNULL(select_stmt) || OB_UNLIKELY(parse_node.type_ != T_JOINED_TABLE)) {
+  if (OB_ISNULL(stmt_) || OB_UNLIKELY(parse_node.type_ != T_JOINED_TABLE)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(select_stmt), K_(parse_node.type));
+    LOG_WARN("invalid argument", K_(stmt), K_(parse_node.type));
   } else if (OB_FAIL(alloc_joined_table_item(cur_table))) {
     LOG_WARN("create joined table item failed", K(ret));
   } else if (parse_node.children_[0]->type_ == T_JOIN_RIGHT &&
@@ -4689,7 +4689,7 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
     table_node = parse_node.children_[i];
     // nested join case or normal join case
     if (T_JOINED_TABLE == table_node->type_) {
-      if (OB_FAIL(resolve_joined_table(*table_node, child_table))) {
+      if (OB_FAIL(SMART_CALL(resolve_joined_table(*table_node, child_table)))) {
         LOG_WARN("resolve child joined table failed", K(ret));
       } else if (1 == i) {
         cur_table->left_table_ = child_table;
@@ -4765,6 +4765,10 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
       break;
     case T_JOIN_INNER:
       cur_table->joined_type_ = INNER_JOIN;
+      break;
+    case T_STRAIGHT_JOIN:
+      cur_table->joined_type_ = INNER_JOIN;
+      cur_table->is_straight_join_ = true;
       break;
     default:
       /* won't be here */
@@ -5029,6 +5033,8 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
   ObCollationType nation_collation = OB_NOT_NULL(session_info_) ? session_info_->get_nls_collation_nation() : CS_TYPE_INVALID;
   ObCollationType collation_connection = CS_TYPE_INVALID;
   ObCharsetType character_set_connection = CHARSET_INVALID;
+  bool enable_decimal_int = false;
+  ObCompatType compat_type = COMPAT_MYSQL57;
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("resolve status is invalid", K_(params_.expr_factory), K_(params_.session_info));
@@ -5042,6 +5048,10 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session_info->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variables failed", K(ret));
+  } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
+    LOG_WARN("fail to check enable decimal int", K(ret));
   } else if (OB_FAIL(ObResolverUtils::resolve_const(&parse_tree,
                                              // stmt_type is only used in oracle mode
                                              lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
@@ -5053,6 +5063,8 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
                                              static_cast<ObCollationType>(server_collation),
                                              &parents_expr_info,
                                              session_info->get_sql_mode(),
+                                             enable_decimal_int,
+                                             compat_type,
                                              nullptr != params_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(val.get_string().length())))) { // deep copy str value
@@ -7330,7 +7342,7 @@ int ObDMLResolver::add_all_rowkey_columns_to_stmt(const TableItem &table_item,
   return ret;
 }
 
-int ObDMLResolver::resolve_limit_clause(const ParseNode *node)
+int ObDMLResolver::resolve_limit_clause(const ParseNode *node, bool disable_offset/*= false*/)
 {
   int ret = OB_SUCCESS;
   if (node) {
@@ -7347,8 +7359,15 @@ int ObDMLResolver::resolve_limit_clause(const ParseNode *node)
     }
     ObRawExpr* limit_count = NULL;
     ObRawExpr* limit_offset = NULL;
+    if (disable_offset && OB_NOT_NULL(offset_node)) {
+      ret = OB_ERR_PARSE_SQL;
+      int32_t str_len = static_cast<int32_t>(offset_node->text_len_);
+      int32_t line_no = 1;
+      LOG_WARN("can't set offset for limit clause in delete/update stmt");
+      LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
+                    str_len, offset_node->raw_text_, line_no);
     // resolve the question mark with less value first
-    if (limit_node != NULL && limit_node->type_ == T_QUESTIONMARK && offset_node != NULL
+    } else if (limit_node != NULL && limit_node->type_ == T_QUESTIONMARK && offset_node != NULL
         && offset_node->type_ == T_QUESTIONMARK && limit_node->value_ > offset_node->value_) {
       if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, *offset_node, limit_offset, NULL))
           || OB_FAIL(ObResolverUtils::resolve_const_expr(params_, *limit_node, limit_count, NULL))) {
@@ -17431,6 +17450,8 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Table
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_FTS_LOG(WARN, "fail to allocate right table item", K(ret));
   } else {
+    ObRawExpr *part_expr = get_stmt()->get_part_expr(left_table->table_id_, left_table->ref_id_);
+    ObRawExpr *subpart_expr = get_stmt()->get_subpart_expr(left_table->table_id_, left_table->ref_id_);
     right_table->type_ = TableItem::BASE_TABLE;
     right_table->ref_id_ = table_schema->get_table_id();
     right_table->table_id_ = generate_table_id();
@@ -17439,10 +17460,13 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Table
     right_table->table_name_ = table_schema->get_table_name_str();
     right_table->alias_name_ = table_schema->get_table_name_str();
     right_table->table_type_ = table_schema->get_table_type();
+    right_table->qb_name_ = left_table->qb_name_;
+    right_table->synonym_db_name_ = left_table->synonym_db_name_;
+    right_table->database_name_ = left_table->database_name_;
     if (OB_FAIL(get_stmt()->add_table_item(session_info_, right_table))) {
       STORAGE_FTS_LOG(WARN, "fail to add right table item", K(ret), K(right_table));
-    } else if (OB_FAIL(resolve_table_partition_expr(*right_table, *table_schema))) {
-      STORAGE_FTS_LOG(WARN, "fail to resolve table partition expr", K(ret), KPC(right_table), KPC(table_schema));
+    } else if (OB_FAIL(get_stmt()->set_part_expr(right_table->table_id_, right_table->ref_id_, part_expr, subpart_expr))) {
+      STORAGE_FTS_LOG(WARN, "fail to set right table partition expr", K(ret), KPC(right_table), KPC(left_table));
     } else if (OB_FAIL(create_joined_table_item(ObJoinType::INNER_JOIN, left_table, right_table, joined_table))) {
       STORAGE_FTS_LOG(WARN, "fail to create joined table item", K(ret), KPC(left_table), KPC(right_table));
     } else if (OB_FAIL(add_all_rowkey_columns_to_stmt(*left_table, left_column_exprs))) {

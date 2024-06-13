@@ -19,6 +19,7 @@
 #include "storage/tx/ob_tx_data_define.h"
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx_table/tx_table_local_buffer.h"
+#include "storage/tx/ob_tx_data_op.h"
 
 namespace oceanbase
 {
@@ -296,8 +297,7 @@ public: /* derived from ObIMemtable */
                                 int64_t &total_bytes,
                                 int64_t &total_rows) override;
 
-  virtual int get_split_ranges(const ObStoreRowkey *start_key,
-                               const ObStoreRowkey *end_key,
+  virtual int get_split_ranges(const ObStoreRange &input_range,
                                const int64_t part_cnt,
                                common::ObIArray<common::ObStoreRange> &range_array) override;
   // not supported
@@ -314,7 +314,6 @@ public:  // checkpoint
   }
 
   int flush(const int64_t trace_id);
-  
   /**
    * @brief Because of the random order of clog callbacks, the tx data in a freezing tx data
    * memtable may not completed. We must wait until the max_consequent_callbacked_scn is larger
@@ -512,7 +511,10 @@ public:
 
     // printf undo status list
     fprintf(fd_, "Undo Actions [from, to): {");
-    ObUndoStatusNode *cur_node = tx_data->undo_status_list_.head_;
+    ObUndoStatusNode *cur_node = NULL;
+    if (tx_data->op_guard_.is_valid()) {
+      cur_node = tx_data->op_guard_->get_undo_status_list().head_;
+    }
     while (OB_NOT_NULL(cur_node))
     {
       for (int i = 0; i < cur_node->size_; i++) {

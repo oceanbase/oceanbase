@@ -417,6 +417,8 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_policy);
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_group);
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_context);
+  //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy);
+  //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy_role);
   template<typename T>
   static int retrieve_object_list(const uint64_t tenant_id, T &result, common::ObIArray<uint64_t> &trigger_list);
   template<typename T>
@@ -623,6 +625,17 @@ public:
       T &result,
       const bool is_fetch_role,
       ObArray<ObUserInfo> &user_array);
+  template<typename T>
+  static int retrieve_proxy_info_schema(const uint64_t tenant_id,
+      T &result,
+      const bool is_fetch_proxy,
+      ObArray<ObUserInfo> &user_array);
+
+  template<typename T>
+  static int retrieve_proxy_role_info_schema(const uint64_t tenant_id,
+    T &result,
+    const bool is_fetch_proxy,
+    ObArray<ObUserInfo> &user_array);
   static inline int find_user_info(const uint64_t user_id,
       ObArray<ObUserInfo> &user_array,
       ObUserInfo *&user_info);
@@ -642,6 +655,8 @@ public:
   static int fill_object_id(const uint64_t tenant_id, T &result,
                             uint64_t &object_id, bool &is_deleted);
 
+  // template<typename T>
+  // static bool compare_proxy_id(const T *proxy_schema, const uint64_t proxy_id);
 //===========================================================================
 
   template<typename T, typename SCHEMA>

@@ -58,6 +58,7 @@ template <int IDX>
 int deepcopy(const transaction::ObTransID &trans_id,
              const BufferCtx &old_ctx,
              BufferCtx *&new_ctx,
+             ObIAllocator &allocator,
              const char *alloc_file,
              const char *alloc_func,
              const int64_t line) {
@@ -74,11 +75,17 @@ int deepcopy(const transaction::ObTransID &trans_id,
     MDS_ASSERT(OB_NOT_NULL(p_old_impl_ctx));
     const ImplType &old_impl_ctx = *p_old_impl_ctx;
     set_mds_mem_check_thread_local_info(MdsWriter(trans_id), typeid(ImplType).name(), alloc_file, alloc_func, line);
-    if (CLICK() &&
-        OB_ISNULL(p_impl = (ImplType *)MTL(ObTenantMdsService*)->get_buffer_ctx_allocator().alloc(sizeof(ImplType),
-                                                                                                  ObMemAttr(MTL_ID(),
-                                                                                                  "MDS_CTX_COPY",
-                                                                                                  ObCtxIds::MDS_CTX_ID)))) {
+    // if pre_alloc buffer_ctx use it
+    if (OB_NOT_NULL(new_ctx)) {
+      ImplType *new_ctx_impl = dynamic_cast<ImplType *>(new_ctx);
+      if (MDS_FAIL(common::meta::copy_or_assign(old_impl_ctx, *new_ctx_impl))) {
+        MDS_LOG(WARN, "fail to assign old ctx to new", KR(ret), K(IDX));
+      }
+    } else if (CLICK() &&
+        OB_ISNULL(p_impl = (ImplType *)allocator.alloc(sizeof(ImplType),
+                                                       ObMemAttr(MTL_ID(),
+                                                       "MDS_CTX_COPY",
+                                                       ObCtxIds::MDS_CTX_ID)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       MDS_LOG(WARN, "alloc memory failed", KR(ret), K(IDX));
     } else {
@@ -86,7 +93,7 @@ int deepcopy(const transaction::ObTransID &trans_id,
       new (p_impl)ImplType();
       if (MDS_FAIL(common::meta::copy_or_assign(old_impl_ctx, *p_impl))) {
         p_impl->~ImplType();
-        MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(p_impl);
+        allocator.free(p_impl);
         MDS_LOG(WARN, "fail to assign old ctx to new", KR(ret), K(IDX));
       } else {
         new_ctx = p_impl;
@@ -95,7 +102,7 @@ int deepcopy(const transaction::ObTransID &trans_id,
     }
     reset_mds_mem_check_thread_local_info();
   } else {
-    ret = deepcopy<IDX + 1>(trans_id, old_ctx, new_ctx, alloc_file, alloc_func, line);
+    ret = deepcopy<IDX + 1>(trans_id, old_ctx, new_ctx, allocator, alloc_file, alloc_func, line);
   }
   return ret;
 }
@@ -104,6 +111,7 @@ template <>
 int deepcopy<BufferCtxTupleHelper::get_element_size()>(const transaction::ObTransID &trans_id,
                                                        const BufferCtx &old_ctx,
                                                        BufferCtx *&new_ctx,
+                                                       ObIAllocator &allocator,
                                                        const char *alloc_file,
                                                        const char *alloc_func,
                                                        const int64_t line)
@@ -116,6 +124,7 @@ int deepcopy<BufferCtxTupleHelper::get_element_size()>(const transaction::ObTran
 int MdsFactory::deep_copy_buffer_ctx(const transaction::ObTransID &trans_id,
                                      const BufferCtx &old_ctx,
                                      BufferCtx *&new_ctx,
+                                     ObIAllocator &allocator,
                                      const char *alloc_file,
                                      const char *alloc_func,
                                      const int64_t line)
@@ -126,7 +135,7 @@ int MdsFactory::deep_copy_buffer_ctx(const transaction::ObTransID &trans_id,
     ret = OB_INVALID_ARGUMENT;
     new_ctx = nullptr;// won't copy
     MDS_LOG(WARN, "invalid old_ctx", K(old_ctx.get_binding_type_id()));
-  } else if (MDS_FAIL(deepcopy<0>(trans_id, old_ctx, new_ctx, alloc_file, alloc_func, line))) {
+  } else if (MDS_FAIL(deepcopy<0>(trans_id, old_ctx, new_ctx, allocator, alloc_file, alloc_func, line))) {
     MDS_LOG(WARN, "fail to deep copy buffer ctx", K(old_ctx.get_binding_type_id()));
   }
   return ret;
@@ -149,6 +158,7 @@ void try_set_writer(T &ctx, const transaction::ObTransID &trans_id) {
 int MdsFactory::create_buffer_ctx(const transaction::ObTxDataSourceType &data_source_type,
                                   const transaction::ObTransID &trans_id,
                                   BufferCtx *&buffer_ctx,
+                                  ObIAllocator &allocator,
                                   const char *alloc_file,
                                   const char *alloc_func,
                                   const int64_t line) {
@@ -161,10 +171,10 @@ int MdsFactory::create_buffer_ctx(const transaction::ObTxDataSourceType &data_so
       set_mds_mem_check_thread_local_info(MdsWriter(trans_id), typeid(BUFFER_CTX_TYPE).name(), alloc_file, alloc_func, line);\
       int64_t type_id = TupleTypeIdx<BufferCtxTupleHelper, BUFFER_CTX_TYPE>::value;\
       BUFFER_CTX_TYPE *ctx_impl = (BUFFER_CTX_TYPE *)\
-                                   MTL(ObTenantMdsService*)->get_buffer_ctx_allocator().alloc(sizeof(BUFFER_CTX_TYPE),\
-                                                                                              ObMemAttr(MTL_ID(),\
-                                                                                              "MDS_CTX_CREATE",\
-                                                                                              ObCtxIds::MDS_CTX_ID));\
+                                   allocator.alloc(sizeof(BUFFER_CTX_TYPE),\
+                                                   ObMemAttr(MTL_ID(),\
+                                                   "MDS_CTX_CREATE",\
+                                                   ObCtxIds::MDS_CTX_ID));\
       if (OB_ISNULL(ctx_impl)) {\
         ret = OB_ALLOCATE_MEMORY_FAILED;\
         MDS_LOG(WARN, "alloc memory failed", KR(ret));\

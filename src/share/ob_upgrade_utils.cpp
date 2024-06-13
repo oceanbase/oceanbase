@@ -1296,6 +1296,66 @@ int ObUpgradeFor4310Processor::post_upgrade_for_create_replication_role_in_oracl
   }
   return ret;
 }
+
+int ObUpgradeFor4320Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_reset_compat_version())) {
+    LOG_WARN("fail to reset compat version", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4320Processor::post_upgrade_for_reset_compat_version()
+{
+  int ret = OB_SUCCESS;
+  int64_t start = ObTimeUtility::current_time();
+  if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("meta and sys tenant no need to reset system variable", K_(tenant_id));
+  } else if (OB_FAIL(try_reset_version(tenant_id_, OB_SV_COMPATIBILITY_VERSION))) {
+    LOG_WARN("failed to try reset ob_compatibility_version", K(ret));
+  } else if (OB_FAIL(try_reset_version(tenant_id_, OB_SV_SECURITY_VERSION))) {
+    LOG_WARN("failed to try reset ob_security_version", K(ret));
+  }
+  LOG_INFO("[UPGRADE] finish reset compat version", K(ret), K(tenant_id_),
+           "cost", ObTimeUtility::current_time() - start);
+  return ret;
+}
+
+int ObUpgradeFor4320Processor::try_reset_version(const uint64_t tenant_id, const char *var_name)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVarSchema *var_schema = NULL;
+  ObObj val_obj;
+  uint64_t version = 0;
+  if (OB_ISNULL(schema_service_) || OB_ISNULL(sql_proxy_) || OB_ISNULL(var_name)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id_, var_name, var_schema))) {
+    LOG_WARN("failed to get system variable", K(ret));
+  } else if (OB_ISNULL(var_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("var_schema is null", K(ret));
+  } else if (OB_FAIL(var_schema->get_value(NULL, NULL, val_obj))) {
+    LOG_WARN("failed to get value from var_schema", K(ret), KPC(var_schema));
+  } else if (OB_FAIL(val_obj.get_uint64(version))) {
+    LOG_WARN("fail to get uint", K(val_obj), K(ret));
+  } else if (CLUSTER_VERSION_4_2_1_0 != version) {
+    ObSqlString set_sql;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(set_sql.assign_fmt("set global %s = %ld", var_name, CLUSTER_VERSION_4_2_1_0))) {
+      LOG_WARN("failed to assign sql", K(ret));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, set_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to write sql", K(ret), K(set_sql));
+    }
+  }
+  return ret;
+}
 /* =========== 4310 upgrade processor end ============= */
 
 /* =========== special upgrade processor end   ============= */

@@ -15,6 +15,7 @@
 #include "share/ob_cluster_version.h"
 #include "ob_trans_service.h"
 #include "ob_trans_part_ctx.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 namespace oceanbase
 {
@@ -93,6 +94,26 @@ int ObTxLogCb::init(const ObLSID &key,
   return ret;
 }
 
+void ObTxLogCb::reset_tx_op_array()
+{
+  if (OB_NOT_NULL(tx_op_array_)) {
+    for (int64_t idx = 0; idx < tx_op_array_->count(); idx++) {
+      tx_op_array_->at(idx).release();
+    }
+    tx_op_array_->~ObTxOpArray();
+    mtl_free(tx_op_array_);
+    tx_op_array_ = nullptr;
+  }
+}
+
+void ObTxLogCb::reset_undo_node()
+{
+  if (OB_NOT_NULL(undo_node_)) {
+    MTL(share::ObSharedMemAllocMgr*)->tx_data_allocator().free(undo_node_);
+    undo_node_ = NULL;
+  }
+}
+
 void ObTxLogCb::reset()
 {
   ObTxBaseLogCb::reset();
@@ -115,6 +136,8 @@ void ObTxLogCb::reset()
 
   // is_callbacking_ = false;
   first_part_scn_.invalid_scn();
+  reset_tx_op_array();
+  reset_undo_node();
 }
 
 void ObTxLogCb::reuse()
@@ -132,6 +155,8 @@ void ObTxLogCb::reuse()
   need_free_extra_cb_ = false;
 
   first_part_scn_.invalid_scn();
+  reset_tx_op_array();
+  reset_undo_node();
 }
 
 ObTxLogType ObTxLogCb::get_last_log_type() const

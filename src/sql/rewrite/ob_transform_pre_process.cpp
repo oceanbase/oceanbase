@@ -96,6 +96,15 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         LOG_TRACE("succeed to flatten_condition", K(is_happened));
       }
     }
+    if (OB_SUCC(ret) && is_mysql_mode()) {
+      if (OB_FAIL(try_gen_straight_join_leading(stmt, is_happened))) {
+        LOG_WARN("failed to generate straight join leading", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("generate straight join leading", is_happened);
+        LOG_TRACE("succeed to generate straight join leading", K(is_happened), K(ret));
+      }
+    }
     if (OB_SUCC(ret) && parent_stmts.empty()) {
       if (OB_FAIL(expand_correlated_cte(stmt, is_happened))) {
         LOG_WARN("failed to expand correlated cte", K(ret));
@@ -2004,6 +2013,8 @@ int ObTransformPreProcess::transform_for_hierarchical_query(ObDMLStmt *stmt,
       LOG_WARN("unexpect null stmt", K(ret));
     } else if (OB_FAIL(create_and_mock_join_view(*hierarchical_stmt))) {
       LOG_WARN("failed to transform from item", K(ret));
+    } else if (OB_FAIL(move_for_update_dml_info(select_stmt, hierarchical_stmt))) {
+      LOG_WARN("failed to pull up for update info", K(ret));
     } else {
       trans_happened = true;
     }
@@ -2404,6 +2415,8 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
       LOG_WARN("failed to extract shared expr", K(ret));
     } else if (OB_FAIL(append_array_no_dup(select_list, shared_exprs))) {
       LOG_WARN("failed to append shared exprs", K(ret));
+    } else if (has_for_update && OB_FAIL(add_select_item_for_update(left_view_stmt, select_list))) {
+      LOG_WARN("failed to add for update select item", K(ret));
     } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
                                                             select_list,
                                                             left_view_stmt))) {
@@ -2480,17 +2493,19 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
       left_view_stmt->get_start_with_exprs().reset();
     }
   }
-  // 8. 如果stmt有for update标记，需要把标记打在connect by的右侧表上，
-  // 同时清除左侧表上的for update标记
+
+  // 8. adding FOR UPDATE to right table item
   if (OB_SUCC(ret) && has_for_update) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < left_view_stmt->get_table_size(); ++i) {
-      TableItem *table = left_view_stmt->get_table_item(i);
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null table item", K(ret));
-      } else {
-        table->for_update_ = false;
-      }
+    // all rows of the CONNECT BY results will output through the right view,
+    // hence only create FOR UPDATE info for the right view table.
+    left_table_item->for_update_ = false;
+    right_table_item->for_update_ = true;
+    if (OB_FAIL(pull_up_part_exprs(&stmt, right_table_item))) {
+      LOG_WARN("failed to pullup part exprs", K(ret));
+    } else if (OB_FAIL(create_for_update_dml_info(&stmt, right_table_item))) {
+      LOG_WARN("failed to create for update dml info", K(ret), KPC(right_table_item));
+    } else if (OB_FAIL(clear_for_update_mark(left_table_item))) {
+      LOG_WARN("failed to clear for update mark", K(ret), KPC(left_table_item));
     }
   }
 
@@ -2575,6 +2590,378 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
     } else if (OB_FAIL(ctx_->temp_table_ignore_stmts_.push_back(right_view_stmt))) {
       LOG_WARN("failed to push back stmt", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::add_select_item_for_update(ObSelectStmt *view_stmt, ObIArray<ObRawExpr*> &select_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(view_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (OB_UNLIKELY(view_stmt->has_distinct() || view_stmt->has_group_by())) {
+    // invalid usage, can not add rowkey into stmt with DISTINCT or GROUP BY.
+    // Oracle generates FOR UPDATE info after rewrite, so if DISTINCT can be
+    // removed by rewrite, we cannot achieve full compatibility.
+    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+    LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_table_size(); ++i) {
+      TableItem *table = NULL;
+      ObSEArray<ObRawExpr*, 1> unique_keys;
+      if (OB_ISNULL(table = view_stmt->get_table_item(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null", K(ret));
+      } else if (!table->for_update_) {
+        // do nothing
+      } else if (table->is_temp_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "CTE used in hierarchical query with FOR UPDATE");
+        LOG_WARN("CTE can not used in hierarchical query with FOR UPDATE", K(ret));
+      } else if (table->is_generated_table()) {
+        ObSEArray<ObRawExpr*, 4> sub_select_list;
+        ObSEArray<ObRawExpr*, 4> new_select_list;
+        if (OB_FAIL(SMART_CALL(add_select_item_for_update(table->ref_query_, sub_select_list)))) {
+          LOG_WARN("failed to add select item for update", K(ret), KPC(table));
+        } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
+                                                                     *table,
+                                                                     view_stmt,
+                                                                     sub_select_list,
+                                                                     new_select_list))) {
+          LOG_WARN("failed to create columns for view", K(ret), KPC(table), K(sub_select_list));
+        } else if (OB_FAIL(append_array_no_dup(select_list, new_select_list))) {
+          LOG_WARN("failed to append select list", K(ret));
+        }
+      } else if (OB_UNLIKELY(!table->is_basic_table() || is_virtual_table(table->ref_id_))) {
+        // invalid usage
+        ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+        LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
+      } else if (OB_FAIL(ObTransformUtils::generate_unique_key_for_basic_table(ctx_, view_stmt, table, unique_keys))){
+        LOG_WARN("fail to get rowkey expr", K(ret));
+      } else if (OB_FAIL(append_array_no_dup(select_list, unique_keys))) {
+        LOG_WARN("failed to append unique key exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::create_for_update_dml_info(ObSelectStmt *stmt, TableItem *view_table) {
+  int ret = OB_SUCCESS;
+  ObSelectStmt *view_stmt = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(view_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", K(ret), K(stmt), K(view_table));
+  } else if (OB_ISNULL(view_stmt = view_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("view stmt is null", K(ret), KPC(view_table));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_table_size(); ++i) {
+    TableItem *table = NULL;
+    ForUpdateDMLInfo *for_update_info = NULL;
+    ObSEArray<ObRawExpr*, 1> unique_keys;
+    ObSEArray<ColumnItem, 4> column_items;
+    if (OB_ISNULL(table = view_stmt->get_table_item(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if (!table->for_update_) {
+      // do nothing
+    } else if (OB_UNLIKELY(table->is_temp_table())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "CTE used in hierarchical query with FOR UPDATE");
+      LOG_WARN("CTE can not used in hierarchical query with FOR UPDATE", K(ret));
+    } else if (table->is_generated_table()) {
+      if (OB_ISNULL(table->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref query is NULL", K(ret), KPC(table));
+      } else if (OB_UNLIKELY(!table->ref_query_->has_for_update())) {
+        if (view_stmt->is_hierarchical_query() || table->ref_query_->is_hierarchical_query()) {
+          // for "SELECT * FROM (SELECT * from t1 CONNECT BY xxx) v1 CONNECT BY xxx FOR UPDATE;"
+          ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+          LOG_WARN("nested hierarchical query can not do FOR UPDATE", K(ret));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ref query has no for update", K(ret), KPC(table));
+        }
+      } else if (OB_FAIL(SMART_CALL(create_for_update_dml_info(view_stmt, table)))) {
+        LOG_WARN("failed to create for update dml info", K(ret), KPC(view_stmt), KPC(table));
+      } else if (OB_FAIL(pull_up_for_update_dml_info(stmt, view_table))) {
+        LOG_WARN("failed to pull up for update dml info", K(ret));
+      } else {
+        view_stmt->get_for_update_dml_infos().reuse();
+        // clean base table for update mark, only allocate for update operator on top of
+        // connect by join.
+        table->for_update_ = false;
+      }
+    } else if (OB_UNLIKELY(!table->is_basic_table() || is_virtual_table(table->ref_id_))) {
+      // invalid usage
+      ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+      LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
+    } else if (OB_ISNULL(for_update_info
+              = static_cast<ForUpdateDMLInfo*>(ctx_->allocator_->alloc(sizeof(ForUpdateDMLInfo))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (FALSE_IT(for_update_info = new(for_update_info)ForUpdateDMLInfo())) {
+    } else if (OB_FAIL(ObTransformUtils::generate_unique_key_for_basic_table(ctx_,
+                                                                             view_stmt,
+                                                                             table,
+                                                                             unique_keys,
+                                                                             &for_update_info->rowkey_cnt_))) {
+      LOG_WARN("failed to get rowkey expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(view_stmt,
+                                                              table->table_id_,
+                                                              for_update_info->is_nullable_))) {
+      LOG_WARN("failed to check is table on null side", K(ret));
+    } else if (OB_FAIL(stmt->get_column_items(view_table->table_id_, column_items))) {
+      LOG_WARN("failed to get column items", K(ret));
+    } else {
+      for (int64_t j = unique_keys.count() - 1; OB_SUCC(ret) && j >= 0; --j) {
+        bool find = false;
+        for (int64_t k = 0; OB_SUCC(ret) && !find && k < column_items.count(); ++k) {
+          int64_t select_item_idx = -1;
+          if (OB_ISNULL(column_items.at(k).expr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected NULL", K(ret), K(column_items.at(k)));
+          } else if (OB_FALSE_IT(select_item_idx = column_items.at(k).expr_->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
+          } else if (select_item_idx < 0 || select_item_idx >= view_stmt->get_select_item_size()) {
+            // do nothing
+          } else if (unique_keys.at(j) == view_stmt->get_select_item(select_item_idx).expr_) {
+            find = true;
+            if (OB_FAIL(for_update_info->unique_column_ids_.push_back(column_items.at(k).column_id_))) {
+              LOG_WARN("failed to push back column id", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret) && OB_UNLIKELY(!find)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to find column item", K(ret), KPC(unique_keys.at(j)));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        // clean base table for update mark, only allocate for update operator on top of
+        // connect by join.
+        table->for_update_ = false;
+        // add for update dml info
+        for_update_info->table_id_ = view_table->table_id_;
+        for_update_info->base_table_id_ = table->table_id_;
+        for_update_info->ref_table_id_ = table->ref_id_;
+        for_update_info->for_update_wait_us_ = table->for_update_wait_us_;
+        for_update_info->skip_locked_ = table->skip_locked_;
+        if (OB_FAIL(stmt->add_for_update_dml_info(for_update_info))) {
+          LOG_WARN("failed to add for update dml info", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::pull_up_for_update_dml_info(ObSelectStmt *upper_stmt,
+                                                       TableItem *view_table)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *view_stmt = NULL;
+  if (OB_ISNULL(upper_stmt) || OB_ISNULL(view_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", K(ret), K(upper_stmt), K(view_table));
+  } else if (OB_UNLIKELY(!view_table->is_generated_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table is not a generated table", K(ret), KPC(view_table));
+  } else if (OB_ISNULL(view_stmt = view_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref query is NULL", K(ret), KPC(view_table));
+  }
+
+  for (int64_t j = 0; OB_SUCC(ret) && j < view_stmt->get_for_update_dml_infos().count(); ++j) {
+    ForUpdateDMLInfo *for_update_info = NULL;
+    ForUpdateDMLInfo *view_for_update_info = NULL;
+    if (OB_ISNULL(view_for_update_info = view_stmt->get_for_update_dml_infos().at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("for update dml info is null", K(ret), KPC(view_stmt));
+    } else if (OB_ISNULL(for_update_info
+              = static_cast<ForUpdateDMLInfo*>(ctx_->allocator_->alloc(sizeof(ForUpdateDMLInfo))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (FALSE_IT(for_update_info = new(for_update_info)ForUpdateDMLInfo())) {
+    } else if (OB_FAIL(for_update_info->assign(*view_for_update_info))) {
+      LOG_WARN("fail to assign for update dml info", K(ret));
+    } else {
+      for_update_info->table_id_ = view_table->table_id_;
+      for_update_info->unique_column_ids_.reuse();
+    }
+    for (int64_t k = 0; OB_SUCC(ret) && k < view_for_update_info->unique_column_ids_.count(); ++k) {
+      bool find = false;
+      for (int64_t h = 0; OB_SUCC(ret) && !find && h < view_stmt->get_select_item_size(); ++h) {
+        SelectItem select_item = view_stmt->get_select_item(h);
+        const ObColumnRefRawExpr *select_expr = NULL;
+        if (OB_ISNULL(select_item.expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("select item expr is null", K(ret), K(select_item));
+        } else if (!select_item.expr_->is_column_ref_expr()) {
+          // do nothing
+        } else if (OB_FALSE_IT(select_expr = static_cast<ObColumnRefRawExpr*>(select_item.expr_))) {
+        } else if (select_expr->get_table_id() != view_for_update_info->table_id_ ||
+                    select_expr->get_column_id() != view_for_update_info->unique_column_ids_.at(k)) {
+          // do nothing
+        } else if (OB_FAIL(for_update_info->unique_column_ids_.push_back(h + OB_APP_MIN_COLUMN_ID))) {
+          LOG_WARN("failed to push column id", K(ret));
+        } else {
+          find = true;
+          break;
+        }
+      }
+      if (OB_SUCC(ret) && OB_UNLIKELY(!find)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find column item", K(ret), K(view_for_update_info->unique_column_ids_.at(k)));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(upper_stmt->add_for_update_dml_info(for_update_info))) {
+      LOG_WARN("failed to add for update dml info", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::clear_for_update_mark(TableItem *view_table)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *view_stmt = NULL;
+  if (OB_ISNULL(view_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", K(ret), K(view_table));
+  } else if (OB_ISNULL(view_stmt = view_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("view stmt is null", K(ret), KPC(view_table));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_table_size(); ++i) {
+    TableItem *table = NULL;
+    if (OB_ISNULL(table = view_stmt->get_table_item(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if ((table->is_generated_table() || table->is_temp_table())
+               && OB_FAIL(SMART_CALL(clear_for_update_mark(table)))) {
+      LOG_WARN("failed to clear for update mark", K(ret), KPC(table));
+    } else {
+      table->for_update_ = false;
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::pull_up_part_exprs(ObDMLStmt *stmt,
+                                              TableItem *table)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_ISNULL(table) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have NULL", K(ret));
+  } else if (table->is_basic_table()) {
+    // skip
+  } else if (table->is_generated_table() || table->is_temp_table()) {
+    ObSelectStmt *sel_stmt = NULL;
+    ObSEArray<ObRawExpr *, 4> view_columns;
+    ObSEArray<ObRawExpr *, 4> base_columns;
+    ObRawExprCopier copier(*ctx_->expr_factory_);
+    if (OB_ISNULL(sel_stmt = table->ref_query_) ) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get select stmt for base table item failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_table_size(); ++i) {
+      if (OB_FAIL(SMART_CALL(pull_up_part_exprs(sel_stmt, sel_stmt->get_table_item(i))))) {
+        LOG_WARN("failed to view pullup part exprs", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); ++i) {
+      ColumnItem &parent_column = stmt->get_column_items().at(i);
+      int64_t select_item_idx = parent_column.column_id_ - OB_APP_MIN_COLUMN_ID;
+      const ObColumnRefRawExpr *select_expr = NULL;
+      if (parent_column.table_id_ != table->table_id_) {
+        // do nothing
+      } else if (select_item_idx < 0 || select_item_idx >= sel_stmt->get_select_item_size()) {
+        // do nothing
+      } else if (OB_ISNULL(sel_stmt->get_select_item(select_item_idx).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select item expr is null", K(ret), KPC(sel_stmt), K(select_item_idx));
+      } else if (!sel_stmt->get_select_item(select_item_idx).expr_->is_column_ref_expr()) {
+        // do nothing
+      } else if (OB_FALSE_IT(select_expr =
+                 static_cast<ObColumnRefRawExpr*>(sel_stmt->get_select_item(select_item_idx).expr_))) {
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < sel_stmt->get_column_size(); ++j) {
+          ColumnItem &child_column = sel_stmt->get_column_items().at(j);
+          if (child_column.table_id_ == select_expr->get_table_id()
+              && child_column.column_id_ == select_expr->get_column_id()) {
+            if (OB_FAIL(view_columns.push_back(parent_column.expr_)) ||
+                OB_FAIL(base_columns.push_back(child_column.expr_))) {
+              LOG_WARN("failed to push back column expr", K(ret));
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(copier.add_replaced_expr(base_columns, view_columns))) {
+      LOG_WARN("failed to add replace pair", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_part_exprs().count(); ++i) {
+      ObDMLStmt::PartExprItem pei = sel_stmt->get_part_exprs().at(i);
+      if (OB_FAIL(copier.copy_on_replace(pei.part_expr_, pei.part_expr_))) {
+        LOG_WARN("failed to copy part expr", K(ret));
+      } else if (pei.subpart_expr_ != NULL
+                 && OB_FAIL(copier.copy_on_replace(pei.subpart_expr_, pei.subpart_expr_))) {
+        LOG_WARN("failed to copy subpart expr", K(ret));
+      } else if (OB_FAIL(stmt->get_part_exprs().push_back(pei))) {
+        LOG_WARN("failed to push back pullup partition expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::move_for_update_dml_info(ObSelectStmt *stmt,
+                                                    ObSelectStmt *hierarchical_stmt)
+{
+  int ret = OB_SUCCESS;
+  TableItem *hierarchical_table = NULL;
+  ObSEArray<ObRawExpr*, 4> column_exprs;
+  ObSEArray<ObRawExpr*, 4> new_column_list;
+  if (OB_ISNULL(stmt) || OB_ISNULL(hierarchical_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", K(ret), K(stmt), K(hierarchical_stmt));
+  } else if (stmt == hierarchical_stmt) {
+    // do nothing
+  } else if (!hierarchical_stmt->has_for_update()) {
+    // do nothing
+  } else if (OB_ISNULL(hierarchical_table = stmt->get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is null", K(ret));
+  } else if (OB_UNLIKELY(hierarchical_table->ref_query_ != hierarchical_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect ref query", K(ret), KPC(hierarchical_table->ref_query_), KPC(hierarchical_stmt));
+  } else if (OB_FAIL(hierarchical_stmt->get_column_exprs(column_exprs))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
+                                                               *hierarchical_table,
+                                                               stmt,
+                                                               column_exprs,
+                                                               new_column_list))) {
+    LOG_WARN("failed to create columns for view", K(ret));
+  } else if (OB_FAIL(pull_up_for_update_dml_info(stmt, hierarchical_table))) {
+    LOG_WARN("failed to pull up for update dml info", K(ret));
+  } else if (OB_FAIL(pull_up_part_exprs(stmt, hierarchical_table))) {
+    LOG_WARN("failed to pull up part exprs", K(ret));
+  } else {
+    // handle for update mark
+    for (int64_t i = 0; OB_SUCC(ret) && i < hierarchical_stmt->get_table_size(); ++i) {
+      TableItem *mocked_table = hierarchical_stmt->get_table_item(i);
+      if (OB_ISNULL(mocked_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is NULL", K(ret));
+      } else {
+        mocked_table->for_update_ = false;
+      }
+    }
+    hierarchical_table->for_update_ = true;
   }
   return ret;
 }
@@ -4202,6 +4589,32 @@ int ObTransformPreProcess::replace_expr_for_rls(ObDMLStmt &stmt,
   return ret;
 }
 
+int ObTransformPreProcess::get_inner_aggr_exprs(
+    ObSelectStmt *sub_stmt,
+    common::ObIArray<ObAggFunRawExpr*>& inner_aggr_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sub_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select stmt is null", K(ret));
+  } else {
+    common::ObIArray<ObAggFunRawExpr*> &aggr_exprs = sub_stmt->get_aggr_items();
+    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs.count(); ++i) {
+      if (OB_ISNULL(aggr_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr of aggr expr is null", K(ret));
+      } else if (aggr_exprs.at(i)->in_inner_stmt()) {
+        /*do nothing.*/
+        if (OB_FAIL(add_var_to_array_no_dup(inner_aggr_exprs,
+                                            aggr_exprs.at(i)))) {
+          LOG_WARN("failed to to add var to array no dup.", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformPreProcess::get_first_level_output_exprs(
     ObSelectStmt *sub_stmt,
     common::ObIArray<ObRawExpr*>& inner_aggr_exprs)
@@ -4212,13 +4625,14 @@ int ObTransformPreProcess::get_first_level_output_exprs(
     LOG_WARN("select stmt is null", K(ret));
   } else {
     common::ObIArray<ObAggFunRawExpr*> &aggr_exprs = sub_stmt->get_aggr_items();
-    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs.count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs.count(); ++i) {
       if (OB_ISNULL(aggr_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr of aggr expr is null", K(ret));
-      } else if (aggr_exprs.at(i)->is_nested_aggr()) {
+      } else if (aggr_exprs.at(i)->in_inner_stmt()) {
         /*do nothing.*/
       } else {
+        // outer aggr
         int64_t N = aggr_exprs.at(i)->get_param_count();
         for (int64_t j = 0; OB_SUCC(ret) && j < N; ++j) {
           if (OB_ISNULL(aggr_exprs.at(i)->get_param_expr(j))) {
@@ -4242,6 +4656,8 @@ int ObTransformPreProcess::generate_child_level_aggr_stmt(ObSelectStmt *select_s
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> complex_aggr_exprs;
+  ObSEArray<ObAggFunRawExpr*, 4> inner_aggr_exprs;
+
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt is null", K(ret));
@@ -4256,24 +4672,23 @@ int ObTransformPreProcess::generate_child_level_aggr_stmt(ObSelectStmt *select_s
                                                    ctx_->src_qb_name_,
                                                    ctx_->src_hash_val_))) {
     LOG_WARN("failed to recursive adjust statement id", K(ret));
-  } else if (OB_FAIL(get_first_level_output_exprs(sub_stmt,
-                                                  complex_aggr_exprs))) {
-    LOG_WARN("failed to extract levels aggr.", K(ret));
+  } else if (OB_FAIL(get_first_level_output_exprs(sub_stmt, complex_aggr_exprs))) {
+    LOG_WARN("failed to low levels aggr.", K(ret));
+  } else if (OB_FAIL(get_inner_aggr_exprs(sub_stmt, inner_aggr_exprs)) ) {
   } else {
     sub_stmt->get_aggr_items().reset();
     sub_stmt->get_select_items().reset();
+    sub_stmt->get_order_items().reset();
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < sub_stmt->get_having_exprs().count(); ++i) {
-    if (OB_FAIL(ObTransformUtils::extract_aggr_expr(sub_stmt->get_having_exprs().at(i),
-                                                    sub_stmt->get_aggr_items()))) {
-      LOG_WARN("failed to extract aggr exprs.", K(ret));
-    } else { /*do nothing.*/ }
+
+  for (int64_t j = 0; OB_SUCC(ret) && j < inner_aggr_exprs.count(); ++j) {
+    if (OB_FAIL(add_var_to_array_no_dup(sub_stmt->get_aggr_items(), inner_aggr_exprs.at(j)))) {
+      LOG_WARN("failed to add aggr exprs to aggr item.", K(ret));
+    }
   }
+
   for (int64_t j = 0; OB_SUCC(ret) && j < complex_aggr_exprs.count(); ++j) {
-    if (OB_FAIL(ObTransformUtils::extract_aggr_expr(complex_aggr_exprs.at(j),
-                                                    sub_stmt->get_aggr_items()))) {
-      LOG_WARN("failed to extract aggr exprs.", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
+    if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
                                                             complex_aggr_exprs.at(j),
                                                             sub_stmt))) {
       LOG_WARN("failed to push back into select item array.", K(ret));
@@ -4307,7 +4722,7 @@ int ObTransformPreProcess::remove_nested_aggr_exprs(ObSelectStmt *stmt)
       if (OB_ISNULL(stmt->get_aggr_items().at(i))) {
        ret = OB_ERR_UNEXPECTED;
        LOG_WARN("expr of aggr expr is null", K(ret));
-      } else if (stmt->get_aggr_items().at(i)->is_nested_aggr()) {
+      } else if (stmt->get_aggr_items().at(i)->in_inner_stmt()) {
        /*do nothing.*/
       } else if (OB_FAIL(aggr_exprs.push_back(stmt->get_aggr_items().at(i)))) {
        LOG_WARN("failed to assign to inner aggr exprs.", K(ret));
@@ -4356,7 +4771,6 @@ int ObTransformPreProcess::generate_parent_level_aggr_stmt(ObSelectStmt *&select
     select_stmt->get_table_items().reset();
     select_stmt->get_joined_tables().reset();
     select_stmt->get_from_items().reset();
-    select_stmt->get_order_items().reset();
     select_stmt->get_column_items().reset();
     select_stmt->get_condition_exprs().reset();
     select_stmt->get_part_exprs().reset();
@@ -4367,6 +4781,8 @@ int ObTransformPreProcess::generate_parent_level_aggr_stmt(ObSelectStmt *&select
     select_stmt->get_rollup_items().reset();
     select_stmt->get_cube_items().reset();
     select_stmt->get_having_exprs().reset();
+    select_stmt->get_order_items().reset();
+
     if (OB_FAIL(get_first_level_output_exprs(select_stmt,
                                              old_exprs))) {
       LOG_WARN("failed to get column exprs from stmt from.", K(ret));
@@ -10194,6 +10610,237 @@ int ObTransformPreProcess::disable_complex_dml_for_fulltext_index(ObDMLStmt *stm
         LOG_WARN("not supported complex dml operations on table with fulltext or mutivalue index", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::try_gen_straight_join_leading(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  const ObQueryHint *query_hint = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_ISNULL(query_hint = stmt->get_stmt_hint().query_hint_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(query_hint));
+  } else {
+    ObHint *leading_hint = stmt->get_stmt_hint().get_normal_hint(T_LEADING);
+    bool exist_leading_hint = query_hint->has_outline_data() ||
+                              query_hint->has_user_def_outline() ||
+                              OB_NOT_NULL(leading_hint);
+    ObSEArray<TableItem*, 4> flattened_tables;
+
+    //if the current qb already has leading hint or outline data, ignore straight_join info.
+    if (exist_leading_hint) {
+      //do nothing
+    } else if (stmt->is_select_stmt() &&
+               static_cast<ObSelectStmt*>(stmt)->is_select_straight_join()) {
+      if (OB_FAIL(add_ordered_hint(stmt, stmt->get_stmt_hint()))) {
+        LOG_WARN("failed to add ordered hint", K(ret));
+      } else {
+        //for straight_join written in the select clause, an ordered hint is added by default.
+        trans_happened = true;
+      }
+    } else if (OB_FAIL(get_flattened_tables_of_pure_straight_join(stmt, flattened_tables))) {
+      LOG_WARN("failed to get flattend tables of first pure straight join table", K(ret));
+    } else if (flattened_tables.count() < 2) {
+      //do nothing
+    } else if (OB_FAIL(add_leading_hint_by_flattened_tables(stmt, stmt->get_stmt_hint(),
+                                                            flattened_tables))) {
+      LOG_WARN("failed to add leading hint by straight join table", K(ret));
+    } else {
+      //for straight_join written in the from clause, generate partial leading info based on
+      //the first pure straight_join table found from left to right.
+      trans_happened = true;
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::get_flattened_tables_of_pure_straight_join(ObDMLStmt* stmt,
+                                                ObIArray<TableItem*> &flattened_tables)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<TableItem*, 4> from_tables;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_from_tables(from_tables))) {
+    LOG_WARN("failed to get from tables", K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < from_tables.count(); i++) {
+      TableItem *table_item = NULL;
+      bool is_pure_straight_join = false;
+      if (OB_ISNULL(table_item = from_tables.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (!table_item->is_joined_table()) {
+        //do nothing
+      } else if (OB_FAIL(check_pure_straight_join_table(table_item, is_pure_straight_join,
+                                                        flattened_tables))) {
+        LOG_WARN("failed to check pure straight join table", K(ret));
+      } else if (!is_pure_straight_join) {
+        flattened_tables.reuse();
+      } else {
+        found = true;
+      }
+    }
+  }
+  return ret;
+}
+
+// If all leaf nodes in the joined table are base tables and the join types within it are straight_join,
+// then it is considered a pure_straight_join_table whose join order is considered to be determined
+// (left associative after flattening).
+int ObTransformPreProcess::check_pure_straight_join_table(TableItem* table_item,
+                                                          bool &is_pure_straight_join,
+                                                          ObIArray<TableItem*> &flattened_tables)
+{
+  int ret = OB_SUCCESS;
+  is_pure_straight_join = false;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (table_item->is_basic_table()) {
+    is_pure_straight_join = true;
+    if (OB_FAIL(flattened_tables.push_back(table_item))) {
+      LOG_WARN("failed to push back table item", K(ret));
+    }
+  } else if (!table_item->is_joined_table()) {
+    is_pure_straight_join = false;
+  } else {
+    JoinedTable *joined_table = static_cast<JoinedTable*>(table_item);
+    bool is_left_pure_sj = false;
+    bool is_right_pure_sj = false;
+    if (OB_FAIL(SMART_CALL(check_pure_straight_join_table(joined_table->left_table_,
+                                                          is_left_pure_sj,
+                                                          flattened_tables)))) {
+      LOG_WARN("failed to check pure straight join table", K(ret));
+    } else if (OB_FAIL(SMART_CALL(check_pure_straight_join_table(joined_table->right_table_,
+                                                                is_right_pure_sj,
+                                                                flattened_tables)))) {
+      LOG_WARN("failed to check pure straight join table", K(ret));
+    } else if (joined_table->is_straight_join()) {
+      is_pure_straight_join = is_left_pure_sj && is_right_pure_sj;
+    } else {
+      is_pure_straight_join = false;
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::add_ordered_hint(ObDMLStmt* stmt, ObStmtHint &stmt_hint)
+{
+  int ret = OB_SUCCESS;
+  ObJoinOrderHint *join_order_hint = NULL;
+  ObString qb_name;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
+    LOG_WARN("failed to get qb name", K(ret));
+  } else if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_ORDERED, join_order_hint))) {
+    LOG_WARN("failed to create hint", K(ret));
+  } else if (OB_FALSE_IT(join_order_hint->set_qb_name(qb_name))) {
+  } else if (OB_FAIL(stmt_hint.normal_hints_.push_back(join_order_hint))) {
+    LOG_WARN("failed to push back hint", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::add_leading_hint_by_flattened_tables(ObDMLStmt* stmt,
+                                                                ObStmtHint &stmt_hint,
+                                                                ObIArray<TableItem*> &flattened_tables)
+{
+  int ret = OB_SUCCESS;
+  ObJoinOrderHint *join_order_hint = NULL;
+  ObString qb_name;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
+    LOG_WARN("failed to get qb name", K(ret));
+  } else if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_LEADING, join_order_hint))) {
+    LOG_WARN("failed to create hint", K(ret));
+  } else if (OB_ISNULL(join_order_hint)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FALSE_IT(join_order_hint->set_qb_name(qb_name))) {
+  } else if (OB_FAIL(construct_leading_table(stmt, flattened_tables, join_order_hint->get_table()))) {
+    LOG_WARN("failed to construct leading table", K(ret));
+  } else if (OB_FAIL(stmt_hint.normal_hints_.push_back(join_order_hint))) {
+    LOG_WARN("failed to push back hint", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::construct_leading_table(ObDMLStmt* stmt,
+                                                   ObIArray<TableItem*> &flattened_tables,
+                                                   ObLeadingTable &leading_table)
+{
+  int ret = OB_SUCCESS;
+  ObLeadingTable *cur_leading_table = NULL;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (flattened_tables.count() < 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table count", K(ret), K(flattened_tables.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < flattened_tables.count(); i++) {
+      ObLeadingTable *left_leading_table = cur_leading_table;
+      ObLeadingTable *right_leading_table = NULL;
+      if (OB_ISNULL(cur_leading_table)) {
+        if (OB_FAIL(construct_leaf_leading_table(stmt, flattened_tables.at(i), cur_leading_table))) {
+          LOG_WARN("failed to construct leaf leading table", K(ret));
+        } else if (OB_ISNULL(cur_leading_table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        }
+      } else if (OB_FAIL(construct_leaf_leading_table(stmt, flattened_tables.at(i), right_leading_table))) {
+        LOG_WARN("failed to construct leaf leading table", K(ret));
+      } else if (OB_FAIL(ObQueryHint::create_leading_table(ctx_->allocator_, cur_leading_table))) {
+        LOG_WARN("failed to create leading table", K(ret));
+      } else if (OB_ISNULL(cur_leading_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        cur_leading_table->left_table_ = left_leading_table;
+        cur_leading_table->right_table_ = right_leading_table;
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(leading_table.assign(*cur_leading_table))) {
+      LOG_WARN("failed to assign leading table", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::construct_leaf_leading_table(ObDMLStmt *stmt,
+                                                        TableItem *table,
+                                                        ObLeadingTable *&leading_table)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ObQueryHint::create_leading_table(ctx_->allocator_, leading_table))) {
+    LOG_WARN("failed to create leading table", K(ret));
+  } else if (OB_ISNULL(leading_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ObQueryHint::create_hint_table(ctx_->allocator_, leading_table->table_))) {
+    LOG_WARN("fail to create hint table", K(ret));
+  } else if (OB_ISNULL(leading_table->table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_qb_name(leading_table->table_->qb_name_))) {
+    LOG_WARN("failed to get qb name", K(ret));
+  } else {
+    leading_table->table_->db_name_ = table->database_name_;
+    leading_table->table_->table_name_ = table->table_name_;
   }
   return ret;
 }

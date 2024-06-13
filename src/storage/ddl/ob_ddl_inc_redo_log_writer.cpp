@@ -85,6 +85,7 @@ ObDDLIncRedoLogWriter::ObDDLIncRedoLogWriter()
 
 ObDDLIncRedoLogWriter::~ObDDLIncRedoLogWriter()
 {
+  ddl_inc_log_handle_.reset();
   if (nullptr != buffer_) {
     ob_free(buffer_);
     buffer_ = nullptr;
@@ -234,10 +235,9 @@ int ObDDLIncRedoLogWriter::wait_inc_redo_log_finish()
       LOG_WARN("fail to wait io finish", K(ret));
     } else if (OB_FAIL(ddl_inc_log_handle_.cb_->get_ret_code())) {
       LOG_WARN("ddl redo callback executed failed", K(ret));
-    } else {
-      ddl_inc_log_handle_.reset();
     }
   }
+  ddl_inc_log_handle_.reset();
 
   return ret;
 }

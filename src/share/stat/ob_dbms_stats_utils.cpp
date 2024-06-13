@@ -23,6 +23,7 @@
 #include "share/stat/ob_stat_item.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/ob_result_set.h"
 
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_json_pl_utils.h"
@@ -660,7 +661,10 @@ int ObDbmsStatsUtils::merge_col_stats(const ObTableStatParam &param,
       LOG_WARN("get unexpected null pointer", K(ret));
     } else if (is_part_id_valid(param, col_stat->get_partition_id())) {
       col_stat->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(col_stat->get_llc_bitmap()));
-      if (OB_FAIL(dst_col_stats.push_back(col_stat))) {
+      if (OB_UNLIKELY(col_stat->get_num_distinct() < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", KPC(col_stat), K(old_col_stats), K(ret));
+      } else if (OB_FAIL(dst_col_stats.push_back(col_stat))) {
         LOG_WARN("fail to push back table stats", K(ret));
       }
     }
@@ -1074,8 +1078,10 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.stat_level_ = stat_level;
   if (stat_level == SUBPARTITION_LEVEL) {
     gather_param.need_histogram_ = param.subpart_stat_param_.gather_histogram_;
+    gather_param.is_specify_partition_ = param.subpart_infos_.count() != param.all_subpart_infos_.count();
   } else if (stat_level == PARTITION_LEVEL) {
     gather_param.need_histogram_ = param.part_stat_param_.gather_histogram_;
+    gather_param.is_specify_partition_ = param.part_infos_.count() != param.all_part_infos_.count();
   } else if (stat_level == TABLE_LEVEL) {
     gather_param.need_histogram_ = param.global_stat_param_.gather_histogram_;
   }
@@ -1274,6 +1280,24 @@ int ObDbmsStatsUtils::check_all_cols_range_skew(const ObIArray<ObColumnStatParam
   return ret;
 }
 
+int ObDbmsStatsUtils::implicit_commit_before_gather_stats(sql::ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  uint64_t optimizer_features_enable_version = 0;
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx.get_my_session()));
+  } else if (OB_FAIL(ctx.get_my_session()->get_optimizer_features_enable_version(optimizer_features_enable_version))) {
+    LOG_WARN("failed to get_optimizer_features_enable_version", K(ret));
+  } else if (optimizer_features_enable_version < COMPAT_VERSION_4_2_4 ||
+             (optimizer_features_enable_version >= COMPAT_VERSION_4_3_0 &&
+              optimizer_features_enable_version < COMPAT_VERSION_4_3_2)) {
+    //do nothing
+  } else if (OB_FAIL(ObResultSet::implicit_commit_before_cmd_execute(*ctx.get_my_session(), ctx, stmt::T_ANALYZE))) {
+    LOG_WARN("failed to implicit commit before cmd execute", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
 
 }
 }

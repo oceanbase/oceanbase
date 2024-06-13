@@ -126,15 +126,18 @@ private:
 
   int set_proxy_version(ObSMConnection &conn);
   int set_client_version(ObSMConnection &conn);
+  int get_proxy_user_name(ObString &real_user);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPConnect);
   obmysql::OMPKHandshakeResponse hsr_;
   common::ObString user_name_;
+  common::ObString proxied_user_name_;
   common::ObString client_ip_;
   common::ObString tenant_name_;
   common::ObString db_name_;
   char client_ip_buf_[common::MAX_IP_ADDR_LENGTH + 1];
   char user_name_var_[OB_MAX_USER_NAME_BUF_LENGTH];
+  char proxied_user_name_var_[OB_MAX_USER_NAME_BUF_LENGTH];
   char db_name_var_[OB_MAX_DATABASE_NAME_BUF_LENGTH];
   int deser_ret_;
   int32_t client_port_;

@@ -363,6 +363,9 @@ struct ObAuditRecordData {
   int64_t user_id_;
   char *user_name_;
   int64_t user_name_len_;
+  int64_t proxy_user_id_;
+  char *proxy_user_name_;
+  int64_t proxy_user_name_len_;
   int user_group_; // user 所属 cgroup id，仅主线程展示
   uint64_t db_id_;
   char *db_name_;

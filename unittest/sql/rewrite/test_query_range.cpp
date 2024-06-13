@@ -61,6 +61,10 @@ public:
     ObSQLSessionInfo session;
     ctx.session_info_ = &session;
 
+    EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
+    EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));
+    EXPECT_TRUE(OB_SUCCESS == session.load_default_sys_variable(false, true));
+
     OK(ObRawExprUtils::make_raw_expr_from_str(expr_str, strlen(expr_str),
                                                                  ctx, expr, columns,
                                                                  sys_vars, &sub_query_info,
@@ -134,6 +138,10 @@ public:
     ctx.param_list_ = &params;
     ObSQLSessionInfo session;
     ctx.session_info_ = &session;
+
+    EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
+    EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));
+    EXPECT_TRUE(OB_SUCCESS == session.load_default_sys_variable(false, true));
 
     for (int64_t i = 0; i < more_range_columns_.count(); ++i) {
       OK(tmp_range_columns.push_back(more_range_columns_.at(i)));
@@ -1303,6 +1311,8 @@ TEST_F(ObQueryRangeTest, serialize_geo_keypart)
 int main(int argc, char **argv)
 {
   init_sql_factories();
+  system("rm -rf test_query_range.log*");
+  OB_LOGGER.set_file_name("test_query_range.log", true);
   OB_LOGGER.set_log_level("TRACE");
   int ret = 0;
   ContextParam param;

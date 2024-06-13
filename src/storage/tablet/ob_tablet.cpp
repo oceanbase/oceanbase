@@ -4282,29 +4282,31 @@ int ObTablet::create_memtable(
       LOG_WARN("failed to create memtable", K(ret), K(clog_checkpoint_scn),
                K(schema_version), K(for_replay));
     }
-  } else if (FALSE_IT(time_guard.click("inner_create_memtable"))) {
-  } else if (OB_FAIL(update_memtables())) {
-    LOG_WARN("failed to append new memtable to table store", K(ret), KPC(this));
-    if (OB_SIZE_OVERFLOW == ret) {
-      // rewrite errno to OB_EAGAIN when memtable count overflow, in case to stuck the log relpay engine
-      ret = OB_EAGAIN;
-    }
-  } else if (FALSE_IT(time_guard.click("update_memtables"))) {
   } else {
-    tablet_addr_.inc_seq();
-    table_store_addr_.addr_.inc_seq();
-
-    if (table_store_addr_.is_memory_object()) {
-      ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
-      if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
-        LOG_WARN("inner get memtables fail", K(ret), K(*this));
-      } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
-        LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
+    time_guard.click("inner_create_memtable");
+    do {
+      if (OB_FAIL(update_memtables())) {
+        LOG_WARN("failed to append new memtable to table store", K(ret), KPC(this));
+      } else if (FALSE_IT(time_guard.click("update_memtables"))) {
       } else {
-       time_guard.click("ts update mem");
-       LOG_INFO("table store update memtable success", K(ret), K(ls_id), K(tablet_id), K_(table_store_addr), KP(this));
+        tablet_addr_.inc_seq();
+        table_store_addr_.addr_.inc_seq();
+        if (table_store_addr_.is_memory_object()) {
+          ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
+          if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
+            LOG_WARN("inner get memtables fail", K(ret), K(*this));
+          } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
+            LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
+          } else {
+           time_guard.click("ts update mem");
+           LOG_INFO("table store update memtable success", K(ret), K(ls_id), K(tablet_id), K_(table_store_addr), KP(this));
+          }
+        }
       }
-    }
+      if (OB_FAIL(ret) && REACH_COUNT_INTERVAL(100)) {
+        LOG_ERROR("fail to refresh tablet memtables, which may cause hang", K(ret), KPC(this));
+      }
+    } while(OB_FAIL(ret));
   }
 
   STORAGE_LOG(DEBUG,
@@ -5610,7 +5612,9 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
   attr.is_empty_shell_ = table_store_addr_.addr_.is_none();
   attr.has_next_tablet_ = tablet_meta_.has_next_tablet_;
   attr.ha_status_ = tablet_meta_.ha_status_.get_ha_status();
-
+  attr.required_bytes_ = tablet_meta_.space_usage_.data_size_ + tablet_meta_.space_usage_.shared_data_size_;
+  attr.occupy_bytes_ = tablet_meta_.space_usage_.occupy_bytes_;
+  attr.tablet_meta_bytes_ = tablet_meta_.space_usage_.shared_meta_size_ + tablet_meta_.space_usage_.meta_size_;
   attr.has_nested_table_ = false;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
   const ObTabletTableStore *table_store = nullptr;
@@ -6619,6 +6623,47 @@ int ObTablet::init_aggregated_info(common::ObArenaAllocator &allocator, ObLinked
   return ret;
 }
 
+int ObTablet::calc_sstable_occupy_size(int64_t &occupy_size)
+{
+  int ret = OB_SUCCESS;
+  occupy_size = 0;
+  ObTableStoreIterator iter;
+  if (OB_FAIL(inner_get_all_sstables(iter))) {
+    LOG_WARN("fail to get all sstables", K(ret));
+  }
+  int64_t occupy_bytes = 0;
+  while (OB_SUCC(ret)) {
+    ObITable *table = nullptr;
+    ObSSTable *sstable = nullptr;
+    ObSSTableMetaHandle meta_handle;
+    if (OB_FAIL(iter.get_next(table))) {
+      if (OB_UNLIKELY(OB_ITER_END == ret)) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("fail to get next table from iter", K(ret), K(iter));
+      }
+    } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
+    } else if (OB_ISNULL(sstable) || !sstable->is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the sstable is null or invalid", K(ret), KPC(sstable));
+    } else if (OB_FAIL(sstable->get_meta(meta_handle))) {
+      LOG_WARN("fail to get sstable meta handle", K(ret), KPC(sstable));
+    } else if (!meta_handle.is_valid()) {
+      LOG_WARN("meta_handle is not valid", K(ret), K(meta_handle), KPC(sstable));
+    } else if (sstable->is_small_sstable()) {
+      occupy_bytes += sstable->get_macro_read_size(); /*nested_size_*/
+    } else {
+      const ObSSTableMeta &sstable_meta = meta_handle.get_sstable_meta();
+      occupy_bytes += sstable_meta.get_occupy_size();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    occupy_size = occupy_bytes;
+  }
+  return ret;
+}
+
 int ObTablet::load_medium_info_list(
     common::ObArenaAllocator &allocator,
     const ObTabletComplexAddr<oceanbase::storage::ObTabletDumpedMediumInfo> &complex_addr,
@@ -7359,7 +7404,7 @@ int ObTablet::get_all_memtables(ObTableHdlArray &handle) const
   return ret;
 }
 
-int ObTablet::get_boundary_memtable(ObTableHandleV2 &handle) const
+int ObTablet::get_boundary_memtable_from_memtable_mgr(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
   ObProtectedMemtableMgrHandle *protected_handle = NULL;

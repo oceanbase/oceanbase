@@ -1772,7 +1772,7 @@
     "dl":"",
     "type":0
   },
-  "is_nested_aggr":false,
+  "expr_in_inner_stmt":false,
   "pl_agg_udf_expr":null
 }
 [13] max(c1)
@@ -1865,7 +1865,7 @@
     "dl":"",
     "type":0
   },
-  "is_nested_aggr":false,
+  "expr_in_inner_stmt":false,
   "pl_agg_udf_expr":null
 }
 [14] c1 in (select t1 from table1)

@@ -498,6 +498,31 @@ int ObInsertLogPlan::build_lock_row_flag_expr(ObConstRawExpr *&lock_row_flag_exp
   return ret;
 }
 
+int ObInsertLogPlan::get_osg_type(bool is_multi_part_dml,
+                                  ObShardingInfo *insert_table_sharding,
+                                  int64_t distributed_method,
+                                  OSG_TYPE &type)
+{
+  int ret = OB_SUCCESS;
+  type = OSG_TYPE::NORMAL_OSG;
+  if (DIST_PARTITION_WISE == distributed_method ||
+      DIST_PULL_TO_LOCAL == distributed_method) {
+    //need merge stats
+    type = OSG_TYPE::GATHER_OSG;
+  } else if (DIST_BASIC_METHOD == distributed_method) {
+    if (is_multi_part_dml) {
+      type = OSG_TYPE::NORMAL_OSG;
+    } else if (OB_ISNULL(insert_table_sharding)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null sharding", K(ret));
+    } else if (insert_table_sharding->is_remote()) {
+      //need merge stats
+      type = OSG_TYPE::GATHER_OSG;
+    }
+  }
+  return ret;
+}
+
 int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
                                          ObTablePartitionInfo *insert_table_part,
                                          ObShardingInfo *insert_table_sharding,
@@ -511,6 +536,7 @@ int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
   ObExchangeInfo exch_info;
   bool is_multi_part_dml = false;
   CandidatePlan candi_plan;
+  OSG_TYPE osg_type = OSG_TYPE::NORMAL_OSG;
   int64_t inherit_sharding_index = OB_INVALID_INDEX;
   ObShardingInfo *insert_op_sharding = NULL;
   ObSEArray<ObShardingInfo*, 2> input_shardings;
@@ -534,8 +560,15 @@ int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
     } else if (0 == distributed_methods) {
       /*do nothing*/
     } else if (osg_info != NULL &&
+               OB_FAIL(get_osg_type(is_multi_part_dml,
+                                    insert_table_sharding,
+                                    distributed_methods,
+                                    osg_type))) {
+      LOG_WARN("failed to get osg type", K(ret));
+    } else if (osg_info != NULL &&
                OB_FAIL(allocate_optimizer_stats_gathering_as_top(candi_plan.plan_tree_,
-                                                                 *osg_info))) {
+                                                                 *osg_info,
+                                                                 osg_type))) {
       LOG_WARN("failed to allocate sequence as top", K(ret));
     } else if (DIST_PULL_TO_LOCAL == distributed_methods) {
       if (OB_FAIL(allocate_exchange_as_top(candi_plan.plan_tree_, exch_info))) {
@@ -1227,21 +1260,24 @@ int ObInsertLogPlan::prepare_unique_constraint_info(const ObTableSchema &index_s
   } else if (!index_schema.is_index_table() && index_schema.is_heap_table()) {
     // 如果是堆表，那么这里还需要在 constraint_info.constraint_columns_中追加分区建
     // 因为4.0版本堆表 分区建 + hidden_pk 才能保证唯一性
-    uint64_t rowkey_column_id = 0;
-    const ObRowkeyInfo &rowkey_info = index_schema.get_partition_key_info();
     const ColumnItem *col_item = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
-      if (OB_FAIL(rowkey_info.get_column_id(i, rowkey_column_id))) {
-        LOG_WARN("get rowkey column id failed", K(ret));
-      } else if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*insert_stmt,
-                                                                               constraint_info.table_id_,
-                                                                               rowkey_column_id))) {
+    ObSEArray<uint64_t, 5> rowkey_partkey_ids;
+    if (OB_FAIL(index_schema.get_rowkey_partkey_column_ids(rowkey_partkey_ids))) {
+      LOG_WARN("fail to get rowkey partkey column_ids", K(ret), K(index_schema.get_table_id()));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_partkey_ids.count(); ++i) {
+      uint64_t column_id = rowkey_partkey_ids.at(i);
+      if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*insert_stmt,
+                                                                        constraint_info.table_id_,
+                                                                        column_id))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get column expr by id failed", K(ret), K(rowkey_column_id));
-      } else if (OB_FAIL(constraint_info.constraint_columns_.push_back(col_item->expr_))) {
+        LOG_WARN("get column expr by id failed", K(ret), K(i), K(column_id), K(rowkey_partkey_ids));
+      } else if (OB_FAIL(add_var_to_array_no_dup(constraint_info.constraint_columns_, col_item->expr_))) {
         LOG_WARN("store column expr to column exprs failed", K(ret));
       }
     }
+
   }
   return ret;
 }
@@ -1598,7 +1634,8 @@ int ObInsertLogPlan::candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info
           LOG_WARN("failed to allocate exchange as top", K(ret));
         } else if (OB_FAIL(allocate_optimizer_stats_gathering_as_top(
                                                                 best_candidates.at(i).plan_tree_,
-                                                                *osg_info))) {
+                                                                *osg_info,
+                                                                OSG_TYPE::MERGE_OSG))) {
           LOG_WARN("failed to allocate sequence as top", K(ret));
         }
       }

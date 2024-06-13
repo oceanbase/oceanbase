@@ -114,9 +114,12 @@ public:
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(K_(is_reuse_macro_block), K_(occupy_size));
+  TO_STRING_KV(K_(is_reuse_macro_block), K_(occupy_size), K_(macro_meta_row));
   bool is_reuse_macro_block_;
   int64_t occupy_size_;
+
+  blocksstable::ObDatumRow macro_meta_row_; // used to get macro meta
+  common::ObArenaAllocator allocator_;
 };
 
 struct ObCopyTabletInfoArg
@@ -543,11 +546,12 @@ public:
   int assign(const ObTransferTabletInfoArg &other);
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K_(tablet_list));
+  TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(data_version));
   uint64_t tenant_id_;
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
+  uint64_t data_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferTabletInfoArg);
 };

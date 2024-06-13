@@ -377,6 +377,20 @@ int ObLockMemCtx::check_lock_exist( //TODO(lihongqin):check it
   return ret;
 }
 
+int ObLockMemCtx::check_contain_tablet(ObTabletID tablet_id, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  contain = false;
+  RDLockGuard guard(list_rwlock_);
+  DLIST_FOREACH(curr, lock_list_) {
+    if (curr->lock_op_.is_tablet_lock(tablet_id)) {
+      contain = true;
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObLockMemCtx::check_modify_schema_elapsed(
     const ObLockID &lock_id,
     const int64_t schema_version)

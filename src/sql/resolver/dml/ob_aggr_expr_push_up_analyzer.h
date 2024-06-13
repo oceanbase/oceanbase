@@ -51,6 +51,7 @@ public:
                                     ObRawExpr *&final_aggr);
 private:
   int analyze_aggr_param_expr(ObRawExpr *&param_expr,
+                              bool is_in_aggr_expr,
                               bool is_root = false,
                               bool is_child_stmt = false);
 

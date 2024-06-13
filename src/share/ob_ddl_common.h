@@ -101,6 +101,7 @@ enum ObDDLType
   DDL_CREATE_MVIEW = 1015,
   DDL_ALTER_COLUMN_GROUP = 1016, // alter table add/drop column group
   DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION = 1017,
+  DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION = 1018,
 
   // @note new normal ddl type to be defined here !!!
   DDL_NORMAL_TYPE = 10001,
@@ -108,6 +109,10 @@ enum ObDDLType
   DDL_CHANGE_COLUMN_NAME = 10003,
   DDL_DROP_COLUMN_INSTANT = 10004,
   DDL_ALTER_PARTITION_AUTO_SPLIT_ATTRIBUTE = 10005, // auto table auto partition // online
+  DDL_ADD_COLUMN_INSTANT = 10006, // add after/before column
+  DDL_MODIFY_COLUMN_ONLINE = 10007,
+  DDL_COMPOUND_ONLINE = 10008,
+  DDL_COMPOUND_INSTANT = 10009,
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };
@@ -130,6 +135,8 @@ enum ObDDLTaskType
   CANCEL_DDL_TASK = 10,
   MODIFY_NOT_NULL_COLUMN_STATE_TASK = 11,
   MAKE_RECOVER_RESTORE_TABLE_TASK_TAKE_EFFECT = 12,
+  PARTITION_SPLIT_RECOVERY_TASK = 13,
+  PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14
 };
 
 enum ObDDLTaskStatus {
@@ -157,6 +164,7 @@ enum ObDDLTaskStatus {
   WAIT_DATA_TABLE_SPLIT_END = 21,
   WAIT_LOCAL_INDEX_SPLIT_END = 22,
   WAIT_LOB_TABLE_SPLIT_END = 23,
+  WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH = 24,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -253,6 +261,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::WAIT_LOB_TABLE_SPLIT_END:
       str = "WAIT_LOB_TABLE_SPLIT_END";
+      break;
+    case ObDDLTaskStatus::WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH:
+      str = "WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
@@ -819,4 +830,3 @@ public:
 }  // end namespace oceanbase
 
 #endif  // OCEANBASE_SHARE_OB_DDL_COMMON_H
-

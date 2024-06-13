@@ -37,7 +37,10 @@ namespace transaction {
 class ObFakeTxDataTable : public ObTxDataTable {
 public:
   ObSliceAlloc slice_allocator_;
-  ObTenantTxDataAllocator *FAKE_ALLOCATOR = (ObTenantTxDataAllocator *)0x1;
+  ObTenantTxDataAllocator __FAKE_ALLOCATOR_OBJ;
+  ObTenantTxDataAllocator *FAKE_ALLOCATOR = &__FAKE_ALLOCATOR_OBJ;
+  ObTenantTxDataOpAllocator __FAKE_ALLOCATOR_OBJ2;
+  ObTenantTxDataOpAllocator *FAKE_ALLOCATOR2 = &__FAKE_ALLOCATOR_OBJ2;
 
 public:
   ObFakeTxDataTable() : arena_allocator_(), map_(arena_allocator_, 1 << 20 /*2097152*/)
@@ -51,6 +54,9 @@ public:
     OB_ASSERT(OB_SUCCESS == slice_allocator_.init(
                                 sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, mem_attr));
     slice_allocator_.set_nway(32);
+    FAKE_ALLOCATOR->init("FAKE_A");
+    FAKE_ALLOCATOR2->init();
+    tx_data_allocator_ = FAKE_ALLOCATOR;
     is_inited_ = true;
   }
   virtual int init(ObLS *ls, ObTxCtxTable *tx_ctx_table) override
@@ -70,6 +76,7 @@ public:
     ObTxData *tx_data = new (ptr) ObTxData();
     tx_data->ref_cnt_ = 100;
     tx_data->tx_data_allocator_ = FAKE_ALLOCATOR;
+    tx_data->op_allocator_ = FAKE_ALLOCATOR2;
     tx_data_guard.init(tx_data);
     return OB_ISNULL(tx_data) ? OB_ALLOCATE_MEMORY_FAILED : OB_SUCCESS;
   }
@@ -83,7 +90,6 @@ public:
     to->tx_data_allocator_ = FAKE_ALLOCATOR;
     to_guard.init(to);
     OX (*to = *from);
-    OZ (deep_copy_undo_status_list_(from->undo_status_list_, to->undo_status_list_));
     return ret;
   }
   virtual void free_tx_data(ObTxData *tx_data)

@@ -618,7 +618,13 @@ int ObLSTxService::flush(SCN &recycle_scn)
         has_gen_diagnose_trace = true;
         MTL(ObCheckpointDiagnoseMgr*)->acquire_trace_id(ls_id_, trace_id);
       }
-      TRANS_LOG(INFO, "common_checkpoints flush", K(trace_id), K(ls_id_), K(has_gen_diagnose_trace), K(common_checkpoints_[i]));
+      TRANS_LOG(INFO,
+                "common_checkpoints flush",
+                K(i),
+                K(trace_id),
+                K(ls_id_),
+                K(has_gen_diagnose_trace),
+                K(common_checkpoints_[i]));
       if (OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(recycle_scn, trace_id))) {
         TRANS_LOG(WARN, "obCommonCheckpoint flush failed", K(tmp_ret), K(common_checkpoints_[i]));
       }
@@ -899,6 +905,18 @@ int ObLSTxService::print_all_tx_ctx(const int64_t print_num)
   return ret;
 }
 
+int ObLSTxService::retry_apply_start_working_log()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else {
+    ret = mgr_->retry_apply_start_working_log();
+  }
+  return ret;
+}
+
 int ObLSTxService::set_max_replay_commit_version(share::SCN commit_version)
 {
   int ret = OB_SUCCESS;
@@ -924,25 +942,28 @@ int ObLSTxService::check_tx_blocked(bool &tx_blocked) const
   }
   return ret;
 }
+int ObLSTxService::filter_tx_need_transfer(ObIArray<ObTabletID> &tablet_list,
+                                           const share::SCN data_end_scn,
+                                           ObIArray<transaction::ObTransID> &move_tx_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(mgr_->filter_tx_need_transfer(tablet_list, data_end_scn, move_tx_ids))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  return ret;
+}
 
-int ObLSTxService::transfer_out_tx_op(int64_t except_tx_id,
-                                      const share::SCN data_end_scn,
-                                      const share::SCN op_scn,
-                                      transaction::NotifyType op_type,
-                                      bool is_replay,
-                                      share::ObLSID dest_ls_id,
-                                      int64_t transfer_epoch,
+int ObLSTxService::transfer_out_tx_op(const ObTransferOutTxParam &param,
                                       int64_t &active_tx_count,
                                       int64_t &op_tx_count)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
-  if (OB_FAIL(mgr_->transfer_out_tx_op(except_tx_id, data_end_scn, op_scn, op_type, is_replay,
-          dest_ls_id, transfer_epoch, active_tx_count, op_tx_count))) {
+  if (OB_FAIL(mgr_->transfer_out_tx_op(param, active_tx_count, op_tx_count))) {
     TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
   }
   int64_t end_time = ObTimeUtility::current_time();
-  LOG_INFO("transfer_out_tx_op", KR(ret), K(op_type), "cost", end_time - start_time, K(active_tx_count), K(op_tx_count));
+  LOG_INFO("transfer_out_tx_op", KR(ret), "cost", end_time - start_time, K(active_tx_count), K(op_tx_count));
   return ret;
 }
 
@@ -961,18 +982,17 @@ int ObLSTxService::wait_tx_write_end(ObTimeoutCtx &timeout_ctx)
 int ObLSTxService::collect_tx_ctx(const ObLSID dest_ls_id,
                                   const SCN log_scn,
                                   const ObIArray<ObTabletID> &tablet_list,
-                                  int64_t &tx_count,
+                                  const ObIArray<ObTransID> &move_tx_ids,
                                   int64_t &collect_count,
                                   ObIArray<ObTxCtxMoveArg> &res)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
-  if (OB_FAIL(mgr_->collect_tx_ctx(dest_ls_id, log_scn, tablet_list, tx_count, collect_count, res))) {
+  if (OB_FAIL(mgr_->collect_tx_ctx(dest_ls_id, log_scn, tablet_list, move_tx_ids, collect_count, res))) {
     TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
   }
   int64_t end_time = ObTimeUtility::current_time();
-  LOG_INFO("collect_tx_ctx", KR(ret), K(ls_id_), "cost_us", end_time - start_time,
-      K(tx_count), K(collect_count));
+  LOG_INFO("collect_tx_ctx", KR(ret), K(ls_id_), "cost_us", end_time - start_time, K(collect_count));
   return ret;
 }
 

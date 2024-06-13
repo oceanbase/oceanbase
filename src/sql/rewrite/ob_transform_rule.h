@@ -202,6 +202,9 @@ struct ObTryTransHelper
     available_tb_id_(0),
     subquery_count_(0),
     temp_table_count_(0),
+    qb_name_sel_start_id_(0),
+    qb_name_set_start_id_(0),
+    qb_name_other_start_id_(0),
     unique_key_provider_(NULL)
   {}
 
@@ -212,6 +215,9 @@ struct ObTryTransHelper
   uint64_t available_tb_id_;
   int64_t subquery_count_;
   int64_t temp_table_count_;
+  int64_t qb_name_sel_start_id_;
+  int64_t qb_name_set_start_id_;
+  int64_t qb_name_other_start_id_;
   ObSEArray<int64_t, 4, common::ModulePageAllocator, true> qb_name_counts_;
   StmtUniqueKeyProvider *unique_key_provider_;
 };

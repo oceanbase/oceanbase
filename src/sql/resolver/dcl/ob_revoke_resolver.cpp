@@ -459,13 +459,20 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
             LOG_WARN("Resolve priv set error", K(ret));
           } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
             LOG_WARN("fail to get data version", K(tenant_id));
-          } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
-            if ((priv_set & OB_PRIV_EXECUTE) != 0 ||
-                (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ||
-                (priv_set & OB_PRIV_CREATE_ROUTINE) != 0) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or 4_2_2_0", K(ret));
-            }
+          } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)
+                     && ((priv_set & OB_PRIV_EXECUTE) != 0 ||
+                         (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ||
+                         (priv_set & OB_PRIV_CREATE_ROUTINE) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or 4_2_2_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke execute/alter routine/create routine privilege");
+          } else if (!sql::ObSQLUtils::is_data_version_ge_423_or_432(compat_version)
+                     && ((priv_set & OB_PRIV_CREATE_TABLESPACE) != 0 ||
+                         (priv_set & OB_PRIV_SHUTDOWN) != 0 ||
+                         (priv_set & OB_PRIV_RELOAD) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_3_0 or 4_3_2_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke create tablespace/shutdown/reload privilege");
           }
           if (OB_FAIL(ret)) {
           } else {
@@ -494,12 +501,21 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
               } else {
                 uint64_t user_id = OB_INVALID_ID;
                 //0: user name; 1: host name
-                ObString user_name(static_cast<int32_t>(user_hostname_node->children_[0]->str_len_),
-                                   user_hostname_node->children_[0]->str_value_);
+                ObString user_name;
                 ObString host_name;
+                if (user_hostname_node->children_[0]->type_ == T_FUN_SYS_CURRENT_USER) {
+                  user_name = params_.session_info_->get_user_name();
+                } else {
+                  user_name = ObString(static_cast<int32_t>(user_hostname_node->children_[0]->str_len_),
+                                   user_hostname_node->children_[0]->str_value_);
+                }
                 if (NULL == user_hostname_node->children_[1]) {
-                  host_name.assign_ptr(OB_DEFAULT_HOST_NAME, 
+                  if (user_hostname_node->children_[0]->type_ == T_FUN_SYS_CURRENT_USER) {
+                    host_name = params_.session_info_->get_host_name();
+                  } else {
+                    host_name.assign_ptr(OB_DEFAULT_HOST_NAME,
                                        static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
+                  }
                 } else {
                   host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
                             static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));

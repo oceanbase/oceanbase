@@ -307,7 +307,7 @@ int ObLogFileHandler::unlink(const char* file_path)
   while (OB_SUCC(ret)) {
     if (OB_FAIL(THE_IO_DEVICE->unlink(file_path)) && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
       LOG_WARN("unlink failed", K(ret), K(file_path));
-      ob_usleep(static_cast<uint32_t>(UNLINK_RETRY_INTERVAL_US));
+      ob_usleep<ObWaitEventIds::SLOG_NORMAL_RETRY_SLEEP>(UNLINK_RETRY_INTERVAL_US);
       ret = OB_SUCCESS;
     } else if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
       ret = OB_SUCCESS;
@@ -358,7 +358,7 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
         if (REACH_TIME_INTERVAL(LOG_INTERVAL_US)) {
           LOG_WARN("fail to aio_write", K(ret), K(io_info), K(retry_cnt));
         } else {
-          ob_usleep(static_cast<uint32_t>(SLEEP_TIME_US));
+          ob_usleep<ObWaitEventIds::SLOG_NORMAL_RETRY_SLEEP>(SLEEP_TIME_US);
         }
       }
     } while (OB_FAIL(ret));
@@ -381,7 +381,7 @@ int ObLogFileHandler::open(const char *file_path, const int flags, const mode_t 
         LOG_WARN("failed to open file", K(ret), K(file_path), K(errno), KERRMSG);
         if (OB_TIMEOUT == ret || OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
-          ob_usleep(static_cast<uint32_t>(ObLogDefinition::RETRY_SLEEP_TIME_IN_US));
+          ob_usleep<ObWaitEventIds::SLOG_NORMAL_RETRY_SLEEP>(ObLogDefinition::RETRY_SLEEP_TIME_IN_US);
         }
       } else {
         break;

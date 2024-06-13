@@ -352,7 +352,7 @@ class ObTxExecResult
   bool incomplete_; // TODO: (yunxing.cyx) remove, required before sql use new API
   share::ObLSArray touched_ls_list_;
   ObTxPartList parts_;
-  ObSArray<ObTransIDAndAddr> conflict_txs_; // FARM COMPAT WHITELIST
+  ObSArray<ObTransIDAndAddr> conflict_txs_; // FARM COMPAT WHITELIST for cflict_txs_
   ObSArray<storage::ObRowConflictInfo> conflict_info_array_;
 public:
   ObTxExecResult();
@@ -554,7 +554,7 @@ protected:
   // conflict_txs_ is valid when transaction is not executed on local
   // on scheduler, conflict_txs_ merges all participants executed results on remote
   // on participant, conflict_txs_ temporary stores conflict information, and will be read by upper layers, bring back to scheduler
-  ObSArray<ObTransIDAndAddr> conflict_txs_; // FARM COMPAT WHITELIST
+  ObSArray<ObTransIDAndAddr> conflict_txs_; // FARM COMPAT WHITELIST for cflict_txs_
   ObSArray<storage::ObRowConflictInfo> conflict_info_array_;
 
   // used during commit
@@ -854,13 +854,20 @@ public:
                    , list_()
 #endif
    {}
+#ifdef ENABLE_DEBUG_LOG
+    ~ObTxDescAlloc()
+    {
+      ObSpinLockGuard guard(lk_);
+      list_.remove();
+    }
+#endif
    ObTxDesc* alloc_value()
    {
      ATOMIC_INC(&alloc_cnt_);
      ObTxDesc *it = op_alloc(ObTxDesc);
 #ifdef ENABLE_DEBUG_LOG
-      ObSpinLockGuard guard(lk_);
-      list_.insert(it->alloc_link_);
+     ObSpinLockGuard guard(lk_);
+     list_.insert(it->alloc_link_);
 #endif
       return it;
     }
@@ -874,6 +881,10 @@ public:
 #endif
         op_free(v);
       }
+    }
+    static void force_free(ObTxDesc *v)
+    {
+      op_free(v);
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
 #ifdef ENABLE_DEBUG_LOG
@@ -898,6 +909,9 @@ public:
       ObTxDesc::DLink list_;
 #endif
   };
+  static void force_release(ObTxDesc &tx) {
+    ObTxDescAlloc::force_free(&tx);
+  }
   share::ObLightHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
   ObTransService &txs_;

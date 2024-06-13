@@ -221,11 +221,12 @@ protected:
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
   virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
-
+  virtual bool is_kv_processor() override { return true; }
 
 private:
   int process_query_start();
   int process_query_next();
+  int process_query_end();
   int destory_query_session(bool need_rollback_trans);
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAsyncP);
 

@@ -389,6 +389,7 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
                                          bool &normal_sort_valid)
 {
   int ret = OB_SUCCESS;
+  bool has_keep_aggr = false;
   if (ignore_hint) {
     use_hash_valid = true;
     use_merge_valid = true;
@@ -403,10 +404,13 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(optimizer_context_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_stmt()), K(optimizer_context_.get_query_ctx()), K(ret));
+  } else if (OB_FAIL(check_aggr_with_keep(get_stmt()->get_aggr_items(), has_keep_aggr))) {
+    LOG_WARN("failed to check aggr with keep", K(ret));
   } else if (get_stmt()->has_rollup()
              || group_by_exprs.empty()
-             || get_stmt()->has_distinct_or_concat_agg()) {
-    //group_concat and distinct aggregation hold all input rows temporary,
+             || get_stmt()->has_distinct_or_concat_agg()
+             || has_keep_aggr) {
+    //keep_aggr、group_concat and distinct aggregation hold all input rows temporary,
     //too much memory consumption for hash aggregate.
     use_hash_valid = false;
   }
@@ -2973,7 +2977,10 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_PARTITION_WISE)) {
     OPT_TRACE("check partition wise method");
     bool is_partition_wise = false;
-    if (OB_FAIL(ObShardingInfo::check_if_match_partition_wise(equal_sets,
+    if (!is_set_partition_wise_valid(left_child, right_child)) {
+      set_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
+      OPT_TRACE("contain merge op plan will not use partition wise method");
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_partition_wise(equal_sets,
                                                               left_set_keys,
                                                               right_set_keys,
                                                               left_child.get_strong_sharding(),
@@ -2981,11 +2988,8 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
                                                               is_partition_wise))) {
       LOG_WARN("failed to check if match partition wise join", K(ret));
     } else if (is_partition_wise) {
-      if (left_child.is_exchange_allocated() == right_child.is_exchange_allocated()
-          && is_set_partition_wise_valid(left_child, right_child)) {
-        set_dist_methods = DistAlgo::DIST_PARTITION_WISE;
-        OPT_TRACE("plan will use partition wise method and prune other method");
-      }
+      set_dist_methods = DistAlgo::DIST_PARTITION_WISE;
+      OPT_TRACE("plan will use partition wise method and prune other method");
     } else {
       set_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
       OPT_TRACE("plan will not use partition wise method");
@@ -3022,7 +3026,10 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_PARTITION_NONE)) {
     OPT_TRACE("check partition none method");
     bool left_match_repart = false;
-    if (OB_FAIL(check_if_set_match_repart(equal_sets,
+    if (!is_set_repart_valid(left_child, right_child, DistAlgo::DIST_PARTITION_NONE)) {
+      set_dist_methods &= ~DistAlgo::DIST_PARTITION_NONE;
+      OPT_TRACE("plan will not use partition none method");
+    } else if (OB_FAIL(check_if_set_match_repart(equal_sets,
                                           left_set_keys,
                                           right_set_keys,
                                           right_child,
@@ -3058,7 +3065,10 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_NONE_PARTITION)) {
     OPT_TRACE("check none partition method");
     bool right_match_repart = false;
-    if (OB_FAIL(check_if_set_match_repart(equal_sets,
+    if (!is_set_repart_valid(left_child, right_child, DistAlgo::DIST_NONE_PARTITION)) {
+      set_dist_methods &= ~DistAlgo::DIST_NONE_PARTITION;
+      OPT_TRACE("plan will not use none partition method");
+    } else if (OB_FAIL(check_if_set_match_repart(equal_sets,
                                                   right_set_keys,
                                                   left_set_keys,
                                                   left_child,
@@ -3418,8 +3428,6 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
         OB_ISNULL(right_plan = right_child->get_plan())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(right_child), K(right_plan), K(ret));
-    } else if (!is_set_repart_valid(left_child, *right_child, set_dist_algo)) {
-      /*do nothing*/
     } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > (out_parallel = right_child->get_parallel())
                            || ObGlobalHint::DEFAULT_PARALLEL > in_parallel)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3878,21 +3886,20 @@ int ObSelectLogPlan::inner_generate_hash_set_plans(const EqualSets &equal_sets,
           for (int64_t k = DistAlgo::DIST_BASIC_METHOD;
                OB_SUCC(ret) && k < DistAlgo::DIST_MAX_JOIN_METHOD; k = (k << 1)) {
             DistAlgo dist_algo = get_dist_algo(k);
-            if ((set_methods & k) &&
-                 is_set_repart_valid(*left_best_plan, *right_best_plan, dist_algo)) {
-              if (OB_FAIL(create_hash_set_plan(equal_sets,
-                                               left_best_plan,
-                                               right_best_plan,
-                                               left_set_keys,
-                                               right_set_keys,
-                                               set_op,
-                                               dist_algo,
-                                               candidate_plan))) {
-                LOG_WARN("failed to create hash set", K(ret));
-              } else if (OB_FAIL(hash_set_plans.push_back(candidate_plan))) {
-                LOG_WARN("failed to add hash plan", K(ret));
-              } else { /*do nothing*/ }
-            }
+            if (!(set_methods & k)) {
+              //do nothing
+            } else if (OB_FAIL(create_hash_set_plan(equal_sets,
+                                              left_best_plan,
+                                              right_best_plan,
+                                              left_set_keys,
+                                              right_set_keys,
+                                              set_op,
+                                              dist_algo,
+                                              candidate_plan))) {
+              LOG_WARN("failed to create hash set", K(ret));
+            } else if (OB_FAIL(hash_set_plans.push_back(candidate_plan))) {
+              LOG_WARN("failed to add hash plan", K(ret));
+            } else { /*do nothing*/ }
           }
         }
       }
@@ -7919,6 +7926,22 @@ int ObSelectLogPlan::candi_allocate_order_by_if_losted(ObIArray<OrderItem> &orde
       } else if (OB_FAIL(prune_and_keep_best_plans(order_by_plans))) {
         LOG_WARN("failed to prune and keep best plans", K(ret));
       } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::check_aggr_with_keep(const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                          bool &has_keep_aggr)
+{
+  int ret = OB_SUCCESS;
+  has_keep_aggr = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_keep_aggr && i < aggr_items.count(); ++i) {
+    if (OB_ISNULL(aggr_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("aggr item is null", K(ret));
+    } else if (IS_KEEP_AGGR_FUN(aggr_items.at(i)->get_expr_type())) {
+      has_keep_aggr = true;
     }
   }
   return ret;

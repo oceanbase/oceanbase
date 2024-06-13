@@ -85,6 +85,7 @@ private:
                              common::ObArray<int> &foreign_key_node_position_list,
                              common::ObArray<int> &table_level_constraint_list,
                              const int resolve_rule);
+  int resolve_insert_mode(const ParseNode *parse_tree);
   int resolve_table_elements_from_select(const ParseNode &parse_tree);
   int set_temp_table_info(share::schema::ObTableSchema &table_schema, ParseNode *commit_option_node);
 
@@ -134,7 +135,6 @@ private:
   uint64_t gen_column_group_id();
   int resolve_column_group(const ParseNode *cg_node);
 
-  bool can_add_column_group(const ObTableSchema &table_schema);
   int add_inner_index_for_heap_gtt();
   int check_max_row_data_length(const ObTableSchema &table_schema);
 

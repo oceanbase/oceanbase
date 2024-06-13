@@ -481,7 +481,9 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case PROXY_USER_NAME: {
-            cur_row_->cells_[cell_idx].set_null();
+            cur_row_->cells_[cell_idx].set_varchar(sess_info->get_proxy_user_name());
+            cur_row_->cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                         ObCharset::get_default_charset()));
             break;
           }
           case SERVICE_NAME: {

@@ -1231,6 +1231,17 @@ int ObSchemaUtils::is_drop_column_only(const AlterTableSchema &alter_table_schem
   return ret;
 }
 
+bool ObSchemaUtils::can_add_column_group(const ObTableSchema &table_schema)
+{
+  bool can_add_cg = false;
+  if (table_schema.is_user_table()
+      || table_schema.is_tmp_table()
+      || table_schema.is_index_table()) {
+    can_add_cg = true;
+  }
+  return can_add_cg;
+}
+
 } // end schema
 } // end share
 } // end oceanbase

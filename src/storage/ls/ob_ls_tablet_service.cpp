@@ -2733,6 +2733,8 @@ int ObLSTabletService::insert_rows(
                 tbl_rows[i].flag_.set_flag(ObDmlFlag::DF_INSERT);
               }
             }
+          } else if (tbl_rows != static_cast<ObStoreRow *>(ptr)) {
+            tbl_rows = static_cast<ObStoreRow *>(ptr);
           }
 
           if (OB_FAIL(ret)) {
@@ -5892,6 +5894,11 @@ int ObLSTabletService::get_ls_min_end_scn(
         }
       }
     }
+    // now tx_data contains mds tx_op to remove retain_ctx
+    // so we need wait ls_checkpoint advance to recycle tx_data
+    if (ls_checkpoint < min_end_scn_from_latest_tablets) {
+      min_end_scn_from_latest_tablets = ls_checkpoint;
+    }
     LOG_INFO("get ls min end scn finish", K(ls_checkpoint));
   }
   return ret;
@@ -6297,20 +6304,17 @@ int ObLSTabletService::build_tablet_iter(ObLSTabletFastIter &iter, const bool ex
 int ObLSTabletService::set_allow_to_read_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  share::ObLSRestoreStatus restore_status;
+  bool allow_read = false;
 
   if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("set allow to read get invalid argument", K(ret), KP(ls));
   } else {
-    if (OB_FAIL(ls->get_migration_and_restore_status(migration_status, restore_status))) {
-      LOG_WARN("failed to get ls migration and restore status", K(ret), KPC(ls));
-    } else if ((ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status
-          && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != migration_status)
-        || ObLSRestoreStatus::NONE != restore_status) {
+    if (OB_FAIL(ls->check_allow_read(allow_read))) {
+      LOG_WARN("failed to check allow read", K(ret), KPC(ls));
+    } else if (!allow_read) {
       allow_to_read_mgr_.disable_to_read();
-      FLOG_INFO("set ls do not allow to read", KPC(ls), K(migration_status), K(restore_status));
+      FLOG_INFO("set ls do not allow to read", KPC(ls));
     } else {
       allow_to_read_mgr_.enable_to_read();
     }

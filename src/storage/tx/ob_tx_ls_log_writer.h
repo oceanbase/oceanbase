@@ -139,7 +139,7 @@ int ObTxLSLogCb::serialize_ls_log(T &ls_log,
 class ObTxLSLogWriter
 {
 public:
-  const static uint8_t DEFAULT_LOG_CB_CNT = 5;
+  const static uint8_t DEFAULT_LOG_CB_CNT = 1;
   const static uint8_t APPEND_LOG_CB_CNT = 1;
 
   typedef common::ObSEArray<ObTxLSLogCb *, DEFAULT_LOG_CB_CNT, TransModulePageAllocator>
@@ -165,12 +165,6 @@ public:
 public:
   int on_success(ObTxLSLogCb *cb);
   int on_failure(ObTxLSLogCb *cb);
-
-  // TODO RoleChangeSubHandler
-  void switch_to_follower_forcedly();
-  int switch_to_leader();
-  int switch_to_follower_gracefully();
-  int resume_leader();
 
 private:
   template <typename T>
@@ -223,12 +217,12 @@ int ObTxLSLogWriter::submit_ls_log_(T &ls_log,
   } else if (nullptr == cb || OB_FAIL(cb->serialize_ls_log(ls_log, replay_hint, barrier_type))) {
     TRANS_LOG(WARN, "[TxLsLogWriter] serialize ls log error", KR(ret), K(T::LOG_TYPE), KP(cb));
   } else if (OB_FAIL(tx_log_adapter_->submit_log(cb->get_log_buf(), cb->get_log_pos(), share::SCN::min_scn(), cb, need_nonblock))) {
+    TRANS_LOG(WARN, "[TxLsLogWriter] submit ls log failed", KR(ret), K(T::LOG_TYPE), K(ls_id_), KPC(cb));
     return_log_cb_(cb);
     cb = nullptr;
-    TRANS_LOG(WARN, "[TxLsLogWriter] submit ls log failed", KR(ret), K(T::LOG_TYPE), K(ls_id_));
   } else {
     log_ts = cb->get_log_ts();
-    TRANS_LOG(INFO, "[TxLsLogWriter] submit ls log success", K(ret), K(T::LOG_TYPE), K(ls_id_));
+    TRANS_LOG(INFO, "[TxLsLogWriter] submit ls log success", K(ret), K(T::LOG_TYPE), K(ls_id_), KPC(cb));
   }
   return ret;
 }

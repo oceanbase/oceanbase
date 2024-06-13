@@ -205,7 +205,10 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
     // datum with null ptr and zero len should treat as no lob header
     bool set_has_lob_header = has_lob_header && data.length() > 0;
     ObLobLocatorV2 src(data, set_has_lob_header);
-    if (src.has_inrow_data() && lob_mngr->can_write_inrow(data.length(), lob_storage_param.inrow_threshold_)) {
+    int64_t byte_len = 0;
+    if (OB_FAIL(src.get_lob_data_byte_len(byte_len))) {
+      LOG_WARN("fail to get lob data byte len", K(ret), K(src));
+    } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(byte_len, lob_storage_param.inrow_threshold_)) {
       // fast path for inrow data
       if (OB_FAIL(src.get_inrow_data(data))) {
         LOG_WARN("fail to get inrow data", K(ret), K(src));
@@ -307,7 +310,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
     int64_t byte_len = 0;
     if (OB_FAIL(src.get_lob_data_byte_len(byte_len))) {
       LOG_WARN("fail to get lob data byte len", K(ret), K(src));
-    } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(data.length(), lob_storage_param.inrow_threshold_)) {
+    } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(byte_len, lob_storage_param.inrow_threshold_)) {
       // do fast inrow
       if (OB_FAIL(src.get_inrow_data(data))) {
         LOG_WARN("fail to get inrow data", K(ret), K(src));
@@ -333,7 +336,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       lob_param.sql_mode_ = SMO_DEFAULT;
       lob_param.ls_id_ = ls_id;
       lob_param.tablet_id_ = tablet_id;
-      lob_param.coll_type_ = collation_type;
+      lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(obj_type, collation_type);
       lob_param.allocator_ = &allocator;
       lob_param.lob_common_ = nullptr;
       lob_param.timeout_ = timeout_ts;

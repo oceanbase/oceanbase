@@ -254,44 +254,56 @@ int ObResultSet::on_cmd_execute()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid inner state", K(cmd_));
   } else if (cmd_->cause_implicit_commit()) {
-    if (my_session_.is_in_transaction() && my_session_.associated_xa()) {
-      int tmp_ret = OB_SUCCESS;
-      transaction::ObTxDesc *tx_desc = my_session_.get_tx_desc();
-      const transaction::ObXATransID xid = my_session_.get_xid();
-      const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
-      if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
-        // commit is not allowed in xa trans
-        ret = OB_TRANS_XA_ERR_COMMIT;
-        LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid), K(global_tx_type),
-            KPC(tx_desc));
-      } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
-        transaction::ObTransID tx_id;
-        if (OB_FAIL(ObTMService::tm_commit(get_exec_context(), tx_id))) {
-          LOG_WARN("fail to do commit for dblink trans", K(ret), K(tx_id), K(xid),
-              K(global_tx_type));
-        }
-        my_session_.restore_auto_commit();
-        const bool force_disconnect = false;
-        if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = my_session_.get_dblink_context().clean_dblink_conn(force_disconnect)))) {
-          LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected global trans type", K(ret), K(xid), K(global_tx_type), KPC(tx_desc));
+    if (OB_FAIL(implicit_commit_before_cmd_execute(my_session_,
+                                                   get_exec_context(),
+                                                   cmd_->get_cmd_type()))) {
+      LOG_WARN("failed to implicit commit before cmd execute", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObResultSet::implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_info,
+                                                    ObExecContext &exec_ctx,
+                                                    const int cmd_type)
+{
+  int ret = OB_SUCCESS;
+  if (session_info.is_in_transaction() && session_info.associated_xa()) {
+    int tmp_ret = OB_SUCCESS;
+    transaction::ObTxDesc *tx_desc = session_info.get_tx_desc();
+    const transaction::ObXATransID xid = session_info.get_xid();
+    const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+    if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
+      // commit is not allowed in xa trans
+      ret = OB_TRANS_XA_ERR_COMMIT;
+      LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid), K(global_tx_type),
+          KPC(tx_desc));
+    } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
+      transaction::ObTransID tx_id;
+      if (OB_FAIL(ObTMService::tm_commit(exec_ctx, tx_id))) {
+        LOG_WARN("fail to do commit for dblink trans", K(ret), K(tx_id), K(xid),
+            K(global_tx_type));
       }
-      get_exec_context().set_need_disconnect(false);
+      session_info.restore_auto_commit();
+      const bool force_disconnect = false;
+      if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = session_info.get_dblink_context().clean_dblink_conn(force_disconnect)))) {
+        LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
+      }
     } else {
-      // implicit end transaction and start transaction will not clear next scope transaction settings by:
-      // a. set by `set transaction read only`
-      // b. set by `set transaction isolation level XXX`
-      const int cmd_type = cmd_->get_cmd_type();
-      bool keep_trans_variable = (cmd_type == stmt::T_START_TRANS);
-      if (OB_FAIL(ObSqlTransControl::implicit_end_trans(get_exec_context(), false, NULL, !keep_trans_variable))) {
-        LOG_WARN("fail end implicit trans on cmd execute", K(ret));
-      } else if (my_session_.need_recheck_txn_readonly() && my_session_.get_tx_read_only()) {
-        ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
-        LOG_WARN("cmd can not execute because txn is read only", K(ret), K(cmd_type));
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected global trans type", K(ret), K(xid), K(global_tx_type), KPC(tx_desc));
+    }
+    exec_ctx.set_need_disconnect(false);
+  } else {
+    // implicit end transaction and start transaction will not clear next scope transaction settings by:
+    // a. set by `set transaction read only`
+    // b. set by `set transaction isolation level XXX`
+    bool keep_trans_variable = (cmd_type == stmt::T_START_TRANS);
+    if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false, NULL, !keep_trans_variable))) {
+      LOG_WARN("fail end implicit trans on cmd execute", K(ret));
+    } else if (session_info.need_recheck_txn_readonly() && session_info.get_tx_read_only()) {
+      ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
+      LOG_WARN("cmd can not execute because txn is read only", K(ret), K(cmd_type));
     }
   }
   return ret;
@@ -1147,7 +1159,9 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = NULL;
-  if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+  ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx()) ||
+      OB_ISNULL(session_info = get_exec_context().get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("physical plan ctx is null or ref handle is invalid",
              K(ret), K(plan_ctx));
@@ -1156,7 +1170,7 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
     // 因为会修改ObField中的cname_，所以这里深拷计划中的field_columns_
     LOG_WARN("failed to copy field columns", K(ret));
   } else if (phy_plan.contain_paramed_column_field()
-             && OB_FAIL(construct_field_name(raw_params, false))) {
+             && OB_FAIL(construct_field_name(raw_params, false, *session_info))) {
     LOG_WARN("failed to construct field name", K(ret));
   } else {
     int64_t ps_param_count = plan_ctx->get_orig_question_mark_cnt();
@@ -1580,11 +1594,15 @@ int ObResultSet::copy_field_columns(const ObPhysicalPlan &plan)
 }
 
 int ObResultSet::construct_field_name(const common::ObIArray<ObPCParam *> &raw_params,
-                                      const bool is_first_parse)
+                                      const bool is_first_parse,
+                                      const ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < field_columns_.count(); i++) {
-    if (OB_FAIL(construct_display_field_name(field_columns_.at(i), raw_params, is_first_parse))) {
+    if (OB_FAIL(construct_display_field_name(field_columns_.at(i),
+                                             raw_params,
+                                             is_first_parse,
+                                             session_info))) {
       LOG_WARN("failed to construct display name", K(ret), K(field_columns_.at(i)));
     } else {
       // do nothing
@@ -1595,7 +1613,8 @@ int ObResultSet::construct_field_name(const common::ObIArray<ObPCParam *> &raw_p
 
 int ObResultSet::construct_display_field_name(common::ObField &field,
                                               const ObIArray<ObPCParam *> &raw_params,
-                                              const bool is_first_parse)
+                                              const bool is_first_parse,
+                                              const ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
@@ -1605,7 +1624,7 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
   int32_t buf_len = MAX_COLUMN_CHAR_LENGTH * 2;
   int32_t pos = 0;
   int32_t name_pos = 0;
-
+  bool enable_modify_null_name = false;
   if (!field.is_paramed_select_item_ || NULL == field.paramed_ctx_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(field.is_paramed_select_item_), K(field.paramed_ctx_));
@@ -1613,6 +1632,9 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
     // 1. 参数化的cname长度为0，说明指定了列名
     // 2. 指定了别名，别名存在cname_里，直接使用即可
     // do nothing
+  } else if (OB_FAIL(my_session_.check_feature_enable(ObCompatFeatureType::PROJECT_NULL,
+                                                      enable_modify_null_name))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else if (OB_ISNULL(buf = static_cast<char *>(get_mem_pool().alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(buf_len));
@@ -1685,6 +1707,14 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
               buf[pos++] = '\'';
             }
           }
+        } else if (lib::is_mysql_mode() &&
+                   0 == field.paramed_ctx_->paramed_cname_.compare("?") &&
+                   1 == PARAM_CTX->param_idxs_.count() &&
+                   T_NULL == raw_params.at(idx)->node_->type_ &&
+                   enable_modify_null_name) {
+          // MySQL sets the alias of standalone null value("\N","null"...) to "NULL" during projection.
+          copy_str_len = strlen("NULL");
+          copy_str = "NULL";
         } else {
           copy_str_len = raw_params.at(idx)->node_->text_len_;
           copy_str = raw_params.at(idx)->node_->raw_text_;

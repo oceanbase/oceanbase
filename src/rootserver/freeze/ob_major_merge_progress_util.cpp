@@ -82,36 +82,6 @@ int64_t ObMergeProgress::to_string(char *buf, const int64_t buf_len) const
   }
   return pos;
 }
-/**
- * -------------------------------------------------------------------ObRSCompactionTimeGuard-------------------------------------------------------------------
- */
-const char *ObRSCompactionTimeGuard::CompactionEventStr[] = {
-    "PREPARE_UNFINISH_TABLE_IDS",
-    "GET_TABLET_LS_PAIRS",
-    "GET_TABLET_META_TABLE",
-    "CKM_VERIFICATION"
-};
-
-const char *ObRSCompactionTimeGuard::get_comp_event_str(enum CompactionEvent event)
-{
-  STATIC_ASSERT(static_cast<int64_t>(COMPACTION_EVENT_MAX) == ARRAYSIZEOF(CompactionEventStr), "events str len is mismatch");
-  const char *str = "";
-  if (event >= COMPACTION_EVENT_MAX || event < PREPARE_UNFINISH_TABLE_IDS) {
-    str = "invalid_type";
-  } else {
-    str = CompactionEventStr[event];
-  }
-  return str;
-}
-
-int64_t ObRSCompactionTimeGuard::to_string(char *buf, const int64_t buf_len) const
-{
-  int64_t pos = 0;
-  for (int64_t idx = 0; idx < idx_; ++idx) {
-    fmt_ts_to_meaningful_str(buf, buf_len, pos, get_comp_event_str((CompactionEvent)line_array_[idx]), click_poinsts_[idx]);
-  }
-  return pos;
-}
 
 /**
  * -------------------------------------------------------------------ObTabletLSPairCache-------------------------------------------------------------------

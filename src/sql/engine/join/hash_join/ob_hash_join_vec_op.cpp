@@ -789,7 +789,7 @@ int ObHashJoinVecOp::reuse_for_next_chunk()
     LOG_WARN("failed to calc basic info", K(ret));
   } else {
     // reuse buckets
-    OZ(cur_join_table_->build_prepare(profile_.get_row_count(), profile_.get_bucket_size()));
+    OZ(cur_join_table_->build_prepare(jt_ctx_, profile_.get_row_count(), profile_.get_bucket_size()));
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(right_part_->rescan())) {
       LOG_WARN("failed to rescan right", K(ret));
@@ -2032,7 +2032,7 @@ int ObHashJoinVecOp::prepare_hash_table()
               K(build_ht_thread_ptr), K(reinterpret_cast<uint64_t>(this)));
   }
   if (need_build_hash_table) {
-    if (OB_FAIL(cur_join_table_->build_prepare(profile_.get_row_count(), profile_.get_bucket_size()))) {
+    if (OB_FAIL(cur_join_table_->build_prepare(jt_ctx_, profile_.get_row_count(), profile_.get_bucket_size()))) {
       LOG_WARN("trace failed to  prepare hash table",
                K(profile_.get_expect_size()), K(profile_.get_bucket_size()), K(profile_.get_row_count()),
                K(get_mem_used()), K(sql_mem_processor_.get_mem_bound()), K(cur_dumped_partition_));

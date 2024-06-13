@@ -298,6 +298,9 @@ private:
     }
     return ret;
   }
+private:
+  static void on_alloc(AObject& obj, const ObMemAttr& attr);
+  static void on_free(AObject& obj);
 public:
   template <typename T>
   static void* common_realloc(const void *ptr, const int64_t size,

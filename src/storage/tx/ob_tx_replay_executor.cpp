@@ -314,7 +314,7 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
       } else if (base_header_.need_pre_replay_barrier() && OB_UNLIKELY(ctx_->is_replay_complete_unknown())) {
         // if a pre-barrier log will be replayed
         // the txn can be confirmed to incomplete replayed
-        ret = ctx_->set_replay_incomplete();
+        ret = ctx_->set_replay_incomplete(log_ts_ns_);
       }
     }
   }

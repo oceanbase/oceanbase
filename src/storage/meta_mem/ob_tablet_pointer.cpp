@@ -51,7 +51,7 @@ ObTabletPointer::ObTabletPointer()
     attr_()
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 296, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletPointer) == 320, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -675,7 +675,7 @@ int ObTabletPointer::set_tablet_attr(const ObTabletAttr &attr)
   return ret;
 }
 
-ObTabletResidentInfo::ObTabletResidentInfo(const ObTabletMapKey &key, ObTabletPointer &tablet_ptr)
+ObTabletResidentInfo::ObTabletResidentInfo(const ObTabletMapKey &key, const ObTabletPointer &tablet_ptr)
   : attr_(tablet_ptr.attr_), tablet_addr_(tablet_ptr.phy_addr_)
 {
   tablet_id_ = key.tablet_id_;

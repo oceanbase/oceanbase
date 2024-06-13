@@ -909,8 +909,12 @@ int ObTryTransHelper::fill_helper(const ObQueryCtx *query_ctx)
   if (OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null query context", K(ret), K(query_ctx));
-  } else if (OB_FAIL(query_ctx->query_hint_.get_qb_name_counts(query_ctx->stmt_count_, qb_name_counts_))) {
-    LOG_WARN("failed to get qb name counts", K(ret));
+  } else if (OB_FAIL(query_ctx->query_hint_.get_qb_name_info(query_ctx->stmt_count_,
+                                                             qb_name_counts_,
+                                                             qb_name_sel_start_id_,
+                                                             qb_name_set_start_id_,
+                                                             qb_name_other_start_id_))) {
+    LOG_WARN("failed to get qb name info", K(ret));
   } else {
     available_tb_id_ = query_ctx->available_tb_id_;
     subquery_count_ = query_ctx->subquery_count_;
@@ -925,8 +929,12 @@ int ObTryTransHelper::recover(ObQueryCtx *query_ctx)
   if (OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null query context", K(ret), K(query_ctx));
-  } else if (OB_FAIL(query_ctx->query_hint_.recover_qb_names(qb_name_counts_, query_ctx->stmt_count_))) {
-    LOG_WARN("failed to revover qb names", K(ret));
+  } else if (OB_FAIL(query_ctx->query_hint_.recover_qb_name_info(qb_name_counts_,
+                                                                 query_ctx->stmt_count_,
+                                                                 qb_name_sel_start_id_,
+                                                                 qb_name_set_start_id_,
+                                                                 qb_name_other_start_id_))) {
+    LOG_WARN("failed to revover qb name info", K(ret));
   } else if (NULL != unique_key_provider_
              && OB_FAIL(unique_key_provider_->recover_useless_unique_for_temp_table())) {
     LOG_WARN("failed to recover useless unique for temp table", K(ret));

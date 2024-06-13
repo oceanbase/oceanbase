@@ -39,6 +39,7 @@ public:
   static int g_select_uint64(uint64_t tenant_id, const char *sql, uint64_t &val);
 
   static int select_int64(sqlclient::ObISQLConnection *conn, const char *sql, int64_t &val);
+  static int select_int64(ObMySQLTransaction &trans, uint64_t tenant_id, const char *sql, int64_t &val);
 
   static int select_varchar(sqlclient::ObISQLConnection *conn, const char *sql, ObString &val);
   static int g_select_varchar(uint64_t tenant_id, const char *sql, ObString &val);
@@ -70,6 +71,8 @@ public:
   static int get_ls_end_scn(uint64_t tenant_id, ObLSID ls_id, SCN &end_scn);
   static int wait_replay_advance(uint64_t tenant_id, ObLSID ls_id, SCN end_scn);
   static int wait_checkpoint_newest(uint64_t tenant_id, ObLSID ls_id);
+  static int freeze_tx_ctx(uint64_t tenant_id, ObLSID ls_id);
+  static int freeze_tx_data(uint64_t tenant_id, ObLSID ls_id);
   static int wait_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_id, ObTxState tx_state);
   static int wait_tx_exit(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_id);
   static int wait_flush_finish(uint64_t tenant_id, ObLSID ls_id, ObTabletID tablet_id);

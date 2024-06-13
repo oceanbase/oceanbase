@@ -257,8 +257,10 @@ public:
   {
     ObUndoAction undo(from, to);
     ObPartTransCtx *tx_ctx = store_ctx->mvcc_acc_ctx_.tx_ctx_;
-    EXPECT_EQ(OB_SUCCESS,
-              tx_ctx->ctx_tx_data_.add_undo_action(undo));
+    ObTxDataGuard tx_data_guard;
+    EXPECT_EQ(OB_SUCCESS, tx_ctx->ls_tx_ctx_mgr_->get_tx_table()->alloc_tx_data(tx_data_guard));
+    ObUndoStatusNode *undo_node = NULL;
+    EXPECT_EQ(OB_SUCCESS, tx_ctx->insert_undo_action_to_tx_table_(undo, tx_data_guard, undo_node, SCN::min_scn()));
     ObMemtableCtx *mt_ctx = store_ctx->mvcc_acc_ctx_.mem_ctx_;
     ObTxCallbackList &cb_list = mt_ctx->trans_mgr_.callback_list_;
     for (ObMvccRowCallback *iter = (ObMvccRowCallback *)(cb_list.get_guard()->get_next());
@@ -3624,9 +3626,12 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
   } else {
     if (OB_FAIL(ls_tx_ctx_map_.init(lib::ObMemAttr(tenant_id, "LSTxCtxMgr")))) {
       TRANS_LOG(WARN, "ls_tx_ctx_map_ init fail", KR(ret));
+    } else if (OB_FAIL(tx_ls_state_mgr_.init(ls_id))) {
+      TRANS_LOG(WARN, "init tx_ls_state_mgr_ failed", KR(ret));
+    } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::START))) {
+      TRANS_LOG(WARN, "start ls_tx_ctx_mgr failed",K(ret),K(tx_ls_state_mgr_));
     } else {
       is_inited_ = true;
-      state_ = State::F_ALL_BLOCKED;
       tenant_id_ = tenant_id;
       ls_id_ = ls_id;
       tx_table_ = tx_table;

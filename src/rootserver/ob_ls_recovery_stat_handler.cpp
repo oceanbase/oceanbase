@@ -353,6 +353,8 @@ int ObLSRecoveryStatHandler::try_reload_and_fix_config_version_(const palf::LogC
   share::SCN readable_scn;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
   uint64_t tenant_data_version = 0;
+  ObLSRecoveryStatOperator op;
+  ObLSID ls_id;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret));
   } else if (OB_UNLIKELY(!current_version.is_valid())) {
@@ -361,9 +363,14 @@ int ObLSRecoveryStatHandler::try_reload_and_fix_config_version_(const palf::LogC
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
+  } else if (FALSE_IT(ls_id = ls_->get_ls_id())) {
+    //can not be there
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(meta_tenant_id, tenant_data_version))) {
     LOG_WARN("failed to get min data version", KR(ret), K(tenant_id_), K(meta_tenant_id));
-  } else if (tenant_data_version < DATA_VERSION_4_3_0_0) {
+  } else if (tenant_data_version < MOCK_DATA_VERSION_4_2_4_0) {
+    //内部表config_version的汇报最开始是在4300版本上提交的
+    //后面patch到424版本上，由于是在4300分支的第一个版本号提交
+    //所以版本号判断直接小于等于424即可
     need_update = false;
     LOG_INFO("not ready to load and update config version", KR(ret), K(tenant_data_version));
   } else {
@@ -371,13 +378,10 @@ int ObLSRecoveryStatHandler::try_reload_and_fix_config_version_(const palf::LogC
     if (current_version != config_version_in_inner_) {
       need_update = true;
       FLOG_INFO("config version not match, need update",
-                K(config_version_in_inner_), K(current_version), "ls_id",
-                ls_->get_ls_id());
+          K(config_version_in_inner_), K(current_version), K(ls_id));
     }
   }
   if (OB_SUCC(ret) && need_update) {
-    ObLSRecoveryStatOperator op;
-    ObLSID ls_id = ls_->get_ls_id();
     if (OB_FAIL(op.update_ls_config_version(tenant_id_, ls_id, current_version,
     *GCTX.sql_proxy_, readable_scn))) {
       LOG_WARN("failed to update ls config version", KR(ret), K(tenant_id_), K(ls_id), K(current_version));

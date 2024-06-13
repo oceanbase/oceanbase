@@ -278,6 +278,7 @@ int PalfEnvImpl::init(
     tenant_id_ = tenant_id;
     is_inited_ = true;
     is_running_ = true;
+    enable_log_cache_ = options.enable_log_cache_;
     PALF_LOG(INFO, "PalfEnvImpl init success", K(ret), K(self_), KPC(this));
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
@@ -848,12 +849,13 @@ PalfEnvImpl::RemoveStaleIncompletePalfFunctor::RemoveStaleIncompletePalfFunctor(
 int PalfEnvImpl::RemoveStaleIncompletePalfFunctor::func(const dirent *entry)
 {
   int ret = OB_SUCCESS;
+  char *saveptr = NULL;
   char file_name[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
   const char *d_name = entry->d_name;
   MEMCPY(file_name, d_name, strlen(d_name));
-  char *tmp = strtok(file_name, "_");
+  char *tmp = strtok_r(file_name, "_", &saveptr);
   char *timestamp_str = NULL;
-  if (NULL == tmp || NULL == (timestamp_str = strtok(NULL, "_"))) {
+  if (NULL == tmp || NULL == (timestamp_str = strtok_r(NULL, "_", &saveptr))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "unexpected format", K(ret), K(tmp), K(file_name));
   } else {

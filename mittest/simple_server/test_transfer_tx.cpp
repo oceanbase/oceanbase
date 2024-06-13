@@ -54,11 +54,11 @@ public:
 
 TestRunCtx R;
 
-class ObSimpleClusterExampleTest : public ObSimpleClusterTestBase
+class ObTransferTx : public ObSimpleClusterTestBase
 {
 public:
   // 指定case运行目录前缀 test_ob_simple_cluster_
-  ObSimpleClusterExampleTest() : ObSimpleClusterTestBase("test_transfer_tx_", "50G", "50G") {}
+  ObTransferTx() : ObSimpleClusterTestBase("test_transfer_tx_", "50G", "50G") {}
   int do_balance(uint64_t tenant_id);
 private:
   int do_balance_inner_(uint64_t tenant_id);
@@ -66,7 +66,7 @@ private:
   int wait_balance_clean(uint64_t tenant_id);
 };
 
-int ObSimpleClusterExampleTest::do_balance_inner_(uint64_t tenant_id)
+int ObTransferTx::do_balance_inner_(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   static std::mutex mutex;
@@ -79,6 +79,8 @@ int ObSimpleClusterExampleTest::do_balance_inner_(uint64_t tenant_id)
     int64_t start_time = OB_INVALID_TIMESTAMP, finish_time = OB_INVALID_TIMESTAMP;
     ObBalanceJob job;
     if (OB_FAIL(b_svr->gather_stat_())) {
+      LOG_WARN("failed to gather stat", KR(ret));
+    } else if (OB_FAIL(b_svr->gather_ls_status_stat(tenant_id, b_svr->ls_array_))) {
       LOG_WARN("failed to gather stat", KR(ret));
     } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
                    tenant_id, false, *GCTX.sql_proxy_, job, start_time, finish_time))) {
@@ -100,7 +102,7 @@ int ObSimpleClusterExampleTest::do_balance_inner_(uint64_t tenant_id)
   return ret;
 }
 
-int ObSimpleClusterExampleTest::wait_balance_clean(uint64_t tenant_id)
+int ObTransferTx::wait_balance_clean(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   int64_t begin_time = ObTimeUtil::current_time();
@@ -132,7 +134,7 @@ int ObSimpleClusterExampleTest::wait_balance_clean(uint64_t tenant_id)
   return ret;
 }
 
-int ObSimpleClusterExampleTest::do_balance(uint64_t tenant_id)
+int ObTransferTx::do_balance(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(do_balance_inner_(tenant_id))) {
@@ -141,7 +143,7 @@ int ObSimpleClusterExampleTest::do_balance(uint64_t tenant_id)
   return ret;
 }
 
-int ObSimpleClusterExampleTest::do_transfer_start_abort(uint64_t tenant_id, ObLSID dest_ls_id, ObLSID src_ls_id, ObTransferTabletInfo tablet_info)
+int ObTransferTx::do_transfer_start_abort(uint64_t tenant_id, ObLSID dest_ls_id, ObLSID src_ls_id, ObTransferTabletInfo tablet_info)
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
@@ -182,15 +184,11 @@ int ObSimpleClusterExampleTest::do_transfer_start_abort(uint64_t tenant_id, ObLS
   return ret;
 }
 
-TEST_F(ObSimpleClusterExampleTest, observer_start)
+TEST_F(ObTransferTx, prepare)
 {
-  LOG_INFO("observer_start succ");
   LOGI("observer start");
-}
 
-// 创建租户并不轻量，看场景必要性使用
-TEST_F(ObSimpleClusterExampleTest, add_tenant)
-{
+  LOGI("create tenant begin");
   // 创建普通租户tt1
   EQ(OB_SUCCESS, create_tenant("tt1", "40G", "40G", false, 10));
   // 获取租户tt1的tenant_id
@@ -198,18 +196,9 @@ TEST_F(ObSimpleClusterExampleTest, add_tenant)
   ASSERT_NE(0, R.tenant_id_);
   // 初始化普通租户tt1的sql proxy
   EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
-}
-
-/*
-TEST_F(ObSimpleClusterExampleTest, delete_tenant)
-{
-  EQ(OB_SUCCESS, delete_tenant());
-}
-*/
-
-TEST_F(ObSimpleClusterExampleTest, worker)
-{
   int tenant_id = R.tenant_id_;
+  LOGI("create tenant finish");
+
   R.worker_ = std::thread([this, tenant_id] () {
     int ret = OB_SUCCESS;
     lib::set_thread_name_inner("MY_BALANCE");
@@ -221,10 +210,7 @@ TEST_F(ObSimpleClusterExampleTest, worker)
       ::sleep(3);
     }
   });
-}
 
-TEST_F(ObSimpleClusterExampleTest, create_new_ls)
-{
   // 在单节点ObServer下创建新的日志流, 注意避免被RS任务GC掉
   EQ(0, SSH::create_ls(R.tenant_id_, get_curr_observer().self_addr_));
   int64_t ls_count = 0;
@@ -251,7 +237,7 @@ TEST_F(ObSimpleClusterExampleTest, create_new_ls)
   NEQ(loc1, loc2);                                                              \
   EQ(0, sql_proxy.write("create tablegroup tg1 sharding='NONE';", affected_rows));
 
-TEST_F(ObSimpleClusterExampleTest, tx_exit)
+TEST_F(ObTransferTx, tx_exit)
 {
   TRANSFER_CASE_PREPARE;
   ObLSID ls_id;
@@ -352,7 +338,8 @@ TEST_F(ObSimpleClusterExampleTest, tx_exit)
   EQ(OB_TRANS_CTX_NOT_EXIST, SSH::wait_tx_exit(R.tenant_id_, loc2, tx_id));
 }
 
-TEST_F(ObSimpleClusterExampleTest, large_query)
+/*
+TEST_F(ObTransferTx, large_query)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -435,9 +422,9 @@ TEST_F(ObSimpleClusterExampleTest, large_query)
   LOGI("large_query: row_count:%ld", row_count);
   //get_curr_simple_server().get_sql_proxy().write("alter system set syslog_level='INFO'", affected_rows);
 }
+*/
 
-
-TEST_F(ObSimpleClusterExampleTest, epoch_recover_from_active_info)
+TEST_F(ObTransferTx, epoch_recover_from_active_info)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -464,7 +451,7 @@ TEST_F(ObSimpleClusterExampleTest, epoch_recover_from_active_info)
   EQ(0, conn->commit());
 }
 
-TEST_F(ObSimpleClusterExampleTest, epoch_recover_from_ctx_checkpoint)
+TEST_F(ObTransferTx, epoch_recover_from_ctx_checkpoint)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -510,7 +497,7 @@ TEST_F(ObSimpleClusterExampleTest, epoch_recover_from_ctx_checkpoint)
   EQ(0, commit_ret);
 }
 
-TEST_F(ObSimpleClusterExampleTest, epoch_recover_from_ctx_checkpoint2)
+TEST_F(ObTransferTx, epoch_recover_from_ctx_checkpoint2)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -556,7 +543,7 @@ TEST_F(ObSimpleClusterExampleTest, epoch_recover_from_ctx_checkpoint2)
 }
 
 // 空sstable、没有活跃事务
-TEST_F(ObSimpleClusterExampleTest, transfer_empty_tablet)
+TEST_F(ObTransferTx, transfer_empty_tablet)
 {
   // 关掉observer内部的均衡，防止LS均衡，只调度分区均衡
   TRANSFER_CASE_PREPARE;
@@ -579,7 +566,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_empty_tablet)
 }
 
 // sstable有数据，没有活跃事务 transfer
-TEST_F(ObSimpleClusterExampleTest, transfer_no_active_tx)
+TEST_F(ObTransferTx, transfer_no_active_tx)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -606,7 +593,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_no_active_tx)
 }
 
 // sstable有数据，有活跃事务 transfer
-TEST_F(ObSimpleClusterExampleTest, transfer_active_tx)
+TEST_F(ObTransferTx, transfer_active_tx)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -678,7 +665,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_active_tx)
 
 
 // transfer active tx A->B  B->A
-TEST_F(ObSimpleClusterExampleTest, transfer_A_B_AND_B_A)
+TEST_F(ObTransferTx, transfer_A_B_AND_B_A)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -720,7 +707,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_A_B_AND_B_A)
   EQ(600, val);
 }
 
-TEST_F(ObSimpleClusterExampleTest, transfer_replay)
+TEST_F(ObTransferTx, transfer_replay)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -769,7 +756,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_replay)
 }
 
 // sstable有数据，有活跃事务 transfer
-TEST_F(ObSimpleClusterExampleTest, transfer_abort_active_tx)
+TEST_F(ObTransferTx, transfer_abort_active_tx)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -824,7 +811,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_abort_active_tx)
   EQ(1300, sum1);
 }
 
-TEST_F(ObSimpleClusterExampleTest, transfer_resume)
+TEST_F(ObTransferTx, transfer_resume)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -858,7 +845,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_resume)
 }
 
 // sstable有数据，有活跃事务,但事务数据丢失不完整 transfer
-TEST_F(ObSimpleClusterExampleTest, transfer_query_lost)
+TEST_F(ObTransferTx, transfer_query_lost)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -903,7 +890,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_query_lost)
 }
 
 // transfer active tx A->B  A->B
-TEST_F(ObSimpleClusterExampleTest, transfer_A_B_AND_A_B)
+TEST_F(ObTransferTx, transfer_A_B_AND_A_B)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -952,7 +939,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_A_B_AND_A_B)
   NEQ(0, conn->commit());
 }
 
-TEST_F(ObSimpleClusterExampleTest, transfer_AND_ddl)
+TEST_F(ObTransferTx, transfer_AND_ddl)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -1005,7 +992,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_AND_ddl)
   EQ(0, case_err);
 }
 
-TEST_F(ObSimpleClusterExampleTest, transfer_AND_rollback)
+TEST_F(ObTransferTx, transfer_AND_rollback)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -1041,9 +1028,16 @@ TEST_F(ObSimpleClusterExampleTest, transfer_AND_rollback)
   EQ(0, conn->commit());
   EQ(0, SSH::select_int64(conn, "select sum(col) as val from stu2", val));
   EQ(400, val);
+
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc2));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc2));
+  EQ(0, SSH::ls_reboot(R.tenant_id_, loc1));
+  EQ(0, SSH::ls_reboot(R.tenant_id_, loc2));
 }
 
-TEST_F(ObSimpleClusterExampleTest, transfer_AND_rollback2)
+TEST_F(ObTransferTx, transfer_AND_rollback2)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -1090,7 +1084,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_AND_rollback2)
   EQ(100, val);
 }
 
-TEST_F(ObSimpleClusterExampleTest, transfer_tx_ctx_merge)
+TEST_F(ObTransferTx, transfer_tx_ctx_merge)
 {
   TRANSFER_CASE_PREPARE;
 
@@ -1208,14 +1202,20 @@ TEST_F(ObSimpleClusterExampleTest, transfer_tx_ctx_merge)
   EQ(400, val1);
   EQ(400, val2);
 
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc2));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc2));
   EQ(0, SSH::ls_reboot(R.tenant_id_, loc1));
   EQ(0, SSH::ls_reboot(R.tenant_id_, loc2));
 }
 
-TEST_F(ObSimpleClusterExampleTest, transfer_batch)
+TEST_F(ObTransferTx, transfer_batch)
 {
   TRANSFER_CASE_PREPARE;
+  sql_proxy.write("alter system set _transfer_start_trans_timeout='5s'",affected_rows);
 
+  sql_proxy.write("alter system set _transfer_start_trans_timeout = '10s'", affected_rows);
   std::set<sqlclient::ObISQLConnection*> jobs;
   for (int i =0 ;i< 5000;i++) {
     sqlclient::ObISQLConnection *conn = NULL;
@@ -1243,17 +1243,71 @@ TEST_F(ObSimpleClusterExampleTest, transfer_batch)
   int64_t sum = 0;
   EQ(0, SSH::select_int64(sql_proxy, "select sum(col) as val from stu2", sum));
   EQ(100 * 5000, sum);
+  sql_proxy.write("alter system set _transfer_start_trans_timeout='1s'",affected_rows);
+
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc2));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc2));
+  EQ(0, SSH::ls_reboot(R.tenant_id_, loc1));
+  EQ(0, SSH::ls_reboot(R.tenant_id_, loc2));
 }
 
-TEST_F(ObSimpleClusterExampleTest, transfer_retain_ctx)
+/*
+TEST_F(ObTransferTx, replay_from_middle)
+{
+  TRANSFER_CASE_PREPARE;
+
+  sqlclient::ObISQLConnection *conn = NULL;
+  EQ(0, sql_proxy.acquire(conn));
+  EQ(0, SSH::write(conn, "set autocommit=0"));
+  EQ(0, SSH::write(conn, "insert into test.stu1 values(100)", affected_rows));
+  EQ(0, SSH::wait_checkpoint_newest(R.tenant_id_, loc1));
+  int64_t val = -1;
+  EQ(0, SSH::select_int64(conn, "select get_lock('test_lock', 10) val", val));
+  EQ(1, val);
+  EQ(0, conn->commit());
+
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc2));
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, ObLSID(1)));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc2));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, ObLSID(1)));
+  EQ(0, SSH::ls_reboot(R.tenant_id_, loc1));
+  EQ(0, SSH::ls_reboot(R.tenant_id_, loc2));
+  EQ(0, SSH::ls_reboot(R.tenant_id_, ObLSID(1)));
+
+  LOGI("release_lock");
+  val = -1;
+  EQ(0, SSH::select_int64(conn, "select release_lock('test_lock')", val));
+  // session end lock release
+  LOGI("get_lock");
+  val = -1;
+  EQ(0, SSH::select_int64(sql_proxy, "select get_lock('test_lock', 1) val", val));
+  EQ(1, val);
+  // session end lock release
+  LOGI("get_lock");
+  val = -1;
+  EQ(0, SSH::select_int64(sql_proxy, "select get_lock('test_lock', 1) val", val));
+  EQ(1, val);
+}
+*/
+TEST_F(ObTransferTx, transfer_mds_trans)
 {
   TRANSFER_CASE_PREPARE;
 
   ObMySQLTransaction trans;
   EQ(0, trans.start(GCTX.sql_proxy_, R.tenant_id_));
+  EQ(0, trans.write(R.tenant_id_, "insert into test.stu1 values(100)", affected_rows));
+  EQ(0, trans.write(R.tenant_id_, "insert into test.stu2 values(100)", affected_rows));
+  //EQ(0, sql_proxy.write("alter system minor freeze", affected_rows));
+  // make it replay from middle
+  EQ(0, SSH::wait_checkpoint_newest(R.tenant_id_, loc1));
+  EQ(0, SSH::wait_checkpoint_newest(R.tenant_id_, loc2));
+  EQ(0, trans.write(R.tenant_id_, "insert into test.stu1 values(200)", affected_rows));
+  EQ(0, trans.write(R.tenant_id_, "insert into test.stu2 values(200)", affected_rows));
   observer::ObInnerSQLConnection *conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection());
-  //EQ(0, conn->execute_write(R.tenant_id_, "insert into stu1 values(100)", affected_rows));
-  //EQ(0, conn->execute_write(R.tenant_id_, "insert into stu2 values(100)", affected_rows));
   char buf[10];
   ObRegisterMdsFlag flag;
   EQ(0, conn->register_multi_data_source(R.tenant_id_,
@@ -1269,32 +1323,20 @@ TEST_F(ObSimpleClusterExampleTest, transfer_retain_ctx)
                                          buf,
                                          10,
                                          flag));
+
+  EQ(0, conn->register_multi_data_source(R.tenant_id_,
+                                         loc2,
+                                         ObTxDataSourceType::TEST3,
+                                         buf,
+                                         10,
+                                         flag));
   ObTransID tx_id;
   EQ(0, SSH::g_select_int64(R.tenant_id_, "select trans_id as val from __all_virtual_trans_stat where is_exiting=0 and session_id<=1 limit 1", tx_id.tx_id_));
   LOGI("find active_tx tx_id:%ld", tx_id.get_id());
 
-  InjectTxFaultHelper inject_tx_fault_helper;
-  EQ(0, inject_tx_fault_helper.inject_tx_block(R.tenant_id_, loc2, tx_id, ObTxLogType::TX_ABORT_LOG));
-
-  // make tx ctx enter retain
-  EQ(0, SSH::submit_redo(R.tenant_id_, loc1));
-  EQ(0, SSH::abort_tx(R.tenant_id_, loc1, tx_id));
-
   EQ(0, sql_proxy.write("alter tablegroup tg1 add stu1,stu2;", affected_rows));
   EQ(0, do_balance(R.tenant_id_));
 
-  // make wrs check approve
-  EQ(0, SSH::modify_wrs(R.tenant_id_, loc2));
-
-  // transfer task failed bacause tx retain_ctx
-  NEQ(loc1, loc2);
-  ob_usleep(3 * 1000 * 1000);
-  NEQ(loc1, loc2);
-
-  inject_tx_fault_helper.release();
-
-  // transfer task failed bacause tx retain_ctx
-  EQ(0, SSH::abort_tx(R.tenant_id_, loc2, tx_id));
   // wait
   while (true) {
     EQ(0, SSH::select_table_loc(R.tenant_id_, "stu1", loc1));
@@ -1305,7 +1347,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_retain_ctx)
     ::sleep(1);
   }
 
-  NEQ(0, trans.end(true));
+  EQ(0, trans.end(false));
   int64_t val1 = 0;
   int64_t val2 = 0;
   EQ(0, SSH::select_int64(sql_proxy, "select count(col) as val from stu1", val1));
@@ -1314,11 +1356,16 @@ TEST_F(ObSimpleClusterExampleTest, transfer_retain_ctx)
   EQ(0, val1);
   EQ(0, val2);
 
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc2));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc1));
+  EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc2));
+  LOGI("ls_reboot");
   EQ(0, SSH::ls_reboot(R.tenant_id_, loc1));
   EQ(0, SSH::ls_reboot(R.tenant_id_, loc2));
 }
 
-TEST_F(ObSimpleClusterExampleTest, create_more_ls)
+TEST_F(ObTransferTx, create_more_ls)
 {
   for (int i=0;i<8;i++) {
     EQ(0, SSH::create_ls(R.tenant_id_, get_curr_observer().self_addr_));
@@ -1328,7 +1375,7 @@ TEST_F(ObSimpleClusterExampleTest, create_more_ls)
   EQ(10, ls_count);
 }
 
-TEST_F(ObSimpleClusterExampleTest, bench)
+TEST_F(ObTransferTx, bench)
 {
   int64_t affected_rows = 0;
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
@@ -1443,7 +1490,7 @@ TEST_F(ObSimpleClusterExampleTest, bench)
   EQ(0, bench_err);
 }
 
-TEST_F(ObSimpleClusterExampleTest, end)
+TEST_F(ObTransferTx, end)
 {
   int64_t wait_us = R.time_sec_ * 1000 * 1000;
   while (ObTimeUtil::current_time() - R.start_time_ < wait_us) {

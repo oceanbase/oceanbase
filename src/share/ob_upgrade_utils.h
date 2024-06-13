@@ -244,7 +244,17 @@ private:
   int post_upgrade_for_create_replication_role_in_oracle();
 };
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 2, 0)
+class ObUpgradeFor4320Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4320Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4320Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_reset_compat_version();
+  int try_reset_version(const uint64_t tenant_id, const char *var_name);
+};
 
 /* =========== special upgrade processor end   ============= */
 

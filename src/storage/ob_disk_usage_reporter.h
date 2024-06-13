@@ -31,6 +31,7 @@ namespace storage
 {
 class ObTenantTabletIterator;
 
+
 struct ObDiskUsageReportKey
 {
   ObDiskReportFileType file_type_;
@@ -56,6 +57,8 @@ struct ObDiskUsageReportKey
   TO_STRING_KV(K_(file_type), K_(tenant_id));
 };
 
+typedef hash::HashMapPair<ObDiskUsageReportKey, std::pair<int64_t, int64_t>> ObDiskUsageReportMap;// pair(occupy_size, required_size)
+
 class ObDiskUsageReportTask : public common::ObTimerTask, public observer::ObIDiskReport
 {
 public:
@@ -68,17 +71,16 @@ public:
   // get data disk used size of specified tenant_id in current observer
   int get_data_disk_used_size(const uint64_t tenant_id, int64_t &used_size) const;
   int get_clog_disk_used_size(const uint64_t tenant_id, int64_t &used_size) const;
-  void set_count_sstable_data_trigger() { ATOMIC_SET(&sstable_data_size_, -1); }
 
 private:
   class ObReportResultGetter final
   {
   public:
-    explicit ObReportResultGetter(ObArray<hash::HashMapPair<ObDiskUsageReportKey, int64_t>> &result_arr)
+    explicit ObReportResultGetter(ObArray<ObDiskUsageReportMap> &result_arr)
       : result_arr_(result_arr)
     {}
     ~ObReportResultGetter() = default;
-    int operator()(const hash::HashMapPair<ObDiskUsageReportKey, int64_t> &pair)
+    int operator()(const ObDiskUsageReportMap &pair)
     {
       int ret = OB_SUCCESS;
       if (OB_FAIL(result_arr_.push_back(pair))) {
@@ -87,7 +89,7 @@ private:
       return ret;
     }
   private:
-    ObArray<hash::HashMapPair<ObDiskUsageReportKey, int64_t>> &result_arr_;
+    ObArray<ObDiskUsageReportMap> &result_arr_;
     DISALLOW_COPY_AND_ASSIGN(ObReportResultGetter);
   };
 
@@ -113,14 +115,12 @@ private:
                             const int64_t seq_num);
 
   virtual void runTimerTask();
-  typedef common::hash::ObHashMap<ObDiskUsageReportKey, int64_t> ReportResultMap;
+  typedef common::hash::ObHashMap<ObDiskUsageReportKey, std::pair<int64_t, int64_t>> ReportResultMap; // pair(occupy_size, required_size)
 private:
   bool is_inited_;
   ReportResultMap result_map_;
   common::ObMySQLProxy *sql_proxy_;
   share::ObDiskUsageTableOperator disk_usage_table_operator_;
-  int64_t sstable_data_size_;
-  int64_t sstable_meta_size_;
 };
 
 } // namespace storage

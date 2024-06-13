@@ -257,6 +257,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_table_direct_insert_ctx.cpp
   engine/cmd/ob_table_direct_insert_service.cpp
   engine/cmd/ob_tenant_snapshot_executor.cpp
+  engine/cmd/ob_mock_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_dml
@@ -509,6 +510,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_pad.cpp
   engine/expr/ob_expr_part_id.cpp
   engine/expr/ob_expr_part_id_pseudo_column.cpp
+  engine/expr/ob_expr_password.cpp
   engine/expr/ob_expr_period_diff.cpp
   engine/expr/ob_expr_pi.cpp
   engine/expr/ob_expr_pl_associative_index.cpp
@@ -734,6 +736,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_inner_row_cmp_val.cpp
   engine/expr/ob_expr_last_refresh_scn.cpp
   engine/expr/ob_expr_json_utils.cpp
+  engine/expr/ob_expr_inner_table_option_printer.cpp
   engine/expr/ob_expr_master_pos_wait.cpp
 )
 
@@ -1066,6 +1069,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_help_resolver.cpp
   resolver/cmd/ob_help_stmt.cpp
   resolver/cmd/ob_kill_resolver.cpp
+  resolver/cmd/ob_mock_resolver.cpp
   resolver/cmd/ob_load_data_resolver.cpp
   resolver/cmd/ob_load_data_stmt.cpp
   resolver/cmd/ob_resource_resolver.cpp
@@ -1086,6 +1090,8 @@ ob_set_subtarget(ob_sql resolver_dcl
   resolver/dcl/ob_alter_user_primary_zone_stmt.cpp
   resolver/dcl/ob_alter_user_profile_resolver.cpp
   resolver/dcl/ob_alter_user_profile_stmt.cpp
+  resolver/dcl/ob_alter_user_proxy_resolver.cpp
+  resolver/dcl/ob_alter_user_proxy_stmt.cpp
   resolver/dcl/ob_create_role_resolver.cpp
   resolver/dcl/ob_create_role_stmt.cpp
   resolver/dcl/ob_create_user_resolver.cpp

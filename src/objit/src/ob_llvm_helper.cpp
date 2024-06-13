@@ -597,22 +597,30 @@ int ObLLVMHelper::init_llvm() {
   OZ (helper.get_int64(OB_SUCCESS, magic));
   OZ (helper.create_ret(magic));
 
-  OX (helper.compile_module());
+  OZ (helper.compile_module(jit::ObPLOptLevel::O2));
   OX (helper.get_function_address(init_func_name));
 
   return ret;
 }
 
-void ObLLVMHelper::compile_module(bool optimization)
+int ObLLVMHelper::compile_module(jit::ObPLOptLevel optimization)
 {
-  if (optimization) {
-    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
-    jc_->optimize();
-    LOG_INFO("================Optimized LLVM Module================");
-    dump_module();
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(jit_->set_optimize_level(optimization))) {
+    LOG_WARN("failed to set backend optimize level", K(ret), K(optimization));
+  } else {
+    if (optimization >= jit::ObPLOptLevel::O2) {
+      OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
+      jc_->optimize();
+      LOG_INFO("================Optimized LLVM Module================");
+      dump_module();
+    }
+    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+    jc_->compile();
   }
-  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
-  jc_->compile();
+
+  return ret;
 }
 
 void ObLLVMHelper::dump_module()

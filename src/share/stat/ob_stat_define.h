@@ -56,7 +56,7 @@ enum StatOptionFlags
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
 const static int64_t OPT_STATS_MAX_VALUE_CHAR_LEN = 128;
-const static int64_t OPT_STATS_BIG_TABLE_ROWS = 10000000;
+const int64_t MAX_AUTO_GATHER_FULL_TABLE_ROWS = 100000000;
 const int64_t MAGIC_SAMPLE_SIZE = 5500;
 const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
 const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;
@@ -138,7 +138,9 @@ struct BlockNumStat
     tab_macro_cnt_(0),
     tab_micro_cnt_(0),
     cg_macro_cnt_arr_(),
-    cg_micro_cnt_arr_()
+    cg_micro_cnt_arr_(),
+    sstable_row_cnt_(0),
+    memtable_row_cnt_(0)
   {
     cg_macro_cnt_arr_.set_attr(ObMemAttr(MTL_ID(), "BlockNumStat"));
     cg_micro_cnt_arr_.set_attr(ObMemAttr(MTL_ID(), "BlockNumStat"));
@@ -147,10 +149,14 @@ struct BlockNumStat
   int64_t tab_micro_cnt_;
   ObSEArray<int64_t, 1, common::ModulePageAllocator, true> cg_macro_cnt_arr_;
   ObSEArray<int64_t, 1, common::ModulePageAllocator, true> cg_micro_cnt_arr_;
+  int64_t sstable_row_cnt_;
+  int64_t memtable_row_cnt_;
   TO_STRING_KV(K(tab_macro_cnt_),
                K(tab_micro_cnt_),
                K(cg_macro_cnt_arr_),
-               K(cg_micro_cnt_arr_))
+               K(cg_micro_cnt_arr_),
+               K(sstable_row_cnt_),
+               K(memtable_row_cnt_))
 };
 
 //TODO@jiangxiu.wt: improve the expression of PartInfo, use the map is better.
@@ -475,6 +481,12 @@ struct ObTableStatParam {
 
   bool is_specify_column_gather() const;
 
+  int64_t get_need_gather_column() const;
+
+  bool need_gather_stats() const { return global_stat_param_.need_modify_ ||
+                                          part_stat_param_.need_modify_ ||
+                                          subpart_stat_param_.need_modify_; }
+
   uint64_t tenant_id_;
 
   ObString db_name_;
@@ -599,9 +611,11 @@ struct ObOptStatGatherParam {
     global_part_id_(-1),
     gather_vectorize_(DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE),
     sepcify_scn_(0),
-    use_column_store_(false)
+    use_column_store_(false),
+    is_specify_partition_(false)
   {}
   int assign(const ObOptStatGatherParam &other);
+  int64_t get_need_gather_column() const;
   uint64_t tenant_id_;
   ObString db_name_;
   ObString tab_name_;
@@ -625,6 +639,7 @@ struct ObOptStatGatherParam {
   int64_t gather_vectorize_;
   uint64_t sepcify_scn_;
   bool use_column_store_;
+  bool is_specify_partition_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -646,7 +661,8 @@ struct ObOptStatGatherParam {
                K(global_part_id_),
                K(gather_vectorize_),
                K(sepcify_scn_),
-               K(use_column_store_));
+               K(use_column_store_),
+               K(is_specify_partition_));
 };
 
 struct ObOptStat
@@ -664,9 +680,20 @@ struct ObOptStat
 
 struct ObHistogramParam
 {
+  ObHistogramParam():
+    epc_(0),
+    minval_(NULL),
+    maxval_(NULL),
+    bkvals_(),
+    novals_(),
+    chvals_(),
+    eavals_(),
+    rpcnts_(),
+    eavs_(0)
+  {}
   int64_t epc_;                       //Number of buckets in histogram
-  ObString minval_;                   //Minimum value
-  ObString maxval_;                   //Maximum value
+  const ObObj *minval_;               //Minimum value
+  const ObObj *maxval_;               //Maximum value
   ObSEArray<int64_t, 4> bkvals_;      //Array of bucket numbers
   ObSEArray<int64_t, 4> novals_;      //Array of normalized end point values
   ObSEArray<ObString, 4> chvals_;     //Array of dumped end point values
@@ -712,14 +739,24 @@ struct ObSetTableStatParam
 
 struct ObSetColumnStatParam
 {
+  ObSetColumnStatParam():
+  table_param_(),
+  distcnt_(0),
+  density_(0.0),
+  nullcnt_(0),
+  hist_param_(),
+  avgclen_(0),
+  flags_(0),
+  col_meta_()
+  {}
   ObTableStatParam table_param_;
-
   int64_t distcnt_;
   double density_;
   int64_t nullcnt_;
   ObHistogramParam hist_param_;
   int64_t avgclen_;
   int64_t flags_;
+  common::ObObjMeta col_meta_;
 
   TO_STRING_KV(K(table_param_),
                K(distcnt_),
@@ -727,7 +764,8 @@ struct ObSetColumnStatParam
                K(nullcnt_),
                K(hist_param_),
                K(avgclen_),
-               K(flags_));
+               K(flags_),
+               K(col_meta_));
 
 };
 

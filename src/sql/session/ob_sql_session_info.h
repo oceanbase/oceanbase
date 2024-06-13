@@ -881,7 +881,7 @@ public:
   void set_trans_type(transaction::ObTxClass t) { trans_type_ = t; }
   transaction::ObTxClass get_trans_type() const { return trans_type_; }
 
-  void get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const;
+  int get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const;
   void set_found_rows(const int64_t count) { found_rows_ = count; }
   int64_t get_found_rows() const { return found_rows_; }
   void set_affected_rows(const int64_t count) { affected_rows_ = count; }

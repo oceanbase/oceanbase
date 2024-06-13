@@ -111,6 +111,14 @@ public:
   virtual ~ObTableApiProcessorBase() = default;
 public:
   static int init_session();
+  OB_INLINE bool is_kv_feature_enable()
+  {
+    bool bret = true;
+    if (is_kv_processor()) { // only check kv processor, ignore direct load processor
+      bret = GCONF._enable_kv_feature;
+    }
+    return bret;
+  }
   int check_user_access(const ObString &credential_str);
   // transaction control
   int start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
@@ -146,6 +154,7 @@ protected:
   virtual int try_process() = 0;
   virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) = 0;
   virtual void set_req_has_wokenup() = 0;
+  virtual bool is_kv_processor() = 0;
   virtual void reset_ctx();
   int get_ls_id(const ObTabletID &tablet_id, share::ObLSID &ls_id);
   int process_with_retry(const ObString &credential, const int64_t timeout_ts);

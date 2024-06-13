@@ -146,7 +146,7 @@ ObExecContext::~ObExecContext()
       phy_plan_ctx_->~ObPhysicalPlanCtx();
     } else {
       // free subschema map memory
-      phy_plan_ctx_->get_subschema_ctx().destroy();
+      phy_plan_ctx_->destroy();
     }
   }
   phy_plan_ctx_ = NULL;

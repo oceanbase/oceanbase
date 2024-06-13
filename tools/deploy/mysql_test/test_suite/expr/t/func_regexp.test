@@ -534,4 +534,8 @@ set names GB18030;
 
 SELECT TRIM( SUBSTRING( SUBSTRING( '∷ ∶ ∫ ∮ ∝ ∞ ∧ ∨ ∑ ∏ ∪ ∩ ∈ ∵ ∴ ⊥ ∥ ∠ ⌒ ⊙ √∟⊿ ㏒ ㏑ % ‰' , 1, LEAST( 228, 20 ) ) , 1 , LEAST( 228, 20 ) ) ) NOT REGEXP CONCAT( 'tu', '%' ) FROM table10_bigint WHERE col_int NOT IN ( 5387431054241955840 , 13633803446934044672 , 65066 , 45808 , 6755399441055744000 ) ORDER BY col_char_20 DESC , pk ASC LIMIT 6 OFFSET 1;
 
+##bug:
+
+select cast('NAMEXX' as BINARY) regexp BINARY '^[A-Z]+$', cast('NAME66' as BINARY) regexp BINARY '^[A-Z]+$';
+
 drop database ly;

@@ -20,6 +20,7 @@
 #include "share/ob_rpc_struct.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using oceanbase::share::schema::ObUserInfo;
@@ -72,9 +73,30 @@ int ObAlterUserProfileResolver::resolve_set_role(const ParseNode &parse_tree)
       arg.tenant_id_ = params_.session_info_->get_effective_tenant_id();
       stmt->set_set_role_flag(ObAlterUserProfileStmt::SET_ROLE);
 
+      ObSEArray<uint64_t, 8> role_id_array = user_info->get_role_id_array();
+      if (params_.session_info_->get_proxy_user_id() != OB_INVALID_ID) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < user_info->get_proxied_user_info_cnt(); i++) {
+          const ObProxyInfo *proxy_info = user_info->get_proxied_user_info_by_idx(i);
+          if (OB_ISNULL(proxy_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error", K(ret));
+          } else if (proxy_info->user_id_ == params_.session_info_->get_proxy_user_id()) {
+            ObArray<uint64_t> res_role_id_array;
+            ObArray<uint64_t> res_role_id_option_array;
+            if (OB_FAIL(ObSQLUtils::get_proxy_can_activate_role(user_info->get_role_id_array(),
+                                                                user_info->get_role_id_option_array(),
+                                                                *proxy_info,
+                                                                res_role_id_array,
+                                                                res_role_id_option_array))) {
+              LOG_WARN("get proxy can activate role failed", K(ret));
+            } else {
+              OZ (role_id_array.assign(res_role_id_array));
+            }
+          }
+        }
+      }
       /* 1. resolve default role */
-      OZ (resolve_default_role_clause(parse_tree.children_[0], arg, 
-                                      user_info->get_role_id_array(), false));
+      OZ (resolve_default_role_clause(parse_tree.children_[0], arg, role_id_array, false));
 
     }
   }

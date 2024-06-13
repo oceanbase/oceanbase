@@ -1560,13 +1560,14 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
         //column_order
         if (OB_FAIL(ret)) {
           //do nothing
-        } else if (sort_column_node->children_[2] &&
-            T_SORT_DESC == sort_column_node->children_[2]->type_) {
+        } else if (is_oracle_mode() && sort_column_node->children_[2]
+                   && T_SORT_DESC == sort_column_node->children_[2]->type_) {
           // sort_item.order_type_ = common::ObOrderType::DESC;
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support desc index now", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Desc index");
         } else {
+          //兼容mysql5.7, 降序索引不生效且不报错
           sort_item.order_type_ = common::ObOrderType::ASC;
         }
 

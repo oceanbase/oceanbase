@@ -28,6 +28,7 @@
 #include "storage/tx/ob_tx_log.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "storage/memtable/ob_redo_log_generator.h"
+#include "storage/tx/ob_tx_data_op.h"
 
 namespace oceanbase
 {
@@ -74,13 +75,15 @@ class ObTxLogCb : public ObTxBaseLogCb,
                   public common::ObDLinkBase<ObTxLogCb>
 {
 public:
-  ObTxLogCb() : extra_cb_(nullptr), need_free_extra_cb_(false) { reset(); }
+  ObTxLogCb() : extra_cb_(nullptr), need_free_extra_cb_(false), tx_op_array_(nullptr),
+  undo_node_(nullptr) { reset(); }
   ~ObTxLogCb() { destroy(); }
   int init(const share::ObLSID &key,
            const ObTransID &trans_id,
            ObTransCtx *ctx,
            const bool is_dynamic);
   void reset();
+  void reset_tx_op_array();
   void reuse();
   void destroy() { reset(); }
   ObTxLogType get_last_log_type() const;
@@ -93,7 +96,15 @@ public:
       tx_data_guard_.init(tx_data);
     }
   }
+  void reset_undo_node();
+  storage::ObUndoStatusNode *&get_undo_node() { return undo_node_; }
+  void set_undo_action(const ObUndoAction &undo_action) {
+    undo_action_ = undo_action;
+  }
+  ObUndoAction &get_undo_action() { return undo_action_; }
+  ObTxOpArray *&get_tx_op_array() { return tx_op_array_; }
   ObTxData* get_tx_data() { return tx_data_guard_.tx_data(); }
+  ObTxDataGuard &get_tx_data_guard() { return tx_data_guard_; }
   int set_callbacks(const ObCallbackScopeArray &callbacks) { return callbacks_.assign(callbacks); }
   ObCallbackScopeArray& get_callbacks() { return callbacks_; }
   int reserve_callbacks(int cnt) { return callbacks_.reserve(cnt); }
@@ -161,6 +172,9 @@ private:
   storage::ObDDLIncLogBasic dli_batch_key_;
   logservice::AppendCb * extra_cb_;
   bool need_free_extra_cb_;
+  ObUndoAction undo_action_;
+  storage::ObTxOpArray *tx_op_array_;
+  storage::ObUndoStatusNode *undo_node_;
   //bool is_callbacking_;
 };
 

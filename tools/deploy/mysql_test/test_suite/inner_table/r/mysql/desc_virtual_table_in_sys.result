@@ -5858,6 +5858,7 @@ readable_scn	bigint(20) unsigned	NO		NULL
 recovery_until_scn	bigint(20) unsigned	NO		4611686018427387903	
 log_mode	varchar(100)	NO		NOARCHIVELOG	
 max_ls_id	bigint(20)	NO		0	
+restore_data_mode	varchar(128)	NO		NORMAL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_info;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9443,6 +9444,66 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 "oceanbase.__all_virtual_tracepoint_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_compatibility_control;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+name	varchar(128)	NO		NULL	
+description	varchar(4096)	NO		NULL	
+is_enable	tinyint(4)	NO		NULL	
+enable_versions	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_compatibility_control;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_user_proxy_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+client_user_id	bigint(20)	NO	PRI	NULL	
+proxy_user_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+credential_type	bigint(20)	NO		0	
+flags	bigint(20)	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_user_proxy_info;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_user_proxy_info_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+client_user_id	bigint(20)	NO	PRI	NULL	
+proxy_user_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+credential_type	bigint(20)	YES		0	
+flags	bigint(20)	YES		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_user_proxy_info_history;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_user_proxy_role_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+client_user_id	bigint(20)	NO	PRI	NULL	
+proxy_user_id	bigint(20)	NO	PRI	NULL	
+role_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_user_proxy_role_info;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_user_proxy_role_info_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+client_user_id	bigint(20)	NO	PRI	NULL	
+proxy_user_id	bigint(20)	NO	PRI	NULL	
+role_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_user_proxy_role_info_history;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_tenant_resource_limit;

@@ -459,33 +459,16 @@ int ObExprUtil::get_mb_str_info(const ObString &str,
 
 double ObExprUtil::round_double(double val, int64_t dec)
 {
-  const double pow_val = std::pow(10, static_cast<double>(std::abs(dec)));
-  volatile double val_div_tmp = val / pow_val;
-  volatile double val_mul_tmp = val * pow_val;
-  volatile double res = 0.0;
+  const double pow_val = std::pow(10.0, static_cast<double>(std::abs(dec)));
+  double val_div_tmp = val / pow_val;
+  double val_mul_tmp = val * pow_val;
+  double res = 0.0;
   if (dec < 0 && std::isinf(pow_val)) {
     res = 0.0;
-  } else if (dec >= 0 && std::isinf(val_mul_tmp)) {
+  } else if (dec >= 0 && !std::isfinite(val_mul_tmp)) {
     res = val;
   } else {
     res = dec < 0 ? rint(val_div_tmp) * pow_val : rint(val_mul_tmp) / pow_val;
-  }
-  LOG_DEBUG("round double done", K(val), K(dec), K(res));
-  return res;
-}
-
-double ObExprUtil::round_double_nearest(double val, int64_t dec)
-{
-  const double pow_val = std::pow(10, static_cast<double>(std::abs(dec)));
-  volatile double val_div_tmp = val / pow_val;
-  volatile double val_mul_tmp = val * pow_val;
-  volatile double res = 0.0;
-  if (dec < 0 && std::isinf(pow_val)) {
-    res = 0.0;
-  } else if (dec >= 0 && std::isinf(val_mul_tmp)) {
-    res = val;
-  } else {
-    res = dec < 0 ? std::round(val_div_tmp) * pow_val : std::round(val_mul_tmp) / pow_val;
   }
   LOG_DEBUG("round double done", K(val), K(dec), K(res));
   return res;
@@ -524,7 +507,7 @@ double ObExprUtil::trunc_double(double val, int64_t dec)
   volatile double res = 0.0;
   if (dec < 0 && std::isinf(pow_val)) {
     res = 0.0;
-  } else if (dec >= 0 && std::isinf(val_mul_tmp)) {
+  } else if (dec >= 0 && !std::isfinite(val_mul_tmp)) {
     res = val;
   } else {
     if (val >= 0) {
@@ -783,33 +766,6 @@ int ObSolidifiedVarsContext::get_local_tz_info(const sql::ObBasicSessionInfo *se
   return ret;
 }
 
-OB_DEF_SERIALIZE(ObSolidifiedVarsContext)
-{
-  int ret = OB_SUCCESS;
-  if (NULL != local_session_var_) {
-    OB_UNIS_ENCODE(*local_session_var_);
-  }
-  return ret;
-}
-
-OB_DEF_SERIALIZE_SIZE(ObSolidifiedVarsContext)
-{
-  int64_t len = 0;
-  if (NULL != local_session_var_) {
-    OB_UNIS_ADD_LEN(*local_session_var_);
-  }
-  return len;
-}
-
-OB_DEF_DESERIALIZE(ObSolidifiedVarsContext)
-{
-  int ret = OB_SUCCESS;
-  if (NULL != local_session_var_) {
-    OB_UNIS_DECODE(*local_session_var_);
-  }
-  return ret;
-}
-
 DEF_TO_STRING(ObSolidifiedVarsContext)
 {
   int64_t pos = 0;
@@ -990,6 +946,22 @@ int ObSolidifiedVarsGetter::get_max_allowed_packet(int64_t &max_size)
              && OB_FAIL(ObSQLUtils::merge_solidified_var_into_max_allowed_packet(local_session_var_->get_local_vars(),
                                                                               max_size))) {
     LOG_WARN("try get local max allowed packet failed", K(ret));
+  }
+  return ret;
+}
+
+int ObSolidifiedVarsGetter::get_compat_version(uint64_t &compat_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(session_->get_compatibility_version(compat_version))) {
+    LOG_WARN("failed to get compat version", K(ret));
+  } else if (NULL != local_session_var_
+             && OB_FAIL(ObSQLUtils::merge_solidified_var_into_compat_version(local_session_var_->get_local_vars(),
+                                                                             compat_version))) {
+    LOG_WARN("try get local compat version failed", K(ret));
   }
   return ret;
 }

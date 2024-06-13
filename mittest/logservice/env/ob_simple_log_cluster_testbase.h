@@ -77,8 +77,7 @@ public:
 
 private:
   static int generate_sorted_server_list_(const int64_t node_cnt);
-  static int init_log_kv_cache_();
-
+  static int init_global_kv_cache_();
 protected:
   static void SetUpTestCase();
   static void TearDownTestCase();

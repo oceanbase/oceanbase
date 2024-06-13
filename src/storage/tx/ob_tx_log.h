@@ -411,11 +411,12 @@ public:
       is_alloc_ = true;
       dli_buf_size_ = ddl_log->get_serialize_size();
       submit_buf_ = static_cast<char *>(share::mtl_malloc(dli_buf_size_, "DLI_TMP_BUF"));
-      memset(submit_buf_, 0, dli_buf_size_);
       int64_t pos = 0;
       if (OB_ISNULL(submit_buf_)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         TRANS_LOG(WARN, "alloc memory failed", K(ret), KPC(this), KPC(ddl_log));
+      } else if (OB_FALSE_IT(memset(submit_buf_, 0, dli_buf_size_))) {
+        // do nothing
       } else if (ddl_log->serialize(static_cast<char *>(submit_buf_), dli_buf_size_, pos)) {
         TRANS_LOG(WARN, "serialize ddl log buf failed", K(ret), KPC(this), KPC(ddl_log));
       }
@@ -1100,7 +1101,8 @@ class ObTxAbortLog
 
 public:
   ObTxAbortLog(ObTxAbortLogTempRef &temp_ref)
-      : multi_source_data_(temp_ref.multi_source_data_), tx_data_backup_()
+      : multi_source_data_(temp_ref.multi_source_data_),
+        tx_data_backup_()
   {
     before_serialize();
   }

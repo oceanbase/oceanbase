@@ -44,6 +44,10 @@ private:
   int scheduler_ls_ha_handler_();
   int do_ha_handler_(const share::ObLSID &ls_id);
 
+#ifdef ERRSIM
+  int errsim_set_ls_migration_status_hold_();
+#endif
+
 private:
 
   // TODO(zeyong): change SCHEDULER_WAIT_TIME_MS to 5 min when rs use rpc to wake up the ha service in 4.3

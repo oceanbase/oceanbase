@@ -64,6 +64,7 @@
 #include "sql/engine/expr/ob_expr_agg_param_list.h"
 #include "sql/engine/expr/ob_expr_is_serving_tenant.h"
 #include "sql/engine/expr/ob_expr_hex.h"
+#include "sql/engine/expr/ob_expr_password.h"
 #include "sql/engine/expr/ob_expr_in.h"
 #include "sql/engine/expr/ob_expr_not_in.h"
 #include "sql/engine/expr/ob_expr_int2ip.h"
@@ -438,6 +439,7 @@
 #include "sql/engine/expr/ob_expr_st_symdifference.h"
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
+#include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_master_pos_wait.h"
@@ -676,6 +678,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprGreaterThan);
     REG_OP(ObExprGreatest);
     REG_OP(ObExprHex);
+    REG_OP(ObExprPassword);
     REG_OP(ObExprIn);
     REG_OP(ObExprNotIn);
     REG_OP(ObExprInt2ip);
@@ -1078,6 +1081,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPrivSTAsMVTGeom);
     REG_OP(ObExprPrivSTMakeValid);
     REG_OP(ObExprCurrentRole);
+    REG_OP(ObExprInnerTableOptionPrinter);
+    REG_OP(ObExprInnerTableSequenceGetter);
     REG_OP(ObExprMasterPosWait);
   }();
 // 注册oracle系统函数
@@ -1400,6 +1405,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprTransactionId);
   REG_OP_ORCL(ObExprInnerRowCmpVal);
   REG_OP_ORCL(ObExprLastRefreshScn);
+  REG_OP_ORCL(ObExprInnerTableOptionPrinter);
+  REG_OP_ORCL(ObExprInnerTableSequenceGetter);
   // REG_OP_ORCL(ObExprTopNFilter);
   // REG_OP_ORCL(ObExprSdoRelate);
 }

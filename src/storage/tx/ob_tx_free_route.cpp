@@ -793,9 +793,14 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
 #define PRE_ENCODE_LENGTH(X) PRE_ENCODE_LENGTH_(X)
 #define ENCODE_NORMAL_STATE_LENGTH(X, ...)                              \
   if (ctx.flag_.is_return_normal_state()) {                             \
-    LST_DO(PRE_ENCODE_LENGTH, (;), ##__VA_ARGS__);                      \
-    ObSpinLockGuard guard(tx->lock_);                                   \
-    l += tx->X##_state_encoded_length();                                \
+    if (OB_ISNULL(tx)) {                                                \
+      int ret = OB_ERR_UNEXPECTED;                                      \
+      TRANS_LOG(ERROR, "tx is null", K(ret));                           \
+    } else {                                                            \
+      LST_DO(PRE_ENCODE_LENGTH, (;), ##__VA_ARGS__);                    \
+      ObSpinLockGuard guard(tx->lock_);                                 \
+      l += tx->X##_state_encoded_length();                              \
+    }                                                                   \
   }
 
 #define TXN_FREE_ROUTE_SERIALIZE_PARAM                                  \

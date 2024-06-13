@@ -663,7 +663,7 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(
   return ret;
 }
 
-int ObTabletMemtableMgr::get_memtable_for_replay(SCN replay_scn, ObTableHandleV2 &handle)
+int ObTabletMemtableMgr::get_memtable_for_replay(const SCN &replay_scn, ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
   ObITabletMemtable *tablet_memtable = nullptr;
@@ -741,7 +741,6 @@ DEF_REPORT_CHEKCPOINT_DIAGNOSE_INFO(UpdateReleaseTime, update_release_time)
 int ObTabletMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
                                                 const bool force)
 {
-  UNUSED(force);
   int ret = OB_SUCCESS;
   ObITabletMemtable *memtable = static_cast<ObITabletMemtable *>(imemtable);
 
@@ -768,7 +767,11 @@ int ObTabletMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
       }
       memtable->remove_from_data_checkpoint();
       memtable->set_is_flushed();
-      memtable->set_freeze_state(TabletMemtableFreezeState::RELEASED);
+      if (force) {
+        memtable->set_freeze_state(TabletMemtableFreezeState::FORCE_RELEASED);
+      } else {
+        memtable->set_freeze_state(TabletMemtableFreezeState::RELEASED);
+      }
       memtable->set_frozen();
       memtable->report_memtable_diagnose_info(UpdateReleaseTime());
       release_head_memtable();

@@ -937,12 +937,12 @@ int ObDDLResolver::resolve_table_id_pre(ParseNode *node)
   if (NULL != node) {
     ParseNode *option_node = NULL;
     int32_t num = 0;
-    if(T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
+    if(T_TABLE_OPTION_LIST != node->type_) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid parse node", K(ret));
-    } else if (OB_ISNULL(node->children_) || OB_ISNULL(session_info_)) {
+    } else if (OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "node children or session_info_ is null", K(node->children_), K(session_info_), K(ret));
+      SQL_RESV_LOG(WARN, "session_info_ is null", K(session_info_), K(ret));
     } else {
       num = node->num_child_;
     }
@@ -968,12 +968,12 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
   if (NULL != node) {
     ParseNode *option_node = NULL;
     int32_t num = 0;
-    if(T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
+    if(T_TABLE_OPTION_LIST != node->type_) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid parse node", KR(ret), K(node->type_), K(node->num_child_));
-    } else if (OB_ISNULL(node->children_) || OB_ISNULL(session_info_)) {
+    } else if ( OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "node children or session_info_ is null", K(node->children_), K(session_info_), K(ret));
+      SQL_RESV_LOG(WARN, "session_info_ is null", K(session_info_), K(ret));
     } else {
       num = node->num_child_;
     }
@@ -10276,20 +10276,14 @@ int ObDDLResolver::resolve_partition_hash_or_key(
           LOG_WARN("failed to generate default hash part", K(ret));
         }
         if (!stmt->use_def_sub_part()) {
-          if (table_schema.is_hash_like_subpart()) {
-            // partition by hash(c1) subpartition by hash(c2) subpartitions 3 partitions 3
-            for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_first_part_num(); ++i) {
-              if (OB_FAIL(resolve_subpartition_elements(stmt,
-                                                        NULL, // dummy node
-                                                        table_schema,
-                                                        table_schema.get_part_array()[i],
-                                                        false))) {
-                LOG_WARN("failed to resolve subpartition elements", K(ret));
-              }
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_first_part_num(); ++i) {
+            if (OB_FAIL(resolve_subpartition_elements(stmt,
+                                                      NULL, // dummy node
+                                                      table_schema,
+                                                      table_schema.get_part_array()[i],
+                                                      false))) {
+              LOG_WARN("failed to resolve subpartition elements", K(ret));
             }
-          } else {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid partition define", K(ret));
           }
         }
       }
@@ -11935,6 +11929,9 @@ int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
   if (OB_ISNULL(column_group_node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column gorup node should not be null", K(ret));
+  } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported table type to add column group", K(ret));
   } else {
     dst_table_schema.set_max_used_column_group_id(table_schema.get_max_used_column_group_id());
   }
@@ -11993,17 +11990,17 @@ int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
   return ret;
 }
 
-int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const
+int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, obrpc::ObCreateIndexArg &create_index_arg) const
 {
   int ret = OB_SUCCESS;
-  exist_all_column_group = false;
+  bool is_all_cg_exist = false;
+  bool is_each_cg_exist = false;
 
   if (OB_UNLIKELY(T_COLUMN_GROUP != cg_node.type_ || cg_node.num_child_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_RESV_LOG(WARN, "invalid argument", KR(ret), K(cg_node.type_), K(cg_node.num_child_));
   } else {
     const int64_t num_child = cg_node.num_child_;
-    bool exist_single_type = false;
     // handle all_type column_group & single_type column_group
     for (int64_t i = 0; OB_SUCC(ret) && (i < num_child); ++i) {
       ParseNode *node = cg_node.children_[i];
@@ -12011,24 +12008,24 @@ int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, bool &exist_all_colum
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("children of column_group_list should not be null", KR(ret));
       } else if (T_ALL_COLUMN_GROUP == node->type_) {
-        if (exist_all_column_group) {
+        if (is_all_cg_exist) {
           ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
           SQL_RESV_LOG(WARN, "all column group already exist in sql",
                        K(ret), K(node->children_[i]->type_));
           const ObString error_msg = "all columns";
           LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
         } else {
-          exist_all_column_group = true;
+          is_all_cg_exist = true;
         }
       } else if (T_SINGLE_COLUMN_GROUP == node->type_) {
-        if (exist_single_type) {
+        if (is_each_cg_exist) {
           ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
           SQL_RESV_LOG(WARN, "single column group already exist in sql",
                        K(ret), K(node->type_));
           const ObString error_msg = "each column";
           LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
         } else {
-          exist_single_type = true;
+          is_each_cg_exist = true;
         }
       } else if (T_NORMAL_COLUMN_GROUP == node->type_) {
         ret = OB_NOT_SUPPORTED;
@@ -12036,8 +12033,28 @@ int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, bool &exist_all_colum
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "column store tables with customized column group are");
       }
     }
-  }
+    if (OB_FAIL(ret)) {
+    } else if (is_each_cg_exist) {
+      obrpc::ObCreateIndexArg::ObIndexColumnGroupItem each_cg_item;
+      each_cg_item.is_each_cg_ = true;
+      each_cg_item.cg_type_ = ObColumnGroupType::SINGLE_COLUMN_GROUP;
+      if (OB_FAIL(create_index_arg.index_cgs_.push_back(each_cg_item))) {
+        LOG_WARN("failed to push back value", K(ret));
+      }
+    }
 
+    if (OB_FAIL(ret)) {
+    } else if (is_all_cg_exist) {
+      obrpc::ObCreateIndexArg::ObIndexColumnGroupItem all_cg_item;
+      all_cg_item.is_each_cg_ = false;
+      all_cg_item.cg_type_ = ObColumnGroupType::ALL_COLUMN_GROUP;
+      if (OB_FAIL(create_index_arg.index_cgs_.push_back(all_cg_item))) {
+        LOG_WARN("failed to push back value", K(ret));
+      } else {
+        create_index_arg.exist_all_column_group_ = true; /* for compat*/
+      }
+    }
+  }
   return ret;
 }
 
@@ -12114,12 +12131,8 @@ int ObDDLResolver::resolve_index_column_group(const ParseNode *cg_node, obrpc::O
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3, create index with column group");
   } else {
     bool exist_all_column_group = false;
-    if (OB_FAIL(parse_cg_node(*cg_node, exist_all_column_group))) {
+    if (OB_FAIL(parse_cg_node(*cg_node, create_index_arg))) {
       LOG_WARN("fail to parse cg node", KR(ret));
-    } else if (OB_FAIL(create_index_arg.index_cgs_.push_back(obrpc::ObCreateIndexArg::ObIndexColumnGroupItem(true/*each cg*/)))) {
-      LOG_WARN("fail to push each cg", K(ret));
-    } else {
-      create_index_arg.exist_all_column_group_ = exist_all_column_group;
     }
   }
   return ret;
