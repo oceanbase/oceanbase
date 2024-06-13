@@ -147,10 +147,6 @@ struct LogRuntimeFilterDependencyInfo
 public:
   LogRuntimeFilterDependencyInfo() : rf_create_ops_() {}
   ~LogRuntimeFilterDependencyInfo() = default;
-  void destroy()
-  {
-    rf_create_ops_.reset();
-  }
   inline bool is_empty() const {
     return rf_create_ops_.empty();
   }
@@ -174,6 +170,9 @@ struct PxInfo {
       : inited_(false), root_op_(root_op), root_dfo_(root_dfo),
         threads_cnt_(0), group_cnt_(0), rf_dpd_info_()
   {}
+  ~PxInfo() {
+    destroy();
+  }
   void destroy()
   {
     if (OB_NOT_NULL(root_dfo_)) {

@@ -185,7 +185,7 @@ int ObPxResourceAnalyzer::analyze(
   }
   for (int64_t i = 0; i < px_trees_.count(); ++i) {
     if (OB_NOT_NULL(px_trees_.at(i))) {
-      px_trees_.at(i)->destroy();
+      px_trees_.at(i)->~PxInfo();
       px_trees_.at(i) = NULL;
     }
   }
