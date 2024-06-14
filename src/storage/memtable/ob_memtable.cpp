@@ -122,6 +122,7 @@ ObMemtable::ObMemtable()
       logging_blocked_start_time(0),
       unset_active_memtable_logging_blocked_(false),
       resolve_active_memtable_left_boundary_(true),
+      offlined_(false),
       transfer_freeze_flag_(false),
       recommend_snapshot_version_(share::SCN::invalid_scn()),
       freeze_scn_(SCN::max_scn()),
@@ -274,6 +275,7 @@ void ObMemtable::destroy()
   logging_blocked_start_time = 0;
   unset_active_memtable_logging_blocked_ = false;
   resolve_active_memtable_left_boundary_ = true;
+  offlined_ = false;
   transfer_freeze_flag_ = false;
   recommend_snapshot_version_.reset();
   max_end_scn_ = ObScnRange::MIN_SCN;

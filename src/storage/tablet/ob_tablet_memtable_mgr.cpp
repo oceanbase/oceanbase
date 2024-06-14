@@ -979,6 +979,7 @@ int ObTabletMemtableMgr::set_frozen_for_all_memtables()
         STORAGE_LOG(WARN, "memtable is nullptr", K(ret), K(ls_id), KP(memtable), K(i));
       } else {
         STORAGE_LOG(INFO, "set frozen for offline", K(ls_id), K(i), KPC(memtable));
+        memtable->set_offlined();
         memtable->set_frozen();
       }
     }

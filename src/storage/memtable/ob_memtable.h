@@ -472,6 +472,8 @@ public:
   inline void unset_active_memtable_logging_blocked() { ATOMIC_STORE(&unset_active_memtable_logging_blocked_, true); }
   inline void set_resolve_active_memtable_left_boundary(bool flag) { ATOMIC_STORE(&resolve_active_memtable_left_boundary_, flag); }
   inline bool get_resolve_active_memtable_left_boundary() { return ATOMIC_LOAD(&resolve_active_memtable_left_boundary_); }
+  inline void set_offlined() { ATOMIC_STORE(&offlined_, true); }
+  inline bool get_offlined() { return ATOMIC_LOAD(&offlined_); }
   void set_freeze_state(const int64_t state);
   void set_minor_merged();
   int64_t get_minor_merged_time() const { return minor_merged_time_; }
@@ -768,6 +770,7 @@ private:
   int64_t logging_blocked_start_time; // record the start time of logging blocked
   bool unset_active_memtable_logging_blocked_;
   bool resolve_active_memtable_left_boundary_;
+  bool offlined_;
   // TODO(handora.qc): remove it as soon as possible
   // only used for decide special right boundary of memtable
   bool transfer_freeze_flag_;
