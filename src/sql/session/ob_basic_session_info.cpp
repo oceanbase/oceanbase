@@ -42,6 +42,7 @@
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ob_compatibility_control.h"
+#include "sql/ob_optimizer_trace_impl.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -2774,6 +2775,21 @@ int ObBasicSessionInfo::dump_all_sys_vars() const
     }
   }
   return ret;
+}
+
+void ObBasicSessionInfo::trace_all_sys_vars() const
+{
+  int ret = OB_SUCCESS;
+  int64_t store_idx = OB_INVALID_INDEX_INT64;
+  int64_t var_amount = ObSysVariables::get_amount();
+  for (int64_t i = 0; OB_SUCC(ret) && i < var_amount; ++i) {
+    store_idx = ObSysVarsToIdxMap::get_store_idx((int64_t)ObSysVariables::get_sys_var_id(i));
+    OV (0 <= store_idx && store_idx < ObSysVarFactory::ALL_SYS_VARS_COUNT);
+    OV (OB_NOT_NULL(sys_vars_[store_idx]));
+    if (OB_SUCC(ret) && (sys_vars_[store_idx]->get_value() != sys_vars_[store_idx]->get_global_default_value())) {
+      OPT_TRACE("  ", sys_vars_[store_idx]->get_name(), " = ", sys_vars_[store_idx]->get_value());
+    }
+  }
 }
 
 int ObBasicSessionInfo::init_sys_vars_cache_base_values()

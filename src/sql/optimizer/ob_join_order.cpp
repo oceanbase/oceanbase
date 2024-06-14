@@ -5419,6 +5419,8 @@ int AccessPath::estimate_cost()
                                                 adj_cost_is_valid))) {
     LOG_WARN("failed to check adj index cost valid", K(ret));
   } else {
+    ENABLE_OPT_TRACE_COST_MODEL;
+    OPT_TRACE_COST_MODEL("calc cost for index:", index_id_);
     ObOptimizerContext &opt_ctx = parent_->get_plan()->get_optimizer_context();
     if (OB_FAIL(ObOptEstCost::cost_table(est_cost_info_,
                                         parallel_,
@@ -5431,6 +5433,7 @@ int AccessPath::estimate_cost()
     } else if (!adj_cost_is_valid) {
       cost_ = storage_est_cost;
       index_back_cost_ = storage_est_index_back_cost;
+      OPT_TRACE_COST_MODEL(KV_(cost), "=", KV(storage_est_cost));
     } else if (OB_FAIL(ObOptEstCost::cost_table(est_cost_info_,
                                                 parallel_,
                                                 stats_query_range_row_count,
@@ -5443,7 +5446,9 @@ int AccessPath::estimate_cost()
       double rate = opt_stats_cost_percent * 1.0 / 100.0;
       cost_ = storage_est_cost * (1-rate) + stats_est_cost * rate;
       index_back_cost_ = storage_est_index_back_cost * (1-rate) + stats_est_index_back_cost * rate;
+      OPT_TRACE_COST_MODEL(KV_(cost), "=", KV(storage_est_cost), "* (1-", KV(rate), ") +", KV(stats_est_cost), "*", KV(rate));
     }
+    DISABLE_OPT_TRACE_COST_MODEL;
   }
   return ret;
 }

@@ -181,7 +181,8 @@ ObOptimizerTraceImpl::ObOptimizerTraceImpl()
     section_(0),
     trace_level_(0),
     enable_(false),
-    trace_state_before_stop_(false)
+    trace_state_(1),
+    enable_trace_cost_model_(false)
 {
 
 }
@@ -199,6 +200,12 @@ int ObOptimizerTraceImpl::enable_trace(const common::ObString &identifier,
   if (OB_FAIL(set_parameters(identifier, sql_id, trace_level))) {
     LOG_WARN("failed to set parameters", K(ret));
   } else {
+    start_time_us_ = 0;
+    last_time_us_ = 0;
+    last_mem_ = 0;
+    section_ = 0;
+    trace_state_ = 1;
+    enable_trace_cost_model_ = false;
     set_enable(true);
   }
   return ret;
@@ -224,15 +231,16 @@ void ObOptimizerTraceImpl::reset()
   log_handle_.close();
   sql_id_.reset();
   enable_ = false;
-  trace_state_before_stop_ = false;
+  trace_state_ = 1;
+  enable_trace_cost_model_ = false;
 }
 
 bool ObOptimizerTraceImpl::enable(const common::ObString &sql_id)
 {
   if (!sql_id_.empty()) {
-    return enable_ && (sql_id_.compare(sql_id) == 0);
+    return enable() && (sql_id_.compare(sql_id) == 0);
   } else {
-    return enable_;
+    return enable();
   }
 }
 
@@ -241,6 +249,7 @@ int ObOptimizerTraceImpl::open()
   int ret = OB_SUCCESS;
   start_time_us_ = ObTimeUtil::current_time();
   last_time_us_ = start_time_us_;
+  last_mem_ = 0;
   if (OB_FAIL(log_handle_.open())) {
     LOG_WARN("fail to open file", K(ret));
   }
@@ -254,13 +263,18 @@ void ObOptimizerTraceImpl::close()
 
 void ObOptimizerTraceImpl::resume_trace()
 {
-  set_enable(trace_state_before_stop_);
+  trace_state_ >>= 1;
 }
 
 void ObOptimizerTraceImpl::stop_trace()
 {
-  trace_state_before_stop_ = enable_;
-  set_enable(false);
+  trace_state_ <<= 1;
+}
+
+void ObOptimizerTraceImpl::restart_trace()
+{
+  trace_state_ <<= 1;
+  trace_state_ |= 1;
 }
 
 int ObOptimizerTraceImpl::new_line()
@@ -641,11 +655,15 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
             ",right need sort:", join_path->right_need_sort_, ",right prefix pos:", join_path->right_prefix_pos_);
     }
     new_line();
+    append(join_path->get_sharding());
+    new_line();
     append("left path:");
     if (OB_NOT_NULL(join_path->left_path_) && OB_NOT_NULL(join_path->left_path_->parent_)) {
       increase_section();
       new_line();
       append("tables:", join_path->left_path_->parent_);
+      new_line();
+      append_ptr(join_path->left_path_);
       new_line();
       append("cost:", join_path->left_path_->cost_, ",card:", join_path->left_path_->parent_->get_output_rows(),
             ",width:", join_path->left_path_->parent_->get_output_row_size());
@@ -663,6 +681,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
       new_line();
       append("tables:", join_path->right_path_->parent_);
       new_line();
+      new_line();
+      append_ptr(join_path->right_path_);
       append("cost:", join_path->right_path_->cost_, ",card:", join_path->right_path_->parent_->get_output_rows(),
             ",width:", join_path->right_path_->parent_->get_output_row_size());
       new_line();
@@ -802,6 +822,8 @@ int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
   } else if (OB_FAIL(append("ds_degree:",
                             stat->get_ds_degree()))) {
     LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
   } else {
     for (int64_t j = 0; OB_SUCC(ret) && j < stat->get_ds_col_stats().count(); ++j) {
       const ObOptDSColStat &col_stat = stat->get_ds_col_stats().at(j);
@@ -885,74 +907,16 @@ int ObOptimizerTraceImpl::trace_parameters()
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(session_info_)) {
-    /*+
-    var: name from ob_system_variable_init.json
-    should be upper case
-    type: ObObj、ObString、int64_t、uint64_t
-    */
-    #define TRACE_SYS_VAR(var, type)  \
-    do {  \
-      type value;  \
-      if (OB_FAIL(ret)) { \
-      } else if (OB_FAIL(new_line())) { \
-        LOG_WARN("failed to append msg", K(ret)); \
-      } else if (OB_FAIL(session->get_sys_variable(share::SYS_VAR_##var, value))) {  \
-        LOG_WARN("failed to get parameter value", K(ret));  \
-      } else if (OB_FAIL(append_lower(#var))) {  \
-        LOG_WARN("failed to append msg", K(ret)); \
-      } else if (OB_FAIL(append(":\t", value))) {  \
-        LOG_WARN("failed to append msg", K(ret)); \
-      }   \
-    } while (0);
-
-    /*+
-    var: name from ob_parameter_seed.ipp
-    should be lower case
-    type: bool、int64_t、uint64_t
-    */
-    #define TRACE_PARAMETER(var, type) \
-    do{ \
-      type v; \
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session->get_effective_tenant_id()));  \
-      if (OB_UNLIKELY(!tenant_config.is_valid())) { \
-        v = 0;  \
-      } else if (tenant_config->var) {  \
-        v = 1;  \
-      } else {  \
-        v = 0;  \
-      } \
-      if (OB_FAIL(new_line())) { \
-        LOG_WARN("failed to append msg", K(ret)); \
-      } else if (OB_FAIL(append_key_value(#var, v))) {  \
-        LOG_WARN("failed to append msg", K(ret)); \
-      }   \
-    } while (0);
-
-    ObSQLSessionInfo *session = session_info_;
-    //for tenant parameters
-    TRACE_PARAMETER(_rowsets_enabled, bool);
-    TRACE_PARAMETER(_enable_px_batch_rescan, bool);
-    TRACE_PARAMETER(_enable_spf_batch_rescan, bool);
-    TRACE_PARAMETER(_hash_join_enabled, bool);
-    TRACE_PARAMETER(_optimizer_sortmerge_join_enabled, bool);
-    TRACE_PARAMETER(_nested_loop_join_enabled, bool);
-    TRACE_PARAMETER(_enable_var_assign_use_das, bool);
-    //for system variables
-    TRACE_SYS_VAR(_PX_SHARED_HASH_JOIN, int64_t);
-    TRACE_SYS_VAR(_ENABLE_PARALLEL_DML, int64_t);
-    TRACE_SYS_VAR(_NLJ_BATCHING_ENABLED, int64_t);
-    TRACE_SYS_VAR(_ENABLE_PARALLEL_QUERY, int64_t);
-    TRACE_SYS_VAR(PARALLEL_SERVERS_TARGET, int64_t);
-    TRACE_SYS_VAR(_FORCE_PARALLEL_DML_DOP, uint64_t);
-    TRACE_SYS_VAR(OB_ENABLE_TRANSFORMATION, int64_t);
-    TRACE_SYS_VAR(_FORCE_PARALLEL_QUERY_DOP, uint64_t);
-    TRACE_SYS_VAR(_PX_MIN_GRANULES_PER_SLAVE, int64_t);
-    TRACE_SYS_VAR(_PX_PARTIAL_ROLLUP_PUSHDOWN, int64_t);
-    TRACE_SYS_VAR(_PX_PARTITION_SCAN_THRESHOLD, int64_t);
-    TRACE_SYS_VAR(_OB_PX_SLAVE_MAPPING_THRESHOLD, int64_t);
-    TRACE_SYS_VAR(_OPTIMIZER_NULL_AWARE_ANTIJOIN, int64_t);
-    TRACE_SYS_VAR(_PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN, int64_t);
-    TRACE_SYS_VAR(CARDINALITY_ESTIMATION_MODEL, int64_t);
+    int64_t tenant_id = session_info_->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      new_line();
+      append("tenant config:");
+      tenant_config.trace_all_config();
+    }
+    new_line();
+    append("system variables:");
+    session_info_->trace_all_sys_vars();
   }
   return ret;
 }

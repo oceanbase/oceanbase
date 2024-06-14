@@ -2395,7 +2395,7 @@ int ObTransformTempTable::accept_cte_transform(ObDMLStmt &origin_root_stmt,
   double temp_table_costs = 0.0;
   double dummy = 0.0;
   double temp_table_profit = 0.0;
-  STOP_OPT_TRACE;
+  BEGIN_OPT_TRACE_EVA_COST;
   if (OB_ISNULL(ctx_) || OB_UNLIKELY(origin_stmts.count() != trans_stmts.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), K(ctx_));
@@ -2416,7 +2416,7 @@ int ObTransformTempTable::accept_cte_transform(ObDMLStmt &origin_root_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected array size", K(origin_costs), K(trans_costs), K(trans_happened));
   }
-  RESUME_OPT_TRACE;
+  END_OPT_TRACE_EVA_COST;
   if (OB_SUCC(ret)) {
     if (!force_accept) {
       // Only consider stmt whose cost is reduced after extracting cte.

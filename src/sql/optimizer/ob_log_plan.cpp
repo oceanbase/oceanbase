@@ -789,6 +789,7 @@ int ObLogPlan::generate_join_orders()
       OPT_TRACE("create base path for ", join_rels.at(0).at(i));
       OPT_TRACE_BEGIN_SECTION;
       ret = join_rels.at(0).at(i)->generate_base_paths();
+      OPT_TRACE_MEM_USED;
       OPT_TRACE_END_SECTION;
     }
   }
@@ -797,9 +798,7 @@ int ObLogPlan::generate_join_orders()
   //如果有leading hint就在这里按leading hint指定的join order枚举,
   //如果根据leading hint没有枚举到有效join order，就忽略hint重新枚举。
   if (OB_SUCC(ret)) {
-    OPT_TRACE_TITLE("SYSTEM STATS");
-    OPT_TRACE(get_optimizer_context().get_system_stat());
-    OPT_TRACE_TITLE("BASIC TABLE STATS");
+    OPT_TRACE_TITLE("BASIC TABLE STATISTICS");
     OPT_TRACE_STATIS(stmt, get_basic_table_metas());
     OPT_TRACE_TITLE("UPDATE TABLE STATS");
     OPT_TRACE_STATIS(stmt, get_update_table_metas());

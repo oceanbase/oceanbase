@@ -52,6 +52,13 @@ void ObTenantConfigGuard::set_config(ObTenantConfig *config)
   config_ = config;
 }
 
+void ObTenantConfigGuard::trace_all_config() const
+{
+  if (OB_NOT_NULL(config_)) {
+    config_->trace_all_config();
+  }
+}
+
 int TenantConfigInfo::assign(const TenantConfigInfo &rhs)
 {
   int ret = OB_SUCCESS;

@@ -1253,7 +1253,9 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
     // print access
     ObIArray<ObRawExpr*> &access = get_access_exprs();
     if (OB_FAIL(adjust_print_access_info(access))) {
-      LOG_WARN("failed to adjust print access info", K(ret));
+      ret = OB_SUCCESS;
+      //ignore error code for explain
+      EXPLAIN_PRINT_EXPRS(access, type);
     } else {
       EXPLAIN_PRINT_EXPRS(access, type);
     }
@@ -1986,6 +1988,7 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
   int64_t limit_count = -1;
   int64_t offset_count = 0;
   double index_back_cost = 0.0;
+  ENABLE_OPT_TRACE_COST_MODEL;
   if (OB_ISNULL(est_cost_info_)) {
     //fake cte path
   } else if (OB_FAIL(get_limit_offset_value(NULL, limit_count_expr_, limit_offset_expr_,
@@ -2013,6 +2016,7 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
       LOG_TRACE("push limit into table scan", K(param), K(limit_count_double), K(part_count), K(card));
     }
   }
+  DISABLE_OPT_TRACE_COST_MODEL;
   return ret;
 }
 

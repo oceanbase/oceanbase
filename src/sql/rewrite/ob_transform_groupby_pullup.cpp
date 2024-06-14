@@ -1113,9 +1113,7 @@ int ObTransformGroupByPullup::check_original_plan_validity(ObLogicalOperator* ro
     LOG_WARN("failed to check all table has statistics", K(ret));
   } else if (!has_stats) {
     is_valid = false;
-    RESUME_OPT_TRACE
     OPT_TRACE("check original plan has statistics:", has_stats);
-    STOP_OPT_TRACE
   } else if (OB_FAIL(extract_columns_in_join_conditions(parent_ops,
                                                         view_table_id,
                                                         column_exprs))) {
@@ -1137,11 +1135,9 @@ int ObTransformGroupByPullup::check_original_plan_validity(ObLogicalOperator* ro
     double expansion_rate = card / group_ndv;
     is_valid = expansion_rate < groupby_nopushdown_cut_ratio;
     LOG_TRACE("check original plan", K(is_valid), K(group_exprs), K(group_ndv), K(expansion_rate));
-    RESUME_OPT_TRACE
     OPT_TRACE("check original plan group by exprs:", group_exprs);
     OPT_TRACE("check original plan group by ndv:", group_ndv);
     OPT_TRACE("check original plan expansion rate:", expansion_rate);
-    STOP_OPT_TRACE
   }
   return ret;
 }

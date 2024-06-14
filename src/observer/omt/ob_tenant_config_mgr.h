@@ -48,6 +48,7 @@ public:
    * Requires: check is_valid().
    */
   ObTenantConfig *operator->() { return config_; }
+  void trace_all_config() const;
 private:
   ObTenantConfig *config_;
 };

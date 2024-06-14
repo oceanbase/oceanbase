@@ -1354,6 +1354,7 @@ public:
   int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
   bool is_real_inner_session() const { return is_real_inner_session_; }
   void set_real_inner_session(bool value) { is_real_inner_session_ = value; }
+  void trace_all_sys_vars() const;
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
