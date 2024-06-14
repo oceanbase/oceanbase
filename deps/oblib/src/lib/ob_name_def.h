@@ -1121,4 +1121,5 @@
 #define N_SDO_RELATE                        "sdo_relate"
 #define N_INNER_TABLE_OPTION_PRINTER        "inner_table_option_printer"
 #define N_INNER_TABLE_SEQUENCE_GETTER       "inner_table_sequence_getter"
+#define N_MASTER_POS_WAIT                   "master_pos_wait"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

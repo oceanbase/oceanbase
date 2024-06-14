@@ -1,3 +1,10 @@
+*.sh
+tools/deploy/TMP_DIR
+tools/deploy/tmp
+Doxyfile
+audit/
+run/
+test/tpch/
 ############# root #############
 *.a
 *.bak
@@ -229,6 +236,7 @@ tools/deploy/distributed.yaml
 tools/deploy/obd_profile.sh
 tools/deploy/single-with-proxy.yaml
 tools/deploy/single.yaml
+tools/deploy/single2.yaml
 tools/deploy/tpchobp_test.yaml
 tools/deploy/bmsqlobp_test.yaml
 tools/deploy/oci_test.yaml

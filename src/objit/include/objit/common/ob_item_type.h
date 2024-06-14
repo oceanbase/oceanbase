@@ -81,7 +81,6 @@ typedef enum ObItemType
   T_JSON        = 47,
   T_GEOMETRY    = 48,
   T_UDT_SQL     = 49,
-  T_COLLECTION  = 51,
   T_ROARINGBITMAP = 52,
 
   T_IEEE754_NAN = 61,
@@ -854,13 +853,6 @@ typedef enum ObItemType
   T_FUN_SYS_XML_EXISTSNODE = 1734,
   T_FUN_SYS_PRIV_ST_GEOHASH = 1735,
   T_FUN_SYS_PRIV_ST_MAKEPOINT = 1736,
-  T_FUN_SYS_ARRAY = 1737,
-  T_FUN_SYS_L1_DISTANCE = 1738,
-  T_FUN_SYS_L2_DISTANCE = 1739,
-  T_FUN_SYS_INNER_PRODUCT = 1740,
-  T_FUN_SYS_COSINE_DISTANCE = 1741,
-  T_FUN_SYS_VECTOR_DIMS = 1742,
-  T_FUN_SYS_VECTOR_NORM = 1743,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -880,12 +872,6 @@ typedef enum ObItemType
   T_FUN_SYS_INNER_TABLE_SEQUENCE_GETTER = 1815,
   T_FUN_SYS_DECODE_TRACE_ID = 1816,
   T_FUN_SYS_DOC_LENGTH = 1817,
-  T_FUN_SYS_VEC_VID = 1900,   // vector index
-  T_FUN_SYS_VEC_TYPE = 1901,
-  T_FUN_SYS_VEC_VECTOR = 1902,
-  T_FUN_SYS_VEC_SCN = 1903,
-  T_FUN_SYS_VEC_KEY = 1904,
-  T_FUN_SYS_VEC_DATA = 1905,
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
   T_FUN_SYS_INNER_ROW_CMP_VALUE = 2011,
@@ -928,6 +914,7 @@ typedef enum ObItemType
   T_FUN_SYS_RB_TO_STRING = 2046,
   T_FUN_SYS_RB_FROM_STRING = 2047,
   T_FUN_SYS_RB_ITERATE = 2048,
+  T_FUN_MASTER_POS_WAIT = 2049,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2516,13 +2503,6 @@ typedef enum ObItemType
   T_SHOW_CHECK_TABLE,
   T_SHARED_STORAGE_INFO,
   T_XA_RECOVER,
-  T_VEC_INDEX_PARAMS,
-  T_VEC_INDEX_COLUMN,
-  T_VEC_INDEX_COLUMN_EXPR,
-  T_BACKUP_CLUSTER_PARAMETERS,
-  // create mv build deferred
-  T_MV_REFRESH_OPT,
-  T_MV_BUILD_OPT,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -217,6 +217,7 @@ private:
   int resolve_dblink_udf_expr(const ParseNode *node,
                               ObQualifiedName &column_ref,
                               ObRawExpr *&expr);
+  int process_master_pos_wait_node(const ParseNode *node, ObRawExpr *&expr);
 
 private:
   int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count);

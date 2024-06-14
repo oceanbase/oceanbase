@@ -1268,6 +1268,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         }
         break;
       }
+      case T_FUN_MASTER_POS_WAIT: {
+        if (OB_FAIL(process_master_pos_wait_node(node, expr))) {
+          LOG_WARN("failed to process master_pos_wait node", K(ret), K(node));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("Wrong type in expression", K(get_type_name(node->type_)));
@@ -8577,6 +8583,40 @@ int ObRawExprResolverImpl::process_last_refresh_scn_node(const ParseNode *expr_n
     expr = func_expr;
     LOG_DEBUG("finish resolve last_refresh_scn expr", K(get_type_name(child_node->type_)), K(func_expr->get_mview_id()));
   }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_master_pos_wait_node(const ParseNode *node, ObRawExpr *&expr) 
+{
+  INIT_SUCC(ret);
+  CK(OB_NOT_NULL(node));
+  if(OB_SUCC(ret) && T_FUN_MASTER_POS_WAIT != node->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node->type_ error", K(node->type_));
+  } else if (OB_SUCC(ret) && (2 > node->num_child_ || 4 < node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("num_child_ error", K(node->num_child_));
+  }
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_MASTER_POS_WAIT, func_expr))) {
+      LOG_WARN("create raw expr failed", K(node->num_child_), K(ret));
+    } else if (OB_ISNULL(func_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("func expr is null", K(node->num_child_));
+    } else {
+      func_expr->set_func_name(ObString::make_string("master_pos_wait"));
+    }
+  }
+  for (int32_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
+    const ParseNode *expr_node = node->children_[i];
+    CK (OB_NOT_NULL(expr_node));
+    ObRawExpr *para_expr = NULL;
+    OZ(recursive_resolve(expr_node, para_expr));
+    CK(OB_NOT_NULL(para_expr));
+    OZ(func_expr->add_param_expr(para_expr));
+  }
+  OX(expr = func_expr);
   return ret;
 }
 

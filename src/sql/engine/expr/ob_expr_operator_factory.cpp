@@ -442,6 +442,7 @@
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
+#include "sql/engine/expr/ob_expr_master_pos_wait.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1082,6 +1083,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCurrentRole);
     REG_OP(ObExprInnerTableOptionPrinter);
     REG_OP(ObExprInnerTableSequenceGetter);
+    REG_OP(ObExprMasterPosWait);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

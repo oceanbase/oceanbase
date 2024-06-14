@@ -378,6 +378,7 @@
 #include "ob_expr_inner_table_option_printer.h"
 #include "ob_expr_password.h"
 
+#include "ob_expr_master_pos_wait.h"
 
 namespace oceanbase
 {
@@ -1206,6 +1207,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVectorIPDistance::calc_inner_product,                /* 724 */
   NULL, // ObExprVectorDims::calc_dims,                               /* 725 */
   NULL, // ObExprVectorNorm::calc_norm,                               /* 726 */
+  ObExprMasterPosWait::eval_master_pos_wait,                           /* 717 */                         
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

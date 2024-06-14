@@ -1047,6 +1047,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"without", WITHOUT},
   {"validation", VALIDATION},
   {"_st_asmvt", _ST_ASMVT},
+  {"master_pos_wait", MASTER_POS_WAIT}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html
