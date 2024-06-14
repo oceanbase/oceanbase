@@ -370,10 +370,6 @@ int ObNLConnectByWithIndexOp::read_pump_func_going()
       state_ = CNTB_STATE_READ_RIGHT;
     }
   }
-  if (OB_SUCC(ret)) {
-    LOG_DEBUG("debug pump going", K(ObToStringExprRow(eval_ctx_, MY_SPEC.right_prior_exprs_)),
-              K(ObToStringExprRow(eval_ctx_, MY_SPEC.cur_row_exprs_)));
-  }
   return ret;
 }
 
