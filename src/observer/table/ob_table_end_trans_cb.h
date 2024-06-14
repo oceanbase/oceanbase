@@ -74,20 +74,21 @@ private:
   ObTableOperationType::Type op_type_;
 };
 
+class ObTableLSExecuteEndTransCb;
 class ObTableLSExecuteCreateCbFunctor : public ObTableCreateCbFunctor
 {
 public:
   ObTableLSExecuteCreateCbFunctor()
       : req_(nullptr),
-        result_(nullptr)
+        cb_(nullptr)
   {}
   virtual ~ObTableLSExecuteCreateCbFunctor() = default;
 public:
-  int init(rpc::ObRequest *req, const ObTableLSOpResult *result);
+  int init(rpc::ObRequest *req);
   virtual ObTableAPITransCb* new_callback() override;
 private:
   rpc::ObRequest *req_;
-  const ObTableLSOpResult *result_;
+  ObTableLSExecuteEndTransCb *cb_;
 };
 
 class ObTableAPITransCb: public sql::ObExclusiveEndTransCallback
@@ -182,6 +183,9 @@ public:
   virtual const char *get_type() const override { return "ObTableLSEndTransCallback"; }
   virtual sql::ObEndTransCallbackType get_callback_type() const override { return sql::ASYNC_CALLBACK_TYPE; }
   int assign_ls_execute_result(const ObTableLSOpResult &result);
+  OB_INLINE ObTableLSOpResult &get_result() { return result_; }
+  OB_INLINE ObTableEntityFactory<ObTableSingleOpEntity> &get_entity_factory() { return entity_factory_; }
+  OB_INLINE ObIAllocator &get_allocator() { return allocator_; }
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableLSExecuteEndTransCb);

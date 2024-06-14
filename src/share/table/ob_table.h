@@ -541,6 +541,7 @@ public:
   int get_entity(const ObITableEntity *&entity) const;
   int get_entity(ObITableEntity *&entity);
   ObITableEntity *get_entity() { return entity_; }
+  const ObITableEntity *get_entity() const { return entity_; }
   int64_t get_affected_rows() const { return affected_rows_; }
   int get_return_rows() { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
   OB_INLINE bool get_insertup_do_insert() { return is_insertup_do_insert_; }
@@ -1482,7 +1483,9 @@ private:
       int64_t reserved : 63;
     };
   };
-  ObSEArray<ObTableSingleOpEntity, 4> entities_;
+  // Note: Only the HBase checkAndMutate operation may have multiple entities,
+  // In such cases, we decode the size first and prepare_allocate the entities at once.
+  ObSEArray<ObTableSingleOpEntity, 1> entities_;
   table::ObTableEntityFactory<table::ObTableSingleOpEntity> *default_entity_factory_;
   common::ObIAllocator *deserialize_alloc_; // do not serialize
   ObTableSingleOpQuery *op_query_;

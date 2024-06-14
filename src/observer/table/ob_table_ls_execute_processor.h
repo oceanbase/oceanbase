@@ -30,7 +30,7 @@ class ObTableLSExecuteP: public ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRp
   typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LS_EXECUTE> > ParentType;
 public:
   explicit ObTableLSExecuteP(const ObGlobalContext &gctx);
-  virtual ~ObTableLSExecuteP() = default;
+  virtual ~ObTableLSExecuteP();
   virtual int deserialize() override;
 
 protected:
@@ -60,10 +60,13 @@ private:
                   const table::ObTableOperation &table_operation);
   int add_dict_and_bm_to_result_entity(const table::ObTableTabletOp &tablet_op,
                                        table::ObTableTabletOpResult &tablet_result);
-  int add_tablet_result(const table::ObTableTabletOpResult &tablet_result);
+  int execute_ls_op(table::ObTableLSOpResult &ls_result);
+  // void record_aft_rtn_rows(const table::ObTableLSOpResult &ls_result);
 private:
   common::ObArenaAllocator allocator_;
-  table::ObTableEntityFactory<table::ObTableSingleOpEntity> default_entity_factory_;
+  table::ObTableEntityFactory<table::ObTableSingleOpEntity> *default_entity_factory_;
+  table::ObTableLSExecuteCreateCbFunctor cb_functor_;
+  table::ObTableLSExecuteEndTransCb *cb_;
 };
 
 } // end namespace observer

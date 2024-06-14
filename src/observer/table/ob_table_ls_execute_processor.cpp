@@ -24,8 +24,17 @@ using namespace oceanbase::common;
 ObTableLSExecuteP::ObTableLSExecuteP(const ObGlobalContext &gctx)
   : ObTableRpcProcessor(gctx),
     allocator_("TableLSExecuteP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    default_entity_factory_("TableLSExeEntFac", MTL_ID())
+    cb_(nullptr)
 {
+}
+
+ObTableLSExecuteP::~ObTableLSExecuteP()
+{
+  // cb need to be released because end_trans wouldn't release it
+  // when txn is rollback
+  if (OB_NOT_NULL(cb_)) {
+    OB_DELETE(ObTableLSExecuteEndTransCb, "TbLsExuTnCb", cb_);
+  }
 }
 
 int ObTableLSExecuteP::deserialize()
@@ -37,17 +46,26 @@ int ObTableLSExecuteP::deserialize()
 int ObTableLSExecuteP::before_process()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObString>& all_rowkey_names = arg_.ls_op_.get_all_rowkey_names();
-  const ObIArray<ObString>& all_properties_names = arg_.ls_op_.get_all_properties_names();
-  bool need_all_prop = arg_.ls_op_.need_all_prop_bitmap();
-  if (OB_FAIL(result_.assign_rowkey_names(all_rowkey_names))) {
-    LOG_WARN("fail to assign rowkey names", K(ret), K(all_rowkey_names));
-  } else if (!need_all_prop && OB_FAIL(result_.assign_properties_names(all_properties_names))) {
-    LOG_WARN("fail to assign properties names", K(ret), K(all_properties_names));
+  ObTableLSExecuteEndTransCb *cb = nullptr;
+  if (OB_SUCC(ret) && OB_FAIL(cb_functor_.init(req_))) {
+    LOG_WARN("fail to init create ls callback functor", K(ret));
+  } else if (OB_ISNULL(cb = static_cast<ObTableLSExecuteEndTransCb *>(cb_functor_.new_callback()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ls execute end trans callback", K(ret));
   } else {
-    ret = ParentType::before_process();
+    cb_ = cb;
+    ObTableLSOpResult &cb_result = cb_->get_result();
+    const ObIArray<ObString>& all_rowkey_names = arg_.ls_op_.get_all_rowkey_names();
+    const ObIArray<ObString>& all_properties_names = arg_.ls_op_.get_all_properties_names();
+    bool need_all_prop = arg_.ls_op_.need_all_prop_bitmap();
+    if (OB_FAIL(cb_result.assign_rowkey_names(all_rowkey_names))) {
+      LOG_WARN("fail to assign rowkey names", K(ret), K(all_rowkey_names));
+    } else if (!need_all_prop && OB_FAIL(cb_result.assign_properties_names(all_properties_names))) {
+      LOG_WARN("fail to assign properties names", K(ret), K(all_properties_names));
+    } else {
+      ret = ParentType::before_process();
+    }
   }
-
   return ret;
 }
 
@@ -126,7 +144,9 @@ void ObTableLSExecuteP::reset_ctx()
 {
   need_retry_in_queue_ = false;
   ObTableApiProcessorBase::reset_ctx();
-  result_.reset();
+  if (OB_NOT_NULL(cb_)) {
+    cb_->get_result().reset();
+  }
 }
 
 int ObTableLSExecuteP::get_ls_id(ObLSID &ls_id)
@@ -161,7 +181,13 @@ int ObTableLSExecuteP::try_process()
   bool exist_global_index = false;
   bool need_all_prop = arg_.ls_op_.need_all_prop_bitmap();
   table_id_ = table_id;  // init move response need
-  if (OB_FAIL(init_schema_info(table_id))) {
+  ObTableLSOpResult *cb_result = nullptr;
+
+  if (OB_ISNULL(cb_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null callback", K(ret));
+  } else if (FALSE_IT(cb_result = &cb_->get_result())) {
+  } else if (OB_FAIL(init_schema_info(table_id))) {
     if (ret == OB_TABLE_NOT_EXIST) {
       ObString db("");
       const ObString &table_name = ls_op.get_table_name();
@@ -177,7 +203,7 @@ int ObTableLSExecuteP::try_process()
     const ObIArray<ObTableColumnInfo *>&column_info_array = schema_cache_guard_.get_column_info_array();
     if (OB_FAIL(ObTableApiUtil::expand_all_columns(column_info_array, all_prop_name))) {
       LOG_WARN("fail to expand all columns", K(ret));
-    } else if (OB_FAIL(result_.assign_properties_names(all_prop_name))) {
+    } else if (OB_FAIL(cb_result->assign_properties_names(all_prop_name))) {
       LOG_WARN("fail to assign property names to result", K(ret));
     }
   }
@@ -189,26 +215,17 @@ int ObTableLSExecuteP::try_process()
                                  get_timeout_ts(),
                                  exist_global_index))) {
     LOG_WARN("fail to start transaction", K(ret));
+  } else if (OB_FAIL(execute_ls_op(*cb_result))) {
+    LOG_WARN("fail to execute ls op", K(ret));
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < ls_op.count(); i++) {
-    ObTableTabletOp &tablet_op = ls_op.at(i);
-    ObTableTabletOpResult tablet_result;
-    if (OB_FAIL(execute_tablet_op(tablet_op, tablet_result))) {
-      LOG_WARN("fail to execute tablet op", KR(ret), K(tablet_op));
-    } else if (OB_FAIL(add_tablet_result(tablet_result))) {
-      LOG_WARN("fail to push back", K(ret));
-    }
+  bool is_rollback = (OB_SUCCESS != ret);
+  if (!is_rollback) {
+    cb_ = nullptr;
   }
-
-  ObTableLSExecuteCreateCbFunctor functor;
-  if (OB_SUCC(ret) && OB_FAIL(functor.init(req_, &result_))) {
-    LOG_WARN("fail to init create ls callback functor", K(ret));
-  }
-
   int tmp_ret = ret;
   const bool use_sync = false;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, &functor, use_sync))) {
+  if (OB_FAIL(end_trans(is_rollback, req_, &cb_functor_, use_sync))) {
     LOG_WARN("failed to end trans", K(ret));
   }
 
@@ -216,34 +233,56 @@ int ObTableLSExecuteP::try_process()
 
 #ifndef NDEBUG
   // debug mode
-  LOG_INFO("[TABLE] execute ls batch operation", K(ret), K_(result), K_(retry_count));
+  LOG_INFO("[TABLE] execute ls batch operation", K(ret), K_(retry_count));
 #else
   // release mode
-  LOG_TRACE("[TABLE] execute ls batch operation", K(ret), K_(result), K_(retry_count), "receive_ts", get_receive_timestamp());
+  LOG_TRACE("[TABLE] execute ls batch operation", K(ret), K_(retry_count), "receive_ts", get_receive_timestamp());
 #endif
   return ret;
 }
 
-int ObTableLSExecuteP::add_tablet_result(const ObTableTabletOpResult &tablet_result)
+int ObTableLSExecuteP::execute_ls_op(ObTableLSOpResult &ls_result)
 {
   int ret = OB_SUCCESS;
-  bool return_one_res = arg_.ls_op_.return_one_result();
-  if (return_one_res && result_.count() != 0) {
-    if (result_.count() != 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected ls result count", K(ret), K(result_.count()));
-    } else {
-      ObTableTabletOpResult &ls_tablet_res = result_.at(0);
-      if (ls_tablet_res.count() != 1 || tablet_result.count() != 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected tablet result count", K(ret), K(ls_tablet_res.count()), K(tablet_result.count()));
-      } else {
-        ObTableSingleOpResult &ls_single_op_res = ls_tablet_res.at(0);
-        ls_single_op_res.set_affected_rows(ls_single_op_res.get_affected_rows() + tablet_result.at(0).get_affected_rows());
-      }
+  ObTableLSOp &ls_op = arg_.ls_op_;
+  bool return_one_res = ls_op.return_one_result();
+  if (!return_one_res) {
+    if (OB_FAIL(ls_result.prepare_allocate(ls_op.count()))) {
+      LOG_WARN("fail to prepare_allocate ls result", K(ret));
     }
   } else {
-    result_.push_back(tablet_result);
+    if (OB_FAIL(ls_result.prepare_allocate(1))) {
+      LOG_WARN("fail to prepare_allocate ls result", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (return_one_res) {
+    int affected_rows = 0;
+    ObTableTabletOpResult &tablet_result = ls_result.at(0);
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_op.count(); i++) {
+      tablet_result.reuse();
+      ObTableTabletOp &tablet_op = ls_op.at(i);
+      if (OB_FAIL(execute_tablet_op(tablet_op, tablet_result))) {
+        LOG_WARN("fail to execute tablet op", KR(ret), K(tablet_op));
+      } else if (tablet_result.count() != 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected tablet result when return one res", K(ret), K(tablet_result.count()));
+      } else {
+        affected_rows += tablet_result.at(0).get_affected_rows();
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObTableSingleOpResult &single_op_res = tablet_result.at(0);
+      single_op_res.set_affected_rows(affected_rows);
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_op.count(); i++) {
+      ObTableTabletOp &tablet_op = ls_op.at(i);
+      ObTableTabletOpResult &tablet_result = ls_result.at(i);
+      if (OB_FAIL(execute_tablet_op(tablet_op, tablet_result))) {
+        LOG_WARN("fail to execute tablet op", KR(ret), K(tablet_op));
+      }
+    }
   }
   return ret;
 }
@@ -293,7 +332,7 @@ int ObTableLSExecuteP::execute_tablet_query_and_mutate(const ObTableTabletOp &ta
       const common::ObTabletID tablet_id = tablet_op.get_tablet_id();
       ObTableSingleOpResult single_op_result;
       single_op_result.set_errno(OB_SUCCESS);
-      ObITableEntity *result_entity = default_entity_factory_.alloc();
+      ObITableEntity *result_entity = cb_->get_entity_factory().alloc();
 
       if (OB_ISNULL(result_entity)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -321,7 +360,7 @@ int ObTableLSExecuteP::execute_tablet_batch_ops(const ObTableTabletOp &tablet_op
     LOG_WARN("unexpected operation count", KR(ret), K(tablet_op.count()));
   } else {
     ObSEArray<ObTableOperation, 16> table_operations;
-    SMART_VAR(ObTableBatchCtx, batch_ctx, allocator_, audit_ctx_) {
+    SMART_VAR(ObTableBatchCtx, batch_ctx, cb_->get_allocator(), audit_ctx_) {
       if (OB_FAIL(init_batch_ctx(batch_ctx, tablet_op, table_operations, tablet_result))) {
         LOG_WARN("fail to init batch ctx", K(ret));
       } else if (OB_FAIL(ObTableBatchService::execute(batch_ctx))) {
@@ -358,7 +397,7 @@ int ObTableLSExecuteP::init_batch_ctx(table::ObTableBatchCtx &batch_ctx,
   batch_ctx.use_put_ = tablet_op.is_use_put();
   batch_ctx.returning_affected_entity_ = tablet_op.is_returning_affected_entity();
   batch_ctx.returning_rowkey_ = tablet_op.is_returning_rowkey();
-  batch_ctx.entity_factory_ = &default_entity_factory_;
+  batch_ctx.entity_factory_ = &cb_->get_entity_factory();
   batch_ctx.return_one_result_ = ls_op.return_one_result();
   // construct batch operation
   batch_ctx.ops_ = &table_operations;
@@ -380,7 +419,7 @@ int ObTableLSExecuteP::init_batch_ctx(table::ObTableBatchCtx &batch_ctx,
   // construct batch operation result
   if (OB_SUCC(ret)) {
     batch_ctx.results_ = &tablet_result;
-    batch_ctx.result_entity_ = default_entity_factory_.alloc(); // only use in hbase mutation
+    batch_ctx.result_entity_ = cb_->get_entity_factory().alloc(); // only use in hbase mutation
     if (OB_ISNULL(batch_ctx.result_entity_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memroy for result_entity", K(ret));
@@ -491,6 +530,7 @@ int ObTableLSExecuteP::add_dict_and_bm_to_result_entity(const table::ObTableTabl
 {
   int ret = OB_SUCCESS;
   ObTableLSOp &ls_op = arg_.ls_op_;
+  ObTableLSOpResult &ls_result = cb_->get_result();
   bool is_hkv = ObTableEntityType::ET_HKV == arg_.entity_type_;
   if (!is_hkv && !ls_op.return_one_result() && tablet_op.count() != tablet_result.count()) {
     ret = OB_ERR_UNEXPECTED;
@@ -507,7 +547,7 @@ int ObTableLSExecuteP::add_dict_and_bm_to_result_entity(const table::ObTableTabl
     const ObTableSingleOpEntity &req_entity= single_op.get_entities().at(0);
     ObTableSingleOpEntity *result_entity = static_cast<ObTableSingleOpEntity *>(tablet_result.at(i).get_entity());
     bool need_rebuild_bitmap = arg_.ls_op_.need_all_prop_bitmap() && single_op.get_op_type() == ObTableOperationType::GET;
-    result_entity->set_dictionary(&result_.get_rowkey_names(), &result_.get_properties_names());
+    result_entity->set_dictionary(&ls_result.get_rowkey_names(), &ls_result.get_properties_names());
     if (need_rebuild_bitmap) { // construct result entity bitmap based on all columns dict
       if (OB_FAIL(result_entity->construct_names_bitmap_by_dict(req_entity))) {
         LOG_WARN("fail to construct name bitmap by all columns", K(ret), K(i));
@@ -547,7 +587,7 @@ int ObTableLSExecuteP::execute_single_query_and_mutate(const uint64_t table_id,
       qm_param.simple_table_schema_ = simple_table_schema_;
       qm_param.schema_cache_guard_ = &schema_cache_guard_;
       qm_param.sess_guard_ = &sess_guard_;
-      SMART_VAR(QueryAndMutateHelper, helper, allocator_, qm_param, audit_ctx_) {
+      SMART_VAR(QueryAndMutateHelper, helper, cb_->get_allocator(), qm_param, audit_ctx_) {
         if (OB_FAIL(helper.execute_query_and_mutate())) {
           LOG_WARN("fail to execute query and mutate", K(ret), K(single_op));
         } else {}

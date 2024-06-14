@@ -113,8 +113,7 @@ ObTableAPITransCb* ObTableBatchExecuteCreateCbFunctor::new_callback()
   return cb;
 }
 
-int ObTableLSExecuteCreateCbFunctor::init(ObRequest *req,
-                                          const ObTableLSOpResult *result)
+int ObTableLSExecuteCreateCbFunctor::init(ObRequest *req)
 {
   int ret = OB_SUCCESS;
 
@@ -122,16 +121,19 @@ int ObTableLSExecuteCreateCbFunctor::init(ObRequest *req,
     if (OB_ISNULL(req)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("request is null", K(ret));
-    } else if (OB_ISNULL(result)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("result is null", K(ret));
     } else {
-      req_ = req;
-      result_ = result;
-      is_inited_ = true;
+      ObTableLSExecuteEndTransCb * cb = OB_NEW(ObTableLSExecuteEndTransCb,
+                                               ObMemAttr(MTL_ID(), "TbLsExuTnCb"), req);
+      if (OB_ISNULL(cb)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memroy for ls execute callback", K(ret));
+      } else {
+        cb_ = cb;
+        req_ = req;
+        is_inited_ = true;
+      }
     }
   }
-
   return ret;
 }
 
@@ -139,21 +141,7 @@ ObTableAPITransCb* ObTableLSExecuteCreateCbFunctor::new_callback()
 {
   ObTableLSExecuteEndTransCb *cb = nullptr;
   if (is_inited_) {
-    cb = OB_NEW(ObTableLSExecuteEndTransCb,
-                ObMemAttr(MTL_ID(), "TbLsExuTnCb"),
-                req_);
-    if (NULL != cb) {
-      int ret = OB_SUCCESS;
-      if (OB_ISNULL(result_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", K(ret));
-      } else if (OB_FAIL(cb->assign_ls_execute_result(*result_))) {
-        LOG_WARN("fail to assign result", K(ret));
-        cb->~ObTableLSExecuteEndTransCb();
-        cb = NULL;
-        ob_free(cb);
-      }
-    }
+    cb = cb_;
   }
   return cb;
 }
