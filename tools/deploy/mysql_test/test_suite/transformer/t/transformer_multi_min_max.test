@@ -1,0 +1,71 @@
+# owner: linyi.cl
+# owner group: sql3
+# tags: optimizer
+
+--disable_warnings
+drop table if exists t1,t2,t3;
+drop sequence if exists s1;
+--enable_warnings
+
+create table t1(c1 int, c2 int);
+create index i1 on t1(c1);
+create index i2 on t1(c2);
+create index i3 on t1(c1,c2);
+create table t2(c1 int, c2 int);
+create index i4 on t2(c1);
+create table t3(c1 int, c2 int);
+
+set ob_query_timeout = 10000000000;
+
+insert /*+append enable_parallel_dml parallel(8) */ into t1
+select if(random(7) % 10 = 0, null, UNIFORM(1, 10000, random(7))),
+       if(random(7) % 10 = 0, null, ZIPF(1, 1000, random(7))) from table(generator(100000));
+
+insert /*+append enable_parallel_dml parallel(8) */ into t2
+select if(random(7) % 10 = 0, null, UNIFORM(1, 10000, random(7))),
+       if(random(7) % 10 = 0, null, ZIPF(1, 1000, random(7))) from table(generator(100000));
+
+insert /*+append enable_parallel_dml parallel(8) */ into t3
+select if(random(7) % 10 = 0, null, UNIFORM(1, 10000, random(7))),
+       if(random(7) % 10 = 0, null, ZIPF(1, 1000, random(7))) from table(generator(100000));
+
+--result_format 4
+--explain_protocol 2
+
+
+### 单min/max
+
+select max(c1) from t1;
+select /*+no_fast_minmax*/ max(c1) from t1;
+select min(c2) from t1;
+select /*+no_fast_minmax*/ min(c2) from t1;
+select 1,min(c1) from t1;
+select /*+no_fast_minmax*/ 1,min(c1) from t1;
+
+select 1 from t1 having min(c1) > 1;
+select /*+no_fast_minmax*/ 1 from t1 having min(c1) > 1;
+select 1 from t1 order by min(c1);
+select /*+no_fast_minmax*/ 1 from t1 order by min(c1);
+
+### 多min/max
+
+select min(c1),max(c1) from t1;
+select /*+no_fast_minmax*/ min(c1),max(c1) from t1;
+select min(c1) as min, max(c1) as max from t1;
+select /*+no_fast_minmax*/ min(c1) as min, max(c1) as max from t1;
+select min(c1)+max(c1)*2 from t1;
+select /*+no_fast_minmax*/ min(c1)+max(c1)*2 from t1;
+select min(c1),max(c2) from t1;
+select /*+no_fast_minmax*/ min(c1),max(c2) from t1;
+
+select min(c1) from t1 having max(c2) > 0;
+select /*+no_fast_minmax*/ min(c1) from t1 having max(c2) > 0;
+select min(c1) from t1 order by max(c2);
+select /*+no_fast_minmax*/ min(c1) from t1 order by max(c2);
+select max(c1), min(c1) from t1 order by min(c1);
+select /*+no_fast_minmax*/ max(c1), min(c1) from t1 order by min(c1);
+
+select min(c1),max(c1) from t2 where c1 = any (select c1 from t3);
+select min(c1) from t2 where c1 = any (select c1 from t3);
+
+drop table t1,t2,t3;
