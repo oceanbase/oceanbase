@@ -3452,7 +3452,8 @@ do {                                                                  \
             ObObjMeta param_meta = get_params().at(i).get_param_meta();
             get_params().at(i) = params->at(i); // 空值不做cast
             params->at(i).is_null() ? get_params().at(i).set_param_meta(param_meta) : (void)NULL;
-          } else if (params->at(i).get_meta().get_type() == get_params().at(i).get_meta().get_type()
+          } else if (lib::is_oracle_mode()
+                     && params->at(i).get_meta().get_type() == get_params().at(i).get_meta().get_type()
                      && params->at(i).get_meta().is_numeric_type()) {
             ObObj tmp;
             if (pl_type.is_pl_integer_type()) {
