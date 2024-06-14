@@ -23,7 +23,7 @@ namespace observer
 {
 class ObTableLoadStoreCtx;
 class ObTableLoadMerger;
-class ObTableLoadTableCompactor;
+class ObTableLoadTableCompactCtx;
 
 struct ObTableLoadTableCompactTabletResult : public common::LinkHashValue<common::ObTabletID>
 {
@@ -50,6 +50,54 @@ public:
   TabletResultMap tablet_result_map_;
 };
 
+class ObTableLoadTableCompactor
+{
+public:
+  ObTableLoadTableCompactor();
+  virtual ~ObTableLoadTableCompactor();
+  int init(ObTableLoadTableCompactCtx *compact_ctx);
+  virtual int start() = 0;
+  virtual void stop() = 0;
+  OB_INLINE int64_t inc_ref()
+  {
+    const int64_t cnt = ATOMIC_AAF(&ref_cnt_, 1);
+    return cnt;
+  }
+  OB_INLINE int64_t dec_ref()
+  {
+    const int64_t cnt = ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
+    return cnt;
+  }
+  OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
+protected:
+  virtual int inner_init() = 0;
+protected:
+  ObTableLoadTableCompactCtx *compact_ctx_;
+  int64_t ref_cnt_;
+  bool is_inited_;
+};
+
+class ObTableLoadTableCompactorHandle
+{
+public:
+  ObTableLoadTableCompactorHandle() : compactor_(nullptr) {}
+  ObTableLoadTableCompactorHandle(const ObTableLoadTableCompactorHandle &other)
+    : compactor_(nullptr)
+  {
+    *this = other;
+  }
+  ObTableLoadTableCompactorHandle &operator=(const ObTableLoadTableCompactorHandle &other);
+  ~ObTableLoadTableCompactorHandle() { reset(); }
+  void reset();
+  bool is_valid() const;
+  int set_compactor(ObTableLoadTableCompactor *compactor);
+  ObTableLoadTableCompactor *get_compactor() const { return compactor_; }
+  TO_STRING_KV(KP_(compactor));
+
+private:
+  ObTableLoadTableCompactor *compactor_;
+};
+
 class ObTableLoadTableCompactCtx
 {
 public:
@@ -60,31 +108,18 @@ public:
   int start();
   void stop();
   int handle_table_compact_success();
-  TO_STRING_KV(KP_(store_ctx), KP_(merger), KP_(compactor));
+  TO_STRING_KV(KP_(store_ctx), KP_(merger), K_(compactor_handle));
 private:
-  ObTableLoadTableCompactor *new_compactor();
+  int new_compactor(ObTableLoadTableCompactorHandle &compactor_handle);
+  void release_compactor();
+  int get_compactor(ObTableLoadTableCompactorHandle &compactor_handle);
 
 public:
-  common::ObArenaAllocator allocator_;
   ObTableLoadStoreCtx *store_ctx_;
   ObTableLoadMerger *merger_;
-  ObTableLoadTableCompactor *compactor_;
+  mutable obsys::ObRWLock rwlock_;
+  ObTableLoadTableCompactorHandle compactor_handle_;
   ObTableLoadTableCompactResult result_;
-};
-
-class ObTableLoadTableCompactor
-{
-public:
-  ObTableLoadTableCompactor();
-  virtual ~ObTableLoadTableCompactor();
-  int init(ObTableLoadTableCompactCtx *compact_ctx);
-  virtual int start() = 0;
-  virtual void stop() = 0;
-protected:
-  virtual int inner_init() = 0;
-protected:
-  ObTableLoadTableCompactCtx *compact_ctx_;
-  bool is_inited_;
 };
 
 } // namespace observer

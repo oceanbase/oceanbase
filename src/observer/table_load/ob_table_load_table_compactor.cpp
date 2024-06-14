@@ -104,18 +104,12 @@ int ObTableLoadTableCompactResult::add_table(ObIDirectLoadPartitionTable *table)
  */
 
 ObTableLoadTableCompactCtx::ObTableLoadTableCompactCtx()
-  : allocator_("TLD_TCCtx"), store_ctx_(nullptr), merger_(nullptr), compactor_(nullptr)
+  : store_ctx_(nullptr), merger_(nullptr)
 {
-  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTableCompactCtx::~ObTableLoadTableCompactCtx()
 {
-  if (nullptr != compactor_) {
-    compactor_->~ObTableLoadTableCompactor();
-    allocator_.free(compactor_);
-    compactor_ = nullptr;
-  }
 }
 
 int ObTableLoadTableCompactCtx::init(ObTableLoadStoreCtx *store_ctx, ObTableLoadMerger &merger)
@@ -140,49 +134,99 @@ bool ObTableLoadTableCompactCtx::is_valid() const
   return nullptr != store_ctx_ && nullptr != merger_;
 }
 
-ObTableLoadTableCompactor *ObTableLoadTableCompactCtx::new_compactor()
+int ObTableLoadTableCompactCtx::new_compactor(ObTableLoadTableCompactorHandle &compactor_handle)
 {
-  ObTableLoadTableCompactor *ret = nullptr;
-  if (store_ctx_->is_multiple_mode_) {
-    if (store_ctx_->table_data_desc_.is_heap_table_) {
-      ret = OB_NEWx(ObTableLoadMultipleHeapTableCompactor, (&allocator_));
-    } else {
-      ret = OB_NEWx(ObTableLoadMemCompactor, (&allocator_));
-    }
+  int ret = OB_SUCCESS;
+  compactor_handle.reset();
+  ObTableLoadTableCompactor *compactor = nullptr;
+  obsys::ObWLockGuard guard(rwlock_);
+  if (OB_UNLIKELY(compactor_handle_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not null compactor", KR(ret), K(compactor_handle_));
   } else {
-    // 有主键表不排序
-    ret = OB_NEWx(ObTableLoadParallelMergeTableCompactor, (&allocator_));
+    ObMemAttr attr(MTL_ID(), "TLD_Compactor");
+    if (store_ctx_->is_multiple_mode_) {
+      if (store_ctx_->table_data_desc_.is_heap_table_) {
+        compactor = OB_NEW(ObTableLoadMultipleHeapTableCompactor, attr);
+      } else {
+        compactor = OB_NEW(ObTableLoadMemCompactor, attr);
+      }
+    } else {
+      // 有主键表不排序
+      compactor = OB_NEW(ObTableLoadParallelMergeTableCompactor, attr);
+    }
+    if (OB_ISNULL(compactor)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObTableLoadTableCompactor", KR(ret));
+    } else if (OB_FAIL(compactor_handle_.set_compactor(compactor))) {
+      LOG_WARN("fail to set compactor", KR(ret));
+    } else {
+      compactor_handle = compactor_handle_;
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != compactor) {
+        OB_DELETE(ObTableLoadTableCompactor, attr, compactor);
+        compactor = nullptr;
+      }
+    }
   }
+  return ret;
+}
+
+void ObTableLoadTableCompactCtx::release_compactor()
+{
+  ObTableLoadTableCompactorHandle compactor_handle;
+  {
+    obsys::ObWLockGuard guard(rwlock_);
+    compactor_handle = compactor_handle_;
+    compactor_handle_.reset();
+  }
+}
+
+int ObTableLoadTableCompactCtx::get_compactor(ObTableLoadTableCompactorHandle &compactor_handle)
+{
+  int ret = OB_SUCCESS;
+  obsys::ObRLockGuard guard(rwlock_);
+  compactor_handle = compactor_handle_;
   return ret;
 }
 
 int ObTableLoadTableCompactCtx::start()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(compactor_ = new_compactor())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObTableLoadGeneralTableCompactor", KR(ret));
-  } else if (OB_FAIL(compactor_->init(this))) {
-    LOG_WARN("fail to init compactor", KR(ret));
-  } else if (OB_FAIL(compactor_->start())) {
-    LOG_WARN("fail to start compactor", KR(ret));
+  ObTableLoadTableCompactorHandle compactor_handle;
+  if (OB_FAIL(new_compactor(compactor_handle))) {
+    LOG_WARN("fail to new compactor", KR(ret));
+  } else if (OB_UNLIKELY(!compactor_handle.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid compactor handle", KR(ret), K(compactor_handle));
+  } else {
+    ObTableLoadTableCompactor *compactor = compactor_handle.get_compactor();
+    if (OB_FAIL(compactor->init(this))) {
+      LOG_WARN("fail to init compactor", KR(ret));
+    } else if (OB_FAIL(compactor->start())) {
+      LOG_WARN("fail to start compactor", KR(ret));
+    }
   }
   return ret;
 }
 
 void ObTableLoadTableCompactCtx::stop()
 {
-  if (OB_NOT_NULL(compactor_)) {
-    compactor_->stop();
+  int ret = OB_SUCCESS;
+  ObTableLoadTableCompactorHandle compactor_handle;
+  if (OB_FAIL(get_compactor(compactor_handle))) {
+    LOG_WARN("fail to get compactor", KR(ret));
+  } else if (compactor_handle.is_valid()) {
+    ObTableLoadTableCompactor *compactor = compactor_handle.get_compactor();
+    compactor->stop();
   }
 }
 
 int ObTableLoadTableCompactCtx::handle_table_compact_success()
 {
   // release compactor
-  compactor_->~ObTableLoadTableCompactor();
-  allocator_.free(compactor_);
-  compactor_ = nullptr;
+  release_compactor();
   // notify merger
   return merger_->handle_table_compact_success();
 }
@@ -192,7 +236,7 @@ int ObTableLoadTableCompactCtx::handle_table_compact_success()
  */
 
 ObTableLoadTableCompactor::ObTableLoadTableCompactor()
-  : compact_ctx_(nullptr), is_inited_(false)
+  : compact_ctx_(nullptr), ref_cnt_(0), is_inited_(false)
 {
 }
 
@@ -216,6 +260,53 @@ int ObTableLoadTableCompactor::init(ObTableLoadTableCompactCtx *compact_ctx)
     } else {
       is_inited_ = true;
     }
+  }
+  return ret;
+}
+
+/**
+ * ObTableLoadTableCompactorHandle
+ */
+
+ObTableLoadTableCompactorHandle &ObTableLoadTableCompactorHandle::operator =(const ObTableLoadTableCompactorHandle &other)
+{
+  if (this != &other) {
+    reset();
+    if (OB_NOT_NULL(other.compactor_)) {
+      compactor_ = other.compactor_;
+      compactor_->inc_ref();
+    }
+  }
+  return *this;
+}
+
+void ObTableLoadTableCompactorHandle::reset()
+{
+  if (nullptr != compactor_) {
+    const int64_t ref_cnt = compactor_->dec_ref();
+    if (0 == ref_cnt) {
+      ObMemAttr attr(MTL_ID(), "TLD_Compactor");
+      OB_DELETE(ObTableLoadTableCompactor, attr, compactor_);
+    }
+    compactor_ = nullptr;
+  }
+}
+
+bool ObTableLoadTableCompactorHandle::is_valid() const
+{
+  return nullptr != compactor_;
+}
+
+int ObTableLoadTableCompactorHandle::set_compactor(ObTableLoadTableCompactor *compactor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(compactor)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(compactor));
+  } else {
+    reset();
+    compactor_ = compactor;
+    compactor_->inc_ref();
   }
   return ret;
 }
