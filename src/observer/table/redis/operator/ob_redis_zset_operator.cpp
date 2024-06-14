@@ -688,7 +688,7 @@ int ZSetCommandOperator::do_zrange_by_score_inner(int64_t db, const ZRangeCtx &z
   ObTableQuery query;
 
   if ((is_max_min_equal && (!zrange_ctx.max_inclusive_ || !zrange_ctx.min_inclusive_))
-      || (zrange_ctx.max_ < zrange_ctx.min_)) {
+      || (zrange_ctx.max_ < zrange_ctx.min_) || (zrange_ctx.offset_ < 0)) {
     // do nothing, return empty array
   } else if (OB_FAIL(build_score_scan_query(op_temp_allocator_, zrange_ctx, query))) {
     LOG_WARN("fail to build score scan query", K(ret), K(zrange_ctx));

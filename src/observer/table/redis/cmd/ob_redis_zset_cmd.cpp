@@ -443,6 +443,9 @@ int ZRangeByScore::init(const ObIArray<ObString> &args)
         } else if (!is_valid) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid end argument", K(ret), K(limit_str));
+        } else if (zrange_ctx_.limit_ < 0) {
+          // limit_ < 0 means not limit
+          zrange_ctx_.limit_ = INT64_MAX;
         }
       }
     } else {
