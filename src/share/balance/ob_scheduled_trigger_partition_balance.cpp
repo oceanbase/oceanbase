@@ -129,8 +129,8 @@ int ObScheduledTriggerPartitionBalance::insert_ignore_new_dbms_scheduler_job_(
   OZ (dml.add_pk_column("tenant_id", schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id))); // 0
   OZ (dml.add_pk_column("job_name", ObHexEscapeSqlStr(job_name)));
   OZ (dml.add_pk_column("job", job_id));
-  OZ (dml.add_column("lowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root")));
-  OZ (dml.add_column("powner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root")));
+  OZ (dml.add_column("lowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
+  OZ (dml.add_column("powner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
   OZ (dml.add_column("cowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("oceanbase")));
   OZ (dml.add_time_column("next_date", start_usec));
   OZ (dml.add_column("total", 0));

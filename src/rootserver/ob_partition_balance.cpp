@@ -17,6 +17,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
 #include "rootserver/ob_partition_balance.h"
+#include "rootserver/ob_tenant_balance_service.h" // ObTenantBalanceService
 #include "observer/ob_server_struct.h"//GCTX
 
 namespace oceanbase
@@ -165,12 +166,11 @@ int ObPartitionBalance::prepare_ls_()
 {
   int ret = OB_SUCCESS;
   ObLSStatusInfoArray ls_stat_array;
-  ObLSStatusOperator status_op;
   if (!inited_ || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not init", KR(ret), K(inited_), KP(sql_proxy_));
-  } else if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id_, ls_stat_array, *sql_proxy_))) {
-    LOG_WARN("failed to get status by order", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObTenantBalanceService::gather_ls_status_stat(tenant_id_, ls_stat_array))) {
+    LOG_WARN("failed to gather ls status", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(job_generator_.prepare_ls(ls_stat_array))) {
     LOG_WARN("job_generator_ prepare ls failed", KR(ret), K(tenant_id_), K(ls_stat_array));
   } else {
