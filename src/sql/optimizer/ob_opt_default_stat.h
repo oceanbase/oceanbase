@@ -76,6 +76,8 @@ const double DEFAULT_AGG_EQ = 0.01;
 // clob/blob like "xxx" 的默认选择率
 const double DEFAULT_CLOB_LIKE_SEL = 0.05;
 const double DEFAULT_ANTI_JOIN_SEL = 0.01;
+// 范围谓词越界部分选择率，参考 SQLserver
+const double DEFAULT_OUT_OF_BOUNDS_SEL = 0.3;
 const double DEFAULT_INEQ_JOIN_SEL = 0.05;
 
 } // namespace common
