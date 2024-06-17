@@ -2142,6 +2142,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, -7433, -1, "42000"
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_VECTOR_DIM, -7600, -1, "22000", "Invalid dimension for vector.", "inconsistent dimension: expected %u got %u", 932, "inconsistent dimension", "inconsistent dimension: expected %u got %u");
+DEFINE_ERROR_EXT(OB_ERR_BAD_VEC_INDEX_COLUMN, -7601, -1, "HY000", "Column cannot be part of VECTOR index", "Column '%.*s' cannot be part of VECTOR index");
 
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

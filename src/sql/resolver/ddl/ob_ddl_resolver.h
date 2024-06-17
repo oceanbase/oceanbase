@@ -113,7 +113,8 @@ public:
     SPATIAL_KEY = 2,
     FTS_KEY = 3,
     MULTI_KEY = 4,
-    MULTI_UNIQUE_KEY = 5
+    MULTI_UNIQUE_KEY = 5,
+    VEC_KEY = 6,
   };
   enum COLUMN_NODE {
     COLUMN_REF_NODE = 0,

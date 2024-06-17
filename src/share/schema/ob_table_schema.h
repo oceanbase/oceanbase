@@ -2065,7 +2065,10 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(const ObIndexType index_type)
   return is_spatial_index(index_type) ||
          share::schema::is_fts_index_aux(index_type) ||
          share::schema::is_fts_doc_word_aux(index_type) ||
-         share::schema::is_multivalue_index_aux(index_type);
+         share::schema::is_multivalue_index_aux(index_type) ||
+         share::schema::is_vec_index_id_type(index_type) ||
+         share::schema::is_vec_delta_buffer_type(index_type) ||
+         share::schema::is_vec_index_snapshot_data_type(index_type);
 }
 
 inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const
