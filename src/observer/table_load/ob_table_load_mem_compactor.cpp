@@ -549,8 +549,8 @@ int ObTableLoadMemCompactor::handle_compact_task_finish(int ret_code)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ret_code)) {
   } else {
-    const int64_t finish_task_count = ATOMIC_AAF(&finish_task_count_, 1);
     int64_t task_to_wait = param_->session_count_ + 1; // one for sample task
+    const int64_t finish_task_count = ATOMIC_AAF(&finish_task_count_, 1);
     if (task_to_wait == finish_task_count) {
       if (OB_LIKELY(!(mem_ctx_.has_error_)) && OB_FAIL(start_finish())) {
         LOG_WARN("fail to start finish", KR(ret));
