@@ -276,7 +276,7 @@ int ObTabletTableStore::init(
         allocator, sstable_array, addr_array, major_start_pos, major_cnt))) {
       LOG_WARN("fail to init major sstables for serialize", K(ret), K(major_start_pos),
           K(major_cnt), K(sstable_array), K(addr_array));
-    } else if (0 != minor_cnt && OB_FAIL(minor_tables_.init(
+    } else if (0 != minor_cnt && OB_FAIL(init_minor_sstables_with_check(
         allocator, sstable_array, addr_array, minor_start_pos, minor_cnt))) {
       LOG_WARN("fail to init minor sstables for serialize", K(ret), K(sstable_array), K(addr_array));
     } else if (0 != ddl_cnt && OB_FAIL(ddl_sstables_.init(
@@ -342,7 +342,7 @@ int ObTabletTableStore::init(
     LOG_WARN("pull_ddl_memtables failed", K(ret));
   } else if (OB_FAIL(major_tables_.init(allocator, old_store.major_tables_))) {
     LOG_WARN("failed to init major tables", K(ret), K(old_store.major_tables_));
-  } else if (OB_FAIL(minor_tables_.init(allocator, old_store.minor_tables_))) {
+  } else if (OB_FAIL(init_minor_sstables_with_check(allocator, old_store.minor_tables_))) {
     LOG_WARN("failed to init minor tables", K(ret), K(old_store.minor_tables_));
   } else if (OB_FAIL(ddl_sstables_.init(allocator, old_store.ddl_sstables_))) {
     LOG_WARN("failed to init ddl tables", K(ret), K(old_store.ddl_sstables_));
@@ -1432,9 +1432,6 @@ int ObTabletTableStore::build_minor_tables(
         && (OB_FAIL(minor_tables.push_back(new_table)))) {
       LOG_WARN("failed to add new minor table", K(ret), KPC(new_table));
     } else if (minor_tables.empty()) { // no minor tables
-    } else if (minor_tables.count() == old_store.minor_tables_.count() && minor_tables.count() >= MAX_SSTABLE_CNT) {
-      ret = OB_MINOR_MERGE_NOT_ALLOW;
-      LOG_WARN("too many sstables, cannot add new minor sstable", K(ret), K(new_table));
     } else if (OB_FAIL(ObTableStoreUtil::sort_minor_tables(minor_tables))) {
       LOG_WARN("failed to sort minor tables", K(ret));
     } else {
@@ -1451,7 +1448,7 @@ int ObTabletTableStore::build_minor_tables(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (inc_pos >= 0 && OB_FAIL(minor_tables_.init(allocator, minor_tables, inc_pos))) {
+      } else if (inc_pos >= 0 && OB_FAIL(init_minor_sstables_with_check(allocator, minor_tables, inc_pos))) {
         LOG_WARN("failed to init minor_tables", K(ret));
       }
     }
@@ -1676,8 +1673,6 @@ int ObTabletTableStore::check_ready_for_read(const ObReadyForReadParam &param)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), KPC(this));
-  } else if (is_major_sstable_empty(param.ddl_commit_scn_)) {
-    LOG_INFO("no valid major sstable, not ready for read", K(*this));
   } else if (OB_FAIL(check_continuous())) {
     LOG_WARN("failed to check continuous of tables", K(ret));
   } else if (minor_tables_.count() + 1 > MAX_SSTABLE_CNT_IN_STORAGE) {
@@ -1698,6 +1693,12 @@ int ObTabletTableStore::check_ready_for_read(const ObReadyForReadParam &param)
     } else {
       is_ready_for_read_ = true;
     }
+  }
+
+  // don't return errcode so check invalid conditions before
+  if (OB_SUCC(ret) && is_major_sstable_empty(param.ddl_commit_scn_)) {
+    is_ready_for_read_ = false;
+    LOG_INFO("no valid major sstable, not ready for read", K(*this));
   }
 
   if (OB_SUCC(ret) && get_table_count() > EMERGENCY_SSTABLE_CNT) {
@@ -2064,7 +2065,7 @@ int ObTabletTableStore::replace_transfer_minor_sstables_(
     // In this scenario, no check is allowed.
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(cut_minor_tables), K(param), K(tablet.get_tablet_meta()));
-  } else if (OB_FAIL(minor_tables_.init(allocator, cut_minor_tables, inc_pos))) {
+  } else if (OB_FAIL(init_minor_sstables_with_check(allocator, cut_minor_tables, inc_pos))) {
     LOG_WARN("failed to init minor_tables", K(ret));
   } else {
     LOG_INFO("succeed build transfer minor sstables", K(old_store), K(cut_minor_tables));
@@ -2104,7 +2105,7 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("update ddl sstable but minor tables is not empty", K(ret), K(param), K(old_store));
     } else if (old_minor_tables.empty()) {
-    } else if (OB_FAIL(minor_tables_.init(allocator, old_minor_tables, inc_pos))) {
+    } else if (OB_FAIL(init_minor_sstables_with_check(allocator, old_minor_tables, inc_pos))) {
       LOG_WARN("failed to init minor_tables", K(ret));
     }
   } else if (OB_FAIL(combine_ha_minor_sstables_(
@@ -2129,7 +2130,7 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
           && tablet.get_tablet_meta().transfer_info_.transfer_start_scn_ != cut_minor_tables.at(0)->get_start_scn())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(cut_minor_tables), K(param), K(old_store), "tablet_meta", tablet.get_tablet_meta());
-  } else if (OB_FAIL(minor_tables_.init(allocator, cut_minor_tables, inc_pos))) {
+  } else if (OB_FAIL(init_minor_sstables_with_check(allocator, cut_minor_tables, inc_pos))) {
     LOG_WARN("failed to init minor_tables", K(ret));
   } else {
     LOG_INFO("succeed build ha minor sstables", K(old_store), K(cut_minor_tables));
@@ -2486,6 +2487,19 @@ int ObTabletTableStore::get_mini_minor_sstables_(ObTableStoreIterator &iter) con
     } else if (OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
       LOG_WARN("failed to get all minor tables", K(ret));
     }
+  }
+  return ret;
+}
+
+template<typename ...Args>
+int ObTabletTableStore::init_minor_sstables_with_check(Args&& ...args)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(minor_tables_.init(std::forward<Args>(args)...))) {
+    LOG_WARN("fail to init minor tables", K(ret));
+  } else if (minor_tables_.count() >= MAX_SSTABLE_CNT_IN_STORAGE) {
+    ret = OB_MINOR_MERGE_NOT_ALLOW;
+    LOG_WARN("too many sstables, cannot add new minor sstable", K(ret));
   }
   return ret;
 }

@@ -355,6 +355,8 @@ private:
       const ObSSTableArray &old_tables,
       ObSSTableArray &new_tables) const;
   int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
+  template<typename ...Args>
+  int init_minor_sstables_with_check(Args&& ...args);
 
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;
