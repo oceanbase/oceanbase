@@ -1901,6 +1901,8 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
   DEF_FUNC_ENTRY(ObDecimalIntType),     // 50, decimal int
   DEF_FUNC_ENTRY(ObCollectionSQLType), // 51, collection
+  DEF_FUNC_ENTRY(ObNullType),           // 52, mysql date
+  DEF_FUNC_ENTRY(ObNullType),           // 53, mysql datetime
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)

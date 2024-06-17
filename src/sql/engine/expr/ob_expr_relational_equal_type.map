@@ -54,6 +54,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,        /* ObCollectionSQLType */
+    ObMaxType,        /* ObMySQLDateType */
+    ObMaxType,        /* ObMySQLDateTimeType */
   },
 
   /*TinyIntType*/
@@ -110,6 +112,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*SmallIntType*/
@@ -166,6 +170,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*MediumIntType*/
@@ -222,6 +228,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*Int32Type*/
@@ -278,6 +286,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*IntType*/
@@ -334,6 +344,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
   /*UTinyIntType*/
   {
@@ -389,6 +401,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*USmallIntType*/
@@ -445,6 +459,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*UMediumIntType*/
@@ -501,6 +517,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*UInt32Type*/
@@ -557,6 +575,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*UInt64Type*/
@@ -613,6 +633,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*FloatType*/
@@ -669,6 +691,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*DoubleType*/
@@ -725,6 +749,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*UFloatType*/
@@ -781,6 +807,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*UDoubleType*/
@@ -837,6 +865,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*NumberType*/
@@ -893,6 +923,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*UNumberType*/
@@ -949,6 +981,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*DateTimeType*/
@@ -1005,6 +1039,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDateTimeType,        /* ObDecimalIntType */
     ObMaxType,             /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*TimestampType*/
@@ -1061,6 +1097,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObTimestampType,        /* ObDecimalIntType */
     ObMaxType,              /* ObCollectionSQLType */
+    ObTimestampType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*DateType*/
@@ -1117,6 +1155,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDateType,        /* ObDecimalIntType */
     ObMaxType,             /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*TimeType*/
@@ -1173,6 +1213,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObTimeType,        /* ObDecimalIntType */
     ObMaxType,             /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*YearType*/
@@ -1229,6 +1271,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,             /* ObCollectionSQLType */
+    ObVarcharType,         /* ObMySQLDateType */
+    ObVarcharType,         /* ObMySQLDateTimeType */
   },
 
   /*VarcharType*/
@@ -1285,6 +1329,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*CharType*/
@@ -1341,6 +1387,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*HexStringType*/
@@ -1397,6 +1445,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*ExtendType*/
@@ -1453,6 +1503,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,        /* ObCollectionSQLType */
+    ObMaxType,  /* ObMySQLDateType */
+    ObMaxType,  /* ObMySQLDateTimeType */
   },
 
   /*UnknownType*/
@@ -1509,6 +1561,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,        /* ObCollectionSQLType */
+    ObMaxType,  /* ObMySQLDateType */
+    ObMaxType,  /* ObMySQLDateTimeType */
   },
   /*TinyTextType*/
   {
@@ -1564,6 +1618,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
   /*TextType*/
   {
@@ -1619,6 +1675,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
   /*MediumTextType*/
   {
@@ -1674,6 +1732,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
   /*LongTextType*/
   {
@@ -1729,6 +1789,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
    /*BitType*/
   {
@@ -1784,6 +1846,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
   /*EnumType*/
   {
@@ -1839,6 +1903,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
   /*SetType*/
   {
@@ -1894,6 +1960,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
   /*EnumInnerType*/
   {
@@ -1949,6 +2017,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,        /* ObCollectionSQLType */
+    ObMaxType,  /* ObMySQLDateType */
+    ObMaxType,  /* ObMySQLDateTimeType */
   },
   /*SetInnerType*/
   {
@@ -2004,6 +2074,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,        /* ObCollectionSQLType */
+    ObMaxType,  /* ObMySQLDateType */
+    ObMaxType,  /* ObMySQLDateTimeType */
   },
   /*ObTimestampTZType*/
   {
@@ -2059,6 +2131,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObTimestampTZType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObTimestampTZType,  /* ObMySQLDateType */
+    ObTimestampTZType,  /* ObMySQLDateTimeType */
   },
   /*ObTimestampLTZType*/
   {
@@ -2114,6 +2188,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObTimestampLTZType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObTimestampLTZType,  /* ObMySQLDateType */
+    ObTimestampLTZType,  /* ObMySQLDateTimeType */
   },
   /*ObTimestampNanoType*/
   {
@@ -2169,6 +2245,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObTimestampNanoType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObTimestampNanoType,  /* ObMySQLDateType */
+    ObTimestampNanoType,  /* ObMySQLDateTimeType */
   },
   /*ObRawType*/
   {
@@ -2224,6 +2302,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObRawType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObRawType,  /* ObMySQLDateType */
+    ObRawType,  /* ObMySQLDateTimeType */
   },
   /*ObIntervalYMType*/
   {
@@ -2279,6 +2359,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObIntervalYMType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObIntervalYMType,  /* ObMySQLDateType */
+    ObIntervalYMType,  /* ObMySQLDateTimeType */
   },
   /*ObIntervalDSType*/
   {
@@ -2334,6 +2416,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObIntervalDSType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObIntervalDSType,  /* ObMySQLDateType */
+    ObIntervalDSType,  /* ObMySQLDateTimeType */
   },
 
     /*NumberFloatType*/
@@ -2390,6 +2474,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*NVarchar2Type*/
@@ -2446,6 +2532,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
 
   /*NCharType*/
@@ -2502,6 +2590,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
   },
   /*ObURowIDType*/
   {
@@ -2557,6 +2647,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,      /* ObCollectionSQLType */
+    ObMaxType,  /* ObMySQLDateType */
+    ObMaxType,  /* ObMySQLDateTimeType */
   },
   /*ObLobType*/
   {
@@ -2612,6 +2704,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,      /* ObCollectionSQLType */
+    ObMaxType,  /* ObMySQLDateType */
+    ObMaxType,  /* ObMySQLDateTimeType */
   },
   /*ObJsonType*/
   {
@@ -2667,6 +2761,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,          /* ObCollectionSQLType */
+    ObJsonType,         /* ObMySQLDateType */
+    ObJsonType,         /* ObMySQLDateTimeType */
   },
   /*ObGeometryType*/
   {
@@ -2722,6 +2818,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*ObUserDefinedSQLType*/
   {
@@ -2777,6 +2875,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*DecimalIntType*/
   {
@@ -2832,6 +2932,8 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
     ObMaxType,            /* ObCollectionSQLType */
+    ObMySQLDateType,         /* ObMySQLDateType */
+    ObMySQLDateTimeType,     /* ObMySQLDateTimeType */
   },
   /*ObCollectionSQLType*/
   {
@@ -2887,7 +2989,124 @@ static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
-  }
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
+  },
+
+  /*MySQLDateType*/
+  {
+    ObMaxType,        /* NullType  */
+    ObMySQLDateType,        /* TinyIntType  */
+    ObMySQLDateType,        /* SmallIntType  */
+    ObMySQLDateType,        /* MediumIntType  */
+    ObMySQLDateType,        /* Int32Type  */
+    ObMySQLDateType,        /* IntType  */
+    ObMySQLDateType,        /* UTinyIntType  */
+    ObMySQLDateType,        /* USmallIntType  */
+    ObMySQLDateType,        /* UMediumIntType  */
+    ObMySQLDateType,        /* UInt32Type  */
+    ObMySQLDateType,        /* UIntType  */
+    ObMySQLDateType,        /* FloatType  */
+    ObMySQLDateType,        /* DoubleType  */
+    ObMySQLDateType,        /* UFloatType  */
+    ObMySQLDateType,        /* UDoubleType  */
+    ObMySQLDateType,        /* NumberType  */
+    ObMySQLDateType,        /* UNumberType  */
+    ObMySQLDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObMySQLDateType,        /* DateType  */
+    ObMySQLDateTimeType,    /* TimeType  */
+    ObVarcharType,     /* YearType  */
+    ObMySQLDateTimeType,    /* VarcharType  */
+    ObMySQLDateTimeType,    /* CharType  */
+    ObMySQLDateTimeType,    /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMySQLDateTimeType,       /*TinyTextType*/
+    ObMySQLDateTimeType,       /*TextType*/
+    ObMySQLDateTimeType,       /*MediumTextType*/
+    ObMySQLDateTimeType,        /*LongTextType*/
+    ObMySQLDateType,    /* BitType  */
+    ObMaxType,    /* EnumType  */
+    ObMaxType,    /* SetType  */
+    ObMaxType,         /*EnumInnerType*/
+    ObMaxType,         /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObMySQLDateType,        /* ObNumberFloatType */
+    ObMySQLDateTimeType,        /* ObNVarchar2Type */
+    ObMySQLDateTimeType,        /* ObNCharType */
+    ObMaxType,             /* ObURowIDType */
+    ObMaxType,             /* ObLobType */
+    ObJsonType,            /* ObJsonType */
+    ObMaxType,             /* ObGeometryType */
+    ObMaxType,             /* ObUserDefinedSQLType */
+    ObMySQLDateType,       /* ObDecimalIntType */
+    ObMaxType,             /* ObCollectionSQLType */
+    ObMySQLDateType,      /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
+  },
+  /*MySQLDateTimeType*/
+  {
+    ObMaxType,    /* NullType  */
+    ObMySQLDateTimeType,    /* TinyIntType  */
+    ObMySQLDateTimeType,    /* SmallIntType  */
+    ObMySQLDateTimeType,    /* MediumIntType  */
+    ObMySQLDateTimeType,    /* Int32Type  */
+    ObMySQLDateTimeType,    /* IntType  */
+    ObMySQLDateTimeType,    /* UTinyIntType  */
+    ObMySQLDateTimeType,    /* USmallIntType  */
+    ObMySQLDateTimeType,    /* UMediumIntType  */
+    ObMySQLDateTimeType,    /* UInt32Type  */
+    ObMySQLDateTimeType,    /* UIntType  */
+    ObMySQLDateTimeType,    /* FloatType  */
+    ObMySQLDateTimeType,    /* DoubleType  */
+    ObMySQLDateTimeType,    /* UFloatType  */
+    ObMySQLDateTimeType,    /* UDoubleType  */
+    ObMySQLDateTimeType,    /* NumberType  */
+    ObMySQLDateTimeType,    /* UNumberType  */
+    ObMySQLDateTimeType,    /* DateTimeType  */
+    ObMySQLDateTimeType,    /* TimestampType  */
+    ObMySQLDateTimeType,    /* DateType  */
+    ObMySQLDateTimeType,    /* TimeType  */
+    ObVarcharType,     /* YearType  */
+    ObMySQLDateTimeType,    /* VarcharType  */
+    ObMySQLDateTimeType,    /* CharType  */
+    ObMySQLDateTimeType,    /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMySQLDateTimeType,       /*TinyTextType*/
+    ObMySQLDateTimeType,       /*TextType*/
+    ObMySQLDateTimeType,       /*MediumTextType*/
+    ObMySQLDateTimeType,       /*LongTextType*/
+    ObMySQLDateTimeType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObMySQLDateTimeType,        /* ObNumberFloatType */
+    ObMySQLDateTimeType,        /* ObNVarchar2Type */
+    ObMySQLDateTimeType,        /* ObNCharType */
+    ObMaxType,             /* ObURowIDType */
+    ObMaxType,             /* ObLobType */
+    ObJsonType,            /* ObJsonType */
+    ObMaxType,             /* ObGeometryType */
+    ObMaxType,             /* ObUserDefinedSQLType */
+    ObMySQLDateTimeType,   /* ObDecimalIntType */
+    ObMaxType,             /* ObCollectionSQLType */
+    ObMySQLDateTimeType,  /* ObMySQLDateType */
+    ObMySQLDateTimeType,  /* ObMySQLDateTimeType */
+  },
 };
 
 static_assert(is_array_fully_initialized(RELATIONAL_EQUAL_TYPE, ObMaxType), "RELATIONAL_EQUAL_TYPE is partially initlized");

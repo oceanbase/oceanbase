@@ -893,13 +893,15 @@ inline int ObDatum::from_obj(const ObObj &obj)
       case ObBitType:
       case ObEnumType:
       case ObSetType:
-      case ObIntervalYMType: {
+      case ObIntervalYMType:
+      case ObMySQLDateTimeType: {
         obj2datum<OBJ_DATUM_8BYTE_DATA>(obj);
         break;
       }
       case ObFloatType:
       case ObUFloatType:
-      case ObDateType: {
+      case ObDateType:
+      case ObMySQLDateType: {
         obj2datum<OBJ_DATUM_4BYTE_DATA>(obj);
         break;
       }
@@ -1039,13 +1041,15 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       case ObBitType:
       case ObEnumType:
       case ObSetType:
-      case ObIntervalYMType: {
+      case ObIntervalYMType:
+      case ObMySQLDateTimeType: {
         datum2obj<OBJ_DATUM_8BYTE_DATA>(obj);
         break;
       }
       case ObFloatType:
       case ObUFloatType:
-      case ObDateType: {
+      case ObDateType:
+      case ObMySQLDateType: {
         datum2obj<OBJ_DATUM_4BYTE_DATA>(obj);
         break;
       }

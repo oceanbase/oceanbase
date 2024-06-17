@@ -54,6 +54,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
 
   /*TinyIntType*/
@@ -110,6 +112,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObIntType,         /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*SmallIntType*/
@@ -166,6 +170,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObIntType,         /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*MediumIntType*/
@@ -222,6 +228,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObIntType,         /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*Int32Type*/
@@ -278,6 +286,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObIntType,         /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*IntType*/
@@ -334,6 +344,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObIntType,         /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*UTinyIntType*/
@@ -390,6 +402,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUInt64Type,      /* ObMySQLDateType */
+    ObUNumberType,     /* ObMySQLDateTimeType */
   },
 
   /*USmallIntType*/
@@ -446,6 +460,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUInt64Type,      /* ObMySQLDateType */
+    ObUNumberType,     /* ObMySQLDateTimeType */
   },
 
   /*UMediumIntType*/
@@ -502,6 +518,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUInt64Type,      /* ObMySQLDateType */
+    ObUNumberType,     /* ObMySQLDateTimeType */
   },
 
   /*UInt32Type*/
@@ -558,6 +576,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUInt64Type,      /* ObMySQLDateType */
+    ObUNumberType,     /* ObMySQLDateTimeType */
   },
 
   /*UIntType*/
@@ -614,6 +634,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUInt64Type,      /* ObMySQLDateType */
+    ObUNumberType,     /* ObMySQLDateTimeType */
   },
 
   /*FloatType*/
@@ -670,6 +692,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
 
   /*DoubleType*/
@@ -726,6 +750,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
 
   /*UFloatType*/
@@ -782,6 +808,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObUDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUDoubleType,      /* ObMySQLDateType */
+    ObUDoubleType,      /* ObMySQLDateTimeType */
   },
 
   /*UDoubleType*/
@@ -838,6 +866,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObUDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUDoubleType,      /* ObMySQLDateType */
+    ObUDoubleType,      /* ObMySQLDateTimeType */
   },
 
   /*NumberType*/
@@ -894,6 +924,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*UNumberType*/
@@ -950,6 +982,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObUNumberType,       /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUNumberType,      /* ObMySQLDateType */
+    ObUNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*DateTimeType*/
@@ -1006,6 +1040,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObNumberType,       /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*TimestampType*/
@@ -1062,6 +1098,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObNumberType,       /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*DateType*/
@@ -1118,6 +1156,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObNumberType,       /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObIntType,         /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*TimeType*/
@@ -1174,6 +1214,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObNumberType,       /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*YearType*/
@@ -1230,6 +1272,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObUNumberType,       /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUInt64Type,      /* ObMySQLDateType */
+    ObUNumberType,      /* ObMySQLDateTimeType */
   },
 
   /*VarcharType*/
@@ -1286,6 +1330,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
 
   /*CharType*/
@@ -1342,6 +1388,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
 
   /*HexStringType*/
@@ -1398,6 +1446,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUDoubleType,      /* ObMySQLDateType */
+    ObUDoubleType,      /* ObMySQLDateTimeType */
   },
 
   /*ExtendType*/
@@ -1454,6 +1504,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,         /*ObDecimalIntType   */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,      /* ObMySQLDateType */
+    ObMaxType,      /* ObMySQLDateTimeType */
   },
 
   /*UnknownType*/
@@ -1510,6 +1562,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
   /*TinyTextType*/
   {
@@ -1565,6 +1619,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
  /*TextType*/
   {
@@ -1620,6 +1676,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
  /*MediumTextType*/
   {
@@ -1675,6 +1733,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
   /*LongTextType*/
   {
@@ -1730,6 +1790,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
   /*BitType*/
   {
@@ -1785,6 +1847,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObUNumberType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObUInt64Type,      /* ObMySQLDateType */
+    ObUNumberType,      /* ObMySQLDateTimeType */
   },
   /*ObEnumType*/
   {
@@ -1840,6 +1904,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
   /*ObSetType*/
   {
@@ -1895,6 +1961,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,      /* ObMySQLDateType */
+    ObDoubleType,      /* ObMySQLDateTimeType */
   },
   /*ObEnumInnerType*/
   {
@@ -1950,6 +2018,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,      /* ObMySQLDateType */
+    ObMaxType,      /* ObMySQLDateTimeType */
   },
   /*ObSetInnerType*/
   {
@@ -2005,6 +2075,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,      /* ObMySQLDateType */
+    ObMaxType,      /* ObMySQLDateTimeType */
   },
   
   /*ObTimestampTZType*/
@@ -2061,6 +2133,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
   /*ObTimestampLTZType*/
   {
@@ -2116,6 +2190,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
     /*ObTimestampNanoType*/
   {
@@ -2171,6 +2247,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
   /*ObRawType*/
   {
@@ -2226,6 +2304,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
   /*ObIntervalYMType*/
   {
@@ -2281,6 +2361,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*ObIntervalDSType*/
   {
@@ -2336,6 +2418,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*ObNumberFloatType*/
   {
@@ -2391,6 +2475,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*ObNVarchar2Type*/
   {
@@ -2446,6 +2532,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*ObNCharType*/
   {
@@ -2501,6 +2589,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*ObURowIDType*/
   {
@@ -2556,6 +2646,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*ObLobType*/
   {
@@ -2611,6 +2703,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*ObJsonType*/
   {
@@ -2666,6 +2760,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType  */
     ObMaxType,         /* ObCollectionSQLType */
+    ObDoubleType,         /* ObMySQLDateType */
+    ObDoubleType,         /* ObMySQLDateTimeType */
   },
   /*ObGeometryType*/
   {
@@ -2721,6 +2817,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,         /*ObDecimalIntType   */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
    /*ObUserDefinedSQLType*/
   {
@@ -2776,6 +2874,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,         /*ObDecimalIntType   */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
 
   /*ObDecimalIntType*/
@@ -2832,6 +2932,8 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /*ObUserDefinedSQLType*/
     ObDecimalIntType,        /* ObDecimalIntType  */
     ObMaxType,         /*ObCollectionSQLType*/
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
   },
   /*ObCollectionSQLType*/
   {
@@ -2887,6 +2989,122 @@ static constexpr ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
+    ObMaxType,         /* ObMySQLDateType */
+    ObMaxType,         /* ObMySQLDateTimeType */
+  },
+  /*MySQLDateType*/
+  {
+    ObDoubleType,        /* NullType  */
+    ObIntType,           /* TinyIntType  */
+    ObIntType,           /* SmallIntType  */
+    ObIntType,           /* MediumIntType  */
+    ObIntType,           /* Int32Type  */
+    ObIntType,           /* IntType  */
+    ObIntType,           /* UTinyIntType  */
+    ObIntType,           /* USmallIntType  */
+    ObIntType,           /* UMediumIntType  */
+    ObIntType,           /* UInt32Type  */
+    ObIntType,           /* UIntType  */
+    ObDoubleType,        /* FloatType  */
+    ObDoubleType,        /* DoubleType  */
+    ObDoubleType,        /* UFloatType  */
+    ObDoubleType,        /* UDoubleType  */
+    ObNumberType,        /* NumberType  */
+    ObNumberType,        /* UNumberType  */
+    ObNumberType,        /* DateTimeType  */
+    ObNumberType,        /* TimestampType  */
+    ObIntType,           /* DateType  */
+    ObNumberType,        /* TimeType  */
+    ObIntType,           /* YearType  */
+    ObDoubleType,        /* VarcharType  */
+    ObDoubleType,        /* CharType  */
+    ObDoubleType,        /* HexStringType  */
+    ObMaxType,           /* ExtendType  */
+    ObDoubleType,         /* UnknownType  */
+    ObDoubleType,       /*TinyTextType*/
+    ObDoubleType,       /*TextType*/
+    ObDoubleType,       /*MediumTextType*/
+    ObDoubleType,        /*LongTextType*/
+    ObIntType,           /* BitType  */
+    ObDoubleType,       /* ObEnumType  */
+    ObDoubleType,       /* ObSetType  */
+    ObMaxType,       /* ObEnumInnerType  */
+    ObMaxType,       /* ObSetInnerType  */
+    ObNumberType,      /*ObTimestampTZType  */
+    ObNumberType,      /*ObTimestampLTZType  */
+    ObNumberType,      /*ObTimestampNanoType  */
+    ObNumberType,      /*ObRawType  */
+    ObMaxType,         /*ObIntervalYMType  */
+    ObMaxType,         /*ObIntervalDSType  */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /* ObGeometryType   */
+    ObMaxType,         /* ObUserDefinedSQLType */
+    ObMaxType,         /* ObDecimalIntType */
+    ObMaxType,         /* ObCollectionSQLType */
+    ObIntType,         /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
+  },
+  /*MySQLDateTimeType*/
+  {
+    ObDoubleType,        /* NullType  */
+    ObNumberType,        /* TinyIntType  */
+    ObNumberType,        /* SmallIntType  */
+    ObNumberType,        /* MediumIntType  */
+    ObNumberType,        /* Int32Type  */
+    ObNumberType,        /* IntType  */
+    ObNumberType,        /* UTinyIntType  */
+    ObNumberType,        /* USmallIntType  */
+    ObNumberType,        /* UMediumIntType  */
+    ObNumberType,        /* UInt32Type  */
+    ObNumberType,        /* UIntType  */
+    ObDoubleType,        /* FloatType  */
+    ObDoubleType,        /* DoubleType  */
+    ObDoubleType,        /* UFloatType  */
+    ObDoubleType,        /* UDoubleType  */
+    ObNumberType,        /* NumberType  */
+    ObNumberType,        /* UNumberType  */
+    ObNumberType,        /* DateTimeType  */
+    ObNumberType,        /* TimestampType  */
+    ObNumberType,        /* DateType  */
+    ObNumberType,        /* TimeType  */
+    ObNumberType,        /* YearType  */
+    ObDoubleType,        /* VarcharType  */
+    ObDoubleType,        /* CharType  */
+    ObDoubleType,        /* HexStringType  */
+    ObMaxType,           /* ExtendType  */
+    ObDoubleType,         /* UnknownType  */
+    ObDoubleType,       /*TinyTextType*/
+    ObDoubleType,       /*TextType*/
+    ObDoubleType,       /*MediumTextType*/
+    ObDoubleType,        /*LongTextType*/
+    ObNumberType,           /* BitType  */
+    ObDoubleType,       /* ObEnumType  */
+    ObDoubleType,       /* ObSetType  */
+    ObMaxType,       /* ObEnumInnerType  */
+    ObMaxType,       /* ObSetInnerType  */
+    ObNumberType,      /*ObTimestampTZType  */
+    ObNumberType,      /*ObTimestampLTZType  */
+    ObNumberType,      /*ObTimestampNanoType  */
+    ObNumberType,      /*ObRawType  */
+    ObMaxType,         /*ObIntervalYMType  */
+    ObMaxType,         /*ObIntervalDSType  */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /* ObGeometryType   */
+    ObMaxType,         /* ObUserDefinedSQLType */
+    ObMaxType,         /* ObDecimalIntType */
+    ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
   },
 };
 

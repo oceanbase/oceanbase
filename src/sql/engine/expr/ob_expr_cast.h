@@ -28,7 +28,7 @@ namespace sql
 {
 
 // The length of array need to be equal to the number of types defined at ObObjType
-static const int32_t CAST_STRING_DEFUALT_LENGTH[53] = {
+static const int32_t CAST_STRING_DEFUALT_LENGTH[ObMaxType + 1] = {
   0, //null
   4, //tinyint
   6, //smallint
@@ -81,6 +81,8 @@ static const int32_t CAST_STRING_DEFUALT_LENGTH[53] = {
   1,//udt
   11, // decimal int
   1,//collection
+  10,//mysql date
+  19,//mysql datetime
   0//max, invalid type, or count of obj type
 };
 

@@ -1579,6 +1579,8 @@ ObObjType ObExprOperator::enumset_calc_types_[ObMaxTC] =
   ObNullType, /*UDT*/
   ObUInt64Type, /*ObDecimalIntTC*/
   ObNullType, /*COLLECTION*/
+  ObVarcharType, /*ObMySQLDateTC*/
+  ObVarcharType, /*ObMySQLDateTimeTC*/
 };
 ////////////////////////////////////////////////////////////////
 

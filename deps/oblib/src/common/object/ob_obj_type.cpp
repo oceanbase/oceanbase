@@ -106,6 +106,8 @@ const char *ob_sql_type_str(ObObjType type)
       "UDT",
       "DECIMAL_INT",
       "COLLECTION",
+      "MYSQL_DATE",
+      "MYSQL_DATETIME",
       ""
     },
     {
@@ -163,6 +165,8 @@ const char *ob_sql_type_str(ObObjType type)
       "UDT",
       "DECIMAL_INT",
       "COLLECTION",
+      "MYSQL_DATE",
+      "MYSQL_DATETIME",
       ""
     }
   };
@@ -763,6 +767,8 @@ int ob_sql_type_str(char *buff,
     nullptr, // udt
     ob_decimal_int_str, //decimal int
     nullptr, // collection
+    nullptr, // mysql date
+    nullptr, // mysql datetime
     ob_empty_str             // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(ObSqlTypeStrFunc) == ObMaxType + 1, "Not enough initializer");
@@ -850,6 +856,8 @@ int ob_sql_type_str(char *buff,
     nullptr,//udt
     ob_decimal_int_str_without_accuracy,//decimal int
     nullptr,//collection
+    nullptr,//mysql date
+    nullptr,//mysql datetime
     ob_empty_str   // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(obSqlTypeStrWithoutAccuracyFunc) == ObMaxType + 1, "Not enough initializer");
@@ -950,6 +958,8 @@ const char *ob_sql_tc_str(ObObjTypeClass tc)
     "UDT",
     "DECIMAL_INT",
     "COLLECTION",
+    "MYSQL_DATE",
+    "MYSQL_DATETIME",
     ""
   };
   static_assert(sizeof(sql_tc_name) / sizeof(const char *) == ObMaxTC + 1, "Not enough initializer");

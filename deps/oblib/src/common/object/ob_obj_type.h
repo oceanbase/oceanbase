@@ -93,6 +93,8 @@ enum ObObjType
   ObUserDefinedSQLType = 49, // User defined type in SQL
   ObDecimalIntType     = 50, // decimal int type
   ObCollectionSQLType  = 51, // collection(varray and nested table) in SQL
+  ObMySQLDateType      = 52, // date type which is compatible with MySQL.
+  ObMySQLDateTimeType  = 53, // datetime type which is compatible with MySQL.
   ObMaxType                 // invalid type, or count of obj type
 };
 
@@ -214,6 +216,8 @@ static ObObjOType OBJ_TYPE_TO_O_TYPE[ObMaxType+1] = {
   ObOUDTSqlType,             //ObUserDefinedSQLType = 49,
   ObONumberType,             //ObDecimalIntType = 50,
   ObOCollectionSqlType,      //ObCollectionSQLType = 51,
+  ObONotSupport,             //ObMySQLDateType = 52,
+  ObONotSupport,             //ObMySQLDateTimeType = 53,
   ObONotSupport              //ObMaxType,
 };
 
@@ -247,6 +251,8 @@ enum ObObjTypeClass
   ObUserDefinedSQLTC = 24, // user defined type class in SQL
   ObDecimalIntTC     = 25, // decimal int class
   ObCollectionSQLTC = 26, // collection type class in SQL
+  ObMySQLDateTC     = 27, // mysql date type class
+  ObMySQLDateTimeTC = 28, // mysql date time type class
   ObMaxTC,
   // invalid type classes are below, only used as the result of XXXX_type_promotion()
   // to indicate that the two obj can't be promoted to the same type.
@@ -309,7 +315,9 @@ enum ObObjTypeClass
     (ObGeometryType, ObGeometryTC),            \
     (ObUserDefinedSQLType, ObUserDefinedSQLTC),\
     (ObDecimalIntType, ObDecimalIntTC),\
-    (ObCollectionSQLType, ObCollectionSQLTC)
+    (ObCollectionSQLType, ObCollectionSQLTC),   \
+    (ObMySQLDateType, ObMySQLDateTC),   \
+    (ObMySQLDateTimeType, ObMySQLDateTimeTC)
 
 #define SELECT_SECOND(x, y) y
 #define SELECT_TC(arg) SELECT_SECOND arg
@@ -351,6 +359,8 @@ const ObObjType OBJ_DEFAULT_TYPE[ObActualMaxTC] =
   ObUserDefinedSQLType, // user defined type in sql
   ObDecimalIntType, // decimal int
   ObCollectionSQLType,  // collection type in sql
+  ObMySQLDateType,     // mysql date
+  ObMySQLDateTimeType, // mysql datetime
   ObMaxType,        // maxtype
   ObUInt64Type,     // int&uint
   ObMaxType,        // lefttype

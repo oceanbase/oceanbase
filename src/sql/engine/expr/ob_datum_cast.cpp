@@ -11781,6 +11781,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_eval_arg,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*int -> XXX*/
@@ -11811,6 +11813,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     int_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*uint -> XXX*/
@@ -11841,6 +11845,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     uint_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*float -> XXX*/
@@ -11871,6 +11877,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     float_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*double -> XXX*/
@@ -11901,6 +11909,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     double_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*number -> XXX*/
@@ -11931,6 +11941,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     number_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*datetime -> XXX*/
@@ -11961,6 +11973,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*date -> XXX*/
@@ -11991,6 +12005,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*time -> XXX*/
@@ -12021,6 +12037,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*year -> XXX*/
@@ -12051,6 +12069,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*string -> XXX*/
@@ -12081,6 +12101,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_udt,/*udt*/
     string_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*extend -> XXX*/
@@ -12111,6 +12133,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     pl_extend_sql_udt,/*udt*/
     cast_not_expected,/*decimalint*/
     pl_extend_sql_udt,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*unknown -> XXX*/
@@ -12141,6 +12165,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*text -> XXX*/
@@ -12170,6 +12196,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*bit -> XXX*/
@@ -12200,6 +12228,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*enum -> XXX*/
@@ -12230,6 +12260,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected, /*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -12260,6 +12292,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*otimestamp -> XXX*/
@@ -12290,6 +12324,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*raw -> XXX*/
@@ -12320,6 +12356,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*interval -> XXX*/
@@ -12350,6 +12388,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /* rowid -> XXX */
@@ -12380,6 +12420,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*lob -> XXX*/
@@ -12410,6 +12452,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     lob_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*json -> XXX*/
@@ -12440,6 +12484,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*geometry -> XXX*/
@@ -12470,6 +12516,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*udt*/
     cast_not_support,/*decimalint*/
     cast_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*udt -> XXX*/
@@ -12500,6 +12548,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     udt_udt,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_udt_to_other_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*decimalint -> XXX*/
@@ -12529,7 +12579,9 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*decimalint*/
     cast_to_udt_not_support, /*udt*/
     decimalint_decimalint,/*decimalint*/
-    cast_not_expected, /*udt*/
+    cast_not_expected, /*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*collection -> XXX*/
@@ -12560,7 +12612,73 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*udt*/
     cast_udt_to_other_not_support,/*decimal int*/
     cast_udt_to_other_not_support,/*collection*/
-  }
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+  },
+  {
+    /*mysql date*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected, /*udt*/
+    cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+  },
+  {
+    /*mysql datetime*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected, /*udt*/
+    cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+  },
 };
 
 // 目前代码里面没有使用该矩阵，Oracle模式都是使用impilicit矩阵
@@ -12596,6 +12714,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_eval_arg,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*int -> XXX*/
@@ -12626,6 +12746,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     int_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*uint -> XXX*/
@@ -12656,6 +12778,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     uint_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*float -> XXX*/
@@ -12686,6 +12810,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     float_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*double -> XXX*/
@@ -12716,6 +12842,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     double_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*number -> XXX*/
@@ -12746,6 +12874,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     number_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*datetime -> XXX*/
@@ -12776,6 +12906,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*date -> XXX*/
@@ -12806,6 +12938,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*time -> XXX*/
@@ -12836,6 +12970,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*year -> XXX*/
@@ -12866,6 +13002,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*string -> XXX*/
@@ -12896,6 +13034,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     string_udt,/*udt*/
     string_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*extend -> XXX*/
@@ -12926,6 +13066,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     pl_extend_sql_udt,/*udt*/
     cast_not_support,/*decimalint*/
     pl_extend_sql_udt,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*unknown -> XXX*/
@@ -12956,6 +13098,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     unknown_other,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*text -> XXX*/
@@ -12986,6 +13130,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     text_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*bit -> XXX*/
@@ -13016,6 +13162,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*enum -> XXX*/
@@ -13046,6 +13194,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -13076,6 +13226,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*otimestamp -> XXX*/
@@ -13106,6 +13258,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*raw -> XXX*/
@@ -13136,6 +13290,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*interval -> XXX*/
@@ -13166,6 +13322,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*rowid -> XXX*/
@@ -13196,6 +13354,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*lob -> XXX*/
@@ -13226,6 +13386,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     lob_decimalint,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*json -> XXX*/
@@ -13256,6 +13418,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
     cast_to_udt_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*geometry -> XXX*/
@@ -13286,6 +13450,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*udt*/
     cast_not_support,/*decimalint*/
     cast_not_support,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*udt -> XXX*/
@@ -13316,6 +13482,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*udt*/
     cast_udt_to_other_not_support,/*decimal int*/
     cast_not_expected,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*decimalint -> XXX*/
@@ -13346,6 +13514,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_to_udt_not_support, /*udt*/
     decimalint_decimalint,/*decimalint*/
     cast_to_udt_not_support, /*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*collection -> XXX*/
@@ -13376,7 +13546,73 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*udt*/
     cast_udt_to_other_not_support,/*decimalint*/
     cast_udt_to_other_not_support,/*collection*/
-  }
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+  },
+  {
+    /*mysql date*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected, /*udt*/
+    cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+  },
+  {
+    /*mysql datetime*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected, /*udt*/
+    cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+  },
 };
 
 ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
@@ -13410,6 +13646,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_eval_arg,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*int -> XXX*/
@@ -13440,6 +13678,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     int_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*uint -> XXX*/
@@ -13470,6 +13710,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     uint_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*float -> XXX*/
@@ -13500,6 +13742,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     float_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*double -> XXX*/
@@ -13530,6 +13774,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     double_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*number -> XXX*/
@@ -13560,6 +13806,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     number_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*datetime -> XXX*/
@@ -13590,6 +13838,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     datetime_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*date -> XXX*/
@@ -13620,6 +13870,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     date_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*time -> XXX*/
@@ -13650,6 +13902,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     time_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*year -> XXX*/
@@ -13680,6 +13934,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     year_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*string -> XXX*/
@@ -13710,6 +13966,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     string_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*extend -> XXX*/
@@ -13740,6 +13998,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_support,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*unknown -> XXX*/
@@ -13770,6 +14030,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     unknown_other,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*text -> XXX*/
@@ -13800,6 +14062,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     text_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*bit -> XXX*/
@@ -13830,6 +14094,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     bit_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*enumset -> XXX*/
@@ -13860,6 +14126,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     enumset_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -13890,6 +14158,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     enumset_inner_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*otimestamp -> XXX*/
@@ -13920,6 +14190,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*raw -> XXX*/
@@ -13950,6 +14222,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*interval -> XXX*/
@@ -13980,6 +14254,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*rowid -> XXX*/
@@ -14010,6 +14286,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*lob -> XXX*/
@@ -14040,6 +14318,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*json -> XXX*/
@@ -14070,6 +14350,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     json_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*geometry -> XXX*/
@@ -14100,6 +14382,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected, /*udt*/
     geometry_decimalint,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*udt -> XXX*/
@@ -14130,6 +14414,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected, /*decimal int*/
     cast_not_expected,/*collection*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*decimalint -> XXX*/
@@ -14160,6 +14446,8 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     decimalint_decimalint, /*decimal int*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
   {
     /*collection -> XXX*/
@@ -14190,6 +14478,72 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
     cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+  },
+  {
+    /*mysql date -> XXX*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt, not implemented in mysql mode*/
+    cast_not_expected,/*decimalint, place_holder*/
+    cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
+  },
+  {
+    /*mysql datetime -> XXX*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt, not implemented in mysql mode*/
+    cast_not_expected,/*decimalint, place_holder*/
+    cast_not_expected,/*collection, not implemented in mysql mode*/
+    cast_not_expected,/*mysql date*/
+    cast_not_expected,/*mysql datetime*/
   },
 };
 
@@ -14327,6 +14681,16 @@ ObExpr::EvalEnumSetFunc OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT[ObMaxTC][2] =
   },
   {
     /*ObCollectionSQLTC -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
+  {
+    /*ObMySQLDate -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
+  {
+    /*ObMySQLDateTime -> enum_or_set*/
     cast_not_support_enum_set,/*enum*/
     cast_not_support_enum_set,/*set*/
   },
