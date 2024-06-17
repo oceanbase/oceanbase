@@ -2251,16 +2251,14 @@ int ObTabletDirectLoadMgr::prepare_storage_schema(ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   if (nullptr != sqc_build_ctx_.storage_schema_) {
-    ObTabletObjLoadHelper::free(sqc_build_ctx_.schema_allocator_, sqc_build_ctx_.storage_schema_);
-    sqc_build_ctx_.storage_schema_ = nullptr;
-    sqc_build_ctx_.schema_allocator_.reset();
-  }
-  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    LOG_INFO("storage schema has been prepared before", K(*sqc_build_ctx_.storage_schema_));
+  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
   } else if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(sqc_build_ctx_.schema_allocator_, sqc_build_ctx_.storage_schema_))) {
     LOG_WARN("load storage schema failed", K(ret));
-  } else {
+  }
+  if (OB_SUCC(ret)) {
     sqc_build_ctx_.commit_scn_ = get_commit_scn(tablet_handle.get_obj()->get_tablet_meta());
   }
   return ret;
