@@ -1514,6 +1514,12 @@ protected:
                       const ObIArray<ObConflictDetector*> &valid_detectors,
                       JoinInfo &join_info);
 
+  int check_detector_valid(ObJoinOrder *left_tree,
+                          ObJoinOrder *right_tree,
+                          const ObIArray<ObConflictDetector*> &valid_detectors,
+                          ObJoinOrder *cur_tree,
+                          bool &is_valid);
+
   int remove_redundancy_pred(ObJoinOrder *left_tree,
                             ObJoinOrder *right_tree,
                             JoinInfo &join_info);
