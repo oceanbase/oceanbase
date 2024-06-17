@@ -1096,6 +1096,40 @@ int ObDDLResolver::add_storing_column(const ObString &column_name,
   return ret;
 }
 
+
+int ObDDLResolver::resolve_file_prefix(ObString &url, ObSqlString &prefix_str, common::ObStorageType &device_type) {
+  int ret = OB_SUCCESS;
+  ObString tmp_url;
+  ObArenaAllocator allocator;
+  OZ (ob_write_string(allocator, url, tmp_url));
+  ObCharset::caseup(CS_TYPE_UTF8MB4_GENERAL_CI, tmp_url);
+  device_type = common::ObStorageType::OB_STORAGE_MAX_TYPE;
+  ObString tmp_prefix = tmp_url.split_on(':');
+  OZ (ob_write_string(allocator, tmp_prefix, tmp_prefix, true));
+  if (!tmp_prefix.empty()) {
+    OZ (get_storage_type_from_name(tmp_prefix.ptr(), device_type));
+  }
+  if (device_type == common::ObStorageType::OB_STORAGE_MAX_TYPE) {
+    device_type = common::ObStorageType::OB_STORAGE_FILE;
+    if (url.empty()) {
+      ret = OB_DIR_NOT_EXIST;
+      LOG_USER_ERROR(OB_DIR_NOT_EXIST);
+    }
+  } else {
+    const char *ts = get_storage_type_str(device_type);
+    url += (strlen(ts) + 3);
+  }
+  if (OB_SUCC(ret)) {
+    ObString prefix;
+    const char *ts = get_storage_type_str(device_type);
+    CK (params_.allocator_ != NULL);
+    OZ (ob_write_string(*params_.allocator_, ObString(ts), prefix));
+    ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, prefix);
+    OZ (prefix_str.append(prefix));
+    OZ (prefix_str.append("://"));
+  }
+  return ret;
+}
 int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool is_index_option)
 {
   int ret = OB_SUCCESS;
@@ -2270,30 +2304,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           } else {
             ObString url = ObString(string_node->str_len_, string_node->str_value_).trim_space_only();
             ObSqlString tmp_location;
+            ObSqlString prefix;
             ObBackupStorageInfo storage_info;
             char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
-
-            if (url.prefix_match_ci(OB_OSS_PREFIX)) {
-              url += strlen(OB_OSS_PREFIX);
-              storage_info.device_type_ = OB_STORAGE_OSS;
-              OZ (tmp_location.append(OB_OSS_PREFIX));
-            } else if (url.prefix_match_ci(OB_COS_PREFIX)) {
-              url += strlen(OB_COS_PREFIX);
-              storage_info.device_type_ = OB_STORAGE_COS;
-              OZ (tmp_location.append(OB_COS_PREFIX));
-            } else if (url.prefix_match_ci(OB_FILE_PREFIX)) {
-              url += strlen(OB_FILE_PREFIX);
-              storage_info.device_type_ = OB_STORAGE_FILE;
-              OZ (tmp_location.append(OB_FILE_PREFIX));
-            } else {
-              storage_info.device_type_ = OB_STORAGE_FILE;
-              if (url.empty()) {
-                ret = OB_DIR_NOT_EXIST;
-                LOG_USER_ERROR(OB_DIR_NOT_EXIST);
-              }
-              OZ (tmp_location.append(OB_FILE_PREFIX));
-            }
-
+            OZ (resolve_file_prefix(url, prefix, storage_info.device_type_));
+            OZ (tmp_location.append(prefix.string()));
             url = url.trim_space_only();
 
             if (OB_STORAGE_FILE != storage_info.device_type_) {

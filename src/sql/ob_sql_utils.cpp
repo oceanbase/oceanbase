@@ -5379,8 +5379,7 @@ void ObSQLUtils::adjust_time_by_ntp_offset(int64_t &dst_timeout_ts)
 
 bool ObSQLUtils::is_external_files_on_local_disk(const ObString &url)
 {
-  return url.prefix_match_ci(OB_FILE_PREFIX) ||
-          (!url.prefix_match_ci(OB_OSS_PREFIX) && !url.prefix_match_ci(OB_COS_PREFIX));
+  return url.prefix_match_ci(OB_FILE_PREFIX);
 }
 
 int ObSQLUtils::split_remote_object_storage_url(ObString &url, ObBackupStorageInfo &storage_info)

@@ -24,6 +24,10 @@
 
 namespace oceanbase
 {
+namespace common {
+extern const char *OB_STORAGE_ACCESS_TYPES_STR[];
+}
+
 using namespace share::schema;
 using namespace common;
 using namespace share;
@@ -243,16 +247,6 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     LOG_WARN("ObExternalDataAccessDriver not init", K(ret));
   } else if (!pattern.empty() && OB_FAIL(filter.init(pattern, regexp_vars))) {
     LOG_WARN("fail to init filter", K(ret));
-  } else if (get_storage_type() == OB_STORAGE_OSS
-             || get_storage_type() == OB_STORAGE_COS) {
-    ObExternalFileListArrayOpWithFilter file_op(file_urls, pattern.empty() ? NULL : &filter, allocator);
-    if (OB_FAIL(device_handle_->scan_dir(to_cstring(path), file_op))) {
-      LOG_WARN("scan dir failed", K(ret));
-      if (get_storage_type() == OB_STORAGE_OSS) {
-        ret = OB_OSS_ERROR;
-        LOG_WARN("scan oss dir failed", K(ret));
-      }
-    }
   } else if (get_storage_type() == OB_STORAGE_FILE) {
     ObSEArray<ObString, 4> file_dirs;
     bool is_dir = false;
@@ -281,23 +275,11 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
         LOG_WARN("too many files and dirs to visit", K(ret));
       }
     }
-  }
-  return ret;
-}
-
-int ObExternalDataAccessDriver::resolve_storage_type(const ObString &location, ObStorageType &device_type)
-{
-  int ret = OB_SUCCESS;
-
-  if (location.prefix_match_ci(OB_OSS_PREFIX)) {
-    device_type = OB_STORAGE_OSS;
-  } else if (location.prefix_match_ci(OB_COS_PREFIX)) {
-    device_type = OB_STORAGE_COS;
-  } else if (location.prefix_match_ci(OB_FILE_PREFIX)) {
-    device_type = OB_STORAGE_FILE;
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Not supported location type", K(ret), K(location));
+    ObExternalFileListArrayOpWithFilter file_op(file_urls, pattern.empty() ? NULL : &filter, allocator);
+    if (OB_FAIL(device_handle_->scan_dir(to_cstring(path), file_op))) {
+      LOG_WARN("scan dir failed", K(ret));
+    }
   }
   return ret;
 }
@@ -314,7 +296,7 @@ int ObExternalDataAccessDriver::init(const ObString &location, const ObString &a
   iod_opts_.opts_ = opts_;
   iod_opts_.opt_cnt_ = 0;
 
-  if (OB_FAIL(resolve_storage_type(location, device_type))) {
+  if (OB_FAIL(get_storage_type_from_path(location, device_type))) {
     LOG_WARN("fail to resove storage type", K(ret));
   } else {
     storage_type_ = device_type;

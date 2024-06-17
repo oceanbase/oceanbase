@@ -573,6 +573,7 @@ protected:
       const bool is_create_table_as = false,
       const bool is_external_table = false,
       const bool allow_has_default = true);
+  int resolve_file_prefix(ObString &url, ObSqlString &prefix_str, common::ObStorageType &device_type);
   int resolve_uk_name_from_column_attribute(
       ParseNode *attrs_node,
       common::ObString &uk_name);
