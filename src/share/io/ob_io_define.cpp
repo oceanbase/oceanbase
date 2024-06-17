@@ -430,8 +430,9 @@ ObIOResult::ObIOResult()
     user_data_buf_(nullptr),
     io_callback_(nullptr),
     flag_(),
-    ret_code_(),
-    cond_()
+    cond_(),
+    time_log_(),
+    ret_code_()
 {
 
 }
@@ -509,6 +510,7 @@ void ObIOResult::reset()
   io_callback_ = nullptr;
   flag_.reset();
   ret_code_.reset();
+  time_log_.reset();
   tenant_io_mgr_.reset();
   //do not destroy thread_cond
   is_inited_ = false;
@@ -532,6 +534,7 @@ void ObIOResult::destroy()
   io_callback_ = nullptr;
   flag_.reset();
   ret_code_.reset();
+  time_log_.reset();
   cond_.destroy();
   tenant_io_mgr_.reset();
   is_inited_ = false;
@@ -739,7 +742,6 @@ ObIORequest::ObIORequest()
     tenant_id_(OB_INVALID_TENANT_ID),
     tenant_io_mgr_(),
     fd_(),
-    time_log_(),
     trace_id_()
 {
 
@@ -830,7 +832,6 @@ void ObIORequest::reset() //only for test, not dec resut_ref
   free_io_buffer();
   ref_cnt_ = 0;
   trace_id_.reset();
-  time_log_.reset();
   io_result_ = nullptr;
   fd_.reset();
   tenant_io_mgr_.reset();
@@ -849,7 +850,6 @@ void ObIORequest::destroy()
   free_io_buffer();
   ref_cnt_ = 0;
   trace_id_.reset();
-  time_log_.reset();
   if (nullptr != io_result_) {
     io_result_->dec_ref("request");
     io_result_ = nullptr;
@@ -1966,7 +1966,9 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("request is null", K(ret), KP(req));
         } else {
-          req->io_result_ == nullptr ? : req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          if (OB_NOT_NULL(req->io_result_)) {
+            req->io_result_->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          }
           if (tmp_phy_queue->req_list_.is_empty()) {
             tmp_phy_queue->reset_time_info();
             tmp_phy_queue->last_empty_ts_ = ObTimeUtility::fast_current_time();
@@ -2093,7 +2095,9 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("req is null", K(ret), KP(req));
         } else {
-          req->io_result_ == nullptr ? : req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          if (OB_NOT_NULL(req->io_result_)) {
+            req->io_result_->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          }
           LOG_DEBUG("req pop from phy queue succcess(P schedule)", KP(req), K(iter_count), "time_cost", ObTimeUtility::fast_current_time() - current_ts, K(ready_heap_.count()), K(current_ts));
           if (tmp_phy_queue->req_list_.is_empty()) {
             tmp_phy_queue->reset_time_info();
