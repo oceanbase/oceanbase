@@ -1206,6 +1206,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVectorIPDistance::calc_inner_product,                /* 724 */
   NULL, // ObExprVectorDims::calc_dims,                               /* 725 */
   NULL, // ObExprVectorNorm::calc_norm,                               /* 726 */
+  NULL, // ObExprVectorDistance::calc_distance,                       /* 727 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
