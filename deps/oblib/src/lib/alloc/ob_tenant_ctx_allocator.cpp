@@ -452,7 +452,9 @@ void ObTenantCtxAllocator::on_free(AObject &obj)
 
   int64_t tenant_id = blk_mgr->get_tenant_id();
   int64_t ctx_id = blk_mgr->get_ctx_id();
-  ObMemAttr attr(tenant_id, obj.label_, ctx_id);
+  char label[lib::AOBJECT_LABEL_SIZE + 1];
+  MEMCPY(label, obj.label_, sizeof(label));
+  ObMemAttr attr(tenant_id, label, ctx_id);
   if (OB_NOT_NULL(malloc_callback)) {
     const int64_t size = obj.alloc_bytes_;
     (*malloc_callback)(attr, -size);
