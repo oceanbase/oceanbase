@@ -3129,9 +3129,20 @@ int ObAlterTableResolver::check_is_drop_primary_key(const ParseNode &node,
     // there are multiple add pk nodes and at least one drop pk node,
     // or there are at least one other action node and at least one drop pk node,
     // or there are multiple drop pk nodes.
+    // or drop pk if the table is implicit key partition table.
     int64_t drop_pk_node_cnt = 0;
     int64_t add_pk_node_cnt = 0;
     int64_t other_action_cnt = 0;
+    if (OB_ISNULL(table_schema_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_schema is null", K(ret));
+    } else {
+      ObPartitionFuncType part_func_type = table_schema_->get_part_option().get_part_func_type();
+      if (share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type) {
+        ret = OB_ERR_FIELD_NOT_FOUND_PART;
+        LOG_WARN("can't drop primary key if table is implicit key partition table to be compatible with mysql mode", K(ret));
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       ParseNode *action_node = node.children_[i];
       if (OB_ISNULL(action_node)) {

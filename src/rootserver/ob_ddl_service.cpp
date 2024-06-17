@@ -4197,11 +4197,16 @@ int ObDDLService::check_can_drop_primary_key(const ObTableSchema &origin_table_s
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
   const ObIArray<ObForeignKeyInfo> &fk_infos = origin_table_schema.get_foreign_key_infos();
+  ObPartitionFuncType part_func_type = origin_table_schema.get_part_option().get_part_func_type();
+  // disallow to drop pk if the table is implicit key partition table.
   if (origin_table_schema.is_heap_table()) {
     const ObString pk_name = "PRIMAY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), K(origin_table_schema));
     LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, pk_name.length(), pk_name.ptr());
+  } else if (share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type) {
+    ret = OB_ERR_FIELD_NOT_FOUND_PART;
+    LOG_WARN("can't drop primary key if table is implicit key partition table to be compatible with mysql mode", K(ret));
   } else if (fk_infos.empty()) {
     // allowed to drop primary key.
   } else if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
