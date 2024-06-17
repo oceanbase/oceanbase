@@ -143,6 +143,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
         LOG_WARN("fail to generate build mview replica sql", K(ret));
       }
     } else {
+      ObString partition_names;
       if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
                                                         data_table_id_,
                                                         dest_table_id_,
@@ -154,6 +155,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
                                                         use_heap_table_ddl_plan_,
                                                         true/*use_schema_version_hint_for_src_table*/,
                                                         &col_name_map_,
+                                                        partition_names,
                                                         sql_string))) {
         LOG_WARN("fail to generate build replica sql", K(ret));
       }

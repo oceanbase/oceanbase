@@ -273,7 +273,7 @@ int ObColumnRedefinitionTask::copy_table_indexes()
             } else {
               create_index_arg.index_type_ = index_schema->get_index_type();
               ObCreateDDLTaskParam param(tenant_id_,
-                                         ObDDLType::DDL_CREATE_INDEX,
+                                         ((DATA_VERSION_4_2_2_0 <= data_format_version_ && data_format_version_ < DATA_VERSION_4_3_0_0) || data_format_version_ >= DATA_VERSION_4_3_2_0) && index_schema->is_storage_local_index_table() && index_schema->is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX,
                                          table_schema,
                                          index_schema,
                                          0/*object_id*/,
