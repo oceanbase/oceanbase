@@ -74,7 +74,7 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
 
       if run_modules.MODULE_HEALTH_CHECK in my_module_set:
         logging.info('================begin to run health check action ===============')
-        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout)
+        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, False)  # need_check_major_status = False
         logging.info('================succeed to run health check action ===============')
 
       if run_modules.MODULE_END_ROLLING_UPGRADE in my_module_set:

@@ -393,7 +393,7 @@ def check_until_timeout(query_cur, sql, value, timeout):
     time.sleep(10)
 
 # 开始健康检查
-def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, zone = ''):
+def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, need_check_major_status, zone = ''):
   try:
     conn = mysql.connector.connect(user = my_user,
                                    password = my_passwd,
@@ -410,6 +410,8 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, zone
       check_paxos_replica(query_cur, timeout)
       check_schema_status(query_cur, timeout)
       check_server_version_by_zone(query_cur, zone)
+      if True == need_check_major_status:
+        check_major_merge(query_cur, timeout)
     except Exception, e:
       logging.exception('run error')
       raise e
@@ -444,7 +446,7 @@ if __name__ == '__main__':
       zone = get_opt_zone()
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
           host, port, user, password.replace('"', '\\"'), log_filename, timeout, zone)
-      do_check(host, port, user, password, upgrade_params, timeout, zone)
+      do_check(host, port, user, password, upgrade_params, timeout, False, zone) # need_check_major_status = False
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')
       raise e
