@@ -639,9 +639,6 @@ int ObDDLIncStartReplayExecutor::init(
 }
 
 struct SyncTabletFreezeHelper {
-  ObLS *ls_;
-  const ObTabletID &tablet_id_;
-  const ObTabletID &lob_meta_tablet_id_;
   SyncTabletFreezeHelper(ObLS *ls, const ObTabletID &tablet_id, const ObTabletID &lob_meta_tablet_id)
       : ls_(ls), tablet_id_(tablet_id), lob_meta_tablet_id_(lob_meta_tablet_id) {}
   int operator()()
@@ -667,6 +664,10 @@ struct SyncTabletFreezeHelper {
     }
     return ret;
   }
+
+  ObLS *ls_;
+  const ObTabletID &tablet_id_;
+  const ObTabletID &lob_meta_tablet_id_;
 };
 
 int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
