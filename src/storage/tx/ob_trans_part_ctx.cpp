@@ -6451,6 +6451,12 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
                     "The transaction cannot be killed temporarily, waiting for handle_timeout to retry abort.",
                     K(ret), KPC(this));
                 ret = OB_SUCCESS;
+              } else if (is_2pc_blocking()) {
+                // when tx is blocked by transfer, we need wait handle_timeout to retry abort
+                // not to block the rest of the transactions from taking over
+                TRANS_LOG(INFO, "tx has blocked by transfer, waiting for handle_timeout to retry abort",
+                    K(ret), KPC(this));
+                ret = OB_SUCCESS;
               }
               TRANS_LOG(WARN, "abort tx failed", KR(ret), KPC(this));
 
