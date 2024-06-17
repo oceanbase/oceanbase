@@ -1209,6 +1209,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVectorDistance::calc_distance,                       /* 727 */
   NULL, // ObExprInnerDoubleToInt::eval_inner_double_to_int           /* 728 */
   NULL, // ObExprInnerDecimalToYear::eval_inner_decimal_to_year       /* 729 */
+  NULL, // ObExprSm3::eval_sm3,                                       /* 730 */
+  NULL, // ObExprSm4Encrypt::eval_sm4_encrypt,                        /* 731 */
+  NULL, // ObExprSm4Decrypt::eval_sm4_decrypt,                        /* 732 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

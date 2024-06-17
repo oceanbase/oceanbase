@@ -506,6 +506,9 @@ typedef enum ObItemType
   T_FUN_SYS_PASSWORD = 773,
   T_FUN_SYS_IS_ENABLED_ROLE = 774,
   T_FUN_SYS_CAN_ACCESS_TRIGGER = 775,
+  T_FUN_SYS_SM3 = 776,
+  T_FUN_SYS_SM4_ENCRYPT = 777,
+  T_FUN_SYS_SM4_DECRYPT = 778,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
