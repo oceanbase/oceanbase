@@ -435,27 +435,68 @@ int ObTableLoadService::check_support_direct_load(
     const ObDirectLoadInsertMode::Type insert_mode)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_ID == table_id ||
-                  !ObDirectLoadMethod::is_type_valid(method) ||
-                  !ObDirectLoadInsertMode::is_type_valid(insert_mode))) {
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(table_id), K(method), K(insert_mode));
+    LOG_WARN("invalid args", KR(ret), K(table_id));
   } else {
     const uint64_t tenant_id = MTL_ID();
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(
+          ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else {
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode);
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
+                                                  uint64_t table_id,
+                                                  const ObDirectLoadMethod::Type method,
+                                                  const ObDirectLoadInsertMode::Type insert_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_id));
+  } else {
+    const uint64_t tenant_id = MTL_ID();
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table schema is null", KR(ret));
+    } else {
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode);
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
+                                                  const ObTableSchema *table_schema,
+                                                  const ObDirectLoadMethod::Type method,
+                                                  const ObDirectLoadInsertMode::Type insert_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == table_schema ||
+                  !ObDirectLoadMethod::is_type_valid(method) ||
+                  !ObDirectLoadInsertMode::is_type_valid(insert_mode))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(method), K(insert_mode));
+  } else {
+    const uint64_t tenant_id = MTL_ID();
     bool trigger_enabled = false;
     bool has_udt_column = false;
     bool has_fts_index = false;
     bool has_multivalue_index = false;
     bool has_invisible_column = false;
     bool has_unused_column = false;
-    if (OB_FAIL(
-          ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-    }
     // check if it is a user table
-    else if (!table_schema->is_user_table()) {
+    if (!table_schema->is_user_table()) {
       ret = OB_NOT_SUPPORTED;
       if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
         LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
@@ -550,11 +591,11 @@ int ObTableLoadService::check_support_direct_load(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with foreign keys");
-      } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
-        if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
-        }
+      }
+    } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
+      if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
       }
     }
   }

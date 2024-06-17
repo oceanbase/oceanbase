@@ -807,7 +807,7 @@ private:
   int direct_insert_rows(const uint64_t table_id,
                          const int64_t task_id,
                          const common::ObTabletID &tablet_id,
-                         const bool is_heap_table,
+                         const common::ObIArray<uint64_t> &column_ids,
                          common::ObNewRowIterator *row_iter,
                          int64_t &affected_rows);
   static int check_is_gencol_check_failed(const ObRelativeTable &data_table,

@@ -29,6 +29,7 @@ namespace observer
 class ObTableLoadTableCtx;
 class ObTableLoadStoreCtx;
 class ObTableLoadStoreTrans;
+class ObTableLoadStoreTransPXWriter;
 
 class ObTableLoadStore
 {
@@ -93,10 +94,7 @@ private:
 public:
   int px_start_trans(const table::ObTableLoadTransId &trans_id);
   int px_finish_trans(const table::ObTableLoadTransId &trans_id);
-  int px_check_for_write(const ObTabletID &tablet_id);
-  int px_write(const table::ObTableLoadTransId &trans_id,
-               const ObTabletID &tablet_id,
-               const common::ObIArray<common::ObNewRow> &row_array);
+  int px_get_trans_writer(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTransPXWriter &writer);
   static int px_abandon_trans(ObTableLoadTableCtx *ctx, const table::ObTableLoadTransId &trans_id);
 private:
   int px_flush(ObTableLoadStoreTrans *trans);

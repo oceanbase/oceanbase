@@ -77,14 +77,15 @@ bool ObTableLoadCoordinator::is_ctx_inited(ObTableLoadTableCtx *ctx)
   return ret;
 }
 
-int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx, const ObIArray<int64_t> &idx_array,
+int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx,
+                                     const ObIArray<uint64_t> &column_ids,
                                      ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret));
-  } else if (OB_FAIL(ctx->init_coordinator_ctx(idx_array, exec_ctx))) {
+  } else if (OB_FAIL(ctx->init_coordinator_ctx(column_ids, exec_ctx))) {
     LOG_WARN("fail to init coordinator ctx", KR(ret));
   }
   return ret;

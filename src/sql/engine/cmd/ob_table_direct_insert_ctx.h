@@ -67,9 +67,6 @@ public:
   }
 
 private:
-  int init_store_column_idxs(const uint64_t tenant_id, const uint64_t table_id,
-                             common::ObIArray<int64_t> &store_column_idxs);
-private:
   observer::ObTableLoadSqlExecCtx *load_exec_ctx_;
   observer::ObTableLoadInstance *table_load_instance_;
   bool is_inited_;

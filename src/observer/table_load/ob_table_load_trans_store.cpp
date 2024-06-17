@@ -317,39 +317,37 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
   return ret;
 }
 
-int ObTableLoadTransStoreWriter::write(int32_t session_id,
-    const ObTabletID &tablet_id, const ObIArray<ObNewRow> &row_array)
+int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > session_count) ||
-             row_array.empty()) {
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !row.is_valid() ||
+                         row.count_ != table_data_desc_->column_count_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(session_id), K(row_array.empty()));
+    LOG_WARN("invalid args", KR(ret), K(tablet_id), K(row), KPC(table_data_desc_));
   } else {
     ObTableLoadSequenceNo seq_no(0); // pdml导入的行目前不存在主键冲突，先都用一个默认的seq_no
-    SessionContext &session_ctx = session_ctx_array_[session_id - 1];
-    for (int64_t i = 0; OB_SUCC(ret) && i < row_array.count(); ++i) {
-      const ObNewRow &row = row_array.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && (j < table_data_desc_->column_count_); ++j) {
-        const ObObj &obj = row.cells_[j];
-        if (OB_FAIL(check_support_obj(obj))) {
-          LOG_WARN("failed to check support obj", KR(ret), K(obj));
-        } else if (OB_FAIL(session_ctx.datum_row_.storage_datums_[j].from_obj_enhance(obj))) {
-          LOG_WARN("fail to from obj enhance", KR(ret), K(obj));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_, tablet_id, seq_no, session_ctx.datum_row_))) {
-          LOG_WARN("fail to write row", KR(ret), K(session_id), K(tablet_id));
-        }
+    SessionContext &session_ctx = session_ctx_array_[0];
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_data_desc_->column_count_; ++i) {
+      ObStorageDatum &datum = session_ctx.datum_row_.storage_datums_[i];
+      const ObObj &obj = row.cells_[i];
+      if (OB_FAIL(check_support_obj(obj))) {
+        LOG_WARN("failed to check support obj", KR(ret), K(obj));
+      } else if (OB_FAIL(datum.from_obj_enhance(obj))) {
+        LOG_WARN("fail to from obj enhance", KR(ret), K(obj));
       }
     }
     if (OB_SUCC(ret)) {
-      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
+      if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_,
+                                           tablet_id,
+                                           seq_no,
+                                           session_ctx.datum_row_))) {
+        LOG_WARN("fail to write row", KR(ret), K(tablet_id));
+      } else {
+        ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, 1);
+      }
     }
   }
   return ret;

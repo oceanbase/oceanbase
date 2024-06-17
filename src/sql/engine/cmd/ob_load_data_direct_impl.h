@@ -92,7 +92,7 @@ private:
                  "method", storage::ObDirectLoadMethod::get_type_string(method_),
                  "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
                  K_(data_access_param),
-                 K_(store_column_idxs));
+                 K_(column_ids));
   public:
     uint64_t tenant_id_;
     uint64_t database_id_;
@@ -112,7 +112,7 @@ private:
     storage::ObDirectLoadMethod::Type method_;
     storage::ObDirectLoadInsertMode::Type insert_mode_;
     DataAccessParam data_access_param_;
-    common::ObArray<int64_t> store_column_idxs_; // Mapping of stored columns to source data columns
+    ObArray<uint64_t> column_ids_;
   };
 
   struct LoadExecuteContext
@@ -440,7 +440,6 @@ private:
 private:
   int init_file_iter();
   // init execute param
-  int init_store_column_idxs(common::ObIArray<int64_t> &store_column_idxs);
   int init_execute_param();
   // init execute context
   int init_logger();
