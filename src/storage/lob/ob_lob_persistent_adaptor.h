@@ -23,6 +23,8 @@ namespace oceanbase
 namespace storage
 {
 
+class ObStoreCtxGuard;
+
 class ObLobUpdIterator : public ObNewRowIterator
 {
 public:
@@ -89,7 +91,7 @@ private:
       int64_t &tenant_schema_version);
     
   int get_lob_tablets(
-      ObLobAccessParam& param,
+      ObLobAccessParam &param,
       ObTabletHandle &data_tablet,
       ObTabletHandle &lob_meta_tablet,
       ObTabletHandle &lob_piece_tablet);
@@ -105,6 +107,7 @@ private:
   int build_common_scan_param(
       const ObLobAccessParam &param,
       const uint64_t table_id,
+      bool is_get,
       uint32_t col_num,
       ObTableScanParam& scan_param);
   int inner_get_tablet(
@@ -136,6 +139,7 @@ private:
       const uint64_t tenant_id,
       ObTableDMLParam* dml_param,
       ObDMLBaseParam& dml_base_param,
+      ObStoreCtxGuard *store_ctx_guard,
       ObSEArray<uint64_t, 6>& column_ids,
       const ObTabletHandle& data_tablet,
       const ObTabletHandle& lob_meta_tablet);
@@ -158,6 +162,11 @@ private:
   int prepare_piece_table_param(
       const ObLobAccessParam &param,
       ObTableScanParam &scan_param);
+
+  int prepare_single_get(
+      ObLobAccessParam &param,
+      ObTableScanParam &scan_param,
+      uint64_t &table_id);
 
 private:
 

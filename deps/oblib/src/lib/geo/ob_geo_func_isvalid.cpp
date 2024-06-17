@@ -26,11 +26,27 @@ namespace common
 
 template <typename GeoType>
 static int eval_isvalid_without_strategy(const ObGeometry *g,
+                                         const ObGeoEvalCtx &context,
                                          bool &result)
 {
   INIT_SUCC(ret);
-  const GeoType *geo_condidate = reinterpret_cast<GeoType *>(const_cast<char *>(g->val()));
-  result = bg::is_valid(*geo_condidate);
+  const GeoType *geo_condidate = nullptr;
+  if (!g->is_tree()) {
+    geo_condidate = reinterpret_cast<GeoType *>(const_cast<char *>(g->val()));
+  } else {
+    geo_condidate = reinterpret_cast<GeoType *>(const_cast<ObGeometry *>(g));
+  }
+  if (OB_ISNULL(geo_condidate)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("geometry can not be null", K(ret));
+  } else {
+    bg::validity_failure_type reason;
+    result = bg::is_valid(*geo_condidate, reason);
+    if (!result && context.get_val_count() > 0) {
+      ObGeoNormalVal *ret_errno = const_cast<ObGeoNormalVal *>(context.get_val_arg(0));
+      ret_errno->int64_ =  static_cast<int64_t>(reason);
+    }
+  }
   return ret;
 }
 
@@ -48,7 +64,12 @@ static int eval_isvalid_with_strategy(const ObGeometry *g,
     bg::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
     bg::strategy::intersection::geographic_segments<> m_geographic_ll_la_aa_strategy(geog_sphere);
     const GeoType *geo_condidate = reinterpret_cast<const GeoType *>(const_cast<char *>(g->val()));
-    result = bg::is_valid(*geo_condidate, m_geographic_ll_la_aa_strategy);
+    bg::validity_failure_type reason;
+    result = bg::is_valid(*geo_condidate, reason, m_geographic_ll_la_aa_strategy);
+    if (!result && context.get_val_count() > 0) {
+      ObGeoNormalVal *ret_errno = const_cast<ObGeoNormalVal *>(context.get_val_arg(0));
+      ret_errno->int64_ =  static_cast<int64_t>(reason);
+    }
   }
   return ret;
 }
@@ -73,7 +94,7 @@ public:
     static int eval(const ObGeometry *g, const ObGeoEvalCtx &context, bool &result)
     {
       UNUSED(context);
-      return eval_isvalid_without_strategy<GeoType>(g, result);
+      return eval_isvalid_without_strategy<GeoType>(g, context, result);
     }
   };
 
@@ -155,6 +176,17 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncIsValidImpl, ObWkbGeogMultiLineString, bool)
 OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncIsValidImpl, ObWkbGeogMultiPolygon, bool)
 {
   return eval_isvalid_with_strategy<ObWkbGeogMultiPolygon>(g, context, result);
+} OB_GEO_FUNC_END;
+
+OB_GEO_UNARY_TREE_FUNC_BEGIN(ObGeoFuncIsValidImpl, ObCartesianPolygon, bool)
+{
+  return eval_isvalid_without_strategy<ObCartesianPolygon>(g, context, result);
+} OB_GEO_FUNC_END;
+
+OB_GEO_UNARY_TREE_FUNC_BEGIN(ObGeoFuncIsValidImpl, ObCartesianMultipolygon, bool)
+{
+  UNUSED(context);
+  return eval_isvalid_without_strategy<ObCartesianMultipolygon>(g, context, result);
 } OB_GEO_FUNC_END;
 
 int ObGeoFuncIsValid::eval(const ObGeoEvalCtx &gis_context, bool &result)

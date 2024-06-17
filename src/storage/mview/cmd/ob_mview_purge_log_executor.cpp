@@ -53,6 +53,7 @@ int ObMViewPurgeLogExecutor::execute(ObExecContext &ctx, const ObMViewPurgeLogAr
     ObMLogPurger purger;
     purge_param.tenant_id_ = tenant_id_;
     purge_param.master_table_id_ = master_table_id_;
+    purge_param.purge_log_parallel_ = arg.purge_log_parallel_;
     if (OB_FAIL(purger.init(ctx, purge_param))) {
       LOG_WARN("fail to init mlog purger", KR(ret), K(purge_param));
     } else if (OB_FAIL(purger.purge())) {

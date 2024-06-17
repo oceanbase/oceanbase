@@ -44,10 +44,12 @@ using namespace share;
 
 ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
   : ctx_(ctx),
-    allocator_("TLD_StoreCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx->param_.tenant_id_),
+    allocator_("TLD_StoreCtx"),
     task_scheduler_(nullptr),
     merger_(nullptr),
     insert_table_ctx_(nullptr),
+    next_tablet_idx_(0),
+    opened_insert_tablet_count_(0),
     is_multiple_mode_(false),
     is_fast_heap_table_(false),
     tmp_file_mgr_(nullptr),
@@ -60,6 +62,10 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     enable_heart_beat_check_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  ls_partition_ids_.set_tenant_id(MTL_ID());
+  target_ls_partition_ids_.set_tenant_id(MTL_ID());
+  committed_trans_store_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadStoreCtx::~ObTableLoadStoreCtx()
@@ -79,14 +85,6 @@ int ObTableLoadStoreCtx::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(partition_id_array), K(target_partition_id_array));
   } else {
-    ObDirectLoadInsertTableParam insert_table_param;
-    insert_table_param.table_id_ = ctx_->param_.table_id_;
-    insert_table_param.schema_version_ = ctx_->ddl_param_.schema_version_;
-    insert_table_param.snapshot_version_ = ctx_->ddl_param_.snapshot_version_;
-    insert_table_param.ddl_task_id_ = ctx_->ddl_param_.task_id_;
-    insert_table_param.execution_id_ = 1; //仓氐说暂时设置为1，不然后面检测过不了
-    insert_table_param.data_version_ = ctx_->ddl_param_.data_version_;
-    insert_table_param.reserved_parallel_ = ctx_->param_.session_count_;
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_id_array.count(); ++i) {
       const ObLSID &ls_id = partition_id_array[i].ls_id_;
       const ObTableLoadPartitionId &part_tablet_id = partition_id_array[i].part_tablet_id_;
@@ -113,55 +111,56 @@ int ObTableLoadStoreCtx::init(
       table_data_desc_.extra_buf_size_ = ObDirectLoadTableDataDesc::DEFAULT_EXTRA_BUF_SIZE;
       table_data_desc_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
       table_data_desc_.is_heap_table_ = ctx_->schema_.is_heap_table_;
+      table_data_desc_.session_count_ = ctx_->param_.session_count_;
+      table_data_desc_.exe_mode_ = ctx_->param_.exe_mode_;
 
       int64_t wa_mem_limit = 0;
-      if (OB_FAIL(get_wa_memory_limit(wa_mem_limit))) {
-        LOG_WARN("failed to get work area memory limit", KR(ret), K(ctx_->param_.tenant_id_));
-      } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
-      } else {
-        table_data_desc_.merge_count_per_round_ = min(wa_mem_limit
-                                                  / table_data_desc_.sstable_data_block_size_
-                                                  / ctx_->param_.session_count_, ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
-
-        table_data_desc_.max_mem_chunk_count_ = 128;
-        int64_t mem_chunk_size = wa_mem_limit / table_data_desc_.max_mem_chunk_count_;
-        if (mem_chunk_size <= ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT) {
-          mem_chunk_size = ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
-          table_data_desc_.max_mem_chunk_count_ = wa_mem_limit / mem_chunk_size;
-        }
-        table_data_desc_.mem_chunk_size_ = mem_chunk_size;
-        table_data_desc_.heap_table_mem_chunk_size_ = wa_mem_limit / ctx_->param_.session_count_;
-        LOG_INFO("table_data_desc init end", K(table_data_desc_));
-      }
-      if (OB_SUCC(ret)) {
-        if (table_data_desc_.is_heap_table_) {
-          int64_t bucket_cnt = 0;
-          if (ctx_->schema_.lob_column_cnt_ > 0) {
-            bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE * 2);
-          } else {
-            bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE);
-          }
-          if (ls_partition_ids_.count() <= bucket_cnt) {
-            is_fast_heap_table_ = true;
-          } else {
-            is_multiple_mode_ = true;
-          }
+      if (table_data_desc_.exe_mode_ == ObTableLoadExeMode::MAX_TYPE) {
+        if (OB_FAIL(ObTableLoadService::get_memory_limit(wa_mem_limit))) {
+          LOG_WARN("failed to get work area memory limit", KR(ret), K(ctx_->param_.tenant_id_));
+        } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
         } else {
-          int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ *
-                                               (table_data_desc_.sstable_index_block_size_ +
-                                                table_data_desc_.sstable_data_block_size_));
-          is_multiple_mode_ = ctx_->param_.need_sort_ || ls_partition_ids_.count() > bucket_cnt;
+          table_data_desc_.merge_count_per_round_ = min(wa_mem_limit / table_data_desc_.sstable_data_block_size_ / ctx_->param_.session_count_,
+                                                        ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
+          table_data_desc_.max_mem_chunk_count_ = 128;
+          int64_t mem_chunk_size = wa_mem_limit / table_data_desc_.max_mem_chunk_count_;
+          if (mem_chunk_size <= ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT) {
+            mem_chunk_size = ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
+            table_data_desc_.max_mem_chunk_count_ = wa_mem_limit / mem_chunk_size;
+          }
+          table_data_desc_.mem_chunk_size_ = mem_chunk_size;
+          table_data_desc_.heap_table_mem_chunk_size_ = wa_mem_limit / ctx_->param_.session_count_;
         }
-        LOG_INFO("multiple_mode is inited", K(is_multiple_mode_), K(is_fast_heap_table_));
+        if (OB_SUCC(ret)) {
+          if (table_data_desc_.is_heap_table_) {
+            int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE);
+            if (ls_partition_ids_.count() <= bucket_cnt) {
+              is_fast_heap_table_ = true;
+            } else {
+              is_multiple_mode_ = true;
+            }
+          } else {
+            int64_t bucket_cnt = wa_mem_limit / ctx_->param_.session_count_ /
+                                 (table_data_desc_.sstable_index_block_size_ + table_data_desc_.sstable_data_block_size_);
+            is_multiple_mode_ = ctx_->param_.need_sort_ || ls_partition_ids_.count() > bucket_cnt;
+          }
+        }
+      } else {
+        wa_mem_limit = ctx_->param_.avail_memory_;
+        if (ctx_->param_.exe_mode_ == ObTableLoadExeMode::FAST_HEAP_TABLE ||
+            ctx_->param_.exe_mode_ == ObTableLoadExeMode::GENERAL_TABLE_COMPACT) {
+          is_fast_heap_table_ = (ctx_->param_.exe_mode_ == ObTableLoadExeMode::FAST_HEAP_TABLE);
+        } else {
+          is_multiple_mode_ = true;
+        }
+        table_data_desc_.merge_count_per_round_ = min(wa_mem_limit / table_data_desc_.sstable_data_block_size_ / ctx_->param_.session_count_,
+                                                      ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
+        table_data_desc_.max_mem_chunk_count_ = wa_mem_limit / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(insert_table_param.ls_partition_ids_.assign(ls_partition_ids_))) {
-      LOG_WARN("fail to assign ls tablet ids", KR(ret));
-    } else if (OB_FAIL(insert_table_param.target_ls_partition_ids_.assign(target_ls_partition_ids_))) {
-      LOG_WARN("fail to assign ls tablet ids", KR(ret));
     }
     // init trans_allocator_
     else if (OB_FAIL(trans_allocator_.init("TLD_STransPool", ctx_->param_.tenant_id_))) {
@@ -199,12 +198,41 @@ int ObTableLoadStoreCtx::init(
       LOG_WARN("fail to init merger", KR(ret));
     }
     // init insert_table_ctx_
-    else if (OB_ISNULL(insert_table_ctx_ =
+    if (OB_SUCC(ret)) {
+      ObDirectLoadInsertTableParam insert_table_param;
+      insert_table_param.table_id_ = ctx_->ddl_param_.dest_table_id_;
+      insert_table_param.schema_version_ = ctx_->ddl_param_.schema_version_;
+      insert_table_param.snapshot_version_ = ctx_->ddl_param_.snapshot_version_;
+      insert_table_param.ddl_task_id_ = ctx_->ddl_param_.task_id_;
+      insert_table_param.data_version_ = ctx_->ddl_param_.data_version_;
+      insert_table_param.parallel_ = ctx_->param_.session_count_;
+      insert_table_param.reserved_parallel_ = is_fast_heap_table_ ? ctx_->param_.session_count_ : 0;
+      insert_table_param.rowkey_column_count_ = ctx_->schema_.rowkey_column_count_;
+      insert_table_param.column_count_ = ctx_->schema_.store_column_count_;
+      insert_table_param.lob_column_count_ = ctx_->schema_.lob_column_cnt_;
+      insert_table_param.is_partitioned_table_ = ctx_->schema_.is_partitioned_table_;
+      insert_table_param.is_heap_table_ = ctx_->schema_.is_heap_table_;
+      insert_table_param.is_column_store_ = ctx_->schema_.is_column_store_;
+      insert_table_param.online_opt_stat_gather_ = ctx_->param_.online_opt_stat_gather_;
+      insert_table_param.is_incremental_ = ObDirectLoadMethod::is_incremental(ctx_->param_.method_);
+      insert_table_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
+      insert_table_param.col_descs_ = &(ctx_->schema_.column_descs_);
+      insert_table_param.cmp_funcs_ = &(ctx_->schema_.cmp_funcs_);
+      if (insert_table_param.is_incremental_ && OB_FAIL(init_trans_param(insert_table_param.trans_param_))) {
+        LOG_WARN("fail to init trans param", KR(ret));
+      } else if (OB_FAIL(ObTableLoadSchema::get_lob_meta_tid(ctx_->param_.tenant_id_,
+          insert_table_param.table_id_, insert_table_param.lob_meta_tid_))) {
+        LOG_WARN("fail to get lob meta tid", KR(ret),
+            K(ctx_->param_.tenant_id_), K(insert_table_param.table_id_));
+      } else if (OB_ISNULL(insert_table_ctx_ =
                          OB_NEWx(ObDirectLoadInsertTableContext, (&allocator_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadInsertTableContext", KR(ret));
-    } else if (OB_FAIL(insert_table_ctx_->init(insert_table_param))) {
-      LOG_WARN("fail to init insert table ctx", KR(ret));
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObDirectLoadInsertTableContext", KR(ret));
+      } else if (OB_FAIL(insert_table_ctx_->init(insert_table_param, ls_partition_ids_, target_ls_partition_ids_))) {
+        LOG_WARN("fail to init insert table ctx", KR(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     }
     // init tmp_file_mgr_
     else if (OB_ISNULL(tmp_file_mgr_ = OB_NEWx(ObDirectLoadTmpFileManager, (&allocator_)))) {
@@ -324,7 +352,7 @@ int ObTableLoadStoreCtx::advance_status(ObTableLoadStatusType status)
     // advance status
     else {
       status_ = status;
-      table_load_status_to_string(status_, ctx_->job_stat_->store.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
       LOG_INFO("LOAD DATA STORE advance status", K(status));
     }
   }
@@ -344,7 +372,7 @@ int ObTableLoadStoreCtx::set_status_error(int error_code)
     } else {
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
-      table_load_status_to_string(status_, ctx_->job_stat_->store.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
       LOG_INFO("LOAD DATA STORE status error", KR(error_code));
     }
   }
@@ -359,7 +387,7 @@ int ObTableLoadStoreCtx::set_status_abort()
     LOG_INFO("LOAD DATA STORE already abort");
   } else {
     status_ = ObTableLoadStatusType::ABORT;
-    table_load_status_to_string(status_, ctx_->job_stat_->store.status_);
+    table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
     LOG_INFO("LOAD DATA STORE status abort");
   }
   return ret;
@@ -391,32 +419,26 @@ bool ObTableLoadStoreCtx::check_heart_beat_expired(const uint64_t expired_time_u
   return ObTimeUtil::current_time() > (last_heart_beat_ts_ + expired_time_us);
 }
 
-int ObTableLoadStoreCtx::get_wa_memory_limit(int64_t &wa_mem_limit)
+int ObTableLoadStoreCtx::init_trans_param(ObDirectLoadTransParam &trans_param)
 {
   int ret = OB_SUCCESS;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObSysVarSchema *var_schema = NULL;
-  ObObj value;
-  int64_t pctg = 0;
-  int64_t tenant_id = MTL_ID();
-  if (OB_ISNULL(GCTX.schema_service_)) {
+  ObSQLSessionInfo *session_info = nullptr;
+  transaction::ObTxDesc *tx_desc = nullptr;
+  trans_param.reset();
+  if (OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema service is null");
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard failed", KR(ret));
-  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id,
-      SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE, var_schema))) {
-    LOG_WARN("get tenant system variable failed", KR(ret), K(tenant_id));
-  } else if (OB_ISNULL(var_schema)) {
+    LOG_WARN("unexpected null session info", KR(ret));
+  } else if (OB_UNLIKELY(!session_info->is_in_transaction())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("var_schema is null");
-  } else if (OB_FAIL(var_schema->get_value(&allocator_, NULL, value))) {
-    LOG_WARN("get value from var_schema failed", KR(ret), K(*var_schema));
-  } else if (OB_FAIL(value.get_int(pctg))) {
-    LOG_WARN("get int from value failed", KR(ret), K(value));
+    LOG_WARN("unexpected not in transaction", KR(ret));
+  } else if (OB_ISNULL(tx_desc = session_info->get_tx_desc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tx desc", KR(ret));
   } else {
-    const int64_t tenant_limit = lib::get_tenant_memory_limit(tenant_id);
-    wa_mem_limit = (tenant_limit / 100) * pctg;
+    trans_param.tx_desc_ = tx_desc;
+    trans_param.tx_id_ = tx_desc->get_tx_id();
+    trans_param.tx_seq_ = tx_desc->inc_and_get_tx_seq(0);
+    LOG_INFO("init trans param", K(trans_param));
   }
   return ret;
 }
@@ -539,7 +561,7 @@ int ObTableLoadStoreCtx::commit_autoinc_value()
 {
   int ret = OB_SUCCESS;
   ObAutoincrementService &auto_service = ObAutoincrementService::get_instance();
-  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.session_count_; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.write_session_count_; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
     if (OB_FAIL(auto_service.sync_insert_value_local(session_ctx->autoinc_param_))) {
       LOG_WARN("fail to sync insert auto increment value local", KR(ret), K(session_ctx->autoinc_param_));
@@ -555,14 +577,14 @@ int ObTableLoadStoreCtx::init_session_ctx_array()
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   AutoincParam autoinc_param;
-  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.session_count_))) {
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.write_session_count_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(generate_autoinc_params(autoinc_param))) {
     LOG_WARN("fail to init auto increment param", KR(ret));
   } else {
-    session_ctx_array_ = new (buf) SessionContext[ctx_->param_.session_count_];
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.session_count_; ++i) {
+    session_ctx_array_ = new (buf) SessionContext[ctx_->param_.write_session_count_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.write_session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->autoinc_param_ = autoinc_param;
       if (is_multiple_mode_) {
@@ -937,6 +959,28 @@ void ObTableLoadStoreCtx::clear_committed_trans_stores()
     trans_ctx->allocator_.free(trans_store);
   }
   committed_trans_store_array_.reset();
+}
+
+int ObTableLoadStoreCtx::get_next_insert_tablet_ctx(ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(op_lock_);
+  if (next_tablet_idx_ < ls_partition_ids_.count()) {
+    tablet_id = ls_partition_ids_[next_tablet_idx_++].part_tablet_id_.tablet_id_;
+  } else {
+    ret = OB_ITER_END;
+  }
+
+  return ret;
+}
+
+void ObTableLoadStoreCtx::handle_open_insert_tablet_ctx_finish(bool &is_finish)
+{
+  is_finish = false;
+  ObMutexGuard guard(op_lock_);
+  if (++opened_insert_tablet_count_ == ls_partition_ids_.count()) {
+    is_finish = true;
+  }
 }
 
 } // namespace observer

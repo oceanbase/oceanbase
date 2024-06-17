@@ -27,7 +27,6 @@
 #include "common/storage/ob_freeze_define.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/ob_i_partition_component_factory.h"
 #include "sql/ob_end_trans_callback.h"
 
 namespace oceanbase
@@ -56,9 +55,8 @@ public:
   MOCK_METHOD0(force_refresh_locality_info, int());
 
 
-  MOCK_METHOD6(init,
+  MOCK_METHOD5(init,
                int(const blocksstable::ObStorageEnv &env, const common::ObAddr &self_addr,
-                   ObIPartitionComponentFactory *cp_fty,
                    share::schema::ObMultiVersionSchemaService *schema_service,
                    share::ObRsMgr *rs_mgr, rpc::frame::ObReqTransport *req_transport));
 

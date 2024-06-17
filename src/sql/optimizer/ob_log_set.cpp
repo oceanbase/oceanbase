@@ -218,15 +218,34 @@ int ObLogSet::compute_fd_item_set()
   } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
     LOG_WARN("failed to push back fd item", K(ret));
   } else if ((ObSelectStmt::INTERSECT == set_op_ || ObSelectStmt::EXCEPT == set_op_) &&
-            OB_FAIL(append(*fd_item_set, left_child->get_fd_item_set()))) {
+            OB_FAIL(append_child_fd_item_set(*fd_item_set, left_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (ObSelectStmt::INTERSECT == set_op_ &&
-            OB_FAIL(append(*fd_item_set, right_child->get_fd_item_set()))) {
+            OB_FAIL(append_child_fd_item_set(*fd_item_set, right_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
     LOG_WARN("falied to deduce fd item set", K(ret));
   } else {
     set_fd_item_set(fd_item_set);
+  }
+  return ret;
+}
+
+// just ignore table fd item now
+// todo: adjust log set fd, convert child fd set to currnet level stmt
+int ObLogSet::append_child_fd_item_set(ObFdItemSet &all_fd_item_set, const ObFdItemSet &child_fd_item_set)
+{
+  int ret = OB_SUCCESS;
+  ObFdItem *fd_item = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_fd_item_set.count(); ++i) {
+    if (OB_ISNULL(fd_item = child_fd_item_set.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (fd_item->is_table_fd_item()) {
+      /* do nothing */
+    } else if (OB_FAIL(all_fd_item_set.push_back(fd_item))) {
+      LOG_WARN("failed to push back fd item", K(ret));
+    }
   }
   return ret;
 }
@@ -547,7 +566,9 @@ int ObLogSet::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   } else if (is_recursive_union_ && get_stmt()->is_select_stmt()) {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(get_stmt());
     // 伪列的产生，search/cycle的伪列都要求在recursive union算子产生
-    if (OB_FAIL(append(all_exprs, select_stmt->get_cte_exprs()))) {
+    if (NULL != identify_seq_expr_ && OB_FAIL(all_exprs.push_back(identify_seq_expr_))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else if (OB_FAIL(append(all_exprs, select_stmt->get_cte_exprs()))) {
       LOG_WARN("fail to add cte exprs", K(ret));
     } else { /*do nothing*/ }
   } else { /*do nothing*/ }
@@ -865,6 +886,28 @@ int ObLogSet::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
     LOG_WARN("failed to get set exprs", K(ret));
   } else {
     is_fixed = ObOptimizerUtil::find_item(set_exprs, expr);
+  }
+  return ret;
+}
+
+int ObLogSet::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = 0.0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+    const ObLogicalOperator *child = get_child(i);
+    if (ObSelectStmt::UNION == get_set_op() && !is_set_distinct()) {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : ObSelectStmt::UNION;
+      if (0 == i) {
+        card = child->get_card();
+      } else {
+        card = ObOptSelectivity::get_set_stmt_output_count(card, child->get_card(), set_type);
+      }
+    } else if (0 == i) {
+      card = child_ndv_.at(i);
+    } else {
+      card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), get_set_op());
+    }
   }
   return ret;
 }

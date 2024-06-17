@@ -51,7 +51,7 @@ public:
   }
   void set_flags(group_flags_t flags = DEFAULT)
   {
-    if (DEFAULT == flags || INVALID == flags) {
+    if (DEFAULT == flags || share::INVALID == flags) {
       // do nothing
     } else {
       if (CRITICAL & flags) {
@@ -142,6 +142,8 @@ public:
   int init();
   void destroy() { /* 进程退出后tid会自动从cgroup tasks中删除 */ }
   bool is_valid() { return valid_; }
+
+  bool is_valid_group_name(common::ObString &group_name);
 
   // 删除租户cgroup规则
   int remove_tenant_cgroup(const uint64_t tenant_id);

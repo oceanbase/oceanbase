@@ -23,6 +23,7 @@
 #include "lib/alloc/alloc_assist.h"
 #include "lib/alloc/abit_set.h"
 #include "lib/allocator/ob_mod_define.h"
+#include "lib/list/ob_dlink_node.h"
 
 #ifndef NDEBUG
 #define MEMCHK_LEVEL 1
@@ -119,15 +120,24 @@ struct ObLabel
   const char *str_;
 };
 
+struct ObMemVersionNode : public ObDLinkBase<ObMemVersionNode>
+{
+  static uint32_t global_version;
+  static __thread bool tl_ignore_node;
+  static __thread ObMemVersionNode* tl_node;
+  uint32_t version_ = UINT32_MAX;
+};
+
 struct ObMemAttr
 {
-  friend ObMemAttr DoNotUseMe(ObMemAttr &attr, bool expect_500);
+  friend ObMemAttr DoNotUseMe(ObMemAttr &attr);
+  friend ObMemAttr UseUnexpected500(ObMemAttr &attr);
+  friend ObMemAttr IgnoreVersion(ObMemAttr &attr);
   uint64_t tenant_id_;
   ObLabel label_;
   uint64_t ctx_id_;
   uint64_t sub_ctx_id_;
   ObAllocPrio prio_;
-
   explicit ObMemAttr(
     uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
     ObLabel label = ObLabel(),
@@ -137,42 +147,75 @@ struct ObMemAttr
         label_(label),
         ctx_id_(ctx_id),
         sub_ctx_id_(ObSubCtxIds::MAX_SUB_CTX_ID),
-        prio_(prio) {}
+        prio_(prio),
+        use_500_(false),
+        expect_500_(true),
+        ignore_version_(ObMemVersionNode::tl_ignore_node),
+        alloc_extra_info_(false)
+  {}
   int64_t to_string(char* buf, const int64_t buf_len) const;
   bool use_500() const { return use_500_; }
   bool expect_500() const { return expect_500_; }
-private:
-  bool use_500_ = false;
-  bool expect_500_ = true;
+  bool ignore_version() const { return ignore_version_; }
+public:
+  union {
+    char padding__[4];
+    struct {
+      struct {
+        uint8_t use_500_ : 1;
+        uint8_t expect_500_ : 1;
+        uint8_t ignore_version_ : 1;
+        uint8_t alloc_extra_info_ : 1;
+      };
+    };
+  };
 };
 
-inline ObMemAttr DoNotUseMe(ObMemAttr &attr, bool expect_500)
+inline ObMemAttr DoNotUseMe(ObMemAttr &attr)
 {
   attr.use_500_ = true;
-  attr.expect_500_ = expect_500;
+  attr.ignore_version_ = true;
   return attr;
 }
 
-inline ObMemAttr DoNotUseMe(const ObMemAttr &&attr, const bool expect_500)
+inline ObMemAttr UseUnexpected500(ObMemAttr &attr)
 {
-  ObMemAttr attr_cpy = attr;
-  return DoNotUseMe(attr_cpy, expect_500);
+  attr.use_500_ = true;
+  attr.expect_500_ = false;
+  attr.ignore_version_ = true;
+  return attr;
 }
 
-inline ObMemAttr DoNotUseMe(const ObLabel &label, const bool expect_500)
+inline ObMemAttr IgnoreVersion(ObMemAttr &attr)
 {
-  ObMemAttr attr(OB_SERVER_TENANT_ID, label);
-  return DoNotUseMe(attr, expect_500);
+  attr.ignore_version_ = true;
+  return attr;
 }
 
-inline ObMemAttr DoNotUseMe(const ObLabel &label, const uint64_t ctx_id, const bool expect_500)
-{
-  ObMemAttr attr(OB_SERVER_TENANT_ID, label, ctx_id);
-  return DoNotUseMe(attr, expect_500);
-}
+#define ObMemAttrFriendFunc(func_name)                                    \
+  inline ObMemAttr func_name(const ObMemAttr &&attr)                      \
+  {                                                                       \
+    ObMemAttr attr_cpy = attr;                                            \
+    return func_name(attr_cpy);                                           \
+  }                                                                       \
+  inline ObMemAttr func_name(const ObLabel &label)                        \
+  {                                                                       \
+    ObMemAttr attr(OB_SERVER_TENANT_ID, label);                           \
+    return func_name(attr);                                               \
+  }                                                                       \
+  inline ObMemAttr func_name(const ObLabel &label, const uint64_t ctx_id) \
+  {                                                                       \
+    ObMemAttr attr(OB_SERVER_TENANT_ID, label, ctx_id);                   \
+    return func_name(attr);                                               \
+  }
 
-#define SET_USE_500(args...) ::oceanbase::lib::DoNotUseMe(args, true)
-#define SET_USE_UNEXPECTED_500(args...) ::oceanbase::lib::DoNotUseMe(args, false)
+ObMemAttrFriendFunc(DoNotUseMe);
+ObMemAttrFriendFunc(UseUnexpected500);
+ObMemAttrFriendFunc(IgnoreVersion);
+
+#define SET_USE_500(args...) ::oceanbase::lib::DoNotUseMe(args)
+#define SET_USE_UNEXPECTED_500(args...) ::oceanbase::lib::UseUnexpected500(args)
+#define SET_IGNORE_MEM_VERSION(args...) ::oceanbase::lib::IgnoreVersion(args)
 
 struct AllocHelper
 {
@@ -259,6 +302,7 @@ struct AObject {
   OB_INLINE ABlock *block() const;
   OB_INLINE uint64_t hold(uint32_t cells_per_block) const;
   OB_INLINE ObLabel label() const;
+  OB_INLINE char *bt();
 
   // members
   union {
@@ -274,16 +318,18 @@ struct AObject {
   uint16_t obj_offset_;
 
   uint32_t alloc_bytes_;
-  uint64_t tenant_id_;
+  uint32_t version_;
   char label_[AOBJECT_LABEL_SIZE + 1];
 
   // padding to ensure data_ is 16x offset
   union {
-    char padding__[4];
+    char padding__[16];
     struct {
       struct {
         uint8_t on_leak_check_ : 1;
         uint8_t on_malloc_sample_ : 1;
+        uint8_t ignore_version_ : 1;
+
       };
     };
   };
@@ -311,6 +357,12 @@ static const uint32_t AOBJECT_HEADER_SIZE = offsetof(AObject, data_);
 static const uint32_t AOBJECT_META_SIZE = AOBJECT_HEADER_SIZE + AOBJECT_TAIL_SIZE;
 static const uint32_t INTACT_NORMAL_AOBJECT_SIZE = 8L << 10;
 static const uint32_t INTACT_MIDDLE_AOBJECT_SIZE = 64L << 10;
+
+static const int32_t AOBJECT_BACKTRACE_COUNT = 16;
+static const int32_t AOBJECT_BACKTRACE_SIZE = sizeof(void*) * AOBJECT_BACKTRACE_COUNT;
+static const int32_t AOBJECT_EXTRA_INFO_SIZE = AOBJECT_BACKTRACE_SIZE;
+
+static const int32_t MAX_BACKTRACE_LENGTH = 512;
 
 static const uint32_t ABLOCK_HEADER_SIZE = sizeof(ABlock);
 static const uint32_t ABLOCK_SIZE = INTACT_NORMAL_AOBJECT_SIZE;
@@ -522,8 +574,7 @@ char *ABlock::data() const
 AObject::AObject()
     : MAGIC_CODE_(FREE_AOBJECT_MAGIC_CODE),
       nobjs_(0), nobjs_prev_(0), obj_offset_(0),
-      alloc_bytes_(0), tenant_id_(0),
-      on_leak_check_(false), on_malloc_sample_(false)
+      alloc_bytes_(0), on_leak_check_(false), on_malloc_sample_(false)
 {
 }
 
@@ -567,6 +618,10 @@ ObLabel AObject::label() const
 {
   return ObLabel(label_);
 }
+char *AObject::bt()
+{
+  return &data_[alloc_bytes_ + AOBJECT_TAIL_SIZE];
+}
 
 class Label
 {
@@ -608,6 +663,33 @@ private:
   ObMemAttr old_attr_;
 };
 
+class ObLightBacktraceGuard
+{
+public:
+  ObLightBacktraceGuard(const bool enable)
+    : last_(tl_enable())
+  {
+    tl_enable() = enable;
+  }
+  ~ObLightBacktraceGuard()
+  {
+    tl_enable() = last_;
+  }
+public:
+  static bool is_enabled()
+  {
+    return tl_enable();
+  }
+private:
+  static bool &tl_enable()
+  {
+    static __thread bool enable = false;
+    return enable;
+  }
+private:
+  const bool last_;
+};
+
 extern void inc_divisive_mem_size(const int64_t size);
 extern void dec_divisive_mem_size(const int64_t size);
 extern int64_t get_divisive_mem_size();
@@ -615,6 +697,9 @@ extern int64_t get_divisive_mem_size();
 extern void set_ob_mem_mgr_path();
 extern void unset_ob_mem_mgr_path();
 extern bool is_ob_mem_mgr_path();
+
+extern void enable_memleak_light_backtrace(const bool);
+extern bool is_memleak_light_backtrace_enabled();
 
 #define FORCE_EXPLICT_500_MALLOC() \
   OB_UNLIKELY(oceanbase::lib::ObMallocAllocator::get_instance()->force_explict_500_malloc_)

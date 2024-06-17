@@ -279,11 +279,11 @@ int ObTableApiExecuteP::try_process()
 
 #ifndef NDEBUG
   // debug mode
-  LOG_INFO("[TABLE] execute operation", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout(), K_(retry_count));
+  LOG_INFO("[TABLE] execute operation", K(ret), K_(result), K_(retry_count));
 #else
   // release mode
-  LOG_TRACE("[TABLE] execute operation", K(ret), K_(arg), K_(result),
-            "timeout", rpc_pkt_->get_timeout(), "receive_ts", get_receive_timestamp(), K_(retry_count));
+  LOG_TRACE("[TABLE] execute operation", K(ret), K_(result),
+              "receive_ts", get_receive_timestamp(), K_(retry_count));
 #endif
   return ret;
 }
@@ -315,7 +315,7 @@ uint64_t ObTableApiExecuteP::get_request_checksum()
 int ObTableApiExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
-  if (!need_retry_in_queue_ && !had_do_response()) {
+  if (!need_retry_in_queue_ && !is_async_response()) {
     if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
       // @note modify the value of timestamp to be positive
       ret = ObTableRpcProcessorUtil::negate_htable_timestamp(result_entity_);
@@ -437,7 +437,7 @@ ObTableAPITransCb *ObTableApiExecuteP::new_callback(rpc::ObRequest *req)
 int ObTableApiExecuteP::before_response(int error_code)
 {
   // NOTE: when check_timeout failed, the result.entity_ is null, and serialize result cause coredump
-  if (!had_do_response() && OB_ISNULL(result_.get_entity())) {
+  if (!is_async_response() && OB_ISNULL(result_.get_entity())) {
     result_.set_entity(result_entity_);
   }
   return ObTableRpcProcessor::before_response(error_code);

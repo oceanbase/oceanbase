@@ -175,7 +175,7 @@ struct ObRowWithHash
 public:
   ObRowWithHash(common::ObIAllocator &allocator) : allocator_(allocator), row_(allocator), hash_val_(0) {}
   int assign(const ObRowWithHash &other);
-  inline int64_t to_string(char *buf, const int64_t len) const { return 0; }
+  TO_STRING_KV(K_(row), K_(hash_val));
 public:
   common::ObIAllocator &allocator_;
   ObFixedArray<ObDatum, common::ObIAllocator> row_;
@@ -216,9 +216,9 @@ public:
   {
     ObRFInFilterNode() = default;
     ObRFInFilterNode(ObRFCmpInfos *row_cmp_infos, RowMeta *row_meta = nullptr, ObCompactRow *compact_row = nullptr,
-        ObRowWithHash *row_with_hash = nullptr, bool *has_compared_ = nullptr)
+        ObRowWithHash *row_with_hash = nullptr)
         : row_cmp_infos_(row_cmp_infos), row_meta_(row_meta), compact_row_(compact_row),
-          row_with_hash_(row_with_hash), has_compared_(has_compared_)
+          row_with_hash_(row_with_hash)
     {}
     int hash(uint64_t &hash_ret) const;
     inline bool operator==(const ObRFInFilterNode &other) const;
@@ -232,16 +232,6 @@ public:
     // allowed us copy memory continuesly.
     ObCompactRow *compact_row_;
     ObRowWithHash *row_with_hash_;
-    // in these two scene, has_compared_ marked as true to avoid the useless comparison
-    // not that, always mark other.has_compared_ but not self.has_compared_
-    // case 1:
-    // when insert, first we call exist_refactored to see whether node exist,
-    // second we call set_refactored to set the node, both of exist_refactored and set_refactored
-    // will call operator== for comparison, the second comparison can be passed.
-    // case 2:
-    // when deserialize, we not need to compare because the it is already done
-    // in the insert process of join filter create operator.
-    bool *has_compared_;
   };
 
 public:

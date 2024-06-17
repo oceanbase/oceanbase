@@ -8,7 +8,7 @@ alter system set _enable_defensive_check = 1;
 ### 1. Test for spatial index base DML constraint.
 if (1) {
   --disable_warnings
-  DROP TABLE IF EXISTS spatial_index_dml_constraint, tt1;
+  DROP TABLE IF EXISTS spatial_index_dml_constraint, tt1, T_GEO;
   --enable_warnings
 
   ## 1.1 Insert row
@@ -425,3 +425,21 @@ select st_astext(geo) from t_geo;
 alter system set _enable_defensive_check = 0;
 
 drop table t_geo;
+
+create table t_geo(geo geometry);
+--error 1416
+insert into t_geo values(x'000000000140340000000000004034000000000000');
+insert into t_geo values(st_geomfromwkb(x'000000000140340000000000004034000000000000'));
+select hex(geo) from t_geo;
+drop table t_geo;
+
+--disable_warnings
+DROP TABLE IF EXISTS tt3;
+--enable_warnings
+create table tt3(id int,p geometry);
+insert into tt3 values(1,st_geomfromtext('point(1 2)'));
+update tt3 set p=x'000000000101000000000000000000F03F0000000000000840';
+select st_astext(p) from tt3;
+update tt3 set p =x'0000000001E9030000000000000000F03F00000000000000400000000000000840';
+select st_astext(p) from tt3;
+drop table tt3;

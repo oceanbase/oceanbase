@@ -589,7 +589,7 @@ int ObTransformSimplifySubquery::get_push_down_conditions(ObDMLStmt *stmt,
         }
       }
 
-      if (can_push_down && OB_FAIL(push_down_conds.push_back(join_conds.at(i)))) {
+      if (OB_SUCC(ret) && can_push_down && OB_FAIL(push_down_conds.push_back(join_conds.at(i)))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
     }

@@ -22,6 +22,10 @@ namespace oceanbase
 namespace obrpc
 {
 
+enum {
+  INVALID_RPC_PKT_ID = -1
+};
+struct ObRpcReverseKeepaliveArg;
 class ObPocServerHandleContext
 {
 public:
@@ -67,6 +71,7 @@ public:
   int start_net_client(int net_thread_count);
   void stop();
   void wait();
+  void destroy();
   bool has_start() {return has_start_;}
   int update_tcp_keepalive_params(int64_t user_timeout);
   int update_server_standby_fetch_log_bandwidth_limit(int64_t value);
@@ -80,6 +85,9 @@ private:
 
 extern ObPocRpcServer global_poc_server;
 extern ObListener* global_ob_listener;
+void stream_rpc_register(const int64_t pkt_id, int64_t send_time_us);
+void stream_rpc_unregister(const int64_t pkt_id);
+int stream_rpc_reverse_probe(const ObRpcReverseKeepaliveArg& reverse_keepalive_arg);
 int64_t get_max_rpc_packet_size();
 extern "C" {
   int dispatch_to_ob_listener(int accept_fd);

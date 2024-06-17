@@ -67,7 +67,7 @@ int ObBackupTmpFile::write(const char *buf, const int64_t size)
     LOG_WARN("failed to write tmp file", K(ret), K(io_info), K(timeout_ms));
   } else {
     file_size_ += size;
-    LOG_INFO("backup tmp file write", K(buf), K(size));
+    LOG_DEBUG("backup tmp file write", K(buf), K(size));
   }
   return ret;
 }

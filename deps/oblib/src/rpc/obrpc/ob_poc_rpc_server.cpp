@@ -39,6 +39,22 @@ bool __attribute__((weak)) enable_pkt_nio(bool start_as_client) {
 int64_t  __attribute__((weak)) get_max_rpc_packet_size() {
   return OB_MAX_RPC_PACKET_LENGTH;
 }
+void __attribute__((weak)) stream_rpc_register(const int64_t pkt_id, int64_t send_time_us)
+{
+  UNUSED(pkt_id);
+  UNUSED(send_time_us);
+  RPC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "should not reach here");
+}
+void __attribute__((weak)) stream_rpc_unregister(const int64_t pkt_id)
+{
+  UNUSED(pkt_id);
+  RPC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "should not reach here");
+}
+int __attribute__((weak)) stream_rpc_reverse_probe(const ObRpcReverseKeepaliveArg& reverse_keepalive_arg)
+{
+  UNUSED(reverse_keepalive_arg);
+  return OB_ERR_UNEXPECTED;
+}
 }; // end namespace obrpc
 }; // end namespace oceanbase
 
@@ -107,6 +123,10 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
           }
           int64_t receive_ts = ObTimeUtility::current_time();
           pkt->set_receive_ts(receive_ts);
+          int64_t pkt_id = pn_get_pkt_id(resp_id);
+          if (OB_LIKELY(pkt_id >= 0)) {
+            pkt->set_packet_id(pkt_id);
+          }
           pkt->set_content(packet_data, tmp_pkt.get_clen());
           req->set_server_handle_context(ctx);
           req->set_packet(pkt);
@@ -197,13 +217,7 @@ void ObPocServerHandleContext::set_peer_unsafe()
 {
   struct sockaddr_storage sock_addr;
   if (0 == pn_get_peer(resp_id_, &sock_addr)) {
-    if (AF_INET == sock_addr.ss_family) {
-      struct sockaddr_in *sin = reinterpret_cast<struct sockaddr_in *>(&sock_addr);
-      peer_.set_ipv4_addr(ntohl(sin->sin_addr.s_addr), ntohs(sin->sin_port));
-    } else if (AF_INET6 == sock_addr.ss_family) {
-      struct sockaddr_in6 *sin6 = reinterpret_cast<struct sockaddr_in6 *>(&sock_addr);
-      peer_.set_ipv6_addr(&sin6->sin6_addr.s6_addr, ntohs(sin6->sin6_port));
-    }
+    peer_.from_sockaddr(&sock_addr);
   }
 }
 
@@ -300,6 +314,8 @@ void ObPocRpcServer::stop()
   for (uint64_t gid = 1; gid < END_GROUP; gid++) {
     pn_stop(gid);
   }
+  has_start_ = false;
+  start_as_client_ = false;
 }
 
 void ObPocRpcServer::wait()
@@ -307,6 +323,12 @@ void ObPocRpcServer::wait()
   for (uint64_t gid = 1; gid < END_GROUP; gid++) {
     pn_wait(gid);
   }
+}
+
+void ObPocRpcServer::destroy()
+{
+  stop();
+  wait();
 }
 
 int ObPocRpcServer::update_tcp_keepalive_params(int64_t user_timeout) {

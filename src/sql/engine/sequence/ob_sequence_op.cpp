@@ -207,7 +207,6 @@ int ObRemoteSequenceExecutor::init_dblink_connection(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo * my_session = ctx.get_my_session();
-  common::sqlclient::ObISQLConnection *dblink_conn = NULL;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx);
   ObDbLinkProxy *dblink_proxy = GCTX.dblink_proxy_;
   const ObDbLinkSchema *dblink_schema = NULL;
@@ -231,13 +230,11 @@ int ObRemoteSequenceExecutor::init_dblink_connection(ObExecContext &ctx)
     LOG_WARN("dblink schema is NULL", K(ret), K(dblink_id_));
   } else if (FALSE_IT(link_type_ = static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto()))) {
     // do nothing
-  } else if (OB_FAIL(ObLinkOp::init_dblink_param_ctx(ctx,
-                                                     param_ctx,
-                                                     link_type_,
-                                                     tenant_id,
+  } else if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(param_ctx,
+                                                     my_session,
+                                                     ctx.get_allocator(), // uselees in oracle mode
                                                      dblink_id_,
-                                                     sessid_,
-                                                     my_session->get_next_sql_request_level()))) {
+                                                     link_type_))) {
     LOG_WARN("failed to init dblink param ctx", K(ret));
   } else if (OB_FAIL(dblink_proxy->create_dblink_pool(param_ctx,
                                                       dblink_schema->get_host_addr(),
@@ -248,15 +245,24 @@ int ObRemoteSequenceExecutor::init_dblink_connection(ObExecContext &ctx)
                                                       dblink_schema->get_conn_string(),
                                                       dblink_schema->get_cluster_name()))) {
     LOG_WARN("failed to create dblink pool", K(ret));
-  } else if (OB_FAIL(ObDblinkService::get_local_session_vars(my_session, ctx.get_allocator(), param_ctx))) {
+  } else if (OB_FAIL(my_session->get_dblink_context().get_dblink_conn(dblink_id_, dblink_conn_))) {
+    LOG_WARN("failed to get dblink connection from session", K(my_session), K(sessid_), K(ret));
+  } else if (NULL == dblink_conn_) {
+    if (OB_FAIL(ObDblinkService::get_local_session_vars(my_session, ctx.get_allocator(), param_ctx))) {
     LOG_WARN("failed to get local session vars", K(ret));
-  } else if (OB_FAIL(dblink_proxy->acquire_dblink(param_ctx,
-                                                  dblink_conn_))) {
-    LOG_WARN("failed to acquire dblink", K(ret), K(dblink_id_));
-  } else if (OB_FAIL(my_session->get_dblink_context().register_dblink_conn_pool(dblink_conn_->get_common_server_pool()))) {
-    LOG_WARN("failed to register dblink conn pool to current session", K(ret));
+    } else if (OB_FAIL(dblink_proxy->acquire_dblink(param_ctx, dblink_conn_))) {
+      LOG_WARN("failed to acquire dblink", K(ret), K(param_ctx));
+    } else if (OB_FAIL(my_session->get_dblink_context().register_dblink_conn_pool(dblink_conn_->get_common_server_pool()))) {
+      LOG_WARN("failed to register dblink conn pool to current session", K(ret));
+    } else if (OB_FAIL(my_session->get_dblink_context().set_dblink_conn(dblink_conn_))) {
+      LOG_WARN("failed to set dblink connection to session", K(my_session), K(sessid_), K(ret));
+    } else if (OB_FAIL(my_session->get_dblink_context().get_dblink_conn(param_ctx.dblink_id_, dblink_conn_))) { // will add a rlock on dblink conn, means this dblink_conn_ is inuse
+      LOG_WARN("failed to get dblink connection from session", K(ret), K(param_ctx.dblink_id_));
+    } else {
+      LOG_TRACE("link op get connection from dblink pool", KP(dblink_conn_), K(lbt()));
+    }
   } else {
-    LOG_TRACE("link op get connection from dblink pool", KP(dblink_conn_), K(lbt()));
+    LOG_TRACE("link op get connection from xa transaction", KP(dblink_conn_));
   }
   return ret;
 }
@@ -303,18 +309,18 @@ void ObRemoteSequenceExecutor::reset()
 void ObRemoteSequenceExecutor::destroy()
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_DBLINK
+  #ifdef OB_BUILD_DBLINK
   if (DBLINK_DRV_OCI == link_type_ &&
       NULL != dblink_conn_ &&
       OB_FAIL(static_cast<ObOciConnection *>(dblink_conn_)->free_oci_stmt())) {
     LOG_WARN("failed to close oci result", K(ret));
   }
 #endif
-  if (OB_NOT_NULL(GCTX.dblink_proxy_) &&
-      OB_NOT_NULL(dblink_conn_) &&
-      OB_FAIL(GCTX.dblink_proxy_->release_dblink(link_type_, dblink_conn_))) {
-    LOG_WARN("failed to release connection", K(ret));
+  // release rlock on dblink_conn
+  if (OB_SUCCESS != (ret = ObDblinkCtxInSession::revert_dblink_conn(dblink_conn_))) {
+    LOG_WARN("failed to revert dblink conn", K(ret), KP(dblink_conn_));
   }
+  //release dblink connection by session
   sessid_ = 0;
   dblink_conn_ = NULL;
   ObSequenceExecutor::destroy();

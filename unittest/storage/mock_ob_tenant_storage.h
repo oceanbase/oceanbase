@@ -48,7 +48,7 @@ public:
     log_file_spec_.retry_write_policy_ = "normal";
     log_file_spec_.log_create_policy_ = "normal";
     log_file_spec_.log_write_policy_ = "truncate";
-    if (OB_FAIL(SLOGGERMGR.init(dir_, MAX_FILE_SIZE, log_file_spec_))) {
+    if (OB_FAIL(SLOGGERMGR.init(dir_, dir_, MAX_FILE_SIZE, log_file_spec_))) {
 
     }
 

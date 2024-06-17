@@ -97,7 +97,26 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_ST_COVERS) \
     || ((op) == T_FUN_SYS_ST_DWITHIN) \
     || ((op) == T_FUN_SYS_ST_WITHIN) \
+    || ((op) == T_FUN_SYS_ST_CONTAINS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_EQUALS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_TOUCHES) \
+    || ((op) == T_FUN_SYS_ST_CROSSES) \
+    || ((op) == T_FUN_SYS_ST_OVERLAPS)) \
+
+#define IS_DOMAIN_OP(op) \
+  (((op) == T_FUN_SYS_JSON_MEMBER_OF) \
+    || ((op) == T_FUN_SYS_JSON_CONTAINS) \
+    || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
+    || ((op) == T_FUN_SYS_ST_INTERSECTS) \
+    || ((op) == T_FUN_SYS_ST_COVERS) \
+    || ((op) == T_FUN_SYS_ST_DWITHIN) \
+    || ((op) == T_FUN_SYS_ST_WITHIN) \
     || ((op) == T_FUN_SYS_ST_CONTAINS)) \
+
+#define IS_DOMAIN_JSON_OP(op) \
+  (((op) == T_FUN_SYS_JSON_MEMBER_OF) \
+    || ((op) == T_FUN_SYS_JSON_CONTAINS) \
+    || ((op) == T_FUN_SYS_JSON_OVERLAPS)) \
 
 #define IS_MYSQL_GEO_OP(op) \
   (((op) == T_FUN_SYS_ST_GEOMFROMTEXT) \
@@ -136,8 +155,15 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_ST_DISTANCE_SPHERE) \
     || ((op) == T_FUN_SYS_ST_DWITHIN) \
     || ((op) == T_FUN_SYS_ST_WITHIN) \
-    || ((op) == T_FUN_SYS_ST_CONTAINS)) \
-
+    || ((op) == T_FUN_SYS_ST_CONTAINS) \
+    || ((op) == T_FUN_SYS_ST_CROSSES) \
+    || ((op) == T_FUN_SYS_ST_OVERLAPS) \
+    || ((op) == T_FUN_SYS_ST_UNION) \
+    || ((op) == T_FUN_SYS_ST_LENGTH) \
+    || ((op) == T_FUN_SYS_ST_DIFFERENCE) \
+    || ((op) == T_FUN_SYS_ST_ASGEOJSON) \
+    || ((op) == T_FUN_SYS_ST_CENTROID) \
+    || ((op) == T_FUN_SYS_ST_SYMDIFFERENCE)) \
 
 #define IS_PRIV_GEO_OP(op) \
   (((op) == T_FUN_SYS_PRIV_ST_BUFFER) \
@@ -148,7 +174,17 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_PRIV_ST_POINT) \
     || ((op) == T_FUN_SYS_PRIV_ST_GEOGFROMTEXT) \
     || ((op) == T_FUN_SYS_PRIV_ST_GEOGRAPHYFROMTEXT) \
-    || ((op) == T_FUN_SYS_PRIV_ST_ASEWKT)) \
+    || ((op) == T_FUN_SYS_PRIV_ST_ASEWKT) \
+    || ((op) == T_FUN_SYS_PRIV_ST_NUMINTERIORRINGS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_ISCOLLECTION) \
+    || ((op) == T_FUN_SYS_PRIV_ST_EQUALS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_TOUCHES) \
+    || ((op) == T_FUN_SYS_PRIV_ST_MAKEENVELOPE) \
+    || ((op) == T_FUN_SYS_PRIV_ST_CLIPBYBOX2D) \
+    || ((op) == T_FUN_SYS_PRIV_ST_POINTONSURFACE) \
+    || ((op) == T_FUN_SYS_PRIV_ST_GEOMETRYTYPE) \
+    || ((op) == T_FUN_SYS_PRIV_ST_ASMVTGEOM) \
+    || ((op) == T_FUN_SYS_PRIV_ST_MAKE_VALID)) \
 
 #define IS_GEO_OP(op) ((IS_MYSQL_GEO_OP(op)) || IS_PRIV_GEO_OP(op))
 
@@ -158,6 +194,23 @@ extern ObRawExpr *USELESS_POINTER;
 
 #define IS_SPATIAL_EXPR(op) \
   ((op) >= T_FUN_SYS_ST_LONGITUDE && (op) <= T_FUN_SYS_ST_LATITUDE)
+
+#define IS_QUERY_JSON_EXPR(op) \
+  (((op) == T_FUN_SYS_JSON_EXTRACT) \
+   || ((op) == T_FUN_SYS_JSON_CONTAINS) \
+   || ((op) == T_FUN_SYS_JSON_CONTAINS_PATH) \
+   || ((op) == T_FUN_SYS_JSON_QUOTE) \
+   || ((op) == T_FUN_SYS_JSON_UNQUOTE) \
+   || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
+   || ((op) == T_FUN_SYS_JSON_MEMBER_OF) \
+   || ((op) == T_FUN_SYS_JSON_VALUE))
+
+// JSON_CONTAINS & JSON_OVERLAPS not support yet
+#define IS_JSON_DOMAIN_OP(op) \
+  (((op) == T_FUN_SYS_JSON_MEMBER_OF) /*\
+    || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
+    || ((op) == T_FUN_SYS_JSON_CONTAINS)*/) \
+
 
 // ObSqlBitSet is a simple bitset, in order to avoid memory exposure
 // ObBitSet is too large just for a simple bitset
@@ -950,6 +1003,7 @@ struct ObUDFInfo
     udf_name_(),
     udf_package_(),
     udf_database_(),
+    dblink_name_(),
     param_names_(),
     param_exprs_(),
     udf_param_num_(0),
@@ -997,6 +1051,7 @@ struct ObUDFInfo
   TO_STRING_KV(K_(udf_name),
                K_(udf_package),
                K_(udf_database),
+               K_(dblink_name),
                K_(param_names),
                K_(param_exprs),
                K_(udf_param_num),
@@ -1009,6 +1064,7 @@ struct ObUDFInfo
   common::ObString udf_name_;
   common::ObString udf_package_;
   common::ObString udf_database_;
+  common::ObString dblink_name_;
   common::ObArray<common::ObString> param_names_;
   common::ObArray<ObRawExpr*> param_exprs_;
 	int64_t	udf_param_num_;
@@ -1108,13 +1164,15 @@ public:
   int extract_params(int64_t level, common::ObIArray<ObRawExpr*> &params) const;
   int replace_params(ObRawExpr *from, ObRawExpr *to);
 
-  TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params));
+  int check_param_num() const;
+
+  TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params), K_(udf_info));
 
   AccessNameType type_;
   common::ObString access_name_;
   int64_t access_index_;
   ObUDFInfo udf_info_;
-  ObSysFunRawExpr *sys_func_expr_;
+  ObRawExpr *sys_func_expr_;
   //a.f(x,y)(m,n)里的x、y、m、n都是f的参数，但是x、y的param_level_是0，m、n是1
   common::ObSEArray<std::pair<ObRawExpr*, int64_t>, 4, common::ModulePageAllocator, true> params_;
   bool has_brackets_; // may has empty (), record it.
@@ -1160,6 +1218,7 @@ public:
     return *this;
   }
 
+  void format_qualified_name();
   void format_qualified_name(common::ObNameCaseMode mode);
   inline bool is_unknown() const
   {
@@ -1176,6 +1235,10 @@ public:
   {
     return 1 == access_idents_.count() && access_idents_.at(0).is_sys_func();
   }
+  inline bool is_col_ref_access() const
+  {
+    return 1 < access_idents_.count() && access_idents_.at(0).is_sys_func();
+  }
   inline bool is_pl_udf() const
   {
     bool bret = !access_idents_.empty()
@@ -1187,6 +1250,12 @@ public:
       bret = 0 == access_idents_.at(access_idents_.count() - 1).params_.at(i).second;
     }
     return bret;
+  }
+  inline bool is_dblink_udf() const
+  {
+    bool bret = !access_idents_.empty()
+        && access_idents_.at(access_idents_.count() - 1).is_pl_udf();
+    return bret && !dblink_name_.empty();
   }
   inline bool is_udf_return_access() const
   {
@@ -1534,6 +1603,7 @@ class ObOpRawExpr;
 class ObWinFunRawExpr;
 class ObUserVarIdentRawExpr;
 struct ObUDFInfo;
+class ObMatchFunRawExpr;
 template <typename ExprFactoryT>
 struct ObResolveContext
 {
@@ -1576,7 +1646,10 @@ struct ObResolveContext
     tg_timing_event_(TG_TIMING_EVENT_INVALID),
     view_ref_id_(OB_INVALID_ID),
     is_variable_allowed_(true),
-    is_expanding_view_(false)
+    is_expanding_view_(false),
+    is_in_system_view_(false),
+    match_exprs_(NULL),
+    is_from_show_resolver_(false)
   {
   }
 
@@ -1623,6 +1696,9 @@ struct ObResolveContext
   uint64_t view_ref_id_;
   bool is_variable_allowed_;
   bool is_expanding_view_;
+  bool is_in_system_view_;
+  common::ObIArray<ObMatchFunRawExpr*> *match_exprs_;
+  bool is_from_show_resolver_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;
@@ -1634,7 +1710,8 @@ enum ExplicitedRefType {
   REF_BY_NORMAL = 1 << 0,
   REF_BY_PART_EXPR = 1 << 1,
   REF_BY_VIRTUAL_GEN_COL = 1<< 2,
-  REF_BY_STORED_GEN_COL = 1 << 3
+  REF_BY_STORED_GEN_COL = 1 << 3,
+  REF_BY_MATCH_EXPR = 1 << 4
 };
 class ObRawExpr : virtual public jit::expr::ObIRawExpr
 {
@@ -1878,7 +1955,11 @@ public:
   bool is_deterministic() const { return is_deterministic_; }
   bool is_bool_expr() const;
   bool is_spatial_expr() const;
+  bool is_json_domain_expr() const;
+  ObRawExpr* get_json_domain_param_expr();
   bool is_geo_expr() const;
+  bool is_domain_expr() const;
+  bool is_domain_json_expr() const;
   bool is_mysql_geo_expr() const;
   bool is_priv_geo_expr() const;
   bool is_xml_expr() const;
@@ -1893,6 +1974,12 @@ public:
   void set_may_add_interval_part(MayAddIntervalPart flag) {
     may_add_interval_part_ = flag;
   }
+  bool is_wrappered_json_extract() const {
+   return (type_ == T_FUN_SYS_JSON_UNQUOTE && OB_NOT_NULL(get_param_expr(0)) && get_param_expr(0)->type_ == T_FUN_SYS_JSON_EXTRACT);
+  }
+  bool extract_multivalue_json_expr(const ObRawExpr*& json_expr) const;
+  bool is_multivalue_define_json_expr() const;
+  ObRawExpr* get_wrapper_json_extract() { return get_param_expr(0); }
   MayAddIntervalPart get_may_add_interval_part() const
   { return may_add_interval_part_;}
   RuntimeFilterType get_runtime_filter_type() const { return runtime_filter_type_; }
@@ -2328,6 +2415,7 @@ public:
                            const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context) const override;
+
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
   virtual uint64_t hash_internal(uint64_t seed) const;
@@ -2623,7 +2711,12 @@ public:
   inline bool is_default_identity_column() const { return share::schema::ObSchemaUtils::is_default_identity_column(column_flags_); }
   inline bool is_default_on_null_identity_column() const { return share::schema::ObSchemaUtils::is_default_on_null_identity_column(column_flags_); }
   inline bool is_fulltext_column() const { return share::schema::ObSchemaUtils::is_fulltext_column(column_flags_); }
+  inline bool is_doc_id_column() const { return share::schema::ObSchemaUtils::is_doc_id_column(column_flags_); }
+  inline bool is_word_segment_column() const { return column_name_.prefix_match(OB_WORD_SEGMENT_COLUMN_NAME_PREFIX); }
+  inline bool is_word_count_column() const { return column_name_.prefix_match(OB_WORD_COUNT_COLUMN_NAME_PREFIX); }
   inline bool is_spatial_generated_column() const { return share::schema::ObSchemaUtils::is_spatial_generated_column(column_flags_); }
+  inline bool is_multivalue_generated_column() const { return share::schema::ObSchemaUtils::is_multivalue_generated_column(column_flags_); }
+  inline bool is_multivalue_generated_array_column() const { return share::schema::ObSchemaUtils::is_multivalue_generated_array_column(column_flags_); }
   inline bool is_cte_generated_column() const { return share::schema::ObSchemaUtils::is_cte_generated_column(column_flags_); }
   inline bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
   inline bool is_table_part_key_column() const { return column_flags_ & TABLE_PART_KEY_COLUMN_FLAG; }
@@ -2665,7 +2758,7 @@ public:
 
   bool is_xml_column() const { return ob_is_xml_pl_type(get_data_type(), get_udt_id())
                                       || ob_is_xml_sql_type(get_data_type(), get_subschema_id()); }
-
+  bool is_geo_column() const { return get_data_type() == ObObjType::ObGeometryType; }
   bool is_udt_hidden_column() const { return is_hidden_column() && get_udt_set_id() > 0;}
 
   inline common::ObGeoType get_geo_type() const { return static_cast<common::ObGeoType>(srs_info_.geo_type_); }
@@ -2831,6 +2924,7 @@ public:
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;
+
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -2935,6 +3029,7 @@ public:
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;
 
+
   //used for jit expr
   virtual int64_t get_children_count() const
   {
@@ -2958,6 +3053,7 @@ public:
                                    int64_t &pos,
                                    ExplainType type) const;
   bool is_white_runtime_filter_expr() const override;
+  int get_subquery_comparison_flag() const;
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -3278,7 +3374,7 @@ public:
     order_items_(),
     separator_param_expr_(NULL),
     udf_meta_(),
-    is_nested_aggr_(false),
+    expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
     pl_agg_udf_expr_(NULL)
   {
@@ -3292,7 +3388,7 @@ public:
     order_items_(),
     separator_param_expr_(NULL),
     udf_meta_(),
-    is_nested_aggr_(false),
+    expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
     pl_agg_udf_expr_(NULL)
   {
@@ -3307,7 +3403,7 @@ public:
     order_items_(),
     separator_param_expr_(NULL),
     udf_meta_(),
-    is_nested_aggr_(false),
+    expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
     pl_agg_udf_expr_(NULL)
   {
@@ -3326,8 +3422,8 @@ public:
   bool is_param_distinct() const;
   void set_param_distinct(bool is_distinct);
   void set_separator_param_expr(ObRawExpr *separator_param_expr);
-  bool is_nested_aggr() const;
-  void set_in_nested_aggr(bool is_nested);
+  bool in_inner_stmt() const;
+  void set_nested_aggr_inner_stmt(bool inner_stmt);
   int add_order_item(const OrderItem &order_item);
   virtual void clear_child() override;
   virtual void reset();
@@ -3339,6 +3435,7 @@ public:
   virtual ObRawExpr *&get_param_expr(int64_t index);
   inline int64_t get_real_param_count() const { return real_param_exprs_.count(); }
   inline const common::ObIArray<ObRawExpr*> &get_real_param_exprs() const { return real_param_exprs_; }
+  int get_param_exprs(common::ObIArray<ObRawExpr*> &param_exprs);
   inline common::ObIArray<ObRawExpr*> &get_real_param_exprs_for_update() { return real_param_exprs_; }
   virtual int do_visit(ObRawExprVisitor &visitor) override;
   inline ObRawExpr *get_separator_param_expr() const { return separator_param_expr_; }
@@ -3384,8 +3481,9 @@ public:
                                             N_ORDER_BY, order_items_,
                                             N_SEPARATOR_PARAM_EXPR, separator_param_expr_,
                                             K_(udf_meta),
-                                            K_(is_nested_aggr),
+                                            K_(expr_in_inner_stmt),
                                             K_(pl_agg_udf_expr));
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAggFunRawExpr);
   // real_param_exprs_.count() == 0 means '*'
@@ -3396,7 +3494,7 @@ private:
   ObRawExpr *separator_param_expr_;
   //use for udf function info
   share::schema::ObUDFMeta udf_meta_;
-  bool is_nested_aggr_;
+  bool expr_in_inner_stmt_;
   bool is_need_deserialize_row_;// for topk histogram and hybrid histogram computation
   ObRawExpr *pl_agg_udf_expr_;//for pl agg udf expr
 };
@@ -3447,9 +3545,9 @@ inline bool ObAggFunRawExpr::is_param_distinct() const
 {
   return distinct_;
 }
-inline bool ObAggFunRawExpr::is_nested_aggr() const
+inline bool ObAggFunRawExpr::in_inner_stmt() const
 {
-  return is_nested_aggr_;
+  return expr_in_inner_stmt_;
 }
 inline bool ObAggFunRawExpr::contain_nested_aggr() const
 {
@@ -3462,7 +3560,7 @@ inline bool ObAggFunRawExpr::contain_nested_aggr() const
   return ret;
 }
 inline void ObAggFunRawExpr::set_param_distinct(bool is_distinct) { distinct_ = is_distinct; }
-inline void ObAggFunRawExpr::set_in_nested_aggr(bool is_nested) { is_nested_aggr_ = is_nested; }
+inline void ObAggFunRawExpr::set_nested_aggr_inner_stmt(bool inner_stmt) { expr_in_inner_stmt_ = inner_stmt; }
 inline void ObAggFunRawExpr::set_separator_param_expr(ObRawExpr *separator_param_expr)
 {
   separator_param_expr_ = separator_param_expr;
@@ -3502,7 +3600,8 @@ public:
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;
-
+  virtual bool inner_json_expr_same_as(const ObRawExpr &expr,
+                             ObExprEqualCheckContext *check_context = NULL) const;
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
   virtual uint64_t hash_internal(uint64_t seed) const
@@ -3517,6 +3616,8 @@ public:
   int get_autoinc_nextval_name(char *buf, int64_t buf_len, int64_t &pos) const;
   void set_op_id(int64_t operator_id) { operator_id_ = operator_id; }
   int64_t get_op_id() const { return operator_id_; }
+  void set_mview_id(uint64_t mview_id) { mview_id_ = mview_id; }
+  uint64_t get_mview_id() const { return mview_id_; }
   void set_dblink_name(const common::ObString &name) { dblink_name_ = name; }
   const common::ObString &get_dblink_name() const { return dblink_name_; }
   void set_dblink_id(int64_t dblink_id) { dblink_id_ = dblink_id; }
@@ -3533,7 +3634,8 @@ public:
                                             K_(dblink_name),
                                             K_(dblink_id),
                                             K_(local_session_var),
-                                            K_(local_session_var_id));
+                                            K_(local_session_var_id),
+                                            K_(mview_id));
   virtual int set_local_session_vars(const share::schema::ObLocalSessionVar *local_sys_vars,
                                      const ObBasicSessionInfo *session,
                                      int64_t ctx_array_idx);
@@ -3542,8 +3644,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSysFunRawExpr);
   common::ObString func_name_;
   common::ObString dblink_name_;
-  //用于记录rownum表达式归属的count算子的op_id_
-  uint64_t operator_id_;
+  union {
+    uint64_t operator_id_;  // for rownum expr
+    uint64_t mview_id_;     // for last_refresh_scn expr
+  };
   uint64_t dblink_id_;
 };
 
@@ -3576,6 +3680,7 @@ public:
   uint64_t get_sequence_id() const { return sequence_id_; }
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;
+
   virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
 private:
   common::ObString database_name_; // sequence database name
@@ -3598,6 +3703,7 @@ public:
   const share::schema::ObUDFMeta &get_udf_meta() const { return udf_meta_; }
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;
+
 private:
   //for udf function info
   share::schema::ObUDFMeta udf_meta_;
@@ -3638,7 +3744,7 @@ public:
   const pl::ObPLDataType& get_elem_type() const { return elem_type_; }
   int64_t get_capacity() const { return capacity_; }
   uint64_t get_udt_id() const { return udt_id_; }
-
+  int64_t get_udt_version() const { return coll_schema_version_; }
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
 
@@ -3708,6 +3814,8 @@ public:
 
   inline void set_udt_id(uint64_t udt_id) { udt_id_ = udt_id; }
   uint64_t get_udt_id() { return udt_id_; }
+
+  int64_t get_udt_version() { return object_schema_version_; }
 
   inline int add_elem_type(ObExprResType &elem_type)
   {
@@ -3888,9 +3996,9 @@ public:
   {
     return params_type_.assign(params_type);
   }
-  inline void set_database_name(const common::ObString &database_name)
+  inline int set_database_name(const common::ObString &database_name)
   {
-    database_name_ = database_name;
+    return ob_write_string(*inner_alloc_, database_name, database_name_);
   }
   inline void set_package_name(const common::ObString &package_name)
   {
@@ -3932,6 +4040,8 @@ public:
   inline void set_pkg_id(uint64_t pkg_id){ pkg_id_ = pkg_id; }
   inline uint64_t get_pkg_id() const { return pkg_id_; }
   inline uint64_t get_udf_id() const { return udf_id_; }
+  inline int64_t get_pkg_version() const { return pkg_schema_version_; }
+  inline int64_t get_udf_version() const { return udf_schema_version_; }
   inline const ObIArray<int64_t> &get_subprogram_path() const { return subprogram_path_; }
   inline pl::ObPLIntegerType get_pls_type() const { return pls_type_; }
   inline common::ObIArray<ObExprResType> &get_params_type() { return params_type_; }
@@ -3942,6 +4052,7 @@ public:
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;
+
   virtual ObExprOperator *get_op() override;
 
   int check_param() { return common::OB_SUCCESS; }
@@ -4647,6 +4758,7 @@ public:
                            const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;
+
   virtual int do_visit(ObRawExprVisitor &visitor) override;
   virtual int get_name_internal(char *buf,
                                 const int64_t buf_len,
@@ -4658,6 +4770,73 @@ public:
 
 private:
   const char *name_;
+};
+
+class ObMatchFunRawExpr : public ObRawExpr
+{
+public:
+  ObMatchFunRawExpr()
+    : ObRawExpr(),
+      mode_flag_(NATURAL_LANGUAGE_MODE),
+      match_columns_(),
+      search_key_(NULL)
+  {
+    set_expr_class(ObIRawExpr::EXPR_MATCH_AGAINST);
+  }
+
+  ObMatchFunRawExpr(common::ObIAllocator &alloc)
+    : ObRawExpr(alloc),
+      mode_flag_(NATURAL_LANGUAGE_MODE),
+      match_columns_(),
+      search_key_(NULL)
+  {
+    set_expr_class(ObIRawExpr::EXPR_MATCH_AGAINST);
+  }
+
+  virtual ~ObMatchFunRawExpr() {}
+  int assign(const ObRawExpr &other) override;
+  virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+                           const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
+  virtual uint64_t hash_internal(uint64_t seed) const;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  virtual bool inner_same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
+  virtual void clear_child() override;
+  virtual void reset();
+  virtual int64_t get_param_count() const;
+  virtual const ObRawExpr *get_param_expr(int64_t index) const;
+  virtual ObRawExpr *&get_param_expr(int64_t index);
+  inline void set_mode_flag(ObMatchAgainstMode mode_flag) { mode_flag_ = mode_flag; }
+  inline ObMatchAgainstMode get_mode_flag() const { return mode_flag_; }
+  inline int set_match_columns(ObIArray<ObRawExpr*> &match_columns)
+  {
+    return match_columns_.assign(match_columns);
+  }
+  inline const ObIArray<ObRawExpr*>& get_match_columns() const { return match_columns_; }
+  inline ObIArray<ObRawExpr*>& get_match_columns() { return match_columns_; }
+  inline void set_search_key(ObRawExpr *search_key) { search_key_ = search_key; }
+  inline const ObRawExpr *get_search_key() const { return search_key_; }
+  inline ObRawExpr *get_search_key() { return search_key_; }
+  int get_table_id(uint64_t &table_id);
+  int get_match_column_type(ObExprResType &result_type);
+  inline int64_t get_search_key_idx() { return get_match_columns().count(); }
+
+  int replace_param_expr(int64_t index, ObRawExpr *expr);
+
+  VIRTUAL_TO_STRING_KV(
+      N_ITEM_TYPE, type_,
+      N_RESULT_TYPE, result_type_,
+      N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_,
+      K_(mode_flag),
+      K_(match_columns),
+      KPC_(search_key));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMatchFunRawExpr);
+  ObMatchAgainstMode mode_flag_; // for MySQL search mode flag
+  ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, ModulePageAllocator, true> match_columns_; // columns for choosing full-text index to use
+  ObRawExpr *search_key_; // user defined search query
 };
 
 /// visitor interface
@@ -4696,6 +4875,7 @@ public:
   virtual int visit(ObAliasRefRawExpr &expr) { UNUSED(expr); return common::OB_SUCCESS; }
   virtual int visit(ObWinFunRawExpr &expr) { UNUSED(expr); return common::OB_SUCCESS; }
   virtual int visit(ObPseudoColumnRawExpr &expr) { UNUSED(expr); return common::OB_SUCCESS; }
+  virtual int visit(ObMatchFunRawExpr &expr) { UNUSED(expr); return common::OB_SUCCESS; }
   virtual bool skip_child(ObRawExpr &expr) { UNUSED(expr); return false; }
 private:
   // disallow copy
@@ -4953,6 +5133,126 @@ inline uint64_t ObPlQueryRefRawExpr::hash_internal(uint64_t seed) const
   }
   return hash_value;
 }
+
+class ObUDTConstructorRawExpr : public ObSysFunRawExpr
+{
+public:
+  ObUDTConstructorRawExpr(common::ObIAllocator &alloc)
+    : ObSysFunRawExpr(alloc),
+      udt_id_(OB_INVALID_ID),
+      root_udt_id_(OB_INVALID_ID),
+      attr_pos_(0),
+      access_names_(),
+      database_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
+  ObUDTConstructorRawExpr()
+    : ObSysFunRawExpr(),
+      udt_id_(OB_INVALID_ID),
+      root_udt_id_(OB_INVALID_ID),
+      attr_pos_(0),
+      access_names_(),
+      database_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
+
+  virtual ~ObUDTConstructorRawExpr() {}
+
+  inline void set_udt_id(uint64_t udt_id) { udt_id_ = udt_id; }
+  uint64_t get_udt_id() { return udt_id_; }
+  inline void set_root_udt_id(uint64_t udt_id) { root_udt_id_ = udt_id; }
+  uint64_t get_root_udt_id() { return root_udt_id_; }
+  inline void set_attribute_pos(uint64_t attr_pos) { attr_pos_ = attr_pos; }
+  uint64_t get_attribute_pos() { return attr_pos_; }
+  int set_access_names(const common::ObIArray<ObObjAccessIdent> &access_idents);
+  int add_access_name(const common::ObString &access_name) { return access_names_.push_back(access_name); }
+  const common::ObIArray<ObString>& get_access_names() const { return access_names_; }
+
+  int assign(const ObRawExpr &other) override;
+  int inner_deep_copy(ObIRawExprCopier &copier) override;
+
+  inline void set_database_id(int64_t database_id)
+  {
+    database_id_ = database_id;
+  }
+
+  OB_INLINE uint64_t get_database_id() const { return database_id_; }
+
+  inline void set_coll_schema_version(int64_t schema_version)
+  {
+    object_schema_version_ = schema_version;
+  }
+
+  inline bool need_add_dependency()
+  {
+    return object_schema_version_ != common::OB_INVALID_VERSION;
+  }
+
+  int get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version);
+
+  virtual ObExprOperator *get_op() override;
+
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
+                                            N_RESULT_TYPE, result_type_,
+                                            N_EXPR_INFO, info_,
+                                            N_REL_ID, rel_ids_,
+                                            N_FUNC, get_func_name(),
+                                            N_CHILDREN, exprs_,
+                                            K_(database_id),
+                                            K_(object_schema_version));
+private:
+  uint64_t udt_id_;
+  // 记录Object每个元素的类型
+  uint64_t root_udt_id_;
+  uint64_t attr_pos_;
+  // 用于打印构造函数的名字
+  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> access_names_;
+  int64_t database_id_;
+  int64_t object_schema_version_;
+};
+
+class ObUDTAttributeAccessRawExpr : public ObSysFunRawExpr
+{
+public:
+  ObUDTAttributeAccessRawExpr(common::ObIAllocator &alloc)
+    : ObSysFunRawExpr(alloc),
+      udt_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
+  ObUDTAttributeAccessRawExpr()
+    : ObSysFunRawExpr(),
+      udt_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
+
+  virtual ~ObUDTAttributeAccessRawExpr() {}
+
+  inline void set_udt_id(uint64_t udt_id) { udt_id_ = udt_id; }
+  uint64_t get_udt_id() { return udt_id_; }
+
+  inline void set_attribute_type(uint64_t attr_type) { attr_type_ = attr_type; }
+  uint64_t get_attribute_type() { return attr_type_; }
+
+
+  int assign(const ObRawExpr &other) override;
+  int inner_deep_copy(ObIRawExprCopier &copier) override;
+
+  inline void set_schema_object_version(int64_t schema_version)
+  {
+    object_schema_version_ = schema_version;
+  }
+
+  inline bool need_add_dependency()
+  {
+    return object_schema_version_ != common::OB_INVALID_VERSION;
+  }
+
+  int get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version);
+
+  virtual ObExprOperator *get_op() override;
+
+private:
+  uint64_t udt_id_;
+  uint64_t attr_type_; // attribute type
+  int64_t object_schema_version_;
+};
+
 
 }// end sql
 }// end oceanbase

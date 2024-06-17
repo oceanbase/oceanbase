@@ -202,13 +202,23 @@ int ObRawExprCopier::add_expr(const ObRawExpr *from,
       LOG_WARN("failed to create expr set", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(copied_exprs_.set_refactored(reinterpret_cast<uint64_t>(from),
-                                             reinterpret_cast<uint64_t>(to)))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_SUCCESS != (ret = copied_exprs_.set_refactored(reinterpret_cast<uint64_t>(from),
+                                                               reinterpret_cast<uint64_t>(to)))) {
+    if (OB_UNLIKELY(ret != OB_HASH_EXIST)) {
       LOG_WARN("faield to add copied expr into map", K(ret));
-    } else if (OB_FAIL(new_exprs_.set_refactored(reinterpret_cast<uint64_t>(to)))) {
-      LOG_WARN("failed to add copied expr into set", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      uint64_t val = 0;
+      if (OB_FAIL(copied_exprs_.get_refactored(reinterpret_cast<uint64_t>(from), val))) {
+        LOG_WARN("get expr from hash map failed", K(ret));
+      } else if (OB_UNLIKELY(val != reinterpret_cast<uint64_t>(to))) {
+        ret = OB_HASH_EXIST;
+        LOG_WARN("from expr exists", K(ret), KPC(from), KPC(to), K(val));
+      }
     }
+  } else if (OB_FAIL(new_exprs_.set_refactored(reinterpret_cast<uint64_t>(to)))) {
+    LOG_WARN("failed to add copied expr into set", K(ret));
   }
   return ret;
 }

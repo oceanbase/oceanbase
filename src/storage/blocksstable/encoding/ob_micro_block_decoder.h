@@ -88,7 +88,13 @@ class ObDecoderCtxArray final
 {
 public:
   typedef ObColumnDecoderCtx ObDecoderCtx;
-  ObDecoderCtxArray(): ctxs_(), ctx_blocks_() {};
+  ObDecoderCtxArray(): ctxs_(), ctx_blocks_()
+  {
+    ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtxArr");
+    SET_IGNORE_MEM_VERSION(attr);
+    ctxs_.set_attr(attr);
+    ctx_blocks_.set_attr(attr);
+  };
   ~ObDecoderCtxArray()
   {
     reset();
@@ -303,6 +309,7 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       const bool contains_null,
+      const share::schema::ObColumnParam *col_param,
       int64_t &count) override final;
   virtual int get_aggregate_result(
       const ObTableIterParam &iter_param,

@@ -95,7 +95,8 @@ ObLockWaitMgr::ObLockWaitMgr()
     : is_inited_(false),
       hash_(hash_buf_, sizeof(hash_buf_)),
       deadlocked_sessions_lock_(common::ObLatchIds::DEADLOCK_DETECT_LOCK),
-      deadlocked_sessions_index_(0)
+      deadlocked_sessions_index_(0),
+      total_wait_node_(0)
 {
   memset(sequence_, 0, sizeof(sequence_));
 }
@@ -118,6 +119,7 @@ int ObLockWaitMgr::init()
   } else {
     share::ObThreadPool::set_run_wrapper(MTL_CTX());
     last_check_session_idle_ts_ = ObClockGenerator::getClock();
+    total_wait_node_ = 0;
     is_inited_ = true;
   }
   TRANS_LOG(INFO, "LockWaitMgr.init", K(ret));
@@ -136,6 +138,8 @@ void ObLockWaitMgr::stop() {
 }
 void ObLockWaitMgr::destroy() {
   is_inited_ = false;
+  total_wait_node_ = 0;
+  deadlocked_sessions_index_ = 0;
 }
 
 void RowHolderMapper::set_hash_holder(const ObTabletID &tablet_id,
@@ -204,7 +208,7 @@ void ObLockWaitMgr::run1()
         row_holder_mapper_.clear();
       }
     }
-    ob_usleep(500000);
+    ob_usleep(10000);
   }
 }
 
@@ -315,6 +319,7 @@ bool ObLockWaitMgr::wait(Node* node)
   uint64_t hash = node->hash();
   uint64_t last_lock_seq = node->lock_seq_;
   bool is_standalone_task = false;
+  ATOMIC_INC(&total_wait_node_);
   if (has_set_stop()) {
     // wait fail if _stop
   } else if (check_wakeup_seq(hash, last_lock_seq, is_standalone_task)) {
@@ -354,6 +359,9 @@ bool ObLockWaitMgr::wait(Node* node)
       WaitQuiescent(get_qs());
     }
   }
+  if (!wait_succ) {
+    ATOMIC_DEC(&total_wait_node_);
+  }
   TRANS_LOG(TRACE, "LockWaitMgr.wait", K(is_standalone_task),
             K(wait_succ), K(has_set_stop()), KPC(node));
   return wait_succ;
@@ -361,7 +369,7 @@ bool ObLockWaitMgr::wait(Node* node)
 
 void ObLockWaitMgr::wakeup(uint64_t hash)
 {
-  TRANS_LOG(TRACE, "LockWaitMgr.wakeup.start", K(hash));
+  TRANS_LOG(DEBUG, "LockWaitMgr.wakeup.start", K(hash));
   Node *node = NULL;
   do {
     node = fetch_waiter(hash);
@@ -375,7 +383,7 @@ void ObLockWaitMgr::wakeup(uint64_t hash)
     // continue loop to wake up all requests waitting on the transaction.
     // or continue loop to wake up all requests waitting on the tablelock.
   } while (!LockHashHelper::is_rowkey_hash(hash) && node != NULL);
-  TRANS_LOG(TRACE, "LockWaitMgr.wakeup.done", K(hash));
+  TRANS_LOG(DEBUG, "LockWaitMgr.wakeup.done", K(hash));
 }
 
 ObLockWaitMgr::Node* ObLockWaitMgr::next(Node*& iter, Node* target)
@@ -400,9 +408,9 @@ ObLockWaitMgr::Node* ObLockWaitMgr::fetch_waiter(uint64_t hash)
 {
   Node* ret = NULL;
   Node* node = NULL;
-  {
+  ATOMIC_INC(&sequence_[(hash >> 1) % LOCK_BUCKET_COUNT]);
+  if (ATOMIC_LOAD(&total_wait_node_) > 0) {
     CriticalGuard(get_qs());
-    ATOMIC_INC(&sequence_[(hash >> 1) % LOCK_BUCKET_COUNT]);
     node = hash_.get_next_internal(hash);
     // we do not need to wake up if the request is not running
     while(NULL != node && node->hash() <= hash) {
@@ -417,6 +425,7 @@ ObLockWaitMgr::Node* ObLockWaitMgr::fetch_waiter(uint64_t hash)
           if (0 != err) {
             ret = NULL;
           } else {
+            ATOMIC_DEC(&total_wait_node_);
             break;
           }
         }
@@ -546,6 +555,7 @@ void ObLockWaitMgr::retire_node(ObLink*& tail, Node* node)
   if (0 == err) {
     node->retire_link_.next_ = tail;
     tail = &node->retire_link_;
+    ATOMIC_DEC(&total_wait_node_);
   }
 }
 

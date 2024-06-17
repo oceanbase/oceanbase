@@ -59,6 +59,26 @@ bool OBGroupIOInfo::is_valid() const
   return min_percent_ >= 0 && max_percent_ >= min_percent_ && max_percent_ <= 100 && weight_percent_ >= 0 && weight_percent_ <= 100;
 }
 
+bool ObCgroupCtrl::is_valid_group_name(ObString &group_name)
+{
+  bool bool_ret = true;
+  const char *group_name_ptr = group_name.ptr();
+  if (group_name.length() < 0 || group_name.length() > GROUP_NAME_BUFSIZE) {
+    bool_ret = false;
+  } else {
+    for(int i = 0; i < group_name.length() && bool_ret; i++) {
+      // only support [a-zA-Z0-9_]
+      if (!((group_name_ptr[i] >= 'a' && group_name_ptr[i] <= 'z') ||
+            (group_name_ptr[i] >= 'A' && group_name_ptr[i] <= 'Z') ||
+            (group_name_ptr[i] >= '0' && group_name_ptr[i] <= '9') ||
+            (group_name_ptr[i] == '_'))) {
+        bool_ret = false;
+      }
+    }
+  }
+  return bool_ret;
+}
+
 // 创建cgroup初始目录结构，将所有线程加入other组
 int ObCgroupCtrl::init()
 {
@@ -79,7 +99,7 @@ int ObCgroupCtrl::init()
     snprintf(procs_path, PATH_BUFSIZE, "%s/cgroup.procs", other_cgroup_);
     snprintf(pid_value, VALUE_BUFSIZE, "%d", getpid());
     if(OB_FAIL(write_string_to_file_(procs_path, pid_value))) {
-      LOG_WARN("add tid to cgroup failed", K(ret), K(procs_path), K(pid_value));
+      LOG_ERROR("add tid to cgroup failed", K(ret), K(procs_path), K(pid_value));
     } else {
       valid_ = true;
     }
@@ -135,15 +155,17 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir)
     LOG_WARN("open group failed", K(ret), K(group_task_path), K(errno), KERRMSG);
   } else {
     char tid_buf[VALUE_BUFSIZE];
+    int tmp_ret = OB_SUCCESS;
     while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
-      if (OB_FAIL(write_string_to_file_(parent_task_path, tid_buf))) {
-        LOG_WARN("remove tenant task failed", K(ret), K(parent_task_path));
-        break;
+      if (OB_TMP_FAIL(write_string_to_file_(parent_task_path, tid_buf))) {
+        LOG_WARN("remove tenant task failed", K(tmp_ret), K(parent_task_path));
       }
     }
     fclose(group_task_file);
   }
-  if (OB_SUCC(ret) && OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
+
+  if (OB_SUCCESS != ret) {
+  } else if (OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
     LOG_WARN("remove group directory failed", K(ret), K(curr_dir));
   } else {
     LOG_INFO("remove group directory success", K(curr_dir));
@@ -184,6 +206,7 @@ int ObCgroupCtrl::recursion_remove_group_(const char *curr_path)
         }
       }
       if (OB_FAIL(remove_dir_(curr_path))) {
+        // ignore ret
         LOG_WARN("remove sub group directory failed", K(ret), K(curr_path));
       } else {
         LOG_INFO("remove sub group directory success", K(curr_path));
@@ -655,7 +678,7 @@ int ObCgroupCtrl::get_cpu_usage(const uint64_t tenant_id, int32_t &cpu_usage)
         K(ret), K(usage_path), K(usage_value), K(tenant_id));
   } else {
     usage_value[VALUE_BUFSIZE] = '\0';
-    cur_usage = std::stoull(usage_value);
+    cur_usage = strtoull(usage_value, NULL, 10);
   }
 
   cpu_usage = 0;
@@ -683,7 +706,7 @@ int ObCgroupCtrl::get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time)
           K(ret), K(usage_path), K(usage_value), K(tenant_id));
     } else {
       usage_value[VALUE_BUFSIZE] = '\0';
-      cpu_time = std::stoull(usage_value) / 1000;
+      cpu_time = strtoull(usage_value, NULL, 10) / 1000;
     }
   }
   return ret;
@@ -877,7 +900,7 @@ int ObCgroupCtrl::write_string_to_file_(const char *filename, const char *conten
     LOG_ERROR("open file error", K(filename), K(errno), KERRMSG, K(ret));
   } else if ((write_size = write(fd, content, static_cast<int32_t>(strlen(content)))) < 0) {
     ret = OB_IO_ERROR;
-    LOG_ERROR("write file error",
+    LOG_WARN("write file error",
         K(filename), K(content), K(ret), K(errno), KERRMSG);
   } else {
     // do nothing

@@ -30,6 +30,7 @@
 #include "sql/ob_sql.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/tx/ob_trans_service.h"
+#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
 
 namespace oceanbase
 {
@@ -169,7 +170,7 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
     exec_ctx_.set_mem_attr(ObMemAttr(tenant_id, ObModIds::OB_SQL_EXEC_CONTEXT, ObCtxIds::EXECUTE_CTX_ID));
     ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx_);
     plan_ctx->set_rich_format(session_info->use_rich_format());
-
+    exec_ctx_.hide_session(); // don't show remote session in show processlist
     vt_ctx.session_ = session_info;
     vt_ctx.vt_iter_factory_ = &vt_iter_factory_;
     vt_ctx.schema_guard_ = &schema_guard_;
@@ -273,6 +274,7 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext &exec_ctx,
     if (OB_ISNULL(spec = plan.get_root_op_spec())
         || OB_ISNULL(kit = exec_ctx.get_kit_store().get_operator_kit(spec->id_))
         || OB_ISNULL(se_op = kit->op_)) {
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("root op spec is null", K(ret));
     }
   }
@@ -308,7 +310,7 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext &exec_ctx,
           } else {
             has_send_result_ = true;
             // override error code
-            if (OB_FAIL(ObRpcProcessor<T>::flush(THIS_WORKER.get_timeout_remain()))) {
+            if (OB_FAIL(ObRpcProcessor<T>::flush(THIS_WORKER.get_timeout_remain(), &ObRpcProcessor<T>::arg_.get_ctrl_server()))) {
               LOG_WARN("fail to flush", K(ret));
             } else {
               // 超过1个scanner的情况，每次发送都打印一条日志
@@ -462,6 +464,14 @@ int ObRemoteBaseExecuteP<T>::execute_remote_plan(ObExecContext &exec_ctx,
           LOG_WARN("created operator is NULL", K(ret));
         } else if (OB_FAIL(plan_ctx->reserve_param_space(plan.get_param_count()))) {
           LOG_WARN("reserve rescan param space failed", K(ret), K(plan.get_param_count()));
+        } else if (!plan.get_mview_ids().empty() && plan_ctx->get_mview_ids().empty()
+                   && OB_FAIL(ObExprLastRefreshScn::set_last_refresh_scns(plan.get_mview_ids(),
+                                                                          exec_ctx.get_sql_proxy(),
+                                                                          exec_ctx.get_my_session(),
+                                                                          exec_ctx.get_das_ctx().get_snapshot().core_.version_,
+                                                                          plan_ctx->get_mview_ids(),
+                                                                          plan_ctx->get_last_refresh_scns()))) {
+          LOG_WARN("fail to set last_refresh_scns", K(ret), K(plan.get_mview_ids()));
         } else {
           if (OB_FAIL(se_op->open())) {
             LOG_WARN("fail open task", K(ret));
@@ -565,7 +575,14 @@ void ObRemoteBaseExecuteP<T>::record_sql_audit_and_plan_stat(
       audit_record.seq_ = 0;  //don't use now
       audit_record.status_ =
           (OB_SUCCESS == ret || common::OB_ITER_END == ret) ? obmysql::REQUEST_SUCC : ret;
-      session->get_cur_sql_id(audit_record.sql_id_, OB_MAX_SQL_ID_LENGTH + 1);
+      if (OB_NOT_NULL(plan)) {
+        const ObString &sql_id = plan->get_sql_id_string();
+        int64_t length = sql_id.length();
+        MEMCPY(audit_record.sql_id_, sql_id.ptr(), std::min(length, OB_MAX_SQL_ID_LENGTH));
+        audit_record.sql_id_[OB_MAX_SQL_ID_LENGTH] = '\0';
+      } else {
+        session->get_cur_sql_id(audit_record.sql_id_, OB_MAX_SQL_ID_LENGTH + 1);
+      }
       audit_record.db_id_ = session->get_database_id();
       audit_record.execution_id_ = session->get_current_execution_id();
       audit_record.client_addr_ = session->get_client_addr();
@@ -595,12 +612,10 @@ void ObRemoteBaseExecuteP<T>::record_sql_audit_and_plan_stat(
         if (!exec_ctx_.get_sql_ctx()->self_add_plan_ && exec_ctx_.get_sql_ctx()->plan_cache_hit_) {
           mutable_plan->update_plan_stat(audit_record,
                                         false, // false mean not first update plan stat
-                                        exec_ctx_.get_is_evolution(),
                                         table_row_count_list);
         } else if (exec_ctx_.get_sql_ctx()->self_add_plan_ && !exec_ctx_.get_sql_ctx()->plan_cache_hit_) {
           mutable_plan->update_plan_stat(audit_record,
                                         true,
-                                        exec_ctx_.get_is_evolution(),
                                         table_row_count_list);
 
         }
@@ -648,6 +663,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
     ObSessionStatEstGuard stat_est_guard(session->get_effective_tenant_id(), session->get_sessid());
+    SQL_INFO_GUARD(task.get_remote_sql_info()->remote_sql_, session->get_cur_sql_id());
     // 初始化ObTask的执行环节
     //
     //
@@ -946,6 +962,7 @@ int ObRpcRemoteExecuteP::process()
     ObSessionStatEstGuard stat_est_guard(
         session->get_effective_tenant_id(),
         session->get_sessid());
+    SQL_INFO_GUARD(task.get_sql_string(), session->get_cur_sql_id());
     // 初始化ObTask的执行环节
     //
     //

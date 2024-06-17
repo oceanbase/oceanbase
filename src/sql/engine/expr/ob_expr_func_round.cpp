@@ -305,7 +305,7 @@ static int do_round_by_type(
     }
     case ObDecimalIntType: {
       if (OB_FAIL(ObExprFuncRound::calc_round_decimalint(
-                  in_meta, out_meta, round_scale, x_datum, res_datum))) {
+                  in_meta, out_meta, GET_SCALE_FOR_CALC(round_scale), x_datum, res_datum))) {
         LOG_WARN("calc_round_decimalint failed", K(ret), K(in_meta), K(out_meta), K(round_scale));
       }
       break;
@@ -434,7 +434,7 @@ static int do_round_by_type_batch_with_check(const int64_t scale, const ObExpr &
           if (x_datum.is_null()) {
             results[i].set_null();
           } else if (OB_FAIL(ObExprFuncRound::calc_round_decimalint(
-                             in_meta, out_meta, scale, x_datum, results[i]))) {
+                             in_meta, out_meta, GET_SCALE_FOR_CALC(scale), x_datum, results[i]))) {
             LOG_WARN("calc_round_decimalint failed", K(ret), K(in_meta), K(out_meta), K(scale));
           }
         }
@@ -567,7 +567,7 @@ static int do_round_by_type_vector(const int64_t scale, const ObExpr &expr,
       for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
         CHECK_ROUND_VECTOR();
         if (OB_FAIL((ObExprFuncRound::calc_round_decimalint<LeftVec, ResVec>)(
-                            in_meta, out_meta, scale, left_vec, res_vec, j))) {
+                            in_meta, out_meta, GET_SCALE_FOR_CALC(scale), left_vec, res_vec, j))) {
           LOG_WARN("calc_round_decimalint failed", K(ret), K(in_meta), K(out_meta), K(scale));
         }
         eval_flags.set(j);
@@ -656,7 +656,7 @@ static int do_round_by_type_batch_without_check(const int64_t scale, const ObExp
       const ObDatumMeta &out_meta = expr.datum_meta_;
       for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
         if (OB_FAIL(ObExprFuncRound::calc_round_decimalint(
-                    in_meta, out_meta, scale, x_datums[i], results[i]))) {
+                    in_meta, out_meta, GET_SCALE_FOR_CALC(scale), x_datums[i], results[i]))) {
           LOG_WARN("calc_round_decimalint failed", K(ret), K(in_meta), K(out_meta), K(scale));
         }
       }

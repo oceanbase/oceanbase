@@ -706,6 +706,7 @@ int ObComplementDataDag::report_replica_build_status()
       LOG_WARN("fail to send build ddl single replica response", K(ret), K(arg));
     }
   }
+  DEBUG_SYNC(HOLD_DDL_COMPLEMENT_DAG_AFTER_REPORT_FINISH);
   FLOG_INFO("complement data finished", K(ret), K(context_.complement_data_ret_));
   return ret;
 }
@@ -744,6 +745,42 @@ int ObComplementDataDag::fill_dag_key(char *buf, const int64_t buf_len) const
   } else if (OB_FAIL(databuff_printf(buf, buf_len, "logstream_id=%ld source_tablet_id=%ld dest_tablet_id=%ld",
                               param_.orig_ls_id_.id(), param_.orig_tablet_id_.id(), param_.dest_tablet_id_.id()))) {
     LOG_WARN("fill dag key for ddl table merge dag failed", K(ret), K(param_));
+  }
+  return ret;
+}
+
+int ObComplementDataDag::check_and_exit_on_demand()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("dag has not been initialized", K(ret));
+  } else {
+    DEBUG_SYNC(HOLD_DDL_COMPLEMENT_DAG_WHEN_APPEND_ROW);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObSqlString sql_string;
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_TMP_FAIL(sql_string.assign_fmt("SELECT status FROM %s WHERE task_id = %lu", share::OB_ALL_DDL_TASK_STATUS_TNAME, param_.task_id_))) {
+        LOG_WARN("assign sql string failed", K(tmp_ret), K(param_));
+      } else if (OB_TMP_FAIL(GCTX.sql_proxy_->read(res, param_.dest_tenant_id_, sql_string.ptr()))) {
+        LOG_WARN("fail to execute sql", K(tmp_ret), K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", K(tmp_ret));
+      } else if (OB_TMP_FAIL(result->next())) {
+        if (OB_ENTRY_NOT_EXIST == tmp_ret) {
+          ret = OB_CANCELED;
+        }
+        LOG_WARN("iterate next failed", K(ret), K(tmp_ret));
+      } else {
+        int task_status = 0;
+        EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int);
+        if (OB_SUCC(ret)) {
+          ret = task_status == ObDDLTaskStatus::REDEFINITION ? ret : OB_CANCELED;
+        }
+      }
+    }
   }
   return ret;
 }
@@ -814,7 +851,8 @@ int ObComplementPrepareTask::process()
 }
 
 ObComplementWriteTask::ObComplementWriteTask()
-  : ObITask(TASK_TYPE_COMPLEMENT_WRITE), is_inited_(false), task_id_(0), param_(nullptr),
+  : ObITask(TASK_TYPE_COMPLEMENT_WRITE), allocator_("WriteTaskAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    is_inited_(false), task_id_(0), param_(nullptr),
     context_(nullptr), write_row_(),
     col_ids_(), org_col_ids_(), output_projector_()
 {
@@ -822,6 +860,11 @@ ObComplementWriteTask::ObComplementWriteTask()
 
 ObComplementWriteTask::~ObComplementWriteTask()
 {
+  col_ids_.reset();
+  org_col_ids_.reset();
+  output_projector_.reset();
+  write_row_.reset();
+  allocator_.reset();
 }
 
 int ObComplementWriteTask::init(const int64_t task_id, ObComplementDataParam &param,
@@ -849,7 +892,7 @@ int ObComplementWriteTask::init(const int64_t task_id, ObComplementDataParam &pa
   } else if (OB_FAIL(hidden_table_schema->get_store_column_count(schema_stored_column_cnt))) {
     LOG_WARN("get stored column cnt failed", K(ret));
   } else if (OB_FAIL(write_row_.init(
-              param.allocator_, schema_stored_column_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
+              allocator_, schema_stored_column_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
     LOG_WARN("Fail to init write row", K(ret));
   } else {
     write_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
@@ -984,9 +1027,37 @@ int ObComplementWriteTask::generate_col_param()
           ObColDesc tmp_col_desc = tmp_col_ids.at(i);
           if (nullptr == data_column_schema) {
             // may be newly added column, can not find in data table.
+          } else if (data_column_schema->is_udt_hidden_column()) {
+            // do nothing
+            // Hidden columns of udt are written when processing the parent column
           } else if (FALSE_IT(tmp_col_desc.col_id_ = data_column_schema->get_column_id())) {
           } else if (OB_FAIL(col_ids_.push_back(tmp_col_desc))) {
             LOG_WARN("fail to push back col desc", K(ret), K(tmp_col_ids.at(i)), K(tmp_col_desc));
+          } else if (data_column_schema->is_extend()) {
+            int64_t column_id = 0;
+            int64_t index_col = 0;
+            if (!data_column_schema->is_xmltype()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("The udt type is not adapted", K(ret), K(*data_column_schema));
+            } else if (OB_FAIL(ObTableSchema::get_xml_hidden_column_id(data_table_schema,
+                                                                       data_column_schema,
+                                                                       column_id))) {
+              LOG_WARN("failed to get xml hidden column id.", K(ret));
+            } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(hidden_table_schema,
+                                                                           hidden_column_schema,
+                                                                           tmp_col_ids,
+                                                                           index_col))) {
+              LOG_WARN("failed to find xml hidden column index.", K(ret));
+            } else if (index_col >= tmp_col_ids.count() || index_col < 0 || column_id < 0) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid index_col.", K(ret), K(index_col), K(tmp_col_ids.count()), K(column_id));
+            } else {
+              ObColDesc find_col_desc = tmp_col_ids.at(index_col);
+              find_col_desc.col_id_ = column_id;
+              if (OB_FAIL(col_ids_.push_back(find_col_desc))) {
+                LOG_WARN("fail to push back col desc", K(ret), K(find_col_desc));
+              }
+            }
           }
         }
       }
@@ -1002,6 +1073,29 @@ int ObComplementWriteTask::generate_col_param()
           const ObColumnSchemaV2 *data_column_schema = data_table_schema->get_column_schema(col_ids_.at(j).col_id_);
           if (nullptr == data_column_schema) {
             // may be newly added column.
+          } else if (data_column_schema->is_udt_hidden_column()) {
+            if (hidden_column_schema->is_udt_hidden_column()) {
+              // hidden parent
+              ObColumnSchemaV2 *parent_hidden_column_schema = nullptr;
+              // data parent
+              ObColumnSchemaV2 *parent_data_column_schema = nullptr;
+              if (OB_ISNULL(parent_hidden_column_schema =
+                            hidden_table_schema->get_xml_hidden_column_parent_col_schema(hidden_column_schema->get_column_id(),
+                                                                                         hidden_column_schema->get_udt_set_id()))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get hidden column parent is null", K(ret), K(*hidden_column_schema), K(*hidden_table_schema));
+              } else if (OB_ISNULL(parent_data_column_schema =
+                                   data_table_schema->get_xml_hidden_column_parent_col_schema(data_column_schema->get_column_id(),
+                                                                                              data_column_schema->get_udt_set_id()))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get data_ column parent is null", K(ret), K(*data_column_schema), K(*data_table_schema));
+              } else if (parent_hidden_column_schema->get_column_name_str() == parent_data_column_schema->get_column_name_str()) {
+                if (OB_FAIL(output_projector_.push_back(static_cast<int32_t>(j)))) {
+                  LOG_WARN("fail to push back output projector", K(ret));
+                }
+                break;
+              }
+            }
           } else if (hidden_column_name == data_column_schema->get_column_name_str()) {
             if (OB_FAIL(output_projector_.push_back(static_cast<int32_t>(j)))) {
               LOG_WARN("fail to push back output projector", K(ret));
@@ -1280,6 +1374,9 @@ int ObComplementWriteTask::append_lob(
 int ObComplementWriteTask::append_row(ObScan *scan)
 {
   int ret = OB_SUCCESS;
+  ObComplementDataDag *current_dag = nullptr;
+  const int64_t CHECK_DAG_NEED_EXIT_INTERVAL = 10000; // 1w rows.
+  ObDataStoreDesc data_desc;
   HEAP_VARS_4((ObMacroBlockWriter, writer),
               (ObSchemaGetterGuard, schema_guard),
               (ObRelativeTable, relative_table),
@@ -1287,7 +1384,6 @@ int ObComplementWriteTask::append_row(ObScan *scan)
   HEAP_VAR(ObWholeDataStoreDesc, data_desc, true) {
     ObArray<int64_t> report_col_checksums;
     ObArray<int64_t> report_col_ids;
-    ObDDLRedoLogWriter sstable_redo_writer;
     ObDDLRedoLogWriterCallback callback;
     ObITable::TableKey hidden_table_key;
     ObMacroDataSeq macro_start_seq(0);
@@ -1297,6 +1393,8 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     int64_t t2 = 0;
     int64_t t3 = 0;
     int64_t lob_cnt = 0;
+    int64_t row_scanned = 0;
+    int64_t row_inserted = 0;
     ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObStoreRow reshaped_row;
     reshaped_row.flag_.set_flag(ObDmlFlag::DF_INSERT);
@@ -1310,21 +1408,31 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
     ObTabletDirectLoadMgrHandle direct_load_hdl;
     bool is_major_sstable_exist = false;
-    ObDDLInsertRowIterator row_iter(nullptr/*ObPxMultiPartSSTableInsertOp*/, false/*is_slice_empty*/,
-          param_->dest_ls_id_, param_->dest_tablet_id_, 0/*unused_rowkey_num*/, param_->snapshot_version_, context_->context_id_, task_id_);
+    ObDDLInsertRowIterator row_iter;
     blocksstable::ObNewRowBuilder new_row_builder;
     int64_t lob_inrow_threshold = OB_DEFAULT_LOB_INROW_THRESHOLD;
-    if (OB_ISNULL(tenant_direct_load_mgr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
-    } else if (OB_UNLIKELY(!is_inited_)) {
+    if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("ObComplementWriteTask is not inited", K(ret));
-    } else if (OB_ISNULL(param_) || OB_ISNULL(scan) || OB_UNLIKELY(!param_->is_valid()) || OB_ISNULL(context_)) {
+    } else if (OB_ISNULL(scan)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret));
+    } else if (OB_ISNULL(tenant_direct_load_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
+    } else if (OB_FAIL(row_iter.init(nullptr/*ObPxMultiPartSSTableInsertOp*/,
+                              false/*is_slice_empty*/,
+                              param_->dest_ls_id_,
+                              param_->dest_tablet_id_,
+                              0/*unused_rowkey_num*/,
+                              param_->snapshot_version_,
+                              context_->context_id_,
+                              task_id_))) {
+      LOG_WARN("init failed", K(ret));
     } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_id_))) {
       LOG_WARN("set parallel degree failed", K(ret), K(task_id_));
+    } else if (OB_FAIL(context_->check_already_committed(param_->dest_ls_id_, param_->dest_tablet_id_, ddl_committed))) {
+      LOG_WARN("check tablet already committed failed", K(ret));
     } else {
       const ObTableSchema *hidden_table_schema = nullptr;
       if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
@@ -1349,9 +1457,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else if (OB_UNLIKELY(!hidden_table_key.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("hidden table key is invalid", K(ret), K(hidden_table_key));
-      } else if (OB_FAIL(sstable_redo_writer.init(param_->dest_ls_id_, param_->dest_tablet_id_))) {
-        LOG_WARN("fail to init sstable redo writer", K(ret));
-      } else if (OB_UNLIKELY(nullptr == static_cast<ObComplementDataDag *>(get_dag()))) {
+      } else if (OB_ISNULL(current_dag = static_cast<ObComplementDataDag *>(get_dag()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the dag of this task is null", K(ret));
       } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
@@ -1372,12 +1478,14 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else if (OB_UNLIKELY(context_->start_scn_ != direct_load_hdl.get_full_obj()->get_start_scn())) {
         ret = OB_TASK_EXPIRED;
         LOG_WARN("task expired", K(ret), K(context_->start_scn_), "start_scn", direct_load_hdl.get_full_obj()->get_start_scn());
-      } else if (OB_FAIL(callback.init(DDL_MB_DATA_TYPE,
+      } else if (OB_FAIL(callback.init(param_->dest_ls_id_,
+                                       param_->dest_tablet_id_,
+                                       DDL_MB_DATA_TYPE,
                                        hidden_table_key,
                                        param_->task_id_,
                                        context_->start_scn_,
                                        param_->data_format_version_,
-                                       &sstable_redo_writer))) {
+                                       direct_load_hdl.get_full_obj()->get_direct_load_type()))) {
         LOG_WARN("fail to init data callback", K(ret), K(hidden_table_key));
       } else if (OB_FAIL(writer.open(data_desc.get_desc(), macro_start_seq, &callback))) {
         LOG_WARN("fail to open macro block writer", K(ret), K(data_desc));
@@ -1422,8 +1530,6 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         LOG_WARN("fail to yield dag", KR(ret));
       } else if (OB_FAIL(DDL_SIM(param_->dest_tenant_id_, param_->task_id_, DDL_INSERT_SSTABLE_GET_NEXT_ROW_FAILED))) {
         LOG_WARN("ddl sim failure", K(ret), KPC(param_));
-      } else if ((0 == (context_->row_inserted_ % 100000)) && OB_FAIL(context_->check_already_committed(param_->dest_ls_id_, param_->dest_tablet_id_, ddl_committed))) {
-        LOG_WARN("check tablet already committed failed", K(ret));
       } else if (OB_FAIL(scan->get_next_row(tmp_row, reshape_row_only_for_remote_scan))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next row", K(ret));
@@ -1444,7 +1550,9 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else {
         t2 = ObTimeUtility::current_time();
         get_next_row_time += t2 - t1;
-        context_->row_scanned_++;
+        if (++row_scanned % 100 == 0) {
+          (void) ATOMIC_AAF(&context_->row_scanned_, 100);
+        }
         if (!ddl_committed && OB_FAIL(writer.append_row(datum_row))) {
           LOG_WARN("fail to append row to macro block", K(ret), K(datum_row));
         }
@@ -1468,11 +1576,16 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         if (OB_SUCC(ret)) {
           t3 = ObTimeUtility::current_time();
           append_row_time += t3 - t2;
-          context_->row_inserted_++;
+          if (++row_inserted % 100 == 0) {
+            (void) ATOMIC_AAF(&context_->row_inserted_, 100);
+          }
+          if (row_inserted % CHECK_DAG_NEED_EXIT_INTERVAL == 0) {
+            if (OB_FAIL(current_dag->check_and_exit_on_demand())) {
+              LOG_WARN("dag check and exit on demand failed", K(ret));
+            }
+          }
         }
-        if (lob_cnt % 128 == 0) {
-          lob_allocator.reuse(); // reuse after append_row to macro block to save memory
-        }
+        lob_allocator.reuse(); // reuse after append_row to macro block to save memory
       }
     }
     if (OB_ITER_END == ret) {
@@ -1481,6 +1594,8 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         LOG_WARN("close lob sstable slice failed", K(ret));
       }
     }
+    (void) ATOMIC_AAF(&context_->row_scanned_, row_scanned % 100);
+    (void) ATOMIC_AAF(&context_->row_inserted_, row_inserted % 100);
     LOG_INFO("print append row to macro block cost time", K(ret), K(task_id_), K(context_->row_inserted_),
         K(get_next_row_time), K(append_row_time));
     ObRowReshapeUtil::free_row_reshape(allocator, reshape_ptr, 1);
@@ -1790,8 +1905,25 @@ int ObLocalScan::get_exist_column_mapping(
       const ObColumnSchemaV2 *data_column_schema = data_table_schema.get_column_schema(hidden_column_name);
       if (nullptr == data_column_schema) {
         // newly added column, can not find in data table.
+      } else if (data_column_schema->is_udt_hidden_column()) {
+        // do nothing
+        // Hidden columns of udt are written when processing the parent column
       } else if (OB_FAIL(exist_column_mapping_.set(i))) {
         LOG_WARN("fail to set bit map", K(ret), K(*data_column_schema));
+      } else if (data_column_schema->is_extend()) {
+        ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
+        int64_t index_col = 0;
+        if (!data_column_schema->is_xmltype()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("The udt type is not adapted", K(ret), K(*data_column_schema));
+        } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(&hidden_table_schema,
+                                                                       hidden_column_schema,
+                                                                       tmp_col_ids,
+                                                                       index_col))) {
+          LOG_WARN("failed to find xml hidden column index.", K(ret));
+        } else if (OB_FAIL(exist_column_mapping_.set(index_col))) {
+          LOG_WARN("fail to set bit map", K(ret), K(*data_column_schema));
+        }
       } else {/* do nothing. */}
     }
   }
@@ -2080,13 +2212,42 @@ int ObLocalScan::get_origin_table_checksum(
         const ObString &hidden_column_name = hidden_col_schema->get_column_name_str();
         const ObColumnSchemaV2 *data_col_schema = data_table_schema->get_column_schema(hidden_column_name);
         const int64_t index_in_array = i < rowkey_cols_cnt ? i : i + extra_rowkey_cnt;
-        if (OB_ISNULL(data_col_schema)) {
+        if (hidden_col_schema->is_udt_hidden_column()) {
+          // do nothing
+          // Hidden columns of udt are written when processing the parent column
+        } else if (OB_ISNULL(data_col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("data column schema should not be null", K(ret), K(hidden_column_name));
+        } else if (data_col_schema->is_udt_hidden_column()) {
+          // do nothing
         } else if (OB_FAIL(report_col_ids.push_back(data_col_schema->get_column_id()))) {
           LOG_WARN("fail to push back col id", K(ret), K(*data_col_schema));
         } else if (OB_FAIL(report_col_checksums.push_back(checksum_calculator_.get_column_checksum()[index_in_array]))) {
           LOG_WARN("fail to push back col checksum", K(ret));
+        } else if (data_col_schema->is_extend()) {
+          int64_t column_id = 0;
+          int64_t index_col = 0;
+          if (!data_col_schema->is_xmltype()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("The udt type is not adapted", K(ret), K(*data_col_schema));
+          } else if (OB_FAIL(ObTableSchema::get_xml_hidden_column_id(data_table_schema, data_col_schema, column_id))) {
+            LOG_WARN("failed to get xml hidden column id.", K(ret));
+          } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(hidden_table_schema,
+                                                                         hidden_col_schema,
+                                                                         tmp_col_ids,
+                                                                         index_col))) {
+            LOG_WARN("failed to find xml hidden column index.", K(ret));
+          } else if (!exist_column_mapping_.test(index_col)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get xml udt hidden column not exist column mapping", K(ret), K(index_col));
+          } else {
+            const int64_t udt_hidden_index_in_array = index_col < rowkey_cols_cnt ? index_col : index_col + extra_rowkey_cnt;
+            if (OB_FAIL(report_col_ids.push_back(column_id))) {
+              LOG_WARN("fail to push back udt hidden col id", K(ret), K(*data_col_schema));
+            } else if (OB_FAIL(report_col_checksums.push_back(checksum_calculator_.get_column_checksum()[udt_hidden_index_in_array]))) {
+              LOG_WARN("fail to push back col checksum", K(ret));
+            }
+          }
         } else {/* do nothing. */}
       } else {/* do nothing. */}
     }

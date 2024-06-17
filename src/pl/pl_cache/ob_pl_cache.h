@@ -34,6 +34,74 @@ struct ObPLCacheCtx;
 class ObPLObjectSet;
 class ObPLCacheMgr;
 
+struct ObPLTableColumnInfo
+{
+  common::ObIAllocator *inner_alloc_;
+  uint64_t column_id_;
+  common::ObObjMeta meta_type_;
+  common::ObAccuracy accuracy_;
+  common::ObCharsetType charset_type_;
+  common::ObString column_name_;
+  common::ObArray<common::ObString> type_info_;//used for enum and set
+
+  ObPLTableColumnInfo():
+    inner_alloc_(nullptr),
+    column_id_(common::OB_INVALID_ID),
+    meta_type_(),
+    accuracy_(),
+    charset_type_(CHARSET_INVALID),
+    column_name_(),
+    type_info_()
+    {}
+
+  explicit ObPLTableColumnInfo(ObIAllocator *alloc):
+    inner_alloc_(alloc),
+    column_id_(common::OB_INVALID_ID),
+    meta_type_(),
+    accuracy_(),
+    charset_type_(CHARSET_INVALID),
+    column_name_(),
+    type_info_()
+    {}
+
+  bool operator==(const ObPLTableColumnInfo &other) const
+  {
+    bool is_same = true;
+    if (type_info_.count() != other.type_info_.count()) {
+      is_same = false;
+    } else {
+      for (int64_t i = 0; is_same && i < type_info_.count(); ++i) {
+        is_same = type_info_.at(i) == other.type_info_.at(i);
+      }
+      is_same = is_same &&
+                column_id_ == other.column_id_ &&
+                meta_type_ == other.meta_type_ &&
+                accuracy_ == other.accuracy_ &&
+                charset_type_ == other.charset_type_ &&
+                column_name_ == other.column_name_;
+    }
+    return is_same;
+  }
+
+  bool operator!=(const ObPLTableColumnInfo &other) const
+  {
+    return !operator==(other);
+  }
+
+  void reset();
+  int deep_copy_type_info(const common::ObIArray<common::ObString>& type_info);
+  ~ObPLTableColumnInfo()
+  {
+    reset();
+  }
+
+  TO_STRING_KV(K_(column_id),
+               K_(meta_type),
+               K_(accuracy),
+               K_(charset_type),
+               K_(column_name));
+};
+
 //todo:when PCVSchemaObj has been moved to appropriate header file, use PCVSchemaObj to instead of PCVPlSchemaObj
 struct PCVPlSchemaObj
 {
@@ -47,6 +115,8 @@ struct PCVPlSchemaObj
   bool is_tmp_table_;
   bool is_explicit_db_name_;
   common::ObIAllocator *inner_alloc_;
+  int64_t column_cnt_;
+  common::ObFixedArray<ObPLTableColumnInfo *, common::ObIAllocator> column_infos_;
 
   PCVPlSchemaObj():
   tenant_id_(common::OB_INVALID_ID),
@@ -58,7 +128,9 @@ struct PCVPlSchemaObj
   table_name_(),
   is_tmp_table_(false),
   is_explicit_db_name_(false),
-  inner_alloc_(nullptr) {}
+  inner_alloc_(nullptr),
+  column_cnt_(0),
+  column_infos_(inner_alloc_) {}
 
   explicit PCVPlSchemaObj(ObIAllocator *alloc):
     tenant_id_(common::OB_INVALID_ID),
@@ -70,7 +142,9 @@ struct PCVPlSchemaObj
     table_name_(),
     is_tmp_table_(false),
     is_explicit_db_name_(false),
-    inner_alloc_(alloc) {}
+    inner_alloc_(alloc),
+    column_cnt_(0),
+    column_infos_(inner_alloc_) {}
 
   int init(const share::schema::ObTableSchema *schema);
   int init_with_version_obj(const share::schema::ObSchemaObjVersion &schema_obj_version);
@@ -79,6 +153,7 @@ struct PCVPlSchemaObj
   {
     inner_alloc_ = alloc;
   }
+  int deep_copy_column_infos(const ObTableSchema *schema);
 
   bool compare_schema(const share::schema::ObTableSchema &schema) const
   {
@@ -99,6 +174,8 @@ struct PCVPlSchemaObj
           && table_type_ == other.table_type_;
     return ret;
   }
+
+  bool match_columns(ObIArray<ObPLTableColumnInfo> &column_infos) const;
 
   bool operator==(const PCVPlSchemaObj &other) const;
 
@@ -129,13 +206,15 @@ struct ObPLObjectKey : public ObILibCacheKey
     db_id_(common::OB_INVALID_ID),
     key_id_(common::OB_INVALID_ID),
     sessid_(0),
-    name_() {}
+    name_(),
+    sys_vars_str_() {}
   ObPLObjectKey(uint64_t db_id, uint64_t key_id)
   : ObILibCacheKey(ObLibCacheNameSpace::NS_INVALID),
     db_id_(db_id),
     key_id_(key_id),
     sessid_(0),
-    name_() {}
+    name_(),
+    sys_vars_str_() {}
 
   void reset();
   virtual int deep_copy(common::ObIAllocator &allocator, const ObILibCacheKey &other) override;
@@ -152,6 +231,7 @@ struct ObPLObjectKey : public ObILibCacheKey
   uint64_t  key_id_; // routine id or package id
   uint32_t sessid_;
   common::ObString name_;
+  common::ObString sys_vars_str_;
 };
 
 
@@ -176,6 +256,9 @@ public:
   int set_stored_schema_objs(const DependenyTableStore &dep_table_store,
                               share::schema::ObSchemaGetterGuard *schema_guard);
   int lift_tenant_schema_version(int64_t new_schema_version);
+  int obtain_new_column_infos(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const PCVPlSchemaObj &schema_obj,
+                                              ObIArray<ObPLTableColumnInfo> &column_infos);
   int check_value_version(share::schema::ObSchemaGetterGuard *schema_guard,
                                   bool need_check_schema,
                                   const ObIArray<PCVPlSchemaObj> &schema_array,
@@ -183,6 +266,10 @@ public:
   int need_check_schema_version(ObPLCacheCtx &pc_ctx,
                                 int64_t &new_schema_version,
                                 bool &need_check);
+  int get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
+                                  uint64_t tenant_id,
+                                  const PCVPlSchemaObj &pcv_schema,
+                                  int64_t &new_version);
   int get_all_dep_schema(ObPLCacheCtx &pc_ctx,
                           const uint64_t database_id,
                           int64_t &new_schema_version,
@@ -260,7 +347,8 @@ struct ObPLCacheCtx : public ObILibCacheCtx
       schema_guard_(NULL),
       need_add_obj_stat_(true),
       cache_params_(NULL),
-      raw_sql_()
+      raw_sql_(),
+      compile_time_(0)
   {
     sql_id_[0] = '\0';
     sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
@@ -274,6 +362,7 @@ struct ObPLCacheCtx : public ObILibCacheCtx
   bool need_add_obj_stat_;
   ParamStore *cache_params_;
   ObString raw_sql_;
+  int64_t compile_time_; // pl object cost time of compile
 };
 
 

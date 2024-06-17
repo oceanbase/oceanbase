@@ -146,6 +146,15 @@ public:
       const uint64_t tenant_id,
       const ObUnLockObjsRequest &arg,
       observer::ObInnerSQLConnection *conn);
+  static int create_inner_conn(sql::ObSQLSessionInfo *session_info,
+                               common::ObMySQLProxy *sql_proxy,
+                               observer::ObInnerSQLConnection *&inner_conn);
+  static int execute_write_sql(observer::ObInnerSQLConnection *conn, const ObSqlString &sql, int64_t &affected_rows);
+  static int execute_read_sql(observer::ObInnerSQLConnection *conn,
+                              const ObSqlString &sql,
+                              ObISQLClient::ReadResult &res);
+  static int build_tx_param(sql::ObSQLSessionInfo *session_info, ObTxParam &tx_param, const bool *readonly = nullptr);
+
 private:
   static int do_obj_lock_(
       const uint64_t tenant_id,
@@ -166,6 +175,7 @@ private:
       const ObLockRequest &arg,
       const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type,
       observer::ObInnerSQLConnection *conn);
+  static int get_org_cluster_id_(sql::ObSQLSessionInfo *session, int64_t &org_cluster_id);
 };
 
 } // tablelock

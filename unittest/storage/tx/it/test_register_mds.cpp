@@ -102,11 +102,11 @@ private:
 OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
                                                         SCN &snapshot,
                                                         const bool is_read_only,
-                                                        bool &acquire_from_follower)
+                                                        ObRole &role)
 {
   int ret = OB_SUCCESS;
   snapshot = tx_version_mgr_.get_max_commit_ts(false);
-  acquire_from_follower = false;
+  role = LEADER;
   return ret;
 }
 
@@ -142,6 +142,7 @@ public:
     auto test_name = test_info->name();
     MTL_MEM_ALLOC_MGR.init();
     _TRANS_LOG(INFO, ">>>> starting test : %s", test_name);
+    LOG_INFO(">>>>>>starting>>>>>>>>", K(test_name));
   }
   virtual void TearDown() override
   {
@@ -151,6 +152,7 @@ public:
     _TRANS_LOG(INFO, ">>>> tearDown test : %s", test_name);
     ObClockGenerator::destroy();
     ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
+    LOG_INFO(">>>>>teardown>>>>>>>>", K(test_name));
   }
   MsgBus bus_;
 };

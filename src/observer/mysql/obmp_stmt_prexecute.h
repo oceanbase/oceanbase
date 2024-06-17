@@ -107,8 +107,6 @@ protected:
   { return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet(); }
   virtual int response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo* session)
   { return ObMPBase::response_packet(pkt, session); }
-  virtual int after_process(int error_code)
-  { return ObMPBase::after_process(error_code); }
   int send_prepare_packet(uint32_t statement_id,
                           uint16_t column_num,
                           uint16_t param_num,

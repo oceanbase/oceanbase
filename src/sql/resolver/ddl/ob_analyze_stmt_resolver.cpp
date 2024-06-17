@@ -322,15 +322,16 @@ int ObAnalyzeStmtResolver::inner_resolve_partition_info(const ParseNode *part_no
   bool is_subpart_name = false;
 
   ObString &partition_name = table_info.get_partition_name();
-  if (OB_ISNULL(schema_checker_)) {
+  if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null schema checker", K(schema_checker_), K(ret));
+    LOG_WARN("null schema checker", K(schema_checker_), K(params_.allocator_), K(ret));
   } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(tenant_id), K(table_id), K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null table schema", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      *params_.allocator_,
                                                       part_infos,
                                                       subpart_infos,
                                                       part_ids,

@@ -435,12 +435,12 @@ static int text_trim2(ObTextStringIter &str_iter,
             int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
             if (OB_FAIL(output_result.init(result_len))) {
               LOG_WARN("init stringtext result failed", K(ret), K(result_len));
-            } else {
-              output_result.append(output);
+            } else if (OB_FAIL(output_result.append(output))) {
+              LOG_WARN("fail to append to result", K(ret), K(output.length()), K(output_result));
             }
           }
-        } else {
-          output_result.append(str_data);
+        } else if (OB_FAIL(output_result.append(str_data))) {
+          LOG_WARN("fail to append to result", K(ret), K(str_data.length()), K(output_result));
         }
       }
     } else if (trim_type == ObExprTrim::TYPE_RTRIM) {
@@ -525,12 +525,12 @@ static int text_trim(ObTextStringIter &str_iter,
             int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
             if (OB_FAIL(output_result.init(result_len))) {
               LOG_WARN("init stringtext result failed", K(ret), K(result_len));
-            } else {
-              output_result.append(output);
+            } else if (OB_FAIL(output_result.append(output))) {
+              LOG_WARN("fail to append to result", K(ret), K(output.length()), K(output_result));
             }
           }
-        } else {
-          output_result.append(str_data);
+        } else if (OB_FAIL(output_result.append(str_data))) {
+          LOG_WARN("fail to append to result", K(ret), K(str_data.length()), K(output_result));
         }
       }
     } else if (trim_type == ObExprTrim::TYPE_RTRIM) {
@@ -553,14 +553,22 @@ static int text_trim(ObTextStringIter &str_iter,
               LOG_WARN("stringtext result reserve buffer failed", K(ret));
             } else if (OB_FAIL(output_result.lseek(result_len, 0))) {
               LOG_WARN("result lseek failed", K(ret));
+            } else if (buf_size < output.length()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("buf size is wrong with data length", K(ret), K(buf_size), K(output.length()));
             } else {
               buf_pos = buf_size - output.length();
               MEMCPY(buf + buf_pos, output.ptr(), output.length());
             }
           }
         } else {
-          buf_pos -= str_data.length();
-          MEMCPY(buf + buf_pos, str_data.ptr(), str_data.length());
+          if (buf_pos < str_data.length()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("buf pos is wrong with data length", K(ret), K(buf_pos), K(str_data.length()));
+          } else {
+            buf_pos -= str_data.length();
+            MEMCPY(buf + buf_pos, str_data.ptr(), str_data.length());
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -576,23 +584,27 @@ static int text_trim(ObTextStringIter &str_iter,
              && found_start == false
              && is_finished == false
              && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
-        if (OB_FAIL(ObExprTrim::trim(output, trim_type, pattern, str_data))) {
-          LOG_WARN("do trim failed", K(ret));
-        } else if (str_iter.get_accessed_byte_len() == total_byte_len) { // accessed to the end of data
-          is_finished = true;
-          if (OB_FAIL(output_result.init(output.length()))) {
-            LOG_WARN("init stringtext result failed", K(ret), K(output.length()));
-          } else {
-            output_result.append(output);
-          }
+        if (OB_FAIL(ObExprTrim::trim(output, ObExprTrim::TYPE_LTRIM, pattern, str_data))) {
+          LOG_WARN("do front ltrim failed", K(ret), K(pattern), K(str_data));
         } else if (output.length() != 0) {
           found_start = true;
           str_iter.reset_reserve_len();
-          start_pos = total_byte_len - str_iter.get_accessed_byte_len() + str_data.length();
+          start_pos = str_iter.get_accessed_byte_len() - output.length();
           // output not copied
+        } else if (str_iter.get_accessed_byte_len() == total_byte_len) { // search to end and all output is zero
+          is_finished = true;
+          if (OB_FAIL(output_result.init(output.length()))) {
+            LOG_WARN("init stringtext result failed", K(ret), K(output.length()));
+          } else if (OB_FAIL(output_result.append(output))) {
+            LOG_WARN("fail to append to result", K(ret), K(output.length()), K(output_result));
+          }
         }
       }
       if (OB_FAIL(ret) || is_finished) {
+      } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+        ret = (str_iter.get_inner_ret() != OB_SUCCESS) ?
+              str_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter));
       } else {
         OB_ASSERT(found_start);
         // find end
@@ -607,9 +619,9 @@ static int text_trim(ObTextStringIter &str_iter,
           bool found_end = false;
           while (OB_SUCC(ret)
              && found_end == false
-             && (back_state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+             && (back_state = str_backward_iter.get_next_block(backward_str_data)) == TEXTSTRING_ITER_NEXT) {
             if (OB_FAIL(ObExprTrim::trim(backward_output, ObExprTrim::TYPE_RTRIM, pattern, backward_str_data))) {
-              LOG_WARN("do trim failed", K(ret));
+              LOG_WARN("do backward rtrim failed", K(ret), K(pattern), K(backward_str_data));
             } else if (backward_output.length() != 0) {
               found_end = true;
               end_pos = total_byte_len - str_backward_iter.get_accessed_byte_len() + backward_output.length();
@@ -618,6 +630,10 @@ static int text_trim(ObTextStringIter &str_iter,
           // copy from start to end
           int result_len = end_pos - start_pos;
           if (OB_FAIL(ret)) {
+          } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+            ret = (str_backward_iter.get_inner_ret() != OB_SUCCESS) ?
+                  str_backward_iter.get_inner_ret() : OB_INVALID_DATA;
+            LOG_WARN("str_backward_iter state invalid", K(ret), K(state), K(str_backward_iter));
           } else if (result_len < 0) {
             ret = OB_SIZE_OVERFLOW;
             LOG_WARN("init stringtext result failed", K(ret), K(start_pos), K(end_pos));
@@ -625,25 +641,23 @@ static int text_trim(ObTextStringIter &str_iter,
           // the same as input if it is a temp lob?
           } else if (OB_FAIL(output_result.init(result_len))) {
             LOG_WARN("init stringtext result failed", K(ret), K(output.length()));
-          } else if (OB_FAIL(output_result.append(output))) {
-            // error log
           } else {
-            result_len -= output.length();
-            while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+            str_data = output;
+            do {
               if (str_data.length() > result_len) {
                 if (OB_FAIL(output_result.append(str_data.ptr(), result_len))) {
-                  // error log
+                  LOG_WARN("fail to append to result", K(ret), K(result_len), K(output_result));
                 } else {
                   result_len = 0;
                 }
               } else if (OB_FAIL(output_result.append(str_data))) {
-                // error log
+                LOG_WARN("fail to append to result", K(ret), K(str_data.length()), K(output_result));
               } else {
                 result_len -= str_data.length();
               }
-            }
+            } while (OB_SUCC(ret) && result_len > 0 && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT);
             if (OB_SUCC(ret)) {
-              OB_ASSERT(result_len = 0);
+              OB_ASSERT(result_len == 0);
             }
           }
         }
@@ -870,7 +884,7 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprTrim, raw_expr) {
   int ret = OB_SUCCESS;
   if (lib::is_mysql_mode()) {
     SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   }
   return ret;
 }

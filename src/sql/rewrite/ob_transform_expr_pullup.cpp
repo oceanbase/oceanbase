@@ -546,29 +546,6 @@ int ObTransformExprPullup::search_expr_cannot_pullup(ObRawExpr *expr,
   return ret;
 }
 
-int ObTransformExprPullup::adjust_subquery(ObRawExpr *expr,
-                                           ObSelectStmt &child,
-                                           ObSelectStmt &parent)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-  } else if (expr->is_query_ref_expr()
-             && !ObRawExprUtils::find_expr(parent.get_subquery_exprs(), expr)) {
-    ObQueryRefRawExpr &query_ref = static_cast<ObQueryRefRawExpr &>(*expr);
-    if (OB_FAIL(parent.add_subquery_ref(&query_ref))) {
-      LOG_WARN("fail to add subquery ref", K(ret));
-    }
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
-    if (OB_FAIL(SMART_CALL(adjust_subquery(expr->get_param_expr(i), child, parent)))) {
-      LOG_WARN("fail to preorder search expr", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObTransformExprPullup::rewrite_decision_by_hint(ObSelectStmt &parent,
                                                     ObSelectStmt &child,
                                                     bool stmt_may_reduce_row_count,
@@ -793,8 +770,6 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
                                                               expr_params,
                                                               new_child_project_columns))) {
           LOG_WARN("failed to create select item", K(ret));
-        } else if (OB_FAIL(child.adjust_subquery_list())) {
-          LOG_WARN("fail to adjust subquery list", K(ret));
         }
       }
 
@@ -809,8 +784,6 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
           for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs_can_pullup.count(); i++) {
             if (OB_FAIL(select_exprs_can_pullup.at(i)->formalize(ctx_->session_info_))) {
               LOG_WARN("fail to formalize expr", K(ret));
-            } else if (OB_FAIL(adjust_subquery(select_exprs_can_pullup.at(i), child, parent))) {
-              LOG_WARN("fail to add subquery ref", K(ret));
             }
           }
         }
@@ -821,6 +794,8 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
                                                   select_exprs_can_pullup))) {
           LOG_WARN("fail to replace inner stmt expr", K(ret));
         } else if (OB_FAIL(parent.formalize_stmt(ctx_->session_info_))) {
+          LOG_WARN("fail to formalize stmt", K(ret));
+        } else if (OB_FAIL(child.formalize_stmt(ctx_->session_info_))) {
           LOG_WARN("fail to formalize stmt", K(ret));
         }
       }

@@ -135,6 +135,18 @@ int ObWkbBuffer::write(uint64_t pos, uint32_t val)
   return ret;
 }
 
+int ObWkbBuffer::read(uint64_t pos, uint32_t &val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf_.ptr()) || pos + sizeof(uint32_t) > buf_.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("read is not safe", K(ret), K(pos));
+  } else {
+    val = ObGeoWkbByteOrderUtil::read<uint32_t>(buf_.ptr() + pos, bo_);
+  }
+  return ret;
+}
+
 const ObString ObWkbBuffer::string() const
 {
   return buf_.string();

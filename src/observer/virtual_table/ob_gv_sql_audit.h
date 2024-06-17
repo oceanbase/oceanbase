@@ -173,6 +173,10 @@ private:
     NETWORK_WAIT_TIME,
     STMT_TYPE,
     SEQ_NUM,
+    TOTAL_MEMSTORE_READ_ROW_COUNT,
+    TOTAL_SSSTORE_READ_ROW_COUNT,
+    PROXY_USER_NAME,
+    FORMAT_SQL_ID
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;
@@ -199,6 +203,7 @@ private:
   char client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char user_client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char trace_id_[128];
+  char pl_trace_id_[128];
 
   //max wait event columns
   bool is_first_get_;

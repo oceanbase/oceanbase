@@ -33,6 +33,7 @@ ObTableIterParam::ObTableIterParam()
       rowkey_read_info_(nullptr),
       tablet_handle_(nullptr),
       cg_read_info_handle_(),
+      cg_read_infos_(nullptr),
       out_cols_project_(NULL),
       agg_cols_project_(NULL),
       group_by_cols_project_(NULL),
@@ -44,12 +45,14 @@ ObTableIterParam::ObTableIterParam()
       output_sel_mask_(nullptr),
       is_multi_version_minor_merge_(false),
       need_scn_(false),
+      need_trans_info_(false),
       is_same_schema_column_(false),
       vectorized_enabled_(false),
       has_virtual_columns_(false),
       has_lob_column_out_(false),
       is_for_foreign_check_(false),
       limit_prefetch_(false),
+      is_non_unique_local_index_(false),
       ss_rowkey_prefix_cnt_(0),
       pd_storage_flag_()
 {
@@ -58,6 +61,11 @@ ObTableIterParam::ObTableIterParam()
 ObTableIterParam::~ObTableIterParam()
 {
   cg_read_info_handle_.reset();
+  if (nullptr != pushdown_filter_) {
+    pushdown_filter_->clear();
+    pushdown_filter_ = nullptr;
+  }
+  ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
 void ObTableIterParam::reset()
@@ -68,14 +76,19 @@ void ObTableIterParam::reset()
   rowkey_read_info_ = nullptr;
   tablet_handle_ = nullptr;
   cg_read_info_handle_.reset();
+  cg_read_infos_ = nullptr;
   out_cols_project_ = NULL;
   agg_cols_project_ = NULL;
   group_by_cols_project_ = NULL;
   is_multi_version_minor_merge_ = false;
   need_scn_ = false;
+  need_trans_info_ = false;
   is_same_schema_column_ = false;
   pd_storage_flag_ = 0;
-  pushdown_filter_ = nullptr;
+  if (nullptr != pushdown_filter_) {
+    pushdown_filter_->clear();
+    pushdown_filter_ = nullptr;
+  }
   ss_rowkey_prefix_cnt_ = 0;
   op_ = nullptr;
   output_exprs_ = nullptr;
@@ -86,6 +99,7 @@ void ObTableIterParam::reset()
   has_lob_column_out_ = false;
   is_for_foreign_check_ = false;
   limit_prefetch_ = false;
+  is_non_unique_local_index_ = false;
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
@@ -123,7 +137,8 @@ bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag) cons
 bool ObTableIterParam::need_trans_info() const
 {
   bool bret = false;
-  if (OB_NOT_NULL(op_) && OB_NOT_NULL(op_->expr_spec_.trans_info_expr_)) {
+  if (need_trans_info_ ||
+      (OB_NOT_NULL(op_) && OB_NOT_NULL(op_->expr_spec_.trans_info_expr_))) {
     bret = true;
   }
   return bret;
@@ -141,6 +156,7 @@ int ObTableIterParam::get_cg_column_param(const share::schema::ObColumnParam *&c
   }
   return ret;
 }
+
 DEF_TO_STRING(ObTableIterParam)
 {
   int64_t pos = 0;
@@ -154,6 +170,7 @@ DEF_TO_STRING(ObTableIterParam)
        KPC_(pushdown_filter),
        KP_(op),
        KP_(sstable_index_filter),
+       KP_(cg_read_infos),
        KPC_(output_exprs),
        KPC_(aggregate_exprs),
        KPC_(output_sel_mask),
@@ -166,6 +183,7 @@ DEF_TO_STRING(ObTableIterParam)
        K_(has_lob_column_out),
        K_(is_for_foreign_check),
        K_(limit_prefetch),
+       K_(is_non_unique_local_index),
        K_(ss_rowkey_prefix_cnt));
   J_OBJ_END();
   return pos;
@@ -216,6 +234,7 @@ int ObTableAccessParam::init(
     iter_param_.table_id_ = table_param.get_table_id();
     iter_param_.tablet_id_ = scan_param.tablet_id_;
     iter_param_.read_info_ = &table_param.get_read_info();
+    iter_param_.cg_read_infos_ = table_param.get_cg_read_infos();
     iter_param_.rowkey_read_info_ = &tablet_handle.get_obj()->get_rowkey_read_info();
     iter_param_.set_tablet_handle(&tablet_handle);
     iter_param_.out_cols_project_ = &table_param.get_output_projector();
@@ -253,8 +272,7 @@ int ObTableAccessParam::init(
     // vectorize requires blockscan is enabled(_pushdown_storage_level > 0)
     iter_param_.vectorized_enabled_ = nullptr != get_op() && get_op()->is_vectorized();
     iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
-    if (scan_param.sample_info_.is_no_sample() &&
-        iter_param_.is_use_column_store() &&
+    if (iter_param_.is_use_column_store() &&
         nullptr != table_param.get_read_info().get_cg_idxs() &&
         !iter_param_.need_fill_group_idx()) { // not use column store in group rescan
       iter_param_.set_use_column_store();
@@ -263,11 +281,10 @@ int ObTableAccessParam::init(
     }
     if (scan_param.need_switch_param_ ||
         iter_param_.is_use_column_store()) {
-      iter_param_.set_use_iter_pool_flag();
+      iter_param_.set_use_stmt_iter_pool();
     }
 
-    if (OB_UNLIKELY(iter_param_.enable_pd_group_by() &&
-        (!iter_param_.vectorized_enabled_ || scan_param.use_index_skip_scan()))) {
+    if (OB_UNLIKELY(iter_param_.enable_pd_group_by() && scan_param.use_index_skip_scan())) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "Invalid argument for group by pushdown, vectorize must be enabled and not skip scan",
           K(ret), K(iter_param_.vectorized_enabled_), K(scan_param.use_index_skip_scan()));
@@ -355,6 +372,7 @@ int ObTableAccessParam::init_dml_access_param(
     iter_param_.tablet_id_ = table.get_tablet_id();
     iter_param_.read_info_ = &schema_param.get_read_info();
     iter_param_.rowkey_read_info_ = &rowkey_read_info;
+    iter_param_.cg_read_infos_ = schema_param.get_cg_read_infos();
     iter_param_.set_tablet_handle(table.tablet_iter_.get_tablet_handle_ptr());
     iter_param_.is_same_schema_column_ =
         iter_param_.read_info_->get_schema_column_count() == iter_param_.rowkey_read_info_->get_schema_column_count();

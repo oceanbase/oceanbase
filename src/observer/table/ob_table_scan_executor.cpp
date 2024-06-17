@@ -32,7 +32,7 @@ int ObTableApiScanExecutor::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef,
   const ObTableApiScanCtDef &tsc_ctdef = scan_spec_.get_ctdef();
   bool is_lookup = (&das_ctdef == tsc_ctdef.lookup_ctdef_);
   das_rtdef.timeout_ts_ = tb_ctx.get_timeout_ts();
-  das_rtdef.scan_flag_.scan_order_ = tb_ctx.get_scan_order();
+  das_rtdef.scan_flag_.scan_order_ = is_lookup ? ObQueryFlag::KeepOrder : tb_ctx.get_scan_order();
   das_rtdef.scan_flag_.index_back_ = tb_ctx.is_index_back();
   das_rtdef.scan_flag_.read_latest_ = tb_ctx.is_read_latest();
   das_rtdef.need_check_output_datum_ = false;
@@ -130,12 +130,12 @@ int ObTableApiScanExecutor::prepare_das_task()
       if (OB_ISNULL(lookup_tablet_loc)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("lookup tablet loc is nullptr", K(ret), KPC(lookup_table_loc->loc_meta_));
-      } else if (OB_FAIL(scan_op->set_lookup_ctdef(scan_spec_.get_ctdef().lookup_ctdef_))) {
-        LOG_WARN("set lookup ctdef failed", K(ret));
-      } else if (OB_FAIL(scan_op->set_lookup_rtdef(tsc_rtdef_.lookup_rtdef_))) {
-        LOG_WARN("set lookup rtdef failed", K(ret));
-      } else if (OB_FAIL(scan_op->set_lookup_tablet_id(lookup_tablet_loc->tablet_id_))) {
-        LOG_WARN("set lookup tablet id failed", K(ret), KPC(lookup_tablet_loc));
+      } else if (OB_FAIL(scan_op->reserve_related_buffer(1))) {
+        LOG_WARN("failed to set related scan cnt", K(ret));
+      } else if (OB_FAIL(scan_op->set_related_task_info(scan_spec_.get_ctdef().lookup_ctdef_,
+                                                        tsc_rtdef_.lookup_rtdef_,
+                                                        lookup_tablet_loc->tablet_id_))) {
+        LOG_WARN("set related task info failed", K(ret));
       } else {
         lookup_table_loc->is_reading_ = true;
       }
@@ -315,7 +315,8 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
   ObObj *cells = nullptr;
   const ObTableCtx &tb_ctx = scan_executor_->get_table_ctx();
   const ExprFixedArray &output_exprs = scan_executor_->get_spec().get_ctdef().output_exprs_;
-  const int64_t cells_cnt = output_exprs.count();
+  const ObIArray<uint64_t> &query_col_ids = tb_ctx.get_query_col_ids();
+  const int64_t cells_cnt = tb_ctx.is_scan() ? query_col_ids.count() : output_exprs.count();
   row_allocator_.reuse();
 
   if (OB_ISNULL(scan_executor_)) {
@@ -339,7 +340,6 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
     ObEvalCtx &eval_ctx = scan_executor_->get_eval_ctx();
     if (tb_ctx.is_scan()) { // 转为用户select的顺序
       const ObIArray<uint64_t> &select_col_ids = tb_ctx.get_select_col_ids();
-      const ObIArray<uint64_t> &query_col_ids = tb_ctx.get_query_col_ids();
       for (int64_t i = 0; OB_SUCC(ret) && i < query_col_ids.count(); i++) {
         uint64_t col_id = query_col_ids.at(i);
         int64_t idx = -1;

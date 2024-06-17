@@ -157,6 +157,17 @@ int ObAllVirtualSysParameterStat::inner_sys_get_next_row(ObNewRow *&row)
                ObCharset::get_default_collation(ObCharset::get_default_charset()));
            break;
           }
+        case DEFAULT_VALUE: {
+            cells[i].set_varchar(sys_iter_->second->default_str());
+            cells[i].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+        case ISDEFAULT: {
+            int isdefault = sys_iter_->second->is_default(sys_iter_->second->str(),sys_iter_->second->default_str(),sizeof(sys_iter_->second->default_str())) ? 1 : 0;
+            cells[i].set_int(isdefault);
+            break;
+          }
         default : {
             // TODO: 版本兼容性，多余的列不报错
             // ret = OB_ERR_UNEXPECTED;
@@ -262,6 +273,17 @@ int ObAllVirtualSysParameterStat::inner_tenant_get_next_row(common::ObNewRow *&r
               ObCharset::get_default_collation(ObCharset::get_default_charset()));
               break;
           }
+        case DEFAULT_VALUE: {
+          cells[i].set_varchar(tenant_iter_->second->default_str());
+          cells[i].set_collation_type(
+            ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+        case ISDEFAULT: {
+          int isdefault = tenant_iter_->second->is_default(tenant_iter_->second->str(),tenant_iter_->second->default_str(),sizeof(tenant_iter_->second->default_str())) ? 1 : 0;
+          cells[i].set_int(isdefault);
+          break;
+        }
         default : {
             // 版本兼容性，多余列不报错
             // ret = OB_ERR_UNEXPECTED;

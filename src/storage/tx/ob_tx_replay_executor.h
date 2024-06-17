@@ -132,7 +132,7 @@ private:
   virtual int replay_one_row_in_memtable_(memtable::ObMutatorRowHeader& row_head,
                                           memtable::ObMemtableMutatorIterator *mmi_ptr);
   int prepare_memtable_replay_(storage::ObStorageTableGuard &w_guard,
-                          memtable::ObIMemtable *&mem_ptr);
+                          ObIMemtable *&mem_ptr);
   int replay_row_(storage::ObStoreCtx &store_ctx,
                   storage::ObTablet *tablet,
                   memtable::ObMemtableMutatorIterator *mmi_ptr);

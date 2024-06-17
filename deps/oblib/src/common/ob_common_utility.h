@@ -14,6 +14,7 @@
 #define _OCEABASE_COMMON_OB_COMMON_UTILITY_H_
 #include <sys/time.h>
 #include "lib/ob_define.h"
+#include "lib/time/ob_tsc_timestamp.h"
 namespace oceanbase
 {
 namespace common
@@ -57,29 +58,57 @@ private:
 
 inline int64_t get_cur_ts()
 {
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  const int64_t us =
-            static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec);
-  return us;
+  return OB_TSC_TIMESTAMP.fast_current_time();
 }
 
 class ObBasicTimeGuard
 {
 public:
-  explicit ObBasicTimeGuard()
+  struct ClickInfo
   {
+
+    static bool compare(const ClickInfo &left, const ClickInfo &right)
+    {
+      return left.seq_ < right.seq_;
+    }
+    int32_t seq_;
+    int32_t cost_time_;
+    const char* mod_;
+  };
+  explicit ObBasicTimeGuard(const char *owner, const char *start, const char *end)
+    : enable_(tl_enable_time_guard), owner_(owner), start_(start), end_(end)
+  {
+    if (OB_LIKELY(enable_)) {
+      last_time_guard_ = tl_time_guard;
+      if (NULL != tl_time_guard) {
+        tl_time_guard->click(start_);
+      }
+      tl_time_guard = this;
+    } else {
+      last_time_guard_ = NULL;
+    }
     start_ts_ = get_cur_ts();
     last_ts_ = start_ts_;
     click_count_ = 0;
+    MEMSET(click_infos_, 0, sizeof(click_infos_));
   }
-  void click(const char *mod = NULL)
+  ~ObBasicTimeGuard()
   {
-    const int64_t cur_ts = get_cur_ts();
-    if (OB_LIKELY(click_count_ < MAX_CLICK_COUNT)) {
-      click_str_[click_count_] = mod;
-      click_[click_count_++] = (int32_t)(cur_ts - last_ts_);
-      last_ts_ = cur_ts;
+    if (OB_LIKELY(enable_)) {
+      tl_time_guard = last_time_guard_;
+      if (NULL != tl_time_guard) {
+        tl_time_guard->click(end_);
+      }
+    }
+  }
+  static ObBasicTimeGuard *get_tl_time_guard()
+  {
+    return tl_time_guard;
+  }
+  static void time_guard_click(const char *mod)
+  {
+    if (OB_LIKELY(tl_enable_time_guard) && NULL != tl_time_guard) {
+      tl_time_guard->click(mod);
     }
   }
   int64_t get_start_ts() const
@@ -91,17 +120,54 @@ public:
     return get_cur_ts() - start_ts_;
   }
   int64_t to_string(char *buf, const int64_t buf_len) const;
+private:
+  void click(const char *mod)
+  {
+    const int64_t cur_ts = get_cur_ts();
+    const int64_t cost_time = cur_ts - last_ts_;
+    last_ts_ = cur_ts;
+    int64_t index = 0;
+    bool record_click = true;
+    if (OB_LIKELY(click_count_ < MAX_CLICK_COUNT)) {
+      index = click_count_;
+    } else {
+      int64_t min_cost_time = cost_time;
+      for (int32_t i = 0; i < MAX_CLICK_COUNT; ++i) {
+        if (click_infos_[i].cost_time_ < min_cost_time) {
+          index = i;
+          min_cost_time = click_infos_[i].cost_time_;
+        }
+      }
+      record_click = cost_time > min_cost_time;
+    }
+    if (record_click) {
+      click_infos_[index].seq_ = (int32_t)click_count_++;
+      click_infos_[index].cost_time_ = (int32_t)cost_time;
+      click_infos_[index].mod_ = mod;
+    }
+  }
+public:
+  static __thread bool tl_enable_time_guard;
 protected:
   static const int64_t MAX_CLICK_COUNT = 16;
+  static __thread ObBasicTimeGuard *tl_time_guard;
 private:
+  const bool enable_;
+  ObBasicTimeGuard *last_time_guard_;
   int64_t start_ts_;
   int64_t last_ts_;
   int64_t click_count_;
-  int32_t click_[MAX_CLICK_COUNT];
-  const char *click_str_[MAX_CLICK_COUNT];
+  const char *owner_;
+  const char *start_;
+  const char *end_;
+  ClickInfo click_infos_[MAX_CLICK_COUNT];
 };
+
+#define BASIC_TIME_GUARD_CLICK(mod) ObBasicTimeGuard::time_guard_click(mod)
+
+#define BASIC_TIME_GUARD(name, owner) ObBasicTimeGuard name(owner, owner"#start", owner"#end");
+
 
 } // end of namespace common
 } // end of namespace oceanbase
-
 #endif /* _OCEABASE_COMMON_OB_COMMON_UTILITY_H_ */

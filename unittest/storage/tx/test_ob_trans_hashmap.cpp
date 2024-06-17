@@ -109,9 +109,6 @@ public:
   bool operator() (ObTransTestValue *val)
   {
     TRANS_LOG(INFO, "currnet val info will be removed ", K(*val));
-    if (NULL != map_) {
-      map_->del(val->get_trans_id(), val);
-    }
     return true;
   }
 private:

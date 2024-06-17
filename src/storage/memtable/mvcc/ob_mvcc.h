@@ -17,11 +17,13 @@
 
 namespace oceanbase
 {
+namespace storage {
+class ObIMemtable;
+};
 namespace memtable
 {
 class ObTransCallbackList;
 class ObITransCallbackIterator;
-class ObIMemtable;
 enum class MutatorType;
 struct TxChecksum : public common::ObBatchChecksum {
   TxChecksum(): cnt_(0), scn_() {}
@@ -56,9 +58,9 @@ public:
   virtual bool is_table_lock_callback() const { return false; }
   virtual int merge_memtable_key(transaction::ObMemtableKeyArray &memtable_key_arr)
   { UNUSED(memtable_key_arr); return common::OB_SUCCESS; }
-  virtual bool on_memtable(const ObIMemtable * const memtable)
+  virtual bool on_memtable(const storage::ObIMemtable * const memtable)
   { UNUSED(memtable); return false; }
-  virtual ObIMemtable* get_memtable() const { return nullptr; }
+  virtual storage::ObIMemtable* get_memtable() const { return nullptr; }
   virtual uint32_t get_freeze_clock() const { return 0; }
   virtual transaction::ObTxSEQ get_seq_no() const { return transaction::ObTxSEQ::INVL(); }
   virtual int del() { return remove(); }
@@ -72,13 +74,13 @@ public:
   void after_append_cb(const bool is_replay);
   bool need_submit_log() const { return need_submit_log_; }
   virtual bool is_logging_blocked() const { return false; }
-  virtual bool on_frozen_memtable(ObIMemtable *&last_frozen_mt) const { return true; }
-  int log_submitted_cb(const share::SCN scn, ObIMemtable *&last_mt);
+  virtual bool on_frozen_memtable(storage::ObIMemtable *&last_frozen_mt) const { return true; }
+  int log_submitted_cb(const share::SCN scn, storage::ObIMemtable *&last_mt);
   int log_sync_fail_cb(const share::SCN scn);
   // interface should be implement by subclasses
   virtual int before_append(const bool is_replay) { return common::OB_SUCCESS; }
   virtual void after_append(const bool is_replay) {}
-  virtual int log_submitted(const share::SCN scn, ObIMemtable *&last_mt)
+  virtual int log_submitted(const share::SCN scn, storage::ObIMemtable *&last_mt)
   { UNUSED(scn); return common::OB_SUCCESS; }
   virtual int log_sync_fail(const share::SCN max_committed_scn)
   { return common::OB_SUCCESS; }

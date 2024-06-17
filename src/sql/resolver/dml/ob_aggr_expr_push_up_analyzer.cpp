@@ -37,7 +37,7 @@ int ObAggrExprPushUpAnalyzer::analyze_and_push_up_aggr_expr(ObRawExprFactory &ex
   if (OB_ISNULL(aggr_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("aggr expr is null", K(ret));
-  } else if (OB_FAIL(analyze_aggr_param_expr(root_expr, true))) {
+  } else if (OB_FAIL(analyze_aggr_param_expr(root_expr, false, true))) {
     LOG_WARN("failed to analyze aggr param expr", K(ret), K(*root_expr));
   } else if (OB_FAIL(get_min_level_resolver(min_level_resolver))) {
     LOG_WARN("failed to get min level resolver", K(ret));
@@ -73,7 +73,7 @@ int ObAggrExprPushUpAnalyzer::analyze_and_push_up_aggr_expr(ObRawExprFactory &ex
     } else if (final_aggr_resolver == &cur_resolver_) {
       final_aggr = aggr_expr;
     } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(expr_factory,
-                                                           final_aggr_resolver->get_subquery(),
+                                                           final_aggr_resolver->get_query_ref_exec_params(),
                                                            aggr_expr,
                                                            final_aggr))) {
       LOG_WARN("failed to get exec param expr", K(ret));
@@ -99,6 +99,7 @@ int ObAggrExprPushUpAnalyzer::analyze_and_push_up_aggr_expr(ObRawExprFactory &ex
  * @return
  */
 int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
+                                                      bool is_in_aggr_expr,
                                                       bool is_root /* = false*/,
                                                       bool is_child_stmt /* = false*/)
 {
@@ -130,7 +131,7 @@ int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
     if (OB_SUCC(ret) &&
         !is_child_stmt &&
         param_expr->is_aggr_expr() &&
-        !static_cast<ObAggFunRawExpr *>(param_expr)->is_nested_aggr()) {
+        !is_in_aggr_expr) {
       //在聚集函数中含有同层级的聚集函数，这个对于mysql不允许的
       //select count(select count(t1.c1) from t) from t1;
       //在上面的例子中，count(t1.c1)推上去了，和最外层的count()处于同一级
@@ -143,7 +144,10 @@ int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
 
   for (int64_t i = 0; OB_SUCC(ret) && i < param_expr->get_param_count(); ++i) {
     ObRawExpr *&param = param_expr->get_param_expr(i);
-    if (OB_FAIL(SMART_CALL(analyze_aggr_param_expr(param, false, is_child_stmt)))) {
+    if (OB_ISNULL(param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(analyze_aggr_param_expr(param, is_in_aggr_expr || param_expr->is_aggr_expr(), false, is_child_stmt)))) {
       LOG_WARN("analyze child expr failed", K(ret));
     }
   }
@@ -170,7 +174,10 @@ int ObAggrExprPushUpAnalyzer::analyze_child_stmt(ObSelectStmt *child_stmt)
     ObRawExpr *expr = NULL;
     if (OB_FAIL(relation_exprs.at(i).get(expr))) {
       LOG_WARN("failed to get expr", K(ret));
-    } else if (OB_FAIL(analyze_aggr_param_expr(expr, false, true))) {
+    } else if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(analyze_aggr_param_expr(expr, false, false, true))) {
       LOG_WARN("failed to analyze aggr param expr", K(ret));
     } else if (OB_FAIL(relation_exprs.at(i).set(expr))) {
       LOG_WARN("failed to set expr", K(ret));
@@ -431,13 +438,13 @@ int ObAggrExprPushUpAnalyzer::get_exec_params(ObDMLResolver *resolver,
                                               ObIArray<ObExecParamRawExpr *> &my_exec_params)
 {
   int ret = OB_SUCCESS;
-  ObQueryRefRawExpr *query_ref = NULL;
-  if (OB_ISNULL(resolver) || OB_ISNULL(query_ref = resolver->get_subquery())) {
+  ObIArray<ObExecParamRawExpr*> *query_ref_exec_params = NULL;
+  if (OB_ISNULL(resolver) || OB_ISNULL(query_ref_exec_params = resolver->get_query_ref_exec_params())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(resolver), K(query_ref));
+    LOG_WARN("params have null", K(ret), K(resolver), K(query_ref_exec_params));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < all_exec_params.count(); ++i) {
-    if (!ObRawExprUtils::find_expr(query_ref->get_exec_params(), all_exec_params.at(i))) {
+    if (!ObRawExprUtils::find_expr(*query_ref_exec_params, all_exec_params.at(i))) {
       // do nothing
     } else if (OB_FAIL(my_exec_params.push_back(all_exec_params.at(i)))) {
       LOG_WARN("failed to push back exec param", K(ret));
@@ -567,7 +574,7 @@ int ObStmtExecParamReplacer::do_visit(ObRawExpr *&expr)
     } else if (OB_FAIL(SMART_CALL(query_ref_expr->get_ref_stmt()->iterate_stmt_expr(*this)))) {
       LOG_WARN("failed to iterator stmt expr", K(ret));
     }
-  } else if (expr->has_flag(CNT_SUB_QUERY)) {
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
       if (OB_FAIL(SMART_CALL(do_visit(expr->get_param_expr(i))))) {
         LOG_WARN("failed to do replace exec param", K(ret));

@@ -72,6 +72,7 @@ public:
   observer::ObSimpleServerReplica &get_curr_simple_server() { return *replica_; }
 
   static int read_cur_json_document_(rapidjson::Document & json_doc);
+
   static int wait_event_finish(const std::string &event_name,
                                std::string &event_content,
                                int64_t wait_timeout_ms,
@@ -81,7 +82,8 @@ public:
   int create_tenant(const char *tenant_name = DEFAULT_TEST_TENANT_NAME,
                     const char *memory_size = "2G",
                     const char *log_disk_size = "2G",
-                    const bool oracle_mode = false);
+                    const bool oracle_mode = false,
+                    const char *primary_zone = "zone1");
   int delete_tenant(const char *tenant_name = DEFAULT_TEST_TENANT_NAME);
   int get_tenant_id(uint64_t &tenant_id, const char *tenant_name = DEFAULT_TEST_TENANT_NAME);
   int exec_write_sql_sys(const char *sql_str, int64_t &affected_rows);

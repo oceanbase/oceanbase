@@ -20,6 +20,7 @@
 #include "ob_xa_define.h"
 #include "ob_xa_inner_table_gc_worker.h"
 #include "ob_xa_trans_heartbeat_worker.h"
+#include "ob_xa_trans_event.h"
 
 namespace oceanbase
 {
@@ -91,22 +92,28 @@ private:
 class ObXAService
 {
 public:
-  ObXAService() : is_running_(false), is_inited_(false) {}
-  virtual ~ObXAService() {}
+  ObXAService()
+    : xa_ctx_mgr_(), xa_proxy_(), xa_rpc_(), timer_(), xa_trans_heartbeat_worker_(),
+      xa_inner_table_gc_worker_(), is_running_(false), is_inited_(false),
+      xa_statistics_v2_(), dblink_statistics_() {}
+  virtual ~ObXAService() { destroy(); }
   int init(const ObAddr &self_addr,
            rpc::frame::ObReqTransport *req_transport);
   static int mtl_init(ObXAService* &xa_service);
   int start();
   void stop();
   void wait();
-  void destroy() {}
+  void destroy();
+public:
+  void try_print_statistics();
 public:
   int xa_start(const ObXATransID &xid,
               const int64_t flags,
               const int64_t timeout_seconds,
               const uint32_t session_id,
               const ObTxParam &tx_param,
-              ObTxDesc *&tx_desc);
+              ObTxDesc *&tx_desc,
+              const uint64_t data_version);
   int xa_end(const ObXATransID &xid,
              const int64_t flags,
              ObTxDesc *&tx_desc);
@@ -143,7 +150,8 @@ public:
                       const uint32_t session_id,
                       const ObTxParam &tx_param,
                       ObTxDesc *&tx_desc,
-                      ObXATransID &xid);
+                      ObXATransID &xid,
+                      const uint64_t data_version);
   int xa_start_for_dblink_client(const common::sqlclient::DblinkDriverProto dblink_type,
                                  common::sqlclient::ObISQLConnection *dblink_conn,
                                  ObTxDesc *&tx_desc,
@@ -228,7 +236,9 @@ public:
                                 const ObTransID &trans_id,
                                 const share::ObLSID &coordinator,
                                 const ObAddr &sche_addr);
-  ObXAStatistics &get_xa_statistics() { return xa_statistics_; }
+  // ObXAStatistics &get_xa_statistics() { return xa_statistics_; }
+  ObXATransStatistics &get_statistics() { return xa_statistics_v2_; }
+  ObDBLinkTransStatistics &get_dblink_statistics() { return dblink_statistics_; }
 private:
   int local_one_phase_xa_commit_ (const ObXATransID &xid,
                                   const ObTransID &trans_id,
@@ -247,7 +257,8 @@ private:
                 const int64_t timeout_seconds,
                 const uint32_t session_id,
                 const ObTxParam &tx_param,
-                ObTxDesc *&tx_desc);
+                ObTxDesc *&tx_desc,
+                const uint64_t data_version);
   int xa_start_join_(const ObXATransID &xid,
                      const int64_t flags,
                      const int64_t timeout_seconds,
@@ -318,7 +329,8 @@ private:
                        const uint32_t session_id,
                        const ObTxParam &tx_param,
                        ObTxDesc *&tx_desc,
-                       ObXATransID &xid);
+                       ObXATransID &xid,
+                       const uint64_t data_version);
 public:
   int xa_scheduler_hb_req();
   int gc_invalid_xa_record(const uint64_t tenant_id);
@@ -332,9 +344,175 @@ private:
   ObXAInnerTableGCWorker xa_inner_table_gc_worker_;
   bool is_running_;
   bool is_inited_;
-  ObXAStatistics xa_statistics_;
   ObXACache xa_cache_;
+  // ObXAStatistics xa_statistics_;
+  ObXATransStatistics xa_statistics_v2_;
+  ObDBLinkTransStatistics dblink_statistics_;
 };
+
+
+class ObXAInnerSqlStatGuard
+{
+public:
+  explicit ObXAInnerSqlStatGuard(const int64_t start_ts)
+    : start_ts_(start_ts)
+  {
+    if (0 > start_ts_) {
+      start_ts_ = 0;
+    }
+  }
+  ~ObXAInnerSqlStatGuard()
+  {
+    ObXATransStatistics &statistics = MTL(ObXAService*)->get_statistics();
+    if (0 < start_ts_) {
+      const int64_t used_time_us = ObTimeUtility::current_time() - start_ts_;
+      if (0 < used_time_us) {
+        statistics.inc_xa_inner_sql_total_count();
+        statistics.add_xa_inner_sql_total_used_time(used_time_us);
+        if (10000 < used_time_us) {
+          statistics.inc_xa_inner_sql_ten_ms_total_count();
+        }
+        if (20000 < used_time_us) {
+          statistics.inc_xa_inner_sql_twenty_ms_total_count();
+        }
+      }
+    }
+  }
+private:
+  int64_t start_ts_;
+};
+
+class ObXAStmtGuard
+{
+public:
+  explicit ObXAStmtGuard(const int64_t start_ts)
+    : start_ts_(start_ts)
+  {
+    ObXATransStatistics &statistics = MTL(ObXAService*)->get_statistics();
+    statistics.inc_active_xa_stmt_count();
+    statistics.try_print_active(start_ts);
+  }
+  ~ObXAStmtGuard()
+  {
+    ObXATransStatistics &statistics = MTL(ObXAService*)->get_statistics();
+    statistics.dec_active_xa_stmt_count();
+  }
+private:
+  int64_t start_ts_;
+};
+
+/////// statistics of xa stmt
+#define XA_STAT_ADD_XA_START_TOTAL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_start_total_count();}                  \
+
+#define XA_STAT_ADD_XA_START_REMOTE_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_start_remote_count();}                  \
+
+#define XA_STAT_ADD_XA_START_FAIL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_start_fail_count();}                  \
+
+#define XA_STAT_ADD_XA_END_TOTAL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_end_total_count();}                  \
+
+#define XA_STAT_ADD_XA_END_REMOTE_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_end_remote_count();}                  \
+
+#define XA_STAT_ADD_XA_END_FAIL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_end_fail_count();}                  \
+
+#define XA_STAT_ADD_XA_PREPARE_TOTAL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_prepare_total_count();}                  \
+
+#define XA_STAT_ADD_XA_PREPARE_REMOTE_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_prepare_remote_count();}                  \
+
+#define XA_STAT_ADD_XA_PREPARE_FAIL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_prepare_fail_count();}                  \
+
+#define XA_STAT_ADD_XA_COMMIT_TOTAL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_commit_total_count();}                  \
+
+#define XA_STAT_ADD_XA_COMMIT_REMOTE_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_commit_remote_count();}                  \
+
+#define XA_STAT_ADD_XA_COMMIT_FAIL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_commit_fail_count();}                  \
+
+#define XA_STAT_ADD_XA_ROLLBACK_TOTAL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_rollback_total_count();}                  \
+
+#define XA_STAT_ADD_XA_ROLLBACK_REMOTE_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_rollback_remote_count();}                  \
+
+#define XA_STAT_ADD_XA_ROLLBACK_FAIL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_rollback_fail_count();}                  \
+
+#define XA_STAT_ADD_XA_START_TOTAL_USED_TIME(used_time)            \
+   { MTL(ObXAService*)->get_statistics().add_xa_start_total_used_time(used_time);}                  \
+
+#define XA_STAT_ADD_XA_END_TOTAL_USED_TIME(used_time)            \
+   { MTL(ObXAService*)->get_statistics().add_xa_end_total_used_time(used_time);}                  \
+
+#define XA_STAT_ADD_XA_PREPARE_TOTAL_USED_TIME(used_time)            \
+   { MTL(ObXAService*)->get_statistics().add_xa_prepare_total_used_time(used_time);}                  \
+
+#define XA_STAT_ADD_XA_COMMIT_TOTAL_USED_TIME(used_time)            \
+   { MTL(ObXAService*)->get_statistics().add_xa_commit_total_used_time(used_time);}                  \
+
+#define XA_STAT_ADD_XA_ROLLBACK_TOTAL_USED_TIME(used_time)            \
+   { MTL(ObXAService*)->get_statistics().add_xa_rollback_total_used_time(used_time);}                  \
+
+/////// statistics of xa trans
+#define XA_STAT_ADD_XA_TRANS_START_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_trans_start_count();}                  \
+
+#define XA_STAT_ADD_XA_READ_ONLY_TRANS_TOTAL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_read_only_trans_total_count();}                  \
+
+#define XA_STAT_ADD_XA_ONE_PHASE_COMMIT_TOTAL_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_xa_one_phase_commit_total_count();}                  \
+
+/////// statistics of active xa info
+#define XA_ACTIVE_INCREMENT_XA_CTX_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_active_xa_ctx_count();}                  \
+
+#define XA_ACTIVE_DECREMENT_XA_CTX_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().dec_active_xa_ctx_count();}                  \
+
+/////// statistics of xa inner logic
+#define XA_INNER_INCREMENT_COMPENSATE_COUNT()            \
+   { MTL(ObXAService*)->get_statistics().inc_compensate_record_count();}                  \
+
+/////// statistics of dblink trans
+#define DBLINK_STAT_ADD_TRANS_COUNT()            \
+   { MTL(ObXAService*)->get_dblink_statistics().inc_dblink_trans_count();}                  \
+
+#define DBLINK_STAT_ADD_TRANS_FAIL_COUNT()            \
+   { MTL(ObXAService*)->get_dblink_statistics().inc_dblink_trans_fail_count();}                  \
+
+#define DBLINK_STAT_ADD_TRANS_PROMOTION_COUNT()            \
+   { MTL(ObXAService*)->get_dblink_statistics().inc_dblink_trans_promotion_count();}                  \
+
+#define DBLINK_STAT_ADD_TRANS_CALLBACK_COUNT()            \
+   { MTL(ObXAService*)->get_dblink_statistics().inc_dblink_trans_callback_count();}                  \
+
+#define DBLINK_STAT_ADD_TRANS_COMMIT_COUNT()            \
+   { MTL(ObXAService*)->get_dblink_statistics().inc_dblink_trans_commit_count();}                  \
+
+#define DBLINK_STAT_ADD_TRANS_COMMIT_USED_TIME(used_time)            \
+   { MTL(ObXAService*)->get_dblink_statistics().add_dblink_trans_commit_used_time(used_time);}                  \
+
+#define DBLINK_STAT_ADD_TRANS_COMMIT_FAIL_COUNT()            \
+   { MTL(ObXAService*)->get_dblink_statistics().inc_dblink_trans_commit_fail_count();}                  \
+
+#define DBLINK_STAT_ADD_TRANS_ROLLBACK_COUNT()            \
+   { MTL(ObXAService*)->get_dblink_statistics().inc_dblink_trans_rollback_count();}                  \
+
+#define DBLINK_STAT_ADD_TRANS_ROLLBACK_USED_TIME(used_time)            \
+   { MTL(ObXAService*)->get_dblink_statistics().add_dblink_trans_rollback_used_time(used_time);}                  \
+
+#define DBLINK_STAT_ADD_TRANS_ROLLBACK_FAIL_COUNT()            \
+   { MTL(ObXAService*)->get_dblink_statistics().inc_dblink_trans_rollback_fail_count();}                  \
 
 }//transaction
 

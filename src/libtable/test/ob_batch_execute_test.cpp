@@ -3079,12 +3079,14 @@ TEST_F(TestBatchExecute, secondary_index)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, obj3));
       //fprintf(stderr, "%ld: (%s,%s,%s)\n", i, S(obj1), S(obj2), S(obj3));
       ASSERT_EQ(OB_SUCCESS, obj3.get_varchar(str));
-      if (i % 2 == 0) {
+      if (i < BATCH_SIZE/4) {
+        ASSERT_EQ(2+i*8, obj1.get_int());
         ASSERT_EQ(1 , obj2.get_int());
-        ASSERT_EQ(2 + 4 * i, obj1.get_int()); // 2, 10, 18,...
+        ASSERT_TRUE(str == ObString::make_string(c3_values[(i%2==0)?1:5]));
       } else {
+        ASSERT_EQ(4+(i-BATCH_SIZE/4)*8, obj1.get_int());
         ASSERT_EQ(2 , obj2.get_int());
-        ASSERT_EQ(4 + (i - 1) * 4, obj1.get_int()); // 4, 12, 20,...
+        ASSERT_TRUE(str == ObString::make_string(c3_values[((i-BATCH_SIZE/4)%2==0)?2:6]));
       }
     }
     ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
@@ -6219,6 +6221,44 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
     ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
   }
 
+  // case : PageFilter
+  fprintf(stderr, "case: PageFilter\n");
+  // check
+  {
+    // page size is 3
+    htable_filter.set_filter(ObString::make_string("PageFilter(3)"));
+    ObTableEntityIterator *iter = nullptr;
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+
+    const ObITableEntity *result_entity = NULL;
+    int cqids_sorted[4] = {1, 3, 4, 7};
+    int64_t timestamps[2] = {7, 6};
+    for (int64_t i = 0; i < 3; ++i) {
+      // only 3 rowkeys (equals to page size)
+      sprintf(rows[i], "row%ld", 50+i);
+      key1.set_varbinary(ObString::make_string(rows[i]));
+      for (int64_t j = 0; j < 4; ++j) {
+        // 4 qualifier
+        sprintf(qualifier2[j], "cq%d", cqids_sorted[j]);
+        key2.set_varbinary(ObString::make_string(qualifier2[j]));
+        for (int64_t k = 0; k < 2; ++k)
+        {
+          key3.set_int(timestamps[k]);
+          ASSERT_EQ(OB_SUCCESS, iter->get_next_entity(result_entity));
+          ObObj rk, cq, ts, val;
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(K, rk));
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
+          ASSERT_EQ(key1, rk);
+          ASSERT_EQ(key2, cq);
+          ASSERT_EQ(key3, ts);
+        } // end for
+      }
+    }
+    ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
+  }
+
   // case : ColumnCountGetFilter
   fprintf(stderr, "case: ColumnCountGetFilter\n");
   // check
@@ -9040,12 +9080,12 @@ TEST_F(TestBatchExecute, htable_append)
   the_table = NULL;
 }
 
-// create table if not exists query_sync_multi_batch_test (PK1 bigint, PK2 bigint, C1 bigint, C2 varchar(100), C3 bigint, PRIMARY KEY(PK1, PK2), INDEX idx1(C1, C2));
-TEST_F(TestBatchExecute, query_sync_multi_batch)
+// create table if not exists query_async_multi_batch_test (PK1 bigint, PK2 bigint, C1 bigint, C2 varchar(100), C3 bigint, PRIMARY KEY(PK1, PK2), INDEX idx1(C1, C2));
+TEST_F(TestBatchExecute, query_async_multi_batch)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("query_sync_multi_batch_test"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("query_async_multi_batch_test"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTableEntityFactory<ObTableEntity> entity_factory;
   ObTableBatchOperation batch_operation;
@@ -9070,7 +9110,7 @@ TEST_F(TestBatchExecute, query_sync_multi_batch)
   ASSERT_TRUE(batch_operation.is_same_type());
   ASSERT_TRUE(batch_operation.is_same_properties_names());
   ObTableBatchOperationResult result;
-  printf("insert data into query_sync_multi_batch_test using batch_execute...\n");
+  printf("insert data into query_async_multi_batch_test using batch_execute...\n");
   ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
   ASSERT_EQ(BATCH_SIZE, result.count());
   for (int64_t i = 0; i < BATCH_SIZE; ++i)
@@ -9113,7 +9153,7 @@ TEST_F(TestBatchExecute, query_sync_multi_batch)
   {
     // two scan order
     query.set_scan_order(scan_orders[k]);
-    ObTableQuerySyncResult *iter = nullptr;
+    ObTableQueryAsyncResult *iter = nullptr;
     ASSERT_EQ(OB_SUCCESS, the_table->query_start(query, iter));
     const ObITableEntity *result_entity = NULL;
     int result_cnt = 0;
@@ -9160,14 +9200,14 @@ TEST_F(TestBatchExecute, query_sync_multi_batch)
   the_table = NULL;
 }
 
-// create table if not exists htable1_query_sync (
+// create table if not exists htable1_query_async (
 // K varbinary(1024), Q varbinary(256), T bigint, V varbinary(1024),
 // primary key(K, Q, T));
-TEST_F(TestBatchExecute, htble_query_sync)
+TEST_F(TestBatchExecute, htble_query_async)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_query_sync"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1_query_async"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -9232,7 +9272,7 @@ TEST_F(TestBatchExecute, htble_query_sync)
   const int64_t query_round = 4;
   query.set_batch(50);
 
-  ObTableQuerySyncResult *iter = nullptr;
+  ObTableQueryAsyncResult *iter = nullptr;
   const ObITableEntity *result_entity = NULL;
   uint64_t result_cnt = 0;
   uint64_t round = 0;
@@ -9260,11 +9300,11 @@ TEST_F(TestBatchExecute, htble_query_sync)
   delete [] rows;
 }
 
-// create table if not exists large_scan_query_sync_test (C1 bigint primary key, C2 bigint, C3 varchar(100));
-TEST_F(TestBatchExecute, large_scan_query_sync)
+// create table if not exists large_scan_query_async_test (C1 bigint primary key, C2 bigint, C3 varchar(100));
+TEST_F(TestBatchExecute, large_scan_query_async)
 {
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("large_scan_query_sync_test"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("large_scan_query_async_test"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTableEntityFactory<ObTableEntity> entity_factory;
   ObTableOperationResult r;
@@ -9322,7 +9362,7 @@ TEST_F(TestBatchExecute, large_scan_query_sync)
   query.set_scan_order(ObQueryFlag::Forward);
   query.set_batch(large_batch_size / query_round);
 
-  ObTableQuerySyncResult *iter = nullptr;
+  ObTableQueryAsyncResult *iter = nullptr;
   uint64_t result_cnt = 0;
 
   ASSERT_EQ(OB_SUCCESS, the_table->query_start(query, iter));
@@ -9354,21 +9394,21 @@ TEST_F(TestBatchExecute, large_scan_query_sync)
   the_table = NULL;
 }
 
-// create table if not exists query_sync_with_index_test
+// create table if not exists query_async_with_index_test
 // (C1 bigint, C2 bigint, C3 bigint,
 // primary key(C1, C2), KEY idx_c2 (C2), KEY idx_c3 (C3), KEY idx_c2c3(C2, C3));
-TEST_F(TestBatchExecute, query_sync_with_index)
+TEST_F(TestBatchExecute, query_async_with_index)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("query_sync_with_index_test"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("query_async_with_index_test"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTableEntityFactory<ObTableEntity> entity_factory;
   ObTableOperationResult r;
   ObITableEntity *entity = NULL;
   const ObITableEntity *result_entity = NULL;
   ObTableOperation table_operation;
-  ObTableQuerySyncResult *iter = nullptr;
+  ObTableQueryAsyncResult *iter = nullptr;
 
   entity = entity_factory.alloc();
   ASSERT_TRUE(NULL != entity);
@@ -9538,9 +9578,9 @@ TEST_F(TestBatchExecute, query_sync_with_index)
   the_table = NULL;
 }
 
-// create table if not exists query_sync_multi_task_test
+// create table if not exists query_async_multi_task_test
 // (C1 bigint primary key, C2 bigint, C3 varchar(100));
-TEST_F(TestBatchExecute, query_sync_multi_task)
+TEST_F(TestBatchExecute, query_async_multi_task)
 {
   // setup
   constexpr int64_t thread_num = 10;
@@ -9556,7 +9596,7 @@ TEST_F(TestBatchExecute, query_sync_multi_task)
   request_options.set_server_timeout(120*1000*1000); // 120s
   for (int64_t i = 0; i < thread_num; ++i) {
     the_table =  NULL;
-    int ret = service_client_->alloc_table(ObString::make_string("query_sync_multi_task_test"), the_table);
+    int ret = service_client_->alloc_table(ObString::make_string("query_async_multi_task_test"), the_table);
     OB_LOG(INFO, "alloc_table succeed", K(i));
     ASSERT_EQ(OB_SUCCESS, ret);
     the_table->set_default_request_options(request_options);
@@ -9637,7 +9677,7 @@ TEST_F(TestBatchExecute, query_sync_multi_task)
 
   auto task = [&](ObTable * one_table) {
     int ret;
-    ObTableQuerySyncResult *iter = nullptr;
+    ObTableQueryAsyncResult *iter = nullptr;
     uint64_t result_cnt = 0;
     ObObj one_value;
     const ObITableEntity *one_result_entity = NULL;
@@ -10456,7 +10496,7 @@ TEST_F(TestBatchExecute, table_query_with_filter)
     ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
     ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
     ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C3:hello\'quote')")));
-    ASSERT_EQ(OB_ERR_PARSER_SYNTAX, the_table->execute_query(query, iter));
+    ASSERT_EQ(OB_KV_FILTER_PARSE_ERROR, the_table->execute_query(query, iter));
   } // end case 14
   {
     // case 15 filter and

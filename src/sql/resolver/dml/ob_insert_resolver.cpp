@@ -43,7 +43,8 @@ ObInsertResolver::ObInsertResolver(ObResolverParams &params)
 : ObDelUpdResolver(params),
     row_count_(0),
     sub_select_resolver_(NULL),
-    autoinc_col_added_(false)
+    autoinc_col_added_(false),
+    is_mock_(false)
 {
   params.contain_dml_ = true;
 }
@@ -119,7 +120,7 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
       ObQueryCtx *query_ctx = insert_stmt->get_query_ctx();
       if (OB_ISNULL(query_ctx)) {
         LOG_WARN("query ctx should not be NULL", KR(ret), KP(query_ctx));
-      } else if (query_ctx->get_query_hint().get_global_hint().has_append()) {
+      } else if (query_ctx->get_query_hint().get_global_hint().has_direct_load()) {
         // For insert into select clause with direct-insert mode, plan cache is disabled
         query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
       }
@@ -129,6 +130,8 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(insert_stmt->formalize_stmt(session_info_))) {
       LOG_WARN("pull stmt all expr relation ids failed", K(ret));
+    } else {
+      LOG_DEBUG("check insert table info", K(insert_stmt->get_insert_table_info()));
     }
   }
 
@@ -181,9 +184,6 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
         LOG_WARN("pullup part exprs for view failed", K(ret));
       } else { /*do nothing*/ }
     }
-    if (is_oracle_mode()) {
-      OZ(add_default_sequence_id_to_stmt(insert_stmt->get_table_item(0)->table_id_));
-    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(generate_insert_table_info(*table_item, insert_stmt->get_insert_table_info()))) {
@@ -193,9 +193,9 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
 
   //无论哪种插入方式, 都需要向target field中添加列__session_id
   //非赋值方式插入oracle临时表值中的session_id添加在resolve_insert_values已完成
-  if (FAILEDx(add_new_column_for_oracle_temp_table(insert_stmt->get_insert_table_info().ref_table_id_,
-                                                   insert_stmt->get_insert_table_info().table_id_,
-                                                   insert_stmt))) {
+  if (FAILEDx(add_column_for_oracle_temp_table(insert_stmt->get_insert_table_info().ref_table_id_,
+                                               insert_stmt->get_insert_table_info().table_id_,
+                                               insert_stmt))) {
     LOG_WARN("failed to add new column for oracle temp table", K(ret));
   } else if (!has_tg && 
              OB_FAIL(add_new_column_for_oracle_label_security_table(label_se_columns,
@@ -278,6 +278,10 @@ int ObInsertResolver::process_values_function(ObRawExpr *&expr)
       uint64_t column_id = b_expr->get_column_id();
       ColumnItem *column_item = NULL;
       if (OB_ISNULL(column_item = insert_stmt->get_column_item_by_id(table_id, column_id))) {
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, b_expr->get_column_name().length(), b_expr->get_column_name().ptr(),
+                       scope_name.length(), scope_name.ptr());
         LOG_WARN("fail to get column item", K(ret), K(table_id), K(column_id));
       } else {
         const int64_t N = insert_columns.count();
@@ -304,6 +308,19 @@ int ObInsertResolver::process_values_function(ObRawExpr *&expr)
                                                                 T_INSERT_SCOPE,
                                                                 true))) {
             LOG_WARN("fail to add additional function", K(ret));
+          } else if (value_expr->is_const_expr() &&
+                     !ob_is_enum_or_set_type(value_expr->get_data_type())) {
+            ObRawExpr* remove_const_expr = NULL;
+            if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(*params_.expr_factory_,
+                                                                *params_.session_info_,
+                                                                value_expr, remove_const_expr))) {
+              LOG_WARN("fail to build remove_const expr",K(ret), K(expr), K(remove_const_expr));
+            } else {
+              value_expr = remove_const_expr;
+            }
+          }
+          if (OB_FAIL(ret)) {
+            //do nothing
           } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, b_expr, value_expr))) {
             LOG_WARN("fail to replace ref column", K(ret), K(b_expr), K(value_expr));
           } else {
@@ -423,21 +440,7 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
   OZ(column_namespace_checker_.add_reference_table(table_item));
   if (OB_SUCC(ret)) {
     current_scope_ = T_INSERT_SCOPE;
-    const ObTableSchema *table_schema = NULL;
-    uint64_t ref_id = (!OB_ISNULL(table_item->ref_query_) && table_item->ref_query_->is_view_stmt())
-                          ? table_item->ref_query_->get_view_ref_id()
-                          : table_item->get_base_table_item().ref_id_;
-    OZ(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), ref_id, table_schema, table_item->is_link_table()));
     OZ (check_need_fired_trigger(table_item));
-
-    if (OB_SUCC(ret)) {
-      if (table_schema->is_oracle_tmp_table()) {
-        //oracle临时表各session不会创建自己的私有对象只能在数据增加时设置标记
-        session_info_->set_has_temp_table_flag();
-        set_is_oracle_tmp_table(true);
-        set_oracle_tmp_table_type(table_schema->is_oracle_sess_tmp_table() ? 0 : 1);
-      }
-    }
   }
 
   if (OB_SUCC(ret)) {
@@ -451,6 +454,22 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
   if (OB_SUCC(ret) && 2 == insert_into.num_child_ &&
       OB_FAIL(resolve_insert_columns(insert_into.children_[1], insert_stmt->get_insert_table_info()))) {
     LOG_WARN("failed to resolve insert columns", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    const ObTableSchema *table_schema = NULL;
+    OZ(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                         table_item->get_base_table_item().ref_id_,
+                                         table_schema,
+                                         table_item->is_link_table()));
+    if (OB_SUCC(ret)) {
+      if (table_schema->is_oracle_tmp_table() && !params_.is_prepare_stage_) {
+        //oracle临时表各session不会创建自己的私有对象只能在数据增加时设置标记
+        session_info_->set_has_temp_table_flag();
+        set_is_oracle_tmp_table(true);
+        set_oracle_tmp_table_type(table_schema->is_oracle_sess_tmp_table() ? 0 : 1);
+      }
+    }
   }
 
   OZ(remove_dup_dep_cols_for_heap_table(insert_stmt->get_insert_table_info().part_generated_col_dep_cols_,
@@ -560,7 +579,7 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
     LOG_WARN("allocate select buffer failed", K(ret), "size", sizeof(ObSelectResolver));
   } else {
     // value from sub-query(insert into table select ..)
-    bool is_mock = lib::is_mysql_mode() && value_node.reserved_;
+    is_mock_ = lib::is_mysql_mode() && value_node.reserved_;
     ObSelectStmt *select_stmt = NULL;
     sub_select_resolver_ = new(select_buffer) ObSelectResolver(params_);
     //insert clause and select clause in insert into select belong to the same namespace level
@@ -576,7 +595,7 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
     ObSEArray<ColumnItem, 4> column_items;
     ParseNode *alias_node = NULL;
     ParseNode *table_alias_node = NULL;
-    if (is_mock &&
+    if (is_mock_ &&
         value_node.children_[PARSE_SELECT_FROM] != NULL &&
         value_node.children_[PARSE_SELECT_FROM]->num_child_ == 1 &&
         value_node.children_[PARSE_SELECT_FROM]->children_[0]->type_ == T_ALIAS &&
@@ -601,7 +620,7 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid select stmt", K(select_stmt));
     } else if (!session_info_->get_ddl_info().is_ddl() &&
-                OB_FAIL(check_insert_select_field(*insert_stmt, *select_stmt, is_mock))) {
+                OB_FAIL(check_insert_select_field(*insert_stmt, *select_stmt, is_mock_))) {
       LOG_WARN("check insert select field failed", K(ret), KPC(insert_stmt), KPC(select_stmt));
     } else if (!session_info_->get_ddl_info().is_ddl() && OB_FAIL(add_new_sel_item_for_oracle_temp_table(*select_stmt))) {
       LOG_WARN("add session id value to select item failed", K(ret));
@@ -613,7 +632,7 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
       LOG_WARN("failed to resolve generate table item", K(ret));
     }
 
-    if (OB_SUCC(ret) && is_mock) {
+    if (OB_SUCC(ret) && is_mock_) {
     ObString ori_table_name = table_item->table_name_;
     ObSEArray<ObString, 4> ori_column_names;
     ObString row_alias_table_name = sub_select_table->get_table_name();
@@ -777,17 +796,28 @@ int ObInsertResolver::check_validity_of_duplicate_node(const ParseNode* node,
               //case: insert into t1(a,b) values (4,5) as new(a,b) on duplicate key update a = value(new.a)+new.a;
               //new.a under values is not allowed
               ParseNode* col_ref_node = expr_list_node->children_[i];
-              if (col_ref_node->num_child_ != 3) {
+              if (col_ref_node->num_child_ != 3 || OB_ISNULL(col_ref_node->children_[2])) {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected error", K(ret));
+                LOG_WARN("unexpected error", K(col_ref_node->num_child_), K(col_ref_node->children_[2]), K(ret));
               } else if (col_ref_node->children_[1] == NULL) {
-                //do nothing
+                //table node is null
+                //insert into t1(a,b) values (4,5) as new(a,b) on duplicate key update a = value(a)+a
+                //a in valus expr must be column of target table t1
+                node_column_name.assign_ptr(col_ref_node->children_[2]->str_value_,
+                                            static_cast<int32_t>(col_ref_node->children_[2]->str_len_));
+                if (!find_in_column(node_column_name, ori_column_names)) {
+                  ret = OB_ERR_BAD_FIELD_ERROR;
+                  ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+                  LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, node_column_name.length(), node_column_name.ptr(),
+                                                        scope_name.length(), scope_name.ptr());
+                }
               } else {
+                //table node is not null
                 node_table_name.assign_ptr(col_ref_node->children_[1]->str_value_,
                                           static_cast<int32_t>(col_ref_node->children_[1]->str_len_));
                 if (0 == (node_table_name.compare(row_alias_table_name))) {
                   node_column_name.assign_ptr(col_ref_node->children_[2]->str_value_,
-                                              static_cast<int32_t>(col_ref_node->children_[2]->str_len_));
+                            static_cast<int32_t>(col_ref_node->children_[2]->str_len_));
                   ret = OB_ERR_BAD_FIELD_ERROR;
                   ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
                   LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, node_column_name.length(), node_column_name.ptr(),
@@ -797,9 +827,9 @@ int ObInsertResolver::check_validity_of_duplicate_node(const ParseNode* node,
             }
           }
         }
+        is_valid = false;
       }
     }
-    is_valid = false;
   } else if (T_COLUMN_REF == node->type_) {
     ObString table_name;
     ObString column_name;
@@ -873,6 +903,20 @@ int ObInsertResolver::check_ambiguous_column(ObString &column_name,
   }
   return ret;
 }
+
+bool ObInsertResolver::find_in_column(ObString &column_name,
+                                      ObIArray<ObString> &column_names)
+{
+  bool find_column = false;
+  for (int i = 0; !find_column && i < column_names.count(); i++) {
+    ObString tmp_col_name = column_names.at(i);
+    if (0 == (column_name.case_compare(tmp_col_name))) {
+      find_column = true;
+    }
+  }
+  return find_column;
+}
+
 int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
                                                 ObSelectStmt &select_stmt,
                                                 bool is_mock)
@@ -1030,6 +1074,8 @@ int ObInsertResolver::replace_column_to_default(ObRawExpr *&origin)
       if (OB_ISNULL(column_item = insert_stmt->get_column_item_by_id(
                   insert_stmt->get_insert_table_info().table_id_, b_expr->get_column_id()))) {
         LOG_WARN("fail to get column item", K(ret));
+      } else if (OB_FAIL(insert_stmt->get_insert_table_info().column_in_values_vector_.push_back(column_item->expr_))) {
+        LOG_WARN("fail to push back column expr", K(ret));
       } else if (OB_FAIL(utils.resolve_column_ref_in_insert(column_item, origin))) {
         LOG_WARN("fail to resolve column ref in insert", K(ret));
       }
@@ -1151,6 +1197,8 @@ int ObInsertResolver::resolve_insert_update_assignment(const ParseNode *node, Ob
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("REPLACE statement does not support ON DUPLICATE KEY UPDATE clause");
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "REPLACE statement ON DUPLICATE KEY UPDATE clause");
+  } else if (FALSE_IT(is_resolve_insert_update_ = true)) {
+    //do nothing
   } else if (OB_FAIL(ObDelUpdResolver::resolve_insert_update_assignment(node, table_info))) {
     LOG_WARN("resolve assignment error", K(ret));
   }
@@ -1400,23 +1448,6 @@ int ObInsertResolver::try_expand_returning_exprs()
       }
     }
   }
-  return ret;
-}
-
-int ObInsertResolver::resolve_insert_values(const ParseNode *node,
-                                            ObInsertTableInfo& table_info,
-                                            ObIArray<uint64_t>& label_se_columns)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObRawExpr*> value_row;
-  if (OB_FAIL(ObDelUpdResolver::resolve_insert_values(node, table_info))) {
-    LOG_WARN("failed to resolve insert values", K(ret));
-  } else if (OB_FAIL(add_new_value_for_oracle_label_security_table(table_info, label_se_columns, value_row))) {
-    LOG_WARN("fail to add new value for oracle label security table", K(ret));
-  } else if (OB_FAIL(append(table_info.values_vector_, value_row))) {
-    LOG_WARN("failed to append value row", K(ret));
-  }
-  value_row.reset();
   return ret;
 }
 

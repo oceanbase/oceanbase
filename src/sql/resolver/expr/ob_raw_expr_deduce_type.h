@@ -61,6 +61,7 @@ public:
   virtual int visit(ObPseudoColumnRawExpr &expr);
   virtual int visit(ObUDFRawExpr &expr);
   virtual int visit(ObPlQueryRefRawExpr &expr);
+  virtual int visit(ObMatchFunRawExpr &expr);
 
   int add_implicit_cast(ObOpRawExpr &parent, const ObCastMode &cast_mode);
   int add_implicit_cast(ObCaseOpRawExpr &parent, const ObCastMode &cast_mode);
@@ -106,7 +107,7 @@ private:
 
   int set_agg_group_concat_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
   int set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type, bool &need_add_cast);
-
+  int set_asmvt_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
   int set_agg_json_array_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
 
   int set_agg_min_max_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type,

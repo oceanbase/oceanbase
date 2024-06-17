@@ -91,7 +91,7 @@ void ObIWkbGeomPoint::y(double d)
 bool ObIWkbGeomPolygon::is_empty_inner() const
 {
   const ObWkbGeomPolygon* poly = reinterpret_cast<const ObWkbGeomPolygon*>(val());
-  return (poly->exterior_ring().size() == 0) && (poly->inner_rings().size() == 0);
+  return (poly->exterior_ring().size(static_cast<ObGeoWkbByteOrder>(poly->get_bo())) == 0) && (poly->inner_rings().size() == 0);
 }
 
 int ObIWkbGeomCollection::get_sub(uint32_t idx, ObGeometry*& geo) const
@@ -189,7 +189,7 @@ bool ObIWkbGeogPolygon::is_empty_inner() const
   const ObWkbGeogPolygon* poly = reinterpret_cast<const ObWkbGeogPolygon*>(val());
   bool bret = true;
   if (OB_NOT_NULL(poly)) {
-    bret = (poly->exterior_ring().size() == 0) && (poly->inner_rings().size() == 0);
+    bret = (poly->exterior_ring().size(static_cast<ObGeoWkbByteOrder>(poly->get_bo())) == 0) && (poly->inner_rings().size() == 0);
   }
   return bret;
 }

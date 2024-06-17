@@ -43,6 +43,7 @@
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "sql/privilege_check/ob_privilege_check.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
+#include "lib/utility/ob_backtrace.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -226,11 +227,8 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
   } else if (OB_FAIL(set_session_active(sql, session, ObTimeUtil::current_time()))) {
     LOG_WARN("fail to set session active", K(ret));
   } else {
-    const bool enable_trace_log = lib::is_trace_log_enabled();
-    if (enable_trace_log) {
-      //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
-      ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-    }
+    //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
+    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
     ctx.retry_times_ = 0; // 这里是建立连接的时候的初始化sql的执行，不重试
     ctx.schema_guard_ = &schema_guard;
     HEAP_VAR(ObMySQLResultSet, result, session, allocator) {
@@ -253,9 +251,7 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
         }
         ret = (open_ret != OB_SUCCESS) ? open_ret : ret;
       }
-      if (enable_trace_log) {
-        ObThreadLogLevelUtils::clear();
-      }
+      ObThreadLogLevelUtils::clear();
     }
 
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
@@ -288,6 +284,23 @@ int ObMPConnect::init_connect_process(ObString &init_sql,
     }
   } else {
     LOG_WARN("split multiple stmt failed!", K(ret));
+  }
+  return ret;
+}
+
+int ObMPConnect::get_proxy_user_name(ObString &proxied_user)
+{
+  int ret = OB_SUCCESS;
+  ObString user_key_str;
+  bool found_user = false;
+  proxied_user.reset();
+  user_key_str.assign_ptr(OB_MYSQL_CLIENT_PROXY_USER_NAME , static_cast<int32_t>(STRLEN(OB_MYSQL_CLIENT_PROXY_USER_NAME)));
+  for (int64_t i = 0; i < hsr_.get_connect_attrs().count() && OB_SUCC(ret) && !found_user; ++i) {
+    const ObStringKV &kv =  hsr_.get_connect_attrs().at(i);
+    if (user_key_str == kv.key_) {
+      proxied_user.assign_ptr(kv.value_.ptr(), kv.value_.length());
+      found_user = true;
+    }
   }
   return ret;
 }
@@ -365,6 +378,7 @@ int ObMPConnect::process()
       session->set_client_sessid_support(conn->proxy_cap_flags_.is_client_sessid_support()
         || (conn->proxy_sessid_ == 0));
       session->set_session_sync_support(conn->proxy_cap_flags_.is_session_sync_support());
+      session->set_feedback_proxy_info_support(conn->proxy_cap_flags_.is_feedback_proxy_info_support());
       session->get_control_info().support_show_trace_ = conn->proxy_cap_flags_.is_flt_show_trace_support();
       LOG_TRACE("setup user resource group OK",
                "user_id", session->get_user_id(),
@@ -537,6 +551,8 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
     }
 
     ObString host_name;
+    uint64_t proxy_user_id = OB_INVALID_ID;
+    bool is_proxy = false;
     uint64_t client_attr_cap_flags = 0;
     if (true) {
       // TODO, checker ret
@@ -567,6 +583,37 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         }
       }
 
+      lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(conn->tenant_id_, compat_mode))) {
+        LOG_WARN("fail to get tenant mode in convert_oracle_object_name", K(ret));
+      } else if (compat_mode == lib::Worker::CompatMode::ORACLE) {
+        ObString proxied_user;
+        if (OB_FAIL(get_proxy_user_name(proxied_user))) {
+          LOG_WARN("get proxy user info failed", K(ret));
+        } else if (!proxied_user.empty()) {
+          uint64_t tenant_data_version = 0;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(conn->tenant_id_, tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", K(ret));
+          } else if (!ObSQLUtils::is_data_version_ge_423_or_432(tenant_data_version)) {
+            ret = OB_PASSWORD_WRONG;
+            LOG_WARN("tenant version is below 423 or 432", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "connect proxy user is not supported when data version is below 4.2.3 or 4.3.2");
+          } else if (proxied_user.length() > OB_MAX_USER_NAME_BUF_LENGTH) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("proxy user name too long", K(ret));
+          } else {
+            MEMCPY(proxied_user_name_var_, proxied_user.ptr(), proxied_user.length());
+            proxied_user_name_var_[proxied_user.length()] = '\0';
+            proxied_user_name_.assign(proxied_user_name_var_, proxied_user.length());
+            if (OB_FAIL(convert_oracle_object_name(conn->tenant_id_, proxied_user_name_))) {
+              LOG_WARN("fail to convert oracle db name", K(ret));
+            }
+          }
+        } else {
+          proxied_user_name_.reset();
+        }
+      }
       share::schema::ObSessionPrivInfo session_priv;
       const ObSysVariableSchema *sys_variable_schema = NULL;
       if (OB_FAIL(ret)) {
@@ -587,12 +634,17 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         share::schema::ObUserLoginInfo login_info;
         login_info.tenant_name_ = tenant_name_;
         login_info.user_name_ = user_name_;
+        login_info.proxied_user_name_ = proxied_user_name_;
         login_info.client_ip_ = client_ip_;
         SSL *ssl_st = SQL_REQ_OP.get_sql_ssl_st(req_);
         const ObUserInfo *user_info = NULL;
         // 当 oracle 模式下，用户登录没有指定 schema_name 时，将其默认设置为对应的 user_name
         if (OB_SUCC(ret) && ORACLE_MODE == session.get_compatibility_mode()  && db_name_.empty()) {
-          login_info.db_ = user_name_;
+          if (proxied_user_name_.empty()) {
+            login_info.db_ = user_name_;
+          } else {
+            login_info.db_ = proxied_user_name_;
+          }
         } else if (!db_name_.empty()) {
           ObString db_name = db_name_;
           ObNameCaseMode mode = OB_NAME_CASE_INVALID;
@@ -607,7 +659,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(
                       cs_type, perserve_lettercase, db_name))) {
             LOG_WARN("fail to check and convert database name", K(db_name), K(ret));
-          } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, &session, db_name))) {
+          } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, &session, db_name, NULL/*allocator*/))) {
             LOG_WARN("fail to convert db name to org");
           } else {
             login_info.db_ = db_name;
@@ -732,10 +784,14 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         host_name = session_priv.host_name_;
         uint64_t db_id = OB_INVALID_ID;
         const ObTenantSchema *tenant_schema = NULL;
-        if (OB_FAIL(session.set_user(user_name_, session_priv.host_name_, session_priv.user_id_))) {
+        if (OB_FAIL(session.set_user(session_priv.user_name_, session_priv.host_name_, session_priv.user_id_))) {
           LOG_WARN("failed to set_user", K(ret));
         } else if (OB_FAIL(session.set_real_client_ip_and_port(client_ip_, client_port_))) {
           LOG_WARN("failed to set_real_client_ip_and_port", K(ret));
+        } else if (OB_FAIL(session.set_proxy_user(session_priv.proxy_user_name_,
+                                                  session_priv.proxy_host_name_,
+                                                  session_priv.proxy_user_id_))) {
+          LOG_WARN("failed to set proxy user");
         } else if (OB_FAIL(session.set_default_database(session_priv.db_))) {
           LOG_WARN("failed to set default database", K(ret), K(session_priv.db_));
         } else if (OB_FAIL(schema_guard.get_tenant_info(session_priv.tenant_id_, tenant_schema))) {
@@ -800,7 +856,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         }
       }
     }
-    LOG_DEBUG("obmp connect info:", K_(tenant_name), K_(user_name),
+    LOG_DEBUG("obmp connect info:", K(ret), K_(tenant_name), K_(user_name),
               K(host_name), K_(client_ip), "database", hsr_.get_database(),
               K(hsr_.get_capability_flags().capability_),
               K(session.is_client_use_lob_locator()),
@@ -1708,7 +1764,12 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
     } else {
       server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_CLIENT_SESSION_ID = 0;
     }
-    conn.proxy_cap_flags_.capability_ = (server_proxy_cap_flag.capability_ & client_proxy_cap);//if old java client, set it 0
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_FEEDBACK_PROXY_SHIFT = 1;
+    } else {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_FEEDBACK_PROXY_SHIFT = 0;
+    }
+    conn.proxy_cap_flags_.capability_ = (server_proxy_cap_flag.capability_ & client_proxy_cap);  // if old java client, set it 0
 
     LOG_DEBUG("Negotiated capability",
               K(conn.proxy_cap_flags_.is_proxy_reroute_support()),
@@ -1975,7 +2036,7 @@ int ObMPConnect::verify_connection(const uint64_t tenant_id) const
         } else if (Worker::CompatMode::MYSQL == compat_mode) {
           check_max_sess = user_name_.compare(OB_SYS_USER_NAME) != 0;
         } else if (Worker::CompatMode::ORACLE == compat_mode) {
-          check_max_sess = user_name_.compare(OB_ORA_SYS_USER_NAME) != 0;
+          check_max_sess = user_name_.case_compare(OB_ORA_SYS_USER_NAME) != 0;
         }
       }
       if (OB_SUCC(ret) && check_max_sess) {

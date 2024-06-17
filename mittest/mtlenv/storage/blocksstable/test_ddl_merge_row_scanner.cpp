@@ -73,6 +73,7 @@ TestDDLMergeRowScanner::TestDDLMergeRowScanner()
   is_ddl_merge_data_ = true;
   max_row_cnt_ = 150000;
   max_partial_row_cnt_ = 78881;
+  co_sstable_row_offset_ = max_partial_row_cnt_ - 1;
   partial_kv_start_idx_ = 3;
 }
 
@@ -139,8 +140,8 @@ void TestDDLMergeRowScanner::test_one_rowkey(const int64_t seed)
   ObDatumRowkey query_rowkey;
   query_rowkey.assign(query_row.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
   STORAGE_LOG(INFO, "Query rowkey", K(query_row));
-  ASSERT_EQ(OB_SUCCESS, getter.inner_open(iter_param_, context_, &sstable_, &query_rowkey));
-  ASSERT_EQ(OB_SUCCESS, merge_ddl_getter.inner_open(iter_param_, context_, &partial_sstable_, &query_rowkey));
+  ASSERT_EQ(OB_SUCCESS, getter.init(iter_param_, context_, &sstable_, &query_rowkey));
+  ASSERT_EQ(OB_SUCCESS, merge_ddl_getter.init(iter_param_, context_, &partial_sstable_, &query_rowkey));
 
   const ObDatumRow *prow = nullptr;
   const ObDatumRow *kv_prow = nullptr;
@@ -177,12 +178,12 @@ void TestDDLMergeRowScanner::test_single_case(
   ObSSTableRowScanner<> scanner;
   ObSSTableRowScanner<> merge_ddl_scanner;
 
-  ASSERT_EQ(OB_SUCCESS, scanner.inner_open(
+  ASSERT_EQ(OB_SUCCESS, scanner.init(
           iter_param_,
           context_,
           &sstable_,
           &range));
-  ASSERT_EQ(OB_SUCCESS, merge_ddl_scanner.inner_open(
+  ASSERT_EQ(OB_SUCCESS, merge_ddl_scanner.init(
           iter_param_,
           context_,
           &partial_sstable_,
@@ -250,12 +251,12 @@ void TestDDLMergeRowScanner::test_full_case(
     ASSERT_EQ(OB_SUCCESS, tmp_rowkey.deep_copy(part_range.end_key_, allocator_));
     part_range.border_flag_.set_inclusive_start();
     part_range.border_flag_.set_inclusive_end();
-    ASSERT_EQ(OB_SUCCESS, scanner.inner_open(
+    ASSERT_EQ(OB_SUCCESS, scanner.init(
             iter_param_,
             context_,
             &sstable_,
             &part_range));
-    ASSERT_EQ(OB_SUCCESS, merge_ddl_scanner.inner_open(
+    ASSERT_EQ(OB_SUCCESS, merge_ddl_scanner.init(
             iter_param_,
             context_,
             &partial_sstable_,
@@ -276,12 +277,12 @@ void TestDDLMergeRowScanner::test_full_case(
     merge_ddl_scanner.reuse();
   }
 
-  ASSERT_EQ(OB_SUCCESS, scanner.inner_open(
+  ASSERT_EQ(OB_SUCCESS, scanner.init(
           iter_param_,
           context_,
           &sstable_,
           &range));
-  ASSERT_EQ(OB_SUCCESS, merge_ddl_scanner.inner_open(
+  ASSERT_EQ(OB_SUCCESS, merge_ddl_scanner.init(
           iter_param_,
           context_,
           &partial_sstable_,
@@ -318,12 +319,12 @@ void TestDDLMergeRowScanner::test_full_case(
 
   if (HIT_ALL == hit_mode) {
     int64_t index = 0;
-    ASSERT_EQ(OB_SUCCESS, scanner.inner_open(
+    ASSERT_EQ(OB_SUCCESS, scanner.init(
             iter_param_,
             context_,
             &sstable_,
             &range));
-    ASSERT_EQ(OB_SUCCESS, merge_ddl_scanner.inner_open(
+    ASSERT_EQ(OB_SUCCESS, merge_ddl_scanner.init(
             iter_param_,
             context_,
             &partial_sstable_,

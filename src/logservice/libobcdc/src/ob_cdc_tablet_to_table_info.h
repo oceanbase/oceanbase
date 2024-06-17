@@ -21,11 +21,16 @@
 #include "storage/tx/ob_multi_data_source.h"      // ObTxBufferNode
 #include "rootserver/ob_tablet_creator.h"         // ObBatchCreateTabletArg
 #include "rootserver/ob_tablet_drop.h"            // ObBatchRemoveTabletArg
-
 #include "logservice/common_util/ob_log_ls_define.h"
 
 namespace oceanbase
 {
+
+namespace rootserver
+{
+  class ObChangeTabletToTableArg;
+}
+
 namespace libobcdc
 {
 // TabletChangeOp Type
@@ -35,6 +40,7 @@ enum TabletChangeCmd
   CMD_CREATE,
   CMD_DELETE,
   CMD_TRANSFER,
+  CMD_EXCHANGE,
   CMD_MAX
 };
 
@@ -118,6 +124,30 @@ private:
   common::ObTabletID tablet_id_;
 };
 
+// data used for ExchangeTablet
+class ExchangeTabletOp
+{
+public:
+  ExchangeTabletOp() { reset(); }
+  ~ExchangeTabletOp() { reset(); }
+  void reset();
+public:
+  bool is_valid() const;
+  int push_back_tablet_to_table(const common::ObTabletID &tablet_id, const uint64_t table_id);
+  const common::ObSArray<common::ObTabletID> &get_tablet_ids() const { return tablet_ids_; }
+  const common::ObSArray<uint64_t> &get_table_ids() const { return table_ids_; }
+public:
+  TO_STRING_KV(
+      K_(tablet_ids),
+      "tablet_ids_count", tablet_ids_.count(),
+      K_(table_ids),
+      "table_id_count", table_ids_.count());
+private:
+  // use array to also store related table, such as lob aux table
+  common::ObSArray<common::ObTabletID> tablet_ids_;
+  common::ObSArray<uint64_t> table_ids_;
+};
+
 // struct store the TabletChangeOp that get from LS_MEMTABLE mulit_data_source trans
 class ObCDCTabletChangeInfo
 {
@@ -133,18 +163,22 @@ public:
 public:
   inline bool is_valid() const
   {
-    return (TabletChangeCmd::CMD_CREATE == cmd_ && 0 >= delete_tablet_op_arr_.count()) // create_tablet_op_arr_ may empty after filter tablet.
-        || (TabletChangeCmd::CMD_DELETE == cmd_ && 0 >= create_tablet_op_arr_.count()); // delete_tablet_op_arri_ may empty.
+    return (TabletChangeCmd::CMD_CREATE == cmd_ && 0 >= delete_tablet_op_arr_.count() && 0 >= exchange_tablet_op_arr_.count())      // create_tablet_op_arr_ may empty after filter tablet.
+        || (TabletChangeCmd::CMD_DELETE == cmd_ && 0 >= create_tablet_op_arr_.count() && 0 >= exchange_tablet_op_arr_.count())      // delete_tablet_op_arr_ may empty.
+        || (TabletChangeCmd::CMD_EXCHANGE == cmd_ && 0 >= create_tablet_op_arr_.count() && 0 >= delete_tablet_op_arr_.count());     // exchange_tablet_op_arr_ may empty.
   }
   inline bool is_create_tablet_op() const { return TabletChangeCmd::CMD_CREATE == cmd_; }
   inline bool is_delete_tablet_op() const { return TabletChangeCmd::CMD_DELETE == cmd_; }
-  const ObArray<CreateTabletOp> &get_create_tablet_op_arr() const { return create_tablet_op_arr_; }
-  const ObArray<DeleteTabletOp> &get_delete_tablet_op_arr() const { return delete_tablet_op_arr_; }
+  inline bool is_exchange_tablet_op() const { return TabletChangeCmd::CMD_EXCHANGE == cmd_; }
+  const ObArray<CreateTabletOp>   &get_create_tablet_op_arr()   const { return create_tablet_op_arr_; }
+  const ObArray<DeleteTabletOp>   &get_delete_tablet_op_arr()   const { return delete_tablet_op_arr_; }
+  const ObArray<ExchangeTabletOp> &get_exchange_tablet_op_arr() const { return exchange_tablet_op_arr_; }
 public:
   void print_detail_for_debug() const;
   TO_STRING_KV(K_(cmd),
-      "create_tablet_cnt", create_tablet_op_arr_.count(),
-      "delete_tablet_cnt", delete_tablet_op_arr_.count());
+      "create_tablet_cnt",   create_tablet_op_arr_.count(),
+      "delete_tablet_cnt",   delete_tablet_op_arr_.count(),
+      "exchange_tablet_cnt", exchange_tablet_op_arr_.count());
 private:
   int parse_create_tablet_op_(
       const logservice::TenantLSID &tls_id,
@@ -152,12 +186,17 @@ private:
   int parse_remove_tablet_op_(
       const logservice::TenantLSID &tls_id,
       const obrpc::ObBatchRemoveTabletArg &remove_tablet_arg);
+  int parse_exchange_tablet_op_(
+      const logservice::TenantLSID &tls_id,
+      const rootserver::ObChangeTabletToTableArg &exchange_tablet_arg);
   int push_create_tablet_op_(const CreateTabletOp &create_tablet_op);
   int push_delete_tablet_op_(const DeleteTabletOp &delete_tablet_op);
+  int push_exchange_tablet_op_(const ExchangeTabletOp &exchange_tablet_op);
 private:
   TabletChangeCmd cmd_;
-  ObArray<CreateTabletOp> create_tablet_op_arr_;
-  ObArray<DeleteTabletOp> delete_tablet_op_arr_;
+  ObArray<CreateTabletOp>   create_tablet_op_arr_;
+  ObArray<DeleteTabletOp>   delete_tablet_op_arr_;
+  ObArray<ExchangeTabletOp> exchange_tablet_op_arr_;
 };
 
 typedef common::ObLinearHashMap<common::ObTabletID, ObCDCTableInfo> TabletToTableMap; // Map of TabletID->TableID
@@ -195,6 +234,17 @@ public:
   /// @retval OB_ENTRY_EXIST      the tablet_id is already in tablet_to_table_map_
   /// @retval other ERROR         unexpected error.
   int insert_tablet_table_info(const common::ObTabletID &tablet_id, const ObCDCTableInfo &table_info);
+
+  /// exchange tablet_id->table_info
+  ///
+  /// @param [in] tablet_id       tablet_id to insert
+  /// @param [in] table_info      table_info of tablet_id
+  ///
+  /// @retval OB_SUCCESS          replace success
+  /// @retval OB_INVALID_ARGUMENT tablet_id is invalid
+  /// @retval OB_ENTRY_NOT_EXIST  the tablet_id is not in tablet_to_table_map_
+  /// @retval other ERROR         unexpected error
+  int exchange_tablet_table_info(const common::ObSArray<common::ObTabletID> &tablet_ids, const common::ObSArray<uint64_t> &table_ids);
 
   /// remove tablet_id->table_info pair for specified tablet_id
   ///

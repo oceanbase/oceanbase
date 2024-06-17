@@ -17,6 +17,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_thread_mgr.h"    // TG*
 #include "ob_ls_log_stat_info.h"    // LogStatRecordArray
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -58,6 +59,11 @@ ObLogRouteService::~ObLogRouteService()
   destroy();
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(LOG_ROUTE_TIMER_INIT_FAIL);
+ERRSIM_POINT_DEF(LOG_ROUTE_HANDLER_INIT_FAIL);
+ERRSIM_POINT_DEF(LOG_ROUTE_HANDLER_START_FAIL);
+#endif
 int ObLogRouteService::init(ObISQLClient *proxy,
     const common::ObRegion &prefer_region,
     const int64_t cluster_id,
@@ -108,10 +114,22 @@ int ObLogRouteService::init(ObISQLClient *proxy,
           all_server_cache_update_interval_sec, all_zone_cache_update_interval_sec))) {
     LOG_WARN("all_svr_cache_ init failed", KR(ret), K(is_tenant_mode), K(prefer_region),
         K(all_server_cache_update_interval_sec), K(all_zone_cache_update_interval_sec));
+#ifdef ERRSIM
+  } else if (OB_FAIL(LOG_ROUTE_TIMER_INIT_FAIL)) {
+    LOG_ERROR("ERRSIM: LOG_ROUTE_TIMER_INIT_FAIL");
+#endif
   } else if (OB_FAIL(timer_.init("LogRouter"))) {
     LOG_ERROR("fail to init itable gc timer", K(ret));
+#ifdef ERRSIM
+  } else if (OB_FAIL(LOG_ROUTE_HANDLER_INIT_FAIL)) {
+    LOG_ERROR("ERRSIM: LOG_ROUTE_HANDLER_INIT_FAIL");
+#endif
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::LogRouteService, tg_id_))) {
     LOG_ERROR("TG_CREATE failed", KR(ret));
+#ifdef ERRSIM
+  } else if (OB_FAIL(LOG_ROUTE_HANDLER_START_FAIL)) {
+    LOG_ERROR("ERRSIM: LOG_ROUTE_HANDLER_START_FAIL");
+#endif
   } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
     LOG_WARN("TG_SET_HANDLER_AND_START failed", KR(ret), K(tg_id_));
   } else {
@@ -170,11 +188,11 @@ void ObLogRouteService::stop()
 
 void ObLogRouteService::wait()
 {
-  if (IS_INIT) {
-    LOG_INFO("ObLogRouteService wait begin");
-    timer_.wait();
-    int64_t num = 0;
-    int ret = OB_SUCCESS;
+  LOG_INFO("ObLogRouteService wait begin");
+
+  int ret = OB_SUCCESS;
+  int64_t num = 0;
+  if (-1 != tg_id_) {
     while (OB_SUCC(TG_GET_QUEUE_NUM(tg_id_, num)) && num > 0) {
       PAUSE();
     }
@@ -183,47 +201,47 @@ void ObLogRouteService::wait()
     }
     TG_STOP(tg_id_);
     TG_WAIT(tg_id_);
-    LOG_INFO("ObLogRouteService wait finish");
   }
+  timer_.wait();
+
+  LOG_INFO("ObLogRouteService wait finish");
 }
 
 void ObLogRouteService::destroy()
 {
-  if (IS_INIT) {
-    LOG_INFO("ObLogRouteService destroy begin");
-    timer_.destroy();
-    ls_route_timer_task_.destroy();
-    timer_id_ = -1;
-    if (-1 != tg_id_) {
-      TG_DESTROY(tg_id_);
-      tg_id_ = -1;
-    }
-    free_mem_();
-    ls_route_key_set_.destroy();
-    ls_router_map_.destroy();
-    systable_queryer_.destroy();
-    all_svr_cache_.destroy();
-    svr_blacklist_.destroy();
-
-    log_router_allocator_.destroy();
-    asyn_task_allocator_.destroy();
-
-    err_handler_ = NULL;
-
-    cluster_id_ = OB_INVALID_CLUSTER_ID;
-    self_tenant_id_ = OB_INVALID_TENANT_ID;
-    source_tenant_id_ = OB_INVALID_TENANT_ID;
-    background_refresh_time_sec_ = 0;
-    blacklist_survival_time_sec_ = 0;
-    blacklist_survival_time_upper_limit_min_ = 0;
-    blacklist_survival_time_penalty_period_min_ = 0;
-    blacklist_history_overdue_time_min_ = 0;
-    blacklist_history_clear_interval_min_ = 0;
-
-    is_tenant_mode_ = false;
-    is_inited_ = false;
-    LOG_INFO("ObLogRouteService destroy finish");
+  LOG_INFO("ObLogRouteService destroy begin");
+  timer_.destroy();
+  ls_route_timer_task_.destroy();
+  timer_id_ = -1;
+  if (-1 != tg_id_) {
+    TG_DESTROY(tg_id_);
+    tg_id_ = -1;
   }
+  free_mem_();
+  ls_route_key_set_.destroy();
+  ls_router_map_.destroy();
+  systable_queryer_.destroy();
+  all_svr_cache_.destroy();
+  svr_blacklist_.destroy();
+
+  log_router_allocator_.destroy();
+  asyn_task_allocator_.destroy();
+
+  err_handler_ = NULL;
+
+  cluster_id_ = OB_INVALID_CLUSTER_ID;
+  self_tenant_id_ = OB_INVALID_TENANT_ID;
+  source_tenant_id_ = OB_INVALID_TENANT_ID;
+  background_refresh_time_sec_ = 0;
+  blacklist_survival_time_sec_ = 0;
+  blacklist_survival_time_upper_limit_min_ = 0;
+  blacklist_survival_time_penalty_period_min_ = 0;
+  blacklist_history_overdue_time_min_ = 0;
+  blacklist_history_clear_interval_min_ = 0;
+
+  is_tenant_mode_ = false;
+  is_inited_ = false;
+  LOG_INFO("ObLogRouteService destroy finish");
 }
 
 void ObLogRouteService::free_mem_()

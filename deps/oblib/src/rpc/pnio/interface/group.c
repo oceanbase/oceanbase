@@ -49,6 +49,7 @@ typedef struct pn_t
 static int next_pn_listen_idx;
 static pn_listen_t pn_listen_array[MAX_PN_LISTEN];
 static pn_grp_t* pn_grp_array[MAX_PN_GRP];
+static int pn_has_listened = 0;
 int64_t pnio_keepalive_timeout;
 PN_API int64_t pn_set_keepalive_timeout(int64_t user_timeout) {
   if (user_timeout >= 0) {
@@ -88,19 +89,27 @@ static void* pn_thread_func(void* arg)
 }
 
 static int pnl_dispatch_accept(int fd, const void* b, int sz);
+extern bool is_support_ipv6_c();
 PN_API int pn_listen(int port, serve_cb_t cb)
 {
   int idx = FAA(&next_pn_listen_idx, 1);
   pn_listen_t* pnl = locate_listen(idx);
   addr_t addr;
+  addr_t addr6;
   addr_init(&addr, "0.0.0.0", port);
-
-  if (listen_create(addr) <= 0) {
-    idx = -1;
-  } else {
-    pnl->serve_cb = cb;
+  if (is_support_ipv6_c()) {
+    addr_init(&addr6, "::", port);
   }
 
+  if (ATOMIC_BCAS(&pn_has_listened, 0, 1)) {
+    if (listen_create(addr) <= 0 ||
+        (is_support_ipv6_c() && listen_create(addr6) <= 0)) {
+      idx = -1;
+      ATOMIC_STORE(&pn_has_listened, 0);
+    } else {
+      pnl->serve_cb = cb;
+    }
+  }
   return idx;
 }
 
@@ -246,8 +255,32 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
   int err = 0;
   int count = 0;
   pn_grp_t* pn_grp = ensure_grp(gid);
-  ef(pn_grp == NULL);
+  if (pn_grp == NULL) {
+    err = -ENOMEM;
+    rk_error("ensure group failed, gid=%d", gid);
+  } else if (thread_count > MAX_PN_PER_GRP) {
+    err = -EINVAL;
+    rk_error("thread count is too large, thread_count=%d, MAX_PN_PER_GRP=%d", thread_count, MAX_PN_PER_GRP);
+  }
   count = pn_grp->count;
+  // restart stoped threads
+  for (int i = 0; 0 == err && i < count; i++) {
+    pn_t* pn = pn_grp->pn_array[i];
+    if (!pn->is_stop_) {
+      // pn thread is running, do nothing
+    } else if (pn->pd) {
+      err = PNIO_ERROR;
+      rk_error("pn is stopped but the thread is still running, gid=%d, i=%d", gid, i)
+    } else {
+      pn->is_stop_ = false;
+      if (0 != (err = ob_pthread_create(&pn->pd, pn_thread_func, pn))) {
+        pn->is_stop_ = true;
+        rk_error("pthread_create failed, gid=%d, i=%d", gid, i);
+      } else {
+        rk_info("pn pthread created, gid=%d, i=%d", gid, i);
+      }
+    }
+  }
   while(0 == err && count < thread_count) {
     pn_t* pn = pn_create(listen_id, gid, count);
     if (NULL == pn) {
@@ -255,14 +288,15 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
     } else if (0 != (err = ob_pthread_create(&pn->pd, pn_thread_func, pn))) {
       pn_destroy(pn);
     } else {
-      pn->has_stopped_ = false;
       pn_grp->pn_array[count++] = pn;
     }
   }
-  pn_grp->count = count;
-  return pn_grp->count;
-  el();
-  return -1;
+  int ret = -1;
+  if (0 == err) {
+    pn_grp->count = count;
+    ret = pn_grp->count;
+  }
+  return ret;
 }
 
 typedef struct pn_pktc_cb_t
@@ -375,7 +409,8 @@ static pn_t* get_pn_for_send(pn_grp_t* pgrp, int tid)
   return pgrp->pn_array[tid % pgrp->count];
 }
 
-PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret)
+extern bool is_valid_sockaddr_c(struct sockaddr_storage *sock_addr);
+PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret)
 {
   int err = 0;
   const char* buf = pkt->buf;
@@ -386,11 +421,12 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const pn_pkt_t* pkt,
 
   pn_grp_t* pgrp = locate_grp(gtid>>32);
   pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
-  addr_t dest = {.ip=addr->sin_addr.s_addr, .port=htons(addr->sin_port), .tid=0};
+  addr_t dest;
+  sockaddr_to_addr(sock_addr, &dest);
   uint32_t pkt_id = gen_pkt_id();
-  if (addr->sin_addr.s_addr == 0 || htons(addr->sin_port) == 0) {
+  if (!is_valid_sockaddr_c(sock_addr)) {
     err = -EINVAL;
-    rk_warn("invalid sin_addr: %x:%d", addr->sin_addr.s_addr, addr->sin_port);
+    rk_warn("invalid sin_addr");
   } else if (expire_us < 0) {
     err = -EINVAL;
     rk_error("invalid rpc timeout: %ld, it might be that the up-layer rpc timeout is too large, categ_id=%d", expire_us, categ_id);
@@ -429,10 +465,9 @@ PN_API void pn_wait(uint64_t gid)
   if (pgrp != NULL) {
     for (int tid = 0; tid < pgrp->count; tid++) {
       pn_t *pn = get_pn_for_send(pgrp, tid);
-      if (!pn->has_stopped_) {
+      if (NULL != pn->pd) {
         ob_pthread_join(pn->pd);
         pn->pd = NULL;
-        pn->has_stopped_ = true;
       }
     }
   }
@@ -567,10 +602,7 @@ PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr) {
       err = -EINVAL;
       rk_warn("idm_get sock failed, sock_id=%lx", ctx->sock_id);
     } else {
-      struct sockaddr_in* sin = (typeof(sin))addr;
-      sin->sin_family = AF_INET;
-      sin->sin_addr.s_addr = sock->peer.ip;
-      sin->sin_port = htons(sock->peer.port);
+      make_sockaddr(addr, sock->peer);
     }
   }
   return err;
@@ -653,6 +685,18 @@ PN_API int pn_get_fd(uint64_t req_id)
     fd = sock->fd;
   }
   return fd;
+}
+
+PN_API int64_t pn_get_pkt_id(uint64_t req_id)
+{
+  int64_t pkt_id = -1;
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  if (unlikely(NULL == ctx)) {
+    rk_warn("invalid arguments, req_id=%p", ctx);
+  } else {
+    pkt_id = ctx->pkt_id;
+  }
+  return pkt_id;
 }
 
 void pn_print_diag_info(pn_comm_t* pn_comm) {

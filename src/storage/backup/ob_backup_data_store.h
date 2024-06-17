@@ -119,6 +119,19 @@ public:
   bool is_valid() const override { return true; }
 };
 
+struct ObBackupResourcePool
+{
+public:
+    ObBackupResourcePool()
+      : resource_pool_(),
+        unit_config_() {}
+    int assign(const ObBackupResourcePool &that);
+    TO_STRING_KV(K_(resource_pool), K_(unit_config));
+public:
+    share::ObResourcePool resource_pool_;
+    share::ObUnitConfig unit_config_;
+};
+
 struct ObExternTenantLocalityInfoDesc final : public ObExternBackupDataDesc
 {
 public:
@@ -141,7 +154,8 @@ public:
       locality_(),
       primary_zone_(),
       sys_time_zone_(),
-      sys_time_zone_wrap_() {}
+      sys_time_zone_wrap_(),
+      resource_pool_infos_() {}
   virtual ~ObExternTenantLocalityInfoDesc() {}
   int assign(const ObExternTenantLocalityInfoDesc &that);
   bool is_valid() const override;
@@ -159,6 +173,7 @@ public:
   PrimaryZone primary_zone_;
   TimeZone sys_time_zone_;
   ObTimeZoneInfoWrap sys_time_zone_wrap_;
+  common::ObSArray<ObBackupResourcePool> resource_pool_infos_;
 };
 
 struct ObExternBackupSetInfoDesc final : public ObExternBackupDataDesc
@@ -235,6 +250,51 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupLSMetaInfosDesc);
 };
+
+struct ObBackupPartialTableListDesc final : public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupPartialTableListDesc()
+    : ObExternBackupDataDesc(ObBackupFileType::BACKUP_TABLE_LIST_FILE, FILE_VERSION),
+      items_() {}
+  virtual ~ObBackupPartialTableListDesc() {}
+  bool is_valid() const override;
+  void reset();
+  int64_t count() const { return items_.count(); }
+  DECLARE_TO_STRING;
+public:
+  ObSArray<ObBackupTableListItem> items_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupPartialTableListDesc);
+};
+
+struct ObBackupTableListMetaInfoDesc final : public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupTableListMetaInfoDesc()
+    : ObExternBackupDataDesc(ObBackupFileType::BACKUP_TABLE_LIST_META_FILE, FILE_VERSION),
+      scn_(share::SCN::min_scn()),
+      count_(0),
+      batch_size_(0),
+      partial_metas_() {}
+  virtual ~ObBackupTableListMetaInfoDesc() {}
+  bool is_valid() const override;
+  TO_STRING_KV(K_(count), K_(batch_size), K_(partial_metas));
+public:
+  share::SCN scn_;
+  int64_t count_;
+  int64_t batch_size_;
+  common::ObSArray<ObBackupPartialTableListMeta>  partial_metas_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupTableListMetaInfoDesc);
+};
+
 
 class ObBackupSetFilter : public ObBaseDirEntryOperator
 {
@@ -316,7 +376,11 @@ public:
 // 4.1 interface to get tablet to ls
   int read_tablet_to_ls_info_v_4_1_x(const int64_t turn_id, const ObLSID &ls_id, ObIArray<ObTabletID> &tablet_ids);
   int read_deleted_tablet_info_v_4_1_x(const ObLSID &ls_id, ObIArray<ObTabletID> &deleted_tablet_ids);
-
+  // table list
+  int write_single_table_list_part_file(const share::SCN &scn, const int64_t part_no, const ObBackupPartialTableListDesc &table_list);
+  int write_table_list_meta_info(const share::SCN &scn, const ObBackupTableListMetaInfoDesc &desc);
+  int read_table_list_file(const char* file_name, ObBackupPartialTableListDesc &desc);
+  int is_table_list_meta_exist(const share::SCN &scn, bool &is_exist);
   TO_STRING_KV(K_(backup_desc));
 
 public:

@@ -209,7 +209,7 @@ int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
                 CK (OB_NOT_NULL(collection = reinterpret_cast<pl::ObPLCollection*>(ptr)));
                 OX (collection->set_count(0));
               }
-              OZ (collection_type->get_element_type().get_size(*pl_exec_ctx, pl::PL_TYPE_INIT_SIZE, init_size));
+              OZ (collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE, init_size));
               OX (row->set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
             }
             if (OB_SUCC(ret)) {

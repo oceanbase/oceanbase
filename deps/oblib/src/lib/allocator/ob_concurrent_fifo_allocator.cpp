@@ -86,6 +86,11 @@ void ObConcurrentFIFOAllocator::destroy()
   inner_allocator_.destroy();
 }
 
+void ObConcurrentFIFOAllocator::purge()
+{
+  inner_allocator_.purge();
+}
+
 void ObConcurrentFIFOAllocator::set_label(const lib::ObLabel &label)
 {
   inner_allocator_.set_label(label);

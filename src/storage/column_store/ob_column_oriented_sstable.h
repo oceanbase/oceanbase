@@ -46,7 +46,8 @@ public:
   void reset();
   bool is_valid() const { return sstable_ != nullptr; }
   int set_sstable(blocksstable::ObSSTable *sstable, ObStorageMetaHandle *meta_handle = nullptr);
-  int get_sstable(blocksstable::ObSSTable *&table);
+  // this interface will return the loaded column store type sstable
+  int get_loaded_column_store_sstable(blocksstable::ObSSTable *&table);
   int get_merge_row_cnt(const ObTableIterParam &iter_param, int64_t &row_cnt);
   blocksstable::ObSSTable *get_sstable() const { return sstable_; }
   const ObStorageMetaHandle &get_meta_handle() const { return meta_handle_; }
@@ -100,6 +101,31 @@ enum ObCOSSTableBaseType : int32_t
   MAX_TYPE
 };
 
+enum ObCOMajorSSTableStatus: uint8_t {
+  INVALID_CO_MAJOR_SSTABLE_STATUS = 0,
+  COL_WITH_ALL, // all cg + normal cg
+  COL_ONLY_ALL, // all cg only
+  PURE_COL, // rowkey cg + normal cg
+  PURE_COL_ONLY_ALL, // all cg only
+  MAX_CO_MAJOR_SSTABLE_STATUS
+};
+
+inline bool is_valid_co_major_sstable_status(const ObCOMajorSSTableStatus& major_sstable_status)
+{
+  return major_sstable_status > INVALID_CO_MAJOR_SSTABLE_STATUS && major_sstable_status < MAX_CO_MAJOR_SSTABLE_STATUS;
+}
+inline bool is_rowkey_major_sstable(const ObCOMajorSSTableStatus& major_sstable_status)
+{
+  return PURE_COL == major_sstable_status;
+}
+inline bool is_redundant_row_store_major_sstable(const ObCOMajorSSTableStatus& major_sstable_status)
+{
+  return major_sstable_status == COL_WITH_ALL || major_sstable_status == COL_ONLY_ALL;
+}
+inline bool is_major_sstable_match_schema(const ObCOMajorSSTableStatus& major_sstable_status)
+{
+  return major_sstable_status == COL_WITH_ALL || major_sstable_status == PURE_COL;
+}
 
 /*
  * The base part of ObCOSSTable maybe
@@ -114,12 +140,14 @@ public:
       const ObTabletCreateSSTableParam &param,
       common::ObArenaAllocator *allocator) override;
 
-  bool is_empty_co_table() const { return is_empty_co_; }
+  bool is_row_store_only_co_table() const { return is_cgs_empty_co_ && is_all_cg_base(); }
+  bool is_cgs_empty_co_table() const { return is_cgs_empty_co_; }
   int fill_cg_sstables(const common::ObIArray<ObITable *> &cg_tables);
+  int build_cs_meta_without_cgs();
   OB_INLINE const ObCOSSTableMeta &get_cs_meta() const { return cs_meta_; }
   OB_INLINE bool is_all_cg_base() const { return ObCOSSTableBaseType::ALL_CG_TYPE == base_type_; }
   OB_INLINE bool is_rowkey_cg_base() const { return ObCOSSTableBaseType::ROWKEY_CG_TYPE == base_type_; }
-  OB_INLINE bool is_inited() const { return is_empty_co_table() || is_cs_valid(); }
+  OB_INLINE bool is_inited() const { return is_cgs_empty_co_table() || is_cs_valid(); }
   OB_INLINE bool is_cs_valid() const {
     return valid_for_cs_reading_
         && base_type_ > ObCOSSTableBaseType::INVALID_TYPE && base_type_ < ObCOSSTableBaseType::MAX_TYPE
@@ -182,13 +210,13 @@ public:
       const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
       ObStoreRowIterator *&row_iter) override;
   INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, KP(this), K_(cs_meta),
-      K_(base_type), K_(is_empty_co), K_(valid_for_cs_reading));
+      K_(base_type), K_(is_cgs_empty_co), K_(valid_for_cs_reading));
 private:
   int build_cs_meta();
 protected:
   ObCOSSTableMeta cs_meta_;
   ObCOSSTableBaseType base_type_;
-  bool is_empty_co_; // no need to create cg sstable when co sstable is empty
+  bool is_cgs_empty_co_; // The co sstable only contains all_cg and cg_sstables_ should be empty. No need to create cg sstable when (case 1) co sstable is co_major and it is empty (case 2) normal cg is redundant
   bool valid_for_cs_reading_;
   common::ObArenaAllocator tmp_allocator_; // TODO(@jiahua.cjh) remove this allocator later
   DISALLOW_COPY_AND_ASSIGN(ObCOSSTableV2);

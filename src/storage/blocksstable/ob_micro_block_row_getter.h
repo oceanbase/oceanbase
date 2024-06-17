@@ -52,6 +52,7 @@ protected:
   ObEncodeBlockGetReader *encode_reader_;
   ObCSEncodeBlockGetReader *cs_encode_reader_;
   const ObITableReadInfo *read_info_;
+  ObIAllocator *long_life_allocator_;
   bool is_inited_;
 };
 
@@ -67,7 +68,7 @@ public:
   int get_row(
       ObSSTableReadHandle &get_handle,
       const ObDatumRow *&store_row,
-      ObMacroBlockReader &block_reader);
+      ObMacroBlockReader *block_reader);
   virtual int switch_context(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,

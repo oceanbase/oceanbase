@@ -56,17 +56,21 @@ int ObMViewRefreshHelper::lock_mview(ObMViewTransaction &trans, const uint64_t t
                                      const uint64_t mview_id, const bool try_lock)
 {
   int ret = OB_SUCCESS;
+  ObTableLockOwnerID owner_id;
   if (OB_UNLIKELY(!trans.is_started() || OB_INVALID_TENANT_ID == tenant_id ||
                   OB_INVALID_ID == mview_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(trans.is_started()), K(tenant_id), K(mview_id));
+  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                 get_tid_cache()))) {
+    LOG_WARN("failed to get owner id", K(ret), K(get_tid_cache()));
   } else {
     const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
     ObInnerSQLConnection *conn = nullptr;
     ObLockObjRequest lock_arg;
     lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW;
     lock_arg.obj_id_ = mview_id;
-    lock_arg.owner_id_ = ObTableLockOwnerID(get_tid_cache());
+    lock_arg.owner_id_ = owner_id;
     lock_arg.lock_mode_ = EXCLUSIVE;
     lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     if (OB_ISNULL(conn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
@@ -95,7 +99,8 @@ int ObMViewRefreshHelper::lock_mview(ObMViewTransaction &trans, const uint64_t t
 
 int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_guard,
                                                   const uint64_t tenant_id, const uint64_t mlog_id,
-                                                  const SCN &purge_scn, ObSqlString &sql_string)
+                                                  const SCN &purge_scn, const int64_t purge_log_parallel,
+                                                  ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
   sql_string.reuse();
@@ -137,7 +142,8 @@ int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_gu
                K(table_schema->get_table_name_str()), K(is_oracle_mode));
     } else {
       if (is_oracle_mode) {
-        if (OB_FAIL(sql_string.assign_fmt("DELETE FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;",
+        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ ENABLE_PARALLEL_DML PARALLEL(%d)*/ FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;",
+                                          static_cast<int>(purge_log_parallel),
                                           static_cast<int>(database_name.length()),
                                           database_name.ptr(),
                                           static_cast<int>(table_name.length()), table_name.ptr(),
@@ -145,7 +151,8 @@ int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_gu
           LOG_WARN("fail to assign sql", KR(ret));
         }
       } else {
-        if (OB_FAIL(sql_string.assign_fmt("DELETE FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
+        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ ENABLE_PARALLEL_DML PARALLEL(%d)*/ FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
+                                          static_cast<int>(purge_log_parallel),
                                           static_cast<int>(database_name.length()),
                                           database_name.ptr(),
                                           static_cast<int>(table_name.length()), table_name.ptr(),

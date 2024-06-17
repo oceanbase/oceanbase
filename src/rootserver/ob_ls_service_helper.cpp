@@ -1542,7 +1542,7 @@ int ObLSServiceHelper::check_transfer_task_replay(const uint64_t tenant_id,
     LOG_WARN("failed to check ls transfer replay", KR(ret), K(tenant_id), K(src_ls), K(transfer_scn));
   } else if (!replay_finish) {
     LOG_WARN("src ls has not replay transfer finish", K(tenant_id), K(src_ls));
-  } else if (OB_FAIL(check_ls_transfer_replay_(tenant_id, src_ls, transfer_scn, replay_finish))) {
+  } else if (OB_FAIL(check_ls_transfer_replay_(tenant_id, dest_ls, transfer_scn, replay_finish))) {
     LOG_WARN("failed to check ls transfer replay", KR(ret), K(tenant_id), K(dest_ls), K(transfer_scn));
   } else if (!replay_finish) {
     LOG_WARN("dest ls has not replay transfer finish", K(tenant_id), K(dest_ls));
@@ -1623,6 +1623,7 @@ int ObLSServiceHelper::get_ls_all_replica_readable_scn_(const uint64_t tenant_id
       LOG_WARN("result is null", KR(ret), K(tenant_id), K(leader), K(ls_id));
     } else {
       readable_scn = proxy.get_results().at(0)->get_cur_readable_scn();
+      LOG_INFO("get all replica readable scn", K(ls_id), K(readable_scn));
     }
   }
   return ret;

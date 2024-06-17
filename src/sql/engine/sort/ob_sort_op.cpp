@@ -39,9 +39,7 @@ ObSortSpec::ObSortSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type
   is_fetch_with_ties_(false),
   prescan_enabled_(false),
   enable_encode_sortkey_opt_(false),
-  part_cnt_(0),
-  sort_compact_level_(share::SORT_DEFAULT_LEVEL),
-  compress_type_(NONE_COMPRESSOR)
+  part_cnt_(0)
 {}
 
 OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
@@ -59,7 +57,6 @@ OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
                     prescan_enabled_,
                     enable_encode_sortkey_opt_,
                     part_cnt_,
-                    sort_compact_level_,
                     compress_type_);
 
 ObSortOp::ObSortOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
@@ -294,7 +291,7 @@ int ObSortOp::scan_all_then_sort()
     if (OB_FAIL(cache_store.init(2 * 1024 * 1024,
         ctx_.get_my_session()->get_effective_tenant_id(),
         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true/*enable dump*/, 0, true,
-        MY_SPEC.sort_compact_level_, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_))) {
+        MY_SPEC.compress_type_, &MY_SPEC.all_exprs_))) {
       LOG_WARN("init sample chunk store failed", K(ret));
     } else if (OB_FAIL(cache_store.alloc_dir_id())) {
       LOG_WARN("failed to alloc dir id", K(ret));
@@ -350,7 +347,7 @@ int ObSortOp::scan_all_then_sort_batch()
     if (OB_FAIL(cache_store.init(2 * 1024 * 1024,
         ctx_.get_my_session()->get_effective_tenant_id(),
         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true/*enable dump*/, 0, true,
-        MY_SPEC.sort_compact_level_, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_))) {
+        MY_SPEC.compress_type_, &MY_SPEC.all_exprs_))) {
       LOG_WARN("init sample chunk store failed", K(ret));
     } else if (OB_FAIL(cache_store.alloc_dir_id())) {
       LOG_WARN("failed to alloc dir id", K(ret));
@@ -435,10 +432,15 @@ int ObSortOp::init_sort(int64_t tenant_id,
                         int64_t topn_cnt)
 {
   int ret = OB_SUCCESS;
+  int64_t est_rows = MY_SPEC.rows_;
+  if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(
+      &ctx_, MY_SPEC.px_est_size_factor_, est_rows, est_rows))) {
+    LOG_WARN("failed to get px size", K(ret));
+  }
   OZ(sort_impl_.init(tenant_id, &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_,
       &eval_ctx_, &ctx_, MY_SPEC.enable_encode_sortkey_opt_, MY_SPEC.is_local_merge_sort_,
       false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt, MY_SPEC.is_fetch_with_ties_,
-      ObChunkDatumStore::BLOCK_SIZE, MY_SPEC.sort_compact_level_, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_));
+      ObChunkDatumStore::BLOCK_SIZE, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_, est_rows, MY_SPEC.prescan_enabled_));
   if (is_batch) {
     read_batch_func_ = &ObSortOp::sort_impl_next_batch;
   } else {

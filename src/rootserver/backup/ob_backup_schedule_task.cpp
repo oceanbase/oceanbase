@@ -317,7 +317,8 @@ ObBackupDataBaseTask::ObBackupDataBaseTask()
     backup_user_ls_scn_(),
     end_scn_(),
     backup_path_(),
-    backup_status_()
+    backup_status_(),
+    is_only_calc_stat_(false)
 {
 }
 
@@ -340,6 +341,7 @@ int ObBackupDataBaseTask::deep_copy(const ObBackupDataBaseTask &that)
     backup_user_ls_scn_ = that.backup_user_ls_scn_;
     end_scn_ = that.end_scn_;
     backup_status_.status_ = that.backup_status_.status_;
+    is_only_calc_stat_ = that.is_only_calc_stat_;
   }
   return ret;
 }
@@ -377,7 +379,7 @@ int ObBackupDataBaseTask::build(const share::ObBackupJobAttr &job_attr, const sh
   int ret = OB_SUCCESS;
   ObBackupScheduleTaskKey key;
   if (!job_attr.is_valid() || !ls_attr.is_valid()) {
-    ret = OB_SUCCESS;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(job_attr), K(ls_attr));
   } else if (OB_FAIL(key.init(ls_attr.tenant_id_, job_attr.job_id_, ls_attr.task_id_, ls_attr.ls_id_.id(), BackupJobType::BACKUP_DATA_JOB))) {
     LOG_WARN("failed to init backup schedule task key", K(ret), K(job_attr), K(ls_attr));
@@ -573,7 +575,7 @@ int ObBackupComplLogTask::build(const share::ObBackupJobAttr &job_attr, const sh
   ObBackupScheduleTaskKey key;
   share::SCN start_replay_scn;
   if (!job_attr.is_valid() || !ls_attr.is_valid()) {
-    ret = OB_SUCCESS;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(job_attr), K(ls_attr));
   } else if (OB_FAIL(key.init(ls_attr.tenant_id_, job_attr.job_id_, ls_attr.task_id_, ls_attr.ls_id_.id(), BackupJobType::BACKUP_DATA_JOB))) {
     LOG_WARN("failed to init backup schedule task key", K(ret), K(job_attr), K(ls_attr));
@@ -592,6 +594,7 @@ int ObBackupComplLogTask::build(const share::ObBackupJobAttr &job_attr, const sh
     backup_status_.status_ = set_task_attr.status_.status_;
     turn_id_ = ls_attr.turn_id_;
     retry_id_ = ls_attr.retry_id_;
+    is_only_calc_stat_ = ObBackupStatus::BEFORE_BACKUP_LOG == set_task_attr.status_.status_;
     if (OB_FAIL(backup_path_.assign(job_attr.backup_path_))) {
       LOG_WARN("failed to assign backup dest", K(ret), "backup dest", job_attr.backup_path_);
     } else if (OB_FAIL(set_optional_servers_(ls_attr.black_servers_))) {
@@ -617,6 +620,7 @@ int ObBackupComplLogTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   arg.start_scn_ = start_scn_;
   arg.end_scn_ = end_scn_;
   arg.backup_type_ = backup_type_.type_;
+  arg.is_only_calc_stat_ = is_only_calc_stat_;
   if (OB_FAIL(arg.backup_path_.assign(backup_path_))) {
     LOG_WARN("failed to assign backup dest", K(ret), K(backup_path_));
   } else if (OB_FAIL(rpc_proxy.to(get_dst()).backup_completing_log(arg))) {

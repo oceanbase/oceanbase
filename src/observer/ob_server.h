@@ -38,7 +38,6 @@
 
 #include "storage/tx/wrs/ob_weak_read_service.h"         // ObWeakReadService
 #include "storage/tx/wrs/ob_black_list.h"
-#include "storage/ob_partition_component_factory.h"
 
 #include "rootserver/ob_root_service.h"
 
@@ -64,7 +63,6 @@
 #include "observer/ob_startup_accel_task_handler.h"
 #include "share/ls/ob_ls_table_operator.h" // for ObLSTableOperator
 #include "storage/ob_locality_manager.h"
-#include "storage/ob_partition_component_factory.h"
 #include "storage/ddl/ob_ddl_heart_beat_task.h"
 
 #include "storage/ob_disk_usage_reporter.h"
@@ -107,7 +105,7 @@ namespace observer
 class ObServer
 {
 public:
-  static const int64_t DEFAULT_ETHERNET_SPEED = 1000 / 8 * 1024 * 1024; // default 125m/s  1000Mbit
+  static const int64_t DEFAULT_ETHERNET_SPEED = 10000 / 8 * 1024 * 1024; // change from default 125m/s  1000Mbit to 1250MBps 10000Mbit
   static const int64_t DISK_USAGE_REPORT_INTERVAL = 1000L * 1000L * 300L; // 5min
   static const uint64_t DEFAULT_CPU_FREQUENCY = 2500 * 1000; // 2500 * 1000 khz
   static ObServer &get_instance();
@@ -265,6 +263,10 @@ private:
   ~ObServer();
 
   int init_config();
+  int init_opts_config(bool has_config_file); // init configs from command line
+  int init_local_ip_and_devname();
+  int init_self_addr();
+  int init_config_module();
   int init_tz_info_mgr();
   int init_pre_setting();
   int init_network();
@@ -292,6 +294,7 @@ private:
   int init_px_target_mgr();
   int init_storage();
   int init_tx_data_cache();
+  int init_log_kv_cache();
   int init_gc_partition_adapter();
   int init_loaddata_global_stat();
   int init_bandwidth_throttle();
@@ -404,7 +407,6 @@ private:
   share::ObLocationService location_service_;
 
   // storage related
-  storage::ObPartitionComponentFactory partition_cfy_;
   common::ObInOutBandwidthThrottle bandwidth_throttle_;
   int64_t sys_bkgd_net_percentage_;
   int64_t ethernet_speed_;

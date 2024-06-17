@@ -215,6 +215,7 @@ private:
                                         bool &has_dropped);
   int delete_ls_status_(const share::ObLSID &id);
   void execute_gc_(ObGCCandidateArray &gc_candidates);
+
 private:
   class InsertLSFunctor;
   class QueryLSIsValidMemberFunctor;
@@ -240,6 +241,39 @@ class ObGCHandler : public ObIReplaySubHandler,
 public:
   ObGCHandler();
   ~ObGCHandler();
+
+public:
+  class ObGCLSLogCb : public AppendCb
+  {
+  public:
+    enum CbState : uint8_t
+    {
+      STATE_INIT = 0,
+      STATE_SUCCESS = 1,
+      STATE_FAILED = 2,
+    };
+    ObGCLSLogCb()
+      : state_(CbState::STATE_INIT), handler_(NULL)
+    {
+    }
+    explicit ObGCLSLogCb(ObGCHandler *handler)
+      : state_(CbState::STATE_INIT), handler_(handler)
+    {
+    }
+    virtual ~ObGCLSLogCb() {}
+    virtual int on_success() override;
+    virtual int on_failure() override {
+      ATOMIC_STORE(&state_, CbState::STATE_FAILED);
+      return OB_SUCCESS;
+    }
+    inline bool is_succeed() const { return CbState::STATE_SUCCESS == ATOMIC_LOAD(&state_); }
+    inline bool is_failed() const { return CbState::STATE_FAILED == ATOMIC_LOAD(&state_); }
+    TO_STRING_KV(K(state_), K(scn_), KP(handler_));
+  public:
+    CbState state_;
+    share::SCN scn_;
+    ObGCHandler *handler_;
+  };
 public:
   int init(storage::ObLS *ls);
   void reset();
@@ -252,6 +286,7 @@ public:
   void set_log_sync_stopped();
   bool is_log_sync_stopped() const {return ATOMIC_LOAD(&log_sync_stopped_);}
 
+  int handle_on_success_cb(const ObGCHandler::ObGCLSLogCb &cb);
   int diagnose(GCDiagnoseInfo &diagnose_info) const;
 
   // for replay
@@ -275,40 +310,15 @@ public:
                K(gc_start_ts_),
                K(block_tx_ts_),
                K(block_log_debug_time_),
-               K(log_sync_stopped_));
+               K(log_sync_stopped_),
+               K(rec_scn_));
 
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
 
-  class ObGCLSLogCb : public AppendCb
-  {
-  public:
-    enum CbState : uint8_t
-    {
-      STATE_INIT = 0,
-      STATE_SUCCESS = 1,
-      STATE_FAILED = 2,
-    };
-    ObGCLSLogCb()
-      : state_(CbState::STATE_INIT)
-    {
-    }
-    virtual ~ObGCLSLogCb() {}
-    virtual int on_success() override {
-      ATOMIC_STORE(&state_, CbState::STATE_SUCCESS);
-      return OB_SUCCESS;
-    }
-    virtual int on_failure() override {
-      ATOMIC_STORE(&state_, CbState::STATE_FAILED);
-      return OB_SUCCESS;
-    }
-    inline bool is_succeed() const { return CbState::STATE_SUCCESS == ATOMIC_LOAD(&state_); }
-    inline bool is_failed() const { return CbState::STATE_FAILED == ATOMIC_LOAD(&state_); }
-  public:
-    CbState state_;
-  };
+
 
 private:
   const int64_t MAX_WAIT_TIME_US_FOR_READONLY_TX = 10 * 60 * 1000 * 1000L;//10 min
@@ -332,23 +342,29 @@ private:
   int get_tenant_readable_scn_(share::SCN &readable_scn);
   int check_if_tenant_in_archive_(bool &in_archive);
   int submit_log_(const ObGCLSLOGType log_type, bool &is_success);
-  void update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
-                                            const share::SCN &scn);
-  void block_ls_transfer_in_(const share::SCN &block_scn);
-  void offline_ls_(const share::SCN &offline_scn);
+  int update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
+                                           const share::SCN &scn);
+  int block_ls_transfer_in_(const share::SCN &block_scn);
+  int offline_ls_(const share::SCN &offline_scn);
   int get_palf_role_(common::ObRole &role);
   void handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_status);
   void handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status);
   void set_block_tx_if_necessary_();
+  int overwrite_set_gc_state_retcode_(const int ret_code,
+                                      const LSGCState gc_state,
+                                      const ObLSID &ls_id);
 private:
   bool is_inited_;
-  RWLock rwlock_; //for leader revoke/takeover submit log
+  mutable RWLock rwlock_; //for leader revoke/takeover submit log
   storage::ObLS *ls_;
   int64_t gc_seq_invalid_member_; //缓存gc检查当前ls不在成员列表时的轮次
   int64_t gc_start_ts_;
   int64_t block_tx_ts_;
   int64_t block_log_debug_time_;
   bool log_sync_stopped_;//used for trans_service to kill trx, True means this replica may not be able to fully synchronize the logs.
+  share::SCN rec_scn_;
+  common::ObSpinLock rec_scn_lock_;//protect  rec_scn_, which guarantees that cb.scn_ is assigned valid value before on_success callback
+  int64_t last_print_dba_log_ts_;
 };
 
 } // namespace logservice

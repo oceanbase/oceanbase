@@ -226,10 +226,20 @@ int get_user_tenant(ObRequest &req, char *user_name_buf, char *tenant_name_buf)
     }
   }
 
-  MEMCPY(user_name_buf, user_name.ptr(), user_name.length());
-  user_name_buf[user_name.length()] = '\0';
-  MEMCPY(tenant_name_buf, tenant_name.ptr(), tenant_name.length());
-  tenant_name_buf[tenant_name.length()] = '\0';
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
+    ret = OB_WRONG_USER_NAME_LENGTH;
+    LOG_WARN("username is too long", K(ret));
+  } else if (tenant_name.length() > OB_MAX_TENANT_NAME_LENGTH) {
+    ret = OB_INVALID_TENANT_NAME;
+    LOG_WARN("tenant name is too long", K(ret));
+  } else {
+    MEMCPY(user_name_buf, user_name.ptr(), user_name.length());
+    user_name_buf[user_name.length()] = '\0';
+    MEMCPY(tenant_name_buf, tenant_name.ptr(), tenant_name.length());
+    tenant_name_buf[tenant_name.length()] = '\0';
+  }
 
   if (OB_NOT_NULL(endpoint_tenant_mapping_buf)) {
     ob_free(endpoint_tenant_mapping_buf);
@@ -662,8 +672,8 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
           LOG_ERROR("deliver request fail", K(req));
         }
       } else if (OB_NOT_NULL(mysql_queue_)) {
-        char user_name_buf[OB_MAX_USER_NAME_LENGTH] = "";
-        char tenant_name_buf[OB_MAX_TENANT_NAME_LENGTH] = "";
+        char user_name_buf[OB_MAX_USER_NAME_BUF_LENGTH] = "";
+        char tenant_name_buf[OB_MAX_TENANT_NAME_LENGTH + 1] = "";
         uint64_t tenant_id = OB_INVALID_TENANT_ID;
         if (OB_FAIL(get_user_tenant(req, user_name_buf, tenant_name_buf))) {
           LOG_WARN("fail to get username and tenant name", K(ret), K(req));
@@ -711,22 +721,6 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
       if (need_update_stat) {
         EVENT_INC(MYSQL_PACKET_IN);
         EVENT_ADD(MYSQL_PACKET_IN_BYTES, pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
-        sql::ObSQLSessionInfo *sess_info = nullptr;
-        if (OB_ISNULL(conn) || OB_ISNULL(GCTX.session_mgr_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("conn or sessoin mgr is NULL", K(ret), KP(conn), K(GCTX.session_mgr_));
-        } else if (OB_FAIL(GCTX.session_mgr_->get_session(conn->sessid_, sess_info))) {
-          LOG_WARN("get session fail", K(ret), "sessid", conn->sessid_,
-                    "proxy_sessid", conn->proxy_sessid_);
-        } else if (OB_ISNULL(sess_info)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("sess_info is null", K(ret));
-        } else {
-          sess_info->inc_in_bytes(pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
-        }
-        if (OB_NOT_NULL(sess_info)) {
-          GCTX.session_mgr_->revert_session(sess_info);
-        }
       }
       // The tenant check has been done in the recv_request method. For performance considerations, the check here is removed;
       /*

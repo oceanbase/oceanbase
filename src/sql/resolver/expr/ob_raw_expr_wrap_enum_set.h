@@ -51,6 +51,7 @@ public:
   int visit(ObWinFunRawExpr &expr);
   int visit(ObPseudoColumnRawExpr &expr);
   int visit(ObPlQueryRefRawExpr &expr);
+  int visit(ObMatchFunRawExpr &expr);
   bool skip_child();
 private:
   int visit_left_expr(ObOpRawExpr &expr, int64_t row_dimension,

@@ -35,6 +35,7 @@
 #include "storage/mock_access_service.h"
 #include "storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
 
 namespace oceanbase
 {
@@ -81,12 +82,13 @@ public:
   void prepare_merge_ddl_kvs();
   void close_builder_and_prepare_sstable(const int64_t column_cnt);
   void prepare_partial_sstable(const int64_t column_cnt);
+  int prepare_cg_read_info(const ObColDesc &col_desc);
   int gen_create_tablet_arg(const int64_t tenant_id,
-    const share::ObLSID &ls_id,
-    const ObTabletID &tablet_id,
-    obrpc::ObBatchCreateTabletArg &arg,
-    share::schema::ObTableSchema &table_schema,
-    const int64_t count = 1);
+                            const share::ObLSID &ls_id,
+                            const ObTabletID &tablet_id,
+                            obrpc::ObBatchCreateTabletArg &arg,
+                            share::schema::ObTableSchema &table_schema,
+                            const int64_t count = 1);
 protected:
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
   static const int64_t MAX_TEST_COLUMN_CNT = TEST_COLUMN_CNT + 3;
@@ -102,6 +104,7 @@ protected:
   ObMergeType merge_type_;
   int64_t max_row_cnt_;
   int64_t max_partial_row_cnt_;
+  int64_t co_sstable_row_offset_;
   int64_t partial_kv_start_idx_;
   ObTableSchema table_schema_;
   ObTableSchema index_schema_;
@@ -131,7 +134,7 @@ protected:
   ObTabletHandle tablet_handle_;
   ObFixedArray<ObSkipIndexColMeta, common::ObIAllocator> agg_col_metas_;
   bool need_agg_data_;
-  ObCGReadInfoHandle cg_read_info_handle_;
+  ObTableReadInfo cg_read_info_;
   ObDatumRowkey start_key_;
   ObDatumRowkey end_key_;
   int64_t rows_per_mirco_block_;
@@ -193,6 +196,7 @@ TestIndexBlockDataPrepare::TestIndexBlockDataPrepare(
     const int64_t mirco_blocks_per_macro_block)
   : merge_type_(merge_type),
     max_row_cnt_(max_row_cnt),
+    co_sstable_row_offset_(0),
     row_cnt_(0),
     partial_sstable_row_cnt_(0),
     root_index_builder_(nullptr),
@@ -318,7 +322,7 @@ void TestIndexBlockDataPrepare::TearDown()
   ddl_kv_.reset();
   ddl_kvs_.reset();
   ddl_kv_ptr_ = nullptr;
-  cg_read_info_handle_.reset();
+  cg_read_info_.reset();
   if (nullptr != root_block_data_buf_.buf_) {
     allocator_.free((void *)root_block_data_buf_.buf_);
     root_block_data_buf_.buf_ = nullptr;
@@ -648,6 +652,17 @@ void TestIndexBlockDataPrepare::prepare_data(const int64_t micro_block_size)
   prepare_ddl_kv();
 }
 
+int TestIndexBlockDataPrepare::prepare_cg_read_info(const ObColDesc &col_desc)
+{
+  int ret = OB_SUCCESS;
+  cg_read_info_.reset();
+  if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->construct_cg_read_info(
+              allocator_, lib::is_oracle_mode(), col_desc, nullptr, cg_read_info_))) {
+    STORAGE_LOG(WARN, "Fail to construct cg read info", K(ret));
+  }
+  return ret;
+}
+
 void TestIndexBlockDataPrepare::prepare_cg_data()
 {
   // need_aggregate_data is ignored temporarily
@@ -688,8 +703,8 @@ void TestIndexBlockDataPrepare::prepare_cg_data()
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder();
   ASSERT_NE(nullptr, root_index_builder_);
   data_desc.get_desc().sstable_index_builder_ = root_index_builder_;
-  OK(MTL(ObTenantCGReadInfoMgr *)->get_cg_read_info(data_desc.get_desc().get_col_desc_array().at(0),//column count always 1
-                                                    nullptr, data_desc.get_desc().get_tablet_id(), cg_read_info_handle_));
+
+  OK(prepare_cg_read_info(data_desc.get_desc().get_col_desc_array().at(0)));
 
   ASSERT_TRUE(data_desc.is_valid());
 
@@ -721,7 +736,7 @@ void TestIndexBlockDataPrepare::prepare_ddl_kv()
 
   share::SCN ddl_start_scn;
   ddl_start_scn.convert_from_ts(ObTimeUtility::current_time());
-  ASSERT_EQ(OB_SUCCESS, ddl_kv_.init(*tablet_handle.get_obj(), sstable_.get_key(), ddl_start_scn, DATA_CURRENT_VERSION));
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_.init(allocator_, *tablet_handle.get_obj(), sstable_.get_key(), ddl_start_scn, DATA_CURRENT_VERSION));
 
   SMART_VAR(ObSSTableSecMetaIterator, meta_iter) {
     ObDatumRange query_range;
@@ -890,6 +905,36 @@ void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
   ASSERT_EQ(OB_SUCCESS, storage_schema->get_stored_column_count_in_sstable(column_cnt));
   prepare_partial_sstable(column_cnt);
   prepare_merge_ddl_kvs();
+
+  ObArray<blocksstable::ObSSTable *> ddl_tables;
+  ASSERT_EQ(OB_SUCCESS, ddl_tables.push_back(&partial_sstable_));
+  for (int64_t i = 0; i < DDL_KVS_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, ddl_tables.push_back(ddl_kvs_.get_obj()->get_ddl_memtables().at(i)));
+  }
+  share::SCN ddl_start_scn;
+  ddl_start_scn.convert_from_ts(ObTimeUtility::current_time());
+  ObTabletDDLParam ddl_param;
+  ddl_param.table_key_ = partial_sstable_.key_;
+  ddl_param.data_format_version_ = DATA_VERSION_4_3_0_0;
+  ddl_param.start_scn_ = ddl_start_scn;
+  ddl_param.commit_scn_ = ddl_start_scn;
+  ddl_param.direct_load_type_ = DIRECT_LOAD_DDL;
+  ddl_param.ls_id_ = ls_id_;
+  ddl_param.snapshot_version_ = SNAPSHOT_VERSION;
+  ObArray<ObDDLBlockMeta> sorted_metas;
+  ObArenaAllocator arena("compact_test", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ASSERT_EQ(OB_SUCCESS, ObTabletDDLUtil::get_compact_meta_array(
+                                         *tablet_handle.get_obj(),
+                                         ddl_tables,
+                                         ddl_param,
+                                         tablet_handle.get_obj()->get_rowkey_read_info(),
+                                         storage_schema,
+                                         arena,
+                                         sorted_metas));
+  if (co_sstable_row_offset_ != 0) {
+    ASSERT_EQ(sorted_metas.at(2).end_row_offset_, co_sstable_row_offset_);
+  }
+  arena.reset();
   ObTabletObjLoadHelper::free(allocator_, storage_schema);
 }
 
@@ -983,6 +1028,24 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
     STORAGE_LOG(INFO, "not supported root block", K(root_desc));
     ASSERT_TRUE(false);
   }
+  ObMicroBlockReaderHelper reader_helper;
+  ObIMicroBlockReader *micro_reader;
+  ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(merge_root_index_builder_->index_store_desc_.get_desc().row_store_type_, micro_reader));
+  ObMicroBlockData root_block(root_buf, root_size);
+  ObDatumRow row;
+  OK(row.init(allocator_, merge_root_index_builder_->index_store_desc_.get_desc().col_desc_->row_column_count_));
+  OK(micro_reader->init(root_block, nullptr));
+  ObIndexBlockRowParser idx_row_parser;
+  int64_t last_idx = 0;
+  for (int64_t it = 0; it != micro_reader->row_count(); ++it) {
+    idx_row_parser.reset();
+    OK(micro_reader->get_row(it, row));
+    OK(idx_row_parser.init(TEST_ROWKEY_COLUMN_CNT + 2, row));
+    int64_t before_last_idx = last_idx;
+    STORAGE_LOG(INFO, "check offset", K(idx_row_parser.get_row_offset()), K(it));
+  }
+
   // deserialize micro block header in root block buf
   ObMicroBlockHeader root_micro_header;
   int64_t des_pos = 0;
@@ -1172,7 +1235,7 @@ void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
     void *buf = allocator_.alloc(sizeof(ObDDLMemtable));
     ASSERT_NE(nullptr, buf);
     ObDDLMemtable *new_ddl_table = new (buf) ObDDLMemtable;
-    ASSERT_EQ(OB_SUCCESS, new_ddl_table->init(*tablet_handle.get_obj(), ddl_key, ddl_start_scn, 4000));
+    ASSERT_EQ(OB_SUCCESS, new_ddl_table->init(allocator_, *tablet_handle.get_obj(), ddl_key, ddl_start_scn, 4000));
     ASSERT_EQ(OB_SUCCESS, ddl_kvs_.get_obj()->get_ddl_memtables().push_back(new_ddl_table));
   }
   ObDDLKVHandle kv_handle;

@@ -35,6 +35,8 @@ drop table t1;
 create table t1 (f1 char(100) , f2 mediumint , f3 int , f4 real, f5 numeric);
 insert into t1 (f1, f2, f3, f4, f5) values
 ("This is a test case for for Bug#9819", 1, 2, 3.0, 4.598);
+Warnings:
+Warning	1265	Data truncated for column 'f5' at row 1
 create table t2 like t1;
 select count(*) from t1;
 +----------+

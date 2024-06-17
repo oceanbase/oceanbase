@@ -188,10 +188,12 @@ private:
       mds::BufferCtx &ctx,
       common::ObIArray<common::ObTabletID> &tablet_id_array);
   static int rollback_transfer_in_tablets_(
+      const ObTXStartTransferInInfo &tx_start_transfer_in_info,
       const common::ObIArray<common::ObTabletID> &tablet_id_array,
       ObLS *dest_ls);
   static int rollback_transfer_in_tablet_(
       const common::ObTabletID &tablet_id,
+      const share::SCN &transfer_start_scn,
       ObLS *dest_ls);
 
   static int inner_create_transfer_in_tablet_(

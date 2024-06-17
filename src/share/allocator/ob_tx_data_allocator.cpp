@@ -23,6 +23,8 @@ namespace oceanbase {
 
 namespace share {
 
+thread_local int64_t ObTenantTxDataOpAllocator::local_alloc_size_ = 0;
+
 int64_t ObTenantTxDataAllocator::resource_unit_size()
 {
   static const int64_t TX_DATA_RESOURCE_UNIT_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE; /* 8KB */
@@ -111,6 +113,11 @@ ObTxDataThrottleGuard::ObTxDataThrottleGuard(const bool for_replay, const int64_
     : for_replay_(for_replay), abs_expire_time_(abs_expire_time)
 {
   throttle_tool_ = &(MTL(ObSharedMemAllocMgr *)->share_resource_throttle_tool());
+  if (0 == abs_expire_time) {
+    abs_expire_time_ =
+        ObClockGenerator::getClock() + ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME;
+  }
+  share::tx_data_throttled_alloc() = 0;
 }
 
 ObTxDataThrottleGuard::~ObTxDataThrottleGuard()
@@ -121,22 +128,19 @@ ObTxDataThrottleGuard::~ObTxDataThrottleGuard()
   if (OB_ISNULL(throttle_tool_)) {
     MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "throttle tool is unexpected nullptr", KP(throttle_tool_));
   } else if (throttle_tool_->is_throttling<ObTenantTxDataAllocator>(share_ti_guard, module_ti_guard)) {
-    if (MTL(ObTenantFreezer *)->exist_ls_freezing()) {
+    (void)TxShareMemThrottleUtil::do_throttle<ObTenantTxDataAllocator>(for_replay_,
+                                                                       abs_expire_time_,
+                                                                       share::tx_data_throttled_alloc(),
+                                                                       *throttle_tool_,
+                                                                       share_ti_guard,
+                                                                       module_ti_guard);
+
+    if (throttle_tool_->still_throttling<ObTenantTxDataAllocator>(share_ti_guard, module_ti_guard)) {
       (void)throttle_tool_->skip_throttle<ObTenantTxDataAllocator>(
           share::tx_data_throttled_alloc(), share_ti_guard, module_ti_guard);
 
       if (module_ti_guard.is_valid()) {
         module_ti_guard.throttle_info()->reset();
-      }
-    } else {
-      uint64_t timeout = 10000;  // 10s
-      int64_t left_interval = abs_expire_time_ - ObClockGenerator::getClock();
-      common::ObWaitEventGuard wait_guard(
-          common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, left_interval);
-      (void)throttle_tool_->do_throttle<ObTenantTxDataAllocator>(abs_expire_time_);
-
-      if (for_replay_) {
-        get_replay_is_writing_throttling() = true;
       }
     }
 
@@ -146,6 +150,60 @@ ObTxDataThrottleGuard::~ObTxDataThrottleGuard()
     // do not need throttle, exit directly
   }
 }
+
+int ObTenantTxDataOpAllocator::init()
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  mem_attr.tenant_id_ = MTL_ID();
+  mem_attr.ctx_id_ = ObCtxIds::MDS_DATA_ID;
+  mem_attr.label_ = "TX_OP";
+  ObSharedMemAllocMgr *share_mem_alloc_mgr = MTL(ObSharedMemAllocMgr *);
+  throttle_tool_ = &(share_mem_alloc_mgr->share_resource_throttle_tool());
+  if (IS_INIT){
+    ret = OB_INIT_TWICE;
+    SHARE_LOG(WARN, "init tenant mds allocator twice", KR(ret), KPC(this));
+  } else if (OB_ISNULL(throttle_tool_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "throttle tool is unexpected null", KP(throttle_tool_), KP(share_mem_alloc_mgr));
+  } else if (OB_FAIL(allocator_.init(OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_, mem_attr))) {
+    MDS_LOG(WARN, "init vslice allocator failed", K(ret), K(OB_MALLOC_NORMAL_BLOCK_SIZE), KP(this), K(mem_attr));
+  } else {
+    allocator_.set_nway(MDS_ALLOC_CONCURRENCY);
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+void *ObTenantTxDataOpAllocator::alloc(const int64_t size)
+{
+  int64_t abs_expire_time = THIS_WORKER.get_timeout_ts();
+  void * buf = alloc(size, abs_expire_time);
+  if (OB_NOT_NULL(buf)) {
+    local_alloc_size_ += size;
+  }
+  return buf;
+}
+
+void *ObTenantTxDataOpAllocator::alloc(const int64_t size, const ObMemAttr &attr)
+{
+  UNUSED(attr);
+  void *obj = alloc(size);
+  return obj;
+}
+
+void *ObTenantTxDataOpAllocator::alloc(const int64_t size, const int64_t abs_expire_time)
+{
+  void *obj = allocator_.alloc(size);
+  return obj;
+}
+
+void ObTenantTxDataOpAllocator::free(void *ptr)
+{
+  allocator_.free(ptr);
+}
+
+void ObTenantTxDataOpAllocator::set_attr(const ObMemAttr &attr) { allocator_.set_attr(attr); }
 
 }  // namespace share
 }  // namespace oceanbase

@@ -23,6 +23,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
+#include "sql/ob_sql.h"
 
 namespace oceanbase
 {
@@ -238,7 +239,11 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       bool view_is_invalid = (0 == table_schema->get_object_status()
                               || 0 == table_schema->get_column_count()
                               || (table_schema->is_sys_view()
-                                  && table_schema->get_schema_version() <= GCTX.start_time_));
+                                  && table_schema->get_schema_version() <= GCTX.start_time_
+                                  && (nullptr == GCTX.sql_engine_
+                                      || OB_HASH_NOT_EXIST == GCTX.sql_engine_->get_dep_info_queue()
+                                      .read_consistent_sys_view_from_set(table_schema->get_tenant_id(),
+                                                                  table_schema->get_table_id()))));
       if (OB_FAIL(ret)) {
       } else if (is_normal_view && view_is_invalid) {
         mem_context_->reset_remain_one_page();
@@ -728,7 +733,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
         case COLUMN_TYPE: {
             int64_t pos = 0;
             const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-            const uint64_t sub_type = column_schema->is_xmltype() ?
+            const uint64_t sub_type = column_schema->is_extend() ?
                                       column_schema->get_sub_data_type() : static_cast<uint64_t>(column_schema->get_geo_type());
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;
@@ -808,8 +813,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             int64_t buf_len = 200;
             int64_t pos = 0;
             ObSessionPrivInfo session_priv;
-            session_->get_session_priv_info(session_priv);
-            if (OB_UNLIKELY(!session_priv.is_valid())) {
+            if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
+              SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+            } else if (OB_UNLIKELY(!session_priv.is_valid())) {
               ret = OB_INVALID_ARGUMENT;
               SERVER_LOG(WARN, "session priv is invalid", "tenant_id", session_priv.tenant_id_,
                          "user_id", session_priv.user_id_, K(ret));
@@ -945,11 +951,11 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
         K(ret),
         K(cur_row_.count_),
         K(col_count));
-  } else if (OB_FAIL(ObTableColumns::deduce_column_attributes(is_oracle_mode, select_stmt,
+  } else if (OB_FAIL(ObTableColumns::deduce_column_attributes(is_oracle_mode, *table_schema, select_stmt,
                                                               select_item, schema_guard_,
                                                               session_, column_type_str_,
                                                               column_type_str_len_,
-                                                              column_attributes, false))) {
+                                                              column_attributes, false, *allocator_))) {
     SERVER_LOG(WARN, "failed to deduce column attributes",
              K(select_item), K(ret));
   } else {
@@ -1203,8 +1209,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             int64_t buf_len = 200;
             int64_t pos = 0;
             ObSessionPrivInfo session_priv;
-            session_->get_session_priv_info(session_priv);
-            if (OB_UNLIKELY(!session_priv.is_valid())) {
+            if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
+              SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+            } else if (OB_UNLIKELY(!session_priv.is_valid())) {
               ret = OB_INVALID_ARGUMENT;
               SERVER_LOG(WARN, "session priv is invalid", "tenant_id", session_priv.tenant_id_,
                          "user_id", session_priv.user_id_, K(ret));

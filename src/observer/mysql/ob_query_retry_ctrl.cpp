@@ -17,6 +17,7 @@
 #include "sql/resolver/ob_stmt.h"
 #include "pl/ob_pl.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/mysql/ob_mysql_result_set.h"
 #include "observer/ob_server_struct.h"
 #include "observer/mysql/obmp_query.h"
@@ -232,7 +233,8 @@ public:
       v.retry_type_ = RETRY_TYPE_NONE;
       if (OB_ERR_INSUFFICIENT_PX_WORKER == v.err_ ||
           OB_ERR_EXCLUSIVE_LOCK_CONFLICT == v.err_ ||
-          OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT == v.err_) {
+          OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT == v.err_ ||
+          OB_ERR_QUERY_INTERRUPTED == v.err_) {
         v.client_ret_ = v.err_;
       } else if (is_try_lock_row_err(v.session_.get_retry_info().get_last_query_retry_err())) {
         // timeout caused by locking, should return OB_ERR_EXCLUSIVE_LOCK_CONFLICT
@@ -266,6 +268,17 @@ public:
     return exec_ctx.get_table_direct_insert_ctx().get_is_direct();
   }
 
+  bool is_load_local(ObRetryParam &v) const
+  {
+    bool bret = false;
+    const ObICmd *cmd = v.result_.get_cmd();
+    if (OB_NOT_NULL(cmd) && cmd->get_cmd_type() == stmt::T_LOAD_DATA) {
+      const ObLoadDataStmt *load_data_stmt = static_cast<const ObLoadDataStmt *>(cmd);
+      bret = load_data_stmt->get_load_arguments().load_file_storage_ == ObLoadFileLocation::CLIENT_DISK;
+    }
+    return bret;
+  }
+
   virtual void test(ObRetryParam &v) const override
   {
     int err = v.err_;
@@ -287,14 +300,24 @@ public:
         v.retry_type_ = RETRY_TYPE_NONE;
       }
       v.no_more_test_ = true;
-    } else if (is_direct_load(v)) {
-      if (is_direct_load_retry_err(err)) {
-        try_packet_retry(v);
+    } else if (stmt::T_LOAD_DATA == v.result_.get_stmt_type()) {
+      if (is_load_local(v)) {
+        v.client_ret_ = err;
+        v.retry_type_ = RETRY_TYPE_NONE;
+        v.no_more_test_ = true;
+      } else if (is_direct_load(v)) {
+        if (is_direct_load_retry_err(err)) {
+          try_packet_retry(v);
+        } else {
+          v.client_ret_ = err;
+          v.retry_type_ = RETRY_TYPE_NONE;
+        }
+        v.no_more_test_ = true;
       } else {
         v.client_ret_ = err;
         v.retry_type_ = RETRY_TYPE_NONE;
+        v.no_more_test_ = true;
       }
-      v.no_more_test_ = true;
     }
   }
 };
@@ -608,9 +631,14 @@ public:
   virtual void test(ObRetryParam &v) const override
   {
     int ret = OB_SUCCESS;
+    if (v.session_.get_ddl_info().is_ddl() && !v.session_.get_ddl_info().is_retryable_ddl()) {
+      v.client_ret_ = v.err_;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.no_more_test_ = true;
+    }
     // nested transaction already supported In 32x and can only rollback nested sql.
     // for forigen key, we keep old logic and do not retry. for pl will retry current nested sql.
-    if (is_nested_conn(v) && !is_static_engine_retry(v.err_) && !v.is_from_pl_) {
+    else if (is_nested_conn(v) && !is_static_engine_retry(v.err_) && !v.is_from_pl_) {
       // right now, top session will retry, bug we can do something here like refresh XXX cache.
       // in future, nested session can retry if nested transaction is supported.
       v.no_more_test_ = true;
@@ -973,6 +1001,13 @@ void ObQueryRetryCtrl::after_func(ObRetryParam &v)
   if (OB_UNLIKELY(OB_SUCCESS == v.client_ret_)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "no matter need retry or not, v.client_ret_ should not be OB_SUCCESS", K(v));
   }
+  // bug fix, reset lock_wait_mgr node before doing local retry
+  if (RETRY_TYPE_LOCAL == v.retry_type_) {
+    rpc::ObLockWaitNode* node = MTL(memtable::ObLockWaitMgr*)->get_thread_node();
+    if (NULL != node) {
+      node->reset_need_wait();
+    }
+  }
 }
 
 int ObQueryRetryCtrl::init()
@@ -1044,10 +1079,10 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("LOCATION", OB_LS_NOT_EXIST,                    location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
   // OB_TABLET_NOT_EXIST may be caused by old version schema or incorrect location.
   // Just use location_error_proc to retry sql and a new schema guard will be obtained during the retry process.
-  ERR_RETRY_FUNC("LOCATION", OB_TABLET_NOT_EXIST,                location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_not_exist_retry_proc);
+  ERR_RETRY_FUNC("LOCATION", OB_TABLET_NOT_EXIST,                location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_LS_LOCATION_NOT_EXIST,           location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_PARTITION_IS_BLOCKED,            location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST, location_error_proc,inner_location_error_proc,                            ObDASRetryCtrl::tablet_not_exist_retry_proc);
+  ERR_RETRY_FUNC("LOCATION", OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST, location_error_proc,inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
 
   ERR_RETRY_FUNC("LOCATION", OB_GET_LOCATION_TIME_OUT,           location_error_proc,        inner_table_location_error_proc,                      ObDASRetryCtrl::tablet_location_retry_proc);
 
@@ -1213,7 +1248,14 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
     retry_err_code_ = client_ret;
   }
   if (RETRY_TYPE_NONE != retry_type_) {
-    result.set_close_fail_callback([this](const int err, int &client_ret)-> void { this->on_close_resultset_fail_(err, client_ret); });
+    struct CloseFailFunctor {
+      ObQueryRetryCtrl* retry_ctl_;
+      CloseFailFunctor(ObQueryRetryCtrl* retry_ctl): retry_ctl_(retry_ctl) {}
+      void operator()(const int err, int &client_ret) {
+        retry_ctl_->on_close_resultset_fail_(err, client_ret);
+      }
+    } callback_functor(this);
+    result.set_close_fail_callback(callback_functor);
   }
 }
 

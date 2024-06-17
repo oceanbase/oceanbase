@@ -39,24 +39,19 @@ public:
   static ObTableLoadClientService *get_client_service();
 
   // client task api
-  static ObTableLoadClientTask *alloc_task();
+  static int alloc_task(ObTableLoadClientTask *&client_task);
   static void free_task(ObTableLoadClientTask *client_task);
   static void revert_task(ObTableLoadClientTask *client_task);
   static int add_task(ObTableLoadClientTask *client_task);
   static int remove_task(ObTableLoadClientTask *client_task);
   static int get_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *&client_task);
   static int get_task(const ObTableLoadKey &key, ObTableLoadClientTask *&client_task);
-  static int exist_task(const ObTableLoadUniqueKey &key, bool &is_exist);
-  static int commit_task(ObTableLoadClientTask *client_task);
-  static int abort_task(ObTableLoadClientTask *client_task);
-  static int wait_task_finish(const ObTableLoadUniqueKey &key);
 
   int add_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *client_task);
   int remove_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *client_task);
   int get_all_client_task(common::ObIArray<ObTableLoadClientTask *> &client_task_array);
   int get_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *&client_task);
   int get_client_task_by_table_id(uint64_t table_id, ObTableLoadClientTask *&client_task);
-  int exist_client_task(const ObTableLoadUniqueKey &key, bool &is_exist);
   int64_t get_client_task_count() const;
   void purge_client_task();
 
@@ -78,12 +73,7 @@ public:
   }
 
 private:
-  static int construct_commit_task(ObTableLoadClientTask *client_task);
-  static int construct_abort_task(ObTableLoadClientTask *client_task);
-private:
-  class CommitTaskProcessor;
-  class AbortTaskProcessor;
-  class CommonTaskCallback;
+  OB_INLINE int64_t generate_task_id() { return ATOMIC_FAA(&next_task_id_, 1); }
 
 private:
   static const int64_t CLIENT_TASK_RETENTION_PERIOD = 24LL * 60 * 60 * 1000 * 1000; // 1day
@@ -112,6 +102,7 @@ private:
     {
       return client_task_ == entry.second;
     }
+
   private:
     ObTableLoadClientTask *client_task_;
   };
@@ -122,6 +113,7 @@ private:
     ClientTaskBriefEraseIfExpired(int64_t expired_ts) : expired_ts_(expired_ts) {}
     bool operator()(const ObTableLoadUniqueKey &key,
                     ObTableLoadClientTaskBrief *client_task_brief) const;
+
   private:
     int64_t expired_ts_;
   };
@@ -131,6 +123,7 @@ private:
   ClientTaskMap client_task_map_;
   ClientTaskIndexMap client_task_index_map_;
   ClientTaskBriefMap client_task_brief_map_; // thread safety
+  int64_t next_task_id_;
   bool is_inited_;
 };
 

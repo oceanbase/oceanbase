@@ -47,7 +47,8 @@ class ObTxTableGuards
 public:
   ObTxTableGuards()
    : tx_table_guard_(),
-     src_tx_table_guard_() {}
+     src_tx_table_guard_(),
+     src_ls_handle_() {}
 
   ~ObTxTableGuards() { reset(); }
 
@@ -55,15 +56,11 @@ public:
   {
     tx_table_guard_.reset();
     src_tx_table_guard_.reset();
-  }
-
-  void reuse()
-  {
-    tx_table_guard_.reuse();
-    src_tx_table_guard_.reuse();
+    src_ls_handle_.reset();
   }
 
   bool is_valid() const { return tx_table_guard_.is_valid(); }
+  bool is_src_valid() const { return src_ls_handle_.is_valid() && src_tx_table_guard_.is_valid(); }
 
   int check_row_locked(
       const transaction::ObTransID &read_tx_id,
@@ -149,13 +146,17 @@ public:
 
   bool check_ls_offline();
 
-  TO_STRING_KV(K_(tx_table_guard), K_(src_tx_table_guard));
+  TO_STRING_KV(K_(tx_table_guard), K_(src_tx_table_guard), K_(src_ls_handle));
+
+  DISABLE_COPY_ASSIGN(ObTxTableGuards);
 
 public:
   storage::ObTxTableGuard tx_table_guard_;
 
-  // dml executed during transfer, src_tx_table_guard_ will be valid.
+  // when dml is executing during transfer, src_tx_table_guard_ and
+  // src_ls_handle_ will be valid.
   storage::ObTxTableGuard src_tx_table_guard_;
+  storage::ObLSHandle src_ls_handle_;
 };
 
 }  // namespace storage

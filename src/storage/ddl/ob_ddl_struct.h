@@ -24,6 +24,13 @@ namespace storage
 
 static const int64_t DDL_FLUSH_MACRO_BLOCK_TIMEOUT = 5 * 1000 * 1000;
 
+enum ObDDLMacroBlockType
+{
+  DDL_MB_INVALID_TYPE = 0,
+  DDL_MB_DATA_TYPE = 1,
+  DDL_MB_INDEX_TYPE = 2,
+};
+
 class ObDDLMacroHandle
 {
 public:
@@ -49,35 +56,49 @@ public:
   int deep_copy(ObDDLMacroBlock &dst_block, common::ObIAllocator &allocator) const;
   bool is_valid() const;
   bool is_column_group_info_valid() const;
-  TO_STRING_KV(K_(block_handle), K_(logic_id), K_(block_type), K_(ddl_start_scn),
-      K_(scn), KP_(buf), K_(size), K_(table_key), K_(end_row_id));
+  TO_STRING_KV(K_(block_handle),
+               K_(logic_id),
+               K_(block_type),
+               K_(ddl_start_scn),
+               K_(scn),
+               KP_(buf),
+               K_(size),
+               K_(table_key),
+               K_(end_row_id),
+               K_(trans_id));
 public:
   ObDDLMacroHandle block_handle_;
   blocksstable::ObLogicMacroBlockId logic_id_;
-  blocksstable::ObDDLMacroBlockType block_type_;
+  ObDDLMacroBlockType block_type_;
   share::SCN ddl_start_scn_;
   share::SCN scn_;
   const char *buf_;
   int64_t size_;
   ObITable::TableKey table_key_;
   int64_t end_row_id_;
+  transaction::ObTransID trans_id_; // for incremental direct load only
 };
 
 class ObDDLKV;
 class ObDDLKVHandle final
 {
 public:
-  ObDDLKVHandle() : ddl_kv_(nullptr) {}
-  ObDDLKVHandle(const ObDDLKVHandle &other) : ddl_kv_(nullptr) { *this = other; }
+  ObDDLKVHandle() : ddl_kv_(nullptr), t3m_(nullptr), allocator_(nullptr) {}
+  ObDDLKVHandle(const ObDDLKVHandle &other) : ddl_kv_(nullptr), t3m_(nullptr), allocator_(nullptr) { *this = other; }
   ObDDLKVHandle &operator =(const ObDDLKVHandle &other);
   ~ObDDLKVHandle() { reset(); }
   ObDDLKV* get_obj() const { return ddl_kv_; }
-  bool is_valid() const { return nullptr != ddl_kv_; }
+  bool is_valid() const;
+  // for full direct load
   int set_obj(ObDDLKV *ddl_kv);
+  // for incremental direct load
+  int set_obj(ObTableHandleV2 &table_handle);
   void reset();
   TO_STRING_KV(KP_(ddl_kv));
 private:
   ObDDLKV *ddl_kv_;
+  ObTenantMetaMemMgr *t3m_;
+  common::ObIAllocator *allocator_;
 };
 
 
@@ -147,6 +168,36 @@ static inline bool is_incremental_direct_load(const ObDirectLoadType &type)
   return ObDirectLoadType::DIRECT_LOAD_INCREMENTAL == type;
 }
 
+struct ObDDLMacroBlockRedoInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDDLMacroBlockRedoInfo();
+  ~ObDDLMacroBlockRedoInfo() = default;
+  bool is_valid() const;
+  bool is_column_group_info_valid() const;
+  void reset();
+  TO_STRING_KV(K_(table_key),
+               K_(data_buffer),
+               K_(block_type),
+               K_(logic_id),
+               K_(start_scn),
+               K_(data_format_version),
+               K_(end_row_id),
+               K_(type),
+               K_(trans_id));
+public:
+  storage::ObITable::TableKey table_key_;
+  ObString data_buffer_;
+  ObDDLMacroBlockType block_type_;
+  blocksstable::ObLogicMacroBlockId logic_id_;
+  share::SCN start_scn_;
+  uint64_t data_format_version_;
+  int64_t end_row_id_;
+  storage::ObDirectLoadType type_;
+  transaction::ObTransID trans_id_; // for incremental direct load only
+};
+
 class ObTabletDirectLoadMgr;
 class ObTabletFullDirectLoadMgr;
 class ObTabletIncDirectLoadMgr;
@@ -159,8 +210,8 @@ public:
   int assign(const ObTabletDirectLoadMgrHandle &handle);
   ObTabletDirectLoadMgr *get_obj();
   const ObTabletDirectLoadMgr *get_obj() const;
-  ObTabletFullDirectLoadMgr *get_full_obj();
-  ObTabletIncDirectLoadMgr *get_inc_obj();
+  ObTabletFullDirectLoadMgr *get_full_obj() const;
+  ObTabletIncDirectLoadMgr *get_inc_obj() const;
   void reset();
   bool is_valid() const;
   TO_STRING_KV(KP_(tablet_mgr));

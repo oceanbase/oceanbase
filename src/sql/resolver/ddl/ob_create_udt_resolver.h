@@ -41,6 +41,7 @@ public:
   explicit ObCreateUDTResolver(ObResolverParams &params) : ObDDLResolver(params) {}
   virtual int resolve(const ParseNode &parse_tree);
 private:
+  int resolve_without_check_valid(const ParseNode &parse_tree);
   int create_udt_arg(obrpc::ObCreateUDTArg *&crt_udt_arg);
   int resolve_oid_clause(const ParseNode *oid_node,
                          share::schema::ObUDTTypeInfo *udt_info);
@@ -88,6 +89,19 @@ private:
                              const ObUDTTypeInfo *udt_info,
                              bool &has_mutual_dep);
 public:
+  static int check_udt_validation(const ObSQLSessionInfo& session_info,
+                                  ObSchemaGetterGuard& schema_guard,
+                                  ObResolverParams &params,
+                                  const ObString& db_name,
+                                  const ObUDTTypeInfo& new_udt_info,
+                                  bool& valid);
+  static int check_udt_validation(const ObSQLSessionInfo& session_info,
+                                  ObSchemaGetterGuard& schema_guard,
+                                  ObResolverParams &params,
+                                  const ObString& db_name,
+                                  const ObString& new_udt_name,
+                                  ObUDTTypeCode type_code,
+                                  bool& valid);
   static int package_info_to_object_info(const share::schema::ObPackageInfo &pkg_info,
                                          share::schema::ObUDTObjectType &obj_info);
   static int object_info_to_package_info(const share::schema::ObUDTObjectType &obj_info,

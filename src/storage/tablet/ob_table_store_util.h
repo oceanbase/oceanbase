@@ -120,7 +120,7 @@ class ObMemtableArray
 {
 public:
   ObMemtableArray() : memtable_array_(), count_(0) {}
-  OB_INLINE memtable::ObIMemtable *operator[](const int64_t pos) const
+  OB_INLINE ObIMemtable *operator[](const int64_t pos) const
   {
     OB_ASSERT(pos < count_ && pos >= 0);
     return memtable_array_[pos];
@@ -141,7 +141,7 @@ public:
   TO_STRING_KV(K_(count));
 private:
   bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
-  memtable::ObIMemtable *memtable_array_[MAX_MEMSTORE_CNT];
+  ObIMemtable *memtable_array_[MAX_MEMSTORE_CNT];
   int64_t count_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableArray);

@@ -70,8 +70,14 @@ int ObLSTabletService::insert_tablet_rows(
   // Check write conflict in memtable + sstable.
   // Check uniqueness constraint in sstable only.
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(tablet_handle.get_obj()->insert_rows(table, run_ctx.store_ctx_, rows, rows_info,
-        check_exists, *run_ctx.col_descs_, row_count, run_ctx.dml_param_.encrypt_meta_))) {
+    if (OB_FAIL(tablet_handle.get_obj()->insert_rows(table,
+                                                     run_ctx.store_ctx_,
+                                                     rows,
+                                                     rows_info,
+                                                     check_exists,
+                                                     *run_ctx.col_descs_,
+                                                     row_count,
+                                                     run_ctx.dml_param_.encrypt_meta_))) {
       if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
         blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
         TRANS_LOG(WARN, "Rowkey already exist", K(ret), K(table), K(duplicate_rowkey),

@@ -94,7 +94,7 @@ struct ObQueryHint {
                               const ObIArray<uint32_t> &src_hash_val,
                               int64_t *sub_num = NULL);
 
-  int generate_orig_stmt_qb_name(ObIAllocator &allocator);
+  int generate_orig_stmt_qb_name(ObIAllocator &allocator, int64_t inited_stmt_count);
   int generate_qb_name_for_stmt(ObIAllocator &allocator,
                                 const ObDMLStmt &stmt,
                                 const ObString &src_qb_name,
@@ -112,7 +112,17 @@ struct ObQueryHint {
   int append_id_to_stmt_name(char *buf, int64_t buf_len, int64_t &pos, int64_t &id_start);
   int get_qb_name(int64_t stmt_id, ObString &qb_name) const;
   int get_qb_name_counts(const int64_t stmt_count, ObIArray<int64_t> &qb_name_counts) const;
-  int recover_qb_names(const ObIArray<int64_t> &qb_name_counts, int64_t &stmt_count);
+  int get_qb_name_info(const int64_t stmt_count,
+                       ObIArray<int64_t> &qb_name_counts,
+                       int64_t &sel_start_id,
+                       int64_t &set_start_id,
+                       int64_t &other_start_id) const;
+  int recover_qb_name_counts(const ObIArray<int64_t> &qb_name_counts, int64_t &stmt_count);
+  int recover_qb_name_info(const ObIArray<int64_t> &qb_name_counts,
+                           int64_t &stmt_count,
+                           int64_t sel_start_id,
+                           int64_t set_start_id,
+                           int64_t other_start_id);
   int fill_tables(const TableItem &table, ObIArray<ObTableInHint> &hint_tables) const;
   bool is_valid_outline_transform(int64_t trans_list_loc, const ObHint *cur_hint) const;
   const ObHint *get_outline_trans_hint(int64_t pos) const
@@ -172,6 +182,9 @@ struct ObQueryHint {
   ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> used_trans_hints_;
   ObSEArray<QbNames, 8, common::ModulePageAllocator, true> stmt_id_map_;	//	stmt id -> qb name list, position is stmt id
   hash::ObHashMap<ObString, int64_t> qb_name_map_;	// qb name -> stmt id
+  int64_t sel_start_id_;
+  int64_t set_start_id_;
+  int64_t other_start_id_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryHint);
@@ -422,6 +435,7 @@ struct ObLogPlanHint
                                     const bool basic_table_only,
                                     LogTableHint *&log_table_hint);
   int check_status() const;
+  bool is_spm_evolution() const;
   const LogTableHint* get_log_table_hint(uint64_t table_id) const;
   const LogTableHint* get_index_hint(uint64_t table_id) const;
   int64_t get_parallel(uint64_t table_id) const;

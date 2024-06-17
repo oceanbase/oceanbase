@@ -73,14 +73,7 @@ int ObCreateOutlineResolver::resolve_hint(const ParseNode *node, ObCreateOutline
        continue;
       }
       if (hint_node->type_ == T_MAX_CONCURRENT) {
-        if (node->num_child_ > 1) {
-          ret = OB_INVALID_OUTLINE;
-          LOG_USER_ERROR(OB_INVALID_OUTLINE, "outline and sql concurrent limit can not be mixed");
-          LOG_WARN("outline and sql concurrent limit can not be mixed");
-        } else if (1 != hint_node->num_child_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("max concurrent node should have 1 child", K(ret));
-        } else if (OB_ISNULL(hint_node->children_[0])) {
+        if (OB_ISNULL(hint_node->children_[0])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("child of max concurrent node should not be NULL", K(ret));
         } else if (hint_node->children_[0]->value_ >= 0) {

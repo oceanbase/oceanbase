@@ -26,6 +26,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tablelock/ob_lock_utils.h" // ObInnerTableLockUtil
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tablelock/ob_table_lock_live_detector.h"
 
 namespace oceanbase
 {
@@ -188,6 +189,8 @@ int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_for_all_ls_()
   ObSharedGuard<ObLSIterator> ls_iter_guard;
   ObLSService *ls_service = nullptr;
   ObLS *ls = nullptr;
+  bool is_leader = false;
+  ObAddr leader_addr;
 
   if (!timer_.is_running()) {
     ret = OB_NOT_INIT;
@@ -198,8 +201,7 @@ int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_for_all_ls_()
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl ObLSService should not be null", K(ret));
-  } else if (ls_service->get_ls_iter(ls_iter_guard,
-                                     ObLSGetMod::TABLELOCK_MOD)) {
+  } else if (OB_FAIL(ls_service->get_ls_iter(ls_iter_guard, ObLSGetMod::TABLELOCK_MOD))) {
     LOG_WARN("fail to get ls iterator", K(ret));
   } else {
     do {
@@ -208,10 +210,15 @@ int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_for_all_ls_()
           LOG_WARN("get next iter failed", K(ret));
         }
       } else if (OB_TMP_FAIL(ls->check_and_clear_obj_lock(false))) {
-        LOG_WARN("check and clear obj lock failed", K(ret), K(tmp_ret),
-                 K(ls->get_ls_id()));
+        LOG_WARN("check and clear obj lock failed", K(ret), K(tmp_ret), K(ls->get_ls_id()));
+      } else if (ls->is_sys_ls()) {
+        if (OB_TMP_FAIL(check_is_leader_(ls, is_leader))) {
+          LOG_WARN("can not check whether this ls is leader", K(ret), K(tmp_ret), K(ls->get_ls_id()));
+        } else if (is_leader && OB_TMP_FAIL(ObTableLockDetector::do_detect_and_clear())) {
+          LOG_WARN("do_detect_and_clear failed", K(ret), K(tmp_ret), K(ls->get_ls_id()));
+        }
       } else {
-        LOG_INFO("start to check and clear obj lock", K(ls->get_ls_id()));
+        LOG_INFO("finish check and clear obj lock", K(ls->get_ls_id()));
       }
     } while (OB_SUCC(ret));
   }
@@ -232,6 +239,21 @@ void ObTableLockService::ObOBJLockGarbageCollector::check_and_report_timeout_()
     LOG_ERROR("task failed too many times", K(current_timestamp),
               K(last_success_timestamp_), KPC(this));
   }
+}
+
+int ObTableLockService::ObOBJLockGarbageCollector::check_is_leader_(ObLS *ls, bool &is_leader)
+{
+  int ret = OB_SUCCESS;
+  ObRole role;
+  int64_t proposal_id = 0;
+  is_leader = false;
+
+  if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
+    STORAGE_LOG(WARN, "failed to get role", K(ret), K(ls->get_ls_id()));
+  } else {
+    is_leader = is_strong_leader(role);
+  }
+  return ret;
 }
 
 int ObTableLockService::ObTableLockCtx::set_tablet_id(const common::ObIArray<common::ObTabletID> &tablet_ids)
@@ -415,7 +437,13 @@ bool need_retry_partitions(const int64_t ret)
 int ObTableLockService::generate_owner_id(ObTableLockOwnerID &owner_id)
 {
   int ret = OB_SUCCESS;
-  ret = ObCommonIDUtils::gen_unique_id(MTL_ID(), owner_id);
+  ObCommonID id;
+  if (OB_FAIL(ObCommonIDUtils::gen_unique_id(MTL_ID(), id))) {
+    LOG_WARN("get unique id failed", K(ret));
+  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                 id.id()))) {
+    LOG_WARN("get owner id failed", K(ret), K(id));
+  }
   return ret;
 }
 
@@ -1794,8 +1822,8 @@ int ObTableLockService::rpc_call_(RpcProxy &proxy_batch,
   int ret = OB_SUCCESS;
   int32_t group_id = 0;
   const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-  if ((min_cluster_version > CLUSTER_VERSION_4_2_1_3 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
-      || (min_cluster_version > CLUSTER_VERSION_4_2_2_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+  if ((min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_1_4 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
+      || (min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_3_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
       || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0)) {
     group_id = share::OBCG_LOCK;
     if (request.is_unlock_request()) {

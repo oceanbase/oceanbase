@@ -35,6 +35,7 @@ public:
            const lib::ObMemAttr &attr,
            const int64_t total_limit);
   void destroy();
+  void purge();
 public:
   void set_label(const lib::ObLabel &label);
   void set_attr(const lib::ObMemAttr &attr);

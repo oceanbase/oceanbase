@@ -79,7 +79,8 @@ int JoinHashTable::init(JoinTableCtx &hjt_ctx, ObIAllocator &allocator)
   return ret;
 }
 
-int JoinHashTable::build_prepare(int64_t row_count, int64_t bucket_count) {
+int JoinHashTable::build_prepare(JoinTableCtx &ctx, int64_t row_count, int64_t bucket_count) {
+  ctx.reuse();
   return hash_table_->build_prepare(row_count, bucket_count);
 }
 

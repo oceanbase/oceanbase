@@ -335,10 +335,6 @@ public:
                   sql::ObRawExpr *&expr,
                   bool for_write = false);
   int resolve_inner_call(const ParseNode *parse_tree, ObPLStmt *&stmt, ObPLFunctionAST &func);
-  int mock_self_param(bool need_rotate,
-                      ObIArray<ObObjAccessIdent> &obj_access_idents,
-                      ObIArray<ObObjAccessIdx> &self_access_idxs,
-                      ObPLFunctionAST &func);
   int resolve_sqlcode_or_sqlerrm(sql::ObQualifiedName &q_name,
                                  ObPLCompileUnitAST &unit_ast,
                                  sql::ObRawExpr *&expr);
@@ -373,7 +369,8 @@ public:
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               ObMySQLProxy &sql_proxy,
                               ObIArray<ObObjAccessIdent> &obj_access_idents,
-                              ObIArray<ObObjAccessIdx>& access_idxs);
+                              ObIArray<ObObjAccessIdx>& access_idxs,
+                              ObPLPackageGuard *package_guard);
   static
   int resolve_cparam_list_simple(const ParseNode &node,
                                  ObRawExprFactory &expr_factory,
@@ -404,17 +401,25 @@ public:
   static
   int build_record_type_by_view_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* view_schema,
-                                ObRecordType *&record_type);
+                                ObRecordType *&record_type,
+                                ObIArray<ObSchemaObjVersion> *dependency_objects = NULL);
   static
   int build_record_type_by_table_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                                 common::ObIAllocator &allocator,
                                 const share::schema::ObTableSchema* table_schema,
                                 ObRecordType *&record_type,
                                 bool with_rowid = false);
+  static int collect_dep_info_by_view_schema(const ObPLResolveCtx &ctx,
+                                             const ObTableSchema* view_schema,
+                                             ObIArray<ObSchemaObjVersion> &dependency_objects);
+  static int collect_dep_info_by_schema(const ObPLResolveCtx &ctx,
+                                        const ObTableSchema* table_schema,
+                                        ObIArray<ObSchemaObjVersion> &dependency_objects);
   static
   int build_record_type_by_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* table_schema,
-                                ObRecordType *&record_type, bool with_rowid = false);
+                                ObRecordType *&record_type, bool with_rowid = false,
+                                ObIArray<ObSchemaObjVersion> *dependency_objects = NULL);
 
   static
   int resolve_extern_type_info(bool is_row_type,
@@ -576,7 +581,7 @@ public:
   static int adjust_routine_param_type(ObPLDataType &type);
 
   int resolve_udf_info(
-    sql::ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func);
+    sql::ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func, const ObIRoutineInfo *routine_info = NULL);
 
   int construct_name(ObString &database_name, ObString &package_name, ObString &routine_name, ObSqlString &object_name);
   static int resolve_dblink_routine(ObPLResolveCtx &resolve_ctx,
@@ -601,6 +606,13 @@ public:
                           const ObString &udt_name,
                           ObPLCompileUnitAST &func,
                           ObPLDataType &pl_type);
+  int resolve_dblink_udf(sql::ObQualifiedName &q_name,
+                         ObRawExprFactory &expr_factory,
+                         ObRawExpr *&expr,
+                         ObPLCompileUnitAST &unit_ast);
+  static int replace_udf_param_expr(ObObjAccessIdent &access_ident,
+                             ObIArray<ObQualifiedName> &columns,
+                             ObIArray<ObRawExpr*> &real_exprs);
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);
@@ -736,6 +748,7 @@ private:
   int set_cm_warn_on_fail(ObRawExpr *&expr);
   int analyze_expr_type(ObRawExpr *&expr,
                         ObPLCompileUnitAST &unit_ast);
+  int set_udf_expr_line_number(ObRawExpr *expr, uint64_t line_number);
   int resolve_expr(const ParseNode *node, ObPLCompileUnitAST &unit_ast,
                    sql::ObRawExpr *&expr, uint64_t line_number = 0, /* where this expr called */
                    bool need_add = true, const ObPLDataType *expected_type = NULL,
@@ -750,9 +763,13 @@ private:
   int resolve_udf_without_brackets(sql::ObQualifiedName &q_name, ObPLCompileUnitAST &unit_ast, ObRawExpr *&expr);
   int make_self_symbol_expr(ObPLCompileUnitAST &func, ObRawExpr *&expr);
   int add_udt_self_argument(const ObIRoutineInfo *routine_info,
+                            ObObjAccessIdent &access_ident,
+                            ObIArray<ObObjAccessIdx> &access_idxs,
+                            ObPLCompileUnitAST &func);
+  int add_udt_self_argument(const ObIRoutineInfo *routine_info,
                             ObIArray<ObRawExpr*> &expr_params,
                             ObIArray<ObObjAccessIdx> &access_idxs,
-                            ObUDFInfo &udf_info,
+                            ObUDFInfo *udf_info,
                             ObPLCompileUnitAST &func);
   int resolve_qualified_identifier(sql::ObQualifiedName &q_name,
                                            ObIArray<sql::ObQualifiedName> &columns,
@@ -908,7 +925,6 @@ private:
                                    ObPLForAllStmt *stmt,
                                    ObPLFunctionAST &func,
                                    ObIArray<ObObjAccessIdx> &access_idxs);
-
 private:
   int check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt, const ObPLConditionValue &value,
                                 bool &dup, ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc* cur_desc);
@@ -1019,6 +1035,9 @@ private:
                               ObRawExpr *&expr,
                               const ObPLDataType *expected_type,
                               ObPLCompileUnitAST &func);
+  int try_transform_assign_to_dynamic_SQL(ObPLStmt *&old_stmt, ObPLFunctionAST &func);
+  int transform_var_val_to_dynamic_SQL(int64_t sql_expr_index, int64_t into_expr_index, ObPLFunctionAST &func);
+  int transform_to_new_assign_stmt(ObIArray<int64_t> &transform_array, ObPLAssignStmt *&old_stmt);
 
   int replace_to_const_expr_if_need(ObRawExpr *&expr);
   int build_seq_value_expr(ObRawExpr *&expr,
@@ -1097,9 +1116,6 @@ private:
   int replace_udf_param_expr(ObQualifiedName &q_name,
                              ObIArray<ObQualifiedName> &columns,
                              ObIArray<ObRawExpr*> &real_exprs);
-  int replace_udf_param_expr(ObObjAccessIdent &access_ident,
-                             ObIArray<ObQualifiedName> &columns,
-                             ObIArray<ObRawExpr*> &real_exprs);
   int get_names_by_access_ident(ObObjAccessIdent &access_ident,
                                 ObIArray<ObObjAccessIdx> &access_idxs,
                                 ObString &database_name,
@@ -1135,6 +1151,7 @@ private:
                                   ObIArray<ObObjAccessIdx> &access_idxs,
                                   ObPLCompileUnitAST &func);
 
+  int build_self_access_idx(ObObjAccessIdx &self_access_idx, const ObPLBlockNS &ns);
   int build_current_access_idx(uint64_t parent_id,
                                ObObjAccessIdx &access_idx,
                                ObObjAccessIdent &access_ident,

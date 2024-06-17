@@ -723,6 +723,38 @@ int ObDataAccessService::collect_das_task_info(ObDASTaskArg &task_arg, ObDASRemo
         LOG_WARN("append task op related rtdefs to remote info failed", K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(collect_das_task_attach_info(remote_info, task_op->get_attach_rtdef()))) {
+        LOG_WARN("collect das task attach info failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDataAccessService::collect_das_task_attach_info(ObDASRemoteInfo &remote_info,
+                                                      ObDASBaseRtDef *attach_rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(attach_rtdef)) {
+    if (attach_rtdef->ctdef_ != nullptr) {
+      remote_info.has_expr_ |= attach_rtdef->ctdef_->has_expr();
+      remote_info.need_calc_expr_ |= attach_rtdef->ctdef_->has_pdfilter_or_calc_expr();
+      remote_info.need_calc_udf_ |= attach_rtdef->ctdef_->has_pl_udf();
+      if (OB_FAIL(add_var_to_array_no_dup(remote_info.ctdefs_, attach_rtdef->ctdef_))) {
+        LOG_WARN("store remote ctdef failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(add_var_to_array_no_dup(remote_info.rtdefs_, attach_rtdef))) {
+        LOG_WARN("store remote rtdef failed", K(ret));
+      }
+    }
+    for (int i = 0; OB_SUCC(ret) && i < attach_rtdef->children_cnt_; ++i) {
+      if (OB_FAIL(collect_das_task_attach_info(remote_info, attach_rtdef->children_[i]))) {
+        LOG_WARN("recursively collect das task attach info failed", K(ret));
+      }
+    }
   }
   return ret;
 }

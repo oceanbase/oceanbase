@@ -350,7 +350,7 @@ int ObLruConnectionAllocator<T>::init()
   int ret = OB_SUCCESS;
   if (is_inited_) {
     // do nothing
-  } else if (OB_FAIL(sessionid_to_conns_map_.create(HASH_BUCKET_NUM, "sessid_conn_map"))) {
+  } else if (OB_FAIL(sessionid_to_conns_map_.create(HASH_BUCKET_NUM, SET_IGNORE_MEM_VERSION("sessid_conn_map")))) {
     _OB_LOG(WARN, "failed to init hashmap sessionid_to_conns_map_, ret=%d", ret);
   } else {
     is_inited_ = true;

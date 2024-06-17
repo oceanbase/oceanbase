@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OB_SESS_INFO_VERI_H_
 
 #include "share/ob_define.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
 #include "lib/string/ob_string.h"
 #include "lib/atomic/ob_atomic.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
@@ -31,6 +32,10 @@ namespace oceanbase
 namespace obrpc
 {
 class ObSrvRpcProxy;
+}
+namespace share {
+  class ObBasicSysVar;
+  enum ObSysVarClassType;
 }
 
 namespace sql

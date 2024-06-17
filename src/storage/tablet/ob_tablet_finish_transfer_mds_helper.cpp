@@ -30,6 +30,8 @@
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_transfer_service.h"
+#include "share/ob_storage_ha_diagnose_struct.h"
+#include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 
 #define USING_LOG_PREFIX MDS
 
@@ -39,6 +41,7 @@ namespace storage
 {
 
 ERRSIM_POINT_DEF(EN_TRANSFER_NEED_REBUILD);
+ERRSIM_POINT_DEF(EN_TRANSFER_DIAGNOSE_FINISH_REPLAY_FAILED);
 
 int ObTabletFinishTransferUtil::check_transfer_table_replaced(
     ObTabletHandle &tablet_handle,
@@ -147,6 +150,8 @@ protected:
   {
     return true;
   }
+
+  virtual bool replay_allow_tablet_not_exist_() { return false; }
 
 private:
   int check_src_transfer_tablet_(ObTabletHandle &tablet_handle);
@@ -281,7 +286,8 @@ int ObTabletFinishTransferOutHelper::on_register(
   ObTXFinishTransferOutInfo tx_finish_transfer_out_info;
   int64_t pos = 0;
   ObTransferUtils::set_transfer_module();
-
+  const int64_t start_ts = ObTimeUtility::current_time();
+  share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::MAX_NAME;
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on register finish transfer out get invalid argument", K(ret), KP(buf), K(len));
@@ -291,11 +297,32 @@ int ObTabletFinishTransferOutHelper::on_register(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx finish transfer out info is unexpected", K(ret), K(tx_finish_transfer_out_info));
   } else if (CLICK_FAIL(on_register_success_(tx_finish_transfer_out_info, ctx))) {
+    diagnose_result_msg = share::ObStorageHACostItemName::ON_REGISTER_SUCCESS;
     LOG_WARN("failed to on register", K(ret), K(tx_finish_transfer_out_info));
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(tx_finish_transfer_out_info.src_ls_id_))) {
     LOG_WARN("failed to set_tablet_empty_shell_trigger", K(ret), K(tx_finish_transfer_out_info));
   }
   ObTransferUtils::clear_transfer_module();
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_TRANSFER_DIAGNOSE_FINISH_REPLAY_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "fake EN_TRANSFER_DIAGNOSE_FINISH_REPLAY_FAILED", K(ret));
+    }
+  }
+#endif
+  const int64_t end_ts = ObTimeUtility::current_time();
+  bool is_report = OB_SUCCESS == ret ? true : false;
+  ObTransferUtils::process_finish_out_perf_diag_info(tx_finish_transfer_out_info,
+      ObStorageHACostItemType::ACCUM_COST_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_OUT_REPLAY_COST,
+      ret, end_ts - start_ts, start_ts, is_report);
+  ObTransferUtils::add_transfer_error_diagnose_in_replay(
+                                   tx_finish_transfer_out_info.task_id_,
+                                   tx_finish_transfer_out_info.dest_ls_id_,
+                                   ret,
+                                   false/*clean_related_info*/,
+                                   ObStorageHADiagTaskType::TRANSFER_FINISH_OUT,
+                                   diagnose_result_msg);
   return ret;
 }
 
@@ -310,6 +337,9 @@ int ObTabletFinishTransferOutHelper::on_register_success_(
   ObLS *ls = NULL;
   const share::ObLSID &src_ls_id = tx_finish_transfer_out_info.src_ls_id_;
   const int64_t start_ts = ObTimeUtil::current_time();
+  ObTransferUtils::process_finish_out_perf_diag_info(tx_finish_transfer_out_info,
+      ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_OUT_FIRST_REPALY_LOG_TIMESTAMP,
+      ret, start_ts, start_ts, false/*is_report*/);
   LOG_INFO("[TRANSFER] start tx finish transfer out on_register_success_", K(tx_finish_transfer_out_info));
 #ifdef ERRSIM
   SERVER_EVENT_ADD("transfer", "tx_finish_transfer_out",
@@ -462,7 +492,8 @@ int ObTabletFinishTransferOutHelper::on_replay(
   ObTXFinishTransferOutInfo tx_finish_transfer_out_info;
   int64_t pos = 0;
   ObTransferUtils::set_transfer_module();
-
+  const int64_t start_ts = ObTimeUtility::current_time();
+  share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::MAX_NAME;
   if (OB_ISNULL(buf) || len < 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on replay finish transfer out get invalid argument", K(ret), KP(buf), K(len), K(scn));
@@ -472,11 +503,32 @@ int ObTabletFinishTransferOutHelper::on_replay(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx finish transfer out info is unexpected", K(ret), K(tx_finish_transfer_out_info));
   } else if (CLICK_FAIL(on_replay_success_(scn, tx_finish_transfer_out_info, ctx))) {
+    diagnose_result_msg = share::ObStorageHACostItemName::ON_REPLAY_SUCCESS;
     LOG_WARN("failed to do on_replay_success_", K(ret), K(tx_finish_transfer_out_info));
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(tx_finish_transfer_out_info.src_ls_id_))) {
     LOG_WARN("failed to set_tablet_empty_shell_trigger", K(ret), K(tx_finish_transfer_out_info));
   }
   ObTransferUtils::clear_transfer_module();
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_TRANSFER_DIAGNOSE_FINISH_REPLAY_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "fake EN_TRANSFER_DIAGNOSE_FINISH_REPLAY_FAILED", K(ret));
+    }
+  }
+#endif
+  const int64_t end_ts = ObTimeUtility::current_time();
+  bool is_report = OB_SUCCESS == ret ? true : false;
+  ObTransferUtils::process_finish_out_perf_diag_info(tx_finish_transfer_out_info,
+      ObStorageHACostItemType::ACCUM_COST_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_OUT_REPLAY_COST,
+      ret, end_ts - start_ts, start_ts, is_report);
+  ObTransferUtils::add_transfer_error_diagnose_in_replay(
+                                   tx_finish_transfer_out_info.task_id_,
+                                   tx_finish_transfer_out_info.dest_ls_id_,
+                                   ret,
+                                   true/*clean_related_info*/,
+                                   ObStorageHADiagTaskType::TRANSFER_FINISH_OUT,
+                                   diagnose_result_msg);
   return ret;
 }
 
@@ -491,7 +543,12 @@ int ObTabletFinishTransferOutHelper::on_replay_success_(
   ObLSService *ls_svr = NULL;
   ObLSHandle ls_handle;
   ObLS *ls = NULL;
-
+  ObTransferUtils::process_finish_out_perf_diag_info(tx_finish_transfer_out_info,
+      ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_OUT_LOG_SCN,
+      ret, scn.get_val_for_logservice(), start_ts, false/*is_report*/);
+  ObTransferUtils::process_finish_out_perf_diag_info(tx_finish_transfer_out_info,
+      ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_OUT_FIRST_REPALY_LOG_TIMESTAMP,
+      ret, start_ts, start_ts, false/*is_report*/);
   FLOG_INFO("[TRANSFER] start tx finish transfer out on_replay_success_", K(scn), K(tx_finish_transfer_out_info));
 #ifdef ERRSIM
   SERVER_EVENT_ADD("transfer", "tx_finish_transfer_out",
@@ -585,6 +642,7 @@ protected:
   {
     return true;
   }
+  virtual bool replay_allow_tablet_not_exist_() { return false; }
 
 private:
   int check_dest_transfer_tablet_(ObTabletHandle &tablet_handle);
@@ -864,7 +922,8 @@ int ObTabletFinishTransferInHelper::on_register(
   int64_t pos = 0;
   const bool for_replay = false;
   ObTransferUtils::set_transfer_module();
-
+  const int64_t start_ts = ObTimeUtility::current_time();
+  share::ObStorageHACostItemName diagnose_result_msg = ObStorageHACostItemName::MAX_NAME;
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on register finish transfer in get invalid argument", K(ret), KP(buf), K(len));
@@ -874,10 +933,31 @@ int ObTabletFinishTransferInHelper::on_register(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx finish transfer in info is unexpected", K(ret), K(tx_finish_transfer_in_info));
   } else if (CLICK_FAIL(on_register_success_(tx_finish_transfer_in_info, ctx))) {
+    diagnose_result_msg = share::ObStorageHACostItemName::ON_REGISTER_SUCCESS;
     LOG_WARN("failed to do on register success", K(ret), K(tx_finish_transfer_in_info));
   }
 
   ObTransferUtils::clear_transfer_module();
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_TRANSFER_DIAGNOSE_FINISH_REPLAY_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "fake EN_TRANSFER_DIAGNOSE_FINISH_REPLAY_FAILED", K(ret));
+    }
+  }
+#endif
+  const int64_t end_ts = ObTimeUtility::current_time();
+  bool is_report = OB_SUCCESS == ret ? true : false;
+  ObTransferUtils::process_finish_in_perf_diag_info(tx_finish_transfer_in_info,
+      ObStorageHACostItemType::ACCUM_COST_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_IN_REPLAY_COST,
+      ret, end_ts - start_ts, 0/*start_ts*/, is_report);
+  ObTransferUtils::add_transfer_error_diagnose_in_replay(
+                                   tx_finish_transfer_in_info.task_id_,
+                                   tx_finish_transfer_in_info.dest_ls_id_,
+                                   ret,
+                                   false/*clean_related_info*/,
+                                   ObStorageHADiagTaskType::TRANSFER_FINISH_IN,
+                                   diagnose_result_msg);
   return ret;
 }
 
@@ -892,6 +972,9 @@ int ObTabletFinishTransferInHelper::on_register_success_(
   ObLS *ls = NULL;
   const share::ObLSID &dest_ls_id = tx_finish_transfer_in_info.dest_ls_id_;
   const int64_t start_ts = ObTimeUtil::current_time();
+  ObTransferUtils::process_finish_in_perf_diag_info(tx_finish_transfer_in_info,
+      ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_IN_FIRST_REPALY_LOG_TIMESTAMP,
+      ret, start_ts, start_ts, false/*is_report*/);
   LOG_INFO("[TRANSFER] start tx finish transfer in on_register_success_", K(tx_finish_transfer_in_info));
 #ifdef ERRSIM
   SERVER_EVENT_ADD("transfer", "tx_finish_transfer_in",
@@ -1080,7 +1163,8 @@ int ObTabletFinishTransferInHelper::on_replay(
   bool skip_replay = false;
   const bool for_replay = true;
   ObTransferUtils::set_transfer_module();
-
+  const int64_t start_ts = ObTimeUtility::current_time();
+  share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::MAX_NAME;
   if (OB_ISNULL(buf) || len < 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on_replay_success_ finish transfer in get invalid argument", K(ret), KP(buf), K(len), K(scn));
@@ -1090,9 +1174,30 @@ int ObTabletFinishTransferInHelper::on_replay(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx finish transfer in info is unexpected", K(ret), K(tx_finish_transfer_in_info));
   } else if (CLICK_FAIL(on_replay_success_(scn, tx_finish_transfer_in_info, ctx))) {
+    diagnose_result_msg = share::ObStorageHACostItemName::ON_REPLAY_SUCCESS;
     LOG_WARN("failed to do on_replay_success_", K(ret), K(tx_finish_transfer_in_info));
   }
   ObTransferUtils::clear_transfer_module();
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_TRANSFER_DIAGNOSE_FINISH_REPLAY_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "fake EN_TRANSFER_DIAGNOSE_FINISH_REPLAY_FAILED", K(ret));
+    }
+  }
+#endif
+  const int64_t end_ts = ObTimeUtility::current_time();
+  bool is_report = OB_SUCCESS == ret ? true : false;
+  ObTransferUtils::process_finish_in_perf_diag_info(tx_finish_transfer_in_info,
+      ObStorageHACostItemType::ACCUM_COST_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_IN_REPLAY_COST,
+      ret, end_ts - start_ts, 0/*start_ts*/, is_report);
+  ObTransferUtils::add_transfer_error_diagnose_in_replay(
+                                   tx_finish_transfer_in_info.task_id_,
+                                   tx_finish_transfer_in_info.dest_ls_id_,
+                                   ret,
+                                   false/*clean_related_info*/,
+                                   ObStorageHADiagTaskType::TRANSFER_FINISH_IN,
+                                   diagnose_result_msg);
   return ret;
 }
 
@@ -1104,6 +1209,12 @@ int ObTabletFinishTransferInHelper::on_replay_success_(
   MDS_TG(1_s);
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtil::current_time();
+  ObTransferUtils::process_finish_in_perf_diag_info(tx_finish_transfer_in_info,
+      ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_IN_LOG_SCN,
+      ret, scn.get_val_for_logservice(), start_ts, false/*is_report*/);
+  ObTransferUtils::process_finish_in_perf_diag_info(tx_finish_transfer_in_info,
+      ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::FINISH_TRANSFER_IN_FIRST_REPALY_LOG_TIMESTAMP,
+      ret, start_ts, start_ts, false/*is_report*/);
   LOG_INFO("[TRANSFER] start tx finish transfer in on_replay_success_", K(scn), K(tx_finish_transfer_in_info));
 #ifdef ERRSIM
   SERVER_EVENT_ADD("transfer", "tx_finish_transfer_in",

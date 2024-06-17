@@ -58,8 +58,8 @@ public:
     key_.encode(key);
     lock_op_ = lock_op;
   }
-  bool on_memtable(const memtable::ObIMemtable * const memtable) override;
-  memtable::ObIMemtable* get_memtable() const override;
+  bool on_memtable(const storage::ObIMemtable * const memtable) override;
+  storage::ObIMemtable* get_memtable() const override;
   virtual int del() override;
   transaction::ObTxSEQ get_seq_no() const override;
   bool is_table_lock_callback() const override { return true; }

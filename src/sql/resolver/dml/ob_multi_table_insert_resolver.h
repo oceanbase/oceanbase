@@ -71,6 +71,9 @@ public:
   common::ObIArray<bool> &get_is_oracle_tmp_table_array() {
     return is_oracle_tmp_table_array_;
   }
+  common::ObIArray<int> &get_oracle_tmp_table_type_array() {
+    return oracle_tmp_table_type_array_;
+  }
   common::ObIArray<common::ObSEArray<uint64_t, 4>> &get_the_missing_label_se_columns_array() {
     return the_missing_label_se_columns_array_;
   }
@@ -78,7 +81,8 @@ public:
     return the_missing_label_se_columns_;
   }
 protected:
-  int mock_values_column_ref(const ObColumnRefRawExpr *column_ref, ObInsertAllTableInfo& table_info);
+  virtual int mock_values_column_ref(const ObColumnRefRawExpr *column_ref,
+                                     ObInsertTableInfo &table_info) override;
   virtual int find_value_desc(ObInsertTableInfo &table_info, uint64_t column_id, ObRawExpr *&column_ref) override;
 private:
   int resolve_multi_table_insert(const ParseNode &node);
@@ -109,6 +113,7 @@ private:
   int add_new_sel_item_for_oracle_label_security_table(ObSelectStmt &select_stmt);
 private:
   common::ObSEArray<bool, 4> is_oracle_tmp_table_array_;
+  common::ObSEArray<int, 4> oracle_tmp_table_type_array_;
   common::ObSEArray<common::ObSEArray<uint64_t, 4>, 4> the_missing_label_se_columns_array_;
   common::ObSEArray<uint64_t, 4> the_missing_label_se_columns_;
 };

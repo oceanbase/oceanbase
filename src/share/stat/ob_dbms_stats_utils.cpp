@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_dbms_stats_utils.h"
 #include "share/stat/ob_opt_column_stat.h"
@@ -22,6 +23,7 @@
 #include "share/stat/ob_stat_item.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/ob_result_set.h"
 
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_json_pl_utils.h"
@@ -181,7 +183,9 @@ int ObDbmsStatsUtils::check_is_stat_table(share::schema::ObSchemaGetterGuard &sc
   } else if (OB_ISNULL(table_schema) || OB_UNLIKELY(!table_schema->is_normal_schema())) {
     //do nothing
   } else {//check user table
-    is_valid = table_schema->is_user_table() || table_schema->is_external_table();
+    is_valid = table_schema->is_user_table()
+               || table_schema->is_external_table()
+               || table_schema->is_mlog_table();
   }
   return ret;
 }
@@ -270,7 +274,10 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_TRANS_STAT_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_TRANS_LOCK_STAT_ORA_TID ||
-         table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_ORA_TID;
+         table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_MDS_NODE_STAT_TID ||
+         table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID ||
+         table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID;
 }
 
 bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)
@@ -654,7 +661,10 @@ int ObDbmsStatsUtils::merge_col_stats(const ObTableStatParam &param,
       LOG_WARN("get unexpected null pointer", K(ret));
     } else if (is_part_id_valid(param, col_stat->get_partition_id())) {
       col_stat->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(col_stat->get_llc_bitmap()));
-      if (OB_FAIL(dst_col_stats.push_back(col_stat))) {
+      if (OB_UNLIKELY(col_stat->get_num_distinct() < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", KPC(col_stat), K(old_col_stats), K(ret));
+      } else if (OB_FAIL(dst_col_stats.push_back(col_stat))) {
         LOG_WARN("fail to push back table stats", K(ret));
       }
     }
@@ -690,6 +700,7 @@ bool ObDbmsStatsUtils::is_part_id_valid(const ObTableStatParam &param,
 }
 
 int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
+                                     ObIAllocator &allocator,
                                      ObIArray<PartInfo> &part_infos,
                                      ObIArray<PartInfo> &subpart_infos,
                                      ObIArray<int64_t> &part_ids,
@@ -708,10 +719,11 @@ int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
         LOG_WARN("get null partition", K(ret), K(part));
       } else {
         PartInfo part_info;
-        part_info.part_name_ = part->get_part_name();
         part_info.part_id_ = part->get_part_id();
         part_info.tablet_id_ = part->get_tablet_id();
-        if (OB_NOT_NULL(part_map)) {
+        if (OB_FAIL(ob_write_string(allocator, part->get_part_name(), part_info.part_name_))) {
+          LOG_WARN("failed to write string", K(ret));
+        } else if (OB_NOT_NULL(part_map)) {
           OSGPartInfo part_info;
           part_info.part_id_ = part->get_part_id();
           part_info.tablet_id_ = part->get_tablet_id();
@@ -726,7 +738,7 @@ int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
         } else if (OB_FAIL(part_ids.push_back(part_info.part_id_))) {
           LOG_WARN("failed to push back part id", K(ret));
         } else if (is_twopart &&
-                   OB_FAIL(get_subpart_infos(table_schema, part, subpart_infos, subpart_ids, part_map))) {
+                   OB_FAIL(get_subpart_infos(table_schema, part, allocator, subpart_infos, subpart_ids, part_map))) {
           LOG_WARN("failed to get subpart info", K(ret));
         } else {
           part_infos.at(part_infos.count() - 1).subpart_cnt_ = subpart_infos.count() - origin_cnt;
@@ -741,6 +753,7 @@ int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
 
 int ObDbmsStatsUtils::get_subpart_infos(const ObTableSchema &table_schema,
                                         const ObPartition *part,
+                                        ObIAllocator &allocator,
                                         ObIArray<PartInfo> &subpart_infos,
                                         ObIArray<int64_t> &subpart_ids,
                                         OSGPartMap *part_map/*default NULL*/)
@@ -764,7 +777,9 @@ int ObDbmsStatsUtils::get_subpart_infos(const ObTableSchema &table_schema,
         subpart_info.part_id_ = subpart->get_sub_part_id(); // means object_id
         subpart_info.tablet_id_ = subpart->get_tablet_id();
         subpart_info.first_part_id_ = part->get_part_id();
-        if (OB_NOT_NULL(part_map)) {
+        if (OB_FAIL(ob_write_string(allocator, subpart->get_part_name(), subpart_info.part_name_))) {
+          LOG_WARN("failed to write string", K(ret));
+        } else if (OB_NOT_NULL(part_map)) {
           OSGPartInfo part_info;
           part_info.part_id_ = part->get_part_id();
           part_info.tablet_id_ = subpart->get_tablet_id();
@@ -1052,6 +1067,7 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
                                                 const PartitionIdBlockMap *partition_id_block_map,
                                                 bool is_split_gather,
                                                 int64_t gather_vectorize,
+                                                bool use_column_store,
                                                 ObOptStatGatherParam &gather_param)
 {
   int ret = OB_SUCCESS;
@@ -1062,8 +1078,10 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.stat_level_ = stat_level;
   if (stat_level == SUBPARTITION_LEVEL) {
     gather_param.need_histogram_ = param.subpart_stat_param_.gather_histogram_;
+    gather_param.is_specify_partition_ = param.subpart_infos_.count() != param.all_subpart_infos_.count();
   } else if (stat_level == PARTITION_LEVEL) {
     gather_param.need_histogram_ = param.part_stat_param_.gather_histogram_;
+    gather_param.is_specify_partition_ = param.part_infos_.count() != param.all_part_infos_.count();
   } else if (stat_level == TABLE_LEVEL) {
     gather_param.need_histogram_ = param.global_stat_param_.gather_histogram_;
   }
@@ -1082,6 +1100,7 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.data_table_name_ = param.data_table_name_;
   gather_param.global_part_id_ = param.global_part_id_;
   gather_param.gather_vectorize_ = gather_vectorize;
+  gather_param.use_column_store_ = use_column_store;
   return gather_param.column_group_params_.assign(param.column_group_params_);
 }
 
@@ -1261,6 +1280,24 @@ int ObDbmsStatsUtils::check_all_cols_range_skew(const ObIArray<ObColumnStatParam
   return ret;
 }
 
+int ObDbmsStatsUtils::implicit_commit_before_gather_stats(sql::ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  uint64_t optimizer_features_enable_version = 0;
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx.get_my_session()));
+  } else if (OB_FAIL(ctx.get_my_session()->get_optimizer_features_enable_version(optimizer_features_enable_version))) {
+    LOG_WARN("failed to get_optimizer_features_enable_version", K(ret));
+  } else if (optimizer_features_enable_version < COMPAT_VERSION_4_2_4 ||
+             (optimizer_features_enable_version >= COMPAT_VERSION_4_3_0 &&
+              optimizer_features_enable_version < COMPAT_VERSION_4_3_2)) {
+    //do nothing
+  } else if (OB_FAIL(ObResultSet::implicit_commit_before_cmd_execute(*ctx.get_my_session(), ctx, stmt::T_ANALYZE))) {
+    LOG_WARN("failed to implicit commit before cmd execute", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
 
 }
 }

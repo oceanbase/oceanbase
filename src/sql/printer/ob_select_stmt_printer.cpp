@@ -59,7 +59,7 @@ int ObSelectStmtPrinter::do_print()
           LOG_WARN("fail to print_unpivot",
                    KPC(stmt_->get_transpose_item()), K(ret));
         }
-      } else if (OB_FAIL(print())) {
+      } else if (OB_FAIL(SMART_CALL(print()))) {
         LOG_WARN("fail to print stmt", KPC(stmt_), K(ret));
       }
     }
@@ -282,7 +282,8 @@ int ObSelectStmtPrinter::print_set_op_stmt()
                                        schema_guard_,
                                        print_params_,
                                        param_store_,
-                                       /*force_col_alias*/true);
+                                       /*force_col_alias*/true,
+                                       session_);
       stmt_printer.set_column_list(column_list_);
       stmt_printer.set_is_first_stmt_for_hint(is_first_stmt_for_hint_);
       ObString set_op_str = ObString::make_string(
@@ -424,6 +425,9 @@ int ObSelectStmtPrinter::print_select()
       } else if (select_stmt->is_unpivot_select()) {
         DATA_PRINTF(" * ");
       } else {
+        if (select_stmt->is_select_straight_join()) { // straight_join
+          DATA_PRINTF("straight_join ");
+        }
         if (select_stmt->has_distinct()) { // distinct
           DATA_PRINTF("distinct ");
         }
@@ -432,7 +436,6 @@ int ObSelectStmtPrinter::print_select()
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
           const SelectItem &select_item = select_stmt->get_select_item(i);
-          OZ (set_synonym_name_recursively(select_item.expr_, stmt_));
           if (select_item.is_implicit_added_ || select_item.implicit_filled_) {
             continue;
           }

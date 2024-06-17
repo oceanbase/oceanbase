@@ -270,7 +270,6 @@ ObPushdownFilterExecutor* TestSSTableIndexFilter::create_lt_white_filter(uint64_
   datum.ptr_ = reinterpret_cast<char *>(datum_buf) + 128;
   datum.from_obj(ref_obj);
   filter->datum_params_.push_back(datum);
-  filter->init_obj_set();
   filter->cmp_func_ = get_datum_cmp_func(obj_meta, obj_meta);
   return filter;
 }

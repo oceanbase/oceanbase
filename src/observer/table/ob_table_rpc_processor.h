@@ -111,6 +111,14 @@ public:
   virtual ~ObTableApiProcessorBase() = default;
 public:
   static int init_session();
+  OB_INLINE bool is_kv_feature_enable()
+  {
+    bool bret = true;
+    if (is_kv_processor()) { // only check kv processor, ignore direct load processor
+      bret = GCONF._enable_kv_feature;
+    }
+    return bret;
+  }
   int check_user_access(const ObString &credential_str);
   // transaction control
   int start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
@@ -139,13 +147,14 @@ public:
   int get_tablet_by_rowkey(uint64_t table_id, const ObIArray<ObRowkey> &rowkeys,
                            ObIArray<ObTabletID> &tablet_ids);
   inline transaction::ObTxReadSnapshot &get_tx_snapshot() { return tx_snapshot_; }
-  inline bool had_do_response() const { return had_do_response_; }
+  inline bool is_async_response() const { return is_async_response_; }
   int get_table_id(const ObString &table_name, const uint64_t arg_table_id, uint64_t &real_table_id) const;
 protected:
   virtual int check_arg() = 0;
   virtual int try_process() = 0;
   virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) = 0;
   virtual void set_req_has_wokenup() = 0;
+  virtual bool is_kv_processor() = 0;
   virtual void reset_ctx();
   int get_ls_id(const ObTabletID &tablet_id, share::ObLSID &ls_id);
   int process_with_retry(const ObString &credential, const int64_t timeout_ts);
@@ -188,7 +197,7 @@ protected:
   // trans control
   sql::TransState trans_state_;
   transaction::ObTxDesc *trans_desc_;
-  bool had_do_response_; // asynchronous transactions return packet in advance
+  bool is_async_response_; // asynchronous transactions return packet in advance
   sql::TransState *trans_state_ptr_;
   transaction::ObTxReadSnapshot tx_snapshot_;
   ObAddr user_client_addr_;

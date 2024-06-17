@@ -215,7 +215,8 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
           } else if (0 == tmp_root->is_val_paramed_item_idx_
                      && OB_FAIL(get_select_item_param_info(*raw_params,
                                                            tmp_root,
-                                                           select_item_param_infos))) {
+                                                           select_item_param_infos,
+                                                           session))) {
             SQL_PC_LOG(WARN, "failed to get select item param info", K(ret));
           } else {
             // do nothing
@@ -357,6 +358,8 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
     ret_bool = true;
   } else if (T_INTO_LINE_LIST == tree->type_) {
     ret_bool = true;
+  } else if (T_INTO_FILE_LIST == tree->type_) {
+    ret_bool = true;
   } else if (T_PIVOT_IN_LIST == tree->type_) {
     ret_bool = true;
   } else if (T_CHAR_CHARSET == tree->type_) {
@@ -475,6 +478,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
   int ret = OB_SUCCESS;
   int64_t value_level = NO_VALUES;
   int64_t assign_level = NO_VALUES;
+  ObCompatType compat_type = COMPAT_MYSQL57;
   if (OB_ISNULL(ctx.top_node_)
       || OB_ISNULL(ctx.allocator_)
       || OB_ISNULL(ctx.sql_info_)
@@ -488,6 +492,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                K(ctx.fixed_param_store_),
                K(ctx.params_),
                K(ret));
+  } else if (OB_FAIL(session_info.get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compat type", K(ret));
   } else if (NULL == ctx.tree_) {
     // do nothing
   } else {
@@ -557,7 +563,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               literal_prefix,
                               ctx.default_length_semantics_,
                               static_cast<ObCollationType>(server_collation),
-                              NULL, session_info.get_sql_mode(), enable_decimal_int,
+                              NULL, session_info.get_sql_mode(),
+                              enable_decimal_int,
+                              compat_type,
                               ctx.is_from_pl_))) {
             SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
           } else {
@@ -877,6 +885,13 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
           } else {
             ctx.not_param_ = not_param;
             ctx.ignore_scale_check_ = ignore_scale_check;
+            // select a + 1 as 'a' from t where b = ?; 'a' in SQL will be recognized as a constant by fast parser
+            // In the ps parameterization scenario, 'a' will be added to the param store as a fixed parameter in
+            // the execute phase. The param store has two parameters, causing correctness problems.
+            // Therefore, the scene ps parameterization ability of specifying aliases needs to be disabled.
+            if (T_ALIAS == root->type_ && NULL != root->str_value_) {
+              ctx.sql_info_->ps_need_parameterized_ = false;
+            }
             if (T_ALIAS == root->type_ && 0 == i) {
               // alias node的param_num_处理必须等到其第一个子节点转换完之后
               // select a + 1 as 'a'，'a'不能被参数化，但是它在raw_params数组内的下标必须是计算了1的下标之后才能得到
@@ -1495,8 +1510,6 @@ int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
         ObPCParam *pc_param = NULL;
         char *ptr = (char *)allocator.alloc(param_num * sizeof(ObPCParam));
         fp_result.raw_params_.reset();
-        fp_result.raw_params_.set_allocator(&allocator);
-        fp_result.raw_params_.set_capacity(param_num);
         if (OB_ISNULL(ptr)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_PC_LOG(WARN, "fail to alloc memory for pc param", K(ret), K(ptr));
@@ -1526,8 +1539,6 @@ int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
           ObPCParam *pc_param = NULL;
           ParamList *p_list = parse_result.param_nodes_;
           char *ptr = (char *)allocator.alloc(param_num * sizeof(ObPCParam));
-          fp_result.raw_params_.set_allocator(&allocator);
-          fp_result.raw_params_.set_capacity(param_num);
           if (OB_ISNULL(ptr)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SQL_PC_LOG(WARN, "fail to alloc memory for pc param", K(ret), K(ptr));
@@ -1839,6 +1850,13 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         sql_info.ps_need_parameterized_ = false;
       } else if ((0 == func_name.case_compare("json_extract"))) {
         sql_info.ps_need_parameterized_ = false;
+      } else if ((0 == func_name.case_compare("json_schema_valid"))
+                || (0 == func_name.case_compare("json_schema_validation_report"))) {
+        const int64_t ARGS_NUMBER_TWO = 2;
+        bool mark_arr[ARGS_NUMBER_TWO] = {1, 0};
+        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TWO, sql_info))) {
+          SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
+        }
       }
     }
   } else if (T_OP_LIKE == tree->type_) {
@@ -1858,13 +1876,13 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
       }
     } else { /*do nothing*/ }
   } else if(T_FUN_SYS_JSON_VALUE == tree->type_) {
-    if (9 != tree->num_child_) {
+    if (10 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
       SQL_PC_LOG(WARN, "invalid json value expr argument", K(ret), K(tree->num_child_)); 
     } else {
-      const int64_t ARGS_NUMBER_NINE = 9;
-      bool mark_arr[ARGS_NUMBER_NINE] = {0, 1, 1, 1, 1, 1, 1, 1, 1};
-      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_NINE, sql_info))) {
+      const int64_t ARGS_NUMBER_TEN = 10;
+      bool mark_arr[ARGS_NUMBER_TEN] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TEN, sql_info))) {
         SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
       }
     }
@@ -1891,13 +1909,13 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
       }
     }
   } else if(T_FUN_SYS_JSON_QUERY == tree->type_) {
-    if (11 != tree->num_child_) {
+    if (13 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
       SQL_PC_LOG(WARN, "invalid json query expr argument", K(ret), K(tree->num_child_));
     } else {
-      const int64_t ARGS_NUMBER_ELEVEN = 11;
-      bool mark_arr[ARGS_NUMBER_ELEVEN] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};   // json doc type will affect returning type,
-      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_ELEVEN, sql_info))) {
+      const int64_t ARGS_NUMBER_THIRTEEN = 13;
+      bool mark_arr[ARGS_NUMBER_THIRTEEN] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};   // json doc type will affect returning type,
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_THIRTEEN, sql_info))) {
         SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
       }
     }
@@ -1948,12 +1966,23 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
   } else if (T_JSON_TABLE_EXPRESSION == tree->type_) {
     if (5 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid json mergepatch expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid json table expr argument", K(ret), K(tree->num_child_));
     } else {
       const int64_t ARGS_NUMBER_FIVE = 5;
       bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1};
       if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_FIVE, sql_info))) {
-        SQL_PC_LOG(WARN, "fail to mark json mergepatch arg", K(ret));
+        SQL_PC_LOG(WARN, "fail to mark json table arg", K(ret));
+      }
+    }
+  } else if (T_XML_TABLE_EXPRESSION == tree->type_) {
+    if (6 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid xml table expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_SIX = 6;
+      bool mark_arr[ARGS_NUMBER_SIX] = {1, 1, 0, 1, 1, 1}; // because of namespace deal in resolve, so can not parameter
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_SIX, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark xml table arg", K(ret));
       }
     }
   } else if (T_FUN_SYS_TREAT == tree->type_) {
@@ -2036,7 +2065,8 @@ int ObSqlParameterization::get_related_user_vars(const ParseNode *tree, common::
 
 int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObPCParam *> &raw_params,
                                                       ParseNode *tree,
-                                                      SelectItemParamInfoArray *select_item_param_infos)
+                                                      SelectItemParamInfoArray *select_item_param_infos,
+                                                      const ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   SelectItemParamInfo param_info;
@@ -2044,6 +2074,7 @@ int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObP
   int64_t expr_pos = tree->raw_sql_offset_;
   int64_t buf_len = SelectItemParamInfo::PARAMED_FIELD_BUF_LEN;
   ObSEArray<TraverseStackFrame, 64> stack_frames;
+  bool enable_modify_null_name = false;
 
   if (T_PROJECT_STRING != tree->type_ || OB_ISNULL(tree->children_) || tree->num_child_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -2152,6 +2183,29 @@ int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObP
     tree->is_val_paramed_item_idx_ = 1;
 
     LOG_DEBUG("add a paramed info", K(param_info));
+  }
+
+  // MySQL sets the alias of standalone null value("\N","null"...) to "NULL" during projection.
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(session.check_feature_enable(ObCompatFeatureType::PROJECT_NULL,
+                                                  enable_modify_null_name))) {
+    LOG_WARN("failed to check feature enable", K(ret));
+  } else if (is_mysql_mode() &&
+             1 == param_info.params_idx_.count() &&
+             0 == ObString(param_info.name_len_, param_info.paramed_field_name_).compare("?") &&
+             enable_modify_null_name) {
+    int64_t idx = param_info.params_idx_.at(0);
+    if (idx >= raw_params.count()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid index", K(idx), K(raw_params.count()));
+    } else if (OB_ISNULL(raw_params.at(idx)) || OB_ISNULL(raw_params.at(idx)->node_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(raw_params.at(idx)), K(raw_params.at(idx)->node_));
+    } else if (T_NULL == raw_params.at(idx)->node_->type_) {
+      tree->str_value_ = "NULL";
+      tree->str_len_ = strlen("NULL");
+    }
   }
 
   return ret;

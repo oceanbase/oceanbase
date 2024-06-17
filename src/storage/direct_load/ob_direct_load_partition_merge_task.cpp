@@ -12,14 +12,11 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_partition_merge_task.h"
-#include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_stat_define.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
-
 
 namespace oceanbase
 {
@@ -28,17 +25,22 @@ namespace storage
 using namespace common;
 using namespace blocksstable;
 using namespace share;
+using namespace table;
+using namespace observer;
 
 /**
  * ObDirectLoadPartitionMergeTask
  */
 
 ObDirectLoadPartitionMergeTask::ObDirectLoadPartitionMergeTask()
-  : merge_param_(nullptr),
+  : ctx_(nullptr),
+    merge_param_(nullptr),
     merge_ctx_(nullptr),
     parallel_idx_(-1),
     affected_rows_(0),
     allocator_("TLD_ParMT"),
+    insert_tablet_ctx_(nullptr),
+    sql_statistics_(nullptr),
     is_stop_(false),
     is_inited_(false)
 {
@@ -47,14 +49,28 @@ ObDirectLoadPartitionMergeTask::ObDirectLoadPartitionMergeTask()
 
 ObDirectLoadPartitionMergeTask::~ObDirectLoadPartitionMergeTask()
 {
-  for (int64_t i = 0; i < column_stat_array_.count(); ++i) {
-    ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-    if (col_stat != nullptr) {
-       col_stat->~ObOptOSGColumnStat();
-       col_stat = nullptr;
-    }
-  }
 }
+
+class ObStoreRowIteratorWrapper : public ObIStoreRowIterator
+{
+public:
+  ObStoreRowIteratorWrapper(observer::ObTableLoadTableCtx *ctx, ObIStoreRowIterator *inner_iter) :
+    ctx_(ctx), inner_iter_(inner_iter) {
+  }
+
+  int get_next_row(const blocksstable::ObDatumRow *&row)
+  {
+    int ret = inner_iter_->get_next_row(row);
+    if (ret == OB_SUCCESS) {
+      ATOMIC_AAF(&ctx_->job_stat_->store_.merge_stage_write_rows_, 1);
+    }
+    return ret;
+  }
+
+private:
+  observer::ObTableLoadTableCtx *ctx_;
+  ObIStoreRowIterator *inner_iter_;
+};
 
 int ObDirectLoadPartitionMergeTask::process()
 {
@@ -65,36 +81,35 @@ int ObDirectLoadPartitionMergeTask::process()
   } else {
     int64_t slice_id = 0;
     const ObTabletID &tablet_id = merge_ctx_->get_tablet_id();
-    ObDirectLoadInsertTabletContext *tablet_ctx = nullptr;
     ObIStoreRowIterator *row_iter = nullptr;
-    bool has_lob_storage = merge_param_->lob_column_cnt_ > 0 ? true :false;
     ObMacroDataSeq block_start_seq;
     block_start_seq.set_parallel_degree(parallel_idx_);
-    if (merge_param_->online_opt_stat_gather_ && OB_FAIL(init_sql_statistics())) {
-      LOG_WARN("fail to inner init sql statistics", KR(ret));
-    } else if (has_lob_storage && OB_FAIL(init_lob_builder())) {
+    if (OB_FAIL(
+          merge_param_->insert_table_ctx_->get_tablet_context(tablet_id, insert_tablet_ctx_))) {
+      LOG_WARN("fail to get tablet context ", KR(ret), K(tablet_id), K(block_start_seq));
+    } else if (insert_tablet_ctx_->get_online_opt_stat_gather() &&
+               OB_FAIL(merge_param_->insert_table_ctx_->get_sql_statistics(sql_statistics_))) {
+      LOG_WARN("fail to get sql statistics", KR(ret));
+    } else if (insert_tablet_ctx_->has_lob_storage() && OB_FAIL(lob_builder_.init(insert_tablet_ctx_))) {
       LOG_WARN("fail to inner init lob builder", KR(ret));
     } else if (OB_FAIL(construct_row_iter(allocator_, row_iter))) {
       LOG_WARN("fail to construct row iter", KR(ret));
-    } else if (OB_FAIL(merge_param_->insert_table_ctx_->get_tablet_context(
-                 tablet_id, tablet_ctx))) {
-      LOG_WARN("fail to get tablet context ", KR(ret), K(tablet_id),
-               K(block_start_seq));
-    } else if (OB_FAIL(tablet_ctx->open_sstable_slice(
-                 block_start_seq, slice_id))) {
-      LOG_WARN("fail to construct sstable slice ", KR(ret), K(slice_id),
-               K(block_start_seq));
+    } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(block_start_seq, slice_id))) {
+      LOG_WARN("fail to construct sstable slice ", KR(ret), K(slice_id), K(block_start_seq));
     } else {
-      LOG_INFO("add sstable slice begin", KP(tablet_ctx), K(slice_id));
+      LOG_INFO("add sstable slice begin", K(tablet_id), K(parallel_idx_), K(slice_id));
+      ObStoreRowIteratorWrapper row_iter_wrapper(ctx_, row_iter);
       if (OB_UNLIKELY(is_stop_)) {
         ret = OB_CANCELED;
         LOG_WARN("merge task canceled", KR(ret));
-      } else if (OB_FAIL(tablet_ctx->fill_sstable_slice(slice_id, *row_iter, affected_rows_))) {
+      } else if (OB_FAIL(insert_tablet_ctx_->fill_sstable_slice(slice_id, row_iter_wrapper, affected_rows_))) {
          LOG_WARN("fail to fill sstable slice", KR(ret));
-      } else if (OB_FAIL(tablet_ctx->close_sstable_slice(slice_id))) {
+      } else if (OB_FAIL(insert_tablet_ctx_->close_sstable_slice(slice_id))) {
         LOG_WARN("fail to close writer", KR(ret));
-      } else if (has_lob_storage && OB_FAIL(lob_builder_.close())) {
+      } else if (insert_tablet_ctx_->has_lob_storage() && OB_FAIL(lob_builder_.close())) {
         LOG_WARN("fail to close lob_builder", KR(ret));
+      } else {
+        insert_tablet_ctx_->inc_row_count(affected_rows_);
       }
       LOG_INFO("add sstable slice end", KR(ret), K(tablet_id), K(parallel_idx_), K(affected_rows_));
     }
@@ -108,50 +123,15 @@ int ObDirectLoadPartitionMergeTask::process()
       if (OB_FAIL(merge_ctx_->inc_finish_count(is_ready))) {
         LOG_WARN("fail to inc finish count", KR(ret));
       } else if (is_ready) {
-        if (merge_param_->is_column_store_) {
-          if (OB_FAIL(tablet_ctx->calc_range())) {
+        if (insert_tablet_ctx_->need_rescan()) {
+          if (OB_FAIL(insert_tablet_ctx_->calc_range(merge_param_->fill_cg_thread_cnt_))) {
             LOG_WARN("fail to calc range", KR(ret));
           }
-        } else if (OB_FAIL(tablet_ctx->close())) {
+        } else if (OB_FAIL(insert_tablet_ctx_->close())) {
           LOG_WARN("fail to close", KR(ret));
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObDirectLoadPartitionMergeTask::init_sql_statistics()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret)&& i < merge_param_->table_data_desc_.column_count_; ++i) {
-    ObOptOSGColumnStat *col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_);
-    if (OB_ISNULL(col_stat)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate buffer", KR(ret));
-    } else if (OB_FAIL(column_stat_array_.push_back(col_stat))){
-      LOG_WARN("fail to push back", KR(ret));
-    }
-    if (OB_FAIL(ret)) {
-      if (col_stat != nullptr) {
-        col_stat->~ObOptOSGColumnStat();
-        allocator_.free(col_stat);
-        col_stat = nullptr;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadPartitionMergeTask::init_lob_builder()
-{
-  int ret = OB_SUCCESS;
-  ObDirectLoadLobBuildParam param;
-  param.tablet_id_ = merge_ctx_->get_tablet_id();
-  param.insert_table_ctx_ = merge_param_->insert_table_ctx_;
-  param.lob_column_cnt_ = merge_param_->lob_column_cnt_;
-  if (OB_FAIL(lob_builder_.init(param))) {
-    LOG_WARN("fail to init lob builder", KR(ret));
   }
   return ret;
 }
@@ -165,8 +145,7 @@ void ObDirectLoadPartitionMergeTask::stop()
   } else {
     ObDirectLoadInsertTabletContext *tablet_ctx = nullptr;
     const ObTabletID &tablet_id = merge_ctx_->get_tablet_id();
-    if (OB_FAIL(merge_param_->insert_table_ctx_->get_tablet_context(
-                  tablet_id, tablet_ctx))) {
+    if (OB_FAIL(merge_param_->insert_table_ctx_->get_tablet_context(tablet_id, tablet_ctx))) {
       LOG_WARN("fail to get tablet context ", KR(ret), K(tablet_id));
     } else if (OB_FAIL(tablet_ctx->cancel())) {
       LOG_WARN("fail to cancel fill task", K(ret));
@@ -174,7 +153,7 @@ void ObDirectLoadPartitionMergeTask::stop()
       is_stop_ = true;
     }
   }
-  //ignore ret
+  // ignore ret
 }
 
 /**
@@ -182,45 +161,33 @@ void ObDirectLoadPartitionMergeTask::stop()
  */
 
 ObDirectLoadPartitionRangeMergeTask::RowIterator::RowIterator()
-  : rowkey_column_num_(0), is_inited_(false)
+  : rowkey_column_num_(0)
 {
 }
 
-ObDirectLoadPartitionRangeMergeTask::RowIterator::~RowIterator()
-{
-}
+ObDirectLoadPartitionRangeMergeTask::RowIterator::~RowIterator() {}
 
 int ObDirectLoadPartitionRangeMergeTask::RowIterator::init(
   const ObDirectLoadMergeParam &merge_param,
   const ObTabletID &tablet_id,
   ObDirectLoadOriginTable *origin_table,
-  ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+  ObTableLoadSqlStatistics *sql_statistics,
   ObDirectLoadLobBuilder &lob_builder,
   const ObIArray<ObDirectLoadSSTable *> &sstable_array,
-  const ObDatumRange &range)
+  const ObDatumRange &range,
+  ObDirectLoadInsertTabletContext *insert_tablet_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadPartitionRangeMergeTask::RowIterator init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(!merge_param.is_valid() || !tablet_id.is_valid() ||
-                         nullptr == origin_table || !range.is_valid())) {
+                         nullptr == origin_table || !range.is_valid() ||
+                         nullptr == insert_tablet_ctx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), K(sstable_array), K(range));
+    LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), K(sstable_array), K(range),
+             KP(insert_tablet_ctx));
   } else {
-    // init row iterator
-    ObDirectLoadInsertTableRowIteratorParam row_iterator_param;
-    row_iterator_param.tablet_id_ = tablet_id;
-    row_iterator_param.table_data_desc_ = merge_param.table_data_desc_;
-    row_iterator_param.datum_utils_ = merge_param.datum_utils_;
-    row_iterator_param.col_descs_ = merge_param.col_descs_;
-    row_iterator_param.lob_column_cnt_ = merge_param.lob_column_cnt_;
-    row_iterator_param.cmp_funcs_ = merge_param.cmp_funcs_;
-    row_iterator_param.column_stat_array_ = &column_stat_array;
-    row_iterator_param.lob_builder_ = &lob_builder;
-    row_iterator_param.is_heap_table_ = merge_param.is_heap_table_;
-    row_iterator_param.online_opt_stat_gather_ = merge_param.online_opt_stat_gather_;
-    row_iterator_param.px_mode_ = merge_param.px_mode_;
     // init data_fuse_
     ObDirectLoadDataFuseParam data_fuse_param;
     data_fuse_param.tablet_id_ = tablet_id;
@@ -228,21 +195,15 @@ int ObDirectLoadPartitionRangeMergeTask::RowIterator::init(
     data_fuse_param.table_data_desc_ = merge_param.table_data_desc_;
     data_fuse_param.datum_utils_ = merge_param.datum_utils_;
     data_fuse_param.dml_row_handler_ = merge_param.dml_row_handler_;
-    if (OB_FAIL(inner_init(row_iterator_param))) {
+    if (OB_FAIL(inner_init(insert_tablet_ctx, sql_statistics, lob_builder))) {
       LOG_WARN("fail to inner init", KR(ret));
     } else if (OB_FAIL(data_fuse_.init(data_fuse_param, origin_table, sstable_array, range))) {
       LOG_WARN("fail to init data fuse", KR(ret));
     }
     // init datum_row_
-    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
-                                     ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
+    else if (OB_FAIL(insert_tablet_ctx->init_datum_row(datum_row_))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
-      datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
-        -merge_param.snapshot_version_); // fill trans_version
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
       rowkey_column_num_ = merge_param.rowkey_column_num_;
       is_inited_ = true;
     }
@@ -285,11 +246,10 @@ ObDirectLoadPartitionRangeMergeTask::ObDirectLoadPartitionRangeMergeTask()
 {
 }
 
-ObDirectLoadPartitionRangeMergeTask::~ObDirectLoadPartitionRangeMergeTask()
-{
-}
+ObDirectLoadPartitionRangeMergeTask::~ObDirectLoadPartitionRangeMergeTask() {}
 
-int ObDirectLoadPartitionRangeMergeTask::init(const ObDirectLoadMergeParam &merge_param,
+int ObDirectLoadPartitionRangeMergeTask::init(ObTableLoadTableCtx *ctx,
+                                              const ObDirectLoadMergeParam &merge_param,
                                               ObDirectLoadTabletMergeCtx *merge_ctx,
                                               ObDirectLoadOriginTable *origin_table,
                                               const ObIArray<ObDirectLoadSSTable *> &sstable_array,
@@ -300,12 +260,13 @@ int ObDirectLoadPartitionRangeMergeTask::init(const ObDirectLoadMergeParam &merg
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadPartitionRangeMergeTask init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!merge_param.is_valid() || nullptr == merge_ctx ||
+  } else if (OB_UNLIKELY(nullptr == ctx || !merge_param.is_valid() || nullptr == merge_ctx ||
                          nullptr == origin_table || !range.is_valid() || parallel_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(merge_param), KP(merge_ctx), K(sstable_array), K(range),
              K(parallel_idx));
   } else {
+    ctx_ = ctx;
     merge_param_ = &merge_param;
     merge_ctx_ = merge_ctx;
     parallel_idx_ = parallel_idx;
@@ -330,8 +291,9 @@ int ObDirectLoadPartitionRangeMergeTask::construct_row_iter(ObIAllocator &alloca
     if (OB_ISNULL(row_iter = OB_NEWx(RowIterator, (&allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new RowIterator", KR(ret));
-    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), origin_table_, column_stat_array_, lob_builder_,
-                                      *sstable_array_, *range_))) {
+    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), origin_table_,
+                                      sql_statistics_, lob_builder_, *sstable_array_, *range_,
+                                      insert_tablet_ctx_))) {
       LOG_WARN("fail to init row iter", KR(ret));
     } else {
       result_row_iter = row_iter;
@@ -352,22 +314,21 @@ int ObDirectLoadPartitionRangeMergeTask::construct_row_iter(ObIAllocator &alloca
  */
 
 ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::RowIterator()
-  : rowkey_column_num_(0), is_inited_(false)
+  : rowkey_column_num_(0)
 {
 }
 
-ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::~RowIterator()
-{
-}
+ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::~RowIterator() {}
 
 int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::init(
   const ObDirectLoadMergeParam &merge_param,
   const ObTabletID &tablet_id,
   ObDirectLoadOriginTable *origin_table,
-  ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+  ObTableLoadSqlStatistics *sql_statistics,
   ObDirectLoadLobBuilder &lob_builder,
   const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
-  const ObDatumRange &range)
+  const ObDatumRange &range,
+  ObDirectLoadInsertTabletContext *insert_tablet_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -375,23 +336,12 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::init(
     LOG_WARN("ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator init twice", KR(ret),
              KP(this));
   } else if (OB_UNLIKELY(!merge_param.is_valid() || !tablet_id.is_valid() ||
-                         nullptr == origin_table || !range.is_valid())) {
+                         nullptr == origin_table || !range.is_valid() ||
+                         nullptr == insert_tablet_ctx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), K(sstable_array), K(range));
+    LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), K(sstable_array), K(range),
+             KP(insert_tablet_ctx));
   } else {
-   // init row iterator
-    ObDirectLoadInsertTableRowIteratorParam row_iterator_param;
-    row_iterator_param.tablet_id_ = tablet_id;
-    row_iterator_param.table_data_desc_ = merge_param.table_data_desc_;
-    row_iterator_param.datum_utils_ = merge_param.datum_utils_;
-    row_iterator_param.col_descs_ = merge_param.col_descs_;
-    row_iterator_param.lob_column_cnt_ = merge_param.lob_column_cnt_;
-    row_iterator_param.cmp_funcs_ = merge_param.cmp_funcs_;
-    row_iterator_param.column_stat_array_ = &column_stat_array;
-    row_iterator_param.lob_builder_ = &lob_builder;
-    row_iterator_param.is_heap_table_ = merge_param.is_heap_table_;
-    row_iterator_param.online_opt_stat_gather_ = merge_param.online_opt_stat_gather_;
-    row_iterator_param.px_mode_ = merge_param.px_mode_;
     // init data_fuse_
     ObDirectLoadDataFuseParam data_fuse_param;
     data_fuse_param.tablet_id_ = tablet_id;
@@ -399,21 +349,15 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::init(
     data_fuse_param.table_data_desc_ = merge_param.table_data_desc_;
     data_fuse_param.datum_utils_ = merge_param.datum_utils_;
     data_fuse_param.dml_row_handler_ = merge_param.dml_row_handler_;
-    if (OB_FAIL(inner_init(row_iterator_param))) {
+    if (OB_FAIL(inner_init(insert_tablet_ctx, sql_statistics, lob_builder))) {
       LOG_WARN("fail to inner init", KR(ret));
     } else if (OB_FAIL(data_fuse_.init(data_fuse_param, origin_table, sstable_array, range))) {
       LOG_WARN("fail to init data fuse", KR(ret));
     }
     // init datum_row_
-    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
-                                     ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
+    else if (OB_FAIL(insert_tablet_ctx->init_datum_row(datum_row_))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
-      datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
-        -merge_param.snapshot_version_); // fill trans_version
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
       rowkey_column_num_ = merge_param.rowkey_column_num_;
       is_inited_ = true;
     }
@@ -458,11 +402,10 @@ ObDirectLoadPartitionRangeMultipleMergeTask::ObDirectLoadPartitionRangeMultipleM
 {
 }
 
-ObDirectLoadPartitionRangeMultipleMergeTask::~ObDirectLoadPartitionRangeMultipleMergeTask()
-{
-}
+ObDirectLoadPartitionRangeMultipleMergeTask::~ObDirectLoadPartitionRangeMultipleMergeTask() {}
 
 int ObDirectLoadPartitionRangeMultipleMergeTask::init(
+  ObTableLoadTableCtx *ctx,
   const ObDirectLoadMergeParam &merge_param,
   ObDirectLoadTabletMergeCtx *merge_ctx,
   ObDirectLoadOriginTable *origin_table,
@@ -474,12 +417,13 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadPartitionRangeMultipleMergeTask init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!merge_param.is_valid() || nullptr == merge_ctx ||
+  } else if (OB_UNLIKELY(nullptr == ctx || !merge_param.is_valid() || nullptr == merge_ctx ||
                          nullptr == origin_table || !range.is_valid() || parallel_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(merge_param), KP(merge_ctx), K(sstable_array), K(range),
              K(parallel_idx));
   } else {
+    ctx_ = ctx;
     merge_param_ = &merge_param;
     merge_ctx_ = merge_ctx;
     parallel_idx_ = parallel_idx;
@@ -504,8 +448,9 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::construct_row_iter(
     if (OB_ISNULL(row_iter = OB_NEWx(RowIterator, (&allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new RowIterator", KR(ret));
-    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), origin_table_, column_stat_array_, lob_builder_,
-                                      *sstable_array_, *range_))) {
+    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), origin_table_,
+                                      sql_statistics_, lob_builder_, *sstable_array_, *range_,
+                                      insert_tablet_ctx_))) {
       LOG_WARN("fail to init row iter", KR(ret));
     } else {
       result_row_iter = row_iter;
@@ -528,66 +473,46 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::construct_row_iter(
 ObDirectLoadPartitionHeapTableMergeTask::RowIterator::RowIterator()
   : deserialize_datums_(nullptr),
     deserialize_datum_cnt_(0),
-    dml_row_handler_(nullptr),
-    is_inited_(false)
+    dml_row_handler_(nullptr)
 {
 }
 
-ObDirectLoadPartitionHeapTableMergeTask::RowIterator::~RowIterator()
-{
-}
+ObDirectLoadPartitionHeapTableMergeTask::RowIterator::~RowIterator() {}
 
 int ObDirectLoadPartitionHeapTableMergeTask::RowIterator::init(
   const ObDirectLoadMergeParam &merge_param,
   const ObTabletID &tablet_id,
   ObDirectLoadExternalTable *external_table,
-  ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+  ObTableLoadSqlStatistics *sql_statistics,
   ObDirectLoadLobBuilder &lob_builder,
-  const ObTabletCacheInterval &pk_interval)
+  const ObTabletCacheInterval &pk_interval,
+  ObDirectLoadInsertTabletContext *insert_tablet_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadPartitionHeapTableMergeTask::RowIterator init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(!merge_param.is_valid() || !tablet_id.is_valid() ||
-                         nullptr == external_table || 0 == pk_interval.count())) {
+                         nullptr == external_table || 0 == pk_interval.count() ||
+                         nullptr == insert_tablet_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), KP(external_table),
-             K(pk_interval));
+             K(pk_interval), KP(insert_tablet_ctx));
   } else {
     // init row iterator
-    ObDirectLoadInsertTableRowIteratorParam row_iterator_param;
-    row_iterator_param.tablet_id_ = tablet_id;
-    row_iterator_param.table_data_desc_ = merge_param.table_data_desc_;
-    row_iterator_param.datum_utils_ = merge_param.datum_utils_;
-    row_iterator_param.col_descs_ = merge_param.col_descs_;
-    row_iterator_param.lob_column_cnt_ = merge_param.lob_column_cnt_;
-    row_iterator_param.cmp_funcs_ = merge_param.cmp_funcs_;
-    row_iterator_param.column_stat_array_ = &column_stat_array;
-    row_iterator_param.lob_builder_ = &lob_builder;
-    row_iterator_param.is_heap_table_ = merge_param.is_heap_table_;
-    row_iterator_param.online_opt_stat_gather_ = merge_param.online_opt_stat_gather_;
-    row_iterator_param.px_mode_ = merge_param.px_mode_;
-    if (OB_FAIL(inner_init(row_iterator_param))) {
+    if (OB_FAIL(inner_init(insert_tablet_ctx, sql_statistics, lob_builder))) {
       LOG_WARN("fail to inner init", KR(ret));
     }
     // init scanner_
     else if (OB_FAIL(scanner_.init(merge_param.table_data_desc_.external_data_block_size_,
-                              external_table->get_meta().max_data_block_size_,
-                              merge_param.table_data_desc_.compressor_type_,
-                              external_table->get_fragments()))) {
+                                   merge_param.table_data_desc_.compressor_type_,
+                                   external_table->get_fragments()))) {
       LOG_WARN("fail to init fragment scanner", KR(ret));
     }
     // init datum_row_
-    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
-                                     ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
+    else if (OB_FAIL(insert_tablet_ctx->init_datum_row(datum_row_))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
-      datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
-        -merge_param.snapshot_version_); // fill trans_version
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
       deserialize_datums_ = datum_row_.storage_datums_ + merge_param.rowkey_column_num_ +
                             ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
       deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
@@ -632,18 +557,15 @@ int ObDirectLoadPartitionHeapTableMergeTask::RowIterator::inner_get_next_row(
   return ret;
 }
 
-
-
 ObDirectLoadPartitionHeapTableMergeTask::ObDirectLoadPartitionHeapTableMergeTask()
   : external_table_(nullptr)
 {
 }
 
-ObDirectLoadPartitionHeapTableMergeTask::~ObDirectLoadPartitionHeapTableMergeTask()
-{
-}
+ObDirectLoadPartitionHeapTableMergeTask::~ObDirectLoadPartitionHeapTableMergeTask() {}
 
-int ObDirectLoadPartitionHeapTableMergeTask::init(const ObDirectLoadMergeParam &merge_param,
+int ObDirectLoadPartitionHeapTableMergeTask::init(ObTableLoadTableCtx *ctx,
+                                                  const ObDirectLoadMergeParam &merge_param,
                                                   ObDirectLoadTabletMergeCtx *merge_ctx,
                                                   ObDirectLoadExternalTable *external_table,
                                                   const ObTabletCacheInterval &pk_interval,
@@ -653,13 +575,14 @@ int ObDirectLoadPartitionHeapTableMergeTask::init(const ObDirectLoadMergeParam &
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadPartitionHeapTableMergeTask init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!merge_param.is_valid() || nullptr == merge_ctx ||
+  } else if (OB_UNLIKELY(nullptr == ctx || !merge_param.is_valid() || nullptr == merge_ctx ||
                          nullptr == external_table || parallel_idx < 0 ||
                          0 == pk_interval.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(merge_param), KP(merge_ctx), KP(external_table),
              K(parallel_idx), K(pk_interval));
   } else {
+    ctx_ = ctx;
     merge_param_ = &merge_param;
     merge_ctx_ = merge_ctx;
     parallel_idx_ = parallel_idx;
@@ -683,8 +606,9 @@ int ObDirectLoadPartitionHeapTableMergeTask::construct_row_iter(
     if (OB_ISNULL(row_iter = OB_NEWx(RowIterator, (&allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new RowIterator", KR(ret));
-    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), external_table_, column_stat_array_, lob_builder_,
-                                      pk_interval_))) {
+    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), external_table_,
+                                      sql_statistics_, lob_builder_, pk_interval_,
+                                      insert_tablet_ctx_))) {
       LOG_WARN("fail to init row iter", KR(ret));
     } else {
       result_row_iter = row_iter;
@@ -707,22 +631,20 @@ int ObDirectLoadPartitionHeapTableMergeTask::construct_row_iter(
 ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::RowIterator()
   : deserialize_datums_(nullptr),
     deserialize_datum_cnt_(0),
-    dml_row_handler_(nullptr),
-    is_inited_(false)
+    dml_row_handler_(nullptr)
 {
 }
 
-ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::~RowIterator()
-{
-}
+ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::~RowIterator() {}
 
 int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::init(
   const ObDirectLoadMergeParam &merge_param,
   const ObTabletID &tablet_id,
   ObDirectLoadMultipleHeapTable *heap_table,
-  ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+  ObTableLoadSqlStatistics *sql_statistics,
   ObDirectLoadLobBuilder &lob_builder,
-  const ObTabletCacheInterval &pk_interval)
+  const ObTabletCacheInterval &pk_interval,
+  ObDirectLoadInsertTabletContext *insert_tablet_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -730,25 +652,14 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::init(
     LOG_WARN("ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator init twice", KR(ret),
              KP(this));
   } else if (OB_UNLIKELY(!merge_param.is_valid() || !tablet_id.is_valid() ||
-                         nullptr == heap_table || 0 == pk_interval.count())) {
+                         nullptr == heap_table || 0 == pk_interval.count() ||
+                         nullptr == insert_tablet_ctx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), KPC(heap_table),
-             K(pk_interval));
+    LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), KPC(heap_table), K(pk_interval),
+             KP(insert_tablet_ctx));
   } else {
     // init row iterator
-    ObDirectLoadInsertTableRowIteratorParam row_iterator_param;
-    row_iterator_param.tablet_id_ = tablet_id;
-    row_iterator_param.table_data_desc_ = merge_param.table_data_desc_;
-    row_iterator_param.datum_utils_ = merge_param.datum_utils_;
-    row_iterator_param.col_descs_ = merge_param.col_descs_;
-    row_iterator_param.lob_column_cnt_ = merge_param.lob_column_cnt_;
-    row_iterator_param.cmp_funcs_ = merge_param.cmp_funcs_;
-    row_iterator_param.column_stat_array_ = &column_stat_array;
-    row_iterator_param.lob_builder_ = &lob_builder;
-    row_iterator_param.is_heap_table_ = merge_param.is_heap_table_;
-    row_iterator_param.online_opt_stat_gather_ = merge_param.online_opt_stat_gather_;
-    row_iterator_param.px_mode_ = merge_param.px_mode_;
-    if (OB_FAIL(inner_init(row_iterator_param))) {
+    if (OB_FAIL(inner_init(insert_tablet_ctx, sql_statistics, lob_builder))) {
       LOG_WARN("fail to inner init", KR(ret));
     }
     // init scanner_
@@ -756,15 +667,9 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::init(
       LOG_WARN("fail to init tablet whole scanner", KR(ret));
     }
     // init datum_row_
-    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
-                                     ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
+    else if (OB_FAIL(insert_tablet_ctx->init_datum_row(datum_row_))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
-      datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
-        -merge_param.snapshot_version_); // fill trans_version
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
       deserialize_datums_ = datum_row_.storage_datums_ + merge_param.rowkey_column_num_ +
                             ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
       deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
@@ -775,7 +680,6 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::init(
   }
   return ret;
 }
-
 
 int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::inner_get_next_row(
   ObDatumRow *&result_row)
@@ -820,6 +724,7 @@ ObDirectLoadPartitionHeapTableMultipleMergeTask::~ObDirectLoadPartitionHeapTable
 }
 
 int ObDirectLoadPartitionHeapTableMultipleMergeTask::init(
+  ObTableLoadTableCtx *ctx,
   const ObDirectLoadMergeParam &merge_param,
   ObDirectLoadTabletMergeCtx *merge_ctx,
   ObDirectLoadMultipleHeapTable *heap_table,
@@ -830,12 +735,14 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadPartitionHeapTableMultipleMergeTask init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!merge_param.is_valid() || nullptr == merge_ctx || nullptr == heap_table ||
+  } else if (OB_UNLIKELY(nullptr == ctx || !merge_param.is_valid() ||
+                         nullptr == merge_ctx || nullptr == heap_table ||
                          parallel_idx < 0 || 0 == pk_interval.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(merge_param), KP(merge_ctx), KPC(heap_table),
              K(parallel_idx), K(pk_interval));
   } else {
+    ctx_ = ctx;
     merge_param_ = &merge_param;
     merge_ctx_ = merge_ctx;
     parallel_idx_ = parallel_idx;
@@ -859,8 +766,9 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::construct_row_iter(
     if (OB_ISNULL(row_iter = OB_NEWx(RowIterator, (&allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new RowIterator", KR(ret));
-    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), heap_table_, column_stat_array_, lob_builder_,
-                                      pk_interval_))) {
+    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), heap_table_,
+                                      sql_statistics_, lob_builder_, pk_interval_,
+                                      insert_tablet_ctx_))) {
       LOG_WARN("fail to init row iter", KR(ret));
     } else {
       result_row_iter = row_iter;
@@ -889,9 +797,9 @@ ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::RowIterat
     pos_(0),
     deserialize_datums_(nullptr),
     deserialize_datum_cnt_(0),
-    dml_row_handler_(nullptr),
-    is_inited_(false)
+    dml_row_handler_(nullptr)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::~RowIterator()
@@ -903,12 +811,14 @@ ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::~RowItera
 }
 
 int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::init(
-  const ObDirectLoadMergeParam &merge_param, const ObTabletID &tablet_id,
+  const ObDirectLoadMergeParam &merge_param,
+  const ObTabletID &tablet_id,
   ObDirectLoadOriginTable *origin_table,
-  ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+  ObTableLoadSqlStatistics *sql_statistics,
   ObDirectLoadLobBuilder &lob_builder,
   const ObIArray<ObDirectLoadMultipleHeapTable *> *heap_table_array,
-  const ObTabletCacheInterval &pk_interval)
+  const ObTabletCacheInterval &pk_interval,
+  ObDirectLoadInsertTabletContext *insert_tablet_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -916,41 +826,23 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::init(
     LOG_WARN("ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator init twice", KR(ret),
              KP(this));
   } else if (OB_UNLIKELY(!merge_param.is_valid() || !tablet_id.is_valid() ||
-                         nullptr == origin_table || nullptr == heap_table_array)) {
+                         nullptr == origin_table || nullptr == heap_table_array ||
+                         nullptr == insert_tablet_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), KP(origin_table),
-             KP(heap_table_array));
+             KP(heap_table_array), KP(insert_tablet_ctx));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     range_.set_whole_range();
     // init row iterator
-    ObDirectLoadInsertTableRowIteratorParam row_iterator_param;
-    row_iterator_param.tablet_id_ = tablet_id;
-    row_iterator_param.table_data_desc_ = merge_param.table_data_desc_;
-    row_iterator_param.datum_utils_ = merge_param.datum_utils_;
-    row_iterator_param.col_descs_ = merge_param.col_descs_;
-    row_iterator_param.lob_column_cnt_ = merge_param.lob_column_cnt_;
-    row_iterator_param.cmp_funcs_ = merge_param.cmp_funcs_;
-    row_iterator_param.column_stat_array_ = &column_stat_array;
-    row_iterator_param.lob_builder_ = &lob_builder;
-    row_iterator_param.is_heap_table_ = merge_param.is_heap_table_;
-    row_iterator_param.online_opt_stat_gather_ = merge_param.online_opt_stat_gather_;
-    row_iterator_param.px_mode_ = merge_param.px_mode_;
-    if (OB_FAIL(inner_init(row_iterator_param))) {
+    if (OB_FAIL(inner_init(insert_tablet_ctx, sql_statistics, lob_builder))) {
       LOG_WARN("fail to inner init", KR(ret));
     } else if (OB_FAIL(origin_table->scan(range_, allocator_, origin_iter_))) {
       LOG_WARN("fail to scan origin table", KR(ret));
     }
     // init datum_row_
-    else if (OB_FAIL(datum_row_.init(merge_param.store_column_count_ +
-                                     ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
+    else if (OB_FAIL(insert_tablet_ctx->init_datum_row(datum_row_))) {
       LOG_WARN("fail to init datum row", KR(ret));
     } else {
-      datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_].set_int(
-        -merge_param.snapshot_version_); // fill trans_version
-      datum_row_.storage_datums_[merge_param.rowkey_column_num_ + 1].set_int(0); // fill sql_no
       deserialize_datums_ = datum_row_.storage_datums_ + merge_param.rowkey_column_num_ +
                             ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
       deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
@@ -1076,7 +968,9 @@ ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::
 }
 
 int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::init(
-  const ObDirectLoadMergeParam &merge_param, ObDirectLoadTabletMergeCtx *merge_ctx,
+  ObTableLoadTableCtx *ctx,
+  const ObDirectLoadMergeParam &merge_param,
+  ObDirectLoadTabletMergeCtx *merge_ctx,
   ObDirectLoadOriginTable *origin_table,
   const ObIArray<ObDirectLoadMultipleHeapTable *> &heap_table_array,
   const ObTabletCacheInterval &pk_interval)
@@ -1085,12 +979,13 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadPartitionHeapTableMultipleMergeTask init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!merge_param.is_valid() || nullptr == merge_ctx ||
+  } else if (OB_UNLIKELY(nullptr == ctx || !merge_param.is_valid() || nullptr == merge_ctx ||
                          nullptr == origin_table || heap_table_array.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(merge_param), KP(merge_ctx), KP(origin_table),
              K(heap_table_array));
   } else {
+    ctx_ = ctx;
     merge_param_ = &merge_param;
     merge_ctx_ = merge_ctx;
     parallel_idx_ = 0;
@@ -1116,8 +1011,9 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::construct_row_iter
     if (OB_ISNULL(row_iter = OB_NEWx(RowIterator, (&allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new RowIterator", KR(ret));
-    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), origin_table_, column_stat_array_, lob_builder_,
-                                      heap_table_array_, pk_interval_))) {
+    } else if (OB_FAIL(row_iter->init(*merge_param_, merge_ctx_->get_tablet_id(), origin_table_,
+                                      sql_statistics_, lob_builder_, heap_table_array_,
+                                      pk_interval_, insert_tablet_ctx_))) {
       LOG_WARN("fail to init row iter", KR(ret));
     } else {
       result_row_iter = row_iter;

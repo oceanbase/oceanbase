@@ -147,7 +147,17 @@ struct ObFixedDoubleCmp: public ObDefined<>
     cmp_ret = 0;
     const double l = l_datum.get_double();
     const double r = r_datum.get_double();
-    if (l == r || fabs(l - r) < P) {
+    if (isnan(l) || isnan(r)) {
+      if (isnan(l) && isnan(r)) {
+        cmp_ret = 0;
+      } else if (isnan(l)) {
+        // l is nan, r is not nan:left always bigger than right
+        cmp_ret = 1;
+      } else {
+        // l is not nan, r is nan, left always less than right
+        cmp_ret = -1;
+      }
+    } else if (l == r || fabs(l - r) < P) {
       cmp_ret = 0;
     } else {
       cmp_ret = (l < r ? -1 : 1);
@@ -365,8 +375,8 @@ struct ObDatumJsonCmp : public ObDefined<>
     } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
       COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(r_instr_iter));
     } else {
-      ObJsonBin j_bin_l(l_data.ptr(), l_data.length());
-      ObJsonBin j_bin_r(r_data.ptr(), r_data.length());
+      ObJsonBin j_bin_l(l_data.ptr(), l_data.length(), &allocator);
+      ObJsonBin j_bin_r(r_data.ptr(), r_data.length(), &allocator);
       ObIJsonBase *j_base_l = &j_bin_l;
       ObIJsonBase *j_base_r = &j_bin_r;
 

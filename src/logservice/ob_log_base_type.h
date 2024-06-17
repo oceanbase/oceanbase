@@ -142,6 +142,15 @@ enum ObLogBaseType
 
   // for DBMS_SCHEDULER
   DBMS_SCHEDULER_LOG_BASE_TYPE = 45,
+
+  // for shared storage pre warm
+  SHARED_STORAGE_PRE_WARM_LOG_BASE_TYPE = 46,
+
+#ifdef  OB_BUILD_SHARED_STORAGE
+// for share storage gc macro block in public dir
+  SHARE_STORAGE_PUBLIC_BLOCK_GC_SERVICE_LOG_BASE_TYPE = 47,
+#endif
+
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -248,6 +257,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str, "MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE", str_len);
   } else if (log_type == SHARE_STORAGE_NRT_THROT_LOG_BASE_TYPE) {
     strncpy(str ,"SHARE_STORAGE_NRT_THROT_SERVICE", str_len);
+  } else if (log_type == SHARED_STORAGE_PRE_WARM_LOG_BASE_TYPE) {
+    strncpy(str ,"SHARED_STORAGE_PRE_WARM_LOG_BASE_TYPE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

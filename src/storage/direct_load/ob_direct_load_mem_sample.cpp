@@ -26,14 +26,15 @@ using namespace blocksstable;
 using namespace observer;
 using namespace table;
 
-ObDirectLoadMemSample::ObDirectLoadMemSample(ObDirectLoadMemContext *mem_ctx)
-  : mem_ctx_(mem_ctx), range_count_(mem_ctx_->mem_dump_task_count_) {}
+ObDirectLoadMemSample::ObDirectLoadMemSample(observer::ObTableLoadTableCtx *ctx, ObDirectLoadMemContext *mem_ctx)
+  : ctx_(ctx), mem_ctx_(mem_ctx), range_count_(mem_ctx_->mem_dump_task_count_) {}
 
 
 int ObDirectLoadMemSample::gen_ranges(ObIArray<ChunkType *> &chunks, ObIArray<RangeType> &ranges)
 {
   int ret = OB_SUCCESS;
   ObArray<RowType *> sample_rows;
+  sample_rows.set_tenant_id(MTL_ID());
   for (int64_t i = 0; OB_SUCC(ret) && i < DEFAULT_SAMPLE_TIMES; i ++) {
     int idx = abs(rand()) % chunks.count();
     ChunkType *chunk = chunks.at(idx);
@@ -81,6 +82,8 @@ int ObDirectLoadMemSample::do_work()
   auto context_ptr = ObTableLoadHandle<ObDirectLoadMemDump::Context>::make_handle();
   context_ptr->sub_dump_count_ = range_count_;
 
+  chunks.set_tenant_id(MTL_ID());
+  ranges.set_tenant_id(MTL_ID());
   mem_ctx_->mem_chunk_queue_.pop_all(chunks);
 
   if (OB_FAIL(context_ptr->init())) {
@@ -121,7 +124,8 @@ int ObDirectLoadMemSample::add_dump(int64_t idx,
                                     ObTableLoadHandle<ObDirectLoadMemDump::Context> context_ptr)
 {
   int ret = OB_SUCCESS;
-  storage::ObDirectLoadMemDump *mem_dump = OB_NEW(ObDirectLoadMemDump, "TLD_mem_dump", mem_ctx_, range, context_ptr, idx);
+  storage::ObDirectLoadMemDump *mem_dump = OB_NEW(
+    ObDirectLoadMemDump, ObMemAttr(MTL_ID(), "TLD_mem_dump"), ctx_, mem_ctx_, range, context_ptr, idx);
   if (mem_dump == nullptr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate mem dump", KR(ret));

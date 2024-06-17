@@ -14,16 +14,12 @@
 #include "lib/allocator/ob_allocator.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "share/schema/ob_table_param.h"
-#include "share/stat/ob_stat_define.h"
-#include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_opt_osg_column_stat.h"
-#include "share/stat/ob_opt_table_stat.h"
 #include "share/table/ob_table_load_define.h"
-#include "share/table/ob_table_load_dml_stat.h"
-#include "share/table/ob_table_load_sql_statistics.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase
 {
@@ -50,27 +46,33 @@ public:
   ObDirectLoadMergeParam();
   ~ObDirectLoadMergeParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_id), K_(target_table_id), K_(rowkey_column_num), K_(store_column_count),
-              K_(snapshot_version), K_(table_data_desc), KP_(datum_utils), KP_(col_descs),
-              KP_(lob_column_cnt), KP_(cmp_funcs), K_(is_heap_table), K_(is_fast_heap_table),
-              K_(is_column_store), K_(online_opt_stat_gather), KP_(insert_table_ctx),
-              KP_(dml_row_handler));
+  TO_STRING_KV(K_(table_id),
+               K_(target_table_id),
+               K_(rowkey_column_num),
+               K_(store_column_count),
+               K_(fill_cg_thread_cnt),
+               K_(table_data_desc),
+               KP_(datum_utils),
+               KP_(col_descs),
+               K_(is_heap_table),
+               K_(is_fast_heap_table),
+               K_(is_incremental),
+               "insert_mode", ObDirectLoadInsertMode::get_type_string(insert_mode_),
+               KP_(insert_table_ctx),
+               KP_(dml_row_handler));
 public:
   uint64_t table_id_;
   uint64_t target_table_id_;
   int64_t rowkey_column_num_;
   int64_t store_column_count_;
-  int64_t snapshot_version_;
-  int64_t lob_column_cnt_;
+  int64_t fill_cg_thread_cnt_;
   storage::ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
-  const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
   bool is_heap_table_;
   bool is_fast_heap_table_;
-  bool is_column_store_;
-  bool online_opt_stat_gather_;
-  bool px_mode_;
+  bool is_incremental_;
+  ObDirectLoadInsertMode::Type insert_mode_;
   ObDirectLoadInsertTableContext *insert_table_ctx_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
 };
@@ -80,7 +82,8 @@ class ObDirectLoadMergeCtx
 public:
   ObDirectLoadMergeCtx();
   ~ObDirectLoadMergeCtx();
-  int init(const ObDirectLoadMergeParam &param,
+  int init(observer::ObTableLoadTableCtx *ctx,
+           const ObDirectLoadMergeParam &param,
            const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &ls_partition_ids,
            const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids);
   const common::ObIArray<ObDirectLoadTabletMergeCtx *> &get_tablet_merge_ctxs() const
@@ -92,8 +95,9 @@ private:
                              const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids);
 private:
   common::ObArenaAllocator allocator_;
+  observer::ObTableLoadTableCtx *ctx_;
   ObDirectLoadMergeParam param_;
-  common::ObSEArray<ObDirectLoadTabletMergeCtx *, 64> tablet_merge_ctx_array_;
+  common::ObArray<ObDirectLoadTabletMergeCtx *> tablet_merge_ctx_array_;
   bool is_inited_;
 };
 
@@ -102,8 +106,10 @@ class ObDirectLoadTabletMergeCtx
 public:
   ObDirectLoadTabletMergeCtx();
   ~ObDirectLoadTabletMergeCtx();
-  int init(const ObDirectLoadMergeParam &param, const table::ObTableLoadLSIdAndPartitionId &ls_partition_id,
-      const table::ObTableLoadLSIdAndPartitionId &target_ls_partition_id);
+  int init(observer::ObTableLoadTableCtx *ctx,
+           const ObDirectLoadMergeParam &param,
+           const table::ObTableLoadLSIdAndPartitionId &ls_partition_id,
+           const table::ObTableLoadLSIdAndPartitionId &target_ls_partition_id);
   int build_rescan_task(int64_t thread_count);
   int build_merge_task(const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
                        const common::ObIArray<share::schema::ObColDesc> &col_descs,
@@ -116,10 +122,6 @@ public:
     const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
   int inc_finish_count(bool &is_ready);
   int inc_rescan_finish_count(bool &is_ready);
-  int collect_sql_statistics(
-    const common::ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array, table::ObTableLoadSqlStatistics &sql_statistics);
-  int collect_dml_stat(const common::ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array,
-                       table::ObTableLoadDmlStat &dml_stats);
   const ObDirectLoadMergeParam &get_param() const { return param_; }
   const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   const common::ObTabletID &get_target_tablet_id() const { return target_tablet_id_; }
@@ -158,17 +160,18 @@ private:
   int get_autoincrement_value(uint64_t count, share::ObTabletCacheInterval &interval);
 private:
   common::ObArenaAllocator allocator_;
+  observer::ObTableLoadTableCtx *ctx_;
   ObDirectLoadMergeParam param_;
   uint64_t target_partition_id_;
   common::ObTabletID tablet_id_;
   common::ObTabletID target_tablet_id_;
   ObDirectLoadOriginTable origin_table_;
-  common::ObSEArray<ObDirectLoadSSTable *, 64> sstable_array_;
-  common::ObSEArray<ObDirectLoadMultipleSSTable *, 64> multiple_sstable_array_;
-  common::ObSEArray<ObDirectLoadMultipleHeapTable *, 64> multiple_heap_table_array_;
-  common::ObSEArray<blocksstable::ObDatumRange, 64> range_array_;
-  common::ObSEArray<ObDirectLoadPartitionMergeTask *, 64> task_array_;
-  common::ObSEArray<ObDirectLoadPartitionRescanTask *, 64> rescan_task_array_;
+  common::ObArray<ObDirectLoadSSTable *> sstable_array_;
+  common::ObArray<ObDirectLoadMultipleSSTable *> multiple_sstable_array_;
+  common::ObArray<ObDirectLoadMultipleHeapTable *> multiple_heap_table_array_;
+  common::ObArray<blocksstable::ObDatumRange> range_array_;
+  common::ObArray<ObDirectLoadPartitionMergeTask *> task_array_;
+  common::ObArray<ObDirectLoadPartitionRescanTask *> rescan_task_array_;
   int64_t task_finish_count_ CACHE_ALIGNED;
   int64_t rescan_task_finish_count_ CACHE_ALIGNED;
   bool is_inited_;

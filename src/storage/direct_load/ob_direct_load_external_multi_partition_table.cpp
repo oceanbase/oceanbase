@@ -57,6 +57,7 @@ ObDirectLoadExternalMultiPartitionTableBuilder::ObDirectLoadExternalMultiPartiti
     is_closed_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadExternalMultiPartitionTableBuilder::~ObDirectLoadExternalMultiPartitionTableBuilder()
@@ -75,7 +76,6 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::init(
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(alloc_tmp_file())) {
       LOG_WARN("fail to alloc tmp file", KR(ret));
     } else if (OB_FAIL(external_writer_.init(param_.table_data_desc_.external_data_block_size_,

@@ -345,6 +345,7 @@ struct ObCharsetInfo
   unsigned char     casedn_multiply;
   unsigned int      mbminlen;
   unsigned int      mbmaxlen;
+  unsigned int      mbmaxlenlen;
   ob_wc_t   min_sort_char;
   ob_wc_t   max_sort_char; /* For LIKE optimization */
   unsigned char     pad_char;
@@ -402,7 +403,9 @@ static inline unsigned int ob_ismbchar(const ObCharsetInfo *cs, const unsigned c
 }
 #define ob_mbcharlen(s, a)            ((s)->cset->mbcharlen((s),(a)))
 
+#define ob_mbcharlen_2(s, a, b) ((s)->cset->mbcharlen((s), ((((a)&0xFF) << 8) + ((b)&0xFF))))
 
+#define ob_mbmaxlenlen(s) ((s)->mbmaxlenlen)
 
 typedef struct ob_uni_ctype
 {
@@ -526,6 +529,8 @@ unsigned int ob_instr_mb(const ObCharsetInfo *cs,
                  const char *b, size_t b_length,
                  const char *s, size_t s_length,
                  ob_match_t *match, unsigned int nmatch);
+
+uint ob_mbcharlen_ptr(const struct ObCharsetInfo *cs, const char *s, const char *e);
 
 void ob_hash_sort_simple(const ObCharsetInfo *cs,
 				const unsigned char *key, size_t len,

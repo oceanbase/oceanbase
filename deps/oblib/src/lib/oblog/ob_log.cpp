@@ -18,6 +18,7 @@
 #include <libgen.h>
 #include <sys/prctl.h>
 #include <linux/prctl.h>
+#include <regex.h>
 #include "lib/oblog/ob_warning_buffer.h"
 #include "lib/ob_errno.h"
 #include "lib/profile/ob_trace_id.h"
@@ -31,6 +32,7 @@
 #include "lib/allocator/ob_vslice_alloc.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "common/ob_smart_var.h"
+#include "lib/oblog/ob_log_compressor.h"
 
 using namespace oceanbase::lib;
 
@@ -337,7 +339,7 @@ int64_t ObLogger::FileName::to_string(char * buff, const int64_t len) const
 
 void __attribute__ ((noinline)) on_probe_abort()
 {
-  abort();
+  ob_abort();
 }
 
 ProbeAction probe_str2action(const char *str)
@@ -478,8 +480,8 @@ ObLogger::ObLogger()
     enable_wf_flag_(false), rec_old_file_flag_(false), can_print_(true),
     enable_async_log_(true), use_multi_flush_(false), stop_append_log_(false), enable_perf_mode_(false),
     last_async_flush_count_per_sec_(0), log_mem_limiter_(nullptr),
-    allocator_(nullptr), error_allocator_(nullptr), enable_log_limit_(true), is_arb_replica_(false),
-    new_file_info_(nullptr), info_as_wdiag_(true)
+    allocator_(nullptr), error_allocator_(nullptr), log_compressor_(nullptr), enable_log_limit_(true),
+    is_arb_replica_(false), new_file_info_(nullptr), info_as_wdiag_(true)
 {
   id_level_map_.set_level(OB_LOG_LEVEL_DBA_ERROR);
 
@@ -688,7 +690,6 @@ int ObLogger::log_head(const int64_t ts,
     ts_to_tv(ts, tv);
     struct tm tm;
     ob_fast_localtime(last_unix_sec_, last_localtime_, static_cast<time_t>(tv.tv_sec), &tm);
-    const uint64_t *trace_id = ObCurTraceId::get();
     const int32_t errcode_buf_size = 32;
     char errcode_buf[errcode_buf_size];
     errcode_buf[0] = '\0';
@@ -702,20 +703,20 @@ int ObLogger::log_head(const int64_t ts,
       //forbid modify the format of logdata_printf
       ret = logdata_printf(buf, buf_len, pos,
                            "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
-                           "[%ld][%s][T%lu][" TRACE_ID_FORMAT_V2 "] ",
+                           "[%ld][%s][T%lu][%s] ",
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
-                           tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id));
+                           tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(), ObCurTraceId::get_trace_id_str());
     } else {
       constexpr int cluster_id_buf_len = 8;
       char cluster_id_buf[cluster_id_buf_len] = {'\0'};
       (void)snprintf(cluster_id_buf, cluster_id_buf_len, "[C%lu]", GET_CLUSTER_ID());
       ret = logdata_printf(buf, buf_len, pos,
                            "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
-                           "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][" TRACE_ID_FORMAT_V2 "] [lt=%ld]%s ",
+                           "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][%s] [lt=%ld]%s ",
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                            tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, function,
                            base_file_name, line, GETTID(), GETTNAME(), is_arb_replica_ ? cluster_id_buf : "",
-                           is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id),
+                           is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), ObCurTraceId::get_trace_id_str(),
                            last_logging_cost_time_us_, errcode_buf);
     }
   }
@@ -796,7 +797,7 @@ void ObLogger::rotate_log(const char *filename,
             if (file_list.size() >= max_file_index_) {
               std::string oldFile = file_list.front();
               file_list.pop_front();
-              unlink(oldFile.c_str());
+              unlink_if_need(oldFile.c_str());
             }
             file_list.push_back(old_log_file);
             (void)pthread_mutex_unlock(&file_index_mutex_);
@@ -848,6 +849,10 @@ void ObLogger::rotate_log(const char *filename,
             }
           }
         }
+      }
+      // awake log compressor when creating new log files
+      if (OB_NOT_NULL(log_compressor_)) {
+        log_compressor_->awake();
       }
     }
   }
@@ -932,6 +937,17 @@ int ObLogger::set_record_old_log_file(bool rec_old_file_flag)
     if (OB_FAIL(record_old_log_file())) {
       LOG_WARN("Record old log file error", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObLogger::set_log_compressor(ObLogCompressor *log_compressor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(log_compressor)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    log_compressor_ = log_compressor;
   }
   return ret;
 }
@@ -1260,6 +1276,7 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
   int ret = OB_SUCCESS;
   char *dirc = NULL;
   char *basec = NULL;
+  regex_t uncompressed_regex;
   if (OB_ISNULL(files) || OB_ISNULL(wf_files)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "Input should not be NULL", K(files), K(wf_files), K(ret));
@@ -1272,6 +1289,8 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
   } else if (NULL == (basec = strdup(filename))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(ERROR, "strdup filename error", K(ret));
+  } else if (OB_FAIL(regcomp(&uncompressed_regex, OB_UNCOMPRESSED_SYSLOG_FILE_PATTERN, REG_EXTENDED))) {
+    OB_LOG(ERROR, "failed to compile regex pattern", K(ret));
   } else {
     ObIArray<FileName> *files_arr = static_cast<ObIArray<FileName> *>(files);
     ObIArray<FileName> *wf_files_arr = static_cast<ObIArray<FileName> *>(wf_files);
@@ -1297,6 +1316,10 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
       FileName tmp_file;
       struct dirent *dir_entry = NULL;//dir_entry is from dir_pointer stream, need not to be freed.
       int64_t print_len = 0;
+      bool enable_delete_compressed_file = true;
+      if (OB_NOT_NULL(log_compressor_) && log_compressor_->is_enable_compress()) {
+        enable_delete_compressed_file = false;
+      }
       while (OB_SUCC(ret) && (dir_entry = readdir(dir_pointer)) != NULL) {
         if (DT_DIR != dir_entry->d_type) {
           if (prefix_match(wf_file_prefix, dir_entry->d_name)) {
@@ -1308,7 +1331,8 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
             } else { }//do nothing
           } else if (prefix_match(wf_file, dir_entry->d_name)) {
             //.wf file, do nothing.
-          } else if (prefix_match(file_prefix, dir_entry->d_name)) {
+          } else if (prefix_match(file_prefix, dir_entry->d_name)
+                     && (enable_delete_compressed_file || regexec(&uncompressed_regex, dir_entry->d_name, 0, NULL, 0) == 0)) {
             print_len = snprintf(tmp_file.file_name_, ObPLogFileStruct::MAX_LOG_FILE_NAME_SIZE, "%s/%s", dir_name, dir_entry->d_name);
             if (OB_UNLIKELY(print_len <0) || OB_UNLIKELY(print_len >= ObPLogFileStruct::MAX_LOG_FILE_NAME_SIZE)) {
               //do nothing
@@ -1323,6 +1347,7 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
         OB_LOG(WARN, "Close dir error", K(ret));
       }
     }
+    regfree(&uncompressed_regex);
   }
   if (NULL != dirc) {
     free(dirc);
@@ -1383,7 +1408,7 @@ int ObLogger::add_files_to_list(void *files,
         if (file_list.size() >= max_file_index_) {
           oldFile = file_list.front();
           file_list.pop_front();
-          unlink(oldFile.c_str());
+          unlink_if_need(oldFile.c_str());
         }
         file_list.push_back(files_arr->at(i).file_name_);
       }
@@ -1881,6 +1906,13 @@ int ObLogger::log_new_file_info(const ObPLogFileStruct &log_file)
     }
   }
   return ret;
+}
+
+void ObLogger::unlink_if_need(const char *file)
+{
+  if (OB_ISNULL(log_compressor_) || !log_compressor_->is_enable_compress()) {
+    unlink(file);
+  }
 }
 
 void ObLogger::issue_dba_error(const int errcode, const char *file, const int line, const char *info_str)

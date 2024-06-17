@@ -2299,9 +2299,6 @@ int ObTransformJoinElimination::try_remove_semi_info(ObDMLStmt *stmt,
     LOG_WARN("failed to replace relation expr", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_semi_infos(), semi_info))) {
     LOG_WARN("failed to remove item", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(child_stmt->get_condition_exprs(),
-                                                              stmt->get_subquery_exprs()))) {
-    LOG_WARN("failed to adjust subquery list", K(ret));
   } else if (OB_FAIL(append(semi_info->semi_conditions_, child_stmt->get_condition_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(trans_semi_condition_exprs(stmt, semi_info))) {
@@ -2345,6 +2342,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
   TableItem *left_table = NULL;
   ObSEArray<ObRawExpr*, 16> dummy_exprs;
   if (OB_ISNULL(stmt) || OB_ISNULL(semi_info)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexcepted null", K(ret), K(stmt), K(semi_info));
   } else if (OB_ISNULL(right_table = stmt->get_table_item_by_id(semi_info->right_table_id_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -2362,6 +2360,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
       target_exprs.reuse();
       stmt_map_info.reset();
       if (OB_ISNULL(left_table = left_tables.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexcepted null", K(ret), K(left_table));
       } else if (OB_FAIL(ObTransformUtils::check_table_item_containment(stmt, left_table, stmt,
                                                                         right_table, stmt_map_info,
@@ -2487,6 +2486,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
           target_exprs.reuse();
           stmt_map_info.reset();
           if (OB_ISNULL(left_table = all_left_tables.at(j))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexcepted null", K(ret), K(left_table));
           } else if (OB_FAIL(ObTransformUtils::check_table_item_containment(stmt,
                                                                             left_table,

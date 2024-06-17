@@ -55,7 +55,8 @@ int ObRawExprCheckDep::check(const ObRawExpr &expr)
     case ObRawExpr::EXPR_CONST:
     case ObRawExpr::EXPR_EXEC_PARAM:
     case ObRawExpr::EXPR_PSEUDO_COLUMN:
-    case ObRawExpr::EXPR_OP_PSEUDO_COLUMN: {
+    case ObRawExpr::EXPR_OP_PSEUDO_COLUMN:
+    case ObRawExpr::EXPR_MATCH_AGAINST: {
       if (OB_FAIL(check_expr(expr, found))) {
         LOG_WARN("failed to check expr", K(expr), K(ret));
       }

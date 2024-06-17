@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <new>
+#include <unistd.h>
 
 #include "cos_api.h"
 #include "cos_log.h"
@@ -38,6 +39,7 @@ constexpr int OB_SUCCESS                             = 0;
 constexpr int OB_INVALID_ARGUMENT                    = -4002;
 constexpr int OB_INIT_TWICE                          = -4005;
 constexpr int OB_ALLOCATE_MEMORY_FAILED              = -4013;
+constexpr int OB_ERR_UNEXPECTED                      = -4016;
 constexpr int OB_SIZE_OVERFLOW                       = -4019;
 constexpr int OB_CHECKSUM_ERROR                      = -4103;
 constexpr int OB_BACKUP_FILE_NOT_EXIST               = -9011;
@@ -45,6 +47,7 @@ constexpr int OB_COS_ERROR                           = -9060;
 constexpr int OB_IO_LIMIT                            = -9061;
 constexpr int OB_BACKUP_PERMISSION_DENIED            = -9071;
 constexpr int OB_BACKUP_PWRITE_OFFSET_NOT_MATCH      = -9083;
+constexpr int OB_INVALID_OBJECT_STORAGE_ENDPOINT     = -9118;
 
 const int COS_BAD_REQUEST = 400;
 const int COS_OBJECT_NOT_EXIST  = 404;
@@ -94,8 +97,12 @@ static void convert_io_error(cos_status_t *cos_ret, int &ob_errcode)
         break;
       }
       case COS_BAD_REQUEST: {
-        if (0 == strcmp("InvalidDigest", cos_ret->error_code)) {
+        if (nullptr == cos_ret->error_code) {
+          ob_errcode = OB_COS_ERROR;
+        } else if (0 == strcmp("InvalidDigest", cos_ret->error_code)) {
           ob_errcode = OB_CHECKSUM_ERROR;
+        } else if (0 == strcmp("InvalidRegionName", cos_ret->error_code)) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         } else {
           ob_errcode = OB_COS_ERROR;
         }
@@ -185,8 +192,6 @@ int ObCosAccount::parse_from(const char *storage_info, uint32_t size)
         if (OB_SUCCESS != (ret = set_field(token + strlen(DELETE_MODE), delete_mode_, sizeof(delete_mode_)))) {
           cos_warn_log("[COS]fail to set delete_mode=%s, ret=%d", token, ret);
         }
-      } else {
-        cos_warn_log("[COS]unkown token:%s\n", token);
       }
     }
 
@@ -245,26 +250,26 @@ static void log_status(cos_status_t *s, const int ob_errcode)
 {
   if (NULL != s) {
     if (OB_CHECKSUM_ERROR == ob_errcode) {
-      cos_error_log("[COS]status->code: %d", s->code);
+      cos_error_log("[COS]status->code: %d, ret=%d", s->code, ob_errcode);
       if (s->error_code) {
-        cos_error_log("[COS]status->error_code: %s", s->error_code);
+        cos_error_log("[COS]status->error_code: %s, ret=%d", s->error_code, ob_errcode);
       }
       if (s->error_msg) {
-        cos_error_log("[COS]status->error_msg: %s", s->error_msg);
+        cos_error_log("[COS]status->error_msg: %s, ret=%d", s->error_msg, ob_errcode);
       }
       if (s->req_id) {
-        cos_error_log("[COS]status->req_id: %s", s->req_id);
+        cos_error_log("[COS]status->req_id: %s, ret=%d", s->req_id, ob_errcode);
       }
     } else {
-      cos_warn_log("[COS]status->code: %d", s->code);
+      cos_warn_log("[COS]status->code: %d, ret=%d", s->code, ob_errcode);
       if (s->error_code) {
-        cos_warn_log("[COS]status->error_code: %s", s->error_code);
+        cos_warn_log("[COS]status->error_code: %s, ret=%d", s->error_code, ob_errcode);
       }
       if (s->error_msg) {
-        cos_warn_log("[COS]status->error_msg: %s", s->error_msg);
+        cos_warn_log("[COS]status->error_msg: %s, ret=%d", s->error_msg, ob_errcode);
       }
       if (s->req_id) {
-        cos_warn_log("[COS]status->req_id: %s", s->req_id);
+        cos_warn_log("[COS]status->req_id: %s, ret=%d", s->req_id, ob_errcode);
       }
     }
   }
@@ -324,6 +329,15 @@ int ObCosWrapper::create_cos_handle(
       custom_mem.customFree(custom_mem.opaque, ctx);
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to create cos http controller, ret=%d\n", ret);
+      // A separate instance of ctl->options is now allocated for each request,
+      // ensuring that disabling CRC checks is a request-specific action
+      // and does not impact the global setting for COS request options.
+    } else if (NULL ==
+        (ctx->options->ctl->options = cos_http_request_options_create(ctx->options->pool))) {
+      cos_pool_destroy(ctx->mem_pool);
+      custom_mem.customFree(custom_mem.opaque, ctx);
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      cos_warn_log("[COS]fail to create cos http request options, ret=%d\n", ret);
     } else {
       *h = reinterpret_cast<Handle *>(ctx);
 
@@ -341,11 +355,10 @@ int ObCosWrapper::create_cos_handle(
 
       if (check_md5) {
         cos_set_content_md5_enable(ctx->options->ctl, COS_TRUE);
-        ctx->options->ctl->options->enable_crc = false;
       } else {
         cos_set_content_md5_enable(ctx->options->ctl, COS_FALSE);
-        ctx->options->ctl->options->enable_crc = true;
       }
+      ctx->options->ctl->options->enable_crc = false;
     }
   }
 
@@ -920,9 +933,6 @@ int ObCosWrapper::pread(
         } else {
           apr_table_set(headers, COS_RANGE_KEY, range_size);
         }
-      } else {
-        // support crc checksum when reading entire object
-        ctx->options->ctl->options->enable_crc = true;
       }
 
       if (OB_SUCCESS != ret) {
@@ -1562,6 +1572,7 @@ int ObCosWrapper::complete_multipart_upload(
     ret = OB_INVALID_ARGUMENT;
     cos_warn_log("[COS]upload_id is null, ret=%d\n", ret);
   } else {
+    int64_t total_parts = 0;
     cos_string_t bucket;
     cos_string_t object;
     cos_string_t upload_id;
@@ -1602,6 +1613,12 @@ int ObCosWrapper::complete_multipart_upload(
               cos_str_set(&complete_part->etag, part_content->etag.data);
               cos_list_add_tail(&complete_part->node, &complete_part_list);
             }
+
+            if (OB_SUCCESS != ret) {
+              break;
+            } else {
+              total_parts++;
+            }
           }
 
           if (OB_SUCCESS == ret && COS_TRUE == params->truncated) {
@@ -1626,7 +1643,14 @@ int ObCosWrapper::complete_multipart_upload(
       } while (OB_SUCCESS == ret && COS_TRUE == params->truncated);
 
       if (OB_SUCCESS == ret) {
-        if (NULL == (cos_ret = cos_complete_multipart_upload(ctx->options, &bucket, &object, &upload_id, &complete_part_list, NULL, &resp_headers))
+        if (total_parts == 0) {
+          // If 'complete' without uploading any data, COS will return the error
+          // 'MalformedXML, The XML you provided was not well-formed or did not validate against our published schema'
+          ret = OB_ERR_UNEXPECTED;
+          cos_warn_log("[COS]no parts have been uploaded, ret=%d, upload_id=%s\n", ret, upload_id.data);
+        } else if (NULL == (cos_ret = cos_complete_multipart_upload(ctx->options, &bucket, &object,
+                                                                    &upload_id, &complete_part_list,
+                                                                    NULL, &resp_headers))
             || !cos_status_is_ok(cos_ret)) {
           convert_io_error(cos_ret, ret);
           cos_warn_log("[COS]fail to complete multipart upload, ret=%d\n", ret);
@@ -1753,6 +1777,10 @@ int ObCosWrapper::del_unmerged_parts(
           } else {
             cos_info_log("[COS]succeed to abort multipart upload, bucket=%s, object=%s, upload_id=%s\n",
                 bucket_name.data_, content->key.data, content->upload_id.data);
+          }
+
+          if (OB_SUCCESS != ret) {
+            break;
           }
         }
       }

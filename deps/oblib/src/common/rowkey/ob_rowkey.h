@@ -144,10 +144,7 @@ public:
     if (obj_ptr_ == rhs.obj_ptr_) {
       cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
     } else {
-      ret = compare_prefix(rhs, cmp);
-      if (0 == cmp) {
-        cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
-      }
+      cmp = fast_compare(rhs);
     }
     return ret;
   }
@@ -158,10 +155,7 @@ public:
     if (obj_ptr_ == rhs.obj_ptr_) {
       cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
     } else {
-      cmp = compare_prefix(rhs);
-      if (0 == cmp) {
-        cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
-      }
+      cmp = fast_compare(rhs);
     }
     return cmp;
   }
@@ -211,6 +205,50 @@ public:
     } else {
       cmp = lv - rv;
     }
+    return cmp;
+  }
+
+  OB_INLINE int32_t fast_compare(const ObRowkey &rhs) const
+  {
+    int32_t cmp = 0;
+    int64_t i = 0;
+    for (; i < obj_cnt_ && 0 == cmp; ++i) {
+      __builtin_prefetch(&rhs.obj_ptr_[i]);
+      if (i < rhs.obj_cnt_) {
+        // optimize for int
+        if (obj_ptr_[i].is_int32() && rhs.obj_ptr_[i].is_int32()) {
+          int32_t left = obj_ptr_[i].get_int32();
+          int32_t right = rhs.obj_ptr_[i].get_int32();
+          if (left > right) {
+            cmp = 1;
+          } else if (left < right) {
+            cmp = -1;
+          } else {
+            cmp = 0;
+          }
+        } else if (obj_ptr_[i].is_int() && rhs.obj_ptr_[i].is_int()) {
+          int64_t left = obj_ptr_[i].get_int();
+          int64_t right = rhs.obj_ptr_[i].get_int();
+          if (left > right) {
+            cmp = 1;
+          } else if (left < right) {
+            cmp = -1;
+          } else {
+            cmp = 0;
+          }
+        } else {
+          cmp = obj_ptr_[i].compare(rhs.obj_ptr_[i]);
+        }
+      } else {
+        cmp = 1;
+      }
+    }
+
+    // rhs.cnt > this.cnt
+    if (0 == cmp && i < rhs.obj_cnt_) {
+      cmp = -1;
+    }
+
     return cmp;
   }
 

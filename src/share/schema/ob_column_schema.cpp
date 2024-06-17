@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_column_schema.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/utility/ob_fast_convert.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/ob_cluster_version.h"
@@ -105,23 +106,15 @@ ObColumnSchemaV2::ObColumnSchemaV2(ObIAllocator *allocator)
   reset();
 }
 
-ObColumnSchemaV2::ObColumnSchemaV2(const ObColumnSchemaV2 &src_schema)
-    : ObSchema(),
-    local_session_vars_(get_allocator())
-
-{
-  reset();
-  *this = src_schema;
-}
-
 ObColumnSchemaV2::~ObColumnSchemaV2()
 {
 }
 
-ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schema)
+int ObColumnSchemaV2::assign(const ObColumnSchemaV2 &src_schema)
 {
+  int ret = OB_SUCCESS;
   if (this != &src_schema) {
-    reset();
+    ObColumnSchemaV2::reset();
     error_ret_ = src_schema.error_ret_;
     tenant_id_ = src_schema.tenant_id_;
     table_id_ = src_schema.table_id_;
@@ -151,7 +144,6 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
     skip_index_attr_ = src_schema.skip_index_attr_;
     lob_chunk_size_ = src_schema.lob_chunk_size_;
 
-    int ret = OB_SUCCESS;
     if (OB_FAIL(deep_copy_obj(src_schema.orig_default_value_, orig_default_value_))) {
       LOG_WARN("Fail to deepy copy orig_default_value, ", K(ret));
     } else if (OB_FAIL(deep_copy_obj(src_schema.cur_default_value_, cur_default_value_))) {
@@ -181,13 +173,7 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
     }
     LOG_DEBUG("operator =", K(src_schema), K(*this));
   }
-  return *this;
-}
-
-int ObColumnSchemaV2::assign(const ObColumnSchemaV2 &other)
-{
-  *this = other;
-  return error_ret_;
+  return ret;
 }
 
 bool ObColumnSchemaV2::operator==(const ObColumnSchemaV2 &r) const

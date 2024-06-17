@@ -31,6 +31,16 @@
 
 namespace oceanbase {
 namespace jit {
+
+enum class ObPLOptLevel : int
+{
+  INVALID = -1,
+  O0 = 0,
+  O1 = 1,
+  O2 = 2,
+  O3 = 3
+};
+
 namespace core {
 using namespace llvm;
 
@@ -46,8 +56,8 @@ class ObNotifyLoaded
 {
 public:
   explicit ObNotifyLoaded(
-    common::ObIAllocator &Allocator, char *&DebugBuf, int64_t &DebugLen)
-      : Allocator(Allocator), DebugBuf(DebugBuf), DebugLen(DebugLen) {}
+    common::ObIAllocator &Allocator, char *&DebugBuf, int64_t &DebugLen, ObString &SoObject)
+      : Allocator(Allocator), DebugBuf(DebugBuf), DebugLen(DebugLen), SoObject(SoObject) {}
   virtual ~ObNotifyLoaded() {}
 
   void operator()(ObVModuleKey Key,
@@ -57,6 +67,7 @@ private:
   common::ObIAllocator &Allocator;
   char* &DebugBuf;
   int64_t &DebugLen;
+  ObString &SoObject;
 };
 
 
@@ -79,6 +90,12 @@ public:
 
   char* get_debug_info_data() { return DebugBuf; }
   int64_t get_debug_info_size() { return DebugLen; }
+
+  void add_compiled_object(size_t length, const char *ptr);
+
+  const ObString& get_compiled_object() const { return SoObject; }
+
+  int set_optimize_level(ObPLOptLevel level);
 
 private:
   std::string mangle(const std::string &Name)
@@ -119,6 +136,8 @@ private:
   ObObjLayerT ObObjectLayer;
   ObCompileLayerT ObCompileLayer;
   std::vector<ObVModuleKey> ObModuleKeys;
+
+  ObString SoObject;
 };
 
 #else

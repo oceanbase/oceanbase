@@ -80,7 +80,7 @@ int ObTransService::mtl_init(ObTransService *&it)
   obrpc::ObSrvRpcProxy *rpc_proxy = GCTX.srv_rpc_proxy_;
   share::ObAliveServerTracer *server_tracer = GCTX.server_tracer_;
   ObSrvNetworkFrame *net_frame = GCTX.net_frame_;
-  auto req_transport = net_frame->get_req_transport();
+  rpc::frame::ObReqTransport *req_transport = net_frame->get_req_transport();
   if (OB_FAIL(it->rpc_def_.init(it, req_transport, self, batch_rpc))) {
     TRANS_LOG(ERROR, "rpc init error", KR(ret));
   } else if (OB_FAIL(it->dup_table_rpc_def_.init(it, req_transport, self))) {
@@ -163,6 +163,8 @@ int ObTransService::init(const ObAddr &self,
     TRANS_LOG(WARN, "init dup_tablet_scan_task_ failed",K(ret));
   } else if (OB_FAIL(rollback_sp_msg_mgr_.init(lib::ObMemAttr(tenant_id, "RollbackSPMgr")))) {
     TRANS_LOG(WARN, "init rollback msg map failed", KR(ret));
+  } else if (OB_FAIL(tablet_to_ls_cache_.init(tenant_id, &tx_ctx_mgr_))) {
+    TRANS_LOG(WARN, "init tablet to ls cache failed", K(ret));
   } else {
     self_ = self;
     tenant_id_ = tenant_id;
@@ -176,7 +178,7 @@ int ObTransService::init(const ObAddr &self,
     server_tracer_ = server_tracer;
     rollback_sp_msg_sequence_ = ObTimeUtil::current_time();
     is_inited_ = true;
-    TRANS_LOG(INFO, "transaction service inited success", KP(this), K(tenant_memory_limit));
+    TRANS_LOG(INFO, "transaction service inited success", KPC(this), K(tenant_memory_limit), K_(tablet_to_ls_cache));
   }
   if (OB_SUCC(ret)) {
 #ifdef ENABLE_DEBUG_LOG
@@ -260,6 +262,8 @@ void ObTransService::stop()
     TRANS_LOG(WARN, "ObTransTimer stop error", K(ret));
   } else if (OB_FAIL(dup_table_scan_timer_.stop())) {
     TRANS_LOG(WARN, "dup_table_scan_timer_ stop error", K(ret));
+  } else if (OB_FAIL(ts_mgr_->remove_dropped_tenant(tenant_id_))) {
+    TRANS_LOG(WARN, "gts_mgr stop error", K(ret));
   } else {
     rpc_->stop();
     dup_table_rpc_->stop();
@@ -316,6 +320,7 @@ void ObTransService::destroy()
       use_def_ = false;
     }
     gti_source_->destroy();
+    tablet_to_ls_cache_.destroy();
     tx_ctx_mgr_.destroy();
     tx_desc_mgr_.destroy();
     dup_table_rpc_->destroy();
@@ -327,7 +332,7 @@ void ObTransService::destroy()
     }
 #endif
     is_inited_ = false;
-    TRANS_LOG(INFO, "transaction service destroyed", KPC(this));
+    TRANS_LOG(INFO, "transaction service destroyed", KPC(this), K_(tablet_to_ls_cache));
   }
 }
 
@@ -780,6 +785,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
   str.assign_ptr(buf, buf_len);
   int64_t local_retry_cnt = 0;
   int64_t retry_cnt = 0;
+  int64_t remain_timeout_us = 0;
   ObTxExecResult tx_result;
   ObTxParam tx_param;
   tx_param.cluster_id_ = tx_desc.cluster_id_;
@@ -866,9 +872,10 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
                   K(ret), K(tx_desc), K(ls_id), K(type), K(buf_len), K(request_id));
       } else if (OB_FALSE_IT(arg.inc_request_id(-1))) {
       } else if (OB_FALSE_IT(time_guard.click("register by rpc begin"))) {
+      } else if (OB_FALSE_IT(remain_timeout_us = tx_desc.expire_ts_ - ObTimeUtil::fast_current_time())) {
       } else if (OB_FAIL(rpc_proxy_->to(ls_leader_addr)
                              .by(tx_desc.tenant_id_)
-                             .timeout(tx_desc.expire_ts_)
+                             .timeout(remain_timeout_us)
                              .register_tx_data(arg, result))) {
         TRANS_LOG(WARN, "register_tx_fata failed", KR(ret), K(ls_leader_addr), K(arg), K(tx_desc),
                   K(ls_id), K(result));
@@ -944,6 +951,8 @@ int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = revert_store_ctx(store_ctx))) {
       TRANS_LOG(WARN, "revert store ctx failed", KR(tmp_ret), K(tx_desc), K(ls_id), K(type));
+    } else {
+      store_ctx.reset();
     }
   }
   TRANS_LOG(DEBUG, "register multi source data on participant", KR(ret), K(tx_desc), K(ls_id),

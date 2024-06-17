@@ -142,10 +142,11 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
   ObSQLSessionInfo *session = ctx_.get_my_session();
   int64_t query_timeout = 0;
   session->get_query_timeout(query_timeout);
-  if (OB_FAIL(OB_E(EventTable::EN_PX_QC_EARLY_TERMINATE, query_timeout) OB_SUCCESS)) {
-    LOG_WARN("fifo qc not interrupt qc by design", K(ret), K(query_timeout));
+  int ecode = EVENT_CALL(EventTable::EN_PX_QC_EARLY_TERMINATE, query_timeout);
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
+    LOG_WARN("fifo qc not interrupt qc by design", K(ecode), K(query_timeout));
     sleep(14);
-    return ret;
+    return ecode;
   }
 #endif
 
@@ -245,7 +246,8 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
   } else if (OB_UNLIKELY(OB_SUCCESS != ret)) {
     int ret_terminate = terminate_running_dfos(coord_info_.dfo_mgr_);
     LOG_WARN("QC get error code", K(ret), K(ret_terminate));
-    if (OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == ret
+    if ((OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == ret
+        || OB_GOT_SIGNAL_ABORTING == ret)
         && OB_SUCCESS != ret_terminate) {
       ret = ret_terminate;
     }

@@ -279,7 +279,7 @@ int ObTempColumnStore::Iterator::ensure_read_vectors(const ObExprPtrIArray &expr
   }
   for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); i++) {
     ObExpr *e = exprs.at(i);
-    if (OB_ISNULL(e)) {
+    if (OB_ISNULL(e) || e->is_const_expr()) {
       vectors_->at(i) = NULL;
     } else if (OB_FAIL(e->init_vector(ctx, e->get_temp_column_store_res_format(), max_rows))) {
       LOG_WARN("fail to init vector", K(ret));

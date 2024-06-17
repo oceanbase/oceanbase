@@ -17,6 +17,12 @@
 #include "observer/table_load/ob_table_load_client_service.h"
 #include "observer/table_load/ob_table_load_manager.h"
 #include "observer/table_load/ob_table_load_struct.h"
+#include "observer/table_load/ob_table_load_coordinator.h"
+#include "observer/table_load/ob_table_load_assigned_task_manager.h"
+#include "observer/table_load/ob_table_load_assigned_memory_manager.h"
+#include "observer/table_load/resource/ob_table_load_resource_rpc_proxy.h"
+#include "observer/table_load/resource/ob_table_load_resource_service.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
@@ -29,7 +35,9 @@ class ObTableLoadService
 public:
   static int mtl_init(ObTableLoadService *&service);
   static int check_tenant();
-  static int check_support_direct_load(uint64_t table_id);
+  static int check_support_direct_load(const uint64_t table_id,
+                                       const storage::ObDirectLoadMethod::Type method,
+                                       const storage::ObDirectLoadInsertMode::Type insert_mode);
   static ObTableLoadTableCtx *alloc_ctx();
   static void free_ctx(ObTableLoadTableCtx *table_ctx);
   static int add_ctx(ObTableLoadTableCtx *table_ctx);
@@ -46,6 +54,18 @@ public:
   {
     return ObTableLoadControlRpcProxy::dispatch(request, result, allocator);
   }
+  // for direct load resource api
+  static int direct_load_resource(const ObDirectLoadResourceOpRequest &request,
+                                  ObDirectLoadResourceOpResult &result, common::ObIAllocator &allocator)
+  {
+    return ObTableLoadResourceRpcProxy::dispatch(request, result, allocator);
+  }
+  static int get_memory_limit(int64_t &memory_limit);
+  static int add_assigned_task(ObDirectLoadResourceApplyArg &arg);
+  static int assign_memory(bool is_sort, int64_t assign_memory);
+  static int recycle_memory(bool is_sort, int64_t assign_memory);
+	static int get_sort_memory(int64_t &sort_memory);
+  static int refresh_and_check_resource(ObDirectLoadResourceCheckArg &arg, ObDirectLoadResourceOpRes &res);
 public:
   ObTableLoadService();
   int init(uint64_t tenant_id);
@@ -102,6 +122,7 @@ private:
     int init(uint64_t tenant_id);
     void runTimerTask() override;
   private:
+    bool gc_mark_delete(ObTableLoadTableCtx *table_ctx);
     bool gc_heart_beat_expired_ctx(ObTableLoadTableCtx *table_ctx);
     bool gc_table_not_exist_ctx(ObTableLoadTableCtx *table_ctx);
   private:
@@ -154,6 +175,8 @@ private:
   };
 private:
   ObTableLoadManager manager_;
+  ObTableLoadAssignedMemoryManager assigned_memory_manager_;
+  ObTableLoadAssignedTaskManager assigned_task_manager_;
   ObTableLoadClientService client_service_;
   common::ObTimer timer_;
   ObCheckTenantTask check_tenant_task_;

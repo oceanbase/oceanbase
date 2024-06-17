@@ -292,6 +292,29 @@ public:
     return ret;
     #undef PRINT_WRAPPER
   }
+
+  static int delete_row(const uint64_t tenant_id,
+                        const ObString &table,
+                        const ObString &value)
+  {
+    TIMEGUARD_INIT(OCCAM, 1_s, 60_s);
+    #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(table), K(value), K(sql)
+    int ret = OB_SUCCESS;
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    if (CLICK_FAIL(sql.append_fmt("DELETE FROM %s WHERE %s", to_cstring(table), to_cstring(value)))) {
+    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG_(WARN, "GCTX.sql_proxy_ is nullptr");
+    } else if (CLICK_FAIL(GCTX.sql_proxy_->write(tenant_id, sql.ptr(), affected_rows))) {
+      OB_LOG_(WARN, "GCTX.sql_proxy_ insert row failed");
+    } else {
+      OB_LOG_(INFO, "GCTX.sql_proxy_ insert row success");
+    }
+    return ret;
+    #undef PRINT_WRAPPER
+  }
+
   static int set_parameter(const ObString &value)
   {
     TIMEGUARD_INIT(OCCAM, 1_s, 60_s);
@@ -324,7 +347,8 @@ private:
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(table), K(condition)
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(GCTX.sql_proxy_)) {
-      OB_LOG_(WARN, "GCTX.sql_proxy_ is null");
+      ret = OB_NULL_CHECK_ERROR;
+      OB_LOG_(WARN, "GCTX.sql_proxy_ is null", K(ret));
     } else {
       HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = nullptr;
@@ -371,6 +395,7 @@ private:
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(table), K(condition)
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_NULL_CHECK_ERROR;
       OB_LOG_(WARN, "GCTX.sql_proxy_ is null");
     } else {
       HEAP_VAR(ObMySQLProxy::MySQLResult, res) {

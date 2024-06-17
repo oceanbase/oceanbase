@@ -446,8 +446,7 @@ int ObTxTable::remove_tablet()
       LOG_WARN("remove tx data tablet failed", K(ret));
       ob_usleep(1000 * 1000);
       ob_abort();
-    }
-    if (OB_FAIL(remove_tablet_(LS_TX_CTX_TABLET))) {
+    } else if (OB_FAIL(remove_tablet_(LS_TX_CTX_TABLET))) {
       LOG_WARN("remove tx ctx tablet failed", K(ret));
       ob_usleep(1000 * 1000);
       ob_abort();
@@ -472,7 +471,8 @@ int ObTxTable::load_tx_ctx_table_()
   } else if (FALSE_IT(tablet = handle.get_obj())) {
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_CTX_TABLET, 0 /* schema_version */))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
+                 LS_TX_CTX_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else {
     const ObSSTableArray &sstables = table_store_wrapper.get_member()->get_minor_sstables();
@@ -645,7 +645,8 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   // step 1 : read tx data in mini cache
   int tmp_ret = OB_SUCCESS;
   bool find_tx_data_in_cache = false;
-  if (OB_TMP_FAIL(check_tx_data_in_mini_cache_(read_tx_data_arg, fn))) {
+  if (read_tx_data_arg.skip_cache_) {
+  } else if (OB_TMP_FAIL(check_tx_data_in_mini_cache_(read_tx_data_arg, fn))) {
     if (OB_TRANS_CTX_NOT_EXIST != tmp_ret) {
       STORAGE_LOG(WARN, "check tx data in mini cache failed", KR(tmp_ret), K(read_tx_data_arg));
     }
@@ -655,7 +656,8 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   }
 
   // step 2 : read tx data in kv cache
-  if (find_tx_data_in_cache) {
+  if (read_tx_data_arg.skip_cache_) {
+  } else if (find_tx_data_in_cache) {
     // already find tx data and do function with mini cache
   } else if (OB_TMP_FAIL(check_tx_data_in_kv_cache_(read_tx_data_arg, fn))) {
     if (OB_TRANS_CTX_NOT_EXIST != tmp_ret) {
@@ -729,7 +731,7 @@ int ObTxTable::check_tx_data_in_kv_cache_(ObReadTxDataArg &read_tx_data_arg, ObI
       if (ObTxData::RUNNING == tx_data->state_) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "read an unexpected state tx data from kv cache");
-      } else if (OB_ISNULL(tx_data->undo_status_list_.head_)) {
+      } else if (!tx_data->op_guard_.is_valid()) {
         // put into mini cache only if this tx data do not have undo actions
         read_tx_data_arg.tx_data_mini_cache_.set(*tx_data);
       }
@@ -768,7 +770,7 @@ int ObTxTable::check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITx
       // if tx data is not null, put tx data into cache
       if (ObTxData::RUNNING == tx_data->state_) {
       } else {
-        if (OB_ISNULL(tx_data->undo_status_list_.head_)) {
+        if (!tx_data->op_guard_.is_valid()) {
           read_tx_data_arg.tx_data_mini_cache_.set(*tx_data);
         }
 
@@ -1004,9 +1006,9 @@ int ObTxTable::cleanout_tx_node(ObReadTxDataArg &read_tx_data_arg,
   return ret;
 }
 
-int ObTxTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
+int ObTxTable::supplement_tx_op_if_exist(ObTxData *tx_data)
 {
-  return tx_data_table_.supplement_undo_actions_if_exist(tx_data);
+  return tx_data_table_.supplement_tx_op_if_exist(tx_data);
 }
 
 int ObTxTable::self_freeze_task() { return tx_data_table_.self_freeze_task(); }
@@ -1015,7 +1017,7 @@ int ObTxTable::generate_virtual_tx_data_row(const transaction::ObTransID tx_id, 
 {
   GenerateVirtualTxDataRowFunctor fn(row_data);
   ObTxDataMiniCache mini_cache;
-  ObReadTxDataArg read_tx_data_arg(tx_id, epoch_, mini_cache);
+  ObReadTxDataArg read_tx_data_arg(tx_id, epoch_, mini_cache, true);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
   return ret;
 }

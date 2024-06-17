@@ -62,8 +62,7 @@ public:
   int init_for_merge(const compaction::ObBasicTabletMergeCtx &ctx,
                      const blocksstable::ObSSTableMergeRes &res,
                      const ObStorageColumnGroupSchema *cg_schema,
-                     const int64_t column_group_idx,
-                     const bool is_main_table);
+                     const int64_t column_group_idx);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_ddl(blocksstable::ObSSTableIndexBuilder *sstable_index_builder,
@@ -112,7 +111,7 @@ public:
       K_(original_size),
       K_(max_merged_trans_version),
       K_(ddl_scn),
-      K_(is_empty_co_table),
+      K_(is_co_table_without_cgs),
       K_(contain_uncommitted_row),
       K_(is_meta_root),
       K_(compressor_type),
@@ -121,7 +120,8 @@ public:
       K_(recycle_version),
       K_(nested_offset),
       K_(nested_size),
-      KPHEX_(encrypt_key, sizeof(encrypt_key_)));
+      KPHEX_(encrypt_key, sizeof(encrypt_key_)),
+      K_(uncommitted_tx_id));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
@@ -159,7 +159,7 @@ public:
   int64_t max_merged_trans_version_;
   share::SCN ddl_scn_; // saved into sstable meta
   share::SCN filled_tx_scn_;
-  bool is_empty_co_table_; // only used for creating empty co sstable
+  bool is_co_table_without_cgs_; // only used for creating co sstable without cg sstables
   bool contain_uncommitted_row_;
   bool is_meta_root_;
   common::ObCompressorType compressor_type_;
@@ -171,6 +171,7 @@ public:
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> data_block_ids_;
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> other_block_ids_;
+  int64_t uncommitted_tx_id_;
 };
 
 } // namespace storage

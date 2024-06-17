@@ -126,7 +126,7 @@ uint64_t ObTableBatchExecuteP::get_request_checksum()
 int ObTableBatchExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
-  if (!need_retry_in_queue_ && !had_do_response()) {
+  if (!need_retry_in_queue_ && !is_async_response()) {
     // For HKV table, modify the value of timetamp to be positive
     if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
       const int64_t N = result_.count();
@@ -262,10 +262,10 @@ int ObTableBatchExecuteP::try_process()
 
 #ifndef NDEBUG
   // debug mode
-  LOG_INFO("[TABLE] execute batch operation", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout(), K_(retry_count));
+  LOG_INFO("[TABLE] execute batch operation", K(ret), K_(result), K_(retry_count));
 #else
   // release mode
-  LOG_TRACE("[TABLE] execute batch operation", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout(), K_(retry_count),
+  LOG_TRACE("[TABLE] execute batch operation", K(ret), K_(result), K_(retry_count),
             "receive_ts", get_receive_timestamp());
 #endif
   return ret;

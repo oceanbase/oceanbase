@@ -14,6 +14,7 @@
 #include "share/schema/ob_table_dml_param.h"
 #include "storage/access/ob_multiple_scan_merge.h"
 #include "storage/access/ob_store_row_iterator.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
@@ -26,11 +27,15 @@ public:
   ObDirectLoadOriginTableCreateParam();
   ~ObDirectLoadOriginTableCreateParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(ls_id));
+  TO_STRING_KV(K_(table_id),
+               K_(tablet_id),
+               K_(ls_id),
+               "insert_mode", ObDirectLoadInsertMode::get_type_string(insert_mode_));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
+  ObDirectLoadInsertMode::Type insert_mode_;
 };
 
 struct ObDirectLoadOriginTableMeta
@@ -38,11 +43,15 @@ struct ObDirectLoadOriginTableMeta
 public:
   ObDirectLoadOriginTableMeta();
   ~ObDirectLoadOriginTableMeta();
-  TO_STRING_KV( K_(table_id), K_(tablet_id), K_(ls_id));
+  TO_STRING_KV(K_(table_id),
+               K_(tablet_id),
+               K_(ls_id),
+               "insert_mode", ObDirectLoadInsertMode::get_type_string(insert_mode_));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
+  ObDirectLoadInsertMode::Type insert_mode_;
 };
 
 class ObDirectLoadOriginTable

@@ -74,6 +74,7 @@ public:
   virtual int print_used_hint(PlanText &plan_text) override;
   inline bool is_partition_ig() const { return is_partition_gi_; }
   inline void set_is_partition_gi(bool v) { is_partition_gi_ = v; }
+  virtual int get_card_without_filter(double &card) override;
 
 private:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;

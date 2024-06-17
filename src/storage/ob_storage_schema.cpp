@@ -96,6 +96,29 @@ bool ObStorageColumnSchema::is_valid() const
   return common::ob_is_valid_obj_type(static_cast<ObObjType>(meta_type_.get_type()));
 }
 
+int ObStorageColumnSchema::construct_column_param(share::schema::ObColumnParam &column_param) const
+{
+  int ret = OB_SUCCESS;
+  column_param.set_meta_type(meta_type_);
+  if (orig_default_value_.is_fixed_len_char_type()) {
+    blocksstable::ObStorageDatum datum;
+    ObObj obj;
+    if (OB_FAIL(datum.from_obj(orig_default_value_))) {
+      STORAGE_LOG(WARN, "fail to covent datum from obj", K(ret), K(orig_default_value_));
+    } else {
+      (void) ObStorageSchema::trim(orig_default_value_.get_collation_type(), datum);
+      if (OB_FAIL(datum.to_obj_enhance(obj, orig_default_value_.get_meta()))) {
+        STORAGE_LOG(WARN, "failed to transfer datum to obj", K(ret), K(datum));
+      } else if (OB_FAIL(column_param.set_orig_default_value(obj))) {
+        STORAGE_LOG(WARN, "fail to set orig default value", K(ret));
+      }
+    }
+  } else if (OB_FAIL(column_param.set_orig_default_value(orig_default_value_))) {
+     STORAGE_LOG(WARN, "fail to set orig default value", K(ret));
+  }
+  return ret;
+}
+
 int ObStorageColumnSchema::deep_copy_default_val(ObIAllocator &allocator, const ObObj &default_val)
 {
   int ret = OB_SUCCESS;
@@ -994,7 +1017,7 @@ int ObStorageSchema::generate_column_group_array(const ObTableSchema &input_sche
   return ret;
 }
 
-int ObStorageSchema::generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type)
+int ObStorageSchema::generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type) const
 {
   int ret = OB_SUCCESS;
 
@@ -1014,6 +1037,93 @@ int ObStorageSchema::generate_all_column_group_schema(ObStorageColumnGroupSchema
     column_group.block_size_ = block_size_;
     column_group.compressor_type_ = compressor_type_;
     column_group.row_store_type_ = row_store_type;
+  }
+
+  return ret;
+}
+
+int ObStorageSchema::mock_row_store_cg(ObStorageColumnGroupSchema &mocked_row_store_cg) const
+{
+  // if cache mocked_row_store_cg in storage schema, cached value will become invalid when ddl happen, so re-build every time
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(generate_all_column_group_schema(mocked_row_store_cg, row_store_type_))) {
+    STORAGE_LOG(WARN, "fail to mock row store cg schema", K(ret));
+  }
+  return ret;
+}
+
+int ObStorageSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t column_group_cnt = column_group_array_.count();
+  cg_idx = OB_INVALID_INDEX; // -1
+  if (OB_UNLIKELY(1 >= column_group_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "No column group exist", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(column_group_cnt > INT32_MAX)) {
+    ret = OB_SIZE_OVERFLOW;
+    STORAGE_LOG(ERROR, "column group count is overflow", K(column_group_cnt));
+  } else {
+    for (int32_t i = 0; (OB_INVALID_INDEX == cg_idx) && i < column_group_cnt; i++) {
+      if (column_group_array_.at(i).is_rowkey_column_group() || column_group_array_.at(i).is_all_column_group()) {
+         cg_idx = i;
+      }
+    }
+    if (OB_INVALID_INDEX == cg_idx) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "failed to find base/rowkey cg", K(ret), K(column_group_array_));
+    }
+  }
+  return ret;
+}
+
+int ObStorageSchema::get_column_group_index(
+    const uint64_t &column_id,
+    const int32_t &column_idx,
+    int32_t &cg_idx) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t column_group_cnt = column_group_array_.count();
+  const bool is_multi_version_col = OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id
+                                 || OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id;
+  cg_idx = OB_INVALID_INDEX; // -1
+  if (OB_UNLIKELY(1 >= column_group_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "No column group exist", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(column_group_cnt > INT32_MAX)) {
+    ret = OB_SIZE_OVERFLOW;
+    STORAGE_LOG(ERROR, "column group count is overflow", K(column_group_cnt));
+  } else if (column_id < OB_END_RESERVED_COLUMN_ID_NUM &&
+      common::OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID != column_id &&
+      common::OB_HIDDEN_SESSION_ID_COLUMN_ID != column_id &&
+      common::OB_HIDDEN_PK_INCREMENT_COLUMN_ID != column_id) { // this has its own column group now
+    if (is_multi_version_col) {
+      if (OB_FAIL(get_base_rowkey_column_group_index(cg_idx))) {
+        STORAGE_LOG(WARN, "Fail to get base/rowkey column group index", K(ret), K(column_id));
+      }
+    } else {
+      // TODO: check the following
+      // TODO: after check, also see ObTableSchema::get_column_group_index
+      // common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id
+      // common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id
+      cg_idx = OB_INVALID_INDEX;
+    }
+  } else {
+    const uint16_t *column_idxs = nullptr;
+    for (int32_t i = 0; OB_SUCC(ret) && (OB_INVALID_INDEX == cg_idx) && i < column_group_cnt; i++) {
+      const ObStorageColumnGroupSchema &cg_schema = column_group_array_.at(i);
+      if (!cg_schema.is_single_column_group()) { // now only support single cg
+      } else if (OB_ISNULL(column_idxs = cg_schema.column_idxs_)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "invalid empty cg", K(ret), K(cg_schema));
+      } else if (column_idxs[0] == column_idx) {
+        cg_idx = i;
+      }
+    }
+    if (OB_SUCC(ret) && (OB_INVALID_INDEX == cg_idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "failed to find column group", K(ret), K(column_id), K(column_idx), K(column_group_array_));
+    }
   }
 
   return ret;
@@ -1493,6 +1603,7 @@ int ObStorageSchema::init_column_meta_array(
 
 int ObStorageSchema::get_orig_default_row(
     const common::ObIArray<ObColDesc> &column_ids,
+    bool need_trim,
     blocksstable::ObDatumRow &default_row) const
 {
   int ret = OB_SUCCESS;
@@ -1513,10 +1624,28 @@ int ObStorageSchema::get_orig_default_row(
         STORAGE_LOG(WARN, "column id not found", K(ret), K(column_ids.at(i)));
       } else if (OB_FAIL(default_row.storage_datums_[i].from_obj_enhance(col_schema->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+      } else if (need_trim && col_schema->get_orig_default_value().is_fixed_len_char_type()) {
+        trim(col_schema->get_orig_default_value().get_collation_type(), default_row.storage_datums_[i]);
       }
     }
   }
   return ret;
+}
+
+void ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum)
+{
+    const char *str = storage_datum.ptr_;
+    int32_t len = storage_datum.len_;
+    ObString space_pattern = ObCharsetUtils::get_const_str(type, ' ');
+
+    for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+      if (0 != MEMCMP(str + len - space_pattern.length(),
+            space_pattern.ptr(),
+            space_pattern.length())) {
+        break;
+      }
+    }
+    storage_datum.len_ = len;
 }
 
 const ObStorageColumnSchema *ObStorageSchema::get_column_schema(const int64_t column_idx) const

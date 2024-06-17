@@ -330,8 +330,7 @@ int ObExprSubQueryRef::expr_eval(
     ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
     CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()));
     CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()->schema_guard_));
-    OZ (pl_type.get_size(pl::ObPLUDTNS(*ctx.exec_ctx_.get_sql_ctx()->schema_guard_),
-                         pl::PL_TYPE_INIT_SIZE, param_size));
+    OZ (pl_type.get_size(pl::PL_TYPE_INIT_SIZE, param_size));
     CK (OB_NOT_NULL(data = static_cast<char *>(
         ctx.exec_ctx_.get_allocator().alloc(param_size))));
     CK (OB_NOT_NULL(obj = static_cast<ObObj *>(
@@ -348,7 +347,9 @@ int ObExprSubQueryRef::expr_eval(
     OZ (session->get_tmp_table_size(size));
     OZ (cursor->prepare_spi_cursor(spi_cursor,
                                    session->get_effective_tenant_id(),
-                                   size));
+                                   size,
+                                   false,
+                                   session));
     OZ (spi_cursor->row_desc_.assign(extra_info->row_desc_));
     while (OB_SUCC(ret)) {
       if (OB_FAIL(iter->get_next_row())) {
@@ -362,17 +363,18 @@ int ObExprSubQueryRef::expr_eval(
     if (OB_LIKELY(OB_ITER_END == ret)) {
       ret = OB_SUCCESS;
     } else {
+      if (OB_NOT_NULL(spi_cursor)) {
+        spi_cursor->~ObSPICursor();
+      }
       LOG_WARN("get next row from row iterator failed", K(ret));
     }
     if (OB_SUCC(ret)) {
       OX (spi_cursor->row_store_.finish_add_row());
       OX (cursor->open(spi_cursor));
-    }
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-      transaction::ObTxReadSnapshot &snapshot = ctx.exec_ctx_.get_das_ctx().get_snapshot();
-      OZ (cursor->set_and_register_snapshot(snapshot));
-    }
-    if (OB_SUCC(ret)) {
+      if (lib::is_oracle_mode()) {
+        transaction::ObTxReadSnapshot &snapshot = ctx.exec_ctx_.get_das_ctx().get_snapshot();
+        OZ (cursor->set_and_register_snapshot(snapshot));
+      }
       ObExprSubQueryRefCtx *sub_query_ctx = NULL;
       uint64_t ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
       if (NULL == (sub_query_ctx = static_cast<ObExprSubQueryRefCtx *>
@@ -381,6 +383,10 @@ int ObExprSubQueryRef::expr_eval(
       }
       CK (OB_NOT_NULL(sub_query_ctx));
       OZ (sub_query_ctx->add_cursor_info(cursor, ctx.exec_ctx_.get_my_session()));
+      if (OB_FAIL(ret)) {
+        cursor->close(*ctx.exec_ctx_.get_my_session());
+        cursor->~ObPLCursorInfo();
+      }
     }
 #endif
   } else if (extra.is_scalar_) {

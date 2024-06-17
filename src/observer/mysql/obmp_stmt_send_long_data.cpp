@@ -176,7 +176,7 @@ int ObMPStmtSendLongData::process()
 
       if (!need_disconnect_) {
         ObPiece *piece = NULL;
-        ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(false));
+        ObPieceCache *piece_cache = session.get_piece_cache(false);
         if (OB_ISNULL(piece_cache)) {
           need_disconnect_ = true;
           LOG_WARN("piece cache is null.", K(ret), K(stmt_id_), K(param_id_));
@@ -212,14 +212,9 @@ int ObMPStmtSendLongData::process_send_long_data_stmt(ObSQLSessionInfo &session)
 
   ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
-  const bool enable_trace_log = lib::is_trace_log_enabled();
-  if (enable_trace_log) {
-    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-  }
+  ObThreadLogLevelUtils::init(session.get_log_id_level_map());
   ret = do_process(session);
-  if (enable_trace_log) {
-    ObThreadLogLevelUtils::clear();
-  }
+  ObThreadLogLevelUtils::clear();
 
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
@@ -323,7 +318,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
 int ObMPStmtSendLongData::store_piece(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(true));
+  ObPieceCache *piece_cache = session.get_piece_cache(true);
   if (OB_ISNULL(piece_cache)) {
     ret = OB_ERR_UNEXPECTED;
     need_disconnect_ = true;

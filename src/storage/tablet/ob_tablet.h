@@ -33,6 +33,7 @@
 #include "storage/tablet/ob_tablet_mds_data_cache.h"
 #include "storage/tablet/ob_tablet_block_aggregated_info.h"
 #include "storage/tablet/ob_tablet_block_header.h"
+#include "storage/tablet/ob_tablet_space_usage.h"
 #include "storage/tx/ob_trans_define.h"
 #include "share/scn.h"
 #include "ob_i_tablet_mds_interface.h"
@@ -40,36 +41,15 @@
 
 namespace oceanbase
 {
-namespace common
-{
-class ObThreadCond;
-}
-
 namespace share
 {
 class ObLSID;
 struct ObTabletAutoincInterval;
-
-namespace schema
-{
-class ObTableSchema;
-}
 }
 
 namespace logservice
 {
 class ObLogHandler;
-}
-
-namespace memtable
-{
-class ObIMemtable;
-class ObIMultiSourceDataUnit;
-}
-
-namespace blocksstable
-{
-class ObSSTable;
 }
 
 namespace compaction
@@ -94,6 +74,7 @@ class ObAllVirtualMdsNodeStat;
 
 namespace storage
 {
+class ObIMemtable;
 class ObStoreCtx;
 class ObTableHandleV2;
 class ObFreezer;
@@ -316,11 +297,6 @@ public:
   void trim_tablet_list();
 
   // dml operation
-  int insert_row(
-      ObRelativeTable &relative_table,
-      ObStoreCtx &store_ctx,
-      const ObColDescIArray &col_descs,
-      const ObStoreRow &row);
   int insert_rows(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
@@ -333,6 +309,7 @@ public:
   int insert_row_without_rowkey_check(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
+      const bool check_exist,
       const ObColDescIArray &col_descs,
       const storage::ObStoreRow &row,
       const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
@@ -357,11 +334,6 @@ public:
       ObStoreCtx &store_ctx,
       const blocksstable::ObDatumRowkey &rowkey,
       bool &locked);
-  int try_update_storage_schema(
-      const int64_t table_id,
-      const int64_t schema_version,
-      ObIAllocator &allocator,
-      const int64_t timeout_ts);
   int get_tablet_first_second_level_meta_ids(ObIArray<blocksstable::MacroBlockId> &meta_ids) const;
   // table operation
   /* When need_unpack is true, if tablet is column store type, we should flatten the co sstable, and add all cg tables to iter.
@@ -376,8 +348,10 @@ public:
   int update_upper_trans_version(ObLS &ls, bool &is_updated);
 
   // memtable operation
+  // ATTENTION!!!
+  // - The `get_all_memtables()` is that get all memtables from memtable mgr, not from this tablet.
   int get_all_memtables(ObTableHdlArray &handle) const;
-  int get_boundary_memtable(ObTableHandleV2 &handle) const;
+  int get_boundary_memtable_from_memtable_mgr(ObTableHandleV2 &handle) const;
   int get_protected_memtable_mgr_handle(ObProtectedMemtableMgrHandle *&handle) const;
 
   // get the active memtable for write or replay.
@@ -388,6 +362,7 @@ public:
   // 2. If a tablet may be being accessed, shouldn't call this function.
   int rebuild_memtables(const share::SCN scn);
 
+  void reset_memtable();
   // ATTENTION!!! The following two interfaces only release memtable from memtable manager.
   int release_memtables(const share::SCN scn);
   // force release all memtables
@@ -516,7 +491,6 @@ public:
       int64_t &required_size,
       const bool need_checksums = true);
   int check_and_set_initial_state();
-  int set_memtable_clog_checkpoint_scn(const ObMigrationTabletParam *tablet_meta);
   int read_mds_table(
       common::ObIAllocator &allocator,
       ObTabletMdsData &mds_data,
@@ -525,7 +499,6 @@ public:
   int notify_mds_table_flush_ret(
       const share::SCN &flush_scn,
       const int flush_ret);
-  int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
   int64_t get_memtable_count() const { return memtable_count_; }
 
   // tablet mds data read interface
@@ -585,6 +558,10 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
   static int get_tablet_version(const char *buf, const int64_t len, int32_t &version);
+  int get_all_minor_sstables(ObTableStoreIterator &table_store_iter) const;
+  int set_macro_block(const ObDDLMacroBlock &macro_block,
+                      const int64_t snapshot_version,
+                      const uint64_t data_format_version);
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMdsData &get_mds_data_() const override final { return mds_data_; }
@@ -626,6 +603,8 @@ private:
   static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
   int64_t get_try_cache_size() const;
   int inner_release_memtables(const share::SCN scn);
+  int calc_sstable_occupy_size(int64_t &occupy_size);
+  inline void set_space_usage_(const ObTabletSpaceUsage &space_usage) { tablet_meta_.set_space_usage_(space_usage); }
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
@@ -645,7 +624,10 @@ private:
       const lib::Worker::CompatMode compat_mode,
       ObFreezer *freezer);
   int build_read_info(common::ObArenaAllocator &allocator, const ObTablet *tablet = nullptr);
-  int create_memtable(const int64_t schema_version, const share::SCN clog_checkpoint_scn, const bool for_replay=false);
+  int create_memtable(const int64_t schema_version,
+                      const share::SCN clog_checkpoint_scn,
+                      const bool for_direct_load,
+                      const bool for_replay);
   int try_update_start_scn();
   int try_update_ddl_checkpoint_scn();
   int try_update_table_store_flag(const ObUpdateTableStoreParam &param);
@@ -670,11 +652,11 @@ private:
       ObStoreCtx &store_ctx,
       memtable::ObMemtable *&write_memtable);
 
-  // used for freeze_tablet
   int inner_create_memtable(
-      const share::SCN clog_checkpoint_scn = share::SCN::base_scn(),/*1 for first memtable, filled later*/
-      const int64_t schema_version = 0/*0 for first memtable*/,
-      const bool for_replay = false);
+      const share::SCN clog_checkpoint_scn,
+      const int64_t schema_version,
+      const bool for_direct_load,
+      const bool for_replay);
 
   int inner_get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active) const;
 
@@ -805,11 +787,10 @@ private:
   int rebuild_memtable(
       const share::SCN &clog_checkpoint_scn,
       common::ObIArray<ObTableHandleV2> &handle_array);
-  int add_memtable(memtable::ObIMemtable* const table);
+  int add_memtable(ObIMemtable* const table);
   bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
-  int assign_memtables(memtable::ObIMemtable * const *memtables, const int64_t memtable_count);
+  int assign_memtables(ObIMemtable * const *memtables, const int64_t memtable_count);
   int assign_ddl_kvs(ObDDLKV * const *ddl_kvs, const int64_t ddl_kv_count);
-  void reset_memtable();
   int pull_ddl_memtables(ObArenaAllocator &allocator, ObDDLKV **&ddl_kvs_addr, int64_t &ddl_kv_count);
   void reset_ddl_memtables();
   int wait_release_memtables_();
@@ -823,6 +804,7 @@ private:
       const bool need_tablet_attr = true) const;
   int calc_tablet_attr(ObTabletAttr &attr) const;
   int check_ready_for_read_if_need(const ObTablet &old_tablet);
+  int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible
@@ -855,7 +837,7 @@ private:
   // through ObTabletPointerHandle.
   // may be some day will fix this issue, then the pointers have no need to exist.
   // won't persist
-  memtable::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
+  ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
   ObArenaAllocator *allocator_;
   mutable common::SpinRWLock memtables_lock_;                // size: 12B, alignment: 4B
   logservice::ObLogHandler *log_handler_;

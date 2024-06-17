@@ -108,6 +108,8 @@ struct ObIndexMetaInfo
       is_unique_index_(false),
       is_global_index_(false),
       is_geo_index_(false),
+      is_fulltext_index_(false),
+      is_multivalue_index_(false),
       index_micro_block_count_(-1)
   { }
   virtual ~ObIndexMetaInfo()
@@ -117,7 +119,7 @@ struct ObIndexMetaInfo
   TO_STRING_KV(K_(ref_table_id), K_(index_id), K_(index_micro_block_size),
                K_(index_part_count), K_(index_part_size),
                K_(index_column_count), K_(is_index_back),
-               K_(is_unique_index), K_(index_micro_block_count));
+               K_(is_unique_index), K_(is_fulltext_index), K_(index_micro_block_count));
   uint64_t ref_table_id_; // ref table id
   uint64_t index_id_; // index id
   int64_t index_micro_block_size_; //index micro block size, same as main table when path is primary
@@ -128,6 +130,8 @@ struct ObIndexMetaInfo
   bool is_unique_index_; // is unique index
   bool is_global_index_; // whether is global index
   bool is_geo_index_; // whether is spatial index
+  bool is_fulltext_index_; // is fulltext index
+  bool is_multivalue_index_; // is multivalue index
   int64_t index_micro_block_count_;  // micro block count from table static info
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMetaInfo);
@@ -656,6 +660,7 @@ public:
 
   int cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
 										double &cost,
+                    double &filter_selectivity,
 										common::ObIArray<ObExprSelPair> &all_predicate_sel);
 
   int cost_mergejoin(const ObCostMergeJoinInfo &est_cost_info,
@@ -804,6 +809,9 @@ public:
                       int64_t range_count,
                       double range_sel,
                       double &cost);
+  int calc_pred_cost_per_row(const ObRawExpr *expr,
+                            double card,
+                            double &cost);
 
 protected:
   int cost_sort(const ObSortCostInfo &cost_info,

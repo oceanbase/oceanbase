@@ -49,7 +49,6 @@ int ObDirectLoadMultipleHeapTableTabletWholeScanner::init(
     if (OB_FAIL(index_scanner_.init(heap_table, tablet_id, table_data_desc))) {
       LOG_WARN("fail to init index scanner", KR(ret));
     } else if (OB_FAIL(data_block_reader_.init(table_data_desc.sstable_data_block_size_,
-                                               heap_table->get_meta().max_data_block_size_,
                                                table_data_desc.compressor_type_))) {
       LOG_WARN("fail to init data block reader", KR(ret));
     } else if (OB_FAIL(switch_next_fragment())) {

@@ -518,16 +518,18 @@ int ObStorageFileUtil::check_is_appendable(
 {
   int ret = OB_SUCCESS;
   ObStorageObjectMetaBase obj_meta;
+  char logic_apendable_obj_name[OB_MAX_URI_LENGTH] = { 0 };
   char tmp_uri_buf[OB_MAX_URI_LENGTH] = "";
-  int pos = snprintf(tmp_uri_buf, OB_MAX_URI_LENGTH, "%s/%s/%s%s", uri.ptr(), cur_entry.d_name,
-                     OB_S3_APPENDABLE_FRAGMENT_PREFIX, OB_S3_APPENDABLE_FORMAT_META);
-  if (pos < 0 || pos >= OB_MAX_URI_LENGTH) {
-    ret = OB_BUF_NOT_ENOUGH;
-    OB_LOG(WARN, "fail to build format meta file path", K(ret), K(pos), K(uri), KCSTRING(cur_entry.d_name));
+  if (OB_FAIL(databuff_printf(logic_apendable_obj_name, sizeof(logic_apendable_obj_name), "%s/%s",
+                              uri.ptr(), cur_entry.d_name))) {
+    OB_LOG(WARN, "fail to construct logic_apendable_obj_name", K(ret), K(uri), K(cur_entry.d_name));
+  } else if (OB_FAIL(construct_fragment_full_name(logic_apendable_obj_name,
+                                                  OB_S3_APPENDABLE_FORMAT_META,
+                                                  tmp_uri_buf, sizeof(tmp_uri_buf)))) {
+    OB_LOG(WARN, "fail to construct fragment full name", K(ret), K(uri), K(cur_entry.d_name));
   } else {
-    common::ObString format_meta_uri(pos, tmp_uri_buf);
-    if (OB_FAIL(head_object_meta(format_meta_uri, obj_meta))) {
-      OB_LOG(WARN, "fail to head object meta", K(ret), K(format_meta_uri));
+    if (OB_FAIL(head_object_meta(tmp_uri_buf, obj_meta))) {
+      OB_LOG(WARN, "fail to head object meta", K(ret), K(tmp_uri_buf));
     } else {
       is_appendable_file = obj_meta.is_exist_;
     }
@@ -1177,6 +1179,7 @@ int ObStorageFileMultiPartWriter::complete()
 {
   int ret = OB_SUCCESS;
   char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
+  struct stat64 file_info;
 
   if (!is_opened_) {
     ret = OB_NOT_INIT;
@@ -1193,6 +1196,13 @@ int ObStorageFileMultiPartWriter::complete()
     if (has_error_) {
       STORAGE_LOG(WARN, "multipart writer has error, skip complete",
           KCSTRING(path_), KCSTRING(real_path_));
+    } else if (0 != ::stat64(path_, &file_info)) {
+      convert_io_error(errno, ret);
+      STORAGE_LOG(WARN, "fail to get file length",
+          K(ret), K_(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+    } else if (OB_UNLIKELY(file_info.st_size == 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(file_info.st_size), K_(path));
     } else if (0 != ::rename(path_, real_path_)) {
       convert_io_error(errno, ret);
       STORAGE_LOG(WARN, "failed to complete", K(ret), KCSTRING(real_path_),

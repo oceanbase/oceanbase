@@ -28,7 +28,8 @@ namespace sql
 ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObDMLStmt *stmt,
                                    ObSchemaGetterGuard *schema_guard,
                                    ObObjPrintParams print_params,
-                                   const ParamStore *param_store)
+                                   const ParamStore *param_store,
+                                   const ObSQLSessionInfo *session)
   : buf_(buf),
     buf_len_(buf_len),
     pos_(pos),
@@ -39,7 +40,8 @@ ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, con
     schema_guard_(schema_guard),
     print_params_(print_params),
     expr_printer_(buf, buf_len, pos, schema_guard_, print_params_, param_store),
-    param_store_(param_store)
+    param_store_(param_store),
+    session_(session)
 {
 }
 
@@ -56,24 +58,92 @@ void ObDMLStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObDMLStmt 
   print_cte_ = false;
 }
 
-int ObDMLStmtPrinter::set_synonym_name_recursively(ObRawExpr * cur_expr, const ObDMLStmt *stmt)
+int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(cur_expr) || OB_ISNULL(stmt)) {
-  } else if (cur_expr->is_column_ref_expr()) {
-    ObColumnRefRawExpr *column_expr = static_cast<ObColumnRefRawExpr *>(cur_expr);
-    const TableItem *table_item = stmt->get_table_item_by_id(column_expr->get_table_id());
-    if (NULL != table_item && table_item->alias_name_.empty()) {
-      column_expr->set_synonym_name(table_item->synonym_name_);
-      column_expr->set_synonym_db_name(table_item->synonym_db_name_);
+  if (!print_params_.for_dblink_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected to print dblink hint", K(ret), K(print_params_.for_dblink_));
+  } else if (is_first_stmt_for_hint_) {
+    const ObQueryHint &query_hint = stmt_->get_query_ctx()->get_query_hint();
+    const ObGlobalHint &global_hint = query_hint.get_global_hint();
+    ObGlobalHint &global_hint_dblink = query_hint_dblink.get_global_hint();
+    global_hint_dblink.reset();
+    global_hint_dblink.merge_query_timeout_hint(global_hint.query_timeout_);
+    global_hint_dblink.merge_read_consistency_hint(global_hint.read_consistency_, global_hint.frozen_version_);
+    global_hint_dblink.merge_log_level_hint(global_hint.log_level_);
+    global_hint_dblink.force_trace_log_ = global_hint.force_trace_log_;
+    global_hint_dblink.monitor_ = global_hint.monitor_;
+    int64_t session_query_timeout_us = 0;
+    if (OB_ISNULL(session_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret), K(lbt()));
+    } else if (stmt_->is_select_stmt()) {
+      uint64_t dblink_id = OB_INVALID_ID;
+      dblink_id = stmt_->get_dblink_id();
+      if (0 == dblink_id) {
+        // set dblink_info, to unparse a link sql with dblink_info hint
+        oceanbase::sql::ObReverseLink *reverse_dblink_info = NULL;
+        if (OB_FAIL(const_cast<oceanbase::sql::ObSQLSessionInfo *>(session_)->get_dblink_context().get_reverse_link(reverse_dblink_info))) {
+          LOG_WARN("failed to get reverse link info from session", K(ret), K(session_->get_sessid()));
+        } else if (NULL == reverse_dblink_info) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else {
+          query_hint_dblink.get_global_hint().merge_tm_sessid_tx_id(reverse_dblink_info->get_tx_id(),
+                                                                    reverse_dblink_info->get_tm_sessid());
+          LOG_TRACE("set tx_id_ and tm_sessid to stmt", K(reverse_dblink_info->get_tx_id()),
+                                                        K(reverse_dblink_info->get_tm_sessid()));
+        }
+      } else {
+        // reset dblink hint, to unparse a link sql without dblink_info hint
+        query_hint_dblink.get_global_hint().reset_tm_sessid_tx_id_hint();
+      }
+      if ((session_->is_in_transaction() &&
+            transaction::ObTxIsolationLevel::RC == session_->get_tx_desc()->get_isolation_level()) ||
+            !session_->is_in_transaction()) {
+        query_hint_dblink.get_global_hint().set_flashback_read_tx_uncommitted(true);
+      }
+      // link scan have not xa_trans_stop_check_lock hint
+      query_hint_dblink.get_global_hint().set_xa_trans_stop_check_lock(false);
+    } else { // T_INSERT T_DELETE T_UPDATE T_MERGE
+      bool has_reverse_link = false;
+      // link dml have not tm_sessid and tx_id hint
+      query_hint_dblink.get_global_hint().reset_tm_sessid_tx_id_hint();
+      if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(stmt_, has_reverse_link))) {
+        LOG_WARN("failed to exec has_reverse_link", K(ret));
+      } else {
+        /**
+          restore xa_trans_stop_check_lock info, to avoid affecting the next execution flow.
+          if xa_trans_stop_check_lock == true and this is RM(0==dblink_id), RM will stop check xa lock.
+          eg:
+          step 1.
+            TM get sql1 like "insert into t2@my_link1 select a.c1, b.c2 from t1 a, t2@my_link1  b where a.c1=b.c1;",
+            and my_link1 and my_link2 have the same conneciton info.
+          step 2.
+            TM will send sql2  to RM like below
+            insert into "LCQ1"."T2"("C1","C2") select "A"."C1" AS "C1","LCQ1"."B"."C2" AS "C2" from "LCQ1"."T1"@! "A","LCQ1"."T2" "B" where ("A"."C1" = "LCQ1"."B"."C1")
+            TM will attach DBLINK_XA_TRANS_STOP_CHECK_LOCK hint to sql2, telling RM to stop check xa lock.
+          step 3.
+            RM get sql2, stop checking xa lock, then send sql3 like below to TM
+            "select * from T2@my_link2"
+          step 4.
+            TM get sql3, and send sql4 like below to RM
+            "select * from T2"
+            RM received sql4 and the meantime of excuting of sql2 is still runing.
+            sql4 can excuted directory without wait ending of sql2, cause sql2 has stoped check xa lock.
+        */
+        // When TM detects a reverse link in the SQL sent to RM, add a xa_trans_stop_check_lock hint tag to the SQL.
+        query_hint_dblink.get_global_hint().set_xa_trans_stop_check_lock(has_reverse_link);
+      }
     }
-  } else if (cur_expr->get_param_count() > 0) {
-    for (int64_t param_idx = 0; param_idx < cur_expr->get_param_count(); ++param_idx) {
-      ObRawExpr * param_expr = cur_expr->get_param_expr(param_idx);
-      OZ (SMART_CALL(set_synonym_name_recursively(param_expr, stmt)));
+    if (OB_SUCC(ret) && -1 == query_hint_dblink.get_global_hint().query_timeout_) {
+      if (OB_FAIL(session_->get_query_timeout(session_query_timeout_us))) {
+        LOG_WARN("failed to get session query timeout", K(ret));
+      } else {
+        query_hint_dblink.get_global_hint().merge_query_timeout_hint(session_query_timeout_us);
+      }
     }
-  } else {
-    //do nothing
   }
   return ret;
 }
@@ -90,6 +160,12 @@ int ObDMLStmtPrinter::print_hint()
     DATA_PRINTF("%s", hint_begin);
     if (OB_SUCC(ret)) {
       const ObQueryHint &query_hint = stmt_->get_query_ctx()->get_query_hint();
+      ObQueryHint query_hint_dblink;
+      if (print_params_.for_dblink_ &&
+          is_first_stmt_for_hint_ &&
+          OB_FAIL(prepare_dblink_hint(query_hint_dblink))) {
+        LOG_WARN("failed to print dblink hint", K(ret));
+      }
       PlanText plan_text;
       plan_text.buf_ = buf_;
       plan_text.buf_len_ = buf_len_;
@@ -98,7 +174,11 @@ int ObDMLStmtPrinter::print_hint()
       plan_text.type_ = print_params_.for_dblink_
                         ? EXPLAIN_DBLINK_STMT
                         : EXPLAIN_UNINITIALIZED;  // just for print hint, ExplainType set as invalid type
-      if (OB_FAIL(query_hint.print_stmt_hint(plan_text, *stmt_, is_first_stmt_for_hint_))) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (print_params_.for_dblink_ && is_first_stmt_for_hint_ && OB_FAIL(query_hint_dblink.get_global_hint().print_global_hint(plan_text))) {
+        LOG_WARN("failed to print stmt hint", K(ret));
+      } else if (!print_params_.for_dblink_ && OB_FAIL(query_hint.print_stmt_hint(plan_text, *stmt_, is_first_stmt_for_hint_))) {
         LOG_WARN("failed to print stmt hint", K(ret));
       } else if (plan_text.pos_ == *pos_) {
         // no hint, roolback buffer!
@@ -180,7 +260,10 @@ int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
     const uint64_t subquery_print_params =
                            PRINT_BRACKET |
                            (stmt_->is_select_stmt() ? FORCE_COL_ALIAS : 0);
-    if (OB_FAIL(print_subquery(table_item->ref_query_,
+    if (table_item->is_lateral_table()) {
+      DATA_PRINTF("lateral ");
+    }
+    if (OB_SUCC(ret) && OB_FAIL(print_subquery(table_item->ref_query_,
                                subquery_print_params))) {
       LOG_WARN("failed to print subquery", K(ret));
     } else if (!table_item->alias_name_.empty()) {
@@ -273,7 +356,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
                   break;
                 }
               case INNER_JOIN: {
-                  type_str = "join";
+                  type_str = join_table->is_straight_join_ ? "straight_join" : "join";
                   break;
                 }
               case CONNECT_BY_JOIN: {
@@ -323,6 +406,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
         }
         break;
       }
+    case TableItem::LATERAL_TABLE:
     case TableItem::GENERATED_TABLE: {
         if (OB_ISNULL(table_item->ref_query_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -362,11 +446,27 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       break;
     }
     case TableItem::JSON_TABLE: {
-      DATA_PRINTF("JSON_TABLE(");
-      OZ (expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE));
-      OZ (print_json_table(table_item));
-      DATA_PRINTF(")");
-      DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+      switch (table_item->json_table_def_->table_type_) {
+        case MulModeTableType::OB_ORA_JSON_TABLE_TYPE : {
+          DATA_PRINTF("JSON_TABLE(");
+          OZ (expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE));
+          OZ (print_json_table(table_item));
+          DATA_PRINTF(")");
+          DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+          break;
+        }
+        case MulModeTableType::OB_ORA_XML_TABLE_TYPE : {
+          DATA_PRINTF("XMLTABLE(");
+          OZ (print_xml_table(table_item));
+          DATA_PRINTF(")");
+          DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+          break;
+        }
+        default : {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected table function type");
+        }
+      }
       break;
     }
     case TableItem::TEMP_TABLE: {
@@ -591,6 +691,11 @@ int ObDMLStmtPrinter::print_json_return_type(int64_t value, ObDataType data_type
         } else {
           DATA_PRINTF("clob");
         }
+        break;
+      }
+      case T_EXTEND: {
+        ret = OB_ERR_INVALID_CAST_UDT;
+        LOG_WARN("invalid CAST to a type that is not a nested table or VARRAY", K(ret));
         break;
       }
       default: {
@@ -949,23 +1054,50 @@ int ObDMLStmtPrinter::print_mysql_json_return_type(int64_t value, ObDataType dat
       break;
     }
     case T_GEOMETRY: {
-      int32_t flag = parse_node.int32_values_[1];
-      if (flag == 0) {
-        DATA_PRINTF("GEOMETRY ");
-      } else if (flag == 1) {
-        DATA_PRINTF("POINT ");
-      } else if (flag == 2) {
-        DATA_PRINTF("LINESTRING ");
-      } else if (flag == 3) {
-        DATA_PRINTF("POLYGON ");
-      } else if (flag == 4) {
-        DATA_PRINTF("MULTIPOINT ");
-      } else if (flag == 5) {
-        DATA_PRINTF("MULTILINESTRING ");
-      } else if (flag == 6) {
-        DATA_PRINTF("MULTIPOLYGON ");
-      } else if (flag == 7) {
-        DATA_PRINTF("GEOMETRYCOLLECTION ");
+      ObGeoType geo_type = static_cast<ObGeoType>(parse_node.int32_values_[1]);
+      switch (geo_type) {
+        case ObGeoType::GEOMETRY: {
+          DATA_PRINTF("geometry");
+          break;
+        }
+        case ObGeoType::POINT: {
+          DATA_PRINTF("point");
+          break;
+        }
+        case ObGeoType::LINESTRING: {
+          DATA_PRINTF("linestring");
+          break;
+        }
+        case ObGeoType::POLYGON: {
+          DATA_PRINTF("polygon");
+          break;
+        }
+        case ObGeoType::MULTIPOINT: {
+          DATA_PRINTF("multipoint");
+          break;
+        }
+        case ObGeoType::MULTILINESTRING: {
+          DATA_PRINTF("multilinestring");
+          break;
+        }
+        case ObGeoType::MULTIPOLYGON: {
+          DATA_PRINTF("multipolygon");
+          break;
+        }
+        case ObGeoType::GEOMETRYCOLLECTION: {
+          DATA_PRINTF("geometrycollection");
+          break;
+        }
+        case ObGeoType::GEOTYPEMAX: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid cast geo sub type", K(ret), K(cast_type), K(geo_type));
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unknown cast geo sub type", K(ret), K(cast_type), K(geo_type));
+          break;
+        }
       }
       break;
     }
@@ -1095,7 +1227,8 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
       }
 
       if (OB_FAIL(ret)) {
-      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_ORDINALITY)) {
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_ORDINALITY)
+                  || col_info.col_type_ == static_cast<int32_t>(COL_TYPE_ORDINALITY_XML)) {
         DATA_PRINTF(" for ordinality");
       } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_EXISTS)) {
         // to print returning type
@@ -1264,6 +1397,33 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
         } else if (col_info.on_mismatch_type_ == 2) {
           DATA_PRINTF(" (type error)");
         }
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_VAL_EXTRACT_XML)) {
+        OZ (print_json_return_type(col_info.res_type_, col_info.data_type_));
+        if (OB_SUCC(ret) && col_info.path_.length() > 0) {
+          DATA_PRINTF(" path \'%.*s\'", LEN_AND_PTR(col_info.path_));
+        }
+        if (OB_SUCC(ret) && col_info.on_empty_ == 2) {
+          DATA_PRINTF(" default ");
+          if (OB_SUCC(ret)
+              && OB_FAIL(expr_printer_.do_print(cur_def->empty_expr_, T_NONE_SCOPE))) {
+            LOG_WARN("fail to print default value col", K(ret));
+          }
+        }
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_XMLTYPE_XML)) {
+        DATA_PRINTF(" XMLTYPE");
+        if (OB_SUCC(ret) && col_info.truncate_) {
+          DATA_PRINTF(" ( SEQUENCE ) BY REF");
+        }
+        if (OB_SUCC(ret) && col_info.path_.length() > 0) {
+          DATA_PRINTF(" path \'%.*s\'", LEN_AND_PTR(col_info.path_));
+        }
+        if (OB_SUCC(ret) && col_info.on_empty_ == 2) {
+          DATA_PRINTF(" default ");
+          if (OB_SUCC(ret)
+              && OB_FAIL(expr_printer_.do_print(cur_def->empty_expr_, T_NONE_SCOPE))) {
+            LOG_WARN("fail to print default value col", K(ret));
+          }
+        }
       }
     }
   }
@@ -1281,6 +1441,55 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
 
   return ret;
 }
+
+int ObDMLStmtPrinter::print_xml_namespace(const TableItem *table_item)
+{
+  INIT_SUCC(ret);
+  DATA_PRINTF("XMLNAMESPACES( ");
+  bool is_default = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_item->json_table_def_->namespace_arr_.count(); i ++) {
+    if (i % 2 == 0) {  // first value is uri
+      if (i > 0) {
+        DATA_PRINTF(", ");
+      }
+      if (table_item->json_table_def_->namespace_arr_.at(i + 1).empty()) {
+        DATA_PRINTF("DEFAULT \'%.*s\' ", LEN_AND_PTR(table_item->json_table_def_->namespace_arr_.at(i)));
+      } else {
+        DATA_PRINTF("\'%.*s\' AS ", LEN_AND_PTR(table_item->json_table_def_->namespace_arr_.at(i)));
+      }
+    } else if (!table_item->json_table_def_->namespace_arr_.at(i).empty()) {
+      DATA_PRINTF("%.*s ", LEN_AND_PTR(table_item->json_table_def_->namespace_arr_.at(i)));
+    }
+  }
+  DATA_PRINTF("),");
+  return ret;
+}
+int ObDMLStmtPrinter::print_xml_table(const TableItem *table_item)
+{
+  int ret = OB_SUCCESS;
+  ObJsonTableDef* tbl_def  = table_item->json_table_def_;
+  ObArenaAllocator alloc;
+  ObDmlJtColDef* root_def = nullptr;
+  if (OB_FAIL(build_json_table_nested_tree(table_item, &alloc, root_def))) {
+    LOG_WARN("fail to build column tree.", K(ret));
+  } else if (table_item->json_table_def_->namespace_arr_.count() > 0 && OB_FAIL(print_xml_namespace(table_item))) {
+    LOG_WARN("fail to print xml ns", K(ret));
+  } else if (root_def->col_base_info_.path_.length() > 0) {
+    DATA_PRINTF(" \'%.*s\'", LEN_AND_PTR(root_def->col_base_info_.path_));
+  }
+  DATA_PRINTF(" PASSING ");
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE))) {
+    LOG_WARN("fail to print xml doc", K(ret));
+  } else if (root_def->col_base_info_.allow_scalar_) {
+    DATA_PRINTF(" RETURNING SEQUENCE BY REF");
+  }
+  DATA_PRINTF(" COLUMNS ");
+  OZ (print_json_table_nested_column(table_item, *root_def));
+
+  return ret;
+}
+
 
 int ObDMLStmtPrinter::print_json_table(const TableItem *table_item)
 {
@@ -1790,11 +1999,9 @@ int ObDMLStmtPrinter::print_returning()
     const ObIArray<ObRawExpr*> &returning_exprs = dml_stmt.get_returning_exprs();
     if (returning_exprs.count() > 0) {
       DATA_PRINTF(" returning ");
-      OZ (set_synonym_name_recursively(returning_exprs.at(0), stmt_));
       OZ (expr_printer_.do_print(returning_exprs.at(0), T_NONE_SCOPE));
       for (uint64_t i = 1; OB_SUCC(ret) && i < returning_exprs.count(); ++i) {
         DATA_PRINTF(",");
-        OZ (set_synonym_name_recursively(returning_exprs.at(i), stmt_));
         OZ (expr_printer_.do_print(returning_exprs.at(i), T_NONE_SCOPE));
       }
     }
@@ -1811,7 +2018,8 @@ int ObDMLStmtPrinter::print_subquery(const ObSelectStmt *subselect_stmt,
                               schema_guard_,
                               print_params_,
                               param_store_,
-                              subquery_print_params & FORCE_COL_ALIAS);
+                              subquery_print_params & FORCE_COL_ALIAS,
+                              session_);
   if (subquery_print_params & PRINT_CTE) {
     printer.enable_print_temp_table_as_cte();
   }

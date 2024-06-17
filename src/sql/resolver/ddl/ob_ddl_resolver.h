@@ -50,7 +50,7 @@ struct PartitionInfo
 
 enum NUMCHILD {
   CREATE_TABLE_NUM_CHILD = 8,
-  CREATE_TABLE_AS_SEL_NUM_CHILD = 9,
+  CREATE_TABLE_AS_SEL_NUM_CHILD = 11,
   COLUMN_DEFINITION_NUM_CHILD = 4,
   COLUMN_DEF_NUM_CHILD = 3,
   INDEX_NUM_CHILD = 5,
@@ -110,7 +110,10 @@ public:
   enum INDEX_KEYNAME {
     NORMAL_KEY = 0,
     UNIQUE_KEY = 1,
-    SPATIAL_KEY = 2
+    SPATIAL_KEY = 2,
+    FTS_KEY = 3,
+    MULTI_KEY = 4,
+    MULTI_UNIQUE_KEY = 5
   };
   enum COLUMN_NODE {
     COLUMN_REF_NODE = 0,
@@ -161,6 +164,42 @@ public:
   static const int64_t DEFAULT_TABLE_DOP = 1;
   explicit ObDDLResolver(ObResolverParams &params);
   virtual ~ObDDLResolver();
+  static int append_fts_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg *index_arg,
+      bool &fts_common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg *> &index_arg_list,
+      ObIAllocator *arg_allocator);
+  static int append_fts_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      bool &fts_common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator);
+    static int append_multivalue_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg *index_arg,
+      bool &fts_common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg *> &index_arg_list,
+      ObIAllocator *arg_allocator);
+  static int append_multivalue_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      bool &fts_common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator);
+  static int append_domain_index_args(
+      const ObTableSchema &table_schema,
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg *index_arg,
+      bool &common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg *> &index_arg_list,
+      ObIAllocator *arg_allocator);
   static int check_text_length(ObCharsetType cs_type, ObCollationType co_type,
                                const char *name, ObObjType &type,
                                int32_t &length,
@@ -188,7 +227,8 @@ public:
       const common::ObCollationType table_collation_type);
   static int check_string_column_length(
       const share::schema::ObColumnSchemaV2 &column,
-      const bool is_oracle_mode);
+      const bool is_oracle_mode,
+      const bool is_prepare_stage=false);
   static int check_raw_column_length(
       const share::schema::ObColumnSchemaV2 &column);
   static int check_urowid_column_length(
@@ -285,9 +325,18 @@ public:
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObString *nls_formats,
       common::ObIAllocator &allocator);
+  static int check_udt_default_value(ObObj &default_value,
+                                     const common::ObTimeZoneInfoWrap &tz_info_wrap,
+                                     const common::ObString *nls_formats,
+                                     ObIAllocator &allocator,
+                                     ObTableSchema &table_schema,
+                                     ObColumnSchemaV2 &column,
+                                     const ObSQLMode sql_mode,
+                                     ObSQLSessionInfo *session_info,
+                                     ObSchemaChecker *schema_checker,
+                                     obrpc::ObDDLArg &ddl_arg);
   static int get_udt_column_default_values(const ObObj &default_value,
                                            const common::ObTimeZoneInfoWrap &tz_info_wrap,
-                                           const common::ObString *nls_formats,
                                            ObIAllocator &allocator,
                                            ObColumnSchemaV2 &column,
                                            const ObSQLMode sql_mode,
@@ -454,6 +503,20 @@ public:
       const int64_t index_keyname_value,
       bool is_oracle_mode,
       bool is_explicit_order);
+  int resolve_fts_index_constraint(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObString &column_name,
+      const int64_t index_keyname_value);
+  int resolve_fts_index_constraint(
+      const share::schema::ObColumnSchemaV2 &column_schema,
+      const int64_t index_keyname_value);
+  int resolve_multivalue_index_constraint(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObString &column_name,
+      const int64_t index_keyname_value);
+  int resolve_multivalue_index_constraint(
+      const share::schema::ObColumnSchemaV2 &column_schema,
+      const int64_t index_keyname_value);
 protected:
   static int get_part_str_with_type(
       const bool is_oracle_mode,
@@ -467,7 +530,8 @@ protected:
       const common::ObIArray<uint64_t> &column_ids,
       const uint64_t cg_id,
       share::schema::ObColumnGroupSchema &column_group);
-  int parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const;
+  int parse_cg_node(const ParseNode &cg_node, obrpc::ObCreateIndexArg &create_index_arg) const;
+  int parse_column_group(const ParseNode *cg_node,const share::schema::ObTableSchema &table_schema, share::schema::ObTableSchema &dst_table_schema);
   int resolve_index_column_group(const ParseNode *node, obrpc::ObCreateIndexArg &create_index_arg);
   bool need_column_group(const ObTableSchema &table_schema);
   int resolve_hints(const ParseNode *parse_node, ObDDLStmt &stmt, const ObTableSchema &table_schema);
@@ -549,6 +613,11 @@ protected:
       share::schema::ObColumnSchemaV2 &column_schema);
   int check_skip_index(share::schema::ObTableSchema &table_schema);
   int resolve_lob_inrow_threshold(const ParseNode *option_node, const bool is_index_option);
+
+  int resolve_lob_storage_parameters(const ParseNode *node);
+  int resolve_lob_storage_parameter(share::schema::ObColumnSchemaV2 &column, const ParseNode &param_node);
+  int resolve_lob_chunk_size(const ParseNode &size_node, int64_t &lob_chunk_size);
+  int resolve_lob_chunk_size(share::schema::ObColumnSchemaV2 &column, const ParseNode &lob_chunk_size_node);
 
   /*
   int resolve_generated_column_definition(
@@ -887,8 +956,6 @@ protected:
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
   int check_ttl_definition(const ParseNode *node);
 
-  int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
-
   int add_new_indexkey_for_oracle_temp_table();
 
   void reset();
@@ -955,6 +1022,7 @@ protected:
   common::ObString ttl_definition_;
   common::ObString kv_attributes_;
   ObNameGeneratedType name_generated_type_;
+  bool have_generate_fts_arg_;
   bool is_set_lob_inrow_threshold_;
   int64_t lob_inrow_threshold_;
 private:

@@ -145,7 +145,13 @@ int ObPwjComparer::extract_all_partition_indexes(const ObCandiTableLoc &phy_tabl
       ObTabletID tablet_id = phy_partitions.at(i).get_partition_location().get_tablet_id();
       int64_t part_index = -1;
       int64_t subpart_index = -1;
-      if (OB_FAIL(table_schema.get_part_idx_by_tablet(tablet_id, part_index, subpart_index))) {
+      if (table_schema.is_external_table()) {
+        if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) { //mock
+        LOG_WARN("failed to push back partition id", K(ret));
+        } else if (OB_FAIL(all_partition_indexes.push_back(part_index))) {
+          LOG_WARN("failed to push back partition index", K(ret));
+        }
+      } else if (OB_FAIL(table_schema.get_part_idx_by_tablet(tablet_id, part_index, subpart_index))) {
         LOG_WARN("failed to get part idx by tablet", K(ret));
       } else if (OB_FAIL(all_tablet_ids.push_back(tablet_id.id()))) {
         LOG_WARN("failed to push back partition id", K(ret));

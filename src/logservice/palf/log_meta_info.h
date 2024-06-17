@@ -86,6 +86,7 @@ public:
   int generate(const int64_t proposal_id, const int64_t config_seq);
   int inc_update_version(const int64_t proposal_id);
   bool is_valid() const;
+  bool is_initial_version() const;
   void reset();
   int64_t to_string(char *buf, const int64_t buf_len);
   bool operator==(const LogConfigVersion &config_version) const;

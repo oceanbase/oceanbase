@@ -379,6 +379,9 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(outline);
   RETRIEVE_SCHEMA_FUNC_DECLARE(db_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(table_priv);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(routine_priv);
+
+  RETRIEVE_SCHEMA_FUNC_DECLARE(column_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(package);
   RETRIEVE_SCHEMA_FUNC_DECLARE(routine);
   RETRIEVE_SCHEMA_FUNC_DECLARE(trigger);
@@ -414,6 +417,8 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_policy);
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_group);
   RETRIEVE_SCHEMA_FUNC_DECLARE(rls_context);
+  //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy);
+  //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy_role);
   template<typename T>
   static int retrieve_object_list(const uint64_t tenant_id, T &result, common::ObIArray<uint64_t> &trigger_list);
   template<typename T>
@@ -496,6 +501,9 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(outline, ObOutlineInfo);
   FILL_SCHEMA_FUNC_DECLARE(db_priv, ObDBPriv);
   FILL_SCHEMA_FUNC_DECLARE(table_priv, ObTablePriv);
+  FILL_SCHEMA_FUNC_DECLARE(routine_priv, ObRoutinePriv);
+
+  FILL_SCHEMA_FUNC_DECLARE(column_priv, ObColumnPriv);
   FILL_SCHEMA_FUNC_DECLARE(package, ObPackageInfo);
   FILL_SCHEMA_FUNC_DECLARE(routine, ObRoutineInfo);
   FILL_SCHEMA_FUNC_DECLARE(routine_param, ObRoutineParam);
@@ -617,6 +625,17 @@ public:
       T &result,
       const bool is_fetch_role,
       ObArray<ObUserInfo> &user_array);
+  template<typename T>
+  static int retrieve_proxy_info_schema(const uint64_t tenant_id,
+      T &result,
+      const bool is_fetch_proxy,
+      ObArray<ObUserInfo> &user_array);
+
+  template<typename T>
+  static int retrieve_proxy_role_info_schema(const uint64_t tenant_id,
+    T &result,
+    const bool is_fetch_proxy,
+    ObArray<ObUserInfo> &user_array);
   static inline int find_user_info(const uint64_t user_id,
       ObArray<ObUserInfo> &user_array,
       ObUserInfo *&user_info);
@@ -636,6 +655,8 @@ public:
   static int fill_object_id(const uint64_t tenant_id, T &result,
                             uint64_t &object_id, bool &is_deleted);
 
+  // template<typename T>
+  // static bool compare_proxy_id(const T *proxy_schema, const uint64_t proxy_id);
 //===========================================================================
 
   template<typename T, typename SCHEMA>

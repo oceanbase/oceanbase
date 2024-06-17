@@ -100,6 +100,7 @@ const int64_t OB_MAX_RESTORE_TYPE_LEN = 8; // LOCATION/SERVICE/RAWPATH
 const int64_t OB_MAX_BACKUP_SET_NUM = 1000000;
 
 const int64_t OB_MAX_BACKUP_PIECE_NUM = 1000000;
+const int64_t MIN_LAG_TARGET_FOR_S3 = 60 * 1000 * 1000UL/*60s*/;
 
 static constexpr const int64_t MAX_FAKE_PROVIDE_ITEM_COUNT = 128;
 static constexpr const int64_t DEFAULT_FAKE_BATCH_COUNT = 32;
@@ -311,6 +312,8 @@ const char *const OB_STR_MACRO_BLOCK_BYTES = "major_block_bytes";
 const char *const OB_STR_FINISH_MACRO_BLOCK_BYTES = "finish_major_block_bytes";
 const char *const OB_STR_MINOR_BLOCK_BYTES = "minor_block_bytes";
 const char *const OB_STR_FINISH_MINOR_BLOCK_BYTES = "finish_minor_block_bytes";
+const char *const OB_STR_LOG_FILE_COUNT = "log_file_count";
+const char *const OB_STR_FINISH_LOG_FILE_COUNT = "finish_log_file_count";
 
 const char *const OB_STR_START_REPLAY_LSN = "start_replay_lsn";
 const char *const OB_STR_LAST_REPLAY_LSN = "last_replay_lsn";
@@ -416,6 +419,8 @@ const char *const OB_STR_SRC_TENANT_NAME = "src_tenant_name";
 const char *const OB_STR_AUX_TENANT_NAME = "aux_tenant_name";
 const char *const OB_STR_TARGET_TENANT_NAME = "target_tenant_name";
 const char *const OB_STR_TARGET_TENANT_ID = "target_tenant_id";
+const char *const OB_STR_TABLE_LIST = "table_list";
+const char *const OB_STR_TABLE_LIST_META_INFO = "table_list_meta_info";
 
 enum ObBackupFileType
 {
@@ -457,6 +462,8 @@ enum ObBackupFileType
   BACKUP_TENANT_ARCHIVE_PIECE_INFOS = 35,
   BACKUP_DELETED_TABLET_INFO = 36,
   BACKUP_TABLET_METAS_INFO = 37,
+  BACKUP_TABLE_LIST_FILE = 38,
+  BACKUP_TABLE_LIST_META_FILE = 39,
   // type <=255 is write header struct to disk directly
   // type > 255 is use serialization to disk
   BACKUP_MAX_DIRECT_WRITE_TYPE = 255,
@@ -918,6 +925,7 @@ public:
   bool is_valid() const;
   bool is_root_path_equal(const ObBackupDest &backup_dest) const;
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
+  bool is_storage_type_s3(){ return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
   int get_backup_dest_str(char *buf, const int64_t buf_size) const;
   int get_backup_dest_str_with_primary_attr(char *buf, const int64_t buf_size) const;
   int get_backup_path_str(char *buf, const int64_t buf_size) const;
@@ -1227,7 +1235,8 @@ public:
     BACKUP_DATA_SYS = 9,
     BACKUP_DATA_MINOR = 10,
     BACKUP_DATA_MAJOR = 11,
-    BACKUP_LOG = 12,
+    BEFORE_BACKUP_LOG = 12,
+    BACKUP_LOG = 13,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}
@@ -1240,7 +1249,7 @@ public:
   bool is_backup_meta() const { return BACKUP_SYS_META == status_ || BACKUP_USER_META == status_; }
   bool is_backup_major() const { return BACKUP_DATA_MAJOR == status_; }
   bool is_backup_minor() const { return BACKUP_DATA_MINOR == status_; }
-  bool is_backup_log() const { return BACKUP_LOG == status_; }
+  bool is_backup_log() const { return BEFORE_BACKUP_LOG == status_ || BACKUP_LOG == status_; }
   bool is_backup_sys() const { return BACKUP_DATA_SYS == status_; }
   bool is_backup_finish() const { return COMPLETED == status_ || FAILED == status_ || CANCELED == status_; }
   const char* get_str() const;
@@ -1298,7 +1307,8 @@ public:
   void cum_with(const ObBackupStats &other);
   void reset();
   TO_STRING_KV(K_(input_bytes), K_(output_bytes), K_(tablet_count), K_(finish_tablet_count),
-      K_(macro_block_count), K_(finish_macro_block_count), K_(extra_bytes), K_(finish_file_count));
+      K_(macro_block_count), K_(finish_macro_block_count), K_(extra_bytes), K_(finish_file_count),
+      K_(log_file_count), K_(finish_log_file_count));
   int64_t input_bytes_;
   int64_t output_bytes_;
   int64_t tablet_count_;
@@ -1307,6 +1317,8 @@ public:
   int64_t finish_macro_block_count_;
   int64_t extra_bytes_;
   int64_t finish_file_count_;
+  int64_t log_file_count_;
+  int64_t finish_log_file_count_;
 };
 
 struct ObBackupLevel final
@@ -1441,8 +1453,9 @@ struct ObBackupDataTaskType final
     BACKUP_META_FINISH = 1,
     BACKUP_DATA_MINOR = 2,
     BACKUP_DATA_MAJOR = 3,
-    BACKUP_PLUS_ARCHIVE_LOG = 4,
-    BACKUP_BUILD_INDEX = 5,
+    BEFORE_PLUS_ARCHIVE_LOG = 4,
+    BACKUP_PLUS_ARCHIVE_LOG = 5,
+    BACKUP_BUILD_INDEX = 6,
     BACKUP_MAX
   };
   ObBackupDataTaskType() : type_(Type::BACKUP_MAX) {}
@@ -1728,6 +1741,46 @@ int backup_time_to_strftime(const int64_t &ts_s, char *buf, const int64_t buf_le
 int backup_scn_to_time_tag(const SCN &scn, char *buf, const int64_t buf_len, int64_t &pos);
 
 inline uint64_t trans_scn_to_second(const SCN &scn) { return scn.convert_to_ts() / 1000 / 1000; }
+
+struct ObBackupTableListItem final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupTableListItem();
+  ~ObBackupTableListItem() = default;
+  bool is_valid() const;
+  void reset();
+  int assign(const ObBackupTableListItem &o);
+  bool operator==(const ObBackupTableListItem &o) const;
+  bool operator!=(const ObBackupTableListItem &o) const { return !(operator ==(o)); }
+  bool operator>(const ObBackupTableListItem &o) const;
+  bool operator>=(const ObBackupTableListItem &o) const { return operator > (o) || operator == (o); }
+  bool operator<(const ObBackupTableListItem &o) const { return !(operator >= (o)); }
+  bool operator<=(const ObBackupTableListItem &o) const { return !(operator > (o)); }
+
+  TO_STRING_KV(K_(database_name), K_(table_name));
+  common::ObFixedLengthString<OB_MAX_DATABASE_NAME_LENGTH + 1> database_name_;
+  common::ObFixedLengthString<OB_MAX_TABLE_NAME_LENGTH + 1> table_name_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupTableListItem);
+};
+
+struct ObBackupPartialTableListMeta final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupPartialTableListMeta();
+  ~ObBackupPartialTableListMeta() = default;
+  bool is_valid() const;
+  void reset();
+  int assign(const ObBackupPartialTableListMeta &other);
+
+  TO_STRING_KV(K_(start_key), K_(end_key));
+  ObBackupTableListItem start_key_;
+  ObBackupTableListItem end_key_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupPartialTableListMeta);
+};
 }//share
 }//oceanbase
 

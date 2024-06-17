@@ -406,7 +406,7 @@ TEST_F(TestCOSSTable, empty_co_table_test)
 
   ObCOSSTableV2 *co_table = static_cast<ObCOSSTableV2 *>(co_table_handle.get_table());
   EXPECT_EQ(0, co_table->meta_->cg_sstables_.count());
-  EXPECT_EQ(true, co_table->is_empty_co_table());
+  EXPECT_EQ(true, co_table->is_empty());
   EXPECT_EQ(storage_schema.get_column_group_count(), co_table->get_cs_meta().column_group_cnt_);
 }
 

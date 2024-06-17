@@ -84,6 +84,7 @@ class ObTxBufferNode
   friend class ObTxExecInfo;
   friend class ObMulSourceTxDataNotifier;
   friend class ObTxMDSCache;
+  friend class ObTxBufferNodeWrapper;
   OB_UNIS_VERSION(1);
 
 public:
@@ -116,10 +117,11 @@ public:
 
   // only for some mds types of CDC
   // can not be used by observer functions
-  bool allow_to_use_mds_big_segment() { return type_ == ObTxDataSourceType::DDL_TRANS; }
+  bool allow_to_use_mds_big_segment() const { return type_ == ObTxDataSourceType::DDL_TRANS; }
 
   void replace_data(const common::ObString &data);
 
+  ObString &get_data() { return data_; }
   int64_t get_data_size() const { return data_.length(); }
   ObTxDataSourceType get_data_source_type() const { return type_; }
   const ObString &get_data_buf() const { return data_; }
@@ -141,6 +143,7 @@ public:
     has_synced_ = false;
   }
   storage::mds::BufferCtxNode &get_buffer_ctx_node() const { return buffer_ctx_node_; }
+
   TO_STRING_KV(K(register_no_), K(has_submitted_), K(has_synced_), K_(type), K(data_.length()));
 
 private:
@@ -155,6 +158,29 @@ private:
 
 typedef common::ObSEArray<ObTxBufferNode, 1> ObTxBufferNodeArray;
 typedef common::ObSEArray<storage::mds::BufferCtxNode , 1> ObTxBufferCtxArray;
+
+// manage mds_op contain (buffer_node, buffer, buffer_ctx)
+class ObTxBufferNodeWrapper
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTxBufferNodeWrapper() : tx_id_(0), node_()
+  {}
+  ObTxBufferNodeWrapper(const ObTxBufferNodeWrapper &) = delete;
+  ObTxBufferNodeWrapper &operator=(const ObTxBufferNodeWrapper &) = delete;
+  ~ObTxBufferNodeWrapper();
+  const ObTxBufferNode &get_node() const { return node_; }
+  int64_t get_tx_id() const { return tx_id_; }
+  int pre_alloc(int64_t tx_id, const ObTxBufferNode &node, ObIAllocator &allocator);
+  // deep_copy by node
+  int assign(int64_t tx_id, const ObTxBufferNode &node, ObIAllocator &allocator, bool has_pre_alloc);
+  int assign(ObIAllocator &allocator, const ObTxBufferNodeWrapper &node_wrapper);
+
+  TO_STRING_KV(K_(tx_id), K_(node));
+private:
+  int64_t tx_id_;
+  ObTxBufferNode node_;
+};
 
 class ObMulSourceTxDataNotifier
 {
@@ -190,7 +216,7 @@ private:
 
 class ObMulSourceTxDataDump
 {
-public: 
+public:
    static const char* dump_buf(ObTxDataSourceType source_type, const char * buf,const int64_t len);
 private:
 

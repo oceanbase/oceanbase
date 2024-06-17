@@ -725,6 +725,24 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBufferImpl, ObWkbGeogCollection, ObGeometry *)
                                 ObIWkbGeomLineString>(g, context, result, true);
 } OB_GEO_FUNC_END;
 
+OB_GEO_UNARY_TREE_FUNC_BEGIN(ObGeoFuncBufferImpl, ObCartesianPolygon, ObGeometry *)
+{
+  INIT_SUCC(ret);
+  if (OB_SUCC(ob_geo_validate_buffer_input(g, context))) {
+    const ObGeoBufferStrategy *strategy = context.get_val_arg(0)->strategy_;
+    if (is_valid_for_polygon(*strategy)) {
+      ret = eval_buffer_cartisan<ObCartesianPolygon,
+                                  ObIWkbGeomPolygon>(g, context, *strategy, result, true);
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("validate strategy for cartisan polygon failed",
+        K(ret), K(strategy->distance_val_), K(strategy->has_point_s_),
+        K(strategy->has_join_s_), K(strategy->has_end_s_));
+    }
+  }
+  return ret;
+} OB_GEO_FUNC_END;
+
 template<typename GeometryType>
 bool ObGeoFuncBufferImpl::apply_bg_equal(GeometryType &geo1,
                                          GeometryType &geo2,

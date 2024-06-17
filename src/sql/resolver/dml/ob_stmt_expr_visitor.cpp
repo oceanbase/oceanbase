@@ -263,3 +263,59 @@ int ObStmtExecParamFormatter::do_formalize_exec_param(ObRawExpr *&expr, bool &is
   }
   return ret;
 }
+
+int ObStmtExprChecker::do_visit(ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_expr(expr))) {
+    LOG_WARN("failed to check expr", K(ret), KPC(expr));
+  }
+  return ret;
+}
+
+int ObStmtExprChecker::check_expr(const ObRawExpr *expr) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (OB_FAIL(check_const_flag(expr))) {
+    LOG_WARN("failed to check const flag", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    if (OB_FAIL(SMART_CALL(check_expr(expr->get_param_expr(i))))) {
+      LOG_WARN("failed to check param expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObStmtExprChecker::check_const_flag(const ObRawExpr *expr) const
+{
+  int ret = OB_SUCCESS;
+  bool expect_is_const = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && expect_is_const && i < expr->get_param_count(); ++i) {
+    const ObRawExpr *param_expr = expr->get_param_expr(i);
+    if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is null", K(ret), K(param_expr));
+    } else {
+      expect_is_const = param_expr->is_const_expr();
+    }
+  }
+  if (OB_SUCC(ret) && expect_is_const) {
+    if (OB_FAIL(expr->is_const_inherit_expr(expect_is_const))) {
+      LOG_WARN("failed to check expr is const inherit", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(expr->is_const_expr() != expect_is_const)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr const flag is not match", K(ret), K(expect_is_const), KPC(expr));
+  }
+  return ret;
+}

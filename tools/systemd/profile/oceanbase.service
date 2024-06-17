@@ -1,0 +1,24 @@
+[Unit]
+Description=oceanbase
+
+[Service]
+User=root
+Type=forking
+KillMode=none
+ExecStart=/bin/bash /home/admin/oceanbase/profile/oceanbase-service.sh start
+ExecStop=/bin/bash /home/admin/oceanbase/profile/oceanbase-service.sh stop
+ExecReload=/bin/bash /home/admin/oceanbase/profile/oceanbase-service.sh reload
+PIDFile=/home/admin/oceanbase/run/observer.pid
+TimeoutSec=2000
+TimeoutStopSec=300
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=SIGKILL
+SendSIGKILL=no
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+LimitSTACK=infinity
+
+[Install]
+WantedBy=multi-user.target

@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
+#include "lib/signal/ob_signal_struct.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
@@ -174,6 +175,7 @@ int ObRemoteTaskExecutor::build_task(ObExecContext &query_ctx,
       task.set_runner_server(task_info.get_task_location().get_server());
       task.set_ob_task_id(task_info.get_task_location().get_ob_task_id());
       task.set_serialize_param(&query_ctx, root_spec, phy_plan);
+      task.set_sql_string(ObSqlInfoGuard::get_tl_sql_info().sql_string_);
     }
   }
   return ret;

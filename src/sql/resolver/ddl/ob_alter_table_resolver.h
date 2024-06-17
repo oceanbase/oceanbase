@@ -36,10 +36,11 @@ typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper,
 
 class ObAlterTableResolver : public ObDDLResolver
 {
-  static const int64_t ALTER_TABLE_NODE_COUNT = 3;
+  static const int64_t ALTER_TABLE_NODE_COUNT = 4;
   static const int64_t TABLE = 0;         // 0. table_node
   static const int64_t ACTION_LIST = 1;   // 1. alter table action list
   static const int64_t SPECIAL_TABLE_TYPE = 2;   // 2. special table type
+  static const int64_t ALTER_HINT = 3; // the hint.
   static const int64_t ALTER_INDEX_CHILD_NUM = 6;
 public:
   explicit ObAlterTableResolver(ObResolverParams &params);
@@ -67,6 +68,8 @@ public:
   int check_modify_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
                                   const share::schema::ObColumnSchemaV2 &origin_col_schema,
                                   const ObColumnResolveStat &stat);
+  int check_alter_geo_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
+                                     const share::schema::ObColumnSchemaV2 &origin_col_schema);
   int resolve_modify_column(const ParseNode &node,
                             bool &is_modify_column_visibility,
                             ObReducedVisibleColSet &reduced_visible_col_set);
@@ -83,6 +86,7 @@ public:
   int resolve_set_interval(ObAlterTableStmt *stmt, const ParseNode &node);
 
   int add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);
+  int check_sdo_geom_default_value(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);
 
   int add_new_indexkey_for_oracle_temp_table(obrpc::ObCreateIndexArg &index_arg);
 
@@ -141,6 +145,8 @@ private:
                              const share::schema::ObTableSchema &orig_table_schema);
   int resolve_drop_subpartition(const ParseNode &node,
                                 const share::schema::ObTableSchema &orig_table_schema);
+  int resolve_exchange_partition(const ParseNode &node,
+                                 const share::schema::ObTableSchema &orig_table_schema);
   int resolve_rename_partition(const ParseNode &node,
                              const share::schema::ObTableSchema &orig_table_schema);
   int resolve_rename_subpartition(const ParseNode &node,
@@ -156,6 +162,12 @@ private:
   int mock_part_func_node(const share::schema::ObTableSchema &table_schema,
                           const bool is_sub_part,
                           ParseNode *&part_expr_node);
+
+  //only for external table
+  int resolve_external_partition_options(const ParseNode &node);
+
+  int resolve_drop_external_partition(const ParseNode &location_node);
+  int resolve_add_external_partition(const ParseNode &part_element, const ParseNode &location_element);
   int resolve_pos_column(const ParseNode *node, share::schema::AlterColumnSchema &alter_column_schema);
   int fill_column_schema_according_stat(const ObColumnResolveStat &stat,
                                         share::schema::AlterColumnSchema &alter_column_schema);
@@ -183,7 +195,6 @@ private:
   int resolve_column_group_for_column();
   int generate_index_arg_cascade();
   int resolve_alter_column_groups(const ParseNode &node);
-  bool is_ttl_column(const common::ObString &orig_column_name, const ObIArray<common::ObString> &ttl_columns);
 
   int check_alter_column_schemas_valid(ObAlterTableStmt &stmt);
 

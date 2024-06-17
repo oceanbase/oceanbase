@@ -129,7 +129,8 @@ private:
       const common::ObString &tenant_name,
       const common::ObString &view_definition,
       const bool is_oracle_mode,
-      const share::schema::ObTableSchema *&new_table_schema);
+      const share::schema::ObTableSchema *&new_table_schema,
+      const common::ObString &database_name);
   int inner_get_next_row_();
   int fill_row_(
       share::schema::ObSchemaGetterGuard &schema_guard,

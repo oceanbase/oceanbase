@@ -138,7 +138,10 @@ int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
                                          get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(tb_ctx_.init_scan(arg_.query_, is_weak_read))) {
-    LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_));
+    LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_), K(arg_.table_id_));
+  } else if (arg_.table_id_ != tb_ctx_.get_ref_table_id()) { // todo: global_index need adapt
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_.table_id_), K(tb_ctx_.get_ref_table_id()));
   } else if (OB_FAIL(cache_guard.init(&tb_ctx_))) {
     LOG_WARN("fail to init cache guard", K(ret));
   } else if (OB_FAIL(cache_guard.get_expr_info(&tb_ctx_, expr_frame_info))) {

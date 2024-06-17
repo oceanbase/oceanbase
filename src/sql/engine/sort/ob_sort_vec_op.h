@@ -35,7 +35,7 @@ public:
                        K_(topk_offset_expr), K_(prefix_pos), K_(minimum_row_count),
                        K_(topk_precision), K_(prefix_pos), K_(is_local_merge_sort),
                        K_(prescan_enabled), K_(enable_encode_sortkey_opt), K_(has_addon),
-                       K_(part_cnt));
+                       K_(part_cnt), K_(compress_type));
 
 public:
   ObExpr *topn_expr_;
@@ -57,6 +57,7 @@ public:
   bool has_addon_;
   // if use, all_exprs_ is : hash(part_by) + part_by + order_by.
   int64_t part_cnt_;
+  ObCompressorType compress_type_;
 };
 
 class ObSortVecOp : public ObOperator
@@ -93,7 +94,7 @@ private:
                                    const ObCompactRow **addon_stored_rows = nullptr);
   int init_sort(int64_t tenant_id, int64_t row_count, int64_t topn_cnt = INT64_MAX);
   int init_temp_row_store(const common::ObIArray<ObExpr *> &exprs, const int64_t batch_size,
-                          const ObMemAttr &mem_attr, const bool is_sort_key,
+                          const ObMemAttr &mem_attr, const bool is_sort_key, ObCompressorType compress_type,
                           ObTempRowStore &row_store);
 
 private:

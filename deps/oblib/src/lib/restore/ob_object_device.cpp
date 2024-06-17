@@ -20,6 +20,16 @@ namespace common
 const char *OB_STORAGE_ACCESS_TYPES_STR[] = {"reader", "adaptive_reader", "overwriter",
                                              "appender", "random_write", "multipart_writer"};
 
+const char *get_storage_access_type_str(const ObStorageAccessType &type)
+{
+  const char *str = "UNKNOWN";
+  STATIC_ASSERT(static_cast<int64_t>(OB_STORAGE_ACCESS_MAX_TYPE) == ARRAYSIZEOF(OB_STORAGE_ACCESS_TYPES_STR), "ObStorageAccessType count mismatch");
+  if (type >= OB_STORAGE_ACCESS_READER && type < OB_STORAGE_ACCESS_MAX_TYPE) {
+    str = OB_STORAGE_ACCESS_TYPES_STR[type];
+  }
+  return str;
+}
+
 ObObjectDevice::ObObjectDevice()
   : storage_info_(), is_started_(false), lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK)
 {
@@ -998,6 +1008,12 @@ int ObObjectDevice::check_space_full(const int64_t required_size) const
 {
   UNUSED(required_size);
   OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "check_space_full is not support in object device !", K(device_type_));
+  return OB_NOT_SUPPORTED;
+}
+
+int ObObjectDevice::check_write_limited() const
+{
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "check_write_limited is not support in object device !", K(device_type_));
   return OB_NOT_SUPPORTED;
 }
 

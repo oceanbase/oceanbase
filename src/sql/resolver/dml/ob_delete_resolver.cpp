@@ -60,7 +60,11 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
   // create the delete stmt
   ObDeleteStmt *delete_stmt = NULL;
   bool is_multi_table_delete = false;
-  if (NULL == (delete_stmt = create_stmt<ObDeleteStmt>())) {
+  bool disable_limit_offset = false;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_ISNULL(delete_stmt = create_stmt<ObDeleteStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create delete stmt failed", K(ret));
   } else if (OB_UNLIKELY(parse_tree.type_ != T_DELETE) || OB_UNLIKELY(parse_tree.num_child_ < 2)) {
@@ -69,6 +73,9 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(parse_tree.children_[TABLE])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_node is null", K(ret));
+  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::UPD_LIMIT_OFFSET,
+                                                         disable_limit_offset))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else {
     stmt_ = delete_stmt;
     if (OB_FAIL(resolve_outline_data_hints())) {
@@ -106,7 +113,7 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("resolve delete where clause failed", K(ret));
       } else if (OB_FAIL(resolve_order_clause(parse_tree.children_[ORDER_BY]))) {
         LOG_WARN("resolve delete order clause failed", K(ret));
-      } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT]))) {
+      } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT], disable_limit_offset))) {
         LOG_WARN("resolve delete limit clause failed", K(ret));
       } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT]))) {
         LOG_WARN("resolve hints failed", K(ret));
@@ -447,7 +454,15 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
+      TableItem *rowkey_doc = NULL;
+      if (OB_FAIL(try_add_join_table_for_fts(&table_item, rowkey_doc))) {
+        LOG_WARN("fail to try add join table for fts", K(ret), K(table_item));
+      } else if (OB_NOT_NULL(rowkey_doc) && OB_FAIL(try_update_column_expr_for_fts(
+                                                                      table_item,
+                                                                      rowkey_doc,
+                                                                      table_info->column_exprs_))) {
+        LOG_WARN("fail to try update column expr for fts", K(ret), K(table_item));
+      } else if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));
       } else if (gindex_cnt > 0) {
         delete_stmt->set_has_global_index(true);

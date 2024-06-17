@@ -60,7 +60,6 @@ public:
         : dh_key_(dh_key), dh_msg_(db_msg), ret_(OB_SUCCESS), succ_reg_dm_(false) {};
     ~P2PMsgSetCall() = default;
     int operator() (const common::hash::HashMapPair<ObP2PDhKey, ObP2PDatahubMsgBase *> &entry);
-    void revert();
     ObP2PDhKey &dh_key_;
     ObP2PDatahubMsgBase &dh_msg_;
     int ret_;

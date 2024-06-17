@@ -170,7 +170,7 @@ void ObSelectIntoTest::test_into_file(int64_t row_count, const char *name)
   op_into.set_outfile_name(file_name);
   ObObj field_str;
   field_str.set_varchar(",");
-  op_into.set_filed_str(field_str);
+  op_into.set_field_str(field_str);
   ObObj line_str;
   line_str.set_varchar("\n");
   op_into.set_line_str(line_str);

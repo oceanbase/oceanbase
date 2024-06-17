@@ -80,6 +80,7 @@ private:
     bool limit_for_exists_;
     int64_t limit_value_;
     ObSEArray<ObPCParamEqualInfo, 1, common::ModulePageAllocator, true> equal_param_info_;
+    ObSEArray<ObRawExpr *, 4> upper_filters_; // filters can be pulled up to upper stmt (aggr first)
     TO_STRING_KV(K_(ja_query_ref),
                  K_(query_refs),
                  K_(nested_conditions),
@@ -88,7 +89,8 @@ private:
                  K_(not_null_expr),
                  K_(limit_for_exists),
                  K_(limit_value),
-                 K_(equal_param_info));
+                 K_(equal_param_info),
+                 K_(upper_filters));
   };
 
   struct TransStmtInfo {
@@ -125,6 +127,7 @@ private:
   int check_aggr_first_validity(ObQueryRefRawExpr &query_ref,
                                 const bool is_vector_assign,
                                 ObIArray<ObRawExpr*> &nested_conditions,
+                                ObIArray<ObRawExpr*> &upper_filters,
                                 const bool is_select_item_expr,
                                 bool &is_valid,
                                 int64_t &limit_value,
@@ -139,21 +142,13 @@ private:
                            ObSelectStmt &subquery,
                            TransformParam &param);
 
-  int deduce_query_values(ObDMLStmt &stmt,
-                          TransformParam &param,
-                          ObIArray<ObRawExpr *> &select_exprs,
-                          ObIArray<ObRawExpr *> &view_columns,
-                          ObIArray<ObRawExpr *> &real_values);
-
   int transform_upper_stmt(ObDMLStmt &stmt, TransformParam &param);
 
   int transform_from_list(ObDMLStmt &stmt,
                           TableItem *view_table_item,
                           const ObIArray<ObRawExpr *> &joined_conds,
+                          const ObIArray<ObRawExpr *> &upper_filters,
                           const int64_t pullup_flag);
-
-  int extract_nullable_exprs(const ObRawExpr *expr,
-                             ObIArray<const ObRawExpr*> &vars);
 
   inline bool use_outer_join(int64_t flag)
   { return 0 != (flag & USE_OUTER_JOIN); }
@@ -244,6 +239,7 @@ private:
   int check_subquery_conditions(ObQueryRefRawExpr &query_ref,
                                 ObSelectStmt &subquery,
                                 ObIArray<ObRawExpr *> &nested_conds,
+                                ObIArray<ObRawExpr *> &upper_filters,
                                 const bool check_idx,
                                 bool &is_valid,
                                 bool &has_equal_correlation);

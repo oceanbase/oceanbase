@@ -80,6 +80,7 @@ ObSharedMacroBlockMgr::ObSharedMacroBlockMgr()
     block_used_size_(),
     defragmentation_task_(*this),
     tg_id_(-1),
+    need_defragment_(false),
     is_inited_(false)
 {
 }
@@ -101,6 +102,7 @@ void ObSharedMacroBlockMgr::destroy()
   }
   common_header_buf_ = nullptr;
   block_used_size_.destroy();
+  need_defragment_ = false;
   is_inited_ = false;
 }
 
@@ -279,7 +281,8 @@ int ObSharedMacroBlockMgr::write_block(
   read_info.offset_ = offset;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-  read_info.io_desc_.set_group_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
+  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
   ObMacroBlockHandle read_handle;
   ObSSTableMacroBlockChecker macro_block_checker;
   ObArenaAllocator io_allocator("SMBM_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -373,12 +376,11 @@ int ObSharedMacroBlockMgr::add_block(const MacroBlockId &block_id, const int64_t
     lib::ObMutexGuard guard(blocks_mutex_);
     if (OB_FAIL(block_used_size_.get(block_id, curr_size)) && OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get block id from map", K(ret), K(block_id));
-    } else if ((curr_size += block_size) == 0) {
-      if (OB_FAIL(block_used_size_.erase(block_id))) {
-        LOG_WARN("fail to erase id from map", K(ret), K(block_id));
-      }
+    } else if (FALSE_IT(curr_size += block_size)) {
     } else if (OB_FAIL(block_used_size_.insert_or_update(block_id, curr_size))) {
       LOG_WARN("fail to add block to map", K(ret), K(block_id), K(curr_size));
+    } else if (is_recyclable(block_id, curr_size)) {
+      ATOMIC_SET(&need_defragment_, true);
     }
   }
   return ret;
@@ -402,6 +404,8 @@ int ObSharedMacroBlockMgr::free_block(const MacroBlockId &block_id, const int64_
       }
     } else if (OB_FAIL(block_used_size_.insert_or_update(block_id, curr_size))) {
       LOG_WARN("fail to set block used size", K(ret), K(block_id), K(block_size), K(curr_size));
+    } else if (is_recyclable(block_id, curr_size)) {
+      ATOMIC_SET(&need_defragment_, true);
     }
   }
   return ret;
@@ -430,6 +434,7 @@ int ObSharedMacroBlockMgr::get_recyclable_blocks(ObIAllocator &allocator, ObIArr
     if (OB_FAIL(ret)) {
       // do nothing
     } else {
+      ATOMIC_SET(&need_defragment_, false);
       int tmp_ret = OB_SUCCESS;
       for (int64_t i = 0; i < recycled_block_ids.count(); ++i) { // ignore tmp_ret
         const MacroBlockId &block_id = recycled_block_ids.at(i);
@@ -457,6 +462,8 @@ int ObSharedMacroBlockMgr::defragment()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSharedMacroBlockMgr hasn't been initiated", K(ret));
+  } else if (!(ATOMIC_LOAD(&need_defragment_))) { // skip
+    LOG_INFO("skip defragment task", K(ret), K_(need_defragment));
   } else if (OB_FAIL(macro_ids.init(MAX_RECYCLABLE_BLOCK_CNT))) {
     LOG_WARN("fail to init macro ids", K(ret));
   } else if (OB_FAIL(get_recyclable_blocks(task_allocator, macro_ids))) {
@@ -499,6 +506,8 @@ int ObSharedMacroBlockMgr::defragment()
   if (OB_ITER_END == ret || OB_SUCC(ret)) {
     ret = OB_SUCCESS;
     FLOG_INFO("successfully defragment data blocks", K(ret), K(rewrite_cnt), K(block_used_size_.count()));
+  } else {
+    ATOMIC_SET(&need_defragment_, true); // set need_defragment_ true to trigger next round
   }
 
   if (nullptr != sstable_index_builder) {
@@ -839,7 +848,8 @@ int ObSharedMacroBlockMgr::read_sstable_block(
     read_info.size_ = upper_align(sstable.get_macro_read_size(), DIO_READ_ALIGN_SIZE);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
-    read_info.io_desc_.set_group_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
 
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

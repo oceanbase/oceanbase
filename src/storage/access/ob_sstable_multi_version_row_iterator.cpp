@@ -61,6 +61,15 @@ void ObSSTableMultiVersionRowGetter::reuse()
   not_exist_row_.reset();
 }
 
+void ObSSTableMultiVersionRowGetter::reclaim()
+{
+  ObSSTableRowScanner::reclaim();
+  multi_version_range_.reset();
+  range_idx_ = 0;
+  base_rowkey_ = nullptr;
+  not_exist_row_.reset();
+}
+
 int ObSSTableMultiVersionRowGetter::inner_open(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
@@ -120,14 +129,18 @@ void ObSSTableMultiVersionRowScanner::reset()
 {
   ObSSTableMultiVersionRowGetter::reset();
   base_range_ = NULL;
-  trans_version_range_.reset();
 }
 
 void ObSSTableMultiVersionRowScanner::reuse()
 {
   ObSSTableMultiVersionRowGetter::reuse();
   base_range_ = NULL;
-  trans_version_range_.reset();
+}
+
+void ObSSTableMultiVersionRowScanner::reclaim()
+{
+  ObSSTableMultiVersionRowGetter::reclaim();
+  base_range_ = NULL;
 }
 
 int ObSSTableMultiVersionRowScanner::inner_open(
@@ -143,7 +156,6 @@ int ObSSTableMultiVersionRowScanner::inner_open(
   } else {
     ObSSTable *sstable = static_cast<ObSSTable *>(table);
     base_range_ = static_cast<const ObDatumRange *>(query_range);
-    trans_version_range_ = access_ctx.trans_version_range_;
     if (OB_FAIL(base_range_->to_multi_version_range(*access_ctx.get_range_allocator(), multi_version_range_))) {
       STORAGE_LOG(WARN, "Failed to transfer multi version range", K(ret), KPC(base_range_));
     } else if (OB_FAIL(ObSSTableRowScanner::inner_open(iter_param, access_ctx, table, &multi_version_range_))) {
@@ -170,6 +182,16 @@ void ObSSTableMultiVersionRowMultiGetter::reuse()
   multi_version_ranges_.reset();
   not_exist_row_.reset();
   range_idx_ = 0;
+  pending_row_ = NULL;
+  base_rowkeys_ = NULL;
+}
+
+void ObSSTableMultiVersionRowMultiGetter::reclaim()
+{
+  ObSSTableRowMultiScanner::reclaim();
+  multi_version_ranges_.reset();
+  range_idx_ = 0;
+  not_exist_row_.reset();
   pending_row_ = NULL;
   base_rowkeys_ = NULL;
 }

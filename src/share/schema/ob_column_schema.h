@@ -17,6 +17,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/schema/ob_schema_utils.h"
 #include "common/rowkey/ob_rowkey_info.h"
 
 namespace oceanbase
@@ -54,15 +55,14 @@ static common::ColumnType convert_str_to_column_type(const char *str);
 //constructor and destructor
 ObColumnSchemaV2();
 explicit ObColumnSchemaV2(common::ObIAllocator *allocator);
-ObColumnSchemaV2(const ObColumnSchemaV2 &src_schema);
+DISABLE_COPY_ASSIGN(ObColumnSchemaV2);
 virtual ~ObColumnSchemaV2();
 
 //operators
-ObColumnSchemaV2 &operator=(const ObColumnSchemaV2 &src_schema);
 bool operator==(const ObColumnSchemaV2 &r) const;
 bool operator!=(const ObColumnSchemaV2 &r) const;
 
-int assign(const ObColumnSchemaV2 &other);
+int assign(const ObColumnSchemaV2 &src_schema);
 
 //set methods
   inline void set_tenant_id(const uint64_t id) { tenant_id_ = id; }
@@ -202,7 +202,8 @@ int assign(const ObColumnSchemaV2 &other);
   }
   inline bool is_extend() const { return meta_type_.is_ext() || meta_type_.is_user_defined_sql_type(); }
   inline bool is_udt_hidden_column() const { return get_udt_set_id() > 0 && is_hidden(); }
-  inline bool is_udt_related_column() const { return is_extend() || is_udt_hidden_column(); }
+  inline bool is_udt_related_column(bool is_oracle_mode) const { return is_extend() || is_udt_hidden_column() ||
+                                                                        (is_oracle_mode && is_geometry()); }
   inline common::ObCharsetType get_charset_type() const { return charset_type_; }
   inline common::ObCollationType get_collation_type() const { return meta_type_.get_collation_type(); }
   inline const common::ObObj &get_orig_default_value()  const { return orig_default_value_; }
@@ -262,9 +263,15 @@ int assign(const ObColumnSchemaV2 &other);
     del_column_flag(DEFAULT_IDENTITY_COLUMN_FLAG);
     del_column_flag(DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG);
   }
-  inline bool is_fulltext_column() const { return column_flags_ & GENERATED_CTXCAT_CASCADE_FLAG; }
+  inline bool is_fulltext_column() const { return ObSchemaUtils::is_fulltext_column(column_flags_); }
+  inline bool is_doc_id_column() const { return ObSchemaUtils::is_doc_id_column(column_flags_); }
+  inline bool is_word_segment_column() const { return ObSchemaUtils::is_word_segment_column(column_flags_); }
+  inline bool is_word_count_column() const { return ObSchemaUtils::is_word_count_column(column_flags_); }
+  inline bool is_doc_length_column() const { return ObSchemaUtils::is_doc_length_column(column_flags_); }
   inline bool is_spatial_generated_column() const { return column_flags_ & SPATIAL_INDEX_GENERATED_COLUMN_FLAG; }
   inline bool is_spatial_cellid_column() const { return is_spatial_generated_column() && get_data_type() == common::ObUInt64Type; }
+  inline bool is_multivalue_generated_column() const { return column_flags_ & MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG; }
+  inline bool is_multivalue_generated_array_column() const { return column_flags_ & MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG; }
   inline bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
   inline bool is_primary_vp_column() const { return column_flags_ & PRIMARY_VP_COLUMN_FLAG; }
   inline bool is_aux_vp_column() const { return column_flags_ & AUX_VP_COLUMN_FLAG; }
@@ -300,6 +307,7 @@ int assign(const ObColumnSchemaV2 &other);
   inline bool is_enum_or_set() const { return meta_type_.is_enum_or_set(); }
 
   inline static bool is_hidden_pk_column_id(const uint64_t column_id);
+  inline bool is_unused() const { return column_flags_ & UNUSED_COLUMN_FLAG; }
 
   //other methods
   int64_t get_convert_size(void) const;

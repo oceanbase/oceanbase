@@ -22,6 +22,7 @@ namespace oceanbase
 namespace observer
 {
 using namespace common;
+using namespace share;
 using namespace share::schema;
 using namespace table;
 using namespace blocksstable;
@@ -144,15 +145,32 @@ int ObTableLoadSchema::get_column_names(const ObTableSchema *table_schema, ObIAl
   return ret;
 }
 
+int ObTableLoadSchema::get_column_idxs(uint64_t tenant_id, uint64_t table_id,
+                                       ObIArray<int64_t> &column_idxs)
+{
+  int ret = OB_SUCCESS;
+  column_idxs.reset();
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else {
+    ret = get_column_idxs(table_schema, column_idxs);
+  }
+  return ret;
+}
+
 int ObTableLoadSchema::get_column_idxs(const ObTableSchema *table_schema,
                                        ObIArray<int64_t> &column_idxs)
 {
   int ret = OB_SUCCESS;
+  column_idxs.reset();
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
-    ObSEArray<ObColDesc, 64> column_descs;
+    ObArray<ObColDesc> column_descs;
+    column_descs.set_tenant_id(MTL_ID());
     if (OB_FAIL(table_schema->get_column_ids(column_descs, false))) {
       LOG_WARN("fail to get column ids", KR(ret));
     }
@@ -191,6 +209,73 @@ int ObTableLoadSchema::check_has_udt_column(const ObTableSchema *table_schema, b
   return ret;
 }
 
+int ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id,
+                                                                 bool &value)
+{
+  int ret = OB_SUCCESS;
+  value = false;
+  ObSqlString sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    sqlclient::ObMySQLResult *result = nullptr;
+    // TODO(suzhi.yt) 这里为啥是带zone纬度的? 如果查询结果中有多个zone的, 选哪个作为返回值呢?
+    if (OB_FAIL(sql.assign_fmt(
+          "SELECT value FROM %s WHERE tenant_id = %ld and (zone, name, schema_version) in (select "
+          "zone, name, max(schema_version) FROM %s group by zone, name) and name = '%s'",
+          OB_ALL_SYS_VARIABLE_HISTORY_TNAME,
+          ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+          OB_ALL_SYS_VARIABLE_HISTORY_TNAME, OB_SV__OPTIMIZER_GATHER_STATS_ON_LOAD))) {
+      LOG_WARN("fail to append sql", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to execute sql", KR(ret), K(sql), K(tenant_id));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get sql result", KR(ret), K(sql), K(tenant_id));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to get next row", KR(ret), K(tenant_id));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else {
+          ObString data;
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", data);
+          if (0 == strcmp(data.ptr(), "1")) {
+            value = true;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::get_lob_meta_tid(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    uint64_t &lob_meta_table_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *data_table_schema = nullptr;
+  lob_meta_table_id = OB_INVALID_ID;
+  if (OB_FAIL(ObTableLoadSchema::get_table_schema(
+      tenant_id, data_table_id, schema_guard, data_table_schema))) {
+    LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("data table not exist", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (!data_table_schema->has_lob_aux_table()) {
+    // bypass
+  } else {
+    lob_meta_table_id = data_table_schema->get_aux_lob_meta_tid();
+  }
+  return ret;
+}
+
 ObTableLoadSchema::ObTableLoadSchema()
   : allocator_("TLD_Schema"),
     is_partitioned_table_(false),
@@ -202,9 +287,11 @@ ObTableLoadSchema::ObTableLoadSchema()
     store_column_count_(0),
     lob_column_cnt_(0),
     collation_type_(CS_TYPE_INVALID),
+    part_level_(PARTITION_LEVEL_ZERO),
     schema_version_(0),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
   column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
   multi_version_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
 }
@@ -226,6 +313,7 @@ void ObTableLoadSchema::reset()
   store_column_count_ = 0;
   lob_column_cnt_ = 0;
   collation_type_ = CS_TYPE_INVALID;
+  part_level_ = PARTITION_LEVEL_ZERO;
   schema_version_ = 0;
   column_descs_.reset();
   multi_version_column_descs_.reset();
@@ -243,7 +331,6 @@ int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t table_id)
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadSchema init twice", KR(ret));
   } else {
-    allocator_.set_tenant_id(tenant_id);
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
     if (OB_FAIL(get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
@@ -270,6 +357,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
     rowkey_column_count_ = table_schema->get_rowkey_column_num();
     collation_type_ = table_schema->get_collation_type();
+    part_level_ = table_schema->get_part_level();
     schema_version_ = table_schema->get_schema_version();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
@@ -295,6 +383,8 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     if (OB_SUCC(ret)) {
       ObArray<ObTabletID> tablet_ids;
       ObArray<uint64_t> part_ids;
+      tablet_ids.set_tenant_id(MTL_ID());
+      part_ids.set_tenant_id(MTL_ID());
       if (OB_FAIL(table_schema->get_all_tablet_and_object_ids(tablet_ids, part_ids))) {
         LOG_WARN("fail to get all tablet ids", KR(ret));
       } else if (OB_FAIL(partition_ids_.create(part_ids.count(), allocator_))) {

@@ -28,6 +28,7 @@
 #include "sql/engine/user_defined_function/ob_pl_user_defined_agg_function.h"
 #include "sql/engine/expr/ob_expr_dll_udf.h"
 #include "sql/engine/expr/ob_rt_datum_arith.h"
+#include "lib/geo/ob_geo_mvt.h"
 
 namespace oceanbase
 {
@@ -167,6 +168,7 @@ public:
     group_idxs_.set_allocator(alloc);
   }
   int64_t to_string(char *buf, const int64_t buf_len) const;
+  int assign(const ObAggrInfo &rhs);
 
   common::ObIAllocator *alloc_;
   ObExpr *expr_;
@@ -412,7 +414,7 @@ public:
 
     int init(const uint64_t tenant_id, const ObAggrInfo &aggr_info,
              ObEvalCtx &eval_ctx, const bool need_rewind,
-             ObIOEventObserver *io_event_observer, ObSqlWorkAreaProfile &profile,
+             ObIOEventObserver *io_event_observer,
              ObMonitorNode &op_monitor_info);
 
     int add_sort_row(const ObIArray<ObExpr *> &expr, ObEvalCtx &eval_ctx);
@@ -789,6 +791,7 @@ public:
   inline void set_support_fast_single_row_agg(const bool flag) { support_fast_single_row_agg_ = flag; }
   void set_need_advance_collect() { need_advance_collect_ = true; }
   bool get_need_advance_collect() const { return need_advance_collect_; }
+  static int llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc);
   static int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size);
 private:
   template <typename T>
@@ -985,7 +988,14 @@ private:
   int get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
                             GroupConcatExtraResult *&extra,
                             ObDatum &concat_result);
-
+  int get_asmvt_result(const ObAggrInfo &aggr_info,
+                       GroupConcatExtraResult *&extra,
+                       ObDatum &concat_result);
+  int init_asmvt_result(ObIAllocator &allocator,
+                        const ObAggrInfo &aggr_info,
+                        const ObObj *tmp_obj,
+                        uint32_t obj_cnt,
+                        mvt_agg_result &mvt_res);
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
   int shadow_truncate_string_for_hist(const ObObjMeta obj_meta,
@@ -1106,7 +1116,8 @@ public:
       case T_FUN_ORA_JSON_ARRAYAGG:
       case T_FUN_JSON_OBJECTAGG:
       case T_FUN_ORA_JSON_OBJECTAGG:
-      case T_FUN_ORA_XMLAGG: {
+      case T_FUN_ORA_XMLAGG:
+      case T_FUN_SYS_ST_ASMVT: {
         need_id = true;
         break;
       }
@@ -1210,7 +1221,6 @@ private:
   RemovalInfo removal_info_;
   bool support_fast_single_row_agg_;
   ObIArray<ObEvalInfo *> *op_eval_infos_;
-  ObSqlWorkAreaProfile profile_;
   ObMonitorNode &op_monitor_info_;
   bool need_advance_collect_;
 };
@@ -1256,6 +1266,7 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       need_extra = true;
       break;

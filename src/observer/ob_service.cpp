@@ -25,6 +25,7 @@
 #include "lib/thread_local/ob_tsi_factory.h"
 #include "lib/utility/utility.h"
 #include "lib/time/ob_tsc_timestamp.h"
+#include "lib/alloc/memory_dump.h"
 
 #include "common/ob_member_list.h"
 #include "common/ob_zone.h"
@@ -39,7 +40,6 @@
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
 #include "share/rc/ob_tenant_base.h"
 
-#include "storage/ob_partition_component_factory.h"
 #include "storage/ob_i_table.h"
 #include "storage/tx/ob_trans_service.h"
 #include "sql/optimizer/ob_storage_estimator.h"
@@ -730,6 +730,7 @@ int ObService::backup_completing_log(const obrpc::ObBackupComplLogArg &arg)
   SCN start_scn = arg.start_scn_;
   SCN end_scn = arg.end_scn_;
   ObLSID ls_id = arg.ls_id_;
+  const bool is_only_calc_stat = arg.is_only_calc_stat_;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (!arg.is_valid() || OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
@@ -737,7 +738,7 @@ int ObService::backup_completing_log(const obrpc::ObBackupComplLogArg &arg)
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, arg.backup_path_, backup_dest))) {
     LOG_WARN("failed to get backup dest", KR(ret), K(arg));
   } else if (OB_FAIL(ObBackupHandler::schedule_backup_complement_log_dag(
-      job_desc, backup_dest, tenant_id, backup_set_desc, ls_id, start_scn, end_scn))) {
+      job_desc, backup_dest, tenant_id, backup_set_desc, ls_id, start_scn, end_scn, is_only_calc_stat))) {
     LOG_WARN("failed to schedule backup data dag", KR(ret), K(arg));
   } else {
     SERVER_EVENT_ADD("backup_data", "schedule_backup_complement_log",
@@ -2124,15 +2125,20 @@ int ObService::set_tracepoint(const obrpc::ObAdminSetTPArg &arg)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
+    EventItem item;
+    item.error_code_ = arg.error_code_;
+    item.occur_ = arg.occur_;
+    item.trigger_freq_ = arg.trigger_freq_;
+    item.cond_ = arg.cond_;
     if (arg.event_name_.length() > 0) {
       ObSqlString str;
       if (OB_FAIL(str.assign(arg.event_name_))) {
         LOG_WARN("string assign failed", K(ret));
-      } else {
-        TP_SET_EVENT(str.ptr(), arg.error_code_, arg.occur_, arg.trigger_freq_, arg.cond_);
+      } else if (OB_FAIL(EventTable::instance().set_event(str.ptr(), item))) {
+        LOG_WARN("Failed to set tracepoint event, tp_name does not exist.", K(ret), K(arg.event_name_));
       }
-    } else {
-      TP_SET_EVENT(arg.event_no_, arg.error_code_, arg.occur_, arg.trigger_freq_, arg.cond_);
+    } else if (OB_FAIL(EventTable::instance().set_event(arg.event_no_, item))) {
+      LOG_WARN("Failed to set tracepoint event, tp_no does not exist.", K(ret), K(arg.event_no_));
     }
     LOG_INFO("set event", K(arg));
   }
@@ -2423,7 +2429,12 @@ int ObService::get_wrs_info(const obrpc::ObGetWRSArg &arg,
 
 int ObService::refresh_memory_stat()
 {
-  return ObDumpTaskGenerator::generate_mod_stat_task();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObMemoryDump::get_instance().check_sql_memory_leak())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "there has sql memory leak");
+  }
+  return ret;
 }
 
 int ObService::wash_memory_fragmentation()
@@ -2471,10 +2482,7 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else {
-    if (DDL_DROP_COLUMN == arg.ddl_type_
-        || DDL_ADD_COLUMN_OFFLINE == arg.ddl_type_
-        || DDL_COLUMN_REDEFINITION == arg.ddl_type_
-        || DDL_TABLE_RESTORE == arg.ddl_type_) {
+    if (is_complement_data_relying_on_dag(ObDDLType(arg.ddl_type_))) {
       int saved_ret = OB_SUCCESS;
       ObTenantDagScheduler *dag_scheduler = nullptr;
       ObComplementDataDag *dag = nullptr;
@@ -2515,6 +2523,47 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
       LOG_WARN("not supported ddl type", K(ret), K(arg));
     }
 
+  }
+  return ret;
+}
+
+int ObService::check_and_cancel_ddl_complement_data_dag(const ObDDLBuildSingleReplicaRequestArg &arg, bool &is_dag_exist)
+{
+  int ret = OB_SUCCESS;
+  is_dag_exist = true;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(arg));
+  } else if (OB_UNLIKELY(!is_complement_data_relying_on_dag(ObDDLType(arg.ddl_type_)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ddl type", K(ret), K(arg));
+  } else {
+    ObTenantDagScheduler *dag_scheduler = nullptr;
+    ObComplementDataDag *dag = nullptr;
+    if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag scheduler is null", K(ret));
+    } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
+      LOG_WARN("fail to alloc dag", K(ret));
+    } else if (OB_ISNULL(dag)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, dag is null", K(ret), KP(dag));
+    } else if (OB_FAIL(dag->init(arg))) {
+      LOG_WARN("fail to init complement data dag", K(ret), K(arg));
+    } else if (OB_FAIL(dag_scheduler->check_dag_exist(dag, is_dag_exist))) {
+      LOG_WARN("check dag exist failed", K(ret));
+    } else if (is_dag_exist && OB_FAIL(dag_scheduler->cancel_dag(dag))) {
+      // sync to cancel ready dag only, not including running dag.
+      LOG_WARN("cancel dag failed", K(ret));
+    }
+    if (OB_NOT_NULL(dag)) {
+      (void) dag->handle_init_failed_ret_code(ret);
+      dag_scheduler->free_dag(*dag);
+      dag = nullptr;
+    }
+  }
+  if (REACH_COUNT_INTERVAL(1000L)) {
+    LOG_INFO("receive cancel ddl complement dag request", K(ret), K(is_dag_exist), K(arg));
   }
   return ret;
 }

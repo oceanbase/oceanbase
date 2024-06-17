@@ -62,9 +62,12 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
                                               session_info_->get_enable_role_array()));
     }
     //Step2: create alter stmt
-    if (OB_SUCC(ret) && OB_ISNULL(alter_routine_stmt = create_stmt<ObAlterRoutineStmt>())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(alter_routine_stmt = create_stmt<ObAlterRoutineStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for ObAlterRoutineStmt", K(ret));
+    } else {
+      crt_resolver_->set_basic_stmt(alter_routine_stmt);
     }
     //Step3: got standalone routine info 
     if (OB_FAIL(ret)) {
@@ -181,6 +184,7 @@ int ObAlterRoutineResolver::resolve_compile_clause(
   bool need_recreate = false;
   ObExecEnv old_env;
   ObExecEnv new_env;
+  ObArenaAllocator tmp_allocator;
 
   CK (OB_LIKELY(T_SP_COMPILE_CLAUSE == alter_clause_node.type_));
   CK (OB_LIKELY(1 == alter_clause_node.num_child_));
@@ -191,11 +195,11 @@ int ObAlterRoutineResolver::resolve_compile_clause(
   OX (reuse_setting = (1==alter_clause_node.int32_values_[1]) ? true : false);
  
   if (OB_SUCC(ret)) {
-    OZ (old_env.load(*session_info_));
+    OZ (old_env.load(*session_info_, &tmp_allocator));
     if (reuse_setting) {
       OZ (new_env.init(routine_info.get_exec_env()));
     } else {
-      OZ (new_env.load(*session_info_));
+      OZ (new_env.load(*session_info_, &tmp_allocator));
     }
     if (params.count() > 0) {
       for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
@@ -354,7 +358,9 @@ int ObAlterRoutineResolver::resolve_routine(
   int ret = OB_SUCCESS;
   ParseNode *crt_tree = NULL;
   CK (OB_NOT_NULL(source_tree));
-  CK (T_SP_SOURCE == source_tree->type_ || T_SF_SOURCE == source_tree->type_);
+  CK (T_SP_SOURCE == source_tree->type_
+      || T_SF_SOURCE == source_tree->type_
+      || T_SF_AGGREGATE_SOURCE == source_tree->type_);
   CK (lib::is_oracle_mode());
   if (OB_SUCC(ret)
       && OB_ISNULL(crt_tree = new_non_terminal_node(

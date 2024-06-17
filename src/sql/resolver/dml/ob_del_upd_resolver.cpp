@@ -86,7 +86,8 @@ ObDelUpdResolver::ObDelUpdResolver(ObResolverParams &params)
     insert_column_ids_(),
     is_column_specify_(false),
     is_oracle_tmp_table_(false),
-    oracle_tmp_table_type_(0)
+    oracle_tmp_table_type_(0),
+    is_resolve_insert_update_(false)
 {
   // TODO Auto-generated constructor stub
 }
@@ -232,6 +233,10 @@ int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
           }
         }
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(resolve_json_partial_update_flag(table_assigns, scope))) {
+      LOG_WARN("resolve_json_partial_update_flag fail", K(ret));
     }
   }
   return ret;
@@ -910,7 +915,7 @@ int ObDelUpdResolver::set_base_table_for_updatable_view(TableItem &table_item,
             ret = dml->is_insert_stmt() ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_NON_UPDATABLE_TABLE;
             LOG_WARN("view is not updatable", K(ret));
           } else if (new_table_item->is_json_table()) {
-            ret = OB_ERR_NON_INSERTABLE_TABLE;
+            ret = is_mysql_mode() ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_VIRTUAL_COL_NOT_ALLOWED;
             LOG_WARN("json table can not be insert", K(ret));
           } else {
             ret = OB_ERR_UNEXPECTED;
@@ -1098,6 +1103,69 @@ int ObDelUpdResolver::check_same_base_table(const TableItem &table_item,
   return ret;
 }
 
+
+int ObDelUpdResolver::add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col) {
+  int ret = OB_SUCCESS;
+  bool found_in_select = false;
+  FOREACH_CNT_X(si, select_stmt.get_select_items(), !found_in_select) {
+    if (si->expr_ == col.expr_) {
+      found_in_select = true;
+    }
+  }
+  if (!found_in_select) {
+    SelectItem select_item;
+    select_item.implicit_filled_ = true;
+    select_item.expr_ = col.expr_;
+    // concat column's table name and column name as select item's alias name
+    const int32_t size = col.expr_->get_table_name().length()
+        + 1 // "."
+        + col.expr_->get_column_name().length();
+    char *buf = static_cast<char *>(allocator_->alloc(size));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(size));
+    } else {
+      char *p = buf;
+      MEMCPY(p, col.expr_->get_table_name().ptr(), col.expr_->get_table_name().length());
+      p += col.expr_->get_table_name().length();
+      *p = '.';
+      p++;
+      MEMCPY(p, col.expr_->get_column_name().ptr(), col.expr_->get_column_name().length());
+      select_item.alias_name_.assign_ptr(buf, size);
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(select_stmt.add_select_item(select_item))) {
+        LOG_WARN("add select item failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::select_items_is_pk(const ObSelectStmt& select_stmt, bool &has_pk) {
+  int ret = OB_SUCCESS;
+  has_pk = false;
+
+  for (int64_t i = 0; i < select_stmt.get_select_items().count() && !has_pk && OB_SUCC(ret); ++i) {
+    const SelectItem &si = select_stmt.get_select_items().at(i);
+    if (OB_ISNULL(si.expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select item expr is null", K(ret));
+    } else if (si.expr_->is_column_ref_expr()) {
+      const ObColumnRefRawExpr* col_ref = static_cast<const ObColumnRefRawExpr*>(si.expr_);
+      if (OB_ISNULL(col_ref)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref expr is null", K(ret));
+      } else if (col_ref->get_column_id() == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+        has_pk = true;
+      }
+    }
+  }
+
+  return ret;
+}
+
+
 int ObDelUpdResolver::add_all_column_to_updatable_view(ObDMLStmt &stmt,
                                                        const TableItem &table_item,
                                                        const bool &has_need_fired_tg_on_view)
@@ -1125,47 +1193,23 @@ int ObDelUpdResolver::add_all_column_to_updatable_view(ObDMLStmt &stmt,
     }
   }
   if (OB_SUCC(ret)) {
-    auto add_select_item_func = [&](ObSelectStmt &select_stmt, ColumnItem &col) {
-      int ret = OB_SUCCESS;
-      bool found_in_select = false;
-      FOREACH_CNT_X(si, select_stmt.get_select_items(), !found_in_select) {
-        if (si->expr_ == col.expr_) {
-          found_in_select = true;
-        }
-      }
-      if (!found_in_select) {
-        SelectItem select_item;
-        select_item.implicit_filled_ = true;
-        select_item.expr_ = col.expr_;
-        // concat column's table name and column name as select item's alias name
-        const int32_t size = col.expr_->get_table_name().length()
-            + 1 // "."
-            + col.expr_->get_column_name().length();
-        char *buf = static_cast<char *>(allocator_->alloc(size));
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory failed", K(ret), K(size));
-        } else {
-          char *p = buf;
-          MEMCPY(p, col.expr_->get_table_name().ptr(), col.expr_->get_table_name().length());
-          p += col.expr_->get_table_name().length();
-          *p = '.';
-          p++;
-          MEMCPY(p, col.expr_->get_column_name().ptr(), col.expr_->get_column_name().length());
-          select_item.alias_name_.assign_ptr(buf, size);
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(select_stmt.add_select_item(select_item))) {
-            LOG_WARN("add select item failed", K(ret));
-          }
-        }
-      }
-      return ret;
-    };
     ColumnItem *col_item = NULL;
     if (table_item.is_basic_table() || table_item.is_link_table()) {
+      bool has_pk = false;
+      if (stmt::T_SELECT == stmt.get_stmt_type()) {
+        // select_items_is_pk must happend before add_select_item_func
+        if (OB_FAIL(select_items_is_pk(static_cast<ObSelectStmt &>(stmt), has_pk))) {
+          LOG_WARN("failed to extract pk", K(ret));
+        } else if (has_pk) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("view has hidden pk in modify stmt", K(ret));
+        }
+      }
+
       const ObTableSchema *table_schema = NULL;
-      if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(), table_item.ref_id_, table_schema, table_item.is_link_table()))) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(), table_item.ref_id_, table_schema, table_item.is_link_table()))) {
         LOG_WARN("get table schema failed", K(ret));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1530,8 +1574,8 @@ int ObDelUpdResolver::resolve_returning(const ParseNode *parse_tree)
           }
         }
         if (OB_SUCC(ret)
-            && (ob_is_user_defined_sql_type(expr->get_data_type())
-                || ob_is_xml_pl_type(expr->get_data_type(), expr->get_udt_id()))) {
+            && (ob_is_xml_pl_type(expr->get_data_type(), expr->get_udt_id()) ||
+                ob_is_xml_sql_type(expr->get_result_type().get_type(), expr->get_result_type().get_subschema_id()))) {
           // ORA-22816 returning clause is currently not object type columns
           // but this is success in ORA: execute immediate 'insert into t1 values(4,5) returning udt1(c1, c2) into :a' using out a;
           // xmltype is not allowed: execute immediate 'insert into t2 values(:b) returning xmltype(c1) into :a' using b, out a;
@@ -2680,7 +2724,7 @@ int ObDelUpdResolver::generate_column_conv_function(ObInsertTableInfo &table_inf
       } else if (OB_FAIL(find_value_desc(table_info, column_id, column_ref))) {
         LOG_WARN("fail to check column is exists", K(ret), K(column_id));
       } else if ((!session_info_->get_ddl_info().is_ddl() || OB_ISNULL(column_ref)) &&
-                 ( tbl_col->is_xml_column() || (tbl_col->is_udt_hidden_column()))) {
+                 (tbl_col->is_xml_column() || (tbl_col->is_udt_hidden_column()))) {
         if (!tbl_col->is_xml_column()) {
           // do nothing, hidden column with build with xml column together
         } else if (OB_FAIL(build_column_conv_function_for_udt_column(table_info, i, column_ref))) {
@@ -3065,47 +3109,70 @@ int ObDelUpdResolver::generate_autoinc_params(ObInsertTableInfo &table_info)
       if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid column schema", K(column_schema));
-      } else {
-        uint64_t column_id = column_schema->get_column_id();
-        if (column_schema->is_autoincrement()) {
-          del_upd_stmt->set_affected_last_insert_id(true);
-          AutoincParam param;
-          param.tenant_id_ = params_.session_info_->get_effective_tenant_id();
-          param.autoinc_table_id_ = table_info.ref_table_id_;
-          param.autoinc_first_part_num_ = table_schema->get_first_part_num();
-          param.autoinc_table_part_num_ = table_schema->get_all_part_num();
-          param.autoinc_col_id_ = column_id;
-          param.auto_increment_cache_size_ = auto_increment_cache_size;
-          param.part_level_ = table_schema->get_part_level();
-          ObObjType column_type = table_schema->get_column_schema(column_id)->get_data_type();
-          param.autoinc_col_type_ = column_type;
-          param.autoinc_desired_count_ = 0;
-          param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
-          param.autoinc_version_ = table_schema->get_truncate_version();
-          param.autoinc_auto_increment_ = table_schema->get_auto_increment();
-
-          // hidden pk auto-increment variables' default value is 1
-          // auto-increment variables for other columns are set in ob_sql.cpp
-          // because physical plan may come from plan cache; it need be reset every time
-          if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id) {
-            param.autoinc_increment_ = 1;
-            param.autoinc_offset_ = 1;
-            param.part_value_no_order_ = true;
-          } else if (column_schema->is_tbl_part_key_column()) {
-            // don't keep intra-partition value asc order when partkey column is auto inc
-            param.part_value_no_order_ = true;
-          }
-
-          if (OB_FAIL(get_value_row_size(param.total_value_count_))) {
-            LOG_WARN("fail to get value row size", K(ret));
-          } else if (OB_FAIL(del_upd_stmt->get_autoinc_params().push_back(param))) {
-            LOG_WARN("failed to push autoinc_param", K(param), K(ret));
-          }
+      } else if (column_schema->is_autoincrement()) {
+        const ObTableSchema *t_schema = table_schema;
+        uint64_t table_id = table_info.ref_table_id_;
+        AutoincParam param;
+        del_upd_stmt->set_affected_last_insert_id(true);
+        if (FAILEDx(build_autoinc_param(table_id, t_schema, column_schema, auto_increment_cache_size, param))) {
+          LOG_WARN("fail to build auto param", K(ret), K(table_id), K(table_info), KPC(column_schema));
+        } else if (OB_FAIL(del_upd_stmt->get_autoinc_params().push_back(param))) {
+          LOG_WARN("failed to push autoinc_param", K(param), K(ret));
         }
       }
     }//end for
   }
-  LOG_DEBUG("generate autoinc_params", "autoin_params", del_upd_stmt->get_autoinc_params());
+  LOG_DEBUG("generate autoinc_params", "autoinc_params", del_upd_stmt->get_autoinc_params());
+  return ret;
+}
+
+int ObDelUpdResolver::build_autoinc_param(
+    const uint64_t table_id,
+    const ObTableSchema *table_schema,
+    const ObColumnSchemaV2 *column_schema,
+    const int64_t auto_increment_cache_size,
+    AutoincParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id || auto_increment_cache_size < 0)
+      || OB_ISNULL(table_schema)
+      || OB_ISNULL(column_schema)
+      || OB_ISNULL(params_.session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(table_id), KP(table_schema), KP(column_schema),
+        K(auto_increment_cache_size), KP(params_.session_info_));
+  } else {
+    const uint64_t column_id = column_schema->get_column_id();
+    const ObObjType column_type = column_schema->get_data_type();
+    param.tenant_id_ = params_.session_info_->get_effective_tenant_id();
+    param.autoinc_table_id_ = table_id;
+    param.autoinc_first_part_num_ = table_schema->get_first_part_num();
+    param.autoinc_table_part_num_ = table_schema->get_all_part_num();
+    param.autoinc_col_id_ = column_id;
+    param.auto_increment_cache_size_ = auto_increment_cache_size;
+    param.part_level_ = table_schema->get_part_level();
+    param.autoinc_col_type_ = column_type;
+    param.autoinc_desired_count_ = 0;
+    param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
+    param.autoinc_version_ = table_schema->get_truncate_version();
+    param.autoinc_auto_increment_ = table_schema->get_auto_increment();
+
+    // hidden pk auto-increment variables' default value is 1
+    // auto-increment variables for other columns are set in ob_sql.cpp
+    // because physical plan may come from plan cache; it need be reset every time
+    if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id) {
+      param.autoinc_increment_ = 1;
+      param.autoinc_offset_ = 1;
+      param.part_value_no_order_ = true;
+    } else if (column_schema->is_tbl_part_key_column()) {
+      // don't keep intra-partition value asc order when partkey column is auto inc
+      param.part_value_no_order_ = true;
+    }
+
+    if (OB_FAIL(get_value_row_size(param.total_value_count_))) {
+      LOG_WARN("fail to get value row size", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -3267,7 +3334,8 @@ int ObDelUpdResolver::resolve_insert_columns(const ParseNode *node,
 }
 
 int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
-                                            ObInsertTableInfo& table_info)
+                                            ObInsertTableInfo& table_info,
+                                            ObIArray<uint64_t> &label_se_columns)
 {
   int ret = OB_SUCCESS;
   ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
@@ -3496,10 +3564,11 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(add_new_value_for_oracle_temp_table(value_row))) {
           LOG_WARN("failed to add __session_id value");
+        } else if (OB_FAIL(add_new_value_for_oracle_label_security_table(table_info, label_se_columns, value_row))) {
+          LOG_WARN("fail to add new value for oracle label security table", K(ret));
         } else if (OB_FAIL(append(table_info.values_vector_, value_row))) {
           LOG_WARN("failed to append value row", K(ret));
         }
-
       }
     }
     value_row.reset();
@@ -4157,10 +4226,105 @@ int ObDelUpdResolver::add_new_sel_item_for_oracle_temp_table(ObSelectStmt &selec
   return ret;
 }
 
+int ObDelUpdResolver::get_session_columns_for_oracle_temp_table(uint64_t ref_table_id,
+                                                                uint64_t table_id,
+                                                                ObDMLStmt *stmt,
+                                                                ObColumnRefRawExpr *&session_id_expr,
+                                                                ObColumnRefRawExpr *&session_create_time_expr)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_tmp_table_) {
+    const share::schema::ObColumnSchemaV2 *column_schema = NULL;
+    const share::schema::ObColumnSchemaV2 *column_schema2 = NULL;
+    const ObTableSchema *table_schema = NULL;
+    common::ObSEArray<ObColumnRefRawExpr*, 8, common::ModulePageAllocator, true> column_exprs;
+    TableItem *table_item = NULL;
+    if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid session_info_", K(session_info_));
+    } else if (OB_FAIL(get_table_schema(table_id, ref_table_id, stmt, table_schema))) {
+      LOG_WARN("not find table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("fail to get tale schema", K(ret), K(table_schema));
+    } else if (OB_ISNULL(column_schema = (table_schema->get_column_schema(OB_HIDDEN_SESSION_ID_COLUMN_ID)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get column schema", K(ret));
+    } else if (OB_ISNULL(column_schema2 = (table_schema->get_column_schema(OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get column schema", K(ret));
+    } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get table item", K(ret));
+    } else if (OB_FAIL(add_column_to_stmt(*table_item, *column_schema, column_exprs, stmt))) {
+      LOG_WARN("failed get column item", K(ret));
+    } else if (OB_FAIL(add_column_to_stmt(*table_item, *column_schema2, column_exprs, stmt))) {
+      LOG_WARN("failed get column exprs", K(ret));
+    } else if (column_exprs.count() != 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get column exprs", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      session_id_expr = column_exprs.at(0);
+      session_create_time_expr = column_exprs.at(1);
+      if (OB_ISNULL(session_id_expr) || OB_ISNULL(session_create_time_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::add_column_for_oracle_temp_table(uint64_t ref_table_id,
+                                                       uint64_t table_id,
+                                                       ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_tmp_table_) {
+    ObColumnRefRawExpr *session_id_expr = NULL;
+    ObColumnRefRawExpr *session_create_time_expr = NULL;
+    if (OB_FAIL(get_session_columns_for_oracle_temp_table(ref_table_id,
+                                                          table_id,
+                                                          stmt,
+                                                          session_id_expr,
+                                                          session_create_time_expr))) {
+      LOG_WARN("failed to get session columns for oracle temp table", K(ret));
+    } else if (OB_FAIL(mock_values_column_ref(session_id_expr))) {
+      LOG_WARN("mock values column reference failed", K(ret));
+    } else if (OB_FAIL(mock_values_column_ref(session_create_time_expr))) {
+      LOG_WARN("mock values column reference failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::add_column_for_oracle_temp_table(ObInsertTableInfo &table_info,
+                                                       ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_tmp_table_) {
+    ObColumnRefRawExpr *session_id_expr = NULL;
+    ObColumnRefRawExpr *session_create_time_expr = NULL;
+    if (OB_FAIL(get_session_columns_for_oracle_temp_table(table_info.ref_table_id_,
+                                                          table_info.table_id_,
+                                                          stmt,
+                                                          session_id_expr,
+                                                          session_create_time_expr))) {
+      LOG_WARN("failed to get session columns for oracle temp table", K(ret));
+    } else if (OB_FAIL(mock_values_column_ref(session_id_expr, table_info))) {
+      LOG_WARN("mock values column reference failed", K(ret));
+    } else if (OB_FAIL(mock_values_column_ref(session_create_time_expr, table_info))) {
+      LOG_WARN("mock values column reference failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 // 值插入、查询插入对oracle临时表都要添加__session_id和__sess_create_time字段到目标列
 int ObDelUpdResolver::add_new_column_for_oracle_temp_table(uint64_t ref_table_id,
-                                                           uint64_t table_id /* = OB_INVALID_ID */,
-                                                           ObDMLStmt *stmt /* = NULL */)
+                                                           uint64_t table_id,
+                                                           ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
   if (is_oracle_tmp_table_) {
@@ -4202,9 +4366,9 @@ int ObDelUpdResolver::add_new_column_for_oracle_temp_table(uint64_t ref_table_id
     } else if (OB_FAIL(sess_create_time_expr->formalize(session_info_))) {
       LOG_WARN("fail to formalize rowkey", KPC(sess_create_time_expr), K(ret));
     } else {
-      session_id_expr->set_ref_id(table_schema->get_table_id(), column_schema->get_column_id());
+      session_id_expr->set_ref_id(table_id, column_schema->get_column_id());
       session_id_expr->set_column_attr(table_schema->get_table_name(), column_schema->get_column_name_str());
-      sess_create_time_expr->set_ref_id(table_schema->get_table_id(), column_schema2->get_column_id());
+      sess_create_time_expr->set_ref_id(table_id, column_schema2->get_column_id());
       sess_create_time_expr->set_column_attr(table_schema->get_table_name(), column_schema2->get_column_name_str());
       LOG_DEBUG("add __session_id & __sess_create_time to target succeed",
                 K(*session_id_expr), K(*sess_create_time_expr));
@@ -4628,6 +4792,69 @@ int ObDelUpdResolver::check_need_match_all_params(const common::ObIArray<ObColum
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+
+int ObDelUpdResolver::resolve_json_partial_update_flag(ObIArray<ObTableAssignment> &table_assigns, ObStmtScope scope)
+{
+  INIT_SUCC(ret);
+  if (T_UPDATE_SCOPE == scope) {
+    bool need_partial_update = false;
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is NULL", K(ret));
+    } else {
+      ObString option = session_info_->get_log_row_value_option();
+      need_partial_update = option.case_compare(OB_LOG_ROW_VALUE_PARTIAL_JSON) == 0
+        || option.case_compare(OB_LOG_ROW_VALUE_PARTIAL_ALL) == 0;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && need_partial_update && i < table_assigns.count(); ++i) {
+      ObTableAssignment &table_assign = table_assigns.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
+        ObAssignment &assign = table_assign.assignments_.at(j);
+        bool allow_json_partial_update = false;
+        if (OB_FAIL(mark_json_partial_update_flag(assign.column_expr_, assign.expr_, 0, allow_json_partial_update))) {
+          LOG_WARN("mark_json_partial_update_flag fail", K(ret), K(table_assign), K(assign));
+        }
+      }
+    }
+  }
+  return ret;
+}
+int ObDelUpdResolver::mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update)
+{
+  INIT_SUCC(ret);
+  ObItemType expr_type = expr->get_expr_type();
+  if (OB_ISNULL(ref_expr) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref_expr or expr is NULL", K(ret), KP(ref_expr), KP(expr));
+  } else if (! ob_is_json(ref_expr->get_data_type())) {
+  } else if (expr->is_column_ref_expr()) {
+    allow_json_partial_update = ObRawExprUtils::is_same_column_ref(ref_expr, expr);
+  } else if (T_FUN_COLUMN_CONV == expr_type) {
+    if (0 == depth && ob_is_json(expr->get_data_type()) && ob_is_json(expr->get_param_expr(4)->get_data_type())) {
+      ObRawExpr *json_expr = expr->get_param_expr(4);
+      if (OB_FAIL(mark_json_partial_update_flag(ref_expr, json_expr, depth + 1, allow_json_partial_update))) {
+        LOG_WARN("mark_json_partial_update_flag fail", K(ret), KP(ref_expr), KP(expr), KP(json_expr));
+      } else if (allow_json_partial_update) {
+        json_expr->set_extra(OB_JSON_PARTIAL_UPDATE_LAST_EXPR | json_expr->get_extra());
+      }
+    }
+  } else if (expr_type != T_FUN_SYS_JSON_REPLACE
+      && expr_type != T_FUN_SYS_JSON_SET
+      && expr_type != T_FUN_SYS_JSON_REMOVE) {
+  } else if (OB_FAIL(mark_json_partial_update_flag(ref_expr, expr->get_param_expr(0), depth + 1, allow_json_partial_update))) {
+    LOG_WARN("mark fail", K(ret));
+  } else if (allow_json_partial_update) {
+    expr->set_extra(OB_JSON_PARTIAL_UPDATE_ALLOW | expr->get_extra());
+    if (depth == 0) {
+      expr->set_extra(OB_JSON_PARTIAL_UPDATE_LAST_EXPR | expr->get_extra());
+    }
+    if (expr->get_param_expr(0)->is_column_ref_expr()) {
+      expr->set_extra(OB_JSON_PARTIAL_UPDATE_FIRST_EXPR | expr->get_extra());
     }
   }
   return ret;

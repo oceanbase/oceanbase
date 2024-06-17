@@ -179,6 +179,7 @@ double ObIndexMetaInfo::get_micro_block_numbers() const
  */
 int ObOptEstCostModel::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                     double &cost,
+                                    double &filter_selectivity,
                                     ObIArray<ObExprSelPair> &all_predicate_sel)
 {
   int ret = OB_SUCCESS;
@@ -191,7 +192,7 @@ int ObOptEstCostModel::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
     double right_rows = est_cost_info.right_rows_;
     double cart_tuples = left_rows * right_rows; // tuples of Cartesian product
     double out_tuples = 0.0;
-    double filter_selectivity = 0.0;
+    filter_selectivity = 0.0;
     double material_cost = 0.0;
     //selectivity for equal conds
     if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
@@ -769,25 +770,7 @@ int ObOptEstCostModel::cost_prefix_sort(const ObSortCostInfo &cost_info,
       } else {
         num_rows_per_group = rows / num_distinct_rows;
       }
-      if (topn_count >= 0 && num_rows_per_group > 0) {
-        // topn prefix sort
-        double remaining_count = topn_count;
-        while (remaining_count > 0 && num_rows_per_group > 0) {
-          ObSortCostInfo cost_info_per_group(num_rows_per_group,
-                                             width,
-                                             prefix_pos,
-                                             ordering_per_group,
-                                             false);
-          cost_info_per_group.topn_ = remaining_count;
-          if (OB_FAIL(cost_sort(cost_info_per_group, cost_per_group))) {
-            LOG_WARN("failed to cost sort", K(ret));
-          } else {
-            cost += cost_per_group;
-            remaining_count -= num_rows_per_group;
-          }
-        }
-      } else {
-        // normal prefix sort
+      if (OB_SUCC(ret)) {
         ObSortCostInfo cost_info_per_group(num_rows_per_group,
                                            width,
                                            prefix_pos,
@@ -797,7 +780,12 @@ int ObOptEstCostModel::cost_prefix_sort(const ObSortCostInfo &cost_info,
                                            cost_info.sel_ctx_);
         if (OB_FAIL(cost_sort(cost_info_per_group, cost_per_group))) {
           LOG_WARN("failed to calc cost", K(ret));
+        } else if (topn_count >= 0 && num_rows_per_group > 0) {
+          // topn prefix sort
+          cost = cost_per_group * (topn_count / num_rows_per_group);
+          LOG_TRACE("OPT: [COST PREFIX TOPN SORT]", K(cost), K(cost_per_group), K(topn_count), K(num_rows_per_group));
         } else {
+          // normal prefix sort
           cost = cost_per_group * num_distinct_rows;
           LOG_TRACE("OPT: [COST PREFIX SORT]", K(cost), K(cost_per_group), K(num_distinct_rows));
         }
@@ -1576,6 +1564,37 @@ int ObOptEstCostModel::cost_row_store_index_scan(const ObCostTableScanInfo &est_
     double spatial_cost = row_count *  cost_params_.get_spatial_per_row_cost(sys_stat_);
     index_scan_cost += spatial_cost;
     LOG_TRACE("OPT::[COST SPATIAL INDEX SCAN]", K(spatial_cost), K(ret));
+  } else if (est_cost_info.index_meta_info_.is_fulltext_index_) {
+    // 全文索引一期：对于每一个 token，都需要:
+    // 1. 以 [token, token] 为 range 扫描 inv_index 两次，计算一个聚合函数；
+    // 2. 全表扫描 doc_id_rowkey_index, 计算一个聚合函数；
+    // 3. 用过滤后的 doc_id 对 doc_id_rowkey_index 做回表
+    int token_count = 1;  // 此处先假设 search query 只有一个 token，后续要调整
+    double token_sel = DEFAULT_SEL;
+    double inv_index_range_scan_cost = 0;
+    double doc_id_full_scan_cost = 0;
+    double doc_id_index_back_cost = 0;
+    if (OB_FAIL(cost_range_scan(est_cost_info,
+                                true,
+                                row_count * token_sel,
+                                inv_index_range_scan_cost))) {
+      LOG_WARN("Failed to estimate scan cost", K(ret));
+    } else if (OB_FAIL(cost_range_scan(est_cost_info,
+                                       true,
+                                       row_count,
+                                       doc_id_full_scan_cost))) {
+      LOG_WARN("Failed to estimate scan cost", K(ret));
+    } else if (OB_FAIL(cost_range_get(est_cost_info,
+                                      true,
+                                      row_count * token_sel,
+                                      doc_id_index_back_cost))) {
+      LOG_WARN("Failed to estimate get cost", K(ret));
+    }
+    double aggregation_cost = (row_count * token_sel + row_count) * cost_params_.get_per_aggr_func_cost(sys_stat_);
+    double fulltext_scan_cost = 2 * inv_index_range_scan_cost + doc_id_full_scan_cost +
+                                aggregation_cost + doc_id_index_back_cost;
+    index_scan_cost = token_count * fulltext_scan_cost;
+    LOG_TRACE("OPT::[COST FULLTEXT INDEX SCAN]", K(fulltext_scan_cost), K(ret));
   }
   //add index skip scan cost
   if (OB_FAIL(ret)) {
@@ -2283,5 +2302,63 @@ int ObOptEstCostModel::calc_range_cost(const ObTableMetaInfo& table_meta_info,
                       + range_count * cost_params_.get_range_cost(sys_stat_) + qual_cost;
   cpu_cost += row_count * cost_params_.get_table_scan_cpu_tuple_cost(sys_stat_);
   cost = io_cost + cpu_cost;
+  return ret;
+}
+
+int ObOptEstCostModel::calc_pred_cost_per_row(const ObRawExpr *expr,
+                                              double card,
+                                              double &cost)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    double rows = expr->is_const_expr() && card > 0 ? card : 1;
+    bool need_calc_child_cost = true;
+    if (IS_SPATIAL_OP(expr->get_expr_type())
+       || IS_GEO_OP(expr->get_expr_type())
+       || expr->is_json_expr()
+       || expr->is_xml_expr()) {
+      cost += cost_params_.get_cmp_spatial_cost(sys_stat_) / rows;
+    } else if (expr->is_udf_expr()) {
+      cost += cost_params_.get_cmp_udf_cost(sys_stat_) / rows;
+    } else if (ob_is_lob_locator(expr->get_result_type().get_type())) {
+      cost += cost_params_.get_cmp_lob_cost(sys_stat_) / rows;
+    } else if (T_OP_DIV == expr->get_expr_type()) {
+      cost += cost_params_.get_cmp_err_handle_expr_cost(sys_stat_) / rows;
+    } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
+      if (OB_ISNULL(expr->get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        ObObjType src = expr->get_param_expr(0)->get_result_type().get_type();
+        ObObjType dst = expr->get_result_type().get_type();
+        if (ob_is_string_type(src) &&
+            (ob_is_numeric_type(dst) || ob_is_temporal_type(dst))) {
+          cost += cost_params_.get_cmp_err_handle_expr_cost(sys_stat_) / rows;
+        } else {
+          cost += cost_params_.get_comparison_cost(sys_stat_,ObIntTC) / rows;
+        }
+      }
+    } else if (T_OP_IN == expr->get_expr_type()) {
+      if (expr->get_param_count() != 2 || OB_ISNULL(expr->get_param_expr(1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid in params", K(ret));
+      } else {
+        cost += (expr->get_param_expr(1)->get_param_count() + 1) * cost_params_.get_comparison_cost(sys_stat_,ObIntTC) / rows;
+      }
+      need_calc_child_cost = false;
+    } else {
+      cost += cost_params_.get_comparison_cost(sys_stat_,ObIntTC) / rows;
+    }
+    if (need_calc_child_cost) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        if (OB_FAIL(SMART_CALL(calc_pred_cost_per_row(expr->get_param_expr(i), card, cost)))) {
+          LOG_WARN("calc cost per tuple failed", K(ret), KPC(expr));
+        }
+      }
+    }
+  }
   return ret;
 }

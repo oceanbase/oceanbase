@@ -68,7 +68,7 @@ class ObTsCbTask : public common::ObLink
 public:
   ObTsCbTask() {}
   virtual ~ObTsCbTask() {}
-  virtual int gts_callback_interrupted(const int errcode) = 0;
+  virtual int gts_callback_interrupted(const int errcode, const share::ObLSID ls_id) = 0;
   virtual int get_gts_callback(const MonotonicTs srr, const share::SCN &gts, const MonotonicTs receive_gts_ts) = 0;
   virtual int gts_elapse_callback(const MonotonicTs srr, const share::SCN &gts) = 0;
   virtual MonotonicTs get_stc() const = 0;
@@ -100,6 +100,8 @@ public:
                               bool &need_wait) = 0;
   virtual int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn) = 0;
   virtual bool is_external_consistent(const uint64_t tenant_id) = 0;
+  virtual int remove_dropped_tenant(const uint64_t tenant_id) = 0;
+  virtual int interrupt_gts_callback_for_ls_offline(const uint64_t tenant_id, const share::ObLSID ls_id) = 0;
 public:
   VIRTUAL_TO_STRING_KV("", "");
 };
@@ -119,7 +121,7 @@ public:
   void update_last_access_ts() { last_access_ts_ = common::ObClockGenerator::getClock(); }
   int64_t get_last_access_ts() const { return last_access_ts_; }
   int check_if_tenant_has_been_dropped(const uint64_t tenant_id, bool &has_dropped);
-  int gts_callback_interrupted(const int errcode);
+  int gts_callback_interrupted(const int errcode, const share::ObLSID ls_id);
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -301,7 +303,7 @@ public:
   ~ObTsSyncGetTsCbTask() {}
   int init(uint64_t task_id);
   int config(MonotonicTs stc, uint64_t tenant_id);
-  int gts_callback_interrupted(const int errcode) override;
+  int gts_callback_interrupted(const int errcode, const share::ObLSID ls_id) override;
   int get_gts_callback(const MonotonicTs srr, const share::SCN &gts,
       const MonotonicTs receive_gts_ts) override;
   int gts_elapse_callback(const MonotonicTs srr, const share::SCN &gts) override;
@@ -371,6 +373,7 @@ public:
   int handle_gts_result(const uint64_t tenant_id, const int64_t queue_index, const int ts_type);
   int update_gts(const uint64_t tenant_id, const MonotonicTs srr, const int64_t gts, const int ts_type, bool &update);
   int delete_tenant(const uint64_t tenant_id);
+  int interrupt_gts_callback_for_ls_offline(const uint64_t tenant_id, const share::ObLSID ls_id);
 public:
   int update_gts(const uint64_t tenant_id, const int64_t gts, bool &update);
   //根据stc获取合适的gts值，如果条件不满足需要注册gts task，等异步回调
@@ -405,6 +408,7 @@ public:
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn);
   bool is_external_consistent(const uint64_t tenant_id);
   int refresh_gts_location(const uint64_t tenant_id);
+  int remove_dropped_tenant(const uint64_t tenant_id);
 public:
   TO_STRING_KV("ts_source", "GTS");
 public:
@@ -420,7 +424,6 @@ private:
   void revert_ts_source_info_(ObTsSourceInfoGuard &guard);
   int add_tenant_(const uint64_t tenant_id);
   int delete_tenant_(const uint64_t tenant_id);
-  int remove_dropped_tenant_(const uint64_t tenant_id);
   static ObTsMgr* &get_instance_inner();
 private:
   bool is_inited_;

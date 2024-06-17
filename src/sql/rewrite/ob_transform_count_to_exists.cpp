@@ -202,7 +202,9 @@ int ObTransformCountToExists::check_trans_valid(ObDMLStmt *stmt, ObRawExpr *expr
     } else if (has_rownum) {
       // do nothing
     } else if (tmp_subquery_expr->get_ref_count() > 1 ||
-               tmp_subquery->has_having() || !tmp_subquery->is_scala_group_by()) {
+               tmp_subquery->has_having() || !tmp_subquery->is_scala_group_by() ||
+               tmp_subquery->has_order_by() || tmp_subquery->has_limit() ||
+               tmp_subquery->has_window_function_filter()) {
       // only scalar group by subquery without having and referred by once can be transformed
       OPT_TRACE("only scalar group by subquery without having and referred by once can be transformed");
     } else if (OB_FAIL(check_sel_expr_valid(sel_expr,

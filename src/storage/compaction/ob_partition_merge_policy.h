@@ -13,6 +13,7 @@
 #ifndef OB_PARTITION_MERGE_POLICY_H_
 #define OB_PARTITION_MERGE_POLICY_H_
 
+#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "share/ob_table_range.h"
@@ -281,14 +282,76 @@ private:
       AdaptiveMergeReason &merge_reason);
 
 public:
-  static constexpr int64_t SCHEDULE_META_MERGE_INTERVAL = 120L * 1000L * 1000L; //120s
   static constexpr int64_t INC_ROW_COUNT_THRESHOLD = 100L * 1000L; // 10w
-  static constexpr int64_t TOMBSTONE_ROW_COUNT_THRESHOLD = 30L * 1000L; // 3w
+  static constexpr int64_t TOMBSTONE_ROW_COUNT_THRESHOLD = 200L * 1000L; // 20w
   static constexpr int64_t BASE_ROW_COUNT_THRESHOLD = 10L * 1000L; // 1w
   static constexpr int64_t LOAD_DATA_SCENE_THRESHOLD = 70;
   static constexpr int64_t TOMBSTONE_SCENE_THRESHOLD = 50;
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;
   static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 10000L; // 10k
+};
+
+class ObCOMajorMergePolicy
+{
+public:
+  enum ObCOMajorMergeType : uint8_t
+  {
+    INVALID_CO_MAJOR_MERGE_TYPE = 0,
+    BUILD_COLUMN_STORE_MERGE = 1,
+    BUILD_ROW_STORE_MERGE = 2,
+    REBUILD_COLUMN_STORE_MERGE = 3,
+    MAX_CO_MAJOR_MERGE_TYPE = 4
+  };
+  static const char *co_major_merge_type_to_str(const ObCOMajorMergeType co_merge_type);
+  static inline bool is_valid_major_merge_type(const ObCOMajorMergeType &major_merge_type)
+  {
+    return major_merge_type > INVALID_CO_MAJOR_MERGE_TYPE && major_merge_type < MAX_CO_MAJOR_MERGE_TYPE;
+  }
+  static inline bool is_build_column_store_merge(const ObCOMajorMergeType &major_merge_type)
+  {
+    return BUILD_COLUMN_STORE_MERGE == major_merge_type;
+  }
+  static inline bool is_build_row_store_merge(const ObCOMajorMergeType &major_merge_type)
+  {
+    return BUILD_ROW_STORE_MERGE == major_merge_type;
+  }
+  static inline bool is_rebuild_column_store_merge(const ObCOMajorMergeType &major_merge_type)
+  {
+    return REBUILD_COLUMN_STORE_MERGE == major_merge_type;
+  }
+  static int decide_co_major_sstable_status(
+      const ObCOSSTableV2 &co_sstable,
+      const ObStorageSchema &storage_schema,
+      ObCOMajorSSTableStatus &major_sstable_status);
+  static int estimate_row_cnt_for_major_merge(
+      const uint64_t table_id,
+      const ObIArray<ObITable *> &tables,
+      const ObStorageSchema &storage_schema,
+      const ObTabletHandle &tablet_handle,
+      int64_t &estimate_row_cnt);
+  static bool whether_to_build_row_store(
+      const int64_t &estimate_row_cnt,
+      const int64_t &column_cnt);
+  static bool whether_to_rebuild_column_store(
+      const ObCOMajorSSTableStatus &major_sstable_status,
+      const int64_t &estimate_row_cnt,
+      const int64_t &column_cnt);
+  static int decide_co_major_merge_type(
+      const ObCOSSTableV2 &co_sstable,
+      const ObIArray<ObITable *> &tables,
+      const ObStorageSchema &storage_schema,
+      const ObTabletHandle &tablet_handle,
+      ObCOMajorMergeType &major_merge_type);
+
+private:
+  // Thresholds for swtiching major sstable
+  // build row store
+  static const int64_t ROW_CNT_THRESHOLD_BUILD_ROW_STORE = 10000;
+  static const int64_t COL_CNT_THRESHOLD_BUILD_ROW_STORE = 3;
+  // rebuild column store
+  static const int64_t ROW_CNT_THRESHOLD_REBUILD_COLUMN_STORE = 20000;
+  static const int64_t ROW_CNT_THRESHOLD_REBUILD_ROWKEY_STORE = 16000;
+  static const int64_t COL_CNT_THRESHOLD_REBUILD_COLUMN_STORE = 5;
 };
 
 

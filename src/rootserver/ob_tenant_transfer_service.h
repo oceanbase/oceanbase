@@ -63,7 +63,7 @@ public:
    * @param [in] dest_ls:         destination log stream
    * @param [in] part_list:       partition list for transfer
    * @param [in] balance_task_id: parenet balance task id
-   * @param [out] task_id:        unique transfer task id
+   * @param [out] task:        transfer task
    * @return
    * - OB_SUCCESS:                generate task successfully
    * - other:                     generate task failed
@@ -74,7 +74,7 @@ public:
       const share::ObLSID &dest_ls,
       const share::ObTransferPartList &part_list,
       const share::ObBalanceTaskID balance_task_id,
-      share::ObTransferTaskID &task_id);
+      share::ObTransferTask &transfer_task);
   /*
    * try cancel and clear transfer task (only task in INIT status can be canceled)
    *
@@ -91,7 +91,8 @@ public:
    * if task is already cleared, return OB_SUCCESS and related info recorded in history
    *
    * @param[in] task_id:               transfer task id
-   * @param[out] all_part_list:        all partitions of the transfer task
+   * @param[out] task:                 transfer task
+   * @param[out] all_part_list:        all partitons of the transfer task
    * @param[out] finished_part_list:   successfully transferred partitions + needless transferred (not exist or not in src LS) partitions
    * @return
    * - OB_SUCCESS:         clear task successfully
@@ -101,6 +102,7 @@ public:
    */
   int try_clear_transfer_task(
       const share::ObTransferTaskID task_id,
+      share::ObTransferTask &transfer_task,
       share::ObTransferPartList &all_part_list,
       share::ObTransferPartList &finished_part_list);
 
@@ -231,6 +233,10 @@ private:
   int construct_ls_member_list_(
       common::sqlclient::ObMySQLResult &res,
       share::ObLSReplica::MemberList &ls_member_list);
+  int check_if_need_wait_due_to_last_failure_(
+      common::ObISQLClient &sql_proxy,
+      const share::ObTransferTask &task,
+      bool &need_wait);
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms

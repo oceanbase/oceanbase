@@ -35,11 +35,11 @@ ERROR HY000: The SRID of the geometry does not match the SRID of the column. The
 # Try to alter the SRID of the columns, which should fail for all columns
 # now since they already contain data.
 ALTER TABLE t1 CHANGE COLUMN no_srid no_srid POINT SRID 0 DEFAULT NULL;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN srid_0 srid_0 POINT SRID 4326 DEFAULT NULL;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN srid_4326 srid_4326 POINT SRID 0 DEFAULT NULL;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 # Removing the SRID specification from a column should work just fine.
 # Setting the SRID to a non-existing SRID should not work.
 ALTER TABLE t1 CHANGE COLUMN srid_4326 srid_1 POINT SRID 1 DEFAULT NULL;
@@ -63,9 +63,9 @@ INSERT INTO t1 VALUES (ST_GeomFromText('POINT(1 1)', 4326)),
 (ST_GeomFromText('POINT(5 5)', 4326)),
 (ST_GeomFromText('POINT(6 6)', 0));
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT SRID 4326;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT SRID 4326;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 DROP TABLE t1;
 # Creating a column with SRID property on a MyISAM table should only
 # be supported if the SRID represents a cartesian coordinate system.
@@ -221,25 +221,25 @@ t1	CREATE TABLE `t1` (
   SPATIAL KEY `idx1` (`col1`) BLOCK_SIZE 16384 LOCAL
 ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col2 POINT NOT NULL SRID 0;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 ALTER TABLE t1 CHANGE COLUMN col1 col2 POINT NOT NULL;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 DROP TABLE t1;
 #
 # Bug#26594499  WL#8592: CANNOT GET GEOMETRY OBJECT ERROR
@@ -397,15 +397,15 @@ drop table tt4;
 drop table if exists test;
 create table test(p point srid 4326);
 alter table test modify p MULTIPOINT;
-ERROR 0A000: Modify geometry type not supported
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
 alter table test change p p1 MULTIPOINT;
-ERROR 0A000: Change geometry type not supported
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
 alter table test modify p POINT SRID 0;
-ERROR 0A000: Modify geometry srid not supported
+ERROR 0A000: alter geometry srid not supported
 alter table test change p p1 point srid 0;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 alter table test change p p1 point;
-ERROR 0A000: not support alter srid not supported
+ERROR 0A000: alter geometry srid not supported
 alter table test change p p1 point srid 4326;
 desc test;
 Field	Type	Null	Key	Default	Extra
@@ -492,3 +492,156 @@ POINT(10 10)
 MULTILINESTRING((1 1,2 2,3 3),(10 10,20 20,30 30))
 drop table geometries;
 drop table t1;
+bugfix: 53170626
+drop table if exists geo_t1;
+create table geo_t1 as select point(1,1);
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+point(1,1)	point	YES		NULL	
+drop table geo_t1;
+create table geo_t1 as select _st_makevalid(st_geomfromtext('POLYGON((2 2,6 -2,10 2,10 -2,6 2,2 -2,2 2))'));
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+_st_makevalid(st_geomfromtext('POLYGON((2 2,6 -2,10 2,10 -2,6 2,2 -2,2 2))'))	geometry	YES		NULL	
+drop table geo_t1;
+create table geo_t1 as select _ST_POINT(0, 0);
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+_ST_POINT(0, 0)	geometry	YES		NULL	
+drop table geo_t1;
+create table geo_t1 as select ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL);
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL)	geometry	YES		NULL	
+drop table geo_t1;
+create table geo_t1 as select ST_X(ST_GEOMFROMTEXT('POINT(0 0)'));
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+ST_X(ST_GEOMFROMTEXT('POINT(0 0)'))	double	YES		NULL	
+drop table geo_t1;
+bugfix: 53668721
+drop table if exists coll_t1;
+drop view if exists coll_v1;
+CREATE table coll_t1 (c1 GeomCollection);
+insert into coll_t1 values (GEOMCOLLECTION(POINT(0,0)));
+desc coll_t1;
+Field	Type	Null	Key	Default	Extra
+c1	geomcollection	YES		NULL	
+select st_astext(t.c1) from coll_t1 t;
+st_astext(t.c1)
+GEOMETRYCOLLECTION(POINT(0 0))
+CREATE view coll_v1 as select * from coll_t1;
+desc coll_v1;
+Field	Type	Null	Key	Default	Extra
+c1	geomcollection	YES		NULL	
+select st_astext(t.c1) from coll_v1 t;
+st_astext(t.c1)
+GEOMETRYCOLLECTION(POINT(0 0))
+drop table coll_t1;
+drop view coll_v1;
+bugfix: 55274751
+drop table if exists geo_t1;
+create table geo_t1(t GeomCollection);
+insert into geo_t1 values (st_geomfromtext('GeometryCollection(point(1 1), linestring(0 0, 2 2))'));
+ALTER TABLE geo_t1 MODIFY t int;
+ERROR HY000: Incorrect integer value
+ALTER TABLE geo_t1 MODIFY t double;
+ERROR 22003: Out of range value for column
+ALTER TABLE geo_t1 MODIFY t datetime;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 MODIFY t timestamp;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 MODIFY t date;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 MODIFY t varchar(1);
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 MODIFY t ENUM('a','b');
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 MODIFY t SET('a','b');
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 MODIFY t JSON;
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 MODIFY t BIT(8);
+ERROR 22001: Data too long for column
+ALTER TABLE geo_t1 MODIFY t varchar(256);
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 MODIFY t text;
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 MODIFY t LONGTEXT CHARSET binary;
+select hex(t) from geo_t1;
+hex(t)
+000000000107000000020000000101000000000000000000F03F000000000000F03F0102000000020000000000000000000000000000000000000000000000000000400000000000000040
+ALTER TABLE geo_t1 MODIFY t GeomCollection;
+select hex(t) from geo_t1;
+hex(t)
+000000000107000000020000000101000000000000000000F03F000000000000F03F0102000000020000000000000000000000000000000000000000000000000000400000000000000040
+ALTER TABLE geo_t1 change t tt int;
+ERROR HY000: Incorrect integer value
+ALTER TABLE geo_t1 change t tt double;
+ERROR 22003: Out of range value for column
+ALTER TABLE geo_t1 change t tt datetime;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 change t tt timestamp;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 change t tt date;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 change t tt varchar(1);
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 change t tt ENUM('a','b');
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 change t tt SET('a','b');
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 change t tt JSON;
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 change t tt BIT(8);
+ERROR 22001: Data too long for column
+ALTER TABLE geo_t1 change t tt varchar(256);
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 change t tt text;
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 change t tt LONGTEXT CHARSET binary;
+select hex(tt) from geo_t1;
+hex(tt)
+000000000107000000020000000101000000000000000000F03F000000000000F03F0102000000020000000000000000000000000000000000000000000000000000400000000000000040
+ALTER TABLE geo_t1 change tt t GeomCollection;
+select hex(t) from geo_t1;
+hex(t)
+000000000107000000020000000101000000000000000000F03F000000000000F03F0102000000020000000000000000000000000000000000000000000000000000400000000000000040
+bugfix: 53251134
+drop table if exists geo_t1;
+create table geo_t1 as select ST_Centroid(ST_geomfromtext('POLYGON((121.474243 31.234504, 121.471775 31.233348, 121.470724 31.23155, 121.471603 31.230229, 121.472655 31.230357, 121.475777 31.232045, 121.474243 31.234504))')) centroid ;
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+centroid	point	YES		NULL	
+drop table geo_t1;
+drop table if exists t1;
+CREATE TABLE `t1` (
+`a` int(10) unsigned NOT NULL,
+`b` varchar(19) DEFAULT NULL);
+ALTER TABLE t1 ADD COLUMN p2 POINT, ADD KEY(p2);
+ERROR 42000: All parts of a SPATIAL index must be NOT NULL.
+ALTER TABLE t1 ADD COLUMN p2 POINT, ADD KEY(P2);
+ERROR 42000: All parts of a SPATIAL index must be NOT NULL.
+ALTER TABLE t1 ADD COLUMN p2 int, ADD KEY(p2);
+drop table t1;
+bugfix: 56020142
+drop table if exists test_wrong_table;
+set binlog_row_image='MINIMAL';
+CREATE TABLE `test_wrong_table` (
+`id` int(32) NOT NULL auto_increment,
+`the_geom` polygon NOT NULL /*!80003 SRID 4326 */,
+PRIMARY KEY (`id`),
+SPATIAL KEY `test_wrong_idx` (`the_geom`) BLOCK_SIZE 16384 LOCAL
+);
+INSERT INTO test_wrong_table (id, the_geom) VALUES (21, st_geomfromtext('POLYGON((40 50,40 70,50 100,70 100,80 80,70 50,40 50))',4326,'axis-order=lat-long'));
+ALTER TABLE test_wrong_table MODIFY COLUMN the_geom varbinary(200) NOT NULL;
+ERROR 42000: A SPATIAL index may only contain a geometrical type column.
+DELETE FROM test_wrong_table;
+drop table test_wrong_table;
+bugfix: 55864433
+drop table if exists t1;
+drop view if exists v1;
+create TABLE t1(pt POINT);
+CREATE VIEW v1 AS (SELECT * FROM t1 ) UNION (SELECT * FROM t1 );
+drop table t1;
+drop view v1;

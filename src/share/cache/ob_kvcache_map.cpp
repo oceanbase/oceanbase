@@ -211,11 +211,6 @@ int ObKVCacheMap::put(
           if (NULL == iter) {
             // put new node
             (void) ATOMIC_AAF(&inst.status_.kv_cnt_, 1);
-          } else {
-            // overwrite
-            (void) ATOMIC_SAF(&iter->mb_handle_->kv_cnt_, 1);
-            (void) ATOMIC_SAF(&iter->mb_handle_->get_cnt_, iter->get_cnt_);
-
           }
           (void) ATOMIC_AAF(&mb_handle->kv_cnt_, 1);
           (void) ATOMIC_AAF(&mb_handle->get_cnt_, 1);
@@ -296,37 +291,31 @@ int ObKVCacheMap::get(
         iter = iter->next_;
       }
 
+      int tmp_ret = OB_SUCCESS;
       if (OB_FAIL(ret)) {
       } else if (NULL == iter) {
         ret = OB_ENTRY_NOT_EXIST;
+      } else if (OB_UNLIKELY(mb_handle_kv_cnt < 0)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(ERROR, "unexpected kv cnt", K(tmp_ret), K(mb_handle_kv_cnt), KPC(iter->mb_handle_));
       } else {
         if (LRU == mb_policy && need_modify_cache(iter_get_cnt, mb_get_cnt, mb_handle_kv_cnt)) {
-          int tmp_ret = OB_SUCCESS;
           ObBucketWLockGuard guard(bucket_lock_, bucket_pos);
           if (OB_TMP_FAIL(guard.get_ret())) {
             COMMON_LOG(WARN, "Fail to write lock bucket, ", K(tmp_ret), K(bucket_pos));
           } else {
+            Node *curr = get_bucket_node(bucket_pos);
+            bucket_ptr = curr;
             prev = NULL;
-            iter = bucket_ptr;
-            bool is_equal = false;
-            while (NULL != iter && OB_LIKELY(OB_SUCCESS == tmp_ret)) {
-              if (hash_code == iter->hash_code_) {
-                if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
-                  if (OB_TMP_FAIL(key.equal(*iter->key_, is_equal))) {
-                    COMMON_LOG(WARN, "Failed to check kvcache key equal", K(tmp_ret));
-                  } else if (is_equal) {
-                    ObKVMemBlockHandle *old_handle = iter->mb_handle_;
-                    if (OB_TMP_FAIL(internal_data_move(hazard_guard, prev, iter, bucket_ptr))) {
-                      COMMON_LOG(WARN, "Fail to move node to LFU block, ", K(tmp_ret));
-                    }
-                    store_->de_handle_ref(old_handle);
-                    break;
-                  }
-                  store_->de_handle_ref(iter->mb_handle_);
+            while (nullptr != curr) {
+              if (curr == iter) {
+                if (OB_TMP_FAIL(internal_data_move(hazard_guard, prev, iter, bucket_ptr))) {
+                  COMMON_LOG(WARN, "Fail to move node to LFU block, ", K(tmp_ret));
                 }
+                break;
               }
-              prev = iter;
-              iter = iter->next_;
+              prev = curr;
+              curr = curr->next_;
             }
           }
         }

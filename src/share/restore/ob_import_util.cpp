@@ -150,6 +150,9 @@ int ObImportTableUtil::get_tenant_name_case_mode(const uint64_t tenant_id, ObNam
   } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service must not be null", K(ret));
+  } else if (!schema_service->is_tenant_refreshed(tenant_id)) {
+    ret = OB_SCHEMA_EAGAIN;
+    LOG_WARN("wait schema refreshed", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service->get_tenant_name_case_mode(tenant_id, name_case_mode))) {
     LOG_WARN("faield to get tenant schema guard", K(ret), K(tenant_id));
   }

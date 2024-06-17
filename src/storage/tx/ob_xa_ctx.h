@@ -155,6 +155,7 @@ public:
                           ObTxDesc *tx_desc);
   int get_dblink_client(const common::sqlclient::DblinkDriverProto dblink_type,
                         common::sqlclient::ObISQLConnection *dblink_conn,
+                        ObDBLinkTransStatistics *dblink_statistics,
                         ObDBLinkClient *&client);
   int remove_dblink_client(ObDBLinkClient *client);
   ObDBLinkClientArray &get_dblink_client_array() { return dblink_client_array_; }
@@ -178,6 +179,7 @@ private:
   int register_xa_timeout_task_();
   void notify_xa_start_complete_(int ret_code);
   int wait_xa_sync_status_(const int64_t expired_time);
+  int wait_sync_stmt_info_(const int64_t expired_time);
   int update_xa_branch_info_(const ObXATransID &xid,
                              const int64_t to_state,
                              const common::ObAddr &addr,
@@ -256,6 +258,7 @@ private:
   // for 4.0 dblink
   int get_dblink_client_(const common::sqlclient::DblinkDriverProto dblink_type,
                          common::sqlclient::ObISQLConnection *dblink_conn,
+                         ObDBLinkTransStatistics *dblink_statistics,
                          ObDBLinkClient *&dblink_client);
 private:
   static const int MIN_TX_REF_COUNT = 3;
@@ -308,6 +311,7 @@ private:
   // can be removed when xid is from session
   ObXATransID executing_xid_;
   ObTransCond start_stmt_cond_;
+  ObTransCond sync_stmt_info_cond_;
   SyncXACb end_trans_cb_;
   // if dblink trans, record dblink client
   ObDBLinkClientArray dblink_client_array_;

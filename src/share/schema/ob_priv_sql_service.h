@@ -52,7 +52,8 @@ public:
   virtual int delete_db_priv(
       const ObOriginalDBKey &org_db_key,
       const int64_t new_schema_version,
-      common::ObISQLClient &sql_client);
+      common::ObISQLClient &sql_client,
+      ObSchemaGetterGuard &schema_guard);
 
   virtual int grant_table_ora_only(
     const ObString *ddl_stmt_str,
@@ -88,6 +89,14 @@ public:
       const share::ObRawObjPrivArray &obj_priv_array,
       bool is_revoke_all);
 
+  virtual int grant_column(
+      const ObColumnPrivSortKey &column_priv_key,
+      uint64_t column_priv_id,
+      const ObPrivSet priv_set,
+      const int64_t new_schema_version,
+      const ObString *ddl_stmt_str,
+      ObISQLClient &sql_client,
+      const bool is_grant);
   virtual int revoke_table_ora(
       const ObObjPrivSortKey &obj_priv_key,
       const share::ObRawObjPrivArray &obj_priv_array,
@@ -99,8 +108,27 @@ public:
   virtual int delete_table_priv(
       const ObTablePrivSortKey &table_priv_key,
       const int64_t new_schema_version,
-      common::ObISQLClient &sql_client);
-  
+      common::ObISQLClient &sql_client,
+      ObSchemaGetterGuard &schema_guard);
+  virtual int grant_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client,
+    const uint64_t option,
+    const bool is_grant);
+  virtual int revoke_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client);
+  virtual int gen_routine_priv_dml(
+    const uint64_t exec_tenant_id,
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet &priv_set,
+    ObDMLSqlSplicer &dml);
   virtual int alter_user_default_role(
       const share::schema::ObUserInfo &user_info,
       const int64_t new_schema_version,
@@ -137,6 +165,22 @@ public:
       const int64_t new_schema_version,
       ObISQLClient &sql_client);
 
+  virtual int grant_proxy(const uint64_t tenant_id,
+                  const uint64_t client_user_id,
+                  const uint64_t proxy_user_id,
+                  const uint64_t flags,
+                  const int64_t new_schema_version,
+                  ObISQLClient &sql_client,
+                  const bool is_grant);
+
+  virtual int grant_proxy_role(const uint64_t tenant_id,
+                      const uint64_t client_user_id,
+                      const uint64_t proxy_user_id,
+                      const uint64_t role_id,
+                      const int64_t new_schema_version,
+                      ObISQLClient &sql_client,
+                      const bool is_grant);
+
 private:
   int log_obj_priv_operation(
       const ObObjPrivSortKey &obj_priv_key,
@@ -168,6 +212,13 @@ private:
       const ObTablePrivSortKey &table_priv_key,
       const ObPrivSet &priv_set,
       share::ObDMLSqlSplicer &dml);
+
+  int gen_column_priv_dml(
+      const uint64_t exec_tenant_id,
+      const ObColumnPrivSortKey &column_priv_key,
+      const uint64_t priv_id,
+      const ObPrivSet &priv_set,
+      ObDMLSqlSplicer &dml);
 
   int gen_grant_sys_priv_dml(
       const uint64_t exec_tenant_id,

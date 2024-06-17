@@ -48,7 +48,7 @@ int ObSingleMerge::open(const ObDatumRowkey &rowkey)
   } else {
     const ObTabletMeta &tablet_meta = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta();
     if (!full_row_.is_valid()) {
-      if (OB_FAIL(full_row_.init(*access_ctx_->stmt_allocator_, access_param_->get_max_out_col_cnt()))) {
+      if (OB_FAIL(full_row_.init(*long_life_allocator_, access_param_->get_max_out_col_cnt()))) {
         STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
       } else {
         full_row_.count_ = access_param_->get_max_out_col_cnt();
@@ -80,6 +80,15 @@ void ObSingleMerge::reuse()
   ObMultipleMerge::reuse();
   full_row_.row_flag_.reset();
   rowkey_ = NULL;
+  handle_.reset();
+}
+
+void ObSingleMerge::reclaim()
+{
+  ObMultipleMerge::reclaim();
+  rowkey_ = nullptr;
+  full_row_.row_flag_.reset();
+  full_row_.trans_info_ = nullptr;
   handle_.reset();
 }
 
@@ -364,21 +373,14 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     if (GCONF.enable_defensive_check()
         && access_ctx_->query_flag_.is_lookup_for_4377()
         && OB_ITER_END == ret) {
-      ret = OB_ERR_DEFENSIVE_CHECK;
-      ObString func_name = ObString::make_string("[index lookup]ObSingleMerge::inner_get_next_row");
-      LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-      LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
-                    K(have_uncommited_row),
-                    K(enable_fuse_row_cache),
-                    K(read_snapshot_version),
-                    KPC(read_info),
-                    KPC(access_ctx_->store_ctx_),
-                    K(tables_));
-      concurrency_control::ObDataValidationService::set_delay_resource_recycle(access_ctx_->ls_id_);
-      dump_table_statistic_for_4377();
-      dump_tx_statistic_for_4377(access_ctx_->store_ctx_);
+      ret = handle_4377("[index lookup]ObSingleMerge::inner_get_next_row");
+      STORAGE_LOG(WARN, "[index lookup] row not found", K(ret),
+                  K(have_uncommited_row),
+                  K(enable_fuse_row_cache),
+                  K(read_snapshot_version),
+                  KPC(read_info),
+                  K(tables_));
     }
-
     rowkey_ = NULL;
   } else {
     ret = OB_ITER_END;

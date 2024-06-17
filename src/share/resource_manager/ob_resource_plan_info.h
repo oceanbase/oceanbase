@@ -37,6 +37,9 @@ enum ObFunctionType
   PRIO_DDL = 6,
   PRIO_DDL_HIGH = 7,
   PRIO_OTHER_BACKGROUND = 8,
+  // PRIO_CLOG_LOW = 9,    placeholder
+  // PRIO_CLOG_MID = 10,   placeholder
+  // PRIO_CLOG_HIGH = 11,  placeholder
   MAX_FUNCTION_NUM
 };
 

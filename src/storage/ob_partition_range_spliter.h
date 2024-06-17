@@ -291,6 +291,9 @@ private:
   typedef common::ObSEArray<common::ObStoreRange, DEFAULT_STORE_RANGE_ARRAY_SIZE> RangeSplitArray;
   typedef common::ObSEArray<ObRangeSplitInfo, DEFAULT_STORE_RANGE_ARRAY_SIZE> RangeSplitInfoArray;
 private:
+  int try_estimate_range_size(const common::ObIArray<common::ObStoreRange> &range_array,
+                              ObIArray<ObITable *> &tables,
+                              int64_t &total_size);
   int get_split_tables(ObTableStoreIterator &table_iter, common::ObIArray<ObITable *> &tables);
   int split_multi_ranges(RangeSplitInfoArray &range_info_array,
                          const int64_t expected_task_count,
@@ -301,15 +304,20 @@ private:
                             const ObITableReadInfo &index_read_info,
                             const common::ObIArray<common::ObStoreRange> &range_array,
                             RangeSplitInfoArray &range_info_array,
-                            int64_t &total_size);
+                            int64_t &total_size,
+                            bool &all_single_rowkey);
   int merge_and_push_range_array(const RangeSplitArray &src_range_split_array,
                                  common::ObIAllocator &allocator,
                                  common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
-  int build_single_range_array(const common::ObIArray<common::ObStoreRange> &range_array,
-                               common::ObIAllocator &allocator,
-                               common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
+  int fast_build_range_array(const common::ObIArray<common::ObStoreRange> &range_array,
+                             const int64_t expected_task_cnt,
+                             common::ObIAllocator &allocator,
+                             common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
 private:
   ObPartitionRangeSpliter range_spliter_;
+
+  static const int64_t RANGE_COUNT_THRESOLD = 500;
+  static const int64_t FAST_ESTIMATE_THRESOLD = 80;
 };
 
 class ObPartitionMajorSSTableRangeSpliter

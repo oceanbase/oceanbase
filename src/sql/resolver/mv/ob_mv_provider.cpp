@@ -37,6 +37,7 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
 {
   int ret = OB_SUCCESS;
   dependency_infos_.reuse();
+  operators_.reuse();
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("mv provider is inited twice", K(ret));
@@ -57,6 +58,8 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
       const ObTableSchema *mv_schema = NULL;
       ObQueryCtx *query_ctx = NULL;
       int64_t max_version = OB_INVALID_VERSION;
+      ObSEArray<ObString, 4> operators;
+      ObSEArray<ObDependencyInfo, 4> dependency_infos;
       if (OB_ISNULL(query_ctx = stmt_factory.get_query_ctx())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(query_ctx));
@@ -74,11 +77,13 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
                                           view_stmt))) {
         LOG_WARN("failed to gen mv stmt", K(ret));
       } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(query_ctx->reference_obj_tables_,
-                                                             dependency_infos_,
+                                                             dependency_infos,
                                                              ObObjectType::VIEW,
                                                              OB_INVALID_ID,
                                                              max_version))) {
         LOG_WARN("failed to collect dep infos", K(ret));
+      } else if (OB_FAIL(dependency_infos_.assign(dependency_infos))) {
+        LOG_WARN("failed to assign fixed array", K(ret));
       } else if (OB_FAIL(check_mv_column_type(mv_schema, view_stmt))) {
         if (OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
           inited_ = true;
@@ -94,9 +99,11 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
                                                          stmt_factory,
                                                          expr_factory,
                                                          session_info,
-                                                         operators_,
+                                                         operators,
                                                          refreshable_type_))) {
         LOG_WARN("failed to print mv operators", K(ret));
+      } else if (OB_FAIL(operators_.assign(operators))) {
+        LOG_WARN("failed to assign fixed array", K(ret));
       } else {
         inited_ = true;
       }
@@ -125,18 +132,43 @@ int ObMVProvider::check_mv_refreshable(bool &can_fast_refresh) const
   return ret;
 }
 
-int ObMVProvider::get_operators(const ObIArray<ObString> *&operators) const
+int ObMVProvider::get_fast_refresh_operators(const ObIArray<ObString> *&operators) const
 {
   int ret = OB_SUCCESS;
   operators = NULL;
-  if (OB_UNLIKELY(!inited_ || ObMVRefreshableType::OB_MV_COMPLETE_REFRESH >= refreshable_type_)) {
+  if (OB_UNLIKELY(!inited_ || for_rt_expand_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected call for get_operators", K(ret), K(inited_), K(refreshable_type_));
+    LOG_WARN("unexpected call for get_operators", K(ret), K(inited_), K(for_rt_expand_));
+  } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_COMPLETE_REFRESH >= refreshable_type_)) {
+    ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
+    LOG_WARN("mview can not fast refresh", K(ret), K(mview_id_));
   } else if (OB_UNLIKELY(operators_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected empty operators", K(ret));
   } else {
     operators = &operators_;
+  }
+  return ret;
+}
+
+// expand_view will used to generate plan, need use alloc to deep copy the query str
+int ObMVProvider::get_real_time_mv_expand_view(ObIAllocator &alloc, ObString &expand_view) const
+{
+  int ret = OB_SUCCESS;
+  expand_view.reset();
+  if (OB_UNLIKELY(!inited_ || !for_rt_expand_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected call for get_operators", K(ret), K(inited_), K(for_rt_expand_));
+  } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_COMPLETE_REFRESH >= refreshable_type_)) {
+    ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
+    LOG_WARN("mview can not on query computation", K(ret), K(mview_id_));
+  } else if (OB_UNLIKELY(1 != operators_.count() || operators_.at(0).empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty operators", K(ret));
+  } else if (OB_FAIL(ob_write_string(alloc, operators_.at(0), expand_view))) {
+    LOG_WARN("failed to write string", K(ret));
+  } else {
+    LOG_TRACE("finish generate rt mv expand view", K(mview_id_), K(expand_view));
   }
   return ret;
 }
@@ -174,6 +206,8 @@ int ObMVProvider::check_mv_column_type(const ObTableSchema *mv_schema,
           || OB_ISNULL(select_items.at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(i), K(org_column), K(select_items.at(i)));
+      } else if (select_items.at(i).expr_->is_const_expr()) {
+        /* do nothing */
       } else if (OB_FAIL(ObCreateViewResolver::fill_column_meta_infos(*select_items.at(i).expr_,
                                                                       mv_schema->get_charset_type(),
                                                                       mv_schema->get_table_id(),
@@ -209,7 +243,12 @@ int ObMVProvider::check_mv_column_type(const ObColumnSchemaV2 &org_column,
    }
   }
 
-  if (OB_SUCC(ret) && !is_valid_col) {
+  if (OB_FAIL(ret) || is_valid_col) {
+  } else if (org_column.get_meta_type().is_number()
+             && cur_column.get_meta_type().is_decimal_int()
+             && lib::is_oracle_mode()) {
+    /* in oracle mode, const number is resolved as decimal int except ddl stmt */
+  } else {
    ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
    LOG_WARN("mv column changed", K(ret), K(org_column), K(cur_column));
   }
@@ -240,6 +279,7 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
   resolver_ctx.stmt_factory_ = &stmt_factory;
   resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
   resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx();
+  ObSelectStmt *sel_stmt = NULL;
   ObSelectResolver select_resolver(resolver_ctx);
   if (OB_ISNULL(resolver_ctx.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -263,10 +303,13 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
   } else if (OB_FALSE_IT(resolver_ctx.query_ctx_->question_marks_count_ = static_cast<int64_t>(parse_result.question_mark_ctx_.count_))) {
   } else if (OB_FAIL(select_resolver.resolve(*node))) {
     LOG_WARN("resolve view definition failed", K(ret));
-  } else if (OB_ISNULL(view_stmt = static_cast<ObSelectStmt*>(select_resolver.get_basic_stmt()))) {
+  } else if (OB_ISNULL(sel_stmt = static_cast<ObSelectStmt*>(select_resolver.get_basic_stmt()))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid mv stmt", K(ret), K(view_stmt));
+    LOG_WARN("invalid mv stmt", K(ret), K(sel_stmt));
+  } else if (OB_FAIL(sel_stmt->formalize_stmt_expr_reference(&expr_factory, &session_info, true))) {
+    LOG_WARN("failed to formalize stmt reference", K(ret));
   } else {
+    view_stmt = sel_stmt;
     LOG_DEBUG("generate mv stmt", KPC(view_stmt));
   }
   return ret;

@@ -32,6 +32,8 @@
 #include "share/table/ob_table_config_util.h"
 #include "share/config/ob_config_mode_name_def.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/ob_ddl_common.h"
+#include "share/backup/ob_archive_persist_helper.h"
 namespace oceanbase
 {
 using namespace share;
@@ -328,11 +330,33 @@ bool ObConfigCompressFuncChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigPerfCompressFuncChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  for (int i = 0; i < ARRAYSIZEOF(common::perf_compress_funcs) && !is_valid; ++i) {
+    if (0 == ObString::make_string(perf_compress_funcs[i]).case_compare(t.str())) {
+      is_valid = true;
+    }
+  }
+  return is_valid;
+}
+
 bool ObConfigResourceLimitSpecChecker::check(const ObConfigItem &t) const
 {
   ObResourceLimit rl;
   int ret = rl.load_config(t.str());
   return OB_SUCCESS == ret;
+}
+
+bool ObConfigTempStoreFormatChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  for (int i = 0; i < ARRAYSIZEOF(share::temp_store_format_options) && !is_valid; ++i) {
+    if (0 == ObString::make_string(temp_store_format_options[i]).case_compare(t.str())) {
+      is_valid = true;
+    }
+  }
+  return is_valid;
 }
 
 bool ObConfigPxBFGroupSizeChecker::check(const ObConfigItem &t) const
@@ -377,6 +401,47 @@ bool ObConfigCompressOptionChecker::check(const ObConfigItem &t) const
   } else if (OB_SUCCESS != ObStoreFormat::find_store_format_type_oracle(ObString::make_string(t.str()), type)) {
   } else if (ObStoreFormat::is_store_format_oracle(type)) {
     is_valid = true;
+  }
+  return is_valid;
+}
+
+bool ObConfigMaxSyslogFileCountChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t max_count = ObConfigIntParser::get(t.str(), is_valid);
+  if (is_valid) {
+    int64_t uncompressed_count = GCONF.syslog_file_uncompressed_count;
+    if (max_count == 0 || max_count >= uncompressed_count) {
+      is_valid = true;
+    } else {
+      is_valid = false;
+    }
+  }
+  return is_valid;
+}
+
+bool ObConfigSyslogCompressFuncChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  for (int i = 0; i < ARRAYSIZEOF(common::syslog_compress_funcs) && !is_valid; ++i) {
+    if (0 == ObString::make_string(syslog_compress_funcs[i]).case_compare(t.str())) {
+      is_valid = true;
+    }
+  }
+  return is_valid;
+}
+
+bool ObConfigSyslogFileUncompressedCountChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t uncompressed_count = ObConfigIntParser::get(t.str(), is_valid);
+  if (is_valid) {
+    int64_t max_count = GCONF.max_syslog_file_count;
+    if (uncompressed_count >= 0 && (max_count == 0 || uncompressed_count <= max_count)) {
+      is_valid = true;
+    } else {
+      is_valid = false;
+    }
   }
   return is_valid;
 }
@@ -623,7 +688,8 @@ int64_t ObConfigIntParser::get(const char *str, bool &valid)
 }
 
 int64_t ObConfigCapacityParser::get(const char *str, bool &valid,
-                                    bool check_unit /* = true */)
+                                    bool check_unit /* = true */,
+                                    bool use_byte /* = false*/)
 {
   char *p_unit = NULL;
   int64_t value = 0;
@@ -641,33 +707,26 @@ int64_t ObConfigCapacityParser::get(const char *str, bool &valid,
     } else if ('\0' == *p_unit) {
       if (check_unit) {
         valid = false;
-      } else {
+      } else if (!use_byte) {
         value <<= CAP_MB;
       }
-    } else if (0 == STRCASECMP("b", p_unit)
-        || 0 == STRCASECMP("byte", p_unit)) {
+    } else if (0 == STRCASECMP("b", p_unit) || 0 == STRCASECMP("byte", p_unit)) {
       // do nothing
-    } else if (0 == STRCASECMP("kb", p_unit)
-        || 0 == STRCASECMP("k", p_unit)) {
+    } else if (0 == STRCASECMP("kb", p_unit) || 0 == STRCASECMP("k", p_unit)) {
       value <<= CAP_KB;
-    } else if (0 == STRCASECMP("mb", p_unit)
-        || 0 == STRCASECMP("m", p_unit)) {
+    } else if (0 == STRCASECMP("mb", p_unit) || 0 == STRCASECMP("m", p_unit)) {
       value <<= CAP_MB;
-    } else if (0 == STRCASECMP("gb", p_unit)
-        || 0 == STRCASECMP("g", p_unit)) {
+    } else if (0 == STRCASECMP("gb", p_unit) || 0 == STRCASECMP("g", p_unit)) {
       value <<= CAP_GB;
-    } else if (0 == STRCASECMP("tb", p_unit)
-        || 0 == STRCASECMP("t", p_unit)) {
+    } else if (0 == STRCASECMP("tb", p_unit) || 0 == STRCASECMP("t", p_unit)) {
       value <<= CAP_TB;
-    } else if (0 == STRCASECMP("pb", p_unit)
-        || 0 == STRCASECMP("p", p_unit)) {
+    } else if (0 == STRCASECMP("pb", p_unit) || 0 == STRCASECMP("p", p_unit)) {
       value <<= CAP_PB;
     } else {
       valid = false;
-      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "set capacity error", K(str), K(p_unit));
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get capacity error", K(str), K(p_unit));
     }
   }
-
   return value;
 }
 
@@ -1147,6 +1206,48 @@ bool ObConfigTableStoreFormatChecker::check(const ObConfigItem &t) const {
   const ObString tmp_str(t.str());
   return 0 == tmp_str.case_compare("ROW") || 0 == tmp_str.case_compare("COLUMN") ||
       0 == tmp_str.case_compare("COMPOUND");
+}
+
+bool ObConfigMigrationChooseSourceChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("idc")
+      || 0 == v_str.case_compare("region");
+}
+
+bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int ret = OB_SUCCESS;
+  int64_t value = ObConfigTimeParser::get(t.value_.ptr(), is_valid);
+  ObArchivePersistHelper archive_op;
+  ObBackupPathString archive_dest_str;
+  ObBackupDest archive_dest;
+  ObStorageType device_type;
+  const int64_t dest_no = 0;
+  const bool lock = false;
+  if (is_valid) {
+    if (OB_FAIL(archive_op.init(tenant_id))) {
+      OB_LOG(WARN, "fail to init archive persist helper", K(ret), K(tenant_id));
+    } else if (OB_FAIL(archive_op.get_archive_dest(*GCTX.sql_proxy_, lock, dest_no, archive_dest_str))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        OB_LOG(WARN, "failed to get archive dest", K(ret), K(tenant_id));
+      } else { // no dest exist, set archive_lag_target is disallowed
+        is_valid =  false;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "log_archive_dest has not been set, set archive_lag_target is");
+      }
+    } else if (OB_FAIL(archive_dest.set(archive_dest_str))) {
+      OB_LOG(WARN, "fail to set archive dest", K(ret), K(archive_dest_str));
+    } else if (archive_dest.is_storage_type_s3()) {
+      is_valid = MIN_LAG_TARGET_FOR_S3 <= value;
+      if (!is_valid) {
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set archive_lag_target smaller than 60s when log_archive_dest is S3 is");
+      }
+    } else {
+      is_valid = true;
+    }
+  }
+  return is_valid;
 }
 
 } // end of namepace common

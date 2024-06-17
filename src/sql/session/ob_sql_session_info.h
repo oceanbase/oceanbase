@@ -53,6 +53,7 @@ namespace observer
 {
 class ObQueryDriver;
 class ObSqlEndTransCb;
+class ObPieceCache;
 }
 namespace pl
 {
@@ -688,6 +689,7 @@ public:
                                  at_type_(ObAuditTrailType::NONE),
                                  sort_area_size_(128*1024*1024),
                                  hash_area_size_(128*1024*1024),
+                                 data_version_(0),
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
                                  range_optimizer_max_mem_size_(128*1024*1024),
@@ -707,6 +709,7 @@ public:
     ObAuditTrailType get_at_type() const { return at_type_; }
     int64_t get_sort_area_size() const { return ATOMIC_LOAD(&sort_area_size_); }
     int64_t get_hash_area_size() const { return ATOMIC_LOAD(&hash_area_size_); }
+    uint64_t get_data_version() const { return ATOMIC_LOAD(&data_version_); }
     bool enable_query_response_time_stats() const { return enable_query_response_time_stats_; }
     bool enable_udr() const { return ATOMIC_LOAD(&enable_user_defined_rewrite_rules_); }
     int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
@@ -727,6 +730,7 @@ public:
     ObAuditTrailType at_type_;
     int64_t sort_area_size_;
     int64_t hash_area_size_;
+    uint64_t data_version_;
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
     int64_t range_optimizer_max_mem_size_;
@@ -877,7 +881,7 @@ public:
   void set_trans_type(transaction::ObTxClass t) { trans_type_ = t; }
   transaction::ObTxClass get_trans_type() const { return trans_type_; }
 
-  void get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const;
+  int get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const;
   void set_found_rows(const int64_t count) { found_rows_ = count; }
   int64_t get_found_rows() const { return found_rows_; }
   void set_affected_rows(const int64_t count) { affected_rows_ = count; }
@@ -895,6 +899,9 @@ public:
   int remove_ps_session_info(const ObPsStmtId stmt_id);
   int get_ps_session_info(const ObPsStmtId stmt_id,
                           ObPsSessionInfo *&ps_session_info) const;
+  int check_ps_stmt_id_in_use(const ObPsStmtId stmt_id, bool &is_in_use);
+  int add_ps_stmt_id_in_use(const ObPsStmtId stmt_id);
+  int earse_ps_stmt_id_in_use(const ObPsStmtId stmt_id);
   int64_t get_ps_session_info_size() const { return ps_session_info_map_.size(); }
   inline pl::ObPL *get_pl_engine() const { return GCTX.pl_engine_; }
 
@@ -961,6 +968,9 @@ public:
 #endif
   inline bool get_pl_can_retry() { return pl_can_retry_; }
   inline void set_pl_can_retry(bool can_retry) { pl_can_retry_ = can_retry; }
+
+  void reset_plsql_exec_time() { plsql_exec_time_ = 0; }
+  void add_plsql_exec_time(int64_t plsql_exec_time) { plsql_exec_time_ += plsql_exec_time; }
 
   CursorCache &get_cursor_cache() { return pl_cursor_cache_; }
   pl::ObPLCursorInfo *get_cursor(int64_t cursor_id);
@@ -1206,15 +1216,18 @@ public:
   bool is_var_assign_use_das_enabled() const;
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;
   bool is_spf_mlj_group_rescan_enabled() const;
+  int is_preserve_order_for_pagination_enabled(bool &enabled) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
+  const ObSessionDDLInfo &get_ddl_info() const { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
   bool is_table_name_hidden() const { return is_table_name_hidden_; }
   void set_table_name_hidden(const bool is_hidden) { is_table_name_hidden_ = is_hidden; }
 
   ObTenantCachedSchemaGuardInfo &get_cached_schema_guard_info() { return cached_schema_guard_info_; }
   int set_enable_role_array(const common::ObIArray<uint64_t> &role_id_array);
-  common::ObIArray<uint64_t>& get_enable_role_array() { return enable_role_array_; }
+  common::ObIArray<uint64_t>& get_enable_role_array() { return get_enable_role_ids(); }
+  const common::ObIArray<uint64_t>& get_enable_role_array() const { return get_enable_role_ids(); }
   void set_in_definer_named_proc(bool in_proc) {in_definer_named_proc_ = in_proc; }
   bool get_in_definer_named_proc() {return in_definer_named_proc_; }
   bool get_prelock() { return prelock_; }
@@ -1279,6 +1292,11 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_sort_area_size();
   }
+  uint64_t get_data_version()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_data_version();
+  }
   bool enable_query_response_time_stats()
   {
     cached_tenant_config_info_.refresh();
@@ -1318,8 +1336,11 @@ public:
   bool is_ignore_stmt() const { return is_ignore_stmt_; }
 
   // piece
-  void *get_piece_cache(bool need_init = false);
+  observer::ObPieceCache *get_piece_cache(bool need_init = false);
 
+  share::schema::ObUserLoginInfo get_login_info () { return login_info_; }
+  int set_login_info(const share::schema::ObUserLoginInfo &login_info);
+  int set_login_auth_data(const ObString &auth_data);
   void set_load_data_exec_session(bool v) { is_load_data_exec_session_ = v; }
   bool is_load_data_exec_session() const { return is_load_data_exec_session_; }
   inline ObSqlString &get_pl_exact_err_msg() { return pl_exact_err_msg_; }
@@ -1333,6 +1354,12 @@ public:
   int on_user_disconnect();
   virtual void reset_tx_variable(bool reset_next_scope = true);
   ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
+  void set_need_send_feedback_proxy_info(bool v) { need_send_feedback_proxy_info_ = v; }
+  bool is_need_send_feedback_proxy_info() const { return need_send_feedback_proxy_info_; }
+  void set_is_lock_session(bool v) { is_lock_session_ = v; }
+  bool is_lock_session() const { return is_lock_session_; }
+  int64_t get_plsql_exec_time();
+  void update_pure_sql_exec_time(int64_t elapsed_time);
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
   void set_affected_rows_is_changed(int64_t affected_rows);
@@ -1401,6 +1428,19 @@ private:
     }
     return ret;
   }
+  common::hash::ObHashSet<ObPsStmtId> in_use_ps_stmt_id_set_;
+  inline int try_create_in_use_ps_stmt_id_set()
+  {
+    int ret = OB_SUCCESS;
+    static const int64_t PS_BUCKET_NUM = 64;
+    if (OB_UNLIKELY(!in_use_ps_stmt_id_set_.created())) {
+      ret = in_use_ps_stmt_id_set_.create(common::hash::cal_next_prime(PS_BUCKET_NUM),
+                                   common::ObModIds::OB_HASH_BUCKET_PS_SESSION_INFO,
+                                   common::ObModIds::OB_HASH_NODE_PS_SESSION_INFO,
+                                   orig_tenant_id_);
+    }
+    return ret;
+  }
 
   typedef common::hash::ObHashMap<common::ObString, ObPsStmtId,
                                   common::hash::NoPthreadDefendMode> PsNameIdMap;
@@ -1433,6 +1473,7 @@ private:
   // otherwise the PL block can be retried in all.
   // if false == pl_can_retry_, we can only retry query in PL blocks locally
   bool pl_can_retry_; //标记当前执行的PL是否可以整体重试
+  int64_t plsql_exec_time_;
 
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null
@@ -1472,7 +1513,7 @@ private:
   bool is_ignore_stmt_;
   ObSessionDDLInfo ddl_info_;
   bool is_table_name_hidden_;
-  void *piece_cache_;
+  observer::ObPieceCache* piece_cache_;
   bool is_load_data_exec_session_;
   ObSqlString pl_exact_err_msg_;
   bool is_varparams_sql_prepare_;
@@ -1500,6 +1541,8 @@ private:
   bool is_send_control_info_ = false;  // whether send control info to client
   bool auto_flush_trace_ = false;
   bool coninfo_set_by_sess_ = false;
+  bool need_send_feedback_proxy_info_ = false;
+  bool is_lock_session_ = false;
 
   ObSessInfoEncoder* sess_encoders_[SESSION_SYNC_MAX_TYPE] = {
                             //&usr_var_encoder_,
@@ -1549,6 +1592,7 @@ public:
   inline void inc_in_bytes(int64_t in_bytes) { IGNORE_RETURN ATOMIC_FAA(&in_bytes_, in_bytes); }
   inline int64_t get_out_bytes() const { return ATOMIC_LOAD(&out_bytes_); }
   inline void inc_out_bytes(int64_t out_bytes) { IGNORE_RETURN ATOMIC_FAA(&out_bytes_, out_bytes); }
+  bool is_pl_prepare_stage() const;
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
@@ -1579,6 +1623,7 @@ private:
   common::ObSEArray<ObSequenceSchema*, 2> dblink_sequence_schemas_;
   bool client_non_standard_;
   bool is_session_sync_support_; // session_sync_support flag.
+  share::schema::ObUserLoginInfo login_info_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

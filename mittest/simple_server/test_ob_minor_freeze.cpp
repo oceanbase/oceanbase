@@ -37,15 +37,15 @@
 namespace oceanbase
 {
 const int SLEEP_TIME = 100;
-namespace memtable
+namespace storage
 {
-int64_t ObMemtable::inc_write_ref_()
+int64_t ObITabletMemtable::inc_write_ref_()
 {
   ob_usleep(rand() % SLEEP_TIME);
   return ATOMIC_AAF(&write_ref_cnt_, 1);
 }
 
-int64_t ObMemtable::dec_write_ref_()
+int64_t ObITabletMemtable::dec_write_ref_()
 {
   ob_usleep(rand() % SLEEP_TIME);
   int64_t write_ref_cnt = ATOMIC_SAF(&write_ref_cnt_, 1);
@@ -55,13 +55,13 @@ int64_t ObMemtable::dec_write_ref_()
   return write_ref_cnt;
 }
 
-int64_t ObMemtable::inc_unsubmitted_cnt_()
+int64_t ObITabletMemtable::inc_unsubmitted_cnt_()
 {
   ob_usleep(rand() % SLEEP_TIME);
   return ATOMIC_AAF(&unsubmitted_cnt_, 1);
 }
 
-int64_t ObMemtable::dec_unsubmitted_cnt_()
+int64_t ObITabletMemtable::dec_unsubmitted_cnt_()
 {
   ob_usleep(rand() % SLEEP_TIME);
   int64_t unsubmitted_cnt = ATOMIC_SAF(&unsubmitted_cnt_, 1);
@@ -129,7 +129,6 @@ public:
   void tenant_freeze();
   void logstream_freeze();
   void tablet_freeze();
-  void tablet_freeze_for_replace_tablet_meta();
   void batch_tablet_freeze();
   void insert_and_freeze();
   void empty_memtable_flush();
@@ -374,28 +373,6 @@ void ObMinorFreezeTest::tablet_freeze()
   }
 }
 
-void ObMinorFreezeTest::tablet_freeze_for_replace_tablet_meta()
-{
-  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
-  share::ObTenantSwitchGuard tenant_guard;
-  OB_LOG(INFO, "tenant_id", K(RunCtx.tenant_id_));
-  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(RunCtx.tenant_id_));
-  const int64_t start = ObTimeUtility::current_time();
-  while (ObTimeUtility::current_time() - start <= freeze_duration_) {
-    for (int j = 0; j < OB_DEFAULT_TABLE_COUNT; ++j) {
-      ObTableHandleV2 handle;
-      int ret = ls_handles_.at(j).get_ls()->get_freezer()->tablet_freeze_for_replace_tablet_meta(tablet_ids_.at(j), handle);
-      if (OB_EAGAIN == ret || OB_ENTRY_EXIST == ret) {
-        ret = OB_SUCCESS;
-      }
-      ASSERT_EQ(OB_SUCCESS, ret);
-      if (OB_SUCC(ret)) {
-        ASSERT_EQ(OB_SUCCESS, ls_handles_.at(j).get_ls()->get_freezer()->handle_frozen_memtable_for_replace_tablet_meta(tablet_ids_.at(j), handle));
-      }
-    }
-  }
-}
-
 void ObMinorFreezeTest::batch_tablet_freeze()
 {
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
@@ -406,7 +383,7 @@ void ObMinorFreezeTest::batch_tablet_freeze()
 
   const int64_t start = ObTimeUtility::current_time();
   while (ObTimeUtility::current_time() - start <= freeze_duration_) {
-    ASSERT_EQ(OB_SUCCESS, ls_handles_.at(0).get_ls()->batch_tablet_freeze(tablet_ids_, (i % 2 == 0) ? true : false));
+    ASSERT_EQ(OB_SUCCESS, ls_handles_.at(0).get_ls()->batch_tablet_freeze(0, tablet_ids_, (i % 2 == 0) ? true : false));
     i = i + 1;
   }
 }
@@ -416,7 +393,6 @@ void ObMinorFreezeTest::insert_and_freeze()
   std::thread tenant_freeze_thread([this]() { tenant_freeze(); });
   std::thread tablet_freeze_thread([this]() { tablet_freeze(); });
   std::thread logstream_freeze_thread([this]() { logstream_freeze(); });
-  std::thread tablet_freeze_for_replace_tablet_meta_thread([this]() { tablet_freeze_for_replace_tablet_meta(); });
   std::thread check_frozen_memtable_thread([this]() { check_frozen_memtable(); });
   std::thread batch_tablet_freeze_thread([this]() { batch_tablet_freeze(); });
   std::vector<std::thread> insert_threads;
@@ -428,7 +404,6 @@ void ObMinorFreezeTest::insert_and_freeze()
   tenant_freeze_thread.join();
   tablet_freeze_thread.join();
   logstream_freeze_thread.join();
-  tablet_freeze_for_replace_tablet_meta_thread.join();
   check_frozen_memtable_thread.join();
   batch_tablet_freeze_thread.join();
   for (int i = 0; i < insert_thread_num_; ++i) {

@@ -50,7 +50,8 @@ public:
   //set is json constraint type is strict or relax
   const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
-
+  inline bool is_resolve_insert_update() { return is_resolve_insert_update_;}
+  int recursive_search_sequence_expr(const ObRawExpr *default_expr);
 protected:
 
   int resolve_assignments(const ParseNode &parse_node,
@@ -98,6 +99,14 @@ protected:
   virtual int mock_values_column_ref(const ObColumnRefRawExpr *column_ref)
   {
     UNUSED(column_ref);
+    return common::OB_SUCCESS;
+  }
+
+  virtual int mock_values_column_ref(const ObColumnRefRawExpr *column_ref,
+                                     ObInsertTableInfo &table_info)
+  {
+    UNUSED(column_ref);
+    UNUSED(table_info);
     return common::OB_SUCCESS;
   }
 
@@ -190,7 +199,9 @@ protected:
 
   int resolve_insert_columns(const ParseNode *node,
                              ObInsertTableInfo& table_info);
-  int resolve_insert_values(const ParseNode *node, ObInsertTableInfo& table_info);
+  int resolve_insert_values(const ParseNode *node,
+                            ObInsertTableInfo& table_info,
+                            common::ObIArray<uint64_t> &label_se_columns);
   int check_column_value_pair(common::ObArray<ObRawExpr*> *value_row,
                               ObInsertTableInfo& table_info,
                               const int64_t row_index,
@@ -233,7 +244,14 @@ protected:
   void set_is_oracle_tmp_table(bool is_temp_table) { is_oracle_tmp_table_ = is_temp_table; }
   void set_oracle_tmp_table_type(int64_t type) { oracle_tmp_table_type_ = type; }
   int add_new_sel_item_for_oracle_temp_table(ObSelectStmt &select_stmt);
-  int add_new_column_for_oracle_temp_table(uint64_t ref_table_id, uint64_t table_id = OB_INVALID_ID, ObDMLStmt *stmt = NULL);
+  int get_session_columns_for_oracle_temp_table(uint64_t ref_table_id,
+                                                uint64_t table_id,
+                                                ObDMLStmt *stmt,
+                                                ObColumnRefRawExpr *&session_id_expr,
+                                                ObColumnRefRawExpr *&session_create_time_expr);
+  int add_column_for_oracle_temp_table(uint64_t ref_table_id, uint64_t table_id, ObDMLStmt *stmt);
+  int add_column_for_oracle_temp_table(ObInsertTableInfo &table_info, ObDMLStmt *stmt);
+  int add_new_column_for_oracle_temp_table(uint64_t ref_table_id, uint64_t table_id, ObDMLStmt *stmt);
   int add_new_value_for_oracle_temp_table(ObIArray<ObRawExpr*> &value_row);
   int add_new_column_for_oracle_label_security_table(ObIArray<uint64_t>& the_missing_label_se_columns,
                                                      uint64_t ref_table_id,
@@ -252,13 +270,25 @@ protected:
                             ObIArray<ObColumnRefRawExpr*> &column_exprs);
   int replace_column_ref_for_check_constraint(ObInsertTableInfo& table_info, ObRawExpr *&expr);
   int add_default_sequence_id_to_stmt(const uint64_t table_id);
-  int recursive_search_sequence_expr(const ObRawExpr *default_expr);
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
+  int build_autoinc_param(
+      const uint64_t table_id,
+      const ObTableSchema *table_schema,
+      const ObColumnSchemaV2 *column_schema,
+      const int64_t auto_increment_cache_size,
+      AutoincParam &param);
+  int resolve_json_partial_update_flag(ObIArray<ObTableAssignment> &table_assigns, ObStmtScope scope);
+  int mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update);
+  int add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col);
+  int select_items_is_pk(const ObSelectStmt& select_stmt, bool &has_pk);
+
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;
   bool is_column_specify_;
   bool is_oracle_tmp_table_; //是否创建oracle的临时表
   int64_t oracle_tmp_table_type_;
+protected:
+  bool is_resolve_insert_update_;
 };
 
 } /* namespace sql */

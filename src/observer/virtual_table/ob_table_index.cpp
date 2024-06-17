@@ -39,7 +39,8 @@ ObTableIndex::ObTableIndex()
       simple_index_infos_(),
       is_rowkey_end_(false),
       is_normal_end_(false),
-      ft_dep_col_idx_(OB_INVALID_ID)
+      ft_dep_col_idx_(OB_INVALID_ID),
+      min_data_version_(OB_INVALID_VERSION)
 {
 }
 
@@ -85,6 +86,16 @@ void ObTableIndex::reset()
   is_rowkey_end_ = false;
   simple_index_infos_.reset();
   ft_dep_col_idx_ = OB_INVALID_ID;
+  min_data_version_ = OB_INVALID_VERSION;
+}
+
+int ObTableIndex::init(uint64_t tenant_id) {
+  int ret = OB_SUCCESS;
+  tenant_id_ = tenant_id;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, min_data_version_))) {
+    LOG_WARN("fail to get min data version", K(ret), K(tenant_id_));
+  }
+  return ret;
 }
 
 int ObTableIndex::inner_get_next_row(common::ObNewRow *&row)
@@ -279,6 +290,59 @@ int ObTableIndex::add_table_indexes(const ObTableSchema &table_schema,
 
 }
 
+int ObTableIndex::get_rowkey_index_column(const ObTableSchema &table_schema,
+                                          const ObColumnSchemaV2 *&column_schema,
+                                          bool &is_column_visible,
+                                          bool &is_end)
+{
+  int ret = OB_SUCCESS;
+  // is_compat: compatible mode for version lower than 4.3.1 which does not support SHOW EXTENDED
+  const bool is_compat = !sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version_);
+  common::ObArray<ObColDesc> store_column_ids;
+  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+  ObRowkeyColumn rowkey_col;
+  is_end = false;
+  if (OB_UNLIKELY(rowkey_info_idx_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "rowkey_info_idx_ is wrong", K(rowkey_info_idx_));
+  } else if (OB_FAIL(table_schema.get_store_column_ids(store_column_ids, true))) {
+    SERVER_LOG(WARN, "get store column ids failed");
+  } else if (rowkey_info_idx_ >= (is_compat ? rowkey_info.get_size() : store_column_ids.count())) {
+    is_end = true;
+    rowkey_info_idx_ = OB_INVALID_ID;
+  } else if (is_compat) {
+    is_column_visible = true;
+    if (table_schema.is_heap_table()) {
+      // don't show hidden pk
+      // used for only hidden pk in the RowKey Table_schema
+      is_end = true;
+      rowkey_info_idx_ = OB_INVALID_ID;
+    } else if (OB_FAIL(rowkey_info.get_column(rowkey_info_idx_, rowkey_col))) {
+      SERVER_LOG(WARN, "fail to get column", K(ret));
+    } else if (OB_UNLIKELY(NULL == (column_schema = table_schema.get_column_schema(rowkey_col.column_id_)))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "fail to get column schema", K(ret), K(rowkey_col.column_id_));
+    } else {
+      is_end = false;
+    }
+  } else {
+    is_column_visible = false;
+    if (table_schema.is_view_table() && !table_schema.is_materialized_view()) {
+      is_end = true;
+      rowkey_info_idx_ = OB_INVALID_ID;
+    } else if (!table_schema.is_heap_table()
+        && OB_FAIL(rowkey_info.is_rowkey_column(store_column_ids.at(rowkey_info_idx_).col_id_, is_column_visible))) {
+      SERVER_LOG(WARN, "fail to check rowkey column", K(ret), K(store_column_ids.at(rowkey_info_idx_).col_id_));
+    } else if (OB_UNLIKELY(NULL == (column_schema = table_schema.get_column_schema(store_column_ids.at(rowkey_info_idx_).col_id_)))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "fail to get column schema", K(ret), K(store_column_ids.at(rowkey_info_idx_).col_id_));
+    } else {
+      is_end = false;
+    }
+  }
+  return ret;
+}
+
 int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
                                      const ObString &database_name,
                                      ObObj *cells,
@@ -286,7 +350,6 @@ int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
                                      bool &is_end)
 {
   int ret = OB_SUCCESS;
-  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
   if (OB_INVALID_ID == static_cast<uint64_t>(rowkey_info_idx_)) {
     rowkey_info_idx_ = 0;
   }
@@ -300,27 +363,38 @@ int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
                    K(ret),
                    K(cur_row_.count_),
                    K(col_count));
-  } else if (OB_UNLIKELY(rowkey_info_idx_ < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "rowkey_info_idx_ is wrong", K(rowkey_info_idx_));
-  } else if (rowkey_info_idx_ >= rowkey_info.get_size()) {
-    is_end = true;
-    rowkey_info_idx_ = OB_INVALID_ID;
   } else {
     const ObColumnSchemaV2 *column_schema = NULL;
-    ObRowkeyColumn rowkey_col;
-    if (table_schema.is_heap_table()) {
-      // don't show hidden pk
-      // used for only hidden pk in the RowKey Table_schema
-      is_end = true;
-      rowkey_info_idx_ = OB_INVALID_ID;
-    } else if (OB_FAIL(rowkey_info.get_column(rowkey_info_idx_, rowkey_col))) {
-      SERVER_LOG(WARN, "fail to get column", K(ret));
-    } else if (OB_UNLIKELY(NULL == (column_schema = table_schema.get_column_schema(rowkey_col.column_id_)))) {
+    bool is_column_visible = false;
+    const ObTableSchema *real_table_schema = &table_schema;
+    if (table_schema.is_materialized_view()) {
+      // a mview's indexes are built upon its container table
+      const ObTableSchema *container_table_schema = nullptr;
+      if (OB_FAIL(schema_guard_->get_table_schema(table_schema.get_tenant_id(),
+          table_schema.get_data_table_id(), container_table_schema))) {
+        SERVER_LOG(WARN, "failed to get table schema", KR(ret), K(table_schema));
+      } else if (OB_ISNULL(container_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "invalid container table id", KR(ret),
+            "container table id", table_schema.get_data_table_id());
+      } else {
+        real_table_schema = container_table_schema;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(real_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "fail to get column schema", K(ret), K(rowkey_col.column_id_));
+      LOG_WARN("unexpected null schema", KR(ret), KP(real_table_schema));
+    } else if (OB_FAIL(get_rowkey_index_column(*real_table_schema, column_schema,
+                                        is_column_visible, is_end))) {
+      SERVER_LOG(WARN, "fail to get rowkey index column", K(ret));
+    } else if (is_end) {
+      // do nothing
+    } else if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "column schema is NULL", K(ret));
     } else {
-      is_end = false;
       uint64_t cell_idx = 0;
       for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
         uint64_t col_id = output_column_ids_.at(j);
@@ -435,11 +509,13 @@ int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
           }
           // is_column_visible
           case OB_APP_MIN_COLUMN_ID + 18: {
-            // is_column_visible is used for SHOW EXTENDED in 4.2.2
-            cells[cell_idx].set_int(1);
+            if (is_column_visible) {
+              cells[cell_idx].set_int(1);
+            } else {
+              cells[cell_idx].set_int(0);
+            }
             break;
           }
-
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
@@ -519,25 +595,24 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
                      "index_table_id",
                      simple_index_infos_.at(index_tid_array_idx_).table_id_);
         } else {
-          bool is_ctxcat_fulltext = false;
-          ObArray<uint64_t> ft_gen_column_ids;
-          ObArray<uint64_t> dep_column_ids;
-          if ((INDEX_TYPE_DOMAIN_CTXCAT == index_schema->get_index_type())) {
-            if (OB_FAIL(index_schema->get_generated_column_ids(ft_gen_column_ids))) {
-              LOG_WARN("get generated column ids failed", K(ret));
-            } else if (1 == ft_gen_column_ids.count()) {
-              // 对于全文索引表，只有一列生成列, 可以有多个依赖列
-              is_ctxcat_fulltext = true;
-            }
-          }
-
-          if (OB_FAIL(ret)) {
-          } else if (is_ctxcat_fulltext) {
+          const bool is_fts_index = index_schema->is_fts_index();
+          uint64_t doc_id_col_id = OB_INVALID_ID;
+          uint64_t ft_col_id = OB_INVALID_ID;
+          if (index_schema->is_built_in_fts_index()) {
+            is_sub_end = true;
+          } else if (is_fts_index && OB_FAIL(index_schema->get_fulltext_column_ids(doc_id_col_id, ft_col_id))) {
+            LOG_WARN("get generated column ids failed", K(ret));
+          } else if (is_fts_index) {
+            ObArray<uint64_t> dep_column_ids;
             const ObColumnSchemaV2 *gen_column_schema = NULL;
             if (OB_INVALID_ID == static_cast<uint64_t>(ft_dep_col_idx_)) {
               ft_dep_col_idx_ = 0;
             }
-            if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(ft_gen_column_ids[0]))) {
+            if (OB_UNLIKELY(doc_id_col_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == doc_id_col_id
+                             || ft_col_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == ft_col_id)) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid doc id or fulltext column id", K(ret), K(doc_id_col_id), K(ft_col_id));
+            } else if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(ft_col_id))) {
               ret = OB_SCHEMA_ERROR;
               SERVER_LOG(WARN, "fail to get data table column schema", K(ret));
             } else if (OB_FAIL(gen_column_schema->get_cascaded_column_ids(dep_column_ids))) {
@@ -577,6 +652,103 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
   return ret;
 }
 
+int ObTableIndex::get_normal_index_column(const ObTableSchema &table_schema,
+                                          const ObTableSchema *index_schema,
+                                          const ObColumnSchemaV2 *&column_schema,
+                                          bool &is_column_visible,
+                                          bool &is_end)
+{
+  int ret = OB_SUCCESS;
+  // is_compat: compatible mode for version lower than 4.3.1 or 4.2.2 which does not support SHOW EXTENDED
+  const bool is_compat = !sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version_);
+  common::ObArray<ObColDesc> store_column_ids;
+  is_end = false;
+  if (OB_ISNULL(index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "index schema pointer is NULL", K(ret));
+  } else if (OB_UNLIKELY(index_column_idx_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "index_column_idx_ is wrong", K(ret));
+  } else if (OB_FAIL(index_schema->get_store_column_ids(store_column_ids, true))) {
+    SERVER_LOG(WARN, "get store columns fail", K(ret));
+  } else if (index_column_idx_ >=
+             (is_compat ? index_schema->get_index_info().get_size() : store_column_ids.count())) {
+    is_end = true;
+    index_column_idx_ = OB_INVALID_ID;
+  } else {
+    const ObIndexInfo &index_info = index_schema->get_index_info();
+    is_column_visible = false;
+    if (is_compat) {
+      const ObRowkeyColumn *rowkey_column;
+      is_column_visible = true;
+      if (OB_ISNULL(rowkey_column = index_info.get_column(index_column_idx_))) {
+        ret = OB_SCHEMA_ERROR;
+        SERVER_LOG(WARN, "fail to get rowkey column", K(ret));
+      } else if (index_schema->is_spatial_index()) {
+        if (rowkey_column->type_.get_type() == ObVarcharType) {
+          is_end = true; // mbr列不需要输出
+          index_column_idx_ = OB_INVALID_ID;
+        } else { // cellid列,获取主表geo列column_name
+          const ObColumnSchemaV2 *cellid_column = NULL;
+          if (OB_ISNULL(cellid_column = index_schema->get_column_schema(rowkey_column->column_id_))) {
+            ret = OB_SCHEMA_ERROR;
+            SERVER_LOG(WARN, "fail to get data table cellid column schema", K(ret), K(rowkey_column->column_id_));
+          } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(cellid_column->get_geo_col_id()))) {
+            ret = OB_SCHEMA_ERROR;
+            SERVER_LOG(WARN, "fail to get data table geo column schema", K(ret), K(cellid_column->get_geo_col_id()));
+          }
+        }
+      } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(rowkey_column->column_id_))) { // 索引表的column_id跟数据表的对应列的column_id是相等的
+        ret = OB_SCHEMA_ERROR;
+        SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K_(rowkey_column->column_id));
+      }
+    } else {
+      const ObColDesc *column_desc;
+      if (OB_ISNULL(column_desc = &store_column_ids.at(index_column_idx_))) {
+        ret = OB_SCHEMA_ERROR;
+        SERVER_LOG(WARN, "fail to get column desc", K(ret));
+      } else if (OB_FAIL(index_info.is_rowkey_column(column_desc->col_id_, is_column_visible))) {
+        SERVER_LOG(WARN, "fail to check rowkey column", K(ret), K(column_desc->col_id_));
+      } else if (index_schema->is_spatial_index()) {
+        if (!is_column_visible) {
+          // normal column
+          if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_desc->col_id_))) {
+            ret = OB_SCHEMA_ERROR;
+            SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K(column_desc->col_id_));
+          }
+        } else if (column_desc->col_type_.get_type() == ObVarcharType) {
+          is_column_visible = false; // mbr列
+          if (OB_ISNULL(column_schema = index_schema->get_column_schema(column_desc->col_id_))) {
+            ret = OB_SCHEMA_ERROR;
+            SERVER_LOG(WARN, "fail to get data table mbr column schema", K(ret), K(column_desc->col_id_));
+          }
+        } else { // cellid列,获取主表geo列column_name
+          const ObColumnSchemaV2 *cellid_column = NULL;
+          if (OB_ISNULL(cellid_column = index_schema->get_column_schema(column_desc->col_id_))) {
+            ret = OB_SCHEMA_ERROR;
+            SERVER_LOG(WARN, "fail to get data table cellid column schema", K(ret), K(column_desc->col_id_));
+          } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(cellid_column->get_geo_col_id()))) {
+            ret = OB_SCHEMA_ERROR;
+            SERVER_LOG(WARN, "fail to get data table geo column schema", K(ret), K(cellid_column->get_geo_col_id()));
+          }
+        }
+      } else if (column_desc->col_id_ < OB_MIN_SHADOW_COLUMN_ID) {
+        if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_desc->col_id_))) { // 索引表的column_id跟数据表的对应列的column_id是相等的
+          ret = OB_SCHEMA_ERROR;
+          SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K(column_desc->col_id_));
+        }
+      } else {
+        // shadow column should get schema from index_schema
+        if (OB_ISNULL(column_schema = index_schema->get_column_schema(column_desc->col_id_))) {
+          ret = OB_SCHEMA_ERROR;
+          SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K(column_desc->col_id_));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableIndex::add_normal_index_column(const ObString &database_name,
                                           const ObTableSchema &table_schema,
                                           const ObTableSchema *index_schema,
@@ -596,20 +768,12 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cells count is less than output column count",
                K(ret), K(cur_row_.count_), K(col_count));
-  } else if (OB_UNLIKELY(index_column_idx_ < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "index_column_idx_ is wrong", K(ret));
-  } else if (index_column_idx_ >= index_schema->get_index_info().get_size()) {
-    is_end = true;
-    index_column_idx_ = OB_INVALID_ID;
   } else {
-    const ObIndexInfo &index_info = index_schema->get_index_info();
-    const ObRowkeyColumn *rowkey_column = index_info.get_column(index_column_idx_);
-    const ObColumnSchemaV2 *column_schema = NULL;
-    const ObColumnSchemaV2 *index_column = NULL;
     ObString index_name;
     char *buf = NULL;
     int64_t buf_len = number::ObNumber::MAX_PRINTABLE_SIZE;
+    const ObColumnSchemaV2 *column_schema = NULL;
+    bool is_column_visible;
     const ObTableSchema *real_table_schema = &table_schema;
     if (table_schema.is_materialized_view()) {
       // a mview's indexes are built upon its container table
@@ -627,37 +791,21 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(NULL == rowkey_column)) {
-      ret = OB_SCHEMA_ERROR;
-      SERVER_LOG(WARN, "fail to get rowkey column", K(ret));
-    } else if (index_schema->is_spatial_index()) {
-      if (rowkey_column->type_.get_type() == ObVarcharType) {
-        is_end = true; // mbr列不需要输出
-        index_column_idx_ = OB_INVALID_ID;
-      } else { // cellid列,获取主表geo列column_name
-        const ObColumnSchemaV2 *cellid_column = NULL;
-        if (OB_ISNULL(cellid_column = index_schema->get_column_schema(rowkey_column->column_id_))) {
-          ret = OB_SCHEMA_ERROR;
-          SERVER_LOG(WARN, "fail to get data table cellid column schema", K(ret), K(rowkey_column->column_id_));
-        } else if (OB_ISNULL(column_schema = real_table_schema->get_column_schema(cellid_column->get_geo_col_id()))) {
-          ret = OB_SCHEMA_ERROR;
-          SERVER_LOG(WARN, "fail to get data table geo column schema", K(ret), K(cellid_column->get_geo_col_id()));
-        }
-      }
-    } else if (OB_ISNULL(column_schema = real_table_schema->get_column_schema(rowkey_column->column_id_))) { // 索引表的column_id跟数据表的对应列的column_id是相等的
-      ret = OB_SCHEMA_ERROR;
-      SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K_(rowkey_column->column_id));
-    }
-
-    if (OB_FAIL(ret) || is_end) {
-    } else if (OB_ISNULL(index_column = index_schema->get_column_schema(rowkey_column->column_id_))) {
-      ret = OB_SCHEMA_ERROR;
-      SERVER_LOG(WARN, "get index column schema failed", K_(rowkey_column->column_id));
+    } else if (OB_ISNULL(real_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
+    } else if (OB_FAIL(get_normal_index_column(*real_table_schema, index_schema, column_schema,
+                                        is_column_visible, is_end))) {
+      SERVER_LOG(WARN, "fail to get normal index column", K(ret));
+    } else if (is_end) {
+      // do nothing
+    } else if (OB_ISNULL(column_schema)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SERVER_LOG(WARN, "column schema is NULL", K(ret));
     } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory for print buffer failed", K(ret), K(buf_len));
     } else {
-      is_end = false;
       uint64_t cell_idx = 0;
       for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
         uint64_t col_id = output_column_ids_.at(j);
@@ -820,8 +968,11 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
           }
           // is_column_visible
           case OB_APP_MIN_COLUMN_ID + 18: {
-            // is_column_visible is used for SHOW EXTENDED in 4.2.2
-            cells[cell_idx].set_int(1);
+            if (is_column_visible) {
+              cells[cell_idx].set_int(1);
+            } else {
+              cells[cell_idx].set_int(0);
+            }
             break;
           }
           default: {
@@ -913,15 +1064,7 @@ int ObTableIndex::add_fulltext_index_column(const ObString &database_name,
           }
             // non_unique
           case OB_APP_MIN_COLUMN_ID + 5: {
-            int64_t non_unique = 0;
-            if (INDEX_TYPE_UNIQUE_GLOBAL == index_schema->get_index_type()
-                || INDEX_TYPE_UNIQUE_LOCAL == index_schema->get_index_type()
-                || index_schema->is_spatial_index()) {
-              non_unique = 0;
-            } else {
-              non_unique = 1;
-            }
-            cells[cell_idx].set_int(non_unique);
+            cells[cell_idx].set_int(1/*non_unique*/);
             break;
           }
             //index_schema
@@ -1016,8 +1159,7 @@ int ObTableIndex::add_fulltext_index_column(const ObString &database_name,
           }
           // is_column_visible
           case OB_APP_MIN_COLUMN_ID + 18: {
-            // is_column_visible is used for SHOW EXTENDED in 4.2.2
-            cells[cell_idx].set_int(1);
+            cells[cell_idx].set_int(1); // TODO this value is set for SHOW EXTENDED INDEX
             break;
           }
           default: {

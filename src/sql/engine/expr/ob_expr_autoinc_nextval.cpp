@@ -37,6 +37,27 @@ ObExprAutoincNextval::ObExprAutoincNextval(ObIAllocator &alloc)
 }
 
 
+ObExprAutoincNextval::ObExprAutoincNextval(
+    common::ObIAllocator &alloc,
+    ObExprOperatorType type,
+    const char *name,
+    int32_t param_num,
+    ObValidForGeneratedColFlag valid_for_generated_col,
+    int32_t dimension,
+    bool is_internal_for_mysql/* = false */,
+    bool is_internal_for_oracle/* = false */)
+  : ObFuncExprOperator(alloc,
+                       type,
+                       name,
+                       param_num,
+                       valid_for_generated_col,
+                       dimension,
+                       is_internal_for_mysql,
+                       is_internal_for_oracle)
+{
+  disable_operand_auto_cast();
+}
+
 ObExprAutoincNextval::~ObExprAutoincNextval()
 {
 }
@@ -392,7 +413,7 @@ int ObExprAutoincNextval::eval_nextval(
     // this column with column_index is auto-increment column
     if (OB_ISNULL(autoinc_param)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("should find auto-increment param", K(ret));
+      LOG_WARN("should find auto-increment param", K(ret), K(autoinc_table_id), K(autoinc_col_id), K(autoinc_params));
     }
 
     // sync last user specified value first(compatible with MySQL)

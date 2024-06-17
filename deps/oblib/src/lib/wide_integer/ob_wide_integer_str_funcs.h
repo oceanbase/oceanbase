@@ -126,8 +126,10 @@ int to_string(const ObWideInteger<Bits, Signed> &self, char *buf, const int64_t 
 {
   static const uint64_t constexpr DIGITS10_BASE = 10000000000000000000ULL; // 10^19
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || buf_len <= 0) {
+  if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (OB_UNLIKELY(buf_len <= 0)) {
+    ret = OB_SIZE_OVERFLOW;
   } else {
     if (ObWideInteger<Bits, Signed>::_impl::is_negative(self)
         && OB_FAIL(databuff_printf(buf, buf_len, pos, "-"))) {

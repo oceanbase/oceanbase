@@ -60,22 +60,20 @@ public:
 public:
   struct ObPLSPIService
   {
-    jit::ObLLVMFunction spi_calc_expr_;
+    jit::ObLLVMFunction spi_calc_expr_at_idx_;
     jit::ObLLVMFunction spi_calc_package_expr_;
-    jit::ObLLVMFunction spi_set_variable_;
-    jit::ObLLVMFunction spi_query_;
-    jit::ObLLVMFunction spi_prepare_;
-    jit::ObLLVMFunction spi_execute_;
+    jit::ObLLVMFunction spi_set_variable_to_expr_;
+    jit::ObLLVMFunction spi_query_into_expr_idx_;
+    jit::ObLLVMFunction spi_execute_with_expr_idx_;
     jit::ObLLVMFunction spi_execute_immediate_;
     jit::ObLLVMFunction spi_extend_collection_;
     jit::ObLLVMFunction spi_delete_collection_;
     jit::ObLLVMFunction spi_cursor_init_;
-    jit::ObLLVMFunction spi_cursor_open_;
+    jit::ObLLVMFunction spi_cursor_open_with_param_idx_;
     jit::ObLLVMFunction spi_dynamic_open_;
     jit::ObLLVMFunction spi_cursor_fetch_;
     jit::ObLLVMFunction spi_cursor_close_;
     jit::ObLLVMFunction spi_destruct_collection_;
-    jit::ObLLVMFunction spi_init_collection_;
     jit::ObLLVMFunction spi_reset_collection_;
     jit::ObLLVMFunction spi_copy_datum_;
     jit::ObLLVMFunction spi_destruct_obj_;
@@ -94,12 +92,10 @@ public:
     jit::ObLLVMFunction spi_trim_collection_;
     jit::ObLLVMFunction spi_interface_impl_;
     jit::ObLLVMFunction spi_process_nocopy_params_;
-    jit::ObLLVMFunction spi_copy_ref_cursor_;
     jit::ObLLVMFunction spi_add_ref_cursor_refcount_;
     jit::ObLLVMFunction spi_handle_ref_cursor_refcount_;
     jit::ObLLVMFunction spi_update_package_change_info_;
     jit::ObLLVMFunction spi_check_composite_not_null_;
-    jit::ObLLVMFunction spi_update_location_;
     jit::ObLLVMFunction spi_process_resignal_error_;
     jit::ObLLVMFunction spi_check_autonomous_trans_;
   };
@@ -193,7 +189,8 @@ public:
     di_adt_service_(di_helper),
     di_user_type_map_(),
     debug_mode_(session_info_.is_pl_debug_on() && func_ast.is_routine()),
-    oracle_mode_(oracle_mode)
+    oracle_mode_(oracle_mode),
+    out_params_(allocator)
     { }
 
   virtual ~ObPLCodeGenerator() {}
@@ -406,11 +403,21 @@ public:
     }
     return label;
   }
+
+  inline int set_label(const ObPLStmt &s, jit::ObLLVMBasicBlock &start, jit::ObLLVMBasicBlock &exit)
+  {
+    int ret = common::OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < s.get_label_cnt(); ++i) {
+      ret = set_label(s.get_label(s.get_label_idx(i)), s.get_level(), start, exit);
+    }
+    return ret;
+  }
+
   inline int set_label(const common::ObString *name, int64_t level, jit::ObLLVMBasicBlock &start, jit::ObLLVMBasicBlock &exit)
   {
     int ret = common::OB_SUCCESS;
     if (label_stack_.cur_ < LABEL_STACK_DEPTH - 1) {
-      label_stack_.labels_[label_stack_.cur_].name_ = NULL == name ? ObString() : *name;
+      label_stack_.labels_[label_stack_.cur_].name_ = (NULL == name) ? ObString() : *name;
       label_stack_.labels_[label_stack_.cur_].level_ = level;
       label_stack_.labels_[label_stack_.cur_].start_ = start;
       label_stack_.labels_[label_stack_.cur_].exit_ = exit;
@@ -423,8 +430,18 @@ public:
   inline int reset_label()
   {
     int ret = common::OB_SUCCESS;
-    if (label_stack_.cur_ > 0) {
-      --label_stack_.cur_;
+    int64_t new_cur = label_stack_.cur_ - 1;
+    while (new_cur > 0) {
+      if (label_stack_.labels_[label_stack_.cur_].level_ == label_stack_.labels_[new_cur].level_
+          && label_stack_.labels_[label_stack_.cur_].start_.get_v() == label_stack_.labels_[new_cur].start_.get_v()
+          && label_stack_.labels_[label_stack_.cur_].exit_.get_v() == label_stack_.labels_[new_cur].exit_.get_v()) {
+        new_cur --;
+      } else {
+        break;
+      }
+    }
+    if (new_cur >= 0) {
+      label_stack_.cur_ = new_cur;
     } else {
       ret = common::OB_ERR_UNEXPECTED;
     }
@@ -645,6 +662,8 @@ public:
                                 int64_t expr_idx,
                                 const ObPLStmt &s,
                                 jit::ObLLVMValue &p_result_obj);
+  int prepare_expression(ObPLCompileUnit &pl_func);
+  int final_expression(ObPLCompileUnit &pl_func);
 
 private:
   int init_spi_service();
@@ -658,8 +677,6 @@ private:
   int prepare_local_user_type();
   int prepare_external();
   int prepare_subprogram(ObPLFunction &pl_func);
-  int prepare_expression(ObPLCompileUnit &pl_func);
-  int final_expression(ObPLCompileUnit &pl_func);
   int generate_get_attr(jit::ObLLVMValue &param_array,
                         const common::ObIArray<ObObjAccessIdx> &obj_access,
                         bool for_write,
@@ -766,6 +783,11 @@ public:
                                  uint32_t arg_no, uint32_t line, jit::ObLLVMValue &value);
   int generate_di_local_variable(const ObString &name, jit::ObLLVMDIType &di_type,
                                  uint32_t arg_no, uint32_t line, jit::ObLLVMValue &value);
+  bool get_debug_mode() { return debug_mode_; }
+
+  inline ObPLSEArray<jit::ObLLVMValue> &get_out_params() { return out_params_; }
+  inline void reset_out_params() { out_params_.reset(); }
+  inline int add_out_params(jit::ObLLVMValue &value) { return out_params_.push_back(value); }
 private:
   int init_di_adt_service();
   int generate_di_prototype();
@@ -775,6 +797,7 @@ private:
   ObLLVMDITypeMap di_user_type_map_;
   bool debug_mode_;
   bool oracle_mode_;
+  ObPLSEArray<jit::ObLLVMValue> out_params_;
 };
 
 class ObPLCodeGenerateVisitor : public ObPLStmtVisitor

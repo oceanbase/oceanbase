@@ -165,6 +165,8 @@ private:
   // because after ls is recycled, the ls context may be cleaned up, but reader still needs to read data based on tenant_ls_id_str
   common::ObSafeArena             tls_info_serialize_allocator_;
 
+
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogLSFetchMgr);
 };

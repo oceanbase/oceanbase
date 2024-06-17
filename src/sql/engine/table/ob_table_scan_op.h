@@ -25,8 +25,14 @@
 #include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_text_retrieval_op.h"
+#include "sql/das/ob_das_attach_define.h"
+#include "sql/das/ob_text_retrieval_op.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
+#include "sql/das/iter/ob_das_iter.h"
+#include "sql/das/iter/ob_das_merge_iter.h"
+#include "sql/das/iter/ob_das_group_fold_iter.h"
+
 namespace oceanbase
 {
 namespace common
@@ -71,7 +77,7 @@ public:
       obj_buffer_(nullptr)
   {}
   ~ObSpatialIndexCache() {};
-  ObSpatIndexRow *spat_rows_;
+  ObDomainIndexRow *spat_rows_;
   uint8_t spat_row_index_;
   void *mbr_buffer_;
   void *obj_buffer_;
@@ -141,9 +147,7 @@ public:
       allocator_(allocator),
       calc_part_id_expr_(NULL),
       global_index_rowkey_exprs_(allocator),
-      aux_lookup_ctdef_(nullptr),
-      aux_lookup_loc_meta_(nullptr),
-      text_ir_ctdef_(nullptr)
+      attach_spec_(allocator_, &scan_ctdef_)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
@@ -156,6 +160,7 @@ public:
         scan_ctdef_.access_column_ids_;
   }
   int allocate_dppr_table_loc();
+  ObDASScanCtDef *get_lookup_ctdef();
   TO_STRING_KV(K_(pre_query_range),
                K_(flashback_item),
                K_(bnlj_param_idxs),
@@ -166,9 +171,7 @@ public:
                KPC_(das_dppr_tbl),
                KPC_(calc_part_id_expr),
                K_(global_index_rowkey_exprs),
-               KPC_(aux_lookup_ctdef),
-               KPC_(aux_lookup_loc_meta),
-               KPC_(text_ir_ctdef));
+               K_(attach_spec));
   //the query range of index scan/table scan
   ObQueryRange pre_query_range_;
   FlashBackItem flashback_item_;
@@ -195,11 +198,7 @@ public:
   ObExpr *calc_part_id_expr_;
   ExprFixedArray global_index_rowkey_exprs_;
   // end for Global Index Lookup
-  // domain doc_id aux lookup
-  ObDASScanCtDef *aux_lookup_ctdef_;
-  ObDASTableLocMeta *aux_lookup_loc_meta_;
-  // text retrieval
-  ObDASIRCtDef *text_ir_ctdef_;
+  ObDASAttachSpec attach_spec_;
 };
 
 struct ObTableScanRtDef
@@ -211,7 +210,8 @@ struct ObTableScanRtDef
       range_buffers_(nullptr),
       range_buffer_idx_(0),
       group_size_(0),
-      max_group_size_(0)
+      max_group_size_(0),
+      attach_rtinfo_(nullptr)
   { }
 
   void prepare_multi_part_limit_param();
@@ -231,6 +231,7 @@ struct ObTableScanRtDef
   // for equal_query_range opt end
   int64_t group_size_;
   int64_t max_group_size_;
+  ObDASAttachRtInfo *attach_rtinfo_;
 };
 
 // table scan operator input
@@ -449,13 +450,15 @@ protected:
   int reassign_task_ranges(ObGranuleTaskInfo &info);
 
   int local_iter_reuse();
-  int switch_batch_iter();
   int set_batch_iter(int64_t group_id);
+  void reset_iter_tree_for_rescan();
+  bool is_group_rescan() const { return OB_NOT_NULL(output_) && output_ == fold_iter_; }
   int calc_expr_int_value(const ObExpr &expr, int64_t &retval, bool &is_null_value);
   int init_table_scan_rtdef();
   int init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef,
                           ObDASScanRtDef &das_rtdef,
                           const ObDASTableLocMeta *loc_meta);
+  int init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *&attach_rtdef);
   int prepare_scan_range();
   int prepare_batch_scan_range();
   int build_bnlj_params();
@@ -492,14 +495,30 @@ protected:
   int fill_generated_cellid_mbr(const ObObj &cellid, const ObObj &mbr);
   int inner_get_next_spatial_index_row();
   int init_spatial_index_rows();
+  void set_real_rescan_cnt(int64_t real_rescan_cnt) { group_rescan_cnt_ = real_rescan_cnt; }
+  int64_t get_real_rescan_cnt() { return group_rescan_cnt_; }
 
+  // in_batch_rescan_subplan means the ancestor operator(NLJ/SPF) of TSC uses bacth rescan
+  bool in_batch_rescan_subplan()
+  {
+    return !tsc_rtdef_.bnlj_params_.empty();
+  }
+  // because of adptive batch rescan in TSC, TSC may performs single-line rescan in some scenarios;
+  // need_perform_real_batch_rescan means TSC needs perform a real batch rescan in the adaptive batch-rescan process
+  // and the return value changes during execution
+  bool need_perform_real_batch_rescan()
+  {
+    return (OB_NOT_NULL(fold_iter_) && output_ == fold_iter_);
+  }
 protected:
   int prepare_das_task();
   int prepare_all_das_tasks();
   int prepare_pushdown_limit_param();
   bool has_das_scan_op(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op);
-  int init_das_group_range(const int64_t cur_group_idx, const int64_t group_size);
   int create_one_das_task(ObDASTabletLoc *tablet_loc);
+  int pushdown_normal_lookup_to_das(ObDASScanOp &target_op);
+  int pushdown_attach_task_to_das(ObDASScanOp &target_op);
+  int attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDef *attach_rtdef);
   int do_table_scan();
   int get_next_row_with_das();
   bool need_init_checksum();
@@ -511,6 +530,7 @@ protected:
   int get_next_batch_with_das(int64_t &count, int64_t capacity);
   void replace_bnlj_param(int64_t batch_idx);
   bool need_real_rescan();
+  int check_need_real_rescan(bool &bret);
   static int check_is_physical_rowid(ObIAllocator &allocator,
                                      ObRowkey &row_key,
                                      bool &is_physical_rowid,
@@ -601,7 +621,6 @@ private:
 
   void adjust_rand_output_brs(const int64_t rand_skip_bits);
 protected:
-  ObDASRef das_ref_;
   DASOpResultIter scan_result_;
   ObTableScanRtDef tsc_rtdef_;
   bool need_final_limit_;
@@ -628,71 +647,26 @@ protected:
   int64_t scan_task_id_;
   bool report_checksum_;
   bool in_rescan_;
-  ObGlobalIndexLookupOpImpl *global_index_lookup_op_;
   ObSpatialIndexCache spat_index_;
+
+  // output_ is used to output data, TSC operator directly invokes output_::get_next_row(s),
+  // it points to fold_iter_ in group rescan and iter_tree_ in normal scan.
+  ObDASIter *output_;
+
+  // fold_iter_ is used for group rescan, it folds the output of iter_tree_ according to group_idx.
+  ObDASGroupFoldIter *fold_iter_;
+
+  // iter_tree_ is used to produce data,
+  // for table scan and local index lookup:
+  //   iter_tree_ and scan_iter_ are the same, both refer to a ObDASMergeIter,
+  // for global index lookup:
+  //   iter_tree_ refers to a ObDASLookupIter for lookup and scan_iter_ refers to a ObDASMergeIter for index scan.
+  ObDASIter *iter_tree_;
+  ObDASMergeIter *scan_iter_;
+  int64_t group_rescan_cnt_;
+  int64_t group_id_;
  };
 
-class ObGlobalIndexLookupOpImpl : public ObIndexLookupOpImpl
-{
-public:
-  ObGlobalIndexLookupOpImpl(ObTableScanOp *table_scan_op);
-  int open();
-  int close();
-  int rescan();
-  void destroy();
-  ObBatchRows& get_brs() {return brs_;}
-private:
-  OB_INLINE ObExpr* get_calc_part_id_expr() { return table_scan_op_->get_tsc_ctdef().calc_part_id_expr_; }
-  OB_INLINE ObDASTableLocMeta* get_loc_meta() { return table_scan_op_->get_tsc_ctdef().lookup_loc_meta_; }
-  OB_INLINE const ObDASScanCtDef* get_lookup_ctdef() { return table_scan_op_->get_tsc_ctdef().lookup_ctdef_; }
-  OB_INLINE bool get_batch_rescan() const { return table_scan_op_->get_tsc_spec().batch_scan_flag_; }
-public:
-  virtual void do_clear_evaluated_flag() override { table_scan_op_->clear_evaluated_flag(); }
-  virtual int get_next_row_from_index_table() override;
-  virtual int process_data_table_rowkey() override;
-  virtual int process_data_table_rowkeys(const int64_t size, const ObBitVector *skip) override;
-  virtual bool is_group_scan() const override {return true;}
-  virtual int init_group_range(int64_t cur_group_idx, int64_t group_size) override;
-  virtual int do_index_lookup() override;
-  virtual int get_next_row_from_data_table() override;
-  virtual int get_next_rows_from_data_table(int64_t &count, int64_t capacity) override;
-  virtual int process_next_index_batch_for_row() override;
-  virtual int process_next_index_batch_for_rows(int64_t &count) override;
-  virtual bool need_next_index_batch() const override;
-  virtual int check_lookup_row_cnt() override;
-  virtual int do_index_table_scan_for_rows(const int64_t max_row_cnt,
-                                           const int64_t start_group_idx,
-                                           const int64_t default_row_batch_cnt) override;
-  virtual void update_state_in_output_rows_state(int64_t &count) override;
-  virtual void update_states_in_finish_state() override;
-  virtual void update_states_after_finish_state() override {brs_.end_ = true;}
-
-  // The following function distinguishes between the global index back and the local index back.
-  // For Local index, it will return 0
-  // For Global index, it will return the property
-  virtual int64_t get_index_group_cnt() const override {return index_group_cnt_;}
-  virtual int64_t get_lookup_group_cnt() const override {return lookup_group_cnt_;}
-  virtual void inc_index_group_cnt() override {index_group_cnt_++;}
-  virtual void inc_lookup_group_cnt() override {lookup_group_cnt_++;}
-  virtual ObEvalCtx & get_eval_ctx() override {return table_scan_op_->get_eval_ctx();}
-  virtual const ExprFixedArray & get_output_expr() override {return table_scan_op_->get_tsc_ctdef().get_das_output_exprs(); }
-
-  void reset_for_rescan();
-  int build_data_table_range(common::ObNewRange &lookup_range);
-  int switch_lookup_result_iter();
-  bool has_das_scan_op(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op);
-  int get_next_data_table_rows(int64_t &count, const int64_t capacity);
-  int reset_brs();
-private:
-  ObTableScanOp *table_scan_op_;
-
-  ObDASRef das_ref_;
-  DASOpResultIter lookup_result_;
-  ObBatchRows brs_;
-  lib::MemoryContext lookup_memctx_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObGlobalIndexLookupOpImpl);
-};
 } // end namespace sql
 } // end namespace oceanbase
 

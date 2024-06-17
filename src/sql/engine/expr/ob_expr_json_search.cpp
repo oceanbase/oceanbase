@@ -12,10 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_search.h"
+#include "util/easy_string.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "lib/signal/safe_snprintf.h"
 #include "ob_expr_json_func_helper.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -168,7 +169,7 @@ int ObExprJsonSearch::find_matches(common::ObIAllocator *allocator,
             } else {
               uint64_t reserve_len = i == 0 ? 3 : static_cast<uint64_t>(std::log10(i)) + 3;
               char temp_buf[reserve_len + 1];
-              int64_t count = safe_snprintf(temp_buf, reserve_len + 1, "[%lu]", i);
+              int64_t count = lnprintf(temp_buf, reserve_len + 1, "[%lu]", i);
               if (count < 0) {
                 LOG_WARN("fail to snprintf", K(i), K(count));
               } else if (OB_FAIL(path.append(temp_buf, count))) {
@@ -411,7 +412,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       bool is_finish = false;
       for (uint64_t i = 4; OB_SUCC(ret) && !is_null && i < expr.arg_cnt_ && !is_finish; i++) {
         ObJsonPath *j_path = json_paths[i - 4];
-        ObJsonBaseVector hit;
+        ObJsonSeekResult hit;
         if (one_flag && hits.size() > 0) {
           is_finish = true;
         } else if (j_path->can_match_many()) {
@@ -502,7 +503,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       res.set_null();
     } else {
       ObString raw_bin;
-      if (OB_FAIL(j_res->get_raw_binary(raw_bin, &temp_allocator))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_res, raw_bin, &temp_allocator))) {
         LOG_WARN("json_keys get result binary failed", K(ret));
       } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
         LOG_WARN("fail to pack json result", K(ret));

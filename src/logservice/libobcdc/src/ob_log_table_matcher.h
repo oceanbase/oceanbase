@@ -49,6 +49,20 @@ public:
       bool &matched,
       const int fntatch_flags) = 0;
 
+  /// check database match
+  ///
+  /// @param [in]  tenant_name   tenant name
+  /// @param [in]  db_name       database name
+  /// @param [out] matched       is matched or not
+  /// @param [in]  fnmatch_flags fnmatch flags
+  ///
+  /// @retval OB_SUCCESS            Success
+  /// @retval Other error codes     Fail
+  virtual int database_match(const char *tenant_name,
+      const char *db_name,
+      bool &matched,
+      const int fnmatch_flags) = 0;
+
   /// check tenant match
   ///
   /// @param [in] tenant_name   tenant name
@@ -102,6 +116,11 @@ public:
       bool &matched,
       const int fnmatch_flags);
 
+  int database_match(const char *tenant_name,
+      const char *db_name,
+      bool &matched,
+      const int fnmatch_flags);
+
   int tenant_match(const char *tenant_name,
       bool &matched,
       const int fnmatch_flags = FNM_CASEFOLD);
@@ -136,6 +155,12 @@ private:
       const char* db_name,
       const char* tb_name,
       bool& matched,
+      const int fnmatch_flags);
+
+  int database_match_pattern_(const bool is_black,
+      const char *tenant_name,
+      const char *db_name,
+      bool &matched,
       const int fnmatch_flags);
 
   int tenant_match_pattern_(const bool is_black,

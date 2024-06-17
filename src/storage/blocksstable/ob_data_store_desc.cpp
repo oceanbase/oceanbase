@@ -161,9 +161,9 @@ int ObStaticDataStoreDesc::init(
           STORAGE_LOG(WARN, "fail to get data version", K(ret));
         } else {
           major_working_cluster_version_ = compat_version;
+          STORAGE_LOG(INFO, "success to set major working cluster version", K(ret), "merge_type", merge_type_to_str(merge_type),
+            K(cluster_version), K(major_working_cluster_version_));
         }
-        STORAGE_LOG(INFO, "success to set major working cluster version", K(ret), "merge_type", merge_type_to_str(merge_type),
-          K(cluster_version), K(major_working_cluster_version_));
       } else if (compressor_type_ != ObCompressorType::NONE_COMPRESSOR) {
         // for mini/minor, use default compressor
         compressor_type_ = DEFAULT_MINOR_COMPRESSOR_TYPE;
@@ -322,7 +322,7 @@ int ObColDataStoreDesc::add_col_desc_from_cg_schema(
   if (OB_FAIL(col_desc_array_.init(column_cnt))) {
     STORAGE_LOG(WARN, "Failed to reserve column desc array", K(ret));
   } else if (merge_schema.is_column_info_simplified()) {
-    if (merge_schema.get_mulit_version_rowkey_column_ids(multi_version_column_desc_array)) {
+    if (OB_FAIL(merge_schema.get_mulit_version_rowkey_column_ids(multi_version_column_desc_array))) {
       STORAGE_LOG(WARN, "failed to get rowkey column ids", K(ret), K(column_cnt), K(cg_schema), K(merge_schema));
     }
   } else if (OB_FAIL(merge_schema.get_multi_version_column_descs(multi_version_column_desc_array))) {
@@ -705,7 +705,7 @@ int ObDataStoreDesc::init(
     if (OB_FAIL(inner_init(merge_schema, row_store_type))) {
       STORAGE_LOG(WARN, "failed inner init", KR(ret), K(merge_schema));
     } else {
-      STORAGE_LOG(INFO, "success to init data desc", K(ret), KPC(this), K(merge_schema));
+      STORAGE_LOG(TRACE, "success to init data desc", K(ret), KPC(this), K(merge_schema));
     }
     if (OB_FAIL(ret)) {
       reset();
@@ -728,17 +728,6 @@ int ObDataStoreDesc::inner_init(
       micro_block_size_ = merge_schema.get_block_size();
     } else {
       micro_block_size_ = MAX(merge_schema.get_block_size(), MIN_MICRO_BLOCK_SIZE);
-    }
-
-    bool need_build_hash_index = merge_schema.get_table_type() == USER_TABLE && !is_major;
-    if (need_build_hash_index
-        && OB_FAIL(ObMicroBlockHashIndexBuilder::need_build_hash_index(
-            merge_schema, need_build_hash_index))) {
-      STORAGE_LOG(WARN, "Failed to judge whether to build hash index", K(ret));
-      need_build_hash_index_for_micro_block_ = false;
-      ret = OB_SUCCESS;
-    } else {
-      need_build_hash_index_for_micro_block_ = need_build_hash_index;
     }
   }
   return ret;
@@ -807,8 +796,6 @@ void ObDataStoreDesc::reset()
   merge_info_ = NULL;
   sstable_index_builder_ = nullptr;
   is_force_flat_store_type_ = false;
-  need_pre_warm_ = false;
-  need_build_hash_index_for_micro_block_ = false;
   micro_block_size_ = 0;
 }
 
@@ -817,8 +804,6 @@ int ObDataStoreDesc::shallow_copy(const ObDataStoreDesc &desc)
   int ret = OB_SUCCESS;
   static_desc_ = desc.static_desc_;
   col_desc_ = desc.col_desc_;
-  need_pre_warm_ = desc.need_pre_warm_;
-  need_build_hash_index_for_micro_block_ = desc.need_build_hash_index_for_micro_block_;
   micro_block_size_ = desc.micro_block_size_;
   row_store_type_ = desc.get_row_store_type();
   encoder_opt_ = desc.encoder_opt_;
@@ -954,7 +939,7 @@ int ObWholeDataStoreDesc::gen_index_store_desc(const ObDataStoreDesc &data_desc)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected invalid index store descriptor", K(ret), K(desc_), K(data_desc));
   } else {
-    STORAGE_LOG(INFO, "success to gen index desc", K(ret), K(desc_), K(data_desc));
+    STORAGE_LOG(TRACE, "success to gen index desc", K(ret), K(desc_), K(data_desc));
   }
   return ret;
 }

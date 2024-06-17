@@ -60,6 +60,18 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "DROP DATABASE LINK";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_DATABASE_LINK_SHIFT] =
                                                    "CREATE DATABASE LINK";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_EXECUTE_SHIFT] =
+                                                   "EXECUTE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ALTER_ROUTINE_SHIFT] =
+                                                   "ALTER ROUTINE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_ROUTINE_SHIFT] =
+                                                   "CREATE ROUTINE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_TABLESPACE_SHIFT] =
+                                                   "CREATE TABLESPACE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_SHUTDOWN_SHIFT] =
+                                                   "SHUTDOWN";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_RELOAD_SHIFT] =
+                                                   "RELOAD";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

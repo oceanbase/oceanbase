@@ -39,6 +39,7 @@ class ObTableSchema;
 class ObColumnSchemaV2;
 class ObServerSchemaService;
 struct SchemaKey;
+class AlterTableSchema;
 class ObSchemaUtils
 {
 public:
@@ -75,7 +76,13 @@ public:
   static bool is_invisible_column(uint64_t flag);
   static bool is_cte_generated_column(uint64_t flag);
   static bool is_default_expr_v2_column(uint64_t flag);
-  static bool is_fulltext_column(uint64_t flag);
+  static bool is_fulltext_column(const uint64_t flag);
+  static bool is_doc_id_column(const uint64_t flag);
+  static bool is_word_segment_column(const uint64_t flag);
+  static bool is_word_count_column(const uint64_t flag);
+  static bool is_doc_length_column(const uint64_t flag);
+  static bool is_multivalue_generated_column(uint64_t flag);
+  static bool is_multivalue_generated_array_column(uint64_t flag);
   static bool is_spatial_generated_column(uint64_t flag);
   static bool is_generated_column(uint64_t flag) { return is_virtual_generated_column(flag) || is_stored_generated_column(flag); }
   static bool is_identity_column(uint64_t flag) { return is_always_identity_column(flag) || is_default_identity_column(flag) || is_default_on_null_identity_column(flag); }
@@ -140,9 +147,16 @@ public:
              const uint64_t tenant_id,
              const uint64_t column_group_id,
              share::schema::ObColumnGroupSchema &column_group_schema);
+
+  static int build_add_each_column_group(const share::schema::ObTableSchema &table_schema,
+                                         share::schema::ObTableSchema &dst_table_schema);
+  static int alter_rowkey_column_group(share::schema::ObTableSchema &table_schema);
+  static int alter_default_column_group(share::schema::ObTableSchema &new_table_schema);
+
   static int mock_default_cg(
               const uint64_t tenant_id,
               share::schema::ObTableSchema &new_table_schema);
+  static bool can_add_column_group(const ObTableSchema &table_schema);
 
   // Optimized method to batch get latest table schemas from cache or inner_table automatically.
   //
@@ -180,7 +194,25 @@ public:
              const ObTimeoutCtx &ctx,
              sql::ObSQLSessionInfo *session,
              const uint64_t tenant_id,
-             const int64_t schema_version);
+             const int64_t schema_version,
+             const bool skip_consensus);
+
+  // Use to check if the sys table (exclude core table) does exist
+  // by querying __all_table when the table is not accessible.
+  //
+  // @param[in] sql_client: ObISQLClient
+  // @param[in] tenant_id:  target tenant_id
+  // @param[in] table_id:   sys table_id (exclude core table)
+  // @param[out] exist:  whether the table really exists
+  // @return: OB_SUCCESS if success
+  static int check_sys_table_exist_by_sql(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const ObObjectID &table_id,
+      bool &exist);
+
+  static int is_drop_column_only(const schema::AlterTableSchema &alter_table_schema, bool &is_drop_col_only);
+
 private:
   static int get_tenant_variable(schema::ObSchemaGetterGuard &schema_guard,
                                  uint64_t tenant_id,

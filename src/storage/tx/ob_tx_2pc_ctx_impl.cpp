@@ -88,7 +88,9 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
 
   if (OB_SUCC(ret)) {
     if (sub_state_.is_force_abort()) {
-      if (OB_FAIL(compensate_abort_log_())) {
+      if (OB_FAIL(prepare_mul_data_source_tx_end_(false))) {
+        TRANS_LOG(WARN, "notify mds tx end fail", K(ret), K(trans_id_), K(ls_id_));
+      } else if (OB_FAIL(compensate_abort_log_())) {
         TRANS_LOG(WARN, "compensate abort log failed", K(ret), K(ls_id_), K(trans_id_),
                   K(get_downstream_state()), K(get_upstream_state()), K(sub_state_));
       } else {
@@ -109,8 +111,6 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
       if (OB_FAIL(dup_table_tx_redo_sync_())) {
         TRANS_LOG(WARN, "dup table tx  redo sync failed", K(ret));
       }
-    } else if (OB_FAIL(generate_prepare_version_())) {
-      TRANS_LOG(WARN, "generate prepare version failed", K(ret), K(*this));
     }
   }
 
@@ -119,11 +119,14 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
               K(is_dup_table_redo_sync_completed_()), KPC(this));
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(prepare_mul_data_source_tx_end_(true))) {
-      TRANS_LOG(WARN, "trans commit need retry", K(ret), K(trans_id_), K(ls_id_));
-    }
+  if (OB_SUCC(ret) && OB_FAIL(prepare_mul_data_source_tx_end_(true))) {
+    TRANS_LOG(WARN, "notify mds tx_end fail", K(ret), K(trans_id_), K(ls_id_));
   }
+
+  if (OB_SUCC(ret) && OB_FAIL(generate_prepare_version_())) {
+    TRANS_LOG(WARN, "generate prepare version failed", K(ret), K(*this));
+  }
+
   if (OB_SUCC(ret) && OB_FAIL(restart_2pc_trans_timer_())) {
     TRANS_LOG(WARN, "restart_2pc_trans_timer_ error", KR(ret), KPC(this));
   }
@@ -361,7 +364,8 @@ int ObPartTransCtx::do_clear()
 
   if (is_root()) {
     // response scheduler after all participant commit log sycned
-    check_and_response_scheduler_(ObTxState::CLEAR, OB_SUCCESS);
+    const int result = ctx_tx_data_.get_state() == ObTxCommitData::COMMIT ? OB_SUCCESS : OB_TRANS_ROLLBACKED;
+    check_and_response_scheduler_(ObTxState::CLEAR, result);
   }
   // currently do nothing
 

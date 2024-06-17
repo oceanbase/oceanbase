@@ -39,16 +39,12 @@ int ObExprJsonOverlaps::calc_result_type2(ObExprResType &type,
 {
   UNUSED(type_ctx); 
   int ret = OB_SUCCESS;
+  bool is_strict = false;
 
   type.set_int32();
   type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
   type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
   
-  if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(type1, 1, N_JSON_OVERLAPS))) {
-    LOG_WARN("wrong type for json doc.", K(ret), K(type1.get_type()));
-  } else if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(type2, 2, N_JSON_OVERLAPS))) {
-    LOG_WARN("wrong type for json doc.", K(ret), K(type2.get_type()));
-  }
   return ret;
 }
 

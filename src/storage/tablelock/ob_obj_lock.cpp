@@ -98,20 +98,6 @@ ObOBJLock::ObOBJLock(const ObLockID &lock_id) : lock_id_(lock_id)
   memset(map_, 0, sizeof(ObTableLockOpList *) * TABLE_LOCK_MODE_COUNT);
 }
 
-int ObOBJLock::get_index_by_lock_mode(ObTableLockMode mode)
-{
-  int index = 0;
-  switch(mode) {
-  case ROW_SHARE: { index = 0; break; }
-  case ROW_EXCLUSIVE: { index = 1; break; }
-  case SHARE: { index = 2; break; }
-  case SHARE_ROW_EXCLUSIVE: { index = 3; break; }
-  case EXCLUSIVE: { index = 4; break; }
-  default: { index = -1; }
-  }
-  return index;
-}
-
 int ObOBJLock::recover_(
     const ObTableLockOp &lock_op,
     ObMalloc &allocator)
@@ -168,7 +154,7 @@ int ObOBJLock::recover_(
 int ObOBJLock::slow_lock(
     const ObLockParam &param,
     const ObTableLockOp &lock_op,
-    const ObTableLockMode &lock_mode_in_same_trans,
+    const uint64_t lock_mode_cnt_in_same_trans[],
     ObMalloc &allocator,
     ObTxIDSet &conflict_tx_set)
 {
@@ -186,7 +172,7 @@ int ObOBJLock::slow_lock(
   if (is_deleted_) {
     ret = OB_EAGAIN;
   } else if (OB_FAIL(check_allow_lock_(lock_op,
-                                       lock_mode_in_same_trans,
+                                       lock_mode_cnt_in_same_trans,
                                        conflict_tx_set,
                                        conflict_with_dml_lock))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -407,7 +393,7 @@ int ObOBJLock::update_lock_status(const ObTableLockOp &lock_op,
 
 int ObOBJLock::try_fast_lock_(
     const ObTableLockOp &lock_op,
-    const ObTableLockMode &lock_mode_in_same_trans,
+    const uint64_t lock_mode_cnt_in_same_trans[],
     ObTxIDSet &conflict_tx_set)
 {
   int ret = OB_SUCCESS;
@@ -418,7 +404,7 @@ int ObOBJLock::try_fast_lock_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("this lock op should not do fast lock", KR(ret), K(lock_op));
   } else if (OB_FAIL(check_allow_lock_(lock_op,
-                                       lock_mode_in_same_trans,
+                                       lock_mode_cnt_in_same_trans,
                                        conflict_tx_set,
                                        unused_conflict_with_dml_lock))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -438,7 +424,7 @@ int ObOBJLock::try_fast_lock_(
 int ObOBJLock::fast_lock(
     const ObLockParam &param,
     const ObTableLockOp &lock_op,
-    const ObTableLockMode &lock_mode_in_same_trans,
+    const uint64_t lock_mode_cnt_in_same_trans[],
     ObMalloc &allocator,
     ObTxIDSet &conflict_tx_set)
 {
@@ -448,7 +434,7 @@ int ObOBJLock::fast_lock(
     // lock first time
     RDLockGuard guard(rwlock_);
     if (OB_FAIL(try_fast_lock_(lock_op,
-                               lock_mode_in_same_trans,
+                               lock_mode_cnt_in_same_trans,
                                conflict_tx_set))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_EAGAIN != ret) {
         LOG_WARN("try fast lock failed", KR(ret), K(lock_op));
@@ -464,7 +450,7 @@ int ObOBJLock::lock(
     const ObLockParam &param,
     ObStoreCtx &ctx,
     const ObTableLockOp &lock_op,
-    const ObTableLockMode &lock_mode_in_same_trans,
+    const uint64_t lock_mode_cnt_in_same_trans[],
     ObMalloc &allocator,
     ObTxIDSet &conflict_tx_set)
 {
@@ -481,7 +467,7 @@ int ObOBJLock::lock(
     if (OB_LIKELY(!lock_op.need_record_lock_op())) {
       if (OB_FAIL(fast_lock(param,
                             lock_op,
-                            lock_mode_in_same_trans,
+                            lock_mode_cnt_in_same_trans,
                             allocator,
                             conflict_tx_set))) {
         if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
@@ -491,7 +477,7 @@ int ObOBJLock::lock(
       }
     } else if (OB_FAIL(slow_lock(param,
                                  lock_op,
-                                 lock_mode_in_same_trans,
+                                 lock_mode_cnt_in_same_trans,
                                  allocator,
                                  conflict_tx_set))) {
       if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
@@ -880,7 +866,7 @@ int ObOBJLock::check_allow_unlock_(
 
 int ObOBJLock::check_allow_lock_(
     const ObTableLockOp &lock_op,
-    const ObTableLockMode &lock_mode_in_same_trans,
+    const uint64_t lock_mode_cnt_in_same_trans[],
     ObTxIDSet &conflict_tx_set,
     bool &conflict_with_dml_lock,
     const bool include_finish_tx,
@@ -896,8 +882,9 @@ int ObOBJLock::check_allow_lock_(
         ret != OB_OBJ_LOCK_EXIST) {
       LOG_WARN("check_op_allow_lock failed.", K(ret), K(lock_op));
     }
-  } else if (FALSE_IT(get_exist_lock_mode_without_cur_trans(lock_mode_in_same_trans,
+  } else if (OB_FAIL(get_exist_lock_mode_without_curr_trans(lock_mode_cnt_in_same_trans,
                                                             curr_lock_mode))) {
+    LOG_WARN("meet unexpected error during get lock_mode without current trans", K(ret));
   } else if (!request_lock(curr_lock_mode,
                            lock_op.lock_mode_,
                            conflict_modes)) {
@@ -926,14 +913,14 @@ int ObOBJLock::check_allow_lock_(
     conflict_with_dml_lock = ((conflict_modes & ROW_SHARE && row_share_) ||
                               (conflict_modes & ROW_EXCLUSIVE && row_exclusive_));
   }
-  LOG_DEBUG("check_allow_lock", K(ret), K(curr_lock_mode), K(lock_mode_in_same_trans),
+  LOG_DEBUG("check_allow_lock", K(ret), K(curr_lock_mode),
             K(lock_op.lock_mode_), K(lock_op), K(conflict_modes), K(conflict_tx_set));
   return ret;
 }
 
 int ObOBJLock::check_allow_lock(
     const ObTableLockOp &lock_op,
-    const ObTableLockMode &lock_mode_in_same_trans,
+    const uint64_t lock_mode_cnt_in_same_trans[],
     ObTxIDSet &conflict_tx_set,
     bool &conflict_with_dml_lock,
     ObMalloc &allocator,
@@ -947,7 +934,7 @@ int ObOBJLock::check_allow_lock(
   } else {
     RDLockGuard guard(rwlock_);
     ret = check_allow_lock_(lock_op,
-                            lock_mode_in_same_trans,
+                            lock_mode_cnt_in_same_trans,
                             conflict_tx_set,
                             conflict_with_dml_lock,
                             include_finish_tx,
@@ -956,69 +943,81 @@ int ObOBJLock::check_allow_lock(
   return ret;
 }
 
-void ObOBJLock::get_exist_lock_mode_without_cur_trans(
-    const ObTableLockMode &lock_mode_in_same_trans,
-    ObTableLockMode &curr_mode)
+int ObOBJLock::get_exist_lock_mode_without_curr_trans(
+    const uint64_t lock_mode_cnt_in_same_trans[],
+    ObTableLockMode &lock_mode_without_curr_trans)
 {
-  curr_mode = 0x0;
+  int ret = OB_SUCCESS;
+  lock_mode_without_curr_trans = 0x0;
 
-  // get RS
-  int row_share_nums = (map_[0] == NULL ? 0 : map_[0]->get_size()) + row_share_;
-  int row_share = (lock_mode_in_same_trans & ROW_SHARE ?
-                  row_share_nums - 1 :
-                  row_share_nums);
-  curr_mode |= (row_share == 0 ? 0 : ROW_SHARE);
+  int row_share_not_in_curr_trans = get_exist_lock_mode_cnt_without_curr_trans_(ROW_SHARE, lock_mode_cnt_in_same_trans);
+  int row_exclusive_not_in_curr_trans =
+    get_exist_lock_mode_cnt_without_curr_trans_(ROW_EXCLUSIVE, lock_mode_cnt_in_same_trans);
+  int share_not_in_curr_trans = get_exist_lock_mode_cnt_without_curr_trans_(SHARE, lock_mode_cnt_in_same_trans);
+  int share_row_exclusive_not_in_curr_trans =
+    get_exist_lock_mode_cnt_without_curr_trans_(SHARE_ROW_EXCLUSIVE, lock_mode_cnt_in_same_trans);
+  int exclusive_not_in_curr_trans = get_exist_lock_mode_cnt_without_curr_trans_(EXCLUSIVE, lock_mode_cnt_in_same_trans);
 
-  // get RX, S, SRX
-  int row_exclusive_nums = (map_[1] == NULL ? 0 : map_[1]->get_size()) + row_exclusive_;
-  int share_nums = (map_[2] == NULL ? 0 : map_[2]->get_size());
-  int share_row_exclusive_nums = (map_[3] == NULL ? 0 : map_[3]->get_size());
-  if ((lock_mode_in_same_trans & ROW_EXCLUSIVE) &&
-       (lock_mode_in_same_trans & SHARE)) {
-    // other trans should not have RX, S or SRX
-    if (row_exclusive_nums > 1 ||
-        share_nums > 1 ||
-        share_row_exclusive_nums > 1) {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected error",
-                K(row_exclusive_nums), K(share_nums), K(share_row_exclusive_nums));
-    }
-  } else if (lock_mode_in_same_trans & ROW_EXCLUSIVE) {
-    // other trans in the obj should not have S or SRX
-    if (share_nums > 1 ||
-        share_row_exclusive_nums > 1) {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected error",
-                K(row_exclusive_nums), K(share_nums), K(share_row_exclusive_nums));
-    }
-    curr_mode |= (row_exclusive_nums > 1 ? ROW_EXCLUSIVE : 0);
-  } else if (lock_mode_in_same_trans & SHARE) {
-    // other trans in the obj should not have RX or SRX
-    if (row_exclusive_nums > 1 ||
-        share_row_exclusive_nums > 1) {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected error",
-                K(row_exclusive_nums), K(share_nums), K(share_row_exclusive_nums));
-    }
-    curr_mode |= (share_nums > 1 ? SHARE : 0);
+  if (OB_UNLIKELY(row_share_not_in_curr_trans < 0 || row_exclusive_not_in_curr_trans < 0 || share_not_in_curr_trans < 0
+                  || share_row_exclusive_not_in_curr_trans < 0 || exclusive_not_in_curr_trans < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("lock_mode count should not be negative",
+              K(row_share_not_in_curr_trans),
+              K(row_exclusive_not_in_curr_trans),
+              K(share_not_in_curr_trans),
+              K(share_row_exclusive_not_in_curr_trans),
+              K(exclusive_not_in_curr_trans));
+  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(ROW_SHARE)] > 0
+                         && exclusive_not_in_curr_trans > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("current trans has rs lock, others should not have x lock",
+              K(lock_mode_cnt_in_same_trans),
+              K(exclusive_not_in_curr_trans));
+  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(ROW_EXCLUSIVE)] > 0
+                         && (share_not_in_curr_trans > 0 || share_row_exclusive_not_in_curr_trans > 0
+                             || exclusive_not_in_curr_trans))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("current trans has rx lock, others should not have s/srx/x lock",
+              K(share_not_in_curr_trans),
+              K(share_row_exclusive_not_in_curr_trans),
+              K(exclusive_not_in_curr_trans));
+  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(SHARE)] > 0
+                         && (row_exclusive_not_in_curr_trans > 0 || share_row_exclusive_not_in_curr_trans > 0
+                             || exclusive_not_in_curr_trans > 0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("current trans has s lock, others should not have rx/srx/x lock",
+              K(row_exclusive_not_in_curr_trans),
+              K(share_row_exclusive_not_in_curr_trans),
+              K(exclusive_not_in_curr_trans));
+  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(SHARE_ROW_EXCLUSIVE)] > 0
+                         && (row_exclusive_not_in_curr_trans > 0 || share_not_in_curr_trans > 0
+                             || share_row_exclusive_not_in_curr_trans > 0 || exclusive_not_in_curr_trans > 0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("current trans has srx lock, others should not have rx/s/srx/x lock",
+              K(row_exclusive_not_in_curr_trans),
+              K(share_not_in_curr_trans),
+              K(share_row_exclusive_not_in_curr_trans),
+              K(exclusive_not_in_curr_trans));
+  } else if (OB_UNLIKELY(lock_mode_cnt_in_same_trans[get_index_by_lock_mode(EXCLUSIVE)] > 0
+                         && (row_share_not_in_curr_trans > 0 || row_exclusive_not_in_curr_trans > 0
+                             || share_not_in_curr_trans > 0 || share_row_exclusive_not_in_curr_trans > 0
+                             || exclusive_not_in_curr_trans > 0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("current trans has x lock, others should not have any locks",
+              K(row_share_not_in_curr_trans),
+              K(row_exclusive_not_in_curr_trans),
+              K(share_not_in_curr_trans),
+              K(share_row_exclusive_not_in_curr_trans),
+              K(exclusive_not_in_curr_trans));
   } else {
-    curr_mode |= (row_exclusive_nums > 0 ? ROW_EXCLUSIVE : 0);
-    curr_mode |= (share_nums > 0 ? SHARE : 0);
-    curr_mode |= (share_row_exclusive_nums > 0 ? SHARE_ROW_EXCLUSIVE : 0);
+    lock_mode_without_curr_trans |= (row_share_not_in_curr_trans == 0 ? 0 : ROW_SHARE);
+    lock_mode_without_curr_trans |= (row_exclusive_not_in_curr_trans == 0 ? 0 : ROW_EXCLUSIVE);
+    lock_mode_without_curr_trans |= (share_not_in_curr_trans == 0 ? 0 : SHARE);
+    lock_mode_without_curr_trans |= (share_row_exclusive_not_in_curr_trans == 0 ? 0 : SHARE_ROW_EXCLUSIVE);
+    lock_mode_without_curr_trans |= (exclusive_not_in_curr_trans == 0 ? 0 : EXCLUSIVE);
   }
 
-  // get X
-  int exclusive_nums = (map_[4] == NULL ? 0 : map_[4]->get_size());
-  if (lock_mode_in_same_trans & EXCLUSIVE) {
-    // other trans should not have RS, RX, S, SRX, X
-    if (row_share_nums > 1 ||
-        row_exclusive_nums > 1 ||
-        share_nums > 1 ||
-        share_row_exclusive_nums > 1 ||
-        exclusive_nums > 1) {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected error", K(row_share_nums), K(row_exclusive_nums),
-                K(share_nums), K(share_row_exclusive_nums), K(exclusive_nums));
-    }
-  } else {
-    curr_mode |= (exclusive_nums > 0 ? EXCLUSIVE : 0);
-  }
+  return ret;
 }
 
 void ObOBJLock::reset_(ObMalloc &allocator)
@@ -1065,7 +1064,7 @@ void ObOBJLock::print_() const
   for (int i = 0; i < TABLE_LOCK_MODE_COUNT; i++) {
     op_list = map_[i];
     if (NULL != op_list) {
-      LOG_INFO("ObOBJLock: mode:", K(LOCK_MODE_ARRAY[i]));
+      LOG_INFO("ObOBJLock: mode:", K(get_lock_mode_by_index(i)));
       print_op_list(op_list);
     }
   }
@@ -1343,7 +1342,7 @@ int ObOBJLock::get_tx_id_set_(const ObTransID &myself_tx,
   bool need_check_curr_list = false;
   for (int i = 0; i < TABLE_LOCK_MODE_COUNT && OB_SUCC(ret); i++) {
     op_list = map_[i];
-    curr_mode = LOCK_MODE_ARRAY[i];
+    curr_mode = get_lock_mode_by_index(i);
     need_check_curr_list = ((curr_mode & lock_modes) == curr_mode);
     if (NULL != op_list && need_check_curr_list) {
       if (OB_FAIL(get_tx_id_set_(myself_tx,
@@ -1594,6 +1593,40 @@ void ObOBJLock::drop_op_list_if_empty_(
   }
 }
 
+int ObOBJLock::get_exist_lock_mode_cnt_without_curr_trans_(const ObTableLockMode &lock_mode,
+                                                           const uint64_t lock_mode_cnt_in_same_trans[])
+{
+  int lock_mode_cnt_without_curr_trans = 0;
+  if (OB_LIKELY(is_lock_mode_valid(lock_mode))) {
+    int index = get_index_by_lock_mode(lock_mode);
+    int total_lock_mode_cnt = OB_ISNULL(map_[index]) ? 0 : map_[index]->get_size();
+    lock_mode_cnt_without_curr_trans = total_lock_mode_cnt - lock_mode_cnt_in_same_trans[index];
+    switch (lock_mode) {
+    case ROW_SHARE: {
+      lock_mode_cnt_without_curr_trans += row_share_;
+      break;
+    }
+    case ROW_EXCLUSIVE: {
+      lock_mode_cnt_without_curr_trans += row_exclusive_;
+      break;
+    }
+    case SHARE:
+    case SHARE_ROW_EXCLUSIVE:
+    case EXCLUSIVE: {
+      // do nothing
+      break;
+    }
+    default: {
+      lock_mode_cnt_without_curr_trans = -1;
+    }
+    }
+  } else {
+    lock_mode_cnt_without_curr_trans = -1;
+  }
+
+  return lock_mode_cnt_without_curr_trans;
+}
+
 ObOBJLock *ObOBJLockFactory::alloc(const uint64_t tenant_id, const ObLockID &lock_id)
 {
   int ret = OB_SUCCESS;
@@ -1745,7 +1778,7 @@ int ObOBJLockMap::lock(
     const ObLockParam &param,
     ObStoreCtx &ctx,
     const ObTableLockOp &lock_op,
-    const ObTableLockMode &lock_mode_in_same_trans,
+    const uint64_t lock_mode_cnt_in_same_trans[],
     ObTxIDSet &conflict_tx_set)
 {
   int ret = OB_SUCCESS;
@@ -1766,7 +1799,7 @@ int ObOBJLockMap::lock(
       } else if (OB_FAIL(obj_lock->lock(param,
                                         ctx,
                                         lock_op,
-                                        lock_mode_in_same_trans,
+                                        lock_mode_cnt_in_same_trans,
                                         allocator_,
                                         conflict_tx_set))) {
         if (ret != OB_EAGAIN &&
@@ -1966,7 +1999,7 @@ int ObOBJLockMap::update_lock_status(const ObTableLockOp &lock_op,
 
 int ObOBJLockMap::check_allow_lock(
     const ObTableLockOp &lock_op,
-    const ObTableLockMode &lock_mode_in_same_trans,
+    const uint64_t lock_mode_cnt_in_same_trans[],
     ObTxIDSet &conflict_tx_set,
     const bool include_finish_tx,
     const bool only_check_dml_lock)
@@ -1992,7 +2025,7 @@ int ObOBJLockMap::check_allow_lock(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("op list map should not be NULL.", K(lock_op));
   } else if (OB_FAIL(obj_lock->check_allow_lock(lock_op,
-                                                lock_mode_in_same_trans,
+                                                lock_mode_cnt_in_same_trans,
                                                 conflict_tx_set,
                                                 conflict_with_dml_lock,
                                                 allocator_,
@@ -2000,7 +2033,7 @@ int ObOBJLockMap::check_allow_lock(
                                                 only_check_dml_lock))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("obj_lock check_allow_lock failed",
-               K(ret), K(lock_op), K(lock_mode_in_same_trans));
+               K(ret), K(lock_op));
     }
   } else {
     LOG_DEBUG("succeed check allow lock.", K(lock_op));

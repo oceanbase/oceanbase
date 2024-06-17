@@ -22,18 +22,22 @@ namespace oceanbase
 namespace share
 {
 class ObThrottleInfoGuard;
+class ObLSID;
 }
 
-namespace memtable
-{
-class ObIMemtable;
+namespace common{
+class ObTabletID;
+}
+
+namespace memtable {
+class ObMemtable;
 }
 
 namespace storage
 {
-class ObTablet;
-class ObITable;
 struct ObStoreCtx;
+class ObTablet;
+class ObIMemtable;
 class ObRelativeTable;
 class ObTableStoreIterator;
 
@@ -54,21 +58,30 @@ public:
 public:
   int refresh_and_protect_table(ObRelativeTable &relative_table);
   int refresh_and_protect_memtable();
-  int get_memtable_for_replay(memtable::ObIMemtable *&memtable);
+  int get_memtable_for_replay(ObIMemtable *&memtable);
+
+  TO_STRING_KV(KP(tablet_),
+               K(need_control_mem_),
+               K(for_replay_),
+               K(for_multi_source_data_),
+               K(replay_scn_),
+               KP(memtable_),
+               K(retry_count_),
+               K(last_ts_),
+               K(init_ts_));
+
 private:
   void reset();
   void double_check_inc_write_ref(
       const uint32_t old_freeze_flag,
       const bool is_tablet_freeze,
-      memtable::ObIMemtable *memtable,
+      memtable::ObMemtable *memtable,
       bool &bool_ret);
-  int check_freeze_to_inc_write_ref(ObITable *table, bool &bool_ret, bool &for_replace_tablet_meta);
+  int check_freeze_to_inc_write_ref(memtable::ObMemtable *table, bool &bool_ret);
+  int create_data_memtable_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, bool &no_need_create);
   bool need_to_refresh_table(ObTableStoreIterator &iter);
   void check_if_need_log_(bool &need_log, bool &need_log_error);
   void throttle_if_needed_();
-  void do_throttle_(share::TxShareThrottleTool &throttle_tool,
-                    share::ObThrottleInfoGuard &share_ti_guard,
-                    share::ObThrottleInfoGuard &module_ti_guard);
 
 private:
   static const int64_t LOG_INTERVAL_US = 10 * 1000 * 1000;        // 10s
@@ -79,7 +92,7 @@ private:
   ObTablet *tablet_;
   ObStoreCtx &store_ctx_;
   bool need_control_mem_;
-  memtable::ObIMemtable *memtable_;
+  ObIMemtable *memtable_;
   int64_t retry_count_;
   int64_t last_ts_;
   // record write latency

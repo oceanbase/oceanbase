@@ -34,7 +34,8 @@ public:
     uint16_t all_lob_in_row_ : 1; // compatible with 4.0, we assume that all lob is out row in old data
     uint16_t contains_hash_index_   : 1;
     uint16_t hash_index_offset_from_end_ : 10;
-    uint16_t reserved16_          : 2;
+    uint16_t has_min_merged_trans_version_   : 1;
+    uint16_t reserved16_          : 1;
   };
   uint32_t row_count_;
   uint8_t row_store_type_;
@@ -71,7 +72,10 @@ public:
   int32_t data_length_;
   int32_t data_zlength_;
   int64_t data_checksum_;
-  int64_t *column_checksums_;
+  union {
+    int64_t *column_checksums_;
+    int64_t min_merged_trans_version_;
+  };
 public:
   ObMicroBlockHeader();
   ~ObMicroBlockHeader() = default;

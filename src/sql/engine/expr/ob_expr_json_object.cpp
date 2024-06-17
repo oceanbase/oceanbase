@@ -16,7 +16,7 @@
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_cast.h"
-
+#include "share/ob_json_access_utils.h"
 #include "lib/hash/ob_hashset.h"
 
 using namespace oceanbase::common;
@@ -117,7 +117,7 @@ int ObExprJsonObject::calc_result_typeN(ObExprResType& type,
     // returning type : param_num - 3
     ObExprResType dst_type;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObJsonExprHelper::get_cast_type(types_stack[param_num - 3], dst_type))) {
+      if (OB_FAIL(ObJsonExprHelper::get_cast_type(types_stack[param_num - 3], dst_type, type_ctx))) {
         LOG_WARN("get cast dest type failed", K(ret));
       } else if (OB_FAIL(ObJsonExprHelper::set_dest_type(types_stack[param_num - 3], type, dst_type, type_ctx))) {
         LOG_WARN("set dest type failed", K(ret));
@@ -233,7 +233,7 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObString raw_bin;
     j_obj.stable_sort();
     j_obj.unique();
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
+    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
       LOG_WARN("fail to pack json result", K(ret));
@@ -351,7 +351,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
   if (OB_SUCC(ret)) {
     if (dst_type == ObJsonType) {
       ObString raw_bin;
-      if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
         LOG_WARN("failed: get json raw binary", K(ret));
       } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
         LOG_WARN("fail to pack json result", K(ret), K(raw_bin));
@@ -509,7 +509,7 @@ int ObExprJsonObjectStar::calc_result_typeN(ObExprResType& type,
     if (OB_FAIL(ObJsonExprHelper::set_dest_type(types_stack[0], type, dst_type, type_ctx))) {
       LOG_WARN("set dest type failed", K(ret));
     } else {
-      type.set_calc_collation_type(type.get_collation_type());
+      type.set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     }
   }
   return ret;

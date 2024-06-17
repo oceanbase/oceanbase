@@ -1313,6 +1313,7 @@ int ObDictDecoder::bt_operator(
   return ret;
 }
 
+// TODO(@wenye): optimize in operator
 int ObDictDecoder::in_operator(
     const sql::ObPushdownFilterExecutor *parent,
     const ObColumnDecoderCtx &col_ctx,
@@ -1341,10 +1342,7 @@ int ObDictDecoder::in_operator(
       int64_t dict_ref = 0;
       bool is_exist = false;
       while (OB_SUCC(ret) && traverse_it != end_it) {
-        ObObj cur_obj;
-        if (OB_FAIL((*traverse_it).to_obj(cur_obj, col_ctx.obj_meta_))) {
-          LOG_WARN("convert datum to obj failed", K(ret), K(*traverse_it), K(col_ctx.obj_meta_));
-        } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, is_exist))) {
+        if (OB_FAIL(filter.exist_in_datum_set(*traverse_it, is_exist))) {
           LOG_WARN("Failed to check object in hashset", K(ret), K(*traverse_it));
         } else if (is_exist) {
           found = true;
@@ -1353,7 +1351,8 @@ int ObDictDecoder::in_operator(
         ++traverse_it;
         ++dict_ref;
       }
-      if (found && OB_FAIL(set_res_with_bitset(parent, col_ctx, col_data,
+      if (OB_FAIL(ret)) {
+      } else if (found && OB_FAIL(set_res_with_bitset(parent, col_ctx, col_data,
           ref_bitset, pd_filter_info, result_bitmap))) {
         LOG_WARN("Failed to set result bitmap", K(ret));
       }
@@ -1650,7 +1649,7 @@ int ObDictDecoder::read_distinct(
   bool has_null = false;
   if (OB_FAIL(batch_read_distinct(ctx, cell_datas, ctx.col_header_->length_, group_by_cell))) {
     LOG_WARN("Failed to batch read distinct", K(ret));
-  } else if (check_has_null(ctx, ctx.col_header_->length_, has_null)) {
+  } else if (OB_FAIL(check_has_null(ctx, ctx.col_header_->length_, has_null))) {
     LOG_WARN("Failed to check has null", K(ret));
   } else if (has_null) {
     group_by_cell.add_distinct_null_value();

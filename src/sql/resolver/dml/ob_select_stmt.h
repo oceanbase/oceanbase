@@ -118,54 +118,70 @@ struct ObSelectIntoItem
   ObSelectIntoItem()
       : into_type_(),
         outfile_name_(),
-        filed_str_(),
+        field_str_(),
         line_str_(),
         user_vars_(),
         pl_vars_(),
-        closed_cht_(DEFAULT_FIELD_ENCLOSED_CHAR),
+        closed_cht_(),
         is_optional_(DEFAULT_OPTIONAL_ENCLOSED),
-        escaped_cht_(DEFAULT_FIELD_ESCAPED_CHAR)
+        is_single_(DEFAULT_SINGLE_OPT),
+        max_file_size_(DEFAULT_MAX_FILE_SIZE),
+        escaped_cht_()
   {
-    filed_str_.set_varchar(DEFAULT_FIELD_TERM_STR);
-    filed_str_.set_collation_type(ObCharset::get_system_collation());
+    field_str_.set_varchar(DEFAULT_FIELD_TERM_STR);
+    field_str_.set_collation_type(ObCharset::get_system_collation());
     line_str_.set_varchar(DEFAULT_LINE_TERM_STR);
     line_str_.set_collation_type(ObCharset::get_system_collation());
+    escaped_cht_.meta_.set_char();
+    escaped_cht_.set_char_value(&DEFAULT_FIELD_ESCAPED_CHAR, 1);
+    escaped_cht_.set_collation_type(ObCharset::get_system_collation());
+    closed_cht_.meta_.set_char();
+    closed_cht_.set_char_value(NULL, 0);
+    closed_cht_.set_collation_type(ObCharset::get_system_collation());
     cs_type_ = ObCharset::get_system_collation();
   }
   int assign(const ObSelectIntoItem &other) {
     into_type_ = other.into_type_;
     outfile_name_ = other.outfile_name_;
-    filed_str_ = other.filed_str_;
+    field_str_ = other.field_str_;
     line_str_ = other.line_str_;
     closed_cht_ = other.closed_cht_;
     is_optional_ = other.is_optional_;
+    is_single_ = other.is_single_;
+    max_file_size_ = other.max_file_size_;
     escaped_cht_ = other.escaped_cht_;
     cs_type_ = other.cs_type_;
     return user_vars_.assign(other.user_vars_);
   }
   TO_STRING_KV(K_(into_type),
                K_(outfile_name),
-               K_(filed_str),
+               K_(field_str),
                K_(line_str),
                K_(closed_cht),
                K_(is_optional),
+               K_(is_single),
+               K_(max_file_size),
                K_(escaped_cht),
                K_(cs_type));
   ObItemType into_type_;
   common::ObObj outfile_name_;
-  common::ObObj filed_str_; // filed terminated str
+  common::ObObj field_str_; // field terminated str
   common::ObObj line_str_; // line terminated str
   common::ObSEArray<common::ObString, 16> user_vars_; // user variables
   common::ObSEArray<sql::ObRawExpr*, 16> pl_vars_; // pl variables
-  char closed_cht_; // all fileds, "123","ab"
+  common::ObObj closed_cht_; // all fields, "123","ab"
   bool is_optional_; //  for string, closed character, such as "aa"
-  char escaped_cht_;
+  bool is_single_;
+  int64_t max_file_size_;
+  common::ObObj escaped_cht_;
   common::ObCollationType cs_type_;
 
   static const char* const DEFAULT_FIELD_TERM_STR;
   static const char* const DEFAULT_LINE_TERM_STR;
   static const char DEFAULT_FIELD_ENCLOSED_CHAR;
   static const bool DEFAULT_OPTIONAL_ENCLOSED;
+  static const bool DEFAULT_SINGLE_OPT;
+  static const int64_t DEFAULT_MAX_FILE_SIZE;
   static const char DEFAULT_FIELD_ESCAPED_CHAR;
 };
 
@@ -225,6 +241,38 @@ struct ObGroupingSetsItem
   common::ObSEArray<ObGroupbyExpr, 2, common::ModulePageAllocator, true> grouping_sets_exprs_;
   common::ObSEArray<ObRollupItem, 2, common::ModulePageAllocator, true> rollup_items_;
   common::ObSEArray<ObCubeItem, 2, common::ModulePageAllocator, true> cube_items_;
+};
+
+struct ForUpdateDMLInfo
+{
+  ForUpdateDMLInfo()
+  : table_id_(OB_INVALID_ID),
+    base_table_id_(OB_INVALID_ID),
+    ref_table_id_(OB_INVALID_ID),
+    rowkey_cnt_(0),
+    is_nullable_(false),
+    for_update_wait_us_(-1),
+    skip_locked_(false)
+  {}
+  int assign(const ForUpdateDMLInfo& other);
+  int deep_copy(ObIRawExprCopier &expr_copier,
+                const ForUpdateDMLInfo &other);
+  TO_STRING_KV(K_(table_id),
+               K_(base_table_id),
+               K_(ref_table_id),
+               K_(rowkey_cnt),
+               K_(unique_column_ids),
+               K_(is_nullable),
+               K_(for_update_wait_us),
+               K_(skip_locked));
+  uint64_t table_id_;       // view table id
+  uint64_t base_table_id_;  // for update base table id
+  uint64_t ref_table_id_;   // base table ref id
+  int64_t rowkey_cnt_;
+  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> unique_column_ids_;
+  bool is_nullable_;
+  int64_t for_update_wait_us_;
+  bool skip_locked_;
 };
 
 }
@@ -413,6 +461,8 @@ public:
   bool is_order_siblings() const { return is_order_siblings_; }
   void set_hierarchical_query(bool is_hierarchical_query) { is_hierarchical_query_ = is_hierarchical_query; }
   bool is_hierarchical_query() const { return is_hierarchical_query_; }
+  inline void set_expanded_mview(bool is_expanded_mview) { is_expanded_mview_ = is_expanded_mview; }
+  inline bool is_expanded_mview() const { return is_expanded_mview_; }
   int contain_hierarchical_query(bool &contain_hie_query) const;
   void set_has_prior(bool has_prior) { has_prior_ = has_prior; }
   bool has_prior() const { return has_prior_; }
@@ -438,7 +488,8 @@ public:
   bool has_hidden_rowid() const;
   virtual int clear_sharable_expr_reference() override;
   virtual int remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
-                                           ObSQLSessionInfo *session_info) override;
+                                           ObSQLSessionInfo *session_info,
+                                           bool explicit_for_col) override;
 
   const common::ObIArray<OrderItem>& get_search_by_items() const { return search_by_items_; }
   const common::ObIArray<ColumnItem>& get_cycle_items() const { return cycle_by_items_; }
@@ -630,6 +681,11 @@ public:
   int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs) const;
   static ObRawExpr* get_pure_set_expr(ObRawExpr *expr);
   int get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) const;
+  inline int add_for_update_dml_info(ForUpdateDMLInfo *for_update_dml_info) { return for_update_dml_info_.push_back(for_update_dml_info); }
+  inline const common::ObIArray<ForUpdateDMLInfo*>& get_for_update_dml_infos() const { return for_update_dml_info_; }
+  inline common::ObIArray<ForUpdateDMLInfo*>& get_for_update_dml_infos() { return for_update_dml_info_; }
+  void set_select_straight_join(bool flag) { is_select_straight_join_ = flag; }
+  bool is_select_straight_join() const { return is_select_straight_join_; }
 
 private:
   SetOperator set_op_;
@@ -673,6 +729,9 @@ private:
   /* for set stmt child stmt*/
   common::ObSEArray<ObSelectStmt*, 2, common::ModulePageAllocator, true> set_query_;
 
+  /* for hierarchical query with for update */
+  common::ObSEArray<ForUpdateDMLInfo*, 2, common::ModulePageAllocator, true> for_update_dml_info_;
+
   /* for show statment*/
   ObShowStmtCtx show_stmt_ctx_;
   // view
@@ -691,6 +750,9 @@ private:
   bool is_hierarchical_query_;
   bool has_prior_;
   bool has_reverse_link_;
+  bool is_expanded_mview_;
+  //denote if the query option 'STRAIGHT_JOIN' has been specified
+  bool is_select_straight_join_;
 };
 }
 }

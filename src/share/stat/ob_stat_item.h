@@ -199,8 +199,7 @@ public:
   virtual bool is_needed() const { return col_param_ != NULL && col_param_->need_avg_len(); }
   const char *get_fmt() const
   {
-    return lib::is_oracle_mode() ? " AVG(SYS_OP_OPNSIZE(\"%.*s\"))"
-                                   : " AVG(SYS_OP_OPNSIZE(`%.*s`))";
+    return lib::is_oracle_mode() ? " SUM_OPNSIZE(\"%.*s\")/decode(COUNT(*),0,1,COUNT(*))" : " SUM_OPNSIZE(`%.*s`)/(case when COUNT(*) = 0 then 1 else COUNT(*) end)";
   }
   virtual int decode(ObObj &obj) override;
 };
@@ -302,13 +301,14 @@ public:
   ObGlobalTableStat()
     : row_count_(0), row_size_(0), data_size_(0),
       macro_block_count_(0), micro_block_count_(0), part_cnt_(0), last_analyzed_(0),
-      cg_macro_cnt_arr_(), cg_micro_cnt_arr_(),
-      stat_locked_(false)
+      cg_macro_cnt_arr_(), cg_micro_cnt_arr_(), stat_locked_(false),
+      sstable_row_cnt_(0), memtable_row_cnt_(0)
   {}
 
   void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic);
   int add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic,
-          ObIArray<int64_t> &cg_macro_arr, ObIArray<int64_t> &cg_micro_arr);
+          ObIArray<int64_t> &cg_macro_arr, ObIArray<int64_t> &cg_micro_arr,
+          int64_t scnt, int64_t mcnt);
 
   int64_t get_row_count() const;
   int64_t get_avg_row_size() const;
@@ -321,6 +321,8 @@ public:
   void set_last_analyzed(int64_t last_analyzed) { last_analyzed_ = last_analyzed; }
   void set_stat_locked(bool locked) { stat_locked_ = locked; }
   bool get_stat_locked() const { return stat_locked_; }
+  int64_t get_sstable_row_cnt() const { return sstable_row_cnt_; }
+  int64_t get_memtable_row_cnt() const { return memtable_row_cnt_; }
 
 
   TO_STRING_KV(K(row_count_),
@@ -332,7 +334,9 @@ public:
                K(last_analyzed_),
                K(cg_macro_cnt_arr_),
                K(cg_micro_cnt_arr_),
-               K(stat_locked_));
+               K(stat_locked_),
+               K(sstable_row_cnt_),
+               K(memtable_row_cnt_));
 
 private:
   int64_t row_count_;
@@ -345,6 +349,8 @@ private:
   ObArray<int64_t> cg_macro_cnt_arr_;
   ObArray<int64_t> cg_micro_cnt_arr_;
   bool stat_locked_;
+  int64_t sstable_row_cnt_;
+  int64_t memtable_row_cnt_;
 };
 
 class ObGlobalNullEval

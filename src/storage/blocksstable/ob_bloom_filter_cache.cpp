@@ -687,6 +687,64 @@ int ObBloomFilterCache::may_contain(
   return ret;
 }
 
+int ObBloomFilterCache::may_contain(
+    const uint64_t tenant_id,
+    const MacroBlockId &macro_block_id,
+    const storage::ObRowKeysInfo *rowkeys_info,
+    const int64_t rowkey_begin_idx,
+    const int64_t rowkey_end_idx,
+    const ObStorageDatumUtils &datum_utils,
+    bool &is_contain)
+{
+  int ret = OB_SUCCESS;
+  is_contain = false;
+  storage::ObRowKeysInfo *my_rowkeys_info = const_cast<storage::ObRowKeysInfo *>(rowkeys_info);
+  ObBloomFilterCacheKey bf_key(tenant_id, macro_block_id, static_cast<int8_t>(my_rowkeys_info->get_rowkey(rowkey_begin_idx).get_datum_cnt()));
+  const ObBloomFilterCacheValue *bf_value = NULL;
+  ObKVCacheHandle handle;
+  uint64_t key_hash = 0;
+  if (OB_UNLIKELY(!bf_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument", K(bf_key), K(ret));
+  } else if (0 == bf_cache_miss_count_threshold_) {
+    is_contain = true;
+  } else if (OB_FAIL(get(bf_key, bf_value, handle))) {
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+      STORAGE_LOG(WARN, "Fail to get bloom filter cache, ", K(ret));
+    }
+    EVENT_INC(ObStatEventIds::BLOOM_FILTER_CACHE_MISS);
+  } else {
+    EVENT_INC(ObStatEventIds::BLOOM_FILTER_CACHE_HIT);
+    if (OB_ISNULL(bf_value)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected null bf value", K(ret));
+    } else {
+      for (int64_t i = rowkey_begin_idx; OB_SUCC(ret) && i < rowkey_end_idx; ++i) {
+        bool tmp_contain = false;
+        const ObDatumRowkey &rowkey = rowkeys_info->get_rowkey(i);
+        if (rowkeys_info->is_rowkey_not_exist(i)) {
+          continue;
+        } else if (OB_FAIL(rowkey.murmurhash(0, datum_utils, key_hash))) {
+          STORAGE_LOG(WARN, "Failed to calc rowkey hash", K(ret), K(rowkey));
+        } else if (OB_FAIL(bf_value->may_contain(static_cast<uint32_t>(key_hash), tmp_contain))) {
+          STORAGE_LOG(WARN, "Fail to check rowkey exist from bloom filter, ", K(ret));
+        } else {
+          if (tmp_contain) {
+            EVENT_INC(ObStatEventIds::BLOOM_FILTER_PASSES);
+            if (i == rowkey_begin_idx) {
+              is_contain = true;
+            }
+          } else {
+            my_rowkeys_info->set_rowkey_not_exist(i);
+            EVENT_INC(ObStatEventIds::BLOOM_FILTER_FILTS);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBloomFilterCache::get_sstable_bloom_filter(const uint64_t tenant_id,
                                                   const MacroBlockId &macro_block_id,
                                                   const uint64_t rowkey_column_number,

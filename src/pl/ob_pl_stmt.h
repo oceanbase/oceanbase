@@ -765,6 +765,7 @@ public:
   inline int add_intf()   { return flags_.add_member(INTF); }
 
   inline int add_compile_flag(int flag) { return flags_.add_member(flag); }
+  inline int del_compile_flag(int flag) { return flags_.del_member(flag); }
 
   inline int add_compile_flag(const ObPLCompileFlag &flag)
   {
@@ -900,6 +901,7 @@ public:
   int get_idx(int64_t &idx) const;
   inline uint64_t get_parent_id() const { return parent_id_; }
   inline uint64_t get_id() const { return id_; }
+  inline uint64_t get_routine_id() const { return id_; }
   inline const ObIArray<int64_t> &get_subprogram_path() const { return subprogram_path_; }
   inline int set_subprogram_path(const ObIArray<int64_t> &path) { return append(subprogram_path_, path); }
   inline int add_subprogram_path(int64_t path) { return subprogram_path_.push_back(path); }
@@ -1162,6 +1164,7 @@ public:
     PKG_TYPE,           // 包中的自定义类型
     SELF_ATTRIBUTE,
     DBLINK_PKG_NS,      // dblink package
+    UDT_MEMBER_ROUTINE, //
   };
 
   ObPLExternalNS(const ObPLResolveCtx &resolve_ctx, const ObPLBlockNS *parent_ns)
@@ -1205,6 +1208,8 @@ public:
   inline const ObPLBlockNS *get_parent_ns() const { return parent_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() { return resolve_ctx_; }
   inline const ObPLDependencyTable *get_dependency_table() const { return dependency_table_; }
+
+  inline ObPLDependencyTable *get_dependency_table() { return dependency_table_; }
   inline void set_dependency_table(ObPLDependencyTable *dependency_table) { dependency_table_ = dependency_table; }
   int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version) const;
 
@@ -1860,11 +1865,11 @@ class ObPLStmt
 {
 public:
   ObPLStmt() : type_(INVALID_PL_STMT), loc_(),
-      level_(OB_INVALID_INDEX), label_(OB_INVALID_INDEX), parent_(NULL) {}
+      level_(OB_INVALID_INDEX), label_cnt_(0), parent_(NULL) {}
   ObPLStmt(ObPLStmtType type) : type_(type), loc_(),
-      level_(OB_INVALID_INDEX), label_(OB_INVALID_INDEX), parent_(NULL) {}
+      level_(OB_INVALID_INDEX), label_cnt_(0), parent_(NULL) {}
   ObPLStmt(ObPLStmtBlock *parent) : type_(INVALID_PL_STMT), loc_(),
-    level_(OB_INVALID_INDEX), label_(OB_INVALID_INDEX), parent_(parent) {}
+    level_(OB_INVALID_INDEX), label_cnt_(0), parent_(parent) {}
   virtual ~ObPLStmt() {}
 
   virtual int accept(ObPLStmtVisitor &visitor) const = 0;
@@ -1881,12 +1886,11 @@ public:
   inline int64_t get_stmt_id() const { return loc_.loc_; }
   inline int64_t get_level() const { return level_; }
   inline void set_level(int64_t level) { level_ = level; }
-  // inline const common::ObString &get_label() const { return label_; }
-  const common::ObString *get_label() const;
-  // inline void set_label(common::ObString &label) { label_ = label; }
+  inline int64_t get_label_cnt() const { return label_cnt_; }
+  inline int64_t get_label_idx(int64_t idx) const { return (idx >= 0 && idx < label_cnt_) ? labels_[idx] : OB_INVALID_INDEX; }
+  const common::ObString* get_label(int64_t idx) const;
   int set_label_idx(int64_t idx);
-  // void set_label_idx(int64_t idx) {label_ = idx;}
-  inline bool has_label() const { return OB_INVALID_INDEX != label_; }
+  inline bool has_label() const { return label_cnt_ > 0; }
   inline void set_block(const ObPLStmtBlock *block) { parent_ = block;}
   inline const ObPLStmtBlock *get_block() const { return parent_; }
   const ObPLBlockNS *get_namespace() const;
@@ -1912,10 +1916,28 @@ public:
   inline const sql::ObRawExpr *get_expr(int64_t i) const { return NULL == get_exprs() ? NULL : get_exprs()->at(i); }
   inline bool get_is_goto_dst() const
   {
-    return NULL == get_label_table() ? false : get_label_table()->get_is_goto_dst(label_);
+    bool ret = false;
+    if (OB_NOT_NULL(get_label_table()) && label_cnt_ > 0) {
+      for (int64_t i = 0; !ret && i < label_cnt_; ++i) {
+        ret = get_label_table()->get_is_goto_dst(labels_[i]);
+      }
+    }
+    return ret;
   }
-  inline void update_label_index(int64_t idx) { label_ = idx; }
-  inline int64_t get_label_idx() const { return label_; }
+  inline const common::ObString* get_goto_label() const
+  {
+    const common::ObString *ret = NULL;
+    if (OB_NOT_NULL(get_label_table()) && label_cnt_ > 0) {
+      int64_t i = 0;
+      for (; i < label_cnt_; ++i) {
+        if (get_label_table()->get_is_goto_dst(labels_[i])) {
+          ret = get_label_table()->get_label(labels_[i]);
+          break;
+        }
+      }
+    }
+    return ret;
+  }
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(loc_.loc), K_(level), K_(label), KP_(parent));
 protected:
@@ -1923,6 +1945,8 @@ protected:
   SourceLocation loc_;
   int64_t level_;
   int64_t label_;
+  int64_t label_cnt_;
+  int64_t labels_[FUNC_MAX_LABELS]; // stmt may has multi lables, like <<a>><<b>>begin null; end;
   const ObPLStmtBlock *parent_;
 };
 
@@ -2080,11 +2104,13 @@ public:
   inline const sql::ObRawExpr *get_into_expr(int64_t i) const { return get_expr(into_.at(i));}
   inline int set_into(ObPLSEArray<int64_t> &idxs) { return append(into_, idxs); }
   inline int add_into(int64_t idx) { return into_.push_back(idx); }
+  inline int64_t get_into_count() { return into_.count(); }
   inline const common::ObIArray<int64_t> &get_value() const { return value_;}
   inline int64_t get_value_index(int64_t i) const { return value_.at(i);}
   inline const sql::ObRawExpr *get_value_expr(int64_t i) const { return get_expr(value_.at(i)); }
   inline int set_value(ObPLSEArray<int64_t> &idxs) { return append(value_, idxs); }
   inline int add_value(int64_t idx) { return value_.push_back(idx); }
+  inline int64_t get_value_count() { return value_.count(); }
 private:
   ObPLSEArray<int64_t> into_;
   ObPLSEArray<int64_t> value_;

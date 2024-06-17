@@ -832,7 +832,7 @@ int ObBackupMacroBlockIndexMerger::merge_index()
       LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
     }
   } else {
-    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+    if (OB_NOT_NULL(dev_handle_) && OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
     }
@@ -1336,7 +1336,7 @@ int ObBackupMetaIndexMerger::merge_index()
       } else if (OB_FAIL(move_iters_next_(min_iters))) {
         LOG_WARN("failed to move iters next", K(ret), K(min_iters));
       } else {
-        LOG_INFO("meta index merge round", K(count), K(min_iters), K(meta_index));
+        LOG_DEBUG("meta index merge round", K(count), K(min_iters), K(meta_index));
         count++;
       }
     }
@@ -1353,7 +1353,7 @@ int ObBackupMetaIndexMerger::merge_index()
       LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
     }
   } else {
-    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+    if (OB_NOT_NULL(dev_handle_) && OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
     }

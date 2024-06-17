@@ -47,6 +47,8 @@
 #include "sql/rewrite/ob_transform_count_to_exists.h"
 #include "sql/rewrite/ob_transform_expr_pullup.h"
 #include "sql/rewrite/ob_transform_dblink.h"
+#include "sql/rewrite/ob_transform_mv_rewrite.h"
+#include "sql/rewrite/ob_transform_decorrelate.h"
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -159,6 +161,8 @@ int ObTransformerImpl::do_after_transform(ObDMLStmt *stmt)
     LOG_WARN("failed to add pre calc constraints", K(ret));
   } else if (OB_FAIL(adjust_global_dependency_tables(stmt))) {
     LOG_WARN("failed to adjust global depency", K(ret));
+  } else if (OB_FAIL(verify_all_stmt_exprs(stmt))) {
+    LOG_WARN("failed to verify all stmt exprs", K(ret));
   }
   return ret;
 }
@@ -292,6 +296,7 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
     int64_t i = 0;
     for (i = 0; OB_SUCC(ret) && need_next_iteration && i < iteration_count; ++i) {
       bool trans_happened_in_iteration = false;
+      ctx_->iteration_level_ = i;
       LOG_TRACE("start to transform one iteration", K(i));
       OPT_TRACE("-- begin ", i, " iteration");
       if (OB_FAIL(transform_rule_set_in_one_iteration(stmt,
@@ -333,6 +338,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
      * The ordering to apply the following rules is important,
      * think carefully when new rules are added
      */
+    APPLY_RULE_IF_NEEDED(MV_REWRITE, ObTransformMVRewrite);
     APPLY_RULE_IF_NEEDED(SIMPLIFY_EXPR, ObTransformSimplifyExpr);
     APPLY_RULE_IF_NEEDED(SIMPLIFY_DISTINCT, ObTransformSimplifyDistinct);
     APPLY_RULE_IF_NEEDED(SIMPLIFY_GROUPBY, ObTransformSimplifyGroupby);
@@ -351,6 +357,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(SEMI_TO_INNER, ObTransformSemiToInner);
     APPLY_RULE_IF_NEEDED(QUERY_PUSH_DOWN, ObTransformQueryPushDown);
     APPLY_RULE_IF_NEEDED(SELECT_EXPR_PULLUP, ObTransformExprPullup);
+    APPLY_RULE_IF_NEEDED(DECORRELATE, ObTransformDecorrelate);
     APPLY_RULE_IF_NEEDED(ELIMINATE_OJ, ObTransformEliminateOuterJoin);
     APPLY_RULE_IF_NEEDED(JOIN_ELIMINATION, ObTransformJoinElimination);
     APPLY_RULE_IF_NEEDED(JOIN_LIMIT_PUSHDOWN, ObTransformJoinLimitPushDown);
@@ -417,7 +424,8 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
-    if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_) {
+    if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_ ||
+        func.contain_fulltext_search_ || func.contain_dml_with_doc_id_) {
        disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_sequence_) {
@@ -430,10 +438,8 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
       ObTransformRule::add_trans_type(disable_list, GROUPBY_PUSHDOWN);
       ObTransformRule::add_trans_type(disable_list, GROUPBY_PULLUP);
-      ObTransformRule::add_trans_type(disable_list, TEMP_TABLE_OPTIMIZATION);
     }
     if (func.update_global_index_) {
-      ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
     }
     if (func.contain_link_table_) {
@@ -500,7 +506,7 @@ int ObTransformerImpl::check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &fun
   return ret;
 }
 
-int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
+int ObTransformerImpl::check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &func)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt)) {
@@ -511,6 +517,7 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
     func.contain_sequence_ = func.contain_sequence_ || stmt->has_sequence();
     func.contain_for_update_ = func.contain_for_update_ || stmt->has_for_update();
     func.contain_unpivot_query_ = func.contain_unpivot_query_ || stmt->is_unpivot_select();
+    func.contain_fulltext_search_ = func.contain_fulltext_search_ || (stmt->get_match_exprs().count() != 0);
   }
   for (int64_t i = 0; OB_SUCC(ret)
                       && (!func.contain_enum_set_values_ || !func.contain_geometry_values_)
@@ -525,7 +532,7 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
   }
   for (int64_t i = 0; OB_SUCC(ret) && !func.contain_link_table_ &&
                       i < stmt->get_table_items().count(); ++i) {
-    TableItem *table = stmt->get_table_item(i);
+    const TableItem *table = stmt->get_table_item(i);
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
@@ -535,7 +542,7 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
   }
   for (int64_t i = 0; OB_SUCC(ret) && !func.contain_json_table_ &&
                       i < stmt->get_table_items().count(); ++i) {
-    TableItem *table = stmt->get_table_item(i);
+    const TableItem *table = stmt->get_table_item(i);
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
@@ -552,8 +559,28 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
                        stmt->is_update_stmt() ||
                        stmt->is_merge_stmt() ||
                        stmt->is_insert_stmt())) {
-    ObDelUpdStmt *del_upd_stmt = static_cast<ObDelUpdStmt *>(stmt);
+    const ObDelUpdStmt *del_upd_stmt = static_cast<const ObDelUpdStmt *>(stmt);
     func.update_global_index_ = func.update_global_index_ || del_upd_stmt->has_global_index();
+  }
+  if (OB_SUCC(ret) && (stmt->is_update_stmt() || stmt->is_delete_stmt())) {
+    ObSqlSchemaGuard &schema_guard = stmt->query_ctx_->sql_schema_guard_;
+    for (int64_t i = 0; OB_SUCC(ret) && !func.contain_dml_with_doc_id_ &&
+                        i < stmt->get_table_items().count(); ++i) {
+      const ObTableSchema *table_schema;
+      if (OB_ISNULL(stmt->get_table_items().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null table item", K(ret));
+      } else if (!stmt->get_table_items().at(i)->get_table_name().suffix_match("rowkey_doc")) {
+        // do nothing
+      } else if (OB_FAIL(schema_guard.get_table_schema(stmt->get_table_items().at(i)->ref_id_, table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid table schema", K(table_schema));
+      } else if (table_schema->is_rowkey_doc_id()) {
+        func.contain_dml_with_doc_id_ = true;
+      }
+    }
   }
   if (OB_SUCC(ret) && !func.all_found()) {
     ObSEArray<ObSelectStmt*, 8> child_stmts;
@@ -593,28 +620,45 @@ int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt)
       }
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count(); ++i) {
+    TableItem *table_item = NULL;
+    if (OB_ISNULL(table_item = stmt->get_table_items().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(finalize_exec_params(stmt, table_item->exec_params_))) {
+      LOG_WARN("failed to finalize exec params", K(ret));
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
     ObQueryRefRawExpr *query_ref = NULL;
     if (OB_ISNULL(query_ref = stmt->get_subquery_exprs().at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query ref expr is null", K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < query_ref->get_param_count(); ++j) {
-      ObExecParamRawExpr *exec_param = NULL;
-      if (OB_ISNULL(exec_param = query_ref->get_exec_param(j))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("exec param is null", K(ret));
-      } else if (exec_param->get_param_index() >= 0) {
-        // do nothing
-      } else {
-        exec_param->set_param_index(stmt->get_question_marks_count());
-        stmt->increase_question_marks_count();
-      }
+    } else if (OB_FAIL(finalize_exec_params(stmt, query_ref->get_exec_params()))) {
+      LOG_WARN("failed to finalize exec params", K(ret));
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
     if (OB_FAIL(SMART_CALL(finalize_exec_params(child_stmts.at(i))))) {
       LOG_WARN("failed to finalize exec params", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt, ObIArray<ObExecParamRawExpr*> & exec_params)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t j = 0; OB_SUCC(ret) && j < exec_params.count(); ++j) {
+    ObExecParamRawExpr *exec_param = NULL;
+    if (OB_ISNULL(exec_param = exec_params.at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec param is null", K(ret));
+    } else if (exec_param->get_param_index() >= 0) {
+      // do nothing
+    } else {
+      exec_param->set_param_index(stmt->get_question_marks_count());
+      stmt->increase_question_marks_count();
     }
   }
   return ret;
@@ -650,6 +694,44 @@ int ObTransformerImpl::adjust_global_dependency_tables(ObDMLStmt *stmt)
   return ret;
 }
 
+int ObTransformerImpl::verify_all_stmt_exprs(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (OB_FAIL(verify_stmt_exprs(stmt))) {
+    LOG_WARN("failed to verify stmt exprs", K(ret));
+  } else {
+    ObArray<ObDMLStmt::TempTableInfo> temp_table_infos;
+    if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+      LOG_WARN("failed to collect temp table infos", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); ++i) {
+      if (OB_FAIL(verify_stmt_exprs(temp_table_infos.at(i).temp_table_query_))) {
+        LOG_WARN("failed to verify temp table query exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::verify_stmt_exprs(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else {
+    ObStmtExprChecker checker;
+    checker.set_relation_scope();
+    if (OB_FAIL(stmt->iterate_stmt_expr(checker))) {
+      LOG_WARN("failed to check stmt expr", K(ret), KPC(stmt));
+    }
+  }
+  return ret;
+}
+
 int ObTransformerImpl::add_param_and_expr_constraints(ObExecContext &exec_ctx,
                                                       ObTransformerCtx &trans_ctx,
                                                       ObDMLStmt &stmt)
@@ -666,8 +748,9 @@ int ObTransformerImpl::add_param_and_expr_constraints(ObExecContext &exec_ctx,
   } else if (OB_FAIL(append(query_ctx->all_equal_param_constraints_,
                             trans_ctx.equal_param_constraints_))) {
     LOG_WARN("fail to append equal param constraints. ", K(ret));
-  } else if (OB_FAIL(query_ctx->all_expr_constraints_.assign(trans_ctx.expr_constraints_))) {
-    LOG_WARN("fail to assign expr constraints", K(ret));
+  } else if (OB_FAIL(append(query_ctx->all_expr_constraints_,
+                            trans_ctx.expr_constraints_))) {
+    LOG_WARN("fail to append expr constraints", K(ret));
   }
   return ret;
 }

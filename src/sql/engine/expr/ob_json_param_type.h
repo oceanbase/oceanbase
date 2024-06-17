@@ -68,29 +68,37 @@ typedef enum JsnQueryAsc {
 } JsnQueryAsc;
 
 // json query clause position
+// modify JsnQueryOpt if modify JsnQueryClause
 typedef enum JsnQueryClause {
-  JSN_QUE_DOC,      // 0
-  JSN_QUE_PATH,     // 1
-  JSN_QUE_RET,      // 2
-  JSN_QUE_TRUNC,      // 3
-  JSN_QUE_SCALAR,     // 4
-  JSN_QUE_PRETTY,    // 5
-  JSN_QUE_ASCII,     // 6
-  JSN_QUE_WRAPPER,    // 7
-  JSN_QUE_ERROR,     // 8
-  JSN_QUE_EMPTY,  // 9
-  JSN_QUE_MISMATCH, //10
+  JSN_QUE_DOC,      // [0:json_text]
+  JSN_QUE_PATH,     // [1:json_path]
+  JSN_QUE_RET,      // [2:returning_type]
+  JSN_QUE_TRUNC,    // [3:truncate]
+  JSN_QUE_SCALAR,   // [4:scalars]
+  JSN_QUE_PRETTY,   // [5:pretty]
+  JSN_QUE_ASCII,    // [6:ascii]
+  JSN_QUE_WRAPPER,  // [7:wrapper]
+  JSN_QUE_ASIS,     // [8:asis]
+  JSN_QUE_ERROR,    // [9:error_type]
+  JSN_QUE_EMPTY,    // [10:empty_type]
+  JSN_QUE_MISMATCH, // [11:mismatch]
+  JSN_QUE_MULTIVALUE, // [12:multivalue]
+
+  JSN_QUE_MAX, // end
 } JsnQueryClause;
 
 typedef enum JsnQueryOpt {
-  JSN_QUE_TRUNC_OPT,      // 0
-  JSN_QUE_SCALAR_OPT,     // 1
+  JSN_QUE_TRUNC_OPT,     // 0
+  JSN_QUE_SCALAR_OPT,    // 1
   JSN_QUE_PRETTY_OPT,    // 2
   JSN_QUE_ASCII_OPT,     // 3
-  JSN_QUE_WRAPPER_OPT,    // 4
-  JSN_QUE_ERROR_OPT,     // 5
-  JSN_QUE_EMPTY_OPT,  // 6
-  JSN_QUE_MISMATCH_OPT, // 7
+  JSN_QUE_WRAPPER_OPT,   // 4
+  JSN_QUE_ASIS_OPT,      // 5
+  JSN_QUE_ERROR_OPT,     // 6
+  JSN_QUE_EMPTY_OPT,     // 7
+  JSN_QUE_MISMATCH_OPT,  // 8
+  JSN_QUE_MULTIVALUE_OPT,// 9
+  JSN_QUE_MAX_OPT, // end
 } JsnQueryOpt;
 
 // json_value
@@ -110,19 +118,11 @@ typedef enum JsnValueClause {
   JSN_VAL_ASCII,     // 4
   JSN_VAL_EMPTY,    // 5
   JSN_VAL_EMPTY_DEF,     // 6
-  JSN_VAL_EMPTY_DEF_PRE, // 7
-  JSN_VAL_ERROR,    // 8
-  JSN_VAL_ERROR_DEF,     // 9
-  JSN_VAL_ERROR_DEF_PRE,     // 10
-  JSN_VAL_MISMATCH  // 11
+  JSN_VAL_ERROR,    // 7
+  JSN_VAL_ERROR_DEF,     // 8
+  JSN_VAL_MISMATCH  // 9
 } JsnValueClause;
 
-typedef enum JsnValueMisMatch {
-  JSN_VALUE_MISMATCH_ERROR,    // 0
-  JSN_VALUE_MISMATCH_NULL,     // 1
-  JSN_VALUE_MISMATCH_IGNORE,   // 2
-  JSN_VALUE_MISMATCH_IMPLICIT  // 3
-} JsnValueMisMatch;
 
 typedef enum JsnValueOpt {
   JSN_VAL_TRUNC_OPT,      // 0

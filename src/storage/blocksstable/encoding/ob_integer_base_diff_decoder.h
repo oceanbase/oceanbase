@@ -126,7 +126,6 @@ private:
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap,
       int (*lambda)(
-          const ObObjMeta &obj_meta,
           const ObDatum &cur_datum,
           const sql::ObWhiteFilterExecutor &filter,
           bool &result)) const;

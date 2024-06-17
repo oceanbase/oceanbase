@@ -105,8 +105,8 @@ int ObQCMonitoringInfo::init(const ObExecContext &exec_ctx) {
   if (OB_NOT_NULL(exec_ctx.get_my_session())) {
     cur_sql_ = exec_ctx.get_my_session()->get_current_query_string();
   }
-  if (cur_sql_.length() > ObQCMonitoringInfo::LIMIT_LENGTH) {
-    cur_sql_.assign(cur_sql_.ptr(), ObQCMonitoringInfo::LIMIT_LENGTH);
+  if (cur_sql_.length() > OB_TINY_SQL_LENGTH) {
+    cur_sql_.assign(cur_sql_.ptr(), OB_TINY_SQL_LENGTH);
   }
   return ret;
 }
@@ -192,6 +192,7 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     const ObExternalFileInfo &other_file = other.access_external_table_files_.at(i);
     ObExternalFileInfo temp_file;
     temp_file.file_id_ = other_file.file_id_;
+    temp_file.part_id_ = other_file.part_id_;
     temp_file.file_addr_ = other_file.file_addr_;
     if (OB_FAIL(ob_write_string(allocator_, other_file.file_url_, temp_file.file_url_))) {
       LOG_WARN("fail to write string", K(ret));
@@ -295,7 +296,7 @@ int ObDfo::fill_channel_info_by_sqc(
   ch_servers.total_task_cnt_ = 0;
   OZ(ch_servers.prefix_task_counts_.push_back(ch_servers.total_task_cnt_));
   OZ(ch_servers.add_exec_addr(sqc.get_exec_addr()));
-  ch_servers.total_task_cnt_ = 1;
+  ch_servers.total_task_cnt_ = sqc.get_task_count();
   return ret;
 }
 

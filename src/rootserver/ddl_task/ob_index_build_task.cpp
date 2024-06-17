@@ -104,8 +104,7 @@ int ObIndexSSTableBuildTask::process()
                                                            false/*use_heap_table_ddl*/,
                                                            !data_schema->is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
                                                            nullptr,
-                                                           sql_string,
-                                                           compact_level_))) {
+                                                           sql_string))) {
       LOG_WARN("fail to generate build replica sql", K(ret));
     } else if (OB_FAIL(data_schema->is_need_padding_for_generated_column(need_padding))) {
       LOG_WARN("fail to check need padding", K(ret));
@@ -149,54 +148,7 @@ int ObIndexSSTableBuildTask::process()
         LOG_WARN("ddl sim failure: create index build sstable failed", K(ret), K(tenant_id_), K(task_id_));
       } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
                   oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
-        if (ret == OB_SERVER_OUTOF_DISK_SPACE &&
-            data_format_version_ >= DATA_VERSION_4_3_0_0) {
-          // if version >= 4.3.0, would retry with compression.
-          // use tmp_ret to avoid ret being reset.
-          int tmp_ret = OB_SUCCESS;
-          sql_string.reuse();
-          SortCompactLevel compress_level = SORT_DEFAULT_LEVEL;
-          switch (compact_level_) {
-            case share::SORT_DEFAULT_LEVEL: {
-              compress_level = share::SORT_COMPRESSION_LEVEL;
-              break;
-            }
-            case share::SORT_COMPACT_LEVEL: {
-              compress_level = share::SORT_COMPRESSION_COMPACT_LEVEL;
-              break;
-            }
-            case share::SORT_ENCODE_LEVEL: {
-              compress_level = share::SORT_COMPRESSION_ENCODE_LEVEL;
-              break;
-            }
-            default: {
-              tmp_ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get unexpected compact level", K(tmp_ret), K(compact_level_));
-            }
-          }
-          if (tmp_ret != OB_SUCCESS) {
-          } else if (OB_SUCCESS != (tmp_ret = ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
-                                                           dest_table_id_,
-                                                           data_schema->get_schema_version(),
-                                                           snapshot_version_,
-                                                           execution_id_,
-                                                           task_id_,
-                                                           parallelism_,
-                                                           false/*use_heap_table_ddl*/,
-                                                           !data_schema->is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
-                                                           nullptr,
-                                                           sql_string,
-                                                           compress_level))) {
-            LOG_WARN("fail to generate build replica sql", K(tmp_ret));
-          } else if (OB_SUCCESS != (tmp_ret = user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
-                  oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
-            LOG_WARN("fail to execute build replica sql", K(tmp_ret), K(tenant_id_));
-          } else {
-            ret = OB_SUCCESS;
-          }
-        } else {
-          LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
-        }
+        LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
@@ -252,9 +204,7 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         trace_id_,
         parallelism_,
         root_service_,
-        inner_sql_exec_addr_,
-        compact_level_,
-        data_format_version_);
+        inner_sql_exec_addr_);
     if (OB_SUCCESS != (task->set_nls_format(nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_))) {
       task->~ObIndexSSTableBuildTask();
       task = nullptr;
@@ -516,7 +466,7 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     LOG_WARN("invalid arguments", K(ret), K(task_record));
   } else if (OB_FAIL(DDL_SIM(task_record.tenant_id_, task_record.task_id_, DDL_TASK_INIT_BY_RECORD_FAILED))) {
     LOG_WARN("ddl sim failure", K(task_record.tenant_id_), K(task_record.task_id_));
-  } else if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
+  } else if (OB_FAIL(deserialize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
     LOG_WARN("deserialize params from message failed", K(ret));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
           task_record.tenant_id_, schema_guard, schema_version))) {
@@ -903,7 +853,7 @@ int ObIndexBuildTask::send_build_single_replica_request()
     LOG_WARN("ObIndexBuildTask has not been inited", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_SEND_BUILD_REPLICA_REQUEST_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, new_execution_id))) {
+  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, task_type_, true/*is ddl retryable*/, data_format_version_, new_execution_id))) {
     LOG_WARN("failed to fetch new execution id", K(ret));
   } else {
     if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, create_index_arg_.inner_sql_exec_addr_))) {
@@ -924,9 +874,7 @@ int ObIndexBuildTask::send_build_single_replica_request()
         trace_id_,
         parallelism_,
         root_service_,
-        create_index_arg_.inner_sql_exec_addr_,
-        create_index_arg_.compact_level_,
-        data_format_version_);
+        create_index_arg_.inner_sql_exec_addr_);
     if (OB_FAIL(task.set_nls_format(create_index_arg_.nls_date_format_,
                                     create_index_arg_.nls_timestamp_format_,
                                     create_index_arg_.nls_timestamp_tz_format_))) {
@@ -1388,6 +1336,7 @@ int ObIndexBuildTask::clean_on_failed()
     bool state_finished = true;
     ObSchemaGetterGuard schema_guard;
     bool drop_index_on_failed = true; // TODO@wenqu: index building triggered by truncate partition may need keep the failed index schema
+    bool index_status_is_available = false;
     if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("get tenant schema failed", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, index_table_id_, is_index_exist))) {
@@ -1410,6 +1359,7 @@ int ObIndexBuildTask::clean_on_failed()
       int64_t tmp_snapshot_version = 0;
       if (ObIndexStatus::INDEX_STATUS_AVAILABLE == index_schema->get_index_status()) {
         LOG_INFO("index take effect but ddl task failed", K(ret), K(ret_code_), K(index_table_id_));
+        index_status_is_available = true;
         state_finished = true;
       } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR != index_schema->get_index_status()) {
         state_finished = false;
@@ -1428,6 +1378,7 @@ int ObIndexBuildTask::clean_on_failed()
         ObSqlString drop_index_sql;
         bool is_oracle_mode = false;
         ObString index_name;
+        ObIndexArg::IndexActionType index_action_type = ObIndexArg::DROP_INDEX;
         if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_schema->get_database_id(), database_schema))) {
           LOG_WARN("get database schema failed", K(ret), K_(tenant_id), K(index_schema->get_database_id()));
         } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_schema->get_data_table_id(), data_table_schema))) {
@@ -1442,6 +1393,17 @@ int ObIndexBuildTask::clean_on_failed()
         } else if (index_schema->is_in_recyclebin()) {
           // index is already in recyclebin, skip get index name, use a fake one, this is just to pass IndexArg validity check
           index_name = "__fake";
+        } else if (ObIndexArg::ADD_MLOG == create_index_arg_.index_action_type_) {
+          const ObString &data_table_name = data_table_schema->get_table_name_str();
+          if (OB_FAIL(index_schema->get_mlog_name(index_name))) {
+            LOG_WARN("failed to get mlog name", KR(ret));
+          } else if (OB_FALSE_IT(index_action_type = obrpc::ObIndexArg::DROP_MLOG)) {
+          } else if ((0 == parent_task_id_) && create_index_arg_.ddl_stmt_str_.empty()) {
+            if (OB_FAIL(drop_index_sql.append_fmt("drop materialized view log on %.*s",
+                data_table_name.length(), data_table_name.ptr()))) {
+              LOG_WARN("failed to generate drop mlog sql", KR(ret), K(data_table_name));
+            }
+          }
         } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
           LOG_WARN("get index name failed", K(ret));
         } else if (0 == parent_task_id_) {
@@ -1470,7 +1432,7 @@ int ObIndexBuildTask::clean_on_failed()
           drop_index_arg.index_name_        = index_name;
           drop_index_arg.table_name_        = data_table_schema->get_table_name();
           drop_index_arg.database_name_     = database_schema->get_database_name_str();
-          drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
+          drop_index_arg.index_action_type_ = index_action_type;
           drop_index_arg.ddl_stmt_str_      = drop_index_sql.string();
           drop_index_arg.is_add_to_scheduler_ = false;
           drop_index_arg.is_hidden_         = data_table_schema->is_user_hidden_table(); // just use to fetch data table schema.
@@ -1490,6 +1452,9 @@ int ObIndexBuildTask::clean_on_failed()
       }
     }
     if (OB_SUCC(ret) && state_finished) {
+      if (index_status_is_available) {
+        ret_code_ = OB_SUCCESS;
+      }
       if (OB_FAIL(cleanup())) {
         LOG_WARN("cleanup failed", K(ret));
       }
@@ -1500,6 +1465,7 @@ int ObIndexBuildTask::clean_on_failed()
 
 int ObIndexBuildTask::succ()
 {
+  ret_code_ = OB_SUCCESS;
   return cleanup();
 }
 
@@ -1584,7 +1550,8 @@ int ObIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
         if (OB_FAIL(databuff_printf(stat_info_.message_,
                                     MAX_LONG_OPS_MESSAGE_LENGTH,
                                     pos,
-                                    "STATUS: REPLICA BUILD, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED_INTO_TMP_FILE: %ld, ROW_INSERTED: %ld out of %ld column group rows",
+                                    "STATUS: REPLICA BUILD, PARALLELISM: %ld, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED_INTO_TMP_FILE: %ld, ROW_INSERTED: %ld out of %ld column group rows",
+                                    ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
                                     row_scanned,
                                     row_sorted,
                                     row_inserted_file,
@@ -1596,7 +1563,8 @@ int ObIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
         if (OB_FAIL(databuff_printf(stat_info_.message_,
                                     MAX_LONG_OPS_MESSAGE_LENGTH,
                                     pos,
-                                    "STATUS: REPLICA BUILD, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld",
+                                    "STATUS: REPLICA BUILD, PARALLELISM: %ld, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld",
+                                    ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
                                     row_scanned,
                                     row_sorted,
                                     row_inserted_file))) {
@@ -1672,14 +1640,14 @@ int ObIndexBuildTask::serialize_params_to_message(char *buf, const int64_t buf_l
   return ret;
 }
 
-int ObIndexBuildTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
+int ObIndexBuildTask::deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   ObCreateIndexArg tmp_arg;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos))) {
+  } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id, buf, data_len, pos))) {
     LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("deserialize table failed", K(ret));

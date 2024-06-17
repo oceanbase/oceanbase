@@ -32,7 +32,8 @@ public:
       set_algo_(INVALID_SET_ALGO),
       set_dist_algo_(DIST_INVALID_METHOD),
       set_op_(ObSelectStmt::NONE),
-      set_directions_()
+      set_directions_(),
+      identify_seq_expr_(nullptr)
   {
   }
 
@@ -85,6 +86,8 @@ public:
   virtual uint64_t hash(uint64_t seed) const override;
   const common::ObIArray<OrderItem> &get_search_ordering() { return search_ordering_; }
   const common::ObIArray<ColumnItem> &get_cycle_items() { return cycle_items_; }
+  ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
+  inline void set_identify_seq_expr(ObRawExpr *expr) { identify_seq_expr_ = expr; }
   virtual int compute_const_exprs() override;
   virtual int compute_equal_set() override;
   virtual int compute_fd_item_set() override;
@@ -120,6 +123,8 @@ public:
   int construct_pq_set_hint(ObPQSetHint &hint);
   int set_child_ndv(ObIArray<double> &ndv) { return child_ndv_.assign(ndv); }
   int add_child_ndv(double ndv) { return child_ndv_.push_back(ndv); }
+  virtual int get_card_without_filter(double &card) override;
+  int append_child_fd_item_set(ObFdItemSet &all_fd_item_set, const ObFdItemSet &child_fd_item_set);
 private:
   bool is_distinct_;
   bool is_recursive_union_;
@@ -133,6 +138,8 @@ private:
   common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true>  search_ordering_;
   common::ObSEArray<ColumnItem, 8, common::ModulePageAllocator, true>  cycle_items_;
   common::ObSEArray<double, 4, common::ModulePageAllocator, true>  child_ndv_;
+  //for batch search recursive cte
+  ObRawExpr *identify_seq_expr_;
 };
 
 } // end of namespace sql

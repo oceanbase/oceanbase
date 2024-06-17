@@ -68,6 +68,7 @@ int Ob20ProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool, c
   const uint32_t sessid = conn.sessid_;
   // together with mysql compress header, all treat as packet header
   const int64_t header_size = OB20_PROTOCOL_HEADER_LENGTH + OB_MYSQL_COMPRESSED_HEADER_SIZE;
+  conn.mysql_pkt_context_.is_auth_switch_ = conn.is_in_auth_switch_phase();
 
   // no need duplicated check 'm' valid, ObMySQLHandler::process() has already checked
   if ((end - start) >= header_size) {

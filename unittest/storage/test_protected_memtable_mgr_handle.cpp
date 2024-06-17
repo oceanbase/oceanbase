@@ -78,8 +78,8 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
   ASSERT_EQ(0, pool->count_);
 
   // create memtable
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(1, scn1));
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(2, scn2));
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(1, scn1, false, false));
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(2, scn2, false, false));
 
   ObSEArray<ObTableHandleV2, 64> handles;
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_all_memtables(handles));
@@ -106,7 +106,7 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
   // remove memtable mgr reference from memtable
   ASSERT_EQ(1, handles.count());
   for (int i = 0; i < handles.count(); i++) {
-    memtable::ObIMemtable *i_mt = nullptr;
+    ObIMemtable *i_mt = nullptr;
     EXPECT_EQ(OB_SUCCESS, handles[i].get_memtable(i_mt));
     memtable::ObMemtable *mt = (memtable::ObMemtable *)(i_mt);
     mt->memtable_mgr_handle_.reset();

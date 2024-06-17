@@ -85,6 +85,10 @@ public:
   static const int64_t MEMORY_TO_LOG_DISK_FACTOR = 3;
   static const int64_t INVALID_LOG_DISK_SIZE = -1;
 
+  ////////////////////////// DATA DISK ////////////////////////////
+  static const int64_t DEFAULT_DATA_DISK_SIZE = 0;
+  static const int64_t INVALID_DATA_DISK_SIZE = -1;
+
   ////////////////////////// IOPS ////////////////////////////
   // IOPS is shared by META and USER tenant.
   static const int64_t UNIT_MIN_IOPS = 1024;
@@ -95,6 +99,10 @@ public:
   // default factor of mapping CPU to IOPS
   // MIN_CPU * FACTOR = IOPS
   static constexpr double CPU_TO_IOPS_FACTOR = 10000;
+
+  ////////////////////// NET_BANDWIDTH //////////////////////////
+  static const int64_t DEFAULT_NET_BANDWIDTH = INT64_MAX;
+  static const int64_t DEFAULT_NET_BANDWIDTH_WEIGHT = 0;
 
 public:
   ObUnitResource() { reset(); }
@@ -382,6 +390,9 @@ protected:
   int64_t max_iops_;
   int64_t min_iops_;
   int64_t iops_weight_;
+  int64_t data_disk_size_;          // not used, only as placeholder
+  int64_t max_net_bandwidth_;       // not used, only as placeholder
+  int64_t net_bandwidth_weight_;    // not used, only as placeholder
 };
 
 

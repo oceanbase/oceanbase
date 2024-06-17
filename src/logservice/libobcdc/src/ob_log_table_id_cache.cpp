@@ -63,5 +63,10 @@ bool TableInfoEraserByTenant::operator()(
   return (tenant_id_ == target_tenant_id);
 }
 
+bool TableInfoEraserByDatabase::operator()(const TableID &table_id_key, uint64_t &val)
+{
+  return (val == database_id_);
+}
+
 }
 }

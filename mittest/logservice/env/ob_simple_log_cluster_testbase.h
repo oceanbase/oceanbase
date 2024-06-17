@@ -69,7 +69,7 @@ public:
     }
     return ObMember(addr, 1);
   }
-  const common::ObArrayHashMap<common::ObAddr, common::ObRegion> &get_member_region_map() const { return member_region_map_; }
+  common::hash::ObHashMap<common::ObAddr, common::ObRegion> &get_member_region_map() const { return member_region_map_; }
   const ObMemberList &get_node_list() const {return node_list_;}
   int64_t get_node_cnt() const { return node_cnt_; }
   int64_t get_member_cnt() const { return member_cnt_; }
@@ -77,7 +77,7 @@ public:
 
 private:
   static int generate_sorted_server_list_(const int64_t node_cnt);
-
+  static int init_global_kv_cache_();
 protected:
   static void SetUpTestCase();
   static void TearDownTestCase();
@@ -86,7 +86,7 @@ public:
   static std::vector<ObISimpleLogServer*> cluster_;
   static ObMemberList member_list_;
   static ObMemberList node_list_;
-  static common::ObArrayHashMap<common::ObAddr, common::ObRegion> member_region_map_;
+  static common::hash::ObHashMap<common::ObAddr, common::ObRegion> member_region_map_;
   static bool is_started_;
   static int64_t member_cnt_;
   static int64_t node_cnt_;

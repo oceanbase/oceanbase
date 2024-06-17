@@ -203,7 +203,7 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
     int ret_bk = ret;
     if (NULL != GCTX.omt_) {
       double cpu_usage = .0;
-      if (!OB_FAIL(GCTX.omt_->get_tenant_cpu_usage(tenant_id, cpu_usage))) {
+      if (OB_SUCC(GCTX.omt_->get_tenant_cpu_usage(tenant_id, cpu_usage))) {
         stat_events.get(ObStatEventIds::CPU_USAGE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
             = static_cast<int64_t>(cpu_usage * 100);
         stat_events.get(ObStatEventIds::MEMORY_USAGE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
@@ -215,7 +215,7 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
       }
 
       int64_t worker_time = 0;
-      if (!OB_FAIL(GCTX.omt_->get_tenant_worker_time(tenant_id, worker_time))) {
+      if (OB_SUCC(GCTX.omt_->get_tenant_worker_time(tenant_id, worker_time))) {
         stat_events.get(ObStatEventIds::WORKER_TIME - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
             = worker_time;
       } else {
@@ -224,7 +224,7 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
 
       double min_cpu = .0;
       double max_cpu = .0;
-      if (!OB_FAIL(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu, max_cpu))) {
+      if (OB_SUCC(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu, max_cpu))) {
         stat_events.get(ObStatEventIds::MIN_CPUS - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
             = static_cast<int64_t>(min_cpu * 100);
         stat_events.get(ObStatEventIds::MAX_CPUS - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
@@ -451,6 +451,9 @@ int ObAllVirtualSysStat::get_cache_size_(const int64_t tenant_id, ObStatEventSet
             = inst->status_.map_size_ + inst->status_.store_size_;
       } else if (0 == STRNCMP(inst->status_.config_->cache_name_, "bf_cache", MAX_CACHE_NAME_LENGTH)) {
         stat_events.get(ObStatEventIds::BLOOM_FILTER_CACHE_SIZE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
+            = inst->status_.map_size_ + inst->status_.store_size_;
+      } else if (0 == STRNCMP(inst->status_.config_->cache_name_, "log_kv_cache", MAX_CACHE_NAME_LENGTH)) {
+        stat_events.get(ObStatEventIds::LOG_KV_CACHE_SIZE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
             = inst->status_.map_size_ + inst->status_.store_size_;
       } else {
         //do nothing

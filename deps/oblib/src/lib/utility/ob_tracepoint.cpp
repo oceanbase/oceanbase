@@ -12,6 +12,12 @@
 
 #include "lib/utility/ob_tracepoint.h"
 
+#define GLOBAL_ERRSIM_POINT_DEF(no, name, describe)                               \
+oceanbase::common::NamedEventItem oceanbase::common::EventTable::name(      \
+  no, #name, describe, oceanbase::common::EventTable::global_item_list());
+#include "lib/utility/ob_tracepoint_def.h"
+#undef GLOBAL_ERRSIM_POINT_DEF
+
 bool &get_tp_switch()
 {
   RLOCAL(bool, turn_off);

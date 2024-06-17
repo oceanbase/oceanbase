@@ -51,6 +51,8 @@ const char *ObLogTableScan::get_name() const
   }
   if (sample_method != SampleInfo::NO_SAMPLE) {
     name = (sample_method == SampleInfo::ROW_SAMPLE) ? "TABLE ROW SAMPLE SCAN" : "TABLE BLOCK SAMPLE SCAN";
+  } else if (is_text_retrieval_scan()) {
+    name = use_das() ? "DISTRIBUTED TEXT RETRIEVAL SCAN" : "TEXT RETRIEVAL SCAN";
   } else if (is_skip_scan()) {
     name = use_das() ? "DISTRIBUTED TABLE SKIP SCAN" : "TABLE SKIP SCAN";
   } else if (EXTERNAL_TABLE == get_table_type()) {
@@ -178,6 +180,8 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to add lookup trans expr", K(ret));
   } else if (NULL != trans_info_expr_ && OB_FAIL(all_exprs.push_back(trans_info_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+  } else if (is_text_retrieval_scan() && OB_FAIL(get_text_retrieval_calc_exprs(all_exprs))) {
+    LOG_WARN("failed to get text retrieval exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, pushdown_aggr_exprs_))) {
@@ -208,6 +212,30 @@ int ObLogTableScan::allocate_expr_post(ObAllocExprContext &ctx)
     } else if (OB_FAIL(mark_expr_produced(expr, branch_id_, id_, ctx))) {
       LOG_WARN("failed to mark expr as produced", K(*expr), K(branch_id_), K(id_), K(ret));
     } else { /*do nothing*/ }
+  }
+  if (OB_SUCC(ret) && is_text_retrieval_scan()) {
+    // match against relevance expr will be calculated in storage
+    ObSEArray<ObRawExpr *, 8> tmp_exprs;
+    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(get_text_retrieval_info().relevance_expr_, tmp_exprs))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    } else if (OB_FAIL(tmp_exprs.push_back(get_text_retrieval_info().doc_token_cnt_))) {
+      LOG_WARN("failed to append tmp exprs", K(ret));
+    } else if (OB_FAIL(tmp_exprs.push_back(get_text_retrieval_info().total_doc_cnt_))) {
+      LOG_WARN("failed to append tmp exprs", K(ret));
+    } else if (OB_FAIL(tmp_exprs.push_back(get_text_retrieval_info().related_doc_cnt_))) {
+      LOG_WARN("failed to append tmp exprs", K(ret));
+    } else if (OB_FAIL(tmp_exprs.push_back(get_text_retrieval_info().match_expr_))) {
+      LOG_WARN("failed to append tmp exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_exprs.count(); ++i) {
+      ObRawExpr *expr = tmp_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null expr", K(ret));
+      } else if (OB_FAIL(mark_expr_produced(expr, branch_id_, id_, ctx))) {
+        LOG_WARN("failed to mark expr as produced", K(*expr), K(branch_id_), K(id_), K(ret));
+      } else { /*do nothing*/ }
+    }
   }
 
   // check if we can produce some more exprs, such as 1 + 'c1' after we have produced 'c1'
@@ -266,6 +294,16 @@ int ObLogTableScan::check_output_dependance(common::ObIArray<ObRawExpr *> &child
   } else if (OB_FAIL(dep_checker.check(exprs))) {
     LOG_WARN("failed to check op_exprs", K(ret));
   } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_output.count(); i++) {
+      if (OB_ISNULL(child_output.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else if (child_output.at(i)->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_URL) {
+        if (OB_FAIL(deps.del_member(i))) {
+          LOG_WARN("del member failed", K(ret));
+        }
+      }
+    }
     LOG_TRACE("succeed to check output exprs", K(exprs), K(type_), K(deps));
   }
   return ret;
@@ -277,7 +315,9 @@ int ObLogTableScan::extract_file_column_exprs_recursively(ObRawExpr *expr)
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
+  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type() ||
+             T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type() ||
+             T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type()) {
     auto pseudo_col_expr = static_cast<ObPseudoColumnRawExpr*>(expr);
     if (pseudo_col_expr->get_table_id() != table_id_) {
       //table id may be changed because of rewrite
@@ -342,6 +382,25 @@ int ObLogTableScan::copy_filter_before_index_back()
 
   return ret;
 }
+
+int ObLogTableScan::find_nearest_rcte_op(ObLogSet *&log_set)
+{
+  int ret = OB_SUCCESS;
+  log_set = nullptr;
+  ObLogicalOperator *op = this->get_parent();
+  while (OB_NOT_NULL(op)) {
+    if (log_op_def::LOG_SET == op->get_type()) {
+      ObLogSet *set_op = static_cast<ObLogSet *>(op);
+      if (set_op->is_recursive_union()) {
+        log_set = set_op;
+        break;
+      }
+    }
+    op = op->get_parent();
+  }
+  return ret;
+}
+
 int ObLogTableScan::generate_access_exprs()
 {
   int ret = OB_SUCCESS;
@@ -352,6 +411,8 @@ int ObLogTableScan::generate_access_exprs()
     LOG_WARN("get unexpected null", K(get_plan()), K(get_stmt()), K(ret));
   } else if (OB_FAIL(copy_filter_before_index_back())) {
     LOG_WARN("failed to copy filter before index back", K(ret));
+  } else if (is_text_retrieval_scan() && OB_FAIL(prepare_text_retrieval_dep_exprs())) {
+    LOG_WARN("failed to copy text retrieval aggr exprs", K(ret));
   } else if (OB_FAIL(generate_necessary_rowkey_and_partkey_exprs())) {
     LOG_WARN("failed to generate rowkey and part exprs", K(ret));
   } else if (use_batch()
@@ -365,6 +426,8 @@ int ObLogTableScan::generate_access_exprs()
     LOG_WARN("failed to push back exprs", K(ret));
   } else if (is_spatial_index_ && OB_FAIL(append_array_no_dup(access_exprs_, spatial_exprs_))) {
     LOG_WARN("failed to push back exprs", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(access_exprs_, domain_exprs_))) {
+    LOG_WARN("failed to append domain exprs", K(ret));
   } else if (is_index_global_ && index_back_) {
     if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter_exprs_, temp_exprs))) {
       LOG_WARN("failed to extract column exprs", K(ret));
@@ -394,6 +457,11 @@ int ObLogTableScan::generate_access_exprs()
       LOG_WARN("failed to append exprs", K(ret));
     } else { /*do nothing*/ }
 
+    if (OB_SUCC(ret) && NULL != identify_seq_expr_) {
+      if (OB_FAIL(access_exprs_.push_back(identify_seq_expr_))) {
+        LOG_WARN("fail to add identify seq expr", K(ret));
+      }
+    }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_pseudo_column_like_exprs().count(); i++) {
       ObRawExpr *expr = stmt->get_pseudo_column_like_exprs().at(i);
@@ -405,6 +473,13 @@ int ObLogTableScan::generate_access_exprs()
         if (OB_FAIL(access_exprs_.push_back(expr))) {
           LOG_WARN("fail to push back expr", K(ret));
         }
+      } else if ((T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type())
+                 && static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_) {
+        if (OB_FAIL(add_var_to_array_no_dup(ext_file_column_exprs_, expr))) {
+          LOG_WARN("fail to push back expr", K(ret));
+        } else if (OB_FAIL(access_exprs_.push_back(expr))) { //add access expr temp
+          LOG_WARN("fail to push back expr", K(ret));
+        }
       }
     }
 
@@ -412,7 +487,7 @@ int ObLogTableScan::generate_access_exprs()
       if (OB_FAIL(add_mapping_columns_for_vt(access_exprs_))) {
         LOG_WARN("failed to add mapping columns for vt", K(ret));
       } else {
-        LOG_TRACE("succeed to generate access exprs", K(access_exprs_));
+        LOG_TRACE("succeed to generate access exprs", K(access_exprs_), K(ext_file_column_exprs_));
       }
     }
   }
@@ -536,7 +611,7 @@ int ObLogTableScan::has_nonpushdown_filter(bool &has_npd_filter)
 int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                              ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                              ObIArray<ObRawExpr*> &lookup_pushdown_filters,
-                                             bool ignore_pd_filter /*= false */)
+                                             bool ignore_pd_filter /*= false */) const
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObRawExpr*> &filters = get_filter_exprs();
@@ -655,9 +730,7 @@ int ObLogTableScan::extract_virtual_gen_access_exprs(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret), K(expr));
       } else if (T_ORA_ROWSCN == expr->get_expr_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("rowscan not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscan not supported");
+        // keep orign expr
       } else if (OB_ISNULL(mapping_expr = get_real_expr(expr))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mapping expr is null", K(ret), KPC(expr));
@@ -768,6 +841,7 @@ int ObLogTableScan::get_mbr_column_exprs(const uint64_t table_id,
   ObRawExpr *expr = NULL;
   const ObDMLStmt *stmt = NULL;
   ObSEArray<ObRawExpr*, 8> temp_exprs;
+
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
@@ -845,6 +919,10 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
     LOG_WARN("failed to check whether stmt has lob column", K(ret));
   } else if (OB_FAIL(get_mbr_column_exprs(table_id_, spatial_exprs_))) {
     LOG_WARN("failed to check whether stmt has mbr column", K(ret));
+  } else if (need_doc_id_index_back() && OB_FAIL(extract_doc_id_index_back_expr(domain_exprs_))) {
+    LOG_WARN("failed to extract doc id index back exprs", K(ret));
+  } else if (is_text_retrieval_scan() && OB_FAIL(extract_text_retrieval_access_expr(domain_exprs_))) {
+    LOG_WARN("failed to extract text retrieval access exprs", K(ret));
   } else if (is_heap_table && is_index_global_ && index_back_ &&
              OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
     LOG_WARN("failed to get part column exprs", K(ret));
@@ -864,8 +942,9 @@ int ObLogTableScan::add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_expr
     LOG_DEBUG("debug mapping columns for virtual table", K(first_col_expr->get_table_id()), K(ref_table_id_));
     if (share::is_oracle_mapping_real_virtual_table(ref_table_id_)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < access_exprs.count(); ++i) {
-        ObRawExpr *real_expr = NULL;
-        if (OB_FAIL(add_mapping_column_for_vt(static_cast<ObColumnRefRawExpr *>(access_exprs.at(i)),
+        ObRawExpr *real_expr = access_exprs.at(i);
+        if (T_ORA_ROWSCN != access_exprs.at(i)->get_expr_type()
+            && OB_FAIL(add_mapping_column_for_vt(static_cast<ObColumnRefRawExpr *>(access_exprs.at(i)),
                                               real_expr))) {
           LOG_WARN("failed to add mapping column for vt", K(ret));
         } else if (OB_FAIL(real_expr_map_.push_back(
@@ -882,6 +961,7 @@ int ObLogTableScan::add_mapping_column_for_vt(ObColumnRefRawExpr *col_expr,
                                               ObRawExpr *&real_expr)
 {
   int ret = OB_SUCCESS;
+  real_expr = nullptr;
   int64_t mapping_table_id = share::schema::ObSchemaUtils::get_real_table_mappings_tid(ref_table_id_);
   if (OB_INVALID_ID == mapping_table_id) {
     ret = OB_ERR_UNEXPECTED;
@@ -1279,7 +1359,7 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
     }
 
     //Print ranges
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || is_text_retrieval_scan()) {
     } else if (OB_FAIL(BUF_PRINTF(", "))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
@@ -1307,6 +1387,12 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       }
     }
 
+    if (OB_SUCC(ret) && is_text_retrieval_scan()) {
+      // print match against related exprs
+      if (OB_FAIL(print_text_retrieval_annotation(buf, buf_len, pos, type))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      }
+    }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item.special_predicates_len_);
   }
@@ -2128,5 +2214,328 @@ ObRawExpr * ObLogTableScan::get_real_expr(const ObRawExpr *col) const
       break;
     }
   }
+  return ret;
+}
+
+int ObLogTableScan::extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  uint64_t doc_id_rowkey_tid = OB_INVALID_ID;
+  ObColumnRefRawExpr *doc_id_col_expr = nullptr;
+  ObSqlSchemaGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  const ObColumnSchemaV2 *doc_id_col_schema = nullptr;
+  ObSEArray<ColumnItem, 4> col_items;
+  if (!need_doc_id_index_back()) {
+    //skip
+  } else if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan())  ||
+      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(get_stmt()), KP(get_plan()),  KP(schema_guard));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_column_count(); ++i) {
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (OB_ISNULL(col_schema = table_schema->get_column_schema_by_idx(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema by index", K(ret));
+      } else if (col_schema->is_doc_id_column()) {
+        doc_id_col_schema = col_schema;
+        break;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(doc_id_col_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected doc id column schema not found", K(ret), KPC(table_schema));
+  } else if (OB_FAIL(ObRawExprUtils::build_column_expr(
+      get_plan()->get_optimizer_context().get_expr_factory(), *doc_id_col_schema, doc_id_col_expr))) {
+    LOG_WARN("failed to create doc id column expr", K(ret), KPC(doc_id_col_schema));
+  } else if (OB_FAIL(exprs.push_back(doc_id_col_expr))) {
+    LOG_WARN("failed to append doc id col expr", K(ret));
+  } else if (OB_FAIL(get_stmt()->get_column_items(table_id_, col_items))) {
+    LOG_WARN("failed to get column items", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_items.count(); ++i) {
+      const ColumnItem &col_item = col_items.at(i);
+      bool is_rowkey = false;
+      if (OB_FAIL(table_schema->get_rowkey_info().is_rowkey_column(col_item.column_id_, is_rowkey))) {
+        LOG_WARN("failed to check if column item is rowkey", K(ret));
+      } else if (is_rowkey) {
+        exprs.push_back(col_item.expr_);
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObLogTableScan::extract_text_retrieval_access_expr(ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  ObTextRetrievalInfo &tr_info = get_text_retrieval_info();
+  if (OB_ISNULL(tr_info.match_expr_) || OB_ISNULL(tr_info.total_doc_cnt_) ||
+      OB_ISNULL(tr_info.doc_token_cnt_) || OB_ISNULL(tr_info.related_doc_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null match against expr", K(ret));
+  } else if (OB_FAIL(exprs.push_back(tr_info.token_column_))) {
+    LOG_WARN("failed to append token column to access exprs", K(ret));
+  } else if (OB_FAIL(exprs.push_back(tr_info.token_cnt_column_))) {
+    LOG_WARN("failed to append token count column to access exprs", K(ret));
+  } else if (OB_FAIL(exprs.push_back(tr_info.doc_id_column_))) {
+    LOG_WARN("failed to append doc id column to access exprs", K(ret));
+  } else if (OB_FAIL(exprs.push_back(tr_info.doc_length_column_))) {
+    LOG_WARN("failed to append doc length column to access exprs", K(ret));
+  } else if (OB_FAIL(exprs.push_back(tr_info.total_doc_cnt_->get_param_expr(0)))) {
+    LOG_WARN("failed to append total doc cnt access col to access exprs", K(ret));
+  } else if (OB_FAIL(exprs.push_back(tr_info.doc_token_cnt_->get_param_expr(0)))) {
+    LOG_WARN("failed to append doc token cnt access col to access exprs", K(ret));
+  } else if (OB_FAIL(exprs.push_back(tr_info.related_doc_cnt_->get_param_expr(0)))) {
+    LOG_WARN("failed to append relater doc cnt access col to access exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObLogTableScan::get_text_retrieval_calc_exprs(ObIArray<ObRawExpr *> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_text_retrieval_info().match_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null match against expr", K(ret));
+  } else if (OB_FAIL(all_exprs.push_back(get_text_retrieval_info().related_doc_cnt_))) {
+    LOG_WARN("failed to append relevanced doc cnt expr", K(ret));
+  } else if (OB_FAIL(all_exprs.push_back(get_text_retrieval_info().doc_token_cnt_))) {
+    LOG_WARN("failed to append doc token cnt expr", K(ret));
+  } else if (OB_FAIL(all_exprs.push_back(get_text_retrieval_info().total_doc_cnt_))) {
+    LOG_WARN("failed to append total doc cnt expr", K(ret));
+  } else if (OB_FAIL(all_exprs.push_back(get_text_retrieval_info().relevance_expr_))) {
+    LOG_WARN("failed to append relevance expr", K(ret));
+  } else if (OB_FAIL(all_exprs.push_back(get_text_retrieval_info().match_expr_))) {
+    LOG_WARN("failed to append text retrieval expr", K(ret));
+  } else if (OB_FAIL(all_exprs.push_back(get_text_retrieval_info().pushdown_match_filter_))) {
+    LOG_WARN("failed to append match filter", K(ret));
+  } else if (OB_NOT_NULL(get_text_retrieval_info().topk_limit_expr_) &&
+             OB_FAIL(all_exprs.push_back(get_text_retrieval_info().topk_limit_expr_))) {
+    LOG_WARN("failed to append limit expr", K(ret));
+  } else if (OB_NOT_NULL(get_text_retrieval_info().topk_offset_expr_) &&
+             OB_FAIL(all_exprs.push_back(get_text_retrieval_info().topk_offset_expr_))) {
+    LOG_WARN("failed to append offset expr", K(ret));
+  }
+  return ret;
+}
+
+int ObLogTableScan::print_text_retrieval_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type)
+{
+  int ret = OB_SUCCESS;
+  ObTextRetrievalInfo &tr_info = get_text_retrieval_info();
+  ObMatchFunRawExpr *match_expr = tr_info.match_expr_;
+  ObRawExpr *pushdown_match_filter = tr_info.pushdown_match_filter_;
+  ObRawExpr *limit = tr_info.topk_limit_expr_;
+  ObRawExpr *offset = tr_info.topk_offset_expr_;
+  ObSEArray<OrderItem, 1> sort_keys;
+  bool calc_relevance = tr_info.need_calc_relevance_;
+  if (OB_FAIL(BUF_PRINTF(", "))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF("calc_relevance=%s", calc_relevance ? "true" : "false"))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF(", "))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(match_expr, type))) {
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(pushdown_match_filter)) {
+    if (OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(pushdown_match_filter, type))) {
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(tr_info.sort_key_.expr_)) {
+    if (OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(sort_keys.push_back(tr_info.sort_key_))) {
+      LOG_WARN("failed to push back order item", K(ret));
+    } else if (FALSE_IT(EXPLAIN_PRINT_SORT_ITEMS(sort_keys, type))) {
+    } else if (OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(limit, type))) {
+    } else if (OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(offset, type))) {
+    } else if (OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("with_ties("))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (tr_info.with_ties_ && OB_FAIL(BUF_PRINTF("true"))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (!tr_info.with_ties_ && OB_FAIL(BUF_PRINTF("false"))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(")"))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogTableScan::prepare_text_retrieval_dep_exprs()
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema;
+  const ObTableSchema *inv_index_schema;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  TableItem *table_item = nullptr;
+  ObRawExprFactory *expr_factory = nullptr;
+  ObSQLSessionInfo *session_info = nullptr;
+  uint64_t token_col_id = OB_INVALID_ID;
+  ObColumnRefRawExpr *token_column = nullptr;
+  uint64_t token_cnt_col_id = OB_INVALID_ID;
+  ObColumnRefRawExpr *token_cnt_column = nullptr;
+  uint64_t doc_length_col_id = OB_INVALID_ID;
+  ObColumnRefRawExpr *doc_length_column = nullptr;
+  ObColumnRefRawExpr *doc_id_column = nullptr;
+  ObAggFunRawExpr *related_doc_cnt = nullptr;
+  ObAggFunRawExpr *total_doc_cnt = nullptr;
+  ObAggFunRawExpr *doc_token_cnt = nullptr;
+  ObOpRawExpr *relevance_expr = nullptr;
+  ObTextRetrievalInfo &tr_info = get_text_retrieval_info();
+  if (OB_NOT_NULL(tr_info.doc_id_column_) && OB_NOT_NULL(tr_info.doc_length_column_) &&
+      OB_NOT_NULL(tr_info.token_column_) && OB_NOT_NULL(tr_info.token_cnt_column_) &&
+      OB_NOT_NULL(tr_info.doc_token_cnt_) && OB_NOT_NULL(tr_info.total_doc_cnt_) &&
+      OB_NOT_NULL(tr_info.related_doc_cnt_) && OB_NOT_NULL(tr_info.relevance_expr_)) {
+    // do nothing, exprs already generated
+  } else if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan()) ||
+             OB_ISNULL(expr_factory = &get_plan()->get_optimizer_context().get_expr_factory()) ||
+             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
+             OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(get_real_ref_table_id(), table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(tr_info.inv_idx_tid_, inv_index_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(get_table_id()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret));
+  } else {
+    ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+    for (int64_t i = 0; OB_SUCC(ret) && i < inv_index_schema->get_column_count(); ++i) {
+      const ObColumnSchemaV2 *col_schema = inv_index_schema->get_column_schema_by_idx(i);
+      if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null column schema ptr", K(ret));
+      } else {
+        const ObColumnSchemaV2 *col_schema_in_data_table = table_schema->get_column_schema(col_schema->get_column_id());
+        if (OB_ISNULL(col_schema_in_data_table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, column schema is nullptr in data table", K(ret), KPC(col_schema), KPC(table_schema));
+        } else if (col_schema_in_data_table->is_doc_id_column()) {
+          // create doc id expr later
+          // Since currently, doc id column on main table schema is a special "virtual generated" column,
+          // which can not be calculated by its expr record on schema
+          // So we use its column ref expr on index table for index back / projection instead
+          if (OB_FAIL(ObRawExprUtils::build_column_expr(*expr_factory, *col_schema, doc_id_column))) {
+            LOG_WARN("failed to build doc id column expr", K(ret));
+          }
+        } else if (col_schema_in_data_table->is_word_count_column()) {
+          token_cnt_col_id = col_schema->get_column_id();
+        } else if (col_schema_in_data_table->is_word_segment_column()) {
+          token_col_id = col_schema->get_column_id();
+        } else if (col_schema_in_data_table->is_doc_length_column()) {
+          doc_length_col_id = col_schema->get_column_id();
+        } else {}
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_column_count(); ++i) {
+      const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema_by_idx(i);
+      if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null column schema ptr", K(ret));
+      } else if (col_schema->get_column_id() == token_cnt_col_id) {
+        if (OB_FAIL(ObRawExprUtils::build_column_expr(*expr_factory, *col_schema, token_cnt_column))) {
+          LOG_WARN("failed to build doc id column expr", K(ret));
+        } else if (OB_NOT_NULL(token_cnt_column)) {
+          token_cnt_column->set_ref_id(get_table_id(), col_schema->get_column_id());
+          token_cnt_column->set_column_attr(get_table_name(), col_schema->get_column_name_str());
+          token_cnt_column->set_database_name(table_item->database_name_);
+        }
+      } else if (col_schema->get_column_id() == token_col_id) {
+        if (OB_FAIL(ObRawExprUtils::build_column_expr(*expr_factory, *col_schema, token_column))) {
+          LOG_WARN("failed to build doc id column expr", K(ret));
+        } else if (OB_NOT_NULL(token_column)) {
+          token_column->set_ref_id(get_table_id(), col_schema->get_column_id());
+          token_column->set_column_attr(get_table_name(), col_schema->get_column_name_str());
+          token_column->set_database_name(table_item->database_name_);
+        }
+      } else if (col_schema->get_column_id() == doc_length_col_id) {
+        if (OB_FAIL(ObRawExprUtils::build_column_expr(*expr_factory, *col_schema, doc_length_column))) {
+          LOG_WARN("failed to build doc id column expr", K(ret));
+        } else if (OB_NOT_NULL(doc_length_column)) {
+          doc_length_column->set_ref_id(get_table_id(), col_schema->get_column_id());
+          doc_length_column->set_column_attr(get_table_name(), col_schema->get_column_name_str());
+          doc_length_column->set_database_name(table_item->database_name_);
+        }
+      } else {}
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(token_cnt_column) || OB_ISNULL(token_column) || OB_ISNULL(doc_id_column) ||
+               OB_ISNULL(doc_length_column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null fulltext generated column", K(ret),
+          KP(token_cnt_column), KP(token_column), KP(doc_id_column));
+    } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_COUNT, related_doc_cnt))) {
+      LOG_WARN("failed to create related doc cnt agg expr", K(ret));
+    } else if (OB_FAIL(related_doc_cnt->add_real_param_expr(token_cnt_column))) {
+      LOG_WARN("failed to set agg param", K(ret));
+    } else if (OB_FAIL(related_doc_cnt->formalize(session_info))) {
+      LOG_WARN("failed to formalize related doc cnt expr", K(ret));
+    } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_COUNT, total_doc_cnt))) {
+      LOG_WARN("failed to create related doc cnt agg expr", K(ret));
+    } else if (OB_FAIL(total_doc_cnt->add_real_param_expr(doc_id_column))) {
+      LOG_WARN("failed to set agg param", K(ret));
+    } else if (OB_FAIL(total_doc_cnt->formalize(session_info))) {
+      LOG_WARN("failed to formalize total doc cnt expr", K(ret));
+    } else if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_SUM, doc_token_cnt))) {
+      LOG_WARN("failed to create document token count sum agg expr", K(ret));
+    } else if (OB_FAIL(doc_token_cnt->add_real_param_expr(token_cnt_column))) {
+      LOG_WARN("failed to set agg param", K(ret));
+    } else if (OB_FAIL(doc_token_cnt->formalize(session_info))) {
+      LOG_WARN("failed to formalize document token count expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_bm25_expr(*expr_factory, related_doc_cnt,
+                                                      token_cnt_column, total_doc_cnt,
+                                                      doc_token_cnt, relevance_expr,
+                                                      session_info))) {
+      LOG_WARN("failed to build bm25 expr", K(ret));
+    } else if (OB_FAIL(relevance_expr->formalize(session_info))) {
+      LOG_WARN("failed to formalize bm25 expr", K(ret));
+    // Copy column ref expr referenced by aggregation in different index table scan
+    // to avoid share expression
+    } else if (OB_FAIL(copier.copy(related_doc_cnt->get_param_expr(0)))) {
+    } else if (OB_FAIL(copier.copy(total_doc_cnt->get_param_expr(0)))) {
+    } else if (OB_FAIL(copier.copy(doc_token_cnt->get_param_expr(0)))) {
+    } else {
+      tr_info.token_column_ = token_column;
+      tr_info.token_cnt_column_ = token_cnt_column;
+      tr_info.doc_id_column_ = doc_id_column;
+      tr_info.doc_length_column_ = doc_length_column;
+      tr_info.related_doc_cnt_ = related_doc_cnt;
+      tr_info.doc_token_cnt_ = doc_token_cnt;
+      tr_info.total_doc_cnt_ = total_doc_cnt;
+      tr_info.relevance_expr_ = relevance_expr;
+    }
+  }
+  return ret;
+}
+
+int ObLogTableScan::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = NULL != est_cost_info_ ? est_cost_info_->phy_query_range_row_count_ : 1.0;
   return ret;
 }

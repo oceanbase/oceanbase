@@ -177,7 +177,9 @@ public:
   virtual ~ObLogTenantMgr();
 
 public:
-  int init(const bool enable_oracle_mode_match_case_sensitive, const RefreshMode &refresh_mode);
+  int init(const bool enable_oracle_mode_match_case_sensitive,
+      const bool enable_white_black_list,
+      const RefreshMode &refresh_mode);
   void destroy();
 
   int register_ls_add_callback(LSAddCallback *callback);
@@ -416,7 +418,7 @@ private:
       int64_t &start_commit_version);
   int get_min_add_tenant_start_ddl_commit_version_(int64_t &commit_version);
   void try_del_tenant_start_ddl_info_(const uint64_t tenant_id);
-  int filter_dropped_tenant_(common::ObIArray<uint64_t> &tenant_id_list);
+  int filter_by_current_tenant_status_(common::ObIArray<uint64_t> &tenant_id_list);
 private:
   bool                inited_;
   RefreshMode         refresh_mode_;
@@ -437,6 +439,7 @@ private:
   ObLogLsGetter       ls_getter_;
 
   bool                enable_oracle_mode_match_case_sensitive_;
+  bool                enable_white_black_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTenantMgr);
 };

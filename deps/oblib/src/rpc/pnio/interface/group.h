@@ -51,7 +51,6 @@ typedef struct pn_grp_comm_t
 
 #define PN_COMM                \
   bool is_stop_;               \
-  bool has_stopped_;           \
   void *pd;                    \
   int accept_qfd;              \
   int gid;                     \
@@ -79,7 +78,7 @@ PN_API int pn_listen(int port, serve_cb_t cb);
 // make sure grp != 0
 PN_API int pn_provision(int listen_id, int grp, int thread_count);
 // gid_tid = (gid<<8) | tid
-PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret);
+PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret);
 PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz, int64_t resp_expired_abs_us);
 PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr);
 PN_API int pn_ratelimit(int grp_id, int64_t value);
@@ -89,6 +88,7 @@ PN_API int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid);
 PN_API void pn_stop(uint64_t gid);
 PN_API void pn_wait(uint64_t gid);
 PN_API int pn_get_fd(uint64_t req_id);
+PN_API int64_t pn_get_pkt_id(uint64_t req_id);
 PN_API int pn_terminate_pkt(uint64_t gtid, uint32_t pkt_id);
 extern int64_t pnio_keepalive_timeout;
 pn_comm_t* get_current_pnio();

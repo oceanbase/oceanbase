@@ -29,12 +29,17 @@ public:
       : ObLogicalOperator(plan),
         into_type_(T_INTO_OUTFILE),
         outfile_name_(),
-        filed_str_(),
+        field_str_(),
         line_str_(),
         user_vars_(),
-        closed_cht_(0),
-        is_optional_(true)
-  {}
+        closed_cht_(),
+        is_optional_(true),
+        is_single_(true),
+        max_file_size_(DEFAULT_MAX_FILE_SIZE),
+        escaped_cht_()
+  {
+    cs_type_ = ObCharset::get_system_collation();
+  }
   virtual ~ObLogSelectInto() {}
   inline void set_into_type(ObItemType &into_type)
   {
@@ -44,9 +49,9 @@ public:
   {
     outfile_name_ = name_str;
   }
-  inline void set_filed_str(common::ObObj &filed_str)
+  inline void set_field_str(common::ObObj &field_str)
   {
-    filed_str_ = filed_str;
+    field_str_ = field_str;
   }
   inline void set_line_str(common::ObObj &line_str)
   {
@@ -65,9 +70,25 @@ public:
   {
     is_optional_ = is_optional;
   }
-  inline void set_closed_cht(char closed_cht)
+  inline void set_is_single(bool is_single)
+  {
+    is_single_ = is_single;
+  }
+  inline void set_max_file_size(int64_t max_file_size)
+  {
+    max_file_size_ = max_file_size;
+  }
+  inline void set_closed_cht(common::ObObj closed_cht)
   {
     closed_cht_ = closed_cht;
+  }
+  inline void set_escaped_cht(common::ObObj escaped_cht)
+  {
+    escaped_cht_ = escaped_cht;
+  }
+  inline void set_cs_type(common::ObCollationType cs_type)
+  {
+    cs_type_ = cs_type;
   }
   inline ObItemType get_into_type() const
   {
@@ -77,9 +98,9 @@ public:
   {
     return outfile_name_;
   }
-  inline common::ObObj get_filed_str() const
+  inline common::ObObj get_field_str() const
   {
-    return filed_str_;
+    return field_str_;
   }
   inline common::ObObj get_line_str() const
   {
@@ -89,13 +110,29 @@ public:
   {
     return user_vars_;
   }
-  inline char get_is_optional() const
+  inline bool get_is_optional() const
   {
     return is_optional_;
   }
-  inline char get_closed_cht() const
+  inline bool get_is_single() const
+  {
+    return is_single_;
+  }
+  inline int64_t get_max_file_size() const
+  {
+    return max_file_size_;
+  }
+  inline common::ObObj get_closed_cht() const
   {
     return closed_cht_;
+  }
+  inline common::ObObj get_escaped_cht() const
+  {
+    return escaped_cht_;
+  }
+  inline common::ObCollationType get_cs_type() const
+  {
+    return cs_type_;
   }
   const common::ObIArray<ObRawExpr*> &get_select_exprs() const { return select_exprs_; }
   common::ObIArray<ObRawExpr*> &get_select_exprs() { return select_exprs_; }
@@ -103,15 +140,20 @@ public:
   virtual int compute_plan_type() override;
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer);
+  static const int64_t DEFAULT_MAX_FILE_SIZE = 256*1024*1024;
 private:
   ObItemType into_type_;
   common::ObObj outfile_name_;
-  common::ObObj filed_str_;
+  common::ObObj field_str_;
   common::ObObj line_str_;
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> select_exprs_;
   common::ObSEArray<common::ObString, 16, common::ModulePageAllocator, true> user_vars_;
-  char closed_cht_;
+  common::ObObj closed_cht_;
   bool is_optional_;
+  bool is_single_;
+  int64_t max_file_size_;
+  common::ObObj escaped_cht_;
+  common::ObCollationType cs_type_;
 };
 }
 }

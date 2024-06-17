@@ -63,12 +63,12 @@ void MdsAllocator::free(void *ptr) {
 }
 }
 }
-namespace memtable
+namespace storage
 {
 
-  bool ObMemtable::can_be_minor_merged()
+  bool ObITabletMemtable::can_be_minor_merged()
   {
-    return is_tablet_freeze_;
+    return get_is_tablet_freeze();
   }
 
 }
@@ -346,7 +346,7 @@ int TestCompactionPolicy::mock_memtable(
   }
   ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(protected_handle->memtable_mgr_handle_.get_memtable_mgr());
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(t3m->acquire_memtable(table_handle))) {
+  } else if (OB_FAIL(t3m->acquire_data_memtable(table_handle))) {
     LOG_WARN("failed to acquire memtable", K(ret));
   } else if (OB_ISNULL(memtable = static_cast<ObMemtable*>(table_handle.get_table()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -368,9 +368,8 @@ int TestCompactionPolicy::mock_memtable(
     memtable->snapshot_version_ = snapshot_scn;
     memtable->write_ref_cnt_ = 0;
     memtable->unsubmitted_cnt_ = 0;
-    memtable->is_tablet_freeze_ = true;
-    memtable->state_ = ObMemtableState::MINOR_FROZEN;
-    memtable->set_resolved_active_memtable_left_boundary(true);
+    memtable->set_is_tablet_freeze();
+    memtable->set_resolved_active_memtable_left_boundary();
     memtable->set_frozen();
     memtable->location_ = storage::checkpoint::ObFreezeCheckpointLocation::PREPARE;
   }
@@ -1095,6 +1094,43 @@ TEST_F(TestCompactionPolicy, test_minor_dag_intersect)
   dag2.result_.scn_range_.start_scn_.val_ = 5;
   dag2.result_.scn_range_.end_scn_.val_ = 10;
   ASSERT_EQ(false, (dag1 == dag2));
+}
+
+
+TEST_F(TestCompactionPolicy, check_sstable_continue_failed)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
+      "10            0            1          1          1        \n"
+      "11            1            150        150        150      \n"
+      "11            150          200        200        200      \n"
+      "11            200          250        250        250      \n"
+      "11            250          300        300        300      \n"
+      "11            900          1000       1000       1000      \n";
+
+  ret = prepare_tablet(key_data, 1000, 1000);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTablet *tablet = tablet_handle_.get_obj();
+  ASSERT_TRUE(nullptr != tablet);
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  ret = tablet->fetch_table_store(table_store_wrapper);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = table_store_wrapper.get_member()->check_continuous();
+  ASSERT_EQ(OB_ERR_SYS, ret);
 }
 
 } //unittest

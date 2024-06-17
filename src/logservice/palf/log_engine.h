@@ -54,6 +54,7 @@ class LogIOFlashbackTask;
 class FlashbackCbCtx;
 class LogIOPurgeThrottlingTask;
 class PurgeThrottlingCbCtx;
+class LogFillCacheTask;
 
 #define OVERLOAD_SUBMIT_CHANGE_CONFIG_META_REQ(type)                                \
   virtual int submit_change_config_meta_req(const type &member_list,                \
@@ -102,7 +103,7 @@ public:
            const LogMeta &log_meta,
            common::ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool,
-           LogHotCache *hot_cache,
+           LogCache *log_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
            LogSharedQueueTh *log_shared_queue_th,
@@ -116,7 +117,7 @@ public:
            const char *base_dir,
            common::ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool,
-           LogHotCache *hot_cache,
+           LogCache *log_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
            LogSharedQueueTh *log_shared_queue_th,
@@ -157,6 +158,7 @@ public:
       const TruncatePrefixBlocksCbCtx &truncate_prefix_blocks_ctx);
   int submit_flashback_task(const FlashbackCbCtx &flashback_ctx);
   int submit_purge_throttling_task(const PurgeThrottlingType purge_type);
+  int submit_fill_cache_task(const LSN &lsn, const int64_t size);
 
   // ==================== Submit aysnc task end ==================
 
@@ -177,6 +179,12 @@ public:
   const LSN get_begin_lsn() const;
   int get_block_id_range(block_id_t &min_block_id, block_id_t &max_block_id) const;
   int get_block_min_scn(const block_id_t &block_id, share::SCN &scn) const;
+  int fill_cache_when_slide(const LSN &begin_lsn, const int64_t size);
+  int raw_read(const LSN &lsn,
+               const int64_t in_read_size,
+               const bool need_read_block_header,
+               ReadBuf &read_buf,
+               int64_t &out_read_size);
   //
   // ====================== LogStorage end =======================
 
@@ -431,17 +439,15 @@ public:
 
   LogMeta get_log_meta() const;
   const LSN &get_base_lsn_used_for_block_gc() const;
-  // not thread safe
   int get_min_block_info_for_gc(block_id_t &block_id, share::SCN &max_scn);
-  int get_min_block_info(block_id_t &block_id, share::SCN &min_scn) const;
-  //
+  int get_min_block_info(block_id_t &block_id, share::SCN &min_scn);
   // ===================== NetService end ========================
   LogStorage *get_log_storage() { return &log_storage_; }
   LogStorage *get_log_meta_storage() { return &log_meta_storage_; }
   int get_total_used_disk_space(int64_t &total_used_size_byte,
                                 int64_t &unrecyclable_disk_space) const;
   virtual int64_t get_palf_epoch() const { return palf_epoch_; }
-  TO_STRING_KV(K_(palf_id), K_(is_inited), K_(min_block_max_scn), K_(min_block_id), K_(base_lsn_for_block_gc),
+  TO_STRING_KV(K_(palf_id), K_(is_inited), K_(min_block_max_scn), K_(min_block_id), K_(min_block_min_scn), K_(base_lsn_for_block_gc),
       K_(log_meta), K_(log_meta_storage), K_(log_storage), K_(palf_epoch), K_(last_purge_throttling_ts), KP(this));
 private:
   int submit_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx, const LogMeta &log_meta);
@@ -465,6 +471,9 @@ private:
                                LogIOFlashbackTask *&flashback_task);
   int generate_purge_throttling_task_(const PurgeThrottlingCbCtx &purge_cb_ctx,
                                       LogIOPurgeThrottlingTask *&purge_task);
+  int generate_fill_cache_task_(const LSN &lsn,
+                                const int64_t size,
+                                LogFillCacheTask *&fill_cache_task);
   int update_config_meta_guarded_by_lock_(const LogConfigMeta &meta, LogMeta &log_meta);
   int try_clear_up_holes_and_check_storage_integrity_(
       const LSN &last_entry_begin_lsn,
@@ -476,8 +485,15 @@ private:
 
   int serialize_log_meta_(const LogMeta &log_meta, char *buf, int64_t buf_len);
 
-  void reset_min_block_info_guarded_by_lock_(const block_id_t min_block_id,
-                                             const share::SCN &min_block_max_scn);
+  void set_min_block_info_(const int64_t min_block_info_cache_version,
+                           const block_id_t min_block_id,
+                           const share::SCN &min_block_min_scn);
+
+  void reset_min_block_info_();
+
+  void set_min_block_info_for_gc_(const int64_t min_block_info_cache_version,
+                                  const block_id_t min_block_id,
+                                  const share::SCN &min_block_max_scn);
 
   int integrity_verify_(const LSN &last_meta_entry_start_lsn,
                         const LSN &last_group_entry_header_lsn,
@@ -487,11 +503,27 @@ private:
 
   const int64_t PURGE_THROTTLING_INTERVAL = 100 * 1000;//100ml
 private:
-  // used for GC
-  mutable ObSpinLock block_gc_lock_;
+  // ======================== begin used for GC ===========================
+  mutable ObSpinLock min_block_info_lock_;
+  // update it only in:
+  // 1) get min block info for gc.
+  // 2) delete min block.
   share::SCN min_block_max_scn_;
+  // update it only in:
+  // 1) get min block info for gc.
+  // 2) get min block info
+  // 3) delete min block.
   mutable block_id_t min_block_id_;
+  // update it only after write LogSnapshotMeta successfully
   LSN base_lsn_for_block_gc_;
+  // update it only in:
+  // 1) get min block info for gc.
+  // 2) get min block info.
+  // 3) delete min block.
+  share::SCN min_block_min_scn_;
+  // update it only in reset_min_block_info_
+  int64_t min_block_info_cache_version_;
+  // ======================== end used for GC ===========================
 
   mutable ObSpinLock log_meta_lock_;
   LogMeta log_meta_;

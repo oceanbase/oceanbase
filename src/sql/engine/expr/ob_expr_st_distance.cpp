@@ -30,99 +30,6 @@ namespace oceanbase
 namespace sql
 {
 
-struct ObGeoUnit
-{
-  const char *name;
-  double factor;
-};
-
-const ObGeoUnit ob_geo_units[] = {
-  // order by unit s, asc
-  { "British chain (Benoit 1895 A)", 20.1167824 },
-  { "British chain (Benoit 1895 B)", 20.1167824943758 },
-  { "British chain (Sears 1922 truncated)", 20.116756 },
-  { "British chain (Sears 1922)", 20.1167651215526 },
-  { "British foot (1865)", 0.304800833333333 },
-  { "British foot (1936)", 0.3048007491 },
-  { "British foot (Benoit 1895 A)", 0.304799733333333 },
-  { "British foot (Benoit 1895 B)", 0.30479973476327077 },
-  { "British foot (Sears 1922 truncated)", 0.304799333333333 },
-  { "British foot (Sears 1922)", 0.304799471538676 },
-  { "British link (Benoit 1895 A)", 0.201167824 },
-  { "British link (Benoit 1895 B)", 0.201167824943758 },
-  { "British link (Sears 1922 truncated)", 0.20116756 },
-  { "British link (Sears 1922)", 0.201167651215526 },
-  { "British yard (Benoit 1895 A)", 0.9143992 },
-  { "British yard (Benoit 1895 B)", 0.914399204289812 },
-  { "British yard (Sears 1922 truncated)", 0.914398 },
-  { "British yard (Sears 1922)", 0.914398414616028 },
-  { "centimetre", 0.01 },
-  { "chain", 20.1168 },
-  { "Clarke's chain", 20.1166195164 },
-  { "Clarke's foot", 0.3047972654 },
-  { "Clarke's link", 0.201166195164 },
-  { "Clarke's yard", 0.9143917962 },
-  { "fathom", 1.8288 },
-  { "foot", 0.3048 },
-  { "German legal metre", 1.0000135965 },
-  { "Gold Coast foot", 0.304799710181508 },
-  { "Indian foot", 0.304799510248146 },
-  { "Indian foot (1937)", 0.30479841 },
-  { "Indian foot (1962)", 0.3047996 },
-  { "Indian foot (1975)", 0.3047995 },
-  { "Indian yard", 0.91439853074444 },
-  { "Indian yard (1937)", 0.91439523 },
-  { "Indian yard (1962)", 0.9143988 },
-  { "Indian yard (1975)", 0.9143985 },
-  { "kilometre", 1000 },
-  { "link", 0.201168 },
-  { "metre", 1 },
-  { "millimetre", 0.001 },
-  { "nautical mile", 1852 },
-  { "Statute mile", 1609.344 },
-  { "US survey chain", 20.1168402336804 },
-  { "US survey foot", 0.304800609601219 },
-  { "US survey link", 0.201168402336804 },
-  { "US survey mile", 1609.34721869443 },
-  { "yard", 0.9144 }
-};
-
-static int ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double &factor)
-{
-  INIT_SUCC(ret);
-  int begin = 0;
-  int end = sizeof(ob_geo_units)/sizeof(ObGeoUnit) - 1;
-  bool is_found = false;
-  while (begin <= end && !is_found) {
-    int mid = begin + (end - begin) / 2;
-    const int cmp_len = MIN(strlen(units[mid].name), name.length());
-    int cmp_res = strncasecmp(units[mid].name, name.ptr(), cmp_len);
-    if (cmp_res > 0) {
-      end = mid - 1;
-    } else if (cmp_res < 0) {
-      begin = mid + 1;
-    } else {
-      if (name.length() == strlen(units[mid].name)) {
-        is_found = true;
-        factor = units[mid].factor;
-      } else if (name.length() > strlen(units[mid].name)) {
-        begin = mid + 1;
-      } else {
-        end = mid - 1;
-      }
-    }
-  }
-
-  if (!is_found) {
-    ret = OB_ERR_UNIT_NOT_FOUND;
-    char name_str[name.length() + 1];
-    name_str[name.length()] = '\0';
-    MEMCPY(name_str, name.ptr(), name.length());
-    LOG_USER_ERROR(OB_ERR_UNIT_NOT_FOUND, name_str);
-  }
-  return ret;
-}
-
 ObExprSTDistance::ObExprSTDistance(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_ST_DISTANCE, N_ST_DISTANCE, TWO_OR_THREE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
@@ -139,47 +46,29 @@ int ObExprSTDistance::calc_result_typeN(ObExprResType& type,
 {
   UNUSED(type_ctx);
   INIT_SUCC(ret);
-  int unexpected_types = 0;
-  int null_types = 0;
 
   for (int64_t i = 0; i < 2; i++) {
     if (types_stack[i].get_type() == ObNullType) {
-      null_types++;
     } else if (!ob_is_geometry(types_stack[i].get_type())
-        && !ob_is_string_type(types_stack[i].get_type())) { // first 2 params are geometries
-      unexpected_types++;
-      LOG_WARN("invalid type", K(types_stack[i].get_type()));
-    } else if (ob_is_string_type(types_stack[i].get_type())) {
-      // ToDo: fix later, not checking range
-      // String now can be check in parse_geometry
-      // types_stack[i].set_calc_type(ObGeometryType);
-      // types_stack[i].set_calc_collation_type(CS_TYPE_BINARY);
-      // types_stack[i].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+        && !ob_is_string_type(types_stack[i].get_type())
+        && ObDoubleType != types_stack[i].get_type()) { // first 2 params are geometries
+      types_stack[i].set_calc_type(ObVarcharType);
+      types_stack[i].set_calc_collation_type(CS_TYPE_BINARY);
     }
   }
-
   const int unit_param_index = 2;
   if (param_num == 3) {
-    if (types_stack[unit_param_index].get_type() == ObNullType) {
-      null_types++;
-    } else if (!(ob_is_string_type(types_stack[unit_param_index].get_type()))) {
-      unexpected_types++;
-      LOG_WARN("invalid option param type", K(types_stack[unit_param_index].get_type()));
+    ObObjType param_type = types_stack[unit_param_index].get_type();
+    if (ob_is_string_type(param_type)) {
+      types_stack[unit_param_index].set_calc_collation_type(CS_TYPE_BINARY);
     } else {
-      types_stack[unit_param_index].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+      types_stack[unit_param_index].set_calc_type(ObVarcharType);
+      types_stack[unit_param_index].set_calc_collation_type(CS_TYPE_BINARY);
     }
-  }
-  // an invalid type and a null type will return null
-  // an invalid type and a valid type return error
-  if (null_types == 0 && unexpected_types > 0) {
-    ret = OB_ERR_GIS_INVALID_DATA;
-    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISTANCE);
-    LOG_WARN("invalid type", K(ret));
   }
   if (OB_SUCC(ret)) {
     type.set_double();
   }
-
   return ret;
 }
 
@@ -190,6 +79,8 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObDatum *gis_datum2 = NULL;
   ObExpr *gis_arg1 = expr.args_[0];
   ObExpr *gis_arg2 = expr.args_[1];
+  ObObjType input_type1 = gis_arg1->datum_meta_.type_;
+  ObObjType input_type2 = gis_arg2->datum_meta_.type_;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
@@ -197,7 +88,12 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
-  } else {
+  } else if (input_type1 == ObDoubleType || input_type2 == ObDoubleType) {
+    // bugfix 53283098, should allow double type in calc_result_type2
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISTANCE);
+    LOG_WARN("invalid type", K(ret), K(input_type1), K(input_type2));
+  }  else {
     bool is_geo1_empty = false;
     bool is_geo2_empty = false;
     ObGeometry *geo1 = NULL;
@@ -219,9 +115,9 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       LOG_WARN("fail to get real string data", K(ret), K(wkb2));
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs, true, N_ST_DISTANCE))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb1));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_ST_DISTANCE))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_ST_DISTANCE, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
       LOG_WARN("get first geo by wkb failed", K(ret));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_ST_DISTANCE))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_ST_DISTANCE, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
     } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
       LOG_WARN("get type and srid from wkb failed", K(wkb1), K(ret));
@@ -256,22 +152,17 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
             LOG_WARN("eval geo unit arg failed", K(ret));
           } else if (gis_unit->is_null()) {
             res.set_null();
-          } else if (srid1 == 0) {
-            ret = OB_ERR_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT;
-            char name_str[gis_unit->get_string().length() + 1];
-            name_str[gis_unit->get_string().length()] = '\0';
-            MEMCPY(name_str, gis_unit->get_string().ptr(), gis_unit->get_string().length());
-            LOG_USER_ERROR(OB_ERR_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT, N_ST_DISTANCE, name_str);
-          } else if (OB_FAIL(ob_geo_find_unit(ob_geo_units, gis_unit->get_string(), factor))) {
-            LOG_WARN("invalid geo unit name", K(ret), K(gis_unit->get_string()));
+          } else if (OB_FAIL(ObGeoExprUtils::length_unit_conversion(gis_unit->get_string(), srs, result, result))) {
+            LOG_WARN("fail to do unit conversion", K(ret), K(result));
+          } else if (std::isinf(result)) {
+            ret = OB_ERR_GIS_INVALID_DATA;
+            LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISTANCE);
           } else {
-            result = result * (srs->linear_uint() / factor);
-            if (std::isinf(result)) {
-              ret = OB_ERR_GIS_INVALID_DATA;
-              LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISTANCE);
-            }
             res.set_double(result);
           }
+        } else if (std::isinf(result)) {
+          ret = OB_ERR_GIS_INVALID_DATA;
+          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISTANCE);
         } else {
           res.set_double(result);
         }

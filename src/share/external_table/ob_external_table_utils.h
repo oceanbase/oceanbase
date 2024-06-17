@@ -90,6 +90,7 @@ class ObExternalTableUtils {
 
   static int prepare_single_scan_range(const uint64_t tenant_id,
                                        const uint64_t table_id,
+                                       ObIArray<int64_t> &partition_ids,
                                        common::ObIArray<common::ObNewRange *> &ranges,
                                        common::ObIAllocator &range_allocator,
                                        common::ObIArray<common::ObNewRange *> &new_range,
@@ -102,6 +103,30 @@ class ObExternalTableUtils {
 
   static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
                                        common::ObIArray<common::ObAddr> &locations);
+
+  static int collect_external_file_list(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const ObString &location,
+    const ObString &access_info,
+    const ObString &pattern,
+    const sql::ObExprRegexpSessionVariables &regexp_vars,
+    ObIAllocator &allocator,
+    common::ObSqlString &full_path,
+    ObIArray<ObString> &file_urls,
+    ObIArray<int64_t> &file_sizes);
+
+  static int collect_local_files_on_servers(
+    const uint64_t tenant_id,
+    const ObString &location,
+    const ObString &pattern,
+    const sql::ObExprRegexpSessionVariables &regexp_vars,
+    ObIArray<ObAddr> &all_servers,
+    ObIArray<ObString> &file_urls,
+    ObIArray<int64_t> &file_sizes,
+    common::ObSqlString &partition_path,
+    ObIAllocator &allocator);
+
  private:
   static bool is_left_edge(const common::ObObj &value);
   static bool is_right_edge(const common::ObObj &value);
@@ -113,6 +138,9 @@ class ObExternalTableUtils {
                                             const int64_t last_lineno,
                                             common::ObIAllocator &allocator,
                                             common::ObNewRange &new_range);
+
+  static int sort_external_files(ObIArray<ObString> &file_urls,
+                          ObIArray<int64_t> &file_sizes);
 
 };
 }

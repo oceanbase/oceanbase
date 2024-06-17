@@ -275,7 +275,7 @@ public:
   // ref: obmp_query.cpp, ob_mysql_end_trans_callback.cpp
   bool is_async_end_trans_submitted() const
   {
-    auto &s = get_exec_context().get_trans_state();
+    const TransState &s = get_exec_context().get_trans_state();
     return s.is_end_trans_executed() && s.is_end_trans_success();
   }
   inline TransState &get_trans_state()  { return get_exec_context().get_trans_state(); }
@@ -298,11 +298,14 @@ public:
   // 往带？的field name填充参数信息
   // 要注意的是，除了cname_以外，其余的string都是从计划里面浅拷出来的，
   // cname_的内存是由result_set的分配器分配出来的
-  int construct_field_name(const common::ObIArray<ObPCParam *> &raw_params, const bool is_first_parse);
+  int construct_field_name(const common::ObIArray<ObPCParam *> &raw_params,
+                           const bool is_first_parse,
+                           const ObSQLSessionInfo &session_info);
 
   int construct_display_field_name(common::ObField &field,
                                    const ObIArray<ObPCParam *> &raw_params,
-                                   const bool is_first_parse);
+                                   const bool is_first_parse,
+                                   const ObSQLSessionInfo &session_info);
 
   // 深拷计划中的field columns，存放在field_columns_成员中
   int copy_field_columns(const ObPhysicalPlan &plan);
@@ -332,6 +335,10 @@ public:
                                const ObField &field,
                                obmysql::ObMySQLField &mfield);
   void set_close_fail_callback(ObFunction<void(const int, int&)> func) { close_fail_cb_ = func; }
+  void set_will_retry() { will_retry_ = true; }
+  static int implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_info,
+                                                ObExecContext &exec_ctx,
+                                                const int cmd_type);
 private:
   // types and constants
   static const int64_t TRANSACTION_SET_VIOLATION_MAX_RETRY = 3;
@@ -349,7 +356,7 @@ private:
   bool transaction_set_violation_and_retry(int &err, int64_t &retry);
   int init_cmd_exec_context(ObExecContext &exec_ctx);
   int on_cmd_execute();
-  int auto_end_plan_trans(ObPhysicalPlan& plan, int ret, bool &async);
+  int auto_end_plan_trans(ObPhysicalPlan& plan, int ret, bool is_tx_active, bool &async);
   int do_close(int *client_ret = NULL);
   void store_affected_rows(ObPhysicalPlanCtx &plan_ctx);
   void store_found_rows(ObPhysicalPlanCtx &plan_ctx);
@@ -373,7 +380,7 @@ private:
     oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
     req_timeinfo.update_end_time();
   }
-
+  bool is_will_retry_() const { return will_retry_; }
 protected:
   // 区分本ResultSet是为User还是Inner SQL服务, 服务于EndTrans异步回调
   bool is_user_sql_;
@@ -433,6 +440,8 @@ private:
   bool is_returning_;
   bool is_com_filed_list_; //used to mark COM_FIELD_LIST
   bool need_revert_tx_; //dblink
+  bool will_retry_; // the query will retry, to figure out the final close
+  bool xa_checking_lock_stoped_;
   common::ObString wild_str_;//uesd to save filed wildcard in COM_FIELD_LIST;
   common::ObString ps_sql_; // for sql in pl
   bool is_init_;
@@ -509,6 +518,8 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       is_returning_(false),
       is_com_filed_list_(false),
       need_revert_tx_(false),
+      will_retry_(false),
+      xa_checking_lock_stoped_(false),
       wild_str_(),
       ps_sql_(),
       is_init_(false),

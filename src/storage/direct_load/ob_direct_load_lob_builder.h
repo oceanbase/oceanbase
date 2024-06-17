@@ -12,50 +12,27 @@
 
 #pragma once
 
-#include "common/ob_tablet_id.h"
-#include "storage/direct_load/ob_direct_load_i_table.h"
-#include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 
 namespace oceanbase
 {
-namespace table
-{
-} // namespace table
-namespace common
-{
-} // namespace common
 namespace storage
 {
-
-struct ObDirectLoadLobBuildParam
-{
-public:
-  ObDirectLoadLobBuildParam();
-  ~ObDirectLoadLobBuildParam();
-  bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id));
-public:
-  common::ObTabletID tablet_id_;
-  ObDirectLoadInsertTableContext *insert_table_ctx_;
-  int64_t lob_column_cnt_;
-};
 
 class ObDirectLoadLobBuilder
 {
 public:
   ObDirectLoadLobBuilder();
   ~ObDirectLoadLobBuilder();
-  int init(const ObDirectLoadLobBuildParam &param);
+  int init(ObDirectLoadInsertTabletContext *insert_tablet_ctx);
   int append_lob(common::ObIAllocator &allocator, blocksstable::ObDatumRow &datum_row);
- int close();
+  int close();
 private:
   int init_sstable_slice_ctx();
   int switch_sstable_slice();
 private:
-  ObDirectLoadLobBuildParam param_;
-  common::ObTabletID lob_tablet_id_;
   ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
+  int64_t lob_column_count_;
   ObDirectLoadInsertTabletWriteCtx write_ctx_;
   int64_t current_lob_slice_id_;
   bool is_closed_;

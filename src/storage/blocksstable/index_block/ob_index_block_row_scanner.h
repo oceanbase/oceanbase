@@ -32,6 +32,7 @@ struct ObTableAccessContext;
 class ObBlockMetaTree;
 class ObBlockMetaTreeValue;
 class ObRowsInfo;
+class ObRowKeysInfo;
 }
 namespace blocksstable
 {
@@ -174,6 +175,7 @@ public:
                                               int64_t &found_idx) { return OB_NOT_SUPPORTED; }
   virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) { return OB_NOT_SUPPORTED; }
   virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) { return OB_NOT_SUPPORTED; }
+  virtual int find_rowkeys_belong_to_curr_idx_row(const int64_t rowkey_end_idx, int64_t &rowkey_idx, const ObRowKeysInfo *rowkeys_info) { return OB_NOT_SUPPORTED; }
   virtual int advance_to_border(const ObDatumRowkey &rowkey,
                                 const bool is_left_border,
                                 const bool is_right_border,
@@ -294,6 +296,7 @@ public:
                                               int64_t &found_idx) override;
   virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) override;
   virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) override;
+  virtual int find_rowkeys_belong_to_curr_idx_row(const int64_t rowkey_end_idx, int64_t &rowkey_idx, const ObRowKeysInfo *rowkeys_info) override;
   virtual int get_idx_row_header_in_target_idx(const int64_t idx,
                                                const ObIndexBlockRowHeader *&idx_row_header) override;
   virtual int advance_to_border(const ObDatumRowkey &rowkey,
@@ -347,9 +350,16 @@ public:
       const ObRowsInfo *rows_info,
       const int64_t rowkey_begin_idx,
       const int64_t rowkey_end_idx);
+   int open(
+      const MacroBlockId &macro_id,
+      const ObMicroBlockData &idx_block_data,
+      const ObRowKeysInfo *row_keys_info,
+      const int64_t rowkey_begin_idx,
+      const int64_t rowkey_end_idx);
   int get_next(
       ObMicroIndexInfo &idx_block_row,
-      const bool is_multi_check = false);
+      const bool is_multi_check = false,
+      const bool is_sorted_multi_get = false);
   void set_iter_param(const ObSSTable *sstable,
                       const ObTablet *tablet);
   bool end_of_block() const;
@@ -403,6 +413,7 @@ private:
     const ObDatumRowkey *rowkey_;
     const ObDatumRange *range_;
     const ObRowsInfo *rows_info_;
+    const ObRowKeysInfo *rowkeys_info_;
     const void *query_range_;
   };
   MacroBlockId macro_id_;

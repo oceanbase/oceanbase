@@ -70,8 +70,11 @@ ObLogFetcher::ObLogFetcher() :
     stop_flag_(true),
     paused_(false),
     pause_time_(OB_INVALID_TIMESTAMP),
-    resume_time_(OB_INVALID_TIMESTAMP)
+    resume_time_(OB_INVALID_TIMESTAMP),
+    decompression_blk_mgr_(DECOMPRESSION_MEM_LIMIT_THRESHOLD),
+    decompression_alloc_(ObMemAttr(OB_SERVER_TENANT_ID, "decompress_buf"), common::OB_MALLOC_BIG_BLOCK_SIZE, decompression_blk_mgr_)
 {
+  decompression_alloc_.set_nway(DECOMPRESSION_MEM_LIMIT_THRESHOLD);
 }
 
 ObLogFetcher::~ObLogFetcher()
@@ -81,6 +84,7 @@ ObLogFetcher::~ObLogFetcher()
 
 int ObLogFetcher::init(
     const bool is_loading_data_dict_baseline_data,
+    const bool enable_direct_load_inc,
     const ClientFetchingMode fetching_mode,
     const ObBackupPathString &archive_dest,
     IObLogFetcherDispatcher *dispatcher,
@@ -197,6 +201,7 @@ int ObLogFetcher::init(
       heartbeat_dispatch_tid_ = 0;
       last_timestamp_ = OB_INVALID_TIMESTAMP;
       is_loading_data_dict_baseline_data_ = is_loading_data_dict_baseline_data;
+      enable_direct_load_inc_ = enable_direct_load_inc;
       fetching_mode_ = fetching_mode;
       archive_dest_ = archive_dest;
       log_ext_handler_concurrency_ = cfg.cdc_read_archive_log_concurrency;
@@ -209,7 +214,7 @@ int ObLogFetcher::init(
       IObCDCPartTransResolver::test_checkpoint_mode_on = cfg.test_checkpoint_mode_on;
       IObCDCPartTransResolver::test_mode_ignore_log_type = static_cast<IObCDCPartTransResolver::IgnoreLogType>(cfg.test_mode_ignore_log_type.get());
 
-      LOG_INFO("init fetcher succ", K_(is_loading_data_dict_baseline_data),
+      LOG_INFO("init fetcher succ", K_(is_loading_data_dict_baseline_data), K(enable_direct_load_inc),
           "test_mode_on", IObCDCPartTransResolver::test_mode_on,
           "test_mode_ignore_log_type", IObCDCPartTransResolver::test_mode_ignore_log_type,
           "test_mode_ignore_redo_count", IObCDCPartTransResolver::test_mode_ignore_redo_count,
@@ -438,7 +443,7 @@ int ObLogFetcher::add_ls(
   }
   // Push LS into ObLogLSFetchMgr
   else if (OB_FAIL(ls_fetch_mgr_.add_ls(tls_id, start_parameters, is_loading_data_dict_baseline_data_,
-      fetching_mode_, archive_dest_))) {
+      enable_direct_load_inc_, fetching_mode_, archive_dest_))) {
     LOG_ERROR("add partition by part fetch mgr fail", KR(ret), K(tls_id), K(start_parameters),
         K(is_loading_data_dict_baseline_data_));
   } else if (OB_FAIL(ls_fetch_mgr_.get_ls_fetch_ctx(tls_id, ls_fetch_ctx))) {
@@ -835,6 +840,22 @@ void ObLogFetcher::print_fetcher_stat_()
     LOG_INFO("[STAT] [FETCHER]", "upper_limit", NTS_TO_STR(upper_limit_ns),
         "dml_progress_limit_sec", dml_progress_limit / _SEC_,
         "fetcher_delay", TVAL_TO_STR(fetcher_delay));
+  }
+}
+void *ObLogFetcher::alloc_decompression_buf(int64_t size)
+{
+  void *buf = NULL;
+  if (IS_INIT) {
+    buf = decompression_alloc_.alloc(size);
+  }
+  return buf;
+}
+
+void ObLogFetcher::free_decompression_buf(void *buf)
+{
+  if (NULL != buf) {
+    decompression_alloc_.free(buf);
+    buf = NULL;
   }
 }
 

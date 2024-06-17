@@ -459,7 +459,7 @@ int ObCreatePackageResolver::resolve_functions_spec(const ObPackageInfo &package
       routine_info.set_overload(NO_OVERLOAD_IDX); //no overload
       for (int64_t k = routine_list.count(); OB_SUCC(ret) && k>0; k--) {
         ObRoutineInfo &tmp_routine_info = routine_list.at(k-1);
-        if (ObCharset::case_insensitive_equal(routine_info.get_routine_name(),
+        if (ObCharset::case_compat_mode_equal(routine_info.get_routine_name(),
                                               tmp_routine_info.get_routine_name())) {
           if (NO_OVERLOAD_IDX == tmp_routine_info.get_overload()) {
             tmp_routine_info.set_overload(OVERLOAD_START_IDX);
@@ -679,6 +679,9 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
 
           OZ (update_routine_route_sql(*allocator_, *session_info_, routine_list,
                                        spec_routine_table, body_routine_table, routine_infos));
+          if (OB_FAIL(ret)) {
+            routine_list.reset();
+          }
         }
         if (OB_FAIL(ret) && ret != OB_ERR_UNEXPECTED && ret != OB_ERR_TOO_LONG_IDENT) {
           LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, "PACKAGE BODY",

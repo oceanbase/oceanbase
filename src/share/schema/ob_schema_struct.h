@@ -127,22 +127,29 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_COLUMN_UDF_EXPR (INT64_C(1) << 20)
 #define UNUSED_COLUMN_FLAG (INT64_C(1) << 21) // check if the column is unused.
 #define GENERATED_DOC_ID_COLUMN_FLAG (INT64_C(1) << 22)
+#define MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 23) // for multivalue index
+#define MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG (INT64_C(1) << 24) // for multivalue index
+#define GENERATED_FTS_WORD_SEGMENT_COLUMN_FLAG (INT64_C(1) << 25) // word segment column for full-text search flag
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
-#define GENERATED_CTXCAT_CASCADE_FLAG (INT64_C(1) << 33)
+#define GENERATED_FTS_WORD_COUNT_COLUMN_FLAG (INT64_C(1) << 33) // word count column for full-text search index
 #define TABLE_PART_KEY_COLUMN_FLAG (INT64_C(1) << 34)
 #define TABLE_ALIAS_NAME_FLAG (INT64_C(1) << 35)
 /* create table t1(c1 int, c2 as (c1+1)) partition by hash(c2) partitions 2
    c1 and c2 has flag TABLE_PART_KEY_COLUMN_ORG_FLAG */
 #define TABLE_PART_KEY_COLUMN_ORG_FLAG (INT64_C(1) << 37) //column is part key, or column is depened by part key(gc col)
 #define SPATIAL_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 38) // for spatial index
+#define GENERATED_FTS_DOC_LENGTH_COLUMN_FLAG (INT64_C(1) << 39) // doc length column for full-text search index
 #define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF
 
 // table_flags stored in __all_table.table_flag
 #define CASCADE_RLS_OBJECT_FLAG (INT64_C(1) << 0)
+#define EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG (INT64_C(1) << 1)
+#define EXTERNAL_TABLE_AUTO_REFRESH_FLAG (INT64_C(1) << 2)
+#define EXTERNAL_TABLE_CREATE_ON_REFRESH_FLAG (INT64_C(1) << 3)
 
 // schema array size
 static const int64_t SCHEMA_SMALL_MALLOC_BLOCK_SIZE = 64;
@@ -292,7 +299,7 @@ enum ObIndexType
   INDEX_TYPE_NORMAL_GLOBAL = 3,
   INDEX_TYPE_UNIQUE_GLOBAL = 4,
   INDEX_TYPE_PRIMARY = 5,
-  INDEX_TYPE_DOMAIN_CTXCAT = 6,
+  INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED = 6,
   /* create table t1(c1 int primary key, c2 int);
    * create index i1 on t1(c2)
    * i1 is a global index.
@@ -307,21 +314,24 @@ enum ObIndexType
   INDEX_TYPE_SPATIAL_GLOBAL = 11,
   INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE = 12,
   // new index types for fts
-  INDEX_TYPE_FTS_ROWKEY_DOC_LOCAL = 13,
-  INDEX_TYPE_FTS_DOC_ROWKEY_LOCAL = 14,
+  INDEX_TYPE_ROWKEY_DOC_ID_LOCAL = 13,
+  INDEX_TYPE_DOC_ID_ROWKEY_LOCAL = 14,
   INDEX_TYPE_FTS_INDEX_LOCAL = 15,
   INDEX_TYPE_FTS_DOC_WORD_LOCAL = 16,
-  INDEX_TYPE_FTS_DOC_ROWKEY_GLOBAL = 17,
+  INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL = 17,
   INDEX_TYPE_FTS_INDEX_GLOBAL = 18,
   INDEX_TYPE_FTS_DOC_WORD_GLOBAL = 19,
-  INDEX_TYPE_FTS_DOC_ROWKEY_GLOBAL_LOCAL_STORAGE = 20,
+  INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE = 20,
   INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE = 21,
   INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE = 22,
+  // new index types for json multivalue index
+  INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL = 23,
+  INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL = 24,
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 23,
+  INDEX_TYPE_MAX = 25,
 };
 
 // using type for index
@@ -586,6 +596,101 @@ inline bool is_available_index_status(const ObIndexStatus index_status)
 
 const char *ob_index_status_str(ObIndexStatus status);
 
+inline bool is_local_fts_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_ROWKEY_DOC_ID_LOCAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_LOCAL ||
+         index_type == INDEX_TYPE_FTS_INDEX_LOCAL ||
+         index_type == INDEX_TYPE_FTS_DOC_WORD_LOCAL;
+}
+
+inline bool is_global_local_fts_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE ||
+         index_type == INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE ||
+         index_type == INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE;
+}
+
+inline bool is_global_fts_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL ||
+         index_type == INDEX_TYPE_FTS_INDEX_GLOBAL ||
+         index_type == INDEX_TYPE_FTS_DOC_WORD_GLOBAL;
+}
+
+inline bool is_local_multivalue_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_ROWKEY_DOC_ID_LOCAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_LOCAL ||
+         index_type == INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL ||
+         index_type == INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
+}
+
+inline bool is_doc_rowkey_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_DOC_ID_ROWKEY_LOCAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
+}
+
+inline bool is_rowkey_doc_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_ROWKEY_DOC_ID_LOCAL;
+}
+
+inline bool is_fts_index_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_FTS_INDEX_LOCAL ||
+         index_type == INDEX_TYPE_FTS_INDEX_GLOBAL ||
+         index_type == INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE;
+}
+
+inline bool is_fts_doc_word_aux(const ObIndexType index_type)
+{
+  return INDEX_TYPE_FTS_DOC_WORD_LOCAL == index_type
+      || INDEX_TYPE_FTS_DOC_WORD_GLOBAL == index_type
+      || INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE == index_type;
+}
+
+inline bool is_multivalue_index_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL ||
+         index_type == INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
+}
+
+inline bool is_built_in_multivalue_index(const ObIndexType index_type)
+{
+  return is_rowkey_doc_aux(index_type)
+      || is_doc_rowkey_aux(index_type);
+}
+
+inline bool is_built_in_fts_index(const ObIndexType index_type)
+{
+  return is_rowkey_doc_aux(index_type)
+      || is_doc_rowkey_aux(index_type)
+      || is_fts_doc_word_aux(index_type);
+}
+
+inline bool is_multivalue_index(const ObIndexType index_type)
+{
+  return is_multivalue_index_aux(index_type) || is_built_in_multivalue_index(index_type);
+}
+
+inline bool is_fts_index(const ObIndexType index_type)
+{
+  return is_fts_index_aux(index_type) || is_built_in_fts_index(index_type);
+}
+
+inline bool is_fts_or_multivalue_index(ObIndexType index_type)
+{
+  return is_multivalue_index(index_type) || is_fts_index(index_type);
+}
+
+inline bool is_fts_or_multivalue_index_aux(ObIndexType index_type)
+{
+  return is_multivalue_index_aux(index_type) || is_fts_index_aux(index_type);
+}
+
 inline bool is_index_local_storage(ObIndexType index_type)
 {
   return INDEX_TYPE_NORMAL_LOCAL == index_type
@@ -593,9 +698,12 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type
            || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
            || INDEX_TYPE_PRIMARY == index_type
-           || INDEX_TYPE_DOMAIN_CTXCAT == index_type
+           || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == index_type
            || INDEX_TYPE_SPATIAL_LOCAL == index_type
-           || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
+           || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type
+           || is_local_fts_index(index_type)
+           || is_global_local_fts_index(index_type)
+           || is_local_multivalue_index(index_type);
 }
 
 inline bool is_related_table(
@@ -617,7 +725,9 @@ inline bool index_has_tablet(const ObIndexType &index_type)
         || INDEX_TYPE_UNIQUE_GLOBAL == index_type
         || INDEX_TYPE_SPATIAL_LOCAL == index_type
         || INDEX_TYPE_SPATIAL_GLOBAL == index_type
-        || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
+        || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type
+        || is_fts_index(index_type)
+        || is_multivalue_index(index_type);
 }
 
 struct ObTenantTableId
@@ -1422,9 +1532,8 @@ public:
   ObSysVarSchema() : ObSchema() { reset(); }
   ~ObSysVarSchema() {}
   explicit ObSysVarSchema(common::ObIAllocator *allocator);
-  explicit ObSysVarSchema(const ObSysVarSchema &src_schema);
-  ObSysVarSchema &operator=(const ObSysVarSchema &src_schema);
-  int assign(const ObSysVarSchema &other);
+  DISABLE_COPY_ASSIGN(ObSysVarSchema);
+  int assign(const ObSysVarSchema &src_schema);
   virtual bool is_valid() const { return ObSchema::is_valid() && tenant_id_ != common::OB_INVALID_ID && !name_.empty(); }
   void reset();
   int64_t get_convert_size() const;
@@ -1494,9 +1603,8 @@ public:
   ObSysVariableSchema();
   explicit ObSysVariableSchema(common::ObIAllocator *allocator);
   virtual ~ObSysVariableSchema();
-  ObSysVariableSchema(const ObSysVariableSchema &src_schema);
-  ObSysVariableSchema &operator=(const ObSysVariableSchema &src_schema);
-  int assign(const ObSysVariableSchema &other);
+  DISABLE_COPY_ASSIGN(ObSysVariableSchema);
+  int assign(const ObSysVariableSchema &src_schema);
   //set methods
   inline void set_tenant_id(const uint64_t tenant_id)  { tenant_id_ = tenant_id; }
   inline void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
@@ -1652,6 +1760,7 @@ public:
   inline uint64_t get_default_tablegroup_id() const { return default_tablegroup_id_; }
   inline const common::ObString &get_default_tablegroup_name() const { return default_tablegroup_name_; }
   inline common::ObCompatibilityMode get_compatibility_mode() const { return compatibility_mode_; }
+
   inline bool is_oracle_tenant() const
   {
     return common::ObCompatibilityMode::ORACLE_MODE == compatibility_mode_;
@@ -2115,9 +2224,14 @@ public:
   // convert character set.
   int convert_character_for_range_columns_part(const ObCollationType &to_collation);
   int convert_character_for_list_columns_part(const ObCollationType &to_collation);
+
+  int set_external_location(common::ObString &location)
+  { return deep_copy_str(location, external_location_); }
+  const common::ObString &get_external_location() const
+  { return external_location_; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
                        K_(high_bound_val), K_(list_row_values), K_(part_idx),
-                       K_(is_empty_partition_name), K_(tablet_id));
+                       K_(is_empty_partition_name), K_(tablet_id), K_(external_location));
 protected:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -2145,6 +2259,10 @@ protected:
   PartitionType partition_type_;
   common::ObRowkey low_bound_val_;
   ObTabletID tablet_id_;
+  common::ObString external_location_;
+  // split_source_tablet_id_ will not be persisted in inner_table.
+  // it is only used when attempting to split partition.
+  ObTabletID split_source_tablet_id_;
 };
 
 class ObSubPartition;
@@ -2298,6 +2416,8 @@ public:
   virtual void set_schema_version(const int64_t schema_version) = 0;
   virtual bool is_user_partition_table() const = 0;
   virtual bool is_user_subpartition_table() const = 0;
+
+  virtual bool is_external_table() const = 0;
   virtual ObPartitionLevel get_part_level() const { return part_level_; }
   virtual bool has_self_partition() const = 0;
   virtual int get_primary_zone_inherit(
@@ -2538,7 +2658,7 @@ public:
   int mock_list_partition_array();
   // only used for generate part_name
   int get_max_part_id(int64_t &part_id) const;
-  int get_max_part_idx(int64_t &part_idx) const;
+  int get_max_part_idx(int64_t &part_idx, bool skip_external_table_default_partition = false) const;
   //@param[in] name: the partition name which you want to get partition by
   //@param[out] part: the partition get by the name, when this function could not find the partition
   //            by the name, this param would be nullptr
@@ -2688,6 +2808,7 @@ public:
   inline const common::ObRowkey& get_split_list_row_values() const {
     return split_list_row_values_;
   }
+  virtual inline bool is_external_table() const override { return false; }
 
   // In the current implementation, if the locality of the zone_list of the tablegroup is empty,
   // it will be read from the tenant, otherwise it will be parsed from the locality
@@ -2952,6 +3073,8 @@ public:
       common::ObTabletID &tablet_id,
       common::ObObjectID &subpart_id,
       RelatedTableInfo *related_table = NULL);
+
+  static bool is_default_list_part(const ObPartition &part);
 
   /* ----------------------------------------------------------------- */
 
@@ -4009,7 +4132,7 @@ public:
   { }
 
   virtual ~ObPriv() { }
-  ObPriv& operator=(const ObPriv &other);
+  int assign(const ObPriv &other);
   static bool cmp_tenant_user_id(const ObPriv *lhs, const ObTenantUserId &tenant_user_id)
   { return (lhs->get_tenant_user_id() < tenant_user_id); }
   static bool equal_tenant_user_id(const ObPriv *lhs, const ObTenantUserId &tenant_user_id)
@@ -4051,6 +4174,8 @@ protected:
   ObPrivSet priv_set_;
   //ObPrivSet ora_sys_priv_set_;
   ObPackedPrivArray priv_array_;
+
+  DISABLE_COPY_ASSIGN(ObPriv);
 };
 
 // Not used now
@@ -4118,8 +4243,82 @@ enum ObUserType
   OB_TYPE_MAX,
 };
 
+#define PROXY_USER_ACTIVATE_ALL_ROLES 1
+#define PROXY_USER_NO_ROLES_BE_ACTIVATED 2
+#define PROXY_USER_MAY_ACTIVATE_ROLE 4
+#define PROXY_USER_ROLE_CAN_NOT_BE_ACTIVATED 8
+
+struct ObProxyInfo
+{
+  OB_UNIS_VERSION(1);
+private:
+  static const int64_t DEFAULT_ARRAY_CAPACITY = 8;
+public:
+  ObProxyInfo(common::ObIAllocator *allocator) : allocator_(allocator), user_id_(OB_INVALID_ID), proxy_flags_(0),
+                                credential_type_(0), role_ids_(NULL), role_id_cnt_(0), role_id_capacity_(0) {}
+  inline int64_t get_convert_size() const
+  {
+    int64_t convert_size = sizeof(*this);
+    convert_size += role_id_cnt_ * sizeof(uint64_t);
+    return convert_size;
+  }
+  void reset();
+  int assign(const ObProxyInfo &other);
+  int add_role_id(const uint64_t role_id);
+  uint64_t get_role_id_by_idx(const int64_t idx) const;
+
+  TO_STRING_KV(K_(user_id), K_(proxy_flags), K(ObArrayWrap<uint64_t>(role_ids_, role_id_cnt_)), K_(role_id_cnt));
+
+  common::ObIAllocator *allocator_;
+  uint64_t user_id_;
+  uint64_t proxy_flags_;
+  uint64_t credential_type_;
+  uint64_t *role_ids_;
+  uint64_t role_id_cnt_;
+  uint64_t role_id_capacity_;
+};
+
 #define ADMIN_OPTION_SHIFT 0
 #define DISABLE_FLAG_SHIFT 1
+
+enum ObProxyActivatedFlag
+{
+  PROXY_NERVER_BEEN_ACTIVATED = 0,
+  PROXY_BEEN_ACTIVATED_BEFORE = 1,
+  PROXY_ACTIVATED_MAX,
+};
+
+//In user schema def, flag is a int column.
+//int is int64_t, not uint64_t. So only 63 bit can be used.
+struct ObUserFlags
+{
+  OB_UNIS_VERSION_V(1);
+private:
+  static const int32_t F_PROXY_INFO_OFFSET = 0;
+  static const int32_t F_PROXY_INFO_BITS = 1;
+  static const int32_t F_RESERVED = 63;
+  static const uint32_t F_PROXY_INFO_MASK = (((1L << F_PROXY_INFO_BITS) - 1) << F_PROXY_INFO_OFFSET);
+public:
+  ObUserFlags() { reset(); }
+  virtual ~ObUserFlags() { reset(); }
+  void reset() { flags_ = 0; }
+  bool operator ==(const ObUserFlags &other) const
+  {
+    return flags_ == other.flags_;
+  }
+  int assign(const ObUserFlags &other);
+  ObUserFlags &operator=(const ObUserFlags &other);
+  bool is_valid() const;
+
+  TO_STRING_KV("proxy_activated_flag", proxy_activated_flag_);
+  union {
+    int64_t flags_;
+    struct {
+      uint64_t proxy_activated_flag_ :F_PROXY_INFO_BITS;
+      uint64_t reserved_ :F_RESERVED;
+    };
+  };
+};
 
 class ObUserInfo : public ObSchema, public ObPriv
 {
@@ -4133,12 +4332,13 @@ public:
      type_(OB_USER), grantee_id_array_(), role_id_array_(), profile_id_(common::OB_INVALID_ID), password_last_changed_timestamp_(common::OB_INVALID_TIMESTAMP),
      role_id_option_array_(),
      max_connections_(0),
-     max_user_connections_(0)
+     max_user_connections_(0),
+     proxied_user_info_(NULL), proxied_user_info_capacity_(0), proxied_user_info_cnt_(0),
+     proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_()
   { }
   explicit ObUserInfo(common::ObIAllocator *allocator);
   virtual ~ObUserInfo();
-  ObUserInfo(const ObUserInfo &other);
-  ObUserInfo& operator=(const ObUserInfo &other);
+  int assign(const ObUserInfo &other);
   static bool cmp(const ObUserInfo *lhs, const ObUserInfo *rhs)
   { return (NULL != lhs && NULL != rhs) ? lhs->get_tenant_user_id() < rhs->get_tenant_user_id() : false; }
   static bool equal(const ObUserInfo *lhs, const ObUserInfo *rhs)
@@ -4194,6 +4394,14 @@ public:
   const common::ObSEArray<uint64_t, 8>& get_grantee_id_array() const { return grantee_id_array_; }
   const common::ObSEArray<uint64_t, 8>& get_role_id_array() const { return role_id_array_; }
   const common::ObSEArray<uint64_t, 8>& get_role_id_option_array() const { return role_id_option_array_; }
+  uint64_t get_proxied_user_info_cnt() const { return proxied_user_info_cnt_; }
+  uint64_t get_proxy_user_info_cnt() const { return proxy_user_info_cnt_; }
+  const ObProxyInfo* get_proxied_user_info_by_idx(uint64_t idx) const;
+  ObProxyInfo* get_proxied_user_info_by_idx_for_update(uint64_t idx);
+  const ObProxyInfo* get_proxy_user_info_by_idx(uint64_t idx) const;
+  ObProxyInfo* get_proxy_user_info_by_idx_for_update(uint64_t idx);
+  int add_proxied_user_info(const ObProxyInfo &proxied_info);
+  int add_proxy_user_info(const ObProxyInfo &proxy_info);
   int add_grantee_id(const uint64_t id) { return grantee_id_array_.push_back(id); }
   int add_role_id(const uint64_t id,
                   const uint64_t admin_option = NO_OPTION,
@@ -4215,11 +4423,34 @@ public:
                K_(info), K_(locked),
                K_(ssl_type), K_(ssl_cipher), K_(x509_issuer), K_(x509_subject),
                K_(type), K_(grantee_id_array), K_(role_id_array),
-               K_(profile_id)
+               K_(profile_id), K_(proxied_user_info_cnt), K_(proxy_user_info_cnt),
+               "proxied info", ObArrayWrap<ObProxyInfo*>(proxied_user_info_, proxied_user_info_cnt_),
+               "proxy info", ObArrayWrap<ObProxyInfo*>(proxy_user_info_, proxy_user_info_cnt_),
+               K_(user_flags)
               );
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
   int get_seq_by_role_id(uint64_t role_id, uint64_t &seq) const;
+  inline void set_flags(const int64_t flags) { user_flags_.flags_ = flags; }
+  inline int64_t get_flags() const { return user_flags_.flags_; }
+  inline void set_proxy_activated_flag(const ObProxyActivatedFlag flag) {
+    static_assert(ObProxyActivatedFlag::PROXY_ACTIVATED_MAX == 2, "proxy activated flag not valid");
+    user_flags_.proxy_activated_flag_ = flag;
+  }
+  inline ObProxyActivatedFlag get_proxy_activated_flag() { return (ObProxyActivatedFlag)(user_flags_.proxy_activated_flag_); }
+
 private:
+  int add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info);
+  int assign_proxy_info_array_(ObProxyInfo **src_arr,
+                              const uint64_t src_cnt,
+                              const uint64_t src_capacity,
+                              ObProxyInfo **&tar_arr,
+                              uint64_t &tar_cnt,
+                              uint64_t &tar_capacity);
+
+  int deserialize_proxy_info_array_(ObProxyInfo **&arr, uint64_t &cnt, uint64_t &capacity,
+                                            const char *buf, const int64_t data_len, int64_t &pos);
+private:
+  static const int64_t DEFAULT_ARRAY_CAPACITY = 8;
   common::ObString user_name_;
   common::ObString host_name_;
   common::ObString passwd_;
@@ -4238,6 +4469,14 @@ private:
   common::ObSEArray<uint64_t, 8> role_id_option_array_; // Record which roles the user/role has
   uint64_t max_connections_;
   uint64_t max_user_connections_;
+  ObProxyInfo** proxied_user_info_; //record users who can proxy the user
+  uint64_t proxied_user_info_capacity_;
+  uint64_t proxied_user_info_cnt_;
+  ObProxyInfo** proxy_user_info_; //recode users whom the user can proxy
+  uint64_t proxy_user_info_capacity_;
+  uint64_t proxy_user_info_cnt_;
+  ObUserFlags user_flags_;
+  DISABLE_COPY_ASSIGN(ObUserInfo);
 };
 
 struct ObDBPrivSortKey
@@ -4520,6 +4759,223 @@ struct ObTablePrivSortKey
   common::ObString table_;
 };
 
+struct ObRoutinePrivDBKey
+{
+  ObRoutinePrivDBKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID)
+  {}
+  ObRoutinePrivDBKey(const uint64_t tenant_id, const uint64_t user_id, const common::ObString &db)
+      : tenant_id_(tenant_id), user_id_(user_id), db_(db)
+  {}
+  bool operator==(const ObRoutinePrivDBKey &rhs) const
+  {
+    return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_)
+           && (db_ == rhs.db_);
+  }
+  bool operator!=(const ObRoutinePrivDBKey &rhs) const
+  {
+    return !(*this == rhs);
+  }
+  bool operator<(const ObRoutinePrivDBKey &rhs) const
+  {
+    bool bret = tenant_id_ < rhs.tenant_id_;
+    if (false == bret && tenant_id_ == rhs.tenant_id_) {
+      bret = user_id_ < rhs.user_id_;
+      if (false == bret && user_id_ == rhs.user_id_) {
+        bret = db_ < rhs.db_;
+      }
+    }
+    return bret;
+  }
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  common::ObString db_;
+};
+
+struct ObRoutinePrivSortKey
+{
+  ObRoutinePrivSortKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID)
+  {}
+  ObRoutinePrivSortKey(const uint64_t tenant_id, const uint64_t user_id,
+                     const common::ObString &db, const common::ObString &routine, int64_t routine_type)
+      : tenant_id_(tenant_id), user_id_(user_id), db_(db), routine_(routine), routine_type_(routine_type)
+  {}
+  bool operator==(const ObRoutinePrivSortKey &rhs) const
+  {
+    ObCompareNameWithTenantID name_cmp(tenant_id_);
+    return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_)
+           && (db_ == rhs.db_) && (0 == name_cmp.compare(routine_, rhs.routine_)) && (routine_type_ == rhs.routine_type_);
+  }
+  bool operator!=(const ObRoutinePrivSortKey &rhs) const
+  {
+    return !(*this == rhs);
+  }
+  bool operator<(const ObRoutinePrivSortKey &rhs) const
+  {
+    ObCompareNameWithTenantID name_cmp(tenant_id_);
+    bool bret = tenant_id_ < rhs.tenant_id_;
+    if (false == bret && tenant_id_ == rhs.tenant_id_) {
+      bret = user_id_ < rhs.user_id_;
+      if (false == bret && user_id_ == rhs.user_id_) {
+        bret = db_ < rhs.db_;
+        if (false == bret && db_ == rhs.db_) {
+          int routine_cmp_ret = name_cmp.compare(routine_, rhs.routine_);
+          if (routine_cmp_ret < 0) {
+            bret = true;
+          } else {
+            bret = false;
+          }
+          if (false == bret && 0 == routine_cmp_ret) {
+            bret = routine_type_ < rhs.routine_type_;
+          }
+        }
+      }
+    }
+    return bret;
+  }
+  //Not used yet.
+  inline uint64_t hash() const
+  {
+    uint64_t hash_ret = 0;
+    common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
+    hash_ret = common::murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
+    hash_ret = common::murmurhash(&user_id_, sizeof(user_id_), hash_ret);
+    hash_ret = common::murmurhash(db_.ptr(), db_.length(), hash_ret);
+    hash_ret = common::ObCharset::hash(cs_type, routine_, hash_ret);
+    hash_ret = common::murmurhash(&routine_type_, sizeof(routine_type_), hash_ret);
+    return hash_ret;
+  }
+  bool is_valid() const
+  {
+    return (tenant_id_ != common::OB_INVALID_ID) && (user_id_ != common::OB_INVALID_ID) && routine_type_ != 0;
+  }
+
+  int deep_copy(const ObRoutinePrivSortKey &src, common::ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    tenant_id_ = src.tenant_id_;
+    user_id_ = src.user_id_;
+    routine_type_ = src.routine_type_;
+    if (OB_FAIL(common::ob_write_string(allocator, src.db_, db_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy db", KR(ret), K(src.db_));
+    } else if (OB_FAIL(common::ob_write_string(allocator, src.routine_, routine_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy routine", KR(ret), K(src.routine_));
+    }
+    return ret;
+  }
+
+  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), K_(routine), K_(routine_type));
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  common::ObString db_;
+  common::ObString routine_;
+  int64_t routine_type_;
+};
+
+struct ObColumnPrivIdKey
+{
+  ObColumnPrivIdKey() : tenant_id_(common::OB_INVALID_ID), priv_id_(common::OB_INVALID_ID) {}
+
+  ObColumnPrivIdKey(const uint64_t tenant_id, const uint64_t priv_id)
+      : tenant_id_(tenant_id), priv_id_(priv_id) {}
+
+  TO_STRING_KV(K_(tenant_id), K_(priv_id));
+
+  bool operator==(const ObColumnPrivIdKey &rhs) const
+  {
+    return (tenant_id_ == rhs.tenant_id_) && (priv_id_ == rhs.priv_id_);
+  }
+  uint64_t tenant_id_;
+  uint64_t priv_id_;
+};
+
+struct ObColumnPrivSortKey
+{
+  ObColumnPrivSortKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID),
+                          db_(), table_(), column_()
+  {}
+  ObColumnPrivSortKey(const uint64_t tenant_id, const uint64_t user_id,
+                     const common::ObString &db, const common::ObString &table, const common::ObString &column)
+      : tenant_id_(tenant_id), user_id_(user_id), db_(db), table_(table), column_(column)
+  {}
+
+  //In resolver, ObSQLUtils::cvt_db_name_to_org will make db_name and table_name string user wrotten in the sql the same as the string in the schema.
+  //So in the schema stage, db and table name can directly binary compare with each other without considering the collation.
+  bool operator==(const ObColumnPrivSortKey &rhs) const
+  {
+    // Only mysql will reach here, and column name character collation is general ci under mysql mode.
+    // If Oracle mode reach here, the result may be wrong!
+    common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
+    return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_)
+           && (db_ == rhs.db_) && (table_ == rhs.table_) &&
+           (0 == common::ObCharset::strcmp(cs_type, column_, rhs.column_));
+  }
+  bool operator!=(const ObColumnPrivSortKey &rhs) const
+  {
+    return !(*this == rhs);
+  }
+  bool operator<(const ObColumnPrivSortKey &rhs) const
+  {
+    bool bret = tenant_id_ < rhs.tenant_id_;
+    if (false == bret && tenant_id_ == rhs.tenant_id_) {
+      bret = user_id_ < rhs.user_id_;
+      if (false == bret && user_id_ == rhs.user_id_) {
+        bret = db_ < rhs.db_;
+        if (false == bret && db_ == rhs.db_) {
+          bret = table_ < rhs.table_;
+          if (false == bret && table_ == rhs.table_) {
+            ObCompareNameWithTenantID name_cmp(tenant_id_);
+            int cmp_ret = name_cmp.compare(column_, rhs.column_);
+            if (cmp_ret < 0) {
+              bret = true;
+            } else {
+              bret = false;
+            }
+          }
+        }
+      }
+    }
+    return bret;
+  }
+  //Not used yet.
+  inline uint64_t hash() const
+  {
+    common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
+    uint64_t hash_ret = 0;
+    hash_ret = common::murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
+    hash_ret = common::murmurhash(&user_id_, sizeof(user_id_), hash_ret);
+    hash_ret = common::murmurhash(db_.ptr(), db_.length(), hash_ret);
+    hash_ret = common::murmurhash(table_.ptr(), table_.length(), hash_ret);
+    hash_ret = common::ObCharset::hash(cs_type, column_, hash_ret);
+    return hash_ret;
+  }
+  bool is_valid() const
+  {
+    return (tenant_id_ != common::OB_INVALID_ID) && (user_id_ != common::OB_INVALID_ID);
+  }
+
+  int deep_copy(const ObColumnPrivSortKey &src, common::ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    tenant_id_ = src.tenant_id_;
+    user_id_ = src.user_id_;
+    if (OB_FAIL(common::ob_write_string(allocator, src.db_, db_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy db", KR(ret), K(src.db_));
+    } else if (OB_FAIL(common::ob_write_string(allocator, src.table_, table_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy table", KR(ret), K(src.table_));
+    } else if (OB_FAIL(common::ob_write_string(allocator, src.column_, column_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy table", KR(ret), K(src.column_));
+    }
+    return ret;
+  }
+
+  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), K_(table), K_(column));
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  common::ObString db_;
+  common::ObString table_;
+  common::ObString column_;
+};
+
 struct ObObjPrivSortKey
 {
   ObObjPrivSortKey() : tenant_id_(common::OB_INVALID_ID),
@@ -4659,6 +5115,154 @@ private:
   common::ObString table_;
 };
 
+class ObRoutinePriv : public ObSchema, public ObPriv
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  //constructor and destructor
+  ObRoutinePriv()
+      : ObSchema(), ObPriv(), db_(), routine_(), routine_type_(0)
+  { }
+  explicit ObRoutinePriv(common::ObIAllocator *allocator)
+      : ObSchema(allocator), ObPriv(allocator), db_(), routine_(), routine_type_(0)
+  { }
+  virtual ~ObRoutinePriv() { }
+
+  int assign(const ObRoutinePriv &other);
+
+  //for sort
+  ObRoutinePrivSortKey get_sort_key() const
+  { return ObRoutinePrivSortKey(tenant_id_, user_id_, db_, routine_, routine_type_); }
+  static bool cmp(const ObRoutinePriv *lhs, const ObRoutinePriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() < rhs->get_sort_key() : false; }
+  static bool cmp_sort_key(const ObRoutinePriv *lhs, const ObRoutinePrivSortKey &sort_key)
+  { return NULL != lhs ? lhs->get_sort_key() < sort_key : false; }
+  static bool equal(const ObRoutinePriv *lhs, const ObRoutinePriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() == rhs->get_sort_key() : false; }
+  static bool equal_sort_key(const ObRoutinePriv *lhs, const ObRoutinePrivSortKey &sort_key)
+  { return NULL != lhs ? lhs->get_sort_key() == sort_key : false; }
+
+  ObRoutinePrivDBKey get_db_key() const
+  { return ObRoutinePrivDBKey(tenant_id_, user_id_, db_); }
+  static bool cmp_db_key(const ObRoutinePriv *lhs, const ObRoutinePrivDBKey &db_key)
+  { return lhs->get_db_key() < db_key; }
+
+  //set methods
+  inline int set_database_name(const char *db) { return deep_copy_str(db, db_); }
+  inline int set_database_name(const common::ObString &db) { return deep_copy_str(db, db_); }
+  inline int set_routine_name(const char *routine) { return deep_copy_str(routine, routine_); }
+  inline int set_routine_name(const common::ObString &routine) { return deep_copy_str(routine, routine_); }
+  inline void set_routine_type(int64_t routine_type) { routine_type_ = routine_type; }
+
+  //get methods
+  inline const char* get_database_name() const { return extract_str(db_); }
+  inline const common::ObString& get_database_name_str() const { return db_; }
+  inline const char* get_routine_name() const { return extract_str(routine_); }
+  inline const common::ObString& get_routine_name_str() const { return routine_; }
+
+  inline int64_t get_routine_type() const { return routine_type_; }
+
+  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), K_(routine), K_(routine_type),
+               "privileges", ObPrintPrivSet(priv_set_));
+  //other methods
+  virtual bool is_valid() const;
+  virtual void reset();
+  int64_t get_convert_size() const;
+
+private:
+  common::ObString db_;
+  common::ObString routine_;
+  int64_t routine_type_;
+
+  DISABLE_COPY_ASSIGN(ObRoutinePriv);
+};
+
+class ObColumnPriv : public ObSchema, public ObPriv
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  //constructor and destructor
+  ObColumnPriv()
+      : ObSchema(), ObPriv()
+  { }
+  explicit ObColumnPriv(common::ObIAllocator *allocator)
+      : ObSchema(allocator), ObPriv(allocator)
+  { }
+  virtual ~ObColumnPriv() { }
+
+  int assign(const ObColumnPriv &other);
+
+  //for sort
+  ObColumnPrivSortKey get_sort_key() const
+  { return ObColumnPrivSortKey(tenant_id_, user_id_, db_, table_, column_); }
+
+  ObColumnPrivIdKey get_id_key() const
+  { return ObColumnPrivIdKey(tenant_id_, priv_id_); }
+  static bool cmp_by_sort_key(const ObColumnPriv *lhs, const ObColumnPriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() < rhs->get_sort_key() : false; }
+  static bool cmp_by_id(const ObColumnPriv *lhs, const ObColumnPriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? (lhs->get_tenant_id() == rhs->get_tenant_id() ? lhs->get_priv_id() < rhs->get_priv_id() : lhs->get_tenant_id() < rhs->get_tenant_id()) : false; }
+  static bool cmp_sort_key(const ObColumnPriv *lhs, const ObColumnPrivSortKey &sort_key)
+  { return NULL != lhs ? lhs->get_sort_key() < sort_key : false; }
+
+  static bool cmp_by_id_key(const ObColumnPriv *lhs, const ObColumnPrivIdKey &sort_key)
+  { return NULL != lhs ? (lhs->get_tenant_id() == sort_key.tenant_id_ ? lhs->get_priv_id() < sort_key.priv_id_ : lhs->get_tenant_id() < sort_key.tenant_id_) : false; }
+  static bool equal_by_sort_key(const ObColumnPriv *lhs, const ObColumnPriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() == rhs->get_sort_key() : false; }
+
+  static bool equal_by_id(const ObColumnPriv *lhs, const ObColumnPriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? (lhs->get_tenant_id() == rhs->get_tenant_id()
+                                           && lhs->get_priv_id() == rhs->get_priv_id()) : false; }
+  static bool equal_sort_key(const ObColumnPriv *lhs, const ObColumnPrivSortKey &sort_key)
+  { return NULL != lhs ? lhs->get_sort_key() == sort_key : false; }
+
+  static bool equal_by_id_key(const ObColumnPriv *lhs, const ObColumnPrivIdKey &sort_key)
+  { return NULL != lhs ? lhs->get_tenant_id() == sort_key.tenant_id_ && lhs->get_priv_id() == sort_key.priv_id_ : false; }
+
+  ObTablePrivSortKey get_table_key() const
+  { return ObTablePrivSortKey(tenant_id_, user_id_, db_, table_); }
+  static bool cmp_table_key(const ObColumnPriv *lhs, const ObTablePrivSortKey &table_key)
+  { return lhs->get_table_key() < table_key; }
+
+  ObTablePrivDBKey get_db_key() const
+  { return ObTablePrivDBKey(tenant_id_, user_id_, db_); }
+  static bool cmp_db_key(const ObColumnPriv *lhs, const ObTablePrivDBKey &db_key)
+  { return lhs->get_db_key() < db_key; }
+
+  //set methods
+  inline int set_database_name(const char *db) { return deep_copy_str(db, db_); }
+  inline int set_database_name(const common::ObString &db) { return deep_copy_str(db, db_); }
+  inline int set_table_name(const char *table) { return deep_copy_str(table, table_); }
+  inline int set_table_name(const common::ObString &table) { return deep_copy_str(table, table_); }
+  inline int set_column_name(const char *column) { return deep_copy_str(column, column_); }
+  inline int set_column_name(const common::ObString &column) { return deep_copy_str(column, column_); }
+  inline void set_priv_id(uint64_t priv_id)  {  priv_id_ = priv_id; }
+
+  //get methods
+  inline const char* get_database_name() const { return extract_str(db_); }
+  inline const common::ObString& get_database_name_str() const { return db_; }
+  inline const char* get_table_name() const { return extract_str(table_); }
+  inline const common::ObString& get_table_name_str() const { return table_; }
+  inline const char* get_column_name() const { return extract_str(column_); }
+  inline const common::ObString& get_column_name_str() const { return column_; }
+  inline uint64_t get_priv_id() const { return priv_id_; }
+  TO_STRING_KV(K_(tenant_id), K_(priv_id), K_(user_id), K_(db), K_(table), K_(column),
+               "privileges", ObPrintPrivSet(priv_set_));
+  //other methods
+  virtual bool is_valid() const;
+  virtual void reset();
+  int64_t get_convert_size() const;
+
+private:
+  common::ObString db_;
+  common::ObString table_;
+  common::ObString column_;
+  uint64_t priv_id_;
+  DISABLE_COPY_ASSIGN(ObColumnPriv);
+};
+
 class ObObjPriv : public ObSchema, public ObPriv
 {
   OB_UNIS_VERSION(1);
@@ -4778,11 +5382,29 @@ struct ObNeedPriv
              const bool is_for_update = false,
              ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL)
       : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
-        is_sys_table_(is_sys_table), is_for_update_(is_for_update), priv_check_type_(priv_check_type)
+        is_sys_table_(is_sys_table), obj_type_(share::schema::ObObjectType::INVALID),
+        is_for_update_(is_for_update), priv_check_type_(priv_check_type),
+        columns_(), check_any_column_priv_(false)
   { }
+
+  ObNeedPriv(const common::ObString &db,
+            const common::ObString &table,
+            ObPrivLevel priv_level,
+            ObPrivSet priv_set,
+            const bool is_sys_table,
+            const share::schema::ObObjectType obj_type,
+            const bool is_for_update = false,
+            ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL)
+    : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
+      is_sys_table_(is_sys_table), obj_type_(obj_type),
+      is_for_update_(is_for_update), priv_check_type_(priv_check_type),
+      columns_(), check_any_column_priv_(false)
+  { }
+
   ObNeedPriv()
       : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false),
-        is_for_update_(false), priv_check_type_(OB_PRIV_CHECK_ALL)
+        obj_type_(share::schema::ObObjectType::INVALID), is_for_update_(false),
+        priv_check_type_(OB_PRIV_CHECK_ALL), columns_(), check_any_column_priv_(false)
   { }
   int deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocator);
   common::ObString db_;
@@ -4790,9 +5412,15 @@ struct ObNeedPriv
   ObPrivLevel priv_level_;
   ObPrivSet priv_set_;
   bool is_sys_table_; // May be used to represent the table of schema metadata
+  share::schema::ObObjectType obj_type_;
   bool is_for_update_;
   ObPrivCheckType priv_check_type_;
-  TO_STRING_KV(K_(db), K_(table), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update),
+  ObSEArray<ObString, 4> columns_; //used under table level.
+  // If columns_ empty, then check table level priv_set.
+  // Else column_ not empty, then table level has not the priv_set, then check if column_ has the priv_set.
+  bool check_any_column_priv_; //used under table level.
+  // If check_any_column_priv_ true, then check the table has any column with the priv_set.
+  TO_STRING_KV(K_(db), K_(table), K_(columns), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update),
                K_(priv_check_type));
 };
 
@@ -4897,7 +5525,11 @@ struct ObSessionPrivInfo
       user_priv_set_(0),
       db_priv_set_(0),
       effective_tenant_id_(common::OB_INVALID_ID),
-      enable_role_id_array_()
+      enable_role_id_array_(),
+      security_version_(0),
+      proxy_user_id_(),
+      proxy_user_name_(),
+      proxy_host_name_()
   {}
   ObSessionPrivInfo(const uint64_t tenant_id,
                     const uint64_t effective_tenant_id,
@@ -4913,11 +5545,22 @@ struct ObSessionPrivInfo
         user_priv_set_(user_priv_set),
         db_priv_set_(db_priv_set),
         effective_tenant_id_(effective_tenant_id),
-        enable_role_id_array_()
+        enable_role_id_array_(),
+        security_version_(0),
+        proxy_user_id_(),
+        proxy_user_name_(),
+        proxy_host_name_()
   {}
 
   virtual ~ObSessionPrivInfo() {}
 
+  bool is_valid() const
+  {
+    return (tenant_id_ != common::OB_INVALID_ID) && (user_id_ != common::OB_INVALID_ID);
+  }
+
+  bool is_tenant_changed() const { return common::OB_INVALID_ID != effective_tenant_id_
+                                          && tenant_id_ != effective_tenant_id_; }
   void reset()
   {
     tenant_id_ = common::OB_INVALID_ID;
@@ -4929,17 +5572,16 @@ struct ObSessionPrivInfo
     user_priv_set_ = 0;
     db_priv_set_ = 0;
     enable_role_id_array_.reset();
+    security_version_ = 0;
+    proxy_user_id_ = common::OB_INVALID_ID;
+    proxy_user_name_.reset();
+    proxy_host_name_.reset();
   }
-  bool is_valid() const
-  {
-    return (tenant_id_ != common::OB_INVALID_ID) && (user_id_ != common::OB_INVALID_ID);
-  }
-  bool is_tenant_changed() const { return common::OB_INVALID_ID != effective_tenant_id_
-                                          && tenant_id_ != effective_tenant_id_; }
   void set_effective_tenant_id(uint64_t effective_tenant_id) { effective_tenant_id_ = effective_tenant_id; }
   uint64_t get_effective_tenant_id() { return effective_tenant_id_; }
   virtual TO_STRING_KV(K_(tenant_id), K_(effective_tenant_id), K_(user_id), K_(user_name), K_(host_name),
-                       K_(db), K_(user_priv_set), K_(db_priv_set));
+                       K_(db), K_(user_priv_set), K_(db_priv_set),  K_(security_version), K_(proxy_user_id), K_(proxy_user_name),
+                       K_(proxy_host_name));
 
   uint64_t tenant_id_; //for privilege.Current login tenant. if normal tenant access
                        //sys tenant's object should use other method for priv checking.
@@ -4952,6 +5594,10 @@ struct ObSessionPrivInfo
   // Only used for privilege check to determine whether there are currently tenants, otherwise the value is illegal
   uint64_t effective_tenant_id_;
   common::ObSEArray<uint64_t, 8> enable_role_id_array_;
+  uint64_t security_version_;
+  uint64_t proxy_user_id_;
+  common::ObString proxy_user_name_;
+  common::ObString proxy_host_name_;
 };
 
 struct ObUserLoginInfo
@@ -4962,7 +5608,7 @@ struct ObUserLoginInfo
                   const common::ObString &client_ip,
                   const common::ObString &passwd,
                   const common::ObString &db)
-      : tenant_name_(tenant_name), user_name_(user_name), client_ip_(client_ip),
+      : tenant_name_(tenant_name), user_name_(user_name), proxied_user_name_(), client_ip_(client_ip),
         passwd_(passwd), db_(db), scramble_str_()
   {}
 
@@ -4972,13 +5618,25 @@ struct ObUserLoginInfo
                   const common::ObString &passwd,
                   const common::ObString &db,
                   const common::ObString &scramble_str)
-      : tenant_name_(tenant_name), user_name_(user_name), client_ip_(client_ip),
+      : tenant_name_(tenant_name), user_name_(user_name), proxied_user_name_(), client_ip_(client_ip),
         passwd_(passwd), db_(db), scramble_str_(scramble_str)
   {}
 
-  TO_STRING_KV(K_(tenant_name), K_(user_name), K_(client_ip), K_(db), K_(scramble_str));
+  ObUserLoginInfo(const common::ObString &tenant_name,
+                  const common::ObString &user_name,
+                  const common::ObString &proxied_user_name,
+                  const common::ObString &client_ip,
+                  const common::ObString &passwd,
+                  const common::ObString &db,
+                  const common::ObString &scramble_str)
+      : tenant_name_(tenant_name), user_name_(user_name), proxied_user_name_(proxied_user_name), client_ip_(client_ip),
+        passwd_(passwd), db_(db), scramble_str_(scramble_str)
+  {}
+
+  TO_STRING_KV(K_(tenant_name), K_(user_name), K_(proxied_user_name), K_(client_ip), K_(db), K_(scramble_str));
   common::ObString tenant_name_;
   common::ObString user_name_;
+  common::ObString proxied_user_name_;
   common::ObString client_ip_;//client ip for current user
   common::ObString passwd_;
   common::ObString db_;
@@ -6797,6 +7455,11 @@ public:
   // inline void set_cache_size(int64_t val) { option_.set_cache_size(val); }
   inline void set_cycle_flag(bool cycle) { option_.set_cycle_flag(cycle); }
   inline void set_order_flag(bool order) { option_.set_order_flag(order); }
+  inline void set_flag(int64_t flag) { option_.set_flag(flag); }
+  inline void set_cache_order_mode(ObSequenceCacheOrderMode mode)
+  {
+    option_.set_cache_order_mode(mode);
+  }
 
   // Temporary compatibility code, in order to support max_value etc. as Number type
   // int set_max_value(const common::ObString &str);
@@ -6827,8 +7490,13 @@ public:
   //inline int64_t get_increment_by() const { return option_.get_increment_by(); }
   //inline int64_t get_start_with() const { return option_.get_start_with(); }
   //inline int64_t get_cache_size() const { return option_.get_cache_size(); }
+  inline int64_t get_flag() const { return option_.get_flag(); }
   inline bool get_cycle_flag() const { return option_.get_cycle_flag(); }
   inline bool get_order_flag() const { return option_.get_order_flag(); }
+  inline ObSequenceCacheOrderMode get_cache_order_mode() const
+  {
+    return option_.get_cache_order_mode();
+  }
   inline const common::ObString &get_sequence_name() const { return name_; }
   inline const char *get_sequence_name_str() const { return extract_str(name_); }
   inline share::ObSequenceOption &get_sequence_option() { return option_; }
@@ -8432,6 +9100,7 @@ public:
   int get_column_id(const int64_t idx, uint64_t &column_id) const;
   int remove_column_id(const uint64_t column_id);
   int get_column_group_type_name(ObString &readable_cg_name) const;
+  bool has_same_column_group_attributes_for_part_exchange(const ObColumnGroupSchema &other) const;
 
   VIRTUAL_TO_STRING_KV(K_(column_group_id),
                        K_(column_group_name),

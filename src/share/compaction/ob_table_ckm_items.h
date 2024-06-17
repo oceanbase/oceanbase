@@ -73,9 +73,10 @@ public:
   {}
   ~ObSortColumnIdArray() { reset(); }
   int build(const uint64_t tenant_id, const share::schema::ObTableSchema &table_schema);
+  bool is_inited() const { return is_inited_; }
   static int get_array_idx_by_column_id(ObSortColumnIdArray& sort_array, const int64_t column_id, int64_t &array_idx)
   {
-    return sort_array.get_func_(sort_array, column_id, array_idx);
+    return NULL == sort_array.get_func_ ? -1 : sort_array.get_func_(sort_array, column_id, array_idx);
   }
   void reset();
   TO_STRING_KV(K_(is_inited), K_(build_map_flag), K_(array), "map_size", map_.size());
@@ -100,9 +101,10 @@ private:
 struct ObTableCkmItems
 {
 public:
-  ObTableCkmItems(const uint64_t tenant_id);
+  ObTableCkmItems(const uint64_t tenant_id = MTL_ID());
   ~ObTableCkmItems();
   bool is_inited() const { return is_inited_; }
+  void set_is_fts_index(const bool is_fts_index) { is_fts_index_ = is_fts_index; }
   void clear();
   void reset();
   int64_t get_table_id() const { return table_id_; }
@@ -148,6 +150,7 @@ private:
     ObTableCkmItems &index_ckm);
   static int compare_ckm_by_column_ids(
     ObTableCkmItems &data_ckm,
+    ObTableCkmItems &index_ckm,
     const share::schema::ObTableSchema &data_table_schema,
     const share::schema::ObTableSchema &index_table_schema,
     const ObIArray<int64_t> &data_replica_ckm_array,
@@ -160,6 +163,7 @@ private:
   static const int64_t DEFAULT_COLUMN_CNT = 64;
   static const int64_t DEFAULT_TABLET_CNT = 16;
   bool is_inited_;
+  bool is_fts_index_;
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t row_count_;

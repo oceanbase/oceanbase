@@ -1,0 +1,187 @@
+**************   Begin Test Reserved Keyword   ***************
+Reserved Keyword: ALTER
+Test PL procedure name Sql:create procedure ALTER () select 1;
+Reserved Keyword: BEFORE
+Test PL procedure name Sql:create procedure BEFORE () select 1;
+Reserved Keyword: BY
+Test PL procedure name Sql:create procedure BY () select 1;
+Reserved Keyword: CALL
+Test PL procedure name Sql:create procedure CALL () select 1;
+Reserved Keyword: CASE
+Test PL procedure name Sql:create procedure CASE () select 1;
+Reserved Keyword: CONDITION
+Test PL procedure name Sql:create procedure CONDITION () select 1;
+Reserved Keyword: CONTINUE
+Test PL procedure name Sql:create procedure CONTINUE () select 1;
+Reserved Keyword: CREATE
+Test PL procedure name Sql:create procedure CREATE () select 1;
+Reserved Keyword: CURRENT_USER
+Test PL procedure name Sql:create procedure CURRENT_USER () select 1;
+Reserved Keyword: CURSOR
+Test PL procedure name Sql:create procedure CURSOR () select 1;
+Reserved Keyword: DECLARE
+Test PL procedure name Sql:create procedure DECLARE () select 1;
+Reserved Keyword: DEFAULT
+Test PL procedure name Sql:create procedure DEFAULT () select 1;
+Reserved Keyword: DELETE
+Test PL procedure name Sql:create procedure DELETE () select 1;
+Reserved Keyword: DETERMINISTIC
+Test PL procedure name Sql:create procedure DETERMINISTIC () select 1;
+Reserved Keyword: DROP
+Test PL procedure name Sql:create procedure DROP () select 1;
+Reserved Keyword: EACH
+Test PL procedure name Sql:create procedure EACH () select 1;
+Reserved Keyword: ELSE
+Test PL procedure name Sql:create procedure ELSE () select 1;
+Reserved Keyword: ELSEIF
+Test PL procedure name Sql:create procedure ELSEIF () select 1;
+Reserved Keyword: EXISTS
+Test PL procedure name Sql:create procedure EXISTS () select 1;
+Reserved Keyword: EXIT
+Test PL procedure name Sql:create procedure EXIT () select 1;
+Reserved Keyword: FETCH
+Test PL procedure name Sql:create procedure FETCH () select 1;
+Reserved Keyword: FOR
+Test PL procedure name Sql:create procedure FOR () select 1;
+Reserved Keyword: FROM
+Test PL procedure name Sql:create procedure FROM () select 1;
+Reserved Keyword: IF
+Test PL procedure name Sql:create procedure IF () select 1;
+Reserved Keyword: IN
+Test PL procedure name Sql:create procedure IN () select 1;
+Reserved Keyword: INDEX
+Test PL procedure name Sql:create procedure INDEX () select 1;
+Reserved Keyword: INOUT
+Test PL procedure name Sql:create procedure INOUT () select 1;
+Reserved Keyword: INSERT
+Test PL procedure name Sql:create procedure INSERT () select 1;
+Reserved Keyword: INTO
+Test PL procedure name Sql:create procedure INTO () select 1;
+Reserved Keyword: IS
+Test PL procedure name Sql:create procedure IS () select 1;
+Reserved Keyword: ITERATE
+Test PL procedure name Sql:create procedure ITERATE () select 1;
+Reserved Keyword: LEAVE
+Test PL procedure name Sql:create procedure LEAVE () select 1;
+Reserved Keyword: LIMIT
+Test PL procedure name Sql:create procedure LIMIT () select 1;
+Reserved Keyword: LONG
+Test PL procedure name Sql:create procedure LONG () select 1;
+Reserved Keyword: LOOP
+Test PL procedure name Sql:create procedure LOOP () select 1;
+Reserved Keyword: MODIFIES
+Test PL procedure name Sql:create procedure MODIFIES () select 1;
+Reserved Keyword: NOT
+Test PL procedure name Sql:create procedure NOT () select 1;
+Reserved Keyword: ON
+Test PL procedure name Sql:create procedure ON () select 1;
+Reserved Keyword: OR
+Test PL procedure name Sql:create procedure OR () select 1;
+Reserved Keyword: OUT
+Test PL procedure name Sql:create procedure OUT () select 1;
+Reserved Keyword: PROCEDURE
+Test PL procedure name Sql:create procedure PROCEDURE () select 1;
+Reserved Keyword: READS
+Test PL procedure name Sql:create procedure READS () select 1;
+Reserved Keyword: REPEAT
+Test PL procedure name Sql:create procedure REPEAT () select 1;
+Reserved Keyword: REPLACE
+Test PL procedure name Sql:create procedure REPLACE () select 1;
+Reserved Keyword: RESIGNAL
+Test PL procedure name Sql:create procedure RESIGNAL () select 1;
+Reserved Keyword: RETURN
+Test PL procedure name Sql:create procedure RETURN () select 1;
+Reserved Keyword: SELECT
+Test PL procedure name Sql:create procedure SELECT () select 1;
+Reserved Keyword: SIGNAL
+Test PL procedure name Sql:create procedure SIGNAL () select 1;
+Reserved Keyword: SQL
+Test PL procedure name Sql:create procedure SQL () select 1;
+Reserved Keyword: SQLEXCEPTION
+Test PL procedure name Sql:create procedure SQLEXCEPTION () select 1;
+Reserved Keyword: SQLSTATE
+Test PL procedure name Sql:create procedure SQLSTATE () select 1;
+Reserved Keyword: SQLWARNING
+Test PL procedure name Sql:create procedure SQLWARNING () select 1;
+Reserved Keyword: TABLE
+Test PL procedure name Sql:create procedure TABLE () select 1;
+Reserved Keyword: THEN
+Test PL procedure name Sql:create procedure THEN () select 1;
+Reserved Keyword: TRIGGER
+Test PL procedure name Sql:create procedure TRIGGER () select 1;
+Reserved Keyword: UPDATE
+Test PL procedure name Sql:create procedure UPDATE () select 1;
+Reserved Keyword: USING
+Test PL procedure name Sql:create procedure USING () select 1;
+Reserved Keyword: WHEN
+Test PL procedure name Sql:create procedure WHEN () select 1;
+Reserved Keyword: WHILE
+Test PL procedure name Sql:create procedure WHILE () select 1;
+Reserved Keyword: TINYINT
+Test PL procedure name Sql:create procedure TINYINT () select 1;
+Reserved Keyword: SMALLINT
+Test PL procedure name Sql:create procedure SMALLINT () select 1;
+Reserved Keyword: MEDIUMINT
+Test PL procedure name Sql:create procedure MEDIUMINT () select 1;
+Reserved Keyword: INTEGER
+Test PL procedure name Sql:create procedure INTEGER () select 1;
+Reserved Keyword: BIGINT
+Test PL procedure name Sql:create procedure BIGINT () select 1;
+Reserved Keyword: FLOAT
+Test PL procedure name Sql:create procedure FLOAT () select 1;
+Reserved Keyword: DOUBLE
+Test PL procedure name Sql:create procedure DOUBLE () select 1;
+Reserved Keyword: PRECISION
+Test PL procedure name Sql:create procedure PRECISION () select 1;
+Reserved Keyword: DEC
+Test PL procedure name Sql:create procedure DEC () select 1;
+Reserved Keyword: DECIMAL
+Test PL procedure name Sql:create procedure DECIMAL () select 1;
+Reserved Keyword: NUMERIC
+Test PL procedure name Sql:create procedure NUMERIC () select 1;
+Reserved Keyword: CHARACTER
+Test PL procedure name Sql:create procedure CHARACTER () select 1;
+Reserved Keyword: VARCHAR
+Test PL procedure name Sql:create procedure VARCHAR () select 1;
+Reserved Keyword: BINARY
+Test PL procedure name Sql:create procedure BINARY () select 1;
+Reserved Keyword: VARBINARY
+Test PL procedure name Sql:create procedure VARBINARY () select 1;
+Reserved Keyword: UNSIGNED
+Test PL procedure name Sql:create procedure UNSIGNED () select 1;
+Reserved Keyword: ZEROFILL
+Test PL procedure name Sql:create procedure ZEROFILL () select 1;
+Reserved Keyword: COLLATE
+Test PL procedure name Sql:create procedure COLLATE () select 1;
+Reserved Keyword: SET
+Test PL procedure name Sql:create procedure SET () select 1;
+Reserved Keyword: BLOB
+Test PL procedure name Sql:create procedure BLOB () select 1;
+Reserved Keyword: TINYTEXT
+Test PL procedure name Sql:create procedure TINYTEXT () select 1;
+Reserved Keyword: MEDIUMTEXT
+Test PL procedure name Sql:create procedure MEDIUMTEXT () select 1;
+Reserved Keyword: LONGTEXT
+Test PL procedure name Sql:create procedure LONGTEXT () select 1;
+Reserved Keyword: TINYBLOB
+Test PL procedure name Sql:create procedure TINYBLOB () select 1;
+Reserved Keyword: MEDIUMBLOB
+Test PL procedure name Sql:create procedure MEDIUMBLOB () select 1;
+Reserved Keyword: LONGBLOB
+Test PL procedure name Sql:create procedure LONGBLOB () select 1;
+Reserved Keyword: VARYING
+Test PL procedure name Sql:create procedure VARYING () select 1;
+Reserved Keyword: CHARSET
+Test PL procedure name Sql:create procedure CHARSET () select 1;
+Reserved Keyword: COMMIT
+Test PL procedure name Sql:create procedure COMMIT () select 1;
+Reserved Keyword: ROLLBACK
+Test PL procedure name Sql:create procedure ROLLBACK () select 1;
+Reserved Keyword: DO
+Test PL procedure name Sql:create procedure DO () select 1;
+Reserved Keyword: UNTIL
+Test PL procedure name Sql:create procedure UNTIL () select 1;
+************** Total Count of Reserved Keyword:91   ***************
+**************   End Test Reserved Keyword   ***************
+**************   Begin Test Non-Reserved Keyword  ***************
+**************   End Test Non-Reserved Keyword  ***************

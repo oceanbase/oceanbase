@@ -31,7 +31,9 @@ namespace rootserver
 {
 class ObZoneMergeManager;
 class ObServerManager;
-
+struct ObFTSGroupArray;
+struct ObFTSGroup;
+struct ObFTSIndexInfo;
 struct ObReplicaCkmItems
 {
   ObReplicaCkmItems()
@@ -64,7 +66,8 @@ public:
     compaction::ObCkmValidatorStatistics &statistics,
     ObArray<share::ObTabletLSPair> &finish_tablet_ls_pair_array,
     ObArray<share::ObTabletChecksumItem> &finish_tablet_ckm_array,
-    compaction::ObUncompactInfo &uncompact_info)
+    compaction::ObUncompactInfo &uncompact_info,
+    ObFTSGroupArray &fts_group_array)
     : is_inited_(false),
       is_primary_service_(false),
       need_validate_index_ckm_(false),
@@ -85,6 +88,7 @@ public:
       finish_tablet_ls_pair_array_(finish_tablet_ls_pair_array),
       finish_tablet_ckm_array_(finish_tablet_ckm_array),
       uncompact_info_(uncompact_info),
+      fts_group_array_(fts_group_array),
       schema_guard_(nullptr),
       simple_schema_(nullptr),
       table_compaction_info_(),
@@ -118,6 +122,9 @@ public:
     const common::ObIArray<share::ObTabletLSPair> &tablet_ls_pairs);
   int batch_write_tablet_ckm();
   int batch_update_report_scn();
+  int handle_fts_checksum(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const ObFTSGroupArray &fts_group_array);
   static const int64_t SPECIAL_TABLE_ID = 1;
   TO_STRING_KV(K_(tenant_id), K_(is_primary_service), K_(table_id), K_(compaction_scn));
 private:
@@ -150,6 +157,14 @@ private:
     const ObArray<share::ObTabletChecksumItem> &tablet_checksum_items);
   bool check_waiting_tablet_checksum_timeout() const;
   int try_update_tablet_checksum_items();
+  /* FTS Checksum Section */
+  int validate_rowkey_doc_indexs(const ObFTSGroup &fts_group, ObIArray<int64_t> &finish_table_ids);
+  int validate_fts_indexs(const ObFTSIndexInfo &index_info, ObIArray<int64_t> &finish_table_ids);
+  int build_ckm_item_for_fts(
+    const int64_t table_id,
+    compaction::ObTableCkmItems &data_table_ckm,
+    ObIArray<int64_t> &finish_table_ids);
+  int finish_verify_fts_ckm(const int64_t table_id);
   static const int64_t PRINT_CROSS_CLUSTER_LOG_INVERVAL = 10 * 60 * 1000 * 1000; // 10 mins
   static const int64_t MAX_TABLET_CHECKSUM_WAIT_TIME_US = 36 * 3600 * 1000 * 1000L;  // 36 hours
   static const int64_t MAX_BATCH_INSERT_COUNT = 1500;
@@ -174,6 +189,7 @@ private:
   ObArray<share::ObTabletLSPair> &finish_tablet_ls_pair_array_;
   ObArray<share::ObTabletChecksumItem> &finish_tablet_ckm_array_;
   compaction::ObUncompactInfo &uncompact_info_;
+  ObFTSGroupArray &fts_group_array_;
 
   /* different for every table */
   share::schema::ObSchemaGetterGuard *schema_guard_;

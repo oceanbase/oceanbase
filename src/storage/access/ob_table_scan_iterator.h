@@ -32,6 +32,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx/ob_trans_service.h"
 #include "ob_table_scan_range.h"
+#include "ob_global_iterator_pool.h"
 
 namespace oceanbase
 {
@@ -59,7 +60,7 @@ public:
   void reuse();
   void reset_for_switch();
   virtual void reset();
-  ObAccessService::ObStoreCtxGuard &get_ctx_guard() { return ctx_guard_; }
+  ObStoreCtxGuard &get_ctx_guard() { return ctx_guard_; }
 
   // A offline ls will disable replay status and kill all part_ctx on the follower.
   // We can not read the uncommitted data which has not replay commit log yet.
@@ -71,6 +72,9 @@ private:
   static const int64_t LOOP_RESCAN_BUFFER_SIZE = 8 * 1024; // 8K
   int prepare_table_param(const ObTabletHandle &tablet_handle);
   int prepare_table_context();
+  bool can_use_global_iter_pool(const ObQRIterType iter_type) const;
+  int prepare_cached_iter_node();
+  void try_release_cached_iter_node(const ObQRIterType rescan_iter_type);
   template<typename T> int init_scan_iter(T *&iter);
   template<typename T> void reset_scan_iter(T *&iter);
   int switch_scan_param(ObMultipleMerge &iter);
@@ -92,9 +96,11 @@ private:
   int init_and_open_block_sample_iter_();
   int init_and_open_row_sample_iter_();
   int init_and_open_memtable_row_sample_iter_(const ObIArray<blocksstable::ObDatumRange> &scan_ranges);
+  int sort_sample_ranges();
 
 private:
   bool is_inited_;
+  ObQRIterType current_iter_type_;
   ObSingleMerge *single_merge_;
   ObMultipleGetMerge *get_merge_;
   ObMultipleScanMerge *scan_merge_;
@@ -108,11 +114,13 @@ private:
   ObTableAccessContext main_table_ctx_;
   ObGetTableParam get_table_param_;
 
-  ObAccessService::ObStoreCtxGuard ctx_guard_;
+  ObStoreCtxGuard ctx_guard_;
   ObTableScanParam *scan_param_;
   ObTableScanRange table_scan_range_;
   ObQueryRowIterator *main_iter_;
   ObSEArray<ObDatumRange, 1> sample_ranges_;
+  CachedIteratorNode *cached_iter_node_;
+  ObQueryRowIterator **cached_iter_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableScanIterator);
 };

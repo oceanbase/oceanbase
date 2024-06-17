@@ -38,6 +38,43 @@ public:
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
 };
 
+class ObDASEmptyOp : public ObDASSimpleOp
+{
+public:
+  ObDASEmptyOp(common::ObIAllocator &op_alloc)
+    : ObDASSimpleOp(op_alloc)
+  {
+  }
+  virtual ~ObDASEmptyOp() = default;
+  virtual int open_op() override { return common::OB_NOT_IMPLEMENT; }
+  virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override
+  {
+    UNUSEDx(task_result, has_more, memory_limit);
+    return common::OB_NOT_IMPLEMENT;
+  }
+  virtual int decode_task_result(ObIDASTaskResult *task_result) override
+  {
+    UNUSEDx(task_result);
+    return common::OB_NOT_IMPLEMENT;
+  }
+};
+
+class ObDASEmptyResult : public ObIDASTaskResult
+{
+public:
+  ObDASEmptyResult() {}
+  virtual ~ObDASEmptyResult() {}
+  virtual int init(const ObIDASTaskOp &op, common::ObIAllocator &alloc) override
+  {
+    UNUSEDx(op, alloc);
+    return common::OB_NOT_IMPLEMENT;
+  }
+  virtual int reuse() override
+  {
+    return common::OB_NOT_IMPLEMENT;
+  }
+};
+
 struct ObDASEmptyCtDef : ObDASBaseCtDef
 {
   OB_UNIS_VERSION(1);
@@ -147,4 +184,4 @@ public:
 
 }  // namespace sql
 }  // namespace oceanbase
-#endif /* OBDEV_SRC_SQL_DAS_OB_DAS_DELETE_OP_H_ */
+#endif /* OBDEV_SRC_SQL_DAS_OB_DAS_SIMPLE_OP_H */

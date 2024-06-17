@@ -26,8 +26,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.3.0.0"
-#current_data_version = "4.3.0.0"
+#current_cluster_version = "4.3.2.0"
+#current_data_version = "4.3.2.0"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #
@@ -155,10 +155,12 @@
 #
 #  return timeout
 #
-#def set_tenant_parameter(cur, parameter, value, timeout = 0):
+#def set_tenant_parameter(cur, parameter, value, timeout = 0, only_sys_tenant = False):
 #
 #  tenants_list = []
-#  if get_min_cluster_version(cur) < get_version("4.2.1.0"):
+#  if only_sys_tenant:
+#    tenants_list = ['sys']
+#  elif get_min_cluster_version(cur) < get_version("4.2.1.0"):
 #    tenants_list = ['all']
 #  else:
 #    tenants_list = ['sys', 'all_user', 'all_meta']
@@ -174,7 +176,7 @@
 #
 #  set_session_timeout(cur, 10)
 #
-#  wait_parameter_sync(cur, True, parameter, value, timeout)
+#  wait_parameter_sync(cur, True, parameter, value, timeout, only_sys_tenant)
 #
 #def get_ori_enable_ddl(cur, timeout):
 #  ori_value_str = fetch_ori_enable_ddl(cur)
@@ -258,10 +260,11 @@
 #    bret = False
 #  return bret
 #
-#def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
+#def wait_parameter_sync(cur, is_tenant_config, key, value, timeout, only_sys_tenant = False):
 #  table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+#  extra_sql = " and tenant_id = 1" if is_tenant_config and only_sys_tenant else ""
 #  sql = """select count(*) as cnt from oceanbase.{0}
-#           where name = '{1}' and value != '{2}'""".format(table_name, key, value)
+#           where name = '{1}' and value != '{2}'{3}""".format(table_name, key, value, extra_sql)
 #
 #  wait_timeout = 0
 #  query_timeout = 0
@@ -611,6 +614,7 @@
 #import upgrade_health_checker
 #import tenant_upgrade_action
 #import upgrade_post_checker
+#import re
 #
 ## 由于用了/*+read_consistency(WEAK) */来查询，因此升级期间不能允许创建或删除租户
 #
@@ -619,6 +623,11 @@
 #  sql_dump_filename = config.post_upgrade_sql_filename
 #  rollback_sql_filename =  config.post_upgrade_rollback_sql_filename
 #
+#class PasswordMaskingFormatter(logging.Formatter):
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#
 #def config_logging_module(log_filenamme):
 #  logging.basicConfig(level=logging.INFO,\
 #      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
@@ -626,15 +635,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 #
 #def print_stats():
 #  logging.info('==================================================================================')
@@ -662,7 +674,7 @@
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
 #        logging.info('================begin to run health check action ===============')
-#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, False)  # need_check_major_status = False
+#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout)
 #        logging.info('================succeed to run health check action ===============')
 #
 #      if run_modules.MODULE_END_ROLLING_UPGRADE in my_module_set:
@@ -744,7 +756,7 @@
 #        else:
 #          raise MyError('invalid module: {0}'.format(cmd_module))
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, timeout, module_set, log_filename)
+#          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
 #      do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
@@ -767,6 +779,7 @@
 #import mysql.connector
 #from mysql.connector import errorcode
 #import logging
+#import re
 #
 #import config
 #import opts
@@ -782,6 +795,11 @@
 #  sql_dump_filename = config.pre_upgrade_sql_filename
 #  rollback_sql_filename = config.pre_upgrade_rollback_sql_filename
 #
+#class PasswordMaskingFormatter(logging.Formatter):
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#
 #def config_logging_module(log_filenamme):
 #  logging.basicConfig(level=logging.INFO,\
 #      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
@@ -789,15 +807,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 #
 #def print_stats():
 #  logging.info('==================================================================================')
@@ -848,7 +869,7 @@
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
 #        logging.info('================begin to run health check action ===============')
-#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, True) # need_check_major_status = True
+#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout)
 #        logging.info('================succeed to run health check action ===============')
 #
 #    except Exception, e:
@@ -898,7 +919,7 @@
 #        else:
 #          raise MyError('invalid module: {0}'.format(cmd_module))
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, timeout, module_set, log_filename)
+#          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
 #      do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
@@ -1334,19 +1355,19 @@
 #  # when upgrade across version, disable enable_ddl/major_freeze
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
-#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
-#    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
-#    # wait scheduler in storage to notice adaptive_compaction is switched to false
-#    time.sleep(60 * 2)
-#    query_cur = actions.QueryCursor(cur)
-#    wait_major_timeout = 600
-#    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
-#    actions.do_suspend_merge(cur, timeout)
 #  # When upgrading from a version prior to 4.2 to version 4.2, the bloom_filter should be disabled.
 #  # The param _bloom_filter_enabled is no longer in use as of version 4.2, there is no need to enable it again.
 #  if actions.get_version(current_version) < actions.get_version('4.2.0.0')\
 #      and actions.get_version(target_version) >= actions.get_version('4.2.0.0'):
 #    actions.set_tenant_parameter(cur, '_bloom_filter_enabled', 'False', timeout)
+#  # Disable enable_rebalance of sys tenant to avoid automatic unit migration
+#  # regardless of the same version upgrade or cross-version upgrade.
+#  # enable_rebalance is changed from cluster level to tenant level since 4.2.
+#  if actions.get_version(current_version) < actions.get_version('4.2.0.0'):
+#    actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
+#  else:
+#    only_sys_tenant = True
+#    actions.set_tenant_parameter(cur, 'enable_rebalance', 'False', timeout, only_sys_tenant)
 #
 #####========******####======== actions begin ========####******========####
 #  return
@@ -1639,10 +1660,17 @@
 #import logging
 #import getopt
 #import time
+#import re
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_checker.log'
 #  old_version = '4.0.0.0'
+#
+#class PasswordMaskingFormatter(logging.Formatter):
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
 #  def __init__(self, value):
@@ -1912,15 +1940,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 ##### ---------------end----------------------
 #
 #
@@ -2032,9 +2063,6 @@
 #  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
-#  if results[0][0] > 0 :
-#    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
 #
 ## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
@@ -2308,6 +2336,39 @@
 #        fail_list.append('Sys Variable binlog_row_image is set to MINIMAL, please check'.format(results[0][0]))
 #    logging.info('check variable binlog_row_image success')
 #
+## 20. check oracle tenant's standby_replication privs
+#def check_oracle_standby_replication_exist(query_cur):
+#  check_success = True
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    check_success = False
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    check_success = False
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    (desc, results) = query_cur.exec_query("""select tenant_id from oceanbase.__all_tenant where compatibility_mode = 1""")
+#    if len(results) > 0 :
+#      tenant_ids = results
+#      if (min_cluster_version < get_version("4.2.2.0") or (get_version("4.3.0.0") <= min_cluster_version < get_version("4.3.1.0"))):
+#        for tenant_id in tenant_ids:
+#          sql = """select count(1)=1 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+#          (desc, results) = query_cur.exec_query(sql)
+#          if results[0][0] == 1 :
+#            check_success = False
+#            fail_list.append('{0} tenant standby_replication already exists, please check'.format(tenant_id[0]))
+#      else :
+#        for tenant_id in tenant_ids:
+#          sql = """select count(1)=0 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+#          (desc, results) = query_cur.exec_query(sql)
+#          if results[0][0] == 1 :
+#            check_success = False
+#            fail_list.append('{0} tenant standby_replication not exist, please check'.format(tenant_id[0]))
+#  if check_success:
+#    logging.info('check oracle standby_replication privs success')
 ## last check of do_check, make sure no function execute after check_fail_list
 #def check_fail_list():
 #  if len(fail_list) != 0 :
@@ -2356,6 +2417,7 @@
 #      check_table_compress_func(query_cur)
 #      check_table_api_transport_compress_func(query_cur)
 #      check_variable_binlog_row_image(query_cur)
+#      check_oracle_standby_replication_exist(query_cur)
 #      # all check func should execute before check_fail_list
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
@@ -2391,7 +2453,7 @@
 #      password = get_opt_password()
 #      timeout = int(get_opt_timeout())
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, timeout, log_filename)
+#          host, port, user, password.replace('"', '\\"'), timeout, log_filename)
 #      do_check(host, port, user, password, timeout, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
@@ -2411,9 +2473,15 @@
 #from mysql.connector import errorcode
 #import logging
 #import getopt
+#import re
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_cluster_health_checker.log'
+#
+#class PasswordMaskingFormatter(logging.Formatter):
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 #
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
@@ -2666,15 +2734,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 ##### ---------------end----------------------
 #
 #def check_zone_valid(query_cur, zone):
@@ -2787,7 +2858,7 @@
 #    time.sleep(10)
 #
 ## 开始健康检查
-#def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, need_check_major_status, zone = ''):
+#def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, zone = ''):
 #  try:
 #    conn = mysql.connector.connect(user = my_user,
 #                                   password = my_passwd,
@@ -2804,8 +2875,6 @@
 #      check_paxos_replica(query_cur, timeout)
 #      check_schema_status(query_cur, timeout)
 #      check_server_version_by_zone(query_cur, zone)
-#      if True == need_check_major_status:
-#        check_major_merge(query_cur, timeout)
 #    except Exception, e:
 #      logging.exception('run error')
 #      raise e
@@ -2839,8 +2908,8 @@
 #      timeout = int(get_opt_timeout())
 #      zone = get_opt_zone()
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
-#          host, port, user, password, log_filename, timeout, zone)
-#      do_check(host, port, user, password, upgrade_params, timeout, False, zone) # need_check_major_status = False
+#          host, port, user, password.replace('"', '\\"'), log_filename, timeout, zone)
+#      do_check(host, port, user, password, upgrade_params, timeout, zone)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
 #      raise e
@@ -2958,9 +3027,10 @@
 #def enable_ddl(cur, timeout):
 #  actions.set_parameter(cur, 'enable_ddl', 'True', timeout)
 #
-## 5 打开rebalance
+## 5 打开sys租户rebalance
 #def enable_rebalance(cur, timeout):
-#  actions.set_parameter(cur, 'enable_rebalance', 'True', timeout)
+#  only_sys_tenant = True
+#  actions.set_tenant_parameter(cur, 'enable_rebalance', 'True', timeout, only_sys_tenant)
 #
 ## 6 打开rereplication
 #def enable_rereplication(cur, timeout):
@@ -2981,7 +3051,6 @@
 #    enable_ddl(cur, timeout)
 #    enable_rebalance(cur, timeout)
 #    enable_rereplication(cur, timeout)
-#    enable_major_freeze(cur, timeout)
 #  except Exception, e:
 #    logging.exception('run error')
 #    raise e

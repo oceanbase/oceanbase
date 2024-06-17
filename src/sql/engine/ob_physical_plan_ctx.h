@@ -23,7 +23,10 @@
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/engine/user_defined_function/ob_udf_ctx_mgr.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "lib/udt/ob_udt_type.h"
 #include "sql/engine/ob_subschema_ctx.h"
+#include "sql/engine/expr/ob_expr_util.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -94,6 +97,13 @@ class ObPhysicalPlanCtx
 public:
   explicit ObPhysicalPlanCtx(common::ObIAllocator &allocator);
   virtual ~ObPhysicalPlanCtx();
+  void destroy()
+  {
+    // Member variables that need to request additional memory
+    // with another allocator should call destroy here.
+    subschema_ctx_.destroy();
+    all_local_session_vars_.destroy();
+  }
   inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   inline void set_show_seed(bool show_seed) { is_show_seed_ = show_seed; }
   inline uint64_t get_tenant_id() { return tenant_id_; }
@@ -461,10 +471,32 @@ public:
   void set_spm_timeout_timestamp(const int64_t timeout) { spm_ts_timeout_us_ = timeout; }
   void set_rich_format(bool v) { enable_rich_format_ = v; }
   bool is_rich_format() const { return enable_rich_format_; }
+
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
+  int get_subschema_id_by_udt_id(uint64_t udt_type_id,
+                                 uint16_t &subschema_id,
+                                 share::schema::ObSchemaGetterGuard *schema_guard = NULL);
+  int build_subschema_by_fields(const ColumnsFieldIArray *fields,
+                                share::schema::ObSchemaGetterGuard *schema_guard);
+  int build_subschema_ctx_by_param_store(share::schema::ObSchemaGetterGuard *schema_guard);
+  ObSubSchemaCtx &get_subschema_ctx() { return subschema_ctx_; }
   const ObIArray<ObArrayParamGroup> &get_array_param_groups() const { return array_param_groups_; }
   ObIArray<ObArrayParamGroup> &get_array_param_groups() { return array_param_groups_; }
   int set_all_local_session_vars(ObIArray<ObLocalSessionVar> &all_local_session_vars);
-  int get_local_session_vars(int64_t idx, const ObLocalSessionVar *&local_vars);
+  int get_local_session_vars(int64_t idx, const ObSolidifiedVarsContext *&local_vars);
+  common::ObFixedArray<uint64_t, common::ObIAllocator> &get_mview_ids() {  return mview_ids_; }
+  common::ObFixedArray<uint64_t, common::ObIAllocator> &get_last_refresh_scns() {  return last_refresh_scns_; }
+  uint64_t get_last_refresh_scn(uint64_t mview_id) const;
+  void set_tx_id(int64_t tx_id) { tx_id_ = tx_id; }
+  int64_t get_tx_id() const { return tx_id_; }
+  void set_tm_sessid(int64_t tm_sessid) { tm_sessid_ = tm_sessid; }
+  int64_t get_tm_sessid() const { return tm_sessid_; }
+  void set_hint_xa_trans_stop_check_lock(int64_t hint_xa_trans_stop_check_lock) { hint_xa_trans_stop_check_lock_ = hint_xa_trans_stop_check_lock; }
+  int64_t get_hint_xa_trans_stop_check_lock() const { return hint_xa_trans_stop_check_lock_; }
+  void set_main_xa_trans_branch(int64_t main_xa_trans_branch) { main_xa_trans_branch_ = main_xa_trans_branch; }
+  int64_t get_main_xa_trans_branch() const { return main_xa_trans_branch_; }
+  ObIArray<uint64_t> &get_dblink_ids() { return dblink_ids_; }
+  inline int keep_dblink_id(uint64_t dblink_id) { return add_var_to_array_no_dup(dblink_ids_, dblink_id); }
 private:
   int init_param_store_after_deserialize();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
@@ -606,7 +638,15 @@ private:
   ObSubSchemaCtx subschema_ctx_;
   bool enable_rich_format_;
   // for dependant exprs of generated columns
-  common::ObFixedArray<ObLocalSessionVar *, common::ObIAllocator> all_local_session_vars_;
+  common::ObFixedArray<ObSolidifiedVarsContext, common::ObIAllocator> all_local_session_vars_;
+  // for last_refresh_scn expr to get last_refresh_scn for rt mview used in query
+  common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> last_refresh_scns_;
+  int64_t tx_id_; //for dblink recover xa tx
+  uint32_t tm_sessid_; //for dblink get connection attached on tm session
+  bool hint_xa_trans_stop_check_lock_; // for dblink to stop check stmt lock in xa trans
+  bool main_xa_trans_branch_; // for dblink to indicate weather this sql is executed in main_xa_trans_branch
+  ObSEArray<uint64_t, 8> dblink_ids_;
 };
 
 }

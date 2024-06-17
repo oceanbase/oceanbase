@@ -92,13 +92,13 @@ public:
   ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObDMLStmt *stmt,
                    ObSchemaGetterGuard *schema_guard,
                    common::ObObjPrintParams print_params,
-                   const ParamStore *param_store = NULL);
+                   const ParamStore *param_store = NULL,
+                   const ObSQLSessionInfo *session = NULL);
   virtual ~ObDMLStmtPrinter();
   void enable_print_temp_table_as_cte() { print_cte_ = true; }
   void disable_print_temp_table_as_cte() { print_cte_ = false; }
   void init(char *buf, int64_t buf_len, int64_t *pos, ObDMLStmt *stmt);
   virtual int do_print() = 0;
-  static int set_synonym_name_recursively(ObRawExpr * cur_expr, const ObDMLStmt *stmt);
 
   int print_from(bool need_from = true);
   int print_semi_join();
@@ -109,10 +109,12 @@ public:
   int print_fetch();
   int print_returning();
   int print_json_table(const TableItem *table_item);
+  int print_xml_table(const TableItem *table_item);
   int print_table(const TableItem *table_item,
                   bool no_print_alias = false);
   int print_table_with_subquery(const TableItem *table_item);
   int print_base_table(const TableItem *table_item);
+  int prepare_dblink_hint(ObQueryHint &query_hint_dblink);
   int print_hint();
   void set_is_root(bool is_root) { is_root_ = is_root; }
   void set_is_first_stmt_for_hint(bool is_first_stmt) { is_first_stmt_for_hint_ = is_first_stmt; }
@@ -146,6 +148,8 @@ private:
   int print_binary_charset_collation(int64_t value, ObDataType data_type);
   int get_json_table_column_if_exists(int32_t id, ObDmlJtColDef* root, ObDmlJtColDef*& col);
   int build_json_table_nested_tree(const TableItem* table_item, ObIAllocator* allocator, ObDmlJtColDef*& root);
+  // add xml table namespace
+  int print_xml_namespace(const TableItem *table_item);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObDMLStmtPrinter);
 
@@ -162,6 +166,7 @@ protected:
   ObObjPrintParams print_params_;
   ObRawExprPrinter expr_printer_;
   const ParamStore *param_store_;
+  const ObSQLSessionInfo *session_;
 };
 
 }

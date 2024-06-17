@@ -92,7 +92,7 @@ enum ObObjType
 
   ObUserDefinedSQLType = 49, // User defined type in SQL
   ObDecimalIntType     = 50, // decimal int type
-  // ! occupy for ob_gis_42x: ObCollectionSQLType  = 51, // collection(varray and nested table) in SQL
+  ObCollectionSQLType  = 51, // collection(varray and nested table) in SQL
   ObMaxType                 // invalid type, or count of obj type
 };
 
@@ -126,7 +126,7 @@ enum ObObjOType
   ObOJsonType         = 24,
   ObOGeometryType     = 25,
   ObOUDTSqlType       = 26,
-  // !occupy for ob_gis_42x: ObOCollectionSqlType  = 27,
+  ObOCollectionSqlType  = 27,
   ObOMaxType          //invalid type, or count of ObObjOType
 };
 
@@ -213,6 +213,7 @@ static ObObjOType OBJ_TYPE_TO_O_TYPE[ObMaxType+1] = {
   ObOGeometryType,           //ObGeometryType = 48,
   ObOUDTSqlType,             //ObUserDefinedSQLType = 49,
   ObONumberType,             //ObDecimalIntType = 50,
+  ObOCollectionSqlType,      //ObCollectionSQLType = 51,
   ObONotSupport              //ObMaxType,
 };
 
@@ -245,7 +246,7 @@ enum ObObjTypeClass
   ObGeometryTC      = 23, // geometry type class
   ObUserDefinedSQLTC = 24, // user defined type class in SQL
   ObDecimalIntTC     = 25, // decimal int class
-  // ! occupy for ob_gis_42x: ObCollectionSQLTC = 26, // collection type class in SQL
+  ObCollectionSQLTC = 26, // collection type class in SQL
   ObMaxTC,
   // invalid type classes are below, only used as the result of XXXX_type_promotion()
   // to indicate that the two obj can't be promoted to the same type.
@@ -307,7 +308,8 @@ enum ObObjTypeClass
     (ObJsonType, ObJsonTC),                    \
     (ObGeometryType, ObGeometryTC),            \
     (ObUserDefinedSQLType, ObUserDefinedSQLTC),\
-    (ObDecimalIntType, ObDecimalIntTC)
+    (ObDecimalIntType, ObDecimalIntTC),\
+    (ObCollectionSQLType, ObCollectionSQLTC)
 
 #define SELECT_SECOND(x, y) y
 #define SELECT_TC(arg) SELECT_SECOND arg
@@ -348,6 +350,7 @@ const ObObjType OBJ_DEFAULT_TYPE[ObActualMaxTC] =
   ObGeometryType,   // geometry
   ObUserDefinedSQLType, // user defined type in sql
   ObDecimalIntType, // decimal int
+  ObCollectionSQLType,  // collection type in sql
   ObMaxType,        // maxtype
   ObUInt64Type,     // int&uint
   ObMaxType,        // lefttype
@@ -384,6 +387,7 @@ static ObObjTypeClass OBJ_O_TYPE_TO_CLASS[ObOMaxType + 1] =
   ObJsonTC,       // ObOJsonType
   ObGeometryTC,   // ObOGeometryType
   ObUserDefinedSQLTC, // ObOUDTSqlType
+  ObCollectionSQLTC, // ObCollectionSqlType
   ObMaxTC
 };
 
@@ -1084,6 +1088,7 @@ enum ObExtObjType
   T_EXT_SQL_END = 200
 };
 
+// systemd defined udt type (fixed udt id)
 enum ObUDTType
 {
   T_OBJ_NOT_SUPPORTED = 0,
@@ -1181,6 +1186,7 @@ enum VecValueTypeClass: uint16_t {
   VEC_TC_DEC_INT128,
   VEC_TC_DEC_INT256,
   VEC_TC_DEC_INT512,
+  VEC_TC_COLLECTION,
   MAX_VEC_TC
 };
 
@@ -1241,7 +1247,9 @@ OB_INLINE VecValueTypeClass get_vec_value_tc(const ObObjType type, const int16_t
     VEC_TC_LOB,               // ObLobType
     VEC_TC_JSON,              // ObJsonType
     VEC_TC_GEO,               // ObGeometryType
-    VEC_TC_UDT                // ObUserDefinedSQLType
+    VEC_TC_UDT,                // ObUserDefinedSQLType
+    MAX_VEC_TC,               // invalid for ObDecimalIntType
+    VEC_TC_COLLECTION         // ObCollectionSQLType
   };
   VecValueTypeClass t = MAX_VEC_TC;
   if (type < 0 || type >= ObMaxType) {
@@ -1282,7 +1290,7 @@ OB_INLINE bool ob_is_castable_type_class(ObObjTypeClass tc)
       || ObBitTC == tc || ObEnumSetTC == tc || ObEnumSetInnerTC == tc || ObTextTC == tc
       || ObOTimestampTC == tc || ObRawTC == tc || ObIntervalTC == tc
       || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc || ObGeometryTC == tc
-      || ObUserDefinedSQLTC == tc || ObDecimalIntTC == tc;
+      || ObUserDefinedSQLTC == tc || ObDecimalIntTC == tc || ObCollectionSQLTC == tc;
 }
 
 //used for arithmetic
@@ -1395,7 +1403,8 @@ inline bool ob_is_unsigned_type(ObObjType type)
           || ObYearType == type
           || ObUFloatType == type
           || ObUDoubleType == type
-          || ObUNumberType == type;
+          || ObUNumberType == type
+          || ObBitType == type;
 }
 bool is_match_alter_integer_column_online_ddl_rules(const common::ObObjMeta& src_meta,
                                                     const common::ObObjMeta& dst_meta);
@@ -1544,7 +1553,11 @@ inline bool ob_is_var_len_type(const ObObjType type) {
       || ob_is_rowid_tc(type)
       || ob_is_lob_locator(type);
 }
-inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type) || ob_is_geometry_tc(type); }
+inline bool ob_is_collection_sql_type(const ObObjType type) { return ObCollectionSQLType == type; }
+inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type)
+                                                          || ob_is_json_tc(type)
+                                                          || ob_is_geometry_tc(type)
+                                                          || ob_is_collection_sql_type(type); }
 inline bool ob_is_geometry(const ObObjType type) { return ObGeometryType == type; }
 inline bool ob_is_lob_group(const ObObjType type) { return ob_is_json(type) || ob_is_geometry(type) || ob_is_large_text(type); }
 inline bool ob_is_decimal_int(const ObObjType type) { return ObDecimalIntType == type; }

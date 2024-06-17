@@ -15,6 +15,7 @@
 
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/ob_operator.h"
+#include "sql/das/ob_das_context.h"
 
 namespace oceanbase
 {
@@ -86,10 +87,11 @@ public:
   int get_next_batch_from_store(int64_t max_rows, int64_t &read_rows);
   ObBatchRowDatums &get_last_batch() { return last_batch_; }
   void destroy();
+  int get_next_row_from_right();
+  int get_next_batch_from_right(int64_t max_batch_size, const ObBatchRows *brs);
 private:
   int init_group_params();
   int deep_copy_dynamic_obj();
-  int bind_group_params_to_store();
   int prepare_rescan_params();
   int get_next_left_iter();
   int add_row_to_store();
@@ -153,6 +155,8 @@ private:
   int64_t above_group_size_;
   int64_t max_group_size_;
   int64_t group_scan_size_;
+  int64_t group_rescan_cnt_;
+  GroupParamArray rescan_params_info_;
   union {
     uint64_t flags_;
     struct {

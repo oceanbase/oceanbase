@@ -61,7 +61,7 @@ public:
       int64_t &sys_ls_min_progress,
       palf::LSN &sys_ls_min_handle_log_lsn) = 0;
 
-  virtual int64_t get_part_trans_task_count() const = 0;
+  virtual void get_task_count(int64_t &total_part_trans_count, int64_t &ddl_part_trans_count) const = 0;
 
   virtual void configure(const ObLogConfig &config) = 0;
 };
@@ -99,7 +99,7 @@ public:
       uint64_t &sys_min_progress_tenant_id,
       int64_t &sys_ls_min_progress,
       palf::LSN &sys_ls_min_handle_log_lsn);
-  virtual int64_t get_part_trans_task_count() const;
+  virtual void get_task_count(int64_t &total_part_trans_count, int64_t &ddl_part_trans_count) const;
   virtual void configure(const ObLogConfig &config);
 
 public:
@@ -140,6 +140,8 @@ private:
       PartTransTask *task,
       ObLogTenant *tenant,
       const bool is_tenant_served);
+  void inc_ddl_part_trans_count_() { ATOMIC_INC(&ddl_part_trans_count_); }
+  void dec_ddl_part_trans_count_() { ATOMIC_DEC(&ddl_part_trans_count_); }
 
 public:
   // Task queue
@@ -180,6 +182,7 @@ private:
 
   // Queue of pending tasks exported from Fetcher
   TaskQueue           sys_ls_fetch_queue_;
+  int64_t             ddl_part_trans_count_;
   common::ObCond      wait_formatted_cond_;
 
 private:

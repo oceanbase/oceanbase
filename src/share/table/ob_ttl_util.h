@@ -342,6 +342,10 @@ public:
   }
   static bool is_enable_ttl(uint64_t tenant_id);
   static const char *get_ttl_tenant_status_cstr(const ObTTLTaskStatus &status);
+
+  static int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
+  static bool is_ttl_column(const ObString &orig_column_name, const ObIArray<ObString> &ttl_columns);
+
   const static uint64_t TTL_TENNAT_TASK_TABLET_ID = -1;
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
 private:

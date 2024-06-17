@@ -444,39 +444,59 @@ int ObSkipIndexFilterExecutor::in_operator(const sql::ObWhiteFilterExecutor &fil
 {
   int ret = OB_SUCCESS;
   const common::ObIArray<common::ObDatum> &datums = filter.get_datums();
-  if (OB_UNLIKELY(datums.count() == 0 || filter.null_param_contained())){
+  const sql::ObExpr *col_expr = filter.get_filter_node().expr_;
+  if (OB_UNLIKELY(nullptr == col_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument for falsifiable IN operator", K(ret), K(filter));
+  } else if (filter.null_param_contained()) {
+    fal_desc.set_always_false();
   } else {
-    const int ref_count = datums.count();
     ObDatumCmpFuncType cmp_func = filter.cmp_func_;
-    int min_cmp_res;
-    int max_cmp_res;
-    bool falsifable_true = true;
-    bool falsifable_false = false;
-    for (int i = 0; OB_SUCC(ret) && i < ref_count; ++i) {
-      if (OB_FAIL(cmp_func(min_datum, datums.at(i), min_cmp_res))) {
-        LOG_WARN("Failed to compare datum", K(ret), K(min_datum), K(i), K(datums.at(i)));
-      } else if (OB_FAIL(cmp_func(max_datum, datums.at(i), max_cmp_res))) {
-        LOG_WARN("Failed to compare datum", K(ret), K(max_datum), K(i), K(datums.at(i)));
-      } else {
-          if (falsifable_true && ((min_cmp_res < 0 && max_cmp_res > 0) ||
-              min_cmp_res == 0 || max_cmp_res == 0)) {
-            falsifable_true = false;
-          }
-          if (!falsifable_false && min_cmp_res == 0 && max_cmp_res == 0) {
-            falsifable_false = true;
-          }
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (falsifable_true) {
+    ObDatumCmpFuncType col_cmp_func = col_expr->args_[0]->basic_funcs_->null_first_cmp_;
+    int min_cmp_res = 0;
+    int max_cmp_res = 0;
+    int cmp_res = 0;
+
+    if (OB_FAIL(cmp_func(min_datum, filter.get_max_param(), min_cmp_res))) {
+      LOG_WARN("Failed to compare min datum with max filter param", K(ret), K(min_datum), K(filter.get_max_param()));
+    } else if (min_cmp_res > 0) {
       fal_desc.set_always_false();
-    } else if (falsifable_false) {
-      fal_desc.set_always_true();
+    } else if (OB_FAIL(cmp_func(max_datum, filter.get_min_param(), max_cmp_res))) {
+      LOG_WARN("Failed to compare max datum with min filter param", K(ret), K(max_datum), K(filter.get_min_param()));
+    } else if (max_cmp_res < 0) {
+      fal_desc.set_always_false();
+    } else if (OB_FAIL(col_cmp_func(min_datum, max_datum, cmp_res))) {
+      LOG_WARN("Failed to compare min max datum", K(ret), K(min_datum), K(max_datum));
+    } else if (cmp_res == 0) {
+      if (min_cmp_res == 0 || max_cmp_res == 0) {
+        fal_desc.set_always_true();
+      } else {
+        ObFilterInCmpType cmp_type = get_filter_in_cmp_type(1, datums.count(), false);
+        bool is_exist = false;
+        if (cmp_type == ObFilterInCmpType::BINARY_SEARCH) {
+          if (OB_FAIL(filter.exist_in_datum_array(min_datum, is_exist))) {
+            LOG_WARN("Failed to check datum in array", K(ret), K(min_datum), K(max_datum));
+          }
+        } else if (cmp_type == ObFilterInCmpType::HASH_SEARCH) {
+          if (OB_FAIL(filter.exist_in_datum_set(min_datum, is_exist))) {
+            LOG_WARN("Failed to check datum in hashset", K(ret), K(min_datum), K(max_datum));
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected filter in compare type", K(ret), K(cmp_type));
+        }
+        if (OB_SUCC(ret)) {
+          if (is_exist) {
+            fal_desc.set_always_true();
+          } else {
+            fal_desc.set_always_false();
+          }
+        }
+      }
     } else {
       fal_desc.set_uncertain();
     }
+    LOG_DEBUG("check filter in in skip index", K(min_cmp_res), K(max_cmp_res), K(cmp_res), K(fal_desc));
   }
   return ret;
 }

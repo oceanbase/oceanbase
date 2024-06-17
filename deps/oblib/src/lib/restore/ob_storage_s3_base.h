@@ -48,6 +48,7 @@
 #include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
 #include <aws/core/utils/HashingUtils.h>
 #include <aws/core/utils/crypto/CRC32.h>
+#include <aws/core/client/DefaultRetryStrategy.h>
 #pragma pop_macro("private")
 
 namespace oceanbase
@@ -62,8 +63,6 @@ int init_s3_env();
 // You need to clean s3 resource when not use cos any more.
 // Thread safe guaranteed by user.
 void fin_s3_env();
-
-bool is_s3_supported_checksum(ObStorageChecksumType checksum_type);
 
 static constexpr int64_t S3_CONNECT_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t S3_REQUEST_TIMEOUT_MS = 10 * 1000;
@@ -296,9 +295,9 @@ protected:
   ObS3Client *s3_client_;
   ObString bucket_;
   ObString object_;
-  // The default is ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
-  // The S3 SDK cannot disable checksum, therefore ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
-  // is equivalent to using the SDK's default checksum algorithm, which is md5
+  // The default is ObStorageChecksumType::OB_MD5_ALGO
+  // The S3 SDK cannot disable checksum,
+  // therefore ObStorageChecksumType::OB_NO_CHECKSUM_ALGO is not supported
   ObStorageChecksumType checksum_type_;
 
 private:

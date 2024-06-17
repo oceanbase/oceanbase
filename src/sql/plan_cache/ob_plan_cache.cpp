@@ -594,7 +594,7 @@ int ObPlanCache::get_plan(common::ObIAllocator &allocator,
         if (GCONF.enable_perf_event) {
           uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
           bool read_only = false;
-          if (pc_ctx.sql_ctx_.session_info_->is_inner()) {
+          if (pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.session_info_->is_user_session()) {
             // do nothing
           } else if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id,
                                                                                  read_only))) {
@@ -740,8 +740,6 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
               K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
         } else {
           fp_result.raw_params_.reset();
-          fp_result.raw_params_.set_allocator(&allocator);
-          fp_result.raw_params_.set_capacity(pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)->count());
           if (OB_FAIL(fp_result.raw_params_.assign(*pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)))) {
             LOG_WARN("fail to assign raw_param", K(ret));
           } else {
@@ -1229,18 +1227,18 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
     SQL_PC_LOG(TRACE, "failed to get cache node from lib cache by key", K(ret));
   } else if (OB_UNLIKELY(NULL == cache_node)) {
     ret = OB_SQL_PC_NOT_EXIST;
-    SQL_PC_LOG(TRACE, "cache obj does not exist!", K(key));
+    SQL_PC_LOG(DEBUG, "cache obj does not exist!", K(key));
   } else {
-    LOG_TRACE("inner_get_cache_obj", K(key), K(cache_node));
+    LOG_DEBUG("inner_get_cache_obj", K(key), K(cache_node));
     if (OB_FAIL(cache_node->update_node_stat(ctx))) {
       SQL_PC_LOG(WARN, "failed to update node stat",  K(ret));
     } else if (OB_FAIL(cache_node->get_cache_obj(ctx, key, cache_obj))) {
       if (OB_SQL_PC_NOT_EXIST != ret) {
-        LOG_TRACE("cache_node fail to get cache obj", K(ret));
+        LOG_DEBUG("cache_node fail to get cache obj", K(ret));
       }
     } else {
       guard.cache_obj_ = cache_obj;
-      LOG_TRACE("succ to get cache obj", KPC(key));
+      LOG_DEBUG("succ to get cache obj", KPC(key));
     }
     // release lock whatever
     (void)cache_node->unlock();
@@ -2266,7 +2264,7 @@ int ObPlanCache::get_ps_plan(ObCacheObjGuard& guard,
   if (OB_SUCC(ret) && GCONF.enable_perf_event) {
     uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
     bool read_only = false;
-    if (pc_ctx.sql_ctx_.session_info_->is_inner()) {
+    if (pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.session_info_->is_user_session()) {
       // do nothing
     } else if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id, read_only))) {
       SQL_PC_LOG(WARN, "fail to get tenant read only attribute", K(tenant_id), K(ret));
@@ -2323,6 +2321,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   // added plan's key will be `true + other_info`, same as key constructed for getting plan.
   // if `use_rich_format()` is used as part of key, added plan's key will be `false + other_info`.
   pc_key.use_rich_vector_format_ = session.initial_use_rich_format();
+  pc_key.config_use_rich_format_ = session.config_use_rich_format();
   pc_key.is_weak_read_ = is_weak;
   return ret;
 }

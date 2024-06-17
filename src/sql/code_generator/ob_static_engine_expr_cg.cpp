@@ -278,8 +278,13 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       rt_expr->obj_meta_ = result_meta;
       // pl extend type has its own explanation for scale
       if (ObExtendType != rt_expr->obj_meta_.get_type()
-          && ObUserDefinedSQLType != rt_expr->obj_meta_.get_type()) {
+          && ObUserDefinedSQLType != rt_expr->obj_meta_.get_type()
+          && ObCollectionSQLType != rt_expr->obj_meta_.get_type()) {
         rt_expr->obj_meta_.set_scale(rt_expr->datum_meta_.scale_);
+      }
+      if (result_meta.is_xml_sql_type()) {
+        // set xml subschema id = ObXMLSqlType
+        rt_expr->datum_meta_.cs_type_ = CS_TYPE_INVALID;
       }
       if (is_lob_storage(rt_expr->obj_meta_.get_type())) {
         if (cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
@@ -618,11 +623,11 @@ int ObStaticEngineExprCG::classify_exprs(const ObIArray<ObRawExpr *> &raw_exprs,
       && !raw_exprs.at(i)->has_flag(IS_TABLE_ASSIGN) && !is_dyn_qm) {
       if (raw_exprs.at(i)->has_flag(IS_DYNAMIC_PARAM)) {
         // if questionmark is dynamic evaluated, e.g. decint->nmb, use dynamic_param_frame as its memory
-        if (dynamic_param_exprs.push_back(raw_exprs.at(i))) {
+        if (OB_FAIL(dynamic_param_exprs.push_back(raw_exprs.at(i)))) {
           LOG_WARN("fail to push expr", K(ret), K(i), K(raw_exprs));
         }
       } else {
-        if (param_exprs.push_back(raw_exprs.at(i))) {
+        if (OB_FAIL(param_exprs.push_back(raw_exprs.at(i)))) {
           LOG_WARN("fail to push expr", K(ret), K(i), K(raw_exprs));
         }
       }
@@ -636,7 +641,6 @@ int ObStaticEngineExprCG::classify_exprs(const ObIArray<ObRawExpr *> &raw_exprs,
       }
     }
   }
-
   return ret;
 }
 
@@ -1716,7 +1720,6 @@ int ObStaticEngineExprCG::divide_probably_local_exprs(common::ObIArray<ObRawExpr
   int ret = OB_SUCCESS;;
   int64_t begin = 0;
   int64_t end = exprs.count() - 1;
-
   while (begin < end) {
     while (begin <= end && !exprs.at(begin)->has_flag(IS_PROBABLY_LOCAL)) {
       begin++;
@@ -1730,7 +1733,6 @@ int ObStaticEngineExprCG::divide_probably_local_exprs(common::ObIArray<ObRawExpr
       end--;
     }
   }
-
   return ret;
 }
 
@@ -1985,9 +1987,23 @@ bool ObStaticEngineExprCG::is_vectorized_expr(const ObRawExpr *raw_expr) const
 
 int ObStaticEngineExprCG::compute_max_batch_size(const ObRawExpr *raw_expr)
 {
+  // expr_datums_header_size
+  int64_t irrelevant = sizeof(ObEvalInfo) + 1 + 1;
+  // 1 refer to three bitmap (2 in expr_datums_header_size, 1 in rich_format_size)
+  int64_t relevant = sizeof(ObDatum) + 1;
+  // reserve_datums_buf_len
   const ObExprResType &result_type = raw_expr->get_result_type();
-  return (MAX_FRAME_SIZE - sizeof(ObEvalInfo)) /
-           (1 + sizeof(ObDatum) + reserve_data_consume(result_type.get_type(), result_type.get_precision()));
+  relevant += reserve_data_consume(result_type.get_type(), result_type.get_precision());
+  // rich_format_size
+  if (use_rich_format()) {
+    ObExpr *rt_expr = get_rt_expr(*raw_expr);
+    if (OB_ISNULL(rt_expr) || !rt_expr->is_fixed_length_data_) {
+      irrelevant += sizeof(uint32_t) + sizeof(ObDynReserveBuf);
+      relevant += sizeof(uint32_t) + sizeof(char *);
+    }
+    irrelevant += sizeof(VectorHeader) + 1;
+  }
+  return (MAX_FRAME_SIZE - irrelevant) / relevant;
 }
 
 // this is used for dynamic evaluated questionmark exprs

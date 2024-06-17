@@ -20,7 +20,7 @@ namespace oceanbase
 namespace rootserver
 {
 
-class ObDropIndexTask : public ObDDLTask
+class ObDropIndexTask final: public ObDDLTask
 {
 public:
   ObDropIndexTask();
@@ -40,7 +40,7 @@ public:
   virtual int process() override;
   virtual bool is_valid() const override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
+  virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, KP_(root_service));
   virtual void flt_set_task_span_tag() const override;
@@ -68,6 +68,7 @@ private:
   }
 private:
   static const int64_t OB_DROP_INDEX_TASK_VERSION = 1;
+private:
   ObDDLWaitTransEndCtx wait_trans_ctx_;
   ObRootService *root_service_;
   obrpc::ObDropIndexArg drop_index_arg_;

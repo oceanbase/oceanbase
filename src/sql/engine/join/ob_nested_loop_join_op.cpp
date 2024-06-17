@@ -589,8 +589,6 @@ int ObNestedLoopJoinOp::group_read_left_operate()
           ret = OB_ERR_UNEXPECTED;
         }
         LOG_WARN("rescan right failed", KR(ret));
-      } else if (OB_FAIL(group_join_buffer_.fill_cur_row_group_param())) {
-        LOG_WARN("fill group param failed", KR(ret));
       }
     } else {
       ret = OB_ITER_END;
@@ -635,7 +633,7 @@ int ObNestedLoopJoinOp::read_right_operate()
 {
   int ret = OB_SUCCESS;
   clear_evaluated_flag();
-  if (OB_FAIL(get_next_right_row()) && OB_ITER_END != ret) {
+  if (OB_FAIL(get_next_row_from_right()) && OB_ITER_END != ret) {
     LOG_WARN("failed to get next right row", K(ret));
   }
 
@@ -821,7 +819,11 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
       }
 
       if (OB_SUCC(ret)) {
-        const_cast<ObBatchRows *>(left_brs)->skip_->reset(read_size);
+        // left_brs.size_ may be larger or smaller than read_size:
+        //   left_brs.size_ > read_size: group size is small and lots of left rows were skipped;
+        //   left_brs.size_ < read_size: left_brs reaches iter end with no enough rows;
+        // Thus, we need to reset skip_ with max size of left_brs.size_ and read_size.
+        const_cast<ObBatchRows *>(left_brs)->skip_->reset(std::max(left_brs->size_, read_size));
         const_cast<ObBatchRows *>(left_brs)->size_ = read_size;
         const_cast<ObBatchRows *>(left_brs)->end_ = false;
         left_row_joined_ = false;
@@ -847,7 +849,11 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
           LOG_WARN("get next batch from store failed", KR(ret));
         }
       } else {
-        const_cast<ObBatchRows *>(left_brs)->skip_->reset(read_size);
+        // left_brs.size_ may be larger or smaller than read_size:
+        //   left_brs.size_ > read_size: group size is small and lots of left rows were skipped;
+        //   left_brs.size_ < read_size: left_brs reaches iter end with no enough rows;
+        // Thus, we need to reset skip_ with max size of left_brs.size_ and read_size.
+        const_cast<ObBatchRows *>(left_brs)->skip_->reset(std::max(left_brs->size_, read_size));
         const_cast<ObBatchRows *>(left_brs)->size_ = read_size;
         const_cast<ObBatchRows *>(left_brs)->end_ = false;
         left_row_joined_ = false;
@@ -908,7 +914,8 @@ int ObNestedLoopJoinOp::process_right_batch()
   const ObBatchRows *right_brs = &right_->get_brs();
   const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
   clear_evaluated_flag();
-  if (OB_FAIL(right_->get_next_batch(op_max_batch_size_, right_brs))) {
+  DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), MY_SPEC.group_rescan_);
+  if (OB_FAIL(get_next_batch_from_right(right_brs))) {
     LOG_WARN("fail to get next right batch", K(ret), K(MY_SPEC));
   } else if (0 == right_brs->size_ && right_brs->end_) {
     match_right_batch_end_ = true;
@@ -1162,5 +1169,28 @@ int ObNestedLoopJoinOp::calc_other_conds(bool &is_match)
 
   return ret;
 }
+
+int ObNestedLoopJoinOp::get_next_batch_from_right(const ObBatchRows *right_brs)
+{
+  int ret = OB_SUCCESS;
+  if (!MY_SPEC.group_rescan_) {
+    ret = right_->get_next_batch(op_max_batch_size_, right_brs);
+  } else {
+    ret = group_join_buffer_.get_next_batch_from_right(op_max_batch_size_, right_brs);
+  }
+  return ret;
+}
+
+int ObNestedLoopJoinOp::get_next_row_from_right()
+{
+  int ret = OB_SUCCESS;
+  if (!MY_SPEC.group_rescan_) {
+    ret = right_->get_next_row();
+  } else {
+    ret = group_join_buffer_.get_next_row_from_right();
+  }
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

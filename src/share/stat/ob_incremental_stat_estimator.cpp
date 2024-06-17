@@ -227,6 +227,8 @@ int ObIncrementalStatEstimator::derive_split_gather_stats(ObExecContext &ctx,
   } else if (OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
+  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("check status failed", KR(ret));
   } else {
     ObArenaAllocator allocator("IncrementStats", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
     ObSEArray<ObOptTableStat *, 4> cur_table_stats;
@@ -605,6 +607,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         int64_t max_bucket_num = param.column_params_.at(i).bucket_num_;
         for (int64_t j = 0; OB_SUCC(ret) && j < part_cnt; ++j) {
           ObOptColumnStat *opt_col_stat = NULL;
+          ObOptTableStat *opt_tab_stat = part_opt_stats.at(j).table_stat_;
           for (int64_t k = 0;
                OB_SUCC(ret) && opt_col_stat == NULL && k < part_opt_stats.at(j).column_stats_.count();
                ++k) {
@@ -617,7 +620,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_ISNULL(opt_col_stat)) {
+          } else if (OB_ISNULL(opt_col_stat) || OB_ISNULL(opt_tab_stat)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), K(part_opt_stats.at(j).column_stats_),
                                             K(param.column_params_.at(i)));
@@ -633,7 +636,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
               min_eval.add(opt_col_stat->get_min_value());
               max_eval.add(opt_col_stat->get_max_value());
               ndv_eval.add(opt_col_stat->get_num_distinct(), opt_col_stat->get_llc_bitmap());
-              not_null_eval.add(opt_col_stat->get_num_not_null());
+              not_null_eval.add(opt_tab_stat->get_row_count() - opt_col_stat->get_num_null());
             }
             if (opt_col_stat->get_avg_len() != 0) {
               avglen_eval.add(opt_col_stat->get_avg_len());
@@ -703,7 +706,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
       ObSEArray<ObOptStat, 1> tmp_opt_stats;
       if (OB_FAIL(ObDbmsStatsUtils::prepare_gather_stat_param(param, approx_level, NULL, false,
                                                               DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE,
-                                                              gather_param))) {
+                                                              false, gather_param))) {
         LOG_WARN("failed to assign", K(ret));
       } else if (OB_FAIL(gather_param.column_params_.assign(param.column_params_))) {
         LOG_WARN("failed to assign", K(ret));
@@ -947,6 +950,7 @@ int ObIncrementalStatEstimator::gen_opt_stat_param_by_direct_load(ObExecContext 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      alloc,
                                                       param.part_infos_,
                                                       param.subpart_infos_,
                                                       part_ids,

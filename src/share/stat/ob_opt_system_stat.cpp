@@ -83,7 +83,8 @@ int OptSystemIoBenchmark::run_benchmark(ObIAllocator &allocator)
   io_info.size_ = load_size;
   io_info.buf_ = nullptr;
   io_info.flag_.set_mode(ObIOMode::READ);
-  io_info.flag_.set_group_id(ObIOModule::CALIBRATION_IO);
+  io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
+  io_info.flag_.set_sys_module_id(ObIOModule::CALIBRATION_IO);
   io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   io_info.flag_.set_unlimited(true);
   io_info.timeout_us_ = MAX_IO_WAIT_TIME_MS;

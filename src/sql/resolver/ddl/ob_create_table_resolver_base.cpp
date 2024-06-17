@@ -40,8 +40,19 @@ int ObCreateTableResolverBase::resolve_partition_option(
     SQL_RESV_LOG(WARN, "failed to build partition key info!", KR(ret), KP(session_info_));
   } else {
     if (NULL != node) {
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
+      } else if (tenant_data_version < DATA_VERSION_4_3_1_0) {
+        if (table_schema.is_external_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("partition ext table is not supported in data version less than 4.3.1", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition external table in data version less than 4.3.1");
+        }
+      }
       ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
-      if (!is_partition_option_node_with_opt) {
+      if (OB_FAIL(ret)) {
+      } else if (!is_partition_option_node_with_opt) {
         if (OB_FAIL(resolve_partition_node(create_table_stmt, node, table_schema))) {
           LOG_WARN("failed to resolve partition option", KR(ret));
         }
@@ -67,6 +78,10 @@ int ObCreateTableResolverBase::resolve_partition_option(
         ret = OB_INVALID_ARGUMENT;
         SQL_RESV_LOG(WARN, "node type is invalid.", KR(ret), K(node->type_));
       }
+    } else if (table_schema.is_external_table() && table_schema.is_user_specified_partition_for_external_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "USER SPECIFIED PARTITION TYPE for non partitioned external table");
+      LOG_WARN("USER SPECIFIED PARTITION TYPE for non partitioned external table not supported");
     }
   }
   return ret;
@@ -381,6 +396,53 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default format or location option for external table");
       }
     }
+  }
+  return ret;
+}
+
+int ObCreateTableResolverBase::add_primary_key_part(const ObString &column_name,
+                                                    ObTableSchema &table_schema,
+                                                    const int64_t cur_rowkey_size,
+                                                    int64_t &pk_data_length,
+                                                    ObColumnSchemaV2 *&col)
+{
+  int ret = OB_SUCCESS;
+  col = NULL;
+  bool is_oracle_mode = lib::is_oracle_mode();
+  int64_t length = 0;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_NOT_INIT;
+    SQL_RESV_LOG(WARN, "session is null", KP(session_info_), K(ret));
+  } else if (static_cast<int64_t>(table_id_) > 0
+             && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
+             session_info_->get_effective_tenant_id(), table_id_, is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret), K_(table_id));
+  } else if (OB_ISNULL(col = table_schema.get_column_schema(column_name))) {
+    ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+    LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
+    SQL_RESV_LOG(WARN, "column '%s' does not exists", K(ret), K(to_cstring(column_name)));
+  } else if (OB_FAIL(check_add_column_as_pk_allowed(*col))) {
+    LOG_WARN("the column can not be primary key", K(ret));
+  } else if (col->get_rowkey_position() > 0) {
+    ret = OB_ERR_COLUMN_DUPLICATE;
+    LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
+  } else if (OB_USER_MAX_ROWKEY_COLUMN_NUMBER == cur_rowkey_size) {
+    ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+    LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+  } else if (OB_FALSE_IT(col->set_nullable(false))
+             || OB_FALSE_IT(col->set_rowkey_position(cur_rowkey_size + 1))) {
+  } else if (OB_FAIL(table_schema.set_rowkey_info(*col))) {
+    LOG_WARN("failed to set rowkey info", K(ret));
+  } else if (!col->is_string_type()) {
+    /* do nothing */
+  } else if (OB_FAIL(col->get_byte_length(length, is_oracle_mode, false))) {
+    SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
+  } else if ((pk_data_length += length) > OB_MAX_USER_ROW_KEY_LENGTH) {
+    ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+    LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
+  } else if (length <= 0) {
+    ret = OB_ERR_WRONG_KEY_COLUMN;
+    LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
   }
   return ret;
 }

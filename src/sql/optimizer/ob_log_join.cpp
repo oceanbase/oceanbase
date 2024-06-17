@@ -91,6 +91,10 @@ int ObLogJoin::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to generate join partition id expr", K(ret));
   } else if (NULL != partition_id_expr_ && OB_FAIL(all_exprs.push_back(partition_id_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+    // lateral derived table exec params may eliminate by group by, add exec_params to all_exprs here
+    // otherwise, will report 4002 in cg
+  } else if (OB_FAIL(append(all_exprs, nl_params_))) {
+    LOG_WARN("failed to append exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < nl_params_.count(); i++) {
       if (OB_ISNULL(nl_params_.at(i)) ||
@@ -1348,7 +1352,9 @@ int ObLogJoin::check_and_set_use_batch()
   if (OB_SUCC(ret) && can_use_batch_nlj_) {
     bool contains_invalid_startup = false;
     bool contains_limit = false;
-    if (get_child(1)->get_type() == log_op_def::LOG_GRANULE_ITERATOR) {
+    bool enable_group_rescan_test_mode = false;
+    enable_group_rescan_test_mode = (OB_SUCCESS != (OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS));
+    if (get_child(1)->get_type() == log_op_def::LOG_GRANULE_ITERATOR && !enable_group_rescan_test_mode) {
       can_use_batch_nlj_ = false;
     } else if (OB_FAIL(plan->contains_startup_with_exec_param(get_child(1),
                                                               contains_invalid_startup))) {
@@ -1419,12 +1425,6 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
     }
   } else if (log_op_def::LOG_SET == root->get_type()) {
     ObLogSet *log_set = static_cast<ObLogSet *>(root);
-    if (log_set->get_set_op() != ObSelectStmt::UNION) {
-      //Disable batch nested loop join that contains set operations other than UNION
-      //because other set operations may involve short-circuit operations.
-      //Currently, batch NLJ does not support short-circuit execution.
-      can_use_batch_nlj = false;
-    }
     for (int64_t i = 0; OB_SUCC(ret) && can_use_batch_nlj && i < root->get_num_of_child(); ++i) {
       ObLogicalOperator *child = root->get_child(i);
       if (OB_ISNULL(child)) {
@@ -1435,24 +1435,8 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
       }
     }
   } else if (log_op_def::LOG_JOIN == root->get_type()) {
-    ObLogJoin *join = static_cast<ObLogJoin *>(root);
-    ObSQLSessionInfo *session_info = NULL;
-    ObLogPlan *plan = NULL;
-    if (OB_ISNULL(plan = get_plan())
-        || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(plan), K(session_info));
-    } else if (!session_info->is_spf_mlj_group_rescan_enabled()) {
-      //Group rescan optimization for nested joins at multiple levels is disabled by default.
-      can_use_batch_nlj = false;
-    } else if (!join->can_use_batch_nlj()) {
-      can_use_batch_nlj = false;
-      LOG_TRACE("child join not support batch_nlj", K(root->get_name()));
-    } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(0), can_use_batch_nlj)))) {
-      LOG_WARN("failed to check use batch nlj", K(ret));
-    } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(1), can_use_batch_nlj)))) {
-      LOG_WARN("failed to check use batch nlj for right op", K(ret));
-    }
+    // multi level nlj use batch is disabled
+    can_use_batch_nlj = false;
   } else {
     can_use_batch_nlj = false;
   }
@@ -1505,6 +1489,23 @@ int ObLogJoin::allocate_startup_expr_post(int64_t child_idx)
         LOG_WARN("failed to assign exprs", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObLogJoin::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = 0;
+  ObLogicalOperator *child_op = NULL;
+  const JoinPath *path = static_cast<ObLogJoin *>(this)->get_join_path();
+  if (OB_ISNULL(path)) {
+    //for late materialization
+    card = get_card();
+  } else if (path->other_cond_sel_ > 0) {
+    card = get_card() / path->other_cond_sel_;
+  } else {
+    card = 1.0;
   }
   return ret;
 }

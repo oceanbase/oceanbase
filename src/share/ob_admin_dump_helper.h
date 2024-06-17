@@ -30,6 +30,7 @@ enum class LogFormatFlag
   FILTER_FORMAT = 2,
   STAT_FORMAT = 3,
   META_FORMAT = 4,
+  DECOMPRESS_FORMAT = 5,
 };
 
 class ObAdminLogDumperInterface
@@ -136,6 +137,7 @@ struct ObLogStat
   int64_t total_tx_redo_log_count_;
   int64_t normal_row_count_;
   int64_t table_lock_count_;
+  int64_t ext_info_log_count_;
 
 
   TO_STRING_KV(
@@ -153,7 +155,8 @@ struct ObLogStat
   K(total_tx_log_count_),
   K(total_tx_redo_log_count_),
   K(normal_row_count_),
-  K(table_lock_count_));
+  K(table_lock_count_),
+  K(ext_info_log_count_));
 };
 
 struct ObAdminMutatorStringArg
@@ -169,11 +172,14 @@ public:
   void reset();
   void reset_buf();
   ObAdminMutatorStringArg &operator= (const ObAdminMutatorStringArg &rhs);
-  TO_STRING_KV(KP_(buf), K_(buf_len), K_(pos), K(flag_), K(filter_),
+  TO_STRING_KV(KP_(buf), K_(buf_len), KP(decompress_buf_), K(decompress_buf_len_), K_(pos), K(flag_), K(filter_),
                KPC(log_stat_));
 public:
   char *buf_;
   int64_t buf_len_;
+
+  char *decompress_buf_;
+  int64_t decompress_buf_len_;
   int64_t pos_;
   LogFormatFlag flag_;
 //  int64_t tx_id_;

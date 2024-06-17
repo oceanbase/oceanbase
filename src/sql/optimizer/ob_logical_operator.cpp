@@ -60,6 +60,7 @@
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/engine/expr/ob_expr_join_filter.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
+#include "sql/optimizer/ob_opt_est_parameter_normal.h"
 
 
 using namespace oceanbase::sql;
@@ -320,7 +321,7 @@ int ObAllocExprContext::add(const ExprProducer &producer)
   if (OB_FAIL(expr_producers_.push_back(producer))) {
     LOG_WARN("failed to push back producer", K(ret));
   } else if (expr_producers_.count() == 1 &&
-             expr_map_.create(128, "ExprAlloc")) {
+             OB_FAIL(expr_map_.create(128, "ExprAlloc"))) {
     LOG_WARN("failed to init hash map", K(ret));
   } else if (OB_FAIL(expr_map_.set_refactored(reinterpret_cast<uint64_t>(producer.expr_),
                                               expr_producers_.count() - 1))) {
@@ -432,7 +433,9 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     need_late_materialization_(false),
     op_exprs_(),
     inherit_sharding_index_(-1),
-    need_osg_merge_(false)
+    need_osg_merge_(false),
+    max_px_thread_branch_(OB_INVALID_INDEX),
+    max_px_group_branch_(OB_INVALID_INDEX)
 
 {
 }
@@ -499,6 +502,18 @@ double FilterCompare::get_selectivity(ObRawExpr *expr)
     }
   }
   return selectivity;
+}
+
+int ObLogicalOperator::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child_op = NULL;
+  if (OB_NOT_NULL(child_op = get_child(ObLogicalOperator::first_child))) {
+    card = child_op->get_card();
+  } else {
+    card = 1.0;
+  }
+  return ret;
 }
 
 // Add a child to the end of the array
@@ -1053,7 +1068,7 @@ int ObLogicalOperator::compute_property(Path *path)
     if (OB_FAIL(server_list_.assign(path->server_list_))) {
       LOG_WARN("failed to assign path's server list to op", K(ret));
     } else if (OB_FAIL(check_property_valid())) {
-      LOG_WARN("failed to check property valid", K(ret));
+      LOG_WARN("failed to check property valid", K(ret), KPC(path));
     } else {
       LOG_TRACE("compute property finished",
                 K(get_op_name(type_)),
@@ -2130,7 +2145,8 @@ int ObLogicalOperator::extract_shared_exprs(ObRawExpr *raw_expr,
     LOG_WARN("failed to add var to array", K(ret));
   }
 
-  if (!ObOptimizerUtil::find_item(ctx.inseparable_exprs_, raw_expr)) {
+  if (!ObOptimizerUtil::find_item(ctx.inseparable_exprs_, raw_expr) &&
+      !raw_expr->is_match_against_expr()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); ++i) {
       ret = SMART_CALL(extract_shared_exprs(raw_expr->get_param_expr(i),
                                             ctx,
@@ -2524,9 +2540,60 @@ int ObLogicalOperator::reorder_filter_exprs()
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpeced null", K(ret), K(get_plan()));
-  } else {
-    FilterCompare filter_compare(get_plan()->get_predicate_selectivities());
-    std::sort(filter_exprs_.begin(), filter_exprs_.end(), filter_compare);
+  } else if (OB_FAIL(reorder_filters_exprs(get_plan()->get_predicate_selectivities(),
+                                           filter_exprs_))) {
+    LOG_WARN("reorder filter exprs failed", K(ret));
+  } else if (log_op_def::LOG_JOIN == get_type()) {
+    ObLogJoin *join_op = static_cast<ObLogJoin *>(this);
+    if (OB_FAIL(reorder_filters_exprs(get_plan()->get_predicate_selectivities(),
+                                      join_op->get_join_filters()))) {
+      LOG_WARN("reorder join filters failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::reorder_filters_exprs(common::ObIArray<ObExprSelPair> &predicate_selectivities,
+                                             ObIArray<ObRawExpr *> &filter_exprs)
+{
+  int ret = OB_SUCCESS;
+  double card = 0;
+  FilterCompare filter_compare(predicate_selectivities);
+  common::ObSEArray<ObExprRankPair, 4> filter_ranks;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()));
+  } else if (OB_FAIL(get_card_without_filter(card))) {
+    LOG_WARN("get num of rows to be filtered failed", K(ret));
+  } else if (card < 1.0) {
+    card = 1.0;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+    double cost_per_tuple = 0.0;
+    double sel = filter_compare.get_selectivity(filter_exprs.at(i));
+    double rank = 0;
+    if (sel < 0) {
+      // security filter should be calc firstly
+      rank = -NAN;
+    } else if (OB_FAIL(ObOptEstCost::calc_pred_cost_per_row(filter_exprs.at(i),
+                                                            card,
+                                                            cost_per_tuple,
+                                                            get_plan()->get_optimizer_context()))) {
+      LOG_WARN("calc pred cost failed", K(ret));
+    } else {
+      rank = (sel - 1) / cost_per_tuple;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(filter_ranks.push_back(ObExprRankPair(rank, filter_exprs.at(i))))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    std::sort(filter_ranks.begin(), filter_ranks.end(), ObExprRankPairCompare());
+    for(int64_t i = 0; i < filter_ranks.count(); ++i) {
+      filter_exprs.at(i) = filter_ranks.at(i).second;
+    }
   }
   return ret;
 }
@@ -2548,9 +2615,9 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
   bool is_union_all_set_pw = false;
   bool is_setop_ext_pw = false;
   bool is_join_ext_pw = false;
-  if (OB_ISNULL(ctx) || OB_ISNULL(get_stmt())) {
+  if (OB_ISNULL(ctx) || OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ctx is unexpected null", K(ret));
+    LOG_WARN("ctx is unexpected null", K(ret), K(ctx), K(get_stmt()), K(get_plan()));
   } else {
     ObLocationConstraintContext *loc_cons_ctx = reinterpret_cast<ObLocationConstraintContext *>(ctx);
 
@@ -2643,8 +2710,24 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
           } else {
             ++add_count;
           }
-        } else if (OB_FAIL(loc_cons_ctx->base_table_constraints_.push_back(loc_cons))) {
-          LOG_WARN("failed to push back location constraint", K(ret));
+        } else {
+          bool find = false;
+          ObIArray<ObTablePartitionInfo *> & partition_infos =
+              get_plan()->get_optimizer_context().get_table_partition_info();
+          for (int64_t i = 0; !find && i < partition_infos.count(); ++i) {
+            const ObTablePartitionInfo *cur_info = partition_infos.at(i);
+            if (OB_NOT_NULL(cur_info) &&
+                cur_info->get_table_id() == loc_cons.key_.table_id_ &&
+                cur_info->get_ref_table_id() == loc_cons.key_.ref_table_id_) {
+              find = true;
+            }
+          }
+          if (!find) {
+            // local multi part insert, remove location constraint of insert table because
+            // we didn't add it's table location.
+          } else if (OB_FAIL(loc_cons_ctx->base_table_constraints_.push_back(loc_cons))) {
+            LOG_WARN("failed to push back location constraint", K(ret));
+          }
         }
       }
 
@@ -3611,7 +3694,8 @@ int ObLogicalOperator::set_plan_root_output_exprs()
   } else if (stmt->is_select_stmt()) {
     const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt*>(get_stmt());
     bool is_unpivot = (LOG_UNPIVOT == type_ && sel_stmt->is_unpivot_select());
-    if (OB_FAIL(sel_stmt->get_select_exprs(output_exprs_, is_unpivot))) {
+    uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+    if (!sel_stmt->has_select_into() && OB_FAIL(sel_stmt->get_select_exprs(output_exprs_, is_unpivot))) {
       LOG_WARN("failed to get select exprs", K(ret));
     } else { /*do nothing*/ }
   } else if (stmt->is_returning()) {
@@ -3815,8 +3899,33 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
       OZ(part_infos.push_back(part_info));
     } else {
       const ObTabletID &tablet_id = part_loc.get_tablet_id();
-      OZ(table_schema->get_part_idx_by_tablet(tablet_id, part_info.part_id_, part_info.subpart_id_));
-      OZ(part_infos.push_back(part_info));
+      if (table_schema->is_external_table()) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_schema->get_partition_num(); j++) {
+          if (OB_ISNULL(table_schema->get_part_array())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("table shcema is invalid", K(ret));
+          } else {
+            ObPartition *partition = table_schema->get_part_array()[j];
+            if (OB_ISNULL(partition)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            } else if (partition->get_part_id() == part_loc.get_partition_id()) {
+              part_info.part_id_ = j;
+            }
+            LOG_TRACE("show external table partition", K(tablet_id), KPC(partition), K(partitions.at(i)), K(part_info));
+          }
+        }
+        OZ(part_infos.push_back(part_info));
+      } else {
+        OZ(table_schema->get_part_idx_by_tablet(tablet_id, part_info.part_id_, part_info.subpart_id_));
+        OZ(part_infos.push_back(part_info));
+      }
+      // if (OB_FAIL(ret) || part_info.part_id_ == OB_INVALID_INDEX) {
+      //   //do nothing
+      // } else if (!table_schema->is_external_table() || common::ObTabletID::INVALID_TABLET_ID == tablet_id.id()) {
+      //   //do nothing
+      // } else {
+      // }
       LOG_TRACE("explain print partition", K(tablet_id), K(part_info), K(ref_table_id));
     }
   }
@@ -4183,18 +4292,22 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_AFFINITIZE);
         gi_op->add_flag(GI_PARTITION_WISE);
       }
-      if (LOG_TABLE_SCAN == get_type() &&
-          static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
-        ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(this);
-        ObOpPseudoColumnRawExpr *tablet_id_expr = NULL;
-        if (OB_FAIL(generate_pseudo_partition_id_expr(tablet_id_expr))) {
-          LOG_WARN("fail alloc partition id expr", K(ret));
-        } else {
-          gi_op->set_tablet_id_expr(tablet_id_expr);
-          gi_op->set_join_filter_info(table_scan->get_join_filter_info());
-          ObLogJoinFilter *jf_create_op = gi_op->get_join_filter_info().log_join_filter_create_op_;
-          jf_create_op->set_paired_join_filter(gi_op);
-          gi_op->add_flag(GI_USE_PARTITION_FILTER);
+      if (LOG_TABLE_SCAN == get_type()) {
+        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan()) {
+          gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
+        }
+        if (static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
+          ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(this);
+          ObOpPseudoColumnRawExpr *tablet_id_expr = NULL;
+          if (OB_FAIL(generate_pseudo_partition_id_expr(tablet_id_expr))) {
+            LOG_WARN("fail alloc partition id expr", K(ret));
+          } else {
+            gi_op->set_tablet_id_expr(tablet_id_expr);
+            gi_op->set_join_filter_info(table_scan->get_join_filter_info());
+            ObLogJoinFilter *jf_create_op = gi_op->get_join_filter_info().log_join_filter_create_op_;
+            jf_create_op->set_paired_join_filter(gi_op);
+            gi_op->add_flag(GI_USE_PARTITION_FILTER);
+          }
         }
       } else if (LOG_GROUP_BY == get_type()) {
         if (static_cast<ObLogGroupBy*>(this)->force_partition_gi()) {
@@ -5099,6 +5212,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
   ObLogJoinFilter *join_filter_create = NULL;
   ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
   CK(LOG_JOIN == get_type());
+  DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_join_distributed_method();
   for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
     filter_create = NULL;
     bool right_has_exchange = false;
@@ -5146,7 +5260,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
       set_child(first_child, join_filter_create);
       join_filter_create->set_filter_length(info.sharding_->get_part_cnt() * 2);
       join_filter_create->set_is_use_filter_shuffle(right_has_exchange);
-      if (is_partition_wise_ && !right_has_exchange) {
+      if ((is_partition_wise_ || DistAlgo::DIST_PARTITION_NONE == join_dist_algo) && !right_has_exchange) {
           join_filter_create->set_is_no_shared_partition_join_filter();
       } else {
           join_filter_create->set_is_shared_partition_join_filter();
@@ -5239,7 +5353,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
             join_filter_create->set_is_use_filter_shuffle(true);
             join_filter_use->set_is_use_filter_shuffle(true);
           }
-          if (is_partition_wise_ && !right_has_exchange) {
+          if ((is_partition_wise_ || DistAlgo::DIST_PARTITION_NONE == join_dist_algo) && !right_has_exchange) {
             join_filter_create->set_is_non_shared_join_filter();
             join_filter_use->set_is_non_shared_join_filter();
           } else {
@@ -5894,6 +6008,194 @@ int ObLogicalOperator::alloc_nodes_above(AllocOpContext& ctx, const uint64_t &fl
     } else if (OB_FAIL(ctx.visit(op_id_, ObAllocOpHint::OB_MONITOR_STAT | ObAllocOpHint::OB_MONITOR_TRACING))) {
       LOG_WARN("failed to visit alloc op", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  for (int64_t i = 0; i < get_num_of_child() && OB_SUCC(ret); i++) {
+    if (OB_ISNULL(get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child op is null", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_block_op()) {
+    // block operator is usually single-child, so it doesn't matter whether consume child 1by1 actually.
+    if (is_consume_child_1by1()) {
+      // open and close child one by one.
+      for (int64_t i = 0; i < get_num_of_child() && OB_SUCC(ret); i++) {
+        child = get_child(i);
+       if (OB_FAIL(SMART_CALL(child->open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+          LOG_WARN("open px resource analyze failed", K(ret));
+        } else if (OB_FAIL(SMART_CALL(child->close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+          LOG_WARN("close px resource analyze failed", K(ret));
+        }
+      }
+    } else {
+      // open all then close all
+      for (int64_t i = 0; i < get_num_of_child() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(SMART_CALL(get_child(i)->open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+          LOG_WARN("open px resource analyze failed", K(ret));
+        }
+      }
+      for (int64_t i = 0; i < get_num_of_child() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(SMART_CALL(get_child(i)->close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+          LOG_WARN("close px resource analyze failed", K(ret));
+        }
+      }
+    }
+  } else if (is_consume_child_1by1()) {
+    // open and close all block input. for example: first child of HASH JOIN, HASH SET(except UNION)
+    int64_t child_idx = 0;
+    for (; child_idx < get_num_of_child() && is_block_input(child_idx) && OB_SUCC(ret); child_idx++) {
+      child = get_child(child_idx);
+      if (OB_FAIL(SMART_CALL(child->open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+        LOG_WARN("open px resource analyze failed", K(ret));
+      } else if (OB_FAIL(SMART_CALL(child->close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+        LOG_WARN("close px resource analyze failed", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(find_max_px_resource_child(OPEN_PX_RESOURCE_ANALYZE_ARG, child_idx))) {
+      LOG_WARN("find max px resource child failed", K(ret));
+    } else {
+      for (; child_idx < get_num_of_child() && OB_SUCC(ret); child_idx++) {
+        if (child_idx == max_px_thread_branch_ || child_idx == max_px_group_branch_) {
+          // skip, open later
+        } else if (OB_FAIL(SMART_CALL(get_child(child_idx)->open_px_resource_analyze(
+                        OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+          LOG_WARN("child open px resource analyze failed", K(ret));
+        } else if (OB_FAIL(SMART_CALL(get_child(child_idx)->close_px_resource_analyze(
+                                                              CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+          LOG_WARN("child close px resource analyze failed", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(OB_INVALID_INDEX == max_px_thread_branch_ ||
+                            OB_INVALID_INDEX == max_px_group_branch_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child with max parallel thread/group not found", K(ret));
+      } else if (max_px_thread_branch_ >= get_num_of_child()) {
+        // all inputs are block, do nothing.
+      } else if (OB_FAIL(SMART_CALL(get_child(max_px_thread_branch_)->open_px_resource_analyze(
+                                    OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+        LOG_WARN("child open px resource analyze failed", K(ret));
+      // open both child with max thread and child with max group. may be inaccurate, by design.
+      } else if (max_px_group_branch_ != max_px_thread_branch_ &&
+                OB_FAIL(SMART_CALL(get_child(max_px_group_branch_)->open_px_resource_analyze(
+                                    OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+        LOG_WARN("child open px resource analyze failed", K(ret));
+      }
+    }
+  } else {
+    // non block op and not consume child one by one, open all children. example: nlj, merge union distinct.
+    for (int64_t i = 0; i < get_num_of_child() && OB_SUCC(ret); i++) {
+      if (OB_FAIL(SMART_CALL(get_child(i)->open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+        LOG_WARN("open px resource analyze failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG)
+{
+  int ret = OB_SUCCESS;
+  // close children that are opened and not closed in open_px_resource_analyze.
+  ObLogicalOperator *child = NULL;
+   if (is_block_op()) {
+    // do nothing because all children have been closed.
+  } else if (is_consume_child_1by1()) {
+    if (max_px_thread_branch_ >= get_num_of_child()) {
+      // all children are block input and have been closed, do nothing.
+    } else if (OB_FAIL(SMART_CALL(get_child(max_px_thread_branch_)->close_px_resource_analyze(
+                            CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+      LOG_WARN("child open px resource analyze failed", K(ret));
+    // close both child with max thread and child with max group.
+    } else if (max_px_group_branch_ != max_px_thread_branch_ &&
+              OB_FAIL(SMART_CALL(get_child(max_px_group_branch_)->close_px_resource_analyze(
+                            CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+      LOG_WARN("child open px resource analyze failed", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; i < get_num_of_child() && OB_SUCC(ret); i++) {
+      if (OB_FAIL(SMART_CALL(get_child(i)->close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+        LOG_WARN("open px resource analyze failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+
+/* search for child with max running thread/group count.
+ *                                              NESTEDLOOP JOIN
+ *                               UNION ALL                           PX4(dop=5)
+ *                  HASH JOIN               PX3(dop=5)
+ *          PX1(dop=10)       PX2(dop=2)
+ * When nlj is outputting data, both union-all and PX4 are opened, the data of UNION-ALL may be from
+ *   HASH JOIN or PX3, we need to know when the px work count reaches the maximum.
+ * When the data of UNION-ALL is from HASH JOIN, the px worker count of the plan equals to PX2 + PX4 = 7.
+ * When the data of UNION-ALL is from PX3, the px worker count of the plan equals to PX3 + PX4 = 10.
+ * Consider that before UNION-ALL output data, PX1 has to be opened and closed,
+  *  so the final expected_px_worker_cnt = max(PX1, max(PX2 + PX4, PX3 + PX4) = 10.
+ * This function is to search for the child of UNION-ALL kept in open state when UNION-ALL is open.
+ * In the above plan, the result is 1.
+*/
+int ObLogicalOperator::find_max_px_resource_child(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG,
+                                                  int64_t first_nonblock_child)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(first_nonblock_child >= get_num_of_child() - 1)) {
+    max_px_thread_branch_ = first_nonblock_child;
+    max_px_group_branch_ = first_nonblock_child;
+    LOG_TRACE("[PxResAnaly] find max px resource child", K(get_op_id()), K(max_px_thread_branch_),
+            K(max_px_group_branch_));
+  } else if (OB_INVALID_INDEX == max_px_thread_branch_) {
+    int64_t ori_thread_cnt = cur_parallel_thread_count;
+    int64_t ori_group_cnt = cur_parallel_group_count;
+    int64_t max_child_thread_cnt = -1;
+    int64_t max_child_group_cnt = -1;
+    ObLogicalOperator *child = NULL;
+    bool append_map = false;
+    for (int64_t i = first_nonblock_child; i < get_num_of_child() && OB_SUCC(ret); i++) {
+      if (OB_ISNULL(child = get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child is null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(child->open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+        LOG_WARN("child open px resource analyze failed", K(ret));
+      } else {
+        int64_t thread_inc = cur_parallel_thread_count - ori_thread_cnt;
+        int64_t group_inc = cur_parallel_group_count - ori_group_cnt;
+        if (thread_inc > max_child_thread_cnt) {
+          max_child_thread_cnt = thread_inc;
+          max_px_thread_branch_ = i;
+          if (group_inc == max_child_group_cnt) {
+            // make max_px_group_branch_ be equal to max_px_thread_branch_ if possible.
+            max_px_group_branch_ = i;
+          }
+        }
+        if (group_inc > max_child_group_cnt) {
+          max_child_group_cnt = group_inc;
+          max_px_group_branch_ = i;
+          if (thread_inc == max_child_thread_cnt) {
+            max_px_thread_branch_ = i;
+          }
+        }
+        if (OB_FAIL(SMART_CALL(child->close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+          LOG_WARN("child close px resource analyze failed", K(ret));
+        } else {
+          OB_ASSERT(cur_parallel_thread_count == ori_thread_cnt);
+          OB_ASSERT(cur_parallel_group_count == ori_group_cnt);
+        }
+      }
+    }
+    LOG_TRACE("[PxResAnaly] find max px resource child", K(get_op_id()), K(max_px_thread_branch_),
+            K(max_px_group_branch_));
   }
   return ret;
 }

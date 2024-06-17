@@ -26,4 +26,5 @@ TG_DEF(MEMORY_DUMP, memDump, THREAD_POOL, 1)
 TG_DEF(SchemaRefTask, SchemaRefTask, DEDUP_QUEUE, 1, 1024, 1024, 1L << 30, 512L << 20, common::OB_MALLOC_BIG_BLOCK_SIZE, "SchemaDedupQueu")
 TG_DEF(ReqMemEvict, ReqMemEvict, TIMER)
 TG_DEF(replica_control, replica_control, THREAD_POOL, 1)
+TG_DEF(SYSLOG_COMPRESS, SyslogCompress, THREAD_POOL, 1)
 #endif

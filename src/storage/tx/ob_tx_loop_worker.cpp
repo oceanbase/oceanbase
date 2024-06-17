@@ -80,8 +80,9 @@ void ObTxLoopWorker::destroy()
 
 void ObTxLoopWorker::reset()
 {
-  last_tx_gc_ts_ = false;
+  last_tx_gc_ts_ = 0;
   last_retain_ctx_gc_ts_ = 0;
+  last_check_start_working_retry_ts_ = 0;
 }
 
 void ObTxLoopWorker::run1()
@@ -92,6 +93,7 @@ void ObTxLoopWorker::run1()
   lib::set_thread_name("TxLoopWorker");
   bool can_gc_tx = false;
   bool can_gc_retain_ctx = false;
+  bool can_check_and_retry_start_working = false;
 
   while (!has_set_stop()) {
     start_time_us = ObTimeUtility::current_time();
@@ -113,7 +115,14 @@ void ObTxLoopWorker::run1()
       can_gc_retain_ctx = true;
     }
 
-    (void)scan_all_ls_(can_gc_tx, can_gc_retain_ctx);
+    if (common::ObClockGenerator::getClock() - last_check_start_working_retry_ts_
+        > TX_START_WORKING_RETRY_INTERVAL) {
+      TRANS_LOG(INFO, "try to retry start_working");
+      last_check_start_working_retry_ts_ = common::ObClockGenerator::getClock();
+      can_check_and_retry_start_working = true;
+    }
+
+    (void)scan_all_ls_(can_gc_tx, can_gc_retain_ctx, can_check_and_retry_start_working);
 
     // TODO shanyan.g
     // 1) We use max(max_commit_ts, gts_cache) as read snapshot,
@@ -128,10 +137,13 @@ void ObTxLoopWorker::run1()
     }
     can_gc_tx = false;
     can_gc_retain_ctx = false;
+    can_check_and_retry_start_working = false;
   }
 }
 
-int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
+int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
+                                 bool can_gc_retain_ctx,
+                                 bool can_check_and_retry_start_working)
 {
   int ret = OB_SUCCESS;
   int iter_ret = OB_SUCCESS;
@@ -164,7 +176,7 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
 
       if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, base_proposal_id))) {
         TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));
-        status  = MinStartScnStatus::UNKOWN;
+        status = MinStartScnStatus::UNKOWN;
       } else if (role == common::ObRole::FOLLOWER) {
         status = MinStartScnStatus::UNKOWN;
       }
@@ -184,7 +196,7 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
         do_tx_gc_(cur_ls_ptr, min_start_scn, status);
       }
 
-      if(MinStartScnStatus::UNKOWN == status) {
+      if (MinStartScnStatus::UNKOWN == status) {
         // do nothing
       } else if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, proposal_id))) {
         TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));
@@ -222,6 +234,10 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
       if (can_gc_retain_ctx) {
         do_retain_ctx_gc_(cur_ls_ptr);
       }
+
+      if (can_check_and_retry_start_working) {
+        do_start_working_retry_(cur_ls_ptr);
+      }
     }
   }
 
@@ -232,7 +248,7 @@ void ObTxLoopWorker::do_keep_alive_(ObLS *ls_ptr, const SCN &min_start_scn, MinS
 {
   int ret = OB_SUCCESS;
 
-  if (ls_ptr->get_keep_alive_ls_handler()->try_submit_log(min_start_scn, status)) {
+  if (OB_FAIL(ls_ptr->get_keep_alive_ls_handler()->try_submit_log(min_start_scn, status))) {
     TRANS_LOG(WARN, "[Tx Loop Worker] try submit keep alive log failed", K(ret));
   } else if (REACH_TIME_INTERVAL(KEEP_ALIVE_PRINT_INFO_INTERVAL)) {
     ls_ptr->get_keep_alive_ls_handler()->print_stat_info();
@@ -294,7 +310,7 @@ void ObTxLoopWorker::do_retain_ctx_gc_(ObLS *ls_ptr)
     TRANS_LOG(WARN, "[Tx Loop Worker] retain_ctx_mgr  is not inited", K(ret), K(MTL_ID()),
               K(*ls_ptr));
 
-  } else if (retain_ctx_mgr->try_gc_retain_ctx(ls_ptr)) {
+  } else if (OB_FAIL(retain_ctx_mgr->try_gc_retain_ctx(ls_ptr))) {
     TRANS_LOG(WARN, "[Tx Loop Worker] retain_ctx_mgr try to gc retain ctx failed", K(ret),
               K(MTL_ID()), K(*ls_ptr));
   } else {
@@ -306,6 +322,15 @@ void ObTxLoopWorker::do_retain_ctx_gc_(ObLS *ls_ptr)
   retain_ctx_mgr->try_advance_retain_ctx_gc(ls_ptr->get_ls_id());
 
   UNUSED(ret);
+}
+
+void ObTxLoopWorker::do_start_working_retry_(ObLS *ls_ptr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ls_ptr->retry_apply_start_working_log())) {
+    TRANS_LOG(WARN, "retry to apply start working log failed", K(ret), KPC(ls_ptr));
+  }
 }
 
 }

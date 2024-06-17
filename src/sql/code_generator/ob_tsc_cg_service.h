@@ -55,17 +55,49 @@ private:
   int generate_das_scan_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef, bool &has_rowscn);
   int generate_table_param(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef);
   int extract_das_output_column_ids(const ObLogTableScan &op,
-                                    common::ObTableID table_id,
+                                    ObDASScanCtDef &scan_ctdef,
                                     const ObTableSchema &index_schema,
                                     common::ObIArray<uint64_t> &output_cids);
 
   int extract_das_access_exprs(const ObLogTableScan &op,
-                               common::ObTableID scan_table_id,
+                               ObDASScanCtDef &scan_ctdef,
                                common::ObIArray<ObRawExpr*> &access_exprs);
   //extract these column exprs need by TSC operator, these column will output by DAS scan
   int extract_tsc_access_columns(const ObLogTableScan &op, common::ObIArray<ObRawExpr*> &access_exprs);
   int extract_das_column_ids(const common::ObIArray<ObRawExpr*> &column_exprs, common::ObIArray<uint64_t> &column_ids);
   int generate_geo_access_ctdef(const ObLogTableScan &op, const ObTableSchema &index_schema, ObArray<ObRawExpr*> &access_exprs);
+  int generate_text_ir_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
+  int extract_text_ir_access_columns(const ObLogTableScan &op,
+                                     const ObDASScanCtDef &scan_ctdef,
+                                     ObIArray<ObRawExpr*> &access_exprs);
+  int extract_text_ir_das_output_column_ids(const ObLogTableScan &op,
+                                            const ObDASScanCtDef &scan_ctdef,
+                                            ObIArray<uint64_t> &output_cids);
+  int generate_text_ir_pushdown_expr_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef);
+  int generate_text_ir_spec_exprs(const ObLogTableScan &op,
+                                  ObDASIRScanCtDef &text_ir_scan_ctdef);
+  int generate_doc_id_lookup_ctdef(const ObLogTableScan &op,
+                                   ObTableScanCtDef &tsc_ctdef,
+                                   ObDASBaseCtDef *ir_scan_ctdef,
+                                   ObDASIRAuxLookupCtDef *&aux_lookup_ctdef);
+  int generate_table_lookup_ctdef(const ObLogTableScan &op,
+                                  ObTableScanCtDef &tsc_ctdef,
+                                  ObDASBaseCtDef *scan_ctdef,
+                                  ObDASTableLookupCtDef *&lookup_ctdef);
+  int extract_doc_id_index_back_access_columns(const ObLogTableScan &op,
+                                               ObIArray<ObRawExpr *> &access_exprs);
+  int extract_doc_id_index_back_output_column_ids(const ObLogTableScan &op,
+                                                  ObIArray<uint64_t> &output_cids);
+  int filter_out_match_exprs(ObIArray<ObRawExpr*> &exprs);
+  int append_fts_relavence_project_col(
+      ObDASIRAuxLookupCtDef *aux_lookup_ctdef,
+      ObDASIRScanCtDef *ir_scan_ctdef);
+  int generate_das_sort_ctdef(const ObIArray<OrderItem> &sort_keys,
+                              const bool fetch_with_ties,
+                              ObRawExpr *topk_limit_expr,
+                              ObRawExpr *topk_offset_expr,
+                              ObDASBaseCtDef *child_ctdef,
+                              ObDASSortCtDef *&sort_ctdef);
 private:
   ObStaticEngineCG &cg_;
 };

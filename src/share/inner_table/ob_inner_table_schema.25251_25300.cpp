@@ -260,7 +260,7 @@ int ObInnerTableSchema::dba_scheduler_job_run_details_ora_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT TENANT_ID,                               JOB,                               TIME,                               CODE,                               MESSAGE,                               JOB_CLASS,                               GMT_CREATE,                               GMT_MODIFIED                        FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -625,6 +625,106 @@ int ObInnerTableSchema::dba_ob_import_table_task_history_ora_schema(ObTableSchem
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_transfer_partition_tasks_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_TRANSFER_PARTITION_TASKS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_TRANSFER_PARTITION_TASKS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TASK_ID,          GMT_CREATE AS CREATE_TIME,          GMT_MODIFIED AS MODIFY_TIME,          TABLE_ID,          OBJECT_ID,          DEST_LS,          BALANCE_JOB_ID,          TRANSFER_TASK_ID,          STATUS,          "COMMENT"   FROM SYS.ALL_VIRTUAL_TRANSFER_PARTITION_TASK_REAL_AGENT   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_transfer_partition_task_history_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_TRANSFER_PARTITION_TASK_HISTORY_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_TRANSFER_PARTITION_TASK_HISTORY_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TASK_ID,          CREATE_TIME,          FINISH_TIME,          TABLE_ID,          OBJECT_ID,          DEST_LS,          BALANCE_JOB_ID,          TRANSFER_TASK_ID,          STATUS,          "COMMENT"   FROM SYS.ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_REAL_AGENT   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::user_users_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -860,7 +960,7 @@ int ObInnerTableSchema::dba_mviews_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS CONTAINER_NAME,       B.VIEW_DEFINITION AS QUERY /* TODO: LONG */,       CAST(LENGTH(B.VIEW_DEFINITION) AS NUMBER) AS QUERY_LEN,       CAST('N' AS VARCHAR2(1)) AS UPDATABLE,       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,       CAST('N' AS VARCHAR2(1)) AS REWRITE_ENABLED,       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,       CAST(         DECODE(C.REFRESH_MODE, 0, 'NEVER',                                1, 'DEMAND',                                2, 'COMMIT',                                3, 'STATEMENT',                                   NULL         ) AS VARCHAR2(6)       ) AS REFRESH_MODE,       CAST(         DECODE(C.REFRESH_METHOD, 0, 'NEVER',                                  1, 'COMPLETE',                                  2, 'FAST',                                  3, 'FORCE',                                     NULL          ) AS VARCHAR2(8)       ) AS REFRESH_METHOD,       CAST(         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',                              1, 'DEFERRED',                              2, 'PERBUILT',                                 NULL         ) AS VARCHAR2(9)       ) AS BUILD_MODE,       CAST(NULL AS VARCHAR2(18)) AS FAST_REFRESHABLE,       CAST(         DECODE(C.LAST_REFRESH_TYPE, 0, 'COMPLETE',                                     1, 'FAST',                                        'NA'         ) AS VARCHAR2(8)       ) AS LAST_REFRESH_TYPE,       CAST(C.LAST_REFRESH_DATE AS DATE) AS LAST_REFRESH_DATE /* TODO: DD-MON-YYYY */,       CAST(C.LAST_REFRESH_DATE + C.LAST_REFRESH_TIME / 86400 AS DATE) AS LAST_REFRESH_END_TIME /* TODO: DD-MON-YYYY */,       CAST(NULL AS VARCHAR2(19)) AS STALENESS,       CAST(NULL AS VARCHAR2(19)) AS AFTER_FAST_REFRESH,       CAST(DECODE(C.BUILD_MODE, 2, 'Y', 'N') AS VARCHAR2(1)) AS UNKNOWN_PREBUILT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_PLSQL_FUNC,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_EXTERNAL_TABLE,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_CONSIDER_FRESH,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_IMPORT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_TRUSTED_FD,       CAST(NULL AS VARCHAR2(19)) AS COMPILE_STATE,       CAST('Y' AS VARCHAR2(1)) AS USE_NO_INDEX,       CAST(NULL AS DATE) AS STALE_SINCE,       CAST(NULL AS NUMBER) AS NUM_PCT_TABLES,       CAST(NULL AS NUMBER) AS NUM_FRESH_PCT_REGIONS,       CAST(NULL AS NUMBER) AS NUM_STALE_PCT_REGIONS,       CAST('NO' AS VARCHAR2(3)) AS SEGMENT_CREATED,       CAST(NULL AS VARCHAR2(128)) AS EVALUATION_EDITION,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST('N' AS VARCHAR2(1)) AS ON_QUERY_COMPUTATION     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT C     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS CONTAINER_NAME,       B.VIEW_DEFINITION AS QUERY /* TODO: LONG */,       CAST(LENGTH(B.VIEW_DEFINITION) AS NUMBER) AS QUERY_LEN,       CAST('N' AS VARCHAR2(1)) AS UPDATABLE,       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,       CAST(         CASE bitand((B.TABLE_MODE / 134217728), 1)           WHEN 0 THEN 'N'           WHEN 1 THEN 'Y'           ELSE NULL         END AS CHAR(1)       ) AS REWRITE_ENABLED,       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,       CAST(         DECODE(C.REFRESH_MODE, 0, 'NEVER',                                1, 'DEMAND',                                2, 'COMMIT',                                3, 'STATEMENT',                                   NULL         ) AS VARCHAR2(6)       ) AS REFRESH_MODE,       CAST(         DECODE(C.REFRESH_METHOD, 0, 'NEVER',                                  1, 'COMPLETE',                                  2, 'FAST',                                  3, 'FORCE',                                     NULL          ) AS VARCHAR2(8)       ) AS REFRESH_METHOD,       CAST(         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',                              1, 'DEFERRED',                              2, 'PERBUILT',                                 NULL         ) AS VARCHAR2(9)       ) AS BUILD_MODE,       CAST(NULL AS VARCHAR2(18)) AS FAST_REFRESHABLE,       CAST(         DECODE(C.LAST_REFRESH_TYPE, 0, 'COMPLETE',                                     1, 'FAST',                                        'NA'         ) AS VARCHAR2(8)       ) AS LAST_REFRESH_TYPE,       CAST(C.LAST_REFRESH_DATE AS DATE) AS LAST_REFRESH_DATE /* TODO: DD-MON-YYYY */,       CAST(C.LAST_REFRESH_DATE + C.LAST_REFRESH_TIME / 86400 AS DATE) AS LAST_REFRESH_END_TIME /* TODO: DD-MON-YYYY */,       CAST(NULL AS VARCHAR2(19)) AS STALENESS,       CAST(NULL AS VARCHAR2(19)) AS AFTER_FAST_REFRESH,       CAST(DECODE(C.BUILD_MODE, 2, 'Y', 'N') AS VARCHAR2(1)) AS UNKNOWN_PREBUILT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_PLSQL_FUNC,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_EXTERNAL_TABLE,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_CONSIDER_FRESH,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_IMPORT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_TRUSTED_FD,       CAST(NULL AS VARCHAR2(19)) AS COMPILE_STATE,       CAST('Y' AS VARCHAR2(1)) AS USE_NO_INDEX,       CAST(NULL AS DATE) AS STALE_SINCE,       CAST(NULL AS NUMBER) AS NUM_PCT_TABLES,       CAST(NULL AS NUMBER) AS NUM_FRESH_PCT_REGIONS,       CAST(NULL AS NUMBER) AS NUM_STALE_PCT_REGIONS,       CAST('NO' AS VARCHAR2(3)) AS SEGMENT_CREATED,       CAST(NULL AS VARCHAR2(128)) AS EVALUATION_EDITION,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST(         CASE bitand((B.TABLE_MODE / 268435456), 1)           WHEN 0 THEN 'N'           WHEN 1 THEN 'Y'           ELSE NULL         END AS CHAR(1)       ) AS ON_QUERY_COMPUTATION     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT C     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -910,7 +1010,7 @@ int ObInnerTableSchema::all_mviews_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS CONTAINER_NAME,       B.VIEW_DEFINITION AS QUERY /* TODO: LONG */,       CAST(LENGTH(B.VIEW_DEFINITION) AS NUMBER) AS QUERY_LEN,       CAST('N' AS VARCHAR2(1)) AS UPDATABLE,       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,       CAST('N' AS VARCHAR2(1)) AS REWRITE_ENABLED,       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,       CAST(         DECODE(C.REFRESH_MODE, 0, 'NEVER',                                1, 'DEMAND',                                2, 'COMMIT',                                3, 'STATEMENT',                                   NULL         ) AS VARCHAR2(6)       ) AS REFRESH_MODE,       CAST(         DECODE(C.REFRESH_METHOD, 0, 'NEVER',                                  1, 'COMPLETE',                                  2, 'FAST',                                  3, 'FORCE',                                     NULL          ) AS VARCHAR2(8)       ) AS REFRESH_METHOD,       CAST(         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',                              1, 'DEFERRED',                              2, 'PERBUILT',                                 NULL         ) AS VARCHAR2(9)       ) AS BUILD_MODE,       CAST(NULL AS VARCHAR2(18)) AS FAST_REFRESHABLE,       CAST(         DECODE(C.LAST_REFRESH_TYPE, 0, 'COMPLETE',                                     1, 'FAST',                                        'NA'         ) AS VARCHAR2(8)       ) AS LAST_REFRESH_TYPE,       CAST(C.LAST_REFRESH_DATE AS DATE) AS LAST_REFRESH_DATE /* TODO: DD-MON-YYYY */,       CAST(C.LAST_REFRESH_DATE + C.LAST_REFRESH_TIME / 86400 AS DATE) AS LAST_REFRESH_END_TIME /* TODO: DD-MON-YYYY */,       CAST(NULL AS VARCHAR2(19)) AS STALENESS,       CAST(NULL AS VARCHAR2(19)) AS AFTER_FAST_REFRESH,       CAST(DECODE(C.BUILD_MODE, 2, 'Y', 'N') AS VARCHAR2(1)) AS UNKNOWN_PREBUILT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_PLSQL_FUNC,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_EXTERNAL_TABLE,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_CONSIDER_FRESH,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_IMPORT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_TRUSTED_FD,       CAST(NULL AS VARCHAR2(19)) AS COMPILE_STATE,       CAST('Y' AS VARCHAR2(1)) AS USE_NO_INDEX,       CAST(NULL AS DATE) AS STALE_SINCE,       CAST(NULL AS NUMBER) AS NUM_PCT_TABLES,       CAST(NULL AS NUMBER) AS NUM_FRESH_PCT_REGIONS,       CAST(NULL AS NUMBER) AS NUM_STALE_PCT_REGIONS,       CAST('NO' AS VARCHAR2(3)) AS SEGMENT_CREATED,       CAST(NULL AS VARCHAR2(128)) AS EVALUATION_EDITION,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST('N' AS VARCHAR2(1)) AS ON_QUERY_COMPUTATION     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT C     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND (A.DATABASE_ID = USERENV('SCHEMAID')         OR USER_CAN_ACCESS_OBJ(1, B.TABLE_ID, B.DATABASE_ID) = 1) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS CONTAINER_NAME,       B.VIEW_DEFINITION AS QUERY /* TODO: LONG */,       CAST(LENGTH(B.VIEW_DEFINITION) AS NUMBER) AS QUERY_LEN,       CAST('N' AS VARCHAR2(1)) AS UPDATABLE,       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,       CAST(         CASE bitand((B.TABLE_MODE / 134217728), 1)           WHEN 0 THEN 'N'           WHEN 1 THEN 'Y'           ELSE NULL         END AS CHAR(1)       ) AS REWRITE_ENABLED,       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,       CAST(         DECODE(C.REFRESH_MODE, 0, 'NEVER',                                1, 'DEMAND',                                2, 'COMMIT',                                3, 'STATEMENT',                                   NULL         ) AS VARCHAR2(6)       ) AS REFRESH_MODE,       CAST(         DECODE(C.REFRESH_METHOD, 0, 'NEVER',                                  1, 'COMPLETE',                                  2, 'FAST',                                  3, 'FORCE',                                     NULL          ) AS VARCHAR2(8)       ) AS REFRESH_METHOD,       CAST(         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',                              1, 'DEFERRED',                              2, 'PERBUILT',                                 NULL         ) AS VARCHAR2(9)       ) AS BUILD_MODE,       CAST(NULL AS VARCHAR2(18)) AS FAST_REFRESHABLE,       CAST(         DECODE(C.LAST_REFRESH_TYPE, 0, 'COMPLETE',                                     1, 'FAST',                                        'NA'         ) AS VARCHAR2(8)       ) AS LAST_REFRESH_TYPE,       CAST(C.LAST_REFRESH_DATE AS DATE) AS LAST_REFRESH_DATE /* TODO: DD-MON-YYYY */,       CAST(C.LAST_REFRESH_DATE + C.LAST_REFRESH_TIME / 86400 AS DATE) AS LAST_REFRESH_END_TIME /* TODO: DD-MON-YYYY */,       CAST(NULL AS VARCHAR2(19)) AS STALENESS,       CAST(NULL AS VARCHAR2(19)) AS AFTER_FAST_REFRESH,       CAST(DECODE(C.BUILD_MODE, 2, 'Y', 'N') AS VARCHAR2(1)) AS UNKNOWN_PREBUILT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_PLSQL_FUNC,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_EXTERNAL_TABLE,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_CONSIDER_FRESH,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_IMPORT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_TRUSTED_FD,       CAST(NULL AS VARCHAR2(19)) AS COMPILE_STATE,       CAST('Y' AS VARCHAR2(1)) AS USE_NO_INDEX,       CAST(NULL AS DATE) AS STALE_SINCE,       CAST(NULL AS NUMBER) AS NUM_PCT_TABLES,       CAST(NULL AS NUMBER) AS NUM_FRESH_PCT_REGIONS,       CAST(NULL AS NUMBER) AS NUM_STALE_PCT_REGIONS,       CAST('NO' AS VARCHAR2(3)) AS SEGMENT_CREATED,       CAST(NULL AS VARCHAR2(128)) AS EVALUATION_EDITION,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST(         CASE bitand((B.TABLE_MODE / 268435456), 1)           WHEN 0 THEN 'N'           WHEN 1 THEN 'Y'           ELSE NULL         END AS CHAR(1)       ) AS ON_QUERY_COMPUTATION     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT C     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND (A.DATABASE_ID = USERENV('SCHEMAID')         OR USER_CAN_ACCESS_OBJ(1, B.TABLE_ID, B.DATABASE_ID) = 1) )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -960,7 +1060,7 @@ int ObInnerTableSchema::user_mviews_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS CONTAINER_NAME,       B.VIEW_DEFINITION AS QUERY /* TODO: LONG */,       CAST(LENGTH(B.VIEW_DEFINITION) AS NUMBER) AS QUERY_LEN,       CAST('N' AS VARCHAR2(1)) AS UPDATABLE,       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,       CAST('N' AS VARCHAR2(1)) AS REWRITE_ENABLED,       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,       CAST(         DECODE(C.REFRESH_MODE, 0, 'NEVER',                                1, 'DEMAND',                                2, 'COMMIT',                                3, 'STATEMENT',                                   NULL         ) AS VARCHAR2(6)       ) AS REFRESH_MODE,       CAST(         DECODE(C.REFRESH_METHOD, 0, 'NEVER',                                  1, 'COMPLETE',                                  2, 'FAST',                                  3, 'FORCE',                                     NULL          ) AS VARCHAR2(8)       ) AS REFRESH_METHOD,       CAST(         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',                              1, 'DEFERRED',                              2, 'PERBUILT',                                 NULL         ) AS VARCHAR2(9)       ) AS BUILD_MODE,       CAST(NULL AS VARCHAR2(18)) AS FAST_REFRESHABLE,       CAST(         DECODE(C.LAST_REFRESH_TYPE, 0, 'COMPLETE',                                     1, 'FAST',                                        'NA'         ) AS VARCHAR2(8)       ) AS LAST_REFRESH_TYPE,       CAST(C.LAST_REFRESH_DATE AS DATE) AS LAST_REFRESH_DATE /* TODO: DD-MON-YYYY */,       CAST(C.LAST_REFRESH_DATE + C.LAST_REFRESH_TIME / 86400 AS DATE) AS LAST_REFRESH_END_TIME /* TODO: DD-MON-YYYY */,       CAST(NULL AS VARCHAR2(19)) AS STALENESS,       CAST(NULL AS VARCHAR2(19)) AS AFTER_FAST_REFRESH,       CAST(DECODE(C.BUILD_MODE, 2, 'Y', 'N') AS VARCHAR2(1)) AS UNKNOWN_PREBUILT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_PLSQL_FUNC,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_EXTERNAL_TABLE,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_CONSIDER_FRESH,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_IMPORT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_TRUSTED_FD,       CAST(NULL AS VARCHAR2(19)) AS COMPILE_STATE,       CAST('Y' AS VARCHAR2(1)) AS USE_NO_INDEX,       CAST(NULL AS DATE) AS STALE_SINCE,       CAST(NULL AS NUMBER) AS NUM_PCT_TABLES,       CAST(NULL AS NUMBER) AS NUM_FRESH_PCT_REGIONS,       CAST(NULL AS NUMBER) AS NUM_STALE_PCT_REGIONS,       CAST('NO' AS VARCHAR2(3)) AS SEGMENT_CREATED,       CAST(NULL AS VARCHAR2(128)) AS EVALUATION_EDITION,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST('N' AS VARCHAR2(1)) AS ON_QUERY_COMPUTATION     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT C     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND A.DATABASE_NAME = SYS_CONTEXT('USERENV','CURRENT_USER') )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS CONTAINER_NAME,       B.VIEW_DEFINITION AS QUERY /* TODO: LONG */,       CAST(LENGTH(B.VIEW_DEFINITION) AS NUMBER) AS QUERY_LEN,       CAST('N' AS VARCHAR2(1)) AS UPDATABLE,       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,       CAST(         CASE bitand((B.TABLE_MODE / 134217728), 1)           WHEN 0 THEN 'N'           WHEN 1 THEN 'Y'           ELSE NULL         END AS CHAR(1)       ) AS REWRITE_ENABLED,       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,       CAST(         DECODE(C.REFRESH_MODE, 0, 'NEVER',                                1, 'DEMAND',                                2, 'COMMIT',                                3, 'STATEMENT',                                   NULL         ) AS VARCHAR2(6)       ) AS REFRESH_MODE,       CAST(         DECODE(C.REFRESH_METHOD, 0, 'NEVER',                                  1, 'COMPLETE',                                  2, 'FAST',                                  3, 'FORCE',                                     NULL          ) AS VARCHAR2(8)       ) AS REFRESH_METHOD,       CAST(         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',                              1, 'DEFERRED',                              2, 'PERBUILT',                                 NULL         ) AS VARCHAR2(9)       ) AS BUILD_MODE,       CAST(NULL AS VARCHAR2(18)) AS FAST_REFRESHABLE,       CAST(         DECODE(C.LAST_REFRESH_TYPE, 0, 'COMPLETE',                                     1, 'FAST',                                        'NA'         ) AS VARCHAR2(8)       ) AS LAST_REFRESH_TYPE,       CAST(C.LAST_REFRESH_DATE AS DATE) AS LAST_REFRESH_DATE /* TODO: DD-MON-YYYY */,       CAST(C.LAST_REFRESH_DATE + C.LAST_REFRESH_TIME / 86400 AS DATE) AS LAST_REFRESH_END_TIME /* TODO: DD-MON-YYYY */,       CAST(NULL AS VARCHAR2(19)) AS STALENESS,       CAST(NULL AS VARCHAR2(19)) AS AFTER_FAST_REFRESH,       CAST(DECODE(C.BUILD_MODE, 2, 'Y', 'N') AS VARCHAR2(1)) AS UNKNOWN_PREBUILT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_PLSQL_FUNC,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_EXTERNAL_TABLE,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_CONSIDER_FRESH,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_IMPORT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_TRUSTED_FD,       CAST(NULL AS VARCHAR2(19)) AS COMPILE_STATE,       CAST('Y' AS VARCHAR2(1)) AS USE_NO_INDEX,       CAST(NULL AS DATE) AS STALE_SINCE,       CAST(NULL AS NUMBER) AS NUM_PCT_TABLES,       CAST(NULL AS NUMBER) AS NUM_FRESH_PCT_REGIONS,       CAST(NULL AS NUMBER) AS NUM_STALE_PCT_REGIONS,       CAST('NO' AS VARCHAR2(3)) AS SEGMENT_CREATED,       CAST(NULL AS VARCHAR2(128)) AS EVALUATION_EDITION,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST(         CASE bitand((B.TABLE_MODE / 268435456), 1)           WHEN 0 THEN 'N'           WHEN 1 THEN 'Y'           ELSE NULL         END AS CHAR(1)       ) AS ON_QUERY_COMPUTATION     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT C     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND A.DATABASE_NAME = SYS_CONTEXT('USERENV','CURRENT_USER') )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

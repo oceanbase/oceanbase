@@ -95,7 +95,8 @@ TEST(TestPalfEnvLiteMgr, test_create_block)
   EXPECT_EQ(OB_SUCCESS, dbp.create_block_at(dir_fd, block_path.c_str(), block_size));
   EXPECT_EQ(OB_SUCCESS, dbp.create_block_at(dir_fd, block_path.c_str(), block_size));
   EXPECT_EQ(OB_SUCCESS, dbp.remove_block_at(dir_fd, block_path.c_str()));
-  EXPECT_EQ(OB_NO_SUCH_FILE_OR_DIRECTORY, dbp.remove_block_at(dir_fd, block_path.c_str()));
+  // file has not exist, return OB_SUCCESS
+  EXPECT_EQ(OB_SUCCESS, dbp.remove_block_at(dir_fd, block_path.c_str()));
 }
 
 } // end of unittest

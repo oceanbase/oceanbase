@@ -207,7 +207,7 @@ public:
         str.assign_ptr(lob.get_inrow_data_ptr(), static_cast<int32_t>(lob.get_byte_size(datum.len_)));
       } else {
         const ObMemLobCommon *memlob = reinterpret_cast<const ObMemLobCommon*>(datum.ptr_);
-        if (datum.len_ != 0 && memlob->has_inrow_data_ && memlob->has_extern_ == 0) {
+        if (datum.len_ != 0 && memlob->has_inrow_data_ && memlob->has_extern_ == 0 && (memlob->type_ != ObMemLobType::TEMP_DELTA_LOB)) {
           if (memlob->is_simple_) {
             str.assign_ptr(memlob->data_, static_cast<int32_t>(datum.len_ - sizeof(ObMemLobCommon)));
           } else {
@@ -400,7 +400,7 @@ public:
     // pl must has lob header
     bool has_lob_header = true;
     ObTextStringObObjResult text_result(ObLongTextType, nullptr, &output, has_lob_header);
-    if(OB_FAIL(text_result.init(input.length(), &allocator))) {
+    if (OB_FAIL(text_result.init(input.length(), &allocator))) {
       COMMON_LOG(WARN, "init lob result failed", K(ret));
     } else if (OB_FAIL(text_result.append(input.ptr(), input.length()))) {
       COMMON_LOG(WARN, "failed to append realdata", K(ret), K(input), K(text_result));

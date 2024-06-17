@@ -65,13 +65,7 @@ public:
   ~ObIndexTreeRootCtx();
   int init(common::ObIAllocator &allocator);
   void reset();
-  /*
-    use_absolute_offset_ for ddl paritial sst select.
-    ddl cg sstable                   : use_absolute_offset == true, absolute_offsets == nullptr
-    ddl co sstable                   : use_absolute_offset == true, absolute_offsets != nullptr
-    not ddl sstable for column store : use_ablsolute_offset == false, absolute_offsets == nullptr
-  */
-  inline bool is_absolute_vaild(const bool is_cg) const;
+  bool is_absolute_vaild() const;
   int add_absolute_row_offset(const int64_t absolute_row_offset);
   int add_macro_block_meta(const ObDataMacroBlockMeta &macro_meta);
   int get_macro_id_array(common::ObIArray<blocksstable::MacroBlockId> &block_ids); //inc ref
@@ -300,6 +294,7 @@ protected:
       ObDataMacroBlockMeta &macro_meta,
       ObIAllocator &allocator);
   int64_t get_row_count() { return micro_writer_->get_row_count(); }
+  virtual OB_INLINE bool need_pre_warm() const { return false; }
 private:
   int new_next_builder(ObBaseIndexBlockBuilder *&next_builder);
   virtual int append_next_row(const ObMicroBlockDesc &micro_block_desc);
@@ -341,7 +336,7 @@ public:
            ObSSTableIndexBuilder &sstable_builder);
   int append_row(const ObMicroBlockDesc &micro_block_desc,
                  const ObMacroBlock &macro_block);
-  int generate_macro_row(ObMacroBlock &macro_block, const MacroBlockId &id);
+  int generate_macro_row(ObMacroBlock &macro_block, const MacroBlockId &id, const int64_t ddl_start_row_offset);
   int append_macro_block(const ObDataMacroBlockMeta &macro_meta);
   int cal_macro_meta_block_size(const ObDatumRowkey &rowkey, int64_t &estimate_block_size);
   int set_parallel_task_idx(const int64_t task_idx);
@@ -351,14 +346,21 @@ public:
             ObMacroBlocksWriteCtx *data_write_ctx);
   void reset();
 private:
-  int append_index_micro_block(ObMacroBlock &macro_block, const MacroBlockId &block_id);
+  int append_index_micro_block(
+      ObMacroBlock &macro_block,
+      const MacroBlockId &block_id,
+      const int64_t ddl_start_row_offset);
   int write_meta_block(
       ObMacroBlock &macro_block,
       const MacroBlockId &block_id,
-      const ObIndexBlockRowDesc &macro_row_desc);
+      const ObIndexBlockRowDesc &macro_row_desc,
+      const int64_t ddl_start_row_offset);
+
+  void update_macro_meta_with_offset(const int64_t macro_block_row_count, const int64_t ddl_start_row_offset);
   virtual int insert_and_update_index_tree(const ObDatumRow *index_row) override;
   int append_next_row(const ObMicroBlockDesc &micro_block_desc, ObIndexBlockRowDesc &macro_row_desc);
   int add_row_offset(ObIndexBlockRowDesc &row_desc);
+  virtual OB_INLINE bool need_pre_warm() const override { return true; }
 private:
   ObSSTableIndexBuilder *sstable_builder_;
   compaction::ObLocalArena task_allocator_;  // Used to apply for memory whose lifetime is task
@@ -423,13 +425,12 @@ class ObIndexBlockRebuilder final
 public:
   ObIndexBlockRebuilder();
   ~ObIndexBlockRebuilder();
-  int init(ObSSTableIndexBuilder &sstable_builder, bool need_sort = true, const int64_t *task_idx = nullptr, const bool use_absolute_offset = false);
+  int init(ObSSTableIndexBuilder &sstable_builder, bool need_sort = true, const int64_t *task_idx = nullptr, const bool is_ddl_merge_sstable = false);
   int append_macro_row(
       const char *buf,
       const int64_t size,
       const MacroBlockId &macro_id);
   int append_macro_row(const ObDataMacroBlockMeta &macro_meta);
-  int append_macro_row(const ObDataMacroBlockMeta &macro_meta, const int64_t absolute_row_offset);
   int close();
   void reset();
   static int get_macro_meta(
@@ -452,6 +453,7 @@ private:
       common::ObIAllocator &allocator,
       ObSSTableMacroBlockHeader &header,
       ObMicroBlockData &meta_block);
+  int fill_abs_offset_for_ddl();
 private:
   bool is_inited_;
   bool need_sort_;

@@ -33,7 +33,7 @@ public:
   virtual ~ObDirectLoadExternalSequentialScanner();
   void reuse();
   void reset();
-  int init(int64_t data_block_size, int64_t buf_size, common::ObCompressorType compressor_type,
+  int init(int64_t data_block_size, common::ObCompressorType compressor_type,
            const ObDirectLoadExternalFragmentArray &fragments);
   int get_next_item(const T *&item) override;
 private:
@@ -74,7 +74,7 @@ void ObDirectLoadExternalSequentialScanner<T>::reset()
 
 template <typename T>
 int ObDirectLoadExternalSequentialScanner<T>::init(
-  int64_t data_block_size, int64_t buf_size, common::ObCompressorType compressor_type,
+  int64_t data_block_size, common::ObCompressorType compressor_type,
   const ObDirectLoadExternalFragmentArray &fragments)
 {
   int ret = common::OB_SUCCESS;
@@ -82,16 +82,14 @@ int ObDirectLoadExternalSequentialScanner<T>::init(
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDirectLoadExternalSequentialScanner init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(data_block_size <= 0 || data_block_size % DIO_ALIGN_SIZE != 0 ||
-                         buf_size <= 0 || buf_size % DIO_ALIGN_SIZE != 0 ||
-                         data_block_size > buf_size ||
                          compressor_type <= common::ObCompressorType::INVALID_COMPRESSOR ||
                          fragments.empty())) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(buf_size), K(compressor_type), K(fragments));
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(compressor_type), K(fragments));
   } else {
     if (OB_FAIL(fragments_.assign(fragments))) {
       STORAGE_LOG(WARN, "fail to assign fragments", KR(ret));
-    } else if (OB_FAIL(reader_.init(data_block_size, buf_size, compressor_type))) {
+    } else if (OB_FAIL(reader_.init(data_block_size, compressor_type))) {
       STORAGE_LOG(WARN, "fail to init fragment reader", KR(ret));
     } else if (OB_FAIL(switch_next_fragment())) {
       STORAGE_LOG(WARN, "fail to switch next fragment", KR(ret));
@@ -158,13 +156,13 @@ class ObDirectLoadExternalSortScanner : public ObDirectLoadExternalIterator<T>
 public:
   ObDirectLoadExternalSortScanner();
   virtual ~ObDirectLoadExternalSortScanner();
-  int init(int64_t data_block_size, int64_t buf_size, common::ObCompressorType compressor_type,
+  int init(int64_t data_block_size, common::ObCompressorType compressor_type,
            const ObDirectLoadExternalFragmentArray &fragments, Compare *compare);
   int get_next_item(const T *&item) override;
   void reuse();
 private:
   common::ObArenaAllocator allocator_;
-  common::ObSEArray<ExternalIterator *, 64> iters_;
+  common::ObArray<ExternalIterator *> iters_;
   ObDirectLoadExternalMerger<T, Compare> merger_;
   bool is_inited_;
 };
@@ -173,6 +171,8 @@ template <typename T, typename Compare>
 ObDirectLoadExternalSortScanner<T, Compare>::ObDirectLoadExternalSortScanner()
   : allocator_("TLD_ESScanner"), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  iters_.set_tenant_id(MTL_ID());
 }
 
 template <typename T, typename Compare>
@@ -197,7 +197,7 @@ void ObDirectLoadExternalSortScanner<T, Compare>::reuse()
 
 template <typename T, typename Compare>
 int ObDirectLoadExternalSortScanner<T, Compare>::init(
-  int64_t data_block_size, int64_t buf_size, common::ObCompressorType compressor_type,
+  int64_t data_block_size, common::ObCompressorType compressor_type,
   const ObDirectLoadExternalFragmentArray &fragments, Compare *compare)
 {
   int ret = common::OB_SUCCESS;
@@ -205,22 +205,19 @@ int ObDirectLoadExternalSortScanner<T, Compare>::init(
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDirectLoadExternalSortScanner init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(data_block_size <= 0 || data_block_size % DIO_ALIGN_SIZE != 0 ||
-                         buf_size <= 0 || buf_size % DIO_ALIGN_SIZE != 0 ||
-                         data_block_size > buf_size ||
                          compressor_type <= common::ObCompressorType::INVALID_COMPRESSOR ||
                          fragments.empty() || nullptr == compare)) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(buf_size), K(compressor_type), K(fragments),
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(compressor_type), K(fragments),
                 KP(compare));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     for (int64_t i = 0; OB_SUCC(ret) && i < fragments.count(); ++i) {
       const ObDirectLoadExternalFragment &fragment = fragments.at(i);
       ExternalReader *reader = nullptr;
       if (OB_ISNULL(reader = OB_NEWx(ExternalReader, (&allocator_)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to new fragment reader", KR(ret));
-      } else if (OB_FAIL(reader->init(data_block_size, buf_size, compressor_type))) {
+      } else if (OB_FAIL(reader->init(data_block_size, compressor_type))) {
         STORAGE_LOG(WARN, "fail to init fragment reader", KR(ret));
       } else if (OB_FAIL(reader->open(fragment.file_handle_, 0, fragment.file_size_))) {
         STORAGE_LOG(WARN, "fail to open fragment", KR(ret));

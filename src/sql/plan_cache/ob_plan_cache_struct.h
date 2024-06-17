@@ -166,7 +166,8 @@ struct ObPlanCacheKey : public ObILibCacheKey
     {
       uint16_t is_weak_read_ : 1;
       uint16_t use_rich_vector_format_ : 1;
-      uint16_t reserved_ : 14; // reserved
+      uint16_t config_use_rich_format_ : 1;
+      uint16_t reserved_ : 13; // reserved
     };
   };
 };
@@ -221,7 +222,6 @@ private:
 public:
   ObFastParserResult()
     : inner_alloc_("FastParserRes"),
-      raw_params_(&inner_alloc_),
       parameterized_params_(&inner_alloc_),
       cache_params_(NULL),
       values_token_pos_(0),
@@ -230,7 +230,7 @@ public:
     reset_question_mark_ctx();
   }
   ObPlanCacheKey pc_key_; //plan cache key, parameterized by fast parser
-  common::ObFixedArray<ObPCParam *, common::ObIAllocator> raw_params_;
+  common::ObSEArray<ObPCParam *, 4> raw_params_;
   common::ObFixedArray<const common::ObObjParam *, common::ObIAllocator> parameterized_params_;
   ParamStore *cache_params_;
   ObQuestionMarkCtx question_mark_ctx_;
@@ -260,7 +260,6 @@ public:
   {
     int ret = OB_SUCCESS;
     pc_key_ = other.pc_key_;
-    raw_params_.set_allocator(&inner_alloc_);
     parameterized_params_.set_allocator(&inner_alloc_);
     cache_params_ = other.cache_params_;
     question_mark_ctx_ = other.question_mark_ctx_;

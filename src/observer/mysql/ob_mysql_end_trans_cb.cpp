@@ -133,7 +133,7 @@ void ObSqlEndTransCb::callback(int cb_param)
       session_info->reset_warnings_buf();
     }
 
-    ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session_info->get_piece_cache());
+    ObPieceCache *piece_cache = session_info->get_piece_cache();
     if (OB_ISNULL(piece_cache)) {
       // do nothing
       // piece_cache not be null in piece data protocol

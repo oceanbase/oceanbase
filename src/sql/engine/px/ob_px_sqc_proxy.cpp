@@ -521,7 +521,8 @@ int ObPxSQCProxy::report(int end_ret) const
   if (OB_SUCC(ret)) {
     int64_t query_timeout = 0;
     session->get_query_timeout(query_timeout);
-    if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_NOT_REPORT_TO_QC, query_timeout) OB_SUCCESS)) {
+    int ecode = EVENT_CALL(EventTable::EN_PX_SQC_NOT_REPORT_TO_QC, query_timeout);
+    if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
       static bool errsim = false;
       errsim = !errsim;
       if (errsim) {

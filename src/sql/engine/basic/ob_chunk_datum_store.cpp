@@ -1800,6 +1800,8 @@ int ObChunkDatumStore::get_store_row(RowIterator &it, const StoredRow *&sr)
   return ret;
 }
 
+
+
 ////////////////////////////////////////////////////////////////
 ObChunkDatumStore::RowIterator::RowIterator()
   : store_(NULL),

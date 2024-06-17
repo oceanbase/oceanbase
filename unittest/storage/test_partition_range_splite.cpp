@@ -18,7 +18,6 @@
 #include "lib/container/ob_array_array.h"
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/memtable/ob_memtable_interface.h"
-#include "storage/ob_partition_component_factory.h"
 #include "blocksstable/ob_data_file_prepare.h"
 #include "blocksstable/ob_row_generate.h"
 #include "observer/ob_service.h"

@@ -50,7 +50,8 @@ ObPhysicalCopyCtx::ObPhysicalCopyCtx()
     restore_macro_block_id_mgr_(nullptr),
     need_sort_macro_meta_(true),
     need_check_seq_(false),
-    ls_rebuild_seq_(-1)
+    ls_rebuild_seq_(-1),
+    table_key_()
 {
 }
 
@@ -63,7 +64,8 @@ bool ObPhysicalCopyCtx::is_valid() const
   bool bool_ret = false;
   bool_ret = tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_id_.is_valid()
       && OB_NOT_NULL(bandwidth_throttle_) && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(ha_dag_)
-      && OB_NOT_NULL(sstable_index_builder_) && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
+      && OB_NOT_NULL(sstable_index_builder_) && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_)
+      && table_key_.is_valid();
   if (bool_ret) {
     if (!is_leader_restore_) {
       bool_ret = src_info_.is_valid();
@@ -93,6 +95,7 @@ void ObPhysicalCopyCtx::reset()
   need_sort_macro_meta_ = true;
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
+  table_key_.reset();
 }
 
 /******************ObPhysicalCopyTaskInitParam*********************/
@@ -330,7 +333,7 @@ int ObPhysicalCopyTask::fetch_macro_block_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected task_idx_", K(ret), K(task_idx_));
     } else if (OB_FAIL(index_block_rebuilder.init(
-            *copy_ctx_->sstable_index_builder_, copy_ctx_->need_sort_macro_meta_, &task_idx_))) {
+            *copy_ctx_->sstable_index_builder_, copy_ctx_->need_sort_macro_meta_, &task_idx_, copy_ctx_->table_key_.is_ddl_merge_sstable()))) {
       LOG_WARN("failed to init index block rebuilder", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(get_macro_block_reader_(reader))) {
       LOG_WARN("fail to get macro block reader", K(ret));
@@ -670,6 +673,7 @@ int ObSSTableCopyFinishTask::init(
     copy_ctx_.need_sort_macro_meta_ = init_param.need_sort_macro_meta_;
     copy_ctx_.need_check_seq_ = init_param.need_check_seq_;
     copy_ctx_.ls_rebuild_seq_ = init_param.ls_rebuild_seq_;
+    copy_ctx_.table_key_ = init_param.sstable_param_->table_key_;
     macro_range_info_index_ = 0;
     ls_ = init_param.ls_;
     sstable_param_ = init_param.sstable_param_;
@@ -979,12 +983,10 @@ int ObSSTableCopyFinishTask::create_empty_sstable_()
     } else if (OB_FAIL(tablet->load_storage_schema(tmp_allocator, storage_schema_ptr))) {
       LOG_WARN("failed to load storage_schema", K(ret), KPC(tablet));
     } else if (FALSE_IT(param.column_group_cnt_ = sstable_param_->column_group_cnt_)) {
-    } else if (FALSE_IT(param.is_empty_co_table_ = param.table_key_.is_ddl_sstable() ? false : true)) {
+    } else if (FALSE_IT(param.is_co_table_without_cgs_ = param.table_key_.is_ddl_sstable() ? false : true)) {
     } else if (FALSE_IT(param.full_column_cnt_ = sstable_param_->full_column_cnt_)) {
       LOG_WARN("failed to get_stored_column_count_in_sstable", K(ret), KPC(storage_schema_ptr));
-    } else if (FALSE_IT(param.co_base_type_ = storage_schema_ptr->has_all_column_group()
-                                            ? ObCOSSTableBaseType::ALL_CG_TYPE
-                                            : ObCOSSTableBaseType::ROWKEY_CG_TYPE)) {
+    } else if (FALSE_IT(param.co_base_type_ = sstable_param_->co_base_type_)) {
     } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
             tablet_copy_finish_task_->get_allocator(), table_handle))) {
       LOG_WARN("failed to create co sstable", K(ret), K(param), K(copy_ctx_));
@@ -1037,6 +1039,7 @@ int ObSSTableCopyFinishTask::create_sstable_with_index_builder_()
         } else if (FALSE_IT(param.column_group_cnt_ = sstable_param_->column_group_cnt_)) {
         } else if (FALSE_IT(param.full_column_cnt_ = sstable_param_->full_column_cnt_)) {
         } else if (FALSE_IT(param.co_base_type_ = sstable_param_->co_base_type_)) {
+        } else if (FALSE_IT(param.is_co_table_without_cgs_ = sstable_param_->is_empty_cg_sstables_)) {
         } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
               tablet_copy_finish_task_->get_allocator(), table_handle))) {
           LOG_WARN("failed to create co sstable", K(ret), K(copy_ctx_), KPC(sstable_param_));

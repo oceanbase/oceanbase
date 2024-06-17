@@ -196,10 +196,6 @@ int ObParallelMergeInfo::generate_from_range_array(
   LOG_DEBUG("parallel range info", K(ret), KPC(this), K(paral_range), K(paral_range.count()), K(paral_range.at(0)));
   if (OB_FAIL(ret)) {
     destroy();
-  } else if (get_serialize_size() > MAX_PARALLEL_RANGE_SERIALIZE_LEN) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_DEBUG("parallel range info is too large to sync", K(ret), KPC(this));
-    destroy();
   }
   return ret;
 }
@@ -366,6 +362,7 @@ ObMediumCompactionInfo::ObMediumCompactionInfo()
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
     is_schema_changed_(false),
     tenant_id_(0),
+    co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
     reserved_(0),
     cluster_id_(0),
     data_version_(0),
@@ -453,6 +450,7 @@ void ObMediumCompactionInfo::reset()
   contain_parallel_range_ = false;
   medium_merge_reason_ = ObAdaptiveMergePolicy::NONE;
   is_schema_changed_ = false;
+  co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
   tenant_id_ = 0;
   cluster_id_ = 0;
   medium_snapshot_ = 0;
@@ -484,8 +482,6 @@ int ObMediumCompactionInfo::gene_parallel_info(
   if (OB_FAIL(parallel_merge_info_.generate_from_range_array(allocator, paral_range))) {
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("failed to generate parallel merge info", K(ret), K(paral_range));
-    } else {
-      ret = OB_SUCCESS;
     }
   } else if (parallel_merge_info_.get_size() > 0) {
     contain_parallel_range_ = true;
@@ -597,6 +593,7 @@ int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) cons
       "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
       K_(medium_snapshot), K_(last_medium_snapshot), K_(tenant_id), K_(cluster_id),
       K_(medium_compat_version), K_(data_version), K_(is_schema_changed), K_(storage_schema),
+      "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(co_major_merge_type_)),
       K_(contain_parallel_range), K_(parallel_merge_info));
     J_OBJ_END();
   }

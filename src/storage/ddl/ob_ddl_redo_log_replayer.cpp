@@ -115,6 +115,49 @@ int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const SCN &sc
   return ret;
 }
 
+int ObDDLRedoLogReplayer::replay_inc_start(const ObDDLIncStartLog &log, const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  ObDDLIncStartReplayExecutor replay_executor;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
+  } else if (OB_FAIL(replay_executor.init(ls_, log, scn))) {
+    LOG_WARN("failed to init ddl inc start log replay executor", K(ret));
+  } else if (OB_FAIL(replay_executor.execute(scn, ls_->get_ls_id(), log.get_log_basic().get_tablet_id()))) {
+    if (OB_TABLET_NOT_EXIST == ret || OB_NO_NEED_UPDATE == ret) {
+      LOG_INFO("no need to replay ddl inc start log", K(ret));
+      ret = OB_SUCCESS;
+    } else if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to replay", K(ret), K(log), K(scn));
+      ret = OB_EAGAIN;
+    }
+  }
+
+  return ret;
+}
+
+int ObDDLRedoLogReplayer::replay_inc_commit(const ObDDLIncCommitLog &log, const SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  ObDDLIncCommitReplayExecutor replay_executor;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
+  } else if (OB_FAIL(replay_executor.init(ls_, log, scn))) {
+    LOG_WARN("failed to init ddl inc commit log replay executor", K(ret));
+  } else if (OB_FAIL(replay_executor.execute(scn, ls_->get_ls_id(), log.get_log_basic().get_tablet_id()))) {
+    if (OB_TABLET_NOT_EXIST == ret || OB_NO_NEED_UPDATE == ret) {
+      LOG_INFO("no need to replay ddl inc commit log", K(ret));
+      ret = OB_SUCCESS;
+    } else if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to replay", K(ret), K(log), K(scn));
+      ret = OB_EAGAIN;
+    }
+  }
+
+  return ret;
+}
 
 void ObDDLRedoLogReplayer::destroy()
 {

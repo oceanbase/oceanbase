@@ -62,7 +62,7 @@ public:
   ~ObAggRow();
   void reset();
   void reuse();
-  int init(const ObTableAccessParam &param, const int64_t batch_size);
+  int init(const ObTableAccessParam &param, const ObTableAccessContext &context, const int64_t batch_size);
   OB_INLINE int64_t get_agg_count() const { return agg_cells_.count(); }
   OB_INLINE int64_t get_dummy_agg_count() const { return dummy_agg_cells_.count(); }
   OB_INLINE bool has_lob_column_out() const { return has_lob_column_out_; }
@@ -126,7 +126,7 @@ public:
   OB_INLINE void set_end() { iter_end_flag_ = IterEndState::ITER_END; }
   int check_agg_in_row_mode(const ObTableIterParam &iter_param);
   bool has_data();
-  TO_STRING_KV(K_(agg_row), K_(agg_flat_row_mode));
+  INHERIT_TO_STRING_KV("ObBlockBatchedRowStore", ObBlockBatchedRowStore, K_(agg_row), K_(agg_flat_row_mode));
 
 private:
   ObAggRow agg_row_;

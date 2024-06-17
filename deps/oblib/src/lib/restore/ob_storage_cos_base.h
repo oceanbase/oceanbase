@@ -36,8 +36,6 @@ int init_cos_env();
 // Thread safe guaranteed by user.
 void fin_cos_env();
 
-bool is_cos_supported_checksum(ObStorageChecksumType checksum_type);
-
 class ObStorageCosUtil: public ObIStorageUtil
 {
 public:

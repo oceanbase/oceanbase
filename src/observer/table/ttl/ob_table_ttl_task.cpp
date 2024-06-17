@@ -66,7 +66,7 @@ int ObTableTTLDeleteTask::init(ObTenantTabletTTLMgr *ttl_tablet_mgr,
       rowkey_.reset();
     } else {
       int64_t pos = 0;
-      if (OB_FAIL(rowkey_.deserialize(allocator_, ttl_info.row_key_.ptr(), ttl_info.row_key_.length(), pos))) {
+      if (OB_FAIL(rowkey_.deserialize(rowkey_allocator_, ttl_info.row_key_.ptr(), ttl_info.row_key_.length(), pos))) {
         LOG_WARN("fail to deserialize rowkey",  KR(ret), K(ttl_info.row_key_));
       }
     }
@@ -659,6 +659,7 @@ int ObTableTTLDeleteTask::execute_ttl_delete(ObTableTTLDeleteRowIterator &ttl_ro
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected rowkey column count", KR(ret), K(row_cell_cnt), K(rowkey_cnt));
       } else {
+        rowkey_.reset();
         rowkey_allocator_.reuse();
         ObObj *rowkey_buf = nullptr;
         common::ObIArray<uint64_t> &row_cell_ids = ttl_row_iter.rowkey_cell_ids_;

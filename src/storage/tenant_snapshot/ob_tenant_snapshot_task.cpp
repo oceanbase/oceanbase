@@ -402,11 +402,11 @@ int ObTenantSnapshotGCTask::process()
           LOG_WARN("fail to delete tenant snapshot in tenant_snapshot_mgr_",
               KR(ret), KPC(tenant_snapshot_mgr_), KPC(tenant_snapshot));
         }
-      } // if only gc ls snapshot, then no need to delete tenant_snapshot in tenant_snapshot_mgr_
-      tenant_snapshot->finish_gc_tenant_snapshot_dag();
-      tenant_snapshot_mgr_->revert_tenant_snapshot(tenant_snapshot);
-      LOG_INFO("execute gc tenant snapshot task success");
+      }
     }
+    // once task finished, we clean has_unfinished_gc_dag_ flag
+    tenant_snapshot->finish_gc_tenant_snapshot_dag();
+    tenant_snapshot_mgr_->revert_tenant_snapshot(tenant_snapshot);
   }
 
   LOG_INFO("ObTenantSnapshotGCTask finished",

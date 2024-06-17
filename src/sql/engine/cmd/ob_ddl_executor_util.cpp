@@ -48,6 +48,7 @@ int ObDDLExecutorUtil::handle_session_exception(ObSQLSessionInfo &session)
 int ObDDLExecutorUtil::wait_ddl_finish(
     const uint64_t tenant_id,
     const int64_t task_id,
+    const bool ddl_need_retry_at_executor,
     ObSQLSessionInfo *session,
     obrpc::ObCommonRpcProxy *common_rpc_proxy,
     const bool is_support_cancel)
@@ -79,7 +80,12 @@ int ObDDLExecutorUtil::wait_ddl_finish(
           tenant_id, task_id, -1 /* target_object_id */, unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len)) {
         ret = error_message.ret_code_;
         if (OB_SUCCESS != ret) {
-          FORWARD_USER_ERROR(ret, error_message.user_message_);
+          if (ddl_need_retry_at_executor) {
+            ret = ObIDDLTask::in_ddl_retry_white_list(ret) ? OB_EAGAIN : ret;
+            LOG_WARN("is ddl need retry at user", K(ret));
+          } else {
+            FORWARD_USER_ERROR(ret, error_message.user_message_);
+          }
         }
         break;
       } else {

@@ -679,7 +679,7 @@ int ObTempExpr::eval(ObExecContext &exec_ctx, const ObNewRow &row, ObObj &result
     if (!exec_ctx.use_temp_expr_ctx_cache()) {
       temp_expr_ctx->~ObTempExprCtx();
     }
-    LOG_TRACE("temp expr result", K(result), K(row), K(rt_exprs_));
+    LOG_DEBUG("temp expr result", K(result), K(row), K(rt_exprs_));
   }
 
   return ret;
@@ -712,7 +712,10 @@ int ObTempExpr::deep_copy(ObIAllocator &allocator, ObTempExpr *&dst) const
 {
   int ret = OB_SUCCESS;
   char *buf = static_cast<char *>(allocator.alloc(sizeof(ObTempExpr)));
-  CK(OB_NOT_NULL(buf));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem in temp expr deep copy", K(ret));
+  }
   OX(dst = new(buf)ObTempExpr(allocator));
   OZ(dst->assign(*this, allocator));
   OX(dst->expr_idx_ = expr_idx_);

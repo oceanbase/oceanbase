@@ -31,7 +31,7 @@
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 #include "sql/optimizer/ob_sel_estimator.h"
-
+#include "sql/optimizer/ob_opt_est_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase
@@ -1151,7 +1151,8 @@ int ObOptSelectivity::get_column_range_sel(const OptTableMetas &table_metas,
       double hist_scale = 0.0;
       if (OB_FAIL(get_column_hist_scale(table_metas, ctx, col_expr, hist_scale))) {
         LOG_WARN("failed to get columnn hist sample scale", K(ret));
-      } else if (OB_FAIL(get_range_sel_by_histogram(handler.stat_->get_histogram(),
+      } else if (OB_FAIL(get_range_sel_by_histogram(ctx,
+                                                    handler.stat_->get_histogram(),
                                                     ranges,
                                                     true,
                                                     hist_scale,
@@ -1340,6 +1341,10 @@ int ObOptSelectivity::calc_column_range_selectivity(const OptTableMetas &table_m
     ObObj *new_start_obj = NULL;
     ObObj *new_end_obj = NULL;
     ObArenaAllocator tmp_alloc("ObOptSel");
+    bool convert2sortkey =
+        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_1_BP5 && ctx.get_compat_version() < COMPAT_VERSION_4_2_2) ||
+        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_4 && ctx.get_compat_version() < COMPAT_VERSION_4_3_0) ||
+        ctx.get_compat_version() >= COMPAT_VERSION_4_3_1;
     if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&start_obj, tmp_alloc, new_start_obj)) ||
         OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&end_obj, tmp_alloc, new_end_obj))) {
       LOG_WARN("failed to convert valid obj for opt stats", K(ret), K(start_obj), K(end_obj),
@@ -1352,7 +1357,8 @@ int ObOptSelectivity::calc_column_range_selectivity(const OptTableMetas &table_m
     } else if (OB_FAIL(ObOptEstObjToScalar::convert_objs_to_scalars(&minobj, &maxobj,
                                                                     new_start_obj, new_end_obj,
                                                                     &minscalar, &maxscalar,
-                                                                    &startscalar, &endscalar))) {
+                                                                    &startscalar, &endscalar,
+                                                                    convert2sortkey))) {
       LOG_WARN("failed to convert obj to scalars", K(ret));
     } else if (OB_FAIL(do_calc_range_selectivity(minscalar.get_double(),
                                                  maxscalar.get_double(),
@@ -1384,8 +1390,13 @@ int ObOptSelectivity::calc_column_range_selectivity(const OptTableMetas &table_m
       //startobj and endobj cannot be min/max in this branch, no need to defend
       ObObj startscalar;
       ObObj endscalar;
+      bool convert2sortkey =
+        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_1_BP5 && ctx.get_compat_version() < COMPAT_VERSION_4_2_2) ||
+        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_4 && ctx.get_compat_version() < COMPAT_VERSION_4_3_0) ||
+        ctx.get_compat_version() >= COMPAT_VERSION_4_3_1;
       if (OB_FAIL(ObOptEstObjToScalar::convert_objs_to_scalars(NULL, NULL, &start_obj, &end_obj,
-                                                               NULL, NULL, &startscalar, &endscalar))) {
+                                                               NULL, NULL, &startscalar, &endscalar,
+                                                               convert2sortkey))) {
         LOG_WARN("failed to convert objs to scalars", K(ret));
       } else {
         LOG_TRACE("range column est", K(start_obj), K(end_obj), K(startscalar), K(endscalar));
@@ -1910,7 +1921,8 @@ int ObOptSelectivity::get_equal_pred_sel(const ObHistogram &histogram,
   return ret;
 }
 
-int ObOptSelectivity::get_range_sel_by_histogram(const ObHistogram &histogram,
+int ObOptSelectivity::get_range_sel_by_histogram(const OptSelectivityCtx &ctx,
+                                                 const ObHistogram &histogram,
                                                  const ObQueryRangeArray &ranges,
                                                  bool no_whole_range,
                                                  const double sample_size_scale,
@@ -1945,7 +1957,8 @@ int ObOptSelectivity::get_range_sel_by_histogram(const ObHistogram &histogram,
         } else if (OB_ISNULL(new_startobj) || OB_ISNULL(new_endobj)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(new_startobj), K(new_endobj));
-        } else if (OB_FAIL(get_range_pred_sel(histogram,
+        } else if (OB_FAIL(get_range_pred_sel(ctx,
+                                              histogram,
                                               *new_startobj,
                                               range->border_flag_.inclusive_start(),
                                               *new_endobj,
@@ -1984,7 +1997,8 @@ int ObOptSelectivity::get_range_sel_by_histogram(const ObHistogram &histogram,
   * 2. b[count()-1].ev < maxv, all elements in the histograms satisfy the predicate
   *
   */
-int ObOptSelectivity::get_less_pred_sel(const ObHistogram &histogram,
+int ObOptSelectivity::get_less_pred_sel(const OptSelectivityCtx &ctx,
+                                        const ObHistogram &histogram,
                                         const ObObj &maxv,
                                         const bool inclusive,
                                         double &density)
@@ -2015,9 +2029,14 @@ int ObOptSelectivity::get_less_pred_sel(const ObHistogram &histogram,
       ObObj minobj(histogram.get(idx).endpoint_value_);
       ObObj maxobj(histogram.get(idx+1).endpoint_value_);
       ObObj startobj(minobj), endobj(maxv);
+      bool convert2sortkey =
+        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_1_BP5 && ctx.get_compat_version() < COMPAT_VERSION_4_2_2) ||
+        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_4 && ctx.get_compat_version() < COMPAT_VERSION_4_3_0) ||
+        ctx.get_compat_version() >= COMPAT_VERSION_4_3_1;
       if (OB_FAIL(ObOptEstObjToScalar::convert_objs_to_scalars(
                     &minobj, &maxobj, &startobj, &endobj,
-                    &minscalar, &maxscalar, &startscalar, &endscalar))) {
+                    &minscalar, &maxscalar, &startscalar, &endscalar,
+                    convert2sortkey))) {
         LOG_WARN("failed to convert objs to scalars", K(ret));
       } else if (maxscalar.get_double() - minscalar.get_double() > OB_DOUBLE_EPSINON) {
         last_bucket_count = histogram.get(idx+1).endpoint_num_ -
@@ -2043,14 +2062,16 @@ int ObOptSelectivity::get_less_pred_sel(const ObHistogram &histogram,
   * II. f(minv <= col) can be converted as sample_size - f(col < minv)
   *
   */
-int ObOptSelectivity::get_greater_pred_sel(const ObHistogram &histogram,
+int ObOptSelectivity::get_greater_pred_sel(const OptSelectivityCtx &ctx,
+                                           const ObHistogram &histogram,
                                            const ObObj &minv,
                                            const bool inclusive,
                                            double &density)
 {
   int ret = OB_SUCCESS;
   double less_sel = 0;
-  if (OB_FAIL(get_less_pred_sel(histogram,
+  if (OB_FAIL(get_less_pred_sel(ctx,
+                                histogram,
                                 minv,
                                 !inclusive,
                                 less_sel))) {
@@ -2070,7 +2091,8 @@ int ObOptSelectivity::get_greater_pred_sel(const ObHistogram &histogram,
   * the problem can be converted as f(col <(=) maxv) + f(minv <(=) col) - sample_size
   *
   */
-int ObOptSelectivity::get_range_pred_sel(const ObHistogram &histogram,
+int ObOptSelectivity::get_range_pred_sel(const OptSelectivityCtx &ctx,
+                                         const ObHistogram &histogram,
                                          const ObObj &minv,
                                          const bool min_inclusive,
                                          const ObObj &maxv,
@@ -2080,9 +2102,9 @@ int ObOptSelectivity::get_range_pred_sel(const ObHistogram &histogram,
   int ret = OB_SUCCESS;
   double less_sel = 0;
   double greater_sel = 0;
-  if (OB_FAIL(get_greater_pred_sel(histogram, minv, min_inclusive, greater_sel))) {
+  if (OB_FAIL(get_greater_pred_sel(ctx, histogram, minv, min_inclusive, greater_sel))) {
     LOG_WARN("failed to get greater predicate selectivity", K(ret));
-  } else if (OB_FAIL(get_less_pred_sel(histogram, maxv, max_inclusive, less_sel))) {
+  } else if (OB_FAIL(get_less_pred_sel(ctx, histogram, maxv, max_inclusive, less_sel))) {
     LOG_WARN("failed to get less predicate selectivity", K(ret));
   } else {
     density = less_sel + greater_sel - 1.0;
@@ -2378,7 +2400,7 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
     } else if (T_WIN_FUN_NTILE == win_expr->get_func_type()) {
       ObSEArray<ObRawExpr *, 4> param_exprs;
       ObRawExpr* const_expr = NULL;
-      ObObj result;
+      ObObj result,out_ptr;
       bool got_result = false;
       const ParamStore *params = ctx.get_params();
       if (OB_FAIL(param_exprs.assign(win_expr->get_func_params()))) {
@@ -2395,15 +2417,30 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
           LOG_WARN("fail to calc_const_or_calculable_expr", K(ret));
         } else if (!got_result || result.is_null() || !ob_is_numeric_type(result.get_type())) {
           special_ndv = origin_rows/part_ndv;
+        } else if (OB_FAIL(ObOptEstObjToScalar::convert_obj_to_scalar_obj(&result, &out_ptr))) {
+          LOG_WARN("Failed to convert obj using old method", K(ret));
         } else {
-          double n = (double)ObOptEstObjToScalar::convert_obj_to_scalar(&result);
-          special_ndv = std::min(origin_rows/part_ndv, n);
+          double scalar = static_cast<double>(out_ptr.get_double());
+          special_ndv = std::min(origin_rows/part_ndv, scalar);
         }
       }
     } else if (T_FUN_MIN == win_expr->get_func_type()||
                T_FUN_MEDIAN == win_expr->get_func_type()||
-               T_WIN_FUN_MAX == win_expr->get_func_type() ||
-               T_WIN_FUN_NTH_VALUE == win_expr->get_func_type() ||
+               T_FUN_MAX == win_expr->get_func_type()) {
+      ObSEArray<ObRawExpr *, 4> param_exprs;
+      ObAggFunRawExpr* aggr_expr =  win_expr->get_agg_expr();
+      double param_ndv = 1.0;
+      if (OB_ISNULL(aggr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null pointer", K(aggr_expr), K(ret));
+      } else if (OB_FAIL(param_exprs.assign(aggr_expr->get_real_param_exprs()))) {
+        LOG_WARN("fail to assign exprs", K(ret));
+      } else if (OB_FAIL(SMART_CALL(calculate_distinct(table_metas, ctx, param_exprs, origin_rows, param_ndv, false)))) {
+        LOG_WARN("failed to calculate_distinct", K(ret));
+      } else {
+        special_ndv = std::min(part_order_ndv, param_ndv);
+      }
+    } else if (T_WIN_FUN_NTH_VALUE == win_expr->get_func_type() ||
                T_WIN_FUN_FIRST_VALUE == win_expr->get_func_type() ||
                T_WIN_FUN_LAST_VALUE == win_expr->get_func_type()) {
       ObSEArray<ObRawExpr *, 4> param_exprs;

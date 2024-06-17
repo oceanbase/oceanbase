@@ -908,11 +908,11 @@ int ObOptStatSqlService::get_table_stat_sql(const uint64_t tenant_id,
       OB_FAIL(dml_splicer.add_column("object_type", stat.get_object_type())) ||
       OB_FAIL(dml_splicer.add_time_column("last_analyzed", stat.get_last_analyzed() == 0 ?
                                                         current_time : stat.get_last_analyzed())) ||
-      OB_FAIL(dml_splicer.add_column("sstable_row_count", -1)) ||
+      OB_FAIL(dml_splicer.add_column("sstable_row_count", stat.get_sstable_row_count())) ||
       OB_FAIL(dml_splicer.add_column("sstable_avg_row_len", -1)) ||
       OB_FAIL(dml_splicer.add_column("macro_blk_cnt", stat.get_macro_block_num())) ||
       OB_FAIL(dml_splicer.add_column("micro_blk_cnt", stat.get_micro_block_num())) ||
-      OB_FAIL(dml_splicer.add_column("memtable_row_cnt", -1)) ||
+      OB_FAIL(dml_splicer.add_column("memtable_row_cnt", stat.get_memtable_row_count())) ||
       OB_FAIL(dml_splicer.add_column("memtable_avg_row_len", -1)) ||
       OB_FAIL(dml_splicer.add_column("row_cnt", stat.get_row_count())) ||
       OB_FAIL(dml_splicer.add_column("avg_row_len", stat.get_avg_row_size())) ||
@@ -951,8 +951,9 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(data_version));
-  } else if (OB_UNLIKELY(ObHistType::INVALID_TYPE != stat.get_histogram().get_type() &&
-                         stat.get_histogram().get_bucket_cnt() == 0)) {
+  } else if (OB_UNLIKELY((ObHistType::INVALID_TYPE != stat.get_histogram().get_type() &&
+                          stat.get_histogram().get_bucket_cnt() == 0) ||
+                         stat.get_num_distinct() < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(stat));
   } else if (OB_FAIL(get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str, print_params)) ||
@@ -1001,7 +1002,7 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
         OB_FAIL(dml_splicer.add_column("distinct_cnt_synopsis", llc_hex_buf == NULL ? "" : llc_hex_buf)) ||
         OB_FAIL(dml_splicer.add_column("distinct_cnt_synopsis_size", llc_comp_size * 2)) ||
         OB_FAIL(dml_splicer.add_column("sample_size", stat.get_histogram().get_sample_size())) ||
-        OB_FAIL(dml_splicer.add_column("density", stat.get_histogram().get_density())) ||
+        OB_FAIL(dml_splicer.add_long_double_column("density", stat.get_histogram().get_density())) ||
         OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_cnt())) ||
         OB_FAIL(dml_splicer.add_column("histogram_type", stat.get_histogram().get_type())) ||
         OB_FAIL(dml_splicer.add_column("global_stats", 0)) ||
@@ -1172,7 +1173,7 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
       } else if (OB_LIKELY(obj_type.is_double())) {
         EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, avg_row_size, stat, int64_t);
       } else {
-        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, avg_row_size, stat, int64_t);  
+        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, avg_row_size, stat, int64_t);
       }
     }
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, macro_block_num, stat, int64_t);
@@ -1483,9 +1484,6 @@ int ObOptStatSqlService::get_compressed_llc_bitmap(ObIAllocator &allocator,
       comp_buf = const_cast<char*>(bitmap_buf);
       comp_size = bitmap_size;
     }
-    if (compressor != nullptr) {
-      compressor->reset_mem();
-    }
   }
   return ret;
 }
@@ -1527,8 +1525,6 @@ int ObOptStatSqlService::get_decompressed_llc_bitmap(ObIAllocator &allocator,
     LOG_WARN("decompress bitmap buffer failed.",
                KP(comp_buf), K(comp_size), KP(bitmap_buf),
                K(max_bitmap_size), K(bitmap_size), K(ret));
-  } else {
-    compressor->reset_mem();
   }
   return ret;
 }

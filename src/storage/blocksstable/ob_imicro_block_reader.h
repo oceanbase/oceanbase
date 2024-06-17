@@ -52,8 +52,9 @@ struct ObMicroIndexInfo;
   do {                                                                      \
     if (nullptr != ptr) {                                                   \
       ptr->~T();                                                            \
-      if (OB_LIKELY(nullptr != ctx && nullptr != ctx->stmt_allocator_)) {   \
-        ctx->stmt_allocator_->free(ptr);                                    \
+      if (OB_LIKELY(nullptr != ctx &&                                       \
+          nullptr != ctx->get_long_life_allocator())) {                     \
+        ctx->get_long_life_allocator()->free(ptr);                          \
       }                                                                     \
       ptr = nullptr;                                                        \
     }                                                                       \
@@ -296,9 +297,10 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       const bool contains_null,
+      const share::schema::ObColumnParam *col_param,
       int64_t &count)
   {
-    UNUSEDx(col_id, row_ids, row_cap, contains_null, count);
+    UNUSEDx(col_id, row_ids, row_cap, contains_null, col_param, count);
     return OB_NOT_SUPPORTED;
   }
   virtual int64_t get_column_count() const = 0;
@@ -387,7 +389,6 @@ public:
       int32_t &compare_result) = 0;
   static int filter_white_filter(
       const sql::ObWhiteFilterExecutor &filter,
-      const common::ObObjMeta &obj_meta,
       const common::ObDatum &datum,
       bool &filtered);
   virtual bool has_lob_out_row() const = 0;

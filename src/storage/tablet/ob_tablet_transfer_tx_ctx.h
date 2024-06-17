@@ -80,6 +80,23 @@ public:
   bool is_incomplete_replay_;
 };
 
+struct ObTransferOutTxParam
+{
+  ObTransferOutTxParam() { reset(); }
+  ~ObTransferOutTxParam() { reset(); }
+  void reset();
+  TO_STRING_KV(K_(except_tx_id), K_(data_end_scn), K_(op_scn), K_(op_type),
+      K_(is_replay), K_(dest_ls_id), K_(transfer_epoch), K_(move_tx_ids));
+  int64_t except_tx_id_;
+  share::SCN data_end_scn_;
+  share::SCN op_scn_;
+  transaction::NotifyType op_type_;
+  bool is_replay_;
+  share::ObLSID dest_ls_id_;
+  int64_t transfer_epoch_;
+  ObIArray<transaction::ObTransID> *move_tx_ids_;
+};
+
 struct CollectTxCtxInfo final
 {
   OB_UNIS_VERSION(1);
@@ -145,25 +162,30 @@ class ObTransferOutTxCtx : public mds::MdsCtx
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTransferOutTxCtx();
+  ObTransferOutTxCtx() { reset();  }
   ~ObTransferOutTxCtx() { reset(); }
   void reset();
   int record_transfer_block_op(const share::ObLSID src_ls_id,
                                const share::ObLSID dest_ls_id,
                                const share::SCN data_end_scn,
                                int64_t transfer_epoch,
-                               bool is_replay);
+                               bool is_replay,
+                               bool filter_tx_need_transfer,
+                               ObIArray<transaction::ObTransID> &move_tx_ids);
   virtual void on_redo(const share::SCN &redo_scn) override;
   virtual void on_commit(const share::SCN &commit_version, const share::SCN &commit_scn) override;
   virtual void on_abort(const share::SCN &abort_scn) override;
   bool is_valid();
   int assign(const ObTransferOutTxCtx &other);
+  bool empty_tx() { return filter_tx_need_transfer_ && move_tx_ids_.count() == 0; }
 
   TO_STRING_KV(K_(do_transfer_block),
                K_(src_ls_id),
                K_(dest_ls_id),
                K_(data_end_scn),
-               K_(transfer_scn));
+               K_(transfer_scn),
+               K_(filter_tx_need_transfer),
+               K_(move_tx_ids));
 private:
   bool do_transfer_block_;
   share::ObLSID src_ls_id_;
@@ -171,6 +193,8 @@ private:
   share::SCN data_end_scn_;
   share::SCN transfer_scn_;
   int64_t transfer_epoch_;
+  bool filter_tx_need_transfer_;
+  ObSEArray<transaction::ObTransID, 1> move_tx_ids_;
 };
 
 OB_SERIALIZE_MEMBER_TEMP(inline, ObTransferOutTxCtx,
@@ -180,7 +204,9 @@ OB_SERIALIZE_MEMBER_TEMP(inline, ObTransferOutTxCtx,
                                  dest_ls_id_,
                                  data_end_scn_,
                                  transfer_scn_,
-                                 transfer_epoch_)
+                                 transfer_epoch_,
+                                 filter_tx_need_transfer_,
+                                 move_tx_ids_)
 
 class ObTransferMoveTxCtx : public mds::BufferCtx
 {

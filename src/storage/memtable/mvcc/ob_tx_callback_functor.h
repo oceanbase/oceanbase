@@ -97,8 +97,12 @@ public:
       // case3: the callback has not been sync successfully
       is_iter_end = true;
     } else if (callback->get_scn().is_min()) {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback scn is min_scn", KPC(callback));
+#ifdef ENABLE_DEBUG_LOG
       usleep(5000);
       ob_abort();
+#endif
+      is_iter_end = true;
     } else if (0 >= need_remove_count_ && callback->get_scn() != last_scn_for_remove_) {
       // case4: the callback has exceeded the last log whose log ts need to be
       //         removed
@@ -278,10 +282,9 @@ public:
     checksum_scn_(share::SCN::min_scn()),
     checksumer_(NULL),
     checksum_last_scn_(share::SCN::min_scn()) {}
-  virtual bool cond_for_remove(ObITransCallback* callback) = 0;
+  virtual bool cond_for_remove(ObITransCallback* callback, int &ret) = 0;
   void set_checksumer(const share::SCN checksum_scn,
-                      TxChecksum *checksumer
-                      )
+                      TxChecksum *checksumer)
   {
     checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
@@ -307,7 +310,7 @@ public:
       TRANS_LOG(ERROR, "unexpected callback", KP(callback));
     } else if (callback->need_submit_log()) {
       // Case 1: callback has not been proposed to paxos
-      if (cond_for_remove(callback)) {
+      if (cond_for_remove(callback, ret)) {
         if (need_remove_data_ && OB_FAIL(callback->rollback_callback())) {
           TRANS_LOG(WARN, "rollback callback failed", K(ret), K(*callback));
         } else if (!need_remove_data_ && OB_FAIL(callback->checkpoint_callback())) {
@@ -315,11 +318,13 @@ public:
         } else {
           need_remove_callback_ = true;
         }
+      } else if (OB_FAIL(ret)) {
+        // check ret
       }
     } else if (!callback->need_submit_log()) {
       // Case 2: callback has submitted to log-service may not persistented
       // we check removable in cond_for_remove_ ensure it is synced
-      if (cond_for_remove(callback)) {
+      if (cond_for_remove(callback, ret)) {
         if (checksumer_ && callback->get_scn() >= checksum_scn_
             && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
           TRANS_LOG(WARN, "calc checksum callback failed", K(ret), K(*callback));
@@ -333,6 +338,8 @@ public:
             checksum_last_scn_ = callback->get_scn();
           }
         }
+      } else if (OB_FAIL(ret)) {
+        // check ret
       } else {
         if (checksumer_) {
           if (callback->get_scn() >= checksum_scn_
@@ -397,8 +404,11 @@ public:
     /*   ret = OB_ERR_UNEXPECTED; */
     /*   TRANS_LOG(ERROR, "unexpected callback", KP(callback)); */
     } else if (is_commit_ && callback->get_scn().is_max()) {
-      TRANS_LOG(ERROR, "callback has not submitted log yet when commit callback", KP(callback));
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "callback has not submitted log yet when commit callback", K(ret), KP(callback));
+#ifdef ENABLE_DEBUG_LOG
       ob_abort();
+#endif
     } else if (is_commit_
                && OB_FAIL(callback->trans_commit())) {
       TRANS_LOG(ERROR, "trans commit failed", KPC(callback));
@@ -442,7 +452,8 @@ private:
 class ObCleanUnlogCallbackFunctor : public ObITxCallbackFunctor
 {
 public:
-  ObCleanUnlogCallbackFunctor() {}
+  ObCleanUnlogCallbackFunctor(common::ObFunction<void()> &before_remove)
+  : before_remove_(&before_remove) {}
 
   virtual int operator()(ObITransCallback *callback) override
   {
@@ -452,13 +463,17 @@ public:
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected callback", KP(callback));
     } else if (callback->need_submit_log()) {
+      if (before_remove_) {
+        before_remove_->operator()();
+        before_remove_ = NULL;
+      }
       callback->rollback_callback();
       need_remove_callback_ = true;
     }
 
     return ret;
   }
-
+  common::ObFunction<void()> *before_remove_;
   VIRTUAL_TO_STRING_KV("CleanUnlogCallback", "CleanUnlogCallback");
 };
 

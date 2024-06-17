@@ -418,7 +418,8 @@ int ObPxDistTransmitOp::do_range_dist()
     }
   }
   if (OB_SUCC(ret)) {
-    range = ctx_.get_partition_ranges().empty() ? NULL : &ctx_.get_partition_ranges().at(0);
+    ObPxSqcHandler *handler = ctx_.get_sqc_handler();
+    range = handler->get_partition_ranges().empty() ? NULL : &handler->get_partition_ranges().at(0);
     ObRangeSliceIdCalc slice_id_calc(ctx_.get_allocator(), task_channels_.count(),
       range, &MY_SPEC.dist_exprs_, MY_SPEC.sort_cmp_funs_, MY_SPEC.sort_collations_);
     if (ObPxSampleType::OBJECT_SAMPLE == MY_SPEC.sample_type_) {
@@ -652,6 +653,10 @@ int ObPxDistTransmitSpec::register_to_datahub(ObExecContext &ctx) const
             } else if (OB_FAIL(ctx.get_sqc_handler()->get_sqc_proxy().
                   get_piece_sample_msg().row_stores_.push_back(sample_store))) {
               LOG_WARN("fail to push back sample store", K(ret));
+            }
+            if (OB_FAIL(ret) && nullptr != sample_store) {
+              sample_store->~ObChunkDatumStore();
+              ctx.get_allocator().free(sample_store);
             }
           }
         }

@@ -49,7 +49,7 @@ int ObRoutineSqlService::create_package(ObPackageInfo &package_info,
       opt.tenant_id_ = package_info.get_tenant_id();
       opt.database_id_ = package_info.get_database_id();
       opt.table_id_ = package_info.get_package_id();
-      opt.op_type_ = OB_DDL_CREATE_PACKAGE;
+      opt.op_type_ = is_replace ? OB_DDL_ALTER_PACKAGE : OB_DDL_CREATE_PACKAGE;
       opt.schema_version_ = package_info.get_schema_version();
       opt.ddl_stmt_str_ = (NULL != ddl_stmt_str) ? *ddl_stmt_str : ObString();
       if (OB_FAIL(log_operation(opt, *sql_client))) {

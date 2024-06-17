@@ -62,6 +62,7 @@ class ObVSliceAlloc;
 class ObBlockAllocMgr;
 class ObFIFOAllocator;
 class ObPLogItem;
+class ObLogCompressor;
 
 extern void allow_next_syslog(int64_t count = 1);
 extern int logdata_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, va_list args);
@@ -556,6 +557,8 @@ public:
   //@brief Set whether record old log file. If this flag and max_file_index set,
   //will record log files in the directory for log file
   int set_record_old_log_file(bool rec_old_file_flag = false);
+  int set_log_compressor(ObLogCompressor *log_compressor);
+  int64_t get_max_file_index() const { return max_file_index_; }
 
   //@brief Get the process-only ObLogger.
   static ObLogger &get_logger();
@@ -747,6 +750,7 @@ private:
 
   int log_new_file_info(const ObPLogFileStruct &log_file);
   void drop_log_items(ObIBaseLogItem **items, const int64_t item_cnt) override;
+  void unlink_if_need(const char *file);
 private:
   static const char *const errstr_[];
   // default log rate limiter if there's no tl_log_limiger
@@ -806,6 +810,7 @@ private:
   ObBlockAllocMgr* log_mem_limiter_;
   ObVSliceAlloc* allocator_;
   ObFIFOAllocator* error_allocator_;
+  ObLogCompressor* log_compressor_;
   // juse use it for test promise log print
   bool enable_log_limit_;
   RLOCAL_STATIC(ByteBuf<LOCAL_BUF_SIZE>, local_buf_);
@@ -931,7 +936,8 @@ void ObLogger::log_it(const char *mod_name,
             int64_t buf_len = tb->get_cap();
             int64_t &pos = tb->get_pos();
             int64_t orig_pos = pos;
-            ret = log_head(get_cur_ts(), mod_name, level, file, line, function, errcode, buf, buf_len, pos);
+            int64_t ts = OB_TSC_TIMESTAMP.current_time();
+            ret = log_head(ts, mod_name, level, file, line, function, errcode, buf, buf_len, pos);
             if (OB_SUCC(ret)) {
               ret = log_data_func(buf, buf_len, pos);
             }
@@ -1150,7 +1156,8 @@ inline void ObLogger::do_log_message(const bool is_async,
   auto fd_type = get_fd_type(mod_name);
   const int64_t log_size = limited_left_log_size_ + NORMAL_LOG_SIZE;
   limited_left_log_size_ = 0;
-  ObBasicTimeGuard tg;
+  BASIC_TIME_GUARD(tg, "ObLog");
+  int64_t start_ts = OB_TSC_TIMESTAMP.current_time();
   if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size,
           allow, limiter_info))) {
     LOG_STDERR("precheck_tl_log_limiter error, ret=%d\n", ret);
@@ -1162,7 +1169,7 @@ inline void ObLogger::do_log_message(const bool is_async,
     ObPLogItem *log_item = new (local_buf_) ObPLogItem();
     log_item->set_buf_size(MAX_LOG_SIZE);
     log_item->set_log_level(level);
-    log_item->set_timestamp(tg.get_start_ts());
+    log_item->set_timestamp(start_ts);
     log_item->set_tl_type(tl_type_);
     log_item->set_force_allow(is_force_allows());
     log_item->set_fd_type(fd_type);
@@ -1171,7 +1178,7 @@ inline void ObLogger::do_log_message(const bool is_async,
     int64_t buf_len = log_item->get_buf_size();
     int64_t pos = log_item->get_data_len();
     if (with_head) {
-      if (OB_FAIL(log_head(tg.get_start_ts(), mod_name, level, file, line, function, errcode,
+      if (OB_FAIL(log_head(start_ts, mod_name, level, file, line, function, errcode,
                            buf, buf_len, pos))) {
         LOG_STDERR("log_header error ret = %d\n", ret);
       }
@@ -1203,7 +1210,7 @@ inline void ObLogger::do_log_message(const bool is_async,
         check_log_end(*log_item, pos);
       }
     }
-    tg.click("FORMAT_END");
+    BASIC_TIME_GUARD_CLICK("FORMAT_END");
 
 
     if (OB_SUCC(ret)) {
@@ -1223,7 +1230,7 @@ _Pragma("GCC diagnostic pop")
             // update buf_size
           new_log_item->set_buf_size(log_item->get_data_len());
           log_item = new_log_item;
-          tg.click("ALLOC_END");
+          BASIC_TIME_GUARD_CLICK("ALLOC_END");
         }
 
         if (OB_SUCC(ret)) {
@@ -1236,12 +1243,12 @@ _Pragma("GCC diagnostic pop")
               (void)ATOMIC_AAF(current_written_count_ + tl_type, 1);
             }
             last_logging_seq_ = curr_logging_seq_;
-            tg.click("APPEND_END");
+            BASIC_TIME_GUARD_CLICK("APPEND_END");
           }
         }
       } else {
         flush_logs_to_file(&log_item, 1);
-        tg.click("FLUSH_END");
+        BASIC_TIME_GUARD_CLICK("FLUSH_END");
       }
 
       // stat
@@ -1251,12 +1258,12 @@ _Pragma("GCC diagnostic pop")
           free_log_item(log_item);
         }
         log_item = NULL;
-        tg.click("FREE_END");
+        BASIC_TIME_GUARD_CLICK("FREE_END");
       }
       check_reset_force_allows();
     } /* not allow */
   }
-#ifndef OB_BUILD_RPM
+#ifndef OB_BUILD_PACKAGE
   const int64_t threshold_us = 500 * 1000;
 #else
   const int64_t threshold_us = 1000 * 1000;
@@ -1267,7 +1274,7 @@ _Pragma("GCC diagnostic pop")
     const int64_t buf_len = sizeof buf;
     int64_t pos = 0;
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(log_head(tg.get_start_ts(), mod_name, OB_LOG_LEVEL_ERROR, file, line, function,
+    if (OB_TMP_FAIL(log_head(start_ts, mod_name, OB_LOG_LEVEL_ERROR, file, line, function,
                              errcode, buf, buf_len, pos))) {
     } else if (OB_TMP_FAIL(logdata_printf(buf, buf_len, pos,
                                           "LOGGER COST TOO MUCH TIME, cost: %ld, ", cost_time))) {

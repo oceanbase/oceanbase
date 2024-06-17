@@ -97,9 +97,9 @@ public:
   // Whether the dump conditions are met
   virtual bool ready_for_flush() = 0;
   // avoid active checkpoint block minor merge
-  virtual bool is_frozen_checkpoint() const = 0;
+  virtual bool is_frozen_checkpoint() = 0;
   // active checkpoint no need to flush
-  virtual bool is_active_checkpoint() const = 0;
+  virtual bool is_active_checkpoint() = 0;
   // for checkpoint_virtual_table
   virtual ObTabletID get_tablet_id() const = 0;
   // register into ObDataCheckpoint
@@ -107,7 +107,7 @@ public:
   bool is_in_prepare_list_of_data_checkpoint();
   // after checkpoint ready_for_flush
   // move to prepare_list in data_checkpoint
-  int finish_freeze();
+  virtual int finish_freeze();
   // for empty memtable
   virtual int set_frozen() { return OB_SUCCESS; }
 

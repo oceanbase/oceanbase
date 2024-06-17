@@ -36,6 +36,8 @@ using namespace storage;
 ObTableLoadTableCompactResult::ObTableLoadTableCompactResult()
   : allocator_("TLD_TCResult"), tablet_result_map_(64)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  all_table_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTableCompactResult::~ObTableLoadTableCompactResult()
@@ -58,7 +60,6 @@ void ObTableLoadTableCompactResult::reset()
 int ObTableLoadTableCompactResult::init()
 {
   int ret = OB_SUCCESS;
-  allocator_.set_tenant_id(MTL_ID());
   if (OB_FAIL(tablet_result_map_.init("TLD_TCResult", MTL_ID()))) {
     LOG_WARN("fail to init link hash map", KR(ret));
   }

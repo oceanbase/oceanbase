@@ -21,20 +21,6 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObRowSampleIterator : public ObISampleIterator 
-{
-public:
-  explicit ObRowSampleIterator(const common::SampleInfo &sample_info);
-  virtual ~ObRowSampleIterator();
-  int open(ObQueryRowIterator &iterator);
-  virtual void reuse();
-  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
-  virtual void reset() override;
-private:
-  ObQueryRowIterator *iterator_;
-  int64_t row_num_;
-};
-
 class ObMemtableRowSampleIterator : public ObISampleIterator
 {
 public:

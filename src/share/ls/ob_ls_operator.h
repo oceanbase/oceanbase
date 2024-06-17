@@ -138,6 +138,10 @@ public:
   ~ObLSFlag() {}
   void reset() {flag_ = NORMAL_FLAG;}
   int assign(const ObLSFlag &ls_flag);
+  bool operator==(const ObLSFlag &other) const
+  {
+    return flag_ == other.flag_;
+  }
   bool is_valid() const { return flag_ >= 0; }
   void set_block_tablet_in() { flag_ |= BLOCK_TABLET_IN_FLAG; }
   void clear_block_tablet_in() { flag_ &= (~BLOCK_TABLET_IN_FLAG); }
@@ -345,7 +349,6 @@ public:
    * */
   int load_all_ls_and_snapshot(const share::SCN &read_scn, ObLSAttrIArray &ls_array, bool only_existing_ls = true);
   static int get_tenant_gts(const uint64_t &tenant_id, SCN &gts_scn);
-  static int get_tenant_gts(const uint64_t &tenant_id, int64_t &gts_ts_ns);
   int alter_ls_group_in_trans(const ObLSAttr &ls_info,
                               const uint64_t new_ls_group_id,
                               common::ObMySQLTransaction &trans);

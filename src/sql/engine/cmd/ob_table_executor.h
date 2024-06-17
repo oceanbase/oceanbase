@@ -100,27 +100,6 @@ public:
   ObAlterTableExecutor();
   virtual ~ObAlterTableExecutor();
   int execute(ObExecContext &ctx, ObAlterTableStmt &stmt);
-
-  static int update_external_file_list(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      const common::ObString &location,
-      const common::ObString &access_info,
-      const common::ObString &pattern,
-      const ObExprRegexpSessionVariables &regexp_vars);
-  static int collect_local_files_on_servers(
-      const uint64_t tenant_id,
-      const common::ObString &location,
-      const common::ObString &pattern,
-      const ObExprRegexpSessionVariables &regexp_vars,
-      common::ObIArray<common::ObAddr> &all_servers,
-      common::ObIArray<common::ObString> &file_urls,
-      common::ObIArray<int64_t> &file_sizes,
-      common::ObIAllocator &allocator);
-  static int flush_external_file_cache(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      const common::ObIArray<common::ObAddr> &all_servers);
 private:
   static const int64_t TIME_INTERVAL_PER_PART_US = 50 * 1000; // 50ms
   static const int64_t MAX_WAIT_CHECK_SCHEMA_VERSION_INTERVAL_US = 120LL * 1000000LL; // 120s
@@ -142,6 +121,12 @@ private:
       obrpc::ObCommonRpcProxy *common_rpc_proxy,
       ObSQLSessionInfo *my_session,
       const bool is_sync_ddl_user);
+
+  int alter_table_exchange_partition_rpc(
+      obrpc::ObExchangePartitionArg &exchange_partition_arg,
+      obrpc::ObAlterTableRes &res,
+      obrpc::ObCommonRpcProxy *common_rpc_proxy,
+      ObSQLSessionInfo *my_session);
 
   int need_check_constraint_validity(obrpc::ObAlterTableArg &alter_table_arg, bool &need_check);
 
@@ -202,8 +187,14 @@ private:
 
   int refresh_schema_for_table(const uint64_t tenant_id);
   int execute_alter_external_table(ObExecContext &ctx, ObAlterTableStmt &stmt);
-  static int sort_external_files(ObIArray<ObString> &file_urls,
-                                 ObIArray<int64_t> &file_sizes);
+  static int get_external_file_list(
+    const ObString &location,
+    common::ObIArray<common::ObString> &file_urls,
+    common::ObIArray<int64_t> &file_sizes,
+    const common::ObString &access_info,
+    common::ObIAllocator &allocator,
+    common::ObStorageType &storage_type);
+
 private:
   //DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);
 };

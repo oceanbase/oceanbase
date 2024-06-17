@@ -93,6 +93,7 @@
 #include "observer/table/ob_table_session_pool.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 
 namespace oceanbase
 {
@@ -257,6 +258,17 @@ public:
     UNUSED(ts_type);
     MonotonicTs unused;
     return source_.get_gts(stc, NULL, gts, unused);
+  }
+  virtual int remove_dropped_tenant(const uint64_t tenant_id)
+  {
+    UNUSED(tenant_id);
+    return OB_SUCCESS;
+  }
+  virtual int interrupt_gts_callback_for_ls_offline(const uint64_t tenant_id, const share::ObLSID ls_id)
+  {
+    UNUSED(tenant_id);
+    UNUSED(ls_id);
+    return OB_SUCCESS;
   }
 private:
   MockObGtsSource &source_;
@@ -587,7 +599,7 @@ int MockTenantModuleEnv::init_slogger_mgr(const char *log_dir)
   log_file_spec.retry_write_policy_ = "normal";
   log_file_spec.log_create_policy_ = "normal";
   log_file_spec.log_write_policy_ = "truncate";
-  if (OB_FAIL(SLOGGERMGR.init(log_dir, MAX_FILE_SIZE, log_file_spec))) {
+  if (OB_FAIL(SLOGGERMGR.init(log_dir, log_dir, MAX_FILE_SIZE, log_file_spec))) {
     STORAGE_LOG(WARN, "fail to init SLOGGERMGR", K(ret));
   }
 
@@ -648,8 +660,6 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(ERROR, "failed to init bandwidth_throttle_", K(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
     STORAGE_LOG(ERROR, "init timer fail", KR(ret));
-  } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
-    STORAGE_LOG(ERROR, "init memory dump timer fail", KR(ret));
   } else {
     obrpc::ObRpcNetHandler::CLUSTER_ID = 1;
     oceanbase::palf::election::INIT_TS = 1;
@@ -724,9 +734,13 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, table::ObHTableLockMgr::mtl_init, nullptr, nullptr, nullptr, table::ObHTableLockMgr::mtl_destroy);
       MTL_BIND2(mtl_new_default, omt::ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, table::ObTableApiSessPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(ObTenantFTPluginMgr::mtl_new, mtl_init_default, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObIndexUsageInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, storage::ObTabletMemtableMgrPool::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantSnapshotService::mtl_init, mtl_start_default, mtl_stop_default, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, memtable::ObLockWaitMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObGlobalIteratorPool::mtl_init, nullptr, nullptr, nullptr, ObGlobalIteratorPool::mtl_destroy);
     }
     if (OB_FAIL(ret)) {
 
@@ -852,10 +866,6 @@ void MockTenantModuleEnv::destroy()
   TG_STOP(lib::TGDefIDs::ServerGTimer);
   TG_WAIT(lib::TGDefIDs::ServerGTimer);
   TG_DESTROY(lib::TGDefIDs::ServerGTimer);
-
-  TG_STOP(lib::TGDefIDs::MemDumpTimer);
-  TG_WAIT(lib::TGDefIDs::MemDumpTimer);
-  TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
 
   if (OB_NOT_NULL(THE_IO_DEVICE)) {
     THE_IO_DEVICE->destroy();

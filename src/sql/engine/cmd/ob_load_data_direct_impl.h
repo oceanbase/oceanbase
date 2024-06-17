@@ -23,6 +23,7 @@
 #include "common/storage/ob_io_device.h"
 #include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "observer/table_load/ob_table_load_instance.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
@@ -75,14 +76,27 @@ private:
   public:
     LoadExecuteParam();
     bool is_valid() const;
-    TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(combined_name), K_(parallel), K_(thread_count),
-                 K_(batch_row_count), K_(data_mem_usage_limit), K_(need_sort), K_(online_opt_stat_gather),
-                 K_(max_error_rows), K_(ignore_row_num), K_(data_access_param), K_(store_column_idxs));
+    TO_STRING_KV(K_(tenant_id),
+                 K_(database_id),
+                 K_(table_id),
+                 K_(combined_name),
+                 K_(parallel),
+                 K_(thread_count),
+                 K_(batch_row_count),
+                 K_(data_mem_usage_limit),
+                 K_(need_sort),
+                 K_(online_opt_stat_gather),
+                 K_(max_error_rows),
+                 K_(ignore_row_num),
+                 K_(dup_action),
+                 "method", storage::ObDirectLoadMethod::get_type_string(method_),
+                 "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
+                 K_(data_access_param),
+                 K_(store_column_idxs));
   public:
     uint64_t tenant_id_;
     uint64_t database_id_;
     uint64_t table_id_;
-    uint64_t sql_mode_;
     common::ObString database_name_;
     common::ObString table_name_;
     common::ObString combined_name_; // database name + table name
@@ -95,9 +109,10 @@ private:
     int64_t max_error_rows_; // max allowed error rows
     int64_t ignore_row_num_; // number of rows to ignore per file
     sql::ObLoadDupActionType dup_action_;
+    storage::ObDirectLoadMethod::Type method_;
+    storage::ObDirectLoadInsertMode::Type insert_mode_;
     DataAccessParam data_access_param_;
-    common::ObSEArray<int64_t, 16>
-      store_column_idxs_; // Mapping of stored columns to source data columns
+    common::ObArray<int64_t> store_column_idxs_; // Mapping of stored columns to source data columns
   };
 
   struct LoadExecuteContext
@@ -166,7 +181,7 @@ private:
     int get_next_data_desc(DataDesc &data_desc, int64_t &pos);
     TO_STRING_KV(K_(data_descs), K_(pos));
   private:
-    common::ObSEArray<DataDesc, 64> data_descs_;
+    common::ObArray<DataDesc> data_descs_;
     int64_t pos_;
   };
 
@@ -359,7 +374,7 @@ private:
     // task ctrl
     ObParallelTaskController task_controller_;
     ObConcurrentFixedCircularArray<TaskHandle *> handle_reserve_queue_;
-    common::ObSEArray<TaskHandle *, 64> handle_resource_; // 用于释放资源
+    common::ObArray<TaskHandle *> handle_resource_; // 用于释放资源
     int64_t total_line_count_;
     bool is_inited_;
   private:

@@ -31,6 +31,7 @@
 #include "ob_transfer_backfill_tx.h"
 #include "lib/thread/thread_mgr_interface.h"
 #include "logservice/ob_log_base_type.h"
+#include "share/ob_storage_ha_diagnose_struct.h"
 
 namespace oceanbase
 {
@@ -68,6 +69,40 @@ public:
   int safe_to_destroy(bool &is_safe);
   int offline();
   void online();
+  int set_related_info(
+      const share::ObTransferTaskID &task_id,
+      const share::SCN &start_scn);
+  int get_related_info_task_id(share::ObTransferTaskID &task_id) const;
+  int reset_related_info(const share::ObTransferTaskID &task_id);
+  int record_error_diagnose_info_in_replay(
+      const share::ObTransferTaskID &task_id,
+      const share::ObLSID &dest_ls_id,
+      const int result_code,
+      const bool clean_related_info,
+      const share::ObStorageHADiagTaskType type,
+      const share::ObStorageHACostItemName result_msg);
+  int record_error_diagnose_info_in_backfill(
+      const share::SCN &log_sync_scn,
+      const share::ObLSID &dest_ls_id,
+      const int result_code,
+      const ObTabletID &tablet_id,
+      const ObMigrationStatus &migration_status,
+      const share::ObStorageHACostItemName result_msg);
+  void reset_related_info();
+  int record_perf_diagnose_info_in_replay(
+      const share::ObStorageHAPerfDiagParams &params,
+      const int result,
+      const uint64_t timestamp,
+      const int64_t start_ts,
+      const bool is_report);
+  int record_perf_diagnose_info_in_backfill(
+      const share::ObStorageHAPerfDiagParams &params,
+      const share::SCN &log_sync_scn,
+      const int result_code,
+      const ObMigrationStatus &migration_status,
+      const uint64_t timestamp,
+      const int64_t start_ts,
+      const bool is_report);
 private:
   int get_transfer_task_(share::ObTransferTaskInfo &task_info);
   int get_transfer_task_from_inner_table_(
@@ -158,6 +193,8 @@ private:
       ObMySQLTransaction &trans,
       const SCN data_end_scn,
       const SCN transfer_scn,
+      ObIArray<ObTabletID> &tablet_list,
+      ObIArray<transaction::ObTransID> &move_tx_ids,
       int64_t &move_tx_count);
   int start_trans_(
       ObTimeoutCtx &timeout_ctx,
@@ -170,7 +207,8 @@ private:
       const share::ObTransferTaskInfo &task_info,
       common::ObMySQLTransaction &trans,
       const transaction::ObTxDataSourceType data_source_type,
-      SCN data_end_scn = SCN::min_scn());
+      SCN data_end_scn,
+      ObIArray<transaction::ObTransID> *move_tx_ids);
   int lock_transfer_task_(
       const share::ObTransferTaskInfo &task_info,
       common::ObISQLClient &trans);
@@ -284,6 +322,12 @@ private:
   int get_src_ls_member_list_(
       common::ObMemberList &member_list);
   int broadcast_tablet_location_(const share::ObTransferTaskInfo &task_info);
+  void process_perf_diagnose_info_(
+      const ObStorageHACostItemName name,
+      const ObStorageHADiagTaskType task_type,
+      const int64_t start_ts,
+      const int64_t round, const bool is_report) const;
+  int do_clean_diagnose_info_();
 
   int register_move_tx_ctx_batch_(const share::ObTransferTaskInfo &task_info,
                                   const SCN transfer_scn,
@@ -306,6 +350,9 @@ private:
   ObTransferWorkerMgr transfer_worker_mgr_;
   int64_t round_;
   share::SCN gts_seq_;
+  ObTransferRelatedInfo related_info_;
+  ObTransferTaskInfo task_info_;
+  share::ObStorageHACostItemName diagnose_result_msg_;
   common::SpinRWLock transfer_handler_lock_;
   bool transfer_handler_enabled_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);

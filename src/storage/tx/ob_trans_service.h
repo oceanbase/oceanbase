@@ -46,6 +46,7 @@
 #include "storage/tx/ob_dup_table_util.h"
 #include "ob_tx_free_route.h"
 #include "ob_tx_free_route_msg.h"
+#include "ob_tablet_to_ls_cache.h"
 
 #define MAX_REDO_SYNC_TASK_COUNT 10
 
@@ -72,28 +73,12 @@ class ObAliveServerTracer;
 
 namespace storage
 {
-struct ObStoreCtx;
-class ObIFreezeCb;
-class LeaderActiveArg;
-class ObLSService;
-class ObLSTxService;
+class ObIMemtable;
 }
 
 namespace memtable
 {
-class ObIMemtable;
-class ObMemtable;
-class ObIMemtableCtx;
 class ObMemtableCtx;
-class ObIMemtableCtxFactory;
-}
-
-namespace rpc
-{
-namespace frame
-{
-class ObReqTransport;
-}
 }
 
 namespace obrpc
@@ -215,12 +200,12 @@ public:
   int calculate_trans_cost(const ObTransID &tid, uint64_t &cost);
   int get_ls_min_uncommit_prepare_version(const share::ObLSID &ls_id, share::SCN &min_prepare_version);
   int get_min_undecided_log_ts(const share::ObLSID &ls_id, share::SCN &log_ts);
-  int check_dup_table_lease_valid(const ObLSID ls_id, bool &is_dup_ls, bool &is_lease_valid);
+  int check_dup_table_lease_valid(const share::ObLSID ls_id, bool &is_dup_ls, bool &is_lease_valid);
   //get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_iter);
   int dump_elr_statistic();
   int remove_callback_for_uncommited_txn(
-    const ObLSID ls_id,
+    const share::ObLSID ls_id,
     const memtable::ObMemtableSet *memtable_set);
   int64_t get_tenant_id() const { return tenant_id_; }
   const common::ObAddr &get_server() { return self_; }
@@ -229,6 +214,7 @@ public:
   ObIDupTableRpc *get_dup_table_rpc() { return dup_table_rpc_; }
   ObDupTableRpc &get_dup_table_rpc_impl() { return dup_table_rpc_impl_; }
   ObDupTableLoopWorker &get_dup_table_loop_worker() { return dup_table_loop_worker_; }
+  const ObDupTabletScanTask &get_dup_table_scan_task() { return dup_tablet_scan_task_; }
   ObILocationAdapter *get_location_adapter() { return location_adapter_; }
   common::ObMySQLProxy *get_mysql_proxy() { return GCTX.sql_proxy_; }
   bool is_running() const { return is_running_; }
@@ -245,6 +231,24 @@ public:
                            const int64_t request_id = 0,
                            const ObRegisterMdsFlag &register_flag = ObRegisterMdsFlag());
   ObTxELRUtil &get_tx_elr_util() { return elr_util_; }
+  int create_tablet(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id)
+  {
+    return tablet_to_ls_cache_.create_tablet(tablet_id, ls_id);
+  }
+  int remove_tablet(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id)
+  {
+    return tablet_to_ls_cache_.remove_tablet(tablet_id, ls_id);
+  }
+  int remove_tablet(const share::ObLSID &ls_id)
+  {
+    return tablet_to_ls_cache_.remove_ls_tablets(ls_id);
+  }
+  int check_and_get_ls_info(const common::ObTabletID &tablet_id,
+                            share::ObLSID &ls_id,
+                            bool &is_local_leader)
+  {
+    return tablet_to_ls_cache_.check_and_get_ls_info(tablet_id, ls_id, is_local_leader);
+  }
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckMgr *get_defensive_check_mgr() { return defensive_check_mgr_; }
 #endif
@@ -330,6 +334,8 @@ private:
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckMgr *defensive_check_mgr_;
 #endif
+  // in order to pass the mittest, tablet_to_ls_cache_ must be declared before tx_desc_mgr_
+  ObTabletToLSCache tablet_to_ls_cache_;
   // txDesc's manager
   ObTxDescMgr tx_desc_mgr_;
 

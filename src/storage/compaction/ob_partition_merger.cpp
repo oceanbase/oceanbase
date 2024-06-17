@@ -40,9 +40,7 @@ int ObDataDescHelper::build(
     const ObMergeParameter &merge_param,
     ObTabletMergeInfo &input_merge_info,
     blocksstable::ObDataStoreDesc &data_store_desc,
-    ObSSTableMergeInfo &output_merge_info,
-    const uint16_t table_idx,
-    const storage::ObStorageColumnGroupSchema *cg_schema)
+    ObSSTableMergeInfo &output_merge_info)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(data_store_desc.shallow_copy(input_merge_info.get_sstable_build_desc().get_desc()))) {
@@ -63,7 +61,6 @@ int ObDataDescHelper::build(
     // init desc input data_store_desc
     data_store_desc.sstable_index_builder_ = input_merge_info.get_index_builder();
     data_store_desc.merge_info_ = &output_merge_info;
-    data_store_desc.need_pre_warm_ = true;
   }
   return ret;
 }
@@ -208,7 +205,6 @@ ObMerger::ObMerger(
     task_idx_(0),
     force_flat_format_(false),
     merge_param_(static_param),
-    read_info_(),
     partition_fuser_(nullptr),
     merge_helper_(nullptr),
     base_iter_(nullptr),
@@ -232,7 +228,6 @@ void ObMerger::reset()
 
   trans_state_mgr_.destroy();
   base_iter_ = nullptr;
-  read_info_.reset();
   merge_param_.reset();
   force_flat_format_ = false;
   task_idx_ = 0;
@@ -249,15 +244,9 @@ int ObMerger::prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx)
   } else {
     merge_ctx_ = &ctx;
     task_idx_ = idx;
-    int64_t schema_stored_col_cnt = 0;
 
     if (OB_FAIL(merge_param_.init(ctx, task_idx_, &merger_arena_))) {
       STORAGE_LOG(WARN, "Failed to assign the merge param", K(ret), KPC(merge_ctx_), K_(task_idx));
-    } else if (OB_FAIL(ctx.get_schema()->get_store_column_count(schema_stored_col_cnt, true/*full_col*/))) {
-      LOG_WARN("failed to get storage count", K(ret), KPC(ctx.get_schema()));
-    } else if (OB_FAIL(read_info_.init(merger_arena_, schema_stored_col_cnt, ctx.get_schema()->get_rowkey_column_num(),
-            lib::is_oracle_mode(), merge_param_.static_param_.multi_version_column_descs_))) {
-      LOG_WARN("Fail to init read_info", K(ret));
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(trans_state_mgr_.init(CACHED_TRANS_STATE_MAX_CNT))) {
@@ -265,7 +254,7 @@ int ObMerger::prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx)
       } else {
         merge_param_.trans_state_mgr_ = &trans_state_mgr_;
       }
-      if (OB_FAIL(ObMergeFuserBuilder::build(merge_param_, merger_arena_, partition_fuser_))) {
+      if (OB_FAIL(ObMergeFuserBuilder::build(merge_param_, ctx.static_desc_.major_working_cluster_version_ ,merger_arena_, partition_fuser_))) {
         STORAGE_LOG(WARN, "failed to build partition fuser", K(ret), K(merge_param_));
       } else if (OB_FAIL(inner_prepare_merge(ctx, idx))) {
         STORAGE_LOG(WARN, "failed to inner prepare merge", K(ret), K(ctx));
@@ -618,7 +607,7 @@ int ObPartitionMajorMerger::inner_init()
   if (OB_FAIL(init_progressive_merge_helper())) {
     STORAGE_LOG(WARN, "Failed to init progressive_merge_helper", K(ret));
   } else {
-    merge_helper_ = OB_NEWx(ObPartitionMajorMergeHelper, (&merger_arena_), read_info_, merger_arena_);
+    merge_helper_ = OB_NEWx(ObPartitionMajorMergeHelper, (&merger_arena_), merge_ctx_->read_info_, merger_arena_);
 
     if (OB_ISNULL(merge_helper_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -697,6 +686,7 @@ int ObPartitionMajorMerger::merge_partition(
         } else if (0 == minimum_iters_.count()) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "unexpected minimum_iters_ is null", K(ret));
+        } else if (FALSE_IT(set_base_iter(minimum_iters_))) {
         } else if (merge_helper_->is_need_skip()) {
           //move purge iters
           if (OB_FAIL(merge_helper_->move_iters_next(minimum_iters_))) {
@@ -894,6 +884,7 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMergeHelper &merge_hel
         // flush all row in curr macro block
         while (OB_SUCC(ret) && base_iter->is_macro_block_opened()) {
           if (OB_ISNULL(base_iter->get_curr_row())) {
+            ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "curr row is unexpected null", K(ret), KPC(base_iter));
           } else if (OB_FAIL(process(*base_iter->get_curr_row()))) {
             STORAGE_LOG(WARN, "Failed to process row", K(ret), K(partition_fuser_->get_result_row()));
@@ -950,7 +941,7 @@ void ObPartitionMinorMerger::reset()
 int ObPartitionMinorMerger::inner_init()
 {
   int ret = OB_SUCCESS;
-  merge_helper_ = OB_NEWx(ObPartitionMinorMergeHelper, (&merger_arena_), read_info_, merger_arena_);
+  merge_helper_ = OB_NEWx(ObPartitionMinorMergeHelper, (&merger_arena_), merge_ctx_->read_info_, merger_arena_);
 
   if (OB_ISNULL(merge_helper_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1046,6 +1037,7 @@ int ObPartitionMinorMerger::merge_partition(
       } else if (rowkey_minimum_iters.empty()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected rowkey_minimum_iters is null", K(ret));
+      } else if (FALSE_IT(set_base_iter(rowkey_minimum_iters))) {
       } else if (1 == rowkey_minimum_iters.count()
           && nullptr == rowkey_minimum_iters.at(0)->get_curr_row()) {
         // only one iter, output its' macro block
@@ -1297,17 +1289,13 @@ int ObPartitionMinorMerger::set_result_flag(MERGE_ITER_ARRAY &fuse_iters,
         }
       }
     }
-    if (OB_SUCC(ret) && add_shadow_row) {
-      const ObDatumRow &result_row = partition_fuser_->get_result_row();
-      row_flag.set_shadow_row(true);
-      int64_t sql_sequence_col_idx = data_store_desc_.get_schema_rowkey_col_cnt() + 1;
-      result_row.storage_datums_[sql_sequence_col_idx].reuse();
-      result_row.storage_datums_[sql_sequence_col_idx].set_int(-INT64_MAX);
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(partition_fuser_->set_multi_version_flag(row_flag))) {
+    if (FAILEDx(partition_fuser_->set_multi_version_flag(row_flag))) {
       STORAGE_LOG(WARN, "Failed to set multi version row flag and dml", K(ret));
+    } else if (add_shadow_row && OB_FAIL(partition_fuser_->make_result_row_shadow(
+          data_store_desc_.get_schema_rowkey_col_cnt() + 1 /*sql_sequence_col_idx*/))) {
+        LOG_WARN("failed to make shadow row", K(ret),
+          "result_row", partition_fuser_->get_result_row(),
+          "sql_seq_col_idx", data_store_desc_.get_schema_rowkey_col_cnt() + 1);
     } else {
       STORAGE_LOG(DEBUG, "succ to set multi version row flag and dml", K(partition_fuser_->get_result_row()),
                   K(row_flag), KPC(base_row));
@@ -1651,6 +1639,7 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
       ObITable *table = tables_handle.get_table(idx);
       ObITable *dump_table = nullptr;
       if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "The store is NULL", K(idx), K(tables_handle));
       } else if (OB_FAIL(compaction::ObPartitionMergeDumper::judge_disk_free_space(dump_table_dir,
                          table))) {

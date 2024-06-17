@@ -246,9 +246,23 @@ int FetchStream::handle(volatile bool &stop_flag)
   return ret;
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(FAILED_TO_SCHEDULE_FETCH_STREAM);
+#endif
+
 int FetchStream::schedule(int timer_id)
 {
-  return TG_SCHEDULE(timer_id, *this, g_schedule_time, false);
+  int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  if (OB_FAIL(FAILED_TO_SCHEDULE_FETCH_STREAM)) {
+    LOG_ERROR("ERRSIM: failed to schedule fetch stream");
+  } else {
+#endif
+  ret = TG_SCHEDULE(timer_id, *this, g_schedule_time, false);
+#ifdef ERRSIM
+  }
+#endif
+  return ret;
 }
 
 // The purpose of a timed task is to assign itself to a worker thread
@@ -264,7 +278,8 @@ void FetchStream::runTimerTask()
   if (OB_ISNULL(stream_worker_)) {
     LOG_ERROR("invalid stream worker", K(stream_worker_));
     ret = OB_INVALID_ERROR;
-  } else if (OB_FAIL(stream_worker_->dispatch_stream_task(*this, "TimerWakeUp"))) {
+  // should never fail
+  } else if (OB_FAIL(stream_worker_->dispatch_stream_task(*this, "TimerWakeUp", true))) {
     LOG_ERROR("dispatch stream task fail", KR(ret), K(this));
   } else {
     ATOMIC_STORE(&end_time, get_timestamp());
@@ -305,7 +320,7 @@ void FetchStream::configure(const ObLogFetcherConfig &config)
   LOG_INFO("[CONFIG]", K(timer_task_wait_time_msec));
 }
 
-void FetchStream::do_stat()
+void FetchStream::do_stat(int64_t &traffic)
 {
   ObByteLockGuard lock_guard(stat_lock_);
 
@@ -334,7 +349,7 @@ void FetchStream::do_stat()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), "fs", *this);
     }
-
+    traffic = fsi_printer.get_traffic();
     last_stat_time_ = cur_time;
     last_stat_info_ = cur_stat_info_;
   }
@@ -1462,19 +1477,19 @@ KickOutReason FetchStream::get_feedback_reason_(const Feedback &feedback) const
   // Get KickOutReason based on feedback
   KickOutReason reason = NONE;
   switch (feedback) {
-    case ObCdcLSFetchLogResp::LAGGED_FOLLOWER:
+    case FeedbackType::LAGGED_FOLLOWER:
       reason = LAGGED_FOLLOWER;
       break;
 
-    case ObCdcLSFetchLogResp::LOG_NOT_IN_THIS_SERVER:
+    case FeedbackType::LOG_NOT_IN_THIS_SERVER:
       reason = LOG_NOT_IN_THIS_SERVER;
       break;
 
-    case ObCdcLSFetchLogResp::LS_OFFLINED:
+    case FeedbackType::LS_OFFLINED:
       reason = LS_OFFLINED;
       break;
 
-    case ObCdcLSFetchLogResp::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
+    case FeedbackType::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
       reason = ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF;
       break;
 

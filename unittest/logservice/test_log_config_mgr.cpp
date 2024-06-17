@@ -16,12 +16,14 @@
 #include "share/rc/ob_tenant_module_init_ctx.h"
 #define private public
 #include "logservice/palf/log_config_mgr.h"
+#include "logservice/palf/palf_callback_wrapper.h"
 #include "mock_logservice_container/mock_election.h"
 #include "mock_logservice_container/mock_log_state_mgr.h"
 #include "mock_logservice_container/mock_log_sliding_window.h"
 #include "mock_logservice_container/mock_log_engine.h"
 #include "mock_logservice_container/mock_log_mode_mgr.h"
 #include "mock_logservice_container/mock_log_reconfirm.h"
+#include "mittest/logservice/env/mock_ob_locality_manager.h"
 #undef private
 namespace oceanbase
 {
@@ -58,9 +60,16 @@ public:
     mock_mode_mgr_ = OB_NEW(MockLogModeMgr, "TestLog");
     mock_reconfirm_ = OB_NEW(MockLogReconfirm, "TestLog");
     mock_plugins_ = OB_NEW(LogPlugins, "TestLog");
+    mock_locality_cb_ = OB_NEW(MockObLocalityManager, "TestLog");
+
+    region_map_.create(OB_MAX_MEMBER_NUMBER, ObMemAttr(MTL_ID(), ObModIds::OB_HASH_NODE,
+        ObCtxIds::DEFAULT_CTX_ID));
+    EXPECT_EQ(OB_SUCCESS, mock_locality_cb_->init(&region_map_));
+    EXPECT_EQ(OB_SUCCESS, mock_plugins_->add_plugin(dynamic_cast<PalfLocalityInfoCb*>(mock_locality_cb_)));
   }
   ~TestLogConfigMgr()
   {
+    EXPECT_EQ(OB_SUCCESS, mock_plugins_->del_plugin(dynamic_cast<PalfLocalityInfoCb*>(mock_locality_cb_)));
     OB_DELETE(MockElection, "TestLog", mock_election_);
     OB_DELETE(MockLogStateMgr, "TestLog", mock_state_mgr_);
     OB_DELETE(MockLogSlidingWindow, "TestLog", mock_sw_);
@@ -68,6 +77,7 @@ public:
     OB_DELETE(MockLogModeMgr, "TestLog", mock_mode_mgr_);
     OB_DELETE(MockLogReconfirm, "TestLog", mock_reconfirm_);
     OB_DELETE(LogPlugins, "TestLog", mock_plugins_);
+    OB_DELETE(MockObLocalityManager, "TestLog", mock_locality_cb_);
   }
   void init_test_log_config_env(const common::ObAddr &self,
                                 const LogConfigInfoV2 &config_info,
@@ -93,14 +103,6 @@ public:
     EXPECT_EQ(OB_SUCCESS, config_meta.generate(init_pid, config_info, config_info, 1, LSN(0), 1));
     EXPECT_EQ(OB_SUCCESS, cm.init(1, self, config_meta, mock_log_engine_, mock_sw_, mock_state_mgr_, mock_election_,
         mock_mode_mgr_, mock_reconfirm_, mock_plugins_));
-    LogMemberRegionMap region_map;
-    EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
-    for (int i = 0; i < cm.alive_paxos_memberlist_.get_member_number(); ++i) {
-      ObAddr server;
-      cm.alive_paxos_memberlist_.get_server_by_index(i, server);
-      region_map.insert(server, default_region);
-    }
-    EXPECT_EQ(OB_SUCCESS, cm.set_paxos_member_region_map(region_map));
   }
 public:
   mockelection::MockElection *mock_election_;
@@ -110,6 +112,8 @@ public:
   palf::MockLogModeMgr *mock_mode_mgr_;
   palf::MockLogReconfirm *mock_reconfirm_;
   palf::LogPlugins *mock_plugins_;
+  unittest::MockObLocalityManager *mock_locality_cb_;
+  LogMemberRegionMap region_map_;
 };
 
 TEST_F(TestLogConfigMgr, test_set_initial_member_list)
@@ -223,28 +227,6 @@ TEST_F(TestLogConfigMgr, test_handle_learner_keepalive)
   LogLearner child_in_list;
   EXPECT_EQ(OB_SUCCESS, cm.children_.get_learner_by_addr(addr1, child_in_list));
   EXPECT_GT(child_in_list.keepalive_ts_, 0);
-}
-
-TEST_F(TestLogConfigMgr, test_set_paxos_member_region_map)
-{
-  LogConfigMgr cm;
-  cm.is_inited_ = true;
-  EXPECT_EQ(OB_SUCCESS, cm.paxos_member_region_map_.init("testmap", OB_MAX_MEMBER_NUMBER));
-  cm.alive_paxos_memberlist_.add_server(addr1);
-  cm.alive_paxos_memberlist_.add_server(addr2);
-  cm.alive_paxos_memberlist_.add_server(addr3);
-  LogMemberRegionMap region_map;
-  EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
-  region_map.insert(addr1, region1);
-  region_map.insert(addr2, region2);
-  cm.set_paxos_member_region_map(region_map);
-  ObRegion tmp_region;
-  EXPECT_EQ(OB_SUCCESS, cm.paxos_member_region_map_.get(addr1, tmp_region));
-  EXPECT_EQ(region1, tmp_region);
-  EXPECT_EQ(OB_SUCCESS, cm.paxos_member_region_map_.get(addr2, tmp_region));
-  EXPECT_EQ(region2, tmp_region);
-  EXPECT_EQ(OB_SUCCESS, cm.paxos_member_region_map_.get(addr3, tmp_region));
-  EXPECT_EQ(default_region, tmp_region);
 }
 
 TEST_F(TestLogConfigMgr, test_config_change_lock)
@@ -1701,7 +1683,9 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     cm.all_learnerlist_.add_learner(ObMember(exist_child.get_server(), -1));
     child1.register_time_us_ = 1;
     child1.region_ = region1;
-    cm.paxos_member_region_map_.update(addr2, region1);
+    EXPECT_EQ(OB_SUCCESS, mock_locality_cb_->set_server_region(addr2, region1));
+    // cm.paxos_member_region_map_.erase_refactored(addr2);
+    // cm.paxos_member_region_map_.set_refactored(addr2, region1);
     // child1 register
     // duplicate register req, region has changed
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child1, true));

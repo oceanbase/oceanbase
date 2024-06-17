@@ -47,6 +47,7 @@ namespace rootserver
 class ObZoneManager;
 class ObDDLService;
 class ObDDLTaskRecord;
+struct ObCreateDDLTaskParam;
 
 class ObIndexBuilder
 {
@@ -81,10 +82,10 @@ public:
   int submit_drop_index_task(
       common::ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &data_schema,
-      const share::schema::ObTableSchema &index_schema,
-      const int64_t schema_version,
+      const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       const obrpc::ObDropIndexArg &arg,
       common::ObIAllocator &allocator,
+      bool &task_has_exist,
       ObDDLTaskRecord &task_record);
   int submit_build_index_task(common::ObMySQLTransaction &trans,
                               const obrpc::ObCreateIndexArg &arg,
@@ -98,20 +99,12 @@ public:
                               common::ObIAllocator &allocator,
                               ObDDLTaskRecord &task_record);
 private:
-  typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
-  class FulltextColumnOrder
-  {
-  public:
-    FulltextColumnOrder() {}
-    ~FulltextColumnOrder() {}
-
-    bool operator()(const std::pair<int64_t, common::ObString> &left,
-                    const std::pair<int64_t, common::ObString> &right) const
-    {
-      return left.first < right.first;
-    }
-  };
-
+  int recognize_index_schemas(
+      const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
+      int64_t &index_ith,
+      int64_t &aux_doc_word_ith,
+      int64_t &aux_rowkey_doc_ith,
+      int64_t &aux_doc_rowkey_ith);
   int set_basic_infos(const obrpc::ObCreateIndexArg &arg,
                       const share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &schema);
@@ -123,7 +116,16 @@ private:
                               share::schema::ObTableSchema &schema);
 
   bool is_final_index_status(const share::schema::ObIndexStatus index_status) const;
-
+  int check_has_fts_or_multivalue_index(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      bool &has_fts_or_multivalue_index);
+  bool ignore_error_code_for_domain_index(
+      const int ret,
+      const obrpc::ObDropIndexArg &arg,
+      const share::schema::ObTableSchema *index_schema = nullptr);
+  int set_index_table_column_store_if_need(share::schema::ObTableSchema &table_schema);
   int create_index_column_group(const obrpc::ObCreateIndexArg &arg,
                                 share::schema::ObTableSchema &index_table_schema);
 

@@ -56,6 +56,8 @@ const char* const ObSelectIntoItem::DEFAULT_LINE_TERM_STR = "\n";
 const char* const ObSelectIntoItem::DEFAULT_FIELD_TERM_STR = "\t";
 const char ObSelectIntoItem::DEFAULT_FIELD_ENCLOSED_CHAR = 0;
 const bool ObSelectIntoItem::DEFAULT_OPTIONAL_ENCLOSED = false;
+const bool ObSelectIntoItem::DEFAULT_SINGLE_OPT = true;
+const int64_t ObSelectIntoItem::DEFAULT_MAX_FILE_SIZE = 256 * 1024 * 1024;
 const char ObSelectIntoItem::DEFAULT_FIELD_ESCAPED_CHAR = '\\';
 
 //对于select .. for update 也认为是被更改
@@ -154,11 +156,11 @@ int ObSelectStmt::check_aggr_and_winfunc(ObRawExpr &expr)
   if (expr.is_aggr_expr() &&
       !ObRawExprUtils::find_expr(agg_items_, &expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("aggr expr does not exist in the stmt", K(ret));
+    LOG_WARN("aggr expr does not exist in the stmt", K(agg_items_), K(expr), K(ret));
   } else if (expr.is_win_func_expr() &&
              !ObRawExprUtils::find_expr(win_func_exprs_, &expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("win func expr does not exist in the stmt", K(ret));
+    LOG_WARN("win func expr does not exist in the stmt", K(ret), K(expr));
   }
   return ret;
 }
@@ -205,7 +207,9 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
   } else if (OB_FAIL(sample_infos_.assign(other.sample_infos_))) {
     LOG_WARN("assign sample scan infos failed", K(ret));
   } else if (OB_FAIL(set_query_.assign(other.set_query_))) {
-    LOG_WARN("assign sample scan infos failed", K(ret));
+    LOG_WARN("assign set query failed", K(ret));
+  } else if (OB_FAIL(for_update_dml_info_.assign(other.for_update_dml_info_))) {
+    LOG_WARN("assign for update dml info failed", K(ret));
   } else {
     set_op_ = other.set_op_;
     is_recursive_cte_ = other.is_recursive_cte_;
@@ -227,6 +231,8 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     is_hierarchical_query_ = other.is_hierarchical_query_;
     has_prior_ = other.has_prior_;
     has_reverse_link_ = other.has_reverse_link_;
+    is_expanded_mview_ = other.is_expanded_mview_;
+    is_select_straight_join_ = other.is_select_straight_join_;
   }
   return ret;
 }
@@ -297,6 +303,11 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
                                                         other.cube_items_,
                                                         cube_items_))) {
     LOG_WARN("deep copy cube items failed", K(ret));
+  } else if (OB_FAIL(deep_copy_stmt_objects<ForUpdateDMLInfo>(allocator,
+                                                              expr_copier,
+                                                              other.for_update_dml_info_,
+                                                              for_update_dml_info_))) {
+    LOG_WARN("deep copy for update dml info failed", K(ret));
   } else {
     set_op_ = other.set_op_;
     is_recursive_cte_ = other.is_recursive_cte_;
@@ -318,6 +329,8 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     is_hierarchical_query_ = other.is_hierarchical_query_;
     has_prior_ = other.has_prior_;
     has_reverse_link_ = other.has_reverse_link_;
+    is_expanded_mview_ = other.is_expanded_mview_;
+    is_select_straight_join_ = other.is_select_straight_join_;
     // copy insert into statement
     if (OB_SUCC(ret) && NULL != other.into_item_) {
       ObSelectIntoItem *temp_into_item = NULL;
@@ -528,6 +541,8 @@ ObSelectStmt::ObSelectStmt()
   is_hierarchical_query_ = false;
   has_prior_ = false;
   has_reverse_link_ = false;
+  is_expanded_mview_ = false;
+  is_select_straight_join_ = false;
 }
 
 ObSelectStmt::~ObSelectStmt()
@@ -723,7 +738,8 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
            K_(is_hierarchical_query),
            K_(check_option),
            K_(dblink_id),
-           K_(is_reverse_link)
+           K_(is_reverse_link),
+           K_(is_expanded_mview)
              );
     }
   } else {
@@ -831,13 +847,14 @@ int ObSelectStmt::clear_sharable_expr_reference()
 }
 
 int ObSelectStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
-                                               ObSQLSessionInfo *session_info)
+                                               ObSQLSessionInfo *session_info,
+                                               bool explicit_for_col)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr_factory)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObDMLStmt::remove_useless_sharable_expr(expr_factory, session_info))) {
+  } else if (OB_FAIL(ObDMLStmt::remove_useless_sharable_expr(expr_factory, session_info, explicit_for_col))) {
     LOG_WARN("failed to remove useless sharable expr", K(ret));
   } else {
     ObRawExpr *expr = NULL;
@@ -1042,6 +1059,41 @@ bool ObSelectStmt::contain_nested_aggr() const
     if (agg_items_.at(i)->contain_nested_aggr()) {
       ret = true;
     } else { /*do nothing.*/ }
+  }
+  return ret;
+}
+
+int ForUpdateDMLInfo::assign(const ForUpdateDMLInfo& other)
+{
+  int ret = OB_SUCCESS;
+  table_id_ = other.table_id_;
+  base_table_id_ = other.base_table_id_;
+  ref_table_id_ = other.ref_table_id_;
+  rowkey_cnt_ = other.rowkey_cnt_;
+  is_nullable_ = other.is_nullable_;
+  for_update_wait_us_ = other.for_update_wait_us_;
+  skip_locked_ = other.skip_locked_;
+  if (OB_FAIL(unique_column_ids_.assign(other.unique_column_ids_))) {
+    LOG_WARN("failed to assign", K(ret));
+  }
+  return ret;
+}
+
+int ForUpdateDMLInfo::deep_copy(ObIRawExprCopier &expr_copier,
+                                const ForUpdateDMLInfo &other)
+{
+  int ret = OB_SUCCESS;
+  table_id_ = other.table_id_;
+  base_table_id_ = other.base_table_id_;
+  ref_table_id_ = other.ref_table_id_;
+  rowkey_cnt_ = other.rowkey_cnt_;
+  is_nullable_ = other.is_nullable_;
+  for_update_wait_us_ = other.for_update_wait_us_;
+  skip_locked_ = other.skip_locked_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.unique_column_ids_.count(); ++i) {
+    if (OB_FAIL(unique_column_ids_.push_back(other.unique_column_ids_.at(i)))) {
+      LOG_WARN("failed to push back column ids", K(ret));
+    }
   }
   return ret;
 }

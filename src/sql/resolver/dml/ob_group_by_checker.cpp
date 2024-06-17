@@ -742,6 +742,8 @@ int ObGroupByChecker::check_select_stmt(const ObSelectStmt *ref_stmt)
       visitor.add_scope(SCOPE_ORDERBY);
     } else {
       // 如果是subquery，则需要check所有expression
+      // following is not allow, keep the old logic
+      // select (select d2 from t2 where max(t1.c1)=t2.d1) as c3 from t1 group by c1,c2;
     }
     // if order by has siblings, then order by belongs to connect by, so don't check
     // eg: select max(c2) from t1 start with c1 = 1 connect by nocycle prior c1 = c2 order siblings by c1, c2;
@@ -905,6 +907,28 @@ int ObGroupByChecker::visit(ObCaseOpRawExpr &expr)
   return ret;
 }
 
+int ObGroupByChecker::visit(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
+    set_skip_expr(&expr);
+  }
+  return ret;
+}
+
+
+// following case is allowed
+// select max(max(data)) from test group by id order by id, max(max(data)) ;
+// select max(max(data)) from test group by id order by id;
+// select max(max(data)) from test group by id having id=1;
+// select sum(sum(data)) from test group by id order by sum(data);
+// select sum(sum(data)) from test group by id having max(data) = 4 order by max(max(data))
+// following case is blocked
+// select max(data) from test group by id order by max(max(data))
+// select max(data) from test group by id order by max(max(data)),max(data)
+// having orderby select的顺序检查
+// having一定在内层，order by如果包含max max就在外层，否则在内层，select在外层
 int ObGroupByChecker::visit(ObAggFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
@@ -921,10 +945,10 @@ int ObGroupByChecker::visit(ObAggFunRawExpr &expr)
     LOG_WARN("failed to get belongs to stmt", K(ret));
   } else if (belongs_to) {
     // expr is aggregate function in current stmt, then skip it
-    if (expr.is_nested_aggr()) {
+    if (expr.in_inner_stmt()) {
       set_skip_expr(&expr);
     } else if (has_nested_aggr_) {
-      //do nothing.
+      // do nothing
     } else {
       set_skip_expr(&expr);
     }

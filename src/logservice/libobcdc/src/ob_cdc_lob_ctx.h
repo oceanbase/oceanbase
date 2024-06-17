@@ -13,12 +13,12 @@
 #ifndef OCEANBASE_LIBOBCDC_LOB_CTX_H_
 #define OCEANBASE_LIBOBCDC_LOB_CTX_H_
 
-#include "common/object/ob_object.h"        // ObLobData, ObLobDataOutRowCtx
-#include "storage/blocksstable/ob_datum_row.h" // ObDmlFlag
-#include "lib/atomic/ob_atomic.h"           // ATOMIC_**
+#include "common/object/ob_object.h"           // ObLobData, ObLobDataOutRowCtx
+#include "storage/blocksstable/ob_datum_row.h" // ObDmlRowFlag
+#include "lib/atomic/ob_atomic.h"              // ATOMIC_**
 #include "lib/allocator/ob_allocator.h"
 #include "lib/ob_define.h"
-#include "ob_log_lighty_list.h"             // LightyList
+#include "ob_log_lighty_list.h"                // LightyList
 
 namespace oceanbase
 {
@@ -57,6 +57,15 @@ struct ObLobColCtx
   uint32_t col_ref_cnt_;
 };
 
+// indicate what data the task gets
+//  1. FULL_LOB means getting all lob data
+//  2. EXT_INFO_LOG means get ext info log, not lob data
+enum class ObLobDataGetTaskType
+{
+  FULL_LOB = 0,
+  EXT_INFO_LOG = 1,
+};
+
 struct ObLobDataGetCtx
 {
   ObLobDataGetCtx() { reset(); }
@@ -66,15 +75,16 @@ struct ObLobDataGetCtx
   void reset(
       void *host,
       const uint64_t column_id,
-      const blocksstable::ObDmlFlag &dml_flag,
+      const blocksstable::ObDmlRowFlag &dml_flag,
       const common::ObLobData *new_lob_data);
   void set_old_lob_data(const common::ObLobData *old_lob_data) { old_lob_data_ = old_lob_data; }
 
-  bool is_insert() const { return blocksstable::ObDmlFlag::DF_INSERT == dml_flag_; }
-  bool is_update() const { return blocksstable::ObDmlFlag::DF_UPDATE == dml_flag_; }
-  bool is_delete() const { return blocksstable::ObDmlFlag::DF_DELETE == dml_flag_; }
+  bool is_insert() const { return dml_flag_.is_insert(); }
+  bool is_update() const { return dml_flag_.is_update(); }
+  bool is_delete() const { return dml_flag_.is_delete(); }
+  bool is_ext_info_log() const { return ObLobDataGetTaskType::EXT_INFO_LOG == type_; }
 
-  const common::ObLobData *get_lob_data(const bool is_new_col)
+  const common::ObLobData *get_lob_data(const bool is_new_col) const
   {
     const common::ObLobData *lob_data_ptr;
 
@@ -88,8 +98,9 @@ struct ObLobDataGetCtx
   }
   const common::ObLobData *get_new_lob_data() { return new_lob_data_; }
   const common::ObLobData *get_old_lob_data() { return old_lob_data_; }
-  int get_lob_out_row_ctx(const ObLobDataOutRowCtx *&lob_data_out_row_ctx);
-
+  int get_lob_out_row_ctx(const ObLobDataOutRowCtx *&lob_data_out_row_ctx) const;
+  ObLobId get_lob_id() const;
+  int get_data_length(const bool is_new_col, uint64_t &data_length) const;
   common::ObString **get_fragment_cb_array(const bool is_new_col)
   {
     common::ObString **res_str = nullptr;
@@ -126,9 +137,13 @@ struct ObLobDataGetCtx
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
+  ObLobDataGetTaskType get_type() const { return type_; }
+  void set_type(ObLobDataGetTaskType type) { type_ = type; }
+
+  ObLobDataGetTaskType type_;
   void *host_;    // ObLobDataOutRowCtxList
   uint64_t column_id_;
-  blocksstable::ObDmlFlag dml_flag_;
+  blocksstable::ObDmlRowFlag dml_flag_;
   const common::ObLobData *new_lob_data_;
   const common::ObLobData *old_lob_data_;
   int8_t lob_col_value_handle_done_count_;
@@ -246,12 +261,17 @@ public:
       const uint64_t column_id,
       const bool is_new_col,
       common::ObString *&col_str);
+  int get_lob_data_get_ctx(
+      const uint64_t column_id,
+      ObLobDataGetCtx *&result);
 
   bool is_all_lob_callback_done() const { return get_total_lob_count() == ATOMIC_LOAD(&lob_col_get_succ_count_); }
   void inc_lob_col_count(bool &is_all_lob_col_handle_done)
   {
     is_all_lob_col_handle_done = (get_total_lob_count() == ATOMIC_AAF(&lob_col_get_succ_count_, 1));
   }
+
+  uint64_t get_table_id_of_lob_aux_meta_key(const ObLobDataGetCtx &lob_data_get_ctx) const;
 
 public:
   int64_t to_string(char *buf, const int64_t buf_len) const;

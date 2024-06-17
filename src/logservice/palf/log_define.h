@@ -61,8 +61,8 @@ const int64_t MIN_DISK_SIZE_PER_PALF_INSTANCE = 512 * 1024 * 1024ul;
 constexpr offset_t MAX_LOG_HEADER_SIZE = 4 * 1024;
 constexpr offset_t MAX_INFO_BLOCK_SIZE = 4 * 1024;
 constexpr offset_t MAX_META_ENTRY_SIZE = 4 * 1024;
-constexpr offset_t MAX_LOG_BODY_SIZE = 2 * 1024 * 1024 + 16 * 1024;                 // The max size of one log body is (2MB + 16KB).
-
+constexpr offset_t MAX_LOG_BODY_SIZE = 3 * 1024 * 1024 + 512 * 1024;                 // The max size of one log body is 3.5MB.
+constexpr offset_t MAX_NORMAL_LOG_BODY_SIZE = 2 * 1024 * 1024 + 16 * 1024;
 const int64_t PALF_PHY_BLOCK_SIZE = 1 << 26;                                        // 64MB
 const int64_t PALF_BLOCK_SIZE = PALF_PHY_BLOCK_SIZE - MAX_INFO_BLOCK_SIZE;          // log block size is 64M-MAX_INFO_BLOCK_SIZE by default.
 const int64_t PALF_META_BLOCK_SIZE = PALF_PHY_BLOCK_SIZE - MAX_INFO_BLOCK_SIZE;     // meta block size is 64M-MAX_INFO_BLOCK_SIZE by default.
@@ -73,7 +73,7 @@ constexpr int64_t CLOG_FILE_TAIL_PADDING_TRIGGER = 4096;     // 文件尾剩余�
 // The padding group_entry size range is:
 //    [4KB, (max_valid_group_entry_size + CLOG_FILE_TAIL_PADDING_TRIGGER) ).
 // So the MAX_LOG_BUFFER_SIZE is defined as below:
-constexpr offset_t MAX_LOG_BUFFER_SIZE = MAX_LOG_BODY_SIZE + MAX_LOG_HEADER_SIZE + CLOG_FILE_TAIL_PADDING_TRIGGER;
+constexpr offset_t MAX_LOG_BUFFER_SIZE = MAX_LOG_BODY_SIZE + MAX_LOG_HEADER_SIZE + CLOG_FILE_TAIL_PADDING_TRIGGER;        // max size of the log buffer is (3.5MB + 4KB + 4KB)
 
 constexpr offset_t LOG_DIO_ALIGN_SIZE = 4 * 1024;
 constexpr offset_t LOG_DIO_ALIGNED_BUF_SIZE_REDO = MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE;
@@ -123,6 +123,7 @@ constexpr int64_t PALF_MAX_PROPOSAL_ID = INT64_MAX - 1;
 constexpr int64_t PALF_INITIAL_PROPOSAL_ID = 0;
 constexpr char PADDING_LOG_CONTENT_CHAR = '\0';
 const int64_t MIN_WRITING_THTOTTLING_TRIGGER_PERCENTAGE = 40;
+const int64_t PALF_UPDATE_REGION_INTERVAL_US = 10 * 1000 * 1000L;                // 10s
 
 inline int64_t max_proposal_id(const int64_t a, const int64_t b)
 {
@@ -155,6 +156,11 @@ constexpr mode_t FILE_OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 constexpr int64_t LOG_BATCH_PUSH_LOG_REQ = 1;
 constexpr int64_t LOG_BATCH_PUSH_LOG_RESP = 2;
 // =========== BatchRPC end  ==================
+
+// ========== LogCache start =================
+constexpr offset_t LOG_CACHE_ALIGN_SIZE = 64 * 1024;
+constexpr int64_t LOG_CACHE_MEMORY_LIMIT = 20;      // memory limit ratio with tenant memory
+// ========== LogCache end =================
 
 const int64_t OB_INVALID_CONFIG_CHANGE_LOCK_OWNER = -1;
 
@@ -329,6 +335,10 @@ inline bool is_valid_file_desc(const FileDesc &fd)
   return 0 <= fd;
 }
 
+inline bool is_valid_flashback_version(const int64_t flashback_version)
+{
+  return 0 <= flashback_version;
+}
 
 int block_id_to_string(const block_id_t block_id,
                        char *str,

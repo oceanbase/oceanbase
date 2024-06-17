@@ -73,6 +73,10 @@ int ObTxDataMemtableScanIterator::TxData2DatumRowConverter::init(ObTxData *tx_da
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "tx data is null", KR(ret));
   } else if (INT64_MAX != tx_data->tx_id_.get_id()) {// normal tx data need local buffer to serialize
+    SpinRLockManualGuard tx_op_guard;
+    if (tx_data->op_guard_.is_valid()) {
+      tx_op_guard.lock(tx_data->op_guard_->get_lock());
+    }
     buffer_len_ = tx_data->get_serialize_size();
     if (nullptr == (serialize_buffer_ = (char *)DEFAULT_TX_DATA_ALLOCATOR.alloc(buffer_len_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

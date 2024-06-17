@@ -136,7 +136,16 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
   int64_t notify_idx = 0;
   ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
   ObInsertMonitor insert_monitor(op_monitor_info_.otherstat_2_value_, op_monitor_info_.otherstat_1_value_);
-  if (OB_UNLIKELY(nullptr == child_ || nullptr == tenant_direct_load_mgr)) {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_DDL_EXECUTE_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("errsim ddl execute get next row failed", KR(ret));
+      }
+    }
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(nullptr == child_ || nullptr == tenant_direct_load_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the child op is null", K(ret), K(MTL_ID()), KP(child_), KP(tenant_direct_load_mgr));
   } else if (get_spec().is_returning_) {
@@ -211,9 +220,16 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
                                                                     slice_info))) {
         LOG_WARN("create sstable slice writer failed", K(ret), K(block_start_seq), K(slice_info));
       } else {
-        ObDDLInsertRowIterator row_iter(this, is_current_slice_empty /*is_slice_empty*/,
-          notify_ls_id, notify_tablet_id, table_schema->get_rowkey_column_num(), snapshot_version_, slice_info.context_id_, parallel_idx);
-        if (OB_FAIL(tenant_direct_load_mgr->fill_sstable_slice(slice_info,
+        ObDDLInsertRowIterator row_iter;
+        if (OB_FAIL(row_iter.init(this,
+                                is_current_slice_empty,
+                                notify_ls_id,
+                                notify_tablet_id,
+                                table_schema->get_rowkey_column_num(),
+                                snapshot_version_,
+                                slice_info.context_id_, parallel_idx))) {
+          LOG_WARN("init failed", K(ret));
+        } else if (OB_FAIL(tenant_direct_load_mgr->fill_sstable_slice(slice_info,
                                                               &row_iter,
                                                               affected_rows,
                                                               &insert_monitor))) {
@@ -221,7 +237,8 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(tenant_direct_load_mgr->close_sstable_slice(slice_info, &insert_monitor))) {
+        blocksstable::ObMacroDataSeq unused_seq;
+        if (OB_FAIL(tenant_direct_load_mgr->close_sstable_slice(slice_info, &insert_monitor, unused_seq))) {
           LOG_WARN("close sstable slice failed", K(ret), K(slice_info));
         }
         ctx_.get_physical_plan_ctx()->add_affected_rows(affected_rows);

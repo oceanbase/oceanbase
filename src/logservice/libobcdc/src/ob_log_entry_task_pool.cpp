@@ -70,6 +70,7 @@ void ObLogEntryTaskPool::destroy()
 }
 
 int ObLogEntryTaskPool::alloc(
+    const bool is_direct_load_inc_log,
     ObLogEntryTask *&log_entry_task,
     PartTransTask &host)
 {
@@ -83,7 +84,7 @@ int ObLogEntryTaskPool::alloc(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc log_entry_task failed", KR(ret), K_(alloc_cnt), "memory_hold", allocator_.hold());
   } else {
-    log_entry_task = new(ptr) ObLogEntryTask(host);
+    log_entry_task = new(ptr) ObLogEntryTask(host, is_direct_load_inc_log);
     ATOMIC_INC(&alloc_cnt_);
   }
 

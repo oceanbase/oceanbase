@@ -11,27 +11,48 @@
  */
 
 #include "storage/ob_locality_manager.h"
+#include "lib/hash/ob_hashmap.h"                // ObHashMap
+#include "logservice/palf/palf_callback.h"
 
 namespace oceanbase
 {
 using namespace storage;
+using namespace palf;
 namespace unittest
 {
-class MockObLocalityManager : public ObLocalityManager
+
+typedef common::hash::ObHashMap<common::ObAddr, common::ObRegion> LogMemberRegionMap;
+
+class CallBack
+{
+  public:
+    void operator () (hash::HashMapPair<common::ObAddr, common::ObRegion> &v)
+    {
+      v.second = v_;
+    };
+    void set_v(common::ObRegion v)
+    {
+      v_ = v;
+    };
+  private:
+    common::ObRegion v_;
+};
+
+class MockObLocalityManager : public palf::PalfLocalityInfoCb, public ObLocalityManager
 {
 public:
-  MockObLocalityManager(): self_(), is_inited_(false) { }
+  MockObLocalityManager(): is_inited_(false) { }
   ~MockObLocalityManager() { destroy(); }
-  int init(const common::ObAddr &self)
+  int init(LogMemberRegionMap *region_map)
   {
     int ret = OB_SUCCESS;
     if (IS_INIT) {
       ret = OB_INIT_TWICE;
-    } else if (self.is_valid() == false) {
+    } else if (OB_ISNULL(region_map)) {
       ret = OB_INVALID_ARGUMENT;
-      SERVER_LOG(WARN, "invalid argument", K(self));
+      SERVER_LOG(WARN, "invalid argument", KP(region_map));
     } else {
-      self_ = self;
+      region_map_ = region_map;
       is_inited_ = true;
     }
     return ret;
@@ -39,21 +60,40 @@ public:
   void destroy()
   {
     is_inited_ = false;
-    self_.reset();
+    region_map_ = NULL;
   }
-  int is_same_zone(const common::ObAddr &server, bool &is_same_zone)
+  int set_server_region(const common::ObAddr &server,
+                        const common::ObRegion &region)
   {
     int ret = OB_SUCCESS;
-    UNUSED(server);
-    if (IS_NOT_INIT) {
+    if (OB_ISNULL(region_map_)) {
       ret = OB_NOT_INIT;
+    } else if (OB_FAIL(region_map_->set_refactored(server, region)) && ret != OB_HASH_EXIST) {
+      SERVER_LOG(WARN, "set_refactored failed", K(server), K(region));
     } else {
-      is_same_zone = false;
+      CallBack callback;
+      callback.set_v(region);
+      if (OB_FAIL(region_map_->atomic_refactored(server, callback))) {
+        SERVER_LOG(WARN, "atomic_refactored failed", K(server), K(region));
+      }
+    }
+    SERVER_LOG(INFO, "set_server_region finish", K(ret), K(server), K(region));
+    return ret;
+  }
+  int get_server_region(const common::ObAddr &server,
+                        common::ObRegion &region) const override final
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(region_map_)) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else if (OB_FAIL(region_map_->get_refactored(server, region))) {
+      ret = OB_ENTRY_NOT_EXIST;
+      SERVER_LOG(WARN, "get_server_region failed", K(server), K(region));
     }
     return ret;
   }
 private:
-  common::ObAddr self_;
+  LogMemberRegionMap *region_map_;
   bool is_inited_;
 };
 }// storage

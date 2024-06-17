@@ -98,23 +98,20 @@ int ObExprTreat::cg_expr(ObExprCGCtx &expr_cg_ctx,
 static int treat_as_json_udt(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &temp_allocator,
                                 pl::ObPLOpaque *opaque, ObDatum &res) {
   INIT_SUCC(ret);
-  ObJsonNode *json_doc = nullptr;
   pl::ObPLJsonBaseType *jsontype = nullptr;
+  pl::ObPlJsonNode *pl_json_node = nullptr;
   pl::ObPLJsonBaseType *new_jsontype = nullptr;
   ObObj res_obj;
 
   if(OB_ISNULL(jsontype = static_cast<pl::ObPLJsonBaseType*>(opaque))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cast to json type is null", K(ret), K(opaque));
-  } else if(OB_ISNULL(json_doc = jsontype->get_data())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get json doc is null", K(ret), K(jsontype));
+  } else if(OB_ISNULL(pl_json_node = jsontype->get_data())) {
+    res.set_null();
   } else {
-    ObJsonNode * json_node_copy = nullptr;
-    if (OB_ISNULL(json_node_copy = json_doc->clone(&ctx.exec_ctx_.get_allocator()))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to clone json node", K(ret));
-    } else if (OB_FAIL(pl::ObPlJsonUtil::transform_JsonBase_2_PLJsonType(ctx.exec_ctx_, json_node_copy, new_jsontype))) {
+    if (OB_FAIL(pl::ObPlJsonUtil::transform_JsonBase_2_PLJsonType(ctx.exec_ctx_,
+      pl_json_node->get_ref_node() ? pl_json_node->get_ref_node() : pl_json_node->get_data_node(),
+      new_jsontype))) {
       LOG_WARN("failed to transfrom ObJsonNode to ObPLJsonBaseType", K(ret));
     } else if(OB_ISNULL(new_jsontype)) {
       ret = OB_ERR_UNEXPECTED;

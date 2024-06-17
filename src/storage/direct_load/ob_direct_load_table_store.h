@@ -33,22 +33,21 @@ public:
   ObDirectLoadTableStoreParam();
   ~ObDirectLoadTableStoreParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(snapshot_version), K_(table_data_desc), KP_(datum_utils), KP_(col_descs),
-               KP_(lob_column_cnt), KP_(cmp_funcs), KP_(file_mgr), K_(is_multiple_mode),
-               K_(is_fast_heap_table), K_(online_opt_stat_gather), K_(px_mode),
-               KP_(insert_table_ctx), KP_(dml_row_handler), KP_(extra_buf), K_(extra_buf_size));
+  TO_STRING_KV(K_(table_data_desc),
+               KP_(datum_utils),
+               KP_(file_mgr),
+               K_(is_multiple_mode),
+               K_(is_fast_heap_table),
+               KP_(insert_table_ctx),
+               KP_(dml_row_handler),
+               KP_(extra_buf),
+               K_(extra_buf_size));
 public:
-  int64_t snapshot_version_;
-  int64_t lob_column_cnt_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
-  const common::ObIArray<share::schema::ObColDesc> *col_descs_;
-  const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
   ObDirectLoadTmpFileManager *file_mgr_;
   bool is_multiple_mode_;
   bool is_fast_heap_table_;
-  bool online_opt_stat_gather_;
-  bool px_mode_;
   ObDirectLoadInsertTableContext *insert_table_ctx_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   char *extra_buf_;
@@ -78,7 +77,11 @@ class ObDirectLoadTableStore
 {
 public:
   const static constexpr int64_t MAX_BUCKET_CNT = 1024;
-  ObDirectLoadTableStore() : allocator_("TLD_TSBucket"), is_inited_(false) {}
+  ObDirectLoadTableStore() : allocator_("TLD_TSBucket"), is_inited_(false)
+  {
+    allocator_.set_tenant_id(MTL_ID());
+    bucket_ptr_array_.set_tenant_id(MTL_ID());
+  }
   ~ObDirectLoadTableStore();
   int init(const ObDirectLoadTableStoreParam &param);
   int append_row(const common::ObTabletID &tablet_id, const table::ObTableLoadSequenceNo &seq_no, const blocksstable::ObDatumRow &datum_row);

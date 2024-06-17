@@ -77,6 +77,8 @@ ObTableLoadParallelMergeTabletCtx::ObTableLoadParallelMergeTabletCtx()
 {
   allocator_.set_tenant_id(MTL_ID());
   range_allocator_.set_tenant_id(MTL_ID());
+  ranges_.set_tenant_id(MTL_ID());
+  range_sstables_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadParallelMergeTabletCtx::~ObTableLoadParallelMergeTabletCtx()
@@ -229,7 +231,8 @@ public:
     } else {
       const int64_t merge_sstable_count =
         MIN(tablet_ctx_->sstables_.size() - merge_count_per_round + 1, merge_count_per_round);
-      ObSEArray<ObDirectLoadMultipleSSTable *, 64> sstable_array;
+      ObArray<ObDirectLoadMultipleSSTable *> sstable_array;
+      sstable_array.set_tenant_id(MTL_ID());
       // sort sstable
       ObTableLoadParallelMergeSSTableCompare compare;
       std::sort(tablet_ctx_->sstables_.begin(), tablet_ctx_->sstables_.end(), compare);
@@ -293,6 +296,7 @@ public:
       extra_buf_size_(0)
   {
     ctx_->inc_ref_count();
+    sstable_array_.set_tenant_id(MTL_ID());
   }
   virtual ~MergeRangeTaskProcessor()
   {
@@ -320,6 +324,8 @@ public:
         }
       } else if (OB_FAIL(sstable_builder_.append_row(*datum_row))) {
         LOG_WARN("fail to append row", KR(ret));
+      } else {
+        ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_merge_write_rows_, 1);
       }
     }
     if (OB_SUCC(ret)) {
@@ -406,7 +412,7 @@ private:
   ObTableLoadParallelMergeCtx *parallel_merge_ctx_;
   ObTableLoadParallelMergeTabletCtx *tablet_ctx_;
   int64_t range_idx_;
-  ObSEArray<ObDirectLoadMultipleSSTable *, 64> sstable_array_;
+  ObArray<ObDirectLoadMultipleSSTable *> sstable_array_;
   ObDirectLoadMultipleSSTableScanMerge scan_merge_;
   char *extra_buf_;
   int64_t extra_buf_size_;
@@ -539,6 +545,9 @@ ObTableLoadParallelMergeCtx::ObTableLoadParallelMergeCtx()
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+  light_task_list_.set_tenant_id(MTL_ID());
+  heavy_task_list_.set_tenant_id(MTL_ID());
+  idle_thread_list_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadParallelMergeCtx::~ObTableLoadParallelMergeCtx()
@@ -697,6 +706,8 @@ int ObTableLoadParallelMergeCtx::start(ObTableLoadParallelMergeCb *cb)
         if (OB_FAIL(construct_split_range_task(tablet_ctx))) {
           LOG_WARN("fail to construct split range task", KR(ret));
         }
+      } else {
+        ATOMIC_AAF(&store_ctx_->ctx_->job_stat_->store_.compact_stage_consume_tmp_files_, tablet_ctx->sstables_.size());
       }
     }
     if (OB_SUCC(ret)) {
@@ -891,9 +902,12 @@ int ObTableLoadParallelMergeCtx::handle_tablet_compact_sstable_finish(
     LOG_WARN("invalid args", KR(ret), KP(tablet_ctx));
   } else if (tablet_ctx->sstables_.size() > store_ctx_->table_data_desc_.merge_count_per_round_) {
     // still need merge
+    ATOMIC_AAF(&store_ctx_->ctx_->job_stat_->store_.compact_stage_consume_tmp_files_, tablet_ctx->merge_sstable_count_ - 1);
     if (OB_FAIL(construct_split_range_task(tablet_ctx))) {
       LOG_WARN("fail to construct split range task", KR(ret));
     }
+  } else {
+    ATOMIC_AAF(&store_ctx_->ctx_->job_stat_->store_.compact_stage_consume_tmp_files_, tablet_ctx->merge_sstable_count_);
   }
   return ret;
 }

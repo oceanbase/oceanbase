@@ -18,13 +18,14 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_geo_bin.h"
 #include "lib/geo/ob_geo_ibin.h"
+#include "lib/geo/ob_geo_3d.h"
 
 #include <vector>
 #include <memory>
 namespace oceanbase {
 namespace common {
 
-int ObSpatialMBR::filter(const ObSpatialMBR &other, ObGeoRelationType type, bool &pass_through) const
+int ObSpatialMBR::filter(const ObSpatialMBR &other, ObDomainOpType type, bool &pass_through) const
 {
   INIT_SUCC(ret);
   if (is_geog_) {
@@ -36,23 +37,23 @@ int ObSpatialMBR::filter(const ObSpatialMBR &other, ObGeoRelationType type, bool
       LOG_WARN("fail to generate other latlng rectangle", K(ret));
     } else {
       switch (type) {
-        case ObGeoRelationType::T_COVERS: {
+        case ObDomainOpType::T_GEO_COVERS: {
           pass_through = !other_rect.Contains(this_rect);
           break;
         }
 
-        case ObGeoRelationType::T_DWITHIN:
-        case ObGeoRelationType::T_INTERSECTS: {
+        case ObDomainOpType::T_GEO_DWITHIN:
+        case ObDomainOpType::T_GEO_INTERSECTS: {
           pass_through = !this_rect.Intersects(other_rect);
           break;
         }
 
-        case ObGeoRelationType::T_COVEREDBY: {
+        case ObDomainOpType::T_GEO_COVEREDBY: {
           pass_through = !this_rect.Contains(other_rect);
           break;
         }
 
-        case ObGeoRelationType::T_DFULLYWITHIN: {
+        case ObDomainOpType::T_GEO_DFULLYWITHIN: {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support within geo relation type", K(ret), K(type));
           break;
@@ -74,23 +75,23 @@ int ObSpatialMBR::filter(const ObSpatialMBR &other, ObGeoRelationType type, bool
       LOG_WARN("fail to generate other latlng rectangle", K(ret));
     } else {
       switch (type) {
-        case ObGeoRelationType::T_COVERS: {
+        case ObDomainOpType::T_GEO_COVERS: {
           pass_through = !other_rect.Contains(this_rect);
           break;
         }
 
-        case ObGeoRelationType::T_DWITHIN:
-        case ObGeoRelationType::T_INTERSECTS: {
+        case ObDomainOpType::T_GEO_DWITHIN:
+        case ObDomainOpType::T_GEO_INTERSECTS: {
           pass_through = !this_rect.Intersects(other_rect);
           break;
         }
 
-        case ObGeoRelationType::T_COVEREDBY: {
+        case ObDomainOpType::T_GEO_COVEREDBY: {
           pass_through = !this_rect.Contains(other_rect);
           break;
         }
 
-        case ObGeoRelationType::T_DFULLYWITHIN: {
+        case ObDomainOpType::T_GEO_DFULLYWITHIN: {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support within geo relation type", K(ret), K(type));
           break;
@@ -132,7 +133,7 @@ int ObSpatialMBR::to_char(char *buf, int64_t &buf_len) const
 }
 
 int ObSpatialMBR::from_string(ObString &mbr_str,
-                              ObGeoRelationType type,
+                              ObDomainOpType type,
                               ObSpatialMBR &spa_mbr,
                               bool is_point)
 {
@@ -219,7 +220,7 @@ OB_DEF_DESERIALIZE(ObSpatialMBR)
   OB_UNIS_DECODE(x_max_);
   OB_UNIS_DECODE(mbr_type);
   if (OB_SUCC(ret)) {
-    mbr_type_ = static_cast<ObGeoRelationType>(mbr_type);
+    mbr_type_ = static_cast<ObDomainOpType>(mbr_type);
   }
   OB_UNIS_DECODE(is_point_);
   OB_UNIS_DECODE(is_geog_);
@@ -328,6 +329,15 @@ int64_t ObS2Adapter::init(const ObString &swkb, const ObSrsBoundsItem *bound)
         LOG_WARN("fail to get wkb from swkb", K(ret), K(swkb));
       } else {
         geo->set_data(wkb);
+        if (ObGeoTypeUtil::is_3d_geo_type(type)) {
+          ObGeometry3D *geo_3d = static_cast<ObGeometry3D *>(geo);
+          if (OB_FAIL(geo_3d->to_2d_geo(*allocator_, geo))) {
+            LOG_WARN("fail to convert 3d geo to 2d", K(ret));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
         geo_ = geo;
         if (OB_FAIL(geo->do_visit(*visitor_))) {
           LOG_WARN("fail to do_visit by ObWkbToS2Visitor", K(ret));

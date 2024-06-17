@@ -694,6 +694,7 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
   }
+  uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
   for (int64_t cell_idx = 0;
        OB_SUCC(ret) && cell_idx < output_column_ids_.count();
        ++cell_idx) {
@@ -732,11 +733,11 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       }
       case DB_TIME: {
         // concept:
-        cells[cell_idx].set_int(node.db_time_);
+        cells[cell_idx].set_int(node.db_time_ / cpu_khz);
         break;
       }
       case USER_IO_WAIT_TIME: {
-        cells[cell_idx].set_int(node.block_time_);
+        cells[cell_idx].set_int(node.block_time_ / cpu_khz);
         break;
       }
       case FIRST_REFRESH_TIME: {
@@ -825,6 +826,22 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       case SKIPPED_ROWS_COUNT: { // for batch
         int64_t int_value = node.skipped_rows_count_;
         cells[cell_idx].set_int(int_value);
+        break;
+      }
+      case WORKAREA_MEM: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case WORKAREA_MAX_MEM: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case WORKAREA_TEMPSEG: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case WORKAREA_MAX_TEMPSEG: {
+        cells[cell_idx].set_null();
         break;
       }
       default: {

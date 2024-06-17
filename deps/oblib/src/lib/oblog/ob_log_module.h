@@ -162,6 +162,7 @@ DEFINE_LOG_SUB_MOD(IMC)
 DEFINE_LOG_SUB_MOD(DUP_TABLE)
 DEFINE_LOG_SUB_MOD(TABLELOCK)  // tablelock
 DEFINE_LOG_SUB_MOD(BLKMGR)  // block manager
+DEFINE_LOG_SUB_MOD(FTS) // fulltext search
 LOG_MOD_END(STORAGE)
 
 // statement of clog's sub-modules
@@ -241,6 +242,7 @@ DEFINE_LOG_SUB_MOD(PACK)               // package
 DEFINE_LOG_SUB_MOD(TYPE)               // type
 DEFINE_LOG_SUB_MOD(DEBUG)              // debug
 DEFINE_LOG_SUB_MOD(CACHE)              // cache
+DEFINE_LOG_SUB_MOD(STORAGEROUTINE)     // storage routine
 LOG_MOD_END(PL)
 
 } //namespace common
@@ -628,7 +630,10 @@ LOG_MOD_END(PL)
                                                                     info_string, ##args)
 #define _PL_CACHE_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, CACHE, level,                     \
                                                                 _fmt_, ##args)
-
+#define PL_STORAGEROUTINE_LOG(level, info_string, args...) OB_SUB_MOD_LOG(PL, STORAGEROUTINE, level,                 \
+                                                                    info_string, ##args)
+#define _PL_STORAGEROUTINE_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, STORAGEROUTINE, level,                     \
+                                                                _fmt_, ##args)
 
 #define RPC_FRAME_LOG(level, _fmt_, args...)    \
   OB_SUB_MOD_LOG(RPC, FRAME, level, _fmt_, ##args)
@@ -736,6 +741,10 @@ LOG_MOD_END(PL)
 #define STORAGE_BLKMGR_LOG(level, info_string, args...) OB_SUB_MOD_LOG(STORAGE, BLKMGR, level,   \
                                                                  info_string,  ##args)
 #define _STORAGE_BLKMGR_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(STORAGE, BLKMGR, level,       \
+                                                                 _fmt_,  ##args)
+#define STORAGE_FTS_LOG(level, info_string, args...) OB_SUB_MOD_LOG(STORAGE, FTS, level,   \
+                                                                 info_string,  ##args)
+#define _STORAGE_FTS_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(STORAGE, FTS, level,       \
                                                                  _fmt_,  ##args)
 
 #define SQL_ENG_LOG(level, info_string, args...) OB_SUB_MOD_LOG(SQL, ENG, level,                 \
@@ -1080,6 +1089,8 @@ LOG_MOD_END(PL)
 #define _RS_COMPACTION_LOG_RET(level, errcode, args...) { int ret = errcode; _RS_COMPACTION_LOG(level, ##args); }
 #define STORAGE_BLKMGR_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGE_BLKMGR_LOG(level, ##args); }
 #define _STORAGE_BLKMGR_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGE_BLKMGR_LOG(level, ##args); }
+#define STORAGE_FTS_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGE_BLKMGR_LOG(level, ##args); }
+#define _STORAGE_FTS_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGE_BLKMGR_LOG(level, ##args); }
 #define SQL_ENG_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_ENG_LOG(level, ##args); }
 #define _SQL_ENG_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_ENG_LOG(level, ##args); }
 #define SQL_EXE_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_EXE_LOG(level, ##args); }

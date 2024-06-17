@@ -559,8 +559,8 @@ struct ObRelationalExtraFunc
       } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
         COMMON_LOG(WARN, "LobDebug: get right lob str iter full data failed ", K(ret), K(r_instr_iter));
       } else {
-        ObJsonBin j_bin_l(l_data.ptr(), l_data.length());
-        ObJsonBin j_bin_r(r_data.ptr(), r_data.length());
+        ObJsonBin j_bin_l(l_data.ptr(), l_data.length(), &allocator);
+        ObJsonBin j_bin_r(r_data.ptr(), r_data.length(), &allocator);
         ObIJsonBase *j_base_l = &j_bin_l;
         ObIJsonBase *j_base_r = &j_bin_r;
 

@@ -290,6 +290,7 @@ struct ObAuditRecordData {
     params_value_len_ = 0;
     partition_hit_ = true;
     is_perf_event_closed_ = false;
+    pl_trace_id_.reset();
   }
 
   int64_t get_elapsed_time() const
@@ -362,6 +363,9 @@ struct ObAuditRecordData {
   int64_t user_id_;
   char *user_name_;
   int64_t user_name_len_;
+  int64_t proxy_user_id_;
+  char *proxy_user_name_;
+  int64_t proxy_user_name_len_;
   int user_group_; // user 所属 cgroup id，仅主线程展示
   uint64_t db_id_;
   char *db_name_;
@@ -412,6 +416,10 @@ struct ObAuditRecordData {
   bool is_perf_event_closed_;
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
   char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
+  uint64_t total_memstore_read_row_count_;
+  uint64_t total_ssstore_read_row_count_;
+  ObCurTraceId::TraceId pl_trace_id_;
+  int64_t plsql_exec_time_;
 };
 
 } //namespace sql

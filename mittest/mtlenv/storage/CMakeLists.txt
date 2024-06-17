@@ -19,6 +19,7 @@ storage_dml_unittest(test_index_sstable_multi_estimator)
 storage_dml_unittest(test_multi_version_sstable_single_get)
 storage_dml_unittest(test_multi_version_sstable_merge)
 storage_dml_unittest(test_co_merge)
+storage_dml_unittest(test_ddl_create_tablet test_ddl_create_tablet.cpp)
 storage_dml_unittest(test_medium_info_reader test_medium_info_reader.cpp)
 storage_dml_unittest(test_tablet_mds_data test_tablet_mds_data.cpp)
 storage_dml_unittest(test_mds_data_read_write test_mds_data_read_write.cpp)
@@ -30,6 +31,8 @@ storage_dml_unittest(test_tablet_aggregated_info test_tablet_aggregated_info.cpp
 # storage_unittest(test_speed_limit test_speed_limit.cpp)
 storage_dml_unittest(test_tablet_block_id_list test_tablet_block_id_list.cpp)
 storage_dml_unittest(test_ls_tablet_info_writer_and_reader test_ls_tablet_info_writer_and_reader.cpp)
+storage_dml_unittest(test_transfer_barrier test_transfer_barrier.cpp)
+
 
 add_subdirectory(checkpoint)
 add_subdirectory(blocksstable)

@@ -130,6 +130,10 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
             } else {
               types[i].set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
             }
+          } else if (types[i].is_enum_or_set()) {
+            types[i].set_type(ObVarcharType);
+            types[i].set_collation_level(params_type_.at(i).get_collation_level());
+            types[i].set_collation_type(params_type_.at(i).get_collation_type());
           }
         }
       }
@@ -180,8 +184,12 @@ int ObExprUDF::check_types(const ObExpr &expr, const ObExprUDFInfo &info)
     if (!expr.args_[i]->obj_meta_.is_null()
         && (!info.params_desc_.at(i).is_out())) {
       if (expr.args_[i]->obj_meta_.get_type() != info.params_type_.at(i).get_type()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("check param type failed", K(ret), K(i));
+        if (info.params_type_.at(i).is_enum_or_set() && ObVarcharType == expr.args_[i]->obj_meta_.get_type()) {
+          // do nothing ...
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("check param type failed", K(ret), K(i));
+        }
       }
     }
   }
@@ -733,7 +741,8 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                             false,
                             true,
                             info->loc_,
-                            info->is_called_in_sql_))) {
+                            info->is_called_in_sql_,
+                            info->dblink_id_))) {
         LOG_WARN("fail to execute udf", K(ret), K(info), K(package_id), K(tmp_result));
         if (info->is_called_in_sql_ && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
           ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
@@ -950,6 +959,7 @@ int ObExprUDFInfo::deep_copy(common::ObIAllocator &allocator,
   other.loc_ = loc_;
   other.is_udt_cons_ = is_udt_cons_;
   other.is_called_in_sql_ = is_called_in_sql_;
+  other.dblink_id_ = dblink_id_;
   OZ(other.subprogram_path_.assign(subprogram_path_));
   OZ(other.params_type_.assign(params_type_));
   OZ(other.params_desc_.assign(params_desc_));
@@ -972,6 +982,7 @@ int ObExprUDFInfo::from_raw_expr(RE &raw_expr)
   is_udt_udf_ = udf_expr.get_is_udt_udf();
   loc_ = udf_expr.get_loc();
   is_udt_cons_ = udf_expr.get_is_udt_cons();
+  dblink_id_ = udf_expr.get_dblink_id();
   return ret;
 }
 

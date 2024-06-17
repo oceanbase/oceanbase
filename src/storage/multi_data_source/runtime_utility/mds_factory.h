@@ -91,12 +91,14 @@ struct MdsFactory
   static int deep_copy_buffer_ctx(const transaction::ObTransID &trans_id,
                                   const BufferCtx &old_ctx,
                                   BufferCtx *&new_ctx,
+                                  ObIAllocator &allocator = MTL(ObTenantMdsService*)->get_buffer_ctx_allocator(),
                                   const char *alloc_file = __builtin_FILE(),
                                   const char *alloc_func = __builtin_FUNCTION(),
                                   const int64_t line = __builtin_LINE());
   static int create_buffer_ctx(const transaction::ObTxDataSourceType &data_source_type,
                                const transaction::ObTransID &trans_id,
                                BufferCtx *&buffer_ctx,
+                               ObIAllocator &allocator = MTL(ObTenantMdsService*)->get_buffer_ctx_allocator(),
                                const char *alloc_file = __builtin_FILE(),
                                const char *alloc_func = __builtin_FUNCTION(),
                                const int64_t line = __builtin_LINE());

@@ -74,14 +74,8 @@ int ObTransformSimplifySet::transform_one_stmt(common::ObIArray<ObParentDMLStmt>
       } 
     }
   }
-  if (OB_SUCC(ret)) {
-    if (!trans_happened) {
-      // do nothing
-    } else if (OB_FAIL(stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
-    } else if (OB_FAIL(add_transform_hint(*stmt, NULL))) {
-      LOG_WARN("failed to add transform hint", K(ret));
-    }
+  if (OB_SUCC(ret) && trans_happened && OB_FAIL(add_transform_hint(*stmt, NULL))) {
+    LOG_WARN("failed to add transform hint", K(ret));
   }
   return ret;
 }
@@ -708,6 +702,7 @@ int ObTransformSimplifySet::add_constraints_by_idx(common::ObIArray<int64_t> &co
                                                       op_expr))) {
       LOG_WARN("fail to build constaint expr", K(ret));
     } else if (OB_ISNULL(op_expr)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null pointer", K(ret));
     } else if (OB_FAIL(op_expr->formalize(ctx_->session_info_))) {
       LOG_WARN("fail to formalize expr", K(ret));
@@ -766,6 +761,7 @@ int ObTransformSimplifySet::replace_set_stmt_with_child_stmt(ObSelectStmt *&pare
     if (OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_, child_stmt, view_stmt))) {
       LOG_WARN("fail to create view with generated table", K(ret));
     } else if (OB_ISNULL(view_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("view table is null", K(ret));
     } else if (OB_FAIL(add_order_by(view_stmt, parent_stmt))) {
       // set child's order by to view.

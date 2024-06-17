@@ -199,7 +199,9 @@ OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, da
 
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
-    occupy_size_(0)
+    occupy_size_(0),
+    macro_meta_row_(),
+    allocator_("CMBlockHeader")
 {
 }
 
@@ -207,6 +209,8 @@ void ObCopyMacroBlockHeader::reset()
 {
   is_reuse_macro_block_ = false;
   occupy_size_ = 0;
+  macro_meta_row_.reset();
+  allocator_.reset();
 }
 
 bool ObCopyMacroBlockHeader::is_valid() const
@@ -908,7 +912,8 @@ ObTransferTabletInfoArg::ObTransferTabletInfoArg()
   : tenant_id_(OB_INVALID_ID),
     src_ls_id_(),
     dest_ls_id_(),
-    tablet_list_()
+    tablet_list_(),
+    data_version_(0)
 {
 }
 
@@ -918,6 +923,7 @@ void ObTransferTabletInfoArg::reset()
   src_ls_id_.reset();
   dest_ls_id_.reset();
   tablet_list_.reset();
+  data_version_ = 0;
 }
 
 int ObTransferTabletInfoArg::assign(const ObTransferTabletInfoArg &other)
@@ -932,6 +938,7 @@ int ObTransferTabletInfoArg::assign(const ObTransferTabletInfoArg &other)
     tenant_id_ = other.tenant_id_;
     src_ls_id_ = other.src_ls_id_;
     dest_ls_id_ = other.dest_ls_id_;
+    data_version_ = other.data_version_;
   }
   return ret;
 }
@@ -944,7 +951,7 @@ bool ObTransferTabletInfoArg::is_valid() const
          && !tablet_list_.empty();
 }
 
-OB_SERIALIZE_MEMBER(ObTransferTabletInfoArg, tenant_id_, src_ls_id_, dest_ls_id_, tablet_list_);
+OB_SERIALIZE_MEMBER(ObTransferTabletInfoArg, tenant_id_, src_ls_id_, dest_ls_id_, tablet_list_, data_version_);
 
 ObFetchLSReplayScnArg::ObFetchLSReplayScnArg()
   : tenant_id_(OB_INVALID_ID),
@@ -1317,7 +1324,7 @@ int ObStorageStreamRpcP<RPC_CODE>::flush_and_wait()
 
     if (OB_FAIL(this->check_timeout())) {
       LOG_WARN("rpc is timeout, no need flush", K(ret));
-    } else if (OB_FAIL(this->flush(OB_DEFAULT_STREAM_WAIT_TIMEOUT))) {
+    } else if (OB_FAIL(this->flush())) {
       STORAGE_LOG(WARN, "failed to flush", K(ret));
     } else {
       this->result_.get_position() = 0;
@@ -2152,6 +2159,8 @@ int ObCheckStartTransferTabletsDelegate::check_transfer_out_tablet_sstable_(cons
   int ret = OB_SUCCESS;
   ObTableStoreIterator ddl_iter;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
+  const int64_t emergency_sstable_count = ObTabletTableStore::EMERGENCY_SSTABLE_CNT;
+
   if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet is null", K(ret));
@@ -2159,6 +2168,10 @@ int ObCheckStartTransferTabletsDelegate::check_transfer_out_tablet_sstable_(cons
     LOG_WARN("fetch table store fail", K(ret), KP(tablet));
   } else if (!wrapper.get_member()->get_major_sstables().empty()) {
     // do nothing
+  } else if (wrapper.get_member()->get_table_count() > emergency_sstable_count) {
+    ret = OB_TOO_MANY_SSTABLE;
+    LOG_WARN("transfer src tablet has too many sstable, cannot transfer, need retry", K(ret),
+        "table_count", wrapper.get_member()->get_table_count(), "emergency sstable count", emergency_sstable_count);
   } else if (OB_FAIL(tablet->get_ddl_sstables(ddl_iter))) {
     LOG_WARN("failed to get ddl sstable", K(ret));
   } else if (ddl_iter.is_valid()) { // indicates the existence of ddl sstable

@@ -35,6 +35,102 @@ void ObMacroBlockDesc::reuse()
   is_deleted_ = false;
 }
 
+int ObMicroIndexRowItem::init(ObIAllocator &allocator,
+                           const ObIndexBlockRowHeader *idx_row_header,
+                           const ObDatumRowkey *endkey,
+                           const ObIndexBlockRowMinorMetaInfo *idx_minor_info,
+                           const char *agg_row_buf,
+                           const int64_t agg_buf_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(idx_row_header) || OB_ISNULL(endkey)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguemen", K(ret), KP(idx_row_header), KP(endkey), KP(idx_minor_info), KP(agg_row_buf));
+  } else {
+    allocator_ = &allocator;
+    agg_buf_size_ = agg_buf_size;
+
+    void *key_buf = nullptr;
+    if (OB_ISNULL(key_buf = allocator_->alloc(sizeof(ObDatumRowkey)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObDatumRowkey)));
+    } else if (FALSE_IT(endkey_ = new (key_buf) ObDatumRowkey())) {
+    } else if (OB_FAIL(endkey->deep_copy(*endkey_, allocator))) {
+      LOG_WARN("fail to deep copy rowkey", K(ret), KPC(endkey_), KPC(endkey));
+    }
+
+    void *header_buf = nullptr;
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(header_buf = allocator_->alloc(sizeof(ObIndexBlockRowHeader)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObIndexBlockRowHeader)));
+    } else if (FALSE_IT(idx_row_header_ = new (header_buf) ObIndexBlockRowHeader())) {
+    } else {
+      *idx_row_header_ =*idx_row_header;
+    }
+
+    void *minor_info_buf = nullptr;
+    if (OB_FAIL(ret) || OB_ISNULL(idx_minor_info)) {
+    } else if (OB_ISNULL(minor_info_buf = allocator_->alloc(sizeof(ObIndexBlockRowMinorMetaInfo)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObIndexBlockRowMinorMetaInfo)));
+    } else if (FALSE_IT(idx_minor_info_ = new (minor_info_buf) ObIndexBlockRowMinorMetaInfo())) {
+    } else {
+      *idx_minor_info_ = *idx_minor_info;
+    }
+
+    void *agg_buf = nullptr;
+    if (OB_FAIL(ret) || OB_ISNULL(agg_row_buf)) {
+    } else if (OB_ISNULL(agg_buf = allocator_->alloc(agg_buf_size))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(agg_buf_size));
+    } else {
+      MEMCPY(agg_buf, agg_row_buf, agg_buf_size);
+      agg_row_buf_ = reinterpret_cast<char *>(agg_buf);
+    }
+  }
+  return ret;
+}
+
+void ObMicroIndexRowItem::reset()
+{
+  int ret = OB_SUCCESS;
+  agg_buf_size_ = 0;
+  if (OB_NOT_NULL(allocator_)) {
+    if (OB_NOT_NULL(endkey_)){
+      endkey_->~ObDatumRowkey();
+      allocator_->free(endkey_);
+      endkey_ = nullptr;
+    }
+    if (OB_NOT_NULL(idx_row_header_)){
+      idx_row_header_->~ObIndexBlockRowHeader();
+      allocator_->free(idx_row_header_);
+      idx_row_header_ = nullptr;
+    }
+    if (OB_NOT_NULL(idx_minor_info_)){
+      idx_minor_info_->~ObIndexBlockRowMinorMetaInfo();
+      allocator_->free(idx_minor_info_);
+      idx_minor_info_ = nullptr;
+    }
+    if (OB_NOT_NULL(agg_row_buf_)){
+      allocator_->free(agg_row_buf_);
+      agg_row_buf_ = nullptr;
+    }
+  }
+  allocator_ = nullptr;
+}
+
+void ObMicroIndexRowItem::reuse()
+{
+  int ret = OB_SUCCESS;
+  endkey_ = nullptr;
+  agg_buf_size_ = 0;
+  idx_row_header_ = nullptr;
+  idx_minor_info_ = nullptr;
+  agg_row_buf_ = nullptr;
+  allocator_ = nullptr;
+}
+
 ObIndexBlockMacroIterator::ObIndexBlockMacroIterator()
   : sstable_(nullptr), iter_range_(nullptr),
     tree_cursor_(), allocator_(nullptr),
@@ -220,11 +316,15 @@ int ObIndexBlockMacroIterator::deep_copy_rowkey(const ObDatumRowkey &src_key, Ob
   return ret;
 }
 
-int ObIndexBlockMacroIterator::get_next_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &row_offset, bool &reach_cursor_end)
+int ObIndexBlockMacroIterator::get_next_idx_row(ObIAllocator &item_allocator, ObMicroIndexRowItem &macro_index_item, int64_t &row_offset, bool &reach_cursor_end)
 {
   int ret = OB_SUCCESS;
   row_offset = 0;
+  const ObIndexBlockRowHeader *idx_row_header = nullptr;
   const ObIndexBlockRowParser *idx_row_parser = nullptr;
+  const ObIndexBlockRowMinorMetaInfo *minor_meta_info = nullptr;
+  const char *agg_row_buf = nullptr;
+  int64_t agg_buf_size = 0;
   MacroBlockId macro_id;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -238,9 +338,9 @@ int ObIndexBlockMacroIterator::get_next_idx_row(ObMicroIndexInfo &idx_block_row,
   } else if (OB_ISNULL(idx_row_parser)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null idx_row_parser", K(ret));
-  } else if (OB_FAIL(idx_row_parser->get_header(idx_block_row.row_header_))) {
+  } else if (OB_FAIL(idx_row_parser->get_header(idx_row_header))) {
     LOG_WARN("Fail to get idx row header", K(ret), KPC(idx_row_parser));
-  } else if (OB_ISNULL(idx_block_row.row_header_)) {
+  } else if (OB_ISNULL(idx_row_header)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null index row header", K(ret));
   } else {
@@ -253,13 +353,13 @@ int ObIndexBlockMacroIterator::get_next_idx_row(ObMicroIndexInfo &idx_block_row,
     // traverse all node of this macro block and collect index info
     ObDatumRowkey rowkey;
     row_offset = idx_row_parser->get_row_offset();
-    if (idx_block_row.row_header_->is_data_index() && !idx_block_row.row_header_->is_major_node()) {
-      if (OB_FAIL(idx_row_parser->get_minor_meta(idx_block_row.minor_meta_info_))) {
+    if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
+      if (OB_FAIL(idx_row_parser->get_minor_meta(minor_meta_info))) {
         LOG_WARN("Fail to get minor meta info", K(ret));
       }
-    } else if (!idx_block_row.row_header_->is_major_node() || !idx_block_row.row_header_->is_pre_aggregated()) {
+    } else if (!idx_row_header->is_major_node() || !idx_row_header->is_pre_aggregated()) {
       // Do not have aggregate data
-    } else if (OB_FAIL(idx_row_parser->get_agg_row(idx_block_row.agg_row_buf_, idx_block_row.agg_buf_size_))) {
+    } else if (OB_FAIL(idx_row_parser->get_agg_row(agg_row_buf, agg_buf_size))) {
       LOG_WARN("Fail to get aggregate", K(ret));
     }
 
@@ -285,6 +385,9 @@ int ObIndexBlockMacroIterator::get_next_idx_row(ObMicroIndexInfo &idx_block_row,
       LOG_WARN("Fail to get current endkey", K(ret), K_(tree_cursor));
     } else if (OB_FAIL(deep_copy_rowkey(rowkey, curr_key_, curr_key_buf_))) {
       STORAGE_LOG(WARN, "Failed to save curr key", K(ret), K(rowkey));
+    } else if (FALSE_IT(macro_index_item.reuse())) {
+    } else if (OB_FAIL(macro_index_item.init(item_allocator, idx_row_header, &curr_key_, minor_meta_info, agg_row_buf, agg_buf_size))) {
+      STORAGE_LOG(WARN, "Failed to init macro index item", K(ret), K(macro_index_item));
     } else if (OB_FAIL(tree_cursor_.move_forward(is_reverse_scan_))) {
       if (OB_LIKELY(OB_ITER_END == ret)) {
         is_iter_end_ = true;
@@ -294,7 +397,6 @@ int ObIndexBlockMacroIterator::get_next_idx_row(ObMicroIndexInfo &idx_block_row,
       }
     }
     if (OB_SUCC(ret)) {
-      idx_block_row.endkey_ = &curr_key_;
       reach_cursor_end = is_iter_end_;
     }
   }
@@ -314,8 +416,6 @@ int ObIndexBlockMacroIterator::get_next_macro_block(
     ret = OB_ITER_END;
   } else if (OB_FAIL(tree_cursor_.get_macro_block_id(macro_id))) {
     LOG_WARN("Fail to get macro row block id", K(ret), K(macro_id));
-  } else if (OB_FAIL(tree_cursor_.get_start_row_offset(start_row_offset))) {
-    LOG_WARN("Fail to get prev row offset", K(ret), K(start_row_offset));
   } else if (OB_FAIL(tree_cursor_.get_idx_parser(idx_row_parser))) {
     LOG_WARN("Fail to get idx row parser", K(ret), K_(tree_cursor));
   } else if (OB_ISNULL(idx_row_parser)) {
@@ -330,9 +430,7 @@ int ObIndexBlockMacroIterator::get_next_macro_block(
     if ((macro_id == begin_ && is_reverse_scan_) || (macro_id == end_ && !is_reverse_scan_)) {
       is_iter_end_ = true;
     }
-    if (sstable_->is_normal_cg_sstable()) {
-      start_row_offset = idx_row_parser->get_row_offset() - idx_row_header->get_row_count() + 1;
-    }
+    start_row_offset = idx_row_parser->get_row_offset() - idx_row_header->get_row_count() + 1;
   }
 
   if (OB_SUCC(ret)) {

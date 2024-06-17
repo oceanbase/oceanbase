@@ -26,7 +26,7 @@ public:
   {}
   int init(JoinTableCtx &hjt_ctx, ObIAllocator &allocator);
   bool use_normalized_ht(JoinTableCtx &hjt_ctx);
-  int build_prepare(int64_t row_count, int64_t bucket_count);
+  int build_prepare(JoinTableCtx &ctx, int64_t row_count, int64_t bucket_count);
   int build(JoinPartitionRowIter &iter, JoinTableCtx &jt_ctx);
   int probe_prepare(JoinTableCtx &ctx, OutputInfo &output_info);
   int probe_batch(JoinTableCtx &ctx, OutputInfo &output_info);
@@ -35,9 +35,13 @@ public:
   };
   int get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info);
   void reset() {
-    // TODO shengle
+    if (NULL != hash_table_) {
+      hash_table_->reset();
+    }
   };
-  int64_t get_bucket_mem_size() const { return hash_table_->get_bucket_mem_size(); }
+  int64_t get_mem_used() const {
+    return hash_table_->get_mem_used();
+  }
   void free(ObIAllocator *allocator) {
     if (NULL != hash_table_) {
       hash_table_->free(allocator);

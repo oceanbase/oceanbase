@@ -628,7 +628,7 @@ int ObCompactionBufferWriter::ensure_space(int64_t size)
     if (NULL != ref_mem_ctx_) {
       ref_mem_ctx_->inc_buffer_hold_mem(capacity_ - old_capacity);
     } else {
-      LOG_INFO("no mem ctx has setted to thread", K(ret), K(label_), K(size), K(capacity_), K(old_capacity));
+      LOG_TRACE("no mem ctx has setted to thread", K(ret), K(label_), K(size), K(capacity_), K(old_capacity));
     }
   }
   return ret;

@@ -291,6 +291,7 @@ protected:
   share::SCN end_scn_;
   share::ObBackupPathString backup_path_;
   share::ObBackupStatus backup_status_;
+  bool is_only_calc_stat_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataBaseTask);
 };

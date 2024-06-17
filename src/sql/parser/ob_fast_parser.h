@@ -618,6 +618,12 @@ protected:
 	bool skip_space(ObRawSql &raw_sql);
 
 protected:
+  enum FoundInsertTokenStatus
+  {
+    NOT_FOUND_INSERT_TOKEN,
+    FOUND_INSERT_TOKEN_ONCE, // find one insert token
+    INVALID_TOKEN_STATUS,  // find insert token more than one time
+  };
 	ObRawSql raw_sql_;
 	char *no_param_sql_;
 	int64_t no_param_sql_len_;
@@ -639,7 +645,7 @@ protected:
 	common::ObIAllocator &allocator_;
 	common::ObCharsetType charset_type_;
 	const ObCharsetInfo *charset_info_;
-	bool get_insert_;
+	FoundInsertTokenStatus found_insert_status_;
 	int64_t values_token_pos_;
 	ParseNextTokenFunc parse_next_token_func_;
 	ProcessIdfFunc process_idf_func_;
@@ -680,6 +686,7 @@ private:
 	int process_string(const char quote);
 	int process_zero_identifier();
 	int process_identifier_begin_with_n();
+	int process_identifier_begin_with_backslash();
 private:
 	ObSEArray<ObValuesTokenPos, 4> values_tokens_;
 	DISALLOW_COPY_AND_ASSIGN(ObFastParserMysql);

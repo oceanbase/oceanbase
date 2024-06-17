@@ -551,6 +551,33 @@ int ObExpandAggregateUtils::add_aggr_item(ObIArray<ObAggFunRawExpr*> &new_aggr_i
   return ret;
 }
 
+int ObExpandAggregateUtils::add_win_expr(common::ObIArray<ObWinFunRawExpr*> &new_win_exprs,
+                                         ObWinFunRawExpr *&win_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(win_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(win_expr));
+  } else {
+    int64_t i = 0;
+    for (; OB_SUCC(ret) && i < new_win_exprs.count(); ++i) {
+      if (OB_ISNULL(new_win_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(new_win_exprs.at(i)));
+      } else if (win_expr->same_as(*new_win_exprs.at(i))) {
+        win_expr = new_win_exprs.at(i);
+        break;
+      } else {/*do nothing*/}
+    }
+    if (OB_SUCC(ret) && i == new_win_exprs.count()) {
+      if (OB_FAIL(new_win_exprs.push_back(win_expr))) {
+        LOG_WARN("failed to push back aggr expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 //T_FUN_VAR_POP == node->type_: (SUM(expr*expr) - SUM(expr)* SUM(expr)/ COUNT(expr)) / COUNT(expr)
 //T_FUN_VAR_SAMP== node->type_: (SUM(expr*expr) - SUM(expr)* SUM(expr)/ COUNT(expr)) / (COUNT(expr) - 1)
 int ObExpandAggregateUtils::expand_var_expr(ObAggFunRawExpr *aggr_expr,
@@ -2074,8 +2101,11 @@ int ObExpandAggregateUtils::expand_stddev_samp_expr(ObAggFunRawExpr *aggr_expr,
     LOG_WARN("get unexpected null", K(ret), K(aggr_expr));
   } else {
     ObSysFunRawExpr *sqrt_expr = NULL;
-    ObRawExpr *sqrt_param_expr = NULL;
+    ObRawExpr *expand_var_expr_inner = NULL;
+    ObRawExpr *case_when_expr = NULL;
+    ObConstRawExpr *zero_expr = NULL;
     ObAggFunRawExpr *var_expr = NULL;
+    ObRawExpr *lt_expr = NULL;
     if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory_,
                                                        session_info_,
                                                        T_FUN_VAR_SAMP,
@@ -2084,19 +2114,49 @@ int ObExpandAggregateUtils::expand_stddev_samp_expr(ObAggFunRawExpr *aggr_expr,
       LOG_WARN("failed to build common aggr expr", K(ret));
     } else {
       if (OB_FAIL(expand_var_expr(var_expr,
-                                  sqrt_param_expr, new_aggr_items))) {
+                                  expand_var_expr_inner, new_aggr_items))) {
         LOG_WARN("fail to expand keep variance expr", K(ret));
       } else if (OB_FAIL(expr_factory_.create_raw_expr(T_FUN_SYS_SQRT, sqrt_expr))) {
         LOG_WARN("failed to crate sqrt expr", K(ret));
       } else if (OB_ISNULL(sqrt_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("add expr is null", K(ret), K(sqrt_expr));
-      } else if (OB_FAIL(sqrt_expr->add_param_expr(sqrt_param_expr))) {
-        LOG_WARN("add text expr to add expr failed", K(ret));
       } else {
-        ObString func_name = ObString::make_string("sqrt");
-        sqrt_expr->set_func_name(func_name);
-        replace_expr = sqrt_expr;
+        if (is_oracle_mode()) {
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(sqrt_expr->add_param_expr(expand_var_expr_inner))) {
+              LOG_WARN("add text expr to add expr failed", K(ret));
+            }
+          }
+        } else {
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory_,
+                                                            ObIntType,
+                                                            0,
+                                                            zero_expr))) {
+              LOG_WARN("failed to build const int expr", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_,
+                                                                          T_OP_LT,
+                                                                          expand_var_expr_inner,
+                                                                          zero_expr,
+                                                                          lt_expr))) {
+              LOG_WARN("failed to build common binary op expr", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(expr_factory_,
+                                                                    lt_expr,
+                                                                    zero_expr,
+                                                                    expand_var_expr_inner,
+                                                                    case_when_expr))) {
+              LOG_WARN("failed to build the case when expr", K(ret));
+            } else if (OB_FAIL(sqrt_expr->add_param_expr(case_when_expr))) {
+              LOG_WARN("add text expr to add expr failed", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObString func_name = ObString::make_string("sqrt");
+          sqrt_expr->set_func_name(func_name);
+          replace_expr = sqrt_expr;
+        }
       }
     }
   }
@@ -2188,9 +2248,9 @@ int ObExpandAggregateUtils::add_win_exprs(ObSelectStmt *select_stmt,
         }
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && j < replace_exprs.count(); ++j) {
-          if (ObRawExprUtils::replace_ref_column(replace_exprs.at(j),
-                                                 new_win_exprs.at(i),
-                                                 win_expr)) {
+          if (OB_FAIL(ObRawExprUtils::replace_ref_column(replace_exprs.at(j),
+                                                         new_win_exprs.at(i),
+                                                         win_expr))) {
             LOG_WARN("failed to replace ref column.", K(ret));
           }
         }

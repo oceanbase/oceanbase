@@ -162,6 +162,77 @@ TEST_F(TestLobSeqId, next_seq_id)
   ASSERT_NE(seq_id.buf_, nullptr);
 }
 
+struct ObLobDataOutRowCtxV0
+{
+  ObLobDataOutRowCtxV0()
+    : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
+      del_seq_no_cnt_(0), modified_len_(0), first_meta_offset_(0)
+  {}
+
+  uint64_t is_full_ : 1;
+  uint64_t op_ : 8;
+  uint64_t offset_ : 55;
+  uint64_t check_sum_;
+  int64_t seq_no_st_;
+  uint32_t seq_no_cnt_;
+  uint32_t del_seq_no_cnt_; // for sql update
+  uint64_t modified_len_;
+  uint32_t first_meta_offset_;
+};
+
+TEST_F(TestLobSeqId, test_chunk_size_v0_to_v1)
+{
+  ObLobDataOutRowCtxV0 ctx_v0;
+  ctx_v0.op_ = ObLobDataOutRowCtx::DIFF;
+  ctx_v0.offset_ = 10000;
+  ctx_v0.check_sum_ = 12345;
+  ctx_v0.seq_no_st_ = 56778899;
+  ctx_v0.seq_no_cnt_ = 5;
+  ctx_v0.del_seq_no_cnt_ = 0;
+  ctx_v0.modified_len_ = 111111;
+  ctx_v0.first_meta_offset_ = 1234567;
+
+  ObLobDataOutRowCtx ctx_v1;
+  ASSERT_EQ(sizeof(ObLobDataOutRowCtx), sizeof(ObLobDataOutRowCtxV0));
+  MEMCPY(&ctx_v1, &ctx_v0, sizeof(ObLobDataOutRowCtx));
+  ASSERT_EQ(ctx_v0.is_full_, ctx_v1.is_full_);
+  ASSERT_EQ(ctx_v0.offset_, ctx_v1.offset_);
+  ASSERT_EQ(ctx_v0.check_sum_, ctx_v1.check_sum_);
+  ASSERT_EQ(ctx_v0.seq_no_st_, ctx_v1.seq_no_st_);
+  ASSERT_EQ(ctx_v0.seq_no_cnt_, ctx_v1.seq_no_cnt_);
+  ASSERT_EQ(ctx_v0.del_seq_no_cnt_, ctx_v1.del_seq_no_cnt_);
+  ASSERT_EQ(ctx_v0.modified_len_, ctx_v1.modified_len_);
+  ASSERT_EQ(0, ctx_v1.chunk_size_);
+  ASSERT_EQ(ctx_v0.first_meta_offset_, ctx_v1.first_meta_offset_);
+}
+
+TEST_F(TestLobSeqId, test_chunk_size_v1_to_v0)
+{
+  ObLobDataOutRowCtx ctx_v1;
+  ctx_v1.op_ = ObLobDataOutRowCtx::DIFF;
+  ctx_v1.offset_ = 10000;
+  ctx_v1.check_sum_ = 12345;
+  ctx_v1.seq_no_st_ = 56778899;
+  ctx_v1.seq_no_cnt_ = 5;
+  ctx_v1.del_seq_no_cnt_ = 0;
+  ctx_v1.modified_len_ = 111111;
+  ctx_v1.chunk_size_ = 4;
+  ctx_v1.first_meta_offset_ = 1234567;
+
+  ObLobDataOutRowCtxV0 ctx_v0;
+  ASSERT_EQ(sizeof(ObLobDataOutRowCtx), sizeof(ObLobDataOutRowCtxV0));
+  MEMCPY(&ctx_v0, &ctx_v1, sizeof(ObLobDataOutRowCtx));
+  ASSERT_EQ(ctx_v0.is_full_, ctx_v1.is_full_);
+  ASSERT_EQ(ctx_v0.offset_, ctx_v1.offset_);
+  ASSERT_EQ(ctx_v0.check_sum_, ctx_v1.check_sum_);
+  ASSERT_EQ(ctx_v0.seq_no_st_, ctx_v1.seq_no_st_);
+  ASSERT_EQ(ctx_v0.seq_no_cnt_, ctx_v1.seq_no_cnt_);
+  ASSERT_EQ(ctx_v0.del_seq_no_cnt_, ctx_v1.del_seq_no_cnt_);
+  ASSERT_EQ(ctx_v0.modified_len_, ctx_v1.modified_len_);
+  ASSERT_EQ(4, ctx_v1.chunk_size_);
+  ASSERT_EQ(ctx_v0.first_meta_offset_ & 0xffffff, ctx_v1.first_meta_offset_ );
+}
+
 
 }  // end namespace unittest
 }  // end namespace oceanbase

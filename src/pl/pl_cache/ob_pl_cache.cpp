@@ -20,6 +20,109 @@ namespace oceanbase
 namespace pl
 {
 
+void ObPLTableColumnInfo::reset()
+{
+  column_id_ = common::OB_INVALID_ID;
+  meta_type_.reset();
+  accuracy_.reset();
+  charset_type_ = CHARSET_INVALID;
+  if (inner_alloc_ != nullptr) {
+    if (column_name_.ptr() != nullptr) {
+      inner_alloc_->free(column_name_.ptr());
+      column_name_.reset();
+    }
+    for (int64_t i = 0; i < type_info_.count(); i++) {
+      ObString &str = type_info_.at(i);
+      if (str.ptr() != nullptr) {
+        inner_alloc_->free(str.ptr());
+        str.reset();
+      }
+    }
+    inner_alloc_ = nullptr;
+  }
+}
+
+int ObPLTableColumnInfo::deep_copy_type_info(const common::ObIArray<common::ObString>& type_info)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(inner_alloc_));
+  CK (0 == type_info_.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < type_info.count(); ++i) {
+    const ObString &info = type_info.at(i);
+    if (OB_UNLIKELY(0 == info.length())) {
+      if (OB_FAIL(type_info_.push_back(ObString(0, NULL)))) {
+        LOG_WARN("fail to push back info", K(i), K(info), K(ret));
+      }
+    } else {
+      char *buf = NULL;
+      if (OB_ISNULL(buf = static_cast<char*>(inner_alloc_->alloc(info.length())))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory", K(i), K(info), K(ret));
+      } else if (FALSE_IT(MEMCPY(buf, info.ptr(), info.length()))) {
+      } else if (OB_FAIL(type_info_.push_back(ObString(info.length(), buf)))) {
+        LOG_WARN("fail to push back info", K(i), K(info), K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int PCVPlSchemaObj::deep_copy_column_infos(const ObTableSchema *schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(schema) || OB_ISNULL(inner_alloc_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected null argument", K(ret), K(schema), K(inner_alloc_));
+  } else {
+    void *obj_buf = nullptr;
+    ObPLTableColumnInfo *column_info = nullptr;
+    column_cnt_ = schema->get_column_count();
+    column_infos_.set_allocator(inner_alloc_);
+    if (OB_FAIL(column_infos_.init(column_cnt_))) {
+      LOG_WARN("failed to init column_infos", K(ret));
+    } else {
+      ObTableSchema::const_column_iterator cs_iter = schema->column_begin();
+      ObTableSchema::const_column_iterator cs_iter_end = schema->column_end();
+      for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
+        const ObColumnSchemaV2 &column_schema = **cs_iter;
+        if (nullptr == (obj_buf = inner_alloc_->alloc(sizeof(ObPLTableColumnInfo)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(ret));
+        } else if (FALSE_IT(column_info = new(obj_buf)ObPLTableColumnInfo(inner_alloc_))) {
+          // do nothing
+        } else {
+          column_info->column_id_ = column_schema.get_column_id();
+          column_info->meta_type_ = column_schema.get_meta_type();
+          column_info->charset_type_ = column_schema.get_charset_type();
+          column_info->accuracy_ = column_schema.get_accuracy();
+          OZ (column_info->deep_copy_type_info(column_schema.get_extended_type_info()));
+
+          if (OB_SUCC(ret)) {
+            char *name_buf = NULL;
+            const ObString &column_name = column_schema.get_column_name_str();
+            if (OB_ISNULL(name_buf =
+                static_cast<char*>(inner_alloc_->alloc(column_name.length() + 1)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to alloc column name buf", K(ret), K(column_name));
+            } else {
+              MEMCPY(name_buf, column_name.ptr(), column_name.length());
+              ObString deep_copy_name(column_name.length(), name_buf);
+              column_info->column_name_ = deep_copy_name;
+              OZ (column_infos_.push_back(column_info));
+            }
+          }
+        }
+      }
+      CK (column_cnt_ == column_infos_.count());
+    }
+  }
+
+  return ret;
+}
+
+
 int PCVPlSchemaObj::init(const ObTableSchema *schema)
 {
   int ret = OB_SUCCESS;
@@ -45,8 +148,24 @@ int PCVPlSchemaObj::init(const ObTableSchema *schema)
       MEMCPY(buf, tname.ptr(), tname.length());
       table_name_.assign_ptr(buf, tname.length());
     }
+    OZ (deep_copy_column_infos(schema));
   }
   return ret;
+}
+
+bool PCVPlSchemaObj::match_columns(ObIArray<ObPLTableColumnInfo> &column_infos) const
+{
+  bool is_match = true;
+  if (column_cnt_ != column_infos.count()) {
+    is_match = false;
+  } else {
+    for (int64_t i = 0; is_match && i < column_infos_.count(); ++i) {
+      if (*column_infos_.at(i) != column_infos.at(i)) {
+        is_match = false;
+      }
+    }
+  }
+  return is_match;
 }
 
 bool PCVPlSchemaObj::operator==(const PCVPlSchemaObj &other) const
@@ -106,9 +225,20 @@ void PCVPlSchemaObj::reset()
   schema_version_ = 0;
   table_type_ = MAX_TABLE_TYPE;
   is_tmp_table_ = false;
-  if (inner_alloc_ != nullptr && table_name_.ptr() != nullptr) {
-    inner_alloc_->free(table_name_.ptr());
-    table_name_.reset();
+  column_cnt_ = 0;
+  if (inner_alloc_ != nullptr) {
+    if (table_name_.ptr() != nullptr) {
+      inner_alloc_->free(table_name_.ptr());
+      table_name_.reset();
+    }
+    for (int64_t i = 0; i < column_infos_.count(); i++) {
+      if (OB_ISNULL(column_infos_.at(i))) {
+        // do nothing
+      } else {
+        column_infos_.at(i)->reset();
+        inner_alloc_->free(column_infos_.at(i));
+      }
+    }
     inner_alloc_ = nullptr;
   }
 }
@@ -125,6 +255,7 @@ void ObPLObjectKey::reset()
   sessid_ = 0;
   name_.reset();
   namespace_ = ObLibCacheNameSpace::NS_INVALID;
+  sys_vars_str_.reset();
 }
 
 int ObPLObjectKey::deep_copy(ObIAllocator &allocator, const ObILibCacheKey &other)
@@ -132,6 +263,8 @@ int ObPLObjectKey::deep_copy(ObIAllocator &allocator, const ObILibCacheKey &othe
   int ret = OB_SUCCESS;
   const ObPLObjectKey &key = static_cast<const ObPLObjectKey&>(other);
   if (OB_FAIL(common::ob_write_string(allocator, key.name_, name_))) {
+    LOG_WARN("failed to deep copy name", K(ret), K(name_));
+  } else if (OB_FAIL(common::ob_write_string(allocator, key.sys_vars_str_, sys_vars_str_))) {
     LOG_WARN("failed to deep copy name", K(ret), K(name_));
   } else {
     db_id_ = key.db_id_;
@@ -147,6 +280,9 @@ void ObPLObjectKey::destory(common::ObIAllocator &allocator)
   if (nullptr != name_.ptr()) {
     allocator.free(const_cast<char *>(name_.ptr()));
   }
+  if (nullptr != sys_vars_str_.ptr()) {
+    allocator.free(const_cast<char *>(sys_vars_str_.ptr()));
+  }
 }
 
 uint64_t ObPLObjectKey::hash() const
@@ -156,6 +292,7 @@ uint64_t ObPLObjectKey::hash() const
   hash_ret = murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
   hash_ret = name_.hash(hash_ret);
   hash_ret = murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
+  hash_ret = sys_vars_str_.hash(hash_ret);
   return hash_ret;
 }
 
@@ -166,7 +303,8 @@ bool ObPLObjectKey::is_equal(const ObILibCacheKey &other) const
                  key_id_ == key.key_id_ &&
                  sessid_ == key.sessid_ &&
                  name_ == key.name_ &&
-                 namespace_ == key.namespace_;
+                 namespace_ == key.namespace_ &&
+                 sys_vars_str_ == key.sys_vars_str_;
   return cmp_ret;
 }
 
@@ -236,6 +374,41 @@ int ObPLObjectValue::lift_tenant_schema_version(int64_t new_schema_version)
   return ret;
 }
 
+int ObPLObjectValue::obtain_new_column_infos(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const PCVPlSchemaObj &schema_obj,
+                                              ObIArray<ObPLTableColumnInfo> &column_infos)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(schema_guard.get_table_schema(
+              MTL_ID(),
+              schema_obj.schema_id_,
+              table_schema))) { // now deal with table schema
+    LOG_WARN("failed to get table schema", K(ret), K(schema_obj), K(table_schema));
+  } else if (nullptr == table_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get an unexpected null schema", K(ret), K(table_schema));
+  } else if (table_schema->is_index_table()) {
+    // do nothing
+  } else {
+    ObPLTableColumnInfo column_info;
+    ObTableSchema::const_column_iterator cs_iter = table_schema->column_begin();
+    ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
+    for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
+      const ObColumnSchemaV2 &column_schema = **cs_iter;
+      column_info.column_id_ = column_schema.get_column_id();
+      column_info.meta_type_ = column_schema.get_meta_type();
+      column_info.charset_type_ = column_schema.get_charset_type();
+      column_info.accuracy_ = column_schema.get_accuracy();
+      OZ (column_info.type_info_.assign(column_schema.get_extended_type_info()));
+      OX (column_info.column_name_ = column_schema.get_column_name_str());
+      OZ (column_infos.push_back(column_info));
+    }
+  }
+
+  return ret;
+}
+
 int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *schema_guard,
                                           bool need_check_schema,
                                           const ObIArray<PCVPlSchemaObj> &schema_array,
@@ -264,9 +437,17 @@ int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *sch
         } else if (*schema_obj1 == schema_obj2) { // schema do match
           LOG_DEBUG("matched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
           // do nothing
+        } else if (schema_obj1->schema_type_ == schema_obj2.schema_type_ &&
+                   TABLE_SCHEMA == schema_obj1->schema_type_ &&
+                   schema_obj1->schema_id_ == schema_obj2.schema_id_) {
+          ObSEArray<ObPLTableColumnInfo, 6> column_infos;
+          OZ (obtain_new_column_infos(*schema_guard, schema_obj2, column_infos));
+          OX (is_old_version = !schema_obj1->match_columns(column_infos));
         } else {
-          LOG_WARN("mismatched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
           is_old_version = true;
+        }
+        if (OB_SUCC(ret) && is_old_version) {
+          LOG_WARN("mismatched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
         }
       }
     }
@@ -344,6 +525,54 @@ int ObPLObjectValue::get_all_dep_schema(ObSchemaGetterGuard &schema_guard,
   return ret;
 }
 
+int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
+                                                uint64_t tenant_id,
+                                                const PCVPlSchemaObj &pcv_schema,
+                                                int64_t &new_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pc_ctx.schema_guard_) || OB_ISNULL(pc_ctx.session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    const ObSimpleSynonymSchema *synonym_info = NULL;
+    ObSchemaGetterGuard &schema_guard = *pc_ctx.schema_guard_;
+    ObSQLSessionInfo *session_info = pc_ctx.session_info_;
+    CK (SYNONYM_SCHEMA == pcv_schema.schema_type_);
+    OZ (schema_guard.get_simple_synonym_info(tenant_id, pcv_schema.schema_id_, synonym_info));
+    if (OB_SUCC(ret) && OB_NOT_NULL(synonym_info)) {
+      if (OB_PUBLIC_SCHEMA_ID == synonym_info->get_database_id()) {
+        // in same db, no need check for objects with the same name if synonym name is same as linked object name
+        if (pc_ctx.session_info_->get_database_id() == synonym_info->get_object_database_id() &&
+            synonym_info->get_synonym_name() == synonym_info->get_object_name()) {
+          new_version = synonym_info->get_schema_version();
+        } else {
+          bool exist = false;
+          bool is_private_syn = false;
+          ObSchemaChecker schema_checker;
+          int tmp = schema_checker.init(schema_guard);
+          if (OB_SUCCESS == tmp) {
+            tmp = schema_checker.check_exist_same_name_object_with_synonym(synonym_info->get_tenant_id(),
+                                                                           session_info->get_database_id(),
+                                                                           synonym_info->get_synonym_name(),
+                                                                           exist,
+                                                                           is_private_syn);
+            if (exist) {
+              ret = OB_OLD_SCHEMA_VERSION;
+              LOG_WARN("exist object which name as current synonym", K(ret), KPC(synonym_info));
+            } else {
+              new_version = synonym_info->get_schema_version();
+            }
+          }
+        }
+      } else {
+        new_version = synonym_info->get_schema_version();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
                                          const uint64_t database_id,
                                          int64_t &new_schema_version,
@@ -376,18 +605,24 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
       } else if (TABLE_SCHEMA != pcv_schema->schema_type_) {
         // if no table schema, get schema version is enough
         int64_t new_version = 0;
-        if (PACKAGE_SCHEMA == stored_schema_objs_.at(i)->schema_type_
-            || UDT_SCHEMA == stored_schema_objs_.at(i)->schema_type_
-            || ROUTINE_SCHEMA == stored_schema_objs_.at(i)->schema_type_) {
-          tenant_id = pl::get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
+        if (PACKAGE_SCHEMA == pcv_schema->schema_type_
+            || UDT_SCHEMA == pcv_schema->schema_type_
+            || ROUTINE_SCHEMA == pcv_schema->schema_type_) {
+          tenant_id = pl::get_tenant_id_by_object_id(pcv_schema->schema_id_);
         }
-        if (OB_FAIL(schema_guard.get_schema_version(pcv_schema->schema_type_,
-                                                    tenant_id,
-                                                    pcv_schema->schema_id_,
-                                                    new_version))) {
+        if (SYNONYM_SCHEMA == pcv_schema->schema_type_) {
+          if (OB_FAIL(get_synonym_schema_version(pc_ctx, tenant_id, *pcv_schema, new_version))) {
+            LOG_WARN("failed to get schema version",
+                   K(ret), K(tenant_id), K(pcv_schema->schema_type_), K(pcv_schema->schema_id_));
+          }
+        } else if (OB_FAIL(schema_guard.get_schema_version(pcv_schema->schema_type_,
+                                                            tenant_id,
+                                                            pcv_schema->schema_id_,
+                                                            new_version))) {
           LOG_WARN("failed to get schema version",
                    K(ret), K(tenant_id), K(pcv_schema->schema_type_), K(pcv_schema->schema_id_));
-        } else {
+        }
+        if (OB_SUCC(ret)) {
           tmp_schema_obj.schema_id_ = pcv_schema->schema_id_;
           tmp_schema_obj.schema_type_ = pcv_schema->schema_type_;
           tmp_schema_obj.schema_version_ = new_version;
@@ -474,22 +709,19 @@ int ObPLObjectValue::match_dep_schema(const ObPLCacheCtx &pc_ctx,
   } else if (schema_array.count() != stored_schema_objs_.count()) {
     is_same = false;
   } else {
+    // oracle模式临时表实际上就是实表, 只需比较schema信息即可;
+    // mysql模式临时表不能用于trigger, sql语句的表依赖信息也不会加到存储过程依赖列表中
+    // 因此, 移除临时表比较sessid相关逻辑
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < schema_array.count(); i++) {
       if (OB_ISNULL(stored_schema_objs_.at(i))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null table schema", K(ret), K(i));
-      } else if (schema_array.at(i).is_tmp_table_) { // check for tmp table
-        is_same = ((session_info->get_sessid_for_table() == sessid_) &&
-                   (session_info->get_sess_create_time() == sess_create_time_));
-        if (!is_same) {
-          LOG_WARN("tmp table not match", K(ret), K(sessid_), K(session_info->get_sessid_for_table()),
-                                                  K(sess_create_time_), K(session_info->get_sess_create_time()));
-        }
       } else if (lib::is_oracle_mode()
                  && TABLE_SCHEMA == stored_schema_objs_.at(i)->schema_type_
                  && !stored_schema_objs_.at(i)->match_compare(schema_array.at(i))) {
         // check whether common table name is same as system table in oracle mode
         is_same = false;
+        LOG_WARN("mismatched schema objs", K(*stored_schema_objs_.at(i)), K(stored_schema_objs_.at(i)), K(i));
       } else {
         // do nothing
       }

@@ -665,7 +665,8 @@ int ObDataDictService::filter_table_(const share::schema::ObTableSchema &table_s
       ! (table_schema.has_tablet()
       || table_schema.is_user_table()
       || table_schema.is_unique_index()
-      || table_schema.is_tmp_table());
+      || table_schema.is_tmp_table()
+      || table_schema.is_external_table());
 
   return ret;
 }

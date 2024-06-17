@@ -260,11 +260,16 @@ int ObTransformSemiToInner::gather_params_by_rewrite_form(ObDMLStmt* trans_stmt,
       LOG_WARN("failed to get param expr related to right table", K(ret));
     }
   } else if (trans_param.use_inner_gby()) {
-    ObSEArray<ObSEArray<ObRawExpr*, 4>, 4> column_groups;
+    ObSEArray<ObRawExpr*, 4> column_groups;
+    ObSqlBitSet<> empty_ignore_tables;
+    StmtUniqueKeyProvider unique_key_provider;
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(collect_unique_property_of_from_items(ctx_, trans_stmt, column_groups))) {
-      LOG_WARN("failed to find a unique column group on left tables", K(ret));
+    } else if (OB_FAIL(unique_key_provider.generate_unique_key(ctx_,
+                                                               trans_stmt,
+                                                               empty_ignore_tables,
+                                                               column_groups))) {
+      LOG_WARN("failed to generate unique column group for from items", K(ret));
     } else if (OB_FAIL(trans_param.unique_column_groups_.assign(column_groups))) {
       LOG_WARN("failed to assign column group", K(ret));
     }
@@ -327,6 +332,7 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
         TableItem *right_table = view_stmt->get_table_item_by_id(semi_info->right_table_id_);
         ObSelectStmt* right_stmt = NULL;
         if (OB_ISNULL(right_table)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
         } else if (right_table->is_generated_table()) {
           if (OB_ISNULL(right_stmt = right_table->ref_query_)) {
@@ -355,11 +361,8 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
           ctx.table_id_ = semi_info->right_table_id_;
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < trans_param.unique_column_groups_.count(); i++) {
-          ObIArray<ObRawExpr*> &unique_column_group = trans_param.unique_column_groups_.at(i);
-          for (int64_t j = 0; OB_SUCC(ret) && j < unique_column_group.count(); ++j) {
-            if (OB_FAIL(view_stmt->add_group_expr(unique_column_group.at(j)))) {
-              LOG_WARN("failed to add group by expr", K(ret));
-            }
+          if (OB_FAIL(view_stmt->add_group_expr(trans_param.unique_column_groups_.at(i)))) {
+            LOG_WARN("failed to add group by expr", K(ret));
           }
         }
       }
@@ -632,10 +635,8 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
     bool can_find_unique_column_group = false;
     bool is_spj_stmt = (stmt.is_select_stmt() && static_cast<ObSelectStmt*>(&stmt)->is_spj());
     bool can_add_spj_view = !(stmt.is_set_stmt() || stmt.is_hierarchical_query() || !stmt.is_sel_del_upd());
-    if (OB_FAIL(check_from_item_unique_property(ctx_,
-                                                &stmt,
-                                                can_find_unique_column_group))) {
-      LOG_WARN("failed to find column group with 'unique' property for left tables", K(ret));
+    if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_find_unique_column_group))) {
+      LOG_WARN("failed to find column group with 'unique' property for from tables", K(ret));
     } else if (!can_find_unique_column_group) {
       // do nothing
     } else if (!is_spj_stmt && !can_add_spj_view) {
@@ -692,88 +693,6 @@ int ObTransformSemiToInner::check_query_from_dual(ObSelectStmt *stmt, bool& quer
       }
     }
     query_from_dual = temp_flag;
-  }
-  return ret;
-}
-
-
-/**
- * @brief collect_unique_property_of_from_items
- * try to construct a unique column group based on unique column of each from item
- */
-int ObTransformSemiToInner::collect_unique_property_of_from_items(ObTransformerCtx* ctx,
-                                                                   ObDMLStmt* stmt,
-                                                                   ObIArray<ObSEArray<ObRawExpr*, 4>>& unique_column_group)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx) || OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null", K(ret), K(ctx), K(stmt));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_from_item_size(); i++) {
-      TableItem* table = stmt->get_table_item(stmt->get_from_item(i));
-      ObSEArray<ObRawExpr*, 4> pkeys;
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null table", K(ret), K(table));
-      // lijinmao todo: fix bug here, need generate unique from table except basic table
-      } else if (OB_FAIL(ObTransformUtils::generate_unique_key_for_basic_table(ctx, stmt, table, pkeys))) {
-        LOG_WARN("failed to generate unique key", K(ret));
-      } else if (pkeys.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("left table should have unique key", K(ret));
-      } else if (OB_FAIL(unique_column_group.push_back(pkeys))) {
-        LOG_WARN("failed to push back element", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-/**
- * @brief check_from_item_unique_property
- * check if each left table has unique key
- */
-int ObTransformSemiToInner::check_from_item_unique_property(ObTransformerCtx* ctx,
-                                                            ObDMLStmt* stmt,
-                                                            bool& is_valid)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx) || OB_ISNULL(stmt) || OB_ISNULL(ctx->schema_checker_) || OB_ISNULL(ctx->session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null", K(ret), K(ctx), K(stmt));
-  } else {
-    bool temp = true;
-    const ObTableSchema *table_schema = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && temp && i < stmt->get_from_item_size(); i++) {
-      TableItem* table = stmt->get_table_item(stmt->get_from_item(i));
-      ObSEArray<ObRawExpr*, 4> pkeys;
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null table", K(ret), K(table));
-      } else if (!table->is_basic_table()) {
-        temp = false;
-      } else if (OB_FAIL(ctx->schema_checker_->get_table_schema(ctx->session_info_->get_effective_tenant_id(), table->ref_id_, table_schema))) {
-        LOG_WARN("failed to get table schema", K(ret));
-      } else if (OB_ISNULL(table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table schema is null", K(ret), K(table_schema));
-        //new heap table not add partition key in rowkey and the tablet id is unique in partition,
-        //we need add partition key to ensure the output unique.
-      } else if (table_schema->is_heap_table() &&
-                OB_FAIL(ObTransformUtils::add_part_column_exprs_for_heap_table(stmt, table_schema,
-                                                                        table->table_id_, pkeys))) {
-        LOG_WARN("failed to add part column exprs for heap table", K(ret));
-      } else if (!pkeys.empty()) {
-        // valid, do nothing
-      } else {
-        const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
-        temp = rowkey_info.get_size() > 0;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      is_valid = temp;
-    }
   }
   return ret;
 }

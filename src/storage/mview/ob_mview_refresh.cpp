@@ -250,7 +250,7 @@ int ObMViewRefresher::prepare_for_refresh()
     if (OB_SUCC(ret) && ObMVRefreshType::FAST == refresh_type) {
       const ObIArray<ObString> *operators = nullptr;
       ObString fast_refresh_sql;
-      if (OB_FAIL(mv_provider.get_operators(operators))) {
+      if (OB_FAIL(mv_provider.get_fast_refresh_operators(operators))) {
         LOG_WARN("fail to get operators", KR(ret));
       } else if (OB_ISNULL(operators)) {
         ret = OB_ERR_UNEXPECTED;
@@ -435,7 +435,7 @@ int ObMViewRefresher::complete_refresh()
                       .timeout(timeout_ctx.get_timeout())
                       .mview_complete_refresh(arg, res))) {
           LOG_WARN("fail to mview complete refresh", KR(ret), K(arg));
-        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, session_info,
+        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, DDL_MVIEW_COMPLETE_REFRESH, session_info,
                                                               GCTX.rs_rpc_proxy_))) {
           LOG_WARN("fail to wait mview complete refresh finish", KR(ret));
         } else {

@@ -145,7 +145,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         } else if (OB_FAIL(lock_state->trans_version_.convert_for_tx(trans_version))) {
           LOG_ERROR("convert failed", K(ret), K(trans_version));
         } else if (row_header->get_row_multi_version_flag().is_uncommitted_row()) {
-          ObTxTableGuards tx_table_guards = ctx.get_tx_table_guards();
+          ObTxTableGuards &tx_table_guards = ctx.get_tx_table_guards();
           transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
           if (!tx_table_guards.is_valid()) {
             ret = OB_ERR_UNEXPECTED;

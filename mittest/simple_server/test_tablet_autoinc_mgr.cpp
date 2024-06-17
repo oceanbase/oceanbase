@@ -180,11 +180,13 @@ TEST_F(TestTabletAutoincMgr, test_lob_tablet_autoinc_location_cache)
 
   // transfer t1 to other ls
   ObTransferTaskID task_id;
+  ObTransferTask transfer_task;
   ObMySQLTransaction trans;
   const ObLSID src_ls_id(1001);
   const ObLSID dst_ls_id(1002);
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
-  ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, src_ls_id, dst_ls_id, g_part_list, ObBalanceTaskID(123), task_id));
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, src_ls_id, dst_ls_id, g_part_list, ObBalanceTaskID(123), transfer_task));
+  task_id = transfer_task.get_task_id();
   ASSERT_EQ(OB_SUCCESS, trans.end(true));
   ObTransferStatus expected_status(ObTransferStatus::COMPLETED);
   ObTransferTask task;
@@ -199,7 +201,10 @@ TEST_F(TestTabletAutoincMgr, test_lob_tablet_autoinc_location_cache)
 
   // remove source ls and clear src ls cache
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(src_ls_id));
-  ASSERT_EQ(OB_SUCCESS, ls_location_service->erase_location_(GCONF.cluster_id, g_tenant_id, src_ls_id));
+  ObLSLocationCacheKey cache_key(GCONF.cluster_id, g_tenant_id, src_ls_id);
+  ObLSLocation tmp_loc;
+  ASSERT_EQ(OB_SUCCESS, ls_location_service->inner_cache_.del(cache_key, 0/*safe_delete_time*/));
+  ASSERT_EQ(OB_LS_LOCATION_NOT_EXIST, ls_location_service->nonblock_get(GCONF.cluster_id, g_tenant_id, src_ls_id, tmp_loc));
 
   // insert lob
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("insert into t1 values (2, repeat('abcde0123456789', 1000));"));

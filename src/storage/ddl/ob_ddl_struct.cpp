@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "storage/ls/ob_ls.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
@@ -19,6 +20,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
+#include "storage/ob_i_table.h"
 
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
@@ -78,8 +80,16 @@ int ObDDLMacroHandle::reset_macro_block_ref()
 }
 
 ObDDLMacroBlock::ObDDLMacroBlock()
-  : block_handle_(), logic_id_(), block_type_(DDL_MB_INVALID_TYPE), ddl_start_scn_(SCN::min_scn()),
-    scn_(SCN::min_scn()), buf_(nullptr), size_(0), table_key_(), end_row_id_(-1)
+  : block_handle_(),
+    logic_id_(),
+    block_type_(DDL_MB_INVALID_TYPE),
+    ddl_start_scn_(SCN::min_scn()),
+    scn_(SCN::min_scn()),
+    buf_(nullptr),
+    size_(0),
+    table_key_(),
+    end_row_id_(-1),
+    trans_id_()
 {
 }
 
@@ -135,9 +145,23 @@ ObDDLKVHandle &ObDDLKVHandle::operator =(const ObDDLKVHandle &other)
     if (OB_NOT_NULL(other.ddl_kv_)) {
       ddl_kv_ = other.ddl_kv_;
       ddl_kv_->inc_ref();
+      t3m_ = other.t3m_;
+      allocator_ = other.allocator_;
     }
   }
   return *this;
+}
+
+bool ObDDLKVHandle::is_valid() const
+{
+  bool bret = false;
+  if (nullptr == ddl_kv_) {
+  } else if (ddl_kv_->is_inc_ddl_kv()) {
+    bret = (nullptr != t3m_) ^ (nullptr != allocator_);
+  } else {
+    bret = (nullptr == t3m_) & (nullptr == allocator_);
+  }
+  return bret;
 }
 
 int ObDDLKVHandle::set_obj(ObDDLKV *ddl_kv)
@@ -154,12 +178,50 @@ int ObDDLKVHandle::set_obj(ObDDLKV *ddl_kv)
   return ret;
 }
 
+int ObDDLKVHandle::set_obj(ObTableHandleV2 &table_handle)
+{
+  int ret = OB_SUCCESS;
+  ObDDLKV *ddl_kv = nullptr;
+  if (OB_UNLIKELY(!table_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_handle));
+  } else if (OB_FAIL(table_handle.get_direct_load_memtable(ddl_kv))) {
+    LOG_WARN("fail to get direct load memtable", K(ret), K(table_handle));
+  } else {
+    reset();
+    ddl_kv_ = ddl_kv;
+    ddl_kv_->inc_ref();
+    t3m_ = table_handle.get_t3m();
+    allocator_ = table_handle.get_allocator();
+  }
+  return ret;
+}
+
 void ObDDLKVHandle::reset()
 {
   if (nullptr != ddl_kv_) {
-    ddl_kv_->dec_ref();
-    ddl_kv_ = nullptr;
+    if (OB_UNLIKELY(!is_valid())) {
+      LOG_ERROR_RET(OB_INVALID_ERROR, "t3m or allocator is nullptr", KP_(ddl_kv), KP_(t3m), KP_(allocator));
+      ob_abort();
+    } else {
+      const int64_t ref_cnt = ddl_kv_->dec_ref();
+      if (0 == ref_cnt) {
+        if (nullptr != t3m_) {
+          t3m_->push_table_into_gc_queue(ddl_kv_, ObITable::DIRECT_LOAD_MEMTABLE);
+        } else if (nullptr != allocator_) {
+          ddl_kv_->~ObDDLKV();
+          allocator_->free(ddl_kv_);
+        } else {
+          MTL(ObTenantMetaMemMgr *)->release_ddl_kv(ddl_kv_);
+        }
+      } else if (OB_UNLIKELY(ref_cnt < 0)) {
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "table ref cnt may be leaked", K(ref_cnt), KP(ddl_kv_));
+      }
+    }
   }
+  ddl_kv_ = nullptr;
+  t3m_ = nullptr;
+  allocator_ = nullptr;
 }
 
 ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const SCN &scn, const SCN &start_scn,
@@ -251,6 +313,54 @@ int ObDDLKVPendingGuard::set_macro_block(
   return ret;
 }
 
+ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
+  : table_key_(),
+    data_buffer_(),
+    block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE),
+    start_scn_(SCN::min_scn()),
+    data_format_version_(0/*for compatibility*/),
+    end_row_id_(-1),
+    type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
+    trans_id_()
+{
+}
+
+void ObDDLMacroBlockRedoInfo::reset()
+{
+  table_key_.reset();
+  data_buffer_.reset();
+  block_type_ = ObDDLMacroBlockType::DDL_MB_INVALID_TYPE;
+  logic_id_.reset();
+  start_scn_ = SCN::min_scn();
+  data_format_version_ = 0;
+  end_row_id_ = -1;
+  type_ = ObDirectLoadType::DIRECT_LOAD_INVALID;
+  trans_id_.reset();
+}
+
+bool ObDDLMacroBlockRedoInfo::is_valid() const
+{
+  return table_key_.is_valid() && data_buffer_.ptr() != nullptr && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE
+         && logic_id_.is_valid() && start_scn_.is_valid_and_not_min() && data_format_version_ >= 0
+         && type_ < ObDirectLoadType::DIRECT_LOAD_MAX
+         && (is_incremental_direct_load(type_) ? trans_id_.is_valid() : !trans_id_.is_valid());
+}
+
+bool ObDDLMacroBlockRedoInfo::is_column_group_info_valid() const
+{
+  return table_key_.is_column_store_sstable() && end_row_id_ >= 0;
+}
+
+OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo,
+                    table_key_,
+                    data_buffer_,
+                    block_type_,
+                    logic_id_,
+                    start_scn_,
+                    data_format_version_,
+                    end_row_id_,
+                    type_,
+                    trans_id_);
 
 ObTabletDirectLoadMgrHandle::ObTabletDirectLoadMgrHandle()
   : tablet_mgr_(nullptr)
@@ -285,12 +395,12 @@ const ObTabletDirectLoadMgr *ObTabletDirectLoadMgrHandle::get_obj() const
   return tablet_mgr_;
 }
 
-ObTabletFullDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_full_obj()
+ObTabletFullDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_full_obj() const
 {
   return static_cast<ObTabletFullDirectLoadMgr *>(tablet_mgr_);
 }
 
-ObTabletIncDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_inc_obj()
+ObTabletIncDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_inc_obj() const
 {
   return static_cast<ObTabletIncDirectLoadMgr *>(tablet_mgr_);
 }
@@ -315,11 +425,10 @@ int ObTabletDirectLoadMgrHandle::assign(const ObTabletDirectLoadMgrHandle &other
 {
   int ret = OB_SUCCESS;
   reset();
-  if (OB_UNLIKELY(!other.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(other));
-  } else if (OB_FAIL(set_obj(other.tablet_mgr_))) {
-    LOG_WARN("set obj failed", K(ret));
+  if (OB_LIKELY(other.is_valid())) {
+    if (OB_FAIL(set_obj(other.tablet_mgr_))) {
+      LOG_WARN("set obj failed", K(ret));
+    }
   }
   return ret;
 }

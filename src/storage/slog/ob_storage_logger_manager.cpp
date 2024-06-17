@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE_REDO
+#include <sys/statvfs.h>
 #include "lib/ob_define.h"
 #include "lib/ob_running_mode.h"
 #include "ob_storage_logger_manager.h"
@@ -47,28 +48,29 @@ ObStorageLoggerManager &ObStorageLoggerManager::get_instance()
 
 int ObStorageLoggerManager::init(
     const char *log_dir,
+    const char *data_dir,
     const int64_t max_log_file_size,
-    const blocksstable::ObLogFileSpec &log_file_spec,
-    const bool need_reserved)
+    const blocksstable::ObLogFileSpec &log_file_spec)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_REDO_LOG(WARN, "The ObStorageLoggerManager has been inited.", K(ret));
-  } else if (OB_UNLIKELY(nullptr == log_dir || max_log_file_size <= 0)) {
+  } else if (OB_UNLIKELY(nullptr == log_dir || nullptr == data_dir || max_log_file_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_REDO_LOG(WARN, "invalid arguments", K(ret), KP(log_dir), K(max_log_file_size));
+    STORAGE_REDO_LOG(WARN, "invalid arguments", K(ret), KP(log_dir), KP(data_dir), K(max_log_file_size));
   } else if (OB_FAIL(prepare_log_buffers(MAX_CONCURRENT_ITEM_CNT, NORMAL_LOG_ITEM_SIZE))) {
     STORAGE_REDO_LOG(WARN, "fail to prepare log buffers", K(ret),
         LITERAL_K(MAX_CONCURRENT_ITEM_CNT), LITERAL_K(NORMAL_LOG_ITEM_SIZE));
   } else if (OB_FAIL(prepare_log_items(MAX_CONCURRENT_ITEM_CNT))) {
     STORAGE_REDO_LOG(WARN, "fail to prepare log items", K(ret), LITERAL_K(MAX_CONCURRENT_ITEM_CNT));
+  } else if (OB_FAIL(check_log_disk(data_dir, log_dir))) {
+    STORAGE_REDO_LOG(WARN, "fail to set need reserved", K(ret));
   } else {
     log_dir_ = log_dir;
     max_log_file_size_ = max_log_file_size;
     log_file_spec_ = log_file_spec;
-    need_reserved_ = need_reserved;
     if (OB_FAIL(server_slogger_.init(*this, OB_SERVER_TENANT_ID))) {
       STORAGE_REDO_LOG(WARN, "fail to init server slogger", K(ret));
     } else if (OB_FAIL(server_slogger_.start())) {
@@ -300,6 +302,32 @@ int ObStorageLoggerManager::get_tenant_slog_dir(
   return ret;
 }
 
+int ObStorageLoggerManager::check_log_disk(
+    const char *data_dir,
+    const char *log_dir)
+{
+  int ret = OB_SUCCESS;
+  struct statvfs data_svfs;
+  struct statvfs log_svfs;
+  need_reserved_ = false;
+  if (OB_ISNULL(data_dir) || OB_ISNULL(log_dir)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), KP(data_dir), KP(log_dir));
+  } else if (OB_UNLIKELY(0 != statvfs(data_dir, &data_svfs))) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("fail to get sstable directory vfs", K(ret), K(data_dir));
+  } else if (OB_UNLIKELY(0 != statvfs(log_dir, &log_svfs))) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("fail to get slog directory vfs", K(ret), K(log_dir));
+  } else if (OB_UNLIKELY(0 >= log_svfs.f_bavail)) {
+    ret = OB_DISK_ERROR;
+    LOG_ERROR("slog disk is full, please check", K(ret), K(log_dir), K(log_svfs.f_bavail));
+  } else {
+    // if slog and data are on the same disk, need reserved space when resize file
+    need_reserved_ = (data_svfs.f_fsid == log_svfs.f_fsid);
+  }
+  return ret;
+}
 
 int ObStorageLoggerManager::get_using_disk_space(int64_t &using_space) const
 {

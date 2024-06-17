@@ -27,7 +27,7 @@ int64_t ObIDeadLockDetector::total_destructed_count = 0;
 
 OB_SERIALIZE_MEMBER(ObDetectorUserReportInfo, module_name_, resource_visitor_,
                     required_resource_, extra_columns_names_, extra_columns_values_,
-                    valid_extra_column_size_);
+                    valid_extra_column_size_, blocked_seq_);
 OB_SERIALIZE_MEMBER(ObDetectorInnerReportInfo, binary_key_, tenant_id_, addr_,
                     detector_id_, report_time_,
                     created_time_, event_id_, role_, start_delay_, priority_, user_report_info_);

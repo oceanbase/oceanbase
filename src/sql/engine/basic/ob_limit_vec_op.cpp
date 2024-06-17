@@ -128,158 +128,159 @@ int ObLimitVecOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else {
       input_cnt_ += (child_brs->size_ - child_brs->skip_->accumulate_bit_cnt(child_brs->size_));
     }
-    if (child_brs->end_) {
+    if (OB_SUCC(ret) && child_brs->end_) {
       brs_.end_ = true;
       break;
     }
   } // end while
 
-  LOG_DEBUG("ObLimitVecOp get_next_batch", K(brs_), K(input_cnt_), K(batch_cnt), K(output_cnt_));
-  auto skip_fetch_rows = false;
-  if (input_cnt_ > offset_ && output_cnt_ == 0) {
-    // offset error handling: child operator return more rows than expected
-    // mark offset rows as skipped and continue limit logic
-    brs_.copy(child_brs);
-    input_cnt_ -= (brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_));
-    for (auto i = 0; i < child_brs->size_; i++) {
-      if (brs_.skip_->at(i)) {
-        continue;
-      } else {
-        ++input_cnt_;
-        if (input_cnt_ <= offset_) {
-          brs_.skip_->set(i);
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else {
+    bool skip_fetch_rows = false;
+    if (input_cnt_ > offset_ && output_cnt_ == 0) {
+      // offset error handling: child operator return more rows than expected
+      // mark offset rows as skipped and continue limit logic
+      brs_.copy(child_brs);
+      input_cnt_ -= (brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_));
+      for (int64_t i = 0; i < child_brs->size_; i++) {
+        if (brs_.skip_->at(i)) {
+          continue;
         } else {
-          break;
-        }
-      }
-    }
-    // stop getting rows from child and setting brs_ when skip_fetch_rows is true
-    skip_fetch_rows = true;
-  }
-
-  // now the limit part
-  int64_t left_count = 0;
-  batch_cnt = min(max_row_cnt, MY_SPEC.max_batch_size_);
-  if (OB_UNLIKELY(brs_.end_) && !skip_fetch_rows) {
-    brs_.size_ = 0;
-    LOG_DEBUG("Offset num is bigger than child output num, return empty rows",
-              K(offset_), K(input_cnt_), K(child_brs->size_),
-              K(child_brs->end_));
-  } else if (OB_SUCC(ret)) {
-    if (is_percent_first_ || output_cnt_ < limit_ || limit_ < 0) {
-      // adjust iterating count for last batch
-      if (output_cnt_ + batch_cnt > limit_ && limit_ >= 0) {
-        batch_cnt = limit_ - output_cnt_;
-      }
-      if (is_percent_first_) {
-        // Fetch one row for percent first fetch, make sure %output_cnt_ never exceed %limit_
-        // in this round.
-        batch_cnt = 1;
-      }
-
-      if (!skip_fetch_rows && OB_FAIL(child_->get_next_batch(batch_cnt, child_brs))) {
-        LOG_WARN("child_op failed to get next row", K(ret), K(limit_), K(batch_cnt));
-      } else if (is_percent_first_ && OB_FAIL(convert_limit_percent())) {
-        LOG_WARN("failed to convert limit percent", K(ret));
-      } else if (limit_ == 0) {
-        brs_.size_ = 0;
-        brs_.end_ = true;
-      } else {
-        if (!skip_fetch_rows) {
-          // skip copy brs_ from child as it is already copied in offset error
-          // handing branch
-          brs_.copy(child_brs);
-        }
-        output_cnt_ += (brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_));
-        if (output_cnt_ == limit_) {
-          // Don't mark brs_.end_, end iterating in next round
-          if (MY_SPEC.is_fetch_with_ties_) {
-            ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
-            batch_info_guard.set_batch_size(brs_.size_);
-            batch_info_guard.set_batch_idx(find_last_available_row_cnt(*(brs_.skip_), brs_.size_));
-            if (OB_FAIL(pre_sort_columns_.save_store_row(MY_SPEC.sort_columns_, brs_, eval_ctx_))) {
-              LOG_WARN("failed to deep copy limit last rows", K(ret));
-            }
+          ++input_cnt_;
+          if (input_cnt_ <= offset_) {
+            brs_.skip_->set(i);
+          } else {
+            break;
           }
-        } else if (OB_UNLIKELY(
-                       limit_ != -1 /*limit=-1 means no limit in oracle mode*/ &&
-                       output_cnt_ > limit_)) {
-          // Notice: here is the error hanlding branch
-          // Child branch should NOT return rows more than batch_cnt.
-          // If it return more row, something out of expect take place.
-          // In order to keep limit logic NOT broken, update the batch size
-          // within limit operator to get correct result.
-          LOG_TRACE("child operator return more rows than expected",
-                   K(output_cnt_), K(limit_), K(brs_), K(batch_cnt),
-                   K(child_->get_spec().get_type()));
+        }
+      }
+      // stop getting rows from child and setting brs_ when skip_fetch_rows is true
+      skip_fetch_rows = true;
+    }
 
-          // recaculate output_cnt_ and update output brs_.size_
-          output_cnt_ -= (brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_));
-          for (auto i = 0; i < child_brs->size_; i++) {
-            if (brs_.skip_->at(i)) {
-              continue;
-            } else {
-              ++output_cnt_;
-              if (output_cnt_ >= limit_) {
-                brs_.size_ = i + 1;
-                break;
+    // now the limit part
+    int64_t left_count = 0;
+    batch_cnt = min(max_row_cnt, MY_SPEC.max_batch_size_);
+    if (OB_UNLIKELY(brs_.end_) && !skip_fetch_rows) {
+      brs_.size_ = 0;
+      LOG_DEBUG("Offset num is bigger than child output num, return empty rows", K(offset_),
+                K(input_cnt_), K(child_brs->size_), K(child_brs->end_));
+    } else if (OB_SUCC(ret)) {
+      if (is_percent_first_ || output_cnt_ < limit_ || limit_ < 0) {
+        // adjust iterating count for last batch
+        if (output_cnt_ + batch_cnt > limit_ && limit_ >= 0) {
+          batch_cnt = limit_ - output_cnt_;
+        }
+        if (is_percent_first_) {
+          // Fetch one row for percent first fetch, make sure %output_cnt_ never exceed %limit_
+          // in this round.
+          batch_cnt = 1;
+        }
+
+        if (!skip_fetch_rows && OB_FAIL(child_->get_next_batch(batch_cnt, child_brs))) {
+          LOG_WARN("child_op failed to get next row", K(ret), K(limit_), K(batch_cnt));
+        } else if (is_percent_first_ && OB_FAIL(convert_limit_percent())) {
+          LOG_WARN("failed to convert limit percent", K(ret));
+        } else if (limit_ == 0) {
+          brs_.size_ = 0;
+          brs_.end_ = true;
+        } else {
+          if (!skip_fetch_rows) {
+            // skip copy brs_ from child as it is already copied in offset error
+            // handing branch
+            brs_.copy(child_brs);
+          }
+          output_cnt_ += (brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_));
+          if (output_cnt_ == limit_) {
+            // Don't mark brs_.end_, end iterating in next round
+            if (MY_SPEC.is_fetch_with_ties_) {
+              ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
+              batch_info_guard.set_batch_size(brs_.size_);
+              batch_info_guard.set_batch_idx(
+                find_last_available_row_cnt(*(brs_.skip_), brs_.size_));
+              if (OB_FAIL(
+                    pre_sort_columns_.save_store_row(MY_SPEC.sort_columns_, brs_, eval_ctx_))) {
+                LOG_WARN("failed to deep copy limit last rows", K(ret));
+              }
+            }
+          } else if (OB_UNLIKELY(limit_ != -1 /*limit=-1 means no limit in oracle mode*/
+                                 && output_cnt_ > limit_)) {
+            // Notice: here is the error hanlding branch
+            // Child branch should NOT return rows more than batch_cnt.
+            // If it return more row, something out of expect take place.
+            // In order to keep limit logic NOT broken, update the batch size
+            // within limit operator to get correct result.
+            LOG_TRACE("child operator return more rows than expected", K(output_cnt_), K(limit_),
+                      K(brs_), K(batch_cnt), K(child_->get_spec().get_type()));
+
+            // recaculate output_cnt_ and update output brs_.size_
+            output_cnt_ -= (brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_));
+            for (int64_t i = 0; i < child_brs->size_; i++) {
+              if (brs_.skip_->at(i)) {
+                continue;
+              } else {
+                ++output_cnt_;
+                if (output_cnt_ >= limit_) {
+                  brs_.size_ = i + 1;
+                  break;
+                }
               }
             }
           }
         }
-      }
-      skip_fetch_rows = false;
-    } else if (limit_ > 0 && output_cnt_ >= limit_ &&
-               MY_SPEC.is_fetch_with_ties_) {
-      // keep fetching until a different value is found
-      batch_cnt = min(max_row_cnt, MY_SPEC.max_batch_size_);
-      bool keep_iterating = false;
-      uint32_t matched_row_count = 0;
-      if (OB_FAIL(child_->get_next_batch(batch_cnt, child_brs))) {
-          LOG_WARN("child_op failed to get next row",
-                   K(ret), K(limit_), K(batch_cnt), K(child_brs->size_));
-      } else if (OB_FAIL(compare_value_in_batch(keep_iterating, child_brs, matched_row_count))) {
-          LOG_WARN("failed to is row order by item value equal", K(ret));
-      }
-      brs_.copy(child_brs);
-      if (!keep_iterating) {
-        brs_.end_ = true;
-        brs_.size_ = matched_row_count;
-      }
-      output_cnt_ += brs_.size_;
-    } else {
-      brs_.end_ = true;
-      if (MY_SPEC.calc_found_rows_) {
+        skip_fetch_rows = false;
+      } else if (limit_ > 0 && output_cnt_ >= limit_ && MY_SPEC.is_fetch_with_ties_) {
+        // keep fetching until a different value is found
         batch_cnt = min(max_row_cnt, MY_SPEC.max_batch_size_);
-        while (OB_SUCC(child_->get_next_batch(batch_cnt, child_brs))) {
-          left_count += (child_brs->size_ -
-                         child_brs->skip_->accumulate_bit_cnt(child_brs->size_));
-          if (child_brs->end_) {
-            break;
+        bool keep_iterating = false;
+        uint32_t matched_row_count = 0;
+        if (OB_FAIL(child_->get_next_batch(batch_cnt, child_brs))) {
+          LOG_WARN("child_op failed to get next row", K(ret), K(limit_), K(batch_cnt),
+                   K(child_brs->size_));
+        } else if (OB_FAIL(compare_value_in_batch(keep_iterating, child_brs, matched_row_count))) {
+          LOG_WARN("failed to is row order by item value equal", K(ret));
+        }
+        brs_.copy(child_brs);
+        if (!keep_iterating) {
+          brs_.end_ = true;
+          brs_.size_ = matched_row_count;
+        }
+        output_cnt_ += brs_.size_;
+      } else {
+        brs_.end_ = true;
+        if (MY_SPEC.calc_found_rows_) {
+          batch_cnt = min(max_row_cnt, MY_SPEC.max_batch_size_);
+          while (OB_SUCC(child_->get_next_batch(batch_cnt, child_brs))) {
+            left_count +=
+              (child_brs->size_ - child_brs->skip_->accumulate_bit_cnt(child_brs->size_));
+            if (child_brs->end_) {
+              break;
+            }
+          }
+          if (OB_SUCCESS != ret) {
+            LOG_WARN("fail to get next row from child", K(ret));
           }
         }
-        if (OB_SUCCESS != ret) {
-          LOG_WARN("fail to get next row from child", K(ret));
+      }
+    }
+    if (brs_.end_) {
+      if (MY_SPEC.is_top_limit_) {
+        total_cnt_ = left_count + output_cnt_ + input_cnt_;
+        ObPhysicalPlanCtx *plan_ctx = NULL;
+        if (OB_ISNULL(plan_ctx = ctx_.get_physical_plan_ctx())) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("get physical plan context failed");
+        } else {
+          NG_TRACE_EXT(found_rows, OB_ID(total_count), total_cnt_, OB_ID(input_count), input_cnt_);
+          plan_ctx->set_found_rows(total_cnt_);
         }
       }
     }
+    LOG_DEBUG("limit_vec_op get_next_batch finished", K(batch_cnt), K(output_cnt_), K(brs_),
+              K(limit_), K(input_cnt_));
   }
-  if (brs_.end_) {
-    if (MY_SPEC.is_top_limit_) {
-      total_cnt_ = left_count + output_cnt_ + input_cnt_;
-      ObPhysicalPlanCtx *plan_ctx = NULL;
-      if (OB_ISNULL(plan_ctx = ctx_.get_physical_plan_ctx())) {
-        ret = OB_ERR_NULL_VALUE;
-        LOG_WARN("get physical plan context failed");
-      } else {
-        NG_TRACE_EXT(found_rows,
-                     OB_ID(total_count), total_cnt_, OB_ID(input_count), input_cnt_);
-        plan_ctx->set_found_rows(total_cnt_);
-      }
-    }
-  }
-  LOG_DEBUG("limit_vec_op get_next_batch finished", K(batch_cnt), K(output_cnt_),
-              K(brs_), K(limit_), K(input_cnt_));
+
   return ret;
 }
 

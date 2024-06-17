@@ -89,6 +89,7 @@
 #include "sql/resolver/dcl/ob_create_role_resolver.h"
 #include "sql/resolver/dcl/ob_drop_role_resolver.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_resolver.h"
+#include "sql/resolver/dcl/ob_alter_user_proxy_resolver.h"
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_resolver.h"
 #include "sql/resolver/tcl/ob_start_trans_resolver.h"
 #include "sql/resolver/tcl/ob_end_trans_resolver.h"
@@ -126,6 +127,7 @@
 #include "sql/resolver/cmd/ob_drop_restore_point_resolver.h"
 #include "sql/resolver/cmd/ob_get_diagnostics_resolver.h"
 #include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
+#include "sql/resolver/cmd/ob_mock_resolver.h"
 #include "sql/resolver/dcl/ob_alter_role_resolver.h"
 #include "sql/resolver/dml/ob_multi_table_insert_resolver.h"
 #include "sql/resolver/ddl/ob_create_directory_resolver.h"
@@ -419,6 +421,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushDagWarnings);
         break;
       }
+      case T_FLUSH_PRIVILEGES: {
+        REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
       case T_SWITCH_REPLICA_ROLE: {
         REGISTER_STMT_RESOLVER(SwitchReplicaRole);
         break;
@@ -704,6 +710,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_TENANT:
       case T_SHOW_CREATE_TENANT:
       case T_SHOW_RECYCLEBIN:
+      case T_SHOW_PROFILE:
       case T_SHOW_PROCEDURE_STATUS:
       case T_SHOW_FUNCTION_STATUS:
       case T_SHOW_TRIGGERS:
@@ -712,6 +719,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_QUERY_RESPONSE_TIME:
       case T_SHOW_STATUS:
       case T_SHOW_CREATE_TRIGGER:
+      case T_SHOW_ENGINE:
+      case T_SHOW_OPEN_TABLES:
       case T_SHOW_SEQUENCES: {
         REGISTER_STMT_RESOLVER(Show);
         break;
@@ -742,11 +751,16 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(AlterUserProfile);
         break;
       }
+      case T_ALTER_USER_PROXY: {
+        REGISTER_STMT_RESOLVER(AlterUserProxy);
+        break;
+      }
       case T_ALTER_USER_PRIMARY_ZONE: {
         REGISTER_STMT_RESOLVER(AlterUserPrimaryZone);
         break;
       }
 
+      case T_GRANT_ROLE:
       case T_SYSTEM_GRANT:
       case T_GRANT: {
         REGISTER_STMT_RESOLVER(Grant);
@@ -1185,6 +1199,26 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(CancelClone);
         break;
       }
+      case T_TRANSFER_PARTITION: {
+        REGISTER_STMT_RESOLVER(TransferPartition);
+        break;
+      }
+      case T_CANCEL_TRANSFER_PARTITION: {
+        REGISTER_STMT_RESOLVER(TransferPartition);
+        break;
+      }
+      case T_CANCEL_BALANCE_JOB: {
+        REGISTER_STMT_RESOLVER(TransferPartition);
+        break;
+      }
+      case T_REPAIR_TABLE: {
+        REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
+      case T_CHECKSUM_TABLE: {
+        REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);
@@ -1198,8 +1232,9 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_external_table()) );
     }
 
-    if (OB_SUCC(ret) && stmt->is_dml_stmt()
-        && !params_.session_info_->is_inner()) {
+    if (OB_SUCC(ret) && !params_.session_info_->is_inner()
+        && stmt->is_dml_stmt() && !stmt->is_explain_stmt() && 0 == stmt->get_stmt_id()) {
+      // allowed explain for dml write mv, allowed refresh mv sql write mv
       OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_materialized_view()) );
     }
 
@@ -1250,17 +1285,21 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
 
       if (OB_SUCC(ret)) {
-        bool has_rich_format_hint = false;
-        bool enable_rich_format = false;
-        ObOptParamHint &opt_hint = params_.query_ctx_->query_hint_.global_hint_.opt_params_;
-        if (OB_FAIL(opt_hint.check_and_get_bool_opt_param(ObOptParamHint::ENABLE_RICH_VECTOR_FORMAT,
-                                                          has_rich_format_hint,
-                                                          enable_rich_format))) {
-          LOG_WARN("check and get bool opt param failed", K(ret));
-        } else if (has_rich_format_hint) {
-          params_.session_info_->set_force_rich_format(
-            enable_rich_format ? ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON :
-                                 ObBasicSessionInfo::ForceRichFormatStatus::FORCE_OFF);
+        if (params_.session_info_->is_force_off_rich_format()) {
+          // do nothing
+        } else {
+          bool has_rich_format_hint = false;
+          bool enable_rich_format = false;
+          ObOptParamHint &opt_hint = params_.query_ctx_->query_hint_.global_hint_.opt_params_;
+          if (OB_FAIL(opt_hint.check_and_get_bool_opt_param(ObOptParamHint::ENABLE_RICH_VECTOR_FORMAT,
+                                                            has_rich_format_hint,
+                                                            enable_rich_format))) {
+            LOG_WARN("check and get bool opt param failed", K(ret));
+          } else if (has_rich_format_hint) {
+            params_.session_info_->set_force_rich_format(
+              enable_rich_format ? ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON :
+                                   ObBasicSessionInfo::ForceRichFormatStatus::FORCE_OFF);
+          }
         }
       }
     }

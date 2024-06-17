@@ -17,6 +17,7 @@
 
 #include "common/ob_tablet_id.h"
 #include "storage/tablelock/ob_table_lock_common.h"
+#include "storage/tablelock/ob_table_lock_live_detect_func.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_define_v4.h"
 
@@ -67,12 +68,13 @@ public:
   ObLockParam() :
       lock_id_(),
       lock_mode_(NO_LOCK),
-      owner_id_(0),
+      owner_id_(ObTableLockOwnerID::default_owner()),
       op_type_(UNKNOWN_TYPE),
       is_deadlock_avoid_enabled_(false),
       is_try_lock_(true),
       expired_time_(0),
-      schema_version_(-1)
+      schema_version_(-1),
+      is_for_replace_(false)
   {}
   virtual ~ObLockParam() { reset(); }
   void reset();
@@ -88,7 +90,7 @@ public:
   bool is_valid() const;
   TO_STRING_KV(K_(lock_id), K_(lock_mode), K_(owner_id), K_(op_type),
                K_(is_deadlock_avoid_enabled),
-               K_(is_try_lock), K_(expired_time), K_(schema_version));
+               K_(is_try_lock), K_(expired_time), K_(schema_version), K_(is_for_replace));
 
   ObLockID lock_id_;
   ObTableLockMode lock_mode_;
@@ -103,6 +105,7 @@ public:
   int64_t expired_time_;
   // current schema version
   int64_t schema_version_;
+  bool is_for_replace_;
 };
 
 struct ObLockRequest
@@ -127,7 +130,7 @@ public:
   };
 public:
   ObLockRequest() :
-      owner_id_(0),
+      owner_id_(ObTableLockOwnerID::default_owner()),
       lock_mode_(NO_LOCK),
       op_type_(UNKNOWN_TYPE),
       timeout_us_(0),
@@ -149,7 +152,8 @@ public:
   {
     return !is_unlock_request();
   }
-  VIRTUAL_TO_STRING_KV(K_(owner_id), K_(lock_mode), K_(op_type), K_(timeout_us));
+  VIRTUAL_TO_STRING_KV(K_(owner_id), K_(lock_mode), K_(op_type), K_(timeout_us),
+    K_(is_from_sql));
 public:
   ObLockMsgType type_;
   ObTableLockOwnerID owner_id_;
@@ -192,15 +196,19 @@ struct ObLockObjsRequest : public ObLockRequest
 public:
   ObLockObjsRequest() :
       ObLockRequest(),
-      objs_()
+      objs_(),
+      detect_func_no_(INVALID_DETECT_TYPE),
+      detect_param_()
   { type_ = ObLockMsgType::LOCK_OBJ_REQ; }
   virtual ~ObLockObjsRequest() { reset(); }
   virtual void reset();
   virtual bool is_valid() const;
-  INHERIT_TO_STRING_KV("ObLockRequest", ObLockRequest, K_(objs));
+  INHERIT_TO_STRING_KV("ObLockRequest", ObLockRequest, K_(objs), K_(detect_func_no), K_(detect_param));
 public:
   // which objects should we lock
   common::ObSEArray<ObLockID, 2> objs_;
+  ObTableLockDetectType detect_func_no_;
+  ObString detect_param_;
 };
 
 struct ObUnLockObjsRequest : public ObLockObjsRequest
@@ -210,7 +218,6 @@ public:
   virtual ~ObUnLockObjsRequest() { reset(); }
   virtual bool is_valid() const;
 };
-
 
 struct ObLockTableRequest : public ObLockRequest
 {

@@ -101,6 +101,10 @@ int ObAllVirtualTxData::fill_in_row_(const VirtualTxDataRow &row_data, common::O
         cur_row_.cells_[i].set_varchar(row_data.undo_status_list_str_);
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
+      case TX_OP_COL:
+        cur_row_.cells_[i].set_varchar(row_data.tx_op_str_);
+        cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         break;

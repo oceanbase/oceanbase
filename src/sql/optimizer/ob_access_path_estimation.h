@@ -43,7 +43,11 @@ public:
                                const bool is_inner_path,
                                const ObIArray<ObRawExpr*> &filter_exprs,
                                ObBaseTableEstMethod &method);
-
+  static int inner_estimate_rowcount(ObOptimizerContext &ctx,
+                                      common::ObIArray<AccessPath *> &paths,
+                                      const bool is_inner_path,
+                                      const ObIArray<ObRawExpr*> &filter_exprs,
+                                      bool &is_use_ds);
   static int estimate_full_table_rowcount(ObOptimizerContext &ctx,
                                           const ObTablePartitionInfo &table_part_info,
                                           ObTableMetaInfo &meta);
@@ -55,6 +59,12 @@ public:
                                           uint64_t ref_table_id,
                                           bool &can_use);
 private:
+  static int inner_estimate_rowcount(ObOptimizerContext &ctx,
+                                     common::ObIArray<AccessPath *> &paths,
+                                     const bool is_inner_path,
+                                     const ObIArray<ObRawExpr*> &filter_exprs,
+                                     ObBaseTableEstMethod &method);
+
   static inline uint64_t choose_one_est_method(ObBaseTableEstMethod valid_methods, const ObBaseTableEstMethod est_priority[], uint64_t cnt)
   {
     ObBaseTableEstMethod ret = EST_INVALID;
@@ -70,7 +80,8 @@ private:
                                    common::ObIArray<AccessPath*> &paths,
                                    const ObIArray<ObRawExpr*> &filter_exprs,
                                    bool is_inner_path,
-                                   ObBaseTableEstMethod &valid_methods);
+                                   ObBaseTableEstMethod &valid_methods,
+                                   ObBaseTableEstMethod &hint_specify_methods);
 
   static int check_can_use_dynamic_sampling(ObOptimizerContext &ctx,
                                             const ObLogPlan &log_plan,
@@ -89,6 +100,7 @@ private:
                                   common::ObIArray<AccessPath*> &paths,
                                   const bool is_inner_path,
                                   const ObIArray<ObRawExpr*> &filter_exprs,
+                                  ObBaseTableEstMethod &valid_methods,
                                   ObBaseTableEstMethod &method);
 
   static int process_common_estimate_rowcount(ObOptimizerContext &ctx,
@@ -237,6 +249,9 @@ private:
                                                         ObIArray<AccessPath *> &paths,
                                                         const bool is_inner_path,
                                                         ObIArray<ObDSResultItem> &ds_result_items);
+  static int classify_paths(common::ObIArray<AccessPath *> &paths,
+                             common::ObIArray<AccessPath *> &normal_paths,
+                             common::ObIArray<AccessPath *> &geo_paths);
 };
 
 }

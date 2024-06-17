@@ -1830,12 +1830,14 @@ void ObMicroBlockEncoder::free_encoders()
   FOREACH(ht, hashtables_) {
     // should continue even fail
     if (OB_FAIL(hashtable_factory_.recycle(*ht))) {
+      // overwrite ret
       LOG_WARN("recycle hashtable failed", K(ret));
     }
   }
   FOREACH(pt, multi_prefix_trees_) {
     // should continue even fail
     if (OB_FAIL(multi_prefix_tree_factory_.recycle(*pt))) {
+      // overwrite ret
       LOG_WARN("recycle multi-prefix tree failed", K(ret));
     }
   }

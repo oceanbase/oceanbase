@@ -23,6 +23,7 @@ namespace oceanbase
 {
 namespace compaction
 {
+struct ObTabletSchedulePair;
 
 class ObMediumCompactionScheduleFunc
 {
@@ -47,7 +48,7 @@ public:
   static int schedule_tablet_medium_merge(
       ObLS &ls,
       ObTablet &tablet,
-      bool &tablet_need_freeze_flag,
+      ObTabletSchedulePair &schedule_pair,
       bool &create_dag_flag,
       const int64_t major_frozen_scn = 0,
       const bool scheduler_called = false);
@@ -82,7 +83,7 @@ public:
     ObIAllocator &allocator,
     storage::ObStorageSchema &storage_schema);
   static int batch_check_medium_finish(
-    hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
+    const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
     const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
     ObCompactionTimeGuard &time_guard);
@@ -101,25 +102,32 @@ protected:
     const ObGetMergeTablesResult &result,
     const int64_t schema_version,
     ObMediumCompactionInfo &medium_info);
-  int init_parallel_range_and_schema_changed(
+  int init_parallel_range_and_schema_changed_and_co_merge_type(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
   int init_schema_changed(
     ObMediumCompactionInfo &medium_info);
+  int init_co_major_merge_type(
+      const ObGetMergeTablesResult &result,
+      ObMediumCompactionInfo &medium_info);
+  static int get_result_for_major(
+      ObTablet &tablet,
+      const ObMediumCompactionInfo &medium_info,
+      ObGetMergeTablesResult &result);
   int prepare_iter(
       const ObGetMergeTablesResult &result,
       ObTableStoreIterator &table_iter);
   int submit_medium_clog(ObMediumCompactionInfo &medium_info);
   static int batch_check_medium_meta_table(
       const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
-      hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
+      const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
       ObIArray<ObTabletCheckInfo> &finish_tablet_ls,
       ObCompactionTimeGuard &time_guard);
   static int check_medium_meta_table(
       const int64_t medium_snapshot,
       const ObTabletInfo &tablet_info,
       const share::ObTabletReplicaFilterHolder &filters,
-      hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
+      const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
       bool &merge_finish);
   static int init_tablet_filters(share::ObTabletReplicaFilterHolder &filters);
   static int check_medium_checksum(
@@ -128,7 +136,6 @@ protected:
       int64_t &item_idx,
       int &check_ret);
   static int batch_check_medium_checksum(
-      const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
       const ObIArray<ObTabletReplicaChecksumItem> &checksum_items);
   int choose_medium_snapshot(
       const int64_t max_sync_medium_scn,
@@ -188,10 +195,12 @@ protected:
       || ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == merge_reason
       || ObAdaptiveMergePolicy::CRAZY_MEDIUM_FOR_TEST == merge_reason;
   }
+#ifdef ERRSIM
   int errsim_choose_medium_snapshot(
     const int64_t max_sync_medium_scn,
-    ObMediumCompactionInfo &medium_info);
-
+    ObMediumCompactionInfo &medium_info,
+    ObGetMergeTablesResult &result);
+#endif
 private:
   ObArenaAllocator allocator_;
   ObLS &ls_;

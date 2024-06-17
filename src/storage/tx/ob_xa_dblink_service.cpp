@@ -135,10 +135,10 @@ int ObXAService::xa_start_for_tm_promotion(const int64_t flags,
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start for dblink promotion failed", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_failure_dblink_promotion();
+    // xa_statistics_.inc_failure_dblink_promotion();
   } else {
     TRANS_LOG(INFO, "xa start for dblink promtion", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_success_dblink_promotion();
+    // xa_statistics_.inc_success_dblink_promotion();
   }
 
   return ret;
@@ -244,7 +244,8 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
                                  const uint32_t session_id,
                                  const ObTxParam &tx_param,
                                  ObTxDesc *&tx_desc,
-                                 ObXATransID &xid)
+                                 ObXATransID &xid,
+                                 const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
 
@@ -258,7 +259,7 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
     TRANS_LOG(WARN, "invalid flags for xa start", K(ret), K(xid), K(flags));
   } else {
     if (ObXAFlag::is_tmnoflags(flags, ObXAReqType::XA_START)) {
-      if (OB_FAIL(xa_start_for_tm_(flags, timeout_seconds, session_id, tx_param, tx_desc, xid))) {
+      if (OB_FAIL(xa_start_for_tm_(flags, timeout_seconds, session_id, tx_param, tx_desc, xid, data_version))) {
         TRANS_LOG(WARN, "xa start promotion failed", K(ret), K(flags), K(xid));
       }
     } else {
@@ -269,10 +270,10 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start for dblink failed", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_failure_dblink();
+    // xa_statistics_.inc_failure_dblink();
   } else {
     TRANS_LOG(INFO, "xa start for dblink", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_success_dblink();
+    // xa_statistics_.inc_success_dblink();
   }
 
   return ret;
@@ -283,7 +284,8 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
                                   const uint32_t session_id,
                                   const ObTxParam &tx_param,
                                   ObTxDesc *&tx_desc,
-                                  ObXATransID &xid)
+                                  ObXATransID &xid,
+                                  const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -306,7 +308,7 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
     }
     // the first xa start for xa trans with this xid
     // therefore tx_desc should be allocated
-    if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id))) {
+    if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id, data_version))) {
       TRANS_LOG(WARN, "fail acquire trans", K(ret), K(tx_param));
     } else if (OB_FAIL(MTL(ObTransService *)->start_tx(*tx_desc, tx_param))) {
       TRANS_LOG(WARN, "fail start trans", K(ret), KPC(tx_desc));
@@ -453,7 +455,7 @@ int ObXAService::xa_start_for_dblink_client(const DblinkDriverProto dblink_type,
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected xa context", K(ret), K(xid), K(tx_id));
-    } else if (OB_FAIL(xa_ctx->get_dblink_client(dblink_type, dblink_conn, client))) {
+    } else if (OB_FAIL(xa_ctx->get_dblink_client(dblink_type, dblink_conn, &dblink_statistics_, client))) {
       TRANS_LOG(WARN, "fail to preapre xa start for dblink client", K(ret), K(xid), K(tx_id));
     } else if (NULL == client) {
       ret = OB_ERR_UNEXPECTED;

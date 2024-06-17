@@ -95,12 +95,15 @@ int ObDbmsStatsGather::classfy_column_histogram(const ObOptStatGatherParam &para
         LOG_WARN("get unexpected error", K(ret), KPC(dst_col_stat), K(col_param));
       } else if (col_param.need_basic_stat() &&
                  col_param.bucket_num_ > 1 &&
-                 dst_col_stat->get_num_distinct() > 0) {
+                 dst_col_stat->get_num_distinct() > 0 &&
+                 dst_col_stat->get_num_not_null() > 0) {
         int64_t max_disuse_cnt = std::ceil(dst_col_stat->get_num_not_null() * 1.0 / col_param.bucket_num_);
         //After testing, the error of using hyperloglog to estimate ndv is within %5.
         const double MAX_LLC_NDV_ERR_RATE = !param.need_approx_ndv_ ? 0.0 : 0.05;
         const int64_t fault_tolerance_cnt = std::ceil(dst_col_stat->get_num_distinct() * MAX_LLC_NDV_ERR_RATE);
-        if (dst_col_stat->get_num_distinct() >= col_param.bucket_num_ + max_disuse_cnt + fault_tolerance_cnt) {
+        double sample_val = dst_col_stat->get_histogram().get_sample_size() * 100.0 / dst_col_stat->get_num_not_null();
+        if (dst_col_stat->get_num_distinct() >= col_param.bucket_num_ + max_disuse_cnt + fault_tolerance_cnt ||
+            sample_val < 100.0 * (1.0 - 1.0 / col_param.bucket_num_)) {
           //directly gather hybrid histogram
           dst_col_stat->get_histogram().set_type(ObHistType::HYBIRD);
         } else {
@@ -179,6 +182,8 @@ int ObDbmsStatsGather::init_opt_stat(ObIAllocator &allocator,
     } else {
       tab_stat->set_macro_block_num(block_num_stat->tab_macro_cnt_);
       tab_stat->set_micro_block_num(block_num_stat->tab_micro_cnt_);
+      tab_stat->set_sstable_row_count(block_num_stat->sstable_row_cnt_);
+      tab_stat->set_memtable_row_count(block_num_stat->memtable_row_cnt_);
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {

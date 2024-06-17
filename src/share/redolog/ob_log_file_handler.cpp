@@ -253,7 +253,8 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
       io_info.offset_ = offset + read_sz;
       io_info.size_ = size - read_sz;
       io_info.flag_.set_mode(ObIOMode::READ);
-      io_info.flag_.set_group_id(ObIOModule::SLOG_IO);
+      io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
+      io_info.flag_.set_sys_module_id(ObIOModule::SLOG_IO);
       io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
       io_info.buf_ = nullptr;
       io_info.user_data_buf_ = reinterpret_cast<char*>(buf) + read_sz;
@@ -306,7 +307,7 @@ int ObLogFileHandler::unlink(const char* file_path)
   while (OB_SUCC(ret)) {
     if (OB_FAIL(THE_IO_DEVICE->unlink(file_path)) && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
       LOG_WARN("unlink failed", K(ret), K(file_path));
-      ob_usleep(static_cast<uint32_t>(UNLINK_RETRY_INTERVAL_US));
+      ob_usleep<ObWaitEventIds::SLOG_NORMAL_RETRY_SLEEP>(UNLINK_RETRY_INTERVAL_US);
       ret = OB_SUCCESS;
     } else if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
       ret = OB_SUCCESS;
@@ -339,7 +340,8 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
       io_info.fd_ = io_fd_;
       io_info.offset_ = offset;
       io_info.size_ = size;
-      io_info.flag_.set_group_id(ObIOModule::SLOG_IO);
+      io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
+      io_info.flag_.set_sys_module_id(ObIOModule::SLOG_IO);
       io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       io_info.buf_ = reinterpret_cast<const char *>(buf);
       io_info.callback_ = nullptr;
@@ -356,7 +358,7 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
         if (REACH_TIME_INTERVAL(LOG_INTERVAL_US)) {
           LOG_WARN("fail to aio_write", K(ret), K(io_info), K(retry_cnt));
         } else {
-          ob_usleep(static_cast<uint32_t>(SLEEP_TIME_US));
+          ob_usleep<ObWaitEventIds::SLOG_NORMAL_RETRY_SLEEP>(SLEEP_TIME_US);
         }
       }
     } while (OB_FAIL(ret));
@@ -379,7 +381,7 @@ int ObLogFileHandler::open(const char *file_path, const int flags, const mode_t 
         LOG_WARN("failed to open file", K(ret), K(file_path), K(errno), KERRMSG);
         if (OB_TIMEOUT == ret || OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
-          ob_usleep(static_cast<uint32_t>(ObLogDefinition::RETRY_SLEEP_TIME_IN_US));
+          ob_usleep<ObWaitEventIds::SLOG_NORMAL_RETRY_SLEEP>(ObLogDefinition::RETRY_SLEEP_TIME_IN_US);
         }
       } else {
         break;

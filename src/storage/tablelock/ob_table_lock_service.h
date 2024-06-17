@@ -127,18 +127,18 @@ private:
       };
     };
 
-    ObTableLockOpType lock_op_type_; // specify the lock op type
+    ObTableLockOpType lock_op_type_;  // specify the lock op type
 
-    int64_t origin_timeout_us_;   // the origin timeout us specified by user.
-    int64_t timeout_us_;          // the timeout us for every retry times.
-    int64_t abs_timeout_ts_;      // the abstract timeout us.
+    int64_t origin_timeout_us_;  // the origin timeout us specified by user.
+    int64_t timeout_us_;         // the timeout us for every retry times.
+    int64_t abs_timeout_ts_;     // the abstract timeout us.
     sql::TransState trans_state_;
     transaction::ObTxDesc *tx_desc_;
-    ObTxParam tx_param_;           // the tx param for current tx
-    transaction::ObTxSEQ current_savepoint_;    // used to rollback current sub tx.
-    share::ObLSArray need_rollback_ls_; // which ls has been modified after
-                                        // the current_savepoint_ created.
-    common::ObTabletIDArray tablet_list_; // all the tablets need to be locked/unlocked
+    ObTxParam tx_param_;                      // the tx param for current tx
+    transaction::ObTxSEQ current_savepoint_;  // used to rollback current sub tx.
+    share::ObLSArray need_rollback_ls_;       // which ls has been modified after
+                                              // the current_savepoint_ created.
+    common::ObTabletIDArray tablet_list_;     // all the tablets need to be locked/unlocked
     ObLockIDArray obj_list_;
     // TODO: yanyuan.cxf we need better performance.
     // share::ObLSArray ls_list_; // related ls list
@@ -197,6 +197,7 @@ public:
   private:
     int garbage_collect_for_all_ls_();
     void check_and_report_timeout_();
+    int check_is_leader_(ObLS *ls, bool &is_leader);
   public:
     static int64_t GARBAGE_COLLECT_PRECISION;
     static int64_t GARBAGE_COLLECT_EXEC_INTERVAL;

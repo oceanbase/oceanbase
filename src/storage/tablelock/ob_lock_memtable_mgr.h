@@ -29,11 +29,11 @@ class ObLSID;
 
 namespace memtable
 {
-class ObIMemtable;
 }
 
 namespace storage
 {
+class ObIMemtable;
 class ObFreezer;
 class ObTenantMetaMemMgr;
 }
@@ -60,16 +60,13 @@ public:
                    storage::ObTenantMetaMemMgr *t3m) override;
   virtual void destroy() override;
 
-  virtual int create_memtable(const share::SCN clog_checkpoint_scn,
-                              const int64_t schema_version,
-                              const share::SCN newest_clog_checkpoint_scn,
-                              const bool for_replay = false) override;
+  virtual int create_memtable(const storage::CreateMemtableArg &arg) override;
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
   const ObLockMemtable *get_memtable_(const int64_t pos) const;
 private:
-  virtual int release_head_memtable_(memtable::ObIMemtable *imemtable,
+  virtual int release_head_memtable_(storage::ObIMemtable *imemtable,
                                      const bool force = false) override;
   int unregister_from_common_checkpoint_(const ObLockMemtable *memtable);
 

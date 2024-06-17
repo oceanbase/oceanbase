@@ -30,6 +30,8 @@ namespace oceanbase
 namespace sql
 {
 class ObPhysicalPlanCtx;
+struct ObUserLoggingCtx;
+
 // extract accuracy info from %expr and call datum_accuracy_check() below.
 int datum_accuracy_check(const ObExpr &expr,
                          const uint64_t cast_mode,
@@ -157,6 +159,7 @@ int ob_datum_to_ob_time_with_date(const T &datum,
         ret = ObTimeConverter::int_to_ob_time_with_date(int_part, ob_time, date_sql_mode);
         if (OB_SUCC(ret)) {
           ob_time.parts_[DT_USEC] = (dec_part + 500) / 1000;
+          ObTimeConverter::adjust_ob_time(ob_time);
         }
       }
       break;
@@ -302,6 +305,26 @@ int check_decimalint_accuracy(const ObCastMode cast_mode,
                               const ObPrecision precision, const ObScale scale,
                               ObDecimalIntBuilder &res_val, int &warning);
 
+inline bool decimal_int_truncated_check(const ObDecimalInt *decint, const int32_t int_bytes,
+                                       const unsigned scale)
+{
+#define TRUNC_CHECK(int_type) \
+  if (wide::ObDecimalIntConstValue::get_int_bytes_by_precision(scale) > int_bytes) {  \
+    bret = (*reinterpret_cast<const int_type *>(decint)) != 0;              \
+  } else {                                                                  \
+    const int_type sf = get_scale_factor<int_type>(scale);                  \
+    bret = (((*reinterpret_cast<const int_type *>(decint)) % sf) != 0);     \
+  }
+
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  DISPATCH_WIDTH_TASK(int_bytes, TRUNC_CHECK);
+  return bret;
+#undef TRUNC_CHECK
+}
+
+void log_user_warning_truncated(const ObUserLoggingCtx *user_logging_ctx);
+
 // copied from ob_obj_cast.cpp，函数逻辑没有修改，只是将输入参数从ObObj变为ObDatum
 class ObDatumHexUtils
 {
@@ -433,7 +456,8 @@ public:
   static int common_scale_decimalint(const ObDecimalInt *decint, const int32_t int_bytes,
                                      const ObScale in_scale, const ObScale out_scale,
                                      const ObPrecision out_prec,
-                                     const ObCastMode cast_mode, ObDecimalIntBuilder &val);
+                                     const ObCastMode cast_mode, ObDecimalIntBuilder &val,
+                                     const ObUserLoggingCtx *column_conv_ctx = NULL);
 
   static int align_decint_precision_unsafe(const ObDecimalInt *decint, const int32_t int_bytes,
                                            const int32_t expected_int_bytes,
@@ -461,11 +485,14 @@ public:
   // same with ObObjCaster::to_type().
   // input is ObExpr, and output is ObDatum, it's better if input is also ObDatum.
   // we will do this later if necessary.
+  // subschema id from sql udt type is a combination of (cs_type_ and cs_level_),
+  // datum meta does not have cs_level_, or we can use ObDatum precision_ as subschema id?
   int to_type(const ObDatumMeta &dst_type,
               const ObExpr &src_expr,
               const common::ObCastMode &cm,
               common::ObDatum *&res,
-              int64_t batch_idx = 0);
+              int64_t batch_idx = 0,
+              const uint16_t subschema_id = 0);
   // for xxx -> enumset.
   int to_type(const ObDatumMeta &dst_type,
               const common::ObIArray<common::ObString> &str_values,
@@ -484,7 +511,8 @@ private:
   int setup_cast_expr(const ObDatumMeta &dst_type,
                       const ObExpr &src_expr,
                       const common::ObCastMode cm,
-                      ObExpr &cast_expr);
+                      ObExpr &cast_expr,
+                      const uint16_t subschema_id = 0);
   bool inited_;
   ObEvalCtx *eval_ctx_;
   ObExpr *cast_expr_;

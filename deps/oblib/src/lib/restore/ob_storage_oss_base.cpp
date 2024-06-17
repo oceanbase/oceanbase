@@ -52,13 +52,6 @@ void fin_oss_env()
   ObOssEnvIniter::get_instance().global_destroy();
 }
 
-bool is_oss_supported_checksum(ObStorageChecksumType checksum_type)
-{
-  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
-      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
-}
-
-
 ObStorageOssStaticVar::ObStorageOssStaticVar()
   : compressor_(NULL),
     compress_type_(INVALID_COMPRESSOR)
@@ -234,8 +227,12 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
       }
 
       case OSS_BAD_REQUEST: {
-        if (0 == STRCMP("InvalidDigest", aos_ret->error_code)) {
+        if (OB_ISNULL(aos_ret->error_code)) {
+          ob_errcode = OB_OSS_ERROR;
+        } else if (0 == STRCMP("InvalidDigest", aos_ret->error_code)) {
           ob_errcode = OB_CHECKSUM_ERROR;
+        } else if (0 == STRCMP("InvalidBucketName", aos_ret->error_code)) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         } else {
           ob_errcode = OB_OSS_ERROR;
         }
@@ -350,7 +347,7 @@ ObStorageOssBase::ObStorageOssBase()
    oss_option_(NULL),
    is_inited_(false),
    oss_account_(),
-   checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO)
+   checksum_type_(ObStorageChecksumType::OB_MD5_ALGO)
 {
   memset(oss_endpoint_, 0, MAX_OSS_ENDPOINT_LENGTH);
 }
@@ -370,7 +367,7 @@ void ObStorageOssBase::reset()
     }
     oss_option_ = NULL;
     is_inited_ = false;
-    checksum_type_ = ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+    checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
   }
 }
 
@@ -382,9 +379,9 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     OB_LOG(WARN, "oss client init twice", K(ret));
-  } else if (OB_ISNULL(storage_info)) {
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "oss account is null, fail to init oss base!", K(ret));
+    OB_LOG(WARN, "oss account is invalid, fail to init oss base!", K(ret), KPC(storage_info));
   } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
     OB_LOG(WARN, "fail to get storage info str", K(ret), KPC(storage_info));
   } else if (OB_FAIL(oss_account_.parse_oss_arg(info_str))) {
@@ -397,15 +394,10 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
   } else {
     checksum_type_ = storage_info->get_checksum_type();
     if (OB_UNLIKELY(!is_oss_supported_checksum(checksum_type_))) {
-      ret = OB_NOT_SUPPORTED;
+      ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
       OB_LOG(WARN, "that checksum algorithm is not supported for oss", K(ret), K_(checksum_type));
     } else {
       is_inited_ = true;
-      if (checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO) {
-        oss_option_->ctl->options->enable_crc = false;
-      } else {
-        oss_option_->ctl->options->enable_crc = true;
-      }
     }
   }
   return ret;
@@ -524,12 +516,20 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
     OB_LOG(WARN, "fail to create oss config", K(ret));
   } else if (OB_FAIL(init_oss_endpoint())) {
     OB_LOG(WARN, "fail to init oss endpoind", K(ret));
+  } else if (OB_ISNULL(oss_option->ctl = aos_http_controller_create(oss_option->pool, 0))) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "fail to create aos http controller", K(ret));
+    // A separate instance of ctl->options is now allocated for each request,
+    // ensuring that disabling CRC checks is a request-specific action
+    // and does not impact the global setting for OSS request options.
+  } else if (OB_ISNULL(oss_option->ctl->options = aos_http_request_options_create(oss_option->pool))) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "fail to create aos http request options", K(ret));
   } else {
     aos_str_set(&oss_option->config->endpoint, oss_endpoint_);
     aos_str_set(&oss_option->config->access_key_id, oss_account_.oss_id_);
     aos_str_set(&oss_option->config->access_key_secret, oss_account_.oss_key_);
     oss_option->config->is_cname = 0;
-    oss_option->ctl = aos_http_controller_create(oss_option->pool, 0);
 
     // Set connection timeout, the default value is 10s
     oss_option->ctl->options->connect_timeout = 60;
@@ -542,6 +542,8 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
     // The maximum time that the control can tolerate, the default is 15 seconds
     oss_option->ctl->options->speed_limit = 16000;
     oss_option->ctl->options->speed_time = 60;
+
+    oss_option->ctl->options->enable_crc = false;
   }
   return ret;
 }
@@ -729,6 +731,9 @@ int ObStorageOssMultiPartWriter::open(const ObString &uri, common::ObObjectStora
       convert_io_error(aos_ret, ret);
       OB_LOG(WARN, "oss init multipart upload error", K(uri), K(ret));
       print_oss_info(resp_headers, aos_ret, ret);
+    } else if (OB_ISNULL(upload_id_.data) || OB_UNLIKELY(upload_id_.len <= 0)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "upload id is invalid", K(ret), KP(upload_id_.data), K(upload_id_.len));
     } else {
       is_opened_ = true;
       base_buf_pos_ = 0;
@@ -900,6 +905,7 @@ int ObStorageOssMultiPartWriter::complete()
   }
 
   if (OB_SUCC(ret)) {
+    int64_t total_parts = 0;
     aos_string_t bucket;
     aos_string_t object;
     aos_str_set(&bucket, bucket_.ptr());
@@ -930,17 +936,21 @@ int ObStorageOssMultiPartWriter::complete()
             if (OB_ISNULL(complete_part_content = oss_create_complete_part_content(aos_pool_))) {
               ret = OB_OSS_ERROR;
               OB_LOG(WARN, "fail to create complete part content", K_(bucket), K_(object), K(ret));
-              break;
             } else if (OB_ISNULL(part_content->part_number.data)
                       || OB_ISNULL(part_content->etag.data)) {
               ret = OB_OSS_ERROR;
               OB_LOG(WARN, "invalid part_number or etag",
                   K(ret), KP(part_content->part_number.data), KP(part_content->etag.data));
-              break;
             } else {
               aos_str_set(&complete_part_content->part_number, part_content->part_number.data);
               aos_str_set(&complete_part_content->etag, part_content->etag.data);
               aos_list_add_tail(&complete_part_content->node, &complete_part_list);
+            }
+
+            if (OB_FAIL(ret)) {
+              break;
+            } else {
+              total_parts++;
             }
           }
 
@@ -968,7 +978,12 @@ int ObStorageOssMultiPartWriter::complete()
     }
 
     //complete multipart upload
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(total_parts == 0)) {
+      // If 'complete' without uploading any data, OSS will create an object with a size of 0
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(total_parts), K(upload_id_.data));
+    } else {
       if (OB_ISNULL(aos_ret = oss_complete_multipart_upload(oss_option_, &bucket, &object, &upload_id_,
           &complete_part_list, complete_headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
         convert_io_error(aos_ret, ret);
@@ -992,6 +1007,14 @@ int ObStorageOssMultiPartWriter::close()
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
+  mod_.reset();
+  base_buf_pos_ = 0;
+  partnum_ = 0;
+  base_buf_ = nullptr;
+  is_opened_ = false;
+  file_length_ = -1;
+  upload_id_.len = -1;
+  upload_id_.data = NULL;
   reset();
   return ret;
 }
@@ -1153,8 +1176,6 @@ int ObStorageOssReader::pread(
           } else {
             apr_table_set(headers, OSS_RANGE_KEY, range_size);
           }
-        } else {
-          oss_option->ctl->options->enable_crc = true;
         }
 
         if (OB_FAIL(ret)) {
@@ -1197,6 +1218,10 @@ int ObStorageOssReader::pread(
                 if (buf_pos >= get_data_size) {
                   break;
                 }
+              }
+
+              if (OB_FAIL(ret)) {
+                break;
               }
             } // end aos_list_for_each_entry
           }
@@ -1912,6 +1937,10 @@ int ObStorageOssUtil::del_unmerged_parts(const ObString &uri)
             OB_LOG(INFO, "succeed abort oss multipart upload",
                 K(bucket_str), K(content->key.data), K(content->upload_id.data));
           }
+
+          if (OB_FAIL(ret)) {
+            break;
+          }
         }
       }
 
@@ -2129,12 +2158,12 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
                   int64_t cur_pos = -1;
                   char *append_pos_str = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
                   if (OB_ISNULL(append_pos_str)) {
-                    OB_LOG(WARN, "after append fail, current append pos is not found");
+                    OB_LOG(WARN, "after append fail, current append pos is not found", K(ret));
                   } else if (OB_TMP_FAIL(c_str_to_int(append_pos_str, cur_pos))) {
                     OB_LOG(WARN, "after append fail, fail to get append pos",
-                        K(tmp_ret), K(append_pos_str), K_(object));
+                        K(ret), K(tmp_ret), K(append_pos_str), K_(object));
                   } else {
-                    OB_LOG(WARN, "after append fail, we got the object meta", K(cur_pos));
+                    OB_LOG(WARN, "after append fail, we got the object meta", K(ret), K(cur_pos));
                   }
                 }
               }
@@ -2259,7 +2288,6 @@ int ObStorageOssWriter::write(const char *buf, const int64_t size)
         convert_io_error(aos_ret, ret);
         OB_LOG(WARN, "fail to upload one object", K(bucket_), K(object_), K(ret));
         print_oss_info(resp_headers, aos_ret, ret);
-
       } else {
         file_length_ = size;
       }

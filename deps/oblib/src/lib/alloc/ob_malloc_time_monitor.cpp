@@ -17,24 +17,6 @@ using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
 volatile int64_t ObMallocTimeMonitor::WARN_THRESHOLD = 100000;
-__thread ObBasicTimeGuard *ObMallocTimeMonitor::tl_time_guard = NULL;
-
-ObMallocTimeMonitor::Guard::Guard(const int64_t size, const ObMemAttr &attr)
-  : size_(size), attr_(attr), last_time_guard_(tl_time_guard), time_guard_()
-{
-  tl_time_guard = &time_guard_;
-}
-
-ObMallocTimeMonitor::Guard::~Guard()
-{
-  int64_t cost_time = time_guard_.get_diff();
-  ObMallocTimeMonitor::get_instance().inc(cost_time);
-  if (OB_UNLIKELY(cost_time > WARN_THRESHOLD)) {
-    LIB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "[MALLOC_TIME_MONITOR]", K(cost_time), K_(time_guard), K_(attr), K_(size));
-  }
-
-  tl_time_guard = last_time_guard_;
-}
 void ObMallocTimeMonitor::print()
 {
   char buf[1024] = {'\0'};

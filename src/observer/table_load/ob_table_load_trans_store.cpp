@@ -47,7 +47,7 @@ int ObTableLoadTransStore::init()
 {
   int ret = OB_SUCCESS;
   const int32_t session_count = trans_ctx_->ctx_->param_.px_mode_?
-                                1 : trans_ctx_->ctx_->param_.session_count_;
+                                1 : trans_ctx_->ctx_->param_.write_session_count_;
   SessionStore *session_store = nullptr;
   for (int32_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     if (OB_ISNULL(session_store = OB_NEWx(SessionStore, (&trans_ctx_->allocator_)))) {
@@ -55,13 +55,10 @@ int ObTableLoadTransStore::init()
       LOG_WARN("fail to new SessionStore", KR(ret));
     } else {
       if (trans_ctx_->ctx_->param_.px_mode_) {
-        session_store->session_id_ = (ATOMIC_FAA(&(trans_ctx_->ctx_->store_ctx_->next_session_id_), 1) % trans_ctx_->ctx_->param_.session_count_) + 1;
+        session_store->session_id_ = (ATOMIC_FAA(&(trans_ctx_->ctx_->store_ctx_->next_session_id_), 1) % trans_ctx_->ctx_->param_.write_session_count_) + 1;
       } else {
         session_store->session_id_ = i + 1;
       }
-      session_store->allocator_.set_tenant_id(trans_ctx_->ctx_->param_.tenant_id_);
-      session_store->partition_table_array_.set_block_allocator(
-        ModulePageAllocator(session_store->allocator_));
       if (OB_FAIL(session_store_array_.push_back(session_store))) {
         LOG_WARN("fail to push back session store", KR(ret));
       }
@@ -101,12 +98,13 @@ void ObTableLoadTransStore::reset()
 
 ObTableLoadTransStoreWriter::SessionContext::SessionContext(int32_t session_id, uint64_t tenant_id, ObDataTypeCastParams cast_params)
   : session_id_(session_id),
-    cast_allocator_("TLD_TS_Caster", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
+    cast_allocator_("TLD_TS_Caster"),
     cast_params_(cast_params),
     last_receive_sequence_no_(0),
     extra_buf_(nullptr),
     extra_buf_size_(0)
 {
+  cast_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTransStoreWriter::SessionContext::~SessionContext()
@@ -119,17 +117,22 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     trans_ctx_(trans_store->trans_ctx_),
     store_ctx_(trans_ctx_->ctx_->store_ctx_),
     param_(trans_ctx_->ctx_->param_),
-    allocator_("TLD_TSWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_),
+    allocator_("TLD_TSWriter"),
     table_data_desc_(nullptr),
+    lob_inrow_threshold_(0),
     ref_count_(0),
+    is_incremental_(false),
+    is_inc_replace_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  column_schemas_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTransStoreWriter::~ObTableLoadTransStoreWriter()
 {
   if (nullptr != session_ctx_array_) {
-    int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+    int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
     for (int64_t i = 0; i < session_count; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       if (OB_NOT_NULL(session_ctx->extra_buf_)) {
@@ -146,7 +149,7 @@ ObTableLoadTransStoreWriter::~ObTableLoadTransStoreWriter()
 int ObTableLoadTransStoreWriter::init()
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTransStoreWriter init twice", KR(ret), KP(this));
@@ -158,16 +161,18 @@ int ObTableLoadTransStoreWriter::init()
     collation_type_ = trans_ctx_->ctx_->schema_.collation_type_;
     if (OB_FAIL(init_session_ctx_array())) {
       LOG_WARN("fail to init session ctx array", KR(ret));
-    } else if (OB_FAIL(init_column_schemas())) {
-      LOG_WARN("fail to init column schemas", KR(ret));
+    } else if (OB_FAIL(init_column_schemas_and_lob_info())) {
+      LOG_WARN("fail to init column schemas and lob info", KR(ret));
     } else {
+      is_incremental_ = ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
+      is_inc_replace_ = (ObDirectLoadInsertMode::INC_REPLACE == store_ctx_->ctx_->param_.insert_mode_);
       is_inited_ = true;
     }
   }
   return ret;
 }
 
-int ObTableLoadTransStoreWriter::init_column_schemas()
+int ObTableLoadTransStoreWriter::init_column_schemas_and_lob_info()
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObColDesc> &column_descs = store_ctx_->ctx_->schema_.column_descs_;
@@ -184,6 +189,9 @@ int ObTableLoadTransStoreWriter::init_column_schemas()
       LOG_WARN("failed to push back column schema", K(ret), K(i), KPC(column_schema));
     }
   }
+  if (OB_SUCC(ret)) {
+    lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
+  }
   return ret;
 }
 
@@ -191,7 +199,7 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   ObDataTypeCastParams cast_params(trans_ctx_->ctx_->session_info_->get_timezone_info());
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * session_count))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -206,17 +214,11 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
     }
   }
   ObDirectLoadTableStoreParam param;
-  param.snapshot_version_ = trans_ctx_->ctx_->ddl_param_.snapshot_version_;
   param.table_data_desc_ = *table_data_desc_;
   param.datum_utils_ = &(trans_ctx_->ctx_->schema_.datum_utils_);
-  param.col_descs_ = &(trans_ctx_->ctx_->schema_.column_descs_);
-  param.lob_column_cnt_ = trans_ctx_->ctx_->schema_.lob_column_cnt_;
-  param.cmp_funcs_ = &(trans_ctx_->ctx_->schema_.cmp_funcs_);
   param.file_mgr_ = trans_ctx_->ctx_->store_ctx_->tmp_file_mgr_;
   param.is_multiple_mode_ = trans_ctx_->ctx_->store_ctx_->is_multiple_mode_;
   param.is_fast_heap_table_ = trans_ctx_->ctx_->store_ctx_->is_fast_heap_table_;
-  param.online_opt_stat_gather_ = trans_ctx_->ctx_->param_.online_opt_stat_gather_;
-  param.px_mode_ = trans_ctx_->ctx_->param_.px_mode_;
   param.insert_table_ctx_ = trans_ctx_->ctx_->store_ctx_->insert_table_ctx_;
   param.dml_row_handler_ = trans_ctx_->ctx_->store_ctx_->error_row_handler_;
   for (int64_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
@@ -256,7 +258,7 @@ int ObTableLoadTransStoreWriter::advance_sequence_no(int32_t session_id, uint64_
                                                      ObTableLoadMutexGuard &guard)
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
@@ -287,7 +289,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.session_count_) ||
+  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.write_session_count_) ||
              row_array.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id), K(row_array.empty()));
@@ -308,7 +310,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
       }
     }
     if (OB_SUCC(ret)) {
-      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store.processed_rows_, row_array.count());
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
     }
     session_ctx.cast_allocator_.reuse();
   }
@@ -319,7 +321,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
     const ObTabletID &tablet_id, const ObIArray<ObNewRow> &row_array)
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
@@ -334,7 +336,9 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
       const ObNewRow &row = row_array.at(i);
       for (int64_t j = 0; OB_SUCC(ret) && (j < table_data_desc_->column_count_); ++j) {
         const ObObj &obj = row.cells_[j];
-        if (OB_FAIL(session_ctx.datum_row_.storage_datums_[j].from_obj_enhance(obj))) {
+        if (OB_FAIL(check_support_obj(obj))) {
+          LOG_WARN("failed to check support obj", KR(ret), K(obj));
+        } else if (OB_FAIL(session_ctx.datum_row_.storage_datums_[j].from_obj_enhance(obj))) {
           LOG_WARN("fail to from obj enhance", KR(ret), K(obj));
         }
       }
@@ -345,7 +349,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
       }
     }
     if (OB_SUCC(ret)) {
-      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store.processed_rows_, row_array.count());
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
     }
   }
   return ret;
@@ -354,7 +358,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
 int ObTableLoadTransStoreWriter::flush(int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
@@ -380,7 +384,7 @@ int ObTableLoadTransStoreWriter::flush(int32_t session_id)
 int ObTableLoadTransStoreWriter::clean_up(int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
@@ -411,6 +415,8 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
     if (!is_null_autoinc && OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema,
                                                                    row.cells_[i], out_obj))) {
       LOG_WARN("fail to cast obj and check", KR(ret), K(i), K(row.cells_[i]));
+    } else if (OB_FAIL(check_support_obj(out_obj))) {
+      LOG_WARN("failed to check support obj", KR(ret), K(out_obj));
     } else if (OB_FAIL(datum_row.storage_datums_[i].from_obj_enhance(out_obj))) {
       LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
     } else if (column_schema->is_autoincrement() &&
@@ -442,7 +448,7 @@ int ObTableLoadTransStoreWriter::handle_autoinc_column(const ObColumnSchemaV2 *c
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTableLoadAutoincNextval::eval_nextval(
         &(store_ctx_->session_ctx_array_[session_id - 1].autoinc_param_), datum, tc,
-        param_.sql_mode_))) {
+        store_ctx_->ctx_->session_info_->get_sql_mode()))) {
     LOG_WARN("fail to get auto increment next value", KR(ret));
   }
   return ret;
@@ -491,6 +497,51 @@ int ObTableLoadTransStoreWriter::write_row_to_table_store(ObDirectLoadTableStore
     } else if (OB_LIKELY(OB_ROWKEY_ORDER_ERROR == ret)) {
       if (OB_FAIL(error_row_handler->handle_error_row(ret, datum_row))) {
         LOG_WARN("fail to handle error row", KR(ret), K(tablet_id), K(datum_row));
+      }
+    }
+  }
+  return ret;
+}
+
+static int check_lob_is_inrow(const ObObj &obj, const int64_t lob_inrow_threshold, bool &is_inrow)
+{
+  int ret = OB_SUCCESS;
+  is_inrow = false;
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  if (OB_UNLIKELY(!obj.is_lob_storage() || lob_inrow_threshold < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(obj), K(lob_inrow_threshold));
+  } else if (OB_ISNULL(lob_mngr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get lob manager handle.", K(ret));
+  } else {
+    ObString data = obj.get_string();
+    const bool set_has_lob_header = data.length() > 0;
+    ObLobLocatorV2 src(data, set_has_lob_header);
+    int64_t byte_len = 0;
+    if (OB_FAIL(src.get_lob_data_byte_len(byte_len))) {
+      LOG_WARN("fail to get lob data byte len", K(ret), K(src));
+    } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(byte_len, lob_inrow_threshold)) {
+      is_inrow = true;
+    } else {
+      is_inrow = false;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadTransStoreWriter::check_support_obj(const ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (is_incremental_ && is_inc_replace_) {
+    if (obj.is_lob_storage()) {
+      bool is_inrow = false;
+      if (OB_FAIL(check_lob_is_inrow(obj, lob_inrow_threshold_, is_inrow))) {
+        LOG_WARN("fail to check lob is inrow", KR(ret));
+      } else if (OB_UNLIKELY(!is_inrow)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("incremental direct-load does not support outrow lob", KR(ret), K(obj));
+        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support outrow lob");
       }
     }
   }

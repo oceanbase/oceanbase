@@ -202,6 +202,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigCompressFuncChecker);
 };
 
+class ObConfigPerfCompressFuncChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigPerfCompressFuncChecker() {}
+  virtual ~ObConfigPerfCompressFuncChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigPerfCompressFuncChecker);
+};
+
 class ObConfigResourceLimitSpecChecker
   : public ObConfigChecker
 {
@@ -211,6 +222,17 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigResourceLimitSpecChecker);
+};
+
+class ObConfigTempStoreFormatChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigTempStoreFormatChecker() {}
+  virtual ~ObConfigTempStoreFormatChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigTempStoreFormatChecker);
 };
 
 class ObConfigPxBFGroupSizeChecker
@@ -244,6 +266,39 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigCompressOptionChecker);
+};
+
+class ObConfigMaxSyslogFileCountChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigMaxSyslogFileCountChecker() {}
+  virtual ~ObConfigMaxSyslogFileCountChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigMaxSyslogFileCountChecker);
+};
+
+class ObConfigSyslogCompressFuncChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSyslogCompressFuncChecker() {}
+  virtual ~ObConfigSyslogCompressFuncChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSyslogCompressFuncChecker);
+};
+
+class ObConfigSyslogFileUncompressedCountChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSyslogFileUncompressedCountChecker() {}
+  virtual ~ObConfigSyslogFileUncompressedCountChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSyslogFileUncompressedCountChecker);
 };
 
 class ObConfigUseLargePagesChecker
@@ -588,7 +643,7 @@ class ObConfigCapacityParser
 public:
   ObConfigCapacityParser() {}
   virtual ~ObConfigCapacityParser() {}
-  static int64_t get(const char *str, bool &valid, bool check_unit = true);
+  static int64_t get(const char *str, bool &valid, bool check_unit = true, bool use_byte = false);
 private:
   enum CAP_UNIT
   {
@@ -729,6 +784,26 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigTableStoreFormatChecker);
+};
+
+class ObConfigMigrationChooseSourceChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigMigrationChooseSourceChecker() {}
+  virtual ~ObConfigMigrationChooseSourceChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigMigrationChooseSourceChecker);
+};
+
+class ObConfigArchiveLagTargetChecker {
+public:
+  ObConfigArchiveLagTargetChecker(){}
+  virtual ~ObConfigArchiveLagTargetChecker(){}
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigArchiveLagTargetChecker);
 };
 
 typedef __ObConfigContainer<ObConfigStringKey,

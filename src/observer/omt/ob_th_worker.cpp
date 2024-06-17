@@ -19,6 +19,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
 #include "lib/allocator/ob_page_manager.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "lib/rc/context.h"
 #include "lib/thread/ob_thread_name.h"
 #include "ob_tenant.h"
@@ -234,6 +235,7 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
   // reset retry flags
   can_retry_ = true;
   need_retry_ = false;
+  req.set_large_retry_flag(false);
   bool need_wait_lock = false;
   int ret = OB_SUCCESS;
   reset_sql_throttle_current_priority();
@@ -258,7 +260,7 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
         }
       }
     } else if (retry_times) {
-      if (retry_times == 1) {
+      if (1 == retry_times) {
         LOG_WARN("tenant push retry request to wait queue", "tenant", tenant_->id(), K(req));
       }
       uint64_t curr_timestamp = common::ObClockGenerator::getClock();
@@ -267,9 +269,19 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
       if (OB_FAIL(tenant_->push_retry_queue(req, timestamp))) {
         LOG_WARN("tenant schedule retry_on_lock request fail, retry with current worker","tenant", tenant_->id(), K(ret));
       }
-    } else if (OB_FAIL(tenant_->recv_large_request(req))) {
-      LOG_WARN("tenant receive large request fail, "
-               "retry with current worker", K(ret));
+    } else {
+      // first retry, do not put the req to retry_queue
+      if (req.large_retry_flag()) {
+        if (OB_FAIL(tenant_->recv_large_request(req))) {
+          LOG_WARN("tenant receive large request fail, "
+              "retry with current worker", "tenant", tenant_->id(), K(ret));
+        }
+      } else {
+        if (OB_FAIL(tenant_->recv_request(req))) {
+          LOG_WARN("tenant receive request fail, "
+              "retry with current worker", "tenant", tenant_->id(), K(ret));
+        }
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -305,6 +317,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
   blocking_ts_ = &Thread::blocking_ts_;
 
   ObTLTaGuard ta_guard(tenant_->id());
+  ObMemVersionNodeGuard mem_version_node_guard;
   // Avoid adding and deleting entities from the root node for every request, the parameters are meaningless
   CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, OB_SERVER_TENANT_ID) {
     auto *pm = common::ObPageManager::thread_local_instance();
@@ -437,8 +450,17 @@ int ObThWorker::check_large_query_quota()
       !large_query()) {
     // if current query is not served by large_query worker (!large_query())
     // evict it back to large query queue
-    need_retry_ = true;
-    ret = OB_EAGAIN;
+    if (has_req_flag()) {
+      rpc::ObRequest *req = const_cast<rpc::ObRequest *>(get_cur_request());
+      req->set_large_retry_flag(true);
+      need_retry_ = true;
+      ret = OB_EAGAIN;
+    } else {
+      // large query retry is not supported when req is NULL (i.e. ret = OB_SUCCESS)
+      // but, this situation is unexpected, so log it as ERROR
+      LOG_ERROR("want to set large_retry_flag on request, but the req is NULL",
+          "tenant_id", tenant_->id(), K(ret));
+    }
   }
   return ret;
 }

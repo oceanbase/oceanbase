@@ -78,7 +78,7 @@ int ObMPStmtReset::process()
   } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));
   } else {
-    ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session->get_piece_cache());
+    ObPieceCache *piece_cache = session->get_piece_cache();
     int64_t param_num = 0;
     THIS_WORKER.set_session(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());

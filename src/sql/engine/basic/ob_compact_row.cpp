@@ -54,15 +54,17 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
   }
   fix_data_off_ = extra_off_ + extra_size_;
   if (OB_SUCC(ret) && fixed_cnt_ > 0) {
-    if (OB_ISNULL(allocator_)) {
+    ObDataBuffer local_alloc(buf_, MAX_LOCAL_BUF_LEN);
+    ObIAllocator *alloc = use_local_allocator() ? &local_alloc : allocator_;
+    if (OB_ISNULL(alloc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("allocator is null", K(ret), K(lbt()));
     } else if (OB_ISNULL(projector_ =
-        static_cast<int32_t *>(allocator_->alloc(sizeof(int32_t) * col_cnt_)))) {
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * col_cnt_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc projector failed", K(ret), K(col_cnt_));
     } else if (OB_ISNULL(fixed_offsets_ =
-        static_cast<int32_t *>(allocator_->alloc(sizeof(int32_t) * (fixed_cnt_ + 1))))) {
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * (fixed_cnt_ + 1))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc fixed_offsets_ failed", K(ret), K(col_cnt_));
     } else {
@@ -80,14 +82,7 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
       }
     }
     if (OB_FAIL(ret)) {
-      if (NULL != fixed_offsets_) {
-        allocator_->free(fixed_offsets_);
-        fixed_offsets_ = NULL;
-      }
-      if (NULL != projector_) {
-        allocator_->free(projector_);
-        projector_ = NULL;
-      }
+      reset();
     }
   }
   if (OB_SUCC(ret)) {
@@ -104,16 +99,16 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
 
 void RowMeta::reset()
 {
-  if (NULL != allocator_) {
+  if (!use_local_allocator() && NULL != allocator_) {
     if (NULL != fixed_offsets_) {
       allocator_->free(fixed_offsets_);
-      fixed_offsets_ = NULL;
     }
     if (NULL != projector_) {
       allocator_->free(projector_);
-      projector_ = NULL;
     }
   }
+  fixed_offsets_ = NULL;
+  projector_ = NULL;
 }
 
 int32_t RowMeta::get_row_fixed_size(const int64_t col_cnt,
@@ -235,15 +230,17 @@ OB_DEF_DESERIALIZE(RowMeta)
               var_data_off_);
   projector_ = NULL;
   if (fixed_expr_reordered()) {
-    if (OB_ISNULL(allocator_)) {
+    ObDataBuffer local_alloc(buf_, MAX_LOCAL_BUF_LEN);
+    ObIAllocator *alloc = use_local_allocator() ? &local_alloc : allocator_;
+    if (OB_ISNULL(alloc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("allocator is null", K(ret));
     } else if (OB_ISNULL(projector_ =
-        static_cast<int32_t *>(allocator_->alloc(sizeof(int32_t) * col_cnt_)))) {
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * col_cnt_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc projector failed", K(ret), K(col_cnt_));
     } else if (OB_ISNULL(fixed_offsets_ =
-        static_cast<int32_t *>(allocator_->alloc(sizeof(int32_t) * (fixed_cnt_ + 1))))) {
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * (fixed_cnt_ + 1))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc projector failed", K(ret), K(col_cnt_));
     } else {
@@ -255,12 +252,7 @@ OB_DEF_DESERIALIZE(RowMeta)
       }
     }
     if (OB_FAIL(ret)) {
-      if (projector_ != NULL) {
-        allocator_->free(projector_);
-      }
-      if (fixed_offsets_ != NULL) {
-        allocator_->free(fixed_offsets_);
-      }
+      reset();
     }
   }
   return ret;
@@ -298,15 +290,17 @@ int RowMeta::deep_copy(const RowMeta &other, common::ObIAllocator *allocator)
   projector_ = NULL;
   allocator_ = allocator;
   if (fixed_expr_reordered()) {
-    if (OB_ISNULL(allocator_)) {
+    ObDataBuffer local_alloc(buf_, MAX_LOCAL_BUF_LEN);
+    ObIAllocator *alloc = use_local_allocator() ? &local_alloc : allocator_;
+    if (OB_ISNULL(alloc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("allocator is null", K(ret));
     } else if (OB_ISNULL(projector_ =
-        static_cast<int32_t *>(allocator_->alloc(sizeof(int32_t) * col_cnt_)))) {
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * col_cnt_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc projector failed", K(ret), K(col_cnt_));
     } else if (OB_ISNULL(fixed_offsets_ =
-        static_cast<int32_t *>(allocator_->alloc(sizeof(int32_t) * (fixed_cnt_ + 1))))) {
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * (fixed_cnt_ + 1))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc projector failed", K(ret), K(col_cnt_));
     } else {
@@ -314,12 +308,7 @@ int RowMeta::deep_copy(const RowMeta &other, common::ObIAllocator *allocator)
       MEMCPY(fixed_offsets_, other.fixed_offsets_, (fixed_cnt_ + 1) * sizeof(int32_t));
     }
     if (OB_FAIL(ret)) {
-      if (projector_ != NULL) {
-        allocator_->free(projector_);
-      }
-      if (fixed_offsets_ != NULL) {
-        allocator_->free(fixed_offsets_);
-      }
+      reset();
     }
   }
   return ret;

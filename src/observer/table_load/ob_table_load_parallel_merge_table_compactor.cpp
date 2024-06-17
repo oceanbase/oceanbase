@@ -92,7 +92,8 @@ int ObTableLoadParallelMergeTableCompactor::start()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadParallelMergeTableCompactor not init", KR(ret), KP(this));
   } else {
-    ObSEArray<ObTableLoadTransStore *, 64> trans_store_array;
+    ObArray<ObTableLoadTransStore *> trans_store_array;
+    trans_store_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(compact_ctx_->store_ctx_->get_committed_trans_stores(trans_store_array))) {
       LOG_WARN("fail to get committed trans stores", KR(ret));
     }

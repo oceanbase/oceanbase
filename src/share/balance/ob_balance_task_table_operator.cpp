@@ -17,6 +17,7 @@
 #include "lib/mysqlclient/ob_mysql_result.h"//MySQLResult
 #include "lib/mysqlclient/ob_mysql_proxy.h"//MySQLResult
 #include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
+#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 #include "share/inner_table/ob_inner_table_schema.h"//ALL_BALANCE_TASK_TNAME
 #include "share/ob_dml_sql_splicer.h"//ObDMLSqlSplicer
 #include "share/balance/ob_balance_job_table_operator.h"//job_status
@@ -604,6 +605,8 @@ int ObBalanceTaskTableOperator::start_transfer_task(const uint64_t tenant_id,
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_FINISH_TRANSFER_TASK_COST_TOO_MUCH_TIME);
+
 int ObBalanceTaskTableOperator::finish_transfer_task(
     const ObBalanceTask &balance_task,
     const ObTransferTaskID transfer_task_id,
@@ -668,6 +671,11 @@ int ObBalanceTaskTableOperator::finish_transfer_task(
 
   if (OB_SUCC(ret) && to_do_part_list.empty()) {
     all_part_transferred = true;
+  }
+
+  // only for test
+  if (EN_FINISH_TRANSFER_TASK_COST_TOO_MUCH_TIME) {
+    ob_usleep(31 * 1000 * 1000L); // default internal_sql_execute_timeout + 1s
   }
 
   return ret;
@@ -835,6 +843,27 @@ int ObBalanceTaskTableOperator::load_can_execute_task(const uint64_t tenant_id,
   return ret;
 }
 
+int ObBalanceTaskTableOperator::load_task(const uint64_t tenant_id,
+                                       ObBalanceTaskIArray &task_array,
+                                       ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  task_array.reset();
+  ObSqlString sql;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s",
+                                    OB_ALL_BALANCE_TASK_TNAME))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(sql));
+  } else if (OB_FAIL(read_tasks_(tenant_id, client, sql, task_array))) {
+    LOG_WARN("failed to read task", KR(ret), K(tenant_id), K(sql));
+  }
+  LOG_INFO("load all balance task", KR(ret), K(task_array), K(sql));
+  return ret;
+}
+
+
 int ObBalanceTaskTableOperator::get_job_cannot_execute_task(
     const uint64_t tenant_id, const ObBalanceJobID balance_job_id,
     ObBalanceTaskIArray &task_array, ObISQLClient &client)
@@ -988,7 +1017,7 @@ int ObBalanceTaskTableOperator::get_job_task_cnt(const uint64_t tenant_id,
   return ret;
 }
 
-int ObBalanceTaskTableOperator::update_merge_ls_part_list(const uint64_t tenant_id,
+int ObBalanceTaskTableOperator::update_task_part_list(const uint64_t tenant_id,
                                const ObBalanceTaskID balance_task_id,
                                const ObTransferPartList &part_list,
                                common::ObMySQLTransaction &trans)
@@ -998,24 +1027,25 @@ int ObBalanceTaskTableOperator::update_merge_ls_part_list(const uint64_t tenant_
   int64_t affected_rows = 0;
   common::ObArenaAllocator allocator;
   ObString part_list_str;
+  //maybe part_list empty
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-                  || !balance_task_id.is_valid()
-                  || 0 == part_list.count())) {
+                  || !balance_task_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(balance_task_id),
              K(part_list));
   } else if (OB_FAIL(part_list.to_display_str(allocator, part_list_str))) {
     LOG_WARN("failed to transfer list to str", KR(ret), K(part_list));
   } else if (OB_FAIL(sql.assign_fmt("update %s set part_list = '%.*s', part_count = %ld where "
-                                "task_id = %ld and part_count = 0",
+                                "task_id = %ld",
                                 OB_ALL_BALANCE_TASK_TNAME, part_list_str.length(),
                                 part_list_str.ptr(), part_list.count(), balance_task_id.id()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(balance_task_id), K(part_list_str));
   } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("failed to exec sql", KR(ret), K(tenant_id), K(sql));
   } else if (is_zero_row(affected_rows)) {
+    //调用点处理
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("expected one row, may status change", KR(ret), K(sql), K(affected_rows));
+    LOG_WARN("expected one row, may part_list not change", KR(ret), K(sql), K(affected_rows));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expected single row", KR(ret), K(sql), K(affected_rows));

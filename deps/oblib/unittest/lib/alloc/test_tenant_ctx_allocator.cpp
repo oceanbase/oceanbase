@@ -28,6 +28,7 @@ using namespace oceanbase::common;
 
 TEST(TestTenantAllocator, CtxAlloc)
 {
+  CHUNK_MGR.set_max_chunk_cache_size(1<<20);
   ObTenantCtxAllocator ta(123, 1);
   ta.set_tenant_memory_mgr();
   ta.set_limit(INT64_MAX);

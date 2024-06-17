@@ -56,16 +56,13 @@ public:
   virtual void destroy() override;
 
   // create_memtable is used for creating the only memtable for CheckpointMgr
-  virtual int create_memtable(const share::SCN last_replay_scn,
-                              const int64_t schema_version,
-                              const share::SCN newest_clog_checkpoint_scn,
-                              const bool for_replay=false) override;
+  virtual int create_memtable(const CreateMemtableArg &arg) override;
 
   const ObTxCtxMemtable *get_tx_ctx_memtable_(const int64_t pos) const;
 
   DECLARE_VIRTUAL_TO_STRING;
 protected:
-  virtual int release_head_memtable_(memtable::ObIMemtable *imemtable,
+  virtual int release_head_memtable_(ObIMemtable *imemtable,
                                      const bool force) override;
 
   int unregister_from_common_checkpoint_(const ObTxCtxMemtable *memtable);

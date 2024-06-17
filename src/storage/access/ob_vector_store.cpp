@@ -156,7 +156,7 @@ int ObVectorStore::init(const ObTableAccessParam &param)
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc datum buf", K(ret));
     } else if (FALSE_IT(group_by_cell_ = new (buf) ObGroupByCell(batch_size_, *context_.stmt_allocator_))) {
-    } else if (OB_FAIL(group_by_cell_->init(param, eval_ctx_))) {
+    } else if (OB_FAIL(group_by_cell_->init(param, context_, eval_ctx_))) {
       LOG_WARN("Failed to init group by cell", K(ret));
     }
   }

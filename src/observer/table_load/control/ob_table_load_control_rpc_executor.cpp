@@ -34,7 +34,7 @@ int ObDirectLoadControlPreBeginExecutor::deserialize()
 int ObDirectLoadControlPreBeginExecutor::check_args()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_ID == arg_.table_id_ || 0 == arg_.task_id_)) {
+  if (OB_UNLIKELY(OB_INVALID_ID == arg_.table_id_ || 0 == arg_.ddl_param_.task_id_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg_));
   }
@@ -62,14 +62,12 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.px_mode_ = arg_.px_mode_;
     param.online_opt_stat_gather_ = arg_.online_opt_stat_gather_;
     param.dup_action_ = arg_.dup_action_;
-    ObTableLoadDDLParam ddl_param;
-    uint64_t data_version = 0;
-    ddl_param.dest_table_id_ = arg_.dest_table_id_;
-    ddl_param.task_id_ = arg_.task_id_;
-    ddl_param.schema_version_ = arg_.schema_version_;
-    ddl_param.snapshot_version_ = arg_.snapshot_version_;
-    ddl_param.data_version_ = arg_.data_version_;
-    if (OB_FAIL(create_table_ctx(param, ddl_param, table_ctx))) {
+    param.avail_memory_ = arg_.avail_memory_;
+    param.write_session_count_ = arg_.write_session_count_;
+    param.exe_mode_ = arg_.exe_mode_;
+    param.method_ = arg_.method_;
+    param.insert_mode_ = arg_.insert_mode_;
+    if (OB_FAIL(create_table_ctx(param, arg_.ddl_param_, table_ctx))) {
       LOG_WARN("fail to create table ctx", KR(ret));
     }
     if (OB_SUCC(ret)) {
@@ -99,6 +97,9 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
   } else if (OB_FAIL(table_ctx->init(param, ddl_param, arg_.session_info_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::assign_memory(param.need_sort_, param.avail_memory_))) {
+    LOG_WARN("fail to assign_memory", KR(ret));
+  } else if (FALSE_IT(table_ctx->set_assigned_memory())) {
   } else if (OB_FAIL(ObTableLoadStore::init_ctx(table_ctx, arg_.partition_id_array_,
                                                 arg_.target_partition_id_array_))) {
     LOG_WARN("fail to store init ctx", KR(ret));
@@ -107,6 +108,12 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
   }
   if (OB_FAIL(ret)) {
     if (nullptr != table_ctx) {
+      if (table_ctx->is_assigned_memory()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ObTableLoadService::recycle_memory(param.need_sort_, param.avail_memory_))) {
+          LOG_WARN("fail to recycle_memory", KR(tmp_ret), K(param));
+        }
+      }
       ObTableLoadService::free_ctx(table_ctx);
       table_ctx = nullptr;
     }
@@ -264,7 +271,9 @@ int ObDirectLoadControlCommitExecutor::process()
       ObTableLoadStore store(table_ctx);
       if (OB_FAIL(store.init())) {
         LOG_WARN("fail to init store", KR(ret));
-      } else if (OB_FAIL(store.commit(res_.result_info_))) {
+      } else if (OB_FAIL(store.commit(res_.result_info_,
+                                      res_.sql_statistics_,
+                                      res_.trans_result_))) {
         LOG_WARN("fail to store commit", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
         LOG_WARN("fail to remove table ctx", KR(ret), K(key));
@@ -304,6 +313,7 @@ int ObDirectLoadControlAbortExecutor::process()
     }
   } else {
     ObTableLoadStore::abort_ctx(table_ctx, res_.is_stopped_);
+    table_ctx->mark_delete();
     if (res_.is_stopped_ && OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
       LOG_WARN("fail to remove table ctx", KR(ret), K(key));
     }

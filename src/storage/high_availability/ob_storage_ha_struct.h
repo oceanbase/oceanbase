@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/ls/ob_ls_i_life_manager.h"
+#include "share/scheduler/ob_dag_scheduler_config.h"
 
 
 namespace oceanbase
@@ -99,8 +100,6 @@ public:
       const ObMigrationStatus &status,
       bool &in_final_state);
   static bool check_is_running_migration(const ObMigrationStatus &cur_status);
-  static bool can_gc_ls_without_check_dependency(
-      const ObMigrationStatus &cur_status);
 private:
   static int check_ls_transfer_tablet_(
       const share::ObLSID &ls_id,
@@ -276,6 +275,9 @@ struct ObMigrationUtils
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       int64_t &rebuild_seq);
+  static int get_dag_priority(
+      const ObMigrationOpType::TYPE &type,
+      share::ObDagPrio::ObDagPrioEnum &prio);
 };
 
 struct ObCopyTableKeyInfo final

@@ -15,14 +15,11 @@
 #include "ob_table_direct_load_rpc_executor.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_multi_tenant.h"
-#include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_client_service.h"
 #include "observer/table_load/ob_table_load_client_task.h"
-#include "observer/table_load/ob_table_load_coordinator.h"
-#include "observer/table_load/ob_table_load_redef_table.h"
+#include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_service.h"
-#include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase
 {
@@ -35,24 +32,6 @@ using namespace sql;
 using namespace table;
 
 // begin
-ObTableDirectLoadBeginExecutor::ObTableDirectLoadBeginExecutor(
-  ObTableDirectLoadExecContext &ctx, const ObTableDirectLoadRequest &request,
-  ObTableDirectLoadResult &result)
-  : ParentType(ctx, request, result), client_task_(nullptr), table_ctx_(nullptr)
-{
-}
-
-ObTableDirectLoadBeginExecutor::~ObTableDirectLoadBeginExecutor()
-{
-  if (nullptr != client_task_) {
-    ObTableLoadClientService::revert_task(client_task_);
-    client_task_ = nullptr;
-  }
-  if (nullptr != table_ctx_) {
-    ObTableLoadService::put_ctx(table_ctx_);
-    table_ctx_ = nullptr;
-  }
-}
 
 int ObTableDirectLoadBeginExecutor::check_args()
 {
@@ -81,231 +60,75 @@ int ObTableDirectLoadBeginExecutor::process()
   int ret = OB_SUCCESS;
   LOG_INFO("table direct load begin", K_(arg));
   const uint64_t tenant_id = ctx_.get_tenant_id();
-  const uint64_t user_id = ctx_.get_user_id();
   const uint64_t database_id = ctx_.get_database_id();
   uint64_t table_id = 0;
-
-  THIS_WORKER.set_timeout_ts(ObTimeUtil::current_time() + arg_.timeout_);
+  ObTableLoadClientTask *client_task = nullptr;
   if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
   } else if (OB_FAIL(ObTableLoadSchema::get_table_id(tenant_id, database_id, arg_.table_name_,
                                                      table_id))) {
     LOG_WARN("fail to get table id", KR(ret), K(tenant_id), K(database_id), K_(arg));
-  }
-
-  // get the existing client task if it exists
-  while (OB_SUCC(ret)) {
-    ObTableLoadKey key(tenant_id, table_id);
-    if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task_))) {
-      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-        LOG_WARN("fail to get client task", KR(ret), K(key));
-      } else {
-        ret = OB_SUCCESS;
-        client_task_ = nullptr;
-        break;
-      }
-    } else {
-      bool need_wait_finish = false;
-      ObTableLoadClientStatus wait_client_status;
-      ObTableLoadClientStatus client_status = client_task_->get_status();
-      switch (client_status) {
-        case ObTableLoadClientStatus::RUNNING:
-        case ObTableLoadClientStatus::COMMITTING:
-          if (arg_.force_create_) {
-            if (OB_FAIL(ObTableLoadClientService::abort_task(client_task_))) {
-              LOG_WARN("fail to abort client task", KR(ret));
-            } else {
-              need_wait_finish = true;
-              wait_client_status = ObTableLoadClientStatus::ABORT;
-            }
-          }
-          break;
-        case ObTableLoadClientStatus::COMMIT:
-        case ObTableLoadClientStatus::ABORT:
-          need_wait_finish = true;
-          wait_client_status = client_status;
-          break;
-        default:
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected client status", KR(ret), KPC(client_task_), K(client_status));
-          break;
-      }
-      if (OB_FAIL(ret)) {
-      } else if (!need_wait_finish) {
-        break;
-      } else {
-        ObTableLoadUniqueKey task_key(table_id, client_task_->ddl_param_.task_id_);
-        ObTableLoadClientService::revert_task(client_task_);
-        client_task_ = nullptr;
-        if (OB_FAIL(ObTableLoadClientService::wait_task_finish(task_key))) {
-          LOG_WARN("fail to wait client task finish", KR(ret), K(task_key), K(wait_client_status));
-        }
-      }
+  } else {
+    ObTableLoadClientTaskParam param;
+    param.set_client_addr(ctx_.get_user_client_addr());
+    param.set_tenant_id(tenant_id);
+    param.set_user_id(ctx_.get_user_id());
+    param.set_database_id(database_id);
+    param.set_table_id(table_id);
+    param.set_parallel(arg_.parallel_);
+    param.set_max_error_row_count(arg_.max_error_row_count_);
+    param.set_dup_action(arg_.dup_action_);
+    param.set_timeout_us(arg_.timeout_);
+    param.set_heartbeat_timeout_us(arg_.heartbeat_timeout_);
+    if (OB_FAIL(ObTableLoadClientService::alloc_task(client_task))) {
+      LOG_WARN("fail to alloc client task", KR(ret));
+    } else if (OB_FAIL(client_task->init(param))) {
+      LOG_WARN("fail to init client task", KR(ret), K(param));
+    } else if (OB_FAIL(client_task->start())) {
+      LOG_WARN("fail to start client task", KR(ret));
+    } else if (OB_FAIL(ObTableLoadClientService::add_task(client_task))) {
+      LOG_WARN("fail to add client task", KR(ret));
     }
   }
 
-  // create new client task if it does not exist
-  if (OB_SUCC(ret) && nullptr == client_task_) {
-    if (OB_FAIL(ObTableLoadService::check_support_direct_load(table_id))) {
-      LOG_WARN("fail to check support direct load", KR(ret), K(table_id));
-    }
-    // create client task
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(client_task_ = ObTableLoadClientService::alloc_task())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc client task", KR(ret));
-      } else if (OB_FAIL(client_task_->init(tenant_id, user_id, database_id, table_id,
-                                            arg_.timeout_, arg_.heartbeat_timeout_))) {
-        LOG_WARN("fail to init client task", KR(ret));
+  if (OB_SUCC(ret) && !arg_.is_async_) {
+    ObTableLoadClientStatus client_status = ObTableLoadClientStatus::MAX_STATUS;
+    int client_error_code = OB_SUCCESS;
+    while (OB_SUCC(ret) && ObTableLoadClientStatus::RUNNING != client_status) {
+      if (OB_UNLIKELY(THIS_WORKER.is_timeout())) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("worker timeout", KR(ret));
       } else {
-        // create table ctx
-        if (OB_FAIL(create_table_ctx())) {
-          LOG_WARN("fail to create table ctx", KR(ret));
-        } else {
-          client_task_->ddl_param_ = table_ctx_->ddl_param_;
-          if (OB_FAIL(client_task_->set_table_ctx(table_ctx_))) {
-            LOG_WARN("fail to set table ctx", KR(ret));
-          }
-          if (OB_FAIL(ret)) {
-            int tmp_ret = OB_SUCCESS;
-            if (OB_TMP_FAIL(ObTableLoadService::remove_ctx(table_ctx_))) {
-              LOG_WARN("fail to remove ctx", KR(tmp_ret));
-            }
-          }
+        client_task->get_status(client_status, client_error_code);
+        switch (client_status) {
+          case ObTableLoadClientStatus::RUNNING:
+            break;
+          case ObTableLoadClientStatus::INITIALIZING:
+          case ObTableLoadClientStatus::WAITTING:
+            ob_usleep(200LL * 1000); // sleep 200ms
+            break;
+          case ObTableLoadClientStatus::ERROR:
+          case ObTableLoadClientStatus::ABORT:
+            ret = OB_SUCCESS == client_error_code ? OB_CANCELED : client_error_code;
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected client status", KR(ret), K(client_status));
+            break;
         }
-      }
-    }
-    // begin
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(do_begin())) {
-        LOG_WARN("fail to do begin", KR(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObTableLoadClientService::add_task(client_task_))) {
-        LOG_WARN("fail to add client task", KR(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-      if (nullptr != table_ctx_) {
-        ObTableLoadCoordinator::abort_ctx(table_ctx_);
       }
     }
   }
 
   // fill res
   if (OB_SUCC(ret)) {
-    res_.table_id_ = client_task_->table_id_;
-    res_.task_id_ = client_task_->ddl_param_.task_id_;
-    if (OB_FAIL(res_.column_names_.assign(client_task_->column_names_))) {
-      LOG_WARN("fail to assign column names", KR(ret));
-    } else {
-      client_task_->get_status(res_.status_, res_.error_code_);
-    }
+    res_.table_id_ = client_task->param_.get_table_id();
+    res_.task_id_ = client_task->task_id_;
+    client_task->get_status(res_.status_, res_.error_code_);
   }
-
-  return ret;
-}
-
-int ObTableDirectLoadBeginExecutor::create_table_ctx()
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = client_task_->tenant_id_;
-  const uint64_t table_id = client_task_->table_id_;
-  ObTableLoadDDLParam ddl_param;
-  ObTableLoadParam param;
-  // start redef table
-  if (OB_SUCC(ret)) {
-    ObTableLoadRedefTableStartArg start_arg;
-    ObTableLoadRedefTableStartRes start_res;
-    start_arg.tenant_id_ = tenant_id;
-    start_arg.table_id_ = table_id;
-    start_arg.parallelism_ = arg_.parallel_;
-    start_arg.is_load_data_ = true;
-    if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res,
-                                                    *client_task_->get_session_info()))) {
-      LOG_WARN("fail to start redef table", KR(ret), K(start_arg));
-    } else {
-      ddl_param.dest_table_id_ = start_res.dest_table_id_;
-      ddl_param.task_id_ = start_res.task_id_;
-      ddl_param.schema_version_ = start_res.schema_version_;
-      ddl_param.snapshot_version_ = start_res.snapshot_version_;
-      ddl_param.data_version_ = start_res.data_format_version_;
-    }
-  }
-  // init param
-  if (OB_SUCC(ret)) {
-    ObTenant *tenant = nullptr;
-    if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
-      LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
-    } else {
-      param.tenant_id_ = tenant_id;
-      param.table_id_ = table_id;
-      param.batch_size_ = 100;
-      param.parallel_ = arg_.parallel_;
-      param.session_count_ = MIN(arg_.parallel_, (int32_t)tenant->unit_max_cpu() * 2);
-      param.max_error_row_count_ = arg_.max_error_row_count_;
-      param.column_count_ = client_task_->column_names_.count();
-      param.need_sort_ = true;
-      param.px_mode_ = false;
-      param.online_opt_stat_gather_ = false;
-      param.dup_action_ = arg_.dup_action_;
-      if (OB_FAIL(param.normalize())) {
-        LOG_WARN("fail to normalize param", KR(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(table_ctx_ = ObTableLoadService::alloc_ctx())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-    } else if (OB_FAIL(table_ctx_->init(param, ddl_param, client_task_->get_session_info()))) {
-      LOG_WARN("fail to init table ctx", KR(ret));
-    } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx_, client_task_->column_idxs_,
-                                                        client_task_->get_exec_ctx()))) {
-      LOG_WARN("fail to coordinator init ctx", KR(ret));
-    } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx_))) {
-      LOG_WARN("fail to add ctx", KR(ret));
-    }
-    if (OB_FAIL(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (ddl_param.is_valid()) {
-        ObTableLoadRedefTableAbortArg abort_arg;
-        abort_arg.tenant_id_ = param.tenant_id_;
-        abort_arg.task_id_ = ddl_param.task_id_;
-        if (OB_TMP_FAIL(
-              ObTableLoadRedefTable::abort(abort_arg, *client_task_->get_session_info()))) {
-          LOG_WARN("fail to abort redef table", KR(tmp_ret), K(abort_arg));
-        }
-      }
-      if (nullptr != table_ctx_) {
-        ObTableLoadService::free_ctx(table_ctx_);
-        table_ctx_ = nullptr;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableDirectLoadBeginExecutor::do_begin()
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadCoordinator coordinator(table_ctx_);
-  ObTableLoadTransId trans_id;
-  if (OB_FAIL(coordinator.init())) {
-    LOG_WARN("fail to init coordinator", KR(ret));
-  } else if (OB_FAIL(coordinator.begin())) {
-    LOG_WARN("fail to coordinator begin", KR(ret));
-  } else if (OB_FAIL(coordinator.start_trans(ObTableLoadSegmentID(1), trans_id))) {
-    LOG_WARN("fail to start trans", KR(ret));
-  } else {
-    client_task_->set_trans_id(trans_id);
-    if (OB_FAIL(client_task_->set_status_running())) {
-      LOG_WARN("fail to set status running", KR(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    client_task_->set_status_error(ret);
+  if (nullptr != client_task) {
+    ObTableLoadClientService::revert_task(client_task);
+    client_task = nullptr;
   }
   return ret;
 }
@@ -330,10 +153,8 @@ int ObTableDirectLoadCommitExecutor::process()
   ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
   if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task))) {
     LOG_WARN("fail to get client task", KR(ret), K(key));
-  } else if (OB_FAIL(client_task->check_status(ObTableLoadClientStatus::RUNNING))) {
-    LOG_WARN("fail to check status", KR(ret));
-  } else if (OB_FAIL(ObTableLoadClientService::commit_task(client_task))) {
-    LOG_WARN("fail to commit client task", KR(ret));
+  } else if (OB_FAIL(client_task->commit())) {
+    LOG_WARN("fail to commit client task", KR(ret), K(key));
   }
   if (nullptr != client_task) {
     ObTableLoadClientService::revert_task(client_task);
@@ -362,15 +183,12 @@ int ObTableDirectLoadAbortExecutor::process()
   ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
   if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task))) {
     LOG_WARN("fail to get client task", KR(ret), K(key));
-  } else if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
-    LOG_WARN("fail to abort client task", KR(ret));
+  } else {
+    client_task->abort();
   }
   if (nullptr != client_task) {
     ObTableLoadClientService::revert_task(client_task);
     client_task = nullptr;
-  }
-  if (OB_SUCC(ret) && OB_FAIL(ObTableLoadClientService::wait_task_finish(key))) {
-    LOG_WARN("fail to wait client task finish", KR(ret), K(key));
   }
   return ret;
 }
@@ -438,35 +256,18 @@ int ObTableDirectLoadInsertExecutor::process()
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("table direct load insert", K_(arg));
-  ObTableLoadObjRowArray obj_rows;
   ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
   ObTableLoadClientTask *client_task = nullptr;
-  if (OB_FAIL(decode_payload(arg_.payload_, obj_rows))) {
-    LOG_WARN("fail to decode payload", KR(ret), K_(arg));
-  } else if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task))) {
+  if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task))) {
     LOG_WARN("fail to get client task", KR(ret), K(key));
   } else if (OB_FAIL(client_task->check_status(ObTableLoadClientStatus::RUNNING))) {
     LOG_WARN("fail to check status", KR(ret));
   } else {
-    ObTableLoadTableCtx *table_ctx = nullptr;
-    if (OB_FAIL(client_task->get_table_ctx(table_ctx))) {
-      LOG_WARN("fail to get table ctx", KR(ret));
-    } else {
-      ObTableLoadCoordinator coordinator(table_ctx);
-      const ObTableLoadTransId &trans_id = client_task->get_trans_id();
-      const int64_t batch_id = client_task->get_next_batch_id();
-      const int32_t session_id = batch_id % table_ctx->param_.session_count_ + 1;
-      if (OB_FAIL(set_batch_seq_no(batch_id, obj_rows))) {
-        LOG_WARN("fail to set batch seq no", KR(ret));
-      } else if (OB_FAIL(coordinator.init())) {
-        LOG_WARN("fail to init coordinator", KR(ret));
-      } else if (OB_FAIL(coordinator.write(trans_id, session_id, 0 /*seq_no*/, obj_rows))) {
-        LOG_WARN("fail to coordinator write", KR(ret));
-      }
-    }
-    if (nullptr != table_ctx) {
-      ObTableLoadService::put_ctx(table_ctx);
-      table_ctx = nullptr;
+    ObTableLoadObjRowArray obj_rows;
+    if (OB_FAIL(decode_payload(arg_.payload_, obj_rows))) {
+      LOG_WARN("fail to decode payload", KR(ret), K_(arg));
+    } else if (OB_FAIL(client_task->write(obj_rows))) {
+      LOG_WARN("fail to write", KR(ret));
     }
     if (OB_FAIL(ret)) {
       client_task->set_status_error(ret);
@@ -502,28 +303,6 @@ int ObTableDirectLoadInsertExecutor::decode_payload(const ObString &payload,
       if (OB_FAIL(obj_row_array.deserialize(buf, data_len, pos))) {
         LOG_WARN("failed to deserialize obj rows", KR(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObTableDirectLoadInsertExecutor::set_batch_seq_no(int64_t batch_id,
-                                                      ObTableLoadObjRowArray &obj_row_array)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(obj_row_array.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(obj_row_array));
-  } else if (OB_UNLIKELY(batch_id > ObTableLoadSequenceNo::MAX_BATCH_ID ||
-                         obj_row_array.count() > ObTableLoadSequenceNo::MAX_BATCH_SEQ_NO)) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("size is overflow", KR(ret), K(batch_id), K(obj_row_array.count()));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < obj_row_array.count(); ++i) {
-      ObTableLoadObjRow &row = obj_row_array.at(i);
-      row.seq_no_.sequence_no_ = batch_id;
-      row.seq_no_.sequence_no_ <<= ObTableLoadSequenceNo::BATCH_ID_SHIFT;
-      row.seq_no_.sequence_no_ |= i;
     }
   }
   return ret;

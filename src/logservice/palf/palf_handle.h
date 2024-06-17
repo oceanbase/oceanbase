@@ -80,8 +80,6 @@ public:
                               const int64_t paxos_replica_num,
                               const common::GlobalLearnerList &learner_list);
 #endif
-  int set_region(const common::ObRegion &region);
-  int set_paxos_member_region_map(const common::ObArrayHashMap<common::ObAddr, common::ObRegion> &region_map);
   //================ 文件访问相关接口 =======================
   int append(const PalfAppendOptions &opts,
              const void *buffer,
@@ -94,6 +92,32 @@ public:
                 const LSN &lsn,
                 const void *buffer,
                 const int64_t nbytes);
+
+  // @brief: read up to 'nbytes' from palf at offset of 'lsn' into the 'read_buf', and
+  //         there are alignment restrictions on the length and address of user-space buffers
+  //         and the file offset.
+  //
+  // @param[in] lsn, the start offset to be read, must be aligned with LOG_DIO_ALIGN_SIZE
+  // @param[in] buffer, the start of 'buffer', must be aligned with LOG_DIO_ALIGN_SIZE.
+  // @param[in] nbytes, the read size, must aligned with LOG_DIO_ALIGN_SIZE
+  // @param[out] read_size, the number of bytes read return.
+  //
+  // @return value
+  // OB_SUCCESS.
+  // OB_INVALID_ARGUMENT.
+  // OB_ERR_OUT_OF_LOWER_BOUND, the lsn is out of lower bound.
+  // OB_ERR_OUT_OF_UPPER_BOUND, the lsn is out of upper bound.
+  // OB_NEED_RETRY, there is a flashback operation during raw_read.
+  // others.
+  //
+  // 1. use oceanbase::share::mtl_malloc_align or oceanbase::common::ob_malloc_align
+  //    with LOG_DIO_ALIGN_SIZE to allocate aligned buffer.
+  // 2. use oceanbase::common::lower_align or oceanbase::common::upper_align with
+  //    LOG_DIO_ALIGN_SIZE to get aligned lsn or nbytes.
+  int raw_read(const palf::LSN &lsn,
+               void *buffer,
+               const int64_t nbytes,
+               int64_t &read_size);
 
   // iter->next返回的是append调用写入的值，不会在返回的buf中携带Palf增加的header信息
   //           返回的值不包含未确认日志
@@ -417,7 +441,9 @@ public:
   // - OB_NOT_INIT
   int get_arbitration_member(common::ObMember &arb_member) const;
 #endif
-  int revoke_leader(const int64_t proposal_id);
+  int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                    const int64_t downgrade_priority_time_us,
+                                                    const char *reason);
   int change_leader_to(const common::ObAddr &dst_addr);
   // @brief: change AccessMode of palf.
   // @param[in] const int64_t &proposal_id: current proposal_id of leader
@@ -500,6 +526,8 @@ public:
   int reset_location_cache_cb();
   int set_election_priority(election::ElectionPriority *priority);
   int reset_election_priority();
+  int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb);
+  int reset_locality_cb();
   int stat(PalfStat &palf_stat) const;
 
   //---------config change lock related--------//

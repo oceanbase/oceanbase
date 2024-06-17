@@ -145,12 +145,12 @@ void TestSSTableRowScanner::test_one_case(
     ASSERT_EQ(OB_SUCCESS, tmp_rowkey.deep_copy(part_range.end_key_, allocator_));
     part_range.border_flag_.set_inclusive_start();
     part_range.border_flag_.set_inclusive_end();
-    ASSERT_EQ(OB_SUCCESS, scanner.inner_open(
+    ASSERT_EQ(OB_SUCCESS, scanner.init(
             iter_param_,
             context_,
             &sstable_,
             &part_range));
-    ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+    ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
             iter_param_,
             context_,
             &ddl_kv_,
@@ -171,12 +171,12 @@ void TestSSTableRowScanner::test_one_case(
     kv_scanner.reuse();
   }
 
-  ASSERT_EQ(OB_SUCCESS, scanner.inner_open(
+  ASSERT_EQ(OB_SUCCESS, scanner.init(
           iter_param_,
           context_,
           &sstable_,
           &range));
-  ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
           iter_param_,
           context_,
           &ddl_kv_,
@@ -213,12 +213,12 @@ void TestSSTableRowScanner::test_one_case(
 
   if (HIT_ALL == hit_mode) {
     int64_t index = 0;
-    ASSERT_EQ(OB_SUCCESS, scanner.inner_open(
+    ASSERT_EQ(OB_SUCCESS, scanner.init(
             iter_param_,
             context_,
             &sstable_,
             &range));
-    ASSERT_EQ(OB_SUCCESS, kv_scanner.inner_open(
+    ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
             iter_param_,
             context_,
             &ddl_kv_,

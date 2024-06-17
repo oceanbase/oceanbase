@@ -178,7 +178,8 @@ private:
   int append(const ObDatumRow &row);
   int append(const ObDataMacroBlockMeta &macro_meta);
   int check_order(const ObDatumRow &row);
-  int init_hash_index_builder();
+  int init_hash_index_builder(const ObMacroDataSeq &start_seq);
+  int init_data_pre_warmer(const ObMacroDataSeq &start_seq);
   int append_row_and_hash_index(const ObDatumRow &row);
   int init_pre_agg_util(const ObDataStoreDesc &data_store_desc);
   void release_pre_agg_util();

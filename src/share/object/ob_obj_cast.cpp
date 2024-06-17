@@ -22,6 +22,7 @@
 #include "lib/worker.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/ob_json_access_utils.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "lib/json_type/ob_json_tree.h"
@@ -30,16 +31,19 @@
 #include "lib/json_type/ob_json_parse.h"
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "sql/engine/ob_exec_context.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "src/storage/lob/ob_lob_manager.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_sdo_geometry.h"
+#endif
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"
-#endif
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -58,7 +62,8 @@
     int64_t pos = 0;                                                                               \
     if (OB_FAIL(sql::ObDatumCast::common_scale_decimalint(                                         \
           (in_obj).get_decimal_int(), (in_obj).get_int_bytes(), in_scale,                          \
-          res_acc.get_scale(), res_acc.get_precision(), params.cast_mode_, tmp_dec))) {            \
+          res_acc.get_scale(), res_acc.get_precision(), params.cast_mode_, tmp_dec,                \
+          (NULL == params.exec_ctx_) ? NULL : params.exec_ctx_->get_user_logging_ctx()))) {        \
       LOG_WARN("common scale decimal int failed", K(ret));                                         \
     } else if (OB_ISNULL(buf = (char *)params.alloc(tmp_dec.get_int_bytes()))) {                   \
       ret = OB_ALLOCATE_MEMORY_FAILED;                                                             \
@@ -141,7 +146,7 @@ static int cast_extend_types_not_support(const ObObjType expect_type,
   UNUSED(out);
   UNUSED(cast_mode);
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
   if (in.is_pl_extend()) {
     if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
       pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
@@ -1544,7 +1549,7 @@ static int int_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonInt j_int(in.get_int());
     ObIJsonBase *j_base = &j_int;
     ObString raw_bin;
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get int json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -1593,7 +1598,7 @@ static int common_build_geometry(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObGeoErrLogInfo log_info;
-  if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info))) {
+  if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
     if (OB_ERR_GIS_INVALID_DATA == ret && OB_NOT_NULL(cast_name)) {
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, cast_name);
     } else if (OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE == ret && OB_NOT_NULL(cast_name)) {
@@ -1967,7 +1972,7 @@ static int uint_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonUint j_uint(in.get_uint64());
     ObIJsonBase *j_base = &j_uint;
     ObString raw_bin;
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get uint json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -2416,7 +2421,7 @@ static int float_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonDouble j_double(in.get_float());
     ObIJsonBase *j_base = &j_double;
     ObString raw_bin;
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get float json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -2889,7 +2894,7 @@ static int double_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonDouble j_double(in.get_double());
     ObIJsonBase *j_base = &j_double;
     ObString raw_bin;
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get double json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -3465,7 +3470,7 @@ static int number_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonDecimal j_dec(nmb, -1, in.get_scale());
     ObIJsonBase *j_base = &j_dec;
     ObString raw_bin;
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get decimal json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -3914,7 +3919,7 @@ static int datetime_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonDatetime j_datetime(j_type, ob_time);
       ObIJsonBase *j_base = &j_datetime;
       ObString raw_bin;
-      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get datetime json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -4242,7 +4247,7 @@ static int date_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonDatetime j_date(ObJsonNodeType::J_DATE, ob_time);
       ObIJsonBase *j_base = &j_date;
       ObString raw_bin;
-      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get date json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -4588,7 +4593,7 @@ static int time_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonDatetime j_time(ObJsonNodeType::J_TIME, ob_time);
       ObIJsonBase *j_base = &j_time;
       ObString raw_bin;
-      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get time json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -4919,7 +4924,7 @@ static int year_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonInt j_year(full_year);
     ObIJsonBase *j_base = &j_year;
     ObString raw_bin;
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get year json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -6129,7 +6134,7 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
 
     if (OB_SUCC(ret)) {
       ObString raw_bin;
-      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get string json binary", K(ret), K(in), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -6332,9 +6337,10 @@ static int string_geometry(const ObObjType expect_type, ObObjCastParams &params,
       ObString res_wkb;
       if (OB_FAIL(ObGeoTypeUtil::add_geo_version(temp_allocator, in_str, res_wkb))) {
         LOG_WARN("fail to add version", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(set_geo_res(&params, &out, res_wkb))) {
+        LOG_WARN("set geo result failed", K(ret));
       } else {
-        out.set_string(expect_type, res_wkb.ptr(), res_wkb.length());
-        SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_wkb.length());
+        SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, static_cast<ObLength>(out.get_string_len()));
       }
     } else if (OB_FAIL(geometry_geometry(expect_type, params, in, out, cast_mode))) {
       LOG_WARN("fail to cast geometry", K(ret), K(dst_geo_type));
@@ -6738,7 +6744,7 @@ static int bit_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonOpaque j_opaque(j_value, ObBitType);
       ObIJsonBase *j_base = &j_opaque;
       ObString raw_bin;
-      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get int json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(copy_string(params, expect_type, raw_bin.ptr(), raw_bin.length(), out))) {
         LOG_WARN("fail to copy string", K(ret), K(expect_type), K(raw_bin));
@@ -7018,11 +7024,20 @@ ObCastEnumOrSetFunc OB_CAST_ENUM_OR_SET[ObMaxTC][2] =
     cast_not_support_enum_set,/*enum*/
     cast_not_support_enum_set,/*set*/
   },
+  {/*ObUserDefinedSQLTC -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
   {
     /*Decimalint -> enum_or_set*/
     decimalint_enum,/*enum*/
     decimalint_set,/*set*/
-  }
+  },
+  {
+    /*ObCollectionSQLTC -> enum_or_set*/
+    cast_not_support_enum_set,/*enum*/
+    cast_not_support_enum_set,/*set*/
+  },
 };
 
 ////////////////////////////////////////////////////////////
@@ -8223,7 +8238,7 @@ static int json_int(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8261,7 +8276,7 @@ static int json_uint(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8322,7 +8337,7 @@ static int json_double(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8359,7 +8374,7 @@ static int json_number(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8396,7 +8411,7 @@ static int json_datetime(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8430,7 +8445,7 @@ static int json_date(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8464,7 +8479,7 @@ static int json_time(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8499,7 +8514,7 @@ static int json_year(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8542,7 +8557,7 @@ static int json_raw(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     ObJsonBuffer j_buf(params.allocator_v2_);
     ObString j_bin_str = in.get_string();
-    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8614,7 +8629,7 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -8682,7 +8697,7 @@ static int common_json_string(const ObObjType expect_type,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       ObString j_str;
       if (OB_FAIL(j_bin.reset_iter())) {
@@ -8762,7 +8777,7 @@ static int json_bit(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
@@ -9280,7 +9295,7 @@ static int sql_udt_pl_extend(const ObObjType expect_type, ObObjCastParams &param
                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
   if (in.is_xml_sql_type()) {
     // no need to read blob full data
     pl::ObPLXmlType *xmltype = NULL;
@@ -9308,7 +9323,32 @@ static int sql_udt_pl_extend(const ObObjType expect_type, ObObjCastParams &param
         data->set_collation_type(CS_TYPE_UTF8MB4_BIN);
         xmltype->set_data(data);
         out.set_extend(reinterpret_cast<int64_t>(xmltype), pl::PL_OPAQUE_TYPE);
-        // need deep copy?
+      }
+    }
+  } else if (in.is_user_defined_sql_type()) {
+    if (OB_ISNULL(params.exec_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("need execute ctx to get subschema map on phyplan ctx", K(ret), K(in));
+    } else {
+      const uint16_t subschema_id = in.get_meta().get_subschema_id();
+      ObSqlUDTMeta udt_meta;
+      // Notice: udt_type_id (accuray) does not exist in output obj meta,
+      // should set subschema_id on input obj_meta in code generation
+      if (OB_FAIL(sql::ObSqlUdtUtils::get_sqludt_meta_by_subschema_id(params.exec_ctx_,
+                                                                      subschema_id,
+                                                                      udt_meta))) {
+        LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+      } else if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE || udt_meta.pl_type_ == pl::PL_VARRAY_TYPE) {
+        ObString udt_data = in.get_string();
+        if (OB_FAIL(sql::ObSqlUdtUtils::cast_sql_record_to_pl_record(params.exec_ctx_,
+                                                                     out,
+                                                                     udt_data,
+                                                                     udt_meta))) {
+          LOG_WARN("failed to cast sql collection to pl collection", K(ret), K(udt_meta.udt_id_));
+        }
+      } else {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("inconsistent datatypes", K(ret), K(in), K(subschema_id), K(udt_meta.udt_id_));
       }
     }
   } else {
@@ -9324,7 +9364,6 @@ static int string_sql_udt(const ObObjType expect_type, ObObjCastParams &params,
                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
   if (in.is_string_type()) {
     ObMulModeMemCtx* mem_ctx = nullptr;
     ObIAllocator &temp_allocator = *params.allocator_v2_;
@@ -9383,9 +9422,6 @@ static int string_sql_udt(const ObObjType expect_type, ObObjCastParams &params,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
   }
-#else
-  ret = OB_NOT_SUPPORTED;
-#endif
   return ret;
 }
 
@@ -9393,8 +9429,10 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
-  if (in.is_pl_extend()) {
+#ifdef OB_BUILD_ORACLE_PL
+  if (in.is_null()) {
+    out.set_null();
+  } else if (in.is_pl_extend()) {
     if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
       pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
       if (OB_ISNULL(pl_src)) {
@@ -9406,7 +9444,6 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
         if (OB_ISNULL(blob_obj) || blob_obj->is_null()) {
           out.set_sql_udt("", 0, ObXMLSqlType);
         } else {
-          // deep copy here or by the caller ?
           ObString xml_data = blob_obj->get_string();
           int64_t xml_data_size = xml_data.length();
           char *xml_data_buff = static_cast<char *>(params.alloc(xml_data_size));
@@ -9426,6 +9463,69 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
       }
+    } else {
+      uint64_t udt_id;
+      uint16_t subschema_id;
+      ObSqlUDT sql_udt;
+      ObSqlUDTMeta udt_meta;
+      ObString res_str;
+      bool is_null_res = false;
+      if (pl::PL_RECORD_TYPE == in.get_meta().get_extend_type()) {
+        pl::ObPLRecord *pl_src = reinterpret_cast<pl::ObPLRecord*>(in.get_ext());
+        if (OB_ISNULL(pl_src)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("failed to get pl data type info", K(ret), K(in));
+        } else if (pl_src->is_null()) {
+          is_null_res = true;
+        } else {
+          udt_id = pl_src->get_id();
+        }
+      } else if (pl::PL_VARRAY_TYPE == in.get_meta().get_extend_type()) {
+        pl::ObPLVArray *pl_src = reinterpret_cast<pl::ObPLVArray*>(in.get_ext());
+        if (OB_ISNULL(pl_src)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("failed to get pl data type info", K(ret), K(in));
+        } else if (pl_src->is_null()) {
+          is_null_res = true;
+        } else {
+          udt_id = pl_src->get_id();
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported extend type", K(ret), K(in.get_meta().get_extend_type()));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (is_null_res) {
+        out.set_null();
+      } else if (OB_FAIL(params.exec_ctx_->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
+        LOG_WARN("Failed to get subshcema_meta_info", K(ret), K(udt_id));
+      } else if (OB_FAIL(sql::ObSqlUdtUtils::get_sqludt_meta_by_subschema_id(params.exec_ctx_,
+                                                                             subschema_id,
+                                                                             udt_meta))) {
+        LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+      } else if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("inconsistent datatypes", K(ret), K(in), K(subschema_id), K(udt_meta.udt_id_));
+      } else if (FALSE_IT(sql_udt.set_udt_meta(udt_meta))) {
+      } else if (sql_udt.get_udt_meta().pl_type_ == pl::PL_VARRAY_TYPE) { // single varray
+        if (OB_FAIL(sql::ObSqlUdtUtils::cast_pl_varray_to_sql_varray(*params.allocator_v2_, res_str, in))) {
+          LOG_WARN("convert pl record to sql record failed", K(ret), K(subschema_id), K(udt_meta.udt_id_));
+        } else {
+          out.set_sql_udt(res_str.ptr(), static_cast<int32_t>(res_str.length()), subschema_id);
+        }
+      } else { // record
+        if (OB_FAIL(sql::ObSqlUdtUtils::cast_pl_record_to_sql_record(*params.allocator_v2_,
+                                                                      *params.allocator_v2_,
+                                                                      params.exec_ctx_,
+                                                                      res_str,
+                                                                      sql_udt,
+                                                                      in))) {
+          LOG_WARN("convert pl record to sql record failed",
+                  K(ret), K(subschema_id), K(udt_meta.udt_id_));
+        } else {
+          out.set_sql_udt(res_str.ptr(), static_cast<int32_t>(res_str.length()), subschema_id);
+        }
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -9437,11 +9537,73 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
   return ret;
 }
 
+static int pl_extend_geometry(const ObObjType expect_type, ObObjCastParams &params,
+                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  ObLength res_length = -1;
+  ObIAllocator &temp_allocator = *params.allocator_v2_;
+  uint64_t tenant_id = MTL_ID();
+  ObString res_wkb;
+
+  if (in.is_null()) {
+    out.set_null();
+  } else if (in.is_pl_extend() && pl::PL_RECORD_TYPE == in.get_meta().get_extend_type()) {
+    pl::ObPLRecord *pl_src = reinterpret_cast<pl::ObPLRecord*>(in.get_ext());
+    if (OB_ISNULL(pl_src)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("failed to get pl data type info", K(ret), K(in));
+    } else if (pl_src->is_null()) {
+      out.set_null();
+    } else if (pl_src->get_id() == T_OBJ_SDO_GEOMETRY) {
+      if (OB_FAIL(pl::ObSdoGeometry::pl_extend_to_wkb(&temp_allocator, const_cast<ObObj &>(in), tenant_id, res_wkb))) {
+        LOG_WARN("failed to get geometry wkb from pl extend", K(ret), K(cast_mode));
+      } else if (OB_FAIL(set_geo_res(&params, &out, res_wkb))) {
+        LOG_WARN("set geo result failed", K(ret));
+      } else {
+        res_length = static_cast<ObLength>(out.get_string_len());
+      }
+      SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
+  }
+#else
+  ret = OB_NOT_SUPPORTED;
+#endif
+  return ret;
+}
+
+static int geometry_pl_extend(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  ObString res_wkb = in.get_string();
+  if (OB_ISNULL(params.exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, res_wkb))) {
+    LOG_WARN("fail to get real data.", K(ret), K(res_wkb));
+  } else if (OB_FAIL(pl::ObSdoGeometry::wkb_to_pl_extend(params.exec_ctx_->get_allocator(), params.exec_ctx_, res_wkb, out))) {
+    LOG_WARN("failed to get geometry wkb from pl extend", K(ret), K(cast_mode));
+  }
+#else
+  ret = OB_NOT_SUPPORTED;
+#endif
+  return ret;
+}
+
 static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params,
                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
   if (in.is_pl_extend()) {
     if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
       pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
@@ -9481,15 +9643,15 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
         // then call this directly: select replace(xml_data,xml_data2 ,'1') into stringval from dual;
         out.set_null();
       } else {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NOT_SUPPORTED;
         LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
     }
   } else {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
   }
 #else
@@ -9521,7 +9683,6 @@ static int udt_string(const ObObjType expect_type, ObObjCastParams &params,
                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
   if (in.is_xml_sql_type()) {
     ObString blob_data = in.get_string();
     ObStringBuffer xml_plain_text(params.allocator_v2_);
@@ -9549,9 +9710,6 @@ static int udt_string(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN_RET(OB_ERR_INVALID_TYPE_FOR_OP, "inconsistent datatypes",
       "expected", expect_type, "got", in.get_type(), K(in.get_udt_subschema_id()));
   }
-#else
-  ret = OB_NOT_SUPPORTED;
-#endif
   return ret;
 }
 
@@ -10466,6 +10624,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_identity,/*geometry*/
     cast_not_expected,/*udt, mysql mode does not have udt*/
     cast_identity,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*int -> XXX*/
@@ -10495,6 +10654,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     int_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     int_decimalint,/*decimal int*/
+    cast_not_expected,/*collection*/
   },
   {
     /*uint -> XXX*/
@@ -10524,6 +10684,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     uint_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     uint_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*float -> XXX*/
@@ -10553,6 +10714,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     float_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     float_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*double -> XXX*/
@@ -10582,6 +10744,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     double_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     double_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*number -> XXX*/
@@ -10611,6 +10774,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     number_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     number_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*datetime -> XXX*/
@@ -10640,6 +10804,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     datetime_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     datetime_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*date -> XXX*/
@@ -10669,6 +10834,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     date_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     date_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*time -> XXX*/
@@ -10698,6 +10864,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     time_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     time_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*year -> XXX*/
@@ -10727,6 +10894,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     year_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     year_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*string -> XXX*/
@@ -10756,6 +10924,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     string_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*extend -> XXX*/
@@ -10785,6 +10954,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     pl_extend_sql_udt,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*unknown -> XXX*/
@@ -10814,6 +10984,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     unknown_other,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*text -> XXX*/
@@ -10843,6 +11014,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     text_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*bit -> XXX*/
@@ -10872,6 +11044,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     bit_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     bit_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*enum -> XXX*/
@@ -10901,6 +11074,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     enumset_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -10930,6 +11104,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     enumset_inner_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*otimestamp -> XXX*/
@@ -10959,6 +11134,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*raw -> XXX*/
@@ -10988,6 +11164,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*interval -> XXX*/
@@ -11017,6 +11194,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*rowid -> XXX*/
@@ -11046,6 +11224,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*lob -> XXX*/
@@ -11075,6 +11254,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     lob_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     lob_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*json -> XXX*/
@@ -11104,6 +11284,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     json_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     json_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*geometry -> XXX*/
@@ -11133,6 +11314,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     geometry_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     geometry_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
   },
   {
     /*udt -> XXX*/
@@ -11191,6 +11373,37 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     decimalint_geometry,/*geometry*/
     cast_not_expected, /*udt*/
     decimalint_decimalint,/*decimalint*/
+    cast_not_expected,/*collection*/
+  },
+  {
+    /*collection-> xxx*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected, /*udt*/
+    cast_not_expected,/*decimalint*/
+    cast_not_expected,/*collection*/
   }
 };
 
@@ -11224,6 +11437,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_identity,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*int -> XXX*/
@@ -11250,9 +11464,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json not support oracle yet*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     int_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*uint -> XXX*/
@@ -11279,9 +11494,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/* json */
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     uint_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*float -> XXX*/
@@ -11308,9 +11524,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json */
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     float_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*double -> XXX*/
@@ -11337,9 +11554,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json */
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     double_decimalint, /*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*number -> XXX*/
@@ -11366,9 +11584,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json */
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     number_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*datetime -> XXX*/
@@ -11395,9 +11614,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json */
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*date -> XXX*/
@@ -11427,6 +11647,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*time -> XXX*/
@@ -11453,9 +11674,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json */
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*year -> XXX*/
@@ -11482,9 +11704,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/* json */
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*string -> XXX*/
@@ -11511,9 +11734,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     string_rowid,/*rowid*/
     cast_inconsistent_types,/*lob*/
     string_json,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     string_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*extend -> XXX*/
@@ -11540,9 +11764,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    pl_extend_geometry,/*geometry*/
     pl_extend_sql_udt,/*udt*/
     cast_not_support,/*decimalint*/
+    pl_extend_sql_udt,/*collection*/
   },
   {
     /*unknown -> XXX*/
@@ -11569,9 +11794,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     unknown_other,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_not_support,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     unknown_other,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*text -> XXX*/
@@ -11598,9 +11824,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     text_json,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     text_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*bit -> XXX*/
@@ -11627,9 +11854,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*enum -> XXX*/
@@ -11656,9 +11884,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -11685,9 +11914,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*otimestamp -> XXX*/
@@ -11714,9 +11944,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*raw -> XXX*/
@@ -11743,9 +11974,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*interval -> XXX*/
@@ -11772,9 +12004,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*rowid -> XXX*/
@@ -11801,9 +12034,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     rowid_rowid,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*lob -> XXX*/
@@ -11830,9 +12064,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_inconsistent_types,/*lob*/
     lob_json,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     lob_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*json -> XXX, not support oracle currently*/
@@ -11859,9 +12094,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     json_lob,/*lob*/
     json_json,/*json*/
-    cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*geometry -> XXX, not support oracle currently*/
@@ -11876,7 +12112,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*time*/
     cast_not_support,/*year*/
     cast_not_support,/*string*/
-    cast_not_support,/*extend*/
+    geometry_pl_extend,/*extend*/
     cast_not_support,/*unknown*/
     cast_not_support,/*text*/
     cast_not_support,/*bit*/
@@ -11888,9 +12124,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
-    cast_not_support,/*geometry*/
+    geometry_geometry,/*geometry*/
     cast_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_not_support,/*collection*/
   },
   {
     /*udt -> XXX, not support oracle currently*/
@@ -11920,6 +12157,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*geometry*/
     cast_udt_to_other_not_support,/*udt*/
     cast_udt_to_other_not_support,/*decimal int*/
+    cast_udt_to_other_not_support,/*collection*/
   },
   {
     /*decimalint -> XXX*/
@@ -11949,8 +12187,38 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_to_udt_not_support, /*udt*/
     decimalint_decimalint,/*decimalint*/
-  }
-
+    cast_to_udt_not_support, /*collection*/
+  },
+  {
+    /*collection -> XXX*/
+    cast_udt_to_other_not_support,/*null*/
+    cast_udt_to_other_not_support,/*int*/
+    cast_udt_to_other_not_support,/*uint*/
+    cast_udt_to_other_not_support,/*float*/
+    cast_udt_to_other_not_support,/*double*/
+    cast_udt_to_other_not_support,/*number*/
+    cast_udt_to_other_not_support,/*datetime*/
+    cast_udt_to_other_not_support,/*date*/
+    cast_udt_to_other_not_support,/*time*/
+    cast_udt_to_other_not_support,/*year*/
+    udt_string,/*string*/
+    sql_udt_pl_extend,/*extend*/
+    cast_udt_to_other_not_support,/*unknown*/
+    cast_udt_to_other_not_support,/*text*/
+    cast_udt_to_other_not_support,/*bit*/
+    cast_udt_to_other_not_support,/*enumset*/
+    cast_udt_to_other_not_support,/*enumset_inner*/
+    cast_udt_to_other_not_support,/*otimestamp*/
+    cast_udt_to_other_not_support,/*raw*/
+    cast_udt_to_other_not_support,/*interval*/
+    cast_udt_to_other_not_support,/*rowid*/
+    cast_udt_to_other_not_support,/*lob*/
+    cast_udt_to_other_not_support,/*json*/
+    cast_udt_to_other_not_support,/*geometry*/
+    cast_udt_to_other_not_support,/*udt*/
+    cast_not_expected,/*decimalint*/
+    cast_udt_to_other_not_support,/*collection*/
+  },
 };
 
 /*
@@ -11989,9 +12257,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_identity, /*rowid*/
     cast_identity,/*lob*/
     cast_identity,/*json*/
-    cast_not_support,/*geometry*/
+    cast_identity,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_identity,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*int -> XXX*/
@@ -12018,9 +12287,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     int_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*uint -> XXX*/
@@ -12047,9 +12317,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     uint_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*float -> XXX*/
@@ -12076,9 +12347,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     float_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*double -> XXX*/
@@ -12105,9 +12377,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     double_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*number -> XXX*/
@@ -12134,9 +12407,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     number_lob,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     number_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*datetime -> XXX*/
@@ -12163,9 +12437,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*date -> XXX*/
@@ -12192,9 +12467,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*time -> XXX*/
@@ -12221,9 +12497,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*year -> XXX*/
@@ -12250,9 +12527,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*string -> XXX*/
@@ -12279,9 +12557,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_rowid,/*rowid*/
     string_lob,/*lob*/
     string_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     string_sql_udt,/*udt*/
     string_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*extend -> XXX*/
@@ -12308,9 +12587,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_extend_types_not_support,/*lob*/
     cast_inconsistent_type_json_explicit,/*json*/
-    cast_not_support,/*geometry*/
+    pl_extend_geometry,/*geometry*/
     pl_extend_sql_udt,/*udt*/
     cast_not_expected,/*decimalint*/
+    pl_extend_sql_udt,/*collection*/
   },
   {
     /*unknown -> XXX*/
@@ -12337,9 +12617,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*text -> XXX*/
@@ -12366,9 +12647,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     text_rowid,/*rowid*/
     text_lob,/*lob*/
     text_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     text_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*bit -> XXX*/
@@ -12395,9 +12677,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*enum -> XXX*/
@@ -12424,9 +12707,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_not_expected,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -12456,6 +12740,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*otimestamp -> XXX*/
@@ -12482,9 +12767,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*raw -> XXX*/
@@ -12511,9 +12797,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     raw_lob,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*interval -> XXX*/
@@ -12540,9 +12827,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /* rowid -> XXX */
@@ -12569,9 +12857,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     rowid_rowid,/*rowid*/
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_inconsistent_types,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*lob -> XXX*/
@@ -12598,9 +12887,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     lob_rowid,/*rowid*/
     lob_lob,/*lob*/
     lob_json,/*json*/
-    cast_not_support,/*geometry*/
+    lob_geometry,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     lob_decimalint,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*json -> XXX*/
@@ -12627,9 +12917,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     json_lob,/*lob*/
     json_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*geoemtry -> XXX, not support oracle currently*/
@@ -12644,7 +12935,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*time*/
     cast_not_support,/*year*/
     cast_not_support,/*string*/
-    cast_not_support,/*extend*/
+    geometry_pl_extend,/*extend*/
     cast_not_support,/*unknown*/
     cast_not_support,/*text*/
     cast_not_support,/*bit*/
@@ -12656,9 +12947,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*rowid*/
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
-    cast_not_support,/*geometry*/
+    geometry_geometry,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_to_udt_not_support,/*collection*/
   },
   {
     /*udt -> XXX*/
@@ -12688,6 +12980,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*geometry*/
     cast_udt_to_other_not_support,/*udt*/
     cast_udt_to_other_not_support,/*decimal int*/
+    cast_udt_to_other_not_support,/*collection*/
   },
   {
     /*decimalint -> XXX*/
@@ -12714,10 +13007,41 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*rowid*/
     decimalint_lob,/*lob*/
     cast_inconsistent_types_json,/*json*/
-    cast_not_support,/*geometry*/
+    cast_inconsistent_types,/*geometry*/
     cast_to_udt_not_support, /* udt */
     decimalint_decimalint,/*decimalint*/
-  }
+    cast_to_udt_not_support,/*collection*/
+  },
+  {
+    /*collection -> XXX*/
+    cast_udt_to_other_not_support,/*null*/
+    cast_udt_to_other_not_support,/*int*/
+    cast_udt_to_other_not_support,/*uint*/
+    cast_udt_to_other_not_support,/*float*/
+    cast_udt_to_other_not_support,/*double*/
+    cast_udt_to_other_not_support,/*number*/
+    cast_udt_to_other_not_support,/*datetime*/
+    cast_udt_to_other_not_support,/*date*/
+    cast_udt_to_other_not_support,/*time*/
+    cast_udt_to_other_not_support,/*year*/
+    udt_string,/*string*/
+    sql_udt_pl_extend,/*extend*/
+    cast_udt_to_other_not_support,/*unknown*/
+    cast_udt_to_other_not_support,/*text*/
+    cast_udt_to_other_not_support,/*bit*/
+    cast_udt_to_other_not_support,/*enumset*/
+    cast_udt_to_other_not_support,/*enumset_inner*/
+    cast_udt_to_other_not_support,/*otimestamp*/
+    cast_udt_to_other_not_support,/*raw*/
+    cast_udt_to_other_not_support,/*interval*/
+    cast_udt_to_other_not_support,/*rowid*/
+    cast_udt_to_other_not_support,/*lob*/
+    cast_udt_to_other_not_support,/*json*/
+    cast_udt_to_other_not_support,/*geometry*/
+    cast_udt_to_other_not_support,/*udt*/
+    cast_udt_to_other_not_support,/*decimalint*/
+    cast_udt_to_other_not_support,/*collection*/
+  },
 };
 
 ////////////////////////////////////////////////////////////////
@@ -13109,11 +13433,16 @@ int number_range_check_v2(ObObjCastParams &params, const ObAccuracy &accuracy,
       } else {
         if (OB_FAIL(out_val.from(in_val, allocator))) {
         } else if (OB_FAIL(out_val.round(scale))) {
-        } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
-          in_val.compare(out_val) != 0) {
-          ret = OB_OPERATE_OVERFLOW;
-          LOG_WARN("input value is out of range.", K(scale), K(in_val));
-        } else {
+        } else if (!in_val.is_equal(out_val)) {
+          if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode)) {
+            ret = OB_OPERATE_OVERFLOW;
+            LOG_WARN("input value is out of range.", K(ret), K(scale), K(in_val));
+          } else if (lib::is_mysql_mode()) {
+            // MySQL emits warnings for decimal column truncation, regardless of sql_mode settings.
+            params.warning_ = OB_ERR_DATA_TOO_LONG;
+          }
+        }
+        if (OB_SUCC(ret)) {
           buf_obj.set_number(obj.get_type(), out_val);
         }
       }
@@ -14210,7 +14539,7 @@ int ObObjCaster::bool_to_json(const ObObjType expect_type,
     ObJsonBoolean j_bool(bool_val);
     ObIJsonBase *j_base = &j_bool;
     ObString raw_bin;
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, cast_ctx.allocator_v2_))) {
+    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, cast_ctx.allocator_v2_))) {
       LOG_WARN("fail to get bool json binary", K(ret), K(in_obj), K(expect_type));
     } else if (OB_FAIL(set_json_bin_res(&cast_ctx, &buf_obj, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -14252,7 +14581,7 @@ int ObObjCaster::enumset_to_json(const ObObjType expect_type,
     } else {
       j_base = &j_string;
       ObString raw_bin;
-      if (OB_FAIL(j_base->get_raw_binary(raw_bin, cast_ctx.allocator_v2_))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, cast_ctx.allocator_v2_))) {
         LOG_WARN("fail to get string json binary", K(ret), K(in_obj));
       } else if (OB_FAIL(set_json_bin_res(&cast_ctx, &buf_obj, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));

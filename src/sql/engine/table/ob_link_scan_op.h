@@ -64,7 +64,6 @@ private:
   bool iter_end_;
   common::ObArenaAllocator row_allocator_;
   int64_t iterated_rows_;
-  ObSQLSessionInfo *tm_session_;
   common::sqlclient::ObISQLConnection *tm_rm_connection_;
   ObReverseLink *reverse_link_;
   sql::DblinkGetConnType conn_type_;

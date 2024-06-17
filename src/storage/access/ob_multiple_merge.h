@@ -51,10 +51,16 @@ public:
       ObTableAccessParam &param,
       ObTableAccessContext &context,
       ObGetTableParam &get_table_param);
+  virtual int switch_table(
+      ObTableAccessParam &param,
+      ObTableAccessContext &context,
+      ObGetTableParam &get_table_param);
   virtual int get_next_row(blocksstable::ObDatumRow *&row);
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   virtual void reset();
   virtual void reuse();
+  // used for global cached query iterator
+  virtual void reclaim();
 
   void disable_padding() { need_padding_ = false; }
   void disable_fill_default() { need_fill_default_ = false; }
@@ -80,11 +86,13 @@ protected:
       const common::ObIArray<int32_t> *projector,
       const int64_t range_idx_delta,
       blocksstable::ObDatumRow &projected_row);
-  void reset_iter_array();
+  void reset_iter_array(const bool can_reuse = false);
   void reuse_iter_array();
+  void reclaim_iter_array();
+  int handle_4377(const char* func);
   void dump_tx_statistic_for_4377(ObStoreCtx *store_ctx);
   void dump_table_statistic_for_4377();
-
+  int set_base_version() const;
 private:
   int get_next_normal_row(blocksstable::ObDatumRow *&row);
   int get_next_normal_rows(int64_t &count, int64_t capacity);
@@ -118,6 +126,7 @@ private:
   void reuse_lob_locator();
   void report_tablet_stat();
   OB_INLINE int update_and_report_tablet_stat();
+  void inner_reset();
 
 protected:
   common::ObArenaAllocator padding_allocator_;
@@ -127,7 +136,6 @@ protected:
   common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> tables_;
   blocksstable::ObDatumRow cur_row_;
   blocksstable::ObDatumRow unprojected_row_;
-  const ObIArray<int32_t> *out_cols_projector_;
   int64_t curr_scan_index_;
   blocksstable::ObDatumRowkey curr_rowkey_;
   ObNopPos nop_pos_;
@@ -142,7 +150,10 @@ protected:
   ObGetTableParam *get_table_param_;
   bool read_memtable_only_;
   ObBlockRowStore *block_row_store_;
+  ObGroupByCell *group_by_cell_;
   sql::ObBitVector *skip_bit_;
+  ObIAllocator *long_life_allocator_;
+  ObStoreRowIterPool<ObStoreRowIterator> *stmt_iter_pool_;
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;
 private:

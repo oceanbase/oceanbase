@@ -65,6 +65,7 @@
 #include "sql/resolver/dcl/ob_create_role_stmt.h"
 #include "sql/resolver/dcl/ob_drop_role_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
+#include "sql/resolver/dcl/ob_alter_user_proxy_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_stmt.h"
 #include "sql/resolver/tcl/ob_start_trans_stmt.h"
 #include "sql/resolver/tcl/ob_end_trans_stmt.h"
@@ -79,6 +80,7 @@
 #include "sql/resolver/cmd/ob_clear_balance_task_stmt.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 #include "sql/resolver/cmd/ob_anonymous_block_stmt.h"
+#include "sql/resolver/cmd/ob_mock_stmt.h"
 #include "sql/resolver/prepare/ob_prepare_stmt.h"
 #include "sql/resolver/prepare/ob_execute_stmt.h"
 #include "sql/resolver/prepare/ob_deallocate_stmt.h"
@@ -136,6 +138,7 @@
 #include "sql/engine/cmd/ob_profile_cmd_executor.h"
 #include "sql/engine/cmd/ob_get_diagnostics_executor.h"
 #include "sql/engine/cmd/ob_lock_table_executor.h"
+#include "sql/engine/cmd/ob_mock_executor.h"
 #include "sql/engine/prepare/ob_prepare_executor.h"
 #include "sql/engine/prepare/ob_execute_executor.h"
 #include "sql/engine/prepare/ob_deallocate_executor.h"
@@ -473,6 +476,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObAlterUserProfileStmt, ObAlterUserProfileExecutor);
         break;
       }
+      case stmt::T_ALTER_USER_PROXY: {
+        DEFINE_EXECUTE_CMD(ObAlterUserProxyStmt, ObAlterUserProxyExecutor);
+        break;
+      }
       case stmt::T_ALTER_USER_PRIMARY_ZONE: {
         DEFINE_EXECUTE_CMD(ObAlterUserPrimaryZoneStmt, ObAlterUserPrimaryZoneExecutor);
         break;
@@ -511,10 +518,15 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         break;
       }
       case stmt::T_EXECUTE: {
-        // ps文本模式应该要返回结果，不能定义为cmd
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ps text shoudle be handled as normal query, not cmd", K(ret));
-        // DEFINE_EXECUTE_CMD(ObExecuteStmt, ObExecuteExecutor);
+        // only call procedure run this logic, text ps mode execute call procedure,
+        // if procedure has out param, it should return result to argument
+        ObExecuteStmt &stmt = *(static_cast<ObExecuteStmt*>(&cmd));
+        if (stmt::T_CALL_PROCEDURE != stmt.get_prepare_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ps text shoudle be handled as normal query, not cmd", K(ret));
+        } else {
+          DEFINE_EXECUTE_CMD(ObExecuteStmt, ObExecuteExecutor);
+        }
         break;
       }
       case stmt::T_DEALLOCATE: {
@@ -556,6 +568,12 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_FLUSH_DAG_WARNINGS: {
         DEFINE_EXECUTE_CMD(ObFlushDagWarningsStmt, ObFlushDagWarningsExecutor);
+        break;
+      }
+      case stmt::T_REPAIR_TABLE:
+      case stmt::T_CHECKSUM_TABLE:
+      case stmt::T_FLUSH_PRIVILEGES: {
+        DEFINE_EXECUTE_CMD(ObMockStmt, ObMockExecutor);
         break;
       }
       case stmt::T_SWITCH_REPLICA_ROLE: {
@@ -1038,6 +1056,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_CANCEL_CLONE: {
         DEFINE_EXECUTE_CMD(ObCancelCloneStmt, ObCancelCloneExecutor);
+        break;
+       }
+      case stmt::T_TRANSFER_PARTITION: {
+        DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

@@ -76,7 +76,7 @@ public:
   virtual int execute(sql::ObSql &engine, sql::ObSqlCtx &ctx, sql::ObResultSet &res)
   {
     int ret = OB_SUCCESS;
-    common::ObSqlInfoGuard si_guard(sql_);
+    SQL_INFO_GUARD(sql_, ObString(OB_MAX_SQL_ID_LENGTH, ctx.sql_id_));
     // Deep copy sql, because sql may be destroyed before result iteration.
     const int64_t alloc_size = sizeof(ObString) + sql_.length() + 1; // 1 for C terminate char
     void *mem = res.get_mem_pool().alloc(alloc_size);
@@ -441,8 +441,8 @@ int ObInnerSQLConnection::init_result(ObInnerSQLResult &res,
   result_set.get_exec_context().set_sql_ctx(&res.sql_ctx());
   res.sql_ctx().retry_times_ = retry_cnt;
   res.sql_ctx().session_info_ = &get_session();
-  res.sql_ctx().disable_privilege_check_ = OB_SYS_TENANT_ID == res.sql_ctx().session_info_->get_priv_tenant_id()
-                                            ? PRIV_CHECK_FLAG_DISABLE : PRIV_CHECK_FLAG_DISABLE;
+  res.sql_ctx().disable_privilege_check_ = is_check_priv()
+                                            ? PRIV_CHECK_FLAG_NORMAL : PRIV_CHECK_FLAG_DISABLE;
   res.sql_ctx().secondary_namespace_ = secondary_namespace;
   res.sql_ctx().is_prepare_protocol_ = is_prepare_protocol;
   res.sql_ctx().is_prepare_stage_ = is_prepare_stage;
@@ -531,6 +531,13 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   ObExecStatUtils::record_exec_timestamp(time_record, first_record, exec_timestamp);
   audit_record.exec_timestamp_ = exec_timestamp;
   audit_record.exec_timestamp_.update_stage_time();
+  audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+  if (audit_record.pl_trace_id_.is_invalid() &&
+        result_set.is_pl_stmt(result_set.get_stmt_type()) &&
+        OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+    audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
+  }
+  session.update_pure_sql_exec_time(audit_record.exec_timestamp_.elapsed_t_);
 
   if (enable_perf_event) {
     record_stat(session, result_set.get_stmt_type(), is_from_pl);
@@ -632,12 +639,10 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
         if (!(sql_ctx.self_add_plan_) && sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                 false, // false mean not first update plan stat
-                                result_set.get_exec_context().get_is_evolution(),
                                 table_row_count_list);
         } else if (sql_ctx.self_add_plan_ && !sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                 true,
-                                result_set.get_exec_context().get_is_evolution(),
                                 table_row_count_list);
         }
       }
@@ -914,11 +919,14 @@ template <typename T>
 int ObInnerSQLConnection::retry_while_no_tenant_resource(const int64_t cluster_id, const uint64_t &tenant_id, T function)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
   const int64_t max_retry_us = 128 * 1000;
   int64_t retry_us = 2 * 1000;
   bool need_retry = is_in_trans() ? false : true;
-
+  if (get_session().get_ddl_info().is_ddl()) {  // ddl retry in ddl scheduler layer
+    need_retry = false;
+  }
   // timeout related
   int64_t abs_timeout_us = 0;
   int64_t start_time = ObTimeUtility::current_time();
@@ -1427,9 +1435,10 @@ int ObInnerSQLConnection::execute_proc(const uint64_t tenant_id,
                                       ObString &sql,
                                       const share::schema::ObRoutineInfo &routine_info,
                                       const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                                      const ObTimeZoneInfo *tz_info)
+                                      const ObTimeZoneInfo *tz_info,
+                                      ObObj *result)
 {
-  UNUSEDx(tenant_id, allocator, params, sql, routine_info, udts, tz_info);
+  UNUSEDx(tenant_id, allocator, params, sql, routine_info, udts, tz_info, result);
   int ret = OB_SUCCESS;
   return ret;
 }
@@ -1794,6 +1803,7 @@ int ObInnerSQLConnection::nonblock_get_leader(
     int64_t tmp_abs_timeout_us = 0;
     const int64_t retry_interval_us = 200 * 1000; // 200ms
     do {
+      ret = OB_SUCCESS;
       tmp_abs_timeout_us = ObTimeUtility::current_time() + GCONF.location_cache_refresh_sql_timeout;
       if (THIS_WORKER.is_timeout()) {
         ret = OB_TIMEOUT;
@@ -1826,6 +1836,7 @@ int ObInnerSQLConnection::execute(
     const uint64_t tenant_id, sqlclient::ObIExecutor &executor)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(inner_execute);
   SMART_VAR(ObInnerSQLResult, res, get_session()) {
     if (OB_FAIL(res.init())) {
@@ -2111,38 +2122,6 @@ int ObInnerSQLConnection::end_nested_session(ObSQLSessionInfo::StmtSavedValue &s
     execute_end_timestamp_ = saved_conn.execute_end_timestamp_;
     saved_conn.reset();
   }
-  return ret;
-}
-
-int ObInnerSQLConnection::set_foreign_key_cascade(bool is_cascade)
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (extern_session_->set_foreign_key_casecade(is_cascade));
-  return ret;
-}
-
-int ObInnerSQLConnection::get_foreign_key_cascade(bool &is_cascade) const
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (is_cascade = extern_session_->is_foreign_key_cascade());
-  return ret;
-}
-
-int ObInnerSQLConnection::set_foreign_key_check_exist(bool is_check_exist)
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (extern_session_->set_foreign_key_check_exist(is_check_exist));
-  return ret;
-}
-
-int ObInnerSQLConnection::get_foreign_key_check_exist(bool &is_check_exist) const
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (is_check_exist = extern_session_->is_foreign_key_check_exist());
   return ret;
 }
 } // end of namespace observer

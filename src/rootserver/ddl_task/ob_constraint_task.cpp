@@ -106,6 +106,13 @@ int ObCheckConstraintValidationTask::process()
         LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema->get_schema_version(), is_oracle_mode, ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint str", K(ret));
+      } else if (OB_FAIL(ddl_schema_hint_str.append_fmt(is_oracle_mode ?
+                  " INDEX(\"%.*s\".\"%.*s\" PRIMARY)" : " INDEX(`%.*s`.`%.*s` PRIMARY)",
+            static_cast<int>(database_name.length()),
+            database_name.ptr(),
+            static_cast<int>(table_name.length()),
+            table_name.ptr()))) {
+        LOG_WARN("fail to assign index hint", K(ret));
       } else if (OB_FAIL(sql_string.assign_fmt(
           is_oracle_mode ?
               "SELECT /*+ %.*s */ 1 FROM \"%.*s\".\"%.*s\" WHERE NOT (%.*s) AND ROWNUM = 1" // for oracle mode
@@ -384,6 +391,20 @@ int ObForeignKeyConstraintValidationTask::check_fk_constraint_data_valid(
         LOG_WARN("failed to generate ddl schema hint", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(parent_table_schema.get_table_name_str(), parent_table_schema.get_schema_version(), is_oracle_mode, parent_ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint", K(ret));
+      } else if (OB_FAIL(child_ddl_schema_hint_str.append_fmt(is_oracle_mode ?
+                  " INDEX(\"%.*s\".\"%.*s\" PRIMARY)" : " INDEX(`%.*s`.`%.*s` PRIMARY)",
+            static_cast<int>(child_database_schema.get_database_name_str().length()),
+            child_database_schema.get_database_name_str().ptr(),
+            static_cast<int>(child_table_schema.get_table_name_str().length()),
+            child_table_schema.get_table_name_str().ptr()))) {
+        LOG_WARN("fail to assign index hint", K(ret));
+      } else if (OB_FAIL(parent_ddl_schema_hint_str.append_fmt(is_oracle_mode ?
+                  " INDEX(\"%.*s\".\"%.*s\" PRIMARY)" : " INDEX(`%.*s`.`%.*s` PRIMARY)",
+            static_cast<int>(parent_database_schema.get_database_name_str().length()),
+            parent_database_schema.get_database_name_str().ptr(),
+            static_cast<int>(parent_table_schema.get_table_name_str().length()),
+            parent_table_schema.get_table_name_str().ptr()))) {
+        LOG_WARN("fail to assign index hint", K(ret));
       }
       if (OB_SUCC(ret)) {
         // print "select "
@@ -586,7 +607,7 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
+  } else if (OB_FAIL(deserialize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
     LOG_WARN("deserialize params from message failed", K(ret));
   } else {
     object_id_ = table_id;
@@ -903,16 +924,20 @@ int ObConstraintTask::release_ddl_locks()
   }
 
   ObMySQLTransaction trans;
+  transaction::tablelock::ObTableLockOwnerID owner_id;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
+  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                 task_id_))) {
+    LOG_WARN("get owner id failed", K(ret), K(task_id_));
   } else if (OB_FAIL(ObDDLLock::unlock_for_common_ddl(*table_schema,
-                                                      transaction::tablelock::ObTableLockOwnerID(task_id_),
+                                                      owner_id,
                                                       trans))) {
     LOG_WARN("failed to unlock ddl", K(ret));
   } else if (nullptr != another_table_schema) {
     if (OB_FAIL(ObDDLLock::unlock_for_common_ddl(*another_table_schema,
-                                                 transaction::tablelock::ObTableLockOwnerID(task_id_),
+                                                 owner_id,
                                                  trans))) {
       LOG_WARN("failed to unlock ddl", K(ret));
     }
@@ -2005,14 +2030,14 @@ int ObConstraintTask::serialize_params_to_message(char *buf, const int64_t buf_l
   return ret;
 }
 
-int ObConstraintTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
+int ObConstraintTask::deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   ObAlterTableArg tmp_arg;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos))) {
+  } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id, buf, data_len, pos))) {
     LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));

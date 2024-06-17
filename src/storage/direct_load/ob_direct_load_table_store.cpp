@@ -32,16 +32,10 @@ using namespace table;
  */
 
 ObDirectLoadTableStoreParam::ObDirectLoadTableStoreParam()
-  : snapshot_version_(0),
-    lob_column_cnt_(0),
-    datum_utils_(nullptr),
-    col_descs_(nullptr),
-    cmp_funcs_(nullptr),
+  : datum_utils_(nullptr),
     file_mgr_(nullptr),
     is_multiple_mode_(false),
     is_fast_heap_table_(false),
-    online_opt_stat_gather_(false),
-    px_mode_(false),
     insert_table_ctx_(nullptr),
     dml_row_handler_(nullptr),
     extra_buf_(nullptr),
@@ -55,8 +49,7 @@ ObDirectLoadTableStoreParam::~ObDirectLoadTableStoreParam()
 
 bool ObDirectLoadTableStoreParam::is_valid() const
 {
-  return snapshot_version_ > 0 && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
-         nullptr != col_descs_ && nullptr != cmp_funcs_ &&
+  return table_data_desc_.is_valid() && nullptr != datum_utils_ &&
          nullptr != file_mgr_ && (!is_fast_heap_table_ ||
           (nullptr != insert_table_ctx_)) &&
          nullptr != dml_row_handler_;
@@ -110,16 +103,9 @@ int ObDirectLoadTableStoreBucket::init(const ObDirectLoadTableStoreParam &param,
       // new fast heap table
       ObDirectLoadFastHeapTableBuildParam fast_heap_table_build_param;
       fast_heap_table_build_param.tablet_id_ = tablet_id;
-      fast_heap_table_build_param.snapshot_version_ = param.snapshot_version_;
       fast_heap_table_build_param.table_data_desc_ = param.table_data_desc_;
-      fast_heap_table_build_param.datum_utils_ = param.datum_utils_;
-      fast_heap_table_build_param.col_descs_ = param.col_descs_;
-      fast_heap_table_build_param.lob_column_cnt_ = param.lob_column_cnt_;
-      fast_heap_table_build_param.cmp_funcs_ = param.cmp_funcs_;
       fast_heap_table_build_param.insert_table_ctx_ = param.insert_table_ctx_;
       fast_heap_table_build_param.dml_row_handler_ = param.dml_row_handler_;
-      fast_heap_table_build_param.online_opt_stat_gather_ = param.online_opt_stat_gather_;
-      fast_heap_table_build_param.px_mode_ = param.px_mode_;
       ObDirectLoadFastHeapTableBuilder *fast_heap_table_builder = nullptr;
       if (OB_ISNULL(fast_heap_table_builder =
                       table_builder_allocator_->alloc<ObDirectLoadFastHeapTableBuilder>())) {
@@ -241,7 +227,6 @@ int ObDirectLoadTableStore::init(const ObDirectLoadTableStoreParam &param)
   } else {
     const uint64_t tenant_id = MTL_ID();
     param_ = param;
-    allocator_.set_tenant_id(tenant_id);
     if (OB_FAIL(tablet_index_.create(64, "TLD_TS_PartMap", "TLD_TS_PartMap", tenant_id))) {
       LOG_WARN("fail to create hashmap", KR(ret));
     } else {
@@ -349,7 +334,8 @@ int ObDirectLoadTableStore::get_tables(ObIArray<ObIDirectLoadPartitionTable *> &
     LOG_WARN("ObDirectLoadTableStore not init", KR(ret), KP(this));
   } else {
     table_array.reset();
-    ObSEArray<ObIDirectLoadPartitionTable *, 16> bucket_table_array;
+    ObArray<ObIDirectLoadPartitionTable *> bucket_table_array;
+    bucket_table_array.set_tenant_id(MTL_ID());
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_ptr_array_.count(); ++i) {
       bucket_table_array.reset();
       if (OB_FAIL(bucket_ptr_array_.at(i)->get_tables(bucket_table_array, allocator))) {

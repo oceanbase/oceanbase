@@ -153,7 +153,7 @@ public:
     rcode_.warnings_.reset();
     rcode_.warnings_ = retcode.warnings_;
   }
-  void set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id);
+  void set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id, int64_t pkt_id, int64_t send_ts);
 
   bool need_increment_request_level(int pcode) const {
     return ((pcode > OB_SQL_PCODE_START && pcode < OB_SQL_PCODE_END)
@@ -166,7 +166,7 @@ public:
             || pcode == OB_CLEAN_SEQUENCE_CACHE || pcode == OB_FETCH_TABLET_AUTOINC_SEQ_CACHE
             || pcode == OB_BATCH_GET_TABLET_AUTOINC_SEQ || pcode == OB_BATCH_SET_TABLET_AUTOINC_SEQ
             || pcode == OB_CALC_COLUMN_CHECKSUM_REQUEST || pcode == OB_REMOTE_WRITE_DDL_REDO_LOG
-            || pcode == OB_REMOTE_WRITE_DDL_COMMIT_LOG);
+            || pcode == OB_REMOTE_WRITE_DDL_COMMIT_LOG || pcode == OB_REMOTE_WRITE_DDL_INC_COMMIT_LOG);
   }
 
   // when active is set as false, all RPC calls will simply return OB_INACTIVE_RPC_PROXY.
@@ -299,7 +299,7 @@ protected:
   ObRpcPacketCode pcode_;
   bool do_ratelimit_;
   int8_t is_bg_flow_;
-
+  int64_t first_pkt_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(Handle);
 };

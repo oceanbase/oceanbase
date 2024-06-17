@@ -107,6 +107,7 @@ ob_set_subtarget(ob_share common
   ob_gts_info.cpp
   ob_i_tablet_scan.cpp
   ob_index_builder_util.cpp
+  ob_fts_index_builder_util.cpp
   ob_inner_config_root_addr.cpp
   ob_io_device_helper.cpp
   ob_kv_parser.cpp
@@ -130,6 +131,7 @@ ob_set_subtarget(ob_share common
   ob_primary_zone_util.cpp
   ob_priv_common.cpp
   ob_proposal_id.cpp
+  ob_plugin_helper.cpp
   ob_replica_info.cpp
   ob_resource_limit.cpp
   ob_root_addr_agent.cpp
@@ -184,6 +186,9 @@ ob_set_subtarget(ob_share common
   ob_cluster_event_history_table_operator.cpp
   scn.cpp
   ob_throttling_utils.cpp
+  ob_storage_ha_diagnose_struct.cpp
+  ob_storage_ha_diagnose_operator.cpp
+  ob_compatibility_control.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed
@@ -248,6 +253,7 @@ ob_set_subtarget(ob_share common_mixed
   system_variable/ob_system_variable_factory.cpp
   system_variable/ob_system_variable_init.cpp
   ob_lob_access_utils.cpp
+  ob_json_access_utils.cpp
   table/ob_table.cpp
   table/ob_table_rpc_struct.cpp
   table/ob_table_load_define.cpp
@@ -512,6 +518,11 @@ ob_set_subtarget(ob_share balance
   balance/ob_balance_job_table_operator.cpp
   balance/ob_balance_task_table_operator.cpp
   balance/ob_balance_task_helper_operator.cpp
+  balance/ob_transfer_partition_task_table_operator.cpp
+)
+ob_set_subtarget(ob_share resource_limit_calculator
+  resource_limit_calculator/ob_resource_commmon.cpp
+  resource_limit_calculator/ob_resource_limit_calculator.cpp
 )
 
 if (OB_ERRSIM)
@@ -521,6 +532,15 @@ if (OB_ERRSIM)
    errsim_module/ob_errsim_module_interface_imp.cpp
  )
 endif()
+
+ob_set_subtarget(ob_share text_analysis
+  text_analysis/ob_text_analyzer.cpp
+  text_analysis/ob_token_stream.cpp
+)
+
+ob_set_subtarget(ob_share throttle
+  throttle/ob_throttle_common.cpp
+)
 
 ob_set_subtarget(ob_share wr
   wr/ob_wr_service.cpp

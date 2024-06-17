@@ -62,8 +62,6 @@ int init_oss_env();
 // Thread safe guaranteed by user.
 void fin_oss_env();
 
-bool is_oss_supported_checksum(ObStorageChecksumType checksum_type);
-
 class ObStorageOssStaticVar
 {
 public:
@@ -158,7 +156,6 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObString bucket_;
   common::ObString object_;
-  ObStorageChecksumType checksum_type_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssWriter);
 };
 
@@ -192,7 +189,6 @@ private:
   int partnum_;
   bool is_opened_;
   int64_t file_length_;
-  ObStorageChecksumType checksum_type_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssMultiPartWriter);
 };
@@ -287,7 +283,6 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObString bucket_;
   common::ObString object_;
-  ObStorageChecksumType checksum_type_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssAppendWriter);
 };

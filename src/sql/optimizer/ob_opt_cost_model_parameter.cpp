@@ -383,3 +383,30 @@ double ObOptCostModelParameter::get_hash_cost(const OptSystemStat& stat, int64_t
         return cost / stat.get_cpu_speed();
     }
 }
+
+double ObOptCostModelParameter::get_cmp_lob_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_cpu_speed() <= 0) {
+        return CMP_LOB_COST;
+    } else {
+        return CMP_LOB_COST / stat.get_cpu_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_cmp_udf_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_cpu_speed() <= 0) {
+        return CMP_UDF_COST;
+    } else {
+        return CMP_UDF_COST / stat.get_cpu_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_cmp_err_handle_expr_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_cpu_speed() <= 0) {
+        return CMP_ERR_HANDLE_EXPR_COST;
+    } else {
+        return CMP_ERR_HANDLE_EXPR_COST / stat.get_cpu_speed();
+    }
+}

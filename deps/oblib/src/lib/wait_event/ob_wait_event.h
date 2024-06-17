@@ -11,8 +11,20 @@
  */
 
 #ifdef WAIT_EVENT_DEF
-// symbol, id, name, param1, param2, param3, ObWaitClassIds::wait_class, is_phy, enable
-// USER_IO & SYSTEM_IO
+/**
+ * WAIT_EVENT_DEF(def, id, name, param1, param2, param3, wait_class, is_phy, enable)
+ * @param def Name of this wait event
+ * @param id Identifier of an wait event. ATTENTION: please add id placeholder on master.
+ * @param name Name for this wait event. Display on virtual table v$event_name
+ * @param param1 Additional showing param 1. Display on gv$active_session_history and gv$session_wait
+ * @param prarm2 Additional showing param 2. Display on gv$active_session_history and gv$session_wait
+ * @param param3 Additional showing param 3. Display on gv$active_session_history and gv$session_wait
+ * @param class Every wait event belongs to a class of wait event on deps/oblib/src/lib/wait_event/ob_wait_class.h
+ * @param is_phy Indicate whether this wait event can be nested. true for most cases.
+ * @param enable Means whether this wait event is enabled. Marked it false it you merely need it as an placeholder.
+ * NOTICE: do not reuse wait event id or rename wait event!
+*/
+// USER_IO & SYSTEM_IO 10001-11999
 WAIT_EVENT_DEF(NULL_EVENT, 10000, "", "", "", "", OTHER, true, true)
 WAIT_EVENT_DEF(DB_FILE_DATA_READ, 10001, "db file data read", "fd", "offset", "size", USER_IO, true, true)
 WAIT_EVENT_DEF(DB_FILE_DATA_INDEX_READ, 10002, "db file data `index read", "fd", "offset", "size", USER_IO, true, true)
@@ -30,19 +42,21 @@ WAIT_EVENT_DEF(ROW_STORE_DISK_READ, 11011, "row store disk read", "fd", "offset"
 WAIT_EVENT_DEF(MEMSTORE_MEM_PAGE_ALLOC_WAIT, 11015, "memstore memory page alloc wait", "cur_mem_hold", "sleep_interval", "cur_ts", SYSTEM_IO, true, true)
 WAIT_EVENT_DEF(PALF_READ, 11016, "palf read", "fd", "offset", "size", SYSTEM_IO, false, true)
 WAIT_EVENT_DEF(PALF_WRITE, 11017, "palf write", "fd", "offset", "size", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(OBJECT_STORAGE_WRITE, 11018, "object storage write", "fd", "offset", "size", SYSTEM_IO, true, false)
+WAIT_EVENT_DEF(OBJECT_STORAGE_READ, 11019, "object storage read", "fd", "offset", "size", SYSTEM_IO, true, false)
 
-// SCHEDULER
+// SCHEDULER 12001-12999
 WAIT_EVENT_DEF(OMT_WAIT, 12001, "sched wait", "req type", "req start timestamp", "wait start timestamp", SCHEDULER, true, false)
 WAIT_EVENT_DEF(OMT_IDLE, 12002, "sched idle", "wait start timestamp", "", "", IDLE, true, true)
 
-// NETWORK
+// NETWORK 13000-13999
 WAIT_EVENT_DEF(SYNC_RPC, 13000, "sync rpc", "pcode", "size", "", NETWORK, true, true)
 WAIT_EVENT_DEF(MYSQL_RESPONSE_WAIT_CLIENT, 13001, "mysql response wait client", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(DAS_ASYNC_RPC_LOCK_WAIT, 13002, "das wait remote response", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(NETWORK_QUEUE_WAIT, 13004, "wait for network request in queue", "pcode", "retry_times", "", NETWORK, true, true)
 
-// APPLICATION
+// APPLICATION 14001-14999
 WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter","owner",APPLICATION,false, true)
 WAIT_EVENT_DEF(MT_WRITE_LOCK_WAIT,14002,"memstore write lock wait","lock","waiter","owner",APPLICATION,false, false)
 WAIT_EVENT_DEF(ROW_LOCK_WAIT,14003,"row lock wait","lock","waiter","owner",APPLICATION,false, false)
@@ -104,7 +118,6 @@ WAIT_EVENT_DEF(ASYNC_COMMITTING_WAIT, 16018, "async commiting wait", "", "", "",
 WAIT_EVENT_DEF(OBCDC_PART_MGR_SCHEMA_VERSION_WAIT, 18000, "oblog part mgr schema version wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(SYNC_GET_GTS_WAIT, 18101, "sync get gts timestamp wait", "address", "", "", CONCURRENCY, true, true)
 
-// sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(DTL_PROCESS_CHANNEL_SLEEP, 20001, "sleep: dtl process channel sleep wait", "sleep_interval", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(DTL_DESTROY_CHANNEL_SLEEP, 20002, "sleep: dtl destroy channel sleep wait", "sleep_interval", "", "", CONCURRENCY, true, true)
@@ -112,35 +125,37 @@ WAIT_EVENT_DEF(STORAGE_WRITING_THROTTLE_SLEEP, 20003, "sleep: storage writing th
 WAIT_EVENT_DEF(STORAGE_AUTOINC_FETCH_RETRY_SLEEP, 20004, "sleep: tablet autoinc fetch new range retry wait", "sleep_interval", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(STORAGE_AUTOINC_FETCH_CONFLICT_SLEEP, 20005, "sleep: tablet autoinc fetch new range conflict wait", "sleep_interval", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(STORAGE_HA_FINISH_TRANSFER, 20006, "sleep: finish transfer sleep wait", "sleep_interval", "", "", CONCURRENCY, true, true)
-
-
-// logservice
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_IO_TASK_WAIT, 20007, "latch: log external storage io task wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_RW_WAIT, 20008, "latch: log external storage handler rw wait", "", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_WAIT, 20009, "latch: log external storage handler spin wait", "", "", "", CONCURRENCY, true, false)
 
-// share storage
+// share storage 21001-21999
 WAIT_EVENT_DEF(ZONE_STORAGE_MANAGER_LOCK_WAIT, 21001, "latch: zone storage manager maintaince lock wait", "address", "number", "tries", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(ZONE_STORAGE_INFO_RW_LOCK_WAIT, 21002, "latch: zone storage infos rw lock wait", "address", "number", "tries", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(DEVICE_MANIFEST_RW_LOCK_WAIT, 21003, "latch: device_manifest rw lock wait", "address", "number", "tries", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(MANIFEST_TASK_LOCK_WAIT, 21004, "latch: manifest task lock wait", "address", "number", "tries", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(OB_DEVICE_CREDENTIAL_MGR_WAIT, 21005, "latch: device credential mgr wait", "address", "number", "tries", CONCURRENCY, true, false)
-WAIT_EVENT_DEF(TIERED_BLOCK_MANAGER_LOCK_WAIT, 21006, "tiered block manager lock wait", "address", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(DISK_SPACE_MANAGER_LOCK_WAIT, 21006, "share storage disk space manager lock wait", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(TIERED_SUPER_BLOCK_LOCK_WAIT, 21007, "latch: tiered super block wait", "address", "number", "tries", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(TSLOG_PROCESSING_MUTEX_WAIT, 21008, "latch: tslog processing mutex wait", "address", "number", "tries", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(TSLOG_CKPT_LOCK_WAIT, 21009, "tslog checkpoint lock wait", "address", "", "", CONCURRENCY, true, false)
-WAIT_EVENT_DEF(TIERED_TENANT_BLOCK_LOCK_WAIT, 21010, "tiered tenant block lock wait", "address", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(FILE_MANAGER_LOCK_WAIT, 21010, "file manager lock wait", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(TIERED_BLOCK_WRITE_REMOTE, 21011, "tiered block write remote", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(TIERED_BLOCK_WRITE_LOCAL, 21012, "tiered block write local", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(TIERED_BLOCK_READ_REMOTE, 21013, "tiered block read remote", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(TIERED_BLOCK_READ_LOCAL, 21014, "tiered block read local", "address", "", "", CONCURRENCY, true, false)
 
-// inner sql
+// inner sql 30000-30099
 WAIT_EVENT_DEF(INNER_SQL_EXEC_WAIT, 30000, "exec inner sql wait", "wait inner sql class", "inner session id", "", OTHER, true, true)
+WAIT_EVENT_DEF(INNER_SESSION_IDLE_WAIT, 30001, "inner session wait to be called", "inner session id", "parent session id", "", IDLE, true, false)
 
-// CONFIGURATION
+// CONFIGURATION 30100-30999
 WAIT_EVENT_DEF(WAIT_REFRESH_SCHEMA, 30100, "sleep: wait refresh schema", "sleep_interval", "schema_version", "", CONFIGURATION, true, true)
 WAIT_EVENT_DEF(PALF_THROTTLING, 30101, "palf throttling sleep", "sleep_interval", "", "", USER_IO, false, true)
+WAIT_EVENT_DEF(SLOG_NORMAL_RETRY_SLEEP, 30102, "sleep: slog has io error and retrying", "sleep_interval", "", "", CONCURRENCY, true, true)
+
+// sleep 31000-31999
+WAIT_EVENT_DEF(GARBAGE_COLLECTOR_SLEEP, 31000, "sleep: wait log callback sleep wait", "sleep_interval", "", "", CONCURRENCY, true, true)
 
 // END. DO NOT MODIFY.
 WAIT_EVENT_DEF(WAIT_EVENT_DEF_END, 99999, "event end", "", "", "", OTHER, false, true)

@@ -25,8 +25,8 @@
 #include "observer/table_load/ob_table_load_utils.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "share/stat/ob_dbms_stats_utils.h"
 #include "storage/blocksstable/ob_sstable.h"
+#include "share/table/ob_table_load_dml_stat.h"
 
 namespace oceanbase
 {
@@ -34,6 +34,7 @@ namespace observer
 {
 using namespace common;
 using namespace table;
+using namespace transaction;
 
 ObTableLoadStore::ObTableLoadStore(ObTableLoadTableCtx *ctx)
   : ctx_(ctx), param_(ctx->param_), store_ctx_(ctx->store_ctx_), is_inited_(false)
@@ -88,6 +89,7 @@ int ObTableLoadStore::abort_active_trans(ObTableLoadTableCtx *ctx)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadTransId> trans_id_array;
+  trans_id_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(ctx->store_ctx_->get_active_trans_ids(trans_id_array))) {
     LOG_WARN("fail to get active trans ids", KR(ret));
   }
@@ -140,6 +142,7 @@ int ObTableLoadStore::pre_begin()
     LOG_INFO("store pre begin");
     // do nothing
   }
+
   return ret;
 }
 
@@ -151,15 +154,130 @@ int ObTableLoadStore::confirm_begin()
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store confirm begin");
-    if (OB_FAIL(store_ctx_->set_status_loading())) {
-      LOG_WARN("fail to set store status loading", KR(ret));
-    } else {
-      store_ctx_->heart_beat(); // init heart beat
-      store_ctx_->set_enable_heart_beat_check(true);
+    store_ctx_->heart_beat(); // init heart beat
+    store_ctx_->set_enable_heart_beat_check(true);
+    if (OB_FAIL(open_insert_table_ctx())) {
+      LOG_WARN("fail to open insert_table_ctx", KR(ret));
     }
   }
+
   return ret;
 }
+
+int ObTableLoadStore::open_insert_table_ctx()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStore not init", KR(ret));
+  } else {
+    for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= ctx_->param_.session_count_; ++session_id) {
+      ObTableLoadTask *task = nullptr;
+      if (OB_FAIL(ctx_->alloc_task(task))) {
+        LOG_WARN("fail to alloc task", KR(ret));
+      } else if (OB_FAIL(task->set_processor<OpenInsertTabletTaskProcessor>(ctx_))) {
+        LOG_WARN("fail to set flush task processor", KR(ret));
+      } else if (OB_FAIL(task->set_callback<OpenInsertTabletTaskCallback>(ctx_))) {
+        LOG_WARN("fail to set flush task callback", KR(ret));
+      } else if (OB_FAIL(store_ctx_->task_scheduler_->add_task(session_id - 1, task))) {
+        LOG_WARN("fail to add task", KR(ret), K(session_id), KPC(task));
+      }
+      if (OB_FAIL(ret)) {
+        if (nullptr != task) {
+          ctx_->free_task(task);
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+class ObTableLoadStore::OpenInsertTabletTaskProcessor : public ObITableLoadTaskProcessor
+{
+public:
+  OpenInsertTabletTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx)
+    : ObITableLoadTaskProcessor(task), ctx_(ctx)
+  {
+    ctx_->inc_ref_count();
+  }
+  virtual ~OpenInsertTabletTaskProcessor()
+  {
+    ObTableLoadService::put_ctx(ctx_);
+  }
+  int process() override
+  {
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, store_open_tablet_time_us);
+    int ret = OB_SUCCESS;
+    while (OB_SUCC(ret)) {
+      ObTabletID tablet_id;
+      ObDirectLoadInsertTabletContext *tablet_ctx = nullptr;
+      if (OB_FAIL(ctx_->store_ctx_->get_next_insert_tablet_ctx(tablet_id))) {
+        if (OB_UNLIKELY(ret != OB_ITER_END)) {
+          LOG_WARN("fail to get next insert tablet context", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_FAIL(ctx_->store_ctx_->insert_table_ctx_->get_tablet_context(tablet_id, tablet_ctx))) {
+        LOG_WARN("fail to get tablet context", KR(ret), K(tablet_id));
+      } else {
+        bool is_finish = false;
+        while (OB_SUCC(ret)) {
+          if (THIS_WORKER.is_timeout_ts_valid() && OB_UNLIKELY(THIS_WORKER.is_timeout())) {
+            ret = OB_TIMEOUT;
+            LOG_WARN("worker timeouted", KR(ret));
+          } else if (OB_FAIL(ctx_->store_ctx_->check_status(ObTableLoadStatusType::INITED))) {
+            LOG_WARN("fail to check status", KR(ret));
+          } else if (OB_FAIL(tablet_ctx->open())) {
+            LOG_WARN("fail to open tablet context", KR(ret), K(tablet_id));
+            if (ret == OB_EAGAIN) {
+              LOG_WARN("retry to open tablet context", K(tablet_id));
+              ret = OB_SUCCESS;
+            }
+          } else {
+            ctx_->store_ctx_->handle_open_insert_tablet_ctx_finish(is_finish);
+            break;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (is_finish && OB_FAIL(ctx_->store_ctx_->set_status_loading())) {
+            LOG_WARN("fail to set store status loading", KR(ret));
+          }
+        }
+      }
+    }
+
+    return ret;
+  }
+private:
+  ObTableLoadTableCtx * const ctx_;
+};
+
+class ObTableLoadStore::OpenInsertTabletTaskCallback : public ObITableLoadTaskCallback
+{
+public:
+  OpenInsertTabletTaskCallback(ObTableLoadTableCtx *ctx)
+    : ctx_(ctx)
+  {
+    ctx_->inc_ref_count();
+  }
+  virtual ~OpenInsertTabletTaskCallback()
+  {
+    ObTableLoadService::put_ctx(ctx_);
+  }
+  void callback(int ret_code, ObTableLoadTask *task) override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ret_code)) {
+      ctx_->store_ctx_->set_status_error(ret);
+    }
+    ctx_->free_task(task);
+    OB_TABLE_LOAD_STATISTICS_PRINT_AND_RESET();
+  }
+private:
+  ObTableLoadTableCtx * const ctx_;
+};
 
 /**
  * merge
@@ -221,9 +339,10 @@ int ObTableLoadStore::pre_merge(
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store pre merge");
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator("TLD_Tmp");
     bool trans_exist = false;
     ObTableLoadArray<ObTableLoadTransId> store_committed_trans_id_array;
+    allocator.set_tenant_id(MTL_ID());
     // 1. 冻结状态, 防止后续继续创建trans
     if (OB_FAIL(store_ctx_->set_status_frozen())) {
       LOG_WARN("fail to set store status frozen", KR(ret));
@@ -297,65 +416,41 @@ int ObTableLoadStore::start_merge()
   return ret;
 }
 
-int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info)
+int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
+                             ObTableLoadSqlStatistics &sql_statistics,
+                             ObTxExecResult &trans_result)
 {
   int ret = OB_SUCCESS;
+  sql_statistics.reset();
+  trans_result.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store commit");
+    ObTransService *txs = nullptr;
     ObMutexGuard guard(store_ctx_->get_op_lock());
     ObTableLoadDmlStat dml_stats;
-    ObTableLoadSqlStatistics sql_statistics;
-    if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
+    if (OB_ISNULL(MTL(ObTransService *))) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("trans service is null", KR(ret));
+    } else if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
+    } else if (OB_FAIL(store_ctx_->insert_table_ctx_->commit(dml_stats, sql_statistics))) {
+      LOG_WARN("fail to commit insert table", KR(ret));
     } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
       LOG_WARN("fail to commit sync auto increment value", KR(ret));
-    } else if (param_.online_opt_stat_gather_ &&
-               OB_FAIL(store_ctx_->merger_->collect_sql_statistics(sql_statistics))) {
-      LOG_WARN("fail to collect sql stats", KR(ret));
-    } else if (param_.online_opt_stat_gather_ &&
-               OB_FAIL(commit_sql_statistics(sql_statistics))) {
-      LOG_WARN("fail to commit sql stats", KR(ret));
-    } else if (OB_FAIL(store_ctx_->merger_->collect_dml_stat(dml_stats))) {
-      LOG_WARN("fail to build dml stat", KR(ret));
     } else if (OB_FAIL(ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
       LOG_WARN("fail to update dml stat info", KR(ret));
+    } else if (ObDirectLoadMethod::is_incremental(param_.method_) &&
+               txs->get_tx_exec_result(*ctx_->session_info_->get_tx_desc(), trans_result)) {
+      LOG_WARN("fail to get tx exec result", KR(ret));
     } else if (OB_FAIL(store_ctx_->set_status_commit())) {
       LOG_WARN("fail to set store status commit", KR(ret));
     } else {
       store_ctx_->set_enable_heart_beat_check(false);
       result_info = store_ctx_->result_info_;
     }
-  }
-  return ret;
-}
-
-int ObTableLoadStore::commit_sql_statistics(const ObTableLoadSqlStatistics &sql_statistics)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  const uint64_t table_id = param_.table_id_;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  ObSEArray<ObOptColumnStat *, 64> part_column_stats;
-  ObSEArray<ObOptTableStat *, 64> part_table_stats;
-  if (sql_statistics.is_empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql statistics is empty", K(ret));
-  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard,
-                                                         table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else if (OB_FAIL(sql_statistics.get_col_stat_array(part_column_stats))) {
-    LOG_WARN("failed to get column stat array");
-  } else if (OB_FAIL(sql_statistics.get_table_stat_array(part_table_stats))) {
-    LOG_WARN("failed to get table stat array");
-  } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(
-               &schema_guard, store_ctx_->ctx_->session_info_, GCTX.sql_proxy_, part_table_stats,
-               part_column_stats))) {
-    LOG_WARN("failed to batch write stats", K(ret), K(sql_statistics.table_stat_array_),
-             K(sql_statistics.col_stat_array_));
   }
   return ret;
 }
@@ -568,7 +663,7 @@ int ObTableLoadStore::clean_up_trans(ObTableLoadStoreTrans *trans)
   if (OB_FAIL(trans->get_store_writer(store_writer))) {
     LOG_WARN("fail to get store writer", KR(ret));
   } else {
-    for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.session_count_;
+    for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_;
          ++session_id) {
       ObTableLoadTask *task = nullptr;
       // 1. 分配task
@@ -873,7 +968,7 @@ int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
     else if (OB_FAIL(trans->set_trans_status_frozen())) {
       LOG_WARN("fail to freeze trans", KR(ret));
     } else {
-      for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.session_count_; ++session_id) {
+      for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_; ++session_id) {
         ObTableLoadTask *task = nullptr;
         // 1. 分配task
         if (OB_FAIL(ctx_->alloc_task(task))) {

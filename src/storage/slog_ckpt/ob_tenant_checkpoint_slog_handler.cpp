@@ -833,7 +833,6 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
     LOG_WARN("ckpt_cursor_ is invalid", K(ret));
   } else if (is_force // alter system command triggered
              || last_super_block.is_old_version()  // compat upgrade
-             || (last_frozen_version_ < frozen_version && !is_major_doing) // major complete
              || ((start_time > last_ckpt_time_ + min_interval) // slog is long
                  && !is_major_doing
                  && ckpt_cursor_.newer_than(last_super_block.replay_start_point_)
@@ -1450,11 +1449,10 @@ int ObTenantCheckpointSlogHandler::parse(
         int32_t length = 0;
         int32_t version = 0;
 
+        snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update tablet slog: ");
         if (OB_FAIL(slog_entry.deserialize(buf, len, pos))) {
           LOG_WARN("fail to deserialize tablet meta", K(ret), KP(buf), K(len), K(pos));
-        }
-        snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update tablet slog: ");
-        if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length, to_cstring(slog_entry))) {
+        } else if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length, to_cstring(slog_entry))) {
           ret = OB_IO_ERROR;
           LOG_WARN("Fail to print slog to file.", K(ret));
         }

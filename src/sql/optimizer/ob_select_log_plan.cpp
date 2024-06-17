@@ -389,6 +389,7 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
                                          bool &normal_sort_valid)
 {
   int ret = OB_SUCCESS;
+  bool has_keep_aggr = false;
   if (ignore_hint) {
     use_hash_valid = true;
     use_merge_valid = true;
@@ -403,10 +404,13 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(optimizer_context_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_stmt()), K(optimizer_context_.get_query_ctx()), K(ret));
+  } else if (OB_FAIL(check_aggr_with_keep(get_stmt()->get_aggr_items(), has_keep_aggr))) {
+    LOG_WARN("failed to check aggr with keep", K(ret));
   } else if (get_stmt()->has_rollup()
              || group_by_exprs.empty()
-             || get_stmt()->has_distinct_or_concat_agg()) {
-    //group_concat and distinct aggregation hold all input rows temporary,
+             || get_stmt()->has_distinct_or_concat_agg()
+             || has_keep_aggr) {
+    //keep_aggr、group_concat and distinct aggregation hold all input rows temporary,
     //too much memory consumption for hash aggregate.
     use_hash_valid = false;
   }
@@ -1775,6 +1779,9 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
     const ObSelectStmt *child_stmt = NULL;
     ObSelectLogPlan *child_plan = NULL;
     ObSelectLogPlan *nonrecursive_plan = NULL;
+    if (!select_stmt->is_recursive_union()) {
+      nonrecursive_plan = get_nonrecursive_plan_for_fake_cte();
+    }
     for (int64 i = 0; OB_SUCC(ret) && i < child_size; ++i) {
       child_input_filters.reuse();
       child_rename_filters.reuse();
@@ -2970,7 +2977,10 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_PARTITION_WISE)) {
     OPT_TRACE("check partition wise method");
     bool is_partition_wise = false;
-    if (OB_FAIL(ObShardingInfo::check_if_match_partition_wise(equal_sets,
+    if (!is_set_partition_wise_valid(left_child, right_child)) {
+      set_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
+      OPT_TRACE("contain merge op plan will not use partition wise method");
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_partition_wise(equal_sets,
                                                               left_set_keys,
                                                               right_set_keys,
                                                               left_child.get_strong_sharding(),
@@ -2978,11 +2988,8 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
                                                               is_partition_wise))) {
       LOG_WARN("failed to check if match partition wise join", K(ret));
     } else if (is_partition_wise) {
-      if (left_child.is_exchange_allocated() == right_child.is_exchange_allocated()
-          && is_set_partition_wise_valid(left_child, right_child)) {
-        set_dist_methods = DistAlgo::DIST_PARTITION_WISE;
-        OPT_TRACE("plan will use partition wise method and prune other method");
-      }
+      set_dist_methods = DistAlgo::DIST_PARTITION_WISE;
+      OPT_TRACE("plan will use partition wise method and prune other method");
     } else {
       set_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
       OPT_TRACE("plan will not use partition wise method");
@@ -3019,7 +3026,10 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_PARTITION_NONE)) {
     OPT_TRACE("check partition none method");
     bool left_match_repart = false;
-    if (OB_FAIL(check_if_set_match_repart(equal_sets,
+    if (!is_set_repart_valid(left_child, right_child, DistAlgo::DIST_PARTITION_NONE)) {
+      set_dist_methods &= ~DistAlgo::DIST_PARTITION_NONE;
+      OPT_TRACE("plan will not use partition none method");
+    } else if (OB_FAIL(check_if_set_match_repart(equal_sets,
                                           left_set_keys,
                                           right_set_keys,
                                           right_child,
@@ -3055,7 +3065,10 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_NONE_PARTITION)) {
     OPT_TRACE("check none partition method");
     bool right_match_repart = false;
-    if (OB_FAIL(check_if_set_match_repart(equal_sets,
+    if (!is_set_repart_valid(left_child, right_child, DistAlgo::DIST_NONE_PARTITION)) {
+      set_dist_methods &= ~DistAlgo::DIST_NONE_PARTITION;
+      OPT_TRACE("plan will not use none partition method");
+    } else if (OB_FAIL(check_if_set_match_repart(equal_sets,
                                                   right_set_keys,
                                                   left_set_keys,
                                                   left_child,
@@ -3415,8 +3428,6 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
         OB_ISNULL(right_plan = right_child->get_plan())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(right_child), K(right_plan), K(ret));
-    } else if (!is_set_repart_valid(left_child, *right_child, set_dist_algo)) {
-      /*do nothing*/
     } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > (out_parallel = right_child->get_parallel())
                            || ObGlobalHint::DEFAULT_PARALLEL > in_parallel)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3875,21 +3886,20 @@ int ObSelectLogPlan::inner_generate_hash_set_plans(const EqualSets &equal_sets,
           for (int64_t k = DistAlgo::DIST_BASIC_METHOD;
                OB_SUCC(ret) && k < DistAlgo::DIST_MAX_JOIN_METHOD; k = (k << 1)) {
             DistAlgo dist_algo = get_dist_algo(k);
-            if ((set_methods & k) &&
-                 is_set_repart_valid(*left_best_plan, *right_best_plan, dist_algo)) {
-              if (OB_FAIL(create_hash_set_plan(equal_sets,
-                                               left_best_plan,
-                                               right_best_plan,
-                                               left_set_keys,
-                                               right_set_keys,
-                                               set_op,
-                                               dist_algo,
-                                               candidate_plan))) {
-                LOG_WARN("failed to create hash set", K(ret));
-              } else if (OB_FAIL(hash_set_plans.push_back(candidate_plan))) {
-                LOG_WARN("failed to add hash plan", K(ret));
-              } else { /*do nothing*/ }
-            }
+            if (!(set_methods & k)) {
+              //do nothing
+            } else if (OB_FAIL(create_hash_set_plan(equal_sets,
+                                              left_best_plan,
+                                              right_best_plan,
+                                              left_set_keys,
+                                              right_set_keys,
+                                              set_op,
+                                              dist_algo,
+                                              candidate_plan))) {
+              LOG_WARN("failed to create hash set", K(ret));
+            } else if (OB_FAIL(hash_set_plans.push_back(candidate_plan))) {
+              LOG_WARN("failed to add hash plan", K(ret));
+            } else { /*do nothing*/ }
           }
         }
       }
@@ -4255,46 +4265,18 @@ int ObSelectLogPlan::generate_normal_raw_plan()
 int ObSelectLogPlan::generate_dblink_raw_plan()
 {
   int ret = OB_SUCCESS;
-  ObQueryCtx *query_ctx = NULL;
   // dblink_info hint
   int64_t tx_id = -1;
-  int64_t tm_sessid = -1;
+  uint32_t tm_sessid = 0;
+  bool xa_trans_stop_check_lock = false;
   uint64_t dblink_id = OB_INVALID_ID;
   const ObSelectStmt *stmt = get_stmt();
   ObLogicalOperator *top = NULL;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
-  } else if (NULL == (query_ctx = stmt->get_query_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (FALSE_IT(dblink_id = stmt->get_dblink_id())) {
-  } else if (0 == dblink_id) { //dblink id = 0 means @!/@xxxx!
-    ObSQLSessionInfo *session = get_optimizer_context().get_session_info();
-    oceanbase::sql::ObReverseLink *reverse_dblink_info = NULL;
-    if (NULL == session) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), KP(session));
-    } else if (OB_FAIL(session->get_dblink_context().get_reverse_link(reverse_dblink_info))) {
-      LOG_WARN("failed to get reverse link info from session", K(ret), K(session->get_sessid()));
-    } else if (NULL == reverse_dblink_info) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else {
-      // set dblink_info, to unparse a link sql with dblink_info hint
-      query_ctx->get_query_hint_for_update().get_global_hint().merge_dblink_info_hint(
-                                                    reverse_dblink_info->get_tx_id(),
-                                                    reverse_dblink_info->get_tm_sessid());
-      LOG_DEBUG("set tx_id_ and tm_sessid to stmt",
-                                                    K(reverse_dblink_info->get_tx_id()),
-                                                    K(reverse_dblink_info->get_tm_sessid()));
-    }
   } else {
-    // save dblink_info hint
-    tx_id = query_ctx->get_query_hint_for_update().get_global_hint().get_dblink_tx_id_hint();
-    tm_sessid = query_ctx->get_query_hint_for_update().get_global_hint().get_dblink_tm_sessid_hint();
-    // reset dblink hint, to unparse a link sql without dblink_info hint
-    query_ctx->get_query_hint_for_update().get_global_hint().reset_dblink_info_hint();
+    dblink_id = stmt->get_dblink_id();
   }
   if (OB_FAIL(ret)) {
     //do nothing
@@ -4319,13 +4301,6 @@ int ObSelectLogPlan::generate_dblink_raw_plan()
   } else {
     top->mark_is_plan_root();
     top->get_plan()->set_plan_root(top);
-    if (0 == dblink_id) {
-      // reset dblink info, to avoid affecting the next execution flow
-      query_ctx->get_query_hint_for_update().get_global_hint().reset_dblink_info_hint();
-    } else {
-      // restore dblink_info hint, ensure that the next execution process can get the correct dblink_info
-      query_ctx->get_query_hint_for_update().get_global_hint().merge_dblink_info_hint(tx_id, tm_sessid);
-    }
     LOG_TRACE("succeed to allocate loglinkscan", K(dblink_id));
   }
   return ret;
@@ -4478,6 +4453,15 @@ int ObSelectLogPlan::allocate_plan_top()
       }
     }
 
+    // step. allocate subplan filter if needed, mainly for subquery in select item
+    if (OB_SUCC(ret) && !select_stmt->has_limit()) {
+      if (OB_FAIL(candi_allocate_subplan_filter_for_select_item())) {
+        LOG_WARN("failed to allocate subplan filter for subquery in select item", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate subplan filter for subquery in select item",
+                  K(candidates_.candidate_plans_.count()));
+      }
+    }
     // step. allocate 'order-by' if needed
     if (OB_SUCC(ret) && select_stmt->has_order_by() && !select_stmt->is_order_siblings() &&
         !get_optimizer_context().is_online_ddl()) {
@@ -4487,7 +4471,7 @@ int ObSelectLogPlan::allocate_plan_top()
       } else {
         candidates_.is_final_sort_ = false;
         LOG_TRACE("succeed to allocate order by operator",
-            K(candidates_.candidate_plans_.count()));
+          K(candidates_.candidate_plans_.count()));
       }
     }
 
@@ -4512,12 +4496,15 @@ int ObSelectLogPlan::allocate_plan_top()
     }
 
     // step. allocate subplan filter if needed, mainly for subquery in select item
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && select_stmt->has_limit()) {
       if (OB_FAIL(candi_allocate_subplan_filter_for_select_item())) {
         LOG_WARN("failed to allocate subplan filter for subquery in select item", K(ret));
+      } else if (!order_items.empty() &&
+                 OB_FAIL(candi_allocate_order_by_if_losted(order_items))) {
+        LOG_WARN("failed to adjust order by if losted", K(ret), K(order_items));
       } else {
         LOG_TRACE("succeed to allocate subplan filter for subquery in select item",
-            K(candidates_.candidate_plans_.count()));
+                 K(candidates_.candidate_plans_.count()));
       }
     }
 
@@ -6701,9 +6688,9 @@ int ObSelectLogPlan::init_wf_topn_option(WinFuncOpHelper &win_func_helper, bool 
   }
   if (OB_FAIL(ret) || !win_func_helper.enable_topn_) {
     //do nothing
-  } else if (check_wf_part_topn_supported(winfunc_exprs,
-                                          win_func_helper.partition_exprs_,
-                                          win_func_helper.enable_topn_)) {
+  } else if (OB_FAIL(check_wf_part_topn_supported(winfunc_exprs,
+                                                  win_func_helper.partition_exprs_,
+                                                  win_func_helper.enable_topn_))) {
     LOG_WARN("check partition topn supported failed", K(ret));
   } else if (win_func_helper.enable_topn_) {
     for (int64_t i = 0; OB_SUCC(ret) && NULL == win_func_helper.topn_const_ && i < filter_exprs.count(); ++i) {
@@ -7335,6 +7322,11 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     est_cost_info->logical_query_range_row_count_ = 1.0;
     est_cost_info->use_column_store_ = false;
     table_scan->set_est_cost_info(est_cost_info);
+    // set parallel info
+    table_scan->set_parallel(index_scan->get_parallel());
+    table_scan->set_op_parallel_rule(OpParallelRule::OP_INHERIT_DOP);
+    table_scan->set_available_parallel(index_scan->get_available_parallel()),
+    table_scan->set_server_cnt(index_scan->get_server_cnt());
     table_get = table_scan;
   }
   return ret;
@@ -7443,6 +7435,10 @@ int ObSelectLogPlan::allocate_late_materialization_join_as_top(ObLogicalOperator
       join->set_strong_sharding(left_child->get_sharding());
       join->set_interesting_order_info(left_child->get_interesting_order_info());
       join->set_fd_item_set(&left_child->get_fd_item_set());
+      // set parallel info
+      join->set_parallel(left_child->get_parallel());
+      join->set_available_parallel(left_child->get_available_parallel()),
+      join->set_server_cnt(left_child->get_server_cnt());
       join_op = join;
     }
   }
@@ -7899,6 +7895,53 @@ int ObSelectLogPlan::contain_enum_set_rowkeys(const ObLogTableScan &table_scan, 
       } else if (ob_is_enumset_tc(table_keys.at(i)->get_result_type().get_type())) {
         contain = true;
       }
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::candi_allocate_order_by_if_losted(ObIArray<OrderItem> &order_items)
+{
+  int ret = OB_SUCCESS;
+  bool re_allocate_happened = false;
+  ObSEArray<CandidatePlan, 8> order_by_plans;
+  if (!order_items.empty()) {
+    candidates_.is_final_sort_ = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
+      ObLogicalOperator *top = candidates_.candidate_plans_.at(i).plan_tree_;
+      CandidatePlan &plan = candidates_.candidate_plans_.at(i);
+      if (OB_FAIL(create_order_by_plan(plan.plan_tree_, order_items, NULL, false))) {
+        LOG_WARN("failed to create order by plan", K(ret));
+      } else if (OB_FAIL(order_by_plans.push_back(plan))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (top != candidates_.candidate_plans_.at(i).plan_tree_) {
+        re_allocate_happened = true;
+      }
+    }
+    candidates_.is_final_sort_ = false;
+    if (OB_SUCC(ret) && re_allocate_happened) {
+      int64_t check_scope = OrderingCheckScope::CHECK_SET;
+      if (OB_FAIL(update_plans_interesting_order_info(order_by_plans, check_scope))) {
+        LOG_WARN("failed to update plans interesting order info", K(ret));
+      } else if (OB_FAIL(prune_and_keep_best_plans(order_by_plans))) {
+        LOG_WARN("failed to prune and keep best plans", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::check_aggr_with_keep(const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                          bool &has_keep_aggr)
+{
+  int ret = OB_SUCCESS;
+  has_keep_aggr = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_keep_aggr && i < aggr_items.count(); ++i) {
+    if (OB_ISNULL(aggr_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("aggr item is null", K(ret));
+    } else if (IS_KEEP_AGGR_FUN(aggr_items.at(i)->get_expr_type())) {
+      has_keep_aggr = true;
     }
   }
   return ret;

@@ -42,6 +42,7 @@ ObRawExprInfoExtractor()
   virtual int visit(ObWinFunRawExpr &expr);
   virtual int visit(ObPseudoColumnRawExpr &expr);
   virtual int visit(ObPlQueryRefRawExpr &expr);
+  virtual int visit(ObMatchFunRawExpr &expr);
 private:
   // types and constants
 private:

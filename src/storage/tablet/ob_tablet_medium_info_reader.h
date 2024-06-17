@@ -16,6 +16,7 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/tablet/ob_tablet_dumped_medium_info.h"
+#include "storage/multi_data_source/mds_table_iterator.h"
 
 namespace oceanbase
 {

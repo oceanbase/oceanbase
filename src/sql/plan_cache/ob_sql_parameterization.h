@@ -212,7 +212,8 @@ private:
 
   static int get_select_item_param_info(const common::ObIArray<ObPCParam *> &raw_params,
                                         ParseNode *tree,
-                                        SelectItemParamInfoArray *select_item_param_infos);
+                                        SelectItemParamInfoArray *select_item_param_infos,
+                                        const ObSQLSessionInfo &session);
   static int parameterize_fields(SelectItemTraverseCtx &ctx);
 
   static int resolve_paramed_const(SelectItemTraverseCtx &ctx);

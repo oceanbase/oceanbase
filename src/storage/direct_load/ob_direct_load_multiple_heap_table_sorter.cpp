@@ -17,6 +17,7 @@
 #include "storage/direct_load/ob_direct_load_mem_sample.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_map.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_builder.h"
+#include "observer/table_load/ob_table_load_service.h"
 
 namespace oceanbase
 {
@@ -24,10 +25,12 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
+using namespace observer;
 
 ObDirectLoadMultipleHeapTableSorter::ObDirectLoadMultipleHeapTableSorter(
   ObDirectLoadMemContext *mem_ctx)
-  : mem_ctx_(mem_ctx),
+  : ctx_(nullptr),
+    mem_ctx_(mem_ctx),
     allocator_("TLD_Sorter"),
     extra_buf_(nullptr),
     index_dir_id_(-1),
@@ -35,6 +38,7 @@ ObDirectLoadMultipleHeapTableSorter::ObDirectLoadMultipleHeapTableSorter(
     heap_table_array_(nullptr),
     heap_table_allocator_(nullptr)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleHeapTableSorter::~ObDirectLoadMultipleHeapTableSorter()
@@ -44,7 +48,6 @@ ObDirectLoadMultipleHeapTableSorter::~ObDirectLoadMultipleHeapTableSorter()
 int ObDirectLoadMultipleHeapTableSorter::init()
 {
   int ret = OB_SUCCESS;
-  allocator_.set_tenant_id(MTL_ID());
   if (OB_ISNULL(extra_buf_ = static_cast<char *>(allocator_.alloc(mem_ctx_->table_data_desc_.extra_buf_size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate extra buf", KR(ret));
@@ -76,6 +79,7 @@ int ObDirectLoadMultipleHeapTableSorter::close_chunk(ObDirectLoadMultipleHeapTab
   ObArray<common::ObTabletID> keys;
   ObDirectLoadMultipleHeapTableBuilder table_builder;
   ObDirectLoadMultipleHeapTableBuildParam table_builder_param;
+  keys.set_tenant_id(MTL_ID());
   table_builder_param.table_data_desc_ = mem_ctx_->table_data_desc_;
   table_builder_param.file_mgr_ = mem_ctx_->file_mgr_;
   table_builder_param.extra_buf_size_ = mem_ctx_->table_data_desc_.extra_buf_size_;
@@ -103,6 +107,7 @@ int ObDirectLoadMultipleHeapTableSorter::close_chunk(ObDirectLoadMultipleHeapTab
 
   for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); i ++) {
     ObArray<const ObDirectLoadConstExternalMultiPartitionRow *> bag;
+    bag.set_tenant_id(MTL_ID());
     if (OB_FAIL(chunk->get(keys.at(i), bag))) {
       LOG_WARN("fail to get bag", KR(ret));
     }
@@ -135,6 +140,7 @@ int ObDirectLoadMultipleHeapTableSorter::get_tables(
 {
   int ret = OB_SUCCESS;
   ObArray<ObIDirectLoadPartitionTable *> table_array;
+  table_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(table_builder.get_tables(table_array, *heap_table_allocator_))) {
     LOG_WARN("fail to get tables", KR(ret));
   }
@@ -146,6 +152,8 @@ int ObDirectLoadMultipleHeapTableSorter::get_tables(
       LOG_WARN("unexpected table", KR(ret), KPC(table));
     } else if (OB_FAIL(heap_table_array_->push_back(heap_table))) {
       LOG_WARN("fail to push back heap table", KR(ret));
+    } else {
+      ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_product_tmp_files_, 1);
     }
   }
   return ret;
@@ -172,7 +180,6 @@ int ObDirectLoadMultipleHeapTableSorter::work()
     const ObDirectLoadExternalFragment &fragment = fragments_.at(i);
     ExternalReader external_reader;
     if (OB_FAIL(external_reader.init(mem_ctx_->table_data_desc_.external_data_block_size_,
-                                     fragment.max_data_block_size_,
                                      mem_ctx_->table_data_desc_.compressor_type_))) {
       LOG_WARN("fail to init external reader", KR(ret));
     } else if (OB_FAIL(external_reader.open(fragment.file_handle_, 0, fragment.file_size_))) {
@@ -195,12 +202,19 @@ int ObDirectLoadMultipleHeapTableSorter::work()
           LOG_WARN("some error ocurr", KR(ret));
         }
         if (OB_SUCC(ret)) {
-          chunk = OB_NEW(ChunkType, ObMemAttr(MTL_ID(), "TLD_MemChunkVal"), mem_ctx_->table_data_desc_.heap_table_mem_chunk_size_);
-          if (chunk == nullptr) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to allocate mem", KR(ret));
-          } else if (OB_FAIL(chunk->init())) {
-            LOG_WARN("fail to init external sort", KR(ret));
+          int64_t sort_memory = 0;
+          if (mem_ctx_->table_data_desc_.exe_mode_ == observer::ObTableLoadExeMode::MAX_TYPE) {
+            sort_memory = mem_ctx_->table_data_desc_.heap_table_mem_chunk_size_;
+          } else if (OB_FAIL(ObTableLoadService::get_sort_memory(sort_memory))) {
+            LOG_WARN("fail to get sort memory", KR(ret));
+          }
+          if (OB_SUCC(ret)) {
+            chunk = OB_NEW(ChunkType, ObMemAttr(MTL_ID(), "TLD_MemChunkVal"), sort_memory);
+            if (chunk == nullptr) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+            } else if (OB_FAIL(chunk->init())) {
+              LOG_WARN("fail to init external sort", KR(ret));
+            }
           }
         }
       }
@@ -216,6 +230,7 @@ int ObDirectLoadMultipleHeapTableSorter::work()
           LOG_WARN("fail to add item", KR(ret));
         } else {
           row = nullptr;
+          ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_load_rows_, 1);
         }
       }
     }

@@ -34,6 +34,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase
 {
@@ -68,7 +69,8 @@ ObLSService::ObLSService()
     storage_svr_rpc_proxy_(),
     storage_rpc_(),
     safe_ls_destroy_task_cnt_(0),
-    iter_cnt_(0)
+    iter_cnt_(0),
+    max_ls_cnt_(0)
 {}
 
 ObLSService::~ObLSService()
@@ -95,6 +97,7 @@ void ObLSService::destroy()
   rs_reporter_ = nullptr;
   storage_svr_rpc_proxy_.destroy();
   storage_rpc_.destroy();
+  max_ls_cnt_ = 0;
   is_inited_ = false;
 }
 
@@ -129,6 +132,130 @@ void ObLSService::inc_iter_cnt()
 void ObLSService::dec_iter_cnt()
 {
   ATOMIC_DEC(&iter_cnt_);
+}
+
+int ObLSService::get_resource_constraint_value(ObResoureConstraintValue &constraint_value)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls service not inited, the resource info may not right.", K(ret));
+  } else if (!is_running_ || is_stopped_) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("the ls service is not running ,the resource info may not right.", K(ret));
+  } else {
+    ret = get_resource_constraint_value_(constraint_value);
+  }
+
+  return ret;
+}
+
+int ObLSService::get_resource_constraint_value_(ObResoureConstraintValue &constraint_value)
+{
+  int ret = OB_SUCCESS;
+  int64_t config_value = OB_MAX_LS_NUM_PER_TENANT_PER_SERVER;
+  int64_t memory_value = INT64_MAX;
+  int64_t clog_disk_value = INT64_MAX;
+  // 1. configuration
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (OB_LIKELY(tenant_config.is_valid())) {
+    config_value = (tenant_config->_max_ls_cnt_per_server != 0
+                    ? tenant_config->_max_ls_cnt_per_server : config_value);
+  }
+
+  // 2. memory
+  const int64_t tenant_memory = lib::get_tenant_memory_limit(MTL_ID());
+  memory_value = OB_MAX(tenant_memory - SMALL_TENANT_MEMORY_LIMIT, 0) / TENANT_MEMORY_PER_LS_NEED +
+    OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT;
+
+  // 3. clog disk
+  palf::PalfOptions palf_opts;
+  if (OB_FAIL(MTL(ObLogService*)->get_palf_options(palf_opts))) {
+    LOG_WARN("get palf options failed", K(ret));
+  } else {
+    const palf::PalfDiskOptions &disk_opts = palf_opts.disk_options_;
+    clog_disk_value = disk_opts.log_disk_usage_limit_size_ / MIN_DISK_SIZE_PER_PALF_INSTANCE;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(constraint_value.set_type_value(CONFIGURATION_CONSTRAINT, config_value))) {
+    LOG_WARN("set_type_value failed", K(ret), K(CONFIGURATION_CONSTRAINT), K(config_value));
+  } else if (OB_FAIL(constraint_value.set_type_value(MEMORY_CONSTRAINT, memory_value))) {
+    LOG_WARN("set_type_value failed", K(ret), K(MEMORY_CONSTRAINT), K(memory_value));
+  } else if (OB_FAIL(constraint_value.set_type_value(CLOG_DISK_CONSTRAINT, clog_disk_value))) {
+    LOG_WARN("set_type_value failed", K(ret), K(CLOG_DISK_CONSTRAINT), K(clog_disk_value));
+  }
+
+  return ret;
+}
+
+int ObLSService::get_current_info(share::ObResourceInfo &info)
+{
+  int ret = OB_SUCCESS;
+  ObResoureConstraintValue constraint_value;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls service not inited, the resource info may not right.", K(ret));
+  } else if (!is_running_ || is_stopped_) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("the ls service is not running ,the resource info may not right.", K(ret));
+  } else if (OB_FAIL(get_resource_constraint_value_(constraint_value))) {
+    LOG_WARN("get resource constraint value failed", K(ret));
+  } else {
+    info.curr_utilization_ = ls_map_.get_ls_count() + ATOMIC_LOAD(&safe_ls_destroy_task_cnt_);
+    info.max_utilization_ = ATOMIC_LOAD(&max_ls_cnt_);
+    info.reserved_value_ = 0; // reserve value will be used later
+    constraint_value.get_min_constraint(info.min_constraint_type_, info.min_constraint_value_);
+  }
+  return ret;
+}
+
+int ObLSService::cal_min_phy_resource_needed(share::ObMinPhyResourceResult &min_phy_res)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls service not inited, the resource info may not right.", K(ret));
+  } else if (!is_running_ || is_stopped_) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("the ls service is not running ,the resource info may not right.", K(ret));
+  } else {
+    int64_t ls_cnt = ls_map_.get_ls_count() + ATOMIC_LOAD(&safe_ls_destroy_task_cnt_);
+    ret = cal_min_phy_resource_needed_(ls_cnt, min_phy_res);
+  }
+  return ret;
+}
+
+int ObLSService::cal_min_phy_resource_needed(const int64_t num,
+                                             ObMinPhyResourceResult &min_phy_res)
+{
+  int ret = OB_SUCCESS;
+  ret = cal_min_phy_resource_needed_(num, min_phy_res);
+  return ret;
+}
+
+int ObLSService::cal_min_phy_resource_needed_(const int64_t num,
+                                              ObMinPhyResourceResult &min_phy_res)
+{
+  int ret = OB_SUCCESS;
+  int64_t ls_cnt = num;
+  int64_t clog_disk_bytes = 0;
+  int64_t memory_bytes = 0;
+  // 1. memory
+  // if the ls num is smaller than OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT,
+  // just return SMALL_TENANT_MEMORY_LIMIT.
+  memory_bytes = (SMALL_TENANT_MEMORY_LIMIT
+                  + OB_MAX(ls_cnt - OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT, 0)
+                  * TENANT_MEMORY_PER_LS_NEED);
+  memory_bytes = ls_cnt > 0 ? memory_bytes : 0;
+  // 2. clog disk
+  clog_disk_bytes = MIN_DISK_SIZE_PER_PALF_INSTANCE * OB_MAX(0, ls_cnt);
+
+  if (OB_FAIL(min_phy_res.set_type_value(PHY_RESOURCE_MEMORY, memory_bytes))) {
+    LOG_WARN("set type value failed", K(PHY_RESOURCE_MEMORY), K(memory_bytes));
+  } else if (OB_FAIL(min_phy_res.set_type_value(PHY_RESOURCE_CLOG_DISK, clog_disk_bytes))) {
+    LOG_WARN("set type value failed", K(PHY_RESOURCE_CLOG_DISK), K(clog_disk_bytes));
+  }
+  return ret;
 }
 
 int ObLSService::stop()
@@ -263,23 +390,20 @@ int ObLSService::start()
 int ObLSService::check_tenant_ls_num_()
 {
   int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  const int64_t normal_ls_count = ls_map_.get_ls_count();
-  const int64_t removeing_ls_count = ATOMIC_LOAD(&safe_ls_destroy_task_cnt_);
-  const int64_t tenant_memory = lib::get_tenant_memory_limit(MTL_ID());
-  int64_t tenant_max_ls_limit = OB_MAX(tenant_memory - SMALL_TENANT_MEMORY_LIMIT, 0) / TENANT_MEMORY_PER_LS_NEED +
-                                 OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT;
-  // the max ls limit should not greater than OB_MAX_LS_NUM_PER_TENANT_PER_SERVER
-  tenant_max_ls_limit = OB_MIN(tenant_max_ls_limit, OB_MAX_LS_NUM_PER_TENANT_PER_SERVER);
-  // the config priority is higher than the calculate result.
-  if (OB_LIKELY(tenant_config.is_valid())) {
-    tenant_max_ls_limit = (tenant_config->_max_ls_cnt_per_server != 0 ?
-                           tenant_config->_max_ls_cnt_per_server : tenant_max_ls_limit);
-  }
-  if (normal_ls_count + removeing_ls_count + 1 > tenant_max_ls_limit) {
-    ret = OB_TOO_MANY_TENANT_LS;
-    LOG_WARN("too many ls of a tenant", K(ret), K(normal_ls_count), K(removeing_ls_count),
-             K(tenant_max_ls_limit), K(tenant_memory));
+  ObResoureConstraintValue constraint_value;
+  if (OB_FAIL(get_resource_constraint_value_(constraint_value))) {
+    LOG_WARN("get resource constraint value failed", K(ret));
+  } else {
+    int64_t min_constraint_value = 0;
+    int64_t min_constraint_type = 0;
+    const int64_t normal_ls_count = ls_map_.get_ls_count();
+    const int64_t removeing_ls_count = ATOMIC_LOAD(&safe_ls_destroy_task_cnt_);
+    constraint_value.get_min_constraint(min_constraint_type, min_constraint_value);
+    if (normal_ls_count + removeing_ls_count + 1 > min_constraint_value) {
+      ret = OB_TOO_MANY_TENANT_LS;
+      LOG_WARN("too many ls of a tenant", K(ret), K(normal_ls_count), K(removeing_ls_count),
+               K(min_constraint_type), K(get_constraint_type_name(min_constraint_type)), K(min_constraint_value));
+    }
   }
   return ret;
 }
@@ -335,6 +459,11 @@ int ObLSService::add_ls_to_map_(ObLS *ls)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ls_map_.add_ls(*ls))) {
     LOG_WARN("add ls failed.", K(ret), K(ls->get_ls_id()));
+  } else {
+    // update the max ls cnt
+    const int64_t normal_ls_count = ls_map_.get_ls_count();
+    const int64_t removeing_ls_count = ATOMIC_LOAD(&safe_ls_destroy_task_cnt_);
+    inc_update(&max_ls_cnt_, normal_ls_count + removeing_ls_count);
   }
   return ret;
 }
@@ -471,6 +600,8 @@ int ObLSService::post_create_ls_(const int64_t create_type,
     case ObLSCreateType::NORMAL: {
       if (OB_FAIL(ls->set_start_work_state())) {
         LOG_ERROR("ls set start work state failed", KR(ret), KPC(ls));
+      } else {
+        ls->enable_to_read();
       }
       break;
     }
@@ -957,12 +1088,13 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = NULL;
+  int64_t process_point = 0; // for test
   if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log stream is null, unexpected error");
-  } else if (OB_FAIL(ls->offline())) {
+  } else if (OB_BREAK_FAIL(ls->offline())) {
     LOG_WARN("ls offline failed", K(ret), KP(ls));
-  } else if (OB_FAIL(ls->stop())) {
+  } else if (OB_BREAK_FAIL(ls->stop())) {
     LOG_WARN("stop ls failed", K(ret), KP(ls));
   } else if (FALSE_IT(ls->wait())) {
   } else {
@@ -977,16 +1109,18 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));
     } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
-    } else if (remove_from_disk && OB_FAIL(ls->set_remove_state())) {
+    } else if (OB_BREAK_FAIL(ret)) {
+      LOG_WARN("break fail for malloc", K(ret));
+    } else if (remove_from_disk && OB_BREAK_FAIL(ls->set_remove_state())) {
       LOG_WARN("ls set remove state failed", KR(ret), K(ls_id));
-    } else if (OB_FAIL(task->init(MTL_ID(),
-                                  handle,
-                                  this))) {
+    } else if (OB_BREAK_FAIL(task->init(MTL_ID(),
+                                        handle,
+                                        this))) {
       LOG_WARN("init safe destroy task failed", K(ret));
     } else {
       remove_ls_(ls, remove_from_disk, write_slog);
       // try until success.
-      while (OB_FAIL(gc_service->add_safe_destroy_task(*task))) {
+      while (OB_BREAK_FAIL(gc_service->add_safe_destroy_task(*task))) {
         if (REACH_TIME_INTERVAL(1_min)) { // every minute
           LOG_WARN("add safe destroy task failed, retry", K(ret), KPC(task));
         }
@@ -1008,6 +1142,7 @@ void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool w
   static const int64_t SLEEP_TS = 100_ms;
   int64_t retry_cnt = 0;
   int64_t success_step = 0;
+  transaction::ObTransService *tx_svr = MTL(transaction::ObTransService*);
 
   do {
     // We must do prepare_for_safe_destroy to remove tablets from ObLSTabletService before writing the remove_ls_slog,
@@ -1041,6 +1176,13 @@ void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool w
         LOG_WARN("remove log stream from map fail", K(ret), K(ls_id));
       } else {
         success_step = 4;
+      }
+    }
+    if (success_step < 5 && OB_SUCC(ret)) {
+      if (OB_FAIL(tx_svr->remove_tablet(ls_id))) {
+        LOG_WARN("remove tablet cache fail", K(ret), K(ls_id));
+      } else {
+        success_step = 5;
       }
     }
     if (OB_FAIL(ret)) {

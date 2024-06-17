@@ -403,18 +403,31 @@ int TriggerHandle::calc_trigger_routine(
   ObArray<int64_t> nocopy_params;
   trigger_id = ObTriggerInfo::get_trigger_spec_package_id(trigger_id);
   bool old_flag = false;
+  common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TriggerExec"));
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OX (old_flag = exec_ctx.get_my_session()->is_for_trigger_package());
   OX (exec_ctx.get_my_session()->set_for_trigger_package(true));
   OV (OB_NOT_NULL(exec_ctx.get_pl_engine()));
   OZ (exec_ctx.get_pl_engine()->execute(
-    exec_ctx, exec_ctx.get_allocator(), trigger_id, routine_id, path, params, nocopy_params, result),
+    exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result),
       trigger_id, routine_id, params);
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OZ (exec_ctx.get_my_session()->reset_all_package_state_by_dbms_session(true));
   if (exec_ctx.get_my_session()->is_for_trigger_package()) {
     // whether `ret == OB_SUCCESS`, need to restore flag
     exec_ctx.get_my_session()->set_for_trigger_package(old_flag);
+  }
+  if (OB_SUCC(ret)) {
+    bool copy_out_param = lib::is_oracle_mode() ?
+                          (ROUTINE_IDX_BEFORE_ROW == routine_id) : (ROUTINE_IDX_BEFORE_ROW_MYSQL == routine_id);
+    if (copy_out_param) {
+      CK (2 == params.count());
+      if (OB_SUCC(ret)) {
+        pl::ObPLRecord *new_record = reinterpret_cast<pl::ObPLRecord *>(params.at(1).get_ext());
+        CK (OB_NOT_NULL(new_record));
+        OZ (new_record->deep_copy(*new_record, exec_ctx.get_allocator()));
+      }
+    }
   }
   return ret;
 }

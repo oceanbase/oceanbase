@@ -42,7 +42,8 @@ public:
       const int64_t mview_table_id,
       ObRootService *root_service,
       const common::ObAddr &inner_sql_exec_addr,
-      const int64_t data_format_version = 0);
+      const int64_t data_format_version,
+      const bool is_retryable_ddl);
   int init(
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
@@ -72,6 +73,7 @@ private:
   int64_t parallelism_;
   bool use_heap_table_ddl_plan_;
   bool is_mview_complete_refresh_;
+  bool is_retryable_ddl_;
   int64_t mview_table_id_;
   common::ObArray<share::schema::ObBasedSchemaObjectInfo> based_schema_object_infos_;
   ObRootService *root_service_;
@@ -141,9 +143,9 @@ public:
       const int64_t execution_id,
       const int ret_code,
       const ObDDLTaskInfo &addition_info) = 0;
-  int on_child_task_finish(
+  virtual int on_child_task_finish(
       const uint64_t child_task_key,
-      const int ret_code);
+      const int ret_code) override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
   virtual void flt_set_task_span_tag() const = 0;
   virtual void flt_set_status_span_tag() const = 0;
@@ -170,6 +172,7 @@ protected:
       const share::schema::ObTableSchema &dest_table_schema,
       common::hash::ObHashMap<uint64_t, uint64_t> &validate_checksum_column_ids);
   int check_data_dest_tables_columns_checksum(const int64_t execution_id);
+  virtual int check_and_cancel_complement_data_dag(bool &all_complement_dag_exit); // wait dag exit before unlock table.
   virtual int fail();
   virtual int success();
   int hold_snapshot(const int64_t snapshot_version);
@@ -210,6 +213,7 @@ protected:
 
   int sync_table_level_stats_info(common::ObMySQLTransaction &trans,
                                   const ObTableSchema &data_table_schema,
+                                  const ObTableSchema &new_table_schema,
                                   const bool need_sync_history = true);
   int sync_partition_level_stats_info(common::ObMySQLTransaction &trans,
                                       const ObTableSchema &data_table_schema,
@@ -222,6 +226,7 @@ protected:
                                    const bool need_sync_history = true);
   int sync_one_column_table_level_stats_info(common::ObMySQLTransaction &trans,
                                              const ObTableSchema &data_table_schema,
+                                             const ObTableSchema &new_table_schema,
                                              const uint64_t old_col_id,
                                              const uint64_t new_col_id,
                                              const bool need_sync_history = true);
@@ -291,6 +296,7 @@ protected:
   bool is_sstable_complete_task_submitted_;
   int64_t sstable_complete_request_time_;
   ObDDLSingleReplicaExecutor replica_builder_;
+  common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> check_dag_exit_tablets_map_; // for dag complement data ddl only.
 };
 
 }  // end namespace rootserver

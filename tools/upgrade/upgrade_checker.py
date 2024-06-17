@@ -8,10 +8,17 @@ from mysql.connector import errorcode
 import logging
 import getopt
 import time
+import re
 
 class UpgradeParams:
   log_filename = 'upgrade_checker.log'
   old_version = '4.0.0.0'
+
+class PasswordMaskingFormatter(logging.Formatter):
+  def format(self, record):
+    s = super(PasswordMaskingFormatter, self).format(record)
+    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+
 #### --------------start : my_error.py --------------
 class MyError(Exception):
   def __init__(self, value):
@@ -281,15 +288,18 @@ def config_logging_module(log_filenamme):
       filename=log_filenamme,\
       filemode='w')
   # 定义日志打印格式
-  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
   #######################################
   # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
   stdout_handler = logging.StreamHandler(sys.stdout)
   stdout_handler.setLevel(logging.INFO)
-  # 设置日志打印格式
   stdout_handler.setFormatter(formatter)
-  # 将定义好的stdout_handler日志handler添加到root logger
+  # 定义一个Handler处理文件输出
+  file_handler = logging.FileHandler(log_filenamme, mode='w')
+  file_handler.setLevel(logging.INFO)
+  file_handler.setFormatter(formatter)
   logging.getLogger('').addHandler(stdout_handler)
+  logging.getLogger('').addHandler(file_handler)
 #### ---------------end----------------------
 
 
@@ -401,9 +411,6 @@ def check_cluster_status(query_cur):
   (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
   if results[0][0] > 0 :
     fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
-  if results[0][0] > 0 :
-    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
   logging.info('check cluster status success')
 
 # 5. 检查是否有异常租户(creating，延迟删除，恢复中)
@@ -677,6 +684,39 @@ def check_variable_binlog_row_image(query_cur):
         fail_list.append('Sys Variable binlog_row_image is set to MINIMAL, please check'.format(results[0][0]))
     logging.info('check variable binlog_row_image success')
 
+# 20. check oracle tenant's standby_replication privs
+def check_oracle_standby_replication_exist(query_cur):
+  check_success = True
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    check_success = False
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    check_success = False
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    (desc, results) = query_cur.exec_query("""select tenant_id from oceanbase.__all_tenant where compatibility_mode = 1""")
+    if len(results) > 0 :
+      tenant_ids = results
+      if (min_cluster_version < get_version("4.2.2.0") or (get_version("4.3.0.0") <= min_cluster_version < get_version("4.3.1.0"))):
+        for tenant_id in tenant_ids:
+          sql = """select count(1)=1 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+          (desc, results) = query_cur.exec_query(sql)
+          if results[0][0] == 1 :
+            check_success = False
+            fail_list.append('{0} tenant standby_replication already exists, please check'.format(tenant_id[0]))
+      else :
+        for tenant_id in tenant_ids:
+          sql = """select count(1)=0 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+          (desc, results) = query_cur.exec_query(sql)
+          if results[0][0] == 1 :
+            check_success = False
+            fail_list.append('{0} tenant standby_replication not exist, please check'.format(tenant_id[0]))
+  if check_success:
+    logging.info('check oracle standby_replication privs success')
 # last check of do_check, make sure no function execute after check_fail_list
 def check_fail_list():
   if len(fail_list) != 0 :
@@ -725,6 +765,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_table_compress_func(query_cur)
       check_table_api_transport_compress_func(query_cur)
       check_variable_binlog_row_image(query_cur)
+      check_oracle_standby_replication_exist(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)
@@ -760,7 +801,7 @@ if __name__ == '__main__':
       password = get_opt_password()
       timeout = int(get_opt_timeout())
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
-          host, port, user, password, timeout, log_filename)
+          host, port, user, password.replace('"', '\\"'), timeout, log_filename)
       do_check(host, port, user, password, timeout, upgrade_params)
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')

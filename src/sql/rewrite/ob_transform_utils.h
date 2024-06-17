@@ -272,6 +272,12 @@ public:
                                             ObDMLStmt &stmt,
                                             TableItem *&ret_table);
 
+  static int merge_from_items_as_inner_join(ObTransformerCtx *ctx,
+                                            ObDMLStmt &stmt,
+                                            ObIArray<FromItem> &from_item_list,
+                                            ObIArray<JoinedTable*> &joined_table_list,
+                                            TableItem *&ret_table);
+
   static int create_new_column_expr(ObTransformerCtx *ctx,
                                     const TableItem &table_item,
                                     const int64_t column_id,
@@ -313,11 +319,7 @@ public:
                             ObRawExprFactory &expr_factory,
                             const ObDMLStmt *stmt,
                             ObDMLStmt *&new_stmt);
-  static int create_udt_hidden_columns(ObTransformerCtx *ctx,
-                                       ObDMLStmt *stmt,
-                                       const ObColumnRefRawExpr &udt_expr,
-                                       ObColumnRefRawExpr *&col_expr,
-                                       bool &need_transform);
+
   /**
    * @brief joined_table需要维护一个基表的table id列表
    * 对于它的左右子节点，如果是基表 或者generated table，直接使用其table id；
@@ -899,6 +901,9 @@ public:
                                       ObIArray<ObRawExpr*> &equal_conds);
 
   static int extract_udt_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udt_exprs);
+
+  static int extract_udf_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udf_exprs);
+
   // json object with star : json_object(*)
   static int check_is_json_constraint(ObTransformerCtx *ctx,
                                       ObDMLStmt *stmt,
@@ -923,13 +928,15 @@ public:
                                                   ObDMLStmt *stmt,
                                                   ColumnItem& col_item,
                                                   ObSEArray<ObRawExpr *, 1>& param_array);
+  static int add_dummy_expr_for_json_object_node(ObTransformerCtx *ctx,
+                                                 ObSEArray<ObRawExpr *, 1>& param_array);
   static int get_expand_node_from_star(ObTransformerCtx *ctx,
                                        ObDMLStmt *stmt,
                                        ObRawExpr *param_expr,
                                        ObSEArray<ObRawExpr *, 1>& param_array);
-  static int add_dummy_expr_for_json_object_node(ObTransformerCtx *ctx,
-                                                 ObSEArray<ObRawExpr *, 1>& param_array);
   // end json object with star
+
+
   static int add_cast_for_replace(ObRawExprFactory &expr_factory,
                                   const ObRawExpr *from_expr,
                                   ObRawExpr *&to_expr,
@@ -954,6 +961,8 @@ public:
                                  const ObIArray<ObRawExpr *> &source_exprs,
                                  const ObSqlBitSet<> &table_set,
                                  ObIArray<ObRawExpr *> &table_exprs);
+  static int extract_table_rel_ids(const ObIArray<ObRawExpr*> &exprs,
+                                   ObRelIds& table_ids);
   static int get_table_joined_exprs(const ObDMLStmt &stmt,
                                     const TableItem &source,
                                     const TableItem &target,
@@ -988,7 +997,7 @@ public:
    * 3. 一侧有且仅有本层的列
    * @return
    */
-  static int is_equal_correlation(ObQueryRefRawExpr &query_ref,
+  static int is_equal_correlation(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                   ObRawExpr *cond,
                                   bool &is_valid,
                                   ObRawExpr **outer_param = NULL,
@@ -1041,7 +1050,8 @@ public:
   static int generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
                                                  ObDMLStmt *stmt,
                                                  TableItem *item,
-                                                 ObIArray<ObRawExpr *> &unique_keys);
+                                                 ObIArray<ObRawExpr *> &unique_keys,
+                                                 int64_t *rowkey_count = NULL);
 
   static int check_loseless_join(ObDMLStmt *stmt,
                                  ObTransformerCtx *ctx,
@@ -1093,6 +1103,7 @@ public:
                                               const ObIArray<int64_t> &output_map,
                                               ObIArray<ObRawExpr*> &candi_source_exprs,
                                               ObIArray<ObRawExpr*> &candi_target_exprs);
+  static int check_at_least_one_row(TableItem *table_item, bool &at_least_one_row);
   static int adjust_agg_and_win_expr(ObSelectStmt *source_stmt,
                                      ObRawExpr *&source_expr);
 
@@ -1503,7 +1514,8 @@ public:
 
   static int get_all_child_stmts(ObDMLStmt *stmt,
                                  ObIArray<ObSelectStmt*> &child_stmts,
-                                 hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map = NULL);
+                                 hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map = NULL,
+                                 const ObIArray<ObSelectStmt*> *ignore_stmts = NULL);
 
   static int check_select_expr_is_const(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
 
@@ -1513,18 +1525,18 @@ public:
                                            const int64_t idx,
                                            bool &need_remove);
 
-  static int check_correlated_exprs_can_pullup(const ObQueryRefRawExpr &query_ref,
+  static int check_correlated_exprs_can_pullup(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                const ObSelectStmt &subquery,
                                                bool &can_pullup);
 
-  static int check_correlated_exprs_can_pullup_for_set(const ObQueryRefRawExpr &query_ref,
+  static int check_correlated_exprs_can_pullup_for_set(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                        const ObSelectStmt &subquery,
                                                        bool &can_pullup);
 
   static int check_correlated_condition_isomorphic(ObSelectStmt *left_query,
                                                    ObSelectStmt *right_query,
-                                                   const ObQueryRefRawExpr &left_query_ref,
-                                                   const ObQueryRefRawExpr &right_query_ref,
+                                                   const ObIArray<ObExecParamRawExpr *> &left_exec_params,
+                                                   const ObIArray<ObExecParamRawExpr *> &right_exec_params,
                                                    bool &is_valid,
                                                    ObIArray<ObRawExpr*> &left_new_select_exprs,
                                                    ObIArray<ObRawExpr*> &right_new_select_exprs);
@@ -1550,17 +1562,17 @@ public:
                                            ObRawExpr* right_expr,
                                            bool &is_isomorphic);
 
-  static int check_fixed_expr_correlated(const ObQueryRefRawExpr &query_ref,
+  static int check_fixed_expr_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                          const ObSelectStmt &subquery,
                                          bool &is_valid);
 
   static int check_can_pullup_conds(const ObSelectStmt &subquery, bool &has_special_expr);
 
-  static int is_table_item_correlated(const ObQueryRefRawExpr &query_ref,
+  static int is_table_item_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                       const ObSelectStmt &subquery,
                                       bool &contains);
 
-  static int is_join_conditions_correlated(const ObQueryRefRawExpr &query_ref,
+  static int is_join_conditions_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                            const ObSelectStmt *subquery,
                                            bool &is_correlated);
 
@@ -1572,12 +1584,12 @@ public:
                                                 const JoinedTable *joined_table,
                                                 bool &is_correlated);
 
-  static int check_correlated_having_expr_can_pullup(const ObQueryRefRawExpr &query_ref,
+  static int check_correlated_having_expr_can_pullup(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                      const ObSelectStmt &subquery,
                                                      bool has_special_expr,
                                                      bool &can_pullup);
 
-  static int check_correlated_where_expr_can_pullup(const ObQueryRefRawExpr &query_ref,
+  static int check_correlated_where_expr_can_pullup(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                     const ObSelectStmt &subquery,
                                                     bool has_special_expr,
                                                     bool &can_pullup);
@@ -1585,11 +1597,11 @@ public:
   static int is_select_item_contain_subquery(const ObSelectStmt *subquery,
                                              bool &contain);
 
-  static int create_spj_and_pullup_correlated_exprs(const ObQueryRefRawExpr &query_ref,
+  static int create_spj_and_pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                     ObSelectStmt *&subquery,
                                                     ObTransformerCtx *ctx);
 
-  static int create_spj_and_pullup_correlated_exprs_for_set(const ObQueryRefRawExpr &query_ref,
+  static int create_spj_and_pullup_correlated_exprs_for_set(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                             ObSelectStmt *&stmt,
                                                             ObTransformerCtx *ctx);
 
@@ -1597,30 +1609,30 @@ public:
                                     ObSelectStmt *right_query);
 
   static int replace_none_correlated_exprs(ObIArray<ObRawExpr*> &exprs,
-                                          const ObQueryRefRawExpr &query_ref,
+                                          const ObIArray<ObExecParamRawExpr *> &exec_params,
                                           int &pos,
                                           ObIArray<ObRawExpr*> &new_column_list);
 
   static int replace_none_correlated_expr(ObRawExpr *&expr,
-                                          const ObQueryRefRawExpr &query_ref,
+                                          const ObIArray<ObExecParamRawExpr *> &exec_params,
                                           int &pos,
                                           ObIArray<ObRawExpr*> &new_column_list);
 
-  static int pullup_correlated_exprs(const ObQueryRefRawExpr &query_ref,
+  static int pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                      ObIArray<ObRawExpr*> &exprs,
                                      ObIArray<ObRawExpr*> &new_select_list);
 
-  static int pullup_correlated_expr(const ObQueryRefRawExpr &query_ref,
+  static int pullup_correlated_expr(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                     ObRawExpr *expr,
                                     ObIArray<ObRawExpr*> &new_select_list,
                                     bool &is_correlated);
 
-  static int pullup_correlated_select_expr(const ObQueryRefRawExpr &query_ref,
+  static int pullup_correlated_select_expr(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                            ObSelectStmt &stmt,
                                            ObSelectStmt &view,
                                            ObIArray<ObRawExpr*> &new_select_list);
 
-  static int pullup_correlated_conditions(const ObQueryRefRawExpr &query_ref,
+  static int pullup_correlated_conditions(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                           ObIArray<ObRawExpr *> &exprs,
                                           ObIArray<ObRawExpr *> &pullup_exprs,
                                           ObIArray<ObRawExpr *> &new_select_list);
@@ -1864,6 +1876,10 @@ public:
   static int check_child_projection_validity(const ObSelectStmt *child_stmt,
                                              ObRawExpr *expr,
                                              bool &is_valid);
+  static int check_fulltext_index_match_column(const ColumnReferenceSet &match_column_set,
+                                               const ObTableSchema *table_schema,
+                                               const ObTableSchema *inv_idx_schema,
+                                               bool &found_matched_index);
   static int is_winfunc_topn_filter(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
                                     ObRawExpr *filter,
                                     bool &is_topn_filter,
@@ -1871,7 +1887,74 @@ public:
                                     bool &is_fetch_with_ties,
                                     ObWinFunRawExpr *&win_expr);
   static int pushdown_qualify_filters(ObSelectStmt *stmt);
+  // check if a constant or parameterized constant is NULL.
+  static bool is_const_null(ObRawExpr &expr);
+  static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);
 
+  static int check_table_with_fts_or_multivalue_recursively(TableItem *table,
+                                                   ObSchemaChecker *schema_checker,
+                                                   ObSQLSessionInfo *session_info,
+                                                   bool &has_fts_or_multivalue_index);
+  static int add_aggr_winfun_expr(ObSelectStmt *stmt,
+                                  ObRawExpr *expr);
+  static int expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper_stmt, TableItem *rt_mv_table);
+  static int adjust_col_and_sel_for_expand_mview(ObTransformerCtx *ctx,
+                                                 ObIArray<ColumnItem> &uppper_col_items,
+                                                 ObIArray<SelectItem> &view_sel_items,
+                                                 uint64_t mv_table_id);
+
+  static int generate_view_stmt_from_query_string(const ObString &expand_view,
+                                                  ObTransformerCtx *ctx,
+                                                  ObSelectStmt *&view_stmt);
+  static int set_expand_mview_flag(ObSelectStmt *view_stmt);
+
+  static int is_where_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                          const ObSelectStmt &subquery,
+                                          bool &is_correlated);
+
+  static int is_select_item_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                       const ObSelectStmt &subquery,
+                                       bool &is_correlated);
+
+  static int is_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                 ObIArray<ObRawExpr *> &exprs,
+                                 bool &bret);
+
+  static int is_orderby_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                   const ObSelectStmt &subquery,
+                                   bool &is_correlated);
+  static int check_is_basic_aggr_item(const ObSelectStmt &subquery,
+                                      bool &is_valid);
+
+  static int deduce_query_values(ObTransformerCtx &ctx,
+                                 ObDMLStmt &stmt,
+                                 ObIArray<bool> &is_null_prop,
+                                 ObRawExpr *not_null_expr,
+                                 bool is_outer_join,
+                                 ObIArray<ObRawExpr *> &select_exprs,
+                                 ObIArray<ObRawExpr *> &view_columns,
+                                 ObIArray<ObRawExpr *> &real_values);
+
+  static int extract_nullable_exprs(const ObRawExpr *expr, ObIArray<const ObRawExpr *> &vars);
+
+  static int check_contain_correlated_lateral_table(const TableItem *table_item, bool &is_contain);
+
+  static int check_lateral_ref_outer_table(const ObDMLStmt *stmt,
+                                           const TableItem *parent_table_item,
+                                           const TableItem *table_item,
+                                           bool &is_ref);
+
+  static int check_contain_correlated_lateral_table(ObDMLStmt *stmt, bool &is_contain);
+  // check whether the score calculated by match expr is actually utilized
+  static int check_need_calc_match_score(ObExecContext *exec_ctx,
+                                        const ObDMLStmt* stmt,
+                                        ObRawExpr* match_expr,
+                                        bool &need_calc,
+                                        ObIArray<ObExprConstraint> &constraints);
+  static int check_expr_eq_zero(ObExecContext *ctx,
+                                ObRawExpr *expr,
+                                bool &eq_zero,
+                                ObIArray<ObExprConstraint> &constraints);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
@@ -1921,6 +2004,11 @@ private:
   static int check_convert_string_safely(const ObRawExpr *expr,
                                          const ObRawExpr *src_expr,
                                          bool &is_safe);
+  static int inner_check_need_calc_match_score(ObExecContext *exec_ctx,
+                                              ObRawExpr* expr,
+                                              ObRawExpr* match_expr,
+                                              bool &need_calc,
+                                              ObIArray<ObExprConstraint> &constraints);
 };
 
 class StmtUniqueKeyProvider

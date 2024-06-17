@@ -121,6 +121,10 @@ void ObLSWorker::destroy()
   LOG_INFO("destroy stream worker succ");
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(LOG_FETCHER_LSW_TIMER_START_FAIL);
+ERRSIM_POINT_DEF(LOG_FETCHER_LSW_HANDLER_START_FAIL);
+#endif
 int ObLSWorker::start()
 {
   int ret = OB_SUCCESS;
@@ -128,8 +132,16 @@ int ObLSWorker::start()
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("not init", K(inited_));
     ret = OB_NOT_INIT;
+#ifdef ERRSIM
+  } else if (OB_FAIL(LOG_FETCHER_LSW_TIMER_START_FAIL)) {
+    LOG_ERROR("ERRSIM: LOG_FETCHER_LSW_TIMER_START_FAIL");
+#endif
   } else if (OB_FAIL(TG_START(timer_id_))) {
     LOG_ERROR("start timer thread fail", KR(ret));
+#ifdef ERRSIM
+  } else if (OB_FAIL(LOG_FETCHER_LSW_HANDLER_START_FAIL)) {
+    LOG_ERROR("ERRSIM: LOG_FETCHER_LSW_HANDLER_START_FAIL");
+#endif
   } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
     LOG_WARN("TG_SET_HANDLER_AND_START failed", KR(ret), K(tg_id_));
   } else {
@@ -271,9 +283,10 @@ int ObLSWorker::dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reaso
   return ret;
 }
 
-int ObLSWorker::dispatch_stream_task(FetchStream &task, const char *from_mod)
+int ObLSWorker::dispatch_stream_task(FetchStream &task, const char *from_mod, const bool retry_until_succ)
 {
   int ret = OB_SUCCESS;
+  const int64_t RETRY_INTERVAL = 100L * 1000; // 100ms
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("not init", K(inited_));
@@ -291,16 +304,22 @@ int ObLSWorker::dispatch_stream_task(FetchStream &task, const char *from_mod)
     }
 
     // Rotating the task of fetching log streams to work threads
-    if (OB_FAIL(TG_PUSH_TASK(tg_id_, &task, hash_val))) {
-      LOG_ERROR("push stream task into thread queue fail", KR(ret));
-    }
+    do {
+      if (OB_FAIL(TG_PUSH_TASK(tg_id_, &task, hash_val))) {
+        LOG_ERROR("push stream task into thread queue fail", KR(ret));
+        if (retry_until_succ) {
+          ob_usleep(RETRY_INTERVAL);
+        }
+      }
+    } while (OB_FAIL(ret) && retry_until_succ);
   }
   return ret;
 }
 
-int ObLSWorker::hibernate_stream_task(FetchStream &task, const char *from_mod)
+int ObLSWorker::hibernate_stream_task(FetchStream &task, const char *from_mod, const bool retry_until_succ)
 {
   int ret = OB_SUCCESS;
+  const int64_t RETRY_INTERVAL = 100L * 1000; // 100ms
   bool print_stream_dispatch_info = ATOMIC_LOAD(&g_print_stream_dispatch_info);
 
   if (print_stream_dispatch_info) {
@@ -310,12 +329,16 @@ int ObLSWorker::hibernate_stream_task(FetchStream &task, const char *from_mod)
     LOG_TRACE("[STAT] [STREAM_WORKER] [HIBERNATE_STREAM_TASK]",
         "task", &task, K(from_mod), K(task));
   }
-
-  if (OB_FAIL(task.schedule(timer_id_))) {
-    LOG_ERROR("schedule timer task fail", KR(ret));
-  } else {
-    // success
-  }
+  do {
+    if (OB_FAIL(task.schedule(timer_id_))) {
+      LOG_ERROR("schedule timer task fail", KR(ret));
+      if (retry_until_succ) {
+        ob_usleep(RETRY_INTERVAL);
+      }
+    } else {
+      // success
+    }
+  } while (OB_FAIL(ret) && retry_until_succ);
 
   return ret;
 }
@@ -341,7 +364,7 @@ void ObLSWorker::handle(void *data, volatile bool &stop_flag)
   else if (OB_UNLIKELY(is_paused) && ! (task->is_sys_log_stream() || task->is_rpc_ready())) {
     LOG_TRACE("[STAT] [STREAM_WORKER] [HIBERNATE_STREAM_TASK_ON_PAUSE]", K(task));
 
-    if (OB_FAIL(hibernate_stream_task(*task, "PausedFetcher"))) {
+    if (OB_FAIL(hibernate_stream_task(*task, "PausedFetcher", true))) {
       LOG_ERROR("hibernate_stream_task on pause fail", KR(ret), K(task), KPC(task));
     }
   } else if (OB_FAIL(task->handle(stop_flag))) {
@@ -362,7 +385,7 @@ void ObLSWorker::handle(void *data, volatile bool &stop_flag)
     // 4. the retry mechanism relys on that if LSWorker consume all the result and need to exit, the exit process
     //   couldn't fail, otherwise the same FetchStream would be scheduled multiple times.
     task->switch_state(FetchStream::State::IDLE);
-    if (OB_TMP_FAIL(hibernate_stream_task(*task, "HandleTaskErr"))) {
+    if (OB_TMP_FAIL(hibernate_stream_task(*task, "HandleTaskErr", true))) {
       LOG_ERROR_RET(tmp_ret, "hibernate_stream_task on handle task failure", K(task), KPC(task));
     }
   } else {

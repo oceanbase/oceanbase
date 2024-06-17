@@ -230,8 +230,8 @@ int32_t ObPocClientStub::get_proxy_group_id(ObRpcProxy& proxy) {
 void ObPocClientStub::set_rcode(ObRpcProxy& proxy, const ObRpcResultCode& rcode) {
   proxy.set_result_code(rcode);
 }
-void ObPocClientStub::set_handle(ObRpcProxy& proxy, Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id) {
-  proxy.set_handle_attr(handle, pcode, opts, is_stream_next, session_id);
+void ObPocClientStub::set_handle(ObRpcProxy& proxy, Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id, int64_t pkt_id, int64_t send_ts) {
+  proxy.set_handle_attr(handle, pcode, opts, is_stream_next, session_id, pkt_id, send_ts);
 }
 int ObPocClientStub::translate_io_error(int io_err) {
   return tranlate_to_ob_error(io_err);

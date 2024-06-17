@@ -26,14 +26,21 @@
 
 namespace oceanbase
 {
+namespace transaction
+{
+class ObMemtableCtxObjPool;
+}
 namespace common
 {
 class ObTabletID;
 };
+namespace storage
+{
+class ObIMemtable;
+};
 namespace memtable
 {
 class ObMemtableCtxCbAllocator;
-class ObIMemtable;
 class ObMemtable;
 class ObCallbackScope;
 typedef ObIArray<ObCallbackScope> ObCallbackScopeArray;
@@ -186,9 +193,12 @@ public:
     PARALLEL_STMT = -1
   };
 public:
-  ObTransCallbackMgr(ObIMvccCtx &host, ObMemtableCtxCbAllocator &cb_allocator)
+  ObTransCallbackMgr(ObIMvccCtx &host,
+                     ObMemtableCtxCbAllocator &cb_allocator,
+                     transaction::ObMemtableCtxObjPool &mem_ctx_obj_pool)
     : host_(host),
       skip_checksum_(false),
+      mem_ctx_obj_pool_(mem_ctx_obj_pool),
       callback_list_(*this, 0),
       callback_lists_(NULL),
       rwlock_(ObLatchIds::MEMTABLE_CALLBACK_LIST_MGR_LOCK),
@@ -208,6 +218,7 @@ public:
       callback_remove_for_remove_memtable_count_(0),
       callback_remove_for_fast_commit_count_(0),
       callback_remove_for_rollback_to_count_(0),
+      callback_ext_info_log_count_(0),
       pending_log_size_(0),
       flushed_log_size_(0),
       cb_allocator_(cb_allocator),
@@ -217,8 +228,8 @@ public:
   ~ObTransCallbackMgr() {}
   void reset();
   ObIMvccCtx &get_ctx() { return host_; }
-  void *callback_alloc(const int64_t size);
-  void callback_free(ObITransCallback *cb);
+  void *alloc_mvcc_row_callback();
+  void free_mvcc_row_callback(ObITransCallback *cb);
   int append(ObITransCallback *node);
   void before_append(ObITransCallback *node);
   void after_append(ObITransCallback *node, const int ret_code);
@@ -234,7 +245,8 @@ public:
   int replay_succ(const int16_t callback_list_idx, const share::SCN scn);
   int rollback_to(const transaction::ObTxSEQ seq_no,
                   const transaction::ObTxSEQ from_seq_no,
-                  const share::SCN replay_scn);
+                  const share::SCN replay_scn,
+                  int64_t &remove_cnt);
   void set_for_replay(const bool for_replay);
   bool is_for_replay() const { return ATOMIC_LOAD(&for_replay_); }
   int remove_callbacks_for_fast_commit(const int16_t callback_list_idx, const share::SCN stop_scn);
@@ -260,7 +272,7 @@ public:
                                ObIArray<share::SCN> &checksum_scn);
   int update_checksum(const ObIArray<uint64_t> &checksum,
                       const ObIArray<share::SCN> &checksum_scn);
-  int clean_unlog_callbacks(int64_t &removed_cnt);
+  int clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove);
   // when not inc, return -1
   int64_t inc_pending_log_size(const int64_t size);
   void try_merge_multi_callback_lists(const int64_t new_size, const int64_t size, const bool is_logging_blocked);
@@ -299,6 +311,8 @@ public:
   { return callback_remove_for_fast_commit_count_; }
   int64_t get_callback_remove_for_rollback_to_count() const
   { return callback_remove_for_rollback_to_count_; }
+  int64_t get_callback_ext_info_log_count() const
+  { return callback_ext_info_log_count_; }
   void add_main_list_append_cnt(int64_t cnt = 1)
   { ATOMIC_AAF(&callback_main_list_append_count_, cnt); }
   void add_slave_list_append_cnt(int64_t cnt = 1)
@@ -313,6 +327,8 @@ public:
   { ATOMIC_AAF(&callback_remove_for_fast_commit_count_, cnt); }
   void add_rollback_to_callback_remove_cnt(int64_t cnt = 1)
   { ATOMIC_AAF(&callback_remove_for_rollback_to_count_, cnt); }
+  void add_callback_ext_info_log_count(int64_t cnt = 1)
+  { ATOMIC_AAF(&callback_ext_info_log_count_, cnt); }
   int get_callback_list_count() const
   { return  callback_lists_ ? (MAX_CALLBACK_LIST_COUNT + (need_merge_ ? 1 : 0)) : 1; }
   int get_logging_list_count() const;
@@ -349,7 +365,11 @@ private:
   }
   int fill_from_one_list(ObTxFillRedoCtx &ctx, const int list_idx, ObITxFillRedoFunctor &func);
   int fill_from_all_list(ObTxFillRedoCtx &ctx, ObITxFillRedoFunctor &func);
-  bool check_list_has_min_epoch_(const int my_idx, const int64_t my_epoch, int64_t &min_epoch, int &min_idx);
+  bool check_list_has_min_epoch_(const int my_idx,
+                                 const int64_t my_epoch,
+                                 const bool require_min,
+                                 int64_t &min_epoch,
+                                 int &min_idx);
   void calc_list_fill_log_epoch_(const int list_idx, int64_t &epoch_from, int64_t &epoch_to);
   void calc_next_to_fill_log_info_(const ObIArray<RedoLogEpoch> &arr,
                                    int &index,
@@ -366,6 +386,7 @@ private:
   // for incomplete replay, checksum is not need
   // for tx is aborted, checksum is not need
   bool skip_checksum_;
+  transaction::ObMemtableCtxObjPool &mem_ctx_obj_pool_;
   ObTxCallbackList callback_list_;   // default
   ObTxCallbackList *callback_lists_; // extends for parallel write
   common::SpinRWLock rwlock_;
@@ -414,6 +435,7 @@ private:
   int64_t callback_remove_for_remove_memtable_count_;
   int64_t callback_remove_for_fast_commit_count_;
   int64_t callback_remove_for_rollback_to_count_;
+  int64_t callback_ext_info_log_count_;
   // current log size in leader participant
   int64_t pending_log_size_;
   // current flushed log size in leader participant
@@ -435,6 +457,7 @@ public:
       memtable_(memtable),
       is_link_(false),
       not_calc_checksum_(false),
+      is_non_unique_local_index_cb_(false),
       seq_no_(),
       column_cnt_(0)
   {}
@@ -447,6 +470,7 @@ public:
       memtable_(memtable),
       is_link_(cb.is_link_),
       not_calc_checksum_(cb.not_calc_checksum_),
+      is_non_unique_local_index_cb_(cb.is_non_unique_local_index_cb_),
       seq_no_(cb.seq_no_),
       column_cnt_(cb.column_cnt_)
   {
@@ -463,7 +487,8 @@ public:
            const ObRowData *old_row,
            const bool is_replay,
            const transaction::ObTxSEQ seq_no,
-           const int64_t column_cnt)
+           const int64_t column_cnt,
+           const bool is_non_unique_local_index_cb)
   {
     UNUSED(is_replay);
 
@@ -486,9 +511,11 @@ public:
       tnode_->set_seq_no(seq_no_);
     }
     column_cnt_ = column_cnt;
+    is_non_unique_local_index_cb_ = is_non_unique_local_index_cb;
   }
-  bool on_memtable(const ObIMemtable * const memtable) override;
-  ObIMemtable *get_memtable() const override;
+  bool on_memtable(const storage::ObIMemtable * const memtable) override;
+  storage::ObIMemtable *get_memtable() const override;
+  bool is_non_unique_local_index_cb() const { return is_non_unique_local_index_cb_;}
   virtual MutatorType get_mutator_type() const override;
   int get_redo(RedoDataNode &node);
   ObIMvccCtx &get_ctx() const { return ctx_; }
@@ -507,7 +534,7 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual int before_append(const bool is_replay) override;
   virtual void after_append(const bool is_replay) override;
-  virtual int log_submitted(const share::SCN scn, ObIMemtable *&last_mt) override;
+  virtual int log_submitted(const share::SCN scn, storage::ObIMemtable *&last_mt) override;
   int64_t get_data_size()
   {
     return data_size_;
@@ -551,6 +578,9 @@ private:
   struct {
     bool is_link_ : 1;
     bool not_calc_checksum_ : 1;
+    // this flag is currently only used to skip reset_hash_holder of ObLockWaitMgr,
+    // but it is not set correctly in the replay path which will be fixed later.
+    bool is_non_unique_local_index_cb_ : 1;
   };
   transaction::ObTxSEQ seq_no_;
   int64_t column_cnt_;

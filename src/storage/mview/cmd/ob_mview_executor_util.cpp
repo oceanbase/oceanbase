@@ -212,6 +212,7 @@ int ObMViewExecutorUtil::generate_refresh_id(const uint64_t tenant_id, int64_t &
 bool ObMViewExecutorUtil::is_mview_refresh_retry_ret_code(int ret_code)
 {
   return OB_OLD_SCHEMA_VERSION == ret_code || OB_EAGAIN == ret_code ||
+         OB_INVALID_QUERY_TIMESTAMP == ret_code || OB_TASK_EXPIRED == ret_code ||
          is_master_changed_error(ret_code) || is_partition_change_error(ret_code) ||
          is_ddl_stmt_packet_retry_err(ret_code);
 }

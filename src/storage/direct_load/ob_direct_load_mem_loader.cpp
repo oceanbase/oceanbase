@@ -15,6 +15,7 @@
 #include "storage/direct_load/ob_direct_load_external_block_reader.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 #include "storage/direct_load/ob_direct_load_mem_sample.h"
+#include "observer/table_load/ob_table_load_service.h"
 
 namespace oceanbase
 {
@@ -22,13 +23,14 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
+using namespace observer;
 
 /**
  * ObDirectLoadMemLoader
  */
 
-ObDirectLoadMemLoader::ObDirectLoadMemLoader(ObDirectLoadMemContext *mem_ctx)
-  : mem_ctx_(mem_ctx)
+ObDirectLoadMemLoader::ObDirectLoadMemLoader(observer::ObTableLoadTableCtx *ctx, ObDirectLoadMemContext *mem_ctx)
+  : ctx_(ctx), mem_ctx_(mem_ctx)
 {
 }
 
@@ -69,7 +71,6 @@ int ObDirectLoadMemLoader::work()
     ObDirectLoadExternalFragment &fragment = fragments_.at(i);
     ExternalReader external_reader;
     if (OB_FAIL(external_reader.init(mem_ctx_->table_data_desc_.external_data_block_size_,
-                                     fragment.max_data_block_size_,
                                      mem_ctx_->table_data_desc_.compressor_type_))) {
       LOG_WARN("fail to init external reader", KR(ret));
     } else if (OB_FAIL(external_reader.open(fragment.file_handle_, 0, fragment.file_size_))) {
@@ -103,8 +104,16 @@ int ObDirectLoadMemLoader::work()
             LOG_WARN("fail to allocate mem", KR(ret));
           } else {
             ATOMIC_AAF(&(mem_ctx_->fly_mem_chunk_count_), 1);
-            if (OB_FAIL(chunk->init(MTL_ID(), mem_ctx_->table_data_desc_.mem_chunk_size_))) {
-              LOG_WARN("fail to init external sort", KR(ret));
+            int64_t sort_memory = 0;
+            if (mem_ctx_->table_data_desc_.exe_mode_ == observer::ObTableLoadExeMode::MAX_TYPE) {
+              sort_memory = mem_ctx_->table_data_desc_.mem_chunk_size_;
+            } else if (OB_FAIL(ObTableLoadService::get_sort_memory(sort_memory))) {
+              LOG_WARN("fail to get sort memory", KR(ret));
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(chunk->init(MTL_ID(), sort_memory))) {
+                LOG_WARN("fail to init external sort", KR(ret));
+              }
             }
           }
         }
@@ -122,6 +131,7 @@ int ObDirectLoadMemLoader::work()
           LOG_WARN("fail to add item", KR(ret));
         } else {
           external_row = nullptr;
+          ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_load_rows_, 1);
         }
       }
     }

@@ -110,7 +110,7 @@ int ObPrimaryStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Tenant COMPATIBLE is below 4.1.0.0, switch tenant is not supported", KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.1.0.0, switch tenant is");
-  } else if (OB_FAIL(get_tenant_status_(switch_tenant_id, tenant_status))) {
+  } else if (OB_FAIL(get_tenant_status(switch_tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(switch_tenant_id));
   } else if (is_tenant_normal(tenant_status)) {
     switch (arg.get_op_type()) {
@@ -175,7 +175,7 @@ int ObPrimaryStandbyService::failover_to_primary(const uint64_t tenant_id,
     LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
   } else if (tenant_info.is_primary() && tenant_info.is_normal_status()) {
     LOG_INFO("already is primary tenant, no need switch", K(tenant_info));
-  } else if (OB_FAIL(get_tenant_status_(tenant_id, tenant_status))) {
+  } else if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
   } else if (is_tenant_normal(tenant_status)) {
     ObTenantRoleTransitionService role_transition_service(tenant_id, sql_proxy_, GCTX.srv_rpc_proxy_, switch_optype);
@@ -269,7 +269,7 @@ int ObPrimaryStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg
   return ret;
 }
 
-int ObPrimaryStandbyService::get_tenant_status_(
+int ObPrimaryStandbyService::get_tenant_status(
     const uint64_t tenant_id,
     ObTenantStatus &status)
 {
@@ -314,7 +314,7 @@ int ObPrimaryStandbyService::get_tenant_status_(
 
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to get result", KR(ret), K(tenant_id), K(sql));
-        } else if (OB_FAIL(get_tenant_status(tenant_status_str, status))) {
+        } else if (OB_FAIL(schema::get_tenant_status(tenant_status_str, status))) {
           LOG_WARN("fail to get tenant status", KR(ret), K(tenant_status_str), K(tenant_id), K(sql));
         }
       }
@@ -349,7 +349,7 @@ int ObPrimaryStandbyService::do_recover_tenant(
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(get_tenant_status_(tenant_id, tenant_status))) {
+  } else if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));

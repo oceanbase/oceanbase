@@ -164,6 +164,7 @@ int ObCreateTableHelper::execute()
     const ObTableSchema &table = arg_.schema_;
     //create table xx if not exist (...)
     if (arg_.if_not_exist_) {
+      res_.do_nothing_ = true;
       ret = OB_SUCCESS;
       LOG_INFO("table is exist, no need to create again",
                "tenant_id", table.get_tenant_id(),
@@ -440,7 +441,7 @@ int ObCreateTableHelper::lock_objects_by_id_()
       if (OB_ISNULL(col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema failed", KR(ret));
-      } else if (col->is_extend()) {
+      } else if (col->get_meta_type().is_user_defined_sql_type()) {
         const uint64_t udt_id = col->get_sub_data_type();
         if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
           // can't add object lock across tenant, assumed that sys inner udt won't be changed.
@@ -1041,7 +1042,7 @@ int ObCreateTableHelper::generate_table_schema_()
       if (OB_ISNULL(col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema failed", KR(ret));
-      } else if (col->is_extend()) {
+      } else if (col->get_meta_type().is_user_defined_sql_type()) {
         const uint64_t udt_id = col->get_sub_data_type();
         const ObUDTTypeInfo *udt_info = NULL;
         if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
@@ -1195,6 +1196,14 @@ int ObCreateTableHelper::generate_aux_table_schemas_()
           index_arg.index_type_ = INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE;
         } else if (INDEX_TYPE_SPATIAL_GLOBAL == index_arg.index_type_) {
           index_arg.index_type_ = INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE;
+        } else if (is_global_fts_index(index_arg.index_type_)) {
+          if (index_arg.index_type_ == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL) {
+            index_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
+          } else if (index_arg.index_type_ == INDEX_TYPE_FTS_INDEX_GLOBAL) {
+            index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE;
+          } else if (index_arg.index_type_ == INDEX_TYPE_FTS_DOC_WORD_GLOBAL) {
+            index_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE;
+          }
         }
       }
       // the global index has generated column schema during resolve, RS no need to generate index schema,

@@ -33,7 +33,7 @@ public:
       const int64_t turn_id, const int64_t retry_id, const share::ObBackupDataType &backup_data_type);
   static int schedule_backup_complement_log_dag(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest,
       const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
-      const share::SCN &start_scn, const share::SCN &end_scn);
+      const share::SCN &start_scn, const share::SCN &end_scn, const bool is_only_calc_stat);
 };
 
 }  // namespace backup

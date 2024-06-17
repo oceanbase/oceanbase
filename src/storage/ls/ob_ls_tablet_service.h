@@ -13,7 +13,6 @@
 #ifndef OCEANBASE_STORAGE_OB_LS_TABLET_SERVICE
 #define OCEANBASE_STORAGE_OB_LS_TABLET_SERVICE
 
-#include "storage/meta_mem/ob_tablet_handle.h"
 #include "common/ob_tablet_id.h"
 #include "lib/container/ob_array_serialization.h"
 #include "lib/container/ob_iarray.h"
@@ -196,7 +195,8 @@ public:
       ObTabletHandle &tablet_handle);
   int rollback_remove_tablet(
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id);
+      const common::ObTabletID &tablet_id,
+      const share::SCN &transfer_start_scn);
 
   int get_tablet(
       const common::ObTabletID &tablet_id,
@@ -269,6 +269,16 @@ public:
   int ha_get_tablet(
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle);
+  int get_tablet_without_memtables(
+      const WashTabletPriority &priority,
+      const ObTabletMapKey &key,
+      common::ObArenaAllocator &allocator,
+      ObTabletHandle &handle);
+  int ha_get_tablet_without_memtables(
+      const WashTabletPriority &priority,
+      const ObTabletMapKey &key,
+      common::ObArenaAllocator &allocator,
+      ObTabletHandle &handle);
   int update_tablet_mstx(
       const ObTabletMapKey &key,
       const ObMetaDiskAddr &old_addr,
@@ -281,12 +291,12 @@ public:
       const int64_t buf_len,
       const ObTabletID &tablet_id,
       ObTabletTransferInfo &tablet_transfer_info);
-  int do_remove_tablet(const ObTabletMapKey &key);
 
   int create_memtable(
       const common::ObTabletID &tablet_id,
       const int64_t schema_version,
-      const bool for_replay = false,
+      const bool for_direct_load,
+      const bool for_replay,
       const share::SCN clog_checkpoint_scn = share::SCN::min_scn());
   int get_read_tables(
       const common::ObTabletID tablet_id,
@@ -542,6 +552,9 @@ private:
       const common::ObTabletID &tablet_id,
       const ObUpdateTabletPointerParam &param,
       ObTabletHandle &tablet_handle);
+  int do_remove_tablet(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id);
   int inner_remove_tablet(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
@@ -561,6 +574,7 @@ private:
   int offline_build_tablet_without_memtable_();
   int offline_gc_tablet_for_create_or_transfer_in_abort_();
   int offline_destroy_memtable_and_mds_table_();
+  int mock_duplicated_rows_(common::ObNewRowIterator *&duplicated_rows);
 private:
   static int check_real_leader_for_4377_(const ObLSID ls_id);
   static int check_need_rollback_in_transfer_for_4377_(const transaction::ObTxDesc *tx_desc,
@@ -653,6 +667,10 @@ private:
       ObObj &old_obj,
       ObLobLocatorV2 &delta_lob,
       ObObj &obj);
+  static int register_ext_info_commit_cb(
+      ObDMLRunningCtx &run_ctx,
+      ObObj &col_data,
+      ObObj &ext_info_data);
   static int set_lob_storage_params(
       ObDMLRunningCtx &run_ctx,
       const ObColDesc &column,
@@ -740,6 +758,7 @@ private:
       ObStoreRow &store_row,
       const bool need_copy_cells);
   static int insert_row_to_tablet(
+      const bool check_exist,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
       ObStoreRow &tbl_row);
@@ -779,7 +798,11 @@ private:
   int create_empty_shell_tablet(
       const ObMigrationTabletParam &param,
       ObTabletHandle &tablet_handle);
-
+  int check_rollback_tablet_is_same_(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const share::SCN &transfer_start_scn,
+      bool &is_same);
 private:
   int direct_insert_rows(const uint64_t table_id,
                          const int64_t task_id,

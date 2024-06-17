@@ -34,6 +34,18 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg));
+  } else if (session_info.get_ddl_info().is_mview_complete_refresh()) {
+    res.task_id_ = session_info.get_cur_exec_ctx()->get_table_direct_insert_ctx().get_ddl_task_id();
+    share::ObDDLTaskStatus status = share::ObDDLTaskStatus::PREPARE;
+    if (OB_FAIL(ObDDLUtil::get_data_information(arg.tenant_id_,
+        res.task_id_,
+        res.data_format_version_,
+        res.snapshot_version_,
+        status,
+        res.dest_table_id_,
+        res.schema_version_))) {
+      LOG_WARN("fail to get ddl task info", KR(ret), K(arg));
+    }
   } else {
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
     ObCreateHiddenTableArg create_table_arg;
@@ -78,6 +90,8 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg));
+  } else if (session_info.get_ddl_info().is_mview_complete_refresh()) {
+    //pass
   } else {
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
     ObCopyTableDependentsArg copy_table_dependents_arg;
@@ -131,6 +145,8 @@ int ObTableLoadRedefTable::abort(const ObTableLoadRedefTableAbortArg &arg,
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg));
+  } else if (session_info.get_ddl_info().is_mview_complete_refresh()) {
+    //pass
   } else {
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
     ObAbortRedefTableArg abort_redef_table_arg;

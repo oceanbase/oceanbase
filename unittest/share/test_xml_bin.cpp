@@ -24,6 +24,8 @@
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
+#include "lib/xml/ob_xpath.h"
+#include "lib/xml/ob_path_parser.h"
 #undef private
 
 #include <sys/time.h>
@@ -889,21 +891,21 @@ TEST_F(TestXmlBin, reader)
   ObString sub_value3("sub_value3");
 
   ObXmlElement sub1_1(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1_1.set_key(sub_key1);
+  sub1_1.set_xml_key(sub_key1);
   sub1_1.set_prefix(sub_value1);
 
   ObXmlElement sub1_2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1_2.set_key(sub_key2);
+  sub1_2.set_xml_key(sub_key2);
   sub1_2.set_prefix(sub_value2);
 
   ObXmlElement sub1_3(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1_3.set_key(sub_key3);
+  sub1_3.set_xml_key(sub_key3);
   sub1_3.set_prefix(sub_value3);
 
 
 
   ObXmlElement sub1(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1.set_key(key1);
+  sub1.set_xml_key(key1);
   sub1.set_prefix(value1);
 
   // sub children
@@ -914,27 +916,27 @@ TEST_F(TestXmlBin, reader)
 
 
   ObXmlElement sub2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub2.set_key(key2);
+  sub2.set_xml_key(key2);
   sub2.set_prefix(value2);
 
   ObXmlElement sub3_1(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub3_1.set_key(key3);
+  sub3_1.set_xml_key(key3);
   sub3_1.set_prefix(value3_1);
 
   ObXmlElement sub3_2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub3_2.set_key(key3);
+  sub3_2.set_xml_key(key3);
   sub3_2.set_prefix(value3_2);
 
   ObXmlElement sub3(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub3.set_key(key3);
+  sub3.set_xml_key(key3);
   sub3.set_prefix(value3);
 
   ObXmlElement sub4(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub4.set_key(key4);
+  sub4.set_xml_key(key4);
   sub4.set_prefix(value4);
 
   ObXmlElement sub5(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub5.set_key(key5);
+  sub5.set_xml_key(key5);
   sub5.set_prefix(value5);
 
 
@@ -947,15 +949,15 @@ TEST_F(TestXmlBin, reader)
   ObString value5_3("value5_3");
 
   ObXmlElement sub5_1(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub5_1.set_key(key5_1);
+  sub5_1.set_xml_key(key5_1);
   sub5_1.set_prefix(value5_1);
 
   ObXmlElement sub5_2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub5_2.set_key(key5_2);
+  sub5_2.set_xml_key(key5_2);
   sub5_2.set_prefix(value5_2);
 
   ObXmlElement sub5_3(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub5_3.set_key(key5_3);
+  sub5_3.set_xml_key(key5_3);
   sub5_3.set_prefix(value5_3);
 
   ASSERT_EQ(sub5.add_element(&sub5_1), OB_SUCCESS);
@@ -964,7 +966,7 @@ TEST_F(TestXmlBin, reader)
 
 
   ObXmlElement element(ObMulModeNodeType::M_DOCUMENT, ctx);
-  element.set_key(element_key);
+  element.set_xml_key(element_key);
   element.set_prefix(element_value);
 
   ASSERT_EQ(element.add_element(&sub1), OB_SUCCESS);
@@ -1128,6 +1130,7 @@ TEST_F(TestXmlBin, reader)
 
 TEST_F(TestXmlBin, test_simple_print_document)
 {
+  set_compat_mode(oceanbase::lib::Worker::CompatMode::ORACLE);
   int ret = 0;
   ObCollationType type = CS_TYPE_UTF8MB4_GENERAL_CI;
   common::ObString xml_text(
@@ -1597,6 +1600,185 @@ TEST_F(TestXmlBin, read_by_key)
     ASSERT_EQ(xbin.get_children("b", result1, nullptr), 0);
   }
 
+}
+
+# define NS_TEST_COUNT 3
+ObString ns_key[NS_TEST_COUNT] = {"", "f", "h"};
+ObString ns_value[NS_TEST_COUNT] = {"ns1", "ns2", "ns3"};
+TEST_F(TestXmlBin, test_add_extend)
+{
+  int ret = 0;
+  ObCollationType type = CS_TYPE_UTF8MB4_GENERAL_CI;
+  common::ObString xml_text(
+    "<a xmlns=\"ns1\" xmlns:f=\"ns2\" xmlns:h=\"ns3\">"
+      "<f:b b1=\"b1\" b2=\"b2\">"
+        "<c>"
+          "<h:d>"
+            "<f:e></f:e>"
+          "</h:d>"
+        "</c>"
+      "</f:b>"
+      "<h:b1>"
+      "</h:b1>"
+    "</a>");
+  ObString xml_text_entend("<f:b xmlns:f=\"ns2\" b1=\"b1\" b2=\"b2\"><c xmlns=\"ns1\"><h:d xmlns:h=\"ns3\"><f:e/></h:d></c></f:b>");
+
+  // parse xml text
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
+  ObXmlBin xbin(ctx);
+  ASSERT_EQ(xbin.parse_tree(doc), 0);
+
+  // seek
+  ObString str0 = "/a/f:b";
+  ObString str1 = "/ns1:a/ns2:b";
+  ObString default_ns(ns_value[0]);
+  ObPathVarObject pass(allocator);
+  for (int i = 1; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObDatum* data = static_cast<ObDatum*>(allocator.alloc(sizeof(ObDatum)));
+    data = new(data) ObDatum();
+    data->set_string(ns_value[i]); // default ns value
+    ASSERT_EQ(true, OB_NOT_NULL(data));
+    ret = pass.add(ns_key[i], data);
+  }
+  ObJsonBuffer buf(&allocator);
+  ObPathExprIter pathiter_bin(&allocator);
+  pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass, false);
+  ret = pathiter_bin.open();
+  ret = pathiter_bin.path_node_->node_to_string(buf);
+  ObString str2(buf.ptr());
+  ASSERT_EQ(str1, str2);
+  buf.reset();
+  int idx = 0;
+  ObIMulModeBase* res;
+  ret = pathiter_bin.get_next_node(res);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  res->print(buf, true);
+
+  ObXmlBin* bin_res = static_cast<ObXmlBin*>(res);
+
+  // ns_element
+  // element
+  ObXmlElement element_ns(ObMulModeNodeType::M_ELEMENT, ctx);
+  element_ns.init();
+  ASSERT_EQ(ObMulModeNodeType::M_ELEMENT, element_ns.type());
+  for (int i = 0; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObXmlAttribute* ns1 = static_cast<ObXmlAttribute*>(allocator.alloc(sizeof(ObXmlAttribute)));
+    ns1 = new(ns1) ObXmlAttribute(ObMulModeNodeType::M_NAMESPACE, ctx);
+    ASSERT_EQ(true, OB_NOT_NULL(ns1));
+    if (i != 0 ) {
+      ns1->set_xml_key(ns_key[i]);
+    } else {
+      ns1->set_xml_key("xmlns");
+    }
+    ns1->set_value(ns_value[i]);
+    ASSERT_EQ(OB_SUCCESS, element_ns.add_attribute(ns1));
+  }
+
+  ASSERT_EQ(OB_SUCCESS, bin_res->append_extend(&element_ns));
+  ASSERT_EQ(true, bin_res->check_extend());
+  ASSERT_EQ(true, res->check_extend());
+  buf.reset();
+  bin_res->print(buf, true);
+  std::cout<<"extend str :"<<buf.ptr()<<std::endl;
+  ObString extend_res(buf.ptr());
+  std::cout<<"extend res :"<<buf.ptr()<<std::endl;
+  ASSERT_EQ(extend_res, xml_text_entend);
+}
+
+TEST_F(TestXmlBin, test_merge_extend)
+{
+  int ret = 0;
+  ObCollationType type = CS_TYPE_UTF8MB4_GENERAL_CI;
+  common::ObString xml_text(
+    "<a xmlns=\"ns1\" xmlns:f=\"ns2\" xmlns:h=\"ns3\">"
+      "<f:b b1=\"b1\" b2=\"b2\">"
+        "<c>"
+          "<h:d>"
+            "<f:e></f:e>"
+          "</h:d>"
+        "</c>"
+      "</f:b>"
+      "<h:b1>"
+      "</h:b1>"
+    "</a>");
+  ObString xml_text_entend("<f:b xmlns:f=\"ns2\" b1=\"b1\" b2=\"b2\"><c xmlns=\"ns1\"><h:d xmlns:h=\"ns3\"><f:e/></h:d></c></f:b>");
+
+  // parse xml text
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
+  ObXmlBin xbin(ctx);
+  ASSERT_EQ(xbin.parse_tree(doc), 0);
+
+  // seek
+  ObString str0 = "/a/f:b";
+  ObString str1 = "/ns1:a/ns2:b";
+  ObString default_ns(ns_value[0]);
+  ObPathVarObject pass(allocator);
+  for (int i = 1; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObDatum* data = static_cast<ObDatum*>(allocator.alloc(sizeof(ObDatum)));
+    data = new(data) ObDatum();
+    data->set_string(ns_value[i]); // default ns value
+    ASSERT_EQ(true, OB_NOT_NULL(data));
+    ret = pass.add(ns_key[i], data);
+  }
+  ObJsonBuffer buf(&allocator);
+  ObPathExprIter pathiter_bin(&allocator);
+  pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass, false);
+  ret = pathiter_bin.open();
+  ret = pathiter_bin.path_node_->node_to_string(buf);
+  ObString str2(buf.ptr());
+  ASSERT_EQ(str1, str2);
+  buf.reset();
+  int idx = 0;
+  ObIMulModeBase* res;
+  ret = pathiter_bin.get_next_node(res);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  res->print(buf, true);
+
+  ObXmlBin* bin_res = static_cast<ObXmlBin*>(res);
+
+  // ns_element
+  // element
+  ObXmlElement element_ns(ObMulModeNodeType::M_ELEMENT, ctx);
+  element_ns.init();
+  ASSERT_EQ(ObMulModeNodeType::M_ELEMENT, element_ns.type());
+  for (int i = 0; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObXmlAttribute* ns1 = static_cast<ObXmlAttribute*>(allocator.alloc(sizeof(ObXmlAttribute)));
+    ns1 = new(ns1) ObXmlAttribute(ObMulModeNodeType::M_NAMESPACE, ctx);
+    ASSERT_EQ(true, OB_NOT_NULL(ns1));
+    if (i != 0 ) {
+      ns1->set_xml_key(ns_key[i]);
+    } else {
+      ns1->set_xml_key("xmlns");
+    }
+    ns1->set_value(ns_value[i]);
+    ASSERT_EQ(OB_SUCCESS, element_ns.add_attribute(ns1));
+  }
+
+  ASSERT_EQ(OB_SUCCESS, bin_res->append_extend(&element_ns));
+  ASSERT_EQ(true, bin_res->check_extend());
+  ASSERT_EQ(true, res->check_extend());
+  buf.reset();
+  bin_res->print(buf, true);
+  ObString exptend_res(buf.ptr());
+  ASSERT_EQ(exptend_res, xml_text_entend);
+
+  ObXmlBin bin_merge(ctx);
+  ASSERT_EQ(OB_SUCCESS, bin_res->merge_extend(bin_merge));
+  buf.reset();
+  ret = bin_merge.print(buf, true);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObString merge_res(buf.ptr());
+  std::cout<<"extend res:"<<merge_res.ptr()<<std::endl;
+  std::cout<<"extend str:"<<xml_text_entend.ptr()<<std::endl;
+  ASSERT_EQ(merge_res, xml_text_entend);
 }
 
 TEST_F(TestXmlBin, print_empty_element)

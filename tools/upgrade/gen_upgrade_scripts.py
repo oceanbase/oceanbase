@@ -152,8 +152,9 @@ if __name__ == '__main__':
   upgrade_post_filename = 'upgrade_post.py'
   do_upgrade_pre_filename = 'do_upgrade_pre.py'
   do_upgrade_post_filename = 'do_upgrade_post.py'
+  obcdc_compatible_filename = 'gen_obcdc_compatiable_info.py'
   cur_filename = sys.argv[0][sys.argv[0].rfind(os.sep)+1:]
-  except_filter_filename_list = [cur_filename, upgrade_pre_filename, upgrade_post_filename]
+  except_filter_filename_list = [cur_filename, upgrade_pre_filename, upgrade_post_filename, obcdc_compatible_filename]
   file_splitter_line = '####====XXXX======######==== I am a splitter ====######======XXXX====####'
   sub_filename_line_prefix = '#filename:'
   sub_file_module_end_line = '#sub file module end'

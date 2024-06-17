@@ -124,7 +124,7 @@ template <typename Store_Row, bool has_addon>
 int GeneralCompare<Store_Row, has_addon>::compare(const Store_Row *l, const Store_Row *r,
                                                   const RowMeta *row_meta)
 {
-  int ret = OB_SUCCESS;
+  int &ret = ret_;
   int cmp = 0;
   ObLength l_len = 0;
   ObLength r_len = 0;
@@ -153,7 +153,7 @@ template <typename Store_Row, bool has_addon>
 int GeneralCompare<Store_Row, has_addon>::compare(const Store_Row *r, ObEvalCtx &eval_ctx,
                                                   const RowMeta *row_meta)
 {
-  int ret = OB_SUCCESS;
+  int &ret = ret_;
   int cmp = 0;
   ObLength l_len = 0;
   ObLength r_len = 0;
@@ -364,7 +364,7 @@ template <typename Store_Row, bool has_addon>
 int FixedCompare<Store_Row, has_addon>::compare(const Store_Row *l, const Store_Row *r,
                                                 const RowMeta *row_meta)
 {
-  int ret = OB_SUCCESS;
+  int &ret = ret_;
   int cmp = 0;
   bool l_null = false;
   bool r_null = false;
@@ -386,7 +386,7 @@ template <typename Store_Row, bool has_addon>
 int FixedCompare<Store_Row, has_addon>::compare(const Store_Row *r, ObEvalCtx &eval_ctx,
                                                 const RowMeta *row_meta)
 {
-  int ret = OB_SUCCESS;
+  int &ret = ret_;
   int cmp = 0;
   bool l_null = false;
   bool r_null = false;

@@ -28,7 +28,7 @@ namespace storage
 //RUNNING           N               RUNNING   OFFLINING      N               N
 //OFFLINING         N               N         OFFLINING      OFFLINED        N
 //OFFLINED          N               RUNNING   OFFLINED       OFFLINED        STOPPED
-//STOPPED           N               N         N              N               STOPPED
+//STOPPED           N               N         STOPPED        STOPPED         STOPPED
 int ObLSRunningState::StateHelper::switch_state(const int64_t op)
 {
   int ret = OB_SUCCESS;
@@ -45,7 +45,7 @@ int ObLSRunningState::StateHelper::switch_state(const int64_t op)
 /* RUNNING */     {N,             LS_RUNNING,  LS_OFFLINING,  N,                 N},
 /* OFFLINING */   {N,             N,           LS_OFFLINING,  LS_OFFLINED,       N},
 /* OFFLINED */    {N,             LS_RUNNING,  LS_OFFLINED,   LS_OFFLINED,       LS_STOPPED},
-/* STOPPED */     {N,             N,           N,             N,                 LS_STOPPED},
+/* STOPPED */     {N,             N,           LS_STOPPED,    LS_STOPPED,        LS_STOPPED},
   };
 
   if (OB_UNLIKELY(!Ops::is_valid(op))) {

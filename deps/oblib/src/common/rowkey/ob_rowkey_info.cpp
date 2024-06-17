@@ -70,6 +70,14 @@ DEFINE_GET_SERIALIZE_SIZE(ObRowkeyColumn)
   len += serialization::encoded_length_vi32(order_);
   return len;
 }
+bool ObRowkeyColumn::is_equal_except_column_id(const ObRowkeyColumn &other) const
+{
+   return length_ == other.length_ &&
+          type_ == other.type_ &&
+          order_ == other.order_ &&
+          fulltext_flag_ == other.fulltext_flag_ &&
+          spatial_flag_ == other.spatial_flag_;
+}
 
 ObRowkeyColumn& ObRowkeyColumn::operator=(const ObRowkeyColumn &other)
 {
@@ -79,18 +87,19 @@ ObRowkeyColumn& ObRowkeyColumn::operator=(const ObRowkeyColumn &other)
   this->order_ = other.order_;
   this->fulltext_flag_ = other.fulltext_flag_;
   this->spatial_flag_ = other.spatial_flag_;
+  this->multivalue_flag_ = other.multivalue_flag_;
   return *this;
 }
 
 bool ObRowkeyColumn::operator==(const ObRowkeyColumn &other) const
 {
   return
-      this->length_ == other.length_ &&
       this->column_id_ == other.column_id_ &&
       this->type_ == other.type_ &&
       this->order_ == other.order_ &&
       this->fulltext_flag_ == other.fulltext_flag_ &&
-      this->spatial_flag_ == other.spatial_flag_;
+      this->spatial_flag_ == other.spatial_flag_ &&
+      this->multivalue_flag_ == other.multivalue_flag_;
 }
 
 ObRowkeyInfo::ObRowkeyInfo()
@@ -446,22 +455,6 @@ int ObRowkeyInfo::get_column_ids(ObBitSet<> &column_ids) const
   for (int64_t i = 0; OB_SUCC(ret) && i < size_; i++) {
     if (OB_FAIL(column_ids.add_member(static_cast<int64_t>(columns_[i].column_id_)))) {
       COMMON_LOG(WARN, "fail to push back column id", K(ret), K(i));
-    }
-  }
-  return ret;
-}
-
-int ObRowkeyInfo::get_fulltext_column(uint64_t &column_id) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(columns_)) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "columns is null");
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < size_; i++) {
-    if (columns_[i].fulltext_flag_) {
-      column_id = columns_[i].column_id_;
-      break;
     }
   }
   return ret;

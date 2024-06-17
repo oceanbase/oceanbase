@@ -251,7 +251,7 @@ int ObSSTableIndexFilterFactory::build_sstable_index_filter(
   }
   if (OB_SUCC(ret) && tmp_index_filter->can_use_skipping_index()) {
     index_filter = tmp_index_filter;
-  } else if (tmp_index_filter) {
+  } else if (nullptr != tmp_index_filter) {
     tmp_index_filter->~ObSSTableIndexFilter();
     allocator->free(tmp_index_filter);
   }

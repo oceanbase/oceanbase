@@ -44,6 +44,7 @@ namespace schema
 class ObMultiVersionSchemaService;
 class ObTableSchema;
 class ObTenantSchema;
+class ObSimpleTableSchemaV2;
 }
 }
 
@@ -125,10 +126,10 @@ public:
   public:
     TableIdCompare() : ret_(common::OB_SUCCESS) {}
     ~TableIdCompare() {}
-    bool operator() (const share::schema::ObTableSchema* left,
-                     const share::schema::ObTableSchema* right);
+    bool operator() (const share::schema::ObSimpleTableSchemaV2* left,
+                     const share::schema::ObSimpleTableSchemaV2* right);
     int get_ret() const { return ret_; }
-  private:
+private:
     int ret_;
   };
   explicit ObBootstrap(obrpc::ObSrvRpcProxy &rpc_proxy,

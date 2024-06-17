@@ -127,7 +127,8 @@ ObOpSpec::ObOpSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
     plan_depth_(0),
     max_batch_size_(0),
     need_check_output_datum_(false),
-    use_rich_format_(false)
+    use_rich_format_(false),
+    compress_type_(NONE_COMPRESSOR)
 {
 }
 
@@ -148,7 +149,8 @@ OB_SERIALIZE_MEMBER(ObOpSpec,
                     plan_depth_,
                     max_batch_size_,
                     need_check_output_datum_,
-                    use_rich_format_);
+                    use_rich_format_,
+                    compress_type_);
 
 DEF_TO_STRING(ObOpSpec)
 {
@@ -293,7 +295,7 @@ int ObOpSpec::create_operator(ObExecContext &exec_ctx, ObOperator *&op) const
   } else if (OB_FAIL(create_exec_feedback_node_recursive(exec_ctx))) {
     LOG_WARN("fail to create exec feedback node", K(ret));
   }
-  LOG_TRACE("trace create operator", K(ret), K(lbt()));
+  LOG_DEBUG("trace create operator", K(ret), K(lbt()));
   return ret;
 }
 
@@ -312,7 +314,7 @@ int ObOpSpec::create_operator_recursive(ObExecContext &exec_ctx, ObOperator *&op
               K(ret), K(id_), KP(kit), KP(children_), K(create_child_cnt), K(type_));
     } else {
       kit->spec_ = this;
-      LOG_TRACE("trace create spec", K(ret), K(id_), K(type_));
+      LOG_DEBUG("trace create spec", K(ret), K(id_), K(type_));
       for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt_; i++) {
         if (NULL == children_[i]) {
           // 这里如果有child但为nullptr，说明是receive算子
@@ -341,7 +343,7 @@ int ObOpSpec::create_operator_recursive(ObExecContext &exec_ctx, ObOperator *&op
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("NULL input returned", K(ret));
         } else {
-          LOG_TRACE("trace create input", K(ret), K(id_), K(type_));
+          LOG_DEBUG("trace create input", K(ret), K(id_), K(type_));
         }
       }
     }
@@ -1068,9 +1070,12 @@ int ObOperator::setup_op_feedback_info()
     int64_t &total_db_time = fb_info.get_total_db_time();
     total_db_time +=  op_monitor_info_.db_time_;
     if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {
+      uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
       ObExecFeedbackNode &node = nodes.at(fb_node_idx_);
       node.block_time_ = op_monitor_info_.block_time_;
+      node.block_time_ /= cpu_khz;
       node.db_time_ = op_monitor_info_.db_time_;
+      node.db_time_ /= cpu_khz;
       node.op_close_time_ = op_monitor_info_.close_time_;
       node.op_first_row_time_ = op_monitor_info_.first_row_time_;
       node.op_last_row_time_ = op_monitor_info_.last_row_time_;
@@ -1091,6 +1096,23 @@ int ObOperator::submit_op_monitor_node()
     // Reference document:
     op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
+
+    // exclude time cost in children, but px receive have no real children in exec view
+    int64_t db_time = total_time_; // use temp var to avoid dis-order close
+    if (!spec_.is_receive()) {
+      for (int64_t i = 0; i < child_cnt_; i++) {
+        db_time -= children_[i]->total_time_;
+      }
+    }
+    if (db_time < 0) {
+      db_time = 0;
+    }
+    // exclude io time cost
+    // Change to divide by cpu_khz when generating the virtual table.
+    // Otherwise, the unit of this field is inconsistent during SQL execution and after SQL execution is completed.
+    op_monitor_info_.db_time_ = 1000 * db_time;
+    op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_;
+
     if (list && spec_.plan_) {
       if (spec_.plan_->get_phy_plan_hint().monitor_
           || (ctx_.get_my_session()->is_user_session()
@@ -1098,18 +1120,6 @@ int ObOperator::submit_op_monitor_node()
                   || (op_monitor_info_.close_time_
                       - ctx_.get_plan_start_time()
                       > MONITOR_RUNNING_TIME_THRESHOLD)))) {
-        // exclude time cost in children, but px receive have no real children in exec view
-        uint64_t db_time = total_time_; // use temp var to avoid dis-order close
-        if (!spec_.is_receive()) {
-          for (int64_t i = 0; i < child_cnt_; i++) {
-            db_time -= children_[i]->total_time_;
-          }
-        }
-        // exclude io time cost
-        uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
-        op_monitor_info_.db_time_ = 1000 * db_time / cpu_khz;
-        op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_ / cpu_khz;
-
         IGNORE_RETURN list->submit_node(op_monitor_info_);
         LOG_DEBUG("debug monitor", K(spec_.id_));
       }
@@ -1329,6 +1339,17 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
           ret = spec_.use_rich_format_ ? (*e)->eval_vector(eval_ctx_, brs_)
                                        : (*e)->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_);
           (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        }
+      }
+
+      if (brs_.end_ && 0 == brs_.size_) {
+        FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
+          if (UINT32_MAX != (*e)->vector_header_off_) {
+            if (OB_FAIL((*e)->init_vector(eval_ctx_, (*e)->is_batch_result()
+                                          ? VEC_UNIFORM : VEC_UNIFORM_CONST, brs_.size_))) {
+              LOG_WARN("failed to init vector", K(ret));
+            }
+          }
         }
       }
 

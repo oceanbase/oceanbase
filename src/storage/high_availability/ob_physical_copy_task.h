@@ -51,7 +51,7 @@ struct ObPhysicalCopyCtx
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(src_info), KP_(bandwidth_throttle),
       KP_(svr_rpc_proxy), K_(is_leader_restore), KP_(restore_base_info),
       KP_(meta_index_store), KP_(second_meta_index_store), KP_(ha_dag),
-      KP_(sstable_index_builder), KP_(restore_macro_block_id_mgr), K_(need_check_seq), K_(ls_rebuild_seq));
+      KP_(sstable_index_builder), KP_(restore_macro_block_id_mgr), K_(need_check_seq), K_(ls_rebuild_seq), K_(table_key));
   common::SpinRWLock lock_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -69,6 +69,7 @@ struct ObPhysicalCopyCtx
   bool need_sort_macro_meta_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
+  ObITable::TableKey table_key_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyCtx);
 };
 

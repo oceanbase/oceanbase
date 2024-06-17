@@ -40,6 +40,7 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
   ObUpdateStmt *update_stmt = NULL;
   ObSEArray<ObTableAssignment, 2> tables_assign;
   bool has_tg = false;
+  bool disable_limit_offset = false;
   if (T_UPDATE != parse_tree.type_
       || 3 > parse_tree.num_child_
       || OB_ISNULL(parse_tree.children_)
@@ -50,6 +51,9 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(update_stmt = create_stmt<ObUpdateStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create update stmt failed");
+  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::UPD_LIMIT_OFFSET,
+                                                         disable_limit_offset))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else {
     stmt_ = update_stmt;
     update_stmt->set_ignore(false);
@@ -106,9 +110,6 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
         if ((NULL != (*it)->view_base_item_ || has_tg) &&
             OB_FAIL(add_all_column_to_updatable_view(*update_stmt, *(*it), has_tg))) {
           LOG_WARN("add all column for updatable view failed", K(ret));
-        } else if (is_oracle_mode() &&
-                   OB_FAIL(add_default_sequence_id_to_stmt((*it)->table_id_))) {
-          LOG_WARN("add default sequence id to stmt failed", K(ret));
         }
       }
     }
@@ -159,7 +160,7 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("failed to generate batched stmt info", K(ret));
     } else if (OB_FAIL(resolve_order_clause(parse_tree.children_[ORDER_BY]))) {
       LOG_WARN("resolve order clause failed", K(ret));
-    } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT]))) {
+    } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT], disable_limit_offset))) {
       LOG_WARN("resolve limit clause failed", K(ret));
     } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT]))) {
       LOG_WARN("resolve hints failed", K(ret));
@@ -562,7 +563,15 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(update_stmt->get_update_table_info().push_back(table_info))) {
+      TableItem *rowkey_doc = NULL;
+      if (OB_FAIL(try_add_join_table_for_fts(table_item, rowkey_doc))) {
+        LOG_WARN("fail to try add join table for fts", K(ret), KPC(table_item));
+      } else if (OB_NOT_NULL(rowkey_doc) && OB_FAIL(try_update_column_expr_for_fts(
+                                                                      *table_item,
+                                                                      rowkey_doc,
+                                                                      table_info->column_exprs_))) {
+        LOG_WARN("fail to try update column expr for fts", K(ret), KPC(table_item));
+      } else if (OB_FAIL(update_stmt->get_update_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));
       } else if (gindex_cnt > 0) {
         update_stmt->set_has_global_index(true);

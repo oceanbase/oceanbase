@@ -14,10 +14,17 @@
 #define DEV_SRC_PL_OB_PL_USER_TYPE_H_
 #include "pl/ob_pl_type.h"
 #include "rpc/obmysql/ob_mysql_util.h"
+#include "lib/hash/ob_hashmap.h"
 #include "lib/hash/ob_array_index_hash_set.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "share/rc/ob_tenant_base.h"
+
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/opaque/ob_pl_opaque.h"
+#include "pl/opaque/ob_pl_xml.h"
+#include "pl/opaque/ob_pl_json_type.h"
+#endif
 
 namespace oceanbase
 {
@@ -88,7 +95,7 @@ public:
                    const ObPLINS *ns,
                    int64_t &ptr) const;
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
                                sql::ObExecContext &exec_ctx,
@@ -151,6 +158,25 @@ public:
   static int deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos);
   static int64_t get_serialize_obj_size(const ObObj &obj);
 
+  int text_protocol_prefix_info_for_each_item(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const ObPLDataType &type,
+                                              char *buf,
+                                              const int64_t len,
+                                              int64_t &pos) const;
+  int text_protocol_suffix_info_for_each_item(const ObPLDataType &type,
+                                              char *buf,
+                                              const int64_t len,
+                                              int64_t &pos,
+                                              const bool is_last_item,
+                                              const bool is_null) const;
+  int text_protocol_base_type_convert(const ObPLDataType &type, char *buf, int64_t &pos, int64_t len) const;
+  int base_type_serialize_for_text(ObObj* obj,
+                                   const ObTimeZoneInfo *tz_info,
+                                   char *dst,
+                                   const int64_t dst_len,
+                                   int64_t &dst_pos,
+                                   bool &has_serialized) const;
+
   VIRTUAL_TO_STRING_KV(K_(type), K_(user_type_id), K_(type_name));
 protected:
   common::ObString type_name_;
@@ -197,7 +223,7 @@ public:
   virtual int get_all_depended_user_type(const ObPLResolveCtx &resolve_ctx,
                                          const ObPLBlockNS &current_ns) const;
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
@@ -261,8 +287,7 @@ public:
 public:
   int deep_copy(common::ObIAllocator &alloc, const ObRefCursorType &other);
 
-  virtual int get_size(
-    const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
   virtual int init_obj(
     share::schema::ObSchemaGetterGuard &schema_guard,
@@ -415,7 +440,7 @@ public:
                      const ObPLINS *ns,
                      int64_t &ptr) const;
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
@@ -492,7 +517,7 @@ public:
   virtual int64_t get_member_count() const { return 0; }
   virtual const ObPLDataType *get_member(int64_t i) const { UNUSED(i); return NULL; }
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
   virtual int get_all_depended_user_type(
     const ObPLResolveCtx &resolve_ctx, const ObPLBlockNS &current_ns) const
@@ -563,7 +588,7 @@ public:
                      const ObPLINS *ns,
                      int64_t &ptr) const;
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
@@ -828,6 +853,7 @@ public:
   int serialize(char *buf, int64_t len, int64_t &pos) const;
   int deserialize(const char* buf, const int64_t len, int64_t &pos);
   void print() const;
+  static bool obj_is_null(ObObj* obj);
 
   TO_STRING_KV(K_(type), K_(id), K_(is_null));
 
@@ -887,7 +913,7 @@ public:
   inline bool is_inited() const { return count_ != OB_INVALID_COUNT; }
   void print() const;
 
-  TO_STRING_KV(K_(type), K_(count));
+  TO_STRING_KV(K_(type), K_(count), K(id_), K(is_null_));
 
 private:
   int32_t count_; //field count
@@ -1165,299 +1191,6 @@ public:
   TO_STRING_KV(KP_(allocator), K_(type), K_(count), K_(first), K_(last), K_(data), K_(capacity));
 private:
   int64_t capacity_;
-};
-
-class ObPLOpaque
-{
-public:
-  ObPLOpaque(ObPLOpaqueType type)
-    : type_(type), allocator_("PlOpaque", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()) {}
-  ObPLOpaque()
-    : type_(ObPLOpaqueType::PL_INVALID), allocator_("PlOpaque", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()) {}
-
-  virtual ~ObPLOpaque() { allocator_.reset(); }
-
-  inline ObPLOpaqueType get_type() const { return type_; }
-
-  static ObPLOpaqueType get_type(uint64_t id)
-  {
-    ObPLOpaqueType type = ObPLOpaqueType::PL_INVALID;
-    switch (id)
-    {
-      case 300001: {
-        type = ObPLOpaqueType::PL_XML_TYPE;
-      } break;
-      case 300004: {
-        type = ObPLOpaqueType::PL_ANY_TYPE;
-      } break;
-      case 300005: {
-        type = ObPLOpaqueType::PL_ANY_DATA;
-      } break;
-      case 300023:
-      case 300024: {
-        type = ObPLOpaqueType::PL_JSON_TYPE;
-      } break;
-      default :{
-      } break;
-    }
-    return type;
-  }
-
-  inline bool is_invalid() const { return ObPLOpaqueType::PL_INVALID == type_; }
-  inline bool is_anytype() const { return ObPLOpaqueType::PL_ANY_TYPE == type_; }
-  inline bool is_anydata() const { return ObPLOpaqueType::PL_ANY_DATA == type_; }
-  inline bool is_xmltype() const { return ObPLOpaqueType::PL_XML_TYPE == type_; }
-  inline bool is_json_type() const { return ObPLOpaqueType::PL_JSON_TYPE == type_; }
-
-  ObIAllocator& get_allocator(); // { return allocator_; }
-
-  virtual int deep_copy(ObPLOpaque *dst);
-
-  int64_t get_init_size() const;
-
-  TO_STRING_KV(K_(type));
-
-private:
-  ObPLOpaqueType type_;
-  ObArenaAllocator allocator_;
-};
-
-class ObPLAnyType : public ObPLOpaque
-{
-public:
-  enum TypeCode {
-    TYPECODE_INVALID          = -1,
-    TYPECODE_DATE             = 12,
-    TYPECODE_NUMBER           = 2,
-    TYPECODE_RAW              = 95,
-    TYPECODE_CHAR             = 96,
-    TYPECODE_VARCHAR2         = 9,
-    TYPECODE_VARCHAR          = 1,
-    TYPECODE_MLSLABEL         = 105,
-    TYPECODE_BLOB             = 113,
-    TYPECODE_BFILE            = 114,
-    TYPECODE_CLOB             = 112,
-    TYPECODE_CFILE            = 115,
-    TYPECODE_TIMESTAMP        = 187,
-    TYPECODE_TIMESTAMP_TZ     = 188,
-    TYPECODE_TIMESTAMP_LTZ    = 232,
-    TYPECODE_INTERVAL_YM      = 189,
-    TYPECODE_INTERVAL_DS      = 190,
-
-    TYPECODE_REF              = 110,
-    TYPECODE_OBJECT           = 108,
-    TYPECODE_VARRAY           = 247, // COLLECTION TYPE
-    TYPECODE_TABLE            = 248, // COLLECTION TYPE
-    TYPECODE_NAMEDCOLLECTION  = 122,
-    TYPECODE_OPAQUE           = 58, // OPAQUE TYPE
-
-    TYPECODE_NCHAR            = 286,
-    TYPECODE_NVARCHAR2        = 287,
-    TYPECODE_NCLOB            = 288,
-
-    TYPECODE_BFLOAT           = 100,
-    TYPECODE_BDOUBLE          = 101,
-    TYPECODE_UROWID           = 104,
-  };
-
-public:
-  ObPLAnyType()
-    : ObPLOpaque(ObPLOpaqueType::PL_ANY_TYPE),
-      in_begincreate_(false),
-      rowsize_(0),
-      code_(TypeCode::TYPECODE_INVALID),
-      type_(NULL) {}
-
-  virtual ~ObPLAnyType() {}
-
-public:
-  virtual int deep_copy(ObPLOpaque *dst);
-  static int pltype_to_typecode(const ObPLDataType &pl_type, ObPLAnyType::TypeCode &typecode);
-  static bool typecode_compatible(ObPLAnyType::TypeCode &src, ObPLAnyType::TypeCode &dst);
-
-public:
-  void set_in_begincreate(bool v) { in_begincreate_ = v; }
-  bool is_in_begincreate() { return in_begincreate_; }
-
-  void set_rowsize(int64_t v) { rowsize_ = v; }
-  int64_t get_rowsize() { return rowsize_; }
-
-  void set_type_ptr(ObPLDataType *type) { type_ = type; }
-  ObPLDataType* get_type_ptr() { return type_; }
-
-  void set_typecode(TypeCode code)
-  {
-    if (is_valid_type(code)) {
-      code_ = code;
-    }
-  }
-  TypeCode get_typecode() { return code_; }
-
-  bool is_valid_type() { return is_valid_type(code_); }
-
-  static bool is_obj_type(TypeCode code);
-  static bool is_valid_type(TypeCode code);
-
-
-  TO_STRING_KV(K_(in_begincreate), K_(code), K_(type));
-
-private:
-  bool in_begincreate_;
-  int64_t rowsize_;
-  TypeCode code_;
-  ObPLDataType *type_;
-};
-
-class ObPLAnyData : public ObPLOpaque
-{
-public:
-  ObPLAnyData()
-    : ObPLOpaque(ObPLOpaqueType::PL_ANY_DATA),
-      in_begincreate_(false),
-      in_piecewise_(false),
-      is_last_elem_(false),
-      is_no_data_(false),
-      rowsize_(0),
-      current_pos_(0),
-      type_code_(ObPLAnyType::TypeCode::TYPECODE_INVALID),
-      type_(NULL),
-      data_(NULL) {}
-
-  virtual ~ObPLAnyData()
-  {
-    in_piecewise_ = false;
-    in_begincreate_ = false;
-    is_last_elem_ = false;
-    is_no_data_ = false;
-    rowsize_ = 0;
-    current_pos_ = 0;
-    type_code_ = ObPLAnyType::TypeCode::TYPECODE_INVALID;
-    type_ = NULL;
-    if (NULL != data_) {
-      (void)ObUserDefinedType::destruct_obj(*data_);
-      data_ = NULL;
-    }
-  }
-
-public:
-  virtual int deep_copy(ObPLOpaque *dst);
-
-  int set_data(const ObObj &data);
-  ObObj* get_data() { return data_; }
-
-  void set_type_code(ObPLAnyType::TypeCode type_code) { type_code_ = type_code; }
-  ObPLAnyType::TypeCode get_type_code() { return type_code_; }
-
-  void set_type(const ObPLDataType *type) { type_ = type; }
-  const ObPLDataType* get_type() { return type_; }
-
-  void set_in_begincreate(bool v) { in_begincreate_ = v; }
-  bool is_in_begincreate() { return in_begincreate_; }
-
-  void set_piecewise(bool v) { in_piecewise_ = v; }
-  bool is_in_piecewise() { return in_piecewise_; }
-
-  void set_rowsize(int64_t v) { rowsize_ = v; }
-  int64_t get_rowsize() { return rowsize_; }
-
-  void set_current_pos(int64_t pos) { current_pos_ = pos; }
-  int64_t get_current_pos() { return current_pos_; }
-
-  void set_is_last_elem(bool v) { is_last_elem_ = v; }
-  bool is_last_elem() { return is_last_elem_; }
-
-  void set_is_no_data(bool v) { is_no_data_ = v; }
-  bool is_no_data() { return is_no_data_; }
-
-  int get_current_data(ObObj &obj, ObPLAnyType::TypeCode &dst_typecode);
-  int set_current_data(ObObj &obj, ObPLAnyType::TypeCode &src_typecode, bool is_last_elem);
-
-  int get_current_type(const ObPLDataType *&pl_type);
-  int set_record_element(ObObj &obj);
-  int set_collection_element(ObObj &obj);
-
-  TO_STRING_KV(K_(in_begincreate),
-               K_(in_piecewise),
-               K_(current_pos),
-               KPC(type_),
-               KPC(data_));
-
-private:
-  bool in_begincreate_;
-  bool in_piecewise_;
-  bool is_last_elem_;
-  bool is_no_data_;
-  int64_t rowsize_;
-  int64_t current_pos_;
-  ObPLAnyType::TypeCode type_code_;
-  const ObPLDataType *type_;
-  ObObj *data_;
-};
-
-class ObPLXmlType : public ObPLOpaque
-{
-public:
-  ObPLXmlType()
-    : ObPLOpaque(ObPLOpaqueType::PL_XML_TYPE),
-      data_(NULL) {
-      }
-
-  virtual ~ObPLXmlType()
-  {
-    data_ = NULL;
-  }
-
-public:
-  virtual int deep_copy(ObPLOpaque *dst);
-
-  void set_data(ObObj *data) { data_ = data; }
-  ObObj* get_data() { return data_; }
-
-  TO_STRING_KV(KPC(data_));
-
-private:
-  ObObj *data_;
-};
-
-class ObPLJsonBaseType : public ObPLOpaque
-{
-public:
-  enum JSN_ERR_BEHAVIOR {
-    JSN_PL_NULL_ON_ERR,
-    JSN_PL_ERR_ON_ERR,
-    JSN_PL_ERR_ON_EMP,
-    JSN_PL_ERR_ON_MISMATCH,
-    JSN_PL_ERR_ON_INVALID = 7
-  };
-
-  ObPLJsonBaseType()
-    : ObPLOpaque(ObPLOpaqueType::PL_JSON_TYPE),
-      data_(NULL),
-      behavior_(0),
-      is_shallow_copy_(0)
-      {}
-
-  virtual ~ObPLJsonBaseType()
-  {
-    data_ = NULL;
-    behavior_ = 0;
-  }
-
-public:
-  virtual int deep_copy(ObPLOpaque *dst);
-  void set_data(ObJsonNode *data) { data_ = data; }
-  void set_err_behavior(int behavior) { behavior_ = behavior; }
-  int get_err_behavior() { return behavior_ ; }
-  ObJsonNode* get_data() { return data_; }
-  bool need_shallow_copy() { return is_shallow_copy_ > 0; }
-  void set_shallow_copy(int value) { is_shallow_copy_ = value; }
-
-  TO_STRING_KV(KPC(data_), K_(behavior), K_(is_shallow_copy));
-
-private:
-  ObJsonNode *data_;
-  int behavior_;
-  int is_shallow_copy_;
 };
 
 #endif

@@ -29,7 +29,7 @@ namespace logservice
 class ObLogService;
 class ObLogRestoreDriverBase
 {
-  const int64_t FETCH_LOG_AHEAD_THRESHOLD_NS = 3 * 1000 * 1000 *1000L;  // 3s
+  const int64_t FETCH_LOG_AHEAD_THRESHOLD_NS = 6 * 1000 * 1000 *1000L;  // 6s
 public:
   ObLogRestoreDriverBase();
   virtual ~ObLogRestoreDriverBase();

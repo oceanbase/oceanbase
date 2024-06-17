@@ -5,7 +5,7 @@ ARG VERSION
 ARG STEP
 
 RUN yum install -y yum-utils && \
-    yum-config-manager --add-repo https://mirrors.aliyun.com/oceanbase/OceanBase.repo && \
+    yum-config-manager --add-repo https://mirrors.oceanbase.com/oceanbase/OceanBase.repo && \
     sed -i 's/$releasever/7/' /etc/yum.repos.d/OceanBase.repo && \
     yum install -y ob-deploy obclient ob-sysbench libaio bc libselinux-utils zip && \
     rm -rf /usr/obd/mirror/remote/* && \
@@ -36,6 +36,7 @@ COPY init_store_for_fast_start.py /root/boot/
 ENV PATH /root/boot:$PATH
 ENV LD_LIBRARY_PATH /home/admin/oceanbase/lib:/root/ob/lib:$LD_LIBRARY_PATH
 
+STOPSIGNAL SIGTERM
 WORKDIR /root
 CMD _boot
 

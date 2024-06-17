@@ -21,6 +21,7 @@
 #include "rpc/obrpc/ob_rpc_result_code.h"
 #include "sql/das/ob_das_define.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
+#include "sql/das/ob_das_def_reg.h"
 namespace oceanbase
 {
 namespace sql
@@ -63,13 +64,33 @@ public:
                                  ObIAllocator &allocator,
                                  blocksstable::ObStorageDatum &datum_value);
   static int padding_fixed_string_value(int64_t max_len, ObIAllocator &alloc, ObObj &value);
-  static int generate_spatial_index_rows(ObIAllocator &allocator,
-                                         const ObDASDMLBaseCtDef &das_ctdef,
-                                         const ObString &wkb_str,
-                                         const IntFixedArray &row_projector,
-                                         const ObDASWriteBuffer::DmlRow &dml_row,
-                                         ObSpatIndexRow &spat_rows);
   static int wait_das_retry(int64_t retry_cnt);
+  static int find_child_das_def(const ObDASBaseCtDef *root_ctdef,
+                                ObDASBaseRtDef *root_rtdef,
+                                ObDASOpType op_type,
+                                const ObDASBaseCtDef *&target_ctdef,
+                                ObDASBaseRtDef *&target_rtdef);
+  template <typename CtDefType, typename RtDefType>
+  static int find_target_das_def(const ObDASBaseCtDef *root_ctdef,
+                                 ObDASBaseRtDef *root_rtdef,
+                                 ObDASOpType op_type,
+                                 const CtDefType *&target_ctdef,
+                                 RtDefType *&target_rtdef)
+  {
+    int ret = common::OB_SUCCESS;
+    const ObDASBaseCtDef *base_ctdef = nullptr;
+    ObDASBaseRtDef *base_rtdef = nullptr;
+    if (OB_FAIL(find_child_das_def(root_ctdef, root_rtdef, op_type, base_ctdef, base_rtdef))) {
+      SQL_DAS_LOG(WARN, "find chld das def failed", K(ret));
+    } else if (OB_ISNULL(base_ctdef) || OB_ISNULL(base_rtdef)) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SQL_DAS_LOG(WARN, "can not find the target op def", K(ret), K(op_type), KP(base_ctdef), KP(base_rtdef));
+    } else {
+      target_ctdef = static_cast<const CtDefType*>(base_ctdef);
+      target_rtdef = static_cast<RtDefType*>(base_rtdef);
+    }
+    return ret;
+  }
   static int generate_mlog_row(const common::ObTabletID &tablet_id,
                                const storage::ObDMLBaseParam &dml_param,
                                common::ObNewRow &row,

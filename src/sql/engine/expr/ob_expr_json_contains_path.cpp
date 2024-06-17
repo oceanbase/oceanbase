@@ -113,7 +113,7 @@ int ObExprJsonContainsPath::eval_json_contains_path(const ObExpr &expr,
       path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
 
       for (int64_t i = 2; OB_SUCC(ret) && i < expr.arg_cnt_ && !is_null_result; i++) {
-        ObJsonBaseVector hit;
+        ObJsonSeekResult hit;
         ObDatum *path_data = NULL;
         if (OB_FAIL(expr.args_[i]->eval(ctx, path_data))) {
           LOG_WARN("eval json path datum failed", K(ret));

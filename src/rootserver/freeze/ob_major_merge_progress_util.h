@@ -32,7 +32,7 @@ enum ObTabletCompactionStatus
 
 struct ObTableCompactionInfo {
 public:
-  enum Status
+  enum Status : uint8_t
   {
     INITIAL = 0,
     // already finished compaction and verified tablet checksum
@@ -60,6 +60,7 @@ public:
     tablet_cnt_ = 0;
     status_ = Status::INITIAL;
     unfinish_index_cnt_ = INVALID_INDEX_CNT;
+    need_check_fts_ = false;
   }
 
   ObTableCompactionInfo &operator=(const ObTableCompactionInfo &other);
@@ -80,12 +81,13 @@ public:
   const int64_t INVALID_INDEX_CNT = -1;
   bool is_index_table() const { return INVALID_INDEX_CNT == unfinish_index_cnt_; }
 
-  TO_STRING_KV(K_(table_id), K_(tablet_cnt), "status", status_to_str(status_), K_(unfinish_index_cnt));
+  TO_STRING_KV(K_(table_id), K_(tablet_cnt), "status", status_to_str(status_), K_(unfinish_index_cnt), K_(need_check_fts));
 public:
   uint64_t table_id_;
   int64_t tablet_cnt_;
   int64_t unfinish_index_cnt_; // accurate for main table, record cnt of unfinish index_table
   Status status_;
+  bool need_check_fts_;
 };
 
 struct ObMergeProgress
@@ -206,26 +208,6 @@ struct ObUnfinishTableIds
 typedef hash::ObHashMap<ObTabletID, ObTabletCompactionStatus> ObTabletStatusMap;
 typedef common::ObArray<share::ObTabletLSPair> ObTabletLSPairArray;
 typedef hash::ObHashMap<uint64_t, ObTableCompactionInfo> ObTableCompactionInfoMap;
-
-struct ObRSCompactionTimeGuard : public ObCompactionTimeGuard
-{
-public:
-  ObRSCompactionTimeGuard()
-    : ObCompactionTimeGuard(UINT64_MAX, "[RS] ")
-  {}
-  virtual ~ObRSCompactionTimeGuard() {}
-  enum CompactionEvent : uint16_t {
-    PREPARE_UNFINISH_TABLE_IDS = 0,
-    GET_TABLET_LS_PAIRS,
-    GET_TABLET_META_TABLE,
-    CKM_VERIFICATION,
-    COMPACTION_EVENT_MAX,
-  };
-  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
-private:
-  const static char *CompactionEventStr[];
-  static const char *get_comp_event_str(enum CompactionEvent event);
-};
 
 struct ObCkmValidatorStatistics
 {

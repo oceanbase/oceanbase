@@ -148,7 +148,7 @@ int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
   if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
     LOG_WARN("eval json arg failed", K(ret));
   } else if (type == ObNullType || json_datum->is_null()) {
-    // path为空时会报错
+    // path is null will return error
     // ORA-40442: JSON path expression syntax error
     ret = OB_ERR_JSON_PATH_SYNTAX_ERROR;
     LOG_WARN("JSON path expression syntax error ('')", K(ret));
@@ -176,6 +176,7 @@ int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
 
   return ret;
 }
+
 int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObArenaAllocator &allocator,
                                     uint16_t index, ObIJsonBase*& j_base)
 {
@@ -191,9 +192,6 @@ int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::O
   } else if (OB_ISNULL(json_datum)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("eval json arg failed", K(ret));
-  } else if (val_type == ObNullType) {
-    ret = OB_ERR_INVALID_VARIABLE_IN_JSON_PATH;
-    LOG_USER_ERROR(OB_ERR_INVALID_VARIABLE_IN_JSON_PATH);
   } else if (json_datum->is_null()) {
     if (ob_is_string_type(val_type)) {
       ObJsonString* tmp_ans = static_cast<ObJsonString*> (allocator.alloc(sizeof(ObJsonString)));
@@ -214,138 +212,30 @@ int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::O
         j_base = tmp_ans;
       }
     }
-  } else if (val_type == ObJsonType) {
-    bool is_json_null = false;
-    if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, allocator, index, j_base, is_json_null, true, true))) {
-      LOG_WARN("parse json_data fail", K(ret));
-    }
-  } else if (ob_is_string_type(val_type)) {
-    ObString j_str;
-    bool is_null = false;
-    if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null))) {
-      LOG_WARN("fail to get real data.", K(ret), K(j_str));
-    } else if (is_null) {
-      ObJsonNull* tmp_ans = static_cast<ObJsonNull*> (allocator.alloc(sizeof(ObJsonNull)));
-      if (OB_ISNULL(tmp_ans)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate row buffer failed at ObJsonNull", K(ret));
-      } else {
-        tmp_ans = new (tmp_ans) ObJsonNull();
-        j_base = tmp_ans;
-      }
-    } else {
-      ObJsonString* tmp_ans = static_cast<ObJsonString*> (allocator.alloc(sizeof(ObJsonString)));
-      if (OB_ISNULL(tmp_ans)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate row buffer failed at ObJsonString", K(ret));
-      } else {
-        tmp_ans = new (tmp_ans) ObJsonString(j_str.ptr(), j_str.length());
-        j_base = tmp_ans;
-      }
-    }
-  } else if (ObTinyIntType <= val_type && val_type <= ObUInt64Type) {
-    // int
-    ObJsonInt* tmp_ans = static_cast<ObJsonInt*> (allocator.alloc(sizeof(ObJsonInt)));
-    if (OB_ISNULL(tmp_ans)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate row buffer failed at ObJsonInt", K(ret));
-    } else {
-      tmp_ans = new (tmp_ans) ObJsonInt(json_datum->get_int());
-      j_base = tmp_ans;
-    }
-  } else if (ObFloatType <= val_type && val_type <= ObUDoubleType) {
-    // double
-    if (val_type == ObUFloatType || val_type == ObFloatType) {
-      ObJsonOFloat* tmp_ans = static_cast<ObJsonOFloat*> (allocator.alloc(sizeof(ObJsonOFloat)));
-      if (OB_ISNULL(tmp_ans)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate row buffer failed at ObJsonDouble", K(ret));
-      } else {
-        tmp_ans = new (tmp_ans) ObJsonOFloat(json_datum->get_float());
-        j_base = tmp_ans;
-      }
-    } else {
-      ObJsonDouble* tmp_ans = static_cast<ObJsonDouble*> (allocator.alloc(sizeof(ObJsonDouble)));
-      if (OB_ISNULL(tmp_ans)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate row buffer failed at ObJsonDouble", K(ret));
-      } else {
-        tmp_ans = new (tmp_ans) ObJsonDouble(json_datum->get_double());
-        j_base = tmp_ans;
-      }
-    }
-  } else if ((ObNumberType <= val_type && val_type <= ObUNumberType) || (val_type == ObDecimalIntType)) {
-    // decimal
-    ObJsonDecimal* tmp_ans = static_cast<ObJsonDecimal*> (allocator.alloc(sizeof(ObJsonDecimal)));
-    if (OB_ISNULL(tmp_ans)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate row buffer failed at ObJsonDecimal", K(ret));
-    } else if (val_type != ObDecimalIntType){
-      tmp_ans = new (tmp_ans) ObJsonDecimal(json_datum->get_number());
-      j_base = tmp_ans;
-    } else {
-      ObNumber tmp_nmb;
-      if (OB_FAIL(wide::to_number(json_datum->get_decimal_int(), json_datum->get_int_bytes(),
-                                  dec_scale, allocator, tmp_nmb))) {
-        LOG_WARN("to number faile", K(ret));
-      } else {
-        tmp_ans = new (tmp_ans) ObJsonDecimal(tmp_nmb);
-        j_base = tmp_ans;
-      }
-    }
-  } else if (val_type == ObDateTimeType || val_type == ObDateType || val_type == ObTimeType) {
-    // datetime
-    ObTime ob_time;
-    int64_t date = json_datum->get_datetime();
-    ObString j_str = json_datum->get_string();
-    if (OB_FAIL(ObTimeConverter::usec_to_ob_time(json_datum->get_datetime(), ob_time))) {
-      LOG_WARN("fail to cast int to ob_time", K(ret));
-    } else {
-      ObJsonDatetime* tmp_ans = static_cast<ObJsonDatetime*> (allocator.alloc(sizeof(ObJsonDatetime)));
-      if (OB_ISNULL(tmp_ans)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate row buffer failed at ObJsonDecimal", K(ret));
-      } else {
-        tmp_ans = new (tmp_ans) ObJsonDatetime(ObJsonNodeType::J_DATE, ob_time);
-        j_base = tmp_ans;
-      }
-    }
-  } else if (ObTimestampTZType == val_type) {
-    ObTime ob_time;
-    ObOTimestampData date = json_datum->get_otimestamp_tiny();
-    ObString j_str = json_datum->get_string();
-    if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(val_type, json_datum->get_otimestamp_tz(), NULL, ob_time))) {
-      LOG_WARN("fail to cast int to ob_time", K(ret));
-    } else {
-      ObJsonDatetime* tmp_ans = static_cast<ObJsonDatetime*> (allocator.alloc(sizeof(ObJsonDatetime)));
-      if (OB_ISNULL(tmp_ans)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate row buffer failed at ObJsonDecimal", K(ret));
-      } else {
-        tmp_ans = new (tmp_ans) ObJsonDatetime(ob_time, ObTimestampType);
-        j_base = tmp_ans;
-      }
-    }
-  } else if (ObTimestampLTZType == val_type || ObTimestampNanoType == val_type) {
-    ObTime ob_time;
-    ObOTimestampData date = json_datum->get_otimestamp_tiny();
-    ObString j_str = json_datum->get_string();
-    if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(val_type, json_datum->get_otimestamp_tiny(), NULL, ob_time))) {
-      LOG_WARN("fail to cast int to ob_time", K(ret));
-    } else {
-      ObJsonDatetime* tmp_ans = static_cast<ObJsonDatetime*> (allocator.alloc(sizeof(ObJsonDatetime)));
-      if (OB_ISNULL(tmp_ans)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate row buffer failed at ObJsonDecimal", K(ret));
-      } else {
-        tmp_ans = new (tmp_ans) ObJsonDatetime(ob_time, ObTimestampType);
-        j_base = tmp_ans;
-      }
+  } else if (ObJsonExprHelper::is_convertible_to_json(val_type)) {
+    ObCollationType cs_type = json_arg->datum_meta_.cs_type_;
+    if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(*json_datum, val_type,
+                                                                  &allocator, cs_type,
+                                                                  j_base, ObConv2JsonParam(true,
+                                                                  json_arg->obj_meta_.has_lob_header(),
+                                                                  false,
+                                                                  true,
+                                                                  false)))) {
+      LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
     }
   } else {
-    bool is_json_null = false;
-    if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, allocator, index, j_base, is_json_null, true, true))) {
-      LOG_WARN("parse json_data fail", K(ret));
+    ObBasicSessionInfo *session = ctx.exec_ctx_.get_my_session();
+    ObScale scale = json_arg->datum_meta_.scale_;
+    scale = (val_type == ObBitType) ? json_arg->datum_meta_.length_semantics_ : scale;
+    if (OB_ISNULL(session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is NULL", K(ret));
+    } else if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(*json_datum, val_type,
+                                                                    &allocator, scale,
+                                                                    session->get_timezone_info(),
+                                                                    session,
+                                                                    j_base, true))) {
+      LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
     }
   }
   return ret;
@@ -364,8 +254,11 @@ int ObExprJsonExists::get_passing(const ObExpr &expr, ObEvalCtx &ctx, PassingMap
     ObIJsonBase *json_data = nullptr;
 
     // get json_value, value could be null
-    if (OB_FAIL(get_var_data(expr, ctx, temp_allocator, i, json_data))) {
-      LOG_WARN("get_json_doc failed", K(ret));
+    if (type == ObNullType) {
+      ret = OB_ERR_INVALID_VARIABLE_IN_JSON_PATH;
+      LOG_USER_ERROR(OB_ERR_INVALID_VARIABLE_IN_JSON_PATH);
+    } else if (OB_FAIL(get_var_data(expr, ctx, temp_allocator, i, json_data))) {
+      LOG_WARN("fail to get json val", K(ret));
     } else {
     // get keyname, keyname can't be null
       json_arg = expr.args_[i + 1];
@@ -387,7 +280,7 @@ int ObExprJsonExists::get_passing(const ObExpr &expr, ObEvalCtx &ctx, PassingMap
           ret = OB_ERR_JSON_ILLEGAL_ZERO_LENGTH_IDENTIFIER_ERROR;
           LOG_USER_ERROR(OB_ERR_JSON_ILLEGAL_ZERO_LENGTH_IDENTIFIER_ERROR);
         } else {
-          // Oracle中，若有两个相同keyname，后者的value会覆盖前者
+          // In Oracle, if there are two identical keynames, the value of the latter will overwrite the former
           if (OB_FAIL(pass_map.set_refactored(keyname, json_data, 1))) {
             LOG_WARN("fail to set k-v for passing", K(i));
           }
@@ -432,64 +325,86 @@ int ObExprJsonExists::get_error_or_empty(const ObExpr &expr, ObEvalCtx &ctx, uin
   return ret;
 }
 
-int ObExprJsonExists::set_result(ObDatum &res, const ObJsonBaseVector& hit,
+int ObExprJsonExists::get_empty_option(int8_t option_on_empty, bool& res_val)
+{
+  INIT_SUCC(ret);
+  switch (option_on_empty) {
+    // The on empty clause has two problems
+    // 1. The on empty clause of json_exists, its track diagram is inconsistent with the document description:
+    // a. The on empty clause in the document includes: NULL ON EMPTY, ERROR ON EMPTY, DEFAULT literal ON EMPTY
+    // b. The on empty clause in the track diagram includes: ERROR ON EMPTY, FALSE ON EMPTY, TRUE ON EMPTY
+    // c. During the actual test, it is found that inputting NULL ON EMPTY will report a syntax error, and the modification clause cannot be recognized, so implement it according to the track diagram
+    // 2. According to the documentation, the on error of json_exists mainly checks whether the json data is wrong, and returns the response result.
+    // But the on empty clause cannot find the correct documentation for the corresponding clause due to reason 1.
+    // According to: whether the query result is empty / whether the path expression is empty / whether the json data is empty These three situations have been tried
+    // It turns out that error/false/true on empty behaves exactly the same in three cases:
+    // a. The query result or json data is empty, and all three on empty clauses return false
+    // b. The path expression is empty, and the three on empty clauses all return the error code when the path is empty
+    // Therefore, when implementing, follow the behavior of oracle, without distinguishing the three clauses, as long as there is no true result, it will return false
+    case OB_JSON_ERROR_ON_EMPTY:
+    case OB_JSON_FALSE_ON_EMPTY:
+    case OB_JSON_TRUE_ON_EMPTY:
+    case OB_JSON_DEFAULT_ON_ERROR: {
+      res_val = false;
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("on_empty_option type error", K(option_on_empty), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprJsonExists::get_error_option(int8_t option_on_error, bool& res_val)
+{
+  INIT_SUCC(ret);
+  switch (option_on_error) {
+    case OB_JSON_ERROR_ON_ERROR: {
+      ret = OB_ERR_JSON_SYNTAX_ERROR;
+      LOG_USER_ERROR(OB_ERR_JSON_SYNTAX_ERROR);
+      break;
+    }
+    case OB_JSON_FALSE_ON_ERROR: {
+      ret = OB_SUCCESS;
+      res_val = false;
+      break;
+    }
+    case OB_JSON_TRUE_ON_ERROR: {
+      ret = OB_SUCCESS;
+      res_val = true;
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("on_empty_option type error", K(option_on_error), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprJsonExists::set_result(ObDatum &res, ObJsonSeekResult& hit,
                                 const uint8_t option_on_error, const uint8_t option_on_empty,
                                 const bool is_cover_by_error, const bool is_null_json)
 {
   INIT_SUCC(ret);
+  bool res_val = false;
   if (is_null_json) {
-    res.set_bool(false);
   } else if (is_cover_by_error) {
-    switch (option_on_error) {
-      case OB_JSON_ERROR_ON_ERROR: {
-        ret = OB_ERR_JSON_SYNTAX_ERROR;
-        LOG_USER_ERROR(OB_ERR_JSON_SYNTAX_ERROR);
-        break;
-      }
-      case OB_JSON_FALSE_ON_ERROR: {
-        ret = OB_SUCCESS;
-        res.set_bool(false);
-        break;
-      }
-      case OB_JSON_TRUE_ON_ERROR: {
-        ret = OB_SUCCESS;
-        res.set_bool(true);
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("on_empty_option type error", K(option_on_empty), K(ret));
-      }
+    if (OB_FAIL(get_error_option(option_on_error, res_val))) {
+      LOG_WARN("fail to get error option", K(ret));
     }
   } else {
     if (hit.size() == 0) {
-      switch (option_on_empty) {
-        // on empty 子句有两个问题
-        // 1. json_exists的on empty子句，其轨道图与文档说明不一致：
-        //    a. 文档中on empty子句包括: NULL ON EMPTY, ERROR ON EMPTY, DEFAULT literal ON EMPTY
-        //    b. 轨道图中on empty子句包括: ERROR ON EMPTY, FALSE ON EMPTY, TRUE ON EMPTY
-        //    c. 实际测试时，发现输入NULL ON EMPTY会报语法错误，无法识别改子句，因此按照轨道图实现
-        // 2. json_exists的on error依据文档说明，主要针对json数据是否出错进行检查，并返回响应结果。
-        //    但on empty子句因为原因1，无法找到对应子句的正确文档说明。
-        //    根据：查询结果是否为空 / path表达式是否为空 / json数据是否为空 这三种情况进行了尝试
-        //    结果发现，三种情况下，error/false/true on empty 的行为完全一致：
-        //    a. 查询结果或json数据为空，三种 on empty 子句均返回false
-        //    b. path表达式为空，三种 on empty 子句均返回path为空时的错误码
-        //    因此在实现时，遵循了oracle的行为，未对三种子句做区分，只要不存在为true的结果，即返回false
-        case OB_JSON_ERROR_ON_EMPTY:
-        case OB_JSON_FALSE_ON_EMPTY:
-        case OB_JSON_TRUE_ON_EMPTY: {
-          res.set_bool(false);
-          break;
-        }
-        default: {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("on_empty_option type error", K(option_on_empty), K(ret));
-        }
+      if (OB_FAIL(get_empty_option(option_on_empty, res_val))) {
+        LOG_WARN("fail to get error option", K(ret));
       }
     } else {
-      res.set_bool(true);
+      res_val = true;
     }
+  }
+  if (OB_SUCC(ret)) {
+    res.set_bool(res_val);
   }
   return ret;
 }
@@ -510,11 +425,11 @@ int ObExprJsonExists::eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   bool is_cover_by_error = false;
   uint8_t option_on_error = 0;
   uint8_t option_on_empty = 0;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
 
   // get json
-  // json 数据为空时不报错，无论如何都不报错，且结果为false
-  // error on error时，json解析错误时报错，否则不报错（默认时false on error）
+  // No error is reported when the json data is empty, no error is reported anyway, and the result is false
+  // When error on error, json parses an error and reports an error, otherwise no error is reported (false on error by default)
   // ORA-40441: JSON syntax error
   if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0,
                                              json_data, is_null_json))) {
@@ -550,14 +465,14 @@ int ObExprJsonExists::eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   }
 
   // get on_error && on_empty
-  // 若json_data是空, 结果无论如何都是false, 即便是 true on error
-  // 若json_data解析出错, 结果由on error子句决定
+  // if json_data is null, return false whatever, even true on error
+  // if json_data parse fail, result design by on error clause
   if (OB_SUCC(ret) || is_cover_by_error) {
     if (is_null_json) {
       option_on_error = 0;
       option_on_empty = 0;
     } else {
-      // 防止get_error_or_empty导致错误码被吞
+      // Prevent get_error_or_empty from causing error codes to be swallowed
       int tmp_ret = ret;
       if (OB_FAIL(get_error_or_empty(expr, ctx, param_num - 2, option_on_error))) {
         LOG_WARN("fail to get option_on_error for json_exists", K(ret));

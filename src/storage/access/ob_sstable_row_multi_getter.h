@@ -27,7 +27,7 @@ public:
       iter_param_(nullptr),
       access_ctx_(nullptr),
       prefetcher_(),
-      macro_block_reader_(),
+      macro_block_reader_(nullptr),
       is_opened_(false),
       micro_getter_(nullptr)
   {
@@ -37,7 +37,8 @@ public:
   virtual ~ObSSTableRowMultiGetter();
   virtual void reset() override;
   virtual void reuse() override;
-  TO_STRING_KV(K_(is_opened), K_(prefetcher));
+  virtual void reclaim() override;
+  TO_STRING_KV(K_(is_opened), K_(prefetcher), KP_(macro_block_reader));
 protected:
   int inner_open(
       const ObTableIterParam &access_param,
@@ -52,7 +53,7 @@ protected:
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
   ObIndexTreeMultiPrefetcher prefetcher_;
-  ObMacroBlockReader macro_block_reader_;
+  ObMacroBlockReader *macro_block_reader_;
 private:
   bool is_opened_;
   blocksstable::ObMicroBlockRowGetter *micro_getter_;

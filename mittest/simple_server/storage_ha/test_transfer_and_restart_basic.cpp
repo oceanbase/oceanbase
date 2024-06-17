@@ -103,13 +103,15 @@ int TestTransferHandler::gen_mock_data(const ObTransferTaskID task_id, const ObT
   ObLSID dest_ls(1002);
   share::SCN start_scn;
   share::SCN finish_scn;
+  ObTableLockOwnerID owner_id;
   start_scn.convert_for_inner_table_field(1666844202200632);
   finish_scn.convert_for_inner_table_field(1666844202208490);
+  owner_id.convert_from_value(999);
   ObCurTraceId::TraceId trace_id;
   trace_id.init(GCONF.self_addr_);
   ret = task.init(task_id, src_ls, dest_ls, ObString::make_string("500016:500014"), ObString("500030:500031"), ObString("500016:500015"),
       ObString::make_string("1152921504606846983"), ObString::make_string("1152921504606846983:0"), start_scn, finish_scn, status, trace_id, OB_SUCCESS,
-      ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), ObTableLockOwnerID(999));
+      ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), owner_id);
   return ret;
 }
 
@@ -216,10 +218,12 @@ TEST_F(TestTransferHandler, test_transfer_1001_to_1)
   //title: 1001 ls transfer to 1 ls
   // generate transfer task
   ObTransferTaskID task_id;
+  ObTransferTask transfer_task;
   ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1001), ObLSID(1),
-      g_part_list, ObBalanceTaskID(123), task_id));
+      g_part_list, ObBalanceTaskID(123), transfer_task));
+  task_id = transfer_task.get_task_id();
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {

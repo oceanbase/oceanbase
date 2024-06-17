@@ -1034,7 +1034,7 @@ public:
   //void set_mem_ctx_id(const int64_t ctx_id) { ctx_id_ = ctx_id; }
   void set_mem_limit(const int64_t limit) { mem_limit_ = limit; }
   void set_dumped(bool dumped) { enable_dump_ = dumped; }
-  inline int64_t get_mem_limit() { return mem_limit_; }
+  inline int64_t get_mem_limit() const { return mem_limit_; }
   void set_block_size(const int64_t size) { default_block_size_ = size; }
   inline int64_t get_block_cnt() const { return n_blocks_; }
   inline int64_t get_block_list_cnt() { return blocks_.get_size(); }
@@ -1081,8 +1081,9 @@ public:
   {
     return nullptr == cur_blk_ ? 0 : cur_blk_->get_buffer()->mem_size();
   }
-  uint64_t get_tenant_id() { return tenant_id_; }
-  const char* get_label() { return label_; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  int64_t get_mem_ctx_id() const { return ctx_id_;}
+  const char* get_label() const { return label_; }
   void free_tmp_dump_blk();
   inline void set_io_event_observer(ObIOEventObserver *observer)
   {
@@ -1093,6 +1094,12 @@ public:
     return io_event_observer_;
   }
   inline int64_t get_max_blk_size() const { return max_blk_size_; }
+
+  // 这里暂时以ObExpr的数组形式写入数据到DatumStore，主要是为了上层Operator在写入数据时，可以无脑调用ObExpr的插入
+  // 可以看下面参数为common::ObDatum **datums的函数进行对比
+  static inline int row_copy_size(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx,
+                                  int64_t &size);
+
 private:
   OB_INLINE int add_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx *ctx,
                         const int64_t row_size, StoredRow **stored_row);
@@ -1146,38 +1153,10 @@ private:
 
   int init_batch_ctx(const int64_t col_cnt, const int64_t max_batch_size);
 
-  // 这里暂时以ObExpr的数组形式写入数据到DatumStore，主要是为了上层Operator在写入数据时，可以无脑调用ObExpr的插入
-  // 可以看下面参数为common::ObDatum **datums的函数进行对比
-  static inline int row_copy_size(
-    const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx, int64_t &size)
-  {
-    int ret = OB_SUCCESS;
-    ObExpr *expr = nullptr;
-    common::ObDatum *datum = nullptr;
-    size = DATUM_SIZE * exprs.count();
-    for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
-      expr = exprs.at(i);
-      if (OB_ISNULL(expr)) {
-      } else if (OB_FAIL(expr->eval(ctx, datum))) {
-        SQL_ENG_LOG(WARN, "failed to eval expr datum", KPC(expr), K(ret));
-      } else {
-        size += datum->len_;
-      }
-    }
-    return ret;
-  }
-
   // 提供给从chunk datum store获取后
   // 由于整体是compact模式，所以采用指针形式指向第一个datum，后续以++或下标方式可以获取所有datum
   // 暂时没有使用
-  static inline int64_t row_copy_size(const common::ObDatum *datums, const int64_t cnt)
-  {
-    int64_t size = DATUM_SIZE * cnt;
-    for (int64_t i = 0; i < cnt; ++i) {
-      size += datums[i].len_;
-    }
-    return size;
-  }
+  static inline int64_t row_copy_size(const common::ObDatum *datums, const int64_t cnt);
 private:
   bool inited_;
   uint64_t tenant_id_;
@@ -1300,6 +1279,32 @@ int ObChunkDatumStore::StoredRow::to_expr(
     }
   }
   return ret;
+}
+
+inline int ObChunkDatumStore::row_copy_size(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx,
+                                            int64_t &size)
+{
+  int ret = OB_SUCCESS;
+  ObExpr *expr = nullptr;
+  common::ObDatum *datum = nullptr;
+  size = DATUM_SIZE * exprs.count();
+  for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
+    expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+    } else if (OB_FAIL(expr->eval(ctx, datum))) {
+      SQL_ENG_LOG(WARN, "failed to eval expr datum", KPC(expr), K(ret));
+    } else {
+      size += datum->len_;
+    }
+  }
+  return ret;
+}
+
+inline int64_t ObChunkDatumStore::row_copy_size(const common::ObDatum *datums, const int64_t cnt)
+{
+  int64_t size = DATUM_SIZE * cnt;
+  for (int64_t i = 0; i < cnt; ++i) { size += datums[i].len_; }
+  return size;
 }
 
 template <bool fill_invariable_res_buf>

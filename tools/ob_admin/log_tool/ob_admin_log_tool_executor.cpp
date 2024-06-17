@@ -16,7 +16,10 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "ob_admin_log_tool_executor.h"
 #include "dump/ob_admin_dump_block.h"
+#include "logservice/palf/log_group_entry.h"
 #include "cmd_args_parser.h"
+#include <fstream>
+#include <iostream>
 
 
 namespace oceanbase
@@ -31,6 +34,11 @@ ObAdminLogExecutor::~ObAdminLogExecutor()
     ob_free(mutator_str_buf_);
     mutator_str_buf_ = NULL;
     mutator_buf_size_ = 0;
+  }
+  if (NULL != decompress_buf_) {
+    ob_free(decompress_buf_);
+    decompress_buf_ = NULL;
+    decompress_buf_size_ = 0;
   }
 }
 
@@ -53,6 +61,8 @@ int ObAdminLogExecutor::execute(int argc, char *argv[])
       LOG_INFO("finsh dump_filter", K(ret));
     } else if (OB_NEED_RETRY != (ret = CmdCallSimple(new_argc, new_argv, stat) : OB_NEED_RETRY)) {
       LOG_INFO("finsh stat", K(ret));
+    } else if (OB_NEED_RETRY != (ret = CmdCallSimple(new_argc, new_argv, decompress_log) : OB_NEED_RETRY)) {
+      LOG_INFO("finsh decompress", K(ret));
     } else {
       fprintf(stderr, "failed %d", ret);
       print_usage();
@@ -85,6 +95,11 @@ void ObAdminLogExecutor::print_usage()
 int ObAdminLogExecutor::dump_log(int argc, char **argv)
 {
   return dump_all_blocks_(argc, argv, LogFormatFlag::NO_FORMAT);
+}
+
+int ObAdminLogExecutor::decompress_log(int argc, char **argv)
+{
+  return dump_all_blocks_(argc, argv, LogFormatFlag::DECOMPRESS_FORMAT);
 }
 
 int ObAdminLogExecutor::dump_meta(int argc, char **argv)
@@ -134,14 +149,77 @@ int ObAdminLogExecutor::dump_all_blocks_(int argc, char **argv, LogFormatFlag fl
     str_arg.flag_ = flag;
     str_arg.buf_ = mutator_str_buf_;
     str_arg.buf_len_ = mutator_buf_size_;
+
+    str_arg.decompress_buf_ = decompress_buf_;
+    str_arg.decompress_buf_len_ = decompress_buf_size_;
     str_arg.pos_ = 0;
     str_arg.filter_ = filter_;
-    for (int i = 0; i < argc && OB_SUCC(ret); i++) {
-      if (OB_FAIL(dump_single_block_(argv[i], str_arg))) {
-        LOG_WARN("failed to dump block", K(argv[i]), K(ret));
-      } else {
-        LOG_INFO("dump_single_block_ success", K(argv[i]));
+    if (LogFormatFlag::DECOMPRESS_FORMAT != flag) {
+      for (int i = 0; i < argc && OB_SUCC(ret); i++) {
+        if (OB_FAIL(dump_single_block_(argv[i], str_arg))) {
+          LOG_WARN("failed to dump block", K(argv[i]), K(ret));
+        } else {
+          LOG_INFO("dump_single_block_ success", K(argv[i]));
+        }
       }
+    } else {
+      char tmp_file[MAX_PATH_SIZE]={0};
+      snprintf(tmp_file, MAX_PATH_SIZE, "%s.tmp", argv[0]);
+      int fd = ::open(tmp_file, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+      if (-1 == fd) {
+        ret = OB_IO_ERROR;
+        LOG_INFO("failed to create tmp_file", K(tmp_file));
+      } else {
+        ::close(fd);
+        fd = -1;
+      }
+
+      for (int i = 0; i < argc && OB_SUCC(ret); i++) {
+        //concat log file to a big file
+        if (OB_FAIL(concat_file_(tmp_file, argv[i]))) {
+          LOG_WARN("failed to concat_file", K(argv[i]), K(ret));
+        } else {
+          LOG_INFO("concat_file success", K(tmp_file), K(argv[i]));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(dump_single_block_(tmp_file, str_arg))) {
+          LOG_WARN("failed to dump block", K(tmp_file), K(ret));
+        } else {
+          LOG_INFO("dump_single_block_ success", K(tmp_file));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminLogExecutor::concat_file_(const char *first_path, const char *second_path)
+{
+  int ret = OB_SUCCESS;
+  const std::streampos offset = palf::MAX_INFO_BLOCK_SIZE;
+
+  // open first file with append mode
+  std::ofstream first_file(first_path, std::ios::binary | std::ios::app);
+  // open first file with read mode
+  std::ifstream second_file(second_path, std::ios::binary);
+
+  if (!first_file || !second_file) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("failed to open_file", KP(first_path), KP(second_path));
+  } else {
+    //Move the read pointer of the second file to the specified offset.
+    second_file.seekg(offset, std::ios::beg);
+    if (!second_file.good()) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("Unable to seek in second file", KP(first_path), KP(second_path));
+    } else {
+      //Read content from the second file and append it to the first file.
+      first_file << second_file.rdbuf();
+      //Close files
+      first_file.close();
+      second_file.close();
+      LOG_INFO("finish concat_file", KP(first_path), KP(second_path));
     }
   }
   return ret;
@@ -190,17 +268,28 @@ int ObAdminLogExecutor::alloc_mutator_string_buf_()
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(mutator_str_buf_)) {
-    mutator_str_buf_ = static_cast<char *>(ob_malloc(MAX_TX_LOG_STRING_SIZE, "AdminDumpLog"));
-    mutator_buf_size_ = MAX_TX_LOG_STRING_SIZE;
+    if (NULL != (mutator_str_buf_ = static_cast<char *>( ob_malloc(MAX_TX_LOG_STRING_SIZE, "AdminDumpLog")))) {
+      mutator_buf_size_ = MAX_TX_LOG_STRING_SIZE;
+    } else {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      mutator_buf_size_ = 0;
+    }
   }
 
-  if (OB_ISNULL(mutator_str_buf_)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    mutator_buf_size_ = 0;
+  if (OB_SUCC(ret)) {
+    if (NULL == decompress_buf_) {
+      if (NULL != (decompress_buf_ = static_cast<char *>(ob_malloc(MAX_TX_LOG_STRING_SIZE, "AdminCompress")))) {
+        decompress_buf_size_ = MAX_TX_LOG_STRING_SIZE;
+      } else {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        decompress_buf_size_ =0;
+        ob_free(mutator_str_buf_);
+        mutator_str_buf_ = NULL;
+        mutator_buf_size_ = 0;
+      }
+    }
   }
-
   return ret;
 }
-
-}
-}
+}//end of namespace tools
+}//end of namespace oceanbase

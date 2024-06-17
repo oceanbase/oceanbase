@@ -43,7 +43,10 @@ class ObAllVirtualUnit : public common::ObVirtualTableScannerIterator
     STATUS,
     CREATE_TIME,
     ZONE_TYPE,
-    REGION
+    REGION,
+    DATA_DISK_SIZE,         // not used, only as placeholder
+    MAX_NET_BANDWIDTH,      // not used, only as placeholder
+    NET_BANDWIDTH_WEIGHT    // not used, only as placeholder
   };
 
 public:

@@ -112,10 +112,10 @@ TEST(TestCancelTask, cancel_running)
   ASSERT_EQ(OB_SUCCESS, timer.init());
   ASSERT_EQ(OB_SUCCESS, timer.start());
   TaskCommon task;
-  task.exec_time_ = 100000; // 100ms
+  task.exec_time_ = 300000; // 300ms
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 50000, true)); // repeate = true , delay = 50ms
   ASSERT_EQ(1, timer.get_tasks_num());
-  ::usleep(70000);
+  ::usleep(150000);
   ASSERT_EQ(1, task.task_run_count_); // task is running
   // the running task has been removed from the task array
   ASSERT_EQ(0, timer.get_tasks_num());
@@ -132,15 +132,15 @@ TEST(TestCancelTask, cancel_non_running)
   ASSERT_EQ(OB_SUCCESS, timer.init());
   ASSERT_EQ(OB_SUCCESS, timer.start());
   TaskCommon task1;
-  task1.exec_time_ = 100000; // 100ms
+  task1.exec_time_ = 300000; // 300ms
   TaskCommon task2;
   task2.exec_time_ = 50000; //50ms
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task1, 50000, false));  // t1
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 100000, true));  // t2
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 300000, true));  // t2
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 500000, true));  // t4
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 400000, true));  // t2
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 500000, true));  // t3
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 600000, true));  // t4
   ASSERT_EQ(4, timer.get_tasks_num()); // 4 tasks were scheduled
-  ::usleep(70000);
+  ::usleep(150000);
   ASSERT_EQ(1, task1.task_run_count_); // t1 is running
   // t1 (i.e., the running task) has been removed from the task array
   ASSERT_EQ(3, timer.get_tasks_num());

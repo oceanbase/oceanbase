@@ -19,6 +19,7 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "lib/string/ob_sql_string.h"//ObSqlString
 #include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTransaction
+#include "lib/utility/ob_tracepoint.h"
 #include "common/ob_timeout_ctx.h"
 #include "share/ob_share_util.h"
 #include "share/ls/ob_ls_status_operator.h"
@@ -486,6 +487,7 @@ int ObLSRecoveryStatOperator::get_tenant_min_user_ls_create_scn(const uint64_t t
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_END_TRANSACTION_ERROR);
 int ObLSRecoveryStatOperator::update_ls_config_version(
     const uint64_t tenant_id, const ObLSID &ls_id,
     const palf::LogConfigVersion &config_version, ObMySQLProxy &client,
@@ -501,7 +503,7 @@ int ObLSRecoveryStatOperator::update_ls_config_version(
     ObLSRecoveryStat ls_recovery_stat;
     START_TRANSACTION(&client, exec_tenant_id)
     if (FAILEDx(get_ls_recovery_stat(tenant_id, ls_id, true,
-    ls_recovery_stat, trans))) {
+            ls_recovery_stat, trans))) {
       LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id), K(ls_id));
     } else if (ls_recovery_stat.get_config_version().is_valid()
       && ls_recovery_stat.get_config_version() > config_version) {
@@ -534,6 +536,11 @@ int ObLSRecoveryStatOperator::update_ls_config_version(
     if (OB_SUCC(ret)) {
       readable_scn = ls_recovery_stat.get_readable_scn();
     }
+    if (EN_END_TRANSACTION_ERROR) {
+      ret = EN_END_TRANSACTION_ERROR;
+      SHARE_LOG(ERROR, "set end transaction error", KR(ret));
+    }
+
     END_TRANSACTION(trans)
   }
   return ret;

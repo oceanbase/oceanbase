@@ -46,6 +46,7 @@ public:
 
 public:
   ObDupTableLSLeaseMgr() : lease_diag_info_log_buf_(nullptr) { reset(); }
+  ~ObDupTableLSLeaseMgr() { destroy(); }
 
   int init(ObDupTableLSHandler *dup_ls_handle);
   int offline();
@@ -60,7 +61,7 @@ public:
 
   int follower_try_acquire_lease(const share::SCN &lease_log_scn);
 
-  int recive_lease_request(const ObDupTableLeaseRequest &lease_req);
+  int receive_lease_request(const ObDupTableLeaseRequest &lease_req);
 
   int leader_takeover(bool is_resume);
   int leader_revoke();

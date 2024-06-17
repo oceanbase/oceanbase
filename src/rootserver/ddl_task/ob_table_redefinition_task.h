@@ -42,6 +42,7 @@ public:
       const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg &alter_table_arg,
       const uint64_t tenant_data_version,
+      const bool ddl_need_retry_at_executor,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
       const int64_t snapshot_version = 0);
   int init(const ObDDLTaskRecord &task_record);
@@ -59,7 +60,7 @@ public:
   inline void set_is_ignore_errors(const bool is_ignore_errors) {is_ignore_errors_ = is_ignore_errors;}
   inline void set_is_do_finish(const bool is_do_finish) {is_do_finish_ = is_do_finish;}
   virtual int serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos) override;
+  virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   int assign(const ObTableRedefinitionTask *table_redef_task);
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
@@ -80,6 +81,7 @@ protected:
                                 const int64_t row_scanned,
                                 const int64_t row_inserted);
   int repending(const share::ObDDLTaskStatus next_task_status);
+  virtual bool task_can_retry() const override { return share::ObDDLTaskStatus::REDEFINITION == task_status_ ? is_ddl_retryable_ : true; }
 private:
   inline bool get_is_copy_indexes() const {return is_copy_indexes_;}
   inline bool get_is_copy_triggers() const {return is_copy_triggers_;}
@@ -95,9 +97,10 @@ private:
   int check_build_replica_end(bool &is_end);
   int replica_end_check(const int ret_code);
   int check_modify_autoinc(bool &modify_autoinc);
-  int check_use_heap_table_ddl_plan(bool &use_heap_table_ddl_plan);
+  int check_use_heap_table_ddl_plan(const share::schema::ObTableSchema *target_table_schema);
   int get_direct_load_job_stat(common::ObArenaAllocator &allocator, sql::ObLoadDataStat &job_stat);
   int check_target_cg_cnt();
+  int check_ddl_can_retry(const bool ddl_need_retry_at_executor, const share::schema::ObTableSchema *table_schema);
 private:
   static const int64_t OB_TABLE_REDEFINITION_TASK_VERSION = 1L;
   bool has_rebuild_index_;
@@ -111,6 +114,8 @@ private:
   bool is_ignore_errors_;
   bool is_do_finish_;
   int64_t target_cg_cnt_;
+  bool use_heap_table_ddl_plan_;
+  bool is_ddl_retryable_;
 };
 
 }  // end namespace rootserver

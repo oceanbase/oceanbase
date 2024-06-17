@@ -494,8 +494,12 @@ public:
     }
     return reroute_info_;
   }
-  share::ObFeedbackRerouteInfo *get_reroute_info() {
+  share::ObFeedbackRerouteInfo *get_reroute_info() const {
     return reroute_info_;
+  }
+  void set_reroute_info(share::ObFeedbackRerouteInfo &reroute_info)
+  {
+    reroute_info_->assign(reroute_info);
   }
 
   bool is_batch_params_execute() const
@@ -554,6 +558,7 @@ public:
   // release dynamic allocated memory
   //
   void clear();
+
 public:
   ObMultiStmtItem multi_stmt_item_;
   ObSQLSessionInfo *session_info_;
@@ -686,9 +691,9 @@ public:
       res_map_rule_id_(common::OB_INVALID_ID),
       res_map_rule_param_idx_(common::OB_INVALID_INDEX),
       root_stmt_(NULL),
-      udf_has_select_stmt_(false),
-      has_pl_udf_(false),
-      optimizer_features_enable_version_(0)
+      optimizer_features_enable_version_(0),
+      udf_flag_(0),
+      has_dblink_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -732,9 +737,9 @@ public:
     res_map_rule_id_ = common::OB_INVALID_ID;
     res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
     root_stmt_ = NULL;
-    udf_has_select_stmt_ = false;
-    has_pl_udf_ = false;
+    udf_flag_ = 0;
     optimizer_features_enable_version_ = 0;
+    has_dblink_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -760,6 +765,8 @@ public:
   void set_is_prepare_stmt(bool is_prepare) { is_prepare_stmt_ = is_prepare; }
   bool has_nested_sql() const { return has_nested_sql_; }
   void set_has_nested_sql(bool has_nested_sql) { has_nested_sql_ = has_nested_sql; }
+  bool has_dblink() const { return has_dblink_; }
+  void set_has_dblink(bool v) { has_dblink_ = v; }
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
   int add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx);
@@ -817,9 +824,18 @@ public:
   uint64_t res_map_rule_id_;
   int64_t res_map_rule_param_idx_;
   ObDMLStmt *root_stmt_;
-  bool udf_has_select_stmt_; // udf has select stmt, not contain other dml stmt
-  bool has_pl_udf_; // used to mark sql contain pl udf
   uint64_t optimizer_features_enable_version_;
+  union {
+    int8_t udf_flag_;
+    struct {
+      int8_t has_pl_udf_ : 1; // used to mark sql contain pl udf
+      int8_t udf_has_select_stmt_ : 1; // udf has select stmt, not contain other dml stmt
+      int8_t udf_has_dml_stmt_ : 1; // udf has dml stmt
+      int8_t has_dblink_udf_ : 1; // udf is dblink udf
+      int8_t reserved_:4;
+    };
+  };
+  bool has_dblink_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

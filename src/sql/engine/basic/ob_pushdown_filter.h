@@ -21,6 +21,7 @@
 #include "share/datum/ob_datum.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/expr/ob_expr_in.h"
 #include "sql/engine/ob_operator.h"
 
 namespace oceanbase
@@ -63,6 +64,7 @@ enum PushdownFilterType
   AND_FILTER,
   OR_FILTER,
   DYNAMIC_FILTER,
+  SAMPLE_FILTER,
   MAX_FILTER_TYPE
 };
 
@@ -73,6 +75,7 @@ enum PushdownExecutorType
   AND_FILTER_EXECUTOR,
   OR_FILTER_EXECUTOR,
   DYNAMIC_FILTER_EXECUTOR,
+  SAMPLE_FILTER_EXECUTOR,
   MAX_EXECUTOR_TYPE
 };
 
@@ -174,15 +177,18 @@ public:
   OB_INLINE void set_filter_pushdown(const bool filter) { pd_filter_ = filter; }
   OB_INLINE void set_aggregate_pushdown(const bool aggregate) { pd_aggregate_ = aggregate; }
   OB_INLINE void set_group_by_pushdown(const bool groupby) { pd_group_by_ = groupby; }
+  OB_INLINE void set_filter_reorder(const bool filter_reorder) { pd_filter_reorder_ = filter_reorder; }
   OB_INLINE void set_enable_skip_index(const bool skip_index) { enable_skip_index_ = skip_index; }
-  OB_INLINE void set_use_iter_pool(const bool use_pool) { use_iter_pool_ = use_pool; }
+  OB_INLINE void set_use_stmt_iter_pool(const bool use_pool) { use_stmt_iter_pool_ = use_pool; }
   OB_INLINE void set_use_column_store(const bool use_cs) { use_column_store_ = use_cs; }
   OB_INLINE void set_enable_prefetch_limiting(const bool enable_limit) { enable_prefetch_limiting_ = enable_limit; }
+  OB_INLINE void set_use_global_iter_pool(const bool use_iter_mgr) { use_global_iter_pool_ = use_iter_mgr; }
   OB_INLINE void set_flags(const bool block_scan, const bool filter, const bool skip_index,
-                           const bool use_cs, const bool enable_limit)
+                           const bool use_cs, const bool enable_limit, const bool filter_reorder = true)
   {
     set_blockscan_pushdown(block_scan);
     set_filter_pushdown(filter);
+    set_filter_reorder(filter_reorder);
     set_enable_skip_index(skip_index);
     set_use_column_store(use_cs);
     set_enable_prefetch_limiting(enable_limit);
@@ -192,10 +198,12 @@ public:
   OB_INLINE bool is_filter_pushdown() const { return pd_filter_; }
   OB_INLINE bool is_aggregate_pushdown() const { return pd_aggregate_; }
   OB_INLINE bool is_group_by_pushdown() const { return pd_group_by_; }
+  OB_INLINE bool is_filter_reorder() const { return pd_filter_reorder_; }
   OB_INLINE bool is_apply_skip_index() const { return enable_skip_index_; }
-  OB_INLINE bool is_use_iter_pool() const { return use_iter_pool_; }
+  OB_INLINE bool is_use_stmt_iter_pool() const { return use_stmt_iter_pool_; }
   OB_INLINE bool is_use_column_store() const { return use_column_store_; }
   OB_INLINE bool is_enable_prefetch_limiting() const { return enable_prefetch_limiting_; }
+  OB_INLINE bool is_use_global_iter_pool() const { return use_global_iter_pool_; }
   TO_STRING_KV(K_(pd_flag));
 
   union {
@@ -204,11 +212,13 @@ public:
       int32_t pd_filter_ : 1;
       int32_t pd_aggregate_ : 1;
       int32_t pd_group_by_ : 1;
+      int32_t pd_filter_reorder_ : 1;
       int32_t enable_skip_index_ : 1;
-      int32_t use_iter_pool_:1;
+      int32_t use_stmt_iter_pool_:1;
       int32_t use_column_store_:1;
       int32_t enable_prefetch_limiting_ : 1;
-      int32_t reserved_ : 24;
+      int32_t use_global_iter_pool_:1;
+      int32_t reserved_ : 22;
     };
     int32_t pd_flag_;
   };
@@ -236,7 +246,6 @@ public:
       : alloc_(alloc), type_(type), n_child_(0), childs_(nullptr),
       col_ids_(alloc)
   {}
-
   PushdownFilterType get_type() const { return type_; }
   common::ObIArray<uint64_t> &get_col_ids() { return col_ids_; }
   void set_type(PushdownFilterType type) { type_ = type; }
@@ -295,7 +304,6 @@ public:
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterNode", ObPushdownFilterNode,
                        K_(column_exprs), K_(filter_exprs));
 
-private:
   int64_t get_filter_expr_count()
   { return filter_exprs_.empty() ? 1 : filter_exprs_.count(); }
 public:
@@ -335,7 +343,8 @@ public:
   virtual int get_filter_val_meta(common::ObObjMeta &obj_meta) const;
   inline virtual ObObjType get_filter_arg_obj_type(int64_t arg_idx) const
   {
-    return expr_->args_[arg_idx]->obj_meta_.get_type();
+    const ObExpr *expr = WHITE_OP_IN == op_type_ ? expr_->args_[1] : expr_;
+    return expr->args_[arg_idx]->obj_meta_.get_type();
   }
 
   // mapping array from white filter's operation type to common::ObCmpOp
@@ -539,7 +548,8 @@ public:
   {
     return type_ == WHITE_FILTER_EXECUTOR || type_ == DYNAMIC_FILTER_EXECUTOR;
   }
-  virtual OB_INLINE bool is_filter_node() const { return is_filter_black_node() || is_filter_white_node(); }
+  virtual OB_INLINE bool is_sample_node() const { return type_ == SAMPLE_FILTER_EXECUTOR; }
+  virtual OB_INLINE bool is_filter_node() const { return is_filter_black_node() || is_filter_white_node() || is_sample_node(); }
   virtual OB_INLINE bool is_logic_and_node() const { return type_ == AND_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_logic_or_node() const { return type_ == OR_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_logic_op_node() const { return is_logic_and_node() || is_logic_or_node(); }
@@ -577,7 +587,7 @@ public:
   OB_INLINE ObCommonFilterTreeStatus get_status() const { return filter_tree_status_; }
   virtual common::ObIArray<uint64_t> &get_col_ids() = 0;
   OB_INLINE int64_t get_col_count() const { return n_cols_; }
-  OB_INLINE ObPushdownOperator & get_op() { return op_; }
+  OB_INLINE virtual ObPushdownOperator & get_op() { return op_; }
   OB_INLINE const common::ObIArray<int32_t> &get_col_offsets(const bool is_cg = false) const
   {
     return is_cg ? cg_col_offsets_ : col_offsets_;
@@ -654,6 +664,7 @@ public:
       blocksstable::ObIMicroBlockRowScanner *micro_scanner,
       const bool use_vectorize);
   int execute_skipping_filter(ObBoolMask &bm);
+  virtual void clear(); // release array and set memory used by WHITE_OP_IN filter.
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   int find_evaluated_datums(
@@ -710,7 +721,7 @@ public:
         n_datum_eval_flags_(0),
         datum_eval_flags_(nullptr)
   {}
-  ~ObPhysicalFilterExecutor();
+  virtual ~ObPhysicalFilterExecutor();
   int filter(blocksstable::ObStorageDatum *datums, int64_t col_cnt, const sql::ObBitVector &skip_bit, bool &ret_val);
   virtual int init_evaluated_datums() override;
   virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) = 0;
@@ -759,6 +770,107 @@ private:
   ObBitVector *skip_bit_;
 };
 
+class ObWhiteFilterParam
+{
+public:
+  ObWhiteFilterParam() : datum_(nullptr), hash_func_(nullptr), cmp_func_(nullptr) {}
+  ObWhiteFilterParam(const ObDatum *datum,
+      const ObExprHashFuncType *hash_func,
+      const ObDatumCmpFuncType *cmp_func)
+    : datum_(datum),
+      hash_func_(hash_func),
+      cmp_func_(cmp_func)
+  {}
+  ~ObWhiteFilterParam() {}
+  inline bool operator==(const ObWhiteFilterParam &other) const
+  {
+    bool equal_ret = true;
+    if (datum_->is_null() && other.datum_->is_null()) {
+    } else if (datum_->is_null() || other.datum_->is_null()) {
+      equal_ret = false;
+    } else {
+      int cmp_ret = 0;
+      (*cmp_func_)(*datum_, *other.datum_, cmp_ret);
+      equal_ret = cmp_ret == 0;
+    }
+    return equal_ret;
+  }
+  inline int hash(uint64_t &hash_val, uint64_t seed = 0) const
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL((*hash_func_)(*datum_, seed, seed))) {
+      STORAGE_LOG(WARN, "Failed to do hash for datum", K_(datum));
+    } else {
+      hash_val = seed;
+    }
+    return ret;
+  }
+  TO_STRING_KV(KPC_(datum), KP_(hash_func), KP_(cmp_func));
+private:
+  const ObDatum *datum_;
+  const ObExprHashFuncType *hash_func_;
+  const ObDatumCmpFuncType *cmp_func_;
+};
+
+class ObWhiteFilterParamHashSet
+{
+public:
+  ObWhiteFilterParamHashSet() : set_(), hash_func_(nullptr), cmp_func_(nullptr) {}
+  ~ObWhiteFilterParamHashSet()
+  {
+    destroy();
+  }
+  void destroy()
+  {
+    if (set_.created()) {
+      (void)set_.destroy();
+    }
+  }
+  inline bool created() const
+  {
+    return set_.created();
+  }
+  inline int create(int param_num)
+  {
+    ObMemAttr attr(MTL_ID(), common::ObModIds::OB_HASH_BUCKET);
+    return set_.create(param_num, attr);
+  }
+  inline int64_t count() const
+  {
+    return set_.size();
+  }
+  inline int set_refactored(const ObDatum &datum, int flag = 0 /*deduplicated*/)
+  {
+    ObWhiteFilterParam param(&datum, &hash_func_, &cmp_func_);
+    return set_.set_refactored(param, flag);
+  }
+  inline int exist_refactored(const ObDatum &datum, bool &is_exist) const
+  {
+    ObWhiteFilterParam param(&datum, &hash_func_, &cmp_func_);
+    int ret = set_.exist_refactored(param);
+    if (OB_HASH_EXIST == ret) {
+      is_exist = true;
+      ret = OB_SUCCESS;
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      is_exist = false;
+      ret = OB_SUCCESS;
+    } else {
+      STORAGE_LOG(WARN, "Failed to search in hashset", K(ret), K(param));
+    }
+    return ret;
+  }
+  inline void set_hash_and_cmp_func(const ObExprHashFuncType hash_func, const ObDatumCmpFuncType cmp_func)
+  {
+    hash_func_ = hash_func;
+    cmp_func_ = cmp_func;
+  }
+  TO_STRING_KV(K_(set), K_(hash_func), K_(cmp_func));
+private:
+  common::hash::ObHashSet<ObWhiteFilterParam, common::hash::NoPthreadDefendMode> set_;
+  ObExprHashFuncType hash_func_;
+  ObDatumCmpFuncType cmp_func_;
+};
+
 class ObWhiteFilterExecutor : public ObPhysicalFilterExecutor
 {
 public:
@@ -766,13 +878,12 @@ public:
                         ObPushdownWhiteFilterNode &filter,
                         ObPushdownOperator &op)
       : ObPhysicalFilterExecutor(alloc, op, PushdownExecutorType::WHITE_FILTER_EXECUTOR),
-        cmp_func_(nullptr), null_param_contained_(false), datum_params_(alloc), filter_(filter) {}
+        cmp_func_(nullptr), cmp_func_rev_(nullptr), null_param_contained_(false), datum_params_(alloc), filter_(filter)
+      {}
   ~ObWhiteFilterExecutor()
   {
     datum_params_.reset();
-    if (param_set_.created()) {
-      (void)param_set_.destroy();
-    }
+    param_set_.destroy();
   }
 
   OB_INLINE ObPushdownWhiteFilterNode &get_filter_node() { return filter_; }
@@ -783,25 +894,43 @@ public:
   virtual int init_evaluated_datums() override;
   OB_INLINE const common::ObIArray<common::ObDatum> &get_datums() const
   { return datum_params_; }
+  OB_INLINE const common::ObDatum &get_min_param() const
+  { return datum_params_.at(0); }
+  OB_INLINE const common::ObDatum &get_max_param() const
+  { return datum_params_.at(datum_params_.count() - 1); }
   OB_INLINE bool null_param_contained() const { return null_param_contained_; }
-  int exist_in_obj_set(const common::ObObj &obj, bool &is_exist) const;
-  bool is_obj_set_created() const { return param_set_.created(); };
+  int exist_in_datum_set(const common::ObDatum &datum, bool &is_exist) const;
+  int exist_in_datum_array(const common::ObDatum &datum, bool &is_exist, const int64_t offset = 0) const;
   OB_INLINE ObWhiteFilterOperatorType get_op_type() const
   { return filter_.get_op_type(); }
   bool is_cmp_op_with_null_ref_value() const;
   INHERIT_TO_STRING_KV("ObPushdownWhiteFilterExecutor", ObPushdownFilterExecutor,
-                       K_(null_param_contained), K_(datum_params), K(param_set_.created()),
+                       K_(null_param_contained), K_(datum_params), K_(param_set),
                        K_(filter));
   virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) override;
+  virtual void clear_in_datums()
+  {
+    if (WHITE_OP_IN == filter_.get_op_type()) {
+      datum_params_.clear();
+      param_set_.destroy();
+    }
+  }
 protected:
-  void check_null_params();
-  int init_obj_set();
+  OB_INLINE bool is_null_param(const ObDatum &datum, const ObObjMeta obj_meta)
+  {
+    return datum.is_null() || (lib::is_oracle_mode() && obj_meta.is_character_type() && (0 == datum.len_));
+  }
+  int init_compare_eval_datums();
+  int init_in_eval_datums();
+  int init_param_set(const int64_t count, const ObExpr *cur_arg);
+  int add_to_param_set_and_array(const ObDatum &datum, const ObExpr *cur_arg);
 public:
   common::ObDatumCmpFuncType cmp_func_;
+  common::ObDatumCmpFuncType cmp_func_rev_;
 protected:
   bool null_param_contained_;
   common::ObFixedArray<common::ObDatum, common::ObIAllocator> datum_params_;
-  common::hash::ObHashSet<common::ObObj> param_set_;
+  ObWhiteFilterParamHashSet param_set_;
   ObPushdownWhiteFilterNode &filter_;
 };
 
@@ -1046,7 +1175,7 @@ struct PushdownFilterInfo
   OB_INLINE bool is_valid()
   {
     bool ret = is_inited_;
-    if (is_pd_filter_ && nullptr != filter_) {
+    if (is_pd_filter_ && nullptr != filter_ && !filter_->is_sample_node()) {
       ret = ret && (nullptr != datum_buf_);
     }
     if (0 < batch_size_) {

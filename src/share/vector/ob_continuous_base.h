@@ -38,9 +38,11 @@ public:
   {
     has_null_ = has_null;
     nulls_->reset(read_rows);
-    for (int64_t i = 0; i < read_rows; ++i) {
-      if (nulls.at(start_idx + i)) {
-        nulls_->set(i);
+    if (has_null) {
+      for (int64_t i = 0; i < read_rows; ++i) {
+        if (nulls.at(start_idx + i)) {
+          nulls_->set(i);
+        }
       }
     }
     offsets_ = offsets + start_idx;

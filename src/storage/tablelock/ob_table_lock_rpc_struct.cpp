@@ -30,7 +30,8 @@ OB_SERIALIZE_MEMBER(ObLockParam,
                     is_deadlock_avoid_enabled_,
                     is_try_lock_,
                     expired_time_,
-                    schema_version_);
+                    schema_version_,
+                    is_for_replace_);
 
 OB_SERIALIZE_MEMBER(ObLockRequest,
                     type_,
@@ -45,7 +46,9 @@ OB_SERIALIZE_MEMBER_INHERIT(ObLockObjRequest, ObLockRequest,
                             obj_id_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockObjsRequest, ObLockRequest,
-                            objs_);
+                            objs_,
+                            detect_func_no_,
+                            detect_param_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockTableRequest, ObLockRequest,
                             table_id_);
@@ -243,16 +246,17 @@ bool ObLockParam::is_valid() const
             || ObLockOBJType::OBJ_TYPE_DATABASE_NAME == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_OBJECT_NAME == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_DBMS_LOCK == lock_id_.obj_type_
-            || ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW == lock_id_.obj_type_)));
+            || ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW == lock_id_.obj_type_
+            || ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC == lock_id_.obj_type_)));
 }
 
 void ObLockRequest::reset()
 {
-  owner_id_ = 0;
+  owner_id_.set_default();
   lock_mode_ = NO_LOCK;
   op_type_ = UNKNOWN_TYPE;
-  type_ = ObLockMsgType::UNKNOWN_MSG_TYPE;
   timeout_us_ = 0;
+  is_from_sql_ = false;
 }
 
 bool ObLockRequest::is_valid() const
@@ -264,8 +268,8 @@ bool ObLockRequest::is_valid() const
 bool ObLockRequest::is_lock_thread_enabled() const
 {
   const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-  return ((min_cluster_version > CLUSTER_VERSION_4_2_1_3 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
-          || (min_cluster_version > CLUSTER_VERSION_4_2_2_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+  return ((min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_1_4 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
+          || (min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_3_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
           || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0));
 }
 
@@ -309,6 +313,8 @@ void ObLockObjsRequest::reset()
 {
   ObLockRequest::reset();
   objs_.reset();
+  detect_func_no_ = INVALID_DETECT_TYPE;
+  detect_param_.reset();
 }
 
 bool ObLockObjsRequest::is_valid() const

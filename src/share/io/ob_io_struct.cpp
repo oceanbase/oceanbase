@@ -577,7 +577,7 @@ bool ObIOUsage::is_request_doing(const int64_t index) const
 
 int64_t ObIOUsage::get_io_usage_num() const
 {
-  return group_num_;
+  return ATOMIC_LOAD(&group_num_);
 }
 
 int64_t ObIOUsage::to_string(char* buf, const int64_t buf_len) const
@@ -676,13 +676,13 @@ int ObSysIOUsage::init()
 
 void ObSysIOUsage::accumulate(ObIOResult &result, ObIORequest &request)
 {
-  if (OB_UNLIKELY(!is_sys_group(request.get_group_id()))) {
+  if (OB_UNLIKELY(!request.is_sys_module())) {
     // ignore
   } else if (request.time_log_.return_ts_ > 0) {
     int32_t io_offset = 0;
     int64_t io_size = 0;
     result.calc_io_offset_and_size(io_size, io_offset);
-    const int64_t idx = result.get_group_id() - SYS_RESOURCE_GROUP_START_ID;
+    const uint64_t idx = result.get_sys_module_id() - SYS_RESOURCE_GROUP_START_ID;
     const int64_t device_delay = get_io_interval(request.time_log_.return_ts_, request.time_log_.submit_ts_);
     io_stats_.at(idx).at(static_cast<int>(result.get_mode()))
       .accumulate(1, io_size, device_delay);
@@ -1119,7 +1119,7 @@ void ObIOSender::stop_submit()
 void ObIOSender::run1()
 {
   int ret = OB_SUCCESS;
-  const int64_t thread_id = get_thread_idx();
+  const int64_t thread_id = sender_index_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
@@ -1165,7 +1165,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
         LOG_WARN("get_refactored tenant_map failed", K(ret), K(req));
       } else {
         uint64_t index = INT_MAX64;
-        const int64_t group_id = tmp_req->get_group_id();
+        const int64_t group_id = tmp_req->get_resource_group_id();
         if (!is_user_group(group_id)) { //other
           tmp_phy_queue = &(io_group_queues->other_phy_queue_);
         } else if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(group_id, index))) {
@@ -1824,6 +1824,9 @@ int ObIOScheduler::init_group_queues(const uint64_t tenant_id, const int64_t gro
             LOG_WARN("init tenant group map failed", K(tenant_id), K(ret), K(i));
           }
         } else {
+          if (OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+          }
           io_group_queues->~ObIOGroupQueues();
           io_allocator->free(io_group_queues);
         }
@@ -2173,7 +2176,7 @@ void ObAsyncIOChannel::get_events()
             }
           }
         } else { // io failed
-          LOG_ERROR("io request failed", K(*req), K(system_errno), K(complete_size));
+          LOG_ERROR("io request failed", K(system_errno), K(complete_size), K(*req));
           if (-EAGAIN == system_errno) { //retry
             if (OB_FAIL(on_full_retry(*req))) {
               LOG_WARN("retry io request failed", K(ret), K(system_errno), K(*req));
@@ -3294,7 +3297,7 @@ int ObIOFaultDetector::record_timing_task(const int64_t first_id, const int64_t 
     retry_task->io_info_.user_data_buf_ = nullptr;
     retry_task->io_info_.buf_ = nullptr;
     retry_task->io_info_.flag_.set_mode(ObIOMode::READ);
-    retry_task->io_info_.flag_.set_group_id(0);
+    retry_task->io_info_.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
     retry_task->io_info_.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     retry_task->io_info_.flag_.set_time_detect();
     retry_task->io_info_.fd_.first_id_ = first_id;
@@ -3336,7 +3339,8 @@ void ObIOFaultDetector::record_io_timeout(const ObIOResult &result, ObIORequest 
       retry_task->io_info_.flag_ = result.flag_;
       retry_task->io_info_.size_ = result.size_;
       retry_task->io_info_.offset_ = static_cast<int64_t>(result.offset_);
-      retry_task->io_info_.flag_.set_group_id(ObIOModule::DETECT_IO);
+      retry_task->io_info_.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
+      retry_task->io_info_.flag_.set_sys_module_id(ObIOModule::DETECT_IO);
       retry_task->timeout_ms_ = io_config_.data_storage_warning_tolerance_time_; // default 5s
       if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {
         LOG_WARN("io fault detector push task failed", K(ret), KPC(retry_task));
@@ -3385,7 +3389,8 @@ int ObIOFaultDetector::record_read_failure(const ObIOInfo &info)
     LOG_WARN("alloc RetryTask failed", K(ret));
   } else {
     retry_task->io_info_ = info;
-    retry_task->io_info_.flag_.set_group_id(ObIOModule::DETECT_IO);
+    retry_task->io_info_.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
+    retry_task->io_info_.flag_.set_sys_module_id(ObIOModule::DETECT_IO);
     retry_task->io_info_.callback_ = nullptr;
     retry_task->io_info_.user_data_buf_ = nullptr;
     retry_task->timeout_ms_ = 5000L; // 5s

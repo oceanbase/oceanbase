@@ -182,7 +182,7 @@ int ObBackupHandler::schedule_build_tenant_level_index_dag(const ObBackupJobDesc
 
 int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &job_desc,
     const share::ObBackupDest &backup_dest, const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc,
-    const share::ObLSID &ls_id, const SCN &start_scn, const SCN &end_scn)
+    const share::ObLSID &ls_id, const SCN &start_scn, const SCN &end_scn, const bool is_only_calc_stat)
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
@@ -220,6 +220,7 @@ int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &j
     param.retry_id_ = 0;  // retry id no use for complement log
     param.compl_start_scn_ = start_scn;
     param.compl_end_scn_ = end_scn;
+    param.is_only_calc_stat_ = is_only_calc_stat;
     param.report_ctx_ = report_ctx;
     if (OB_FAIL(param.backup_dest_.deep_copy(backup_dest))) {
       LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest));

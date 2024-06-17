@@ -73,7 +73,7 @@ void ObStoreCtx::reset()
   tablet_id_.reset();
   table_iter_ = nullptr;
   table_version_ = INT64_MAX;
-  timeout_ = -1;
+  timeout_ = 0;
   mvcc_acc_ctx_.reset();
   tablet_stat_.reset();
   is_read_store_ctx_ = false;
@@ -131,6 +131,15 @@ void ObStoreCtx::force_print_trace_log()
   }
 }
 
+bool ObStoreCtx::is_uncommitted_data_rollbacked() const
+{
+  bool bret = false;
+  if (NULL != mvcc_acc_ctx_.tx_ctx_) {
+    bret = mvcc_acc_ctx_.tx_ctx_->is_data_rollbacked();
+  }
+  return bret;
+}
+
 void ObStoreRowLockState::reset()
 {
   is_locked_ = false;
@@ -139,6 +148,7 @@ void ObStoreRowLockState::reset()
   lock_data_sequence_.reset();
   lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   is_delayed_cleanout_ = false;
+  exist_flag_ = ObExistFlag::UNKNOWN;
   mvcc_row_ = NULL;
   trans_scn_ = SCN::max_scn();
 }

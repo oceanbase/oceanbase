@@ -770,6 +770,7 @@ void ObTxExecInfo::reset()
   exec_epoch_ = 0;
   serial_final_scn_.reset();
   serial_final_seq_no_.reset();
+  dli_batch_set_.destroy();
 }
 
 void ObTxExecInfo::destroy(ObTxMDSCache &mds_cache)
@@ -898,6 +899,8 @@ int ObTxExecInfo::assign(const ObTxExecInfo &exec_info)
     TRANS_LOG(WARN, "commit parts assign error", KR(ret), K(exec_info));
   } else if (OB_FAIL(transfer_parts_.assign(exec_info.transfer_parts_))) {
     TRANS_LOG(WARN, "transfer_epoch assign error", KR(ret), K(exec_info));
+  } else if (OB_FAIL(dli_batch_set_.assign(exec_info.dli_batch_set_))) {
+    TRANS_LOG(WARN, "direct load inc batch set assign error", K(ret), K(exec_info.dli_batch_set_));
   } else {
     // Prepare version should be initialized before state_
     // for ObTransPartCtx::get_prepare_version_if_preapred();
@@ -948,8 +951,8 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     max_applied_log_ts_,
                     max_applying_part_log_no_,
                     max_submitted_seq_no_,
-                    checksum_[0],
-                    checksum_scn_[0],
+                    checksum_[0],       // FARM COMPAT WHITELIST
+                    checksum_scn_[0],   // FARM COMPAT WHITELIST
                     max_durable_lsn_,
                     data_complete_,
                     is_dup_tx_,
@@ -968,7 +971,9 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     checksum_,
                     checksum_scn_,
                     serial_final_scn_,
-                    serial_final_seq_no_);
+                    serial_final_seq_no_,
+                    dli_batch_set_  // FARM COMPAT WHITELIST
+                    );
 
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 
@@ -1019,6 +1024,9 @@ int RollbackMaskSet::merge_part(const share::ObLSID add_ls_id, const int64_t exe
     for (int64_t i = 0; i < rollback_parts_->count(); i++) {
       if (rollback_parts_->at(i).ls_id_ == add_ls_id) {
         is_exist = true;
+        if (OB_FAIL(mask_set_.unmask(rollback_parts_->at(i)))) {
+          TRANS_LOG(WARN, "unmask fail", KR(ret), K(add_ls_id));
+        }
         break;
       }
     }

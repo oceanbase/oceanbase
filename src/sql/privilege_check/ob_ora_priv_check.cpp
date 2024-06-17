@@ -2278,6 +2278,7 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_USER);
         break;
       }
+      case stmt::T_ALTER_USER_PROXY:
       case stmt::T_ALTER_USER_PROFILE:
       case stmt::T_ALTER_USER_PRIMARY_ZONE: 
       case stmt::T_ALTER_USER: {
@@ -2681,9 +2682,9 @@ int ObOraSysChecker::check_ora_grant_obj_priv(
     const uint64_t obj_id,
     const uint64_t obj_type,
     const ObRawObjPrivArray &table_priv_array,
-    const ObSEArray<uint64_t, 4> &ins_col_ids,
-    const ObSEArray<uint64_t, 4> &upd_col_ids,
-    const ObSEArray<uint64_t, 4> &ref_col_ids,
+    const ObIArray<uint64_t> &ins_col_ids,
+    const ObIArray<uint64_t> &upd_col_ids,
+    const ObIArray<uint64_t> &ref_col_ids,
     uint64_t &grantor_id_out,
     const ObIArray<uint64_t> &role_id_array)
 {

@@ -15,7 +15,6 @@
 
 #include "lib/container/ob_fixed_array.h"
 #include "lib/thread/ob_async_task_queue.h"
-#include "share/schema/ob_dependency_info.h"
 #include "lib/hash/ob_hashset.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_struct.h"
@@ -90,11 +89,13 @@ class ObMaintainDepInfoTaskQueue: public share::ObAsyncTaskQueue
 {
 public:
   static const int64_t INIT_BKT_SIZE = 512;
+  static const int64_t MAX_SYS_VIEW_SIZE = 65536;
   constexpr static const double MAX_QUEUE_USAGE_RATIO = 0.8;
   ObMaintainDepInfoTaskQueue() : last_execute_time_(0) {}
   virtual ~ObMaintainDepInfoTaskQueue()
   {
     view_info_set_.destroy();
+    sys_view_consistent_.destroy();
   }
   int init(const int64_t thread_cnt, const int64_t queue_size);
   virtual void run2() override;
@@ -103,10 +104,13 @@ public:
   { last_execute_time_ = execute_time; }
   int add_view_id_to_set(const uint64_t view_id) { return view_info_set_.set_refactored(view_id); }
   int erase_view_id_from_set(const uint64_t view_id) { return view_info_set_.erase_refactored(view_id); }
+  int add_consistent_sys_view_id_to_set(const uint64_t tenant_id, const uint64_t view_id) { return sys_view_consistent_.set_refactored(std::make_pair(tenant_id, view_id)); }
+  int read_consistent_sys_view_from_set(const uint64_t tenant_id, const uint64_t view_id) { return sys_view_consistent_.exist_refactored(std::make_pair(tenant_id, view_id)); }
   bool is_queue_almost_full() const { return queue_.size() > queue_.capacity() * MAX_QUEUE_USAGE_RATIO; }
 private:
   int64_t last_execute_time_;
   common::hash::ObHashSet<uint64_t, common::hash::ReadWriteDefendMode> view_info_set_;
+  common::hash::ObHashSet<std::pair<uint64_t, uint64_t>, common::hash::ReadWriteDefendMode> sys_view_consistent_;
 };
 
 }  // namespace sql

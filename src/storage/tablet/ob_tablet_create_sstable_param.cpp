@@ -65,7 +65,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     max_merged_trans_version_(0),
     ddl_scn_(SCN::min_scn()),
     filled_tx_scn_(SCN::min_scn()),
-    is_empty_co_table_(false),
+    is_co_table_without_cgs_(false),
     contain_uncommitted_row_(false),
     is_meta_root_(false),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
@@ -75,7 +75,8 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     nested_offset_(0),
     nested_size_(0),
     data_block_ids_(),
-    other_block_ids_()
+    other_block_ids_(),
+    uncommitted_tx_id_(0)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -213,8 +214,7 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
 int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMergeCtx &ctx,
                                                const blocksstable::ObSSTableMergeRes &res,
                                                const ObStorageColumnGroupSchema *cg_schema,
-                                               const int64_t column_group_idx,
-                                               const bool is_main_table)
+                                               const int64_t column_group_idx)
 {
   int ret = OB_SUCCESS;
   const compaction::ObStaticMergeParam &static_param = ctx.static_param_;
@@ -222,6 +222,7 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
     LOG_WARN("fail to get_stored_column_count_in_sstable", K(ret), KPC(cg_schema), K(res));
   } else {
     ObITable::TableKey table_key;
+    bool is_main_table = (nullptr == cg_schema) ? false : (cg_schema->is_all_column_group() || cg_schema->is_rowkey_column_group());
     table_key.table_type_ = ctx.get_merged_table_type(cg_schema, is_main_table);
     table_key.tablet_id_ = ctx.get_tablet_id();
     table_key.column_group_idx_ = (nullptr == cg_schema) ? 0 : column_group_idx;
@@ -229,6 +230,11 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
       table_key.version_range_.snapshot_version_ = static_param.version_range_.snapshot_version_;
     } else {
       table_key.scn_range_ = static_param.scn_range_;
+    }
+    if (is_minor_merge_type(static_param.get_merge_type()) && res.contain_uncommitted_row_) {
+      uncommitted_tx_id_ = static_param.tx_id_;
+    } else {
+      uncommitted_tx_id_ = 0;
     }
     table_key_ = table_key;
 
@@ -262,7 +268,7 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
     progressive_merge_round_ = static_param.progressive_merge_round_;
     progressive_merge_step_ = std::min(
             static_param.progressive_merge_num_, static_param.progressive_merge_step_ + 1);
-    is_empty_co_table_ = is_main_table ? (0 == res.data_blocks_cnt_) : false;
+    is_co_table_without_cgs_ = is_main_table ? (0 == res.data_blocks_cnt_ || static_param.is_build_row_store()) : false;
     column_cnt_ = res.data_column_cnt_;
     if ((0 == res.row_count_ && 0 == res.max_merged_trans_version_)
         || (nullptr != cg_schema && !cg_schema->has_multi_version_column())) {
@@ -384,7 +390,7 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
       } else if (ddl_param.table_key_.is_co_sstable()) {
         column_group_cnt_ = storage_schema.get_column_group_count();
         // only set true when build empty major sstable. ddl co sstable must set false and fill cg sstables
-        is_empty_co_table_ = ddl_param.table_key_.is_major_sstable() && 0 == data_blocks_cnt_;
+        is_co_table_without_cgs_ = ddl_param.table_key_.is_major_sstable() && 0 == data_blocks_cnt_;
         const int64_t base_cg_idx = ddl_param.table_key_.get_column_group_id();
         if (base_cg_idx < 0 || base_cg_idx >= storage_schema.get_column_group_count()) {
           ret = OB_ERR_UNEXPECTED;

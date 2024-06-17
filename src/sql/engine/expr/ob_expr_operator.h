@@ -1249,10 +1249,10 @@ public:
   //    col < -12.2341  <=> col < -12.234
   // define 1 & 4 as up mode: val = val + 1 if val >= 0
   // define 2 & 3 as down mode: val = val - 1 if val < 0
-  static ObCastMode get_const_cast_mode(const ObExprOperatorType op_type,
+
+  static ObCastMode get_const_cast_mode(const common::ObCmpOp cmp_op,
                                         const bool right_const_param)
   {
-    ObCmpOp cmp_op = get_cmp_op(op_type);
     ObCastMode cm = CM_NONE;
     if (cmp_op >= CO_CMP) {
       // do nothing
@@ -1275,6 +1275,12 @@ public:
     }
     return cm;
   }
+  static ObCastMode get_const_cast_mode(const ObExprOperatorType op_type,
+                                        const bool right_const_param)
+  {
+    ObCmpOp cmp_op = get_cmp_op(op_type);
+    return get_const_cast_mode(cmp_op, right_const_param);
+  }
 
   OB_INLINE static common::ObCmpOp get_cmp_op(const ObExprOperatorType type) {
     /*
@@ -1288,7 +1294,8 @@ public:
       case T_OP_EQ: // fall through
       case T_OP_NSEQ: // fall through
       case T_OP_SQ_EQ: // fall through
-      case T_OP_SQ_NSEQ: {
+      case T_OP_SQ_NSEQ:
+      case T_OP_IN: {
         cmp_op = common::CO_EQ;
         break;
       }

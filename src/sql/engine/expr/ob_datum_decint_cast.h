@@ -429,7 +429,7 @@ inline static void scale_up_with_types(const ObDecimalInt *decint, unsigned scal
 
 template <typename in_type, typename out_type>
 inline static void scale_down_with_types(const ObDecimalInt *decint, unsigned scale,
-                                         ObDecimalIntBuilder &res)
+                                         ObDecimalIntBuilder &res, bool &truncated)
 {
   static_assert(wide::IsIntegral<out_type>::value, "");
   static_assert(wide::IsIntegral<in_type>::value, "");
@@ -440,6 +440,7 @@ inline static void scale_down_with_types(const ObDecimalInt *decint, unsigned sc
   out_type remain = val % sf;
   val = val / sf;
   if (remain >= (sf >> 1)) { val = val + 1; }
+  truncated = (remain != 0);
   if (is_neg) { val = -val; }
   res.from(val);
 }
@@ -497,9 +498,13 @@ static int decimalint_fast_cast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
                                              res_val);
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
     } else {
+      bool truncated = false;
       scale_down_with_types<in_type, out_type>(child_res->get_decimal_int(), in_scale - out_scale,
-                                               res_val);
+                                               res_val, truncated);
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+      if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) & truncated) {
+        log_user_warning_truncated(ctx.exec_ctx_.get_user_logging_ctx());
+      }
     }
   }
   if (is_explicit && !res_datum.is_null() && OB_SUCC(ret)) {

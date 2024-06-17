@@ -105,12 +105,15 @@ private:
   int update_inner_task_(const ObIArray<share::ObLSID> &new_ls_ids, 
       const ObIArray<const share::ObBackupLSTaskAttr *> &need_change_turn_ls_tasks);
   int convert_task_type_(const ObIArray<share::ObBackupLSTaskAttr> &ls_task);
+  int before_backup_log_();
+  int stat_all_ls_backup_log_(ObMySQLTransaction &trans);
   int backup_completing_log_();
   int do_backup_completing_log_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
   int calculate_start_replay_scn_(share::SCN &start_replay_scn);
   int do_cancel_();
   int do_failed_ls_task_(ObMySQLTransaction &trans, const ObIArray<share::ObBackupLSTaskAttr> &ls_task);
   int write_backup_set_placeholder_(const bool is_start);
+  int write_table_list_(const share::SCN &end_scn);
   int write_extern_infos_();
   int write_tenant_backup_set_infos_();
   int write_extern_locality_info_(storage::ObExternTenantLocalityInfoDesc &locality_info);
@@ -127,6 +130,7 @@ private:
   int advance_status_(ObMySQLTransaction &trans, const share::ObBackupStatus &next_status, const int result = OB_SUCCESS,
       const share::SCN &scn = share::SCN::min_scn(), const int64_t end_ts = 0);
   int get_next_status_(const share::ObBackupStatus &cur_status, share::ObBackupStatus &next_status);
+  int get_backup_end_scn_(share::SCN &end_scn) const;
 private:
   bool is_inited_;
   uint64_t meta_tenant_id_;

@@ -1874,6 +1874,8 @@ int ObCancelTaskExecutor::parse_task_id(
 int ObSetDiskValidExecutor::execute(ObExecContext &ctx, ObSetDiskValidStmt &stmt)
 {
   int ret = OB_SUCCESS;
+  const ObZone null_zone;
+  ObArray<ObAddr> server_list;
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObSrvRpcProxy *srv_rpc_proxy = NULL;
   ObAddr server = stmt.server_;
@@ -1886,6 +1888,11 @@ int ObSetDiskValidExecutor::execute(ObExecContext &ctx, ObSetDiskValidStmt &stmt
   } else if (OB_ISNULL(srv_rpc_proxy = task_exec_ctx->get_srv_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get srv rpc proxy failed");
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
+    LOG_WARN("get alive server failed", KR(ret), K(null_zone));
+  } else if (!has_exist_in_array(server_list, server)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("server does not exist in the alive server list", K(ret), K(null_zone), K(server_list), K(server));
   } else if (OB_FAIL(srv_rpc_proxy->to(server).set_disk_valid(arg))) {
     LOG_WARN("rpc proxy set_disk_valid failed", K(ret));
   } else {
@@ -1948,7 +1955,8 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
     LOG_WARN("ptr is null", KR(ret));
   } else if (FALSE_IT(pre_effective_tenant_id = session_info->get_effective_tenant_id())) {
   } else if (FALSE_IT(login_tenant_id = session_info->get_login_tenant_id())) {
-  } else if (FALSE_IT(session_info->get_session_priv_info(session_priv))) {
+  } else if (OB_FAIL(session_info->get_session_priv_info(session_priv))) {
+    LOG_WARN("fail to get session priv info", K(ret));
   } else if (effective_tenant_id == pre_effective_tenant_id) {
     // do nothing
   } else if (OB_SYS_TENANT_ID != login_tenant_id) { //case 1
@@ -2602,6 +2610,8 @@ int ObClearRestoreSourceExecutor::execute(ObExecContext &ctx, ObClearRestoreSour
 int ObCheckpointSlogExecutor::execute(ObExecContext &ctx, ObCheckpointSlogStmt &stmt)
 {
   int ret = OB_SUCCESS;
+  const ObZone null_zone;
+  ObArray<ObAddr> server_list;
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObSrvRpcProxy *srv_rpc_proxy = NULL;
   const ObAddr server = stmt.server_;
@@ -2614,6 +2624,11 @@ int ObCheckpointSlogExecutor::execute(ObExecContext &ctx, ObCheckpointSlogStmt &
   } else if (OB_ISNULL(srv_rpc_proxy = task_exec_ctx->get_srv_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get srv rpc proxy failed");
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
+    LOG_WARN("get alive server failed", KR(ret), K(null_zone));
+  } else if (!has_exist_in_array(server_list, server)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("server does not exist in the alive server list", K(ret), K(null_zone), K(server_list), K(server));
   } else if (OB_FAIL(srv_rpc_proxy->to(server).timeout(THIS_WORKER.get_timeout_remain()).checkpoint_slog(arg))) {
     LOG_WARN("rpc proxy checkpoint slog failed", K(ret));
   }
@@ -2780,5 +2795,18 @@ int ObCancelCloneExecutor::execute(ObExecContext &ctx, ObCancelCloneStmt &stmt)
   return ret;
 }
 
+int ObTransferPartitionExecutor::execute(ObExecContext& ctx, ObTransferPartitionStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  const rootserver::ObTransferPartitionArg &arg = stmt.get_arg();
+  rootserver::ObTransferPartitionCommand command;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invaid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(command.execute(arg))) {
+    LOG_WARN("fail to execute command", KR(ret), K(arg));
+  }
+  return ret;
+}
 } // end namespace sql
 } // end namespace oceanbase

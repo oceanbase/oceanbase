@@ -16,7 +16,6 @@
 #include "lib/container/ob_iarray.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/memtable/ob_memtable_interface.h"
-#include "storage/ob_partition_component_factory.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "storage/blocksstable/ob_row_generate.h"
 #include "observer/ob_service.h"
@@ -220,16 +219,25 @@ public:
 
   void get_cg_read_info(const ObColDesc &col_desc, const ObITableReadInfo *&cg_read_info)
   {
-    ASSERT_EQ(OB_SUCCESS,
-              MTL(ObTenantCGReadInfoMgr *)->get_cg_read_info(col_desc, nullptr, ObTabletID(tablet_id_), cg_read_info_handle_));
-    cg_read_info = cg_read_info_handle_.get_read_info();
+    int ret = OB_SUCCESS;
+    cg_read_info_.reset();
+    if (OB_FAIL(ObTenantCGReadInfoMgr::construct_cg_read_info(allocator_,
+                                                              lib::is_oracle_mode(),
+                                                              col_desc,
+                                                              nullptr,
+                                                              cg_read_info_))) {
+      LOG_WARN("Fail to init cg read info", K(ret));
+    } else {
+      cg_read_info = &cg_read_info_;
+    }
+    ASSERT_EQ(OB_SUCCESS, ret);
   }
 
 public:
   ObCOMergeDagParam param_;
   ObCOMergeDagNet dag_net_;
   ObStoreCtx store_ctx_;
-  ObCGReadInfoHandle cg_read_info_handle_;
+  ObTableReadInfo cg_read_info_;
 };
 
 void TestCOMerge::SetUpTestCase()
@@ -490,6 +498,7 @@ void TestCOMerge::prepare_merge_context(const ObMergeType &merge_type,
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_static_param_and_desc());
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_read_info());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_tablet_merge_info());
 }
 
@@ -2099,7 +2108,7 @@ TEST_F(TestCOMerge, test_merge_range_with_empty)
     ObSSTable *merged_sstable = static_cast<ObSSTable *>(merge_context.merged_cg_tables_handle_.get_table(i));
     if (NULL != merged_sstable) {
       EXPECT_EQ(true, merged_sstable->is_co_sstable());
-      EXPECT_EQ(true, static_cast<ObCOSSTableV2 *>(merged_sstable)->is_empty_co_table());
+      EXPECT_EQ(true, static_cast<ObCOSSTableV2 *>(merged_sstable)->is_cgs_empty_co_table());
     }
   }
 }
@@ -2378,7 +2387,7 @@ TEST_F(TestCOMerge, test_merge_range_with_beyond_range)
     ObSSTable *merged_sstable = static_cast<ObSSTable *>(merge_context.merged_cg_tables_handle_.get_table(i));
     if (NULL != merged_sstable) {
       EXPECT_EQ(true, merged_sstable->is_co_sstable());
-      EXPECT_EQ(true, static_cast<ObCOSSTableV2 *>(merged_sstable)->is_empty_co_table());
+      EXPECT_EQ(true, static_cast<ObCOSSTableV2 *>(merged_sstable)->is_cgs_empty_co_table());
     }
   }
 

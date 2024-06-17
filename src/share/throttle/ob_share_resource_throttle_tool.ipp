@@ -190,43 +190,6 @@ int64_t ObShareResourceThrottleTool<FakeAllocator, Args...>::expected_wait_time(
   return expected_wait_time;
 }
 
-#define PRINT_THROTTLE_WARN                                                              \
-  do {                                                                                   \
-    const int64_t WARN_LOG_INTERVAL = 1LL * 60L * 1000L * 1000L /* one minute */;        \
-    if (sleep_time > (WARN_LOG_INTERVAL) && TC_REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) { \
-      SHARE_LOG(WARN,                                                                    \
-                "[Throttling] Attention!! Sleep More Than One Minute!!",                 \
-                "Throttle Unit Name",                                                    \
-                ALLOCATOR::throttle_unit_name(),                                         \
-                K(sleep_time),                                                           \
-                K(left_interval),                                                        \
-                K(expected_wait_t),                                                      \
-                K(abs_expire_time));                                                     \
-      if (!has_printed_lbt) {                                                            \
-        has_printed_lbt = true;                                                          \
-        oceanbase::share::ObTaskController::get().allow_next_syslog();                   \
-        SHARE_LOG(INFO,                                                                  \
-                  "[Throttling] (report write throttle info) LBT Info",                  \
-                  "Throttle Unit Name",                                                  \
-                  ALLOCATOR::throttle_unit_name(),                                       \
-                  K(lbt()));                                                             \
-      }                                                                                  \
-    }                                                                                    \
-  } while (0)
-
-#define PRINT_THROTTLE_STATISTIC                                                       \
-  do {                                                                                 \
-    const int64_t MEMSTORE_THROTTLE_LOG_INTERVAL = 1L * 1000L * 1000L; /*one seconds*/ \
-    if (sleep_time > 0 && REACH_TIME_INTERVAL(MEMSTORE_THROTTLE_LOG_INTERVAL)) {       \
-      SHARE_LOG(INFO,                                                                  \
-                "[Throttling] (report write throttle info) Time Info",                 \
-                "Throttle Unit Name",                                                  \
-                ALLOCATOR::throttle_unit_name(),                                       \
-                "Throttle Sleep Time(us)",                                             \
-                sleep_time);                                                           \
-    }                                                                                  \
-  } while (0);
-
 template <typename FakeAllocator, typename... Args>
 template <typename ALLOCATOR>
 void ObShareResourceThrottleTool<FakeAllocator, Args...>::do_throttle(const int64_t abs_expire_time)
@@ -256,19 +219,26 @@ void ObShareResourceThrottleTool<FakeAllocator, Args...>::do_throttle(const int6
           module_ti_guard.throttle_info()->reset();
         }
       } else {
-        uint32_t sleep_interval = min(DEFAULT_THROTTLE_SLEEP_INTERVAL, (uint32_t)expected_wait_t);
-        sleep_time += sleep_interval;
-        left_interval -= sleep_interval;
-        ::usleep(sleep_interval);
+        int64_t sleep_interval = min(DEFAULT_THROTTLE_SLEEP_INTERVAL, expected_wait_t);
+        if (0 < sleep_interval) {
+          sleep_time += sleep_interval;
+          left_interval -= sleep_interval;
+          ::usleep(sleep_interval);
+        }
       }
-      PRINT_THROTTLE_WARN;
+      PrintThrottleUtil::pirnt_throttle_info(ret,
+                                             ALLOCATOR::throttle_unit_name(),
+                                             sleep_time,
+                                             left_interval,
+                                             expected_wait_t,
+                                             abs_expire_time,
+                                             share_ti_guard,
+                                             module_ti_guard,
+                                             has_printed_lbt);
     }
-    PRINT_THROTTLE_STATISTIC;
+    PrintThrottleUtil::print_throttle_statistic(ret, ALLOCATOR::throttle_unit_name(), sleep_time);
   }
 }
-
-#undef PRINT_THROTTLE_WARN
-#undef PRINT_THROTTLE_STATISTIC
 
 template <typename FakeAllocator, typename... Args>
 template <typename ALLOCATOR>
@@ -318,8 +288,6 @@ void ObShareResourceThrottleTool<FakeAllocator, Args...>::update_throttle_config
 }
 
 #undef ACQUIRE_THROTTLE_UNIT
-#undef ACQUIRE_ALLOCATOR
-#undef FUNC_PREFIX
 
 }  // namespace share
 }  // namespace oceanbase

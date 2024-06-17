@@ -135,6 +135,8 @@ TEST_F(ObLockTableBeforeRestartTest, test_lock_table_flush)
   ASSERT_NE(nullptr, ls_svr);
   ObLS *ls = nullptr;
   ObLSHandle handle;
+  ObTableLockOwnerID owner_id;
+  owner_id.convert_from_value(1);
   share::ObLSID ls_id = share::LOCK_SERVICE_LS;
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
   ASSERT_NE(nullptr, ls = handle.get_ls());
@@ -150,7 +152,7 @@ TEST_F(ObLockTableBeforeRestartTest, test_lock_table_flush)
     guard.get_table_id(RunCtx.tenant_id_, "test", "test_lock_table_persistence_t",
     false, share::schema::ObSchemaGetterGuard::NON_TEMP_WITH_NON_HIDDEN_TABLE_TYPE, table_id));
   ObTableLockService *table_lock_ser = MTL(ObTableLockService*);
-  ASSERT_EQ(OB_SUCCESS, table_lock_ser->lock_table(table_id, EXCLUSIVE, ObTableLockOwnerID(1), 0));
+  ASSERT_EQ(OB_SUCCESS, table_lock_ser->lock_table(table_id, EXCLUSIVE, owner_id, 0));
   usleep(1000 * 1000);
 
   ObLockMemtable *lock_memtable
@@ -178,7 +180,7 @@ TEST_F(ObLockTableBeforeRestartTest, test_lock_table_flush)
   ASSERT_EQ(lock_memtable->flushed_scn_, lock_memtable->freeze_scn_);
 
   //unlock table
-  ASSERT_EQ(OB_SUCCESS, table_lock_ser->unlock_table(table_id, EXCLUSIVE, ObTableLockOwnerID(1), 0));
+  ASSERT_EQ(OB_SUCCESS, table_lock_ser->unlock_table(table_id, EXCLUSIVE, owner_id, 0));
   usleep(1000 * 1000);
   unlock_scn = lock_memtable->get_rec_scn();
   ASSERT_NE(lock_memtable->get_rec_scn(), SCN::max_scn());

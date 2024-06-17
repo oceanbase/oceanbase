@@ -31,9 +31,15 @@
 #include "ob_log_ls_callback.h"
 #include "ob_log_systable_helper.h"
 #include "ob_log_fetching_mode.h"
+#include "lib/allocator/ob_block_alloc_mgr.h"   // ObBlockAllocMgr
+#include "lib/allocator/ob_vslice_alloc.h"      // ObVSliceAlloc
 
 namespace oceanbase
 {
+namespace common
+{
+class ObIAllocator;
+}
 namespace libobcdc
 {
 
@@ -97,6 +103,9 @@ public:
       const int64_t timestamp,
       bool &is_exceeded,
       int64_t &cur_progress) = 0;
+  virtual void *alloc_decompression_buf(int64_t size)  = 0;
+  virtual common::ObIAllocator *get_decompression_allocator() = 0;
+  virtual void free_decompression_buf(void *buf)  = 0;
 };
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -126,6 +135,7 @@ public:
 
   int init(
       const bool is_loading_data_dict_baseline_data,
+      const bool enable_direct_load_inc,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest,
       IObLogFetcherDispatcher *dispatcher,
@@ -177,8 +187,14 @@ public:
       const int64_t timestamp,
       bool &is_exceeded,
       int64_t &cur_progress);
+  void *alloc_decompression_buf(int64_t size);
+
+  virtual common::ObIAllocator *get_decompression_allocator() {return &decompression_alloc_;}
+  void free_decompression_buf(void *buf);
 
 private:
+  const int64_t DECOMPRESSION_MEM_LIMIT_THRESHOLD = 512 * 1024 * 1024L;
+  const int64_t DECOMPRSSION_BUF_ALLOC_NWAY = 4;
   static void *misc_thread_func_(void *);
   void run_misc_thread();
   static void *heartbeat_dispatch_thread_func_(void *);
@@ -244,6 +260,7 @@ private:
   bool                          is_inited_;
   bool                          is_running_;
   bool                          is_loading_data_dict_baseline_data_;
+  bool                          enable_direct_load_inc_;
   ClientFetchingMode            fetching_mode_;
   ObBackupPathString            archive_dest_;
   archive::LargeBufferPool      large_buffer_pool_;
@@ -279,6 +296,8 @@ private:
   bool                          paused_ CACHE_ALIGNED;
   int64_t                       pause_time_ CACHE_ALIGNED;
   int64_t                       resume_time_ CACHE_ALIGNED;
+  ObBlockAllocMgr decompression_blk_mgr_;
+  ObVSliceAlloc decompression_alloc_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogFetcher);

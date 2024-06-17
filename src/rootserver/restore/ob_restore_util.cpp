@@ -780,11 +780,17 @@ int ObRestoreUtil::do_fill_backup_info_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_RESTORE_SKIP_BACKUP_DATA_VERSION_CHECK, "");
+
 int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  if (!backup_file_desc.is_valid()) {
+
+  if (OB_UNLIKELY(ERRSIM_RESTORE_SKIP_BACKUP_DATA_VERSION_CHECK)) {
+    // do nothing
+    LOG_INFO("skip backup data version check");
+  } else if (!backup_file_desc.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(backup_file_desc));
   } else if (!ObUpgradeChecker::check_cluster_version_exist(backup_file_desc.cluster_version_)) {
@@ -809,6 +815,11 @@ int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &b
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore from version 4.0 is not allowd", K(ret), K(backup_file_desc.tenant_compatible_), K(data_version));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore from version 4.0 is");
+  } else if (!ObUpgradeChecker::check_data_version_valid_for_backup(backup_file_desc.tenant_compatible_)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("restore from backup with unsupported data version",
+             KR(ret), K(backup_file_desc.tenant_compatible_), K(data_version));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore from backup with unsupported data version is");
   }
   return ret;
 }

@@ -82,7 +82,8 @@ int CheckSqlSequenceCanReadFunctor::operator() (const ObTxData &tx_data, ObTxCCC
   const int32_t state = ATOMIC_LOAD(&tx_data.state_);
   const SCN commit_version = tx_data.commit_version_.atomic_load();
   const SCN end_scn = tx_data.end_scn_.atomic_load();
-  const bool is_rollback = tx_data.undo_status_list_.is_contain(sql_sequence_, state);
+  const bool is_rollback = !tx_data.op_guard_.is_valid() ? false :
+    tx_data.op_guard_->get_undo_status_list().is_contain(sql_sequence_, state);
 
   // NB: The functor is only used during minor merge
   if (ObTxData::ABORT == state) {
@@ -116,14 +117,20 @@ int CheckRowLockedFunctor::operator() (const ObTxData &tx_data, ObTxCCCtx *tx_cc
   const int32_t state = ATOMIC_LOAD(&tx_data.state_);
   const SCN commit_version = tx_data.commit_version_.atomic_load();
   const SCN end_scn = tx_data.end_scn_.atomic_load();
-  const bool is_rollback = tx_data.undo_status_list_.is_contain(sql_sequence_, state);
+  const bool is_rollback = !tx_data.op_guard_.is_valid() ? false :
+    tx_data.op_guard_->get_undo_status_list().is_contain(sql_sequence_, state);
 
   switch (state) {
   case ObTxData::COMMIT: {
-    // Case 1: data is committed, so the lock is locked by the data and we
-    // also need return the commit version for tsc check
+    // Case 1: data is committed, so the lock is not locked by the data and we
+    // also need return the commit version for tsc check if the data is not
+    // rollbacked
     lock_state_.is_locked_ = false;
-    lock_state_.trans_version_ = commit_version;
+    if (!is_rollback) {
+      lock_state_.trans_version_ = commit_version;
+    } else {
+      lock_state_.trans_version_.set_min();
+    }
     break;
   }
   case ObTxData::RUNNING:
@@ -244,7 +251,8 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
   const int32_t state = ATOMIC_LOAD(&tx_data.state_);
   const SCN commit_version = tx_data.commit_version_.atomic_load();
   const SCN end_scn = tx_data.end_scn_.atomic_load();
-  const bool is_rollback = tx_data.undo_status_list_.is_contain(data_sql_sequence, state);
+  const bool is_rollback = !tx_data.op_guard_.is_valid() ? false :
+    tx_data.op_guard_->get_undo_status_list().is_contain(data_sql_sequence, state);
 
   can_read_ = false;
   trans_version_.set_invalid();
@@ -261,7 +269,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
       } else {
         // Case 1.2: Otherwise, we get the version under mvcc
         can_read_ = snapshot_version >= commit_version
-          && !tx_data.undo_status_list_.is_contain(data_sql_sequence, state);
+          && !is_rollback;
         trans_version_ = commit_version;
       }
       break;
@@ -430,7 +438,7 @@ int LockForReadFunctor::check_clog_disk_full_()
 
   if (NULL != detector && detector->is_clog_disk_has_fatal_error()) {
     if (detector->is_clog_disk_has_full_error()) {
-      ret = OB_SERVER_OUTOF_DISK_SPACE;
+      ret = OB_LOG_OUTOF_DISK_SPACE;
       TRANS_LOG(ERROR, "disk full error", K(ret), KPC(this));
     } else if (detector->is_clog_disk_has_hang_error()) {
       ret = OB_CLOG_DISK_HANG;
@@ -495,7 +503,8 @@ int CleanoutTxStateFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc
   const int32_t state = ATOMIC_LOAD(&tx_data.state_);
   const SCN commit_version = tx_data.commit_version_.atomic_load();
   const SCN end_scn = tx_data.end_scn_.atomic_load();
-  const bool is_rollback = tx_data.undo_status_list_.is_contain(seq_no_, state);
+  const bool is_rollback = !tx_data.op_guard_.is_valid() ? false :
+    tx_data.op_guard_->get_undo_status_list().is_contain(seq_no_, state);
 
   (void)resolve_tx_data_check_data_(state, commit_version, end_scn, is_rollback);
 
@@ -627,8 +636,25 @@ int GenerateVirtualTxDataRowFunctor::operator()(const ObTxData &tx_data, ObTxCCC
   row_data_.start_scn_ = tx_data.start_scn_;
   row_data_.end_scn_ = tx_data.end_scn_;
   row_data_.commit_version_ = tx_data.commit_version_;
-  tx_data.undo_status_list_.to_string(row_data_.undo_status_list_str_, common::MAX_UNDO_LIST_CHAR_LENGTH);
+  if (tx_data.op_guard_.is_valid()) {
+    tx_data.op_guard_->get_undo_status_list().to_string(row_data_.undo_status_list_str_, common::MAX_UNDO_LIST_CHAR_LENGTH);
+    tx_data.op_guard_->get_tx_op_list().to_string(row_data_.tx_op_str_, common::MAX_TX_OP_CHAR_LENGTH);
+  }
   return OB_SUCCESS;
+}
+
+
+int LoadTxOpFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (!tx_data.op_guard_.is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(tx_data_.init_tx_op())) {
+    TRANS_LOG(WARN, "init_tx_op failed", K(ret));
+  } else {
+    tx_data_.op_guard_.init(tx_data.op_guard_.ptr());
+  }
+  return ret;
 }
 
 } // namespace storage

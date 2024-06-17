@@ -115,15 +115,6 @@ int ObMacroBlocksWriteCtx::get_macro_id_array(ObIArray<MacroBlockId> &block_ids)
       LOG_ERROR("failed to inc macro block ref cnt", K(ret));
     }
   }
-  if (OB_FAIL(ret)) {
-    int tmp_ret = OB_SUCCESS;
-    for (int64_t i = start; i < block_ids.count(); ++i) {
-      const MacroBlockId &block_id = block_ids.at(i);
-      if (OB_SUCCESS != (tmp_ret = OB_SERVER_BLOCK_MGR.dec_ref(block_id))) {
-        STORAGE_LOG(ERROR, "fail to dec macro block ref cnt", K(tmp_ret), K(block_id), K(i));
-      }
-    }
-  }
   return ret;
 }
 

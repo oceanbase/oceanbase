@@ -90,7 +90,8 @@ struct ObGAISPushAutoIncValReq
   OB_UNIS_VERSION(1);
 
 public:
-  ObGAISPushAutoIncValReq() : autoinc_key_(), base_value_(0), max_value_(0), sender_(), autoinc_version_(OB_INVALID_VERSION) {}
+  ObGAISPushAutoIncValReq() : autoinc_key_(), base_value_(0), max_value_(0), sender_(),
+                              autoinc_version_(OB_INVALID_VERSION), cache_size_(0) {}
   int init(const AutoincKey &autoinc_key,
            const uint64_t base_value,
            const uint64_t max_value,
@@ -101,13 +102,15 @@ public:
     return is_valid_tenant_id(autoinc_key_.tenant_id_) && max_value_ > 0 && base_value_ <= max_value_
             && sender_.is_valid() && autoinc_version_ >= OB_INVALID_VERSION;
   }
-  TO_STRING_KV(K_(autoinc_key), K_(base_value), K_(max_value), K_(sender), K_(autoinc_version));
+  TO_STRING_KV(K_(autoinc_key), K_(base_value), K_(max_value), K_(sender), K_(autoinc_version),
+               K_(cache_size));
 
   AutoincKey autoinc_key_;
   uint64_t base_value_;
   uint64_t max_value_;
   common::ObAddr sender_;
   int64_t autoinc_version_;
+  int64_t cache_size_;
 };
 
 } // share

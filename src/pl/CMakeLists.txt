@@ -34,6 +34,7 @@ ob_set_subtarget(ob_pl common
   ob_pl_stmt.cpp
   ob_pl_type.cpp
   ob_pl_user_type.cpp
+  ob_pl_persistent.cpp
 )
 
 ob_set_subtarget(ob_pl pl_cache
@@ -56,6 +57,7 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_workload_repository.cpp
   sys_package/ob_pl_dbms_resource_manager.cpp
   sys_package/ob_pl_dbms_trusted_certificate_manager.cpp
+  sys_package/ob_dbms_limit_calculator_mysql.cpp
 )
 
 ob_set_subtarget(ob_pl dblink

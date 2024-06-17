@@ -484,6 +484,7 @@ int TestOpEngine::generate_physical_plan(ObLogPlan *log_plan, ObPhysicalPlan &ph
     // So we need set here to support rich_format
     ObCodeGenerator code_gen(false /*use_jit*/, CLUSTER_VERSION_4_3_0_0, &(pctx->get_datum_param_store()));
     log_plan->get_optimizer_context().get_session_info()->sys_vars_cache_.set_enable_rich_vector_format(enable_rich_format);
+    log_plan->get_optimizer_context().get_session_info()->init_use_rich_format();
     phy_plan.set_use_rich_format(enable_rich_format);
 
     if (OB_FAIL(do_code_generate(*log_plan, code_gen, phy_plan))) {

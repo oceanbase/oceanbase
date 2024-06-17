@@ -68,6 +68,21 @@ enum class ObGeoRelationType
   T_DFULLYWITHIN = 5
 };
 
+// will define in other file, later
+enum class ObDomainOpType
+{
+  T_INVALID = 0,
+  T_JSON_MEMBER_OF = 1,
+  T_JSON_CONTAINS = 2,
+  T_JSON_OVERLAPS = 3,
+  T_GEO_COVERS,
+  T_GEO_INTERSECTS,
+  T_GEO_DWITHIN,
+  T_GEO_DFULLYWITHIN,
+  T_GEO_COVEREDBY,
+  T_DOMAIN_OP_END,
+};
+
 class ObGeoWkbByteOrderUtil
 {
 public:
@@ -93,6 +108,7 @@ public:
   int append(const char *str, const uint64_t len);
   int append(const ObString &str);
   int write(uint64_t pos, uint32_t val);
+  int read(uint64_t pos, uint32_t &val);
   const ObString string() const;
   uint64_t length() const;
   int append_zero(const uint64_t len);

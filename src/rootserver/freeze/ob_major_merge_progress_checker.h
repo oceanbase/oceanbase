@@ -22,6 +22,7 @@
 #include "rootserver/freeze/ob_major_freeze_util.h"
 #include "rootserver/freeze/ob_major_merge_progress_util.h"
 #include "share/compaction/ob_schedule_batch_size_mgr.h"
+#include "rootserver/freeze/ob_fts_checksum_validate_util.h"
 
 namespace oceanbase
 {
@@ -120,6 +121,10 @@ private:
     bool &is_table_valid,
     ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas);
   int rebuild_map_by_tablet_cnt();
+  int prepare_fts_group(
+    const int64_t table_id,
+    const ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas);
+  int handle_fts_checksum();
 private:
   static const int64_t ADD_RS_EVENT_INTERVAL = 10L * 60 * 1000 * 1000; // 10m
   static const int64_t PRINT_LOG_INTERVAL = 2 * 60 * 1000 * 1000; // 2m
@@ -146,6 +151,7 @@ private:
   compaction::ObTabletStatusMap tablet_status_map_;
   // record each table compaction/verify status
   compaction::ObTableCompactionInfoMap table_compaction_map_; // <table_id, compaction_info>
+  ObFTSGroupArray fts_group_array_;
   ObChecksumValidator ckm_validator_;
   compaction::ObUncompactInfo uncompact_info_;
   // cache of ls_infos in __all_ls_meta_table

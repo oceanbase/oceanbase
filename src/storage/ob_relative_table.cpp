@@ -453,6 +453,11 @@ bool ObRelativeTable::is_storage_index_table() const
   return schema_param_->is_storage_index_table();
 }
 
+bool ObRelativeTable::is_index_local_storage() const
+{
+  return schema_param_->is_index_local_storage();
+}
+
 bool ObRelativeTable::can_read_index() const
 {
   return schema_param_->can_read_index();
@@ -476,6 +481,11 @@ bool ObRelativeTable::is_lob_meta_table() const
 bool ObRelativeTable::is_spatial_index() const
 {
   return schema_param_->is_spatial_index();
+}
+
+bool ObRelativeTable::is_fts_index() const
+{
+  return schema_param_->is_fts_index();
 }
 
 int ObRelativeTable::check_rowkey_in_column_ids(

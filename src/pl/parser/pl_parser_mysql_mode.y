@@ -78,7 +78,7 @@ typedef struct _YYLookaheadToken
 } YYLookaheadToken;
 
 extern ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *prefix, YYLookaheadToken *la_token, int end_token_cnt, ...);
-extern void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s, ...);
+extern void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s);
 extern void obpl_mysql_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, yyconst char *msg, ...);
 
 int obpl_mysql_check_specific_node(const ParseNode *node, const ObItemType type, int *is_contain) {
@@ -128,6 +128,7 @@ int obpl_mysql_wrap_node_into_subquery(ObParseCtx *_parse_ctx, ParseNode *node) 
       parse_result.is_not_utf8_connection_ = _parse_ctx->is_not_utf8_connection_;
       parse_result.connection_collation_ = _parse_ctx->connection_collation_;
       parse_result.sql_mode_ = _parse_ctx->scanner_ctx_.sql_mode_;
+      parse_result.semicolon_start_col_ = INT32_MAX;
       if (0 == parse_sql_stmt(&parse_result)) {
         *node = *parse_result.result_tree_->children_[0];
         node->str_value_ = subquery;
@@ -194,38 +195,41 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 
 /*these tokens can't be used for obj names*/
 %token END_P
-/* reserved key words */
-%token  ALTER BEFORE BY CALL CASE CONDITION CONTINUE CREATE CURRENT_USER CURSOR DECLARE
-        DEFAULT DELETE DETERMINISTIC DROP EACH ELSE ELSEIF EXISTS EXIT FETCH FOR FROM IF IN
-        INDEX INOUT INSERT INTO IS ITERATE LEAVE LIMIT LONG LOOP MODIFIES  NOT ON OR OUT
-        PROCEDURE READS REPEAT REPLACE RESIGNAL RETURN SELECT SIGNAL SQL SQLEXCEPTION
-        SQLSTATE SQLWARNING TABLE THEN TRIGGER UPDATE USING WHEN WHILE
-/* reserved key words only used in ob, in mysql these keywords are non reserved*/
-%token  COMMIT ROLLBACK DO UNTIL 
-
 %token SQL_KEYWORD SQL_TOKEN PARAM_ASSIGN_OPERATOR
 %token PARSER_SYNTAX_ERROR /*used internal*/
 %token <node> IDENT STRING INTNUM DECIMAL_VAL HEX_STRING_VALUE DATE_VALUE SYSTEM_VARIABLE USER_VARIABLE NULLX
 %token <node> USER_NAME
-//*data type keyword*/
-%token TINYINT SMALLINT MEDIUMINT INTEGER BIGINT FLOAT DOUBLE PRECISION NUMBER NUMERIC BIT
-        DATETIME TIMESTAMP TIME DATE YEAR CHARACTER TEXT VARCHAR NCHAR NVARCHAR BINARY VARBINARY UNSIGNED
-        SIGNED ZEROFILL COLLATE SET CHARSET BOOL BOOLEAN BLOB ENUM TINYTEXT MEDIUMTEXT LONGTEXT TINYBLOB
+/* reserved key words */
+%token
+//-----------------------------reserved keyword begin-----------------------------------------------
+        ALTER BEFORE BY CALL CASE CONDITION CONTINUE CREATE CURRENT_USER CURSOR DECLARE
+        DEFAULT DELETE DETERMINISTIC DROP EACH ELSE ELSEIF EXISTS EXIT FETCH FOR FROM IF IN
+        INDEX INOUT INSERT INTO IS ITERATE LEAVE LIMIT LONG LOOP MODIFIES  NOT ON OR OUT
+        PROCEDURE READS REPEAT REPLACE RESIGNAL RETURN SELECT SIGNAL SQL SQLEXCEPTION
+        SQLSTATE SQLWARNING TABLE THEN TRIGGER UPDATE USING WHEN WHILE
+        TINYINT SMALLINT MEDIUMINT INTEGER BIGINT FLOAT DOUBLE PRECISION DEC DECIMAL NUMERIC
+        CHARACTER VARCHAR BINARY VARBINARY UNSIGNED
+        ZEROFILL COLLATE SET BLOB TINYTEXT MEDIUMTEXT LONGTEXT TINYBLOB
         MEDIUMBLOB LONGBLOB VARYING
+/* reserved key words only used in ob, in mysql these keywords are non reserved*/
+        CHARSET COMMIT ROLLBACK DO UNTIL
+//-----------------------------reserved keyword end-------------------------------------------------
 
 /* non reserved key words */
 %token <non_reserved_keyword>
+//-----------------------------non_reserved keyword begin-------------------------------------------
       AFTER AUTHID BEGIN_KEY BINARY_INTEGER BODY C CATALOG_NAME CLASS_ORIGIN CLOSE COLUMN_NAME COMMENT
       CONSTRAINT_CATALOG CONSTRAINT_NAME CONSTRAINT_ORIGIN CONSTRAINT_SCHEMA CONTAINS COUNT CURSOR_NAME
       DATA DEFINER END_KEY EXTEND FOLLOWS FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
       MESSAGE_TEXT MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
-      SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE VALUE
-
+      SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME USER TYPE VALUE DATETIME TIMESTAMP TIME DATE YEAR
+      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE
+//-----------------------------non_reserved keyword end---------------------------------------------
 %right END_KEY
 %left ELSE IF ELSEIF
 
 %nonassoc LOWER_PARENS
-%nonassoc FUNCTION
+%nonassoc FUNCTION ZEROFILL SIGNED UNSIGNED
 %nonassoc PARENS
 %left '(' ')'
 %nonassoc AUTHID INTERFACE
@@ -270,17 +274,17 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> opt_tail_package_name
 %type <ival> opt_replace
 %type <node> create_trigger_stmt drop_trigger_stmt plsql_trigger_source
-%type <node> trigger_definition trigger_event trigger_body pl_obj_access_ref opt_trigger_order
+%type <node> trigger_definition trigger_event trigger_body pl_obj_access_ref
 %type <ival> trigger_time
 /*SQL data type*/
 %type <node> scalar_data_type opt_charset collation opt_collation charset_name collation_name
 %type <node> number_literal literal charset_key opt_float_precision opt_number_precision opt_binary
 %type <node> string_list text_string
 %type <ival> string_length_i opt_string_length_i opt_int_length_i opt_string_length_i_v2
-%type <ival> opt_bit_length_i opt_datetime_fsp_i opt_unsigned_i opt_zerofill_i opt_year_i
+%type <ival> opt_bit_length_i opt_datetime_fsp_i opt_year_i
 %type <ival> int_type_i float_type_i datetime_type_i date_year_type_i text_type_i blob_type_i
 %type <ival> nchar_type_i nvarchar_type_i
-%type <node> variable
+%type <node> variable number_type
 %%
 /*****************************************************************************
  *
@@ -383,6 +387,7 @@ sql_keyword:
     '(' sql_keyword { $$ = NULL; }
   | SQL_KEYWORD { $$ = NULL; }
   | TABLE { $$ = NULL; }
+  | USER { $$ = NULL; }
   | INSERT { $$ = NULL; }
   | DELETE { $$ = NULL; }
   | UPDATE { $$ = NULL; }
@@ -404,6 +409,20 @@ sql_stmt:
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
     }
   | CREATE sql_keyword /*sql stmt tail*/
+    {
+      //read sql query string直到读到token';'或者END_P
+      ParseNode *sql_stmt = NULL;
+      do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+    }
+  | CREATE ROLE /*sql stmt tail*/
+    {
+      //read sql query string直到读到token';'或者END_P
+      ParseNode *sql_stmt = NULL;
+      do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+    }
+  | DROP ROLE /*sql stmt tail*/
     {
       //read sql query string直到读到token';'或者END_P
       ParseNode *sql_stmt = NULL;
@@ -438,14 +457,23 @@ sql_stmt:
       do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
       if (T_SET_PASSWORD == sql_stmt->type_ ||
           T_SET_NAMES == sql_stmt->type_ ||
-          T_SET_CHARSET == sql_stmt->type_) {
+          T_SET_CHARSET == sql_stmt->type_ ||
+          T_SET_ROLE == sql_stmt->type_ ||
+          T_ALTER_USER_DEFAULT_ROLE == sql_stmt->type_) {
         malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
       } else {
         $$ = sql_stmt;
       }
       if(T_VARIABLE_SET == $$->type_) {
+        int64_t child_cnt = $$->num_child_;
         for(int64_t i = 0; i < $$->num_child_; ++i) {
-          if(OB_UNLIKELY(NULL == $$->children_[i] || NULL == $$->children_[i]->children_[1])) {
+          if (T_SET_NAMES == $$->children_[i]->type_ || T_SET_CHARSET == $$->children_[i]->type_) {
+            malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+            if (child_cnt > 1) {
+              obpl_mysql_yyerror(&@1, parse_ctx, "Syntax Error\n");
+              YYERROR;
+            }
+          } else if(OB_UNLIKELY(NULL == $$->children_[i] || NULL == $$->children_[i]->children_[1])) {
             YY_UNEXPECTED_ERROR("value node in SET statement is NULL");
           } else {
             obpl_mysql_wrap_get_user_var_into_subquery(parse_ctx, $$->children_[i]->children_[1]);
@@ -550,14 +578,6 @@ call_sp_stmt:
     CALL sp_call_name opt_sp_cparam_list
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CALL_STMT, 2, $2, $3);
-    }
-  | CALL sp_proc_stmt
-    {
-      if (!parse_ctx->is_inner_parse_) {
-        obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
-        YYERROR; //生成一个语法错误
-      }
-      $$ = $2;
     }
   | CALL PROCEDURE sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
     {
@@ -730,18 +750,37 @@ unreserved_keyword:
   | NO
   | OF
   | OPEN
+  | USER
   | PACKAGE
   | PRAGMA
   | RECORD
   | RETURNS
   | ROW
   | ROWTYPE
+  | ROLE
   | SCHEMA_NAME
   | SECURITY
   | SUBCLASS_ORIGIN
   | TABLE_NAME
   | TYPE
   | VALUE
+  | FOLLOWS
+  | PRECEDES
+  | NATIONAL
+  | DATETIME
+  | TIMESTAMP
+  | TIME
+  | DATE
+  | YEAR
+  | TEXT
+  | NCHAR
+  | NVARCHAR
+  | BOOL
+  | BOOLEAN
+  | ENUM
+  | BIT
+  | FIXED
+  | SIGNED
 ;
 
 /*****************************************************************************
@@ -1043,9 +1082,23 @@ plsql_trigger_source:
 ;
 
 trigger_definition:
-    trigger_time trigger_event ON sp_name FOR EACH ROW opt_trigger_order trigger_body
+    trigger_time trigger_event ON sp_name FOR EACH ROW trigger_body
     {
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_SIMPLE_DML, 4, $2, $4, $8, $9);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_SIMPLE_DML, 4, $2, $4, NULL, $8);
+      $$->int16_values_[0] = $1;
+    }
+    | trigger_time trigger_event ON sp_name FOR EACH ROW FOLLOWS sp_name trigger_body
+    {
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_ORDER, 1, $9);
+      $$->value_ = 1; // FOLLOWS
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_SIMPLE_DML, 4, $2, $4, $$, $10);
+      $$->int16_values_[0] = $1;
+    }
+    | trigger_time trigger_event ON sp_name FOR EACH ROW PRECEDES sp_name trigger_body
+    {
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_ORDER, 1, $9);
+      $$->value_ = 2; // PRECEDES
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_SIMPLE_DML, 4, $2, $4, $$, $10);
       $$->int16_values_[0] = $1;
     }
 
@@ -1059,19 +1112,6 @@ trigger_event:
   | DELETE { malloc_terminal_node($$, parse_ctx->mem_pool_, T_DELETE); }
   | UPDATE { malloc_terminal_node($$, parse_ctx->mem_pool_, T_UPDATE); }
 ;
-
-opt_trigger_order:
-    /*EMPTY*/ { $$ = NULL; }
-  | FOLLOWS sp_name
-   {
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_ORDER, 1, $2);
-      $$->value_ = 1; // FOLLOWS
-   }
-  | PRECEDES sp_name
-    {
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_ORDER, 1, $2);
-      $$->value_ = 2; // PRECEDES
-    }
 
 trigger_body:
   sp_proc_stmt
@@ -1513,12 +1553,18 @@ sp_proc_stmt_if:
 sp_if:
     expr THEN sp_proc_stmts sp_elseifs
     {
+      if (NULL == $1) {
+        YYERROR;
+      }
       ParseNode *proc_stmts = NULL;
       merge_nodes(proc_stmts, parse_ctx->mem_pool_, T_SP_PROC_STMT_LIST, $3);
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_IF, 3, $1, proc_stmts, $4);
     }
   | expr THEN sp_proc_stmts %prec PARENS
     {
+      if (NULL == $1) {
+        YYERROR;
+      }
       ParseNode *proc_stmts = NULL;
       merge_nodes(proc_stmts, parse_ctx->mem_pool_, T_SP_PROC_STMT_LIST, $3);
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_IF, 3, $1, proc_stmts, NULL);
@@ -1791,7 +1837,7 @@ sp_data_type:
 
 opt_sp_decl_default:
     /*Empty*/ { $$ = NULL; }
-  | DEFAULT expr
+  | DEFAULT default_expr
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_DECL_DEFAULT, 1, $2);
     }
@@ -1911,35 +1957,191 @@ opt_if_exists:
 ;
 
 scalar_data_type:
-    int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
+    int_type_i opt_int_length_i %prec LOWER_PARENS
     {
-      malloc_terminal_node($$, parse_ctx->mem_pool_, ($3 || $4) ? $1 + (T_UTINYINT - T_TINYINT) : $1);
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1);
       $$->int16_values_[0] = $2;
-      $$->int16_values_[2] = $4;   /* 2 is the same index as float or number. */
+      $$->int16_values_[2] = 0;   /* 2 is the same index as float or number. */
     }
-  | float_type_i opt_float_precision opt_unsigned_i opt_zerofill_i
+  | int_type_i opt_int_length_i ZEROFILL
+    {
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1 + (T_UTINYINT - T_TINYINT));
+      $$->int16_values_[0] = $2;
+      $$->int16_values_[2] = 1;   /* 2 is the same index as float or number. */
+    }
+  | int_type_i opt_int_length_i SIGNED
+    {
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1);
+      $$->int16_values_[0] = $2;
+      $$->int16_values_[2] = 0;   /* 2 is the same index as float or number. */
+    }
+  | int_type_i opt_int_length_i SIGNED ZEROFILL
+    {
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1 + (T_UTINYINT - T_TINYINT));
+      $$->int16_values_[0] = $2;
+      $$->int16_values_[2] = 1;   /* 2 is the same index as float or number. */
+    }
+  | int_type_i opt_int_length_i UNSIGNED
+    {
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1 + (T_UTINYINT - T_TINYINT));
+      $$->int16_values_[0] = $2;
+      $$->int16_values_[2] = 0;   /* 2 is the same index as float or number. */
+    }
+  | int_type_i opt_int_length_i UNSIGNED ZEROFILL
+    {
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1 + (T_UTINYINT - T_TINYINT));
+      $$->int16_values_[0] = $2;
+      $$->int16_values_[2] = 1;   /* 2 is the same index as float or number. */
+    }
+  | float_type_i opt_float_precision %prec LOWER_PARENS
     {
       if (T_FLOAT != $1 && NULL != $2 && -1 == $2->int16_values_[1]) {
         obpl_mysql_yyerror(&@2, parse_ctx, "double type not support double(M) syntax\n");
         YYERROR;
       }
-      malloc_terminal_node($$, parse_ctx->mem_pool_, ($3 || $4) ? $1 + (T_UFLOAT - T_FLOAT) : $1);
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1);
       if (NULL != $2) {
         $$->int16_values_[0] = $2->int16_values_[0];
         $$->int16_values_[1] = $2->int16_values_[1];
       }
       /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
-      $$->int16_values_[2] = $4;
+      $$->int16_values_[2] = 0;
     }
-  | NUMBER opt_number_precision opt_unsigned_i opt_zerofill_i
+  | float_type_i opt_float_precision ZEROFILL
     {
-      malloc_terminal_node($$, parse_ctx->mem_pool_, ($3 || $4) ? T_UNUMBER : T_NUMBER);
+      if (T_FLOAT != $1 && NULL != $2 && -1 == $2->int16_values_[1]) {
+        obpl_mysql_yyerror(&@2, parse_ctx, "double type not support double(M) syntax\n");
+        YYERROR;
+      }
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1 + (T_UFLOAT - T_FLOAT));
       if (NULL != $2) {
         $$->int16_values_[0] = $2->int16_values_[0];
         $$->int16_values_[1] = $2->int16_values_[1];
       }
       /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
-      $$->int16_values_[2] = $4;
+      $$->int16_values_[2] = 1;
+    }
+  | float_type_i opt_float_precision SIGNED
+    {
+      if (T_FLOAT != $1 && NULL != $2 && -1 == $2->int16_values_[1]) {
+        obpl_mysql_yyerror(&@2, parse_ctx, "double type not support double(M) syntax\n");
+        YYERROR;
+      }
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1);
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 0;
+    }
+  | float_type_i opt_float_precision SIGNED ZEROFILL
+    {
+      if (T_FLOAT != $1 && NULL != $2 && -1 == $2->int16_values_[1]) {
+        obpl_mysql_yyerror(&@2, parse_ctx, "double type not support double(M) syntax\n");
+        YYERROR;
+      }
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1 + (T_UFLOAT - T_FLOAT));
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 1;
+    }
+  | float_type_i opt_float_precision UNSIGNED
+    {
+      if (T_FLOAT != $1 && NULL != $2 && -1 == $2->int16_values_[1]) {
+        obpl_mysql_yyerror(&@2, parse_ctx, "double type not support double(M) syntax\n");
+        YYERROR;
+      }
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1 + (T_UFLOAT - T_FLOAT));
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 0;
+    }
+  | float_type_i opt_float_precision UNSIGNED ZEROFILL
+    {
+      if (T_FLOAT != $1 && NULL != $2 && -1 == $2->int16_values_[1]) {
+        obpl_mysql_yyerror(&@2, parse_ctx, "double type not support double(M) syntax\n");
+        YYERROR;
+      }
+      malloc_terminal_node($$, parse_ctx->mem_pool_, $1 + (T_UFLOAT - T_FLOAT));
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 1;
+    }
+  | number_type opt_number_precision %prec LOWER_PARENS
+    {
+      (void)($1);
+      malloc_terminal_node($$, parse_ctx->mem_pool_, T_NUMBER);
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 0;
+    }
+  | number_type opt_number_precision ZEROFILL
+    {
+      (void)($1);
+      malloc_terminal_node($$, parse_ctx->mem_pool_, T_UNUMBER);
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 1;
+    }
+  | number_type opt_number_precision SIGNED
+    {
+      (void)($1);
+      malloc_terminal_node($$, parse_ctx->mem_pool_, T_NUMBER);
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 0;
+    }
+  | number_type opt_number_precision SIGNED ZEROFILL
+    {
+      (void)($1);
+      malloc_terminal_node($$, parse_ctx->mem_pool_, T_UNUMBER);
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 1;
+    }
+  | number_type opt_number_precision UNSIGNED
+    {
+      (void)($1);
+      malloc_terminal_node($$, parse_ctx->mem_pool_, T_UNUMBER);
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 0;
+    }
+  | number_type opt_number_precision UNSIGNED ZEROFILL
+    {
+      (void)($1);
+      malloc_terminal_node($$, parse_ctx->mem_pool_, T_UNUMBER);
+      if (NULL != $2) {
+        $$->int16_values_[0] = $2->int16_values_[0];
+        $$->int16_values_[1] = $2->int16_values_[1];
+      }
+      /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+      $$->int16_values_[2] = 1;
     }
   | datetime_type_i opt_datetime_fsp_i
     {
@@ -2080,22 +2282,10 @@ scalar_data_type:
     $$->int32_values_[0] = 0;//not used so far
     $$->int32_values_[1] = 0; /* is char */
   }
-  | pl_obj_access_ref
+  | JSON
 	{
-    if ($1 != NULL && $1->type_ == T_SP_OBJ_ACCESS_REF && 
-        $1->num_child_ == 2 && 
-        $1->children_[0] != NULL &&
-        $1->children_[0]->type_ == T_SP_ACCESS_NAME &&
-        $1->children_[0]->num_child_ == 3 &&
-        $1->children_[0]->children_[0] == NULL && 
-        $1->children_[0]->children_[1] == NULL &&
-        nodename_equal($1->children_[0]->children_[2], "JSON", 4)) {
-      malloc_terminal_node($$, parse_ctx->mem_pool_, T_JSON);
-      $$->int32_values_[0] = 0; 
-    } else {
-      obpl_mysql_yyerror(&@1, parse_ctx, "Syntax Error\n");
-      YYERROR;
-    }
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_JSON);
+    $$->int32_values_[0] = 0;
   }
   | pl_obj_access_ref '%' ROWTYPE
   {
@@ -2133,6 +2323,12 @@ datetime_type_i:
   | TIMESTAMP   { $$ = T_TIMESTAMP; }
   | TIME        { $$ = T_TIME; }
 ;
+
+number_type:
+DEC { $$ = NULL; }
+| DECIMAL { $$ = NULL; }
+| NUMERIC { $$ = NULL; }
+| FIXED { $$ = NULL; }
 
 date_year_type_i:
     DATE        { $$ = T_DATE; }
@@ -2347,17 +2543,6 @@ opt_string_length_i:
     {
       $$ = 1;
     }
-;
-
-opt_unsigned_i:
-    UNSIGNED    { $$ = 1; }
-  | SIGNED      { $$ = 0; }
-  | /*EMPTY*/   { $$ = 0; }
-;
-
-opt_zerofill_i:
-    ZEROFILL    { $$ = 1; }
-  | /*EMPTY*/   { $$ = 0; }
 ;
 
 opt_binary:
@@ -2605,6 +2790,7 @@ ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *pref
     parse_result.is_not_utf8_connection_ = parse_ctx->is_not_utf8_connection_;
     parse_result.connection_collation_ = parse_ctx->connection_collation_;
     parse_result.sql_mode_ = parse_ctx->scanner_ctx_.sql_mode_;
+    parse_result.semicolon_start_col_ = INT32_MAX;
   }
   if (sql_str_len <= 0) {
     //do nothing
@@ -2628,12 +2814,11 @@ ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *pref
   return sql_node;
 }
 
-void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s, ...)
+void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s)
 {
   if (OB_LIKELY(NULL != parse_ctx)) {
-    va_list ap;
-    va_start(ap, s);
-    vsnprintf(parse_ctx->global_errmsg_, MAX_ERROR_MSG, s, ap);
+    strncpy(parse_ctx->global_errmsg_, s, MAX_ERROR_MSG);
+    parse_ctx->global_errmsg_[MAX_ERROR_MSG - 1] = '\0';
     // vfprintf(stderr, s, ap);
     if (OB_LIKELY(NULL != yylloc)) {
       ObParseErrorInfo *error_info = (ObParseErrorInfo*)parse_malloc(sizeof(ObParseErrorInfo), parse_ctx->mem_pool_);
@@ -2648,7 +2833,6 @@ void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s, ...)
         parse_ctx->cur_error_info_ = error_info;
       }
     }
-    va_end(ap);
   }
 }
 

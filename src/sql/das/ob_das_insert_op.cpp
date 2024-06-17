@@ -89,7 +89,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator>::write_rows(cons
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("insert rows to access service failed", K(ret));
     }
-  } else if (!(ctdef.is_ignore_ || ctdef.table_param_.get_data_table().is_spatial_index())
+  } else if (!(ctdef.is_ignore_ || ctdef.table_param_.get_data_table().is_domain_index())
       && 0 == affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected_rows after do insert", K(affected_rows), K(ret));
@@ -157,10 +157,20 @@ int ObDASInsertOp::insert_row_with_fetch()
   ObAccessService *as = MTL(ObAccessService *);
   ObDMLBaseParam dml_param;
   ObDASDMLIterator dml_iter(ins_ctdef_, insert_buffer_, op_alloc_);
+  storage::ObStoreCtxGuard store_ctx_guard;
+
   if (ins_ctdef_->table_rowkey_types_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_rowkey_types is invalid", K(ret));
-  } else if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef_, *ins_rtdef_, *snapshot_, write_branch_id_, op_alloc_, dml_param))) {
+  } else if (OB_FAIL(as->get_write_store_ctx_guard(ls_id_,
+                                                   ins_rtdef_->timeout_ts_,
+                                                   *trans_desc_,
+                                                   *snapshot_,
+                                                   write_branch_id_,
+                                                   store_ctx_guard))) {
+    LOG_WARN("fail to get_write_store_ctx_guard", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef_, *ins_rtdef_,
+      *snapshot_, write_branch_id_, op_alloc_, store_ctx_guard, dml_param))) {
     LOG_WARN("init dml param failed", K(ret), KPC_(ins_ctdef), KPC_(ins_rtdef));
   } else if (OB_ISNULL(buf = op_alloc_.alloc(sizeof(ObDASConflictIterator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -200,12 +210,25 @@ int ObDASInsertOp::insert_row_with_fetch()
         }
       }
     }
+    if (OB_FAIL(ret) && OB_NOT_NULL(duplicated_rows)) {
+      ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
+      duplicated_rows = NULL;
+    }
   }
   ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
   for (int64_t i = 0; OB_SUCC(ret) && i < related_ctdefs_.count(); ++i) {
     const ObDASInsCtDef *index_ins_ctdef = static_cast<const ObDASInsCtDef*>(related_ctdefs_.at(i));
     ObDASInsRtDef *index_ins_rtdef = static_cast<ObDASInsRtDef*>(related_rtdefs_.at(i));
     ObTabletID index_tablet_id = related_tablet_ids_.at(i);
+    ObDASMLogDMLIterator mlog_iter(index_tablet_id, dml_param, &dml_iter, DAS_OP_TABLE_INSERT);
+    ObNewRowIterator *new_iter = nullptr;
+    if (index_ins_ctdef->table_param_.get_data_table().is_mlog_table()
+        && !index_ins_ctdef->is_access_mlog_as_master_table_) {
+      new_iter = &mlog_iter;
+    } else {
+      new_iter = &dml_iter;
+    }
+
     if (OB_FAIL(dml_iter.rewind(index_ins_ctdef))) {
       LOG_WARN("rewind dml iter failed", K(ret));
     } else if (OB_FAIL(ObDMLService::init_dml_param(*index_ins_ctdef,
@@ -213,6 +236,7 @@ int ObDASInsertOp::insert_row_with_fetch()
                                                     *snapshot_,
                                                     write_branch_id_,
                                                     op_alloc_,
+                                                    store_ctx_guard,
                                                     dml_param))) {
       LOG_WARN("init index dml param failed", K(ret), KPC(index_ins_ctdef), KPC(index_ins_rtdef));
     }
@@ -226,7 +250,7 @@ int ObDASInsertOp::insert_row_with_fetch()
       duplicated_column_ids = &(index_ins_ctdef->column_ids_);
     }
 
-    while (OB_SUCC(ret) && OB_SUCC(dml_iter.get_next_row(insert_row))) {
+    while (OB_SUCC(ret) && OB_SUCC(new_iter->get_next_row(insert_row))) {
       ObNewRowIterator *duplicated_rows = NULL;
       if (OB_ISNULL(insert_row)) {
         ret = OB_ERR_UNEXPECTED;
@@ -258,8 +282,13 @@ int ObDASInsertOp::insert_row_with_fetch()
           } else {
             // 需要释放iter的内存， 否则会内存泄漏
             ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
+            duplicated_rows = NULL;
           }
         }
+      }
+      if (OB_FAIL(ret) && OB_NOT_NULL(duplicated_rows)) {
+        ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
+        duplicated_rows = NULL;
       }
     }
     ret = OB_ITER_END == ret ? OB_SUCCESS : ret;

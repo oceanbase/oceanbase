@@ -193,6 +193,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              palf_handle_impl_map_(64),  // 指定min_size=64
                              last_palf_epoch_(0),
                              rebuild_replica_log_lag_threshold_(0),
+                             enable_log_cache_(false),
                              diskspace_enough_(true),
                              tenant_id_(0),
                              is_inited_(false),
@@ -277,6 +278,7 @@ int PalfEnvImpl::init(
     tenant_id_ = tenant_id;
     is_inited_ = true;
     is_running_ = true;
+    enable_log_cache_ = options.enable_log_cache_;
     PALF_LOG(INFO, "PalfEnvImpl init success", K(ret), K(self_), KPC(this));
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
@@ -366,6 +368,7 @@ void PalfEnvImpl::destroy()
   tmp_log_dir_[0] = '\0';
   disk_options_wrapper_.reset();
   rebuild_replica_log_lag_threshold_ = 0;
+  enable_log_cache_ = false;
 }
 
 // NB: not thread safe
@@ -846,12 +849,13 @@ PalfEnvImpl::RemoveStaleIncompletePalfFunctor::RemoveStaleIncompletePalfFunctor(
 int PalfEnvImpl::RemoveStaleIncompletePalfFunctor::func(const dirent *entry)
 {
   int ret = OB_SUCCESS;
+  char *saveptr = NULL;
   char file_name[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
   const char *d_name = entry->d_name;
   MEMCPY(file_name, d_name, strlen(d_name));
-  char *tmp = strtok(file_name, "_");
+  char *tmp = strtok_r(file_name, "_", &saveptr);
   char *timestamp_str = NULL;
-  if (NULL == tmp || NULL == (timestamp_str = strtok(NULL, "_"))) {
+  if (NULL == tmp || NULL == (timestamp_str = strtok_r(NULL, "_", &saveptr))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "unexpected format", K(ret), K(tmp), K(file_name));
   } else {
@@ -923,6 +927,7 @@ int PalfEnvImpl::update_options(const PalfOptions &options)
   } else if (OB_FAIL(disk_options_wrapper_.update_disk_options(options.disk_options_))) {
     PALF_LOG(WARN, "update_disk_options failed", K(ret), K(options));
   } else {
+    enable_log_cache_ = options.enable_log_cache_;
     PALF_LOG(INFO, "update_options successs", K(options), KPC(this));
   }
   return ret;
@@ -937,6 +942,7 @@ int PalfEnvImpl::get_options(PalfOptions &options)
     options.disk_options_ = disk_options_wrapper_.get_disk_opts_for_recycling_blocks();
     options.compress_options_ = log_rpc_.get_compress_opts();
     options.rebuild_replica_log_lag_threshold_ = rebuild_replica_log_lag_threshold_;
+    options.enable_log_cache_ = enable_log_cache_;
   }
   return ret;
 }

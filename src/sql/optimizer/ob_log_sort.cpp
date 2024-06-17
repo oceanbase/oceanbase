@@ -136,7 +136,7 @@ int ObLogSort::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
           LOG_WARN("failed to push back expr", K(ret));
         }
       }
-      if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
+      if (FAILEDx(ObLogicalOperator::get_op_exprs(all_exprs))) {
         LOG_WARN("failed to get op exprs", K(ret));
       } else { /*do nothing*/ }
     }

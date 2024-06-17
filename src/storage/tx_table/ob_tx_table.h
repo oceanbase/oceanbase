@@ -138,11 +138,11 @@ public:
 
   /**
    * @brief check whether the row key is locked by tx id
-   * 
-   * @param[in] read_trans_id 
-   * @param[in] data_trans_id 
-   * @param[in] sql_sequence 
-   * @param[out] lock_state 
+   *
+   * @param[in] read_trans_id
+   * @param[in] data_trans_id
+   * @param[in] sql_sequence
+   * @param[out] lock_state
    */
   int check_row_locked(ObReadTxDataArg &read_tx_data_arg,
                        const transaction::ObTransID &read_tx_id,
@@ -151,10 +151,10 @@ public:
 
   /**
    * @brief check whether transaction data_tx_id with sql_sequence is readable. (sql_sequence may be unreadable for txn or stmt rollback)
-   * 
-   * @param[in] data_tx_id 
-   * @param[in] sql_sequence 
-   * @param[out] can_read 
+   *
+   * @param[in] data_tx_id
+   * @param[in] sql_sequence
+   * @param[out] can_read
    */
   int check_sql_sequence_can_read(ObReadTxDataArg &read_tx_data_arg,
                                   const transaction::ObTxSEQ &sql_sequence,
@@ -243,7 +243,7 @@ public:
    *
    * @param[in & out] tx_data The pointer of tx data to be supplemented which is in tx ctx.
    */
-  int supplement_undo_actions_if_exist(ObTxData *tx_data);
+  int supplement_tx_op_if_exist(ObTxData *tx_data);
 
   int prepare_for_safe_destroy();
 

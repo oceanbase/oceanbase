@@ -442,7 +442,9 @@ int FileDirectoryUtils::delete_directory_rec(const char *path)
       }
     }
   }
-  if (OB_FAIL(delete_directory(path))) {
+  if (OB_FAIL(ret)) {
+    LIB_LOG(WARN, "delete directory rec failed", K(ret), K(path));
+  } else if (OB_FAIL(delete_directory(path))) {
     LIB_LOG(WARN, "delete_directory failed", K(ret), K(path));
   }
   if (NULL != dir) {

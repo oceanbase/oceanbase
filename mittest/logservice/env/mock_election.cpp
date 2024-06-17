@@ -90,9 +90,10 @@ int MockElection::change_leader_to(const common::ObAddr &dest_addr)
   return ret;
 }
 
-int MockElection::revoke(const RoleChangeReason &reason)
+int MockElection::temporarily_downgrade_protocol_priority(const int64_t time_us, const char *reason)
 {
   int ret = OB_SUCCESS;
+  UNUSED(time_us);
   UNUSED(reason);
   return ret;
 }

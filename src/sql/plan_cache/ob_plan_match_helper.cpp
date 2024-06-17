@@ -112,11 +112,6 @@ int ObPlanMatchHelper::match_plan(const ObPlanCacheCtx &pc_ctx,
                 LOG_WARN("failed to set refactored", K(ret));
               }
             }
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(das_ctx.add_candi_table_loc(out_tbl_locations.at(i).get_loc_meta(), src_location))) {
-                LOG_WARN("add candi table loc failed", K(ret), K(out_tbl_locations.at(i).get_loc_meta()), K(src_location));
-              }
-            }
           }
         }
       }

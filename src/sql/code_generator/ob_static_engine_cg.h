@@ -191,7 +191,7 @@ public:
                                        ObLogicalOperator *op,
                                        bool is_root_job = true);
   inline static void exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
-                                         bool &found);
+                                                 const bool is_column_store_tbl, bool &found);
   inline uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
 
   // detect physical operator type from logic operator.
@@ -448,6 +448,8 @@ private:
     const ObSortCollations &collations,
     ObSortFuncs &sort_funcs,
     const ObIArray<ObExpr*> &sort_exprs);
+
+  int fill_compress_type(ObLogSort &op, ObCompressorType &compr_type);
   int check_not_support_cmp_type(
     const ObSortCollations &collations,
     const ObIArray<ObExpr*> &sort_exprs);
@@ -556,6 +558,8 @@ private:
   int generate_sort_exprs(const bool is_store_sortkey_separately, ObLogSort &op, ObSortVecSpec &spec,
                           ObIArray<OrderItem> &sk_keys);
 
+  int extract_all_mview_ids(const ObIArray<ObRawExpr *> &exprs);
+  int extract_all_mview_ids(const ObRawExpr *expr);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)
@@ -587,11 +591,12 @@ private:
   // all self_produced exprs of current operator
   ObSEArray<ObRawExpr *, 8> cur_op_self_produced_exprs_;
   //仅供递归cte使用，因为oracle的cte是不允许嵌套的，所以可以采用这种方式
-  common::ObSEArray<uint64_t, 10> fake_cte_tables_;
+  common::ObSEArray<ObOpSpec *, 10> fake_cte_specs_;
   ObDmlCgService dml_cg_service_;
   ObTscCgService tsc_cg_service_;
   uint64_t cur_cluster_version_;
   common::ObSEArray<BatchExecParamCache, 8> batch_exec_param_caches_;
+  common::ObSEArray<uint64_t, 4> mview_ids_;
 
 };
 

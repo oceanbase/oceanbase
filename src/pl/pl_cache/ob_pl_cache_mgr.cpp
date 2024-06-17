@@ -27,13 +27,14 @@ int ObPLCacheMgr::get_pl_object(ObPlanCache *lib_cache, ObILibCacheCtx &ctx, ObC
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pc_get_pl_object);
+  ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
   //guard.get_cache_obj() = NULL;
   ObGlobalReqTimeService::check_req_timeinfo();
-  if (OB_ISNULL(lib_cache)) {
+  if (OB_ISNULL(lib_cache) || OB_ISNULL(pc_ctx.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
   } else {
-    ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
+    pc_ctx.key_.sys_vars_str_ = pc_ctx.session_info_->get_sys_var_in_pc_str();
     if (OB_FAIL(lib_cache->get_cache_obj(ctx, &pc_ctx.key_, guard))) {
       PL_CACHE_LOG(DEBUG, "failed to get plan", K(ret));
       // if schema expired, update pl cache;
@@ -81,7 +82,10 @@ int ObPLCacheMgr::get_pl_cache(ObPlanCache *lib_cache, ObCacheObjGuard& guard, O
   int ret = OB_SUCCESS;
   ObGlobalReqTimeService::check_req_timeinfo();
   pc_ctx.handle_id_ = guard.get_ref_handle();
-  if (OB_FAIL(get_pl_object(lib_cache, pc_ctx, guard))) {
+  if (OB_NOT_NULL(pc_ctx.session_info_) &&
+      false == pc_ctx.session_info_->get_local_ob_enable_pl_cache()) {
+    // do nothing
+  } else if (OB_FAIL(get_pl_object(lib_cache, pc_ctx, guard))) {
     PL_CACHE_LOG(DEBUG, "fail to get plan", K(ret));
   } else if (OB_ISNULL(guard.get_cache_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -90,17 +94,10 @@ int ObPLCacheMgr::get_pl_cache(ObPlanCache *lib_cache, ObCacheObjGuard& guard, O
     // update pl func/package stat
     pl::PLCacheObjStat *stat = NULL;
     int64_t current_time = ObTimeUtility::current_time();
-    if (ObLibCacheNameSpace::NS_PKG != guard.get_cache_obj()->get_ns() &&
-        ObLibCacheNameSpace::NS_CALLSTMT != guard.get_cache_obj()->get_ns()) {
-      pl::ObPLFunction* pl_func = static_cast<pl::ObPLFunction*>(guard.get_cache_obj());
-      stat = &pl_func->get_stat_for_update();
-      ATOMIC_INC(&(stat->hit_count_));
-      ATOMIC_STORE(&(stat->last_active_time_), current_time);
-    } else {
-      //todo:support package
-      //pl::ObPLPackage* pl_pkg = static_cast<pl::ObPLPackage*>(guard.get_cache_obj());
-      //stat = &pl_pkg->get_stat_for_update();
-    }
+    pl::ObPLCacheObject* pl_object = static_cast<pl::ObPLFunction*>(guard.get_cache_obj());
+    stat = &pl_object->get_stat_for_update();
+    ATOMIC_INC(&(stat->hit_count_));
+    ATOMIC_STORE(&(stat->last_active_time_), current_time);
   }
   return ret;
 }
@@ -110,14 +107,15 @@ int ObPLCacheMgr::add_pl_object(ObPlanCache *lib_cache,
                                       ObILibCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
+  ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
   if (OB_ISNULL(cache_obj)) {
     ret = OB_INVALID_ARGUMENT;
     PL_CACHE_LOG(WARN, "invalid cache obj", K(ret));
-  } else if (OB_ISNULL(lib_cache)) {
+  } else if (OB_ISNULL(lib_cache) || OB_ISNULL(pc_ctx.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
   } else {
-    ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
+    pc_ctx.key_.sys_vars_str_ = pc_ctx.session_info_->get_sys_var_in_pc_str();
     do {
       if (OB_FAIL(lib_cache->add_cache_obj(ctx, &pc_ctx.key_, cache_obj)) && OB_OLD_SCHEMA_VERSION == ret) {
         PL_CACHE_LOG(INFO, "schema in pl cache value is old, start to remove pl object", K(ret), K(pc_ctx.key_));
@@ -140,6 +138,9 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
   if (OB_ISNULL(lib_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
+  } else if (OB_NOT_NULL(pc_ctx.session_info_) &&
+              false == pc_ctx.session_info_->get_local_ob_enable_pl_cache()) {
+    // do nothing
   } else if (OB_ISNULL(pl_object)) {
      ret = OB_INVALID_ARGUMENT;
      PL_CACHE_LOG(WARN, "invalid physical plan", K(ret));

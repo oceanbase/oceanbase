@@ -88,6 +88,7 @@ public:
   int init(int64_t data_version,
            UpgradeMode mode,
            common::ObMySQLProxy &sql_proxy,
+           common::ObOracleSqlProxy &oracle_sql_proxy,
            obrpc::ObSrvRpcProxy &rpc_proxy,
            obrpc::ObCommonRpcProxy &common_proxy,
            share::schema::ObMultiVersionSchemaService &schema_service,
@@ -106,6 +107,7 @@ protected:
   uint64_t tenant_id_;
   UpgradeMode mode_;
   common::ObMySQLProxy *sql_proxy_;
+  common::ObOracleSqlProxy *oracle_sql_proxy_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   obrpc::ObCommonRpcProxy *common_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
@@ -121,6 +123,7 @@ public:
   virtual ~ObUpgradeProcesserSet();
   int init(ObBaseUpgradeProcessor::UpgradeMode mode,
            common::ObMySQLProxy &sql_proxy,
+           common::ObOracleSqlProxy &oracle_sql_proxy,
            obrpc::ObSrvRpcProxy &rpc_proxy,
            obrpc::ObCommonRpcProxy &common_proxy,
            share::schema::ObMultiVersionSchemaService &schema_service,
@@ -165,12 +168,13 @@ class ObUpgradeChecker
 {
 public:
   static bool check_data_version_exist(const uint64_t version);
+  static bool check_data_version_valid_for_backup(const uint64_t data_version);
   static bool check_cluster_version_exist(const uint64_t version);
   static int get_data_version_by_cluster_version(
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 10;
+  static const int64_t DATA_VERSION_NUM = 16;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -223,7 +227,35 @@ private:
 };
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 2)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 1)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 4, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 1)
+
+class ObUpgradeFor4310Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4310Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4310Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_create_replication_role_in_oracle();
+};
+
+class ObUpgradeFor4320Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4320Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4320Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_reset_compat_version();
+  int try_reset_version(const uint64_t tenant_id, const char *var_name);
+};
+
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

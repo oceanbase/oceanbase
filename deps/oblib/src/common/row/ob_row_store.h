@@ -302,6 +302,7 @@ int ObRowStore::append_row_store(const T &other_store)
     int64_t col_count = other_store.get_col_count();
     ObObj *cell = NULL;
     if (OB_ISNULL(cell = static_cast<ObObj *>(alloca(sizeof(ObObj) * col_count)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "fail to alloc obj array", K(ret));
     } else {
       cur_row.cells_ = cell;

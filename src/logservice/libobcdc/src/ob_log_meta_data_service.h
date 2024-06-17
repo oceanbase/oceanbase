@@ -36,6 +36,7 @@ namespace libobcdc
 class IObLogSysLsTaskHandler;
 class ObLogSysTableHelper;
 class IObLogErrHandler;
+class IObLogPartTransParser;
 
 class ObLogMetaDataService
 {
@@ -52,9 +53,11 @@ public:
       IObLogSysLsTaskHandler *sys_ls_handler,
       common::ObMySQLProxy *proxy,
       IObLogErrHandler *err_handler,
+      IObLogPartTransParser &part_trans_parser,
       const int64_t cluster_id,
       const ObLogConfig &cfg,
-      const int64_t start_seq);
+      const int64_t start_seq,
+      const bool enable_direct_load_inc);
   void destroy();
 
   static ObLogMetaDataService &get_instance();
@@ -117,6 +120,7 @@ private:
   ObLogMetaDataBaselineLoader baseline_loader_;
   ObLogMetaDataReplayer incremental_replayer_;
   ObLogMetaDataFetcherDispatcher fetcher_dispatcher_;
+  IObLogPartTransParser *part_trans_parser_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogMetaDataService);
 };

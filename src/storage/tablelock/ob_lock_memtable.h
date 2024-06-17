@@ -41,7 +41,7 @@ namespace tablelock
 struct ObLockParam;
 
 class ObLockMemtable
-  : public memtable::ObIMemtable,
+  : public ObIMemtable,
     public storage::checkpoint::ObCommonCheckpoint
 {
 public:
@@ -121,12 +121,12 @@ public:
   virtual bool can_be_minor_merged() override;
 
   int on_memtable_flushed() override;
-  bool is_frozen_memtable() const override;
-  bool is_active_memtable() const override;
+  bool is_frozen_memtable() override;
+  bool is_active_memtable() override;
 
   // =========== INHERITED FROM ObCommonCheckPoint ==========
   virtual share::SCN get_rec_scn();
-  virtual int flush(share::SCN recycle_scn, bool need_freeze = true);
+  virtual int flush(share::SCN recycle_scn, int64_t trace_id, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const;
 
@@ -198,7 +198,7 @@ private:
                               const ObTableLockMode &lock_mode,
                               const ObTransID &conflict_tx_id,
                               ObFunction<int(bool &need_wait)> &recheck_f);
-  int register_into_deadlock_detector_(const ObStoreCtx &ctx,
+  int register_into_deadlock_detector_(const storage::ObStoreCtx &ctx,
                                        const ObTableLockOp &lock_op);
   int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);
 

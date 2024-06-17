@@ -35,7 +35,7 @@ class IObLogRpc
 public:
   virtual ~IObLogRpc() { }
 
-  // Reuest start LSN by timestamp
+  // Request start LSN by timestamp
   virtual int req_start_lsn_by_tstamp(const uint64_t tenant_id,
       const common::ObAddr &svr,
       obrpc::ObCdcReqStartLSNByTsReq &req,

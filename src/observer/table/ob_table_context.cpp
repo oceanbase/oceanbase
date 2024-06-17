@@ -154,6 +154,8 @@ int ObTableCtx::construct_column_items()
           LOG_WARN("fail to get cascaded column ids", K(ret), K(item), K(*col_schema));
         } else if (OB_FAIL(column_items_.push_back(item))) {
           LOG_WARN("fail to push back column item", K(ret), K_(column_items), K(item));
+        } else if (!has_lob_column_ && is_lob_storage(item.column_type_)) {
+          has_lob_column_ = true;
         }
       }
     }
@@ -479,15 +481,12 @@ int ObTableCtx::convert_lob(ObIAllocator &allocator, ObObj &obj)
 {
   int ret = OB_SUCCESS;
 
-  ObString full_data;
   if (obj.is_persist_lob()) {
     // do nothing
-  } else if (obj.has_lob_header()) {
+  } else if (obj.has_lob_header()) { // we add lob header in write_datum
     ret = OB_ERR_UNEXPECTED;
-    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "lob object should have lob header");
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "lob object should not have lob header");
     LOG_WARN("object should not have lob header", K(ret), K(obj));
-  } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj, allocator))) { // add lob header
-    LOG_WARN("fail to add lob header to obj", K(ret), K(obj));
   }
 
   return ret;
@@ -891,8 +890,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   const ObString &index_name = query.get_index_name();
   const ObIArray<ObString> &select_columns = query.get_select_columns();
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
-  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query() || is_ttl_table_
-                                  || (has_filter && !is_htable());
+  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query() || (has_filter && !is_htable());
   const ObColumnSchemaV2 *column_schema = nullptr;
   operation_type_ = ObTableOperationType::Type::SCAN;
   // init is_weak_read_,scan_order_
@@ -901,8 +899,8 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   // init limit_,offset_
   bool is_query_with_filter = query.get_htable_filter().is_valid() ||
                               query.get_filter_string().length() > 0;
-  limit_ = is_query_with_filter ? -1 : query.get_limit(); // // query with filter can't pushdown limit
-  offset_ = query.get_offset();
+  limit_ = is_query_with_filter || is_ttl_table() ? -1 : query.get_limit(); // query with filter or ttl table can't pushdown limit
+  offset_ = is_ttl_table() ? 0 : query.get_offset();
   // init is_index_scan_
   if (index_name.empty() || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) { // scan with primary key
     index_table_id_ = ref_table_id_;
@@ -932,6 +930,13 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
     } else {
       // select_col_ids_ is same order with schema
       int64_t cell_idx = 0;
+      ObSEArray<ObString, 4> ttl_columns;
+      if (is_ttl_table_) {
+        const ObString &ttl_definition = table_schema_->get_ttl_definition();
+        if (OB_FAIL(ObTTLUtil::get_ttl_columns(ttl_definition, ttl_columns))) {
+          LOG_WARN("fail to get ttl columns", K(ret));
+        }
+      }
       for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
           OB_SUCC(ret) && iter != table_schema_->column_end(); ++iter, cell_idx++) {
         const ObColumnSchemaV2 *column_schema = *iter;
@@ -953,7 +958,8 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
               OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
             is_index_back_ = true;
           }
-        } else if (has_exist_in_columns(select_columns, column_schema->get_column_name_str())) {
+        } else if (has_exist_in_columns(select_columns, column_schema->get_column_name_str())
+            || (is_ttl_table_ && has_exist_in_array(ttl_columns, column_schema->get_column_name_str()))) {
           if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
             LOG_WARN("fail to add column id", K(ret));
           } else if (is_index_scan_ && !is_index_back_ &&
@@ -963,11 +969,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
         }
       }
       if (OB_SUCC(ret)) {
-        if ((select_col_ids_.count() != select_columns.count()) && !select_all_columns) {
-          ret = OB_ERR_COLUMN_NOT_FOUND;
-          LOG_WARN("select_col_ids or select_metas count is not equal to select_columns",
-              K(select_columns), K(select_col_ids_));
-        } else if (!select_all_columns) {
+        if (!select_all_columns) {
           // query_col_ids_ is user query order
           for (int64_t i = 0; OB_SUCC(ret) && i < select_columns.count(); i++) {
             if (OB_ISNULL(column_schema = table_schema_->get_column_schema(select_columns.at(i)))) {
@@ -1774,6 +1776,8 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
   check insert up operation can use put implement or not
   1. can not have any index.
   2. all column must be filled.
+  3. ob-hbase use put cause CDC has supported
+  4. tableapi with full binlog image can not use put
 */
 int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
 {
@@ -1786,6 +1790,9 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
   } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid operation type", K(ret), K_(operation_type));
+  } else if (has_lob_column()) {
+    // has lob column cannot use put: may cause lob storeage leak when put row to lob meta table
+    can_use_put = false;
   } else if (is_htable()) { // htable has no index and alway full filled.
     can_use_put = true;
   } else if (is_client_set_put_ && !related_index_ids_.empty()) {
@@ -1815,8 +1822,11 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
     }
   }
 
-  if (OB_SUCC(ret) && can_use_put && !is_total_quantity_log()) {
+  if (OB_SUCC(ret) && can_use_put) {
     use_put = true;
+    if (!is_htable() && is_total_quantity_log()) { // tableapi with full binlog image can not use put
+      use_put = false;
+    }
   }
 
   return ret;

@@ -544,6 +544,7 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
   for (int64_t i = 1; OB_SUCC(ret) && enable_das_group_rescan_ && i < get_num_of_child(); i++) {
     ObLogicalOperator *child = get_child(i);
     bool contains_invalid_startup = false;
+    bool contains_limit = false;
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
@@ -914,6 +915,55 @@ int ObLogSubPlanFilter::get_sub_qb_names(ObIArray<ObString> &sub_qb_names)
     } else if (OB_FAIL(sub_qb_names.push_back(qb_name))) {
       LOG_WARN("failed to push back", K(ret));
     } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  // prepare onetime exprs first.
+  for (int64_t i = 0; i < get_num_of_child() && OB_SUCC(ret); i++) {
+    if (!get_onetime_idxs().has_member(i)) {
+      // do nothing if it's not onetime expr
+    } else if (OB_ISNULL(child = get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child op is null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(child->open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+      LOG_WARN("open px resource analyze failed", K(ret));
+    } else if (OB_FAIL(SMART_CALL(child->close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+      LOG_WARN("open px resource analyze failed", K(ret));
+    }
+  }
+  // then schedule all other children
+  for (int64_t i = 0; i < get_num_of_child() && OB_SUCC(ret); i++) {
+    if (get_onetime_idxs().has_member(i)) {
+      // do nothing if it's onetime expr
+    } else if (OB_ISNULL(child = get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child op is null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(child->open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_ARG)))) {
+      LOG_WARN("open px resource analyze failed", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  // close all non-onetime-expr children
+  for (int64_t i = 0; i < get_num_of_child() && OB_SUCC(ret); i++) {
+    if (get_onetime_idxs().has_member(i)) {
+      // do nothing if it's onetime expr
+    } else if (OB_ISNULL(child = get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child op is null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(child->close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_ARG)))) {
+      LOG_WARN("open px resource analyze failed", K(ret));
+    }
   }
   return ret;
 }

@@ -32,6 +32,7 @@ public:
   typedef enum {
     STATE_L2_INSERT = 0,
     STATE_L3_INSERT,
+    STATE_MAX_MEM_INSERT, // Use the maximum available memory for data deduplication
     STATE_PROBE,
     STATE_ANALYZE,
     STATE_PROCESS_HT,
@@ -42,10 +43,11 @@ public:
                          period_cnt_(MIN_PERIOD_CNT), probe_cnt_(0), exists_cnt_(0),
                          rebuild_times_(0), cut_ratio_(INIT_CUT_RATIO), by_pass_ctrl_enabled_(false),
                          small_row_cnt_(0), op_id_(-1), need_resize_hash_table_(false),
-                         round_times_(0) {}
+                         round_times_(0), scaled_llc_est_ndv_(0) {}
   inline void reset() {
     by_pass_ = false;
     processed_cnt_ = 0;
+    scaled_llc_est_ndv_ = 0;  // reset scaled_llc_est_ndv_ before reset_state()
     reset_state();
     period_cnt_ = MIN_PERIOD_CNT;
     probe_cnt_ = 0;
@@ -53,16 +55,16 @@ public:
     rebuild_times_ = 0;
     need_resize_hash_table_ = false;
   }
-  inline void reset_state() { state_ = STATE_L2_INSERT; }
+  inline void reset_state() { state_ = (scaled_llc_est_ndv_ ? STATE_MAX_MEM_INSERT : STATE_L2_INSERT); }
+  inline void set_max_mem_insert_state() { state_ = STATE_MAX_MEM_INSERT; }
+  inline bool is_max_mem_insert_state() { return  STATE_MAX_MEM_INSERT == state_; }
+  inline void set_analyze_state() { state_ = STATE_ANALYZE; }
+  inline bool is_analyze_state() { return  STATE_ANALYZE == state_; }
   inline void start_process_ht() { state_ = STATE_PROCESS_HT; }
   inline bool processing_ht() { return STATE_PROCESS_HT == state_; }
-  inline bool in_l2_cache(int64_t row_cnt, int64_t mem_size)
+  inline bool in_cache_mem_bound(int64_t row_cnt, int64_t mem_size, int64_t mem_bound)
   {
-    return 0 != small_row_cnt_ ? (row_cnt < small_row_cnt_) : (mem_size < INIT_L2_CACHE_SIZE);
-  }
-  inline bool in_l3_cache(int64_t row_cnt, int64_t mem_size)
-  {
-    return 0 != small_row_cnt_ ? (row_cnt < small_row_cnt_) : (mem_size < INIT_L3_CACHE_SIZE);
+    return 0 != small_row_cnt_ ? (row_cnt < small_row_cnt_) : (mem_size < mem_bound);
   }
   void gby_process_state(int64_t probe_cnt, int64_t row_cnt, int64_t mem_size);
   inline void inc_processed_cnt(int64_t new_processed_cnt) { processed_cnt_ += new_processed_cnt; }
@@ -72,7 +74,9 @@ public:
   inline void set_cut_ratio(uint64_t cut_ratio) { cut_ratio_ = cut_ratio; }
   inline bool by_passing() { return by_pass_; }
   inline void start_by_pass() { by_pass_ = true; }
+  inline void stop_by_pass() { by_pass_ = false; }
   inline void reset_rebuild_times() { rebuild_times_ = 0; }
+  inline void bypass_rebackto_insert(uint64_t llc_est_ndv) { scaled_llc_est_ndv_ = llc_est_ndv / 2 * 3; stop_by_pass(); start_process_ht(); reset_rebuild_times(); round_times_ = 0; need_resize_hash_table_ = false; }
   inline bool rebuild_times_exceeded() { return rebuild_times_ >= MAX_REBUILD_TIMES; }
   inline void set_max_rebuild_times() { rebuild_times_ = MAX_REBUILD_TIMES + 1; }
   inline void open_by_pass_ctrl() { by_pass_ctrl_enabled_ = true; }
@@ -94,6 +98,7 @@ public:
   int64_t probe_cnt_for_period_[MAX_REBUILD_TIMES];
   int64_t ndv_cnt_for_period_[MAX_REBUILD_TIMES];
   int64_t round_times_;
+  uint64_t scaled_llc_est_ndv_;
 };
 
 } // end namespace sql

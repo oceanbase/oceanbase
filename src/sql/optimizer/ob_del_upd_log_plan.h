@@ -233,6 +233,8 @@ public:
                                 IndexDMLInfo*& index_dml_info) const;
   int check_update_part_key(const ObTableSchema* index_schema,
                             IndexDMLInfo*& index_dml_info) const;
+  int check_update_primary_key(const ObTableSchema* index_schema,
+                               IndexDMLInfo*& index_dml_info) const;
   int allocate_link_dml_as_top(ObLogicalOperator *&old_top);
   bool use_pdml() const { return use_pdml_; }
   int compute_dml_parallel();
@@ -243,7 +245,8 @@ protected:
   virtual int generate_normal_raw_plan() override;
   virtual int generate_dblink_raw_plan() override;
   int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
-                                                OSGShareInfo &info);
+                                                OSGShareInfo &info,
+                                                OSG_TYPE type);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 

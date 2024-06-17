@@ -62,6 +62,7 @@ int ObExprObjectConstruct::calc_result_typeN(ObExprResType &type,
     }
   }
   OX (type.set_type(ObExtendType));
+  OX (type.set_extend_type(pl::PL_RECORD_TYPE));
   OX (type.set_udt_id(udt_id_));
   return ret;
 }
@@ -121,9 +122,16 @@ int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id)
   ObExecContext &exec_ctx = ctx.exec_ctx_;
   ObIAllocator &alloc = ctx.exec_ctx_.get_allocator();
   pl::ObPLPackageGuard package_guard(session->get_effective_tenant_id());
+  ObSchemaGetterGuard *schema_guard = NULL;
+  // if called by check_default_value in ddl resolver, no sql ctx, get guard from session cache
+  if (OB_ISNULL(exec_ctx.get_sql_ctx()) || OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
+    schema_guard = &session->get_cached_schema_guard_info().get_schema_guard();
+  } else {
+    schema_guard = exec_ctx.get_sql_ctx()->schema_guard_;
+  }
   pl::ObPLResolveCtx resolve_ctx(alloc,
                                  *session,
-                                 *(exec_ctx.get_sql_ctx()->schema_guard_),
+                                 *(schema_guard),
                                  package_guard,
                                  *(exec_ctx.get_sql_proxy()),
                                  false);
@@ -144,7 +152,7 @@ int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id)
     OZ (ns->get_user_type(udt_id, user_type, &tmp_alloc));
     CK (OB_NOT_NULL(user_type));
     OZ (user_type->newx(alloc, ns, ptr));
-    OZ (user_type->get_size(*ns, pl::PL_TYPE_INIT_SIZE, init_size));
+    OZ (user_type->get_size(pl::PL_TYPE_INIT_SIZE, init_size));
     OX (new_composite.set_extend(ptr, user_type->get_type(), init_size));
     OX (result = new_composite);
   }
@@ -188,6 +196,14 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
       if (objs[i].is_null() && info->elem_types_.at(i).is_ext()) {
         OZ (newx(ctx, record->get_element()[i], info->elem_types_.at(i).get_udt_id()));
+        if (OB_SUCC(ret)) {
+          // use _is_null to distinguish the following two situations:
+          // SDO_GEOMETRY(2003, 4000, SDO_POINT_TYPE(NULL,NULL,NULL), NULL, NULL)
+          // SDO_GEOMETRY(2003, 4000, NULL, NULL, NULL)
+          pl::ObPLRecord *child_null_record =
+            reinterpret_cast<pl::ObPLRecord *>(record->get_element()[i].get_ext());
+          child_null_record->set_null();
+        }
       } else {
         // param ObObj may have different accuracy with the argument, need conversion
         OZ (ObSPIService::spi_convert(*session,

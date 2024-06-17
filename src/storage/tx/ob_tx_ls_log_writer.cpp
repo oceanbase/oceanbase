@@ -138,7 +138,7 @@ int ObTxLSLogCb::on_failure()
   if (OB_ISNULL(base_wr_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "[TxLsLogWriter] invalid arguments", KP(base_wr_));
-  } else if (base_wr_->on_failure(this)) {
+  } else if (OB_FAIL(base_wr_->on_failure(this))) {
     TRANS_LOG(WARN, "[TxLsLogWriter] on_failure failed", KR(ret), K(log_ts_), K(type_));
   }
   return ret;

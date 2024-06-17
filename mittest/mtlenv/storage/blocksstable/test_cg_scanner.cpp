@@ -84,17 +84,9 @@ void TestCGScanner::prepare_cg_query_param(const bool is_reverse_scan, const ObV
   access_param_.iter_param_.vectorized_enabled_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
-  access_param_.iter_param_.pd_storage_flag_.use_iter_pool_ = true;
+  access_param_.iter_param_.pd_storage_flag_.use_stmt_iter_pool_ = true;
   access_param_.iter_param_.pd_storage_flag_.use_column_store_ = true;
-  /*
-     ObSEArray<ObColDesc, 1> cg_col_descs;
-     ObTableReadInfo *cg_read_info = nullptr;
-     ASSERT_EQ(OB_SUCCESS, tablet_handle_.get_obj()->get_cg_col_descs(cg_idx, cg_col_descs));
-     ASSERT_EQ(OB_SUCCESS, MTL(ObTenantCGReadInfoMgr *)->get_cg_read_info(cg_col_descs.at(0),
-     ObTabletID(tablet_id_),
-     cg_read_info));
-     */
-  access_param_.iter_param_.read_info_ = cg_read_info_handle_.get_read_info();
+  access_param_.iter_param_.read_info_ = &cg_read_info_;
 
   //jsut for test
   ObQueryFlag query_flag(ObQueryFlag::Forward,
@@ -561,7 +553,6 @@ TEST_F(TestCGScanner, test_filter)
   filter.datum_params_.push_back(arg_datum);
   filter.filter_.expr_->args_[1] = reinterpret_cast<sql::ObExpr *>(expr_buf3) + 1;
   filter.filter_.expr_->args_[1]->type_ = T_REF_COLUMN;
-  ASSERT_EQ(OB_SUCCESS, filter.init_obj_set());
   filter.cmp_func_ = get_datum_cmp_func(filter.filter_.expr_->args_[0]->obj_meta_, filter.filter_.expr_->args_[0]->obj_meta_);
 
   exprs.init(1);

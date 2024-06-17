@@ -43,9 +43,12 @@ private:
   static int apply_bg_transform_point(const ObGeometry *g, const ObGeoEvalCtx &context, ObGeometry *&result)
   {
     int ret = OB_SUCCESS;
+    lib::ObMemAttr last_mem_attr = lib::ObMallocHookAttrGuard::get_tl_mem_attr();
+    lib::ObMallocHookAttrGuard tmp_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "BoostCache"));
     boost::geometry::srs::proj4 src_proj4(context.get_val_arg(0)->string_->ptr());
     boost::geometry::srs::proj4 dest_proj4(context.get_val_arg(1)->string_->ptr());
     boost::geometry::srs::transformation<> transformer(src_proj4, dest_proj4);
+    lib::ObMallocHookAttrGuard malloc_guard(last_mem_attr);
     const PtInType *src_geo = reinterpret_cast<const PtInType *>(g->val());
     PtResType *dest_geo = NULL;
     if (OB_ISNULL(dest_geo = OB_NEWx(PtResType, (context.get_allocator())))) {
@@ -78,9 +81,12 @@ private:
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create geo by type", K(ret));
     } else {
+      lib::ObMemAttr last_mem_attr = lib::ObMallocHookAttrGuard::get_tl_mem_attr();
+      lib::ObMallocHookAttrGuard tmp_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "BoostCache"));
       boost::geometry::srs::proj4 src_proj4(context.get_val_arg(0)->string_->ptr());
       boost::geometry::srs::proj4 dest_proj4(context.get_val_arg(1)->string_->ptr());
       boost::geometry::srs::transformation<> transformer(src_proj4, dest_proj4);
+      lib::ObMallocHookAttrGuard malloc_guard(last_mem_attr);
       const GeometryInType *src_geo = reinterpret_cast<const GeometryInType *>(g->val());
       transformer.forward(*src_geo, *dest_geo);
       result = dest_geo;

@@ -59,6 +59,95 @@ struct ObPlParamInfo : public sql::ObParamInfo
   OB_UNIS_VERSION_V(1);
 };
 
+enum ObPLCacheObjectType
+{
+  INVALID_PL_OBJECT_TYPE = 5, // start with OB_PHY_PLAN_UNCERTAIN, distict ObPhyPlanType
+  STANDALONE_ROUTINE_TYPE,
+  PACKAGE_ROUTINE_TYPE,
+  UDT_ROUTINE_TYPE,
+  ANONYMOUS_BLOCK_TYPE,
+  CALL_STMT_TYPE,
+  MAX_TYPE_NUM
+};
+
+struct PLCacheObjStat
+{
+  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  int64_t pl_schema_id_;
+  common::ObString raw_sql_; // sql txt for anonymous block
+  common::ObString name_;
+  common::ObCollationType sql_cs_type_;
+  int64_t gen_time_;
+  int64_t last_active_time_;
+  int64_t compile_time_; // pl object cost time of compile
+  uint64_t hit_count_;
+  ObPLCacheObjectType type_;
+  int64_t elapsed_time_;          //执行时间rt
+  int64_t execute_times_;        //SUCC下执行次数
+  int64_t  slowest_exec_time_;    // execution slowest time
+  uint64_t slowest_exec_usec_;    // execution slowest usec
+  int64_t schema_version_;
+  int64_t ps_stmt_id_;//prepare stmt id
+  common::ObString sys_vars_str_;
+
+  PLCacheObjStat()
+    : pl_schema_id_(OB_INVALID_ID),
+      raw_sql_(),
+      name_(),
+      sql_cs_type_(common::CS_TYPE_INVALID),
+      gen_time_(0),
+      last_active_time_(0),
+      compile_time_(0),
+      hit_count_(0),
+      type_(ObPLCacheObjectType::INVALID_PL_OBJECT_TYPE),
+      elapsed_time_(0),
+      execute_times_(0),
+      slowest_exec_time_(0),
+      slowest_exec_usec_(0),
+      schema_version_(OB_INVALID_ID),
+      ps_stmt_id_(OB_INVALID_ID),
+      sys_vars_str_()
+  {
+    sql_id_[0] = '\0';
+  }
+
+  inline bool is_updated() const
+  {
+    return last_active_time_ != 0;
+  }
+
+  void reset()
+  {
+    sql_id_[0] = '\0';
+    pl_schema_id_ = OB_INVALID_ID;
+    sql_cs_type_ = common::CS_TYPE_INVALID;
+    raw_sql_.reset();
+    name_.reset();
+    gen_time_ = 0;
+    last_active_time_ = 0;
+    hit_count_ = 0;
+    type_ = ObPLCacheObjectType::INVALID_PL_OBJECT_TYPE;
+    elapsed_time_ = 0;
+    execute_times_ = 0;
+    slowest_exec_time_ = 0;
+    slowest_exec_usec_ = 0;
+    schema_version_ = OB_INVALID_ID;
+    ps_stmt_id_ = OB_INVALID_ID;
+    sys_vars_str_.reset();
+  }
+
+  TO_STRING_KV(K_(pl_schema_id),
+               K_(gen_time),
+               K_(last_active_time),
+               K_(hit_count),
+               K_(raw_sql),
+               K_(name),
+               K_(compile_time),
+               K_(type),
+               K_(schema_version),
+               K_(sys_vars_str));
+};
+
 class ObPLCacheObject : public sql::ObILibCacheObject
 {
 public:
@@ -73,7 +162,8 @@ public:
     expr_operator_factory_(allocator_),
     expressions_(allocator_),
     expr_op_size_(0),
-    frame_info_(allocator_)
+    frame_info_(allocator_),
+    stat_()
     {}
 
   virtual ~ObPLCacheObject() {}
@@ -104,6 +194,12 @@ public:
   inline void set_expr_op_size(int64_t size) { expr_op_size_ = size; }
   inline sql::ObExprFrameInfo &get_frame_info() { return frame_info_; }
 
+  inline const PLCacheObjStat get_stat() const { return stat_; }
+  inline PLCacheObjStat &get_stat_for_update() { return stat_; }
+
+  virtual int update_cache_obj_stat(sql::ObILibCacheCtx &ctx);
+  int update_execute_time(int64_t exec_time);
+
   TO_STRING_KV(K_(expr_op_size),
                K_(tenant_schema_version),
                K_(sys_schema_version),
@@ -123,6 +219,8 @@ protected:
   common::ObFixedArray<sql::ObSqlExpression*, common::ObIAllocator> expressions_;
   int64_t expr_op_size_;
   sql::ObExprFrameInfo frame_info_;
+  // stat info
+  PLCacheObjStat stat_;
 };
 
 } // namespace pl end

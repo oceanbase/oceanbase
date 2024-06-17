@@ -103,6 +103,7 @@ private:
   rpc::frame::ObReqTransport *mysql_transport_;
   rpc::frame::ObReqTransport *batch_rpc_transport_;
   uint64_t last_ssl_info_hash_;
+  ObSpinLock lock_;
   int64_t standby_fetchlog_bw_limit_;
   uint64_t standby_fetchlog_bytes_;
   int64_t standby_fetchlog_time_;
@@ -132,6 +133,7 @@ static int get_default_net_thread_count()
     cnt = 7;
   } else {
     cnt = max(8, cpu_num / 6);
+    cnt = min(cnt, 64);
   }
   return cnt;
 }

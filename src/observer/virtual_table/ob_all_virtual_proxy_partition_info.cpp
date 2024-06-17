@@ -719,7 +719,7 @@ int ObAllVirtualProxyPartitionInfo::build_check_str_to_raw_expr_(
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(q_name.access_idents_.at(0).sys_func_expr_->check_param_num())) {
+        } else if (OB_FAIL(q_name.access_idents_.at(0).check_param_num())) {
           LOG_WARN("check param_num failed", KR(ret));
         } else if (OB_FAIL(sql::ObRawExprUtils::replace_ref_column(
                            check_expr, q_name.ref_expr_, sys_func))) {

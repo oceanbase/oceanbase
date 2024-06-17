@@ -81,6 +81,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   OZ (ob_write_string(allocator, other.job_name_, job_name_));
   OZ (ob_write_string(allocator, other.job_class_, job_class_));
   OZ (ob_write_string(allocator, other.program_name_, program_name_));
+  OZ (ob_write_string(allocator, other.state_, state_));
   return ret;
 }
 
@@ -296,6 +297,31 @@ int ObDBMSSchedJobUtils::init_session(
   return ret;
 }
 
+int ObDBMSSchedJobUtils::reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos)
+{
+  int ret = OB_SUCCESS;
+  if (user_infos.count() > 1) {
+    //bug:
+    //resver the minimum user id to execute
+    const ObUserInfo *minimum_user_info = user_infos.at(0);
+    for (int64_t i = 1; OB_SUCC(ret) && i < user_infos.count(); ++i) {
+      if (OB_ISNULL(minimum_user_info) || OB_ISNULL(user_infos.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(minimum_user_info), K(user_infos.at(i)));
+      } else if (minimum_user_info->get_user_id() > user_infos.at(i)->get_user_id()) {
+        minimum_user_info = user_infos.at(i);
+      } else {/*do nothing*/}
+    }
+    if (OB_SUCC(ret)) {
+      user_infos.reset();
+      if (OB_FAIL(user_infos.push_back(minimum_user_info))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDBMSSchedJobUtils::init_env(
     ObDBMSSchedJobInfo &job_info,
     ObSQLSessionInfo &session)
@@ -313,30 +339,50 @@ int ObDBMSSchedJobUtils::init_env(
   CK (job_info.valid());
   OZ (GCTX.schema_service_->get_tenant_schema_guard(job_info.get_tenant_id(), schema_guard));
   OZ (schema_guard.get_tenant_info(job_info.get_tenant_id(), tenant_info));
-  OZ (schema_guard.get_user_info(
-    job_info.get_tenant_id(), job_info.get_powner(), user_infos));
   OZ (schema_guard.get_database_schema(
     job_info.get_tenant_id(), job_info.get_cowner(), database_schema));
-  if (OB_SUCC(ret) &&
-      user_infos.count() > 1 &&
-      ObDbmsStatsMaintenanceWindow::is_stats_job(job_info.get_job_name())) {
-    OZ(ObDbmsStatsMaintenanceWindow::reset_opt_stats_user_infos(user_infos));
+  if (OB_SUCC(ret)) {
+    if (job_info.is_oracle_tenant()) {
+      OZ (schema_guard.get_user_info(
+        job_info.get_tenant_id(), job_info.get_powner(), user_infos));
+      OV (1 == user_infos.count(), OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
+      CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+    } else {
+      ObString user = job_info.get_powner();
+      if (OB_SUCC(ret)) {
+        const char *c = user.reverse_find('@');
+        if (OB_ISNULL(c)) {
+          OZ (schema_guard.get_user_info(
+            job_info.get_tenant_id(), user, user_infos));
+          if (OB_SUCC(ret) && user_infos.count() > 1) {
+            OZ(reserve_user_with_minimun_id(user_infos));
+          }
+          OV (1 == user_infos.count(), OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
+          CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+        } else {
+          ObString user_name;
+          ObString host_name;
+          user_name = user.split_on(c);
+          host_name = user;
+          OZ (schema_guard.get_user_info(
+            job_info.get_tenant_id(), user_name, host_name, user_info));
+        }
+      }
+    }
+    CK (OB_NOT_NULL(user_info));
+    CK (OB_NOT_NULL(tenant_info));
+    CK (OB_NOT_NULL(database_schema));
+    OZ (exec_env.init(job_info.get_exec_env()));
+    OZ (init_session(session,
+                    schema_guard,
+                    tenant_info->get_tenant_name(),
+                    job_info.get_tenant_id(),
+                    database_schema->get_database_name(),
+                    database_schema->get_database_id(),
+                    user_info,
+                    job_info));
+    OZ (exec_env.store(session));
   }
-  OV (1 == user_infos.count(), OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
-  CK (OB_NOT_NULL(user_info = user_infos.at(0)));
-  CK (OB_NOT_NULL(user_info));
-  CK (OB_NOT_NULL(tenant_info));
-  CK (OB_NOT_NULL(database_schema));
-  OZ (exec_env.init(job_info.get_exec_env()));
-  OZ (init_session(session,
-                   schema_guard,
-                   tenant_info->get_tenant_name(),
-                   job_info.get_tenant_id(),
-                   database_schema->get_database_name(),
-                   database_schema->get_database_id(),
-                   user_info,
-                   job_info));
-  OZ (exec_env.store(session));
   return ret;
 }
 

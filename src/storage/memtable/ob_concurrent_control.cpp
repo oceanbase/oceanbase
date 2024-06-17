@@ -59,10 +59,12 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
     // 1. reader seq no is bigger or equal than the seq no of the last statements
     if (reader_seq_no < locker_seq_no) {
       // Case 1: It may happens that two pdml unique index tasks insert the same
-      // row concurrently, so we report duplicate key under the case to prevent
-      // the insertion.
+      // row concurrently or two px update with one update(one doesnot change
+      // the rowkey) and one insert(one changes the rowkey), so we report
+      // duplicate key under the case to prevent the insertion.
       if (blocksstable::ObDmlFlag::DF_INSERT == writer_dml_flag
-          && blocksstable::ObDmlFlag::DF_INSERT == locker_dml_flag) {
+          && (blocksstable::ObDmlFlag::DF_INSERT == locker_dml_flag
+              || blocksstable::ObDmlFlag::DF_UPDATE == locker_dml_flag)) {
         ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
         TRANS_LOG(WARN, "pdml duplicate primary key found", K(ret),
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
@@ -161,7 +163,7 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
       // may break the promise of the memtable semantics. We need to be aware of
       // this situation and retry the entire SQL statement in such cases.
       ret = OB_SEQ_NO_REORDER_UNDER_PDML;
-      TRANS_LOG(ERROR, "wrong row of sequence on one row found", K(reader_seq_no),
+      TRANS_LOG(WARN, "wrong row of sequence on one row found", K(reader_seq_no),
                 K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
                 K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
     }

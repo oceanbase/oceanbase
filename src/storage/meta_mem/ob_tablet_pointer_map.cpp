@@ -18,6 +18,22 @@ namespace oceanbase
 namespace storage
 {
 
+ObTabletPointerMap::ObTabletPointerMap()
+    : ObResourceMap<ObTabletMapKey, ObTabletPointer>(), max_count_(0)
+{
+}
+
+int ObTabletPointerMap::set(const ObTabletMapKey &key, ObTabletPointer &ptr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ResourceMap::set(key, ptr))) {
+    STORAGE_LOG(WARN, "fail to set into ResourceMap", K(ret), K(key));
+  } else if (count() > ATOMIC_LOAD(&max_count_)) {
+    ATOMIC_INC(&max_count_);
+  }
+  return ret;
+}
+
 int ObTabletPointerMap::erase(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard)
 {
   int ret = common::OB_SUCCESS;

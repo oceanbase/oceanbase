@@ -82,7 +82,6 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
     //impossible
   } else if (FALSE_IT(create_index_arg.is_inner_ = my_session->is_inner())) {
   } else if (FALSE_IT(create_index_arg.parallelism_ = stmt.get_parallelism())) {
-  } else if (FALSE_IT(create_index_arg.compact_level_ = stmt.get_compact_level())) {
   } else if (FALSE_IT(create_index_arg.consumer_group_id_ = THIS_WORKER.get_group_id())) {
   } else if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
     LOG_WARN("rpc proxy create index failed", K(create_index_arg),
@@ -100,7 +99,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
         ret = OB_ERR_ADD_INDEX;
         LOG_WARN("index table id is invalid", KR(ret));
       }
-    } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(create_index_arg.tenant_id_, res.task_id_, my_session, common_rpc_proxy))) {
+    } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(create_index_arg.tenant_id_, res.task_id_, false/*do not need retry at executor*/, my_session, common_rpc_proxy))) {
       LOG_WARN("failed to wait ddl finish", K(ret));
     }
   }

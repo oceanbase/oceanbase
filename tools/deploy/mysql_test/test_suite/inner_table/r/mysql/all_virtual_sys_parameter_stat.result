@@ -38,6 +38,7 @@ bf_cache_miss_count_threshold
 bf_cache_priority
 builtin_db_data_verify_cycle
 cache_wash_threshold
+choose_migration_source_policy
 clog_sync_time_warn_threshold
 cluster
 cluster_id
@@ -59,6 +60,7 @@ datafile_next
 datafile_size
 data_dir
 data_disk_usage_limit_percentage
+data_disk_write_limit_percentage
 data_storage_error_tolerance_time
 data_storage_warning_tolerance_time
 ddl_thread_score
@@ -96,7 +98,6 @@ enable_rpc_authentication_bypass
 enable_sql_audit
 enable_sql_extension
 enable_sql_operator_dump
-enable_store_compression
 enable_syslog_recycle
 enable_syslog_wf
 enable_sys_table_ddl
@@ -137,6 +138,8 @@ log_disk_throttling_percentage
 log_disk_utilization_limit_threshold
 log_disk_utilization_threshold
 log_restore_concurrency
+log_storage_compress_all
+log_storage_compress_func
 log_storage_warning_tolerance_time
 log_transport_compress_all
 log_transport_compress_func
@@ -177,7 +180,6 @@ partition_balance_schedule_interval
 plan_cache_evict_interval
 plsql_code_type
 plsql_debug
-plsql_optimize_level
 plsql_v2_compatibility
 px_task_size
 px_workers_per_cpu_quota
@@ -218,6 +220,10 @@ standby_db_fetch_log_rpc_timeout
 standby_db_preferred_upstream_log_region
 standby_fetch_log_bandwidth_limit
 storage_meta_cache_priority
+strict_check_os_params
+syslog_compress_func
+syslog_disk_size
+syslog_file_uncompressed_count
 syslog_io_bandwidth_limit
 syslog_level
 system_memory
@@ -252,6 +258,7 @@ writing_throttling_maximum_duration
 writing_throttling_trigger_percentage
 zone
 _advance_checkpoint_timeout
+_allow_skip_replay_redo_after_detete_tablet
 _audit_mode
 _auto_broadcast_tablet_location_rate_limit
 _auto_drop_recovering_auxiliary_tenant
@@ -264,6 +271,7 @@ _balance_wait_killing_transaction_end_threshold
 _bloom_filter_enabled
 _bloom_filter_ratio
 _cache_wash_interval
+_checkpoint_diagnose_preservation_count
 _chunk_row_store_mem_limit
 _ctx_memory_limit
 _datafile_usage_lower_bound_percentage
@@ -273,19 +281,27 @@ _delay_resource_recycle_after_correctness_issue
 _enable_active_txn_transfer
 _enable_adaptive_compaction
 _enable_adaptive_merge_schedule
+_enable_add_fulltext_index_to_existing_table
 _enable_backtrace_function
 _enable_balance_kill_transaction
 _enable_block_file_punch_hole
+_enable_choose_migration_source_policy
 _enable_column_store
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal
 _enable_dblink_reuse_connection
+_enable_dbms_job_package
+_enable_dbms_lob_partial_update
 _enable_decimal_int_type
 _enable_defensive_check
 _enable_easy_keepalive
 _enable_hash_join_hasher
 _enable_hash_join_processor
+_enable_hgby_llc_ndv_adaptive
 _enable_in_range_optimization
+_enable_kv_feature
+_enable_log_cache
+_enable_memleak_light_backtrace
 _enable_newsort
 _enable_new_sql_nio
 _enable_optimizer_qualify_filter
@@ -294,6 +310,7 @@ _enable_parallel_minor_merge
 _enable_parallel_redo_logging
 _enable_parallel_table_creation
 _enable_partition_level_retry
+_enable_persistent_compiled_routine
 _enable_pkt_nio
 _enable_plan_cache_mem_diagnosis
 _enable_prefetch_limiting
@@ -314,6 +331,8 @@ _enable_transaction_internal_routing
 _enable_values_table_folding
 _enable_var_assign_use_das
 _endpoint_tenant_mapping
+_faststack_min_interval
+_faststack_req_queue_size_threshold
 _fast_commit_callback_count
 _follower_snapshot_read_retry_duration
 _force_explict_500_malloc
@@ -321,8 +340,10 @@ _force_hash_groupby_dump
 _force_hash_join_spill
 _force_malloc_for_absent_tenant
 _force_skip_encoding_partition_id
+_global_enable_rich_vector_format
 _hash_area_size
 _hash_join_enabled
+_ha_diagnose_history_recycle_interval
 _ha_rpc_timeout
 _ha_tablet_info_batch_count
 _hidden_sys_tenant_memory
@@ -343,7 +364,6 @@ _max_rpc_packet_size
 _max_schema_slot_num
 _max_tablet_cnt_per_gb
 _mds_memory_limit_percentage
-_memory_large_chunk_cache_size
 _memstore_limit_percentage
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
@@ -351,6 +371,7 @@ _min_malloc_sample_interval
 _mvcc_gc_using_min_txn_snapshot
 _nested_loop_join_enabled
 _obkv_feature_mode
+_ob_ddl_temp_file_compress_func
 _ob_ddl_timeout
 _ob_elr_fast_freeze_threshold
 _ob_enable_direct_load
@@ -363,6 +384,7 @@ _ob_max_thread_num
 _ob_obj_dep_maint_task_interval
 _ob_plan_cache_auto_flush_interval
 _ob_plan_cache_gc_strategy
+_ob_pl_compile_max_concurrency
 _ob_query_rate_limit
 _ob_ssl_invited_nodes
 _ob_trans_rpc_timeout
@@ -377,6 +399,7 @@ _parallel_redo_logging_trigger
 _parallel_server_sleep_time
 _pdml_thread_cache_size
 _pipelined_table_function_memory_limit
+_preserve_order_for_pagination
 _print_sample_ppm
 _private_buffer_size
 _publish_schema_mode
@@ -406,6 +429,7 @@ _sort_area_size
 _sqlexec_disable_hash_based_distagg_tiv
 _sql_insert_multi_values_split_opt
 _stall_threshold_for_dynamic_worker
+_standby_max_replay_gap_time
 _storage_leak_check_mod
 _storage_meta_memory_limit_percentage
 _stream_rpc_max_wait_timeout
@@ -419,6 +443,7 @@ _transfer_service_wakeup_interval
 _transfer_start_retry_count
 _transfer_start_rpc_timeout
 _transfer_start_trans_timeout
+_transfer_task_retry_interval
 _transfer_task_tablet_count_threshold
 _tx_data_memory_limit_percentage
 _tx_result_retention

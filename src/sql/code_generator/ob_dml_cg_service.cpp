@@ -71,6 +71,8 @@ int ObDmlCgService::generate_insert_ctdef(ObLogDelUpd &op,
   LOG_TRACE("begin to generate insert ctdef", K(index_dml_info));
   ObArray<ObRawExpr*> old_row;
   ObArray<ObRawExpr*> new_row;
+  uint64_t dml_event = op.is_pdml_update_split() ?
+       ObTriggerEvents::get_update_event() : ObTriggerEvents::get_insert_event();
   if (OB_ISNULL(op.get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -78,7 +80,7 @@ int ObDmlCgService::generate_insert_ctdef(ObLogDelUpd &op,
     LOG_WARN("convert insert new row exprs failed", K(ret));
   } else if (OB_FAIL(generate_dml_base_ctdef(op, index_dml_info,
                                              ins_ctdef,
-                                             ObTriggerEvents::get_insert_event(),
+                                             dml_event,
                                              old_row,
                                              new_row))) {
     LOG_WARN("generate dml base ctdef failed", K(ret), K(index_dml_info));
@@ -276,12 +278,14 @@ int ObDmlCgService::generate_delete_ctdef(ObLogDelUpd &op,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 64> old_row;
   ObSEArray<ObRawExpr*, 64> new_row;
+  uint64_t dml_event = op.is_pdml_update_split() ?
+      ObTriggerEvents::get_update_event() : ObTriggerEvents::get_delete_event();
   if (OB_FAIL(old_row.assign(index_dml_info.column_old_values_exprs_))) {
     LOG_WARN("fail to assign delete old row", K(ret));
   } else if (OB_FAIL(generate_dml_base_ctdef(op,
                                              index_dml_info,
                                              del_ctdef,
-                                             ObTriggerEvents::get_delete_event(),
+                                             dml_event,
                                              old_row,
                                              new_row))) {
     LOG_WARN("generate dml base ctdef failed", K(ret), K(index_dml_info));
@@ -1133,7 +1137,7 @@ int ObDmlCgService::convert_dml_column_info(ObTableID index_tid,
     for (; OB_SUCC(ret) && iter != index_schema->column_end(); ++iter) {
       const ObColumnSchemaV2 *column = *iter;
       ObObjMeta column_type;
-      if (!column->is_rowkey_column() && !column->is_virtual_generated_column()) {
+      if (!column->is_rowkey_column() && (!column->is_virtual_generated_column())) {
         //skip virtual generated column or rowkey
         column_type = column->get_meta_type();
         column_type.set_scale(column->get_accuracy().get_scale());
@@ -1490,7 +1494,7 @@ int ObDmlCgService::is_table_has_unique_key(ObSchemaGetterGuard *schema_guard,
   return ret;
 }
 
-int ObDmlCgService::check_upd_need_all_columns(ObLogicalOperator &op,
+int ObDmlCgService::check_upd_need_all_columns(ObLogDelUpd &op,
                                                ObSchemaGetterGuard *schema_guard,
                                                const ObTableSchema *table_schema,
                                                const IndexDMLInfo &index_dml_info,
@@ -1504,14 +1508,20 @@ int ObDmlCgService::check_upd_need_all_columns(ObLogicalOperator &op,
   need_all_columns = false;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   ObSQLSessionInfo *session = cg_.opt_ctx_->get_session_info();
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session) || OB_ISNULL(schema_guard) || OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ptr", K(ret));
+    LOG_WARN("unexpected null ptr", K(ret), KP(session), KP(schema_guard), KP(table_schema));
   } else if (OB_FAIL(session->get_binlog_row_image(binlog_row_image))) {
     LOG_WARN("fail to get binlog image", K(ret));
-  } else if (binlog_row_image == ObBinlogRowImage::FULL) {
+  } else if (binlog_row_image == ObBinlogRowImage::FULL || op.has_instead_of_trigger()) {
     // full mode
     need_all_columns = true;
+  } else if (table_schema->has_mlog_table()) {
+    need_all_columns = true;
+    LOG_TRACE("update table with materialized view log, need all columns", K(table_schema->has_mlog_table()));
+  } else if (table_schema->is_mlog_table()) {
+    need_all_columns = true;
+    LOG_TRACE("update materialized view log, need all columns", K(table_schema->is_mlog_table()));
   } else if (!is_primary_index) {
     // index_table if update PK, also need record all_columns
     if (OB_FAIL(check_has_upd_rowkey(op, table_schema, index_dml_info, is_update_pk))) {
@@ -1596,7 +1606,7 @@ int ObDmlCgService::append_upd_old_row_cid(ObLogicalOperator &op,
   return ret;
 }
 
-int ObDmlCgService::generate_minimal_upd_old_row_cid(ObLogicalOperator &op,
+int ObDmlCgService::generate_minimal_upd_old_row_cid(ObLogDelUpd &op,
                                                      ObTableID index_tid,
                                                      ObDASUpdCtDef &das_upd_ctdef,
                                                      const IndexDMLInfo &index_dml_info,
@@ -1644,7 +1654,8 @@ int ObDmlCgService::generate_minimal_upd_old_row_cid(ObLogicalOperator &op,
   return ret;
 }
 
-int ObDmlCgService::check_del_need_all_columns(ObSchemaGetterGuard *schema_guard,
+int ObDmlCgService::check_del_need_all_columns(ObLogDelUpd &op,
+                                               ObSchemaGetterGuard *schema_guard,
                                                const ObTableSchema *table_schema,
                                                bool &need_all_columns)
 {
@@ -1653,14 +1664,20 @@ int ObDmlCgService::check_del_need_all_columns(ObSchemaGetterGuard *schema_guard
   bool has_not_null_uk = false;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   ObSQLSessionInfo *session = cg_.opt_ctx_->get_session_info();
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session) || OB_ISNULL(schema_guard) || OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ptr", K(ret));
+    LOG_WARN("unexpected null ptr", K(ret), KP(session), KP(schema_guard), KP(table_schema));
   } else if (OB_FAIL(session->get_binlog_row_image(binlog_row_image))) {
     LOG_WARN("fail to get binlog image", K(ret));
-  } else if (binlog_row_image == ObBinlogRowImage::FULL) {
+  } else if (binlog_row_image == ObBinlogRowImage::FULL || op.has_instead_of_trigger()) {
     // full mode
     need_all_columns = true;
+  } else if (table_schema->has_mlog_table()) {
+    need_all_columns = true;
+    LOG_TRACE("delete from table with materialized view log, need all columns", K(table_schema->has_mlog_table()));
+  } else if (table_schema->is_mlog_table()) {
+    need_all_columns = true;
+    LOG_TRACE("delete from materialized view log, need all columns", K(table_schema->is_mlog_table()));
   } else if (table_schema->is_heap_table()) {
     if (OB_FAIL(table_schema->has_not_null_unique_key(*schema_guard, has_not_null_uk))) {
       LOG_WARN("fail to check whether has not null unique key", K(ret), K(table_schema->get_table_name_str()));
@@ -1672,7 +1689,8 @@ int ObDmlCgService::check_del_need_all_columns(ObSchemaGetterGuard *schema_guard
   return ret;
 }
 
-int ObDmlCgService::generate_minimal_delete_old_row_cid(ObTableID index_tid,
+int ObDmlCgService::generate_minimal_delete_old_row_cid(ObLogDelUpd &op,
+                                                        ObTableID index_tid,
                                                         bool is_primary_index,
                                                         ObDASDelCtDef &das_del_ctdef,
                                                         ObIArray<uint64_t> &minimal_column_ids)
@@ -1695,7 +1713,7 @@ int ObDmlCgService::generate_minimal_delete_old_row_cid(ObTableID index_tid,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", KR(ret), K(index_tid));
-  } else if (OB_FAIL(check_del_need_all_columns(schema_guard, table_schema, need_all_columns))) {
+  } else if (OB_FAIL(check_del_need_all_columns(op, schema_guard, table_schema, need_all_columns))) {
     LOG_WARN("fail to check del need all columns", K(ret), K(is_primary_index), K(index_tid));
   } else if (need_all_columns) {
     if (OB_FAIL(minimal_column_ids.assign(das_del_ctdef.column_ids_))) {
@@ -1780,7 +1798,7 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
   IntFixedArray &new_row_projector = das_ctdef.new_row_projector_;
   bool is_spatial_index = das_ctdef.table_param_.get_data_table().is_spatial_index()
                           && das_ctdef.op_type_ == DAS_OP_TABLE_UPDATE;
-  uint8_t extra_geo = is_spatial_index ? 1 : 0;
+  uint8_t extra_geo = (is_spatial_index) ? 1 : 0;
   //generate old row projector
   if (!old_row.empty()) {
     //generate storage row projector
@@ -1815,10 +1833,11 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
         }
       }
     }
+
     if (OB_SUCC(ret) && is_spatial_index
         && OB_FAIL(add_geo_col_projector(old_row, full_row, dml_column_ids, storage_column_ids.count(),
                                          das_ctdef, old_row_projector))) {
-        LOG_WARN("add geo column projector failed", K(ret));
+      LOG_WARN("add geo column projector failed", K(ret));
     }
   }
   //generate new row projector
@@ -2058,7 +2077,8 @@ int ObDmlCgService::generate_das_del_ctdef(ObLogDelUpd &op,
     LOG_WARN("generate das dml ctdef failed", K(ret));
   } else if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, dml_column_ids))) {
     LOG_WARN("generate dml column ids failed", K(ret));
-  } else if (OB_FAIL(generate_minimal_delete_old_row_cid(index_tid,
+  } else if (OB_FAIL(generate_minimal_delete_old_row_cid(op,
+                                                         index_tid,
                                                          is_primary_table,
                                                          das_del_ctdef,
                                                          minimal_column_ids))) {
@@ -2255,6 +2275,41 @@ int ObDmlCgService::convert_table_dml_param(ObLogicalOperator &op, ObDASDMLBaseC
   return ret;
 }
 
+int ObDmlCgService::fill_multivalue_extra_info_on_table_param(
+    share::schema::ObSchemaGetterGuard *guard,
+    const ObTableSchema *index_schema,
+    uint64_t tenant_id,
+    ObDASDMLBaseCtDef &das_dml_ctdef)
+{
+  int ret = OB_SUCCESS;
+  int64_t t_version = OB_INVALID_VERSION;
+  const ObTableSchema *table_schema = NULL;
+
+  if (OB_ISNULL(guard) || OB_ISNULL(index_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(guard), K(index_schema->get_data_table_id()));
+  } else if (OB_FAIL(guard->get_table_schema(tenant_id, index_schema->get_data_table_id(), table_schema))) {
+    LOG_WARN("fail to get schema", K(ret), K(index_schema->get_data_table_id()));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("table schema is NULL", K(ret));
+  } else {
+    ObTableSchemaParam& table_param = das_dml_ctdef.table_param_.get_data_table_ref();
+    table_param.set_data_table_rowkey_column_num(table_schema->get_rowkey_column_num());
+    uint64_t max_idx = table_param.get_column_count();
+    for (int64_t i = max_idx - 2; i >= 0; --i) {
+      if (OB_ISNULL(table_param.get_column_by_idx(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table column is NULL", K(ret));
+      } else {
+        table_param.get_column_by_idx(i)->set_nullable_for_write(true);
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDmlCgService::fill_table_dml_param(share::schema::ObSchemaGetterGuard *guard,
                                          uint64_t table_id,
                                          ObDASDMLBaseCtDef &das_dml_ctdef)
@@ -2277,6 +2332,9 @@ int ObDmlCgService::fill_table_dml_param(share::schema::ObSchemaGetterGuard *gua
                                                         t_version,
                                                         das_dml_ctdef.column_ids_))) {
     LOG_WARN("fail to convert table param", K(ret), K(das_dml_ctdef));
+  } else if (table_schema->is_multivalue_index_aux() &&
+            OB_FAIL(fill_multivalue_extra_info_on_table_param(guard, table_schema, tenant_id, das_dml_ctdef))) {
+    LOG_WARN("fail to set multivalue index extra info on table param", K(ret), K(das_dml_ctdef));
   }
   return ret;
 }

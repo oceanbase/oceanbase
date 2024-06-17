@@ -58,6 +58,26 @@ int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator
   return ret;
 }
 
+int ObDBLinkHit::print(char *buf, int64_t &buf_len, int64_t &pos, const char* outline_indent) const {
+  int ret = OB_SUCCESS;
+  if (0 < tx_id_) {
+    if (OB_FAIL(BUF_PRINTF("%s%s(\'%s\' , %ld)", outline_indent, "DBLINK_INFO", "DBLINK_TX_ID", tx_id_))) {
+      LOG_WARN("failed to print hint", K(ret), K("DBLINK_INFO(%s , %ld)"));
+    }
+  }
+  if (OB_SUCC(ret) &&  0 != tm_sessid_) {
+    if (OB_FAIL(BUF_PRINTF("%s%s(\'%s\' , %u)", outline_indent, "DBLINK_INFO", "DBLINK_TM_SESSID", tm_sessid_))) {
+      LOG_WARN("failed to print hint", K(ret), K("DBLINK_INFO(%s , %u)"));
+    }
+  }
+  if (OB_SUCC(ret) &&  hint_xa_trans_stop_check_lock_) {
+    if (OB_FAIL(BUF_PRINTF("%s%s(\'%s\' , \'%s\')", outline_indent, "DBLINK_INFO", "DBLINK_XA_TRANS_STOP_CHECK_LOCK", "TRUE"))) {
+      LOG_WARN("failed to print hint", K(ret), K("DBLINK_INFO(%s , %s)"));
+    }
+  }
+  return 0;
+}
+
 int ObGlobalHint::merge_alloc_op_hints(const ObIArray<ObAllocOpHint> &alloc_op_hints)
 {
   int ret = OB_SUCCESS;
@@ -131,19 +151,34 @@ void ObGlobalHint::merge_query_timeout_hint(int64_t hint_time)
   }
 }
 
-void ObGlobalHint::merge_dblink_info_hint(int64_t tx_id, int64_t tm_sessid)
+void ObGlobalHint::merge_tm_sessid_tx_id(int64_t tx_id, uint32_t tm_sessid)
 {
-  if (-1 != tx_id && -1 != tm_sessid) {
-    tx_id_ = tx_id;
-    tm_sessid_ = tm_sessid;
-    LOG_DEBUG("merge dblink info hint", K(tx_id_), K(tm_sessid_));
+  if (0 < tx_id && 0 != tm_sessid) {
+    dblink_hints_.tx_id_ = tx_id;
+    dblink_hints_.tm_sessid_ = tm_sessid;
+    int ret = 0;
   }
 }
 
-void ObGlobalHint::reset_dblink_info_hint()
+void ObGlobalHint::merge_dblink_info_tx_id(int64_t tx_id)
 {
-  tx_id_ = -1;
-  tm_sessid_ = -1;
+  if (0 < tx_id) {
+    dblink_hints_.tx_id_ = tx_id;
+  }
+}
+
+void ObGlobalHint::merge_dblink_info_tm_sessid(uint32_t tm_sessid)
+{
+  if (0 != tm_sessid) {
+    dblink_hints_.tm_sessid_ = tm_sessid;
+  }
+}
+
+void ObGlobalHint::reset_tm_sessid_tx_id_hint()
+{
+  int ret = 0;
+  dblink_hints_.tx_id_ = 0;
+  dblink_hints_.tm_sessid_ = 0;
 }
 
 void ObGlobalHint::merge_max_concurrent_hint(int64_t max_concurrent)
@@ -273,6 +308,14 @@ void ObGlobalHint::merge_opt_features_version_hint(uint64_t opt_features_version
   }
 }
 
+void ObGlobalHint::merge_direct_load_hint(const ObDirectLoadHint &other)
+{
+  direct_load_hint_.flags_ |= other.flags_;
+  direct_load_hint_.max_error_row_count_ =
+      std::max(direct_load_hint_.max_error_row_count_, other.max_error_row_count_);
+  direct_load_hint_.load_method_ = other.load_method_;
+}
+
 // zhanyue todo: try remove this later
 bool ObGlobalHint::has_hint_exclude_concurrent() const
 {
@@ -281,7 +324,7 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || -1 != topk_precision_
          || 0 != sharding_minimum_row_count_
          || UNSET_QUERY_TIMEOUT != query_timeout_
-         || (-1 != tx_id_ && -1 != tm_sessid_)
+         || dblink_hints_.has_valid_hint()
          || common::INVALID_CONSISTENCY != read_consistency_
          || OB_USE_PLAN_CACHE_INVALID != plan_cache_policy_
          || false != force_trace_log_
@@ -294,9 +337,16 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || ObParamOption::NOT_SPECIFIED != param_option_
          || !alloc_op_hints_.empty()
          || !dops_.empty()
+         || false != disable_transform_
+         || false != disable_cost_based_transform_
+         || false != has_append()
          || !opt_params_.empty()
          || !ob_ddl_schema_versions_.empty()
-         || flashback_read_tx_uncommitted_;
+         || has_gather_opt_stat_hint()
+         || false != has_dbms_stats_hint_
+         || -1 != dynamic_sampling_
+         || flashback_read_tx_uncommitted_
+         || has_direct_load();
 }
 
 void ObGlobalHint::reset()
@@ -305,8 +355,6 @@ void ObGlobalHint::reset()
   topk_precision_ = -1;
   sharding_minimum_row_count_ = 0;
   query_timeout_ = UNSET_QUERY_TIMEOUT;
-  tx_id_ = -1;
-  tm_sessid_ = -1;
   read_consistency_ = common::INVALID_CONSISTENCY;
   plan_cache_policy_ = OB_USE_PLAN_CACHE_INVALID;
   force_trace_log_ = false;
@@ -324,12 +372,13 @@ void ObGlobalHint::reset()
   disable_cost_based_transform_ = false;
   opt_params_.reset();
   ob_ddl_schema_versions_.reuse();
-  enable_append_ = false;
   osg_hint_.flags_ = 0;
   has_dbms_stats_hint_ = false;
   flashback_read_tx_uncommitted_ = false;
   dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
   alloc_op_hints_.reuse();
+  direct_load_hint_.reset();
+  dblink_hints_.reset();
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -338,7 +387,6 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_read_consistency_hint(other.read_consistency_, other.frozen_version_);
   merge_topk_hint(other.topk_precision_, other.sharding_minimum_row_count_);
   merge_query_timeout_hint(other.query_timeout_);
-  merge_dblink_info_hint(other.tx_id_, other.tm_sessid_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
   merge_log_level_hint(other.log_level_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
@@ -353,11 +401,12 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_opt_features_version_hint(other.opt_features_version_);
   disable_transform_ |= other.disable_transform_;
   disable_cost_based_transform_ |= other.disable_cost_based_transform_;
-  enable_append_ |= other.enable_append_;
   osg_hint_.flags_ |= other.osg_hint_.flags_;
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
+  dblink_hints_ = other.dblink_hints_;
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
+  merge_direct_load_hint(other.direct_load_hint_);
   if (OB_FAIL(merge_alloc_op_hints(other.alloc_op_hints_))) {
     LOG_WARN("failed to merge alloc op hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -438,10 +487,8 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   if (OB_SUCC(ret) && UNSET_QUERY_TIMEOUT != query_timeout_) { //QUERY_TIMEOUT
     PRINT_GLOBAL_HINT_NUM("QUERY_TIMEOUT", query_timeout_);
   }
-  if (OB_SUCC(ret) && -1 != tx_id_ && -1 != tm_sessid_) { //DBLINK_INFO
-    if (OB_FAIL(BUF_PRINTF("%s%s(%ld , %ld)", outline_indent, "DBLINK_INFO", tx_id_, tm_sessid_))) {
-      LOG_WARN("failed to print hint", K(ret), K("DBLINK_INFO(%lld , %lld)"));
-    }
+  if (OB_SUCC(ret) && OB_FAIL(dblink_hints_.print(buf, buf_len, pos, outline_indent))) { // DBLINK_INFO
+    LOG_WARN("failed to print dblink hints", K(ret), K(dblink_hints_));
   }
   if (OB_SUCC(ret) && plan_cache_policy_ != OB_USE_PLAN_CACHE_INVALID) { //USE_PLAN_CACHE
     const char *plan_cache_policy = "INVALID";
@@ -525,9 +572,6 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   if (OB_SUCC(ret) && disable_cost_based_transform()) {
     PRINT_GLOBAL_HINT_STR("NO_COST_BASED_QUERY_TRANSFORMATION");
   }
-  if (OB_SUCC(ret) && has_append()) { // APPEND
-    PRINT_GLOBAL_HINT_STR("APPEND");
-  }
   if (OB_SUCC(ret) && UNSET_DYNAMIC_SAMPLING != dynamic_sampling_) { //DYNAMIC SAMPLING
     PRINT_GLOBAL_HINT_NUM("DYNAMIC_SAMPLING", dynamic_sampling_);
   }
@@ -542,6 +586,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && get_flashback_read_tx_uncommitted()) {
     PRINT_GLOBAL_HINT_STR("FLASHBACK_READ_TX_UNCOMMITTED");
+  }
+  if (OB_SUCC(ret) && OB_FAIL(direct_load_hint_.print_direct_load_hint(plan_text))) {
+    LOG_WARN("failed to print direct load hint", KR(ret));
   }
   return ret;
 }
@@ -772,10 +819,6 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
-    case COMPACT_SORT_LEVEL: {
-      is_valid = val.is_int() && (val.get_int() >= 0 && val.get_int() <=5);
-      break;
-    }
     case WORKAREA_SIZE_POLICY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANULE"));
       break;
@@ -786,6 +829,11 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       break;
     }
     case _ENABLE_STORAGE_CARDINALITY_ESTIMATION: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case PRESERVE_ORDER_FOR_PAGINATION: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
@@ -939,6 +987,8 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_PULLUP_EXPR :       return T_PULLUP_EXPR;
     case T_NO_AGGR_FIRST_UNNEST:           return T_AGGR_FIRST_UNNEST;
     case T_NO_JOIN_FIRST_UNNEST:           return T_JOIN_FIRST_UNNEST;
+    case T_NO_DECORRELATE :       return T_DECORRELATE;
+    case T_MV_NO_REWRITE:       return T_MV_REWRITE;
 
     // optimize hint
     case T_NO_USE_DAS_HINT:     return T_USE_DAS_HINT;
@@ -995,6 +1045,8 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PULLUP_EXPR :        return is_enable_hint ? "PULLUP_EXPR" : "NO_PULLUP_EXPR";
     case T_AGGR_FIRST_UNNEST:           return is_enable_hint ? "AGGR_FIRST_UNNEST" : "NO_AGGR_FIRST_UNNEST";
     case T_JOIN_FIRST_UNNEST:           return is_enable_hint ? "JOIN_FIRST_UNNEST" : "NO_JOIN_FIRST_UNNEST";
+    case T_DECORRELATE :        return is_enable_hint ? "DECORRELATE" : "NO_DECORRELATE";
+    case T_MV_REWRITE:          return is_enable_hint ? "MV_REWRITE" : "NO_MV_REWRITE";
     // optimize hint
     case T_INDEX_HINT:          return "INDEX";
     case T_FULL_HINT:           return "FULL";
@@ -1870,6 +1922,56 @@ bool ObCoalesceSqHint::has_qb_name_list(const ObIArray<ObString> & qb_names) con
     }
   }
   return bret;
+}
+
+int ObMVRewriteHint::assign(const ObMVRewriteHint &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  } else if (OB_FAIL(mv_list_.assign(other.mv_list_))) {
+    LOG_WARN("failed to assign mv list", K(ret));
+  }
+  return ret;
+}
+
+int ObMVRewriteHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  if (!mv_list_.empty()) {
+    char *buf = plan_text.buf_;
+    int64_t &buf_len = plan_text.buf_len_;
+    int64_t &pos = plan_text.pos_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < mv_list_.count(); ++i) {
+      if (i > 0 && OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("fail to print comma", K(ret));
+      } else if (OB_FAIL(mv_list_.at(i).print_table_in_hint(plan_text, true))) {
+        LOG_WARN("fail to print mv table", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMVRewriteHint::check_mv_match_hint(ObCollationType cs_type,
+                                         const ObTableSchema *mv_schema,
+                                         const ObDatabaseSchema *db_schema,
+                                         bool &is_match) const
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  if (OB_ISNULL(mv_schema) || OB_ISNULL(db_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(mv_schema), K(db_schema));
+  } else if (mv_list_.empty()) {
+    is_match = true;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < mv_list_.count(); ++i) {
+    const ObTableInHint &table_in_hint = mv_list_.at(i);
+    is_match = 0 == ObCharset::strcmp(cs_type, table_in_hint.table_name_, mv_schema->get_table_name()) &&
+    (table_in_hint.db_name_.empty() || 0 == ObCharset::strcmp(cs_type, table_in_hint.db_name_, db_schema->get_database_name_str()));
+  }
+  return ret;
 }
 
 int ObTableParallelHint::assign(const ObTableParallelHint &other)
@@ -2863,6 +2965,42 @@ int ObAllocOpHint::assign(const ObAllocOpHint& other) {
   id_ = other.id_;
   flags_ = other.flags_;
   alloc_level_ = other.alloc_level_;
+  return ret;
+}
+
+DEFINE_ENUM_FUNC(ObDirectLoadHint::LoadMethod, load_method, DIRECT_LOAD_METHOD_DEF, ObDirectLoadHint::);
+
+void ObDirectLoadHint::reset()
+{
+  flags_ = 0;
+  max_error_row_count_ = 0;
+  load_method_ = INVALID_LOAD_METHOD;
+}
+
+int ObDirectLoadHint::assign(const ObDirectLoadHint &other)
+{
+  int ret = OB_SUCCESS;
+  flags_ = other.flags_;
+  max_error_row_count_ = other.max_error_row_count_;
+  load_method_ = other.load_method_;
+  return ret;
+}
+
+int ObDirectLoadHint::print_direct_load_hint(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  const char* outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  if (is_enable_) {
+    const char *need_sort_str = need_sort_ ? "TRUE" : "FALSE";
+    const char *load_method_str = get_load_method_string(load_method_);
+    if (OB_FAIL(BUF_PRINTF("%sDIRECT(%s, %ld, '%s')",
+        outline_indent, need_sort_str, max_error_row_count_, load_method_str))) {
+      LOG_WARN("failed to print direct load hint", KR(ret));
+    }
+  }
   return ret;
 }
 

@@ -31,7 +31,7 @@ using namespace share::schema;
  */
 
 ObDirectLoadOriginTableCreateParam::ObDirectLoadOriginTableCreateParam()
-  : table_id_(OB_INVALID_ID)
+  : table_id_(OB_INVALID_ID), insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE)
 {
 }
 
@@ -41,7 +41,10 @@ ObDirectLoadOriginTableCreateParam::~ObDirectLoadOriginTableCreateParam()
 
 bool ObDirectLoadOriginTableCreateParam::is_valid() const
 {
-  return OB_INVALID_ID != table_id_ && tablet_id_.is_valid() && ls_id_.is_valid();
+  return OB_INVALID_ID != table_id_ &&
+         tablet_id_.is_valid() &&
+         ls_id_.is_valid() &&
+         ObDirectLoadInsertMode::is_type_valid(insert_mode_);
 }
 
 /**
@@ -49,7 +52,7 @@ bool ObDirectLoadOriginTableCreateParam::is_valid() const
  */
 
 ObDirectLoadOriginTableMeta::ObDirectLoadOriginTableMeta()
-  : table_id_(OB_INVALID_ID)
+  : table_id_(OB_INVALID_ID), insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE)
 {
 }
 
@@ -64,6 +67,7 @@ ObDirectLoadOriginTableMeta::~ObDirectLoadOriginTableMeta()
 ObDirectLoadOriginTable::ObDirectLoadOriginTable()
   : major_sstable_(nullptr), is_inited_(false)
 {
+  ddl_sstables_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadOriginTable::~ObDirectLoadOriginTable()
@@ -95,12 +99,13 @@ int ObDirectLoadOriginTable::init(const ObDirectLoadOriginTableCreateParam &para
       LOG_WARN("unexpected ls is nullptr", KR(ret));
     } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_))) {
       LOG_WARN("fail to get tablet", KR(ret), K(tablet_id));
-    } else if (OB_FAIL(prepare_tables())) {
+    } else if (ObDirectLoadInsertMode::need_origin_data(param.insert_mode_) && OB_FAIL(prepare_tables())) {
       LOG_WARN("fail to prepare tables", KR(ret));
     } else {
       meta_.ls_id_ = param.ls_id_;
       meta_.table_id_ = param.table_id_;
       meta_.tablet_id_ = param.tablet_id_;
+      meta_.insert_mode_ = param.insert_mode_;
       is_inited_ = true;
     }
   }
@@ -195,6 +200,8 @@ int ObDirectLoadOriginTable::scan(const ObDatumRange &key_range,
 ObDirectLoadOriginTableScanner::ObDirectLoadOriginTableScanner()
   : allocator_("TLD_OriSSTScan"), origin_table_(nullptr), schema_param_(allocator_), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  col_ids_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadOriginTableScanner::~ObDirectLoadOriginTableScanner()
@@ -214,8 +221,9 @@ int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table,
     LOG_WARN("Invalid argument", KR(ret), KPC(origin_table), K(query_range));
   } else {
     origin_table_ = origin_table;
-    allocator_.set_tenant_id(MTL_ID());
-    if (OB_FAIL((init_table_access_param()))) {
+    if (!ObDirectLoadInsertMode::need_origin_data(origin_table_->get_meta().insert_mode_)) {
+      // do nothing
+    } else if (OB_FAIL((init_table_access_param()))) {
       LOG_WARN("fail to init query range", KR(ret));
     } else if (OB_FAIL(init_table_access_ctx())) {
       LOG_WARN("fail to init table access param", KR(ret));
@@ -226,7 +234,8 @@ int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table,
       LOG_WARN("fail to init multi merge", KR(ret));
     } else if (OB_FAIL(scan_merge_.open(query_range))) {
       LOG_WARN("fail to open multi merge", KR(ret), K(query_range));
-    } else {
+    }
+    if (OB_SUCC(ret)) {
       is_inited_ = true;
     }
   }
@@ -325,6 +334,8 @@ int ObDirectLoadOriginTableScanner::get_next_row(const ObDatumRow *&datum_row)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadOriginTableScanner not init", KR(ret), KP(this));
+  } else if (!ObDirectLoadInsertMode::need_origin_data(origin_table_->get_meta().insert_mode_)) {
+    ret = OB_ITER_END;
   } else {
     ObDatumRow *result_row = nullptr;
     if (OB_FAIL(scan_merge_.get_next_row(result_row))) {

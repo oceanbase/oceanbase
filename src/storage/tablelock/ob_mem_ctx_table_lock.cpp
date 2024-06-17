@@ -16,6 +16,8 @@
 #include "lib/oblog/ob_log_module.h"
 #include "storage/tablelock/ob_mem_ctx_table_lock.h"
 #include "storage/tablelock/ob_lock_memtable.h"
+#include "storage/memtable/ob_memtable_context.h"
+#include "storage/tx/ob_trans_ctx_mgr_v4.h"
 
 namespace oceanbase
 {
@@ -40,6 +42,21 @@ int ObMemCtxLockOpLinkNode::init(const ObTableLockOp &op_info)
   return ret;
 }
 
+int ObLockMemCtx::init(ObLSTxCtxMgr *ls_tx_ctx_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ls_tx_ctx_mgr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KP(ls_tx_ctx_mgr));
+  } else if (OB_FAIL(ls_tx_ctx_mgr->get_lock_memtable(memtable_handle_))) {
+    TRANS_LOG(WARN, "get lock_memtable fail", KR(ret));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+// for mintest
 int ObLockMemCtx::init(ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
@@ -69,13 +86,11 @@ void ObLockMemCtx::reset()
   DLIST_FOREACH_REMOVESAFE_NORET(curr, lock_list_) {
     lock_list_.remove(curr);
     curr->~ObMemCtxLockOpLinkNode();
-    free_lock_op_(curr);
+    free_lock_link_node_(curr);
   }
   is_killed_ = false;
   max_durable_scn_.reset();
   memtable_handle_.reset();
-  node_pool_.reset();
-  callback_pool_.reset();
 }
 
 int ObLockMemCtx::rollback_table_lock_(const ObTxSEQ to_seq_no, const ObTxSEQ from_seq_no)
@@ -96,7 +111,7 @@ int ObLockMemCtx::rollback_table_lock_(const ObTxSEQ to_seq_no, const ObTxSEQ fr
         memtable->remove_lock_record(curr->lock_op_);
         (void)lock_list_.remove(curr);
         curr->~ObMemCtxLockOpLinkNode();
-        free_lock_op_(curr);
+        free_lock_link_node_(curr);
       }
     }
   }
@@ -114,7 +129,7 @@ void ObLockMemCtx::abort_table_lock_()
       memtable->remove_lock_record(curr->lock_op_);
       (void)lock_list_.remove(curr);
       curr->~ObMemCtxLockOpLinkNode();
-      free_lock_op_(curr);
+      free_lock_link_node_(curr);
     }
   }
 }
@@ -152,7 +167,7 @@ int ObLockMemCtx::commit_table_lock_(const SCN &commit_version, const SCN &commi
       } // switch
       (void)lock_list_.remove(curr);
       curr->~ObMemCtxLockOpLinkNode();
-      free_lock_op_(curr);
+      free_lock_link_node_(curr);
     }
   }
   return ret;
@@ -268,7 +283,7 @@ int ObLockMemCtx::add_lock_record(
   if (OB_UNLIKELY(!lock_op.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(lock_op));
-  } else if (OB_ISNULL(ptr = alloc_lock_op())) {
+  } else if (OB_ISNULL(ptr = alloc_lock_link_node_())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alllocate ObTableLockOp ", K(ret));
   } else if (FALSE_IT(lock_op_node = new(ptr) ObMemCtxLockOpLinkNode())) {
@@ -284,7 +299,7 @@ int ObLockMemCtx::add_lock_record(
   }
   if (OB_FAIL(ret) && NULL != lock_op_node) {
     lock_op_node->~ObMemCtxLockOpLinkNode();
-    free_lock_op(lock_op_node);
+    free_lock_link_node_(lock_op_node);
     lock_op_node = NULL;
   }
   LOG_DEBUG("ObLockMemCtx::add_lock_record", K(ret), K(lock_op));
@@ -302,7 +317,7 @@ void ObLockMemCtx::remove_lock_record(
       (void)lock_list_.remove(lock_op);
     }
     lock_op->~ObMemCtxLockOpLinkNode();
-    free_lock_op(lock_op);
+    free_lock_link_node_(lock_op);
     lock_op = NULL;
   }
 }
@@ -320,7 +335,7 @@ void ObLockMemCtx::remove_lock_record(
           curr->lock_op_.op_type_ == lock_op.op_type_) {
         (void)lock_list_.remove(curr);
         curr->~ObMemCtxLockOpLinkNode();
-        free_lock_op_(curr);
+        free_lock_link_node_(curr);
       }
     }
   }
@@ -333,7 +348,7 @@ int ObLockMemCtx::check_lock_exist( //TODO(lihongqin):check it
     const ObTableLockMode mode,
     const ObTableLockOpType op_type,
     bool &is_exist,
-    ObTableLockMode &lock_mode_in_same_trans) const
+    uint64_t lock_mode_cnt_in_same_trans[]) const
 {
   int ret = OB_SUCCESS;
   is_exist = false;
@@ -347,16 +362,30 @@ int ObLockMemCtx::check_lock_exist( //TODO(lihongqin):check it
     DLIST_FOREACH(curr, lock_list_) {
       if (curr->lock_op_.lock_id_ == lock_id) {
         // BE CAREFUL: get all the lock mode curr trans has got.
-        lock_mode_in_same_trans |= curr->lock_op_.lock_mode_;
+        lock_mode_cnt_in_same_trans[get_index_by_lock_mode(curr->lock_op_.lock_mode_)]++;
         // check exist.
         if (curr->lock_op_.owner_id_ == owner_id &&
             curr->lock_op_.op_type_ == op_type && /* different op type may lock twice */
             curr->lock_op_.lock_op_status_ == LOCK_OP_DOING) {
-          // dbms_lock can only have one obj lock
+          // dbms_lock can only have one obj lock, no matter what lock_mode
           is_exist = lock_id.obj_type_ == ObLockOBJType::OBJ_TYPE_DBMS_LOCK ? true : curr->lock_op_.lock_mode_ == mode;
           if (is_exist) break;
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObLockMemCtx::check_contain_tablet(ObTabletID tablet_id, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  contain = false;
+  RDLockGuard guard(list_rwlock_);
+  DLIST_FOREACH(curr, lock_list_) {
+    if (curr->lock_op_.is_tablet_lock(tablet_id)) {
+      contain = true;
+      break;
     }
   }
   return ret;
@@ -462,35 +491,29 @@ void ObLockMemCtx::print() const
   }
 }
 
-void *ObLockMemCtx::alloc_lock_op()
+ObOBJLockCallback *ObLockMemCtx::create_table_lock_callback(ObIMvccCtx &ctx, ObLockMemtable *memtable)
 {
-  WRLockGuard guard(list_rwlock_);
-  return node_pool_.alloc();
+  int ret = OB_SUCCESS;
+  void *cb_buffer = NULL;
+  ObOBJLockCallback *cb = NULL;
+  if (NULL == (cb_buffer = alloc_table_lock_callback_())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "alloc ObOBJLockCallback cb_buffer fail", K(ret));
+  }
+  if (NULL != cb_buffer) {
+    if (NULL == (cb = new(cb_buffer) ObOBJLockCallback(ctx, memtable))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      TRANS_LOG(WARN, "construct ObOBJLockCallback object fail", K(ret), "cb_buffer", cb_buffer);
+    }
+  }
+  return cb;
 }
 
-void ObLockMemCtx::free_lock_op(void *op)
-{
-  WRLockGuard guard(list_rwlock_);
-  return free_lock_op_(op);
-}
+OB_INLINE void *ObLockMemCtx::alloc_table_lock_callback_() { return host_.alloc_table_lock_callback(); }
+OB_INLINE void ObLockMemCtx::free_table_lock_callback_(memtable::ObITransCallback *cb) { host_.free_table_lock_callback(cb); }
+OB_INLINE void *ObLockMemCtx::alloc_lock_link_node_() { return host_.alloc_lock_link_node(); }
+OB_INLINE void ObLockMemCtx::free_lock_link_node_(void *ptr) { host_.free_lock_link_node(ptr); }
 
-void ObLockMemCtx::free_lock_op_(void *op)
-{
-  return node_pool_.free(op);
-}
-
-void *ObLockMemCtx::alloc_lock_op_callback()
-{
-  WRLockGuard guard(list_rwlock_);
-  return callback_pool_.alloc();
-}
-
-void ObLockMemCtx::free_lock_op_callback(void *cb)
-{
-  WRLockGuard guard(list_rwlock_);
-  return callback_pool_.free(cb);
-}
-
-}
-}
-}
+}  // namespace tablelock
+}  // namespace transaction
+}  // namespace oceanbase

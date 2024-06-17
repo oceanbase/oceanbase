@@ -282,9 +282,15 @@ int ObLogExprValues::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_stmt())) {
+  ObQueryCtx *query_ctx = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  bool enable_var_assign_use_das = false;
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan()) ||
+      OB_ISNULL(query_ctx = get_plan()->get_optimizer_context().get_query_ctx()) ||
+      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
+  } else if (OB_FALSE_IT(enable_var_assign_use_das = session_info->is_var_assign_use_das_enabled())) {
   } else if (get_stmt()->is_insert_stmt() || is_values_table_) {
     const ObIArray<ObColumnRefRawExpr*> &values_desc = get_stmt()->is_insert_stmt() ?
                                   static_cast<const ObInsertStmt*>(get_stmt())->get_values_desc() : value_desc_;
@@ -305,6 +311,9 @@ int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
     LOG_WARN("construct array binding values failed", K(ret));
   } else if (value_exprs_.empty() && OB_FAIL(append(value_exprs_, get_output_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
+  } else if (enable_var_assign_use_das && get_stmt()->is_select_stmt() &&
+             OB_FAIL(extract_var_init_exprs(get_stmt(), query_ctx->var_init_exprs_))) {
+    LOG_WARN("extract var init exprs failed", K(ret));
   } else if (value_exprs_.empty() && OB_FAIL(allocate_dummy_output())) {
     LOG_WARN("failed to allocate dummy output", K(ret));
   } else if (OB_FAIL(construct_sequence_values())) {
@@ -561,6 +570,28 @@ int ObLogExprValues::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
 {
   is_fixed = ObOptimizerUtil::find_item(value_desc_, expr);
   return OB_SUCCESS;
+}
+
+// Extract the var assign expr, This is to be compatible with some of mysql's uses of variables
+// Such as "select c1,(@rownum:= @rownum+1) as CCBH from t1,(SELECT@rownum:=0) B"
+int ObLogExprValues::extract_var_init_exprs(const ObDMLStmt *stmt,
+                                            ObIArray<ObRawExpr*> &assign_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObSelectStmt *select_stmt = NULL;
+  if (OB_ISNULL(stmt) || !stmt->is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt", K(ret));
+  } else if (OB_FALSE_IT(select_stmt = static_cast<const ObSelectStmt*>(stmt))) {
+  } else if (select_stmt->get_from_item_size() <= 0) {
+    for (int i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
+      const SelectItem &select_item = select_stmt->get_select_item(i);
+      if (OB_FAIL(ObRawExprUtils::extract_var_assign_exprs(select_item.expr_, assign_exprs))) {
+        LOG_WARN("extract var assign exprs failed", K(ret));
+      }
+    }
+  }
+  return ret;
 }
 
 } // namespace sql

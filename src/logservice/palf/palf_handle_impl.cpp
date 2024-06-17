@@ -45,7 +45,7 @@ PalfHandleImpl::PalfHandleImpl()
     log_engine_(),
     election_msg_sender_(log_engine_.log_net_service_),
     election_(),
-    hot_cache_(),
+    log_cache_(),
     fetch_log_engine_(NULL),
     allocator_(NULL),
     palf_id_(INVALID_PALF_ID),
@@ -90,6 +90,7 @@ PalfHandleImpl::PalfHandleImpl()
     chaning_config_warn_time_(OB_INVALID_TIMESTAMP),
     cached_is_in_sync_(false),
     has_higher_prio_config_change_(false),
+    last_update_region_time_us_(OB_INVALID_TIMESTAMP),
     is_inited_(false)
 {
   log_dir_[0] = '\0';
@@ -147,7 +148,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
-  } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, &hot_cache_, \
+  } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, &log_cache_, \
           log_rpc, log_io_worker, log_shared_queue_th, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine init failed", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
@@ -203,7 +204,7 @@ int PalfHandleImpl::load(const int64_t palf_id,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
-  } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, &hot_cache_, log_rpc,
+  } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, &log_cache_, log_rpc,
         log_io_worker, log_shared_queue_th, &plugins_, entry_header, palf_epoch, is_integrity,
         PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine load failed", K(ret), K(palf_id));
@@ -241,7 +242,7 @@ void PalfHandleImpl::destroy()
     fetch_log_engine_ = NULL;
     allocator_ = NULL;
     election_.stop();
-    hot_cache_.destroy();
+    log_cache_.destroy();
     log_engine_.destroy();
     reconfirm_.destroy();
     state_mgr_.destroy();
@@ -391,26 +392,28 @@ int PalfHandleImpl::get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info)
   return ret;
 }
 
-int PalfHandleImpl::set_region(const common::ObRegion &region)
+int PalfHandleImpl::update_self_region_()
 {
   int ret = OB_SUCCESS;
-  WLockGuard guard(lock_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(config_mgr_.set_region(region))) {
-    PALF_LOG(WARN, "set_region failed", KR(ret), K(region));
-  }
-  return ret;
-}
-
-int PalfHandleImpl::set_paxos_member_region_map(const LogMemberRegionMap &region_map)
-{
-  int ret = OB_SUCCESS;
-  WLockGuard guard(lock_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (config_mgr_.set_paxos_member_region_map(region_map)) {
-    PALF_LOG(WARN, "set_paxos_member_region_map failed", KR(ret), KPC(this));
+  common::ObRegion new_region, curr_region;
+  do {
+    RLockGuard guard(lock_);
+    if (OB_FAIL(config_mgr_.get_region(curr_region))) {
+      PALF_LOG(WARN, "get_region failed", K(ret), KPC(this));
+    }
+  } while (0);
+  if (OB_FAIL(ret)) {
+    PALF_LOG(WARN, "get_region failed", K(ret), KPC(this));
+  } else if (OB_FAIL(plugins_.get_server_region(self_, new_region))) {
+    PALF_LOG(WARN, "get_server_region failed", K(ret), KPC(this));
+  } else if (curr_region != new_region) {
+    WLockGuard guard(lock_);
+    if (OB_FAIL(config_mgr_.set_region(new_region))) {
+      PALF_LOG(WARN, "get_server_region failed", K(ret), K(new_region), KPC(this));
+    } else {
+      PALF_LOG(INFO, "update_self_region_ success", K(ret), K(curr_region),
+          K(new_region), KPC(this));
+    }
   }
   return ret;
 }
@@ -2347,7 +2350,7 @@ int PalfHandleImpl::alloc_palf_group_buffer_iterator(const SCN &scn,
     sw_.get_committed_end_lsn(committed_end_lsn);
     return MIN(committed_end_lsn, max_flushed_end_lsn);
   };
-  PalfGroupBufferIterator local_iter;
+  PalfGroupBufferIterator local_iter(palf_id_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
@@ -2566,6 +2569,35 @@ int PalfHandleImpl::reset_monitor_cb()
   return ret;
 }
 
+int PalfHandleImpl::set_locality_cb(palf::PalfLocalityInfoCb *locality_cb)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "not initted", KR(ret), KPC(this));
+  } else if (OB_ISNULL(locality_cb)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "locality_cb is NULL, can't register", KR(ret), KPC(this));
+  } else if (OB_FAIL(plugins_.add_plugin(locality_cb))) {
+    PALF_LOG(WARN, "add_plugin failed", KR(ret), KPC(this), KP(locality_cb), K_(plugins));
+  } else {
+    PALF_LOG(INFO, "set_locality_cb success", KPC(this), K_(plugins), KP(locality_cb));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::reset_locality_cb()
+{
+  int ret = OB_SUCCESS;
+  PalfLocalityInfoCb *locality_cb = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(plugins_.del_plugin(locality_cb))) {
+    PALF_LOG(WARN, "del_plugin failed", KR(ret), KPC(this), K_(plugins));
+  }
+  return ret;
+}
+
 int PalfHandleImpl::check_and_switch_freeze_mode()
 {
   int ret = OB_SUCCESS;
@@ -2648,6 +2680,10 @@ int PalfHandleImpl::check_and_switch_state()
         FLOG_INFO("[PALF_DUMP]", K_(palf_id), K_(self), K(ack_info_list));
       }
       (void) sw_.report_log_task_trace(sw_.get_start_id());
+    }
+    if (palf_reach_time_interval(PALF_UPDATE_REGION_INTERVAL_US, last_update_region_time_us_) &&
+        OB_FAIL(update_self_region_())) {
+      PALF_LOG(WARN, "update_region failed", K(ret), KPC(this));
     }
   }
   return OB_SUCCESS;
@@ -2888,8 +2924,8 @@ int PalfHandleImpl::do_init_mem_(
     return role_change_cb_wrpper.on_need_change_leader(id, dest_addr);
   }))) {
     PALF_LOG(WARN, "election_ init failed", K(ret), K(palf_id));
-  } else if (OB_FAIL(hot_cache_.init(palf_id, this))) {
-    PALF_LOG(WARN, "hot_cache_ init failed", K(ret), K(palf_id));
+  } else if (OB_FAIL(log_cache_.init(palf_id, this, palf_env_impl, log_engine_.get_log_storage()))) {
+    PALF_LOG(WARN, "log_cache_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(state_mgr_.init(palf_id, self, log_meta.get_log_prepare_meta(), log_meta.get_log_replica_property_meta(),
           &election_, &sw_, &reconfirm_, &log_engine_, &config_mgr_, &mode_mgr_, &role_change_cb_wrpper_, &plugins_))) {
     PALF_LOG(WARN, "state_mgr_ init failed", K(ret), K(palf_id));
@@ -3128,7 +3164,7 @@ int PalfHandleImpl::receive_batch_log(const common::ObAddr &server,
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
-  MemPalfGroupBufferIterator iterator;
+  MemPalfGroupBufferIterator iterator(palf_id_);
   MemoryStorage storage;
   auto get_file_end_lsn = [curr_lsn, buf_len] () { return curr_lsn + buf_len; };
   if (OB_FAIL(iterator.init(curr_lsn, get_file_end_lsn, &storage))) {
@@ -3533,7 +3569,7 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
   LSN prev_lsn_each_round = prev_lsn;
   LSN prev_end_lsn_each_round = prev_lsn;
   int64_t prev_log_proposal_id_each_round = INVALID_PROPOSAL_ID;
-  PalfGroupBufferIterator iterator;
+  PalfGroupBufferIterator iterator(palf_id_, LogIOUser::FETCHLOG);
   const LSN fetch_end_lsn = fetch_start_lsn + fetch_log_size;
   int64_t fetched_count = 0;
   const bool need_check_prev_log = (prev_lsn.is_valid() && PALF_INITIAL_LSN_VAL < fetch_start_lsn.val_);
@@ -3578,6 +3614,7 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
   // Rpc delay increases enormously when it's size exceeds 2M.
   const int64_t MAX_BATCH_LOG_SIZE_EACH_ROUND = 2 * 1024 * 1024 - 1024;
   char *batch_log_buf = NULL;
+  bool enable_fill_cache = false;
   if (no_need_fetch_log) {
     PALF_LOG(INFO, "no need fetch_log_from_storage", K(ret), KPC(this), K(server), K(fetch_start_lsn), K(prev_lsn),
         K(max_flushed_end_lsn), K(access_mode));
@@ -3596,7 +3633,7 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
   } else if (check_need_hook_fetch_log_(fetch_type, fetch_start_lsn)) {
     ret = OB_ERR_OUT_OF_LOWER_BOUND;
   } else if (FALSE_IT(prev_log_proposal_id_each_round = prev_log_info.log_proposal_id_)) {
-  } else if (OB_FAIL(iterator.init(fetch_start_lsn, get_file_end_lsn, log_engine_.get_log_storage()))) {
+  } else if (OB_FAIL(iterator.init(fetch_start_lsn, get_file_end_lsn, log_engine_.get_log_storage(), enable_fill_cache))) {
     PALF_LOG(ERROR, "init iterator failed", K(ret), K_(palf_id));
   } else if (FALSE_IT(iterator.set_need_print_error(false))) {
     // NB: Fetch log will be concurrent with truncate, the content on disk will not integrity, need igore
@@ -4319,7 +4356,7 @@ int PalfHandleImpl::get_prev_log_info_for_fetch_(const LSN &prev_lsn,
                                                  LogInfo &prev_log_info)
 {
   int ret = OB_SUCCESS;
-  PalfGroupBufferIterator iterator;
+  PalfGroupBufferIterator iterator(palf_id_, LogIOUser::FETCHLOG);
   auto get_file_end_lsn = [&]() { return curr_lsn; };
   auto get_mode_version = [this]() -> int64_t {
     int64_t mode_version = INVALID_PROPOSAL_ID;
@@ -4330,7 +4367,7 @@ int PalfHandleImpl::get_prev_log_info_for_fetch_(const LSN &prev_lsn,
     }
     return mode_version;
   };
-  if (OB_FAIL(iterator.init(prev_lsn, get_file_end_lsn, get_mode_version, log_engine_.get_log_storage()))) {
+  if (OB_FAIL(iterator.init(prev_lsn, get_file_end_lsn, get_mode_version, log_engine_.get_log_storage(), false))) {
     PALF_LOG(WARN, "LogGroupEntryIterator init failed", K(ret), K(iterator), K(prev_lsn), K(curr_lsn));
   } else if (FALSE_IT(iterator.set_need_print_error(false))) {
   } else {
@@ -4364,15 +4401,16 @@ int PalfHandleImpl::get_prev_log_info_(const LSN &lsn,
   LSN start_lsn;
   start_lsn.val_ =
     (0ul == lsn_block_offset ? (lsn_block_id-1) * PALF_BLOCK_SIZE : lsn_block_id * PALF_BLOCK_SIZE);
-  PalfGroupBufferIterator iterator;
+  PalfGroupBufferIterator iterator(palf_id_);
   const LogSnapshotMeta log_snapshot_meta = log_engine_.get_log_meta().get_log_snapshot_meta();
   const LSN base_lsn = log_snapshot_meta.base_lsn_;
   LogInfo log_info;
   auto get_file_end_lsn = [&]() { return lsn; };
+  bool enable_fill_cache = false;
   if (lsn == base_lsn && OB_SUCC(log_snapshot_meta.get_prev_log_info(log_info))) {
     prev_log_info = log_info;
     PALF_LOG(INFO, "lsn is same as base_lsn, and log_snapshot_meta is valid", K(lsn), K(log_snapshot_meta));
-  } else if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, log_engine_.get_log_storage()))) {
+  } else if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, log_engine_.get_log_storage(), enable_fill_cache))) {
     PALF_LOG(WARN, "LogGroupEntryIterator init failed", K(ret), K(start_lsn), K(lsn));
   } else {
     LSN curr_lsn;
@@ -4526,14 +4564,15 @@ int PalfHandleImpl::construct_palf_base_info_for_flashback_(const LSN &start_lsn
 int PalfHandleImpl::append_disk_log_to_sw_(const LSN &start_lsn)
 {
   int ret = OB_SUCCESS;
-  PalfGroupBufferIterator iterator;
+  PalfGroupBufferIterator iterator(palf_id_);
+  bool enable_fill_cache = false;
   // NB: we need append each log locate in [start_lsn, log_tail_);
   auto get_file_end_lsn = [&](){ return LSN(LOG_MAX_LSN_VAL); };
   // if there is no valid data on disk, the 'start_lsn' which meash max committed log offset
   // of this log stream may be invalid.
   if (false == start_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, log_engine_.get_log_storage()))) {
+  } else if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, log_engine_.get_log_storage(), enable_fill_cache))) {
     PALF_LOG(WARN, "PalfGroupBufferIterator init failed", K(ret), K(log_engine_), K(start_lsn));
   } else {
     LogGroupEntry group_entry;
@@ -4570,20 +4609,24 @@ int PalfHandleImpl::get_election_leader_without_lock_(ObAddr &addr) const
   return ret;
 }
 
-int PalfHandleImpl::revoke_leader(const int64_t proposal_id)
+int PalfHandleImpl::advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                                  const int64_t downgrade_priority_time_us,
+                                                                  const char *reason)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "PalfHandleImpl not inited", K(ret), K_(palf_id));
+    PALF_LOG(WARN, "PalfHandleImpl not inited", K(ret), K_(palf_id), K(reason));
   } else if (false == state_mgr_.can_revoke(proposal_id)) {
     ret = OB_NOT_MASTER;
-    PALF_LOG(WARN, "revoke_leader failed, not master", K(ret), K_(palf_id), K(proposal_id));
-  } else if (OB_FAIL(election_.revoke(RoleChangeReason::AskToRevoke))) {
-    PALF_LOG(WARN, "PalfHandleImpl revoke leader failed", K(ret), K_(palf_id));
+    PALF_LOG(WARN, "advance election epoch failed, not master", K(ret), K_(palf_id), K(proposal_id), K(reason));
+  } else if (OB_FAIL(election_.change_leader_to(GCTX.self_addr()))) {
+    PALF_LOG(WARN, "fail to change leader to self", K(ret), K_(palf_id), K(proposal_id), K(reason));
+  } else if (OB_FAIL(election_.temporarily_downgrade_protocol_priority(downgrade_priority_time_us, reason))) {
+    PALF_LOG(WARN, "PalfHandleImpl revoke leader failed", K(ret), K_(palf_id), K(reason));
   } else {
-    PALF_LOG(INFO, "PalfHandleImpl revoke leader success", K(ret), K_(palf_id));
+    PALF_LOG(INFO, "PalfHandleImpl revoke leader success", K(ret), K_(palf_id), K(reason));
   }
   return ret;
 }
@@ -4596,6 +4639,7 @@ int PalfHandleImpl::diagnose(PalfDiagnoseInfo &diagnose_info) const
   state_mgr_.get_election_role(diagnose_info.election_role_, diagnose_info.election_epoch_);
   diagnose_info.enable_sync_ = state_mgr_.is_sync_enabled();
   diagnose_info.enable_vote_ = state_mgr_.is_allow_vote();
+  diagnose_info.parent_ = config_mgr_.get_parent();
   return ret;
 }
 
@@ -4838,7 +4882,8 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
   LogGroupEntryHeader prev_entry_header;
   LogGroupEntry curr_group_entry;
   LSN prev_log_lsn, curr_log_lsn;
-  PalfGroupBufferIterator iterator;
+  PalfGroupBufferIterator iterator(palf_id_, LogIOUser::FLASHBACK);
+  bool enable_fill_cache = false;
   auto get_file_end_lsn = [&](){
     LSN max_flushed_end_lsn;
     (void)sw_.get_max_flushed_end_lsn(max_flushed_end_lsn);
@@ -4850,7 +4895,7 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
   if (!read_buf_guard.read_buf_.is_valid()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "allocate memory failed", KPC(this));
-  } else if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, log_engine_.get_log_storage()))) {
+  } else if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, log_engine_.get_log_storage(), enable_fill_cache))) {
     PALF_LOG(WARN, "iterator init failed", K(ret), KPC(this), K(start_lsn), K(flashback_scn));
   } else {
     const int64_t read_buf_len = read_buf_guard.read_buf_.buf_len_;
@@ -5516,6 +5561,48 @@ int PalfHandleImpl::read_data_from_buffer(const LSN &read_begin_lsn,
   } else {
     PALF_LOG(TRACE, "read_data_from_buffer success", K(ret), K_(palf_id), K(read_begin_lsn),
         K(in_read_size), K(out_read_size));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::raw_read(const LSN &lsn,
+                             char *buffer,
+                             const int64_t nbytes,
+                             int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+  const LSN readable_end_lsn = get_end_lsn();
+  LSN readable_begin_lsn;
+  int64_t real_read_size = 0;
+  read_size = 0;
+  const bool need_read_block_header = false;
+  ObTimeGuard time_guard("raw_read", 100 * 1000);
+  ReadBuf read_buf(buffer, nbytes);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImp not inited", K(ret), K_(palf_id), K(lsn), K(nbytes), K(read_buf));
+  } else if (!lsn.is_valid()
+             || !is_valid_raw_read_buf(read_buf, lsn_2_offset(lsn, PALF_BLOCK_SIZE), nbytes)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid arguments", K(ret), K_(palf_id), K(lsn), K(nbytes), K(read_buf));
+  } else if (OB_FAIL(get_begin_lsn(readable_begin_lsn))) {
+    PALF_LOG(WARN, "get_begin_lsn failed", K(ret), K_(palf_id), K(lsn), K(nbytes), K(read_buf));
+  } else if (lsn < readable_begin_lsn) {
+    ret = OB_ERR_OUT_OF_LOWER_BOUND;
+    PALF_LOG(WARN, "read something out of lower bound", K(ret), K_(palf_id), K(lsn), K(nbytes),
+             K(read_size), K(readable_begin_lsn));
+  } else if (lsn >= readable_end_lsn) {
+    ret = OB_ERR_OUT_OF_UPPER_BOUND;
+    PALF_LOG(WARN, "read something out of upper bound", K(ret), K_(palf_id), K(lsn),
+             K(nbytes), K(read_size), K(readable_end_lsn));
+    // only read the data before readable_end_lsn
+  } else if (FALSE_IT(real_read_size = MIN(nbytes, readable_end_lsn - lsn))) {
+  } else if (OB_FAIL(log_engine_.raw_read(lsn, real_read_size, need_read_block_header, read_buf, read_size))) {
+    PALF_LOG(WARN, "read_log from storage failed", K(ret), K_(palf_id), K(lsn),
+             K(nbytes), K(real_read_size), K(readable_end_lsn), K(read_size));
+  } else {
+    PALF_LOG(TRACE, "raw_read success", K(ret), K_(palf_id), K(lsn),  K(nbytes),
+             K(real_read_size), K(readable_end_lsn), K(read_size), K(time_guard));
   }
   return ret;
 }

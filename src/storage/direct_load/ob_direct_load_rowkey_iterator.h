@@ -34,9 +34,20 @@ public:
   TO_STRING_EMPTY();
 };
 
+template <class Rowkey>
+class ObDirectLoadRowkeyEmptyIterator : public ObIDirectLoadRowkeyIterator<Rowkey>
+{
+public:
+  ObDirectLoadRowkeyEmptyIterator() = default;
+  virtual ~ObDirectLoadRowkeyEmptyIterator() = default;
+  int get_next_rowkey(const Rowkey *&rowkey) override { return OB_ITER_END; }
+};
+
 typedef ObIDirectLoadRowkeyIterator<blocksstable::ObDatumRowkey> ObIDirectLoadDatumRowkeyIterator;
 typedef ObIDirectLoadRowkeyIterator<ObDirectLoadMultipleDatumRowkey>
   ObIDirectLoadMultipleDatumRowkeyIterator;
+typedef ObDirectLoadRowkeyEmptyIterator<blocksstable::ObDatumRowkey>
+  ObDirectLoadDatumRowkeyEmptyIterator;
 
 class ObDirectLoadDatumRowkeyArrayIterator : public ObIDirectLoadDatumRowkeyIterator
 {

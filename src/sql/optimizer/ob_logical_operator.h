@@ -31,6 +31,8 @@
 #include "sql/optimizer/ob_fd_item.h"
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/monitor/ob_plan_info_manager.h"
+#include "sql/optimizer/ob_px_resource_analyzer.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -39,6 +41,7 @@ struct JoinFilterInfo;
 struct EstimateCostInfo;
 struct ObSqlPlanItem;
 struct PlanText;
+class ObPxResourceAnalyzer;
 struct partition_location
 {
   int64_t partition_id;
@@ -277,6 +280,17 @@ struct FilterCompare
   double get_selectivity(ObRawExpr *expr);
 
   common::ObIArray<ObExprSelPair> &predicate_selectivities_;
+};
+
+typedef std::pair<double, ObRawExpr *> ObExprRankPair;
+
+struct ObExprRankPairCompare
+{
+  ObExprRankPairCompare() {};
+  bool operator()(ObExprRankPair &left, ObExprRankPair &right)
+  {
+    return left.first < right.first;
+  }
 };
 
 class AdjustSortContext
@@ -1151,9 +1165,9 @@ public:
    * get cur_op's expected_ordering
    */
   inline void set_is_local_order(bool is_local_order) { is_local_order_ = is_local_order; }
-  inline bool get_is_local_order() { return is_local_order_; }
+  inline bool get_is_local_order() const { return is_local_order_; }
   inline void set_is_range_order(bool is_range_order) { is_range_order_ = is_range_order; }
-  inline bool get_is_range_order() { return is_range_order_; }
+  inline bool get_is_range_order() const { return is_range_order_; }
 
   inline void set_is_at_most_one_row(bool is_at_most_one_row) { is_at_most_one_row_ = is_at_most_one_row; }
   inline bool get_is_at_most_one_row() { return is_at_most_one_row_; }
@@ -1634,6 +1648,8 @@ public:
    *  be evaluated earlier.
    */
   int reorder_filter_exprs();
+  int reorder_filters_exprs(common::ObIArray<ObExprSelPair> &predicate_selectivities,
+                            ObIArray<ObRawExpr *> &filters_exprs);
 
   int find_shuffle_join_filter(bool &find) const;
   int has_window_function_below(bool &has_win_func) const;
@@ -1689,6 +1705,18 @@ public:
   int generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr);
   int pick_out_startup_filters();
   int check_contain_false_startup_filter(bool &contain_false);
+
+  // Make the operator in state of output data.
+  // 1. If this operator is single-child and non-block, then open its child.
+  // 2. If this operator is single-child and block, then open and close its child.
+  // 3. If this operator has multiple children, open all children by default and
+  //    operators should override this function according to their unique execution logic.
+  // append_map = false means it's in the progress of LogSet searching for child
+  //   with max running thread/group count, and we will not modify max_count or max_map.
+  virtual int open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG);
+  // Make the operator in state that all data has been outputted already.
+  virtual int close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG);
+  int find_max_px_resource_child(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG, int64_t start_idx);
 
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
@@ -1849,6 +1877,7 @@ private:
   // alloc mat for sync in intput
   int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
   int check_need_parallel_valid(int64_t need_parallel) const;
+  virtual int get_card_without_filter(double &card);
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator
@@ -1906,6 +1935,8 @@ protected:
   int64_t inherit_sharding_index_;
   // wether has allocated a osg_gather.
   bool need_osg_merge_;
+  int64_t max_px_thread_branch_;
+  int64_t max_px_group_branch_;
 };
 
 template <typename Allocator>
@@ -1928,6 +1959,33 @@ int ObLogicalOperator::init_all_traverse_ctx(Allocator &alloc)
   }
   return ret;
 }
+
+// json table default value struct
+struct ObColumnDefault
+{
+public:
+  ObColumnDefault()
+    : column_id_(common::OB_NOT_EXIST_COLUMN_ID),
+      default_error_expr_(nullptr),
+      default_empty_expr_(nullptr)
+  {}
+  ObColumnDefault(int64_t column_id)
+    : column_id_(column_id),
+      default_error_expr_(nullptr),
+      default_empty_expr_(nullptr)
+  {}
+  void reset()
+  {
+    column_id_ = common::OB_NOT_EXIST_COLUMN_ID;
+    default_error_expr_ = nullptr;
+    default_empty_expr_ = nullptr;
+  }
+
+  TO_STRING_KV(K_(column_id), KPC_(default_error_expr), KPC_(default_empty_expr));
+  int64_t column_id_;
+  ObRawExpr* default_error_expr_;
+  ObRawExpr* default_empty_expr_;
+};
 
 } // end of namespace sql
 } // end of namespace oceanbase

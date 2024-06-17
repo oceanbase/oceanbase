@@ -732,11 +732,10 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
     }
     const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
     batch_info_guard.set_batch_size(brs_.size_);
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || brs_.size_ <= 0) {
     } else if (OB_FAIL(set_rollup_hybrid_keys(slice_calc))) {
       LOG_WARN("failed to set rollup hybrid keys", K(ret));
-    } else if (brs_.size_ > 0
-        && (!slice_calc.support_vectorized_calc() || NULL != spec.tablet_id_expr_)) {
+    } else if ((!slice_calc.support_vectorized_calc() || NULL != spec.tablet_id_expr_)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
         if (brs_.skip_->at(i)) {
           continue;
@@ -759,7 +758,7 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
           }
         }
       }
-    } else if (brs_.size_ > 0) {
+    } else {
       int64_t *indexes = NULL;
       if (OB_FAIL((slice_calc.get_slice_idx_batch<CALC_TYPE, false>(spec_.output_, eval_ctx_,
                                                *brs_.skip_, brs_.size_,
@@ -849,11 +848,10 @@ int ObPxTransmitOp::send_rows_in_vector(ObSliceIdxCalc &slice_calc)
     }
     const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
     batch_info_guard.set_batch_size(brs_.size_);
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || brs_.size_ == 0) {
     } else if (OB_FAIL(set_rollup_hybrid_keys(slice_calc))) {
       LOG_WARN("failed to set rollup hybrid keys", K(ret));
-    } else if (brs_.size_ > 0
-        && (!slice_calc.support_vectorized_calc() || NULL != spec.tablet_id_expr_)) {
+    } else if ((!slice_calc.support_vectorized_calc() || NULL != spec.tablet_id_expr_)) {
       for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); i++) {
         ObExpr *expr = spec_.output_.at(i);
         if (T_TABLET_AUTOINC_NEXTVAL == expr->type_) {
@@ -913,7 +911,7 @@ int ObPxTransmitOp::send_rows_in_vector(ObSliceIdxCalc &slice_calc)
           LOG_WARN("failed to send batch", K(ret));
         }
       }
-    } else if (brs_.size_ > 0) {
+    } else {
       int64_t *indexes = NULL;
       if (OB_FAIL((slice_calc.get_slice_idx_batch<CALC_TYPE, true>(spec_.output_, eval_ctx_,
                                                *brs_.skip_, brs_.size_,
@@ -1372,6 +1370,7 @@ int ObPxTransmitOp::link_ch_sets(ObPxTaskChSet &ch_set,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_DYNAMIC_SAMPLE_FAIL)
 int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePieceMsg &piece_msg)
 {
   int ret = OB_SUCCESS;
@@ -1381,6 +1380,9 @@ int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePiec
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("dynimic sample only supported in parallel execution mode", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynimic sample in non-px mode");
+  } else if (OB_SUCCESS != ERRSIM_DYNAMIC_SAMPLE_FAIL &&
+             ctx_.get_px_task_id() == 0) {
+    ret = ERRSIM_DYNAMIC_SAMPLE_FAIL;
   } else {
     const ObDynamicSampleWholeMsg *temp_whole_msg = NULL;
     ObPxSQCProxy &proxy = handler->get_sqc_proxy();
@@ -1399,10 +1401,11 @@ int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePiec
     } else if (OB_ISNULL(temp_whole_msg)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("whole msg is unexpected", K(ret));
-    } else if (OB_FAIL(ctx_.set_partition_ranges(temp_whole_msg->part_ranges_))) {
-      LOG_WARN("set partition ranges failed", K(ret), K(*temp_whole_msg));
+    } else if (OB_FAIL(handler->set_partition_ranges(temp_whole_msg->part_ranges_))) {
+      LOG_WARN("set partition ranges failed", K(ret), K(piece_msg), K(*temp_whole_msg));
     } else {
-      LOG_INFO("dynamic sample succ", K(ret), K(piece_msg), K(*temp_whole_msg), K(ctx_.get_partition_ranges()));
+      LOG_INFO("dynamic sample succ", K(ret), K(piece_msg), K(*temp_whole_msg),
+                                      K(handler->get_partition_ranges()));
     }
   }
   return ret;

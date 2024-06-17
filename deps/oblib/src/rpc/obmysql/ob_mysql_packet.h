@@ -84,6 +84,7 @@ enum ObMySQLCmd
   // COM_LOGIN represents client---->hand shake response && observer---> ok or error
   COM_HANDSHAKE,
   COM_LOGIN,
+  COM_AUTH_SWITCH_RESPONSE,
 
   COM_STMT_PREXECUTE = PREXECUTE_CMD,
   COM_STMT_SEND_PIECE_DATA,
@@ -105,8 +106,9 @@ enum class ObMySQLPacketType
   PKT_PREPARE,   // 9 -> prepare packet;
   PKT_RESHEAD,   // 10 -> result header packet
   PKT_PREXEC,    // 11 -> prepare execute packet;
-  PKT_FILENAME,  // 12 -> send file name to client(load local infile)
-  PKT_END        // 13 -> end of packet type
+  PKT_AUTH_SWITCH,// 12 -> auth switch request packet;
+  PKT_FILENAME,  // 13 -> send file name to client(load local infile)
+  PKT_END        // 14 -> end of packet type
 };
 
 union ObServerStatusFlags
@@ -166,6 +168,8 @@ union ObProxyCapabilityFlags
                                                         && is_ob_protocol_v2_support(); }
   bool is_load_local_support() const { return 1 == cap_flags_.OB_CAP_LOCAL_FILES; }
   bool is_client_sessid_support() const { return 1 == cap_flags_.OB_CAP_PROXY_CLIENT_SESSION_ID; }
+  bool is_feedback_proxy_info_support() const { return 1 == cap_flags_.OB_CAP_FEEDBACK_PROXY_SHIFT
+                                                        && is_ob_protocol_v2_support(); }
 
   uint64_t capability_;
   struct CapabilityFlags
@@ -203,6 +207,7 @@ union ObProxyCapabilityFlags
     // client session id consultation
     uint64_t OB_CAP_PROXY_CLIENT_SESSION_ID:           1;
     uint64_t OB_CAP_OB_PROTOCOL_V2_COMPRESS:           1;
+    uint64_t OB_CAP_FEEDBACK_PROXY_SHIFT:              1;
     uint64_t OB_CAP_RESERVED_NOT_USE:                 41;
   } cap_flags_;
 };

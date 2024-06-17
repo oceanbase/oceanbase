@@ -33,6 +33,8 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::observer;
 using namespace oceanbase::pl;
 
+namespace oceanbase
+{
 // copy from test_table_schema.cpp
 void fill_table_schema(ObTableSchema &table)
 {
@@ -162,6 +164,7 @@ void TestCreateExecutor::SetUp()
 
 void TestCreateExecutor::TearDown()
 {
+  MTL_CTX()=nullptr;
 }
 
 ObTableApiSessNodeVal g_sess_node_val(NULL, 500);
@@ -471,39 +474,6 @@ TEST_F(TestCreateExecutor, cons_column_type)
   ASSERT_EQ(1, column_info.type_.get_accuracy().get_length());
 }
 
-TEST_F(TestCreateExecutor, check_column_type)
-{
-  ObTableColumnInfo column_info;
-  column_info.type_.set_result_flag(NOT_NULL_WRITE_FLAG);
-  ObObj obj;
-  uint32_t res_flag = 0;
-  ObTableCtx fake_ctx(allocator_);
-  schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
-  fake_ctx_init_common(fake_ctx, &table_schema_);
-
-  // check nullable
-  obj.set_null();
-  res_flag |= NOT_NULL_FLAG;
-  column_info.type_.set_result_flag(res_flag);
-  column_info.is_nullable_ = false;
-  ASSERT_EQ(OB_BAD_NULL_ERROR, fake_ctx.adjust_column_type(column_info, obj));
-  // check data type mismatch
-  res_flag = 0;
-  obj.set_int(1);
-  column_info.type_.set_result_flag(res_flag);
-  column_info.type_.set_type(ObVarcharType);
-  ASSERT_EQ(OB_KV_COLUMN_TYPE_NOT_MATCH, fake_ctx.adjust_column_type(column_info, obj));
-  // check collation
-  obj.set_binary("ttt");
-  column_info.type_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  ASSERT_EQ(OB_KV_COLLATION_MISMATCH, fake_ctx.adjust_column_type(column_info, obj));
-  // collation convert
-  obj.set_varchar("test");
-  obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.adjust_column_type(column_info, obj));
-  ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, obj.get_collation_type());
-}
-
 TEST_F(TestCreateExecutor, generate_key_range)
 {
   ObTableCtx fake_ctx(allocator_);
@@ -580,6 +550,7 @@ TEST_F(TestCreateExecutor, test_cache)
     ASSERT_EQ(TABLE_API_EXEC_INSERT, spec->type_);
   }
 }
+} // end namespace oceanbase
 
 int main(int argc, char **argv)
 {

@@ -45,7 +45,7 @@
 #include "observer/table/ob_table_batch_execute_processor.h"
 #include "observer/table/ob_table_query_processor.h"
 #include "observer/table/ob_table_query_and_mutate_processor.h"
-#include "observer/table/ob_table_query_sync_processor.h"
+#include "observer/table/ob_table_query_async_processor.h"
 #include "observer/table/ob_table_direct_load_processor.h"
 #include "storage/ob_storage_rpc.h"
 
@@ -54,6 +54,7 @@
 #include "storage/tx/ob_xa_rpc.h"
 
 #include "observer/table_load/ob_table_load_rpc_processor.h"
+#include "observer/table_load/resource/ob_table_load_resource_processor.h"
 #include "observer/net/ob_net_endpoint_ingress_rpc_processor.h"
 #include "share/wr/ob_wr_snapshot_rpc_processor.h"
 
@@ -204,7 +205,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObTableBatchExecuteP, gctx_);
   RPC_PROCESSOR(ObTableQueryP, gctx_);
   RPC_PROCESSOR(ObTableQueryAndMutateP, gctx_);
-  RPC_PROCESSOR(ObTableQuerySyncP, gctx_);
+  RPC_PROCESSOR(ObTableQueryAsyncP, gctx_);
   RPC_PROCESSOR(ObTableDirectLoadP, gctx_);
   RPC_PROCESSOR(ObTenantTTLP, gctx_);
 
@@ -298,6 +299,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObNetEndpointRegisterP, gctx_);
   RPC_PROCESSOR(ObNetEndpointPredictIngressP, gctx_);
   RPC_PROCESSOR(ObNetEndpointSetIngressP, gctx_);
+  RPC_PROCESSOR(ObRpcGetTenantResP, gctx_);
 
   // session info verification
   RPC_PROCESSOR(ObSessInfoVerificationP, gctx_);
@@ -305,6 +307,8 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // direct load
   RPC_PROCESSOR(ObDirectLoadControlP, gctx_);
+  // direct load resource
+  RPC_PROCESSOR(ObDirectLoadResourceP, gctx_);
 
   // wr
   RPC_PROCESSOR(ObWrAsyncSnapshotTaskP, gctx_);
@@ -316,4 +320,9 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObKillClientSessionP, gctx_);
   // client session create time
   RPC_PROCESSOR(ObClientSessionConnectTimeP, gctx_);
+  // limit calculator
+  RPC_PROCESSOR(ObResourceLimitCalculatorP, gctx_);
+
+  // ddl
+  RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
 }

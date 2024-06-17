@@ -151,6 +151,7 @@ int ObDtlChannelLoop::ObDtlChannelLoopProc::process(
   const ObDtlLinkedBuffer &buffer, bool &transferred)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObDtlMsgHeader header;
   if (buffer.is_data_msg()) {
     last_msg_type_ = static_cast<int16_t>(ObDtlMsgType::PX_NEW_ROW);
@@ -249,8 +250,12 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
       last_dump_channel_time_ = last_dump_channel_time_ < process_query_time_ ? process_query_time_ : last_dump_channel_time_;
       int64_t curr_time = ::oceanbase::common::ObTimeUtility::current_time();
       if (OB_UNLIKELY(curr_time - last_dump_channel_time_ >= static_cast<int64_t> (100_s))) {
+        if (0 != process_query_time_) {
+          LOG_INFO("dump channel loop info for query which active for more than 100 seconds",
+                  K(process_query_time_), K(curr_time),
+                  K(timeout), K(timeout_), K(query_timeout_ts_));
+        }
         last_dump_channel_time_ = curr_time;
-        LOG_INFO("dump channel loop info for query which active for more than 100 seconds", K(process_query_time_), K(curr_time), K(timeout), K(timeout_), K(query_timeout_ts_));
         int64_t idx = -1;
         int64_t last_in_msg_time = INT64_MAX;
         // Find a channel that has not received data for the longest time
@@ -265,9 +270,12 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
         }
         if (-1 == idx) {
           LOG_WARN("no channel exists");
-        } else {
+        } else if (0 != process_query_time_) {
           ObDtlBasicChannel *channel = static_cast<ObDtlBasicChannel *> (chans_.at(idx));
-          LOG_INFO("dump channel info for query which active for more than 100 seconds", K(idx), K(channel->get_id()), K(channel->get_peer_id()), K(channel->get_peer()), K(channel->get_op_metric()));
+          LOG_INFO("dump channel info for query which active for more than 100 seconds",
+                   K(idx), K(channel->get_id()),
+                   K(channel->get_peer_id()), K(channel->get_peer()),
+                   K(channel->get_op_metric()));
         }
       }
     }

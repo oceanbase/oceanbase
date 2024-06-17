@@ -17,6 +17,12 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::common;
 namespace oceanbase
 {
+
+namespace obmysql
+{
+  void __attribute__((weak)) request_finish_callback() {}
+}
+
 namespace obrpc
 {
 void* ObEasyRpcRequestOperator::alloc_response_buffer(ObRequest* req, int64_t size)
@@ -44,6 +50,7 @@ void ObEasyRpcRequestOperator::response_result(ObRequest* req, obrpc::ObRpcPacke
   } else {
     ez_req->opacket = pkt;
     ez_req->retcode = EASY_OK;
+    obmysql::request_finish_callback();
     if (NULL == EASY_IOTH_SELF) { // ErrorP response in io thread, need not wakeup easy request.
       easy_request_wakeup(ez_req);
     }

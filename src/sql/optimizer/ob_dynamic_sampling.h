@@ -199,6 +199,8 @@ static T *copy_ds_stat_item(ObIAllocator &allocator, const T &src)
 
 const int64_t OB_DS_BASIC_SAMPLE_MICRO_CNT = 32;
 const int64_t OB_DS_MAX_FILTER_EXPR_COUNT = 10000;
+const int64_t OB_DS_MIN_QUERY_TIMEOUT = 1000;//Dynamic sampling requires a minimum timeout of 1ms.
+const int64_t OB_DS_MAX_BASIC_SAMPLE_MICRO_CNT = 1000000;
 //const int64_t OB_OPT_DS_ADAPTIVE_SAMPLE_MICRO_CNT = 200;
 //const int64_t OB_OPT_DS_MAX_TIMES = 7;
 
@@ -222,7 +224,10 @@ public:
     basic_hints_(),
     where_conditions_(),
     ds_stat_items_(),
-    results_()
+    results_(),
+    is_big_table_(false),
+    sample_big_table_rown_cnt_(0),
+    table_clause_()
   {}
 
   int estimate_table_rowcount(const ObDSTableParam &param,
@@ -317,6 +322,7 @@ private:
                       int64_t nested_count,
                       bool is_no_backslash_escapes,
                       transaction::ObTxDesc *tx_desc);
+  int add_table_clause(ObSqlString &table_str);
 
 private:
   ObOptimizerContext *ctx_;
@@ -336,6 +342,9 @@ private:
   ObString where_conditions_;
   ObSEArray<ObDSStatItem *, 4, common::ModulePageAllocator, true> ds_stat_items_;
   ObSEArray<ObObj, 4, common::ModulePageAllocator, true> results_;
+  bool is_big_table_;
+  int64_t sample_big_table_rown_cnt_;
+  ObString table_clause_;
   //following members will be used for dynamic sampling join in the future
   //ObString join_type_;
   //ObString join_conditions_;
@@ -366,8 +375,7 @@ public:
                                                   uint64_t index_id,
                                                   const ObIArray<ObDSResultItem> &ds_result_items);
 
-  static int get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx,
-                                              int64_t &max_ds_timeout);
+  static int64_t get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx);
 
   static int add_failed_ds_table_list(const uint64_t table_id,
                                       const common::ObIArray<int64_t> &used_part_id,

@@ -45,9 +45,11 @@ public:
     // TODO: fix deep copy bug
     //nulls_->deep_copy(nulls, start_idx, start_idx + read_rows);
     nulls_->reset(read_rows);
-    for (int64_t i = 0; i < read_rows; ++i) {
-      if (nulls.at(start_idx + i)) {
-        nulls_->set(i);
+    if (has_null) {
+      for (int64_t i = 0; i < read_rows; ++i) {
+        if (nulls.at(start_idx + i)) {
+          nulls_->set(i);
+        }
       }
     }
     len_ = static_cast<int32_t> (fixed_len);

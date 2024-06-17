@@ -92,7 +92,7 @@ using namespace logfetcher;
     LSFetchCtx *ls_fetch_ctx = NULL; \
     ObLogFetcherStartParameters start_paras; \
     start_paras.reset(start_ts_ns, start_lsn); \
-    EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.add_ls(tls_id, start_paras, false, \
+    EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.add_ls(tls_id, start_paras, false, false, \
         ClientFetchingMode::FETCHING_MODE_INTEGRATED, "|")); \
     EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.get_ls_fetch_ctx(tls_id, ls_fetch_ctx)); \
     ObTxLogGenerator log_generator(tenant_id, ls_id, tx_id, cluster_id);

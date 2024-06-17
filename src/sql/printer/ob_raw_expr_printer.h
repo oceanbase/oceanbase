@@ -131,6 +131,7 @@ private:
   int print(ObUDFRawExpr *expr);
   int print(ObWinFunRawExpr *expr);
   int print(ObPseudoColumnRawExpr *expr);
+  int print(ObMatchFunRawExpr *expr);
 
   int print_date_unit(ObRawExpr *expr);
   int print_get_format_unit(ObRawExpr *expr);
@@ -157,6 +158,9 @@ private:
   int print_xml_attributes_expr(ObSysFunRawExpr *expr);
   int print_xml_agg_expr(ObAggFunRawExpr *expr);
   int print_xml_serialize_expr(ObSysFunRawExpr *expr);
+  int print_sql_udt_attr_access(ObSysFunRawExpr *expr);
+  int print_sql_udt_construct(ObSysFunRawExpr *expr);
+  int print_st_asmvt(ObAggFunRawExpr *expr);
 
   int print_type(const ObExprResType &dst_type);
 

@@ -48,6 +48,8 @@ select char_length(' a b');
 drop table if exists t1;
 create table t1 (c1 int, c2 char(10), c3 varchar(10), c4 timestamp, c5 decimal);
 insert into t1 values(1, 'a ', 'a ', '2010-01-01 11:11:11', 10.1);
+Warnings:
+Warning	1265	Data truncated for column 'c5' at row 1
 select char_length(c1) from t1;
 +-----------------+
 | char_length(c1) |

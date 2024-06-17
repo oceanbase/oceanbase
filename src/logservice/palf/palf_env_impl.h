@@ -204,6 +204,7 @@ public:
   virtual int update_replayable_point(const SCN &replayable_scn) = 0;
   virtual int get_throttling_options(PalfThrottleOptions &option) = 0;
   virtual void period_calc_disk_usage() = 0;
+  virtual int get_options(PalfOptions &options) = 0;
   VIRTUAL_TO_STRING_KV("IPalfEnvImpl", "Dummy");
 
 };
@@ -388,6 +389,7 @@ private:
   // last_palf_epoch_ is used to assign increasing epoch for each palf instance.
   int64_t last_palf_epoch_;
   int64_t rebuild_replica_log_lag_threshold_;//for rebuild test
+  bool enable_log_cache_;
 
   LogIOWorkerConfig log_io_worker_config_;
   bool diskspace_enough_;

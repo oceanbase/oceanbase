@@ -32,6 +32,7 @@ extern void obsql_mysql_parser_fatal_error(int32_t errcoyyde, yyscan_t yyscanner
 %x in_c_comment
 %x sq
 %x hint_sq
+%x hint_dq
 %x dq
 %x bt
 %x hint_bt
@@ -55,11 +56,13 @@ insert_hint_begin       (insert{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/
 replace_hint_begin      (replace{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 load_data_hint_begin    (load{space}+data{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 create_hint_begin    (create{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
+alter_hint_begin    (alter{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 hint_hint_begin      (hint{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 common_hint_begin (\/\*\+({space}*hint{space}+)?)
 c_cmt_begin      \/\*
 c_cmt_end        \*+\/
 comment          ({sql_comment})
+start_identifier        (([A-Za-z0-9$_]*[A-Za-z$_][A-Za-z0-9$_]*|{NOTASCII_GB_CHAR})+)
 identifier        (([A-Za-z0-9$_]|{NOTASCII_GB_CHAR})+)
 system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)|(@@[`][`A-Za-z_][`A-Za-z_]*)
 user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)
@@ -136,6 +139,21 @@ NULL {
   CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
+  if (IS_FAST_PARAMETERIZE) {
+    STORE_PARAM_NODE();
+  } else {
+    yylval->node->sql_str_off_ = yylloc->first_column - 1;
+    return NULLX;
+  }
+}
+
+\\N {
+  check_value(yylval);
+  ParseResult *p = (ParseResult *)yyextra;
+  malloc_new_node(yylval->node, p->malloc_pool_, T_NULL, 0);
+  COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
+  yylval->node->text_len_ = yyleng;
+  yylval->node->value_ = 1;
   if (IS_FAST_PARAMETERIZE) {
     STORE_PARAM_NODE();
   } else {
@@ -954,6 +972,12 @@ Timestamp{whitespace}?\"[^\"]*\" {
   p->is_ignore_token_ = p->is_ignore_hint_;
   return CREATE_HINT_BEGIN;
 }
+{alter_hint_begin} {
+  BEGIN(hint);
+  ParseResult *p = (ParseResult *)yyextra;
+  p->is_ignore_token_ = p->is_ignore_hint_;
+  return ALTER_HINT_BEGIN;
+}
 <hint>{c_cmt_end} {
   BEGIN(INITIAL);
   return HINT_END;
@@ -1012,6 +1036,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>LEADING  { return LEADING_HINT; }
 <hint>ORDERED  { return ORDERED; }
 <hint>NO_REWRITE { return NO_REWRITE; }
+<hint>MV_REWRITE { return MV_REWRITE; }
+<hint>NO_MV_REWRITE { return NO_MV_REWRITE; }
 <hint>FULL  { return FULL_HINT; }
 <hint>USE_MERGE  { return USE_MERGE; }
 <hint>NO_USE_MERGE  { return NO_USE_MERGE; }
@@ -1139,6 +1165,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>DYNAMIC_SAMPLING { return DYNAMIC_SAMPLING; }
 <hint>BLOCKING { return BLOCKING; }
 <hint>PUSHDOWN { return PUSHDOWN; }
+<hint>DECORRELATE { return DECORRELATE; }
+<hint>NO_DECORRELATE { return NO_DECORRELATE; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);
@@ -1277,6 +1305,70 @@ Timestamp{whitespace}?\"[^\"]*\" {
 
 <hint_bt><<EOF>>  {
   yyerror(yylloc, yyextra, "unterminated quoted string in hint\n");
+  return PARSER_SYNTAX_ERROR;
+}
+
+<hint>{dquote} {
+  ParseResult *p = (ParseResult *)yyextra;
+  if (!p->is_ignore_token_) {
+    BEGIN(hint_dq);
+    if (IS_FAST_PARAMETERIZE) {
+      COPY_WRITE();
+    } else {
+      check_value(yylval);
+      ParseResult *p = (ParseResult *)yyextra;
+      p->start_col_ = yylloc->first_column;
+      char **tmp_literal = &p->tmp_literal_;
+      if (NULL == *tmp_literal)
+      {
+        *tmp_literal = (char *)parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
+        check_malloc(*tmp_literal);
+      }
+      malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
+      yylval->node->str_len_ = 0;
+    }
+  }
+}
+
+<hint_dq>{dqcontent} {
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    check_value(yylval);
+    memmove(((ParseResult *)yyextra)->tmp_literal_ + yylval->node->str_len_, yytext, yyleng);
+    yylval->node->str_len_ += yyleng;
+  }
+}
+
+<hint_dq>{dqend} {
+  BEGIN(hint);
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    ParseResult *p = (ParseResult *)yyextra;
+    check_value(yylval);
+    yylloc->first_column = p->start_col_;
+    char *tmp_literal = p->tmp_literal_;
+    tmp_literal[yylval->node->str_len_] = '\0';
+    yylval->node->raw_text_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
+    check_malloc(yylval->node->raw_text_);
+    char *dup_value = NULL;
+    char *well_formed_str = replace_invalid_character(p->charset_info_, p->charset_info_oracle_db_, tmp_literal, &(yylval->node->str_len_), p->malloc_pool_, &(p->extra_errno_));
+    check_identifier_convert_result(p->extra_errno_);
+    if (p->is_not_utf8_connection_) {
+      dup_value = parse_str_convert_utf8(p->charset_info_, well_formed_str, p->malloc_pool_, &(yylval->node->str_len_), &(p->extra_errno_));
+      check_identifier_convert_result(p->extra_errno_);
+    } else {
+      dup_value = parse_strndup(well_formed_str, yylval->node->str_len_ + 1, p->malloc_pool_);
+    }
+    check_malloc(dup_value);
+    yylval->node->str_value_ = dup_value;
+    return NAME_OB;
+  }
+}
+
+<hint_dq><<EOF>>  {
+  yyerror(yylloc, yyextra, "unterminated doublequoted string\n");
   return PARSER_SYNTAX_ERROR;
 }
 
@@ -1615,6 +1707,65 @@ BEGIN(in_c_comment);
     REPUT_NEG_SIGN(p);
   }
   return USER_VARIABLE;
+}
+
+{start_identifier}"."{identifier}"."{identifier} {
+  ParseResult *result = (ParseResult *)yyextra;
+  check_value(yylval);
+  if (IS_FAST_PARAMETERIZE) {
+    REPUT_NEG_SIGN(result);
+    return ID_DOT_ID_DOT_ID;
+  } else {
+    ParseNode *node = NULL, *db_node = NULL, *tb_node = NULL, *col_node = NULL;
+    malloc_new_node(db_node, result->malloc_pool_, T_IDENT, 0);
+    malloc_new_node(tb_node, result->malloc_pool_, T_IDENT, 0);
+    malloc_new_node(col_node, result->malloc_pool_, T_IDENT, 0);
+
+    char *db_name = yytext;
+    char *tb_name = strstr(db_name, ".") + 1;
+    char *col_name = strstr(tb_name, ".") + 1;
+    size_t db_len = tb_name - db_name - 1;
+    size_t tb_len = col_name - tb_name - 1;
+    size_t col_len = strlen(col_name);
+
+    gen_expr_node(db_node, db_name, db_len, result, yylloc->first_column - 1);
+    gen_expr_node(tb_node, tb_name, tb_len, result, yylloc->first_column + db_len);
+    gen_expr_node(col_node, col_name, col_len, result, yylloc->first_column + db_len + tb_len + 1);
+    malloc_new_node(node, result->malloc_pool_, T_IDENT, 3);
+    node->children_[0] = db_node;
+    node->children_[1] = tb_node;
+    node->children_[2] = col_node;
+    node->str_value_ = parse_strdup(col_node->str_value_, result->malloc_pool_, &(node->str_len_));
+    yylval->node = node;
+    return ID_DOT_ID_DOT_ID;
+  }
+}
+
+{start_identifier}"."{identifier} {
+  ParseResult *result = (ParseResult *)yyextra;
+  check_value(yylval);
+  if (IS_FAST_PARAMETERIZE) {
+    REPUT_NEG_SIGN(result);
+    return ID_DOT_ID;
+  } else {
+    ParseNode *node = NULL, *tb_node = NULL, *col_node = NULL;
+    malloc_new_node(tb_node, result->malloc_pool_, T_IDENT, 0);
+    malloc_new_node(col_node, result->malloc_pool_, T_IDENT, 0);
+
+    char *tb_name = yytext;
+    char *col_name = strstr(tb_name, ".") + 1;
+    size_t tb_len = col_name - tb_name - 1;
+    size_t col_len = strlen(col_name);
+
+    gen_expr_node(tb_node, tb_name, tb_len, result, yylloc->first_column - 1);
+    gen_expr_node(col_node, col_name, col_len, result, yylloc->first_column + tb_len);
+    malloc_new_node(node, result->malloc_pool_, T_IDENT, 2);
+    node->children_[0] = tb_node;
+    node->children_[1] = col_node;
+    node->str_value_ = parse_strdup(col_node->str_value_, result->malloc_pool_, &(node->str_len_));
+    yylval->node = node;
+    return ID_DOT_ID;
+  }
 }
 
 {identifier} {

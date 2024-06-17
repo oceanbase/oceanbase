@@ -80,6 +80,27 @@ void MultiDataSourceInfo::reset()
   ls_attr_arr_.reset();
   tablet_change_info_arr_.reset();
   has_ddl_trans_op_ = false;
+  for (int i = 0; i < dict_tenant_metas_.count(); ++i) {
+    const ObDictTenantMeta *meta = dict_tenant_metas_.at(i);
+    if (OB_NOT_NULL(meta)) {
+      meta->~ObDictTenantMeta();
+    }
+  }
+
+  for (int i = 0; i < dict_database_metas_.count(); ++i) {
+    const ObDictDatabaseMeta *meta = dict_database_metas_.at(i);
+    if (OB_NOT_NULL(meta)) {
+      meta->~ObDictDatabaseMeta();
+    }
+  }
+
+  for (int i = 0; i < dict_table_metas_.count(); ++i) {
+    const ObDictTableMeta *meta = dict_table_metas_.at(i);
+    if (OB_NOT_NULL(meta)) {
+      meta->~ObDictTableMeta();
+    }
+  }
+
   dict_tenant_metas_.reset();
   dict_database_metas_.reset();
   dict_table_metas_.reset();

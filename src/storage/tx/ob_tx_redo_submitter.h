@@ -136,6 +136,7 @@ ObTxRedoSubmitter::~ObTxRedoSubmitter()
 int ObTxRedoSubmitter::parallel_submit(const ObTxSEQ &write_seq_no)
 {
   int ret = OB_SUCCESS;
+  int save_ret = OB_SUCCESS;
   from_all_list_ = false;
   flush_all_ = false;
   write_seq_no_ = write_seq_no;
@@ -146,20 +147,23 @@ int ObTxRedoSubmitter::parallel_submit(const ObTxSEQ &write_seq_no)
   submit_if_not_full_ = true;
   bool do_submit = false;
   memtable::ObCallbackListLogGuard log_lock_guard;
+  submit_cb_list_idx_ = -1;
   if (OB_FAIL(mt_ctx_.get_log_guard(write_seq_no, log_lock_guard, submit_cb_list_idx_))) {
     if (OB_NEED_RETRY == ret) {
-      // give up, lock conflict
-      ret = OB_SUCCESS;
+      // lock conflict
     } else if (OB_BLOCK_FROZEN == ret) {
       // memtable is logging blocked
     } else if (OB_EAGAIN == ret) {
       // others need flush firstly
-      // TODO: try flush others out and retry
       if (TC_REACH_TIME_INTERVAL(5_s)) {
         TRANS_LOG(WARN, "blocked by other list has smaller wirte epoch unlogged",
                   K(write_seq_no), K(tx_ctx_.get_trans_id()));
       }
-      ret = OB_SUCCESS;
+      if (submit_cb_list_idx_ >= 0) {
+        // try to submit blocking list
+        save_ret = OB_EAGAIN;
+        do_submit = true;
+      }
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       // no callback to log
       ret = OB_SUCCESS;
@@ -171,6 +175,7 @@ int ObTxRedoSubmitter::parallel_submit(const ObTxSEQ &write_seq_no)
   }
   if (do_submit) {
     ret = _submit_redo_pipeline_(false);
+    ret = OB_SUCCESS == ret ? save_ret : ret;
   }
   return ret;
 }
@@ -257,10 +262,13 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
         if (ctx.fill_count_ == 0) {
           // BIG_ROW has been handled in `fill_log_block_`
           ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(ERROR, "should not reach here", K(ret));
+          TRANS_LOG(ERROR, "should not reach here", K(ret), K(ctx), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
           ob_abort();
+#endif
+          break;
         } else {
-          fill_ret = OB_SUCCESS;
+          fill_ret = OB_EAGAIN;
         }
       } else if (OB_BLOCK_FROZEN == fill_ret) {
         if (is_parallel_logging) {
@@ -277,9 +285,11 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
         } else {
           // serial logging, shouldn't reach here
           ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(ERROR, "oops! fatal panic", K(ret), KPC(this));
-          usleep(1000);
+          TRANS_LOG(ERROR, "oops! fatal panic", K(ret), K(ctx), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
           ob_abort();
+#endif
+          break;
         }
       } else if (OB_EAGAIN == fill_ret) {
         // this list is all filled, but others remains
@@ -288,14 +298,18 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
         } else {
           // serial logging, shouldn't reach here
           ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(ERROR, "oops! fatal panic", K(ret), KPC(this));
+          TRANS_LOG(ERROR, "oops! fatal panic", K(ret), K(ctx), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
           usleep(1000);
           ob_abort();
+#endif
+          break;
         }
       } else {
         stop = true;
         ret = fill_ret;
       }
+
       // start submit out filled log block
       bool submitted = false;
       int submit_ret = OB_SUCCESS;
@@ -360,8 +374,10 @@ int ObTxRedoSubmitter::after_submit_redo_out_()
   int ret = OB_SUCCESS;
   if (OB_FAIL(mt_ctx_.log_submitted(*helper_))) {
     TRANS_LOG(WARN, "callback memctx fail", K(ret));
+#ifdef ENABLE_DEBUG_LOG
     usleep(1000);
     ob_abort();
+#endif
   }
   helper_->reset();
   return ret;
@@ -373,7 +389,9 @@ int ObTxRedoSubmitter::prepare_()
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(log_cb_)) {
     ret = OB_ERR_UNEXPECTED;
+#ifdef ENABLE_DEBUG_LOG
     ob_abort();
+#endif
   } else {
     ret = tx_ctx_.prepare_for_submit_redo(log_cb_, *log_block_, serial_final_);
   }

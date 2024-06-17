@@ -378,10 +378,12 @@ public:
   void destroy();
   static int mtl_new(ObTenantSQLSessionMgr *&tenant_session_mgr);
   static int mtl_init(ObTenantSQLSessionMgr *&tenant_session_mgr);
+  static void mtl_wait(ObTenantSQLSessionMgr *&tenant_session_mgr);
   static void mtl_destroy(ObTenantSQLSessionMgr *&tenant_session_mgr);
   ObSQLSessionInfo *alloc_session();
   void free_session(ObSQLSessionInfo *session);
   void clean_session_pool();
+  int64_t count() const { return ATOMIC_LOAD(&count_); }
 private:
   class SessionPool
   {
@@ -404,6 +406,7 @@ private:
 private:
   const int64_t tenant_id_;
   SessionPool session_pool_;
+  int64_t count_;
   ObFixedClassAllocator<ObSQLSessionInfo> session_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantSQLSessionMgr);
 }; // end of class ObSQLSessionMgr

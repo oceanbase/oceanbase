@@ -22,6 +22,11 @@ int remove_ls(const share::ObLSID &ls_id,
 int acquire_tx(const char* buf, const int64_t len, int64_t &pos, ObTxDesc *&tx);
 int release_tx_ref(ObTxDesc &tx);
 /*
+ * used when session destroyed
+ * and TxDesc which referenced by session and the tenant unit has removed
+ */
+static void force_release_tx_when_session_destroy(ObTxDesc &tx);
+/*
  * interrupt any work in progress thread
  */
 int interrupt(ObTxDesc &tx, int cause);
@@ -195,7 +200,10 @@ TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
 private:
 int check_ls_status_(const share::ObLSID &ls_id, bool &leader);
-int init_tx_(ObTxDesc &tx, const uint32_t session_id);
+int init_tx_(ObTxDesc &tx,
+             const uint32_t session_id,
+             const uint64_t cluster_version);
+int reinit_tx_(ObTxDesc &tx, const uint32_t session_id, const uint64_t cluster_version);
 int start_tx_(ObTxDesc &tx);
 int abort_tx_(ObTxDesc &tx, const int cause, bool cleanup = true);
 void abort_tx__(ObTxDesc &tx, const bool cleanup);
@@ -257,7 +265,7 @@ int abort_participants_(const ObTxDesc &tx_desc);
 int acquire_local_snapshot_(const share::ObLSID &ls_id,
                             share::SCN &snapshot,
                             const bool is_read_only,
-                            bool &acquire_from_follower);
+                            ObRole &role);
 int sync_acquire_global_snapshot_(ObTxDesc &tx,
                                   const int64_t expire_ts,
                                   share::SCN &snapshot,
@@ -265,8 +273,7 @@ int sync_acquire_global_snapshot_(ObTxDesc &tx,
 int acquire_global_snapshot__(const int64_t expire_ts,
                               const int64_t gts_ahead,
                               share::SCN &snapshot,
-                              int64_t &uncertain_bound,
-                              ObFunction<bool()> interrupt_checker);
+                              int64_t &uncertain_bound);
 int batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
                                        ObTxRollbackSPMsg &msg,
                                        const ObTxRollbackParts &list,
@@ -347,7 +354,7 @@ int update_user_savepoint_(ObTxDesc &tx, const ObTxSavePointList &savepoints);
 private:
 ObTxCtxMgr tx_ctx_mgr_;
 void invalid_registered_snapshot_(ObTxDesc &tx);
-void registered_snapshot_clear_part_(ObTxDesc &tx);
+void process_registered_snapshot_on_commit_(ObTxDesc &tx);
 int ls_rollback_to_savepoint_(const ObTransID &tx_id,
                               const share::ObLSID &ls,
                               const int64_t verify_epoch,
@@ -358,6 +365,7 @@ int ls_rollback_to_savepoint_(const ObTransID &tx_id,
                               const ObTxDesc *tx,
                               const bool for_transfer,
                               const ObTxSEQ from_scn,
+                              const int64_t request_id,
                               ObIArray<ObTxLSEpochPair> &downstream_parts,
                               int64_t expire_ts = -1);
 int sync_rollback_savepoint__(ObTxDesc &tx,
@@ -378,7 +386,6 @@ int rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
 int rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                                            const ObTxSEQ savepoint,
                                            const int64_t expire_ts,
-                                           const share::ObLSArray *extra_touched_ls,
                                            const int exec_errcode);
 int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const ObTxSEQ savepoint,
@@ -386,11 +393,11 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const int64_t tx_seq_base,
                                  const int64_t expire_ts,
                                  const ObTxSEQ specified_from_scn,
+                                 const int64_t request_id,
                                  ObIArray<ObTxLSEpochPair> &downstream_parts);
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);
-// in_stmt means stmt is executing
-int tx_sanity_check_(ObTxDesc &tx, const bool in_stmt = false);
+int tx_sanity_check_(ObTxDesc &tx);
 bool tx_need_reset_(const int error_code) const;
 int get_tx_table_guard_(ObLS *ls,
                         const share::ObLSID &ls_id,

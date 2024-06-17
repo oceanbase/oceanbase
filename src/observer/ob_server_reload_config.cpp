@@ -18,6 +18,7 @@
 #include "lib/alloc/ob_malloc_sample_struct.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
+#include "lib/signal/ob_signal_handlers.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "rpc/obrpc/ob_rpc_handler.h"
 #include "share/ob_cluster_version.h"
@@ -150,6 +151,7 @@ int ObServerReloadConfig::operator()()
 #endif
     ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
                                      GCONF._min_malloc_sample_interval);
+    enable_memleak_light_backtrace(GCONF._enable_memleak_light_backtrace);
     if (!is_arbitration_mode) {
       ObIOConfig io_config;
       int64_t cpu_cnt = GCONF.cpu_count;
@@ -182,21 +184,15 @@ int ObServerReloadConfig::operator()()
         reserve);
   }
 
-
-
   int64_t cache_size = GCONF.memory_chunk_cache_size;
-  if (0 == cache_size) {
+  bool use_large_chunk_cache = 1 != cache_size;
+  if (0 == cache_size || 1 == cache_size) {
     cache_size = GMEMCONF.get_server_memory_limit();
     if (cache_size >= (32L<<30)) {
       cache_size -= (4L<<30);
     }
   }
-  int64_t large_cache_size = GCONF._memory_large_chunk_cache_size;
-  if (0 == large_cache_size) {
-    large_cache_size = lib::AChunkMgr::DEFAULT_LARGE_CHUNK_CACHE_SIZE;
-  }
-  lib::AChunkMgr::instance().set_max_chunk_cache_size(cache_size);
-  lib::AChunkMgr::instance().set_max_large_chunk_cache_size(large_cache_size);
+  lib::AChunkMgr::instance().set_max_chunk_cache_size(cache_size, use_large_chunk_cache);
 
   if (!is_arbitration_mode) {
     // Refresh cluster_id, cluster_name_hash for non arbitration mode
@@ -318,6 +314,10 @@ int ObServerReloadConfig::operator()()
 
   {
     ObMallocAllocator::get_instance()->force_malloc_for_absent_tenant_ = GCONF._force_malloc_for_absent_tenant;
+  }
+
+  {
+    ObSigFaststack::get_instance().set_min_interval(GCONF._faststack_min_interval.get_value());
   }
   return ret;
 }

@@ -52,7 +52,8 @@ private:
       uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard *schema_guard,
       uint64_t &obj_type,
-      uint64_t &obj_id);
+      uint64_t &obj_id,
+      uint64_t &owner_id);
 
   static int check_user_access_obj(
       share::schema::ObSchemaGetterGuard *schema_guard,

@@ -26,7 +26,8 @@ ObFsContainerMgr::ObFsContainerMgr() :
     fsc_map_(),
     fsc_pool_(),
     fs_pool_(),
-    rpc_result_pool_()
+    rpc_result_pool_(),
+    tenant_fetch_traffic_map_()
 {
 
 }
@@ -60,6 +61,8 @@ int ObFsContainerMgr::init(const int64_t svr_stream_cached_count,
     LOG_ERROR("init fetch stream pool fail", KR(ret), K(fetch_stream_cached_count));
   } else if (OB_FAIL(rpc_result_pool_.init(rpc_result_cached_count))) {
     LOG_ERROR("init rpc result pool fail", KR(ret), K(rpc_result_cached_count));
+  } else if (OB_FAIL(tenant_fetch_traffic_map_.init("TrafficMap"))) {
+    LOG_ERROR("tenant_fetch_traffic_map_ init fail", KR(ret));
   } else {
     rpc_ = &rpc;
     stream_worker_ = &stream_worker;
@@ -81,6 +84,7 @@ void ObFsContainerMgr::destroy()
     (void)fsc_map_.destroy();
     fsc_pool_.destroy();
     fs_pool_.destroy();
+    tenant_fetch_traffic_map_.destroy();
   }
 }
 
@@ -166,7 +170,6 @@ int ObFsContainerMgr::get_fsc(const logservice::TenantLSID &tls_id,
 void ObFsContainerMgr::print_stat()
 {
   int ret = OB_SUCCESS;
-  SvrStreamStatFunc svr_stream_stat_func;
 
   int64_t alloc_count = fsc_pool_.get_alloc_count();
   int64_t free_count = fsc_pool_.get_free_count();
@@ -180,11 +183,54 @@ void ObFsContainerMgr::print_stat()
   fs_pool_.print_stat();
   rpc_result_pool_.print_stat();
 
-  // Statistics every FetchStreamContainer
-  if (OB_FAIL(fsc_map_.for_each(svr_stream_stat_func))) {
-    LOG_ERROR("for each FetchStreamContainer map fail", KR(ret));
+  tenant_fetch_traffic_map_.clear();
+  TenantStreamStatFunc tenant_stream_stat_func(&tenant_fetch_traffic_map_);
+  TenantStreamStatPrinter tenant_stream_stat_printer;
+
+  if (OB_FAIL(fsc_map_.for_each(tenant_stream_stat_func))) {
+    LOG_ERROR("TenantStreamStatFunc for each FetchStreamContainer map fail", KR(ret));
+  } else if (OB_FAIL(tenant_fetch_traffic_map_.for_each(tenant_stream_stat_printer))) {
+    LOG_ERROR("TenantStreamStatPrinter for each tenant fetch traffic map fail", KR(ret));
+  } else {
   }
 }
+
+bool ObFsContainerMgr::TenantStreamStatFunc::operator() (const logservice::TenantLSID &key, FetchStreamContainer *value)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_traffic = 0;
+  int64_t ls_traffic = 0;
+  TenantID tenant_id(key.get_tenant_id());
+
+  if (OB_ISNULL(tenant_fetch_traffic_map_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant_fetch_traffic_map_ is NULL", KR(ret));
+  } else if (OB_FAIL(tenant_fetch_traffic_map_->get(tenant_id, tenant_traffic))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_ERROR("tenant_fetch_traffic_map_ get fail", KR(ret), K(tenant_id));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    (void) value->do_stat(ls_traffic);
+    tenant_traffic += ls_traffic;
+    if (OB_FAIL(tenant_fetch_traffic_map_->insert_or_update(tenant_id, tenant_traffic))) {
+      LOG_ERROR("tenant_fetch_traffic_map_ insert_or_update fail", KR(ret), K(tenant_id), K(tenant_traffic));
+    }
+  }
+
+  return OB_SUCCESS == ret;
+}
+
+
+bool ObFsContainerMgr::TenantStreamStatPrinter::operator() (const TenantID &tenant_id, const int64_t traffic)
+{
+  _LOG_INFO("[STAT] [FETCH_STREAM] TENANT=%lu, TRAFFIC=%s/sec", tenant_id.tenant_id_, SIZE_TO_STR(traffic));
+  return true;
+}
+
 
 } // namespace libobcdc
 } // namespace oceanbase

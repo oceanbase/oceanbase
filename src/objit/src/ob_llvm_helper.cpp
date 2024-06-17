@@ -124,7 +124,8 @@ static ObGetIRType OB_IR_TYPE[common::ObMaxType + 1] =
   NULL,                                                    //48.ObGeometryType
   NULL,                                                    //49.ObUserDefinedSQLType
   NULL,                                                    //50. ObDecimalIntType
-  NULL,                                                    //51.ObMaxType
+  NULL,                                                    //51.ObCollectionSQLType
+  NULL,                                                    //52.ObMaxType
 };
 
 template<typename T, int64_t N>
@@ -491,7 +492,7 @@ int ObLLVMSwitch::add_case(const ObLLVMValue &value, ObLLVMBasicBlock &block)
 
 ObLLVMHelper::~ObLLVMHelper()
 {
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   final();
   if (nullptr != jit_) {
     jit_->~ObOrcJit();
@@ -502,9 +503,12 @@ ObLLVMHelper::~ObLLVMHelper()
 int ObLLVMHelper::init()
 {
   int ret = OB_SUCCESS;
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
 
-  if (nullptr == (jc_ = OB_NEWx(core::JitContext, (&allocator_)))) {
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObLLVMHelper has been inited", K(ret), K(lbt()));
+  } else if (nullptr == (jc_ = OB_NEWx(core::JitContext, (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for jit context", K(ret));
 #ifndef ORC2
@@ -512,10 +516,24 @@ int ObLLVMHelper::init()
 #else
   } else if (nullptr == (jit_ = core::ObOrcJit::create(allocator_))) {
 #endif
+    jc_->~JitContext();
+    allocator_.free(jc_);
+    jc_ = nullptr;
+
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for jit", K(ret));
+  } else if (OB_FAIL(jc_->InitializeModule(*jit_))) {
+    jit_->~ObOrcJit();
+    allocator_.free(jit_);
+    jit_ = nullptr;
+
+    jc_->~JitContext();
+    allocator_.free(jc_);
+    jc_ = nullptr;
+
+    LOG_WARN("failed to initialize module", K(ret));
   } else {
-    jc_->InitializeModule(*jit_);
+    is_inited_ = true;
   }
 
   return ret;
@@ -523,7 +541,7 @@ int ObLLVMHelper::init()
 
 void ObLLVMHelper::final()
 {
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   if (nullptr != jc_) {
     jc_->~JitContext();
     allocator_.free(jc_);
@@ -554,8 +572,8 @@ int ObLLVMHelper::initialize()
 int ObLLVMHelper::init_llvm() {
   int ret = OB_SUCCESS;
 
-  OB_LLVM_MALLOC_GUARD("PlJit");
-  ObArenaAllocator alloc("PlJit", OB_MALLOC_NORMAL_BLOCK_SIZE, OB_SYS_TENANT_ID);
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+  ObArenaAllocator alloc(GET_PL_MOD_STRING(pl::OB_PL_JIT), OB_MALLOC_NORMAL_BLOCK_SIZE, OB_SYS_TENANT_ID);
   ObLLVMHelper helper(alloc);
   ObLLVMDIHelper di_helper(alloc);
   static char init_func_name[] = "pl_init_func";
@@ -579,22 +597,30 @@ int ObLLVMHelper::init_llvm() {
   OZ (helper.get_int64(OB_SUCCESS, magic));
   OZ (helper.create_ret(magic));
 
-  OX (helper.compile_module());
+  OZ (helper.compile_module(jit::ObPLOptLevel::O2));
   OX (helper.get_function_address(init_func_name));
 
   return ret;
 }
 
-void ObLLVMHelper::compile_module(bool optimization)
+int ObLLVMHelper::compile_module(jit::ObPLOptLevel optimization)
 {
-  if (optimization) {
-    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
-    jc_->optimize();
-    LOG_INFO("================Optimized LLVM Module================");
-    dump_module();
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(jit_->set_optimize_level(optimization))) {
+    LOG_WARN("failed to set backend optimize level", K(ret), K(optimization));
+  } else {
+    if (optimization >= jit::ObPLOptLevel::O2) {
+      OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
+      jc_->optimize();
+      LOG_INFO("================Optimized LLVM Module================");
+      dump_module();
+    }
+    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+    jc_->compile();
   }
-  OB_LLVM_MALLOC_GUARD("PlJit");
-  jc_->compile();
+
+  return ret;
 }
 
 void ObLLVMHelper::dump_module()
@@ -655,7 +681,7 @@ int ObLLVMHelper::verify_module()
 
 uint64_t ObLLVMHelper::get_function_address(const ObString &name)
 {
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   return jc_->TheJIT->get_function_address(std::string(name.ptr(), name.length()));
 }
 
@@ -2223,6 +2249,21 @@ ObDWARFHelper::~ObDWARFHelper() {
     Allocator.free(Context);
     Context = nullptr;
   }
+}
+
+int ObLLVMHelper::add_compiled_object(size_t length, const char *ptr)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(jit_));
+  CK (OB_NOT_NULL(ptr));
+  CK (OB_LIKELY(length > 0));
+  OX (jit_->add_compiled_object(length, ptr));
+  return ret;
+}
+
+const ObString& ObLLVMHelper::get_compiled_object()
+{
+  return jit_->get_compiled_object();
 }
 
 } // namespace jit

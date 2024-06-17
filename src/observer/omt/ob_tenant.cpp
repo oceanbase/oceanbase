@@ -67,8 +67,6 @@ using namespace oceanbase::obrpc;
 #define SHRINK_INTERVAL (1 * 1000 * 1000)
 #define SLEEP_INTERVAL (60 * 1000 * 1000)
 
-int64_t FASTSTACK_REQ_QUEUE_SIZE_THRESHOLD = INT64_MAX;
-
 extern "C" {
 int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
 int ob_pthread_tryjoin_np(void *ptr);
@@ -197,6 +195,7 @@ void ObPxPools::mtl_stop(ObPxPools *&pools)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pools)) {
+    // ignore ret
     // pools will be null if it's creating tenant and failed.
     LOG_WARN("pools is null");
   } else {
@@ -541,10 +540,36 @@ int ObResourceGroup::clear_worker()
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(workers_lock_);
-  while (req_queue_.size() > 0
-    || (multi_level_queue_.get_total_size() > 0)) {
-    ob_usleep(10L * 1000L);
+
+  int tmp_ret = OB_SUCCESS;
+  const int64_t timeout = 10 * 1000;
+  ObLink* task = nullptr;
+  rpc::ObRequest *req = nullptr;
+  while (req_queue_.size() > 0) {
+    if (OB_TMP_FAIL(req_queue_.pop(task, timeout))) {
+      LOG_WARN("req queue pop task fail", K(tmp_ret), K(&req_queue_));
+    } else if (NULL != task) {
+      req = static_cast<rpc::ObRequest*>(task);
+      on_translate_fail(req, OB_TENANT_NOT_IN_SERVER);
+    } else {
+      LOG_ERROR("req queue pop successfully but task is NULL");
+    }
   }
+
+  for (int32_t level = 0; level < MULTI_LEVEL_QUEUE_SIZE; level++) {
+    while (multi_level_queue_.get_size(level) > 0) {
+      if (OB_TMP_FAIL(multi_level_queue_.pop(task, level, timeout))) {
+        LOG_WARN("req queue pop task fail", K(tmp_ret), K(&multi_level_queue_));
+      } else if (NULL != task) {
+        req = static_cast<rpc::ObRequest*>(task);
+        on_translate_fail(req, OB_TENANT_NOT_IN_SERVER);
+      } else {
+        LOG_ERROR("multi level queue pop successfully but task is NULL");
+      }
+    }
+  }
+
+
   while (nesting_workers_.get_size() > 0) {
     int ret = OB_SUCCESS;
     DLIST_FOREACH_REMOVESAFE(wnode, nesting_workers_) {
@@ -840,6 +865,7 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
       ret = is_virtual_tenant_id(id_) ? OB_SUCCESS : OB_ENTRY_NOT_EXIST;
     } else {
       mtl_init_ctx_->palf_options_.disk_options_.log_writer_parallelism_ = tenant_config->_log_writer_parallelism;
+      mtl_init_ctx_->palf_options_.enable_log_cache_ = tenant_config->_enable_log_cache;
     }
     LOG_INFO("construct_mtl_init_ctx success", "palf_options", mtl_init_ctx_->palf_options_.disk_options_);
   }
@@ -1521,7 +1547,8 @@ int ObTenant::recv_request(ObRequest &req)
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
   }
 
-  if (OB_SIZE_OVERFLOW == ret || req_queue_.size() >= FASTSTACK_REQ_QUEUE_SIZE_THRESHOLD) {
+  if (OB_SIZE_OVERFLOW == ret || (GCONF._faststack_req_queue_size_threshold.get_value() > 0 &&
+      req_queue_.size() >= GCONF._faststack_req_queue_size_threshold.get_value())) {
     IGNORE_RETURN faststack();
   }
 
@@ -1532,13 +1559,16 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
   req.set_enqueue_timestamp(ObTimeUtility::current_time());
-  req.set_large_retry_flag(true);
-  if (0 != req.get_group_id()) {
+  if (has_stopped()) {
+    ret = OB_TENANT_NOT_IN_SERVER;
+    LOG_WARN("receive large request but tenant has already stopped", K(ret), "tenant_id", id_);
+  } else if (0 != req.get_group_id()) {
     if (OB_FAIL(recv_group_request(req, req.get_group_id()))) {
-      LOG_WARN("tenant receive large retry request fail", K(ret));
+      LOG_WARN("tenant receive large retry request fail", K(ret),
+          "tenant_id", id_, "group_id", req.get_group_id());
     }
   } else if (OB_FAIL(recv_group_request(req, OBCG_LQ))){
-    LOG_ERROR("recv large request failed", K(id_));
+    LOG_ERROR("recv large request failed", "tenant_id", id_);
   } else {
     ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
@@ -1581,11 +1611,22 @@ void ObTenant::handle_retry_req(bool need_clear)
   int ret = OB_SUCCESS;
   ObLink* task = nullptr;
   ObRequest *req = NULL;
+  // even if ret != OB_SUCCESS, the loop must continue to pop all requests
   while (OB_SUCC(retry_queue_.pop(task, need_clear))) {
+    // if pop returns OB_SUCCESS, then the task must not be NULL.
     req = static_cast<rpc::ObRequest*>(task);
-    if (OB_FAIL(recv_large_request(*req))) {
-      LOG_ERROR("tenant patrol push req fail", "tenant", id_);
-      break;
+    if (req->large_retry_flag()) {
+      if (OB_FAIL(recv_large_request(*req))) {
+        LOG_WARN("tenant patrol push req into large_query queue fail, "
+            "and the req well be destroyed", "tenant_id", id_, "req", *req, K(ret));
+        on_translate_fail(req, ret);
+      }
+    } else {
+      if (OB_FAIL(recv_request(*req))) {
+        LOG_WARN("tenant patrol push req into common queue fail, "
+            "and the req well be destroyed", "tenant_id", id_, "req", *req, K(ret));
+        on_translate_fail(req, ret);
+      }
     }
   }
 }

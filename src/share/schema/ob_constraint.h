@@ -119,6 +119,7 @@ public:
 
   // other
   int64_t get_convert_size() const;
+  bool is_match_partition_exchange_constraint_conditions(const ObConstraint &r) const;
   void reset();
   DECLARE_VIRTUAL_TO_STRING;
 private:

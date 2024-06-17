@@ -15,10 +15,13 @@
 #include "lib/container/ob_array_serialization.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_unify_serialize.h"
+#include "observer/table_load/ob_table_load_struct.h"
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "sql/session/ob_sql_session_mgr.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
+#include "storage/tx/ob_trans_define_v4.h"
 
 namespace oceanbase
 {
@@ -50,7 +53,7 @@ enum class ObDirectLoadControlCommandType
 
 struct ObDirectLoadControlRequest
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 
 public:
   ObDirectLoadControlRequest() : command_type_(observer::ObDirectLoadControlCommandType::MAX_TYPE)
@@ -95,7 +98,7 @@ public:
 
 class ObDirectLoadControlResult
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 
 public:
   ObDirectLoadControlResult()
@@ -151,10 +154,22 @@ class ObDirectLoadControlPreBeginArg final
 public:
   ObDirectLoadControlPreBeginArg();
   ~ObDirectLoadControlPreBeginArg();
-  TO_STRING_KV(K_(table_id), K_(config), K_(column_count), K_(dup_action), K_(px_mode),
-               K_(online_opt_stat_gather), K_(dest_table_id), K_(task_id), K_(schema_version),
-               K_(snapshot_version), K_(data_version), K_(partition_id_array),
-               K_(target_partition_id_array));
+  TO_STRING_KV(K_(table_id),
+               K_(config),
+               K_(column_count),
+               K_(dup_action),
+               K_(px_mode),
+               K_(online_opt_stat_gather),
+               K_(ddl_param),
+               K_(partition_id_array),
+               K_(target_partition_id_array),
+               KP_(session_info),
+               K_(free_session_ctx),
+               K_(avail_memory),
+               K_(write_session_count),
+               K_(exe_mode),
+               "method", storage::ObDirectLoadMethod::get_type_string(method_),
+               "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_));
 
 public:
   uint64_t table_id_;
@@ -163,17 +178,17 @@ public:
   sql::ObLoadDupActionType dup_action_;
   bool px_mode_;
   bool online_opt_stat_gather_;
-  // ddl param
-  uint64_t dest_table_id_;
-  int64_t task_id_;
-  int64_t schema_version_;
-  int64_t snapshot_version_;
-  int64_t data_version_;
+  ObTableLoadDDLParam ddl_param_;
   // partition info
   table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> partition_id_array_; // origin table
   table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> target_partition_id_array_; // target table
   sql::ObSQLSessionInfo *session_info_;
   sql::ObFreeSessionCtx free_session_ctx_;
+  int64_t avail_memory_;
+  int32_t write_session_count_;
+  ObTableLoadExeMode exe_mode_;
+  storage::ObDirectLoadMethod::Type method_;
+  storage::ObDirectLoadInsertMode::Type insert_mode_;
 };
 
 class ObDirectLoadControlConfirmBeginArg final
@@ -239,6 +254,7 @@ public:
 public:
   table::ObTableLoadResultInfo result_info_;
   table::ObTableLoadSqlStatistics sql_statistics_;
+  transaction::ObTxExecResult trans_result_;
 };
 
 class ObDirectLoadControlAbortArg final

@@ -14,9 +14,11 @@
 #define OCEANBASE_LIBOBCDC_TENANT_QUERYER_H_
 
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "ob_log_utils.h"
 namespace oceanbase
 {
+using namespace share;
 namespace libobcdc
 {
 // ResultType = T

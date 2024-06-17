@@ -51,6 +51,7 @@
 #include "logservice/leader_coordinator/ob_failure_detector.h"
 #include <memory>
 #include <map>
+#include "share/ob_tenant_mem_limit_getter.h"
 
 namespace oceanbase
 {
@@ -238,6 +239,7 @@ public:
   virtual int simple_init(const std::string &cluster_name,
                           const common::ObAddr &addr,
                           const int64_t node_id,
+                          LogMemberRegionMap *region_map,
                           const bool is_bootstrap) = 0;
   virtual int simple_start(const bool is_bootstrap) = 0;
   virtual int simple_close(const bool is_shutdown) = 0;
@@ -253,6 +255,7 @@ public:
   virtual int remove_mock_election(const int64_t palf_id) = 0;
   virtual int set_leader(const int64_t palf_id, const common::ObAddr &leader, const int64_t new_epoch = 0) = 0;
   virtual int update_server_log_disk(const int64_t log_disk_size) = 0;
+  virtual MockObLocalityManager *get_locality_manager() = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -278,6 +281,7 @@ public:
   int simple_init(const std::string &cluster_name,
                   const common::ObAddr &addr,
                   const int64_t node_id,
+                  LogMemberRegionMap *region_map,
                   const bool is_bootstrap) override final;
   int simple_start(const bool is_bootstrap) override final;
   int simple_close(const bool is_shutdown) override final;
@@ -374,6 +378,7 @@ public:
     return ret;
   }
   int update_server_log_disk(const int64_t log_disk_size);
+  MockObLocalityManager *get_locality_manager() { return &mock_locality_manager_; }
   TO_STRING_KV(K_(node_id), K_(addr), KP(palf_env_));
 
 protected:
@@ -386,6 +391,8 @@ protected:
                                    const int64_t new_log_disk_size,
                                    int64_t &allowed_log_disk_size);
   int update_disk_opts_no_lock_(const PalfDiskOptions &opts);
+  int init_log_kv_cache_();
+
 
 private:
   int64_t node_id_;
@@ -425,6 +432,7 @@ private:
   // 内部表中记录日志盘规格
   palf::PalfDiskOptions inner_table_disk_opts_;
   ObLooper looper_;
+  MockObLocalityManager mock_locality_manager_;
   obrpc::ObBatchRpc batch_rpc_;
   int batch_rpc_tg_id_;
 };

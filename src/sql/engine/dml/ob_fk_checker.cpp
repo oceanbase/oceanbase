@@ -58,7 +58,7 @@ int ObForeignKeyChecker::do_fk_check_batch(bool &all_has_result)
 
   int64_t get_row_count = 0;
   if (0 == batch_distinct_fk_cnt_) {
-    LOG_INFO("distinct foreign key count is 0 in a batch");
+    LOG_TRACE("distinct foreign key count is 0 in a batch");
     all_has_result = true;
   } else if (OB_FAIL(das_ref_.execute_all_task())) {
     LOG_WARN("execute all scan das task failed", K(ret));
@@ -164,7 +164,7 @@ int ObForeignKeyChecker::build_fk_check_das_task(const ObIArray<ObForeignKeyColu
     // Match simple is the ony one match method of OB, if foreign key columns has null, it will pass foreign key check;
     // Note: we need to support match partial and match full method for a more strict foreign key check in MySQL mode
     need_check = false;
-    LOG_INFO("foreign key columns has null, pass foreign key check");
+    LOG_TRACE("foreign key columns has null, pass foreign key check");
   } else if (OB_FAIL(build_table_range(columns, row, lookup_range, need_check))) {
     LOG_WARN("build data table range failed", K(ret), KPC(tablet_loc));
   } else if (!need_check) {
@@ -216,7 +216,7 @@ int ObForeignKeyChecker::calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc)
   } else if (OB_FAIL(DAS_CTX(das_ref_.get_exec_ctx()).extended_tablet_loc(*table_loc_, tablet_id, tablet_loc))) {
     LOG_WARN("extended tablet loc failed", K(ret));
   }
-  LOG_INFO("tablet_id and partition id is", K(tablet_id), K(partition_id));
+  LOG_TRACE("tablet_id and partition id is", K(tablet_id), K(partition_id));
   return ret;
 }
 
@@ -675,7 +675,7 @@ int ObForeignKeyChecker::check_need_shadow_columns(const ObIArray<ObForeignKeyCo
     }
     need_shadow_columns = is_rowkey_all_null;
   }
-  LOG_INFO("need shadow columns", K(need_shadow_columns));
+  LOG_TRACE("need shadow columns", K(need_shadow_columns));
   return ret;
 }
 

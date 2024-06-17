@@ -44,7 +44,7 @@ struct SharedPrinterRawExprs
   ObConstRawExpr *int_zero_;
   ObConstRawExpr *int_one_;
   ObConstRawExpr *int_neg_one_;
-  ObConstRawExpr *last_refresh_scn_;
+  ObRawExpr *last_refresh_scn_;
   ObConstRawExpr *refresh_scn_;
   ObConstRawExpr *str_n_;
   ObConstRawExpr *str_o_;
@@ -74,6 +74,7 @@ public:
   static const ObString DELTA_TABLE_VIEW_NAME;
   static const ObString DELTA_BASIC_MAV_VIEW_NAME;
   static const ObString DELTA_MAV_VIEW_NAME;
+  static const ObString INNER_RT_MV_VIEW_NAME;
   // column name
   static const ObString HEAP_TABLE_ROWKEY_COL_NAME;
   static const ObString OLD_NEW_COL_NAME;
@@ -99,7 +100,35 @@ public:
 private:
   int init(const share::SCN &last_refresh_scn, const share::SCN &refresh_scn);
   int gen_mv_operator_stmts(ObIArray<ObDMLStmt*> &dml_stmts);
-  int gen_refresh_dmls_for_simple_mav(ObIArray<ObDMLStmt*> &dml_stmts);
+  int gen_refresh_dmls_for_mv(ObIArray<ObDMLStmt*> &dml_stmts);
+  int gen_real_time_view_for_mv(ObSelectStmt *&sel_stmt);
+  int gen_delete_insert_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmts);
+  int gen_insert_into_select_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmts);
+  int gen_real_time_view_for_simple_mjv(ObSelectStmt *&sel_stmt);
+  int gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmts);
+  int gen_access_mv_data_for_simple_mjv(ObSelectStmt *&sel_stmt);
+  int gen_exists_cond_for_mjv(const ObIArray<ObRawExpr*> &upper_sel_exprs,
+                              const TableItem *source_table,
+                              bool is_exists,
+                              ObRawExpr *&exists_expr);
+  int gen_access_delta_data_for_simple_mjv(ObIArray<ObSelectStmt*> &access_delta_stmts);
+  int prepare_gen_access_delta_data_for_simple_mjv(ObSelectStmt *&base_delta_stmt,
+                                                   ObIArray<ObRawExpr*> &semi_filters,
+                                                   ObIArray<ObRawExpr*> &anti_filters);
+  int gen_one_access_delta_data_for_simple_mjv(const ObSelectStmt &base_delta_stmt,
+                                               const int64_t table_idx,
+                                               const ObIArray<ObRawExpr*> &semi_filters,
+                                               const ObIArray<ObRawExpr*> &anti_filters,
+                                               ObSelectStmt *&sel_stmt);
+  int gen_real_time_view_for_simple_mav(ObSelectStmt *&sel_stmt);
+  int gen_real_time_view_scn_cte(ObSelectStmt &root_stmt);
+  int gen_real_time_view_filter_for_mav(ObSelectStmt &sel_stmt);
+  int gen_inner_real_time_view_for_mav(ObSelectStmt &sel_stmt, TableItem *&view_table);
+  int gen_inner_real_time_view_tables_for_mav(ObSelectStmt &sel_stmt);
+  int gen_inner_real_time_view_select_list_for_mav(ObSelectStmt &sel_stmt);
+  int gen_select_items_for_mav(const ObString &table_name,
+                               const uint64_t table_id,
+                               ObIArray<SelectItem> &select_items);
   int gen_merge_for_simple_mav(ObMergeStmt *&merge_stmt);
   int gen_update_insert_delete_for_simple_mav(ObIArray<ObDMLStmt*> &dml_stmts);
   int gen_insert_for_mav(ObSelectStmt *delta_mv_stmt,
@@ -137,14 +166,12 @@ private:
                                           ObRawExpr *&calc_sum);
   int get_dependent_aggr_of_fun_sum(const ObRawExpr *expr,
                                     const ObIArray<SelectItem> &select_items,
-                                    const ObIArray<ObColumnRefRawExpr*> &target_columns,
-                                    const ObIArray<ObRawExpr*> &values_exprs,
-                                    ObRawExpr *&target_count,
-                                    ObRawExpr *&source_count);
+                                    int64_t &idx);
   int gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &target_columns,
                              const ObIArray<ObRawExpr*> &values_exprs,
                              const TableItem *source_table,
-                             ObIArray<ObAssignment> &assignments);
+                             ObIArray<ObAssignment> &assignments,
+                             const bool for_mysql_update = false);
   int gen_merge_conds(ObMergeStmt &merge_stmt);
   int gen_simple_mav_delta_mv_view(ObSelectStmt *&view_stmt);
   int init_expr_copier_for_delta_mv_view(const TableItem &table, ObRawExprCopier &copier);
@@ -157,7 +184,7 @@ private:
                           ObRawExpr *dml_factor,
                           ObAggFunRawExpr &aggr_expr,
                           ObRawExpr *&aggr_print_expr);
-  int add_nvl_default_zero_above_expr(ObRawExpr *source_expr, ObRawExpr *&expr);
+  int add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_expr, ObRawExpr *&res_expr);
   int gen_simple_mav_delta_mv_filter(ObRawExprCopier &copier,
                                      const TableItem &table_item,
                                      ObIArray<ObRawExpr*> &filters);
@@ -213,6 +240,7 @@ private:
   ObStmtFactory &stmt_factory_;
   ObRawExprFactory &expr_factory_;
   SharedPrinterRawExprs exprs_;
+  DISALLOW_COPY_AND_ASSIGN(ObMVPrinter);
 };
 
 }

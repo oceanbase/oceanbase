@@ -68,13 +68,13 @@ public:
   int write_block(const char* buf, const int64_t size, ObBlockInfo &block_info, ObMacroBlocksWriteCtx &write_ctx);
   int add_block(const MacroBlockId &block_id, const int64_t block_size);
   int free_block(const MacroBlockId &block_id, const int64_t block_size);
+  bool is_recyclable(const MacroBlockId &macro_id, const int64_t &used_size) const ;
 
   TO_STRING_KV(K_(macro_handle), K_(offset), K_(header_size));
 
   static int mtl_init(ObSharedMacroBlockMgr* &shared_block_mgr);
 
 private:
-  bool is_recyclable(const MacroBlockId &macro_id, const int64_t &used_size) const ;
   class ObBlockDefragmentationTask : public common::ObTimerTask
   {
   public:
@@ -199,6 +199,7 @@ private:
   ObLinearHashMap<MacroBlockId, int32_t> block_used_size_;
   ObBlockDefragmentationTask defragmentation_task_;
   int tg_id_;
+  bool need_defragment_;
   bool is_inited_;
 };
 

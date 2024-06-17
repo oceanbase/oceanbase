@@ -26,7 +26,8 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER
   --
 
   PROCEDURE purge_log(
-    IN     master_name            VARCHAR(65535));
+    IN     master_name            VARCHAR(65535),
+    IN     purge_log_parallel     INT            DEFAULT 1);
 
   --  -----------------------------------------------------------------------
   --  Refresh the given materialized view.

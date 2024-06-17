@@ -188,7 +188,7 @@ int MdsTableBase::merge(const int64_t construct_sequence, const share::SCN &flus
   param.flush_scn_ = flushing_scn;
   param.mds_construct_sequence_ = construct_sequence;
   param.generate_ts_ = ObClockGenerator::getClock();
-  param.merge_type_ = compaction::ObMergeType::MDS_TABLE_MERGE;
+  param.merge_type_ = compaction::ObMergeType::MDS_MINI_MERGE;
   param.merge_version_ = 0;
   if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_mds_table_merge_dag(param))) {
     if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {

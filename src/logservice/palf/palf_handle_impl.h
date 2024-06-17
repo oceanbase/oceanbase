@@ -111,6 +111,7 @@ struct PalfDiagnoseInfo {
   int64_t palf_proposal_id_;
   bool enable_sync_;
   bool enable_vote_;
+  common::ObAddr parent_;
   void reset() {
     election_role_ = FOLLOWER;
     election_epoch_ = 0;
@@ -119,6 +120,7 @@ struct PalfDiagnoseInfo {
     palf_proposal_id_ = INVALID_PROPOSAL_ID;
     enable_sync_ = false;
     enable_vote_ = false;
+    parent_.reset();
   }
   TO_STRING_KV(K(election_role_),
                K(election_epoch_),
@@ -126,7 +128,8 @@ struct PalfDiagnoseInfo {
                K(palf_state_),
                K(palf_proposal_id_),
                K(enable_sync_),
-               K(enable_vote_));
+               K(enable_vote_),
+               K(parent_));
 };
 
 struct FetchLogStat {
@@ -291,12 +294,6 @@ public:
   virtual int get_arb_member_info(ArbMemberInfo &arb_member_info) const = 0;
   virtual int get_arbitration_member(common::ObMember &arb_member) const = 0;
 #endif
-  // set region for self
-  // @param [common::ObRegion] region
-  virtual int set_region(const common::ObRegion &region) = 0;
-  // set region info for paxos members
-  // @param [common::ObArrayHashMap<common::ObAddr, common::ObRegion>] regions of Paxos members
-  virtual int set_paxos_member_region_map(const LogMemberRegionMap &region_map) = 0;
   // 提交需要持久化的内容，提交内容以日志形式在本地持久化并同步给Paxos成员列表中的其他副本
   // 同时，若存在只读副本或物理备库，日志会在满足条件时同步给对应节点
   // 在Paxos成员列表中的多数派副本持久化成功后，会调用log_ctx->on_success()通知调用者
@@ -804,8 +801,12 @@ public:
   virtual int reset_location_cache_cb() = 0;
   virtual int set_election_priority(election::ElectionPriority *priority) = 0;
   virtual int reset_election_priority() = 0;
+  virtual int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) = 0;
+  virtual int reset_locality_cb() = 0;
   // ==================== Callback end ========================
-  virtual int revoke_leader(const int64_t proposal_id) = 0;
+  virtual int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                            const int64_t downgrade_priority_time_us,
+                                                            const char *reason) = 0;
   virtual int flashback(const int64_t mode_version,
                         const share::SCN &flashback_scn,
                         const int64_t timeout_us) = 0;
@@ -822,6 +823,11 @@ public:
                                     char *buf,
                                     int64_t &out_read_size) const = 0;
   virtual int try_handle_next_submit_log() = 0;
+
+  virtual int raw_read(const palf::LSN &lsn,
+                       char *read_buf,
+                       const int64_t nbytes,
+                       int64_t &read_size) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -875,8 +881,6 @@ public:
                               const int64_t paxos_replica_num,
                               const common::GlobalLearnerList &learner_list) override final;
 #endif
-  int set_region(const common::ObRegion &region) override final;
-  int set_paxos_member_region_map(const LogMemberRegionMap &region_map) override final;
   int submit_log(const PalfAppendOptions &opts,
                  const char *buf,
                  const int64_t buf_len,
@@ -963,6 +967,11 @@ public:
                             char *buf,
                             int64_t &out_read_size) const;
   int try_handle_next_submit_log();
+
+  int raw_read(const palf::LSN &lsn,
+               char *buffer,
+               const int64_t nbytes,
+               int64_t &read_size) override final;
 public:
   int delete_block(const block_id_t &block_id) override final;
   int read_log(const LSN &lsn,
@@ -999,6 +1008,8 @@ public:
   int reset_monitor_cb();
   int set_election_priority(election::ElectionPriority *priority) override final;
   int reset_election_priority() override final;
+  int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) override final;
+  int reset_locality_cb() override final;
   // ==================== Callback end ========================
 public:
   int get_begin_lsn(LSN &lsn) const override final;
@@ -1139,7 +1150,9 @@ public:
   int handle_config_change_pre_check(const ObAddr &server,
                                      const LogGetMCStReq &req,
                                      LogGetMCStResp &resp) override final;
-  int revoke_leader(const int64_t proposal_id) override final;
+  int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                    const int64_t downgrade_priority_time_us,
+                                                    const char *reason) override final;
   int stat(PalfStat &palf_stat) override final;
   int handle_register_parent_req(const LogLearner &child,
                                  const bool is_to_leader) override final;
@@ -1281,6 +1294,7 @@ private:
                                     const LogInfo &base_prev_log_info,
                                     const bool is_rebuild);
   int get_election_leader_without_lock_(ObAddr &addr) const;
+  int update_self_region_();
   // ========================= flashback ==============================
   int can_do_flashback_(const int64_t mode_version,
                         const share::SCN &flashback_scn,
@@ -1396,7 +1410,7 @@ private:
   LogEngine log_engine_;
   ElectionMsgSender election_msg_sender_;
   election::ElectionImpl election_;
-  LogHotCache hot_cache_;
+  LogCache log_cache_;
   FetchLogEngine *fetch_log_engine_;
   common::ObILogAllocator *allocator_;
   int64_t palf_id_;
@@ -1449,6 +1463,7 @@ private:
   int64_t chaning_config_warn_time_;
   bool cached_is_in_sync_;
   bool has_higher_prio_config_change_;
+  int64_t last_update_region_time_us_;
   bool is_inited_;
 };
 } // end namespace palf

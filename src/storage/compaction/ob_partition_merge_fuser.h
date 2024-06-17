@@ -63,6 +63,7 @@ public:
   int fuse_rows(const T& row, const Args&... args);
   int fuse_row(MERGE_ITER_ARRAY &macro_row_iters);
   inline const blocksstable::ObDatumRow &get_result_row() const { return result_row_; }
+  int make_result_row_shadow(const int64_t sql_sequence_col_idx);
   VIRTUAL_TO_STRING_KV(K_(column_cnt), K_(result_row), K_(is_inited));
 protected:
   int base_init(const bool is_fuse_row_flag = false);
@@ -145,10 +146,11 @@ protected:
 class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser
 {
 public:
-  ObMajorPartitionMergeFuser(common::ObIAllocator &allocator)
+  ObMajorPartitionMergeFuser(common::ObIAllocator &allocator, const int64_t cluster_version)
     : ObIPartitionMergeFuser(allocator),
       default_row_(),
-      generated_cols_(allocator_)
+      generated_cols_(allocator_),
+      cluster_version_(cluster_version)
   {}
   virtual ~ObMajorPartitionMergeFuser();
   virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row) override;
@@ -158,21 +160,10 @@ protected:
 protected:
   blocksstable::ObDatumRow default_row_;
   ObFixedArray<int32_t, ObIAllocator> generated_cols_;
+  const int64_t cluster_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMajorPartitionMergeFuser);
 };
-
-class ObMetaPartitionMergeFuser : public ObMajorPartitionMergeFuser
-{
-public:
-  ObMetaPartitionMergeFuser(common::ObIAllocator &allocator) : ObMajorPartitionMergeFuser(allocator) {}
-  virtual ~ObMetaPartitionMergeFuser() {}
-  INHERIT_TO_STRING_KV("ObMajorPartitionMergeFuser", ObMajorPartitionMergeFuser,
-      "cur_fuser", "ObMetaPartitionMergeFuser");
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObMetaPartitionMergeFuser);
-};
-
 
 class ObMinorPartitionMergeFuser : public ObIPartitionMergeFuser
 {
@@ -197,6 +188,7 @@ protected:
 class ObMergeFuserBuilder {
 public:
   static int build(const ObMergeParameter &merge_param,
+                   const int64_t cluster_version,
                    ObIAllocator &allocator,
                    ObIPartitionMergeFuser *&partition_fuser);
 };

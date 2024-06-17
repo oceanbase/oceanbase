@@ -8,9 +8,15 @@ import mysql.connector
 from mysql.connector import errorcode
 import logging
 import getopt
+import re
 
 class UpgradeParams:
   log_filename = 'upgrade_cluster_health_checker.log'
+
+class PasswordMaskingFormatter(logging.Formatter):
+  def format(self, record):
+    s = super(PasswordMaskingFormatter, self).format(record)
+    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 
 #### --------------start : my_error.py --------------
 class MyError(Exception):
@@ -263,15 +269,18 @@ def config_logging_module(log_filenamme):
       filename=log_filenamme,\
       filemode='w')
   # 定义日志打印格式
-  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
   #######################################
   # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
   stdout_handler = logging.StreamHandler(sys.stdout)
   stdout_handler.setLevel(logging.INFO)
-  # 设置日志打印格式
   stdout_handler.setFormatter(formatter)
-  # 将定义好的stdout_handler日志handler添加到root logger
+  # 定义一个Handler处理文件输出
+  file_handler = logging.FileHandler(log_filenamme, mode='w')
+  file_handler.setLevel(logging.INFO)
+  file_handler.setFormatter(formatter)
   logging.getLogger('').addHandler(stdout_handler)
+  logging.getLogger('').addHandler(file_handler)
 #### ---------------end----------------------
 
 def check_zone_valid(query_cur, zone):
@@ -384,7 +393,7 @@ def check_until_timeout(query_cur, sql, value, timeout):
     time.sleep(10)
 
 # 开始健康检查
-def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, need_check_major_status, zone = ''):
+def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, zone = ''):
   try:
     conn = mysql.connector.connect(user = my_user,
                                    password = my_passwd,
@@ -401,8 +410,6 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, need
       check_paxos_replica(query_cur, timeout)
       check_schema_status(query_cur, timeout)
       check_server_version_by_zone(query_cur, zone)
-      if True == need_check_major_status:
-        check_major_merge(query_cur, timeout)
     except Exception, e:
       logging.exception('run error')
       raise e
@@ -436,8 +443,8 @@ if __name__ == '__main__':
       timeout = int(get_opt_timeout())
       zone = get_opt_zone()
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
-          host, port, user, password, log_filename, timeout, zone)
-      do_check(host, port, user, password, upgrade_params, timeout, False, zone) # need_check_major_status = False
+          host, port, user, password.replace('"', '\\"'), log_filename, timeout, zone)
+      do_check(host, port, user, password, upgrade_params, timeout, zone)
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')
       raise e

@@ -245,7 +245,7 @@ int ObLobLocatorHelper::fill_lob_locator_v2(ObDatumRow &row,
                                                  out_cols_param->at(i)->get_column_id(),
                                                  rowkey_str_,
                                                  access_ctx,
-                                                 datum_meta.get_collation_type(),
+                                                 ObLobCharsetUtil::get_collation_type(datum_meta.get_type() ,datum_meta.get_collation_type()),
                                                  false,
                                                  is_sys_table(access_param.iter_param_.table_id_)))) {
             STORAGE_LOG(WARN, "Lob: Failed to build lob locator v2", K(ret), K(i), K(datum));

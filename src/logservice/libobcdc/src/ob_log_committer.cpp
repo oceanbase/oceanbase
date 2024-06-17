@@ -1189,10 +1189,6 @@ int ObLogCommitter::after_trans_handled_(PartTransTask *participants)
     // Decrement the reference count after the Commit message is updated
     // If the reference count is 0, the partition transaction is recycled
     else if (0 == part_trans_task->dec_ref_cnt()) {
-      if (is_ddl_trans && ! part_trans_task->is_sys_ls_part_trans()) {
-        // mark user_ls part_trans_task in ddl_trans not served, and will recycle redo of the part_trans_task in resource_collector.
-        part_trans_task->set_unserved();
-      }
       if (OB_FAIL(resource_collector_->revert(part_trans_task))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("revert PartTransTask fail", KR(ret), K(part_trans_task));
@@ -1263,7 +1259,7 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
         // unexpected
         LOG_ERROR("unexpected skiping trans with valid br", KR(ret), K(trans_ctx));
       } else {
-        LOG_INFO("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
+        LOG_DEBUG("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
         ret = OB_SUCCESS;
       }
     } else {

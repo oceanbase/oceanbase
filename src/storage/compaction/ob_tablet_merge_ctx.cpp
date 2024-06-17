@@ -226,12 +226,12 @@ int ObTabletMiniMergeCtx::try_schedule_meta_merge(
 
   // try schedule medium merge
   if (!medium_is_cooling_down) {
-    bool non_used_freeze_flag = false; // no meaning, just for placeholder for refering
     bool non_used_schedule_dag_flag = false;
+    ObTabletSchedulePair non_used_schedule_pair;
     if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
             *get_ls(),
             *tablet_handle.get_obj(),
-            non_used_freeze_flag,
+            non_used_schedule_pair,
             non_used_schedule_dag_flag))) {
       if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
         LOG_WARN_RET(tmp_ret, "failed to schedule tablet medium merge", K(tmp_ret), "param", get_dag_param());
@@ -335,6 +335,73 @@ int ObTabletExeMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_tabl
       LOG_WARN("failed to prepare compaction filter", KR(ret), "param", get_dag_param());
     }
   }
+  return ret;
+}
+
+int ObTabletExeMergeCtx::cal_merge_param()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(static_param_.cal_minor_merge_param())) {
+    LOG_WARN("failed to cal_major_merge_param", KR(ret));
+  } else if (is_minor_merge(static_param_.get_merge_type())) {
+    if (OB_FAIL(init_static_param_tx_id())) {
+      LOG_WARN("failed to init_static_param_tx_id", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTabletExeMergeCtx::init_static_param_tx_id()
+{
+  int ret = OB_SUCCESS;
+  ObTxTableGuard tx_table_guard;
+  const storage::ObTablesHandleArray &tables_handle = static_param_.tables_handle_;
+  const int64_t table_cnt = tables_handle.get_count();
+  ObITable *table = nullptr;
+  ObLS *ls = nullptr;
+  ObSSTableMetaHandle meta_handle;
+  int64_t &static_param_tx_id = static_param_.tx_id_;
+
+  if (OB_ISNULL(ls = static_param_.ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls is null", K(ret));
+  } else if (OB_FAIL(ls->get_tx_table_guard(tx_table_guard))) {
+    STORAGE_LOG(WARN, "get_tx_table_guard from log stream fail.", K(ret), K(*ls));
+  }
+
+  static_param_tx_id = 0;
+  for (int64_t i = 0; i < table_cnt && OB_SUCC(ret); i++) {
+    if (OB_ISNULL(table = tables_handle.get_table(i)) || OB_UNLIKELY(!table->is_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected null table", K(ret), K(i), KPC(table));
+    } else if (!static_cast<ObSSTable *>(table)->contain_uncommitted_row()) {
+      //continue
+    } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(meta_handle))) {
+      STORAGE_LOG(WARN, "fail to get meta", K(ret), K(i), KPC(table));
+    } else if (meta_handle.get_sstable_meta().get_tx_id_count() > 0) {
+      const int64_t tx_id = meta_handle.get_sstable_meta().get_tx_ids(0);
+      int64_t state = 0;
+      share::SCN trans_version;
+      if (OB_UNLIKELY(meta_handle.get_sstable_meta().get_tx_id_count() != 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "unexpected tx id count", K(ret), K(i), KPC(table), KPC(meta_handle.meta_));
+      } else if (tx_id == static_param_tx_id) {
+        //continue
+      } else if (OB_FAIL(tx_table_guard.get_tx_state_with_scn(transaction::ObTransID(tx_id),
+        static_param_.merge_scn_, state, trans_version))) {
+        STORAGE_LOG(WARN, "fail to get tx state", K(ret), K(tx_id), K(static_param_.merge_scn_));
+      } else if (state == ObTxData::RUNNING) {
+        if (OB_UNLIKELY(transaction::ObTransID(static_param_tx_id).is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "unexpected tx id", K(ret), K(static_param_tx_id), K(tx_id), K(tables_handle));
+        } else {
+          static_param_tx_id = tx_id;
+        }
+      }
+    }
+  }
+
+  STORAGE_LOG(INFO, "finish tx id init", K(ret), K(static_param_tx_id));
   return ret;
 }
 

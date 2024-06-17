@@ -179,7 +179,7 @@ int ObExprSubstr::calc_result_length_oracle(const ObExprResType *types_array,
         SQL_RESV_LOG(WARN, "fail to get mbmaxlen", K(ret), K(cs_type));
       } else {
         if (start_pos > 0 && substr_len > 0) {
-          if (start_pos + substr_len <= result_len + 1) {
+          if (start_pos <= INT64_MAX - substr_len && start_pos + substr_len <= result_len + 1) {
             res_len = substr_len;
           } else {
             res_len = result_len - start_pos + 1;

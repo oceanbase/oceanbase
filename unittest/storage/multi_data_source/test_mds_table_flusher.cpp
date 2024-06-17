@@ -160,7 +160,7 @@ TEST_F(TestMdsTableFlush, flusher_for_all_order_with_enough_memory) {
     p_mds_table->rec_scn_ = v_key[i].rec_scn_;
     v.push_back(mds_table);
   }
-  ASSERT_EQ(OB_SUCCESS, mgr.flush(share::SCN::max_scn()));
+  ASSERT_EQ(OB_SUCCESS, mgr.flush(share::SCN::max_scn(), -1));
   ASSERT_EQ(TEST_ALL_SIZE, V_ActualDoFlushKey.size());
   for (int i = 0; i < V_ActualDoFlushKey.size(); ++i) {
     if (V_ActualDoFlushKey[i].rec_scn_ != mock_scn(100 + i)) {
@@ -194,7 +194,7 @@ TEST_F(TestMdsTableFlush, flusher_for_all_order_with_limitted_memory_reserve_fai
     p_mds_table->rec_scn_ = v_key[i].rec_scn_;
     v.push_back(mds_table);
   }
-  ASSERT_EQ(OB_SUCCESS, mgr.flush(share::SCN::max_scn()));
+  ASSERT_EQ(OB_SUCCESS, mgr.flush(share::SCN::max_scn(), -1));
   ASSERT_EQ(TEST_ALL_SIZE + FLUSH_FOR_ALL_SIZE, V_ActualDoFlushKey.size());// 只保证最前面的TEST_ALL_SIZE的tablet是有序的，并且rec scn最小
   for (int i = 0; i < FLUSH_FOR_ALL_SIZE; ++i) {
     if (V_ActualDoFlushKey[i].rec_scn_ != mock_scn(100 + i)) {

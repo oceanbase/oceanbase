@@ -58,35 +58,6 @@ public:
   int64_t wait_rs_validate_cnt_;
 };
 
-struct ObCompactionScheduleTimeGuard : public ObCompactionTimeGuard
-{
-public:
-  ObCompactionScheduleTimeGuard()
-    : ObCompactionTimeGuard(UINT64_MAX, "[STORAGE] ")
-  {}
-  virtual ~ObCompactionScheduleTimeGuard() {}
-  enum CompactionEvent : uint16_t {
-    // medium scheduler
-    GET_TABLET,
-    UPDATE_TABLET_REPORT_STATUS,
-    READ_MEDIUM_INFO,
-    SCHEDULE_NEXT_MEDIUM,
-    SCHEDULE_TABLET_MEDIUM,
-    FAST_FREEZE,
-    // medium checker
-    SEARCH_META_TABLE,
-    CHECK_META_TABLE,
-    SEARCH_CHECKSUM,
-    CHECK_CHECKSUM,
-    SCHEDULER_NEXT_ROUND,
-    COMPACTION_EVENT_MAX
-  };
-  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
-private:
-  const static char *CompactionEventStr[];
-  static const char *get_comp_event_str(enum CompactionEvent event);
-};
-
 } // compaction
 } // oceanbase
 

@@ -21,6 +21,9 @@
 #include "logservice/palf/log_entry.h"              //LogEntry
 #include "logservice/palf/log_define.h"
 #include "logservice/ob_log_service.h"//open_palf
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+#include "logservice/ob_log_compression.h"
+#endif
 #include "share/scn.h"//SCN
 #include "logservice/ob_garbage_collector.h"//ObGCLSLog
 #include "logservice/palf_handle_guard.h"//ObPalfHandleGuard
@@ -59,24 +62,6 @@ using namespace palf;
 namespace rootserver
 {
 ERRSIM_POINT_DEF(ERRSIM_END_TRANS_ERROR);
-#define RESTORE_EVENT_ADD                                                      \
-  int ret_code = OB_SUCCESS;                                                   \
-  switch (ret) {                                                               \
-    case -ER_ACCESS_DENIED_ERROR:                                              \
-      ret_code = OB_PASSWORD_WRONG;                                            \
-    case -ER_CONNECT_FAILED:                                                   \
-      ret_code = OB_CONNECT_ERROR;                                             \
-    case OB_IN_STOP_STATE:                                                     \
-      ret_code = OB_IN_STOP_STATE;                                             \
-    default:                                                                   \
-      ret_code = ret;                                                          \
-  }                                                                            \
-  ROOTSERVICE_EVENT_ADD("root_service", "update_primary_ip_list",              \
-    "tenant_id", tenant_id_, K(ret),                                           \
-    "ob_error_name", ob_error_name(ret_code),                                  \
-    "ob_error_str", ob_strerror(ret_code),                                     \
-    "primary_user_tenant", user_and_tenant.ptr(),                              \
-    "primary_ip_list", service_attr.addr_);                                    \
 
 int ObRecoveryLSService::init()
 {
@@ -107,9 +92,7 @@ void ObRecoveryLSService::destroy()
   inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
   proxy_ = NULL;
-  restore_proxy_.destroy();
   last_report_ts_ = OB_INVALID_TIMESTAMP;
-  primary_is_avaliable_= true;
   restore_status_.reset();
 }
 
@@ -146,7 +129,7 @@ void ObRecoveryLSService::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(inited_), KP(proxy_));
   } else {
-    palf::PalfBufferIterator iterator;//can not use without palf_guard
+    palf::PalfBufferIterator iterator(SYS_LS.id(), palf::LogIOUser::RECOVERY);//can not use without palf_guard
     int64_t idle_time_us = 100 * 1000L;
     SCN start_scn;
     last_report_ts_ = OB_INVALID_TIMESTAMP;
@@ -204,11 +187,7 @@ int ObRecoveryLSService::process_thread0_(const ObAllTenantInfo &tenant_info)
     LOG_WARN("failed to process ls balance task", KR(ret), KR(tmp_ret));
   }
   (void)try_tenant_upgrade_end_();
-  if (tenant_info.is_standby()) {
-    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
-      (void)try_update_primary_ip_list();
-    }
-  }
+
   return ret;
 }
 
@@ -323,6 +302,13 @@ int ObRecoveryLSService::process_ls_log_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant_info is invalid", KR(ret), K(tenant_info));
   }
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  char *decompress_buf = NULL;
+  int64_t decompress_buf_len = 0;
+  int64_t decompressed_len = 0;
+#endif
+  const char *log_body = NULL;
+  int64_t log_body_size = 0;
   while (OB_SUCC(ret) && OB_SUCC(iterator.next())) {
     if (OB_FAIL(iterator.get_entry(log_entry, target_lsn))) {
       LOG_WARN("failed to get log", KR(ret), K(log_entry));
@@ -359,25 +345,43 @@ int ObRecoveryLSService::process_ls_log_(
       } else if (OB_UNLIKELY(log_pos >= log_length)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("log pos is not expected", KR(ret), K(log_pos), K(log_length));
-      } else if (logservice::GC_LS_LOG_BASE_TYPE == header.get_log_type()) {
-        ObGCLSLog gc_log;
-        if (OB_FAIL(gc_log.deserialize(log_buf, log_length, log_pos))) {
-          LOG_WARN("failed to deserialize gc log", KR(ret), K(log_length));
-        } else if (ObGCLSLOGType::OFFLINE_LS == gc_log.get_log_type()) {
-          //set sys ls offline
-          if (OB_FAIL(process_gc_log_(gc_log, sync_scn))) {
-            LOG_WARN("failed to process gc log", KR(ret), K(sync_scn));
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+      } else if (header.is_compressed()) {
+        if (OB_FAIL(decompress_log_payload_(log_buf + log_pos, log_length - log_pos,
+                                            decompress_buf, decompressed_len))) {
+          LOG_WARN("failed to decompress log payload", K(header), K(log_entry));
+        } else {
+          log_body = decompress_buf;
+          log_body_size = decompressed_len;
+        }
+#endif
+      } else {
+        log_body = log_buf + log_pos;
+        log_body_size = log_length - log_pos;
+      }
+
+      if (OB_SUCC(ret)) {
+        int64_t pos = 0;
+        if (logservice::GC_LS_LOG_BASE_TYPE == header.get_log_type()) {
+          ObGCLSLog gc_log;
+          if (OB_FAIL(gc_log.deserialize(log_body, log_body_size, pos))) {
+            LOG_WARN("failed to deserialize gc log", KR(ret), K(log_body_size));
+          } else if (ObGCLSLOGType::OFFLINE_LS == gc_log.get_log_type()) {
+            //set sys ls offline
+            if (OB_FAIL(process_gc_log_(gc_log, sync_scn))) {
+              LOG_WARN("failed to process gc log", KR(ret), K(sync_scn));
+            }
           }
-        }
-        // nothing
-      } else if (logservice::TRANS_SERVICE_LOG_BASE_TYPE == header.get_log_type()) {
-        ObTxLogBlock tx_log_block;
-        if (OB_FAIL(tx_log_block.init_for_replay(log_buf, log_length, log_pos))) {
-          LOG_WARN("failed to init tx log block", KR(ret), K(log_length));
-        } else if (OB_FAIL(process_ls_tx_log_(tx_log_block, sync_scn))) {
-          LOG_WARN("failed to process ls tx log", KR(ret), K(tx_log_block), K(sync_scn));
-        }
-      } else {}
+          // nothing
+        } else if (logservice::TRANS_SERVICE_LOG_BASE_TYPE == header.get_log_type()) {
+          ObTxLogBlock tx_log_block;
+          if (OB_FAIL(tx_log_block.init_for_replay(log_body, log_body_size, pos))) {
+            LOG_WARN("failed to init tx log block", KR(ret), K(log_length));
+          } else if (OB_FAIL(process_ls_tx_log_(tx_log_block, sync_scn))) {
+            LOG_WARN("failed to process ls tx log", KR(ret), K(tx_log_block), K(sync_scn));
+          }
+        } else {}
+      }
 
       if (OB_SUCC(ret)) {
         last_sync_scn = sync_scn;
@@ -393,14 +397,20 @@ int ObRecoveryLSService::process_ls_log_(
         int tmp_ret = OB_SUCCESS;
         const char* comment = OB_SUCC(ret) ? "regular report when iterate log" :
                               "report sync_scn -1 when not valid to process";
-        if (OB_TMP_FAIL(report_sys_ls_recovery_stat_(last_sync_scn, false,
-                comment))) {
+        if (OB_TMP_FAIL(report_sys_ls_recovery_stat_(last_sync_scn, false, comment))) {
           LOG_WARN("failed to report ls recovery stat", KR(ret), KR(tmp_ret),
                     K(last_sync_scn), K(comment));
         }
       }
     }
   }//end for each log
+
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  if (NULL != decompress_buf) {
+    mtl_free(decompress_buf);
+  }
+#endif
+
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
     if (!sync_scn.is_valid() || start_scn >= sync_scn) {
@@ -464,7 +474,7 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
         const ObTxBufferNodeArray &source_data =
             commit_log.get_multi_source_data();
         const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-        START_TRANSACTION(proxy_, exec_tenant_id)
+        ObMySQLTransaction trans;
         for (int64_t i = 0; OB_SUCC(ret) && i < source_data.count(); ++i) {
           const ObTxBufferNode &node = source_data.at(i);
           if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
@@ -474,6 +484,8 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
           } else if (ObTxDataSourceType::LS_TABLE != node.get_data_source_type()
                      && ObTxDataSourceType::TRANSFER_TASK != node.get_data_source_type()) {
             // nothing
+          } else if (! trans.is_started() && OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
+            LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
           } else if (FALSE_IT(has_operation = true)) {
             //can not be there;
           } else if (OB_FAIL(check_valid_to_operator_ls_(sync_scn))) {
@@ -523,6 +535,7 @@ int ObRecoveryLSService::process_upgrade_log_(
       LOG_WARN("failed to get primary_data_version", KR(ret), K(pos), K(node.get_data_buf().length()));
     } else {
       LOG_INFO("get primary_data_version", K(primary_data_version));
+      uint64_t current_data_version = 0;//用户网络备库的版本号校验，防止备租户创建的版本号大于主租户的版本号
       if (!primary_data_version.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("primary_data_version not valid", KR(ret), K(primary_data_version));
@@ -539,6 +552,19 @@ int ObRecoveryLSService::process_upgrade_log_(
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(init_restore_status(sync_scn, OB_ERR_RESTORE_STANDBY_VERSION_LAG))) {
           LOG_WARN("failed to init restore status", KR(tmp_ret), K(sync_scn));
+        }
+      } else if (OB_FAIL(get_min_data_version_(current_data_version))) {
+        LOG_WARN("failed to get min data version", KR(ret));
+      } else if (0 == current_data_version) {
+        //standby cluster not set data version now, need retry
+        ret = OB_EAGAIN;
+        LOG_WARN("standby data version not valid, need retry", KR(ret), K(current_data_version),
+            K(primary_data_version));
+      } else if (primary_data_version.get_data_version() < current_data_version) {
+        ret = OB_ITER_STOP;
+        if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {//1min
+          LOG_ERROR("standby version is larger than primary version", KR(ret),
+              K(current_data_version), K(primary_data_version));
         }
       }
     }
@@ -1204,6 +1230,12 @@ int ObRecoveryLSService::try_do_ls_balance_task_(
       LOG_WARN("failed to remove task", KR(ret), K(tenant_id_), K(ls_balance_task));
     } else {
       LOG_INFO("task can be remove", KR(ret), K(ls_balance_task));
+      ROOTSERVICE_EVENT_ADD("standby_tenant", "remove_balance_task",
+          K_(tenant_id), "task_type", ls_balance_task.get_task_op(),
+          "task_scn", ls_balance_task.get_operation_scn(),
+          "switchover_status", tenant_info.get_switchover_status(),
+          "src_ls", ls_balance_task.get_src_ls(),
+          "dest_ls", ls_balance_task.get_dest_ls());
     }
     END_TRANSACTION(trans)
   }
@@ -1311,201 +1343,6 @@ int ObRecoveryLSService::do_ls_balance_alter_task_(const share::ObBalanceTaskHel
   }
   return ret;
 }
-void ObRecoveryLSService::try_update_primary_ip_list()
-{
-  int ret = OB_SUCCESS;
-  ObLogRestoreSourceMgr restore_source_mgr;
-  ObLogRestoreSourceItem item;
-  common::ObArray<common::ObAddr> primary_addrs;
-  ObSqlString standby_source_value;
-  ObRestoreSourceServiceAttr service_attr;
-  ObMySQLTransaction trans;
-  ObSqlString user_and_tenant;
-  int64_t primary_cluster_id = 0;
-  uint64_t primary_tenant_id = 0;
-  char passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; //unencrypted password
-
-  if (OB_FAIL(restore_source_mgr.init(tenant_id_, proxy_))) {
-    LOG_WARN("fail to init restore_source_mgr", K_(tenant_id));
-  } else if (OB_FAIL(restore_source_mgr.get_source(item))) {
-    LOG_WARN("get source failed", K_(tenant_id));
-  } else if (!check_need_update_ip_list_(item)) {
-    LOG_INFO("there is no log restore source record or the log restore source type is not service" , K(item));
-  } else if (OB_FAIL(get_restore_source_value_(item, standby_source_value))) {
-    LOG_WARN("fail to get service standby log_restore source value", K(item));
-  } else if (OB_FAIL(service_attr.parse_service_attr_from_str(standby_source_value))) {
-    LOG_WARN("fail to parse service attr", K(item), K(standby_source_value));
-  } else if (!service_attr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("service attr is invalid", K(service_attr));
-  } else if (OB_FAIL(service_attr.get_password(passwd, sizeof(passwd)))) {
-    LOG_WARN("get servcie attr password failed", K(service_attr));
-  } else if (OB_FAIL(service_attr.get_user_str_(user_and_tenant))) {
-    LOG_WARN("get user str failed", K(service_attr.user_.user_name_), K(service_attr.user_.tenant_name_));
-  } else if (!primary_is_avaliable_ && restore_proxy_.is_inited()) {
-    LOG_WARN("primary is not avaliable, retry init restore proxy");
-    restore_proxy_.destroy();
-  } else if (!restore_proxy_.is_inited() && OB_FAIL(restore_proxy_.init(tenant_id_/*standby*/,
-      service_attr.addr_,
-      user_and_tenant.ptr(),
-      passwd,
-      service_attr.user_.mode_ == ObCompatibilityMode::MYSQL_MODE ? OB_SYS_DATABASE_NAME : OB_ORA_SYS_SCHEMA_NAME))) {
-    LOG_WARN("restore_proxy_ fail to connect to primary", K_(tenant_id), K(service_attr.addr_), K(user_and_tenant));
-  } else if (OB_FAIL(restore_proxy_.get_cluster_id(service_attr.user_.tenant_id_, primary_cluster_id))) {
-    LOG_WARN("restore proxy fail to get primary cluster id", K(service_attr.user_.tenant_id_));
-  } else if (OB_FAIL(restore_proxy_.get_tenant_id(service_attr.user_.tenant_name_, primary_tenant_id))) {
-    LOG_WARN("restore proxy fail to get primary tenant id", K(service_attr.user_.tenant_name_));
-  } else if (OB_FAIL(restore_proxy_.get_server_ip_list(service_attr.user_.tenant_id_, primary_addrs))) {
-    LOG_WARN("restore proxy fail to get primary server ip list", K(service_attr.user_.tenant_id_));
-  } else if (primary_addrs.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant ip list is empty", K(primary_addrs));
-  } else if ((primary_cluster_id != service_attr.user_.cluster_id_) || (primary_tenant_id != service_attr.user_.tenant_id_)) {
-    LOG_WARN("primary cluster id or tenant id has changed",
-    K(primary_cluster_id), K(service_attr.user_.cluster_id_), K(primary_tenant_id), K(service_attr.user_.tenant_id_));
-  } else {
-    bool cur_primary_state = true;
-    if (cur_primary_state != primary_is_avaliable_) {
-      primary_is_avaliable_ = true;
-      ROOTSERVICE_EVENT_ADD("root_service", "update_primary_ip_list",
-        "tenant_id", tenant_id_,
-        "info", "primary connection recovery",
-        "primary_user_tenant", user_and_tenant.ptr(),
-        "primary_ip_list", primary_addrs);
-    }
-
-    bool addr_is_same = false;
-    addr_is_same = service_attr.compare_addr_(primary_addrs);
-    if (!addr_is_same) {
-      common::ObArray<common::ObAddr> tmp_addr;
-      if (OB_FAIL(tmp_addr.assign(service_attr.addr_))) {
-        LOG_WARN("fail to assign service attr addr", K(service_attr.addr_));
-      } else {
-        service_attr.addr_.reset();
-        ARRAY_FOREACH_N(primary_addrs, idx, cnt) {
-          if (OB_FAIL(service_attr.addr_.push_back(primary_addrs.at(idx)))) {
-            LOG_WARN("fail to push back primary addr", K(primary_addrs.at(idx)));
-          }
-        }
-        LOG_INFO("primary ip list has changed", K(addr_is_same), K(primary_addrs), K(service_attr.addr_));
-        if (OB_FAIL(ret)) {
-          LOG_WARN("fail to update primary ip list");
-        } else if (OB_FAIL(do_update_restore_source_(service_attr, restore_source_mgr))) {
-          LOG_WARN("fail to update restore source", K(service_attr));
-        }
-        ROOTSERVICE_EVENT_ADD("root_service", "update_primary_ip_list",
-          "tenant_id", tenant_id_,
-          "info", "do update primary ip list",
-          "primary_user_tenant", user_and_tenant.ptr(),
-          "new_primary_ip_list", primary_addrs,
-          "old_primary_ip_list", tmp_addr);
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-    bool cur_primary_state = false;
-    if (cur_primary_state != primary_is_avaliable_) {
-      primary_is_avaliable_ = false;
-      LOG_WARN("standby recovery ls service state changed");
-      RESTORE_EVENT_ADD;
-    }
-  }
-}
-
-bool ObRecoveryLSService::check_need_update_ip_list_(ObLogRestoreSourceItem &item)
-{
-  return item.is_valid() && ObLogRestoreSourceType::SERVICE == item.type_;
-}
-
-int ObRecoveryLSService::get_restore_source_value_(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString value;
-  if (!item.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log restore source item is invalid");
-  } else if (OB_FAIL(standby_source_value.assign(item.value_))) {
-    LOG_WARN("fail to assign standby source value", K(item.value_));
-  }
-  return ret;
-}
-
-int ObRecoveryLSService::do_update_restore_source_(
-  ObRestoreSourceServiceAttr &old_attr,
-  ObLogRestoreSourceMgr &restore_source_mgr)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  ObLogRestoreSourceItem tmp_item;
-  ObRestoreSourceServiceAttr tmp_service_attr;
-  ObSqlString tmp_standby_source_value;
-  char updated_value_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
-
-  if (OB_FAIL(old_attr.gen_service_attr_str(updated_value_str, sizeof(updated_value_str)))) {
-    LOG_WARN("gen service_attr_str failed", K(updated_value_str), K(old_attr));
-  } else if (OB_FAIL(trans.start(proxy_, gen_meta_tenant_id(tenant_id_)))) {
-    LOG_WARN("fail to start trans", K_(tenant_id));
-  } else if (OB_FAIL(restore_source_mgr.get_source_for_update(tmp_item, trans))) {
-    LOG_WARN("fail to get log restore source when double check" , K(tmp_item));
-  } else if (ObLogRestoreSourceType::SERVICE != tmp_item.type_) {
-    ret = OB_EAGAIN;
-    LOG_WARN("log restore source type is not service", K_(tenant_id), K(tmp_item.type_));
-  } else if (OB_FAIL(get_restore_source_value_(tmp_item, tmp_standby_source_value))) {
-    LOG_WARN("fail to get service standby log restore source value", K(tmp_item));
-  } else if (OB_FAIL(tmp_service_attr.parse_service_attr_from_str(tmp_standby_source_value))) {
-    LOG_WARN("fail to parse service attr", K(tmp_item), K(tmp_standby_source_value));
-  } else if (!tmp_service_attr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("service attr is invalid", K(tmp_service_attr));
-  } else if (!(tmp_service_attr.user_ == old_attr.user_)) {
-    ret = OB_EAGAIN;
-    LOG_WARN("log restore source record may be modified", K(tmp_service_attr.user_), K(old_attr.user_));
-  } else if (!(0 == STRCMP(tmp_service_attr.encrypt_passwd_, old_attr.encrypt_passwd_))) {
-    ret = OB_EAGAIN;
-    LOG_WARN("log restore source password may be modified", K_(tenant_id));
-  } else if (OB_FAIL(update_source_inner_table_(updated_value_str, sizeof(updated_value_str), trans, tmp_item))) {
-    LOG_WARN("fail to add service source", K(updated_value_str), K(tmp_item.until_scn_));
-  }
-
-  int temp_ret = OB_SUCCESS;
-  if (trans.is_started()) {
-    if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
-      ret = (OB_SUCC(ret)) ? temp_ret : ret;
-    }
-  }
-  return ret;
-}
-
-int ObRecoveryLSService::update_source_inner_table_(char *buf,
-                                                    const int64_t buf_size,
-                                                    ObMySQLTransaction &trans,
-                                                    const ObLogRestoreSourceItem &item)
-{
-  int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-
-  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument when get source for update",K(buf_size));
-  } else {
-    uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-    ObDMLSqlSplicer dml;
-    ObSqlString sql;
-    if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, tenant_id_))) {
-      LOG_WARN("failed to add column", K_(tenant_id), K(item));
-    } else if (OB_FAIL(dml.add_pk_column(OB_STR_LOG_RESTORE_SOURCE_ID, item.id_))) {
-      LOG_WARN("failed to add column", K_(tenant_id), K(item));
-    } else if (OB_FAIL(dml.add_column(OB_STR_LOG_RESTORE_SOURCE_VALUE, buf))) {
-      LOG_WARN("failed to add column", K_(tenant_id), K(item));
-    } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_LOG_RESTORE_SOURCE_TNAME, sql))) {
-      LOG_WARN("fill update source value sql failed", K(item));
-    } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("failed to exec sql", K(sql), K_(tenant_id));
-    }
-  }
-  return ret;
-}
 
 int ObRecoveryLSService::init_restore_status(const share::SCN &sync_scn, int err_code)
 {
@@ -1548,6 +1385,24 @@ int ObRecoveryLSService::init_restore_status(const share::SCN &sync_scn, int err
   return ret;
 }
 
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+int ObRecoveryLSService::decompress_log_payload_(const char *in_buf, const int64_t in_buf_len,
+                                                 char *&decompress_buf, int64_t &decompressed_len)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr attr(MTL_ID(), "RecoveryLS");
+  const int64_t decompress_buf_len = palf::MAX_LOG_BODY_SIZE;
+  if (NULL == decompress_buf
+      && NULL == (decompress_buf = static_cast<char *>(mtl_malloc(decompress_buf_len, attr)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory");
+  } else if (OB_FAIL(logservice::decompress(in_buf, in_buf_len, decompress_buf,
+                                            decompress_buf_len, decompressed_len))) {
+    LOG_WARN("failed to decompress");
+  } else {/*do nothing*/}
+  return ret;
+}
+#endif
 }//end of namespace rootserver
 }//end of namespace oceanbase
 

@@ -102,7 +102,7 @@ public:
   bool is_row_store_;
   ObDDLKV **ddl_kvs_;
   int64_t ddl_kv_count_;
-  memtable::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
+  ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
   int64_t memtable_count_;
   // If you want to add new member, make sure all member is assigned in 2 convert function.
   // ObTabletPersister::convert_tablet_to_mem_arg

@@ -56,6 +56,15 @@ public:
                             const int64_t new_schema_version,
                             common::ObISQLClient *sql_client,
                             const common::ObString *ddl_stmt_str = NULL);
+  int alter_sequence_start_with(const ObSequenceSchema &sequence_schema,
+                                common::ObISQLClient &sql_client);
+  int get_sequence_sync_value(const uint64_t tenant_id,
+                              const uint64_t sequence_id,
+                              const bool is_for_update,
+                              common::ObISQLClient &sql_client,
+                              ObIAllocator &allocator,
+                              common::number::ObNumber &next_value);
+  int clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id);
 private:
   int add_sequence(common::ObISQLClient &sql_client, const ObSequenceSchema &sequence_schema,
                    const bool only_history, const uint64_t *old_sequence_id);
@@ -65,14 +74,6 @@ private:
                                   const uint64_t new_sequence_id,
                                   common::ObISQLClient &sql_client,
                                   ObIAllocator &allocator);
-  int alter_sequence_start_with(const ObSequenceSchema &sequence_schema,
-                                common::ObISQLClient &sql_client);
-  int get_sequence_sync_value(const uint64_t tenant_id,
-                              const uint64_t sequence_id,
-                              common::ObISQLClient &sql_client,
-                              ObIAllocator &allocator,
-                              common::number::ObNumber &next_value);
-  int clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSequenceSqlService);
 };

@@ -315,21 +315,30 @@ int ObIteratePrivateVirtualTable::inner_get_next_row(ObNewRow *&row)
         || cur_row_.count_ != scan_param_->column_ids_.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("row is NULL or column count mismatched", KR(ret), KP(r), K(cur_row_.count_));
-    } else {
-      convert_alloc_.reuse();
-      for (int64_t i = 0; i < cur_row_.count_; i++) {
-        const ObObj &input = r->get_cell(i);
-        const MapItem &item = mapping_[scan_param_->column_ids_.at(i)];
-        ObObj &output = cur_row_.cells_[i];
-        if (input.is_null() || NULL == item.convert_func_) {
-          output = r->get_cell(i);
-        } else {
-          item.convert_func_(input, output, convert_alloc_);
-        }
-      }
-      row = &cur_row_;
+    } else if (OB_FAIL(try_convert_row(r, row))) {
+      LOG_WARN("try_convert_row failed", KR(ret), KP(r));
     }
   }
+  return ret;
+}
+
+int ObIteratePrivateVirtualTable::try_convert_row(const ObNewRow *input_row, ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+
+  convert_alloc_.reuse();
+  for (int64_t i = 0; i < cur_row_.count_; i++) {
+    const ObObj &input = input_row->get_cell(i);
+    const MapItem &item = mapping_[scan_param_->column_ids_.at(i)];
+    ObObj &output = cur_row_.cells_[i];
+    if (input.is_null() || NULL == item.convert_func_) {
+      output = input_row->get_cell(i);
+    } else {
+      item.convert_func_(input, output, convert_alloc_);
+    }
+  }
+  row = &cur_row_;
+
   return ret;
 }
 

@@ -28,6 +28,7 @@ public:
 private:
   void print_usage();
   int dump_log(int argc, char **argv);
+  int decompress_log(int argc, char **argv);
   int dump_meta(int argc, char **argv);
   int dump_tx_format(int argc, char **argv);
   int dump_filter(int argc, char **argv);
@@ -41,10 +42,16 @@ private:
   int dump_single_log_block_(const char *block_path,
                              share::ObAdminMutatorStringArg &str_arg);
   int alloc_mutator_string_buf_();
+  int concat_file_(const char *first_path, const char *second_path);
 private:
   const static int64_t MAX_TX_LOG_STRING_SIZE = 5*1024*1024;
+  const static int64_t MAX_DECOMPRESSED_BUF_SIZE = palf::MAX_LOG_BODY_SIZE;
+
+
   char *mutator_str_buf_;
   int64_t mutator_buf_size_;
+  char *decompress_buf_;
+  int64_t decompress_buf_size_;
   share::ObAdminLogDumpFilter filter_;
 };
 }

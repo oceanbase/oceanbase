@@ -70,7 +70,7 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
                                                 est_percent,
                                                 no_sample_idx))) {
     LOG_WARN("failed to add hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_))) {
+  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
@@ -206,7 +206,7 @@ int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allo
                                                           hybrid_col_stats,
                                                           no_sample_idx))) {
     LOG_WARN("failed to add no sample hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_))) {
+  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
                                                                param.max_duration_time_,
@@ -354,16 +354,28 @@ int ObHybridHistEstimator::compute_estimate_percent(int64_t total_row_count,
     }
     if (OB_SUCC(ret) && need_sample) {
       if (total_row_count * est_percent / 100 >= MAGIC_MIN_SAMPLE_SIZE) {
-        /*do nothing*/
+        const int64_t MAGIC_MAX_SPECIFY_SAMPLE_SIZE = 1000000;
+        is_block_sample = !is_block_sample ? total_row_count >= MAX_AUTO_GATHER_FULL_TABLE_ROWS : is_block_sample;
+        int64_t max_allowed_multiple = max_num_bkts <= ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM ? 1 :
+                                                    max_num_bkts / ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM;
+        int64_t max_specify_sample_size = MAGIC_MAX_SPECIFY_SAMPLE_SIZE * max_allowed_multiple;
+        if (total_row_count * est_percent / 100 >= max_specify_sample_size) {
+          est_percent = max_specify_sample_size * 100.0 / total_row_count;
+        }
       } else if (total_row_count <= MAGIC_SAMPLE_SIZE) {
         need_sample = false;
         est_percent = 0.0;
         is_block_sample = false;
       } else {
-        is_block_sample = false;
+        is_block_sample = total_row_count >= MAX_AUTO_GATHER_FULL_TABLE_ROWS;
         est_percent = (MAGIC_SAMPLE_SIZE * 100.0) / total_row_count;
       }
     }
+  } else if (total_row_count >= MAX_AUTO_GATHER_FULL_TABLE_ROWS) {
+    need_sample = true;
+    is_block_sample = true;
+    const int64_t MAGIC_MAX_SAMPLE_SIZE = 100000;
+    est_percent = MAGIC_MAX_SAMPLE_SIZE * 100.0 / total_row_count;
   } else if (total_row_count >= MAGIC_MAX_AUTO_SAMPLE_SIZE) {
     if (max_num_bkts <= ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM) {
       need_sample = true;

@@ -38,7 +38,6 @@ void ObChunkBlockCompressor::reset()
 {
   compressor_type_ = NONE_COMPRESSOR;
   if (compressor_ != nullptr) {
-    compressor_->reset_mem();
     compressor_ = nullptr;
   }
 }

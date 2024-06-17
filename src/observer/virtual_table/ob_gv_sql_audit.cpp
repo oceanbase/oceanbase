@@ -567,7 +567,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
   ObObj *cells = cur_row_.cells_;
   const bool is_perf_event_closed = record.data_.is_perf_event_closed_;
 
-  if (OB_ISNULL(cells)) {
+  if (OB_ISNULL(cells) || OB_ISNULL(allocator_)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(cells));
   } else {
@@ -1049,10 +1049,18 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
 
         } break;
         case PL_TRACE_ID: {
-          cells[cell_idx].set_null();
+          const ObCurTraceId::TraceId &pl_trace_id = record.data_.pl_trace_id_;
+          if (pl_trace_id.is_invalid()) {
+            cells[cell_idx].set_null();
+          } else {
+            int64_t len = pl_trace_id.to_string(pl_trace_id_, sizeof(pl_trace_id_));
+            cells[cell_idx].set_varchar(pl_trace_id_, len);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                ObCharset::get_default_charset()));
+          }
         } break;
         case PLSQL_EXEC_TIME: {
-          cells[cell_idx].set_int(0);
+          cells[cell_idx].set_int(record.data_.plsql_exec_time_);
         } break;
         case NETWORK_WAIT_TIME: {
           cells[cell_idx].set_null();
@@ -1064,6 +1072,23 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case SEQ_NUM: {
           int64_t set_v = record.data_.seq_num_;
           cells[cell_idx].set_int(set_v);
+        } break;
+        case TOTAL_MEMSTORE_READ_ROW_COUNT: {
+          cells[cell_idx].set_int(record.data_.total_memstore_read_row_count_);
+        } break;
+        case TOTAL_SSSTORE_READ_ROW_COUNT: {
+          cells[cell_idx].set_int(record.data_.total_ssstore_read_row_count_);
+        } break;
+        case PROXY_USER_NAME: {
+          int64_t len = min(record.data_.proxy_user_name_len_, OB_MAX_USER_NAME_LENGTH);
+          cells[cell_idx].set_varchar(record.data_.proxy_user_name_,
+                                      static_cast<ObString::obstr_size_t>(len));
+        } break;
+        //format_sql_id
+        case FORMAT_SQL_ID: {
+          cells[cell_idx].set_varchar("");
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;

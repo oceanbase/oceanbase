@@ -45,6 +45,21 @@ enum DumpType
   STAT_LABEL
 };
 
+struct ObMemoryCheckContext
+{
+  enum CheckType
+  {
+    SQL_MEMORY_LEAK,
+  };
+  ObMemoryCheckContext(CheckType type = SQL_MEMORY_LEAK)
+    : ret_(OB_SUCCESS), type_(type), cond_()
+  {}
+  bool is_sql_memory_leak() { return SQL_MEMORY_LEAK == type_; }
+  int ret_;
+  CheckType type_;
+  ObThreadCond cond_;
+};
+
 class ObMemoryDumpTask
 {
 public:
@@ -67,6 +82,9 @@ public:
         };
         void *p_chunk_;
       };
+    };
+    struct {
+      ObMemoryCheckContext *memory_check_ctx_;
     };
   };
 };
@@ -189,10 +207,14 @@ public:
     lib::ObMutexGuard guard(task_mutex_);
     avaliable_task_set_ |= (1 << pos);
   }
+  int generate_mod_stat_task(ObMemoryCheckContext *memory_check_ctx = NULL);
+  int check_sql_memory_leak();
   int load_malloc_sample_map(lib::ObMallocSampleMap& malloc_sample_map);
 private:
   void run1() override;
   void handle(void *task);
+
+  void print_malloc_sample_info();
 private:
   AChunk *find_chunk(void *ptr);
 private:

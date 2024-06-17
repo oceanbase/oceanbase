@@ -73,9 +73,12 @@ void ObTLTaGuard::revert()
 }
 
 ObMallocAllocator::ObMallocAllocator()
-  : locks_(), allocators_(), unrecycled_lock_(), unrecycled_allocators_(),
+  : locks_(), allocators_(), unrecycled_lock_(false), unrecycled_allocators_(),
     reserved_(0), urgent_(0), max_used_tenant_id_(0), create_on_demand_(false)
 {
+  for (int64_t i = 0; i < PRESERVED_TENANT_COUNT; ++i) {
+    locks_[i].enable_record_stat(false);
+  }
   set_root_allocator();
   is_inited_ = true;
 }
@@ -135,7 +138,9 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
       allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_);
     }
   }
+
   if (OB_ISNULL(allocator)) {
+    // ignore ret
     ret = OB_ENTRY_NOT_EXIST;
     LOG_ERROR("tenant allocator not exist", K(inner_attr.tenant_id_), K(inner_attr.ctx_id_),
               K(ret));
@@ -715,18 +720,21 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
       if (NULL == ctx_allocator) {
         ctx_allocator = &ta[ctx_id];
         char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
-        bool has_unfree = ctx_allocator->check_has_unfree(first_label);
+        char first_bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+        bool has_unfree = ctx_allocator->check_has_unfree(first_label, first_bt);
         if (has_unfree) {
           if (ObCtxIds::GLIBC == ctx_id
               && 0 == strncmp("Pl", first_label, 2)
               && pl_leaked_times_++ < 10) {
             LOG_WARN("tenant memory leak!!!", K(tenant_id), K(ctx_id),
                      "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
-                     "label", first_label);
+                     "label", first_label,
+                     "backtrace", first_bt);
           } else {
             LOG_ERROR("tenant memory leak!!!", K(tenant_id), K(ctx_id),
                       "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
-                      "label", first_label);
+                      "label", first_label,
+                      "backtrace", first_bt);
           }
           tas[ctx_id] = ctx_allocator;
         }

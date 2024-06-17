@@ -109,7 +109,7 @@ public: // derived from ObCommonCheckpoint
   share::SCN get_freezing_scn() const;
   virtual share::SCN get_rec_scn() override;
   virtual share::SCN get_rec_scn(ObTabletID &tablet_id) override;
-  virtual int flush(share::SCN recycle_scn, bool need_freeze = true) override;
+  virtual int flush(share::SCN recycle_scn, const int64_t trace_id, bool need_freeze = true) override;
   virtual ObTabletID get_tablet_id() const override { return ObTabletID(0); }
   virtual bool is_flushing() const override { return false; }
 
@@ -118,10 +118,27 @@ public: // getter and setter
   void dec_ref() { ATOMIC_DEC(&ref_cnt_); };
   int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
 
+  struct ObFlushOp {
+  public:
+    ObFlushOp(int64_t trace_id,
+      share::SCN &do_flush_limit_scn,
+      int64_t &scan_mds_table_cnt)
+      : trace_id_(trace_id),
+        do_flush_limit_scn_(do_flush_limit_scn),
+        scan_mds_table_cnt_(scan_mds_table_cnt)
+    {}
+    ObFlushOp& operator=(const ObFlushOp&) = delete;
+    bool operator()(const common::ObTabletID &tablet_id, MdsTableBase *&mds_table) const;
+  private:
+    int64_t trace_id_;
+    share::SCN &do_flush_limit_scn_;
+    int64_t &scan_mds_table_cnt_;
+  };
 private:
   void order_flush_(FlusherForSome &order_flusher_for_some,
                     share::SCN freezing_scn,
-                    share::SCN max_consequent_callbacked_scn);
+                    share::SCN max_consequent_callbacked_scn,
+                    int64_t trace_id);
 private:
   bool is_inited_;
   bool is_freezing_;

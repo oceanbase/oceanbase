@@ -53,7 +53,7 @@ struct LobAuxMetaKey
   uint64_t hash() const
   {
     uint64_t hash_val = 0;
-    hash_val = common::murmurhash(&commit_version_, sizeof(tenant_id_), hash_val);
+    hash_val = common::murmurhash(&commit_version_, sizeof(commit_version_), hash_val);
     hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
     hash_val = common::murmurhash(&aux_lob_meta_tid_, sizeof(aux_lob_meta_tid_), hash_val);
     hash_val = common::murmurhash(&lob_id_, sizeof(lob_id_), hash_val);

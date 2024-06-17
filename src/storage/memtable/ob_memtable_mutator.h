@@ -286,6 +286,12 @@ public:
   int append_table_lock_kv(
       const int64_t table_version,
       const TableLockRedoDataNode &redo);
+
+  int append_ext_info_log_kv(
+      const int64_t table_version,
+      const RedoDataNode &redo,
+      const bool is_big_row);
+
   int append_row_kv(
       const int64_t table_version,
       const RedoDataNode &redo,

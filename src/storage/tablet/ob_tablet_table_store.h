@@ -29,6 +29,7 @@ class ObTablet;
 class ObTableStoreIterator;
 class ObCachedTableHandle;
 class ObStorageMetaHandle;
+struct ObTabletHAStatus;
 
 class ObReadyForReadParam final
 {
@@ -160,7 +161,6 @@ public:
   int get_first_frozen_memtable(ObITable *&table) const;
   int get_ddl_sstables(ObTableStoreIterator &iter) const;
   int get_mini_minor_sstables(
-      const bool is_ha_data_status_complete,
       ObTableStoreIterator &iter) const;
   int get_recycle_version(const int64_t multi_version_start, int64_t &recycle_version) const;
   int get_ha_tables(ObTableStoreIterator &iter, bool &is_ready_for_read) const;
@@ -197,6 +197,8 @@ public:
       blocksstable::ObSSTable &orig_sstable,
       ObStorageMetaHandle &loaded_sstable_handle,
       blocksstable::ObSSTable *&loaded_sstable);
+  int get_all_minor_sstables(
+      ObTableStoreIterator &iter) const;
 private:
   int get_need_to_cache_sstables(
       common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
@@ -245,7 +247,8 @@ private:
       const blocksstable::ObSSTable *new_sstable,
       const ObTabletTableStore &old_store,
       const bool need_check_sstable,
-      const int64_t inc_base_snapshot_version);
+      const int64_t inc_base_snapshot_version,
+      const ObTabletHAStatus &ha_status);
   int build_meta_major_table(
       common::ObArenaAllocator &allocator,
       const blocksstable::ObSSTable *new_sstable,
@@ -305,7 +308,7 @@ private:
       ObITable **minor_sstables) const;
   int check_minor_table_continue_(
       ObITable *table,
-      ObITable *prev_table) const;
+      ObITable *&prev_table) const;
   int combine_ha_minor_sstables_(
       const ObTablet &tablet,
       common::ObIArray<ObITable *> &old_store_minor_sstables,
@@ -320,7 +323,6 @@ private:
       common::ObIArray<ObITable *> &new_minor_sstables);
   int check_old_store_minor_sstables_(
       common::ObIArray<ObITable *> &old_store_minor_sstables);
-  int get_ha_mini_minor_sstables_(ObTableStoreIterator &iter) const;
   int replace_ha_minor_sstables_(
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
@@ -352,6 +354,7 @@ private:
       const ObIArray<ObITable *> &replace_sstable_array,
       const ObSSTableArray &old_tables,
       ObSSTableArray &new_tables) const;
+  int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
 
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;

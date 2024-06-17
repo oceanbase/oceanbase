@@ -37,8 +37,13 @@ public:
     ObTableAccessParam &param,
     ObTableAccessContext &context,
     ObGetTableParam &get_table_param);
+  virtual int switch_table(
+    ObTableAccessParam &param,
+    ObTableAccessContext &context,
+    ObGetTableParam &get_table_param) override;
   virtual void reset() override;
   virtual void reuse() override;
+  virtual void reclaim() override;
   inline void set_iter_del_row(const bool iter_del_row) { iter_del_row_ = iter_del_row; }
 protected:
   virtual int calc_scan_range() override;

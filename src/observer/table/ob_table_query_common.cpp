@@ -127,6 +127,12 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc normal query result iterator", K(ret));
     } else {
+      // ttl table should set corresponding limit and query
+      if (tb_ctx.is_ttl_table()) {
+        normal_result_iter->set_limit(query.get_limit());
+        normal_result_iter->set_offset(query.get_offset());
+      }
+      // set aggregate params
       if (query.is_aggregate_query()) {
         normal_result_iter->init_aggregation();
         normal_result_iter->get_agg_calculator().set_projs(tb_ctx.get_agg_projs());

@@ -55,6 +55,14 @@ class ObLSHandle;
 class ObTabletHandle;
 class ObLSTabletService;
 
+enum class ObTabletCreateThrottlingLevel : uint8_t
+{
+    STRICT = 0, // throttling by config like 1G2W, used in leader creation
+    SOFT = 1,   // adaptive, could break config to 1G3W, used in HA scene
+    FREE = 2,   // most free, 1G4W is the max creation speed without influcing stability
+    MAX
+};
+
 class ObTabletCreateMdsHelper
 {
 public:
@@ -78,7 +86,7 @@ public:
       const obrpc::ObBatchCreateTabletArg &arg,
       const share::SCN &scn,
       mds::BufferCtx &ctx);
-  static int check_create_new_tablets(const int64_t inc_tablet_cnt, const bool is_soft_limit = false);
+  static int check_create_new_tablets(const int64_t inc_tablet_cnt, const ObTabletCreateThrottlingLevel level);
 private:
   static int check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg, const bool is_replay = false);
   static int check_create_arg(
@@ -158,9 +166,13 @@ private:
       const bool for_old_mds);
   static void handle_ret_for_replay(int &ret);
   static int convert_schemas(obrpc::ObBatchCreateTabletArg &arg);
-  static bool check_need_create_empty_major_sstable(
-      const ObCreateTabletSchema &create_tablet_schema,
-      const obrpc::ObCreateTabletExtraInfo &create_tablet_extra_info);
+  static int check_and_get_create_tablet_schema_info(
+      const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas,
+      const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos,
+      const obrpc::ObCreateTabletInfo &info,
+      const int64_t index,
+      const ObCreateTabletSchema *&create_tablet_schema,
+      bool &need_create_empty_major_sstable);
 };
 } // namespace storage
 } // namespace oceanbase

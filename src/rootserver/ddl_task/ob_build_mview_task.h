@@ -42,11 +42,12 @@ public:
   virtual int serialize_params_to_message(char *buf,
                                           const int64_t buf_size,
                                           int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const uint64_t tenant_id,
-                                            const char *buf,
-                                            const int64_t buf_size,
-                                            int64_t &pos) override;
+  virtual int deserialize_params_from_message(const uint64_t tenant_id,
+                                              const char *buf,
+                                              const int64_t buf_size,
+                                              int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
+  virtual bool task_can_retry() const { return false; } //build mview task should not retry
   int on_child_task_prepare(const int64_t task_id);
 
 private:

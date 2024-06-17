@@ -142,6 +142,11 @@ int ObMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters)
   return ret;
 }
 
+int ObMergeFuser::make_result_row_shadow(const int64_t sql_sequence_col_idx)
+{
+  return ObShadowRowUtil::make_shadow_row(sql_sequence_col_idx, result_row_);
+}
+
 // fuse delete row
 int ObMergeFuser::fuse_delete_row(
     const blocksstable::ObDatumRow &del_row,
@@ -241,9 +246,11 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
   const common::ObIArray<share::schema::ObColDesc> &multi_version_column_ids = merge_param.static_param_.multi_version_column_descs_;
   const ObStorageSchema *schema = merge_param.get_schema();
   column_cnt_ = multi_version_column_ids.count();
+  const bool need_trim_default_row = cluster_version_ >= DATA_VERSION_4_3_1_0 || cluster_version_ < DATA_VERSION_4_3_0_0;
+
   if (OB_FAIL(default_row_.init(allocator_, column_cnt_))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K_(column_cnt));
-  } else if (OB_FAIL(schema->get_orig_default_row(multi_version_column_ids, default_row_))) {
+  } else if (OB_FAIL(schema->get_orig_default_row(multi_version_column_ids, need_trim_default_row, default_row_))) {
     STORAGE_LOG(WARN, "Failed to get default row from table schema", K(ret), K(multi_version_column_ids));
   } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, multi_version_column_ids, default_row_))) {
     STORAGE_LOG(WARN, "fail to fill lob header for default row", K(ret), K(multi_version_column_ids));
@@ -373,6 +380,7 @@ int ObMinorPartitionMergeFuser::preprocess_fuse_row(const blocksstable::ObDatumR
 
 
 int ObMergeFuserBuilder::build(const ObMergeParameter &merge_param,
+                               const int64_t cluster_version,
                                ObIAllocator &allocator,
                                ObIPartitionMergeFuser *&partition_fuser)
 {
@@ -388,7 +396,7 @@ int ObMergeFuserBuilder::build(const ObMergeParameter &merge_param,
       partition_fuser = alloc_helper<ObCOMinorSSTableFuser>(allocator, allocator);
     } else if (is_major_or_meta_merge_type(merge_type)) {
       is_fuse_row_flag = false;
-      partition_fuser = alloc_helper<ObMajorPartitionMergeFuser>(allocator, allocator);
+      partition_fuser = alloc_helper<ObMajorPartitionMergeFuser>(allocator, allocator, cluster_version);
     } else {
       partition_fuser = alloc_helper<ObMinorPartitionMergeFuser>(allocator, allocator);
     }

@@ -58,18 +58,19 @@
 #include "pl/sys_package/ob_dbms_rls.h"
 #include "pl/sys_package/ob_json_object_type.h"
 #include "pl/sys_package/ob_json_element_type.h"
+#include "pl/sys_package/ob_sdo_geometry.h"
 #include "pl/sys_package/ob_dbms_mview.h"
 #include "pl/sys_package/ob_dbms_mview_stats.h"
-#endif
-#include "pl/sys_package/ob_pl_dbms_resource_manager.h"
-#ifdef OB_BUILD_ORACLE_XML
+#include "pl/sys_package/ob_json_array_type.h"
 #include "pl/sys_package/ob_xml_type.h"
 #endif
+#include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #include "pl/sys_package/ob_dbms_session.h"
 #include "pl/sys_package/ob_dbms_workload_repository.h"
 #include "pl/sys_package/ob_dbms_mview_mysql.h"
 #include "pl/sys_package/ob_dbms_mview_stats_mysql.h"
 #include "pl/sys_package/ob_pl_dbms_trusted_certificate_manager.h"
+#include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -111,9 +112,8 @@
   // dbms_lock
   INTERFACE_DEF(INTERFACE_LOCK_SLEEP_LOCK, "SLEEP_LOCK", (PlPackageLock::sleep))
   INTERFACE_DEF(INTERFACE_LOCK_ALLOCATE_UNIQUE, "ALLOCATE_UNIQUE_LOCK", (PlPackageLock::allocate_unique_lock))
-  // INTERFACE_DEF(INTERFACE_LOCK_ALLOCATE_UNIQUE_AUTONOMOUS, "ALLOCATE_UNIQUE_LOCK_AUTONOMOUS", (PlPackageLock::allocate_unique_lock_autonomous))
   // INTERFACE_DEF(INTERFACE_LOCK_CONVERT, "CONVERT_LOCK", (PlPackageLock::convert))
-  // INTERFACE_DEF(INTERFACE_LOCK_RELEASE, "RELEASE_LOCK", (PlPackageLock::release))
+  INTERFACE_DEF(INTERFACE_LOCK_RELEASE, "RELEASE_LOCK", (PlPackageLock::release_lock))
   INTERFACE_DEF(INTERFACE_LOCK_REQUEST, "REQUEST_LOCK", (PlPackageLock::request_lock))
   // end dbms_lock
 
@@ -454,7 +454,17 @@
 #undef PREFIX
   //end of anydata
 
-#ifdef OB_BUILD_ORACLE_XML
+  //start of sdo_geometry
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_WKB, "SDO_GEOMETRY_GET_WKB", (ObSdoGeometry::get_wkb))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_WKT, "SDO_GEOMETRY_GET_WKT", (ObSdoGeometry::get_wkt))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_GTYPE, "SDO_GEOMETRY_GET_GTYPE", (ObSdoGeometry::get_gtype))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_DIMS, "SDO_GEOMETRY_GET_DIMS", (ObSdoGeometry::get_dims))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_ST_COORDDIM, "SDO_GEOMETRY_ST_COORDDIM", (ObSdoGeometry::st_coorddim))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_ST_ISVALID, "SDO_GEOMETRY_ST_ISVALID", (ObSdoGeometry::st_isvalid))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_CONSTRUCTOR, "SDO_GEOMETRY_CONSTRUCTOR", (ObSdoGeometry::constructor))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_GEOJSON, "SDO_GEOMETRY_GET_GEOJSON", (ObSdoGeometry::get_geojson))
+  //end of sdo_geometry
+
   //start of xmltype
   INTERFACE_DEF(INTERFACE_XML_TYPE_TRANSFORM, "XML_TYPE_TRANSFORM", (ObXmlType::transform))
   INTERFACE_DEF(INTERFACE_XML_TYPE_GETCLOBVAL, "XML_TYPE_GETCLOBVAL", (ObXmlType::getclobval))
@@ -466,7 +476,6 @@
   //start of dbms_xmlgen
   INTERFACE_DEF(INTERFACE_DBMS_XMLGEN_CONVERT, "DBMS_XMLGEN_CONVERT", (ObDbmsXmlGen::convert))
   //end of dbms_xmlgen
-#endif
 
   //start of dbms_crypto
   INTERFACE_DEF(INTERFACE_DBMS_CRYPTO_ENCRYPT, "DBMS_CRYPTO_ENCRYPT", (ObDbmsCrypto::encrypt))
@@ -673,6 +682,15 @@
   INTERFACE_DEF(INTERFACE_JSON_OBJECT_RENAME_KEY, "JSON_OBJECT_RENAME_KEY", (ObPlJsonObject::rename_key))
   INTERFACE_DEF(INTERFACE_JSON_OBJECT_CLONE, "JSON_OBJECT_CLONE", (ObPlJsonObject::clone))
   // end of json_object_t
+
+  // start of json_array_t
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_ON_ERROR, "JSON_ARRAY_ON_ERROR", (ObPlJsonArray::set_on_error))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_PARSE, "JSON_ARRAY_PARSE", (ObPlJsonArray::parse))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_GET, "JSON_ARRAY_GET", (ObPlJsonArray::get))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_GET_TYPE, "JSON_ARRAY_GET_TYPE", (ObPlJsonArray::get_type))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_CONSTRUCTOR, "JSON_ARRAY_CONSTRUCTOR", (ObPlJsonArray::constructor))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_CLONE, "JSON_ARRAY_CLONE", (ObPlJsonArray::clone))
+  // end of json_array_t
 #endif
 
 #ifdef OB_BUILD_ORACLE_PL
@@ -739,6 +757,13 @@
   INTERFACE_DEF(INTERFACE_DBMS_DELETE_TRUSTED_CERTIFICATE, "DELETE_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::delete_trusted_certificate))
   INTERFACE_DEF(INTERFACE_DBMS_UPDATE_TRUSTED_CERTIFICATE, "UPDATE_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::update_trusted_certificate))
   // end of end of dbms_workload_repository
+
+  // start of dbms_ob_limit_calculator
+  INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_LOGIC_RES, "PHY_RES_CALCULATE_BY_LOGIC_RES", (ObDBMSLimitCalculator::phy_res_calculate_by_logic_res))
+  INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_UNIT, "PHY_RES_CALCULATE_BY_UNIT", (ObDBMSLimitCalculator::phy_res_calculate_by_unit))
+  INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_STADNBY_TENANT, "PHY_RES_CALCULATE_BY_STANDBY_TENANT", (ObDBMSLimitCalculator::phy_res_calculate_by_standby_tenant))
+  // end of dbms_ob_limit_calculator
+
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif
 

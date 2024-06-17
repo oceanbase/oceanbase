@@ -41,20 +41,20 @@ int ObTransformWinMagic::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &p
   int ret = OB_SUCCESS;
   int64_t drill_down_idx = -1;
   int64_t roll_up_idx = -2; // -1 means main stmt
-  ObStmtCompareContext context;
-  ObStmtMapInfo map_info;
   ObSEArray<TableItem *, 4> trans_tables;
-  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret), K(stmt));
-  } else if (OB_FAIL(get_view_to_trans(stmt, drill_down_idx, roll_up_idx, context, map_info, trans_tables))) {
-    LOG_WARN("get view to trans failed", K(ret));
-  } else if (drill_down_idx == -1 || roll_up_idx == -2) {
-    // no valid item to do trans
-  } else if (OB_FAIL(do_transform(parent_stmts, stmt, drill_down_idx, 
-                                  roll_up_idx, map_info, context, trans_happened, trans_tables))) {
-    LOG_WARN("do win magic transform for from failed", K(ret));
-  } 
+  SMART_VARS_2((ObStmtCompareContext, context), (ObStmtMapInfo, map_info)) {
+    if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("stmt is null", K(ret), K(stmt));
+    } else if (OB_FAIL(get_view_to_trans(stmt, drill_down_idx, roll_up_idx, context, map_info, trans_tables))) {
+      LOG_WARN("get view to trans failed", K(ret));
+    } else if (drill_down_idx == -1 || roll_up_idx == -2) {
+      // no valid item to do trans
+    } else if (OB_FAIL(do_transform(
+                   parent_stmts, stmt, drill_down_idx, roll_up_idx, map_info, context, trans_happened, trans_tables))) {
+      LOG_WARN("do win magic transform for from failed", K(ret));
+    }
+  } // end smart vars
   return ret;
 }
 
@@ -713,6 +713,7 @@ int ObTransformWinMagic::check_stmt_and_view(ObDMLStmt *stmt,
   EqualSets dummy_set;
   ObSelectStmt *rewrite_view = NULL;
   int64_t match_count = 0;
+  QueryRelation relation;
   
   if (OB_ISNULL(stmt) || OB_ISNULL(rewrite_table) || OB_ISNULL(rewrite_view = rewrite_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -764,7 +765,7 @@ int ObTransformWinMagic::check_stmt_and_view(ObDMLStmt *stmt,
   if (OB_FAIL(ret) || !is_valid) {
     //do nothing
   } else if (OB_FAIL(ObStmtComparer::compute_semi_infos_map(rewrite_view, stmt,
-                                                            map_info, match_count))) {
+                                                            true, map_info, match_count))) {
     LOG_WARN("failed to compute semi info map", K(ret));
   } else if (match_count != rewrite_view->get_semi_info_size() ||
              match_count != stmt->get_semi_info_size()) {
@@ -774,7 +775,7 @@ int ObTransformWinMagic::check_stmt_and_view(ObDMLStmt *stmt,
     LOG_WARN("get column exprs failed", K(ret));
   } else if (OB_FAIL(ObStmtComparer::compute_conditions_map(rewrite_view,
                                             stmt, rewrite_view->get_group_exprs(),
-                                           column_exprs, map_info, expr_map, match_count))) {
+                                           column_exprs, map_info, expr_map, relation))) {
     LOG_WARN("compute expr map failed", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::get_parent_stmt_exprs(dummy_set, rewrite_table->table_id_, 
                                                             *stmt, *rewrite_view,
@@ -817,6 +818,7 @@ int ObTransformWinMagic::check_view_and_view(ObDMLStmt *main_stmt,
   ObSEArray<int64_t, 4> reverse_map;
   ObSqlBitSet<> matched_cond;
   int64_t match_count = 0;
+  QueryRelation relation;
   EqualSets dummy_set;
   if (OB_ISNULL(main_stmt) || OB_ISNULL(drill_down_table) || OB_ISNULL(roll_up_table) 
       || OB_ISNULL(drill_down_view = drill_down_table->ref_query_) 
@@ -835,7 +837,7 @@ int ObTransformWinMagic::check_view_and_view(ObDMLStmt *main_stmt,
   } else if (!is_valid) {
     //do nothing
   } else if (OB_FAIL(ObStmtComparer::compute_semi_infos_map(drill_down_view, roll_up_view,
-                                                            map_info, match_count))) {
+                                                            true, map_info, match_count))) {
     LOG_WARN("failed to compute semi info map", K(ret));
   } else if (match_count != drill_down_view->get_semi_info_size() ||
              match_count != roll_up_view->get_semi_info_size()) {
@@ -843,7 +845,7 @@ int ObTransformWinMagic::check_view_and_view(ObDMLStmt *main_stmt,
   } else if (OB_FAIL(ObStmtComparer::compute_conditions_map(drill_down_view,
                                         roll_up_view, drill_down_view->get_group_exprs(),
                                         roll_up_view->get_group_exprs(), map_info, 
-                                        map_info.group_map_, match_count))) {
+                                        map_info.group_map_, relation))) {
     LOG_WARN("compute expr map failed", K(ret));
   } else if (OB_FAIL(get_reverse_map(map_info.group_map_, reverse_map, roll_up_view->get_group_exprs().count()))) { 
     LOG_WARN("get reverse map failed", K(ret));
@@ -1971,14 +1973,30 @@ int ObTransformWinMagic::push_down_join(ObDMLStmt *main_stmt,
   ObSelectStmt *view_stmt = NULL;
   ObSEArray<ObRawExpr *, 4> renamed_cond;
   ObSEArray<ObDMLStmt::PartExprItem,4> part_exprs;
+  ObSEArray<ObRawExpr *, 4> view_select_list;
+  ObSEArray<ObRawExpr *, 4> view_column_list;
+  ObSEArray<ObQueryRefRawExpr *, 4> query_refs;
+  ObSEArray<ObRawExpr *, 4> old_column;
+  ObSEArray<ObRawExpr *, 4> new_column;
   if (OB_ISNULL(main_stmt) || OB_ISNULL(view_table) || OB_ISNULL(push_down_table) || 
-      OB_ISNULL(view_stmt = view_table->ref_query_)) {
+      OB_ISNULL(view_stmt = view_table->ref_query_) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::rename_subquery_pushdown_filter(*main_stmt, *view_stmt, view_table->table_id_,
-                                                               ctx_->session_info_, *ctx_->expr_factory_, 
-                                                               cond_to_push_down, renamed_cond))) {
-    LOG_WARN("rename subuqery push down filter failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(cond_to_push_down, query_refs))) {
+    LOG_WARN("failed to extract subquery", K(ret));
+  } else if (OB_FAIL(main_stmt->get_view_output(*view_table, view_select_list, view_column_list))) {
+    LOG_WARN("get view output failed", K(ret));
+  } else {
+    ObRawExprCopier copier(*ctx_->expr_factory_);
+    if (OB_FAIL(copier.add_replaced_expr(view_column_list, view_select_list))) {
+      LOG_WARN("failed to add exprs", K(ret));
+    } else if (OB_FAIL(copier.add_skipped_expr(query_refs, false))) {
+      LOG_WARN("failed to add skipped expr", K(ret));
+    } else if (OB_FAIL(copier.copy_on_replace(cond_to_push_down, renamed_cond))) {
+      LOG_WARN("failed to copy on replace filters", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObTransformUtils::add_table_item(view_stmt, push_down_table))) {
     LOG_WARN("add table item failed", K(ret));
   } else if (OB_FAIL(append(view_stmt->get_condition_exprs(), renamed_cond))) {
@@ -1996,11 +2014,8 @@ int ObTransformWinMagic::push_down_join(ObDMLStmt *main_stmt,
   } else if (!part_exprs.empty() && OB_FAIL(view_stmt->set_part_expr_items(part_exprs))) {
     LOG_WARN("failed to set part expr item", K(ret));
   } else if (OB_FAIL(main_stmt->remove_part_expr_items(push_down_table->table_id_))) {
-      LOG_WARN("failed to remove part epxr", K(ret));
+    LOG_WARN("failed to remove part epxr", K(ret));
   }
-
-  ObSEArray<ObRawExpr *, 4> old_column;
-  ObSEArray<ObRawExpr *, 4> new_column;
   for (int64_t i = 0; OB_SUCC(ret) && i < main_stmt->get_column_size(); i++) {
     if (OB_ISNULL(main_stmt->get_column_item(i)) || OB_ISNULL(main_stmt->get_column_item(i)->expr_)) {
       ret = OB_ERR_UNEXPECTED;
