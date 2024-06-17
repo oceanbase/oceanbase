@@ -5764,6 +5764,22 @@ void ObLSTabletService::dump_diag_info_for_old_row_loss(
         FLOG_INFO("Found rowkey in the direct load memtable",
             KPC(row), KPC(static_cast<ObITabletMemtable*>(table)));
       }
+      if (OB_SUCC(ret) && table->is_sstable()) {
+        FLOG_INFO("Dump rowkey from sstable without row cache", KPC(row), KPC(reinterpret_cast<ObSSTable*>(table)));
+        access_ctx.query_flag_.set_not_use_row_cache();
+        getter->reuse();
+        if (OB_FAIL(getter->init(access_param.iter_param_, access_ctx, table, &datum_rowkey))) {
+          LOG_WARN("Failed to init getter", K(ret));
+        } else if (OB_FAIL(getter->get_next_row(row))) {
+          LOG_WARN("Failed to get next row", K(ret), KPC(table));
+        } else if (row->row_flag_.is_not_exist() || row->row_flag_.is_delete()){
+          FLOG_INFO("Cannot found rowkey in the table without row cache", KPC(row), KPC(table));
+        } else {
+          FLOG_INFO("Found rowkey in the sstable without row cache",
+              KPC(row), KPC(reinterpret_cast<ObSSTable*>(table)));
+        }
+        access_ctx.query_flag_.set_use_row_cache();
+      }
 
       // ignore error in the loop
       if (OB_FAIL(ret) && OB_ITER_END != ret) {
