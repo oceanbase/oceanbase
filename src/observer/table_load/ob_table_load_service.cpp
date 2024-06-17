@@ -613,17 +613,9 @@ int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
     } else if (table_ctx->is_assigned_resource()) {
       if (OB_FAIL(service->assigned_task_manager_.delete_assigned_task(release_arg.task_key_))) {
         LOG_WARN("fail to delete_assigned_task", KR(ret), K(release_arg.task_key_));
-      } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id,
-                                                                                     release_arg.tenant_id_,
-                                                                                     share::SYS_LS,
-                                                                                     leader))) {
-        LOG_WARN("fail to get ls location leader", KR(ret), K(release_arg.tenant_id_));
-      } else if (ObTableLoadUtils::is_local_addr(leader)) {
-        if (OB_FAIL(ObTableLoadResourceService::release_resource(release_arg))) {
-          LOG_WARN("fail to release resource", KR(ret));
-        }
-      } else {
-        TABLE_LOAD_RESOURCE_RPC_CALL(release_resource, leader, release_arg);
+      } else if (OB_FAIL(ObTableLoadResourceService::release_resource(release_arg))) {
+        LOG_WARN("fail to release resource", KR(ret));
+        ret = OB_SUCCESS;   // 允许失败，资源管理模块可以回收
       }
     }
   }

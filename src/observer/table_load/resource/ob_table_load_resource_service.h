@@ -33,6 +33,8 @@ class ObTableLoadResourceService : public logservice::ObIReplaySubHandler,
                                    public logservice::ObIRoleChangeSubHandler
 {
 public:
+  static const int64_t GET_LEADER_RETRY_TIMEOUT = 1 * 1000LL * 1000LL; // 1s
+public:
 	ObTableLoadResourceService()
     : resource_manager_(nullptr),
       tenant_id_(common::OB_INVALID_ID),
@@ -71,10 +73,14 @@ public:
 	void switch_to_follower_forcedly();
 
   static int check_tenant();
-	uint64_t get_tenant_id() const { return tenant_id_; }
+  static int get_leader_addr(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader);
+  static int local_apply_resource(ObDirectLoadResourceApplyArg &arg, ObDirectLoadResourceOpRes &res);
+  static int local_release_resource(ObDirectLoadResourceReleaseArg &arg);
+  static int local_update_resource(ObDirectLoadResourceUpdateArg &arg);
   static int apply_resource(ObDirectLoadResourceApplyArg &arg, ObDirectLoadResourceOpRes &res);
   static int release_resource(ObDirectLoadResourceReleaseArg &arg);
   static int update_resource(ObDirectLoadResourceUpdateArg &arg);
+	uint64_t get_tenant_id() const { return tenant_id_; }
 private:
 	int alloc_resource_manager();
 	int delete_resource_manager();
