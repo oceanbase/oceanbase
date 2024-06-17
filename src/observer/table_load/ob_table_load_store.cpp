@@ -233,7 +233,7 @@ public:
             LOG_WARN("fail to check status", KR(ret));
           } else if (OB_FAIL(tablet_ctx->open())) {
             LOG_WARN("fail to open tablet context", KR(ret), K(tablet_id));
-            if (ret == OB_EAGAIN) {
+            if (ret == OB_EAGAIN || ret == OB_MINOR_FREEZE_NOT_ALLOW) {
               LOG_WARN("retry to open tablet context", K(tablet_id));
               ret = OB_SUCCESS;
             }
