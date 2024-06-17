@@ -4024,13 +4024,36 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode &action_node_lis
               LOG_WARN("modify check constraint state failed", K(ret));
             }
           } else {  // OB_INVALID_ID == constraint_id
-            ret = OB_ERR_MODIFY_NONEXISTENT_CONSTRAINT;
-            SQL_RESV_LOG(WARN,
-                "Cannot modify constraint - nonexistent constraint",
-                K(ret),
-                K(constraint_name),
-                K(table_schema_->get_table_name_str()));
-            LOG_USER_ERROR(OB_ERR_MODIFY_NONEXISTENT_CONSTRAINT, constraint_name.length(), constraint_name.ptr());
+            const ObSimpleTableSchemaV2* simple_table_schema = nullptr;
+            ObString unique_index_name_with_prefix;
+            if (OB_FAIL(ObTableSchema::build_index_table_name(*allocator_,
+                        table_schema_->get_table_id(),
+                        constraint_name,
+                        unique_index_name_with_prefix))) {
+              LOG_WARN("build_index_table_name failed", K(ret), K(table_schema_->get_table_id()), K(constraint_name));
+            } else if (OB_FAIL(schema_guard->get_simple_table_schema(table_schema_->get_tenant_id(),
+                               table_schema_->get_database_id(),
+                               unique_index_name_with_prefix,
+                               true,
+                               simple_table_schema))) {
+              LOG_WARN("failed to get simple table schema",
+                        K(ret),
+                        K(table_schema_->get_tenant_id()),
+                        K(table_schema_->get_database_id()),
+                        K(unique_index_name_with_prefix));
+            } else if (OB_NOT_NULL(simple_table_schema) && simple_table_schema->is_unique_index()) {
+              ret = OB_NOT_SUPPORTED;
+              SQL_RESV_LOG(WARN, "modify unique constraint is not supported", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify unique constraint");
+            } else {
+              ret = OB_ERR_MODIFY_NONEXISTENT_CONSTRAINT;
+              SQL_RESV_LOG(WARN,
+                  "Cannot modify constraint - nonexistent constraint",
+                  K(ret),
+                  K(constraint_name),
+                  K(table_schema_->get_table_name_str()));
+              LOG_USER_ERROR(OB_ERR_MODIFY_NONEXISTENT_CONSTRAINT, constraint_name.length(), constraint_name.ptr());
+            }
           }
         }
       }
