@@ -290,6 +290,7 @@ ob_set_subtarget(ob_share common_mixed
   ash/ob_active_sess_hist_task.cpp
   throttle/ob_share_throttle_define.cpp
   throttle/ob_throttle_common.cpp
+  restore/ob_restore_data_mode.cpp
 )
 
 ob_set_subtarget(ob_share tablet
