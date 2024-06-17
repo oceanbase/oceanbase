@@ -428,6 +428,11 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
         func.contain_fulltext_search_ || func.contain_dml_with_doc_id_) {
        disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
+    if (func.contain_dml_with_doc_id_) {
+      uint64_t dml_with_doc_id_enable_list = 0;
+      ObTransformRule::add_trans_type(dml_with_doc_id_enable_list, PREDICATE_MOVE_AROUND);
+      disable_list &= (~dml_with_doc_id_enable_list);
+    }
     if (func.contain_sequence_) {
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
     }

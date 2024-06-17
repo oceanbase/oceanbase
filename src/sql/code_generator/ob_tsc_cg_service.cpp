@@ -1081,7 +1081,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   }
   if (OB_SUCC(ret) && !table_schema.is_global_index_table()) {
     TableLocRelInfo *rel_info = nullptr;
-    ObTableID data_table_id = table_schema.is_index_table() ?
+    ObTableID data_table_id = table_schema.is_index_table() && !table_schema.is_rowkey_doc_id() ?
                               table_schema.get_data_table_id() :
                               real_table_id;
     rel_info = cg_.opt_ctx_->get_loc_rel_info_by_id(table_loc_id, data_table_id);
