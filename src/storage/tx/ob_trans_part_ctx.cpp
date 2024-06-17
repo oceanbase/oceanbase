@@ -1976,18 +1976,17 @@ int ObPartTransCtx::serial_submit_redo_after_write_(int &submitted_cnt)
 
 bool ObPartTransCtx::should_switch_to_parallel_logging_()
 {
-  const int64_t switch_size = GCONF._parallel_redo_logging_trigger;
-  bool ok = GCONF._enable_parallel_redo_logging
-    && is_support_parallel_replay_()
-    && pending_write_ > 1
-    && mt_ctx_.get_pending_log_size() > switch_size;
+  bool ok = false;
+  if (GCONF._enable_parallel_redo_logging) {
+    const int64_t switch_size = GCONF._parallel_redo_logging_trigger;
+    ok = pending_write_ > 1 && mt_ctx_.get_pending_log_size() > switch_size;
 #ifdef ENABLE_DEBUG_LOG
-  // inject
-  if (!ok && trans_id_ % 5 == 0) {
-    ok = GCONF._enable_parallel_redo_logging;
-  }
+    if (!ok) {
+      ok = trans_id_ % 5 == 0;  // force 20% transaction go parallel logging
+    }
 #endif
-  return ok;
+  }
+ return ok;
 }
 
 int ObPartTransCtx::check_can_submit_redo_()
