@@ -306,7 +306,7 @@ public:
   virtual void reset();
   void reset_key();
   typedef common::hash::ObHashMap<int64_t, ObSEArray<int64_t, 16>> SameValIdxMap;
-  static int try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
+  static int try_cast_value(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime, ObIAllocator &alloc,
                             const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
                             common::ObCmpOp cmp_op = CO_EQ, bool left_border = true);
   inline bool operator <=(const ObKeyPart &other) const { return pos_.offset_ <= other.pos_.offset_; }
@@ -409,7 +409,8 @@ public:
   int remove_in_dup_vals();
   int convert_to_true_or_false(bool is_always_true);
 
-  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row, bool &is_bound_modified);
+  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
+                      bool contain_row, bool &is_bound_modified);
 
   // copy all except next_ pointer
   int deep_node_copy(const ObKeyPart &other);
