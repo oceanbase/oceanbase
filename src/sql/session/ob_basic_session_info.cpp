@@ -4158,7 +4158,7 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
       }
     }
     if (OB_SUCC(ret) && !is_error_sync) {
-      if (OB_FAIL(sync_default_sys_vars(sys_var_inc_info_, tmp_sys_var_inc_info,
+      if (OB_FAIL(sync_default_sys_vars(tmp_sys_var_inc_info,
                                         is_influence_plan_cache_sys_var))) {
         LOG_WARN("fail to sync default sys vars",K(ret));
       } else if (OB_FAIL(sys_var_inc_info_.assign(tmp_sys_var_inc_info))) {
@@ -4181,8 +4181,7 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
 }
 
 // Deserialization scenario, synchronization of default system variables
-int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_,
-                                              SysVarIncInfo tmp_sys_var_inc_info,
+int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo &tmp_sys_var_inc_info,
                                               bool &is_influence_plan_cache_sys_var)
 {
   int ret = OB_SUCCESS;
@@ -4215,6 +4214,8 @@ int ObBasicSessionInfo::sync_default_sys_vars(SysVarIncInfo sys_var_inc_info_,
         LOG_TRACE("sync sys var set default value", K(sys_var_id),
         K(sessid_), K(proxy_sessid_));
       }
+    } else if (OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
+      LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
     }
   }
 
