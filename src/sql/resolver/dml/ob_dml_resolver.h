@@ -99,7 +99,9 @@ class ObDMLResolver : public ObStmtResolver
       cte_resolve_level_(0),
       cte_branch_count_(0),
       is_set_left_resolver_(false),
-      is_set_all_(true)
+      is_set_all_(true),
+      has_cte_param_list_(false),
+      has_recursive_word_(false)
     {
 
     }
@@ -130,6 +132,10 @@ class ObDMLResolver : public ObStmtResolver
       left_select_stmt_parse_node_ = node;
       is_set_all_ = all;
     }
+    inline void set_has_param_list(bool has) { has_cte_param_list_ = has; }
+    inline bool check_has_param_list() const { return has_cte_param_list_; }
+    inline void set_has_recursive_word(bool has) { has_recursive_word_ = has; }
+    inline bool check_has_recursive_word() const { return has_recursive_word_; }
     int assign(ObCteResolverCtx &cte_ctx) {
       left_select_stmt_ = cte_ctx.left_select_stmt_;
       left_select_stmt_parse_node_ = cte_ctx.left_select_stmt_parse_node_;
@@ -142,6 +148,8 @@ class ObDMLResolver : public ObStmtResolver
       cte_branch_count_ = cte_ctx.cte_branch_count_;
       is_set_left_resolver_ = cte_ctx.is_set_left_resolver_;
       is_set_all_ = cte_ctx.is_set_all_;
+      has_cte_param_list_ = cte_ctx.has_cte_param_list_;
+      has_recursive_word_ = cte_ctx.has_recursive_word_;
       return cte_col_names_.assign(cte_ctx.cte_col_names_);
     }
     TO_STRING_KV(K_(is_with_clause_resolver),
@@ -149,7 +157,9 @@ class ObDMLResolver : public ObStmtResolver
                  K_(is_recursive_cte),
                  K_(is_cte_subquery),
                  K_(cte_resolve_level),
-                 K_(cte_col_names));
+                 K_(cte_col_names),
+                 K_(has_cte_param_list),
+                 K_(has_recursive_word));
   private:
     ObSelectStmt* left_select_stmt_;
     const ParseNode* left_select_stmt_parse_node_;
@@ -163,6 +173,8 @@ class ObDMLResolver : public ObStmtResolver
     common::ObArray<ObString> cte_col_names_;
     bool is_set_left_resolver_;
     bool is_set_all_;
+    bool has_cte_param_list_;
+    bool has_recursive_word_;
   };
 public:
   explicit ObDMLResolver(ObResolverParams &params);
@@ -383,6 +395,7 @@ protected:
   int set_flashback_info_for_view(ObSelectStmt *select_stmt, TableItem *table_item);
   int resolve_table_drop_oracle_temp_table(TableItem *&table_item);
   int resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
+                                              uint64_t database_id,
                                               const common::ObString &db_name,
                                               const bool &is_db_explicit,
                                               const common::ObString &tbl_name,
@@ -742,17 +755,18 @@ protected:
   int erase_redundant_generated_table_column_flag(const ObSelectStmt &ref_stmt, const ObRawExpr *ref_expr, ObColumnRefRawExpr &col_expr) const;
 
   // for cte
-  int add_cte_table_to_children(ObChildStmtResolver& child_resolver);
-  int add_parent_cte_table_to_children(ObChildStmtResolver& child_resolver);
+  int add_cte_table_to_children(ObChildStmtResolver& child_resolver, const ObString *cur_rcte_name = NULL);
   void set_non_record(bool record) { with_clause_without_record_ = record; };
   int check_current_CTE_name_exist(const ObString &var_name, bool &dup_name);
   int check_current_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
   int check_parent_CTE_name_exist(const ObString &var_name, bool &dup_name);
   int check_parent_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
+  int check_CTE_name_exist(const ObString &var_name, bool &dup_name);
+  int check_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
   int set_cte_ctx(ObCteResolverCtx &cte_ctx, bool copy_col_name = true, bool in_subquery = false);
   int add_cte_table_item(TableItem *table_item,  bool &dup_name);
-  int get_opt_alias_colnames_for_recursive_cte(ObIArray<ObString>& columns, const ParseNode *parse_tree);
-  int init_cte_resolver(ObSelectResolver &select_resolver, const ParseNode *opt_col_node, ObString& table_name);
+  int get_opt_alias_colnames_for_recursive_cte(ObCteResolverCtx &ctx, const ParseNode *parse_tree);
+  int init_cte_resolver(ObSelectResolver &select_resolver, const ParseNode *opt_col_node, ObString& table_name, bool has_recursive_word);
   int add_fake_schema(ObSelectStmt* left_stmt);
   int resolve_basic_table_without_cte(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_basic_table_with_cte(const ParseNode &parse_tree, TableItem *&table_item);
@@ -761,8 +775,7 @@ protected:
   int resolve_cte_table(const ParseNode &parse_tree, const TableItem *CTE_table_item, TableItem *&table_item);
   int resolve_recursive_cte_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_with_clause_opt_alias_colnames(const ParseNode *parse_tree, TableItem *&table_item);
-  int set_parent_cte();
-  int resolve_with_clause_subquery(const ParseNode &parse_tree, TableItem *&table_item);
+  int resolve_with_clause_subquery(const ParseNode &parse_tree, TableItem *&table_item, bool has_recursive_word);
   int resolve_with_clause(const ParseNode *node, bool same_level = false);
 
   int check_oracle_outer_join_condition(const ObRawExpr *expr);
