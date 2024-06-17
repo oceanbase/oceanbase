@@ -81,6 +81,40 @@ enum class ObTxState : uint8_t
 const int64_t OB_C2PC_UPSTREAM_ID = INT64_MAX - 1;
 const int64_t OB_C2PC_SENDER_ID = INT64_MAX - 2;
 
+#define TRX_ENUM_CASE_TO_STR(class_name, src) \
+  case class_name::src:                       \
+    str = #src;                               \
+    break;
+
+static const char *to_str_2pc_role(Ob2PCRole role)
+{
+  const char *str = "INVALID";
+  switch (role) {
+    TRX_ENUM_CASE_TO_STR(Ob2PCRole, UNKNOWN)
+    TRX_ENUM_CASE_TO_STR(Ob2PCRole, ROOT)
+    TRX_ENUM_CASE_TO_STR(Ob2PCRole, INTERNAL)
+    TRX_ENUM_CASE_TO_STR(Ob2PCRole, LEAF)
+  };
+  return str;
+}
+
+static const char *to_str_tx_state(ObTxState state)
+{
+  const char *str = "INVALID";
+  switch (state) {
+    TRX_ENUM_CASE_TO_STR(ObTxState, UNKNOWN)
+    TRX_ENUM_CASE_TO_STR(ObTxState, INIT)
+    TRX_ENUM_CASE_TO_STR(ObTxState, REDO_COMPLETE)
+    TRX_ENUM_CASE_TO_STR(ObTxState, PREPARE)
+    TRX_ENUM_CASE_TO_STR(ObTxState, PRE_COMMIT)
+    TRX_ENUM_CASE_TO_STR(ObTxState, COMMIT)
+    TRX_ENUM_CASE_TO_STR(ObTxState, ABORT)
+    TRX_ENUM_CASE_TO_STR(ObTxState, CLEAR)
+    TRX_ENUM_CASE_TO_STR(ObTxState, MAX)
+  };
+  return str;
+}
+
 /* // ObITxCommitter provides method to commit the transaction with user provided callbacks. */
 /* // The interface need guarantee the atomicity of the transaction. */
 /* class ObITxCommitter */

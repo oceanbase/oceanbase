@@ -1179,7 +1179,7 @@ int ObTxMultiDataSourceLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->start_object();
     for (int64_t i = 0; i < data_.count(); i++) {
       arg.writer_ptr_->dump_key("type");
-        arg.writer_ptr_->dump_string(to_cstring(static_cast<int64_t>(data_[i].get_data_source_type())));
+        arg.writer_ptr_->dump_string(to_str_mds_type(data_[i].get_data_source_type()));
         arg.writer_ptr_->dump_key("buf_len");
         arg.writer_ptr_->dump_string(to_cstring(data_[i].get_data_size()));
         arg.writer_ptr_->dump_key("content");

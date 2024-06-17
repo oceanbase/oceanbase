@@ -287,36 +287,32 @@ public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   // thread unsafe
-  TO_STRING_KV_(K_(ls_id),
-                K_(session_id),
-                K_(part_trans_action),
-                K_(pending_write),
-                K_(exec_info),
-                K_(sub_state),
-                K(is_leaf()),
-                K(is_root()),
-                K(busy_cbs_.get_size()),
-                K(final_log_cb_),
-                K(ctx_tx_data_),
-                K(role_state_),
-                K(create_ctx_scn_),
-                "ctx_source", ctx_source_,
-                K(epoch_),
-                K(replay_completeness_),
-                K(mt_ctx_),
-                K(coord_prepare_info_arr_),
-                K_(upstream_state),
-                K_(retain_cause),
-                "2pc_role",
-                get_2pc_role(),
-                K_(collected),
-                K_(rec_log_ts),
-                K_(prev_rec_log_ts),
-                K_(lastest_snapshot),
-                K_(state_info_array),
-                K_(last_request_ts),
-                KP_(block_frozen_memtable),
-                K_(max_2pc_commit_scn));
+  ON_DEMAND_TO_STRING_KV_("self_ls_id",
+                          ls_id_,
+                          K_(session_id),
+                          K_(part_trans_action),
+                          K_(pending_write),
+                          "2pc_role",
+                          to_str_2pc_role(get_2pc_role()),
+                          K(ctx_tx_data_),
+                          K(role_state_),
+                          K(create_ctx_scn_),
+                          "ctx_source",
+                          ctx_source_,
+                          K(epoch_),
+                          K(replay_completeness_),
+                          "upstream_state",
+                          to_str_tx_state(upstream_state_),
+                          K_(collected),
+                          K_(rec_log_ts),
+                          K_(prev_rec_log_ts),
+                          K_(lastest_snapshot),
+                          K_(last_request_ts),
+                          KP_(block_frozen_memtable),
+                          K_(max_2pc_commit_scn),
+                          K(mt_ctx_));
+
+
 public:
   static const int64_t OP_LOCAL_NUM = 16;
   static const int64_t RESERVED_MEM_SIZE = 256;
@@ -508,7 +504,7 @@ public:
     ATOMIC_CAS(&retain_cause_, static_cast<int16_t>(RetainCause::UNKOWN),
                static_cast<int16_t>(cause));
   }
-  RetainCause get_retain_cause() { return static_cast<RetainCause>(ATOMIC_LOAD(&retain_cause_)); };
+  RetainCause get_retain_cause() const { return static_cast<RetainCause>(ATOMIC_LOAD(&retain_cause_)); };
 
   int del_retain_ctx();
 

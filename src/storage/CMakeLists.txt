@@ -376,6 +376,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_big_segment_buf.cpp
   tx/ob_tx_ls_log_writer.cpp
   tx/ob_tx_msg.cpp
+  tx/ob_tx_on_demand_print.cpp
   tx/ob_tx_replay_executor.cpp
   tx/ob_dup_table_util.cpp
   tx/ob_dup_table_lease.cpp
