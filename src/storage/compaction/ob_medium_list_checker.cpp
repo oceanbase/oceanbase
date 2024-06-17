@@ -146,9 +146,14 @@ int ObMediumListChecker::check_next_schedule_medium(
           ret = OB_SUCCESS;
         }
       } else if (OB_UNLIKELY(freeze_info.frozen_scn_.get_val_for_tx() < next_medium_info->medium_snapshot_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("next major medium info may lost",
-          KR(ret), "freeze_version", freeze_info.frozen_scn_.get_val_for_tx(), KPC(next_medium_info), K(last_major_snapshot));
+        if (next_medium_info->is_skip_tenant_major_) {
+          // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
+          FLOG_INFO("medium info have marked skip tenant major, may have schema issue when schedule tenant major", KR(ret), KPC(next_medium_info), K(freeze_info));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("next major medium info may lost",
+            KR(ret), "freeze_version", freeze_info.frozen_scn_.get_val_for_tx(), KPC(next_medium_info), K(last_major_snapshot));
+        }
       }
     } else {
       // medium info from same cluster_id, can't make sure all medium info exists, so not check medium & last_major_snapshot

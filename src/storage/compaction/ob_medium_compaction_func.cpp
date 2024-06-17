@@ -143,6 +143,7 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema version is invalid", K(ret), K(freeze_info));
     } else if (OB_UNLIKELY(freeze_info.schema_version_ < last_sstable_schema_version)) {
+      medium_info.is_skip_tenant_major_ = true;
       force_schedule_medium_merge = true;
       FLOG_INFO("schema version in freeze info is too small, try to schedule medium compaction instead", K(ret),
                 K(tablet_id), K(last_sstable_schema_version), K(freeze_info));
@@ -157,16 +158,15 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
             K(scheduler_frozen_version));
           schedule_snapshot = freeze_info.frozen_scn_.get_val_for_tx();
           schedule_with_newer_info = true;
+          medium_info.is_skip_tenant_major_ = true;
           ret = OB_SUCCESS;
+          FLOG_INFO("schedule with newer freeze info", K(ret), K(freeze_info));
+          continue;
         }
       } else {
         LOG_WARN("failed to get table schema", K(ret),  K(medium_info));
       }
-    }
-    if (OB_SUCC(ret)) { // success to get table schema
-      if (schedule_with_newer_info) {
-        FLOG_INFO("schedule with newer freeze info", K(ret), K(freeze_info));
-      }
+    } else {
       break;
     }
   } // end of while
@@ -1018,7 +1018,7 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
       if (tablet_id.id() > ObTabletID::MIN_USER_TABLET_ID
         && tablet_id != tablet.get_tablet_meta().data_tablet_id_
         && ATOMIC_BCAS(&have_set_errno, false, true)) {
-        LOG_INFO("ERRSIM EN_SCHEDULE_MAJOR_GET_TABLE_SCHEMA", K(ret), K(table_id), K(tablet_id));
+        LOG_INFO("ERRSIM EN_SCHEDULE_MAJOR_GET_TABLE_SCHEMA", K(ret), K(table_id), K(tablet_id), K(storage_schema));
         errno_tablet_id = tablet_id;
         return ret;
       } else {
