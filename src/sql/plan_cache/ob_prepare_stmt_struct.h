@@ -115,7 +115,7 @@ public:
   ObPsStmtId get_ps_stmt_id() const { return stmt_id_; }
 
   bool check_erase_inc_ref_count();
-  void dec_ref_count_check_erase();
+  void dec_ref_count();
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
 
   int get_convert_size(int64_t &cv_size) const;
@@ -205,7 +205,7 @@ public:
 
   bool is_valid() const;
   bool check_erase_inc_ref_count();
-  bool dec_ref_count_check_erase();
+  void dec_ref_count();
   int deep_copy(const ObPsStmtInfo &other);
   int add_param_field(const common::ObField &param);
   int add_column_field(const common::ObField &column);
@@ -251,6 +251,7 @@ public:
   void set_is_expired() { ATOMIC_STORE(&is_expired_, true); }
   bool is_expired() { return ATOMIC_LOAD(&is_expired_); }
   bool *get_is_expired_evicted_ptr() { return &is_expired_evicted_; }
+  bool try_erase() { return 1 == ATOMIC_VCAS(&ref_count_, 1, 0); }
 
   DECLARE_VIRTUAL_TO_STRING;
 

@@ -55,7 +55,7 @@ void ObPsStmtItemDerefAtomicOp::operator()(const PsStmtIdKV &entry)
     ret_ = OB_HASH_NOT_EXIST;
     LOG_WARN_RET(ret_, "entry not exist", K_(ret));
   } else {
-    entry.second->dec_ref_count_check_erase();
+    entry.second->dec_ref_count();
   }
 }
 
@@ -106,10 +106,17 @@ void ObPsStmtInfoDerefAtomicOp::operator()(const PsStmtInfoKV &entry)
     ret_ = OB_HASH_NOT_EXIST;
     LOG_WARN_RET(ret_, "entry not exist", K_(ret));
   } else {
-    is_erase_ = entry.second->dec_ref_count_check_erase();
-    if (is_erase_) {
-      LOG_INFO("erase stmt info", "stmt_info", *entry.second, "stmt_id", entry.first);
-    }
+    entry.second->dec_ref_count();
+  }
+}
+
+void ObPsStmtInfoDestroyAtomicOp::operator()(const PsStmtInfoKV &entry)
+{
+  if (OB_ISNULL(entry.second)) {
+    ret_ = OB_ERR_UNEXPECTED;
+    LOG_WARN_RET(ret_, "ps stmt info is NULL", K_(ret));
+  } else {
+    marked_erase_ = entry.second->try_erase();
   }
 }
 
