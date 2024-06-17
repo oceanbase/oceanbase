@@ -1207,6 +1207,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVectorDims::calc_dims,                               /* 725 */
   NULL, // ObExprVectorNorm::calc_norm,                               /* 726 */
   NULL, // ObExprVectorDistance::calc_distance,                       /* 727 */
+  NULL, // ObExprInnerDoubleToInt::eval_inner_double_to_int           /* 728 */
+  NULL, // ObExprInnerDecimalToYear::eval_inner_decimal_to_year       /* 729 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
