@@ -251,8 +251,10 @@ bool ObFdSimulator::validate_fd(const ObIOFd& fd, bool expect)
   } else {
     FdSlot *second_array = first_array_[first_id].second_array_p;
     if (OB_ISNULL(second_array)) {
+      // ignore ret
       OB_LOG(WARN, "fd maybe wrong, second fd array is null!", K(first_id), K(second_id), K(total_fd_cnt_), K(used_fd_cnt_));
-    } else if (second_array[second_id].slot_version != fd.second_id_){
+    } else if (second_array[second_id].slot_version != fd.second_id_) {
+      // ignore ret
       OB_LOG(WARN, "fd slot_version is invalid, maybe double free!", K(first_id), K(fd.second_id_),
                     K(second_array[second_id].slot_version));
     } else {

@@ -3242,7 +3242,7 @@ int ObPartTransCtx::submit_redo_commit_info_log_()
     TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
     return_log_cb_(log_cb);
     log_cb = NULL;
-  } else if (log_cb->reserve_callbacks(helper.callbacks_.count())) {
+  } else if (OB_FAIL(log_cb->reserve_callbacks(helper.callbacks_.count()))) {
     TRANS_LOG(WARN, "resolve callbacks failed", K(ret), KPC(this));
     return_log_cb_(log_cb);
     log_cb = NULL;
@@ -4598,11 +4598,12 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
   if (OB_SUCC(ret) && bitmap_is_contain(ObTxLogType::TX_REDO_LOG)) {
     if (OB_FAIL(log_cb->set_callbacks(helper->callbacks_))) {
       ob_abort();
-    }
-    exec_info_.max_submitted_seq_no_.inc_update(helper->max_seq_no_);
-    helper->log_scn_ = log_cb->get_log_ts();
-    if (helper->callback_redo_submitted_ && OB_FAIL(mt_ctx_.log_submitted(*helper))) {
-      TRANS_LOG(ERROR, "fill to do log_submitted on redo log gen", K(ret), K(*this));
+    } else {
+      exec_info_.max_submitted_seq_no_.inc_update(helper->max_seq_no_);
+      helper->log_scn_ = log_cb->get_log_ts();
+      if (helper->callback_redo_submitted_ && OB_FAIL(mt_ctx_.log_submitted(*helper))) {
+        TRANS_LOG(ERROR, "fill to do log_submitted on redo log gen", K(ret), K(*this));
+      }
     }
   }
   if (OB_SUCC(ret) && bitmap_is_contain(ObTxLogType::TX_ROLLBACK_TO_LOG)) {
@@ -7401,6 +7402,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
       } else if (OB_FAIL(ls_tx_ctx_mgr_->get_tx_table()->alloc_tx_data(log_cb->get_tx_data_guard(), true, INT64_MAX))) {
         TRANS_LOG(WARN, "alloc tx_data failed", KR(ret), KPC(this));
       } else if (OB_ISNULL(tmp_buf = mtl_malloc(sizeof(ObTxOpArray), "ObTxOpArray"))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         TRANS_LOG(WARN, "alloc memory failed", KR(ret), KPC(this));
       } else if (FALSE_IT(new (tmp_buf) ObTxOpArray())) {
       } else if (FALSE_IT(log_cb->get_tx_op_array() = (ObTxOpArray*)tmp_buf)) {

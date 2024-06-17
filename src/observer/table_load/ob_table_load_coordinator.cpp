@@ -101,19 +101,20 @@ void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx)
     LOG_WARN("unexpected invalid coordinator ctx", KR(ret), KP(ctx->coordinator_ctx_));
   } else {
     LOG_INFO("coordinator abort");
+    int tmp_ret = OB_SUCCESS;
     // 1. mark status abort, speed up background task exit
-    if (OB_FAIL(ctx->coordinator_ctx_->set_status_abort())) {
-      LOG_WARN("fail to set coordinator status abort", KR(ret));
+    if (OB_SUCCESS != (tmp_ret = ctx->coordinator_ctx_->set_status_abort())) {
+      LOG_WARN("fail to set coordinator status abort", KR(tmp_ret));
     }
     // 2. disable heart beat
     ctx->coordinator_ctx_->set_enable_heart_beat(false);
     // 3. mark all active trans abort
-    if (OB_FAIL(abort_active_trans(ctx))) {
-      LOG_WARN("fail to abort active trans", KR(ret));
+    if (OB_SUCCESS != (tmp_ret = abort_active_trans(ctx))) {
+      LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
     // 4. abort peers ctx
-    if (OB_FAIL(abort_peers_ctx(ctx))) {
-      LOG_WARN("fail to abort peers ctx", KR(ret));
+    if (OB_SUCCESS != (tmp_ret = abort_peers_ctx(ctx))) {
+      LOG_WARN("fail to abort peers ctx", KR(tmp_ret));
     }
   }
 }

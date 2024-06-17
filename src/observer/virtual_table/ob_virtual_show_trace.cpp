@@ -557,7 +557,8 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
          */
        }
 
-       if (OB_FAIL(tmp_arr.push_back(show_trace_arr_.at(i)))) {
+       if(OB_FAIL(ret)){
+       } else if (OB_FAIL(tmp_arr.push_back(show_trace_arr_.at(i)))) {
          LOG_WARN("failed to push back show trace value", K(ret), K(i));
        }
      } else {
@@ -626,7 +627,8 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
                                     = sql::ObFLTShowTraceRec::trace_formatter::LineType::LT_NODE;
       }
     }
-    if (OB_ISNULL(tmp_arr.at(tmp_arr.count()-1))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_arr.at(tmp_arr.count()-1))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "record ptr is null");
     } else {

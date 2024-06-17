@@ -7451,6 +7451,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
       ret = OB_ERR_SP_UNDECLARED_VAR;
       LOG_WARN("exec context is NULL", K(ret));
       if (q_name.access_idents_.count() >= 0) {
+        ret = OB_ERR_SP_UNDECLARED_VAR;
         LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR,
                        q_name.access_idents_.at(0).access_name_.length(),
                        q_name.access_idents_.at(0).access_name_.ptr());

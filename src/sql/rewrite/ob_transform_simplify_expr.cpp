@@ -2656,7 +2656,7 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
           } else if (OB_ISNULL(not_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("not_expr is null", K(not_expr), K(ret));
-          } else if (not_expr->add_param_expr(child->get_param_expr(i))) {
+          } else if (OB_FAIL(not_expr->add_param_expr(child->get_param_expr(i)))) {
             LOG_WARN("failed to add param expr", K(ret));
           } else if (OB_FAIL(new_expr->add_param_expr(not_expr))) {
             LOG_WARN("failed to add param expr", K(ret));

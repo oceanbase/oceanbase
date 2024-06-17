@@ -114,7 +114,7 @@ int ObExprSpatialCollection::calc_resultN(common::ObObj &result,
         const ObString wkb_sub = wkb;
         const char *data = wkb_sub.ptr() + WKB_OFFSET;
         const uint64_t len = wkb_sub.length() - WKB_OFFSET;
-        if (res_wkb_buf.append(data, len)) {
+        if (OB_FAIL(res_wkb_buf.append(data, len))) {
           LOG_WARN("fail to append sub data to res wkb buf", K(ret), K(wkb_sub), K(len));
         }
       }
@@ -307,7 +307,7 @@ int ObExprSpatialCollection::eval_spatial_collection(const ObExpr &expr,
           ret = OB_INVALID_ARGUMENT;
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, get_func_name());
           LOG_WARN("unexpected sub geo type", K(ret), K(sub_type));
-        } else if (res_wkb_buf.append(data, len)) {
+        } else if (OB_FAIL(res_wkb_buf.append(data, len))) {
           LOG_WARN("fail to append sub data to res wkb buf", K(ret), K(wkb_sub), K(len));
         }
       }

@@ -173,11 +173,11 @@ int ObIndexUsageInfoMgr::start()
     // report index usage
     if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer *)->get_tg_id(), report_task_, INDEX_USAGE_REPORT_INTERVAL, true))) {
       LOG_WARN("failed to schedule index usage report task", K(ret));
-    } else if (report_task_.init(this)) {
+    } else if (OB_FAIL(report_task_.init(this))) {
       LOG_WARN("fail to init report task", K(ret));
     } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer *)->get_tg_id(), refresh_conf_task_, INDEX_USAGE_REFRESH_CONF_INTERVAL, true))) {
       LOG_WARN("failed to schedule index usage refresh conf task", K(ret));
-    } else if (refresh_conf_task_.init((this))) {
+    } else if (OB_FAIL(refresh_conf_task_.init((this)))) {
       LOG_WARN("fail to init refresh conf task", K(ret));
     } else {
       LOG_TRACE("success to start ObIndexUsageInfoMgr", K(tenant_id_));

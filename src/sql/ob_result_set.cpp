@@ -870,6 +870,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
     // 无论如何都reset_op_ctx
     bool err_ignored = false;
     if (OB_ISNULL(plan_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("plan is not NULL, but plan ctx is NULL", K(ret), K(errcode));
     } else {
       err_ignored = plan_ctx->is_error_ignored();
@@ -985,6 +986,7 @@ int ObResultSet::do_close(int *client_ret)
   bool async = false; // for debug purpose
   if (OB_TRANS_XA_BRANCH_FAIL == ret) {
     if (my_session_.associated_xa()) {
+      // ignore ret
       //兼容oracle，这里需要重置session状态
       LOG_WARN("branch fail in global transaction", KPC(my_session_.get_tx_desc()));
       ObSqlTransControl::clear_xa_branch(my_session_.get_xid(), my_session_.get_tx_desc());
@@ -1114,6 +1116,7 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
           // don't need to set ret
           ObSqlCtx *sql_ctx = get_exec_context().get_sql_ctx();
           if (OB_ISNULL(sql_ctx)) {
+            // ignore ret
             LOG_WARN("sql_ctx is null when handle security audit");
           } else {
             ObSecurityAuditUtils::handle_security_audit(*this,
@@ -1883,6 +1886,7 @@ uint64_t ObResultSet::get_field_cnt() const
   int64_t cnt = 0;
   uint64_t ret = 0;
   if (OB_ISNULL(get_field_columns())) {
+    // ignore ret
     LOG_ERROR("unexpected error. field columns is null");
     right_to_die_or_duty_to_live();
   }

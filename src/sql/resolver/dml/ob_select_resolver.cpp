@@ -1045,7 +1045,7 @@ int ObSelectResolver::check_and_mark_aggr_in_having_scope(ObSelectStmt *select_s
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL ptr", K(ret));
-      } else if (ObTransformUtils::extract_aggr_expr(expr, aggrs)) {
+      } else if (OB_FAIL(ObTransformUtils::extract_aggr_expr(expr, aggrs))) {
         LOG_WARN("failed to extrace aggr expr", K(ret));
       } else {
         // having aggr must in inner stmt
@@ -3514,6 +3514,7 @@ int ObSelectResolver::resolve_cycle_pseudo(const ParseNode *cycle_set_clause,
   ObRawExpr *expr_d_v = nullptr;
   //for pseudo column
   if (OB_ISNULL(cycle_set_clause)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cycle clause must have set pseudo column", K(ret));
   } else if (OB_FAIL(resolve_and_split_sql_expr(*cycle_set_clause,
                                                 r_union_stmt->get_cte_exprs()))) {
@@ -3970,7 +3971,7 @@ int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
           if (OB_ISNULL(first_select_item.expr_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is null", K(ret), K(first_select_item.expr_));
-          } else if (types.push_back(first_select_item.expr_->get_result_type())) {
+          } else if (OB_FAIL(types.push_back(first_select_item.expr_->get_result_type()))) {
             LOG_WARN("fail to push left_type", K(ret));
           }
           while (OB_SUCC(ret) && item_idx < select_item_count) {
@@ -7251,7 +7252,7 @@ int ObSelectResolver::check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr)
       LOG_WARN("argument is should be a const expr", K(ret), KPC(aggr_expr));
     } else if (OB_FAIL(check_separator_exprs.push_back(aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)))) {
       LOG_WARN("failed to push back", K(ret));
-    } else if (get_select_stmt()->get_all_group_by_exprs(all_group_by_exprs)) {
+    } else if (OB_FAIL(get_select_stmt()->get_all_group_by_exprs(all_group_by_exprs))) {
       LOG_WARN("failed to get all group by exprs", K(ret));
     } else if (OB_FAIL(ObGroupByChecker::check_by_expr(params_.param_list_,
                                                        get_select_stmt(),

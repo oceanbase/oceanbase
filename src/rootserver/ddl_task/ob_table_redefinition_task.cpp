@@ -443,6 +443,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
       }
     }
     if (OB_FAIL(switch_status(next_task_status, true, ret))) {
+      // overwrite ret
       LOG_WARN("fail to switch task status", K(ret));
     }
   }

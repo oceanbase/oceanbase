@@ -1458,7 +1458,7 @@ int ObSchemaChecker::get_trigger_info(const uint64_t tenant_id,
     LOG_WARN("schema checker is not inited", K_(is_inited));
   } else if (OB_FAIL(get_database_id(tenant_id, database_name, db_id))) {
     LOG_WARN("get database id failed", K(ret), K(tenant_id), K(database_name), K(tg_name));
-  } else if (schema_mgr_->get_trigger_info(tenant_id, db_id, tg_name, tg_info)) {
+  } else if (OB_FAIL(schema_mgr_->get_trigger_info(tenant_id, db_id, tg_name, tg_info))) {
     LOG_WARN("get trigger info failed", K(ret), K(tenant_id), K(database_name), K(tg_name));
   }
   return ret;

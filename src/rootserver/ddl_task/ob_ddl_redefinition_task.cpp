@@ -291,8 +291,8 @@ int ObDDLRedefinitionTask::prepare(const ObDDLTaskStatus next_task_status)
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
   }
-  // overwrite ret
   if (OB_FAIL(switch_status(next_task_status, true, ret))) {
+    // overwrite ret
     LOG_WARN("fail to switch status", K(ret));
   }
   return ret;

@@ -708,6 +708,7 @@ int ObTabletTableUpdater::batch_process_tasks(
   const int64_t end = ObTimeUtility::current_time();
   auto* statistics = GET_TSI(TSITabletTableUpdatStatistics);
   if (OB_ISNULL(statistics)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get statistic", "ret", OB_ERR_UNEXPECTED);
   } else {
     (void)statistics->calc(succ_cnt, batch_tasks.count() - succ_cnt,

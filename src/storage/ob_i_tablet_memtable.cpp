@@ -30,7 +30,7 @@ int ObITabletMemtable::inc_unsubmitted_cnt()
   int64_t unsubmitted_cnt = inc_unsubmitted_cnt_();
   TRANS_LOG(DEBUG, "inc_unsubmitted_cnt", K(ls_id), KPC(this), K(lbt()));
 
-  if (get_unset_active_memtable_logging_blocked()) {
+  if (OB_FAIL(get_unset_active_memtable_logging_blocked())) {
     TRANS_LOG(WARN, "cannot inc unsubmitted_cnt", K(unsubmitted_cnt), K(ls_id), KPC(this));
   }
 

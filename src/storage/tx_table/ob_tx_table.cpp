@@ -723,6 +723,7 @@ int ObTxTable::check_tx_data_in_kv_cache_(ObReadTxDataArg &read_tx_data_arg, ObI
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "cache value is nullptr", KR(ret), K(read_tx_data_arg), K(ls_id_), K(val_handle));
     } else if (OB_ISNULL(tx_data = cache_val->get_tx_data())) {
+      ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "tx data in cache value is nullptr", KR(ret), K(read_tx_data_arg), K(ls_id_), KPC(cache_val));
     } else {
       EVENT_INC(ObStatEventIds::TX_DATA_HIT_KV_CACHE_COUNT);

@@ -402,7 +402,8 @@ OB_INLINE int ObDtlVectorRowMsgWriter::try_append_batch(const common::ObIArray<O
       SQL_DTL_LOG(WARN, "failed init row meta", K(ret));
     }
   }
-  if (OB_FAIL(ObTempRowStore::RowBlock::calc_rows_size(vectors, write_buffer_->get_row_meta(),
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTempRowStore::RowBlock::calc_rows_size(vectors, write_buffer_->get_row_meta(),
                                                        selector, size, row_size_arr))) {
     SQL_DTL_LOG(WARN, "failed to calc size", K(ret));
   } else {

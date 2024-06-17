@@ -530,6 +530,7 @@ int ObLogWindowFunction::print_used_hint(PlanText &plan_text)
   const ObWindowDistHint *win_dist_hint = NULL;
   const ObSelectStmt *stmt = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = dynamic_cast<const ObSelectStmt*>(get_plan()->get_stmt()))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
   } else if (OB_FALSE_IT(win_dist_hint = get_plan()->get_log_plan_hint().get_window_dist())) {
   } else if (NULL == win_dist_hint || get_plan()->has_added_win_dist()) {

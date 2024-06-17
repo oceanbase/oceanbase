@@ -59,12 +59,13 @@ const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
 
 //datetime formate : Tue, 09 Apr 2019 06:24:00 GMT
 //time unit is second
-static int64_t strtotime(const char *date_time)
+static int64_t ob_strtotime(const char *date_time)
 {
   int64_t time = 0;
   struct tm tm_time;
   memset(&tm_time, 0, sizeof(struct tm));
   if (NULL == strptime(date_time, "%a, %d %b %Y %H:%M:%S %Z", &tm_time)) {
+    // ignore ret
     //skip set ret, for compat data formate
     cos_warn_log("[COS]fail to transform time, time=%s\n", date_time);
   } else {
@@ -588,7 +589,7 @@ int ObCosWrapper::head_object_meta(
       // get object last modified time
       if (OB_SUCCESS != ret) {
       } else if (NULL != (last_modified_ptr = (char*)apr_table_get(resp_headers, COS_LAST_MODIFIED))) {
-        meta.last_modified_ts_ = strtotime(last_modified_ptr);
+        meta.last_modified_ts_ = ob_strtotime(last_modified_ptr);
       } else {
         ret = OB_COS_ERROR;
         cos_warn_log("[COS]fail to get last modified from apr table, something wrong unexpected, ret=%d.\n", ret);

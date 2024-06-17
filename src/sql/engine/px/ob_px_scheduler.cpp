@@ -136,6 +136,7 @@ void ObPxMsgProc::clean_dtl_interm_result(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(scheduler_)) {
+    // ignore ret
     LOG_WARN("dfo scheduler is null");
   } else {
     scheduler_->clean_dtl_interm_result(ctx);

@@ -113,6 +113,7 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
       TRANS_LOG(WARN, "invalid argument", K(ret), K_(service_type), K_(latest_log_ts), K_(self));
     } else if (ObTimeUtility::current_time() - submit_log_ts_ > SUBMIT_LOG_ALARM_INTERVAL) {
       if (log_interval_.reach()) {
+        // ignore ret
         TRANS_LOG(WARN, "submit log callback use too mush time", K_(submit_log_ts), K_(cb), K_(service_type), K_(latest_log_ts), K_(self));
       }
     }

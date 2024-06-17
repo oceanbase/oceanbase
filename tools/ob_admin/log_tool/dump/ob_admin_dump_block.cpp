@@ -203,7 +203,7 @@ int ObAdminDumpBlock::decompress_()
     const LSN end_lsn = start_lsn + log_len;
     ObGetFileSize get_file_size(end_lsn);
 
-    if (mem_storage.init(start_lsn)) {
+    if (OB_FAIL(mem_storage.init(start_lsn))) {
       LOG_WARN("MemoryIteratorStorage init failed", K(ret), K(block_path_));
     } else if (OB_FAIL(mem_storage.append(buf_out, log_len))) {
       LOG_WARN("MemoryStorage append failed", K(ret));
@@ -312,7 +312,7 @@ int ObAdminDumpBlock::dump_()
     int fd_out = -1;
     const LSN end_lsn = start_lsn + body_size;
     auto get_file_size = [&]() -> LSN { return end_lsn; };
-    if (mem_storage.init(start_lsn)) {
+    if (OB_FAIL(mem_storage.init(start_lsn))) {
       LOG_WARN("MemoryIteratorStorage init failed", K(ret), K(block_path_));
     } else if (OB_FAIL(helper.mmap_log_file(mmap_buf, header_size + body_size, block_path_, fd_out))) {
       LOG_WARN("mmap_log_file_ failed", K(ret));
@@ -470,7 +470,7 @@ int ObAdminDumpMetaBlock::dump()
     char *mmap_buf = NULL;
     char *data_buf = NULL;
     int fd_out = -1;
-    if (mem_storage.init(start_lsn)) {
+    if (OB_FAIL(mem_storage.init(start_lsn))) {
       LOG_WARN("MemoryIteratorStorage init failed", K(ret), K(block_path_));
     } else if (OB_FAIL(helper.mmap_log_file(mmap_buf, header_size + body_size, block_path_, fd_out))) {
       LOG_WARN("mmap_log_file_ failed", K(ret));

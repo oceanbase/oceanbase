@@ -4202,6 +4202,7 @@ int ObPLResolver::resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *s
           if (OB_FAIL(stmt_factory_.allocate(PL_SIGNAL, else_block, stmt))) {
             LOG_WARN("failed to alloc stmt", K(ret));
           } else if (OB_ISNULL(signal_stmt = static_cast<ObPLSignalStmt*>(stmt))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to cast stmt", K(ret));
           } else {
             signal_stmt->set_cond_type(ERROR_CODE);

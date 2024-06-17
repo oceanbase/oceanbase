@@ -452,7 +452,8 @@ int ObGrantResolver::resolve_grant_sys_priv_to_ur(
     }
     ObSArray<ObString> user_name_array;
     ObSArray<ObString> host_name_array;
-    if (OB_FAIL(resolve_grantee_clause(grantee_clause, params_.session_info_,
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(resolve_grantee_clause(grantee_clause, params_.session_info_,
                                        user_name_array, host_name_array))){
       LOG_WARN("resolve grantee_clause failed", K(ret));
     } else {

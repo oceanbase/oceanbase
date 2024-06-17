@@ -115,6 +115,7 @@ int ObLockMemtableMgr::create_memtable(const CreateMemtableArg &arg)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table is nullptr", K(ret));
   } else if (OB_ISNULL(memtable = static_cast<ObLockMemtable *>(table))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("this is not lock memtable", K(ret), KPC(table));
   } else if (OB_FAIL(memtable->init(table_key, ls_id_, freezer_))) {
     LOG_WARN("memtable init fail.", K(ret));

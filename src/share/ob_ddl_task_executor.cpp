@@ -251,6 +251,7 @@ void ObDDLTaskExecutor::run1()
           break;
         }
       } else if (OB_ISNULL(task)) {
+        ret = OB_ERR_SYS;
         STORAGE_LOG(WARN, "error unexpected, task must not be NULL", K(ret));
       } else if (task == first_retry_task) {
         // add the task back to the queue

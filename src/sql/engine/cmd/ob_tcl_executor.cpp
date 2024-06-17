@@ -130,6 +130,7 @@ int ObCreateSavePointExecutor::execute(ObExecContext &ctx,
     }
     // sync commit trans, it should fast because of tx is clean
     if (ac && OB_FAIL(ObSqlTransControl::implicit_end_trans(ctx, false, NULL))) {
+      // overwrite ret
       LOG_WARN("auto commit transaction fail", K(ret), KPC(session));
     }
   }

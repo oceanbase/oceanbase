@@ -752,7 +752,7 @@ int ObCreateViewResolver::get_sel_priv_tables_in_subquery(const ObSelectStmt *se
           if (OB_ISNULL(child_stmts.at(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("child stmt is NULL", K(ret));
-          } else if (SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables))) {
+          } else if (OB_FAIL(SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables)))) {
             LOG_WARN("failed to get need privs in child stmt", K(ret));
           }
         }
@@ -818,7 +818,7 @@ int ObCreateViewResolver::get_need_priv_tables(ObSelectStmt &root_stmt,
         if (OB_ISNULL(child_stmts.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("child stmt is NULL", K(ret));
-        } else if (SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables))) {
+        } else if (OB_FAIL(SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables)))) {
           LOG_WARN("failed to get need privs in child stmt", K(ret));
         }
       }

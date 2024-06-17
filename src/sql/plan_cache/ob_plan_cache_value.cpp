@@ -240,8 +240,10 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
   } else if (FALSE_IT(mem_attr = pcv_set->get_plan_cache()->get_mem_attr())) {
       // do nothing
   } else if (OB_ISNULL(pc_alloc_ = pcv_set->get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(pcv_set->get_allocator()));
   } else if (OB_ISNULL(pc_malloc_ = pcv_set->get_pc_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(pcv_set->get_pc_allocator()));
   } else if (OB_FAIL(outline_params_wrapper_.set_allocator(pc_alloc_, mem_attr))) {
     LOG_WARN("fail to set outline param wrapper allocator", K(ret));

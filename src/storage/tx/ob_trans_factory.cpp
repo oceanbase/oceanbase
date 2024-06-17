@@ -224,6 +224,7 @@ TransRpcTask *TransRpcTaskFactory::alloc()
 void TransRpcTaskFactory::release(TransRpcTask *task)
 {
   if (OB_ISNULL(task)) {
+    // ignore ret
     TRANS_LOG(ERROR, "TransRpcTask pointer is null when released", KP(task));
   } else {
     trans_rpc_task_factory.release(task);

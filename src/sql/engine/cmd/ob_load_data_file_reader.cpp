@@ -47,6 +47,7 @@ int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, Ob
   if (param.file_location_ == ObLoadFileLocation::SERVER_DISK) {
     ObRandomFileReader *tmp_reader = OB_NEWx(ObRandomFileReader, &allocator, allocator);
     if (OB_ISNULL(tmp_reader)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create ObRandomFileReader", K(ret));
     } else if (OB_FAIL(tmp_reader->open(param.filename_))) {
       LOG_WARN("fail to open random file reader", KR(ret), K(param.filename_));
@@ -58,6 +59,7 @@ int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, Ob
   } else if (param.file_location_ == ObLoadFileLocation::OSS) {
     ObRandomOSSReader *tmp_reader = OB_NEWx(ObRandomOSSReader, &allocator, allocator);
     if (OB_ISNULL(tmp_reader)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create RandomOSSReader", K(ret));
     } else if (OB_FAIL(tmp_reader->open(param.access_info_, param.filename_))) {
       LOG_WARN("fail to open random oss reader", KR(ret), K(param.filename_));
@@ -73,6 +75,7 @@ int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, Ob
     } else {
       ObPacketStreamFileReader *tmp_reader = OB_NEWx(ObPacketStreamFileReader, &allocator, allocator);
       if (OB_ISNULL(tmp_reader)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to create ObPacketStreamFileReader", K(ret));
       } else if (OB_FAIL(tmp_reader->open(param.filename_, *param.packet_handle_, param.session_, param.timeout_ts_))) {
         LOG_WARN("failed to open packet stream file reader", KR(ret), K(param.filename_));

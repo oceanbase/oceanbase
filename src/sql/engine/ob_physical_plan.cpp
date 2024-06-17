@@ -1228,7 +1228,8 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     stat_.outline_id_ = get_outline_state().outline_version_.object_id_;
     // Truncate the raw sql to avoid the plan memory being too large due to the long raw sql
     ObTruncatedString trunc_raw_sql(pc_ctx.raw_sql_, OB_MAX_SQL_LENGTH);
-    if (OB_FAIL(pc_ctx.get_not_param_info_str(get_allocator(), stat_.sp_info_str_))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(pc_ctx.get_not_param_info_str(get_allocator(), stat_.sp_info_str_))) {
       SQL_PC_LOG(WARN, "fail to get special param info string", K(ret));
     } else if (OB_FAIL(ob_write_string(get_allocator(),
                                        pc_ctx.fp_result_.pc_key_.sys_vars_str_,
@@ -1256,6 +1257,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
                     get_allocator().alloc(get_access_table_num() * sizeof(ObTableRowCount))))) {
         // @banliu.zyd: 这块内存存放计划涉及的表的行数，用于统计信息已经过期的计划的淘汰，分配失败时
         //              不报错，走原来不淘汰计划的逻辑
+        // ignore ret
         LOG_WARN("allocate memory for table row count list failed", K(get_access_table_num()));
       } else {
         for (int64_t i = 0; i < get_access_table_num(); ++i) {

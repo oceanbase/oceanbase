@@ -644,7 +644,7 @@ public:
             cursor_ids.push_back(cursor_info->get_id());
           }
         }
-        for (int64_t i = 0; i < cursor_ids.count(); i++) {
+        for (int64_t i = 0; i < cursor_ids.count() && OB_SUCC(ret); i++) {
           uint64_t cursor_id = cursor_ids.at(i);
           if (OB_FAIL(session.close_cursor(cursor_id))) {
             SQL_ENG_LOG(WARN, "failed to close cursor",

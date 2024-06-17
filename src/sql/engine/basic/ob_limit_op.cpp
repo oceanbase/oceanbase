@@ -424,8 +424,8 @@ int ObLimitOp::is_row_order_by_item_value_equal(bool &is_equal)
       ObDatum *datum = NULL;
       if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
         LOG_WARN("expression evaluate failed", K(ret));
-      } else if (expr->basic_funcs_->null_first_cmp_(
-                 pre_sort_columns_.store_row_->cells()[i], *datum, cmp_ret)) {
+      } else if (OB_FAIL(expr->basic_funcs_->null_first_cmp_(
+                 pre_sort_columns_.store_row_->cells()[i], *datum, cmp_ret))) {
         LOG_WARN("compare failed", K(ret));
       } else {
         is_equal = 0 == cmp_ret;

@@ -248,6 +248,7 @@ int EventRecorder::report_member_list_changed_event(const MemberList &old_list, 
   int64_t pos = 0;
   bool last_print_flag = false;
   if (old_list.only_membership_version_different(new_list)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_EVENT(ERROR, "only membership version different");
   } else {
     DO_IF_SUCC(databuff_printf(info, INFO_MAX_LEN, pos, "new : "));

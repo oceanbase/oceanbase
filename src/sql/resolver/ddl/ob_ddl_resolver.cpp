@@ -4788,7 +4788,7 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
             if (OB_ISNULL(cast_ctx.allocator_v2_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("allocator is null", K(ret));
-            } else if (wide::from_number(nmb, *cast_ctx.allocator_v2_, scale, decint, int_bytes)) {
+            } else if (OB_FAIL(wide::from_number(nmb, *cast_ctx.allocator_v2_, scale, decint, int_bytes))) {
               LOG_WARN("fail to cast number to deciaml int", K(ret));
             } else {
               default_value.set_decimal_int(int_bytes, scale, decint);
@@ -8045,6 +8045,7 @@ int ObDDLResolver::check_is_json_contraint(ObTableSchema &t_table_schema, ObIArr
     ParseNode *cur_node = cst_check_expr_node->children_[0]->children_[0];
     ObString col_str(cur_node->str_len_, cur_node->str_value_);
     if (OB_ISNULL(column_schema = t_table_schema.get_column_schema(col_str))) {
+      // ignore ret
       LOG_WARN("get column schema fail", K(ret));
     } else {
       col_id = column_schema->get_column_id();

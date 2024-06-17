@@ -1103,7 +1103,9 @@ int ObTransService::rollback_to_implicit_savepoint(ObTxDesc &tx,
       }
     }
 
-    if (OB_FAIL(tx_sanity_check_(tx))) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(tx_sanity_check_(tx))) {
     } else {
       ret = rollback_to_global_implicit_savepoint_(tx,
                                                    savepoint,

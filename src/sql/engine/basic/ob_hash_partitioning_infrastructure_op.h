@@ -2813,7 +2813,7 @@ int ObHashPartitionExtendHashTable<Item>::check_and_extend()
         K(size_), K(get_bucket_num()), K(sql_mem_processor_->get_mem_bound()));
     }
   }
-  if (OB_ISNULL(buckets_)) {
+  if (OB_SUCC(ret) && OB_ISNULL(buckets_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "null buckets", K(ret));
   }

@@ -5720,7 +5720,8 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
             }
             ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
               ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
-              if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
                                                                                  &nlj,
                                                                                  false)))) {
                 LOG_WARN("fail to push back param expr", K(ret));
@@ -6152,7 +6153,8 @@ int ObStaticEngineCG::generate_spec(
     }
     ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
       ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
-      if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
                                                                       &spec,
                                                                       false)))) {
         LOG_WARN("fail to push back param expr", K(ret));

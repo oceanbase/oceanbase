@@ -368,6 +368,7 @@ int ObTenantFreezer::tenant_freeze()
   } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iter is NULL", K(ret));
   } else {
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
@@ -555,9 +556,10 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
 
   // execute statistic print once a minute
   if (TC_REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+    int tmp_ret = OB_SUCCESS;
     if (frozen_tx_data_mem_used + active_tx_data_mem_used > tx_data_mem_limit) {
       LOG_INFO("tx data use too much memory!!!", STATISTIC_PRINT_MACRO);
-    } else if (OB_FAIL(get_tenant_tx_data_mem_used_(
+    } else if (OB_TMP_FAIL(get_tenant_tx_data_mem_used_(
                    frozen_tx_data_mem_used, active_tx_data_mem_used, true /*for_statistic_print*/))) {
       LOG_INFO("print statistic failed");
     } else {

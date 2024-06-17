@@ -1502,6 +1502,7 @@ int ObTransformPreProcess::create_groupby_substmt(const ObIArray<ObRawExpr*> &or
                                                       stmt_copy))) {
     LOG_WARN("failed to deep copy from stmt.", K(ret));
   } else if (OB_ISNULL(sub_stmt = static_cast<ObSelectStmt*>(stmt_copy))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed. get unexpected NULL", K(ret));
   } else if (OB_FAIL(origin_stmt.get_relation_exprs(origin_exprs, origin_visitor))) {
     LOG_WARN("failed to get relation exprs on origin stmt", K(ret));
@@ -7781,9 +7782,9 @@ int ObTransformPreProcess::recursive_generate_rowid_select_item(ObSelectStmt *se
           // ignore create rowid item.
         } else if (OB_FAIL(create_rowid_item_for_stmt(select_stmt, table_item, rowid_expr))) {
           LOG_WARN("create rowid item for stmt failed", K(ret));
-        } else if (ObTransformUtils::create_select_item(*(ctx_->allocator_),
-                                                        rowid_expr,
-                                                        select_stmt)) {
+        } else if (OB_FAIL(ObTransformUtils::create_select_item(*(ctx_->allocator_),
+                                                                rowid_expr,
+                                                                select_stmt))) {
           LOG_WARN("failed to create select item", K(ret));
         } else {/*do nothing*/}
       } else if (OB_FAIL(build_rowid_expr(select_stmt, table_item, rowid_func_expr))) {

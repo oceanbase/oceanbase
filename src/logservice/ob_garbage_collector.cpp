@@ -1675,7 +1675,8 @@ void ObGarbageCollector::gc_check_ls_status_(ObGCCandidateArray &gc_candidates)
           CLOG_LOG(WARN, "get next log stream failed", K(ret));
         }
       } else if (OB_ISNULL(ls)) {
-        CLOG_LOG(ERROR, "log stream is NULL", KP(ls));
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "log stream is NULL", K(ret), KP(ls));
       } else if (OB_UNLIKELY(!ls->is_create_committed())) {
         CLOG_LOG(INFO, "ls is not committed, just ignore", K(ls));
       } else if (OB_SUCCESS != (tmp_ret = gc_check_ls_status_(*ls, gc_candidates))) {
@@ -1801,6 +1802,7 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
       } else if (NOT_IN_LEADER_MEMBER_LIST == gc_reason) {
         ObLogHandler *log_handler = NULL;
         if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+          tmp_ret = OB_ERR_UNEXPECTED;
           CLOG_LOG(ERROR, "log_handler is NULL", K(tmp_ret), K(id));
         } else if (!log_handler->is_sync_enabled() || !log_handler->is_replay_enabled()) {
           gc_handler->set_log_sync_stopped();

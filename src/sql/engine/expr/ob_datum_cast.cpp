@@ -5586,7 +5586,8 @@ CAST_FUNC_NAME(datetime, decimalint)
         }
       }
       ObString nls_format;
-      if (OB_FAIL(ObTimeConverter::datetime_to_str(in_val, tz_info_local, nls_format, in_scale, buf,
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObTimeConverter::datetime_to_str(in_val, tz_info_local, nls_format, in_scale, buf,
                                                    sizeof(buf), length, false))) {
         LOG_WARN("datetime_to_str failed", K(ret), K(in_val), K(in_scale));
       } else if (OB_FAIL(wide::from_string(buf, length, tmp_alloc, scale, in_precision, int_bytes,
@@ -10441,7 +10442,7 @@ CAST_FUNC_NAME(decimalint, text)
     ObString res_str;
     if (OB_FAIL(common_decimalint_string(expr, *child_res, ctx, res_datum))) {
       LOG_WARN("common_decimalint_string failed", K(ret));
-    } else if (copy_datum_str_with_tmp_alloc(ctx, res_datum, res_str)) {
+    } else if (OB_FAIL(copy_datum_str_with_tmp_alloc(ctx, res_datum, res_str))) {
       LOG_WARN("copy datum string with tmp allocator failed", K(ret));
     } else if (OB_FAIL(common_string_text(expr, res_str, ctx, NULL, res_datum))) {
       LOG_WARN("cast string to lob failed", K(ret));
@@ -11555,8 +11556,8 @@ int text_length_check(const ObExpr &expr,
     } else if (OB_FAIL(lob.get_inrow_data(inrow_data))) {
       LOG_WARN("fail to get inrow data", K(ret));
     } else if (FALSE_IT(tmp_in.set_string(inrow_data))) {
-    } else if (OB_FAIL(OB_FAIL(string_length_check(expr, cast_mode, accuracy, type,
-                                                   cs_type, ctx, tmp_in, res_datum, warning)))) {
+    } else if (OB_FAIL(string_length_check(expr, cast_mode, accuracy, type,
+                                           cs_type, ctx, tmp_in, res_datum, warning))) {
       LOG_WARN("fail to do string length check", K(ret));
     } else {
       int32_t lob_handle_len = lob.size_ - inrow_data.length();

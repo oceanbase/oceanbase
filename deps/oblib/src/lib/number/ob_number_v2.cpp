@@ -4246,7 +4246,8 @@ int ObNumber::atan(ObNumber &value, ObIAllocator &allocator, const bool do_round
     int64_t count = 0;
     allocator_const1.free();
     //taylor series: atan(x) = x-(x^3)/3+(x^5)/5-(x^7)/7+... when |x|<1
-    if (OB_FAIL(taylor_series.from(copy_this, allocator_iter2))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(taylor_series.from(copy_this, allocator_iter2))) {
       LOG_WARN("taylor series from copy_this failed", K(copy_this), K(taylor_series), K(ret));
     } else if (OB_FAIL(copy_this.mul_v3(copy_this, doublex, allocator_doublex, true, false))) {
       LOG_WARN("doublex = copy_this*copy_this failed", K(copy_this), K(doublex), K(ret));
@@ -7589,7 +7590,8 @@ int ObNumberBuilder::build_hex_integer_(const char *str, const int64_t integer_s
         LOG_WARN("integer part is longer than fmt str", K(ret), K(i), K(c_p));
       }
       int32_t dec_len = 0;
-      if (OB_FAIL(hex_to_dec_(hex_str, new_len, dec_str, dec_len))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(hex_to_dec_(hex_str, new_len, dec_str, dec_len))) {
         LOG_WARN("failed to hex_to_dec", K(ret));
       }
       i = dec_len - 1;

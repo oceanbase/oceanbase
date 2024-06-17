@@ -69,6 +69,7 @@ void ObTenantDirectLoadMgr::destroy()
     }
   }
   for (int64_t i = 0; i < tablet_mgr_keys.count(); i++) {
+    // overwrite ret
     if (OB_FAIL(remove_tablet_direct_load(tablet_mgr_keys.at(i)))) {
       LOG_WARN("remove tablet mgr failed", K(ret), K(tablet_mgr_keys.at(i)));
     }
@@ -1068,6 +1069,7 @@ int ObTenantDirectLoadMgr::gc_tablet_direct_load()
       if (!mgr_key.is_full_direct_load_) {
         // skip
       } else if (OB_ISNULL(ls_svr)) {
+        ret = OB_ERR_SYS;
         LOG_WARN("invalid mtl ObLSService", K(ret));
       } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
         LOG_WARN("get log stream failed", K(ret), K(ls_id));

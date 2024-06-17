@@ -231,19 +231,23 @@ int ObConfigManager::dump2file(const char* path) const
       char *hist_path = nullptr;
       int64_t pos = 0;
       need_retry = false;
+      int tmp_ret = OB_SUCCESS;
+      int tmp_ret_2 = OB_SUCCESS;
       if (OB_ISNULL(buf = pa.alloc(buf_size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("ob tc malloc memory for buf failed", K(ret));
       }
       if (OB_ISNULL(tmp_path = pa.alloc(MAX_PATH_SIZE))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("ob tc malloc memory for tmp configure path failed", K(ret));
+        tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+        LOG_ERROR("ob tc malloc memory for tmp configure path failed", K(ret), K(tmp_ret));
       } else {
         snprintf(tmp_path, MAX_PATH_SIZE, "%s.tmp", path);
       }
       if (OB_ISNULL(hist_path = pa.alloc(MAX_PATH_SIZE))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("ob tc malloc memory for history configure path fail", K(ret));
+        tmp_ret_2 = OB_ALLOCATE_MEMORY_FAILED;
+        ret = OB_SUCC(ret) ? tmp_ret_2 : ret;
+        LOG_ERROR("ob tc malloc memory for history configure path fail", K(ret), K(tmp_ret_2));
       } else {
         snprintf(hist_path, MAX_PATH_SIZE, "%s.history", path);
       }

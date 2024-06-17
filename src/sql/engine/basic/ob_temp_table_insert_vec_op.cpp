@@ -110,6 +110,7 @@ int ObTempTableInsertVecOp::inner_close()
   }
   int temp_ret = ret;
   if (OB_FAIL(clear_all_interm_res_info())) {
+    // overwrite ret, has temp_ret
     LOG_WARN("failed to clear row store", K(ret));
   }
   ret = temp_ret;
@@ -210,12 +211,12 @@ int ObTempTableInsertVecOp::create_interm_result_info(ObDTLIntermResultInfo *&in
                                           true))) {
       LOG_WARN("failed to create row store.", K(ret));
     } else if (FALSE_IT(interm_res_info = result_info_guard.result_info_)) {
-    } else if (interm_res_info->col_store_->init(MY_SPEC.get_child()->output_,
+    } else if (OB_FAIL(interm_res_info->col_store_->init(MY_SPEC.get_child()->output_,
                                                  MY_SPEC.max_batch_size_,
                                                  mem_attr,
                                                  0 /*mem_limit*/,
                                                  true /*enable_dump*/,
-                                                 false /*reuse_vector_array*/)) {
+                                                 false /*reuse_vector_array*/))) {
       LOG_WARN("failed to init the chunk row store.", K(ret));
     } else if (OB_FAIL(all_interm_res_info_.push_back(interm_res_info))) {
       LOG_WARN("failed to push back row store", K(ret));

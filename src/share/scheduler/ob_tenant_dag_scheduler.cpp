@@ -1708,8 +1708,10 @@ bool ObTenantDagWorker::get_force_cancel_flag()
   if (DWS_FREE == status_ || DWS_STOP == status_) {
     COMMON_LOG(WARN, "the status of worker is invalid to get task", K(status_), K(task_));
   } else if (OB_ISNULL(task_)) {
+    // ignore ret
     COMMON_LOG(WARN, "worker contains nullptr task");
   } else if (OB_ISNULL(dag = task_->get_dag())) {
+    // ignore ret
     COMMON_LOG(WARN, "task does not belong to dag");
   } else {
     flag = dag->get_force_cancel_flag();

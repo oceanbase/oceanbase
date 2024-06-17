@@ -122,7 +122,7 @@ int ObGeoTypeUtil::get_pg_reserved_prj4text(ObIAllocator *allocator, uint32_t sr
 
   if (OB_SUCC(ret)) {
     ObString prj4_tmp = ObString::make_string(tmp_buf);
-    if (OB_FAIL(OB_FAIL(ob_write_string(*allocator, prj4_tmp, prj4_param, true)))) {
+    if (OB_FAIL(ob_write_string(*allocator, prj4_tmp, prj4_param, true))) {
       LOG_WARN("failed to write string to buffer", K(ret), K(srid));
     }
   }

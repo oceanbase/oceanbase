@@ -631,7 +631,7 @@ int ObTransformSimplifySubquery::try_push_down_outer_join_conds(ObDMLStmt *stmt,
       LOG_WARN("failed to get_push_down_conditions", K(ret), K(join_table));
     } else if (push_down_conds.empty()) {
       /*do nothing*/
-    } else if (ObOptimizerUtil::remove_item(join_table->get_join_conditions(), push_down_conds)) {
+    } else if (OB_FAIL(ObOptimizerUtil::remove_item(join_table->get_join_conditions(), push_down_conds))) {
       LOG_WARN("failed to remove item", K(ret));
     } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
                                                                  stmt,
@@ -2557,7 +2557,7 @@ int ObTransformSimplifySubquery::do_trans_empty_table_subquery_as_expr(ObRawExpr
     LOG_WARN("failed to add const param constraints", K(ret));
   } else if (OB_FAIL(conditions.assign(ref_stmt->get_condition_exprs()))) {
     LOG_WARN("failed to assign condition exprs", K(ret));
-  } else if (ObTransformUtils::decorrelate(conditions, query_ref->get_exec_params())) {
+  } else if (OB_FAIL(ObTransformUtils::decorrelate(conditions, query_ref->get_exec_params()))) {
     LOG_WARN("failed to decorrelate condition exprs", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_,
                                                     conditions,

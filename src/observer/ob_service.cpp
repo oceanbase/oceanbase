@@ -156,8 +156,8 @@ void ObSchemaReleaseTimeTask::runTimerTask()
   } else if (OB_FAIL(schema_updater_->try_release_schema())) {
     LOG_WARN("ObSchemaReleaseTimeTask failed", K(ret));
   }
-  // we should ignore error to schedule task
   if (OB_FAIL(schedule_())) {
+    // overwrite ret
     LOG_WARN("fail to schedule ObSchemaReleaseTimeTask in runTimerTask", KR(ret));
   }
 }

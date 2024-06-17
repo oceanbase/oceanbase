@@ -1436,6 +1436,7 @@ int ObRawExprUtils::make_raw_expr_from_str(const char *expr_str,
     if (OB_SUCC(ret)) {
       parsed_expr = select_expr->children_[0];
       if (OB_ISNULL(parsed_expr)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("internal arg is not correct", KP(parsed_expr));
       }
     }
@@ -3386,6 +3387,7 @@ int ObRawExprUtils::replace_all_ref_column(ObRawExpr *&raw_expr, const common::O
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(raw_expr));
   } else if (offset >= exprs.count()) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("beyond the index", K(offset), K(exprs.count()));
   }else if (T_REF_COLUMN == raw_expr->get_expr_type()) {
     LOG_DEBUG("replace leaf node", K(*raw_expr), K(*exprs.at(offset)), K(offset));
@@ -5339,10 +5341,11 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("allocate expr operator failed", K(ret));
       } else if (OB_ISNULL(column_conv = static_cast<ObExprColumnConv *>(op))) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to cast ObExprOperator* to ObExprColumnConv*", K(ret));
       } else if (OB_FAIL(column_conv->shallow_copy_str_values(*type_infos))) {
         LOG_WARN("fail to shallow_copy_str_values", K(ret));
-      } else if (f_expr->set_enum_set_values(*type_infos)) {
+      } else if (OB_FAIL(f_expr->set_enum_set_values(*type_infos))) {
         LOG_WARN("fail to set_enum_set_values", K(ret));
       } else {/*success*/}
     }
@@ -5986,7 +5989,7 @@ int ObRawExprUtils::build_trim_expr(const ObColumnSchemaV2 *column_schema,
     LOG_WARN("fail to store expr", K(ret));
   } else if (OB_FAIL(build_const_int_expr(expr_factory, ObIntType, trim_type, type_expr))) {
     LOG_WARN("fail to build type expr", K(ret));
-  } else if (trim_expr->add_param_expr(type_expr)) {
+  } else if (OB_FAIL(trim_expr->add_param_expr(type_expr))) {
     LOG_WARN("fail to add param expr", K(ret), K(*type_expr));
   } else if (OB_FAIL(build_const_string_expr(expr_factory, ObCharType, padding_char,
                                              padding_char_cs_type,
@@ -5995,9 +5998,9 @@ int ObRawExprUtils::build_trim_expr(const ObColumnSchemaV2 *column_schema,
   } else if (FALSE_IT(static_cast<ObConstRawExpr*>(pattem_expr)->get_value().set_collation_level(
         CS_LEVEL_IMPLICIT))) {
     LOG_WARN("fail to set collation type", K(ret));
-  } else if (trim_expr->add_param_expr(pattem_expr)) {
+  } else if (OB_FAIL(trim_expr->add_param_expr(pattem_expr))) {
     LOG_WARN("fail to add param expr", K(ret));
-  } else if (trim_expr->add_param_expr(expr)) {
+  } else if (OB_FAIL(trim_expr->add_param_expr(expr))) {
     LOG_WARN("fail to add param expr", K(ret), K(*expr));
   } else {
     trim_expr->set_data_type(ObCharType);
@@ -8560,6 +8563,7 @@ int ObRawExprUtils::build_not_expr(ObRawExprFactory &expr_factory,
   int ret = OB_SUCCESS;
   ObOpRawExpr *new_expr = NULL;
   if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr has null", K(ret));
   } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_NOT, new_expr))) {
     LOG_WARN("failed to create a new expr", K(ret));

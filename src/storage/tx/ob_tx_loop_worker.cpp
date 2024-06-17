@@ -307,6 +307,7 @@ void ObTxLoopWorker::do_retain_ctx_gc_(ObLS *ls_ptr)
 
   ObTxRetainCtxMgr *retain_ctx_mgr = ls_ptr->get_tx_svr()->get_retain_ctx_mgr();
   if (OB_ISNULL(retain_ctx_mgr)) {
+    // ignore ret
     TRANS_LOG(WARN, "[Tx Loop Worker] retain_ctx_mgr  is not inited", K(ret), K(MTL_ID()),
               K(*ls_ptr));
 

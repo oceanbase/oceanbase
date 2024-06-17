@@ -355,6 +355,7 @@ int ObMPStmtExecute::send_eof_packet_for_arraybinding(ObSQLSessionInfo &session_
   const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
   uint16_t warning_count = 0;
   if (OB_ISNULL(warnings_buf)) {
+    // ignore ret
     LOG_WARN("can not get thread warnings buffer");
   } else {
     warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
@@ -1013,7 +1014,8 @@ int ObMPStmtExecute::decode_type_info(const char*& buf, TypeInfo &type_info)
   PS_DEFENSE_CHECK(1)
   {
     uint64_t length = 0;
-    if (OB_FAIL(ObMySQLUtil::get_length(buf, length))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObMySQLUtil::get_length(buf, length))) {
       LOG_WARN("failed to get length", K(ret));
     } else {
       PS_DEFENSE_CHECK(length)
@@ -1026,7 +1028,8 @@ int ObMPStmtExecute::decode_type_info(const char*& buf, TypeInfo &type_info)
   PS_DEFENSE_CHECK(1)
   {
     uint64_t version = 0;
-    if (OB_FAIL(ObMySQLUtil::get_length(buf, version))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObMySQLUtil::get_length(buf, version))) {
       LOG_WARN("failed to get version", K(ret));
     }
   }
@@ -1193,6 +1196,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
                                         async_resp_used))) {
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_ISNULL(plan_ctx)) {
+        // ignore ret
         LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
       } else {
         LOG_WARN("execute query fail", K(ret), "timeout_timestamp",

@@ -5100,8 +5100,8 @@ int ObLogicalOperator::try_prepare_rf_query_range_info(
         for (int64_t i = 0; OB_SUCC(ret) && i < rf_count; ++i) {
           RuntimeFilterType type = join_filter_create->get_join_filter_types().at(i);
           if (RuntimeFilterType::IN == type || RuntimeFilterType::RANGE == type) {
-            if (OB_FAIL(OB_FAIL(
-                  p2p_dh_ids.push_back(join_filter_create->get_p2p_sequence_ids().at(i))))) {
+            if (OB_FAIL(
+                  p2p_dh_ids.push_back(join_filter_create->get_p2p_sequence_ids().at(i)))) {
               LOG_WARN("fail to push_back", K(ret));
             }
           }

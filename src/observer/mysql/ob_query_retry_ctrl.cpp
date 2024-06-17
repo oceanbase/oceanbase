@@ -1192,6 +1192,7 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
   retry_func func = nullptr;
   ObSQLSessionInfo *session = result.get_exec_context().get_my_session();
   if (OB_ISNULL(session)) {
+    // ignore ret
     // this is possible. #issue/43953721
     LOG_WARN("session is null in exec_context. maybe OOM. don't retry", K(err));
   } else if (OB_FAIL(get_func(err, is_inner_sql, func))) {

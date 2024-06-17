@@ -100,7 +100,7 @@ int ObTempTableInsertOp::inner_close()
   } else if (OB_ISNULL(task_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null task", K(ret));
-  } else if (!task_->interm_result_ids_.empty()) {
+  } else if (OB_UNLIKELY(!task_->interm_result_ids_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("result ids should be empty", K(ret));
   } else if (OB_FAIL(task_->interm_result_ids_.assign(interm_result_ids_))) {
@@ -110,6 +110,7 @@ int ObTempTableInsertOp::inner_close()
   }
   int temp_ret = ret;
   if (OB_FAIL(clear_all_datum_store())) {
+    // overwrite ret
     LOG_WARN("failed to clear datum store", K(ret));
   }
   ret = temp_ret;
@@ -270,12 +271,12 @@ int ObTempTableInsertOp::init_chunk_row_store(ObDTLIntermResultInfo *&chunk_row_
                                           )))) {
       LOG_WARN("failed to create row store.", K(ret));
     } else if (FALSE_IT(chunk_row_store = result_info_guard.result_info_)) {
-    } else if (chunk_row_store->datum_store_->init(UINT64_MAX,
+    } else if (OB_FAIL(chunk_row_store->datum_store_->init(UINT64_MAX,
                                                 tenant_id,
                                                 ObCtxIds::WORK_AREA,
                                                 "SqlTempTableRowSt",
                                                 true,
-                                                sizeof(uint64_t))) {
+                                                sizeof(uint64_t)))) {
       LOG_WARN("failed to init the chunk row store.", K(ret));
     } else if (OB_FAIL(all_datum_store_.push_back(chunk_row_store))) {
       LOG_WARN("failed to push back datum store", K(ret));

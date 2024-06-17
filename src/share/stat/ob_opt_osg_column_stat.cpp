@@ -28,7 +28,7 @@ int ObMinMaxValEval::get_obj(ObObj &obj) const
   int ret = OB_SUCCESS;
   if (datum_ == NULL) {
     obj.set_null();
-  } else if (datum_->to_obj(obj, meta_)) {
+  } else if (OB_FAIL(datum_->to_obj(obj, meta_))) {
     LOG_WARN("failed to to obj");
   }
   return ret;

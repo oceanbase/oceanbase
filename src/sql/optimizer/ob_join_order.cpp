@@ -479,6 +479,7 @@ int ObJoinOrder::compute_sharding_info_for_index_info_entry(const uint64_t table
   ObShardingInfo *sharding_info = NULL;
   if (OB_ISNULL(index_info_entry)
       || OB_ISNULL(part_info = index_info_entry->get_partition_info())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   }  else if (NULL != sharding_info_ && !index_info_entry->is_index_global()) {
     //all the local index share the same sharding info
@@ -7952,6 +7953,7 @@ int ObJoinOrder::generate_function_table_paths()
     } else if (OB_FAIL(append(func_path->filter_, get_restrict_infos()))) {
       LOG_WARN("failed to append filter", K(ret));
     } else if (OB_ISNULL(function_table_expr = table_item->function_table_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null function table expr", K(ret));
     } else if (OB_FAIL(param_funct_table_expr(function_table_expr,
                                               nl_params,
@@ -12009,6 +12011,7 @@ int ObJoinOrder::extract_used_columns(const uint64_t table_id,
   const ObDMLStmt *stmt = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null point error", K(ret), K(get_plan()), K(stmt), K(schema_guard));
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id) ||
              OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {

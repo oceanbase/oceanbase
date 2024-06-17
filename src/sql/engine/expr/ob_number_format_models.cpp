@@ -2459,7 +2459,7 @@ int ObNFMToNumber::process_hex_format(const common::ObString &in_str,
       number::ObNumber base_num;
       number::ObNumber power_num;
       number::ObNumber res;
-      if (base_num.from(base, allocator)) {
+      if (OB_FAIL(base_num.from(base, allocator))) {
         LOG_WARN("fail to cast uint64 to number", K(ret), K(base));
       } else if (OB_FAIL(base_num.power(exponent, power_num, allocator))) {
         LOG_WARN("power calc failed", K(ret));
@@ -2467,11 +2467,11 @@ int ObNFMToNumber::process_hex_format(const common::ObString &in_str,
         for (int32_t i = 0; OB_SUCC(ret) && i < hex_num_size; i++) {
           uint64_t val = nums.at(i);
           number::ObNumber num;
-          if (num.from(val, allocator)) {
+          if (OB_FAIL(num.from(val, allocator))) {
             LOG_WARN("fail to cast uint64 to number", K(ret), K(val));
           } else {
             for (int32_t j = i; OB_SUCC(ret) && j > 0; j--) {
-              if (num.mul_v2(power_num, num, allocator)) {
+              if (OB_FAIL(num.mul_v2(power_num, num, allocator))) {
                 LOG_WARN("fail to mul number", K(ret));
               }
             }

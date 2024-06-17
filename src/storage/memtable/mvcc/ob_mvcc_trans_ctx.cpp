@@ -1835,6 +1835,7 @@ int ObMvccRowCallback::wakeup_row_waiter_if_need_()
     /*****[for deadlock]*****/
     ObLockWaitMgr *p_lwm = MTL(ObLockWaitMgr *);
     if (OB_ISNULL(p_lwm)) {
+      ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "lock wait mgr is nullptr", K(*this));
     } else {
       p_lwm->reset_hash_holder(get_tablet_id(), key_, ctx_.get_tx_id());

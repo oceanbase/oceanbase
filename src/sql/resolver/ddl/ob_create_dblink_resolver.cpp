@@ -285,7 +285,8 @@ int ObCreateDbLinkResolver::resolve_opt_reverse_link(const ParseNode *node, sql:
     ObString host_str;
     ObString ip_port, conn_str;
     ParseNode *host_node = NULL;
-    if (OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]) || OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_) || OB_ISNULL(host_node = reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_[0])) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]) || OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_) || OB_ISNULL(host_node = reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_[0])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(host_str.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_)))) {

@@ -284,6 +284,7 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
               K(conflict_tx_id), K(acc_ctx), K(lock_wait_expire_ts));
   } else if (OB_ISNULL(lock_wait_mgr = MTL_WITH_CHECK_TENANT(ObLockWaitMgr*,
                                                   tx_desc->get_tenant_id()))) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "can not get tenant lock_wait_mgr MTL", K(tx_desc->get_tenant_id()));
   } else {
     int tmp_ret = OB_SUCCESS;

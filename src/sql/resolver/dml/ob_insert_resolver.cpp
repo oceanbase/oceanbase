@@ -119,6 +119,7 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
         && GCONF._ob_enable_direct_load) {
       ObQueryCtx *query_ctx = insert_stmt->get_query_ctx();
       if (OB_ISNULL(query_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("query ctx should not be NULL", KR(ret), KP(query_ctx));
       } else if (query_ctx->get_query_hint().get_global_hint().has_direct_load()) {
         // For insert into select clause with direct-insert mode, plan cache is disabled
@@ -1073,6 +1074,7 @@ int ObInsertResolver::replace_column_to_default(ObRawExpr *&origin)
       ObDefaultValueUtils utils(insert_stmt, &params_, static_cast<ObDMLResolver*>(this));
       if (OB_ISNULL(column_item = insert_stmt->get_column_item_by_id(
                   insert_stmt->get_insert_table_info().table_id_, b_expr->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get column item", K(ret));
       } else if (OB_FAIL(insert_stmt->get_insert_table_info().column_in_values_vector_.push_back(column_item->expr_))) {
         LOG_WARN("fail to push back column expr", K(ret));

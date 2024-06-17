@@ -6165,6 +6165,7 @@ int ObDMLResolver::resolve_columns_for_fk_partition_expr(ObRawExpr *&expr,
       } else {
         ColumnItem *column_item = NULL;
         if (OB_ISNULL(child_col_name)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get column name of foreign key column", K(ret), K(q_name.col_name_));
         } else if (OB_FAIL(resolve_basic_column_item(table_item, child_col_name, parent_table_schema.is_oracle_tmp_table(), column_item))) {
           LOG_WARN("resolve basic column item failed", K(i), K(q_name), K(ret));
@@ -7178,7 +7179,7 @@ int ObDMLResolver::resolve_order_item(const ParseNode &sort_node, OrderItem &ord
 {
   int ret = OB_SUCCESS;
   ObRawExpr *expr;
-  if (ObResolverUtils::set_direction_by_mode(sort_node, order_item)) {
+  if (OB_FAIL(ObResolverUtils::set_direction_by_mode(sort_node, order_item))) {
     LOG_WARN("failed to set direction by mode", K(ret));
   }
   if (OB_FAIL(ret)) {
@@ -8292,7 +8293,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       //do nothing
     } else if (OB_FAIL(local_vars.assign(column_schema->get_local_session_var()))) {
       LOG_WARN("assign local vars failed", K(ret));
-    } else if (local_vars.remove_vars_same_with_session(session_info)) {
+    } else if (OB_FAIL(local_vars.remove_vars_same_with_session(session_info))) {
       LOG_WARN("remove vars same with session failed", K(ret));
     } else if (0 == local_vars.get_var_count()) {
       //do nothing if all local vars are same with cur session vars
@@ -11921,7 +11922,7 @@ int ObDMLResolver::get_target_sql_for_unpivot(const ObIArray<ColumnItem> &column
                 LOG_WARN("fail to append_fmt", K(column_name), K(ret));
               }
             }
-            if (OB_FAIL(sql.append(")"))) {
+            if (OB_SUCC(ret) && OB_FAIL(sql.append(")"))) {
               LOG_WARN("fail to append", K(ret));
             }
           }
@@ -12102,7 +12103,7 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
                  (*iter)->is_no_validate() &&
                  (!resolve_check_for_optimizer || !(*iter)->get_rely_flag())) {
         continue;
-      } else if (ob_write_string(*params_.allocator_, (*iter)->get_check_expr_str(), constraint_str)) {
+      } else if (OB_FAIL(ob_write_string(*params_.allocator_, (*iter)->get_check_expr_str(), constraint_str))) {
         LOG_WARN("failed to write string", K(ret));
       } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
                  *params_.allocator_, params_.session_info_->get_dtc_params(), constraint_str))) {
@@ -12456,6 +12457,7 @@ int ObDMLResolver::check_oracle_outer_join_expr_validity(const ObRawExpr *expr,
   ObArray<uint64_t> tmp_left_tables;
   ObArray<uint64_t> tmp_right_tables;
   if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer", K(ret));
   } else if (OB_FAIL(extract_column_with_outer_join_symbol(expr, tmp_left_tables, tmp_right_tables))) {
     LOG_WARN("fail to extract_column_with_outer_join_symbol", K(ret));
@@ -12996,6 +12998,7 @@ int ObDMLResolver::fill_same_column_to_using(JoinedTable* &joined_table)
   ObSEArray<ObString, 8> right_column_names;
   ResolverJoinInfo *join_info = NULL;
   if (OB_ISNULL(joined_table)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL joined table", K(ret));
   } else if (OB_FAIL(get_columns_from_table_item(joined_table->left_table_, left_column_names))) {
     LOG_WARN("failed to get left column names", K(ret));
@@ -16188,8 +16191,10 @@ int ObDMLResolver::resolve_cte_table(
       ObDMLStmt *dml_stmt = get_stmt();
       if (OB_ISNULL(CTE_table_item) || OB_ISNULL(dml_stmt) ||
           OB_ISNULL(allocator_)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param is null");
       } else if (OB_ISNULL(node = CTE_table_item->node_)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("CTE table's parser node can not be NULL");
       } else if (is_oracle_mode() && OB_NOT_NULL(part_node)) {
         ret = OB_ERR_PARTITION_EXTENDED_ON_VIEW;
@@ -17893,7 +17898,7 @@ int ObDMLResolver::add_udt_dependency(const pl::ObUserDefinedType &udt_type)
         } else if (OB_ISNULL(user_type)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("user type is null", K(ret), KPC(element_type));
-        } else if (SMART_CALL(add_udt_dependency(*user_type))) {
+        } else if (OB_FAIL(SMART_CALL(add_udt_dependency(*user_type)))) {
           LOG_WARN("failed to add udt depenency", K(ret), KPC(user_type));
         }
       }

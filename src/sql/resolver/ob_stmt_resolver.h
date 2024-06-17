@@ -114,8 +114,10 @@ public:
     int ret = common::OB_SUCCESS;
     T *stmt = NULL;
     if (OB_ISNULL(params_.stmt_factory_)) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(ERROR, "stmt_factory_ is null, not be init");
     } else if (OB_ISNULL(params_.stmt_factory_->get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "query ctx is null", K(ret));
     } else if (OB_FAIL(params_.stmt_factory_->create_stmt(stmt))) {
       SQL_RESV_LOG(WARN, "create stmt failed", K(ret));

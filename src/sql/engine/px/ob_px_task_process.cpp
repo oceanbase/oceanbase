@@ -204,6 +204,7 @@ int ObPxTaskProcess::process()
     if (enable_sql_audit) {
       ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
       if ( OB_ISNULL(phy_plan)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(ret), K(phy_plan));
       } else {
         audit_record.try_cnt_++;

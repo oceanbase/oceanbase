@@ -731,10 +731,10 @@ int ObDirectLoadInsertTableContext::commit(ObTableLoadDmlStat &dml_stats,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
-  } else {
-    if (OB_FAIL(collect_dml_stat(dml_stats))) {
-      LOG_WARN("fail to collect dml stat", KR(ret));
-    } else if (param_.online_opt_stat_gather_ && collect_sql_statistics(sql_statistics)) {
+  } else if (OB_FAIL(collect_dml_stat(dml_stats))) {
+    LOG_WARN("fail to collect dml stat", KR(ret));
+  } else if (param_.online_opt_stat_gather_) {
+    if (OB_FAIL(collect_sql_statistics(sql_statistics))) {
       LOG_WARN("fail to collect sql statistics", KR(ret));
     }
   }

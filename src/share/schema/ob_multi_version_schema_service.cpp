@@ -3566,10 +3566,12 @@ int ObMultiVersionSchemaService::try_gc_existed_tenant_schema_mgr()
         if (ObSchemaService::g_liboblog_mode_) {
           // liboblog/agentserver do nothing
         } else if (OB_FAIL(try_gc_tenant_schema_mgr_for_fallback(tenant_id))) {
+          // overwrite ret
           LOG_WARN("fail to gc tenant schema mgr for fallback", KR(ret), K(tenant_id));
         }
         // 3.let schema mgr to free slot's memory
         if (OB_FAIL(try_gc_current_allocator(tenant_id, mem_mgr, schema_mgr_cache))) {
+          // overwrite ret
           LOG_WARN("fail to gc current slot", KR(ret), K(tenant_id));
         }
       }
@@ -3608,6 +3610,7 @@ int ObMultiVersionSchemaService::try_gc_another_allocator(
       for (int64_t i = 0; OB_SUCC(ret) && i < another_ptrs.count(); i++) {
         ObSchemaMgr *tmp_mgr = NULL;
         if (OB_ISNULL(another_ptrs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ptrs is null", K(ret), K(tenant_id), K(i));
         } else if (FALSE_IT(tmp_mgr = static_cast<ObSchemaMgr *>(another_ptrs.at(i)))) {
         } else if (tmp_mgr->get_schema_version() >= local_version) {
@@ -3620,6 +3623,7 @@ int ObMultiVersionSchemaService::try_gc_another_allocator(
       ObSchemaMgr *eli_schema_mgr = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < another_ptrs.count(); i++) {
         if (OB_ISNULL(another_ptrs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ptrs is null", K(ret), K(tenant_id), K(i));
         } else if (FALSE_IT(eli_schema_mgr = static_cast<ObSchemaMgr *>(another_ptrs.at(i)))) {
         } else if (OB_FAIL(schema_mgr_cache->try_eliminate_schema_mgr(eli_schema_mgr))) {

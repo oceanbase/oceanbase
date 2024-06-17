@@ -389,8 +389,9 @@ int ObMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("log stream migration dag net do not init ", K(ret));
-  } else if (OB_FAIL(ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
-    LOG_WARN("failed to trace task id to string", K(ret), K(*ctx_));
+  } else if (OB_UNLIKELY(0 > ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("failed to get trace id string", K(ret), K(*ctx_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
           "ObLSMigrationDagNet: tenant_id=%s, ls_id=%s, migration_type=%d, trace_id=%s",
           to_cstring(ctx_->tenant_id_), to_cstring(ctx_->arg_.ls_id_), ctx_->arg_.type_, task_id_str))) {
@@ -2409,7 +2410,7 @@ int ObTabletMigrationTask::process()
     LOG_WARN("failed to check tablet replica validity", K(ret), KPC(copy_tablet_ctx_));
   } else if (OB_FAIL(try_update_tablet_())) {
     LOG_WARN("failed to try update tablet", K(ret), KPC(copy_tablet_ctx_));
-  } else if (OB_FAIL(OB_FAIL(copy_tablet_ctx_->get_copy_tablet_status(status)))) {
+  } else if (OB_FAIL(copy_tablet_ctx_->get_copy_tablet_status(status))) {
     LOG_WARN("failed to get copy tablet status", K(ret), KPC(copy_tablet_ctx_));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
     FLOG_INFO("copy tablet is not exist, skip copy it", KPC(copy_tablet_ctx_));

@@ -394,6 +394,7 @@ int ObDBMSLimitCalculator::get_server_resource_info_(
       }
     }
     if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      // overwrite ret
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
     } else if (OB_FAIL(ret)) {

@@ -4612,6 +4612,7 @@ int ObDDLOperator::drop_obj_privs(
     int64_t new_schema_version = OB_INVALID_VERSION;
 
     if (OB_ISNULL(obj_priv)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("obj_priv priv is NULL", K(ret), K(obj_priv));
     } else {
       OZ (schema_service.gen_new_schema_version(tenant_id, new_schema_version));
@@ -6856,6 +6857,7 @@ int ObDDLOperator::drop_db_table_privs(
         const ObDBPriv *db_priv = db_privs.at(i);
         int64_t new_schema_version = OB_INVALID_VERSION;
         if (OB_ISNULL(db_priv)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("db priv is NULL", K(ret), K(db_priv));
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
@@ -6879,6 +6881,7 @@ int ObDDLOperator::drop_db_table_privs(
         const ObTablePriv *table_priv = table_privs.at(i);
         int64_t new_schema_version = OB_INVALID_VERSION;
         if (OB_ISNULL(table_priv)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table priv is NULL", K(ret), K(table_priv));
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
@@ -6929,6 +6932,7 @@ int ObDDLOperator::drop_db_table_privs(
       const ObObjPriv *obj_priv = obj_privs.at(i);
       int64_t new_schema_version = OB_INVALID_VERSION;
       if (OB_ISNULL(obj_priv)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("obj_priv priv is NULL", K(ret), K(obj_priv));
       } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));

@@ -1670,7 +1670,7 @@ int ObLogPlanHint::add_join_hint(const ObDMLStmt &stmt,
       if (OB_ISNULL(log_join_hint = join_hints_.alloc_place_holder())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("Allocate log join hint from array error", K(ret));
-      } else if (log_join_hint->join_tables_.add_members(join_tables)) {
+      } else if (OB_FAIL(log_join_hint->join_tables_.add_members(join_tables))) {
         LOG_WARN("failed to add members", K(ret));
       }
     }

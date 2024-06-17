@@ -252,7 +252,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
 
     //get system variable
     ObObj online_sys_var_obj;
-    if (OB_FAIL(OB_FAIL(my_session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, online_sys_var_obj)))) {
+    if (OB_FAIL(my_session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, online_sys_var_obj))) {
       LOG_WARN("fail to get sys var", K(ret));
     } else {
       online_sys_var = online_sys_var_obj.get_bool();

@@ -110,7 +110,8 @@ int ObPxTenantTargetMonitor::refresh_statistics(bool need_refresh_all)
         LOG_WARN("reset statistics failed", K(ret));
       }
     }
-    if (OB_FAIL(query_statistics(leader))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(query_statistics(leader))) {
       LOG_WARN("query statistics failed", K(ret));
     }
   } else {
@@ -265,7 +266,8 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
         }
       }
     }
-    if (OB_FAIL(rpc_proxy_
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(rpc_proxy_
                 .to(leader)
                 .by(tenant_id_)
                 .timeout(OB_TARGET_MONITOR_RPC_TIMEOUT)

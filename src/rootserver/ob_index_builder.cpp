@@ -676,7 +676,7 @@ int ObIndexBuilder::do_create_local_index(
           my_arg.index_schema_.set_index_type(INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE);
         }
       }
-      if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
+      if (FAILEDx(ObIndexBuilderUtil::adjust_expr_index_args(
               my_arg, new_table_schema, allocator, gen_columns))) {
         LOG_WARN("fail to adjust expr index args", K(ret));
       } else if (OB_FAIL(generate_schema(

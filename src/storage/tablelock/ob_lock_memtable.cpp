@@ -461,6 +461,7 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
     : current_ts;
   int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(lock_wait_start_ts);
   if (OB_ISNULL(lock_wait_mgr = MTL_WITH_CHECK_TENANT(ObLockWaitMgr *, mem_ctx->get_tenant_id()))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can not get tenant lock_wait_mgr MTL", K(mem_ctx->get_tenant_id()));
   } else {
     int tmp_ret = OB_SUCCESS;

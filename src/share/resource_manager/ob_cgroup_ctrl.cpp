@@ -212,7 +212,7 @@ int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *
     DIR *dir = nullptr;
     if (NULL == (dir = opendir(curr_path))){
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("open dir failed", K(curr_path));
+      LOG_WARN("open dir failed", K(ret), K(curr_path));
     } else {
       struct dirent *subdir = nullptr;
       char sub_path[PATH_BUFSIZE];

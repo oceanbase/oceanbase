@@ -44,6 +44,7 @@ int ObExprReverse::do_reverse(const ObString &input_str,
   int64_t input_length = input_str.length();
   char *buf = NULL;
   if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("nullptr allocator.", K(allocator));
   } else if (OB_UNLIKELY(input_length == 0)) {
     res_str.reset();

@@ -1276,7 +1276,7 @@ int ObTransformConstPropagate::remove_const_exec_param_exprs(ObDMLStmt *stmt,
       LOG_WARN("failed to remove const exec param", K(ret));
     } else if (!is_happened) {
       // do nothing
-    } else if (expr->formalize(ctx_->session_info_)) {
+    } else if (OB_FAIL(expr->formalize(ctx_->session_info_))) {
       LOG_WARN("failed to formalize expr", K(ret));
     } else if (OB_FAIL(expr_ptr.set(expr))) {
       LOG_WARN("failed to update expr", K(ret));

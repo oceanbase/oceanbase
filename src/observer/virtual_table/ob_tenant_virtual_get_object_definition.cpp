@@ -697,6 +697,7 @@ int ObGetObjectDefinition::get_database_id(uint64_t tenant_id,
   } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id, db_name, database_schema))) {
     LOG_WARN("get database schema failed", K(ret));
   } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_OBJECT_NOT_FOUND;
     LOG_WARN("database not found", K(db_name));
   } else if (FALSE_IT(database_id = database_schema->get_database_id())) {
   }

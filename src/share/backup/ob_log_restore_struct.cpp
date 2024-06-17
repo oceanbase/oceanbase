@@ -296,7 +296,7 @@ int ObRestoreSourceServiceAttr::parse_ip_port_from_str(const char *ip_list, cons
   char tmp_str[OB_MAX_RESTORE_SOURCE_IP_LIST_LEN + 1] = { 0 };
   char *token = nullptr;
   char *saveptr = nullptr;
-  if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%s", ip_list))) {
+  if (FAILEDx(databuff_printf(tmp_str, sizeof(tmp_str), "%s", ip_list))) {
     LOG_WARN("fail to get ip list", K(ip_list));
   } else {
     token = tmp_str;

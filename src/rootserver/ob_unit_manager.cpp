@@ -1468,7 +1468,7 @@ int ObUnitManager::do_split_pool_persistent_info(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (ut_operator_.remove_resource_pool(trans, pool->resource_pool_id_)) {
+    } else if (OB_FAIL(ut_operator_.remove_resource_pool(trans, pool->resource_pool_id_))) {
       LOG_WARN("fail to remove resource pool persistent info", K(ret),
                "pool_id", pool->resource_pool_id_);
     } else {} // all persistent infos update finished

@@ -349,7 +349,8 @@ int ObLogRestoreNetDriver::add_ls_if_needed_with_lock_(const share::ObLSID &id, 
   share::SCN end_scn;
   palf::PalfHandleGuard palf_handle_guard;
   if (OB_ISNULL(fetcher_)) {
-    LOG_ERROR("fetcher is NULL", K(fetcher_));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fetcher is NULL", K(ret), K(fetcher_));
   } else if (fetcher_->is_ls_exist(id)) {
     //TODO check ls in fetcher with proposal_id
   } else if (OB_FAIL(log_service_->open_palf(id, palf_handle_guard))) {
@@ -651,7 +652,7 @@ void ObLogRestoreNetDriver::LogErrHandler::handle_error(const share::ObLSID &ls_
       if (palf::LSN(palf::LOG_INVALID_LSN_VAL) == lsn ) {
         palf::LSN tmp_lsn = palf::LSN(palf::PALF_INITIAL_LSN_VAL);
         palf::PalfHandleGuard palf_handle_guard;
-        if (OB_FAIL(OB_FAIL(MTL(ObLogService*)->open_palf(ls_id, palf_handle_guard)))) {
+        if (OB_FAIL(MTL(ObLogService*)->open_palf(ls_id, palf_handle_guard))) {
           LOG_WARN("open palf failed", K(ls_id));
         } else if (OB_FAIL(palf_handle_guard.get_end_lsn(tmp_lsn))) {
           LOG_WARN("get end lsn failed", K(ls_id));

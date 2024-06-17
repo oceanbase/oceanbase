@@ -2058,7 +2058,8 @@ int ObSysVarOnCheckFuncs::check_and_convert_tx_isolation(ObExecContext &ctx,
       LOG_WARN("deep copy out_val obj failed", K(ret));
     }
     ObString tmp_out_val = out_val.get_string();
-    if (OB_FAIL(ob_simple_low_to_up(ctx.get_allocator(),
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ob_simple_low_to_up(ctx.get_allocator(),
                                     in_val.get_string(),
                                     tmp_out_val))) {
       LOG_WARN("Isolation level change to upper string failed", K(ret));

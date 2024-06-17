@@ -130,14 +130,17 @@ void ObConnectByOpBFSPump::free_memory_for_rescan()
   }
 
   if (OB_FAIL(free_pump_node_stack(pump_stack_))) {
+    // overwrite ret
     LOG_ERROR("fail to free pump stack", K(ret));
   }
 
   if (OB_FAIL(free_pump_node_stack(sort_stack_))) {
+    // overwrite ret
     LOG_ERROR("fail to free sort stack", K(ret));
   }
 
   if (OB_FAIL(free_record_rows())) {
+    // overwrite ret
     LOG_ERROR("fail to free record rows", K(ret));
   }
 }

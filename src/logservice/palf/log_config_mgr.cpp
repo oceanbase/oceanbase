@@ -2970,7 +2970,7 @@ int LogConfigMgr::handle_learner_keepalive_resp(const LogLearner &child)
 // 2. guarantee regions of children are unique
 // for follower:
 // 2. guarantee regions of children are same with region_
-int LogConfigMgr::check_children_health()
+void LogConfigMgr::check_children_health()
 {
   int ret = OB_SUCCESS;
   LogLearnerList dead_children;
@@ -3013,6 +3013,7 @@ int LogConfigMgr::check_children_health()
     }
     // 5. retire removed children
     if (OB_FAIL(submit_retire_children_req_(dead_children, RetireChildReason::CHILD_NOT_ALIVE))) {
+      // overwrite ret
       PALF_LOG(WARN, "submit_retire_children_req failed", KR(ret), K_(palf_id), K_(self), K(dead_children));
     } else if (!is_leader && OB_FAIL(submit_retire_children_req_(diff_region_children,
         RetireChildReason::DIFFERENT_REGION_WITH_PARENT))) {
@@ -3022,7 +3023,6 @@ int LogConfigMgr::check_children_health()
       PALF_LOG(WARN, "submit_retire_children_req failed", KR(ret), K_(palf_id), K_(self), K(dup_region_children));
     }
   }
-  return ret;
 }
 
 int LogConfigMgr::remove_timeout_child_(LogLearnerList &dead_children)

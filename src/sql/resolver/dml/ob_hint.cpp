@@ -1463,6 +1463,7 @@ bool QbNameList::is_subset(const ObIArray<ObSelectStmt*> &stmts) const
       for (int j = 0; !find && j < stmts.count(); j ++) {
         int ret = OB_SUCCESS;
         if (OB_ISNULL(stmts.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null stmt");
         } else if (OB_FAIL(stmts.at(j)->get_qb_name(stmt_qb_name))) {
           LOG_WARN("failed to get qb name");
@@ -1759,7 +1760,7 @@ int ObMaterializeHint::print_hint_desc(PlanText &plan_text) const
           }
         }
       }
-      if (OB_FAIL(BUF_PRINTF(")"))) {
+      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF(")"))) {
         LOG_WARN("fail to print materialize hint", K(ret));
       }
     }
@@ -1880,7 +1881,7 @@ int ObCoalesceSqHint::print_hint_desc(PlanText &plan_text) const
           }
         }
       }
-      if (OB_FAIL(BUF_PRINTF(")"))) {
+      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF(")"))) {
         LOG_WARN("fail to print coalesce sq hint", K(ret));
       }
     }
@@ -2815,7 +2816,7 @@ int ObWindowDistHint::add_win_dist_option(const ObIArray<int64_t> &win_func_idxs
     win_dist_option.is_push_down_ = is_push_down;
     win_dist_option.use_hash_sort_ = use_hash_sort;
     win_dist_option.use_topn_sort_ = use_topn_sort;
-    if (win_dist_option.win_func_idxs_.assign(win_func_idxs)) {
+    if (OB_FAIL(win_dist_option.win_func_idxs_.assign(win_func_idxs))) {
       LOG_WARN("failed to add win dist option", K(ret));
     }
   }
@@ -2834,7 +2835,7 @@ int ObWindowDistHint::WinDistOption::print_win_dist_option(PlanText &plan_text) 
   } else if (win_func_idxs_.empty()) {
     /* do nothing */
   } else if (OB_FAIL(BUF_PRINTF(" (%ld", win_func_idxs_.at(0)))) {
-      LOG_WARN("fail to print win func idx", K(ret), K(win_func_idxs_));
+    LOG_WARN("fail to print win func idx", K(ret), K(win_func_idxs_));
   } else {
     for (int64_t i = 1; OB_SUCC(ret) && i < win_func_idxs_.count(); ++i) {
       if (OB_FAIL(BUF_PRINTF(",%ld", win_func_idxs_.at(i)))) {

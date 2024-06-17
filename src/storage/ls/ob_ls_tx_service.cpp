@@ -659,6 +659,7 @@ int ObLSTxService::get_common_checkpoint_info(
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     ObCommonCheckpoint *common_checkpoint = common_checkpoints_[i];
     if (OB_ISNULL(common_checkpoint)) {
+      // ignore ret
       TRANS_LOG(WARN, "the common_checkpoint should not be null", K(i));
     } else {
       ObCommonCheckpointVTInfo info;
@@ -703,9 +704,11 @@ int ObLSTxService::unregister_common_checkpoint(const ObCommonCheckpointType &ty
   } else {
     WLockGuard guard(rwlock_);
     if (OB_ISNULL(common_checkpoints_[type])) {
+      // ignore ret
       STORAGE_LOG(WARN, "common_checkpoint is null, no need unregister", K(type),
                   K(common_checkpoint));
     } else if (common_checkpoints_[type] != common_checkpoint) {
+      ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "common checkpoint not equal, not unregister", K(type),
                   K(common_checkpoints_[type]), K(common_checkpoint));
     } else {

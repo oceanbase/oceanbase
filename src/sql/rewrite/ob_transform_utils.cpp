@@ -6872,7 +6872,7 @@ int ObTransformUtils::create_simple_view(ObTransformerCtx *ctx,
     LOG_WARN("failed to get from tables", K(ret));
   } else if (OB_FAIL(semi_infos.assign(stmt->get_semi_infos()))) {
     LOG_WARN("failed to assign semi info", K(ret));
-  } else if (ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), norm_conds)) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), norm_conds))) {
     LOG_WARN("failed to remove item", K(ret));
   } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx,
                                                                stmt,
@@ -7127,6 +7127,19 @@ int ObTransformUtils::adjust_updatable_view(ObRawExprFactory &expr_factory,
       LOG_WARN("get null table info", K(ret));
     } else if (NULL == origin_table_ids ||
                ObOptimizerUtil::find_item(*origin_table_ids, table_info->table_id_)) {
+      if (del_upd_stmt->is_merge_stmt()) {
+        ObMergeTableInfo *merge_table_info = static_cast<ObMergeTableInfo*>(table_info);
+        if (merge_table_info->target_table_id_ == table_info->table_id_) {
+          merge_table_info->target_table_id_ = view_table_item.table_id_;
+        }
+        if (merge_table_info->source_table_id_ == table_info->table_id_) {
+          merge_table_info->source_table_id_ = view_table_item.table_id_;
+        }
+      }
+      TableItem *base_item = view_stmt->get_table_item_by_id(table_info->table_id_);
+      if (NULL != base_item) {
+        view_table_item.view_base_item_ = base_item;
+      }
       table_info->table_id_ = view_table_item.table_id_;
       uint64_t loc_table_id = table_info->loc_table_id_;
       // create partition exprs for index dml infos
@@ -14084,7 +14097,7 @@ int ObTransformUtils::get_column_node_from_table(ObTransformerCtx *ctx,
           } else if (col_schema->is_extend()) {
             ret = OB_ERR_JSON_FUN_UNSUPPORTED_TYPE;
             LOG_WARN("unsupported data type in json object function", K(ret));
-          } else if (ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *col_schema, col_expr)) {
+          } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *col_schema, col_expr))) {
             LOG_WARN("fail to create col expr by column schema", K(ret));
           } else {
             col_expr->set_table_name(tmp_table_item->table_name_);
@@ -15602,11 +15615,11 @@ int ObTransformUtils::check_expr_eq_zero(ObExecContext *ctx,
                                                            expr,
                                                            zero_expr))) {
     LOG_WARN("failed to build cmp expr", K(ret));
-  } else if (ObSQLUtils::calc_const_or_calculable_expr(ctx,
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx,
                                                        eq_zero_expr,
                                                        result,
                                                        got_result,
-                                                       ctx->get_allocator())) {
+                                                       ctx->get_allocator()))) {
     LOG_WARN("failed to calc cosnt or calculable expr", K(ret));
   } else if (!got_result || result.is_false() || result.is_null()) {
     // do nothing

@@ -1626,6 +1626,7 @@ int ObAlterTableResolver::get_table_schema_for_check(ObTableSchema &table_schema
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
   const ObTableSchema *tbl_schema = NULL;
   if (OB_ISNULL(alter_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
   } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
                                                 alter_table_stmt->get_org_database_name(),
@@ -1688,7 +1689,8 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
       }
     }
     ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
-    if (OB_ISNULL(alter_table_stmt)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(alter_table_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
     } else {

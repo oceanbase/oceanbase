@@ -135,7 +135,7 @@ TEST_F(TestStorageOss, test_oss_acl)
   s = oss_get_object_meta(options, &bucket, &object, &resp_headers);
   ASSERT_TRUE(s->code == 200);
   modified_time_before = apr_table_get(resp_headers, "Last-Modified");
-  ossutil.strtotime(modified_time_before, time_before);
+  ossutil.ob_strtotime(modified_time_before, time_before);
 
   const char *modified_time_after = NULL;
   int64_t time_after = 0;
@@ -148,7 +148,7 @@ TEST_F(TestStorageOss, test_oss_acl)
   s = oss_get_object_meta(options, &bucket, &object, &resp_headers);
   ASSERT_TRUE(s->code == 200);
   modified_time_after = apr_table_get(resp_headers, "Last-Modified");
-  ossutil.strtotime(modified_time_after, time_after);
+  ossutil.ob_strtotime(modified_time_after, time_after);
 
   ASSERT_TRUE(time_before < time_after);
 
@@ -170,7 +170,7 @@ TEST_F(TestStorageOss, test_oss_acl)
   s = oss_get_object_meta(options, &bucket, &object, &resp_headers);
   ASSERT_TRUE(s->code == 200);
   modified_after_again = apr_table_get(resp_headers, "Last-Modified");
-  ossutil.strtotime(modified_after_again, time_after_again);
+  ossutil.ob_strtotime(modified_after_again, time_after_again);
   
   ASSERT_TRUE(time_after < time_after_again);
 

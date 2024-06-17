@@ -773,8 +773,9 @@ int ObTransferBackfillTXDagNet::fill_comment(char *buf, const int64_t buf_len) c
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer backfill tx dag net do not init ", K(ret));
-  } else if (OB_FAIL(ctx_.task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
-    LOG_WARN("failed to trace task id to string", K(ret), K(ctx_));
+  } else if (OB_UNLIKELY(0 > ctx_.task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("failed to get trace id string", K(ret), K(ctx_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
       "ObTransferBackfillTXDagNet: tenant_id=%s, src_ls_id=%s, dest_ls_id=%s, trace_id=%s, start_scn=%s",
       to_cstring(ctx_.tenant_id_), to_cstring(ctx_.src_ls_id_), to_cstring(ctx_.dest_ls_id_),

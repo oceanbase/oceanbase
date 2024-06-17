@@ -1002,7 +1002,8 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
                 LOG_WARN("fail to alloc string", K(ret), K(table_item->table_name_));
               }
             }
-            if (OB_FAIL(ob_write_string(alloc, table_item->table_name_, field.org_tname_))) {
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(ob_write_string(alloc, table_item->table_name_, field.org_tname_))) {
               LOG_WARN("fail to alloc string", K(ret), K(table_item->table_name_));
             }
           }
@@ -3024,6 +3025,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
                 K(context.multi_stmt_item_.is_part_of_multi_stmt()),
                 K(context.multi_stmt_item_.get_seq_num()));
       if (result.get_session().get_group_id_not_expected()) {
+        // ignore ret
         LOG_USER_WARN(OB_NEED_SWITCH_CONSUMER_GROUP);
         result.get_session().set_group_id_not_expected(false);
       }
@@ -4700,7 +4702,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
         }
       }
       // init auto increment param
-      if (OB_FAIL(pc_ctx.exec_ctx_.init_physical_plan_ctx(*phy_plan))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(pc_ctx.exec_ctx_.init_physical_plan_ctx(*phy_plan))) {
         LOG_WARN("fail init exec context", K(ret), K(phy_plan->get_stmt_type()));
       } else if (OB_FAIL(DAS_CTX(pc_ctx.exec_ctx_).init(*phy_plan, pc_ctx.exec_ctx_))) {
         LOG_WARN("init das context failed", K(ret));

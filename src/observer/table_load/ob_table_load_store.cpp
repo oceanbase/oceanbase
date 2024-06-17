@@ -69,14 +69,15 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
   } else {
     LOG_INFO("store abort");
     // 1. mark status abort, speed up background task exit
-    if (OB_FAIL(ctx->store_ctx_->set_status_abort())) {
-      LOG_WARN("fail to set store status abort", KR(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = ctx->store_ctx_->set_status_abort())) {
+      LOG_WARN("fail to set store status abort", KR(tmp_ret));
     }
     // 2. disable heart beat check
     ctx->store_ctx_->set_enable_heart_beat_check(false);
     // 3. mark all active trans abort
-    if (OB_FAIL(abort_active_trans(ctx))) {
-      LOG_WARN("fail to abort active trans", KR(ret));
+    if (OB_SUCCESS != (tmp_ret = abort_active_trans(ctx))) {
+      LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
     ctx->store_ctx_->insert_table_ctx_->cancel();
     ctx->store_ctx_->merger_->stop();

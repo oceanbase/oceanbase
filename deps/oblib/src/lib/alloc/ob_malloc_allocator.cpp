@@ -138,12 +138,12 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
       allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_);
     }
   }
-
+  int tmp_ret = OB_SUCCESS;
   if (OB_ISNULL(allocator)) {
-    // ignore ret
-    ret = OB_ENTRY_NOT_EXIST;
+    tmp_ret = OB_ENTRY_NOT_EXIST;
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
     LOG_ERROR("tenant allocator not exist", K(inner_attr.tenant_id_), K(inner_attr.ctx_id_),
-              K(ret));
+              K(ret), K(tmp_ret));
   }
 
   if (OB_SUCC(ret)) {

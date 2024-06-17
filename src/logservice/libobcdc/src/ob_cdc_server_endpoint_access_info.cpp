@@ -107,6 +107,7 @@ ObAddr ObCDCEndpoint::get_addr() const
   char *address;
 
   if (OB_ISNULL(address = obsys::ObNetUtil::get_addr_by_hostname(host_))) {
+    // ignore ret
     LOG_WARN("invalid addr of hostname", KPC(this));
   } else {
     addr.set_ip_addr(address, port_);

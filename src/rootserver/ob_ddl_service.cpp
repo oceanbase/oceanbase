@@ -19190,10 +19190,12 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
                                                       based_table_schema))) {
               LOG_WARN("fail to get table schema", KR(ret), K(based_info));
             } else if (OB_ISNULL(based_table_schema)) {
+              // ignore ret
               LOG_WARN("based table is not exist", KR(ret), K(based_info));
               is_based_schema_version_consistent = false;
             } else if (OB_UNLIKELY(based_table_schema->get_schema_version() !=
                                    based_info.schema_version_)) {
+              // ignore ret
               LOG_WARN("based table schema version is changed", KR(ret), K(based_info),
                       KPC(based_table_schema));
               is_based_schema_version_consistent = false;
@@ -29368,6 +29370,7 @@ int ObDDLService::check_tenant_has_been_dropped_(
   } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant))) {
     LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(tenant)) {
+    // ignore ret
     LOG_WARN("tenant not exist, maybe schema is fall behind", KR(ret), K(tenant_id));
   } else if (tenant->is_dropping()) {
     ObLSStatusOperator ls_status;

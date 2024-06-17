@@ -4536,6 +4536,7 @@ int64_t ObSqlFatalErrExtraInfoGuard::to_string(char *buf, const int64_t buf_len)
     ObQueryCtx *query_ctx = nullptr;
     if (OB_ISNULL(stmt_factory = exec_ctx_->get_stmt_factory())
         || OB_ISNULL(query_ctx = stmt_factory->get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get query ctx", K(ret));
     } else {
       dep_tables = &(query_ctx->global_dependency_tables_);

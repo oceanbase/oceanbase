@@ -642,7 +642,7 @@ int ObLabelSeCompMgr::add_label_se_component(const ObLabelSeComponentSchema &sch
       }
     }
 
-    if (OB_FAIL(long_name_map_.set_refactored(new_long_name_key,
+    if (FAILEDx(long_name_map_.set_refactored(new_long_name_key,
                                               new_schema, over_write))) {
       LOG_WARN("update hash map failed", K(ret));
     } else if (OB_FAIL(short_name_map_.set_refactored(new_short_name_key,

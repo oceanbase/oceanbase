@@ -1043,6 +1043,7 @@ int ObExprOracleLpad::calc_result_typeN(ObExprResType &type,
     if (OB_ISNULL(types_array)
         || OB_ISNULL(types_array + 1)
         || OB_ISNULL(types_array + 2)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL param", K(ret), K(types_array[0]), K(types_array[1]), K(types_array[2]));
     } else if (OB_FAIL(ObExprBaseLRpad::calc_type(
                 type, types_array[0], types_array[1], types_array + 2, type_ctx))) {
@@ -1051,6 +1052,7 @@ int ObExprOracleLpad::calc_result_typeN(ObExprResType &type,
   } else if (param_num == 2) {
     if (OB_ISNULL(types_array)
         || OB_ISNULL(types_array + 1)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL param", K(ret), K(types_array[0]), K(types_array[1]));
     } else if (OB_FAIL(ObExprBaseLRpad::calc_type(
                 type, types_array[0], types_array[1], NULL, type_ctx))) {
@@ -1120,6 +1122,7 @@ int ObExprOracleRpad::calc_result_typeN(ObExprResType &type,
     if (OB_ISNULL(types_array)
         || OB_ISNULL(types_array + 1)
         || OB_ISNULL(types_array + 2)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL param", K(ret), K(types_array[0]), K(types_array[1]), K(types_array[2]));
     } else if (OB_FAIL(ObExprBaseLRpad::calc_type(
                 type, types_array[0], types_array[1], &(types_array[2]), type_ctx))) {
@@ -1128,6 +1131,7 @@ int ObExprOracleRpad::calc_result_typeN(ObExprResType &type,
   } else if (param_num == 2) {
     if (OB_ISNULL(types_array)
         || OB_ISNULL(types_array + 1)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL param", K(ret), K(types_array[0]), K(types_array[1]));
     } else if (OB_FAIL(ObExprBaseLRpad::calc_type(
                 type, types_array[0], types_array[1], NULL, type_ctx))) {

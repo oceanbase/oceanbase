@@ -676,6 +676,7 @@ int ObTransformSemiToInner::check_query_from_dual(ObSelectStmt *stmt, bool& quer
         // stmt referenced in temp table need to be checked
         ObSelectStmt *temp_stmt = NULL;
         if (OB_ISNULL(temp_stmt = table_item->ref_query_)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(temp_stmt));
         } else if (temp_stmt->has_recursive_cte()) {
           temp_flag = false;

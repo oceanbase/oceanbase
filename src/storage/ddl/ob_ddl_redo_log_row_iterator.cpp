@@ -47,6 +47,7 @@ int ObDDLRedoLogRowIterator::init(const ObString &data_buffer)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_rowkey_column_count_ invalid", KR(ret), K(schema_rowkey_column_count_));
   } else if (OB_ISNULL(rowkey_obobj_ = static_cast<ObObj *>(allocator_.alloc(sizeof(ObObj) * schema_rowkey_column_count_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret));
   } else {
     is_inited_ = true;

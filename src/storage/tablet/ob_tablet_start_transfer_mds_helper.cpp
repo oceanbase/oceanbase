@@ -623,7 +623,7 @@ int ObTabletStartTransferOutCommonHelper::try_enable_dest_ls_clog_replay(
       // rollback the ls to offline state.
       do {
         if (CLICK_TMP_FAIL(dest_ls->offline())) {
-          LOG_WARN("online failed", K(ret), K(dest_ls_id));
+          LOG_WARN("online failed", K(tmp_ret), K(dest_ls_id));
           ob_usleep(SLEEP_TS);
         }
       } while (CLICK_TMP_FAIL(tmp_ret));

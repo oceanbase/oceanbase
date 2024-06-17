@@ -460,7 +460,7 @@ void ObConnectResourceMgr::ConnResourceCleanUpTask::runTimerTask()
   }
   const int64_t delay = SLEEP_USECONDS;
   const bool repeat = false;
-  if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, *this, delay, repeat))) {
+  if (OB_SUCC(ret) && OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, *this, delay, repeat))) {
     LOG_ERROR("schedule connect resource cleanup task failed", K(ret));
   }
 }

@@ -792,7 +792,7 @@ int add_procs_priv_in_dml(
   if (OB_ISNULL(dml_stmt) || OB_ISNULL(dml_stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (dml_stmt->get_relation_exprs(relation_exprs)) {
+  } else if (OB_FAIL(dml_stmt->get_relation_exprs(relation_exprs))) {
     LOG_WARN("failed to get relation exprs", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {

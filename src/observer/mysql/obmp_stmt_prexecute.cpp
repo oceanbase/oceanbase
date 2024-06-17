@@ -556,6 +556,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
           const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
           uint16_t warning_count = 0;
           if (OB_ISNULL(warnings_buf)) {
+            // ignore ret
             LOG_WARN("can not get thread warnings buffer");
           } else {
             warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
@@ -686,6 +687,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     } else if (OB_FAIL(response_result(result, session, force_sync_resp, async_resp_used))) {
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_ISNULL(plan_ctx)) {
+        // ignore ret
         LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
       } else {
         LOG_WARN("execute query fail",

@@ -500,7 +500,7 @@ public:
   int handle_register_parent_req(const LogLearner &child, const bool is_to_leader);
   int handle_retire_parent(const LogLearner &child);
   int handle_learner_keepalive_resp(const LogLearner &child);
-  int check_children_health();
+  void check_children_health();
   // ==================== Parent ========================
   int64_t to_string(char* buf, const int64_t buf_len) const
   {

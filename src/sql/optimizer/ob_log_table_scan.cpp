@@ -890,9 +890,9 @@ int ObLogTableScan::allocate_lookup_trans_info_expr()
       opt_ctx->is_strict_defensive_check() &&
       GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0 &&
       nullptr == trans_info_expr_) {
-    if (OB_FAIL(OB_FAIL(ObOptimizerUtil::generate_pseudo_trans_info_expr(*opt_ctx,
-                                                                         index_name_,
-                                                                         tmp_trans_info_expr)))) {
+    if (OB_FAIL(ObOptimizerUtil::generate_pseudo_trans_info_expr(*opt_ctx,
+                                                                 index_name_,
+                                                                 tmp_trans_info_expr))) {
       LOG_WARN("fail to generate pseudo trans info expr", K(ret), K(index_name_));
     } else {
       trans_info_expr_ = tmp_trans_info_expr;

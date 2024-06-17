@@ -1094,7 +1094,7 @@ int ObSqlUdtUtils::cast_sql_udt_varray_to_pl_varray(sql::ObExecContext *exec_ctx
                                                                attr_data.length(),
                                                                pos))) {
           LOG_WARN("failed to serialize object value", K(ret), K(attr_data));
-        } else if (deep_copy_obj(*coll->get_allocator(), obj, varray_objs[i])){
+        } else if (OB_FAIL(deep_copy_obj(*coll->get_allocator(), obj, varray_objs[i]))){
           LOG_WARN("failed to deep copy element object value", K(ret), K(obj), K(i));
         }
       }

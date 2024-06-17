@@ -412,6 +412,7 @@ int ObStorageHAUtils::check_ls_is_leader(
   } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be null", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
     LOG_WARN("failed to get role", K(ret), KP(ls));

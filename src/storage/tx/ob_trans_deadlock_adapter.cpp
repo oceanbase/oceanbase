@@ -692,8 +692,9 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
     DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
   } else if (exist) {
-    if (MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id)) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", K(tmp_ret), PRINT_WRAPPER);
     }
   }
   if (OB_FAIL(ret)) {
@@ -732,8 +733,9 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_detector_waiting_f
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(self_trans_id, exist))) {
     DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
   } else if (exist) {
-    if (MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id)) {
-      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER);
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(self_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", K(tmp_ret), PRINT_WRAPPER);
     }
   }
   if (OB_FAIL(ret)) {
@@ -786,6 +788,7 @@ int ObTransDeadlockDetectorAdapter::autonomous_register_to_deadlock(const ObTran
   CHECK_DEADLOCK_ENABLED();
   int ret = OB_SUCCESS;
   if (OB_ISNULL(MTL(ObDeadLockDetectorMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(ERROR, "tenant deadlock detector mgr is null", PRINT_WRAPPER);
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->register_key(last_trans_id,
                                                   [](const common::ObIArray<ObDetectorInnerReportInfo> &,

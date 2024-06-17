@@ -2998,6 +2998,7 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
               K(conflict_tx_id), K(acc_ctx), K(lock_wait_expire_ts));
   } else if (OB_ISNULL(lock_wait_mgr = MTL_WITH_CHECK_TENANT(ObLockWaitMgr*,
                                                   mem_ctx->get_tenant_id()))) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "can not get tenant lock_wait_mgr MTL", K(mem_ctx->get_tenant_id()));
   } else {
     mem_ctx->add_conflict_trans_id(conflict_tx_id);

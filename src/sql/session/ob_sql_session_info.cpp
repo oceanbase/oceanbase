@@ -1132,6 +1132,7 @@ ObPsCache *ObSQLSessionInfo::get_ps_cache()
     } else {
       ps_cache_ = MTL(ObPsCache*);
       if (OB_ISNULL(ps_cache_)) {
+        // ignore ret
         LOG_WARN("failed to get ps cache");
       } else if (MTL_ID() != get_effective_tenant_id()) {
         LOG_ERROR("unmatched tenant_id", K(MTL_ID()), K(get_effective_tenant_id()));

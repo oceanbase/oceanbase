@@ -488,6 +488,7 @@ void ObTransService::handle(void *task)
   ATOMIC_FAA(&output_queue_count_, 1);
 
   if (OB_ISNULL(task)) {
+    // ignore ret
     TRANS_LOG(ERROR, "task is null", KP(task));
   } else {
     trans_task = static_cast<ObTransTask*>(task);
@@ -516,6 +517,7 @@ void ObTransService::handle(void *task)
     } else if (ObTransRetryTaskType::ADVANCE_LS_CKPT_TASK == trans_task->get_task_type()) {
       ObAdvanceLSCkptTask *advance_ckpt_task = static_cast<ObAdvanceLSCkptTask *>(trans_task);
       if (OB_ISNULL(advance_ckpt_task)) {
+        // ignore ret
         TRANS_LOG(WARN, "advance ckpt task is null", KP(advance_ckpt_task));
       } else if (OB_FAIL(advance_ckpt_task->try_advance_ls_ckpt_ts())) {
         TRANS_LOG(WARN, "advance ls ckpt ts failed", K(ret));
@@ -528,6 +530,7 @@ void ObTransService::handle(void *task)
     } else if (ObTransRetryTaskType::STANDBY_CLEANUP_TASK == trans_task->get_task_type()) {
       ObTxStandbyCleanupTask *standby_cleanup_task = static_cast<ObTxStandbyCleanupTask *>(trans_task);
       if (OB_ISNULL(standby_cleanup_task)) {
+        // ignore ret
         TRANS_LOG(WARN, "standby cleanup task is null");
       } else if (OB_FAIL(do_standby_cleanup())) {
         TRANS_LOG(WARN, "do standby cleanup failed", K(ret));

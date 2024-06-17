@@ -3806,6 +3806,7 @@ int ObDelUpdResolver::check_heap_table_update(ObTableAssignment &tas)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params_.session_info_ is null", K(ret));
   } else if (OB_ISNULL(table = stmt->get_table_item_by_id(tas.table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get table_item", K(ret), K(tas));
   } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
                                                        table->get_base_table_item().ref_id_,
@@ -4100,9 +4101,9 @@ int ObDelUpdResolver::add_select_items(ObSelectStmt &select_stmt, const ObIArray
     LOG_WARN("expr factory is null", K(ret));
   } else if (!select_stmt.is_set_stmt()) {
     ObRawExprCopier copier(*params_.expr_factory_);
-    if (deep_copy_stmt_objects<SelectItem>(copier,
+    if (OB_FAIL(deep_copy_stmt_objects<SelectItem>(copier,
                                            select_items,
-                                           select_stmt.get_select_items())) {
+                                           select_stmt.get_select_items()))) {
       LOG_WARN("failed to deep copy stmt objects", K(ret));
     }
   } else {
