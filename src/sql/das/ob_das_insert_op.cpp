@@ -204,7 +204,8 @@ int ObDASInsertOp::insert_row_with_fetch()
         } else if (OB_FAIL(result_iter->get_duplicated_iter_array().push_back(duplicated_rows))) {
           LOG_WARN("fail to push duplicated_row iter", K(ret));
         } else {
-          LOG_DEBUG("insert one row and conflicted", KPC(insert_row));
+          // TODO aozeliu.azl fix lob
+          // LOG_DEBUG("insert one row and conflicted", KPC(insert_row));
           ins_rtdef_->is_duplicated_ = true;
           is_duplicated_ = true;
         }
@@ -275,7 +276,8 @@ int ObDASInsertOp::insert_row_with_fetch()
             if (OB_FAIL(result_iter->get_duplicated_iter_array().push_back(duplicated_rows))) {
               LOG_WARN("fail to push duplicated_row iter", K(ret));
             } else {
-              LOG_DEBUG("insert one row and conflicted", KPC(insert_row));
+              // TODO aozeliu.azl fix lob
+              // LOG_DEBUG("insert one row and conflicted", KPC(insert_row));
               ins_rtdef_->is_duplicated_ = true;
               is_duplicated_ = true;
             }
