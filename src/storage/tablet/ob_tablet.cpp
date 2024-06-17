@@ -1922,7 +1922,7 @@ int ObTablet::deserialize(
   ObMetaObjBufferHeader &buf_header = ObMetaObjBufferHelper::get_buffer_header(tablet_buf);
   int64_t remain = buf_header.buf_len_ - sizeof(ObTablet);
   int64_t start_pos = sizeof(ObTablet);
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "deserialize"));
   ObDDLKV **ddl_kvs_addr = nullptr;
   int64_t ddl_kv_count = 0;
   ObTabletBlockHeader header;
@@ -3775,7 +3775,7 @@ int ObTablet::insert_rows(
         FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
 #endif
     } else {
-      ObArenaAllocator allocator("insert_acc_ctx");
+      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "insert_acc_ctx"));
       ObTableIterParam param;
       if (OB_FAIL(prepare_param(relative_table, param))) {
         LOG_WARN("Failed to prepare param ctx", K(ret));
@@ -7238,7 +7238,7 @@ int ObTablet::get_column_store_sstable_checksum(common::ObIArray<int64_t> &colum
 {
   int ret = OB_SUCCESS;
   ObStorageSchema *storage_schema = nullptr;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "GetColCKS"));
   if (OB_FAIL(load_storage_schema(allocator, storage_schema))) {
     LOG_WARN("fail to load storage schema", K(ret));
   } else {
