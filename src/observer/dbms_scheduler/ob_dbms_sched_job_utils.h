@@ -279,22 +279,6 @@ public:
                                 const uint64_t tenant_id,
                                 const int64_t job_id,
                                 const ObDBMSSchedJobInfo &job_info);
-  static int init_session(
-      sql::ObSQLSessionInfo &session,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const common::ObString &tenant_name,
-      uint64_t tenant_id,
-      const common::ObString &database_name,
-      uint64_t database_id,
-      const share::schema::ObUserInfo* user_info,
-      const ObDBMSSchedJobInfo &job_info);
-  static int init_env(ObDBMSSchedJobInfo &job_info,
-                      sql::ObSQLSessionInfo &session);
-  static int create_session(const uint64_t tenant_id,
-                            sql::ObFreeSessionCtx &free_session_ctx,
-                            sql::ObSQLSessionInfo *&session_info);
-  static int destroy_session(sql::ObFreeSessionCtx &free_session_ctx,
-                             sql::ObSQLSessionInfo *session_info);
   static int reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos);
 };
 }
