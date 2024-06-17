@@ -3922,6 +3922,7 @@ ObTenantDagScheduler::ObTenantDagScheduler()
     default_work_thread_num_(0),
     total_running_task_cnt_(0),
     scheduled_task_cnt_(0),
+    scheduler_sync_(),
     mem_context_(nullptr),
     ha_mem_context_(nullptr)
 {
@@ -4061,8 +4062,16 @@ void ObTenantDagScheduler::reset()
   notify();
   wait();
 
+  while (is_inited_) {
+    ObThreadCondGuard guard(scheduler_sync_);
+    if (OB_SUCCESS == guard.get_ret()) {
+      is_inited_ = false; // avoid alloc dag/dag_net
+    } else {
+      // 100ms
+      ob_usleep(100 * 1000);
+    }
+  }
   destroy_all_workers();
-  is_inited_ = false; // avoid alloc dag/dag_net
   WEAK_BARRIER();
   dump_dag_status(true);
 
@@ -4080,7 +4089,6 @@ void ObTenantDagScheduler::reset()
     DESTROY_CONTEXT(ha_mem_context_);
     ha_mem_context_ = nullptr;
   }
-  scheduler_sync_.destroy();
   dag_cnt_ = 0;
   dag_limit_ = 0;
   total_worker_cnt_ = 0;
@@ -4171,7 +4179,11 @@ int ObTenantDagScheduler::add_dag(
     }
   } else {
     ObThreadCondGuard guard(scheduler_sync_);
-    scheduler_sync_.signal();
+    if (OB_SUCC(guard.get_ret())) {
+      if(OB_FAIL(scheduler_sync_.signal())) {
+        COMMON_LOG(WARN, "Failed to signal", K(ret), KPC(dag));
+      }
+    }
   }
   return ret;
 }
@@ -4266,16 +4278,11 @@ void ObTenantDagScheduler::dump_dag_status(const bool force_dump/*false*/)
 
     dag_net_sche_.dump_dag_status();
 
-    {
-      ObThreadCondGuard guard(scheduler_sync_);
-      total_worker_cnt = total_worker_cnt_;
-      work_thread_num = work_thread_num_;
-    }
     COMMON_LOG(INFO, "dump_dag_status",
         "dag_cnt", get_cur_dag_cnt(),
-        K(total_worker_cnt),
+        K(total_worker_cnt_),
         "total_running_task_cnt", get_total_running_task_cnt(),
-        K(work_thread_num),
+        K(work_thread_num_),
         "scheduled_task_cnt", get_scheduled_task_cnt());
     clear_scheduled_task_cnt();
   }
@@ -4288,9 +4295,11 @@ int ObTenantDagScheduler::gene_basic_info(
 {
   int ret = OB_SUCCESS;
   ObThreadCondGuard guard(scheduler_sync_);
-  ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::GENERAL, "TOTAL_WORKER_CNT", total_worker_cnt_);
-  ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::GENERAL, "TOTAL_DAG_CNT", get_cur_dag_cnt());
-  ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::GENERAL, "TOTAL_RUNNING_TASK_CNT", get_total_running_task_cnt());
+  if (OB_SUCC(guard.get_ret()))  {
+    ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::GENERAL, "TOTAL_WORKER_CNT", total_worker_cnt_);
+    ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::GENERAL, "TOTAL_DAG_CNT", get_cur_dag_cnt());
+    ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::GENERAL, "TOTAL_RUNNING_TASK_CNT", get_total_running_task_cnt());
+  }
   return ret;
 }
 
@@ -4557,8 +4566,10 @@ void ObTenantDagScheduler::run1()
         if (OB_FAIL(schedule())) {
           if (OB_ENTRY_NOT_EXIST == ret) {
             ObThreadCondGuard guard(scheduler_sync_);
-            try_reclaim_threads();
-            scheduler_sync_.wait(SCHEDULER_WAIT_TIME_MS);
+            if (OB_SUCC(guard.get_ret())) {
+              try_reclaim_threads();
+              scheduler_sync_.wait(SCHEDULER_WAIT_TIME_MS);
+            }
           } else {
             COMMON_LOG(WARN, "failed to schedule", K(ret));
           }
@@ -4571,7 +4582,9 @@ void ObTenantDagScheduler::run1()
 void ObTenantDagScheduler::notify()
 {
   ObThreadCondGuard cond_guard(scheduler_sync_);
-  scheduler_sync_.signal();
+  if (OB_SUCCESS == cond_guard.get_ret()) {
+    scheduler_sync_.signal();
+  }
 }
 
 void ObTenantDagScheduler::notify_when_dag_net_finish()
@@ -4594,9 +4607,13 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask &task, ObTenantDagWorker
     COMMON_LOG(WARN, "fail to finish task", K(ret), K(*dag));
   } else {
     ObThreadCondGuard guard(scheduler_sync_);
-    free_workers_.add_last(&worker);
-    worker.set_task(NULL);
-    scheduler_sync_.signal();
+    if (OB_SUCC(guard.get_ret())) {
+      free_workers_.add_last(&worker);
+      worker.set_task(NULL);
+      if (OB_FAIL(scheduler_sync_.signal())) {
+        COMMON_LOG(WARN, "Failed to signal", K(ret), KPC(dag));
+      }
+    }
   }
 
   return ret;
@@ -4729,16 +4746,24 @@ int ObTenantDagScheduler::dispatch_task(ObITask &task, ObTenantDagWorker *&ret_w
 {
   int ret = OB_SUCCESS;
   ret_worker = NULL;
-  ObThreadCondGuard guard(scheduler_sync_);
-  if (free_workers_.is_empty()) {
-    if (OB_FAIL(create_worker())) {
-      COMMON_LOG(WARN, "failed to create worker", K(ret));
+
+  if (IS_NOT_INIT) {
+    ret = common::OB_NOT_INIT;
+    COMMON_LOG(WARN, "scheduler is not init", K(ret));
+  } else {
+    ObThreadCondGuard guard(scheduler_sync_);
+    if (OB_SUCC(guard.get_ret())) {
+      if (free_workers_.is_empty()) {
+        if (OB_FAIL(create_worker())) {
+          COMMON_LOG(WARN, "failed to create worker", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ret_worker = free_workers_.remove_first();
+        ret_worker->set_task(&task);
+        ret_worker->set_function_type(priority);
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
-    ret_worker = free_workers_.remove_first();
-    ret_worker->set_task(&task);
-    ret_worker->set_function_type(priority);
   }
   return ret;
 }
@@ -4803,15 +4828,12 @@ void ObTenantDagScheduler::destroy_all_workers()
   while (true) {
     // 100ms
     ob_usleep(100 * 1000);
-    ObThreadCondGuard guard(scheduler_sync_);
     if (total_worker_cnt_ == free_workers_.get_size()) {
       DLIST_REMOVE_ALL_NORET(worker, free_workers_) {
         ob_delete(worker);
       }
       free_workers_.reset();
       break;
-    } else {
-      continue;
     }
   }
 }
@@ -4831,15 +4853,20 @@ int ObTenantDagScheduler::set_thread_score(const int64_t priority, const int64_t
     COMMON_LOG(WARN, "fail to set thread score", K(ret));
   } else {
     ObThreadCondGuard guard(scheduler_sync_);
-    if (old_val != new_val) {
-      work_thread_num_ -= old_val;
-      work_thread_num_ += new_val;
+    if (OB_SUCC(ret)) {
+      if (old_val != new_val) {
+        work_thread_num_ -= old_val;
+        work_thread_num_ += new_val;
+      }
+      if (OB_FAIL(scheduler_sync_.signal())) {
+        STORAGE_LOG(WARN, "Failed to signal", K(ret), K(priority), K(score));
+      } else {
+        COMMON_LOG(INFO, "set thread score successfully", K(score),
+            "prio", OB_DAG_PRIOS[priority].dag_prio_str_,
+            "limits_", new_val, K_(work_thread_num),
+            K_(default_work_thread_num));
+      }
     }
-    scheduler_sync_.signal();
-    COMMON_LOG(INFO, "set thread score successfully", K(score),
-      "prio", OB_DAG_PRIOS[priority].dag_prio_str_,
-      "limits_", new_val, K_(work_thread_num),
-      K_(default_work_thread_num));
   }
   return ret;
 }
