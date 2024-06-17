@@ -1968,7 +1968,10 @@ DEF_BOOL(_enable_dbms_job_package, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable OBKV feature.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_CAP(lob_enable_block_cache_threshold, OB_TENANT_PARAMETER, "256K", "[0B, 512M]",
+        "For outrow-stored LOBs, if the length is less than or equal to that threshold, "
+        "they can be admitted into the block cache to speed up the next query.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_ob_pl_compile_max_concurrency, OB_CLUSTER_PARAMETER, "4", "[0,)",
         "The maximum number of threads that an observer node can compile PL concurrently.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

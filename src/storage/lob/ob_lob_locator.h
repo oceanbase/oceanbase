@@ -79,6 +79,7 @@ private:
                           ObCollationType cs_type,
                           bool is_simple,
                           bool is_systable);
+  bool can_skip_build_mem_lob_locator(const common::ObString &payload);
 private:
   uint64_t table_id_;
   uint64_t tablet_id_;

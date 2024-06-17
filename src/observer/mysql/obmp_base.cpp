@@ -573,7 +573,7 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
                     && OB_FAIL(ObQueryDriver::convert_lob_value_charset(value, charset_type, allocator))) {
           LOG_WARN("convert lob value charset failed", K(ret));
         } else if (ob_is_text_tc(value.get_type())
-                    && OB_FAIL(ObQueryDriver::convert_text_value_charset(value, charset_type, allocator, &session))) {
+                    && OB_FAIL(ObQueryDriver::convert_text_value_charset(value, charset_type, allocator, &session, exec_ctx))) {
           LOG_WARN("convert text value charset failed", K(ret));
         }
         if (OB_FAIL(ret)) {
@@ -581,7 +581,8 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
                                     session.is_client_use_lob_locator(),
                                     session.is_client_support_lob_locatorv2(),
                                     &allocator,
-                                    &session))) {
+                                    &session,
+                                    exec_ctx))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
         } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type() || value.is_geometry())
                    && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value,

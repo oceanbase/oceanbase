@@ -480,13 +480,13 @@ int ObTableCtx::cons_column_info(const ObColumnSchemaV2 &column_schema,
 int ObTableCtx::convert_lob(ObIAllocator &allocator, ObObj &obj)
 {
   int ret = OB_SUCCESS;
-
-  if (obj.is_persist_lob()) {
+  ObLobLocatorV2 locator(obj.get_string(), obj.has_lob_header());
+  if (obj.is_persist_lob() || locator.is_inrow_disk_lob_locator()) {
     // do nothing
   } else if (obj.has_lob_header()) { // we add lob header in write_datum
     ret = OB_ERR_UNEXPECTED;
     LOG_USER_ERROR(OB_ERR_UNEXPECTED, "lob object should not have lob header");
-    LOG_WARN("object should not have lob header", K(ret), K(obj));
+    LOG_WARN("object should not have lob header", K(ret), K(obj), K(locator));
   }
 
   return ret;

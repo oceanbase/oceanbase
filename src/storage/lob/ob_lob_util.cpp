@@ -16,7 +16,7 @@
 #include "ob_lob_manager.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/blocksstable/ob_datum_row.h"
-#include "ob_lob_meta.h"
+#include "storage/lob/ob_lob_meta.h"
 #include "storage/tx_storage/ob_access_service.h"
 
 namespace oceanbase
@@ -123,6 +123,17 @@ int64_t ObLobAccessParam::get_inrow_threshold()
     res = OB_DEFAULT_LOB_INROW_THRESHOLD;
   }
   return res;
+}
+
+int ObLobAccessParam::is_timeout()
+{
+  int ret = OB_SUCCESS;
+  int64_t cur_time = ObTimeUtility::current_time();
+  if (cur_time > timeout_) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("query timeout", K(ret), K(cur_time), K(timeout_));
+  }
+  return ret;
 }
 
 int ObInsertLobColumnHelper::start_trans(const share::ObLSID &ls_id,

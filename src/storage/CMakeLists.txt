@@ -804,6 +804,10 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_util.cpp
   lob/ob_lob_rpc_struct.cpp
   lob/ob_ext_info_callback.cpp
+  lob/ob_lob_access_param.cpp
+  lob/ob_lob_persistent_reader.cpp
+  lob/ob_lob_persistent_iterator.cpp
+  lob/ob_lob_write_buffer.cpp
 )
 
 ob_set_subtarget(ob_storage mview

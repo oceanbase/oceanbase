@@ -976,6 +976,14 @@ public:
            (loc->is_valid()) && (loc->is_mem_loc_ == 0);
   }
 
+  OB_INLINE bool is_inrow_disk_lob_locator() const
+  {
+    // Notice: should be called only when ptr_ is not null
+    ObLobCommon *loc = reinterpret_cast<ObLobCommon *>(ptr_);
+    return has_lob_header_ && (loc != nullptr) && (size_ >= sizeof(ObLobCommon)) &&
+           (loc->is_valid()) && (loc->is_mem_loc_ == 0) && (loc->in_row_);
+  }
+
   OB_INLINE bool is_valid(bool is_assert = true) const
   {
     bool bret = true;

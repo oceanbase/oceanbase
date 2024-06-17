@@ -64,6 +64,11 @@ namespace common
 class ObMySQLProxy;
 }
 
+namespace storage
+{
+class ObLobAccessCtx;
+}
+
 namespace pl
 {
 class ObPL;
@@ -514,6 +519,9 @@ public:
   int get_local_var_array(int64_t local_var_array_id, const ObSolidifiedVarsContext *&var_array);
   void set_is_online_stats_gathering(bool v) { is_online_stats_gathering_ = v; }
   bool is_online_stats_gathering() const { return is_online_stats_gathering_; }
+
+  int get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx);
+
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -693,6 +701,8 @@ protected:
   // for online stats gathering
   bool is_online_stats_gathering_;
   //---------------
+
+  ObLobAccessCtx *lob_access_ctx_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

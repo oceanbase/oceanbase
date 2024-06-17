@@ -1804,6 +1804,10 @@ const int64_t OB_MIN_LOB_INROW_THRESHOLD = 0; // 0 means disable inrow lob
 const int64_t OB_MAX_LOB_INROW_THRESHOLD = OB_MAX_USER_ROW_LENGTH / 2; // 1.5M/2
 const int64_t OB_DEFAULT_LOB_INROW_THRESHOLD = 4096; // 4K
 
+// this's used for ob_default_lob_inrow_threshold system variable
+// used to set the default inrow threshold for newly created tables
+const int64_t OB_SYS_VAR_DEFAULT_LOB_INROW_THRESHOLD = 8192; // 8K
+
 const int64_t OB_MAX_CAST_CHAR_VARCHAR_LENGTH = 512;
 const int64_t OB_MAX_CAST_CHAR_TEXT_LENGTH = 16383;
 const int64_t OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH = 4194303;
