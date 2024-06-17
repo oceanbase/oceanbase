@@ -78,8 +78,14 @@ inline int ObTransService::init_tx_(ObTxDesc &tx,
   if (0 == cluster_version && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tx.cluster_version_))) {
     TRANS_LOG(WARN, "get min data version fail", K(ret), K(tx));
   } else if (tx.cluster_version_ < MOCK_DATA_VERSION_4_2_4_0) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "data version should >= 4_2_4_0", K(ret), K(tx));
+    if (tx.cluster_version_ == DATA_VERSION_4_2_1_0) {
+      // FIXME: remove this branch
+      tx.cluster_version_ = MOCK_DATA_VERSION_4_2_4_0;
+      TRANS_LOG(WARN, "NEED_REMOVE_NOTICE:4_2_1_0 data version forced to 4_2_4_0");
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "data version should >= 4_2_4_0", K(ret), K(tx));
+    }
   }
   tx.seq_base_ = common::ObSequence::get_max_seq_no() - 1;
   return ret;
