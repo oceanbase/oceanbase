@@ -126,6 +126,12 @@ protected:
                                const ObChunkDatumStore::StoredRow &upd_new_row,
                                const ObTableUpdCtDef &upd_ctdef,
                                bool &is_row_changed);
+  int check_whether_row_change(
+      const ObExprPtrIArray &old_row,
+      const ObExprPtrIArray &new_row,
+      ObEvalCtx &eval_ctx,
+      const ObTableUpdCtDef &upd_ctdef,
+      bool &is_row_changed);
   int check_rowkey_change(const ObChunkDatumStore::StoredRow &upd_old_row,
                           const ObChunkDatumStore::StoredRow &upd_new_row);
   int to_expr_skip_old(const ObChunkDatumStore::StoredRow &store_row,

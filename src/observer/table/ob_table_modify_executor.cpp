@@ -569,6 +569,39 @@ int ObTableApiModifyExecutor::check_whether_row_change(const ObChunkDatumStore::
   return ret;
 }
 
+
+int ObTableApiModifyExecutor::check_whether_row_change(const ObExprPtrIArray &old_row,
+                                                       const ObExprPtrIArray &new_row,
+                                                       ObEvalCtx &eval_ctx,
+                                                       const ObTableUpdCtDef &upd_ctdef,
+                                                       bool &is_row_changed)
+{
+  int ret = OB_SUCCESS;
+
+  if (tb_ctx_.is_inc_or_append()) {
+    is_row_changed = true;
+  } else if (lib::is_mysql_mode()) {
+    FOREACH_CNT_X(info, upd_ctdef.assign_columns_, OB_SUCC(ret) && !is_row_changed)
+    {
+      const uint64_t idx = info->projector_index_;
+
+      ObDatum *old_datum = NULL;
+      ObDatum *new_datum = NULL;
+      if (OB_FAIL(old_row.at(idx)->eval(eval_ctx, old_datum)) || OB_FAIL(new_row.at(idx)->eval(eval_ctx, new_datum))) {
+        LOG_WARN("evaluate value failed", K(ret));
+      } else {
+        is_row_changed = !ObDatum::binary_equal(*old_datum, *new_datum);
+      }
+    }
+  } else {
+    //in oracle mode, no matter whether the updated row is changed or not,
+    //the row will be updated in the storage
+    is_row_changed = true;
+  }
+
+  return ret;
+}
+
 // if common column equal, check rowkey column, if not equal then report error
 int ObTableApiModifyExecutor::check_rowkey_change(const ObChunkDatumStore::StoredRow &upd_old_row,
                                                   const ObChunkDatumStore::StoredRow &upd_new_row)

@@ -56,7 +56,7 @@ public:
   virtual int close() override;
 private:
   int inner_open_with_das();
-  int get_next_row_from_child();
+  int get_next_row_from_child(bool& is_row_changed);
   int update_row_to_das();
   int update_row(const ObTableUpdCtDef &upd_ctdef,
                  ObTableUpdRtDef &upd_rtdef,
@@ -66,7 +66,7 @@ private:
   int upd_rows_post_proc();
   int gen_del_and_ins_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
                                        ObTableUpdRtDef &upd_rtdef);
-  int process_single_operation(const ObTableEntity *entity);
+  int process_single_operation(const ObTableEntity *entity, bool &is_row_changed);
 private:
   const ObTableApiUpdateSpec &upd_spec_;
   ObTablesUpdRtDefArray upd_rtdefs_;
