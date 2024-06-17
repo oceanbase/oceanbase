@@ -941,7 +941,7 @@ int ObFreezer::set_tablet_freeze_flag_(const int64_t trace_id,
   } else if (OB_FAIL(tablet->get_protected_memtable_mgr_handle(protected_handle))) {
     LOG_WARN("[Freezer] failed to get_protected_memtable_mgr_handle", K(ret), KPC(tablet));
 #ifdef ERRSIM
-  } else if (memtable_handles.count() >= 1 && OB_FAIL(ret = ERRSIM_BATCH_TABLET_FREEZE_FAILURE)) {
+  } else if (frozen_memtable_handles.count() >= 1 && OB_FAIL(ret = ERRSIM_BATCH_TABLET_FREEZE_FAILURE)) {
     LOG_WARN("[Freezer] errsim failure during freezer freeze", K(ret));
 #endif
   } else if (OB_FAIL(protected_handle->set_is_tablet_freeze_for_active_memtable(frozen_memtable_handle, trace_id))) {
