@@ -46,7 +46,9 @@ ObTableLoadClientTaskParam::ObTableLoadClientTaskParam()
     max_error_row_count_(0),
     dup_action_(ObLoadDupActionType::LOAD_INVALID_MODE),
     timeout_us_(0),
-    heartbeat_timeout_us_(0)
+    heartbeat_timeout_us_(0),
+    method_(ObDirectLoadMethod::INVALID_METHOD),
+    insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE)
 {
 }
 
@@ -64,6 +66,8 @@ void ObTableLoadClientTaskParam::reset()
   dup_action_ = ObLoadDupActionType::LOAD_INVALID_MODE;
   timeout_us_ = 0;
   heartbeat_timeout_us_ = 0;
+  method_ = ObDirectLoadMethod::INVALID_METHOD;
+  insert_mode_ = ObDirectLoadInsertMode::INVALID_INSERT_MODE;
 }
 
 int ObTableLoadClientTaskParam::assign(const ObTableLoadClientTaskParam &other)
@@ -81,6 +85,8 @@ int ObTableLoadClientTaskParam::assign(const ObTableLoadClientTaskParam &other)
     dup_action_ = other.dup_action_;
     timeout_us_ = other.timeout_us_;
     heartbeat_timeout_us_ = other.heartbeat_timeout_us_;
+    method_ = other.method_;
+    insert_mode_ = other.insert_mode_;
   }
   return ret;
 }
@@ -90,7 +96,19 @@ bool ObTableLoadClientTaskParam::is_valid() const
   return client_addr_.is_valid() && OB_INVALID_TENANT_ID != tenant_id_ &&
          OB_INVALID_ID != user_id_ && OB_INVALID_ID != database_id_ && OB_INVALID_ID != table_id_ &&
          parallel_ > 0 && ObLoadDupActionType::LOAD_INVALID_MODE != dup_action_ &&
-         timeout_us_ > 0 && heartbeat_timeout_us_ > 0;
+         timeout_us_ > 0 && heartbeat_timeout_us_ > 0 &&
+         ObDirectLoadMethod::is_type_valid(method_) &&
+         ObDirectLoadInsertMode::is_type_valid(insert_mode_) &&
+         (storage::ObDirectLoadMethod::is_full(method_)
+            ? storage::ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode_)
+            : true) &&
+         (storage::ObDirectLoadMethod::is_incremental(method_)
+            ? storage::ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode_)
+            : true) &&
+         (storage::ObDirectLoadInsertMode::INC_REPLACE == insert_mode_
+            ? sql::ObLoadDupActionType::LOAD_REPLACE == dup_action_
+            : true);
+
 }
 
 /**
@@ -569,8 +587,8 @@ int ObTableLoadClientTask::init_instance()
   } else {
     const uint64_t tenant_id = param_.get_tenant_id();
     const uint64_t table_id = param_.get_table_id();
-    ObDirectLoadMethod::Type method = ObDirectLoadMethod::FULL;
-    ObDirectLoadInsertMode::Type insert_mode = ObDirectLoadInsertMode::NORMAL;
+    const ObDirectLoadMethod::Type method = param_.get_method();
+    const ObDirectLoadInsertMode::Type insert_mode = param_.get_insert_mode();
     omt::ObTenant *tenant = nullptr;
     ObSchemaGetterGuard schema_guard;
     ObArray<uint64_t> column_ids;

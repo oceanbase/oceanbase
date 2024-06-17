@@ -20,6 +20,7 @@ namespace oceanbase
 {
 namespace observer
 {
+class ObTableLoadClientTaskParam;
 class ObTableLoadClientTask;
 class ObTableLoadTableCtx;
 
@@ -70,6 +71,9 @@ protected:
   int check_args() override;
   int set_result_header() override;
   int process() override;
+
+private:
+  int resolve_param(ObTableLoadClientTaskParam &param);
 };
 
 // commit
