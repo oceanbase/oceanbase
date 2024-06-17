@@ -982,6 +982,18 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
     } else if (1 == log_path_array.count() 
       && OB_FAIL(restore_source_mgr.add_location_source(job_info.get_restore_scn(), log_path_array.at(0).str()))) {
       LOG_WARN("failed to add log restore source", KR(ret), K(job_info), K(log_path_array));
+    } else if (0 == log_path_array.count()) /*add restore source*/ {
+      DirArray piece_dir_array;
+      const common::ObSArray<share::ObBackupPiecePath> piece_array = job_info.get_multi_restore_path_list().get_backup_piece_path_list();
+      ARRAY_FOREACH_X(piece_array, i, cnt, OB_SUCC(ret)) {
+        ObBackupPiecePath piece_path = piece_array.at(i);
+        if (OB_FAIL(piece_dir_array.push_back(piece_path))) {
+          LOG_WARN("fail to push back", K(ret), K(piece_path), K(piece_dir_array));
+        }
+      }
+      if (FAILEDx(restore_source_mgr.add_rawpath_source(job_info.get_restore_scn(), piece_dir_array))) {
+        LOG_WARN("fail to add raw path source", K(ret), K(job_info), K(piece_dir_array));
+      }
     }
   }
 

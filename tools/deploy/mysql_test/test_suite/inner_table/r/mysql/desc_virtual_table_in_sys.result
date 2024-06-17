@@ -1657,7 +1657,7 @@ backup_id	bigint(20)	NO		NULL
 backup_dest	varchar(2048)	YES		NULL	
 description	varchar(2048)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__tenant_virtual_show_restore_preview;
-ERROR 0A000: show restore preview do not specify backup dest not supported
+ERROR 0A000: show restore preview before ALTER SYSTEM RESTORE PREVIEW is not supported
 desc oceanbase.__all_virtual_master_key_version_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO	PRI	NULL	

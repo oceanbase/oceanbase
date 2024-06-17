@@ -68,17 +68,18 @@ int ObTenantShowRestorePreview::init()
     ret = OB_BAD_NULL_ERROR;
     SHARE_LOG(WARN, "session should not be null", KR(ret));
   } else if (!session_->user_variable_exists(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR)
-      || !session_->user_variable_exists(OB_RESTORE_PREVIEW_SCN_SESSION_STR)) {
+              || !(session_->user_variable_exists(OB_RESTORE_PREVIEW_SCN_SESSION_STR)
+                  || session_->user_variable_exists(OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR)) ) {
     ret = OB_NOT_SUPPORTED;
-    SHARE_LOG(WARN, "no restore preview backup dest specified before", KR(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "show restore preview do not specify backup dest");
+    SHARE_LOG(WARN, "no ALTER SYSTEM RESTORE PREVIEW statement executed before", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "show restore preview before ALTER SYSTEM RESTORE PREVIEW is");
   } else if (OB_FAIL(session_->get_user_variable_value(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, backup_dest_value))) {
     SHARE_LOG(WARN, "failed to get user variable value", KR(ret));
   } else if (OB_FAIL(backup_dest_value.get_varchar(uri_))) {
     SHARE_LOG(WARN, "failed to varchar", KR(ret), K(backup_dest_value));
   } else if (OB_FAIL(ObPhysicalRestoreUriParser::parse(uri_, allocator, tenant_path_array))) {
-    SHARE_LOG(WARN, "fail to parse uri", K(ret), K(uri_));
-  } else if (OB_FAIL(rootserver::ObRestoreUtil::check_restore_using_complement_log_(tenant_path_array, only_contain_backup_set_))) {
+    SHARE_LOG(WARN, "fail to parse uri", K(ret));
+  } else if (OB_FAIL(rootserver::ObRestoreUtil::check_restore_using_complement_log(tenant_path_array, only_contain_backup_set_))) {
     SHARE_LOG(WARN, "check restore using complement log failed", K(ret), K(tenant_path_array));
   } else if (!session_->user_variable_exists(OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR)) {
   } else if (OB_FAIL(session_->get_user_variable_value(OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR, passwd))) {
@@ -86,7 +87,6 @@ int ObTenantShowRestorePreview::init()
   } else if (OB_FAIL(passwd.get_varchar(backup_passwd))) {
     SHARE_LOG(WARN, "failed to parser passwd", K(ret));
   }
-
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(parse_restore_scn_from_session_(backup_passwd, tenant_path_array))) {
     SHARE_LOG(WARN, "failed to parse restore timestamp from session", KR(ret));
@@ -97,6 +97,7 @@ int ObTenantShowRestorePreview::init()
     idx_ = 0;
     total_cnt_ = backup_set_list_.count() + backup_piece_list_.count();
     is_inited_ = true;
+    SHARE_LOG(INFO, "succeed to parse restore preview", K_(restore_scn));
   }
   return ret;
 }
@@ -110,6 +111,7 @@ int ObTenantShowRestorePreview::parse_restore_scn_from_session_(
   ObObj restore_timestamp_obj;
   ObString restore_scn_str;
   ObString restore_timestamp_str;
+  const share::SCN  src_scn = share::SCN::min_scn();
   ObFixedLengthString<MAX_INT64_STR_LENGTH> fixed_string;
   if (OB_ISNULL(session_)) {
     ret = OB_BAD_NULL_ERROR;
@@ -128,13 +130,13 @@ int ObTenantShowRestorePreview::parse_restore_scn_from_session_(
     SHARE_LOG(WARN, "failed to assign tenant id str", KR(ret), K(restore_scn_str));
   } else if (1 != sscanf(fixed_string.ptr(), "%lu", &restore_scn)) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "failed to get uint64_t from value", KR(ret), K(restore_scn));
+    SHARE_LOG(WARN, "failed to get uint64_t from value", KR(ret), K(fixed_string));
   } else if (restore_scn != 0) {
     if (OB_FAIL(restore_scn_.convert_for_inner_table_field(restore_scn))) {
       SHARE_LOG(WARN, "failed to convert for inner table field", K(ret), K(restore_scn));
     }
-  } else if (OB_FAIL(rootserver::ObRestoreUtil::fill_restore_scn_(
-      restore_scn_, restore_timestamp_str, false, tenant_path_array, backup_passwd, only_contain_backup_set_, restore_scn_))) {
+  } else if (OB_FAIL(rootserver::ObRestoreUtil::fill_restore_scn(
+      src_scn, restore_timestamp_str, false/*with_restore_scn*/, tenant_path_array, backup_passwd, only_contain_backup_set_, restore_scn_))) {
     SHARE_LOG(WARN, "failed to parse restore scn", K(ret));
   }
   return ret;
@@ -143,6 +145,7 @@ int ObTenantShowRestorePreview::parse_restore_scn_from_session_(
 int ObTenantShowRestorePreview::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (!is_sys_tenant(effective_tenant_id_)) {
     ret = OB_OP_NOT_ALLOW;
     SHARE_LOG(WARN, "show restore preview is sys only", K(ret), K(effective_tenant_id_));
@@ -150,6 +153,30 @@ int ObTenantShowRestorePreview::inner_get_next_row(common::ObNewRow *&row)
   } else if (OB_FAIL(inner_get_next_row_())) {
     if (OB_ITER_END != ret) {
       SERVER_LOG(WARN, "failed to get next row", KR(ret), K(cur_row_));
+    } else {
+      if (session_->user_variable_exists(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR)
+          && OB_TMP_FAIL(session_->remove_user_variable(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR))) {
+        ret = tmp_ret;
+        SHARE_LOG(WARN, "fail to remove session variable OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR", K(tmp_ret), KPC(session_));
+      }
+
+      if (session_->user_variable_exists(OB_RESTORE_PREVIEW_SCN_SESSION_STR)
+                && OB_TMP_FAIL(session_->remove_user_variable(OB_RESTORE_PREVIEW_SCN_SESSION_STR))) {
+        ret = tmp_ret;
+        SHARE_LOG(WARN, "fail to remove session variable OB_RESTORE_PREVIEW_SCN_SESSION_STR", K(tmp_ret), KPC(session_));
+      }
+
+      if (session_->user_variable_exists(OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR)
+                && OB_TMP_FAIL(session_->remove_user_variable(OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR))) {
+        ret = tmp_ret;
+        SHARE_LOG(WARN, "fail to remove session variable OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR", K(tmp_ret), KPC(session_));
+      }
+
+      if (session_->user_variable_exists(OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR)
+                && OB_TMP_FAIL(session_->remove_user_variable(OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR))) {
+        ret = tmp_ret;
+        SHARE_LOG(WARN, "fail to remove session variable OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR", K(tmp_ret), KPC(session_));
+      }
     }
   } else {
     row = &cur_row_;
@@ -220,6 +247,7 @@ int ObTenantShowRestorePreview::inner_get_next_row_()
       }
     }
     if (OB_SUCC(ret)) {
+      SHARE_LOG(WARN, "curr idx in show restore preview", K(idx_), K(cur_row_));
       ++idx_;
     }
   }

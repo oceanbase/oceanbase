@@ -347,7 +347,6 @@ int ObDRTask::deep_copy(const ObDRTask &that)
   transmit_data_size_ = that.transmit_data_size_;
   sibling_in_schedule_ = that.sibling_in_schedule_;
   invoked_source_ = that.invoked_source_;
-  skip_change_member_list_ = that.skip_change_member_list_;
   /* generated_time_ shall not be copied,
    * the generated_time_ is automatically set in the constructor func
    */
@@ -357,48 +356,6 @@ int ObDRTask::deep_copy(const ObDRTask &that)
   task_id_ = that.task_id_;
   if (OB_FAIL(set_comment(that.comment_.string()))) {
     LOG_WARN("fail to assign comment", KR(ret), K_(comment), K(that));
-  }
-  return ret;
-}
-
-int ObDRTask::generate_skip_change_member_list(
-    const ObDRTaskType task_type,
-    const common::ObReplicaType src_type,
-    const common::ObReplicaType dst_type,
-    bool &skip_change_member_list)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(task_type >= ObDRTaskType::MAX_TYPE
-                  || !ObReplicaTypeCheck::is_replica_type_valid(src_type)
-                  || !ObReplicaTypeCheck::is_replica_type_valid(dst_type))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(task_type), K(src_type), K(dst_type));
-  } else if (ObDRTaskType::LS_BUILD_ONLY_IN_MEMBER_LIST == task_type
-             || ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA == task_type
-             || ObDRTaskType::LS_MODIFY_PAXOS_REPLICA_NUMBER == task_type) {
-    skip_change_member_list = true;
-  } else if (ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == task_type) {
-    skip_change_member_list = false;
-  } else if (ObDRTaskType::LS_MIGRATE_REPLICA == task_type
-             || ObDRTaskType::LS_ADD_REPLICA == task_type) {
-    // no need to modify memberlist when the destination is a non-paxos replica
-    const bool is_valid_paxos_replica = ObReplicaTypeCheck::is_paxos_replica_V2(dst_type);
-    if (is_valid_paxos_replica) {
-      skip_change_member_list = false;
-    } else {
-      skip_change_member_list = true;
-    }
-  } else if (ObDRTaskType::LS_TYPE_TRANSFORM == task_type) {
-    if (ObReplicaTypeCheck::is_paxos_replica_V2(dst_type)
-        != ObReplicaTypeCheck::is_paxos_replica_V2(src_type)) {
-      // need to modify the member list since the paxos replica number is changed
-      skip_change_member_list = false;
-    } else {
-      skip_change_member_list = true;
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpeted rebalance task", K(ret), K(task_type));
   }
   return ret;
 }
@@ -413,7 +370,6 @@ int ObDRTask::build(
     const int64_t cluster_id,
     const int64_t transmit_data_size,
     const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-    const bool skip_change_member_list,
     const ObDRTaskPriority priority,
     const ObString &comment)
 {
@@ -450,7 +406,6 @@ int ObDRTask::build(
       cluster_id_ = cluster_id;
       transmit_data_size_ = transmit_data_size;
       invoked_source_ = invoked_source;
-      skip_change_member_list_ = skip_change_member_list;
       set_priority(priority);
     }
   }
@@ -585,7 +540,8 @@ int ObMigrateLSReplicaTask::execute(
           get_dst_replica().get_member(),
           get_data_src_member(),
           get_paxos_replica_number(),
-          is_skip_change_member_list()))) {
+          false/*skip_change_member_list(not used)*/,
+          get_force_data_src_member()))) {
     LOG_WARN("fail to init arg", KR(ret));
   } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
         .by(get_tenant_id()).ls_migrate_replica(arg))) {
@@ -765,12 +721,12 @@ int ObMigrateLSReplicaTask::build(
     const int64_t cluster_id,
     const int64_t transmit_data_size,
     const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-    const bool skip_change_member_list,
     const ObDRTaskPriority priority,
     const ObString &comment,
     const ObDstReplica &dst_replica,
     const common::ObReplicaMember &src_member,
     const common::ObReplicaMember &data_src_member,
+    const common::ObReplicaMember &force_data_src_member,
     const int64_t paxos_replica_number)
 {
   int ret = OB_SUCCESS;
@@ -794,7 +750,6 @@ int ObMigrateLSReplicaTask::build(
           cluster_id,
           transmit_data_size,
           invoked_source,
-          skip_change_member_list,
           priority,
           comment))) {
     LOG_WARN("fail to build ObDRTask", KR(ret),
@@ -813,6 +768,7 @@ int ObMigrateLSReplicaTask::build(
     } else {
       set_src_member(src_member);
       set_data_src_member(data_src_member);
+      set_force_data_src_member(force_data_src_member);
       paxos_replica_number_ = paxos_replica_number;
     }
   }
@@ -914,11 +870,11 @@ int ObMigrateLSReplicaTask::build_task_from_sql_result(
                     GCONF.cluster_id,               //(not used)cluster_id
                     transmit_data_size,             //(not used)
                     obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
-                    false,                          //(not used)skip_change_member_list
                     priority_to_set,                //(not used)
                     comment_to_set.ptr(),           //comment
                     dst_replica,                    //(in used)dest_server
                     ObReplicaMember(src_server, 0), //(in used)src_server
+                    ObReplicaMember(src_server, 0), //(not used)data_src_member
                     ObReplicaMember(src_server, 0), //(not used)data_src_member
                     src_paxos_replica_number))) {                 //(not used)
     LOG_WARN("fail to build a ObMigrateLSReplicaTask", KR(ret));
@@ -1041,7 +997,8 @@ int ObAddLSReplicaTask::execute(
           get_data_src_member(),
           get_orig_paxos_replica_number(),
           get_paxos_replica_number(),
-          is_skip_change_member_list()))) {
+          false/*skip_change_member_list(not used)*/,
+          get_force_data_src_member()))) {
     LOG_WARN("fail to init arg", KR(ret));
   } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
         .by(get_tenant_id()).ls_add_replica(arg))) {
@@ -1226,11 +1183,11 @@ int ObAddLSReplicaTask::build(
     const int64_t cluster_id,
     const int64_t transmit_data_size,
     const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-    const bool skip_change_member_list,
     const ObDRTaskPriority priority,
     const ObString &comment,
     const ObDstReplica &dst_replica,
     const common::ObReplicaMember &data_src_member,
+    const common::ObReplicaMember &force_data_src_member,
     const int64_t orig_paxos_replica_number,
     const int64_t paxos_replica_number)
 {
@@ -1255,7 +1212,6 @@ int ObAddLSReplicaTask::build(
           cluster_id,
           transmit_data_size,
           invoked_source,
-          skip_change_member_list,
           priority,
           comment))) {
     LOG_WARN("fail to build ObDRTask", KR(ret),
@@ -1271,6 +1227,7 @@ int ObAddLSReplicaTask::build(
       LOG_WARN("fail to assign dst replica", KR(ret), K(dst_replica));
     } else {
       set_data_src_member(data_src_member);
+      set_force_data_src_member(force_data_src_member);
       orig_paxos_replica_number_ = orig_paxos_replica_number;
       paxos_replica_number_ = paxos_replica_number;
     }
@@ -1375,10 +1332,10 @@ int ObAddLSReplicaTask::build_task_from_sql_result(
                     GCONF.cluster_id,               //(not used)cluster_id
                     transmit_data_size,             //(not used)
                     obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
-                    false,                          //(not used)skip_change_member_list
                     priority_to_set,                //(not used)
                     comment_to_set.ptr(),           //comments
                     dst_replica,                    //(in used)dest_server
+                    ObReplicaMember(src_server, 0), //(in used)src_server
                     ObReplicaMember(src_server, 0), //(in used)src_server
                     src_paxos_replica_number,                     //(in used)
                     dest_paxos_replica_number))) {                //(in used)
@@ -1515,7 +1472,7 @@ int ObLSTypeTransformTask::execute(
           get_data_src_member(),
           get_orig_paxos_replica_number(),
           get_paxos_replica_number(),
-          is_skip_change_member_list()))) {
+          false/*skip_change_member_list(not used)*/))) {
     LOG_WARN("fail to init arg", KR(ret));
   } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
         .by(get_tenant_id()).ls_type_transform(arg))) {
@@ -1682,7 +1639,6 @@ int ObLSTypeTransformTask::build(
     const int64_t cluster_id,
     const int64_t transmit_data_size,
     const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-    const bool skip_change_member_list,
     const ObDRTaskPriority priority,
     const ObString &comment,
     const ObDstReplica &dst_replica,
@@ -1712,7 +1668,6 @@ int ObLSTypeTransformTask::build(
           cluster_id,
           transmit_data_size,
           invoked_source,
-          skip_change_member_list,
           priority,
           comment))) {
     LOG_WARN("fail to build ObDRTask", KR(ret),
@@ -1857,7 +1812,6 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
                     GCONF.cluster_id,            //(not used)cluster_id
                     transmit_data_size,          //(not used)
                     obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
-                    false,                       //(not used)skip_change_member_list
                     priority_to_set,             //(not used)
                     comment_to_set.ptr(),        //comment
                     dst_replica,                 //(in used)dest_server
@@ -2080,7 +2034,6 @@ int ObRemoveLSReplicaTask::build(
     const int64_t cluster_id,
     const int64_t transmit_data_size,
     const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-    const bool skip_change_member_list,
     const ObDRTaskPriority priority,
     const ObString &comment,
     const common::ObAddr &leader,
@@ -2110,7 +2063,6 @@ int ObRemoveLSReplicaTask::build(
           cluster_id,
           transmit_data_size,
           invoked_source,
-          skip_change_member_list,
           priority,
           comment))) {
     LOG_WARN("fail to build ObDRTask", KR(ret),
@@ -2230,7 +2182,6 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
                     GCONF.cluster_id,            //(not used)cluster_id
                     transmit_data_size,          //(not used)
                     obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
-                    false,                       //(not used)skip_change_member_list
                     priority_to_set,             //(not used)
                     comment_to_set.ptr(),        //comment
                     dest_server,                 //(in used)leader
@@ -2432,7 +2383,6 @@ int ObLSModifyPaxosReplicaNumberTask::build(
     const int64_t cluster_id,
     const int64_t transmit_data_size,
     const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-    const bool skip_change_member_list,
     const ObDRTaskPriority priority,
     const ObString &comment,
     const common::ObAddr &dst_server,
@@ -2461,7 +2411,6 @@ int ObLSModifyPaxosReplicaNumberTask::build(
           cluster_id,
           transmit_data_size,
           invoked_source,
-          skip_change_member_list,
           priority,
           comment))) {
     LOG_WARN("fail to build ObDRTask", KR(ret),
@@ -2566,7 +2515,6 @@ int ObLSModifyPaxosReplicaNumberTask::build_task_from_sql_result(
                     GCONF.cluster_id,            //(not used)cluster_id
                     transmit_data_size,          //(not used)
                     obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
-                    true,                        //(not used)skip_change_member_list
                     priority_to_set,             //(not used)
                     comment_to_set.ptr(),        //comment
                     dest_server,                 //(in used)leader

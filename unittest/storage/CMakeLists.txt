@@ -115,6 +115,7 @@ storage_dml_unittest(test_major_rows_merger)
 storage_dml_unittest(test_tablet tablet/test_tablet.cpp)
 storage_unittest(test_medium_list_checker compaction/test_medium_list_checker.cpp)
 storage_unittest(test_protected_memtable_mgr_handle test_protected_memtable_mgr_handle.cpp)
+storage_unittest(test_choose_migration_source_policy migration/test_choose_migration_source_policy.cpp)
 
 if(OB_BUILD_CLOSE_MODULES)
 storage_dml_unittest(test_compaction_policy)

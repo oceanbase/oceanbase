@@ -581,3 +581,29 @@ int DRLSInfo::get_leader_and_member_list(
   }
   return ret;
 }
+
+int DRLSInfo::get_default_data_source(
+    ObReplicaMember &data_source,
+    int64_t &data_size) const
+{
+  int ret = OB_SUCCESS;
+  data_size = 0;
+  data_source.reset();
+  const ObLSReplica *leader_replica = nullptr;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(inner_ls_info_.find_leader(leader_replica))) {
+    LOG_WARN("fail to find leader", KR(ret), K(inner_ls_info_));
+  } else if (OB_ISNULL(leader_replica)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("leader replica ptr is null", KR(ret), KP(leader_replica));
+  } else {
+    data_size = leader_replica->get_data_size();
+    data_source = ObReplicaMember(leader_replica->get_server(),
+                                  leader_replica->get_member_time_us(),
+                                  leader_replica->get_replica_type(),
+                                  leader_replica->get_memstore_percent());
+  }
+  return ret;
+}

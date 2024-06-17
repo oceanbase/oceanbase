@@ -869,8 +869,9 @@ bool ObMigrationOpArg::is_valid() const
       && cluster_id_ > 0
       && src_.is_valid()
       && dst_.is_valid()
-      && data_src_.is_valid()
-      && (paxos_replica_number_ > 0 || ObMigrationOpType::REBUILD_LS_OP == type_);
+      && (paxos_replica_number_ > 0 || ObMigrationOpType::REBUILD_LS_OP == type_)
+      && ObMigrationOpType::MIGRATE_LS_OP == type_ ?
+         (src_.get_server() != dst_.get_server()) : true;
 }
 
 void ObMigrationOpArg::reset()

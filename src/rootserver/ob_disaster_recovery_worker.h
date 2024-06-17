@@ -161,15 +161,6 @@ private:
       const MemberChangeType member_change_type,
       int64_t &new_paxos_replica_number,
       bool &found);
-
-  static int choose_disaster_recovery_data_source(
-      ObZoneManager *zone_mgr,
-      DRLSInfo &dr_ls_info,
-      const ObReplicaMember &dst_member,
-      const ObReplicaMember &src_member,
-      ObReplicaMember &data_source,
-      int64_t &transmit_data_size);
-
   enum LATaskType
   {
     RemovePaxos = 0,
@@ -764,14 +755,11 @@ private:
       const DRUnitStatInfo &unit_stat_info,
       const DRUnitStatInfo &unit_in_group_stat_info,
       const ObReplicaMember &dst_member,
-      const ObReplicaMember &src_member,
       uint64_t &tenant_id,
       share::ObLSID &ls_id,
       share::ObTaskId &task_id,
-      ObReplicaMember &data_source,
       int64_t &data_size,
       ObDstReplica &dst_replica,
-      bool &skip_change_member_list,
       int64_t &old_paxos_replica_number);
 
   int generate_replicate_to_unit_and_push_into_task_manager(
@@ -780,7 +768,6 @@ private:
       const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
       const int64_t &data_size,
-      const bool &skip_change_member_list,
       const ObDstReplica &dst_replica,
       const ObReplicaMember &src_member,
       const ObReplicaMember &data_source,
@@ -857,15 +844,12 @@ private:
       const DRUnitStatInfo &unit_stat_info,
       const DRUnitStatInfo &unit_in_group_stat_info,
       const ObReplicaMember &dst_member,
-      const ObReplicaMember &src_member,
       const bool &is_unit_in_group_related,
       uint64_t &tenant_id,
       share::ObLSID &ls_id,
       share::ObTaskId &task_id,
-      ObReplicaMember &data_source,
       int64_t &data_size,
       ObDstReplica &dst_replica,
-      bool &skip_change_member_list,
       int64_t &old_paxos_replica_number);
 
   int generate_migrate_to_unit_task(
@@ -874,7 +858,6 @@ private:
       const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
       const int64_t &data_size,
-      const bool &skip_change_member_list,
       const ObDstReplica &dst_replica,
       const ObReplicaMember &src_member,
       const ObReplicaMember &data_source,
@@ -989,14 +972,12 @@ private:
   // @params[in]  dr_ls_info, disaster recovery infos of this log stream
   // @params[in]  ls_replica, which replica to do type transform
   // @params[in]  dst_member, dest replica
-  // @params[in]  src_member, source replica
   // @params[in]  target_unit_id, dest replica belongs to whcih unit
   // @params[in]  target_unit_group_id, dest replica belongs to which unit group
   // @params[out] task_id, the unique task key
   // @params[out] tenant_id, which tenant's task
   // @params[out] ls_id, which log stream's task
   // @params[out] leader_addr, leader replica address
-  // @params[out] data_source, data source replica
   // @params[out] data_size, data_size of this replica
   // @params[out] dst_replica, dest replica infos
   // @params[out] old_paxos_replica_number, previous number of F-replica count
@@ -1005,14 +986,12 @@ private:
       DRLSInfo &dr_ls_info,
       const share::ObLSReplica &ls_replica,
       const ObReplicaMember &dst_member,
-      const ObReplicaMember &src_member,
       const uint64_t &target_unit_id,
       const uint64_t &target_unit_group_id,
       share::ObTaskId &task_id,
       uint64_t &tenant_id,
       share::ObLSID &ls_id,
       common::ObAddr &leader_addr,
-      ObReplicaMember &data_source,
       int64_t &data_size,
       ObDstReplica &dst_replica,
       int64_t &old_paxos_replica_number,
@@ -1026,7 +1005,7 @@ private:
   // @params[in]  data_size, data_size of this replica
   // @params[in]  dst_replica, dest replica
   // @params[in]  src_member, source member
-  // @params[in]  data_source, data source replica
+  // @params[in]  data_source, data_source of this task
   // @params[in]  old_paxos_replica_number, previous number of F-replica count
   // @params[in]  new_paxos_replica_number, new number of F-replica count
   // @params[out] acc_dr_task, accumulated disaster recovery task count

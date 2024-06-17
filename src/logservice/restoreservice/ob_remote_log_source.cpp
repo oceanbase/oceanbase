@@ -237,10 +237,7 @@ int ObRemoteLocationParent::update_locate_info(ObRemoteLogParent &source)
 // =========================== ObRemoteRawPathParent ============================== //
 ObRemoteRawPathParent::ObRemoteRawPathParent(const share::ObLSID &ls_id) :
   ObRemoteLogParent(ObLogRestoreSourceType::RAWPATH, ls_id),
-  paths_(),
-  piece_index_(0),
-  min_file_id_(0),
-  max_file_id_(0)
+  raw_piece_ctx_()
 {}
 
 ObRemoteRawPathParent::~ObRemoteRawPathParent()
@@ -249,15 +246,7 @@ ObRemoteRawPathParent::~ObRemoteRawPathParent()
   upper_limit_scn_.reset();
   end_fetch_scn_.reset();
   end_lsn_.reset();
-  piece_index_ = 0;
-  min_file_id_ = 0;
-  max_file_id_ = 0;
-}
-
-void ObRemoteRawPathParent::get(DirArray &array, SCN &end_scn)
-{
-  array.assign(paths_);
-  end_scn = upper_limit_scn_;
+  raw_piece_ctx_.reset();
 }
 
 int ObRemoteRawPathParent::set(DirArray &array, const SCN &end_scn)
@@ -265,25 +254,29 @@ int ObRemoteRawPathParent::set(DirArray &array, const SCN &end_scn)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(array.empty() || !end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(raw_piece_ctx_.init(ls_id_, array))) {
+    CLOG_LOG(WARN, "fail to init raw piece context");
   } else {
-    paths_.assign(array);
     upper_limit_scn_ = end_scn;
-    to_end_ = end_fetch_scn_ <= end_scn;
+    to_end_ = end_fetch_scn_ >= end_scn;
   }
   CLOG_LOG(INFO, "add_source dest", KPC(this));
   return ret;
+}
+
+void ObRemoteRawPathParent::get(ObLogRawPathPieceContext *&raw_piece_ctx, SCN &end_scn)
+{
+  raw_piece_ctx = &raw_piece_ctx_;
+  end_scn = upper_limit_scn_;
 }
 
 int ObRemoteRawPathParent::deep_copy_to(ObRemoteLogParent &other)
 {
   int ret = OB_SUCCESS;
   ObRemoteRawPathParent &dst = static_cast<ObRemoteRawPathParent &>(other);
-  if (OB_FAIL(dst.paths_.assign(paths_))) {
+  if (OB_FAIL(raw_piece_ctx_.deep_copy_to(dst.raw_piece_ctx_))) {
     CLOG_LOG(WARN, "dir array assign failed", K(ret), KPC(this));
   } else {
-    dst.piece_index_ = piece_index_;
-    dst.min_file_id_ = min_file_id_;
-    dst.max_file_id_ = max_file_id_;
     base_copy_to_(other);
   }
   return ret;
@@ -293,17 +286,25 @@ bool ObRemoteRawPathParent::is_valid() const
 {
   return is_valid_log_source_type(type_)
     && upper_limit_scn_.is_valid()
-    && ! paths_.empty();
+    && raw_piece_ctx_.is_valid();
 }
 
-void ObRemoteRawPathParent::get_locate_info(int64_t &piece_index,
-    int64_t &min_file_id,
-    int64_t &max_file_id) const
+int ObRemoteRawPathParent::update_locate_info(ObRemoteLogParent &source)
 {
-  piece_index= piece_index_;
-  min_file_id = min_file_id_;
-  max_file_id = max_file_id_;
+  int ret = OB_SUCCESS;
+  ObRemoteRawPathParent &dst = static_cast<ObRemoteRawPathParent &>(source);
+  if (OB_UNLIKELY(! dst.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid rawpath parent", K(ret), K(dst));
+  } else if (OB_FAIL(dst.raw_piece_ctx_.deep_copy_to(raw_piece_ctx_))) {
+    CLOG_LOG(WARN, "fail to deep copy rawpath parent", K(ret));
+    raw_piece_ctx_.reset();
+  } else {
+    CLOG_LOG(TRACE, "update raw path locate info succ", KPC(this));
+  }
+  return ret;
 }
+
 // =========================== ObRemoteSourceGuard ==============================//
 ObRemoteSourceGuard::ObRemoteSourceGuard() :
   source_(NULL)

@@ -1932,7 +1932,7 @@ DEF_TIME(_faststack_min_interval, OB_CLUSTER_PARAMETER, "30m", "[1s,)",
         "Minimum interval for OBServer to automatically collect the obstack. "
         "Default: 30min. Range: [1s,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "idc",
+DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "region",
         common::ObConfigMigrationChooseSourceChecker,
         "the policy of choose source in migration and add replica. 'idc' means firstly choose follower replica of the same idc as source, "
         "'region' means firstly choose follower replica of the same region as source",

@@ -491,6 +491,19 @@ struct ObPieceKey final
     : dest_id_(other.dest_id_), round_id_(other.round_id_),
       piece_id_(other.piece_id_) {}
 
+  uint64_t hash() const;
+
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
+  void reset()
+  {
+    dest_id_ = 0;
+    round_id_ = 0;
+    piece_id_ = 0;
+  }
   void operator=(const ObPieceKey &other)
   {
     dest_id_ = other.dest_id_;
@@ -573,6 +586,8 @@ struct ObTenantArchivePieceAttr final : public ObIInnerTableRow
       return !(*this == other);
     }
 
+    void reset();
+
     // Return if primary key valid.
     bool is_pkey_valid() const override;
 
@@ -641,6 +656,7 @@ public:
   int fill_dml(ObDMLSqlSplicer &dml) const override;
 
   int assign(const ObTenantArchivePieceAttr &other);
+  void reset();
 
   OB_INLINE int set_path(const ObBackupPathString &path)
   {
