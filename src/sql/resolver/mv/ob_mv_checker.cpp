@@ -671,8 +671,8 @@ int ObMVChecker::check_mjv_refresh_type(const ObSelectStmt &stmt, ObMVRefreshabl
   bool select_valid = true;
   if (stmt.get_table_size() <= 1) {
     append_fast_refreshable_note("table size not support");
-  } else if (stmt.get_table_size() > 5) {
-    append_fast_refreshable_note("join table size more than 5 not support");
+  // } else if (stmt.get_table_size() > 5) {
+  //   append_fast_refreshable_note("join table size more than 5 not support");
   } else if (OB_FAIL(check_mv_join_type(stmt, join_type_valid))) {
     LOG_WARN("failed to check mv join type", K(ret));
   } else if (!join_type_valid) {
