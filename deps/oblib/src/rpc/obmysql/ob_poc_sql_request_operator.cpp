@@ -69,8 +69,8 @@ void ObPocSqlRequestOperator::finish_sql_request(ObRequest* req)
 {
   ObSqlSockSession* sess = (ObSqlSockSession*)req->get_server_handle_context();
   req->set_trace_point(ObRequest::OB_FINISH_SQL_REQUEST);
-  sess->revert_sock();
   obmysql::request_finish_callback();
+  sess->revert_sock();
 }
 
 int ObPocSqlRequestOperator::create_read_handle(ObRequest* req, void*& read_handle)
