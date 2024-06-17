@@ -43,6 +43,7 @@ private:
   static const int MAX_SCREEN_WIDTH = 4096;
   bool verbose_;
   char pb_str_[MAX_SCREEN_WIDTH];
+  static int64_t begin_ts_;
 };
 
 }
