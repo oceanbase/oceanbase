@@ -702,6 +702,7 @@ private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
   bool enable_inc_direct_load_; // for incremental direct load
   bool enable_replace_; // for incremental direct load
+  bool insert_overwrite_; // for insert overwrite
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)
