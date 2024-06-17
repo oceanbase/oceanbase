@@ -76,6 +76,7 @@ const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
 const int64_t SYS_RESOURCE_GROUP_CNT = SYS_RESOURCE_GROUP_END_ID - SYS_RESOURCE_GROUP_START_ID;
 const uint64_t USER_RESOURCE_OTHER_GROUP_ID = 0;
 const uint64_t OB_INVALID_GROUP_ID = UINT64_MAX;
+static constexpr char BACKGROUND_CGROUP[] = "background";
 
 OB_INLINE bool is_valid_group(const uint64_t group_id)
 {

@@ -468,7 +468,7 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     dag_ret_(OB_SUCCESS),
     add_time_(0),
     start_time_(0),
-    consumer_group_id_(0),
+    consumer_group_id_(USER_RESOURCE_OTHER_GROUP_ID),
     error_location_(),
     allocator_(nullptr),
     is_inited_(false),
@@ -528,7 +528,7 @@ void ObIDag::clear_running_info()
 {
   add_time_ = 0;
   start_time_ = 0;
-  consumer_group_id_ = 0;
+  consumer_group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   running_task_cnt_ = 0;
   dag_status_ = ObDagStatus::DAG_STATUS_INITING;
   dag_ret_ = OB_SUCCESS;
@@ -1576,7 +1576,7 @@ ObTenantDagWorker::ObTenantDagWorker()
     check_period_(0),
     last_check_time_(0),
     function_type_(0),
-    group_id_(0),
+    group_id_(OB_INVALID_GROUP_ID),
     tg_id_(-1),
     hold_by_compaction_dag_(false),
     is_inited_(false)
@@ -1647,7 +1647,7 @@ void ObTenantDagWorker::reset()
   check_period_ = 0;
   last_check_time_ = 0;
   function_type_ = 0;
-  group_id_ = 0;
+  group_id_ = OB_INVALID_GROUP_ID;
   self_ = NULL;
   is_inited_ = false;
   TG_DESTROY(tg_id_);
@@ -1668,17 +1668,23 @@ void ObTenantDagWorker::resume()
 int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t consumer_group_id = 0;
-  if (group_id != 0) {
+  uint64_t consumer_group_id = USER_RESOURCE_OTHER_GROUP_ID;
+  if (is_user_group(group_id)) {
     //user level
     consumer_group_id = group_id;
   } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type_, consumer_group_id))) {
     //function level
     LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(consumer_group_id));
   }
+
   if (OB_SUCC(ret) && consumer_group_id != group_id_) {
     // for CPU isolation, depend on cgroup
-    if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), consumer_group_id))) {
+    if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
+        OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup(
+            MTL_ID(),
+            consumer_group_id,
+            GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP
+                                                              : ""))) {
       LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
     } else {
       // for IOPS isolation, only depend on consumer_group_id
