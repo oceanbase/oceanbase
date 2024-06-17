@@ -1036,19 +1036,21 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
         LOG_WARN("multi version data is discarded, should not compaction now", K(ret), K(ls_id), K(tablet_id),
           K(result.merge_version_));
       } else if (!tablet->is_row_store()) {
-        ObCOMergeDagParam dag_param;
-        dag_param.ls_id_ = ls_id;
-        dag_param.tablet_id_ = tablet->get_tablet_meta().tablet_id_;
-        dag_param.merge_type_ = META_MAJOR_MERGE;
-        dag_param.merge_version_ = result.merge_version_;
-        dag_param.compat_mode_ = tablet->get_tablet_meta().compat_mode_;
-        dag_param.transfer_seq_ = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
-        if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_co_merge_dag_net(dag_param))) {
-          if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-            LOG_WARN("failed to schedule tablet merge dag", K(ret));
-          }
-        }
-        FLOG_INFO("chaser debug schedule co merge dag", K(ret), K(dag_param), K(tablet->is_row_store()));
+        ret = OB_NO_NEED_MERGE;
+        FLOG_INFO("column store table is not supported for meta major merge", K(ret), K(tablet->is_row_store()));
+        // ObCOMergeDagParam dag_param;
+        // dag_param.ls_id_ = ls_id;
+        // dag_param.tablet_id_ = tablet->get_tablet_meta().tablet_id_;
+        // dag_param.merge_type_ = META_MAJOR_MERGE;
+        // dag_param.merge_version_ = result.merge_version_;
+        // dag_param.compat_mode_ = tablet->get_tablet_meta().compat_mode_;
+        // dag_param.transfer_seq_ = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
+        // if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_co_merge_dag_net(dag_param))) {
+        //   if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
+        //     LOG_WARN("failed to schedule tablet merge dag", K(ret));
+        //   }
+        // }
+        // FLOG_INFO("chaser debug schedule co merge dag", K(ret), K(dag_param), K(tablet->is_row_store()));
       } else {
         ObTabletMergeDagParam dag_param(META_MAJOR_MERGE, ls_id, tablet_id,
             tablet->get_tablet_meta().transfer_info_.transfer_seq_);
