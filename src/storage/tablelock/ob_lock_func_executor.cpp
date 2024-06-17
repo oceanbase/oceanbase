@@ -977,7 +977,8 @@ int ObGetLockExecutor::get_sql_port_(ObLockFuncContext &ctx,
 }
 
 int ObReleaseLockExecutor::execute(ObExecContext &ctx,
-                                   const ObString &lock_name)
+                                   const ObString &lock_name,
+                                   int64_t &release_cnt)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -988,6 +989,8 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
   bool need_remove_from_lock_table = true;
   bool lock_id_existed = false;
   ObLockID tmp_lock_id;
+
+  release_cnt = INVALID_RELEASE_CNT;  // means not release successfully
 
   OZ (ObLockFuncContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
@@ -1001,8 +1004,8 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
         ObTxParam tx_param;
         ObUnLockObjsRequest arg;
         ObTableLockOwnerID lock_owner;
-        // 1. check client_session_id is valid
-        // 2. get lock id from inner table
+        // 1. get lock id from inner table
+        // 2. check client_session_id is valid
         // 3. unlock obj
         // 4. modify inner table
         // 4.1 lock table: dec cnt if the cnt is greater than 1, else remove the record.
@@ -1011,11 +1014,17 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
         // lock id, remove the record at lock name-id table.
         // 4.3 session table: check the lock table if there is no lock of the same
         // client session, remove the record of the same client session id.
+        OZ (query_lock_id_(lock_name, lock_id));
+        if (OB_EMPTY_RESULT == ret) {
+          release_cnt = LOCK_NOT_EXIST_RELEASE_CNT;
+        }
         if (ctx.get_my_session()->is_obproxy_mode()) {
           OZ (check_client_ssid_(stack_ctx, client_session_id, client_session_create_ts));
+          if (OB_EMPTY_RESULT == ret) {
+            release_cnt = LOCK_NOT_OWN_RELEASE_CNT;
+          }
         }
         OZ (lock_owner.convert_from_client_sessid(client_session_id, client_session_create_ts));
-        OZ (query_lock_id_(lock_name, lock_id));
         OZ (ObInnerConnectionLockUtil::build_tx_param(session, tx_param));
 
         OZ (tmp_lock_id.set(ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC, lock_id));
@@ -1031,11 +1040,14 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
         if (OB_SUCC(ret) && need_remove_from_lock_table) {
           OZ (unlock_obj_(tx_desc, tx_param, arg));
           OZ (remove_session_record_(stack_ctx, client_session_id, client_session_create_ts));
+          OX (release_cnt = 1);
         } else if (OB_EMPTY_RESULT == ret) {
           if (OB_TMP_FAIL(check_lock_exist_(stack_ctx, lock_id, lock_id_existed))) {
             LOG_WARN("check lock_id existed failed", K(tmp_ret), K(lock_id));
           } else if (lock_id_existed) {
-            ret = OB_OBJ_LOCK_NOT_EXIST; // when lock is hold by other session, return 0 as result
+            release_cnt = LOCK_NOT_OWN_RELEASE_CNT;
+          } else {
+            release_cnt = LOCK_NOT_EXIST_RELEASE_CNT;
           }
         }
       }
@@ -1045,6 +1057,11 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
         COVER_SUCC(tmp_ret);
       }
     }
+  }
+  // if release_cnt is valid, means we have tried to release,
+  // and have not encountered any failures before
+  if (INVALID_RELEASE_CNT != release_cnt) {
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -1111,6 +1128,7 @@ int ObReleaseAllLockExecutor::execute_(ObExecContext &ctx,
   int tmp_ret = OB_SUCCESS;
   bool is_rollback = false;
   ObTableLockOwnerID owner_id;
+  release_cnt = INVALID_RELEASE_CNT;  // means not release successfully
   OZ (ObLockFuncContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
     SMART_VAR(ObLockFuncContext, stack_ctx) {
@@ -1121,6 +1139,9 @@ int ObReleaseAllLockExecutor::execute_(ObExecContext &ctx,
         ObTxParam tx_param;
         if (ctx.get_my_session()->is_obproxy_mode()) {
           OZ (check_client_ssid_(stack_ctx, client_session_id, client_session_create_ts));
+          if (OB_EMPTY_RESULT == ret) {
+            release_cnt = LOCK_NOT_OWN_RELEASE_CNT;
+          }
         }
         OZ (ObInnerConnectionLockUtil::build_tx_param(session, tx_param));
         OZ (owner_id.convert_from_client_sessid(client_session_id, client_session_create_ts));
@@ -1137,6 +1158,11 @@ int ObReleaseAllLockExecutor::execute_(ObExecContext &ctx,
         COVER_SUCC(tmp_ret);
       }
     }
+  }
+  // if release_cnt is valid, means we have tried to release,
+  // and have not encountered any failures before
+  if (INVALID_RELEASE_CNT != release_cnt) {
+    ret = OB_SUCCESS;
   }
   return ret;
 }

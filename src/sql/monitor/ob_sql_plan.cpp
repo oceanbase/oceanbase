@@ -478,6 +478,9 @@ int ObSqlPlan::inner_store_sql_plan_for_explain(ObExecContext *ctx,
         ret = end_ret;
       }
     }
+    if (OB_NOT_NULL(saved_session)) {
+      saved_session->reset();
+    }
   }
   return ret;
 }

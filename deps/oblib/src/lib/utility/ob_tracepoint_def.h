@@ -376,7 +376,8 @@ GLOBAL_ERRSIM_POINT_DEF(613, EN_PX_DTL_TRACE_LOG_ENABLE, "Deprecated variable");
 GLOBAL_ERRSIM_POINT_DEF(614, EN_PX_DISABLE_RUNTIME_FILTER_EXTRACT_QUERY_RANGE, "Switch: use to disable the feature runtime filter extracting query range");
 GLOBAL_ERRSIM_POINT_DEF(615, EN_PX_MAX_IN_FILTER_QR_COUNT, "Switch: control the max number of query range extract by runtime in filter");
 GLOBAL_ERRSIM_POINT_DEF(616, EN_PX_DISABLE_WHITE_RUNTIME_FILTER, "Switch: used to disable runtime filter pushdown as white filter.");
-GLOBAL_ERRSIM_POINT_DEF(617, EN_PX_DISABLE_PD_TOPN_FILTER, "");
+GLOBAL_ERRSIM_POINT_DEF(617, EN_PX_DISABLE_PD_TOPN_FILTER, "Switch: used to disable runtime topn filter pushdown.");
+GLOBAL_ERRSIM_POINT_DEF(618, EN_PX_PD_TOPN_FILTER_IGNORE_TABLE_CARD, "Switch: allocate topn filter expr even if less table card");
 // please add new trace point after 700 or before 600
 
 // Compaction Related 700-750

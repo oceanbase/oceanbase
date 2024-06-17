@@ -459,6 +459,7 @@ public:
   virtual ~PageFilter() {}
   virtual bool filter_row() override;
   virtual bool has_filter_row() override { return true; }
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual bool filter_all_remaining() override;
   TO_STRING_KV("filter", "PageFilter", K_(page_size), K_(rows_accepted));
 private:

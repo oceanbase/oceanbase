@@ -5285,6 +5285,9 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     SHARE_SCHEMA_LOG(WARN, "fail to print LOCATION", K(ret));
   } else if (!pattern.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPATTERN='%.*s'", pattern.length(), pattern.ptr()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nAUTO_REFRESH = %s", table_schema.get_external_table_auto_refresh() == 0 ? "OFF" :
+                                                                                table_schema.get_external_table_auto_refresh() == 1 ? "IMMEDIATE" : "INTERVAL"))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print AUTO REFRESH", K(ret));
   } else if (user_specified) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPARTITION_TYPE=USER_SPECIFIED"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));

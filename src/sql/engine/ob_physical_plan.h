@@ -276,8 +276,10 @@ public:
   uint64_t get_session_id() const { return session_id_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
+  common::ObIArray<uint64_t> &get_immediate_refresh_external_table_ids() { return immediate_refresh_external_table_ids_; }
   bool is_contain_oracle_trx_level_temporary_table() const { return gtt_trans_scope_ids_.count() > 0; }
   bool is_contain_oracle_session_level_temporary_table() const { return gtt_session_scope_ids_.count() > 0; }
+  bool is_contain_immediate_refresh_external_table() const { return immediate_refresh_external_table_ids_.count() > 0; }
   bool contains_temp_table() const {return 0 != session_id_; }
   void set_returning(bool is_returning) { is_returning_ = is_returning; }
   bool is_returning() const { return is_returning_; }
@@ -596,6 +598,7 @@ private:
   bool contain_oracle_session_level_temporary_table_; // not used
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_session_scope_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_trans_scope_ids_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> immediate_refresh_external_table_ids_;
 
   //for outline use
   ObOutlineState outline_state_;

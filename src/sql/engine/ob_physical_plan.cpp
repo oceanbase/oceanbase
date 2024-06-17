@@ -84,6 +84,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     contain_oracle_session_level_temporary_table_(false),
     gtt_session_scope_ids_(allocator_),
     gtt_trans_scope_ids_(allocator_),
+    immediate_refresh_external_table_ids_(allocator_),
     concurrent_num_(0),
     max_concurrent_num_(ObMaxConcurrentParam::UNLIMITED),
     table_locations_(allocator_),
@@ -191,6 +192,7 @@ void ObPhysicalPlan::reset()
   contain_oracle_session_level_temporary_table_ = false;
   gtt_session_scope_ids_.reset();
   gtt_trans_scope_ids_.reset();
+  immediate_refresh_external_table_ids_.reset();
   concurrent_num_ = 0;
   max_concurrent_num_ = ObMaxConcurrentParam::UNLIMITED;
   is_update_uniq_index_ = false;
@@ -809,7 +811,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     stat_.format_sql_id_,
                     mview_ids_,
                     enable_inc_direct_load_,
-                    enable_replace_);
+                    enable_replace_,
+                    immediate_refresh_external_table_ids_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

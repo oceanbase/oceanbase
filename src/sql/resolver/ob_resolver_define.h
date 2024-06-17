@@ -360,7 +360,6 @@ struct ObResolverParams
        has_recursive_word_(false),
        tg_timing_event_(-1),
        is_column_ref_(true),
-       table_ids_(),
        hidden_column_scope_(T_NONE_SCOPE),
        outline_parse_result_(NULL),
        is_execute_call_stmt_(false),
@@ -432,7 +431,6 @@ public:
   bool has_recursive_word_;
   int64_t tg_timing_event_;      // mysql mode, trigger的触发时机和类型
   bool is_column_ref_;                   // used to mark normal column ref
-  common::hash::ObPlacementHashSet<uint64_t, common::OB_MAX_TABLE_NUM_PER_STMT, true> table_ids_;
   ObStmtScope hidden_column_scope_; // record scope for first hidden column which need check hidden_column_visable in opt_param hint
   ParseResult *outline_parse_result_;
   bool is_execute_call_stmt_;

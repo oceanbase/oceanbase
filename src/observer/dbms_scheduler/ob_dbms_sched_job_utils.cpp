@@ -357,7 +357,7 @@ int ObDBMSSchedJobUtils::init_env(
           if (OB_SUCC(ret) && user_infos.count() > 1) {
             OZ(reserve_user_with_minimun_id(user_infos));
           }
-          OV (1 == user_infos.count(), OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
+          OV (1 == user_infos.count(), 0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
           CK (OB_NOT_NULL(user_info = user_infos.at(0)));
         } else {
           ObString user_name;

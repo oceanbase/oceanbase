@@ -30,6 +30,7 @@ namespace observer
 using namespace common;
 using namespace sql;
 using namespace storage;
+using namespace share::schema;
 using namespace table;
 
 /**
@@ -334,6 +335,57 @@ int ObTableLoadClientTask::create_session_info(uint64_t tenant_id, uint64_t user
   return ret;
 }
 
+int ObTableLoadClientTask::get_column_idxs(ObIArray<int64_t> &column_idxs) const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = param_.get_tenant_id();
+  const uint64_t table_id = param_.get_table_id();
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  ObArray<int64_t> column_ids; // in user define order
+  ObArray<ObColDesc> column_descs; // in storage order
+  bool found_column = true;
+  column_idxs.reset();
+  if (OB_FAIL(
+        ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(table_schema, column_ids))) {
+    LOG_WARN("failed to get all column idx", K(ret));
+  } else if (OB_UNLIKELY(column_ids.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty column idxs", KR(ret));
+  } else if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+    LOG_WARN("fail to get column descs", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && OB_LIKELY(found_column) && i < column_descs.count(); ++i) {
+    const ObColDesc &col_desc = column_descs.at(i);
+    const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(col_desc.col_id_);
+    if (OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null column schema", KR(ret), K(col_desc));
+    } else {
+      found_column = col_schema->is_hidden();
+    }
+    // 在用户定义的列数组中找到对应的列
+    for (int64_t j = 0; OB_SUCC(ret) && OB_LIKELY(!found_column) && j < column_ids.count(); ++j) {
+      const int64_t column_id = column_ids.at(j);
+      if (col_desc.col_id_ == column_id) {
+        found_column = true;
+        if (OB_FAIL(column_idxs.push_back(j))) {
+          LOG_WARN("fail to push back column desc", KR(ret), K(column_idxs), K(i), K(col_desc),
+                   K(j), K(column_ids));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(!found_column)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected column not found", KR(ret), K(column_ids), K(column_descs),
+             K(column_idxs));
+  }
+  return ret;
+}
+
 int ObTableLoadClientTask::init_exec_ctx(int64_t timeout_us, int64_t heartbeat_timeout_us)
 {
   int ret = OB_SUCCESS;
@@ -570,9 +622,8 @@ int ObTableLoadClientTask::init_instance()
     ObArray<int64_t> column_idxs;
     if (OB_FAIL(GCTX.omt_->get_tenant(param_.get_tenant_id(), tenant))) {
       LOG_WARN("fail to get tenant handle", KR(ret), K(param_.get_tenant_id()));
-    } else if (OB_FAIL(ObTableLoadSchema::get_column_idxs(param_.get_tenant_id(),
-                                                          param_.get_table_id(), column_idxs))) {
-      LOG_WARN("failed to get column idx", K(ret));
+    } else if (OB_FAIL(get_column_idxs(column_idxs))) {
+      LOG_WARN("failed to get column idxs", K(ret));
     } else if (OB_UNLIKELY(column_idxs.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected empty column idxs", KR(ret));

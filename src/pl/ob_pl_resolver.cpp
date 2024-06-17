@@ -3338,12 +3338,13 @@ int ObPLResolver::resolve_dblink_type(const ParseNode *node,
   CK (T_SP_ACCESS_NAME == access_node->type_);
   // access_node must be a package type.
   CK (3 == access_node->num_child_);
-  CK (OB_NOT_NULL(access_node->children_[1]) && OB_NOT_NULL(access_node->children_[2]))
   if (OB_SUCC(ret)) {
     dblink_name.assign_ptr(node->children_[1]->str_value_,
                            static_cast<int32_t>(node->children_[1]->str_len_));
-    pkg_name.assign_ptr(access_node->children_[1]->str_value_,
-                        static_cast<int32_t>(access_node->children_[1]->str_len_));
+    if (OB_NOT_NULL(access_node->children_[1])) {
+      pkg_name.assign_ptr(access_node->children_[1]->str_value_,
+                          static_cast<int32_t>(access_node->children_[1]->str_len_));
+    }
     udt_name.assign_ptr(access_node->children_[2]->str_value_,
                         static_cast<int32_t>(access_node->children_[2]->str_len_));
     if (OB_NOT_NULL(access_node->children_[0])) {
@@ -11162,6 +11163,7 @@ int ObPLResolver::resolve_dblink_routine(ObPLResolveCtx &resolve_ctx,
 
 int ObPLResolver::resolve_dblink_routine_with_synonym(ObPLResolveCtx &resolve_ctx,
                                                       const uint64_t pkg_syn_id,
+                                                      const ObString &cur_db_name,
                                                       const ObString &routine_name,
                                                       const common::ObIArray<sql::ObRawExpr *> &expr_params,
                                                       const ObIRoutineInfo *&routine_info)
@@ -11175,7 +11177,8 @@ int ObPLResolver::resolve_dblink_routine_with_synonym(ObPLResolveCtx &resolve_ct
   OZ (checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_sessid()));
   OZ (ObPLDblinkUtil::separate_name_from_synonym(checker, resolve_ctx.allocator_,
                                                  resolve_ctx.session_info_.get_effective_tenant_id(),
-                                                 resolve_ctx.session_info_.get_database_name(),
+                                                 cur_db_name.empty() ?
+                                                    resolve_ctx.session_info_.get_database_name() : cur_db_name,
                                                  pkg_syn_id, dblink_name, db_name, pkg_name));
   OZ (ObPLResolver::resolve_dblink_routine(resolve_ctx, dblink_name, db_name, pkg_name,
                                            routine_name, expr_params, routine_info),
@@ -13878,7 +13881,7 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
       } else {
         OZ (ObPLResolver::resolve_dblink_routine_with_synonym(resolve_ctx_,
                                 static_cast<uint64_t>(access_idxs.at(access_idxs.count()-1).var_index_),
-                                routine_name, expr_params, routine_info));
+                                database_name, routine_name, expr_params, routine_info));
       }
       if (OB_SUCC(ret)
           && NULL != routine_info

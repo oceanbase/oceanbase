@@ -71,6 +71,7 @@
 #include "pl/sys_package/ob_dbms_mview_stats_mysql.h"
 #include "pl/sys_package/ob_pl_dbms_trusted_certificate_manager.h"
 #include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
+#include "pl/sys_package/ob_dbms_external_table.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -764,6 +765,9 @@
   INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_STADNBY_TENANT, "PHY_RES_CALCULATE_BY_STANDBY_TENANT", (ObDBMSLimitCalculator::phy_res_calculate_by_standby_tenant))
   // end of dbms_ob_limit_calculator
 
+  // start of dbms_external_table
+  INTERFACE_DEF(INTERFACE_DBMS_EXTERNAL_TABLE_AUTO_REFRESH_EXTERNAL_TABLE, "AUTO_REFRESH_EXTERNAL_TABLE", (ObDBMSExternalTable::auto_refresh_external_table))
+  //end of dbms_external_table
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif
 

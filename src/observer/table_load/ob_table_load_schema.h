@@ -38,18 +38,18 @@ public:
   static int get_table_schema(uint64_t tenant_id, uint64_t table_id,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const share::schema::ObTableSchema *&table_schema);
-  static int get_column_names(const share::schema::ObTableSchema *table_schema,
-                              common::ObIAllocator &allocator,
-                              common::ObIArray<common::ObString> &column_names);
-  static int get_column_idxs(uint64_t tenant_id, uint64_t table_id,
-                             common::ObIArray<int64_t> &column_idxs);
-  static int get_column_idxs(const share::schema::ObTableSchema *table_schema,
-                             common::ObIArray<int64_t> &column_idxs);
+  static int get_user_column_names(const share::schema::ObTableSchema *table_schema,
+                                   common::ObIAllocator &allocator,
+                                   common::ObIArray<common::ObString> &column_names);
+  static int get_user_column_ids(const share::schema::ObTableSchema *table_schema,
+                                 common::ObIArray<int64_t> &column_ids);
   static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
   static int get_lob_meta_tid(const uint64_t tenant_id,
                               const uint64_t data_table_id,
                               uint64_t &lob_meta_table_id);
+  static int check_has_invisible_column(const share::schema::ObTableSchema *table_schema, bool &bret);
+  static int check_has_unused_column(const share::schema::ObTableSchema *table_schema, bool &bret);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();

@@ -1185,6 +1185,7 @@ public:
   int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
   int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
   int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
+  void set_external_table_auto_refresh(const int64_t flag) { table_flags_ |= (flag << EXTERNAL_TABLE_AUTO_REFRESH_FLAG_OFFSET); }
   inline void set_user_specified_partition_for_external_table() { table_flags_ |= EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG; }
   template<typename ColumnType>
   int add_column(const ColumnType &column);
@@ -1327,6 +1328,10 @@ public:
   const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
   const ObString &get_external_file_format() const { return external_file_format_; }
   const ObString &get_external_file_pattern() const { return external_file_pattern_; }
+  int64_t get_external_table_auto_refresh() const { return (table_flags_ >> EXTERNAL_TABLE_AUTO_REFRESH_FLAG_OFFSET) & ((1 << EXTERNAL_TABLE_AUTO_REFRESH_FLAG_BITS) - 1); }
+  bool is_external_table_immediate_refresh() const { return get_external_table_auto_refresh() == 1; }
+  bool is_external_table_interval_refresh() const { return get_external_table_auto_refresh() == 2; }
+  bool is_external_table_auto_refresh_off() const { return get_external_table_auto_refresh() == 0; }
   inline void set_name_generated_type(const ObNameGeneratedType is_sys_generated) {
     name_generated_type_ = is_sys_generated;
   }

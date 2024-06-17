@@ -258,11 +258,14 @@ int ObCOSSTableV2::init(
   } else if (param.is_co_table_without_cgs_) {
     // current co sstable is empty, or the normal cg is redundant, no need to init cg sstable
     cs_meta_.column_group_cnt_ = param.column_group_cnt_; // other cs meta is zero.
+    is_cgs_empty_co_ = true;
+    if (OB_FAIL(build_cs_meta_without_cgs())) {
+      LOG_WARN("failed to build cs meta without cgs", K(ret), K(param), KPC(this));
+    }
   }
 
   if (OB_SUCC(ret)) {
     base_type_ = static_cast<ObCOSSTableBaseType>(param.co_base_type_);
-    is_cgs_empty_co_ = param.is_co_table_without_cgs_;
     valid_for_cs_reading_ = param.is_co_table_without_cgs_;
     cs_meta_.full_column_cnt_ = param.full_column_cnt_;
   } else {

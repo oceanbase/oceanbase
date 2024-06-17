@@ -5559,11 +5559,11 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
       if (session_info_->get_ddl_info().is_ddl()) {
         if (!tschema->is_storage_local_index_table()) {
           item->ref_id_ = tschema->get_table_id();
-          item->table_id_ = tschema->get_table_id();
+          item->table_id_ = generate_table_id();
           item->is_system_table_ = tschema->is_sys_table();
           item->is_view_table_ = tschema->is_view_table();
           item->table_name_ = tschema->get_table_name_str();
-          item->alias_name_ = tschema->get_table_name_str();
+          item->alias_name_ = alias_name;
           item->ddl_schema_version_ = tschema->get_schema_version();
           item->ddl_table_id_ = tschema->get_table_id();
           item->table_type_ = tschema->get_table_type();
@@ -5573,43 +5573,14 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
             LOG_WARN("get data table schema failed", K(ret), K_(item->ref_id));
           } else {
             item->ref_id_ = tab_schema->get_table_id();
-            item->table_id_ = tab_schema->get_table_id();
+            item->table_id_ = generate_table_id();
             item->is_system_table_ = tab_schema->is_sys_table();
             item->is_view_table_ = tab_schema->is_view_table();
             item->table_name_ = tab_schema->get_table_name_str();
-            item->alias_name_ = tab_schema->get_table_name_str();
+            item->alias_name_ = alias_name;
             item->ddl_schema_version_ = tschema->get_schema_version();
             item->ddl_table_id_ = tschema->get_table_id();
             item->table_type_ = tschema->get_table_type();
-          }
-        }
-        if (OB_SUCC(ret)) {
-          // sql used by foreign key checking ddl may have more than one table items refering to the same table
-          if (item->ref_id_ == OB_INVALID_ID) {
-            ret = OB_TABLE_NOT_EXIST;
-            LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(tbl_name));
-          } else if (TableItem::BASE_TABLE == item->type_) {
-            bool is_exist = false;
-            if (OB_FAIL(check_table_id_exists(item->ref_id_, is_exist))) {
-              LOG_WARN("check table id exists failed", K_(item->ref_id));
-            } else if (is_exist) {
-              //in the whole query stmt, table exists in the other query layer, so subquery must alias it
-              //implicit alias table, alias name is table name
-              item->table_id_ = generate_table_id();
-              item->type_ = TableItem::ALIAS_TABLE;
-              if (!synonym_name.empty()) {
-                // bug: 31827906
-                item->alias_name_ = synonym_name;
-              } else {
-                item->alias_name_ = tbl_name;
-              }
-            } else {
-              //base table, no alias name
-              item->table_id_ = generate_table_id();
-            }
-          } else {
-            item->table_id_ = generate_table_id();
-            item->alias_name_ = alias_name;
           }
         }
       } else if (tschema->is_index_table() || tschema->is_materialized_view()) {
@@ -5655,37 +5626,13 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
         }
       } else {
         item->ref_id_ = tschema->get_table_id();
+        item->table_id_ = generate_table_id();
         item->table_name_ = tbl_name;
+        item->alias_name_ = alias_name;
         item->is_system_table_ = tschema->is_sys_table();
         item->is_view_table_ = tschema->is_view_table();
         item->ddl_schema_version_ = tschema->get_schema_version();
         item->table_type_ = tschema->get_table_type();
-        if (item->ref_id_ == OB_INVALID_ID) {
-          ret = OB_TABLE_NOT_EXIST;
-          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(tbl_name));
-        } else if (TableItem::BASE_TABLE == item->type_) {
-          bool is_exist = false;
-          if (OB_FAIL(check_table_id_exists(item->ref_id_, is_exist))) {
-            LOG_WARN("check table id exists failed", K_(item->ref_id));
-          } else if (is_exist) {
-            //in the whole query stmt, table exists in the other query layer, so subquery must alias it
-            //implicit alias table, alias name is table name
-            item->table_id_ = generate_table_id();
-            item->type_ = TableItem::ALIAS_TABLE;
-            if (!synonym_name.empty()) {
-              // bug: 31827906
-              item->alias_name_ = synonym_name;
-            } else {
-              item->alias_name_ = tbl_name;
-            }
-          } else {
-            //base table, no alias name
-            item->table_id_ = generate_table_id();
-          }
-        } else {
-          item->table_id_ = generate_table_id();
-          item->alias_name_ = alias_name;
-        }
       }
     }
     if (OB_SUCC(ret)) {
