@@ -97,6 +97,10 @@ public:
                                  share::schema::ObSchemaGetterGuard &schema_guard,
                                  const common::ObIArray<uint64_t> &role_ids,
                                  const share::schema::ObStmtNeedPrivs &stmt_need_priv);
+  static int check_read_only(const ObSqlCtx &ctx,
+                             const stmt::StmtType stmt_type,
+                             const bool has_global_variable,
+                             const ObStmtNeedPrivs &stmt_need_privs);
 private:
    ///Extract priv info needed by a single stmt, may be sub-query.
    ///called by recursive_stmt_need_priv

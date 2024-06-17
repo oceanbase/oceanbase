@@ -4124,19 +4124,12 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
       pc_ctx.sql_ctx_.plan_cache_hit_ = true;
       session->set_early_lock_release(plan->stat_.enable_early_lock_release_);
       //极限性能场景下(perf_event=true)，不再校验权限信息
-      if (!session->has_user_super_privilege() && !pc_ctx.sql_ctx_.is_remote_sql_ && GCONF.enable_perf_event) {
-        //we don't care about commit or rollback here because they will not cache in plan cache
-        if (ObStmt::is_write_stmt(plan->get_stmt_type(), false)
-            && OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->verify_read_only(
-                       session->get_effective_tenant_id(),
-                       plan->get_stmt_need_privs()))) {
-          LOG_WARN("database or table is read only, cannot execute this stmt");
-        }
-      }
-      //极限性能场景下(perf_event=true)，不再校验权限信息
       if (OB_SUCC(ret) && !pc_ctx.sql_ctx_.is_remote_sql_ && GCONF.enable_perf_event) {
         //如果是remote sql第二次重入plan cache，不需要再做权限检查，因为在第一次进入plan cache已经检查过了
-        if (!ObSchemaChecker::is_ora_priv_check()) {
+        if (OB_FAIL(ObPrivilegeCheck::check_read_only(pc_ctx.sql_ctx_, plan->get_stmt_type(), false,
+                                                      plan->get_stmt_need_privs()))) {
+          LOG_WARN("database or table is read only, cannot execute this stmt");
+        } else if (!ObSchemaChecker::is_ora_priv_check()) {
           if (OB_FAIL(ObPrivilegeCheck::check_privilege(
                                           pc_ctx.sql_ctx_,
                                           plan->get_stmt_need_privs()))) {
