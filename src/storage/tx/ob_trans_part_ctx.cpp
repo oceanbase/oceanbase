@@ -2359,9 +2359,6 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
     try_submit_next_log_(false);
   }
-  if (OB_SUCCESS != (tmp_ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this))) {
-    TRANS_LOG(ERROR, "release ctx ref failed", KR(tmp_ret));
-  }
 
   if (ObTimeUtility::fast_current_time() - cur_ts > LOG_CB_ON_SUCC_TIME_LIMIT) {
     TRANS_LOG(WARN, "on_success cost too much time", K(ret), K(trans_id_), K(ls_id_),
@@ -2370,6 +2367,11 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
               K(on_succ_ctx_lock_hold_time), K(try_submit_next_log_cost_time), K(log_sync_used_time),
               K(ctx_lock_wait_time));
   }
+
+  if (OB_SUCCESS != (tmp_ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this))) {
+    TRANS_LOG(ERROR, "release ctx ref failed", KR(tmp_ret));
+  }
+
   return ret;
 }
 
