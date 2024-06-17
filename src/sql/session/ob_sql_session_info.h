@@ -67,8 +67,12 @@ class ObDbmsCursorInfo;
 namespace debugger
 {
 class ObPLDebugger;
-}
-#endif
+} // namespace debugger
+
+#endif // OB_BUILD_ORACLE_PL
+
+class ObPLProfiler;
+
 } // namespace pl
 
 namespace obmysql
@@ -925,8 +929,20 @@ public:
 #ifdef OB_BUILD_ORACLE_PL
   inline pl::debugger::ObPLDebugger *get_pl_debugger() const { return pl_debugger_; }
   void set_pl_debugger (pl::debugger::ObPLDebugger *pl_debugger) {pl_debugger_ = pl_debugger; };
+
+  int alloc_pl_profiler(int32_t run_id);
 #endif
   bool is_pl_debug_on();
+  inline pl::ObPLProfiler *get_pl_profiler() const
+  {
+    pl::ObPLProfiler *profiler = nullptr;
+
+#ifdef OB_BUILD_ORACLE_PL
+    profiler = pl_profiler_;
+#endif // OB_BUILD_ORACLE_PL
+
+    return profiler;
+  }
 
   inline void set_pl_attached_id(uint32_t id) { pl_attach_session_id_ = id; }
   inline uint32_t get_pl_attached_id() const { return pl_attach_session_id_; }
@@ -1088,6 +1104,7 @@ public:
     return package_state_map_.erase_refactored(package_id);
   }
   void reset_pl_debugger_resource();
+  void reset_pl_profiler_resource();
   void reset_all_package_changed_info();
   void reset_all_package_state();
   int reset_all_package_state_by_dbms_session(bool need_set_sync_var);
@@ -1477,6 +1494,7 @@ private:
 
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null
+  pl::ObPLProfiler *pl_profiler_;
 #endif
 #ifdef OB_BUILD_SPM
   ObSpmCacheCtx::SpmSelectPlanType select_plan_type_;

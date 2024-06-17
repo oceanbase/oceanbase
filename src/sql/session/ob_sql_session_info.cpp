@@ -49,6 +49,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/debug/ob_pl_debugger_manager.h"
 #include "pl/sys_package/ob_pl_utl_file.h"
+#include "pl/ob_pl_profiler.h"
 #endif
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/string/ob_hex_utils_base.h"
@@ -155,6 +156,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       plsql_exec_time_(0),
 #ifdef OB_BUILD_ORACLE_PL
       pl_debugger_(NULL),
+      pl_profiler_(NULL),
 #endif
 #ifdef OB_BUILD_SPM
       select_plan_type_(ObSpmCacheCtx::INVALID_TYPE),
@@ -330,6 +332,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     plsql_exec_time_ = 0;
 #ifdef OB_BUILD_ORACLE_PL
     pl_debugger_ = NULL;
+    pl_profiler_ = NULL;
 #endif
     pl_attach_session_id_ = 0;
     pl_query_sender_ = NULL;
@@ -696,6 +699,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
 #ifdef OB_BUILD_ORACLE_PL
     // pl debug 功能, pl debug不支持分布式调试，但调用也不会有副作用
     reset_pl_debugger_resource();
+    reset_pl_profiler_resource();
 #endif
     // 非分布式需要的话，分布式也需要，用于清理package的全局变量值
     reset_all_package_state();
@@ -2161,7 +2165,64 @@ void ObSQLSessionInfo::reset_pl_debugger_resource()
 {
   free_pl_debugger();
 }
-#endif
+
+int ObSQLSessionInfo::alloc_pl_profiler(int32_t run_id)
+{
+  int ret = OB_SUCCESS;
+
+  ObPLProfiler *profiler = nullptr;
+
+  CK (OB_ISNULL(pl_profiler_));
+  CK (OB_LIKELY(run_id > 0));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(
+                 profiler = OB_NEW(
+                     ObPLProfiler,
+                     ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_PROFILER)),
+                     *this))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("[DBMS_PROFILER] failed to allocate memory for pl profiler", K(ret));
+  } else if (OB_FAIL(profiler->init(run_id))) {
+    profiler->~ObPLProfiler();
+    ob_free(profiler);
+    profiler = nullptr;
+
+    LOG_WARN("[DBMS_PROFILER] failed to init pl profiler", K(ret));
+  } else {
+    pl_profiler_ = profiler;
+  }
+
+  return ret;
+}
+#endif // OB_BUILD_ORACLE_PL
+
+void ObSQLSessionInfo::reset_pl_profiler_resource()
+{
+#ifdef OB_BUILD_ORACLE_PL
+  if (pl_profiler_ != nullptr) {
+    if (OB_NOT_NULL(pl_context_)) {
+      for (int64_t i = pl_context_->get_exec_stack().count() - 1; i >= 0 ; --i) {
+        if (OB_NOT_NULL(pl_context_->get_exec_stack().at(i))
+              && OB_NOT_NULL(pl_context_->get_exec_stack().at(i)->get_profiler_time_stack())) {
+          int ret = OB_SUCCESS;
+
+          ObPLExecState &curr = *pl_context_->get_exec_stack().at(i);
+          if (OB_FAIL(curr.get_profiler_time_stack()->pop_all(*pl_profiler_))) {
+            LOG_WARN("[DBMS_PROFILER] failed to flush profiler time stack",
+                      K(ret), K(i), K(pl_context_->get_exec_stack().count()), K(lbt()));
+          }
+        }
+      }
+    }
+
+    pl_profiler_->~ObPLProfiler();
+    ob_free(pl_profiler_);
+    pl_profiler_ = nullptr;
+  }
+#endif // OB_BUILD_ORACLE_PL
+}
 
 void ObSQLSessionInfo::reset_all_package_changed_info()
 {
