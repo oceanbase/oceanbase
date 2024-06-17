@@ -4277,6 +4277,13 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (helper_.create_function(ObString("spi_check_autonomous_trans"), ft, spi_service_.spi_check_autonomous_trans_));
   }
 
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(int64_type));
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_opaque_assign_null"), ft, spi_service_.spi_opaque_assign_null_));;
+  }
+
   return ret;
 }
 

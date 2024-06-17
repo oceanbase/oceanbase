@@ -98,6 +98,7 @@ public:
     jit::ObLLVMFunction spi_check_composite_not_null_;
     jit::ObLLVMFunction spi_process_resignal_error_;
     jit::ObLLVMFunction spi_check_autonomous_trans_;
+    jit::ObLLVMFunction spi_opaque_assign_null_;
   };
 
   struct EHStack

@@ -185,7 +185,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_add_ref_cursor_refcount));
   jit::ObLLVMHelper::add_symbol(ObString("spi_handle_ref_cursor_refcount"),
                                 (void*)(sql::ObSPIService::spi_handle_ref_cursor_refcount));
-
+  jit::ObLLVMHelper::add_symbol(ObString("spi_opaque_assign_null"),
+                                (void*)(sql::ObSPIService::spi_opaque_assign_null));
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));
   OZ (jit_lock_.first.init(1024));

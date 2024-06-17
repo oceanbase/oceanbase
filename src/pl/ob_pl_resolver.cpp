@@ -10547,7 +10547,7 @@ int ObPLResolver::resolve_inner_call(
           } else {
             is_routine = true;
           }
-        } else {
+        } else if (obj_access_idents.at(i).is_unknown()) {
           obj_access_idents.at(i).set_pl_udf();
         }
         int64_t idx_cnt = access_idxs.count();
@@ -10558,7 +10558,7 @@ int ObPLResolver::resolve_inner_call(
                                 access_idxs,
                                 func,
                                 is_routine),
-                                K(access_idxs), K(i));
+                                K(access_idxs), K(obj_access_idents), K(i));
         OZ (obj_access_idents.at(i).extract_params(0, expr_params));
         OX (idx_cnt = (idx_cnt >= access_idxs.count()) ? 0 : idx_cnt);
         if (OB_SUCC(ret)
@@ -10952,6 +10952,9 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
         if (OB_NOT_NULL(node.children_[0]->children_[i])) {
           ObString ident_name(static_cast<int32_t>(node.children_[0]->children_[i]->str_len_), node.children_[0]->children_[i]->str_value_);
           ObObjAccessIdent access_ident(ident_name);
+          if (T_QUESTIONMARK == node.children_[0]->children_[i]->type_) {
+            access_ident.set_pl_var();
+          }
           if (OB_FAIL(obj_access_idents.push_back(access_ident))) {
             LOG_WARN("push back access ident failed", K(ret));
           }
@@ -15329,7 +15332,7 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
       break;
     }
   }
-  if (OB_NOT_NULL(cur_desc)) {
+  if (OB_NOT_NULL(cur_desc) && lib::is_mysql_mode()) {
     for (int64_t j = 0; !dup && j < cur_desc->get_conditions().count(); ++j) {
       if (value.type_ == cur_desc->get_condition(j).type_ &&
           value.error_code_ == cur_desc->get_condition(j).error_code_ &&
