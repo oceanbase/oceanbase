@@ -19,6 +19,7 @@
 #include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/das/ob_das_utils.h"
 #include "storage/lob/ob_lob_persistent_iterator.h"
 
 namespace oceanbase
@@ -488,16 +489,39 @@ int ObLobManager::is_remote(ObLobAccessParam& param, bool& is_remote, common::Ob
 {
   int ret = OB_SUCCESS;
   ObLobLocatorV2 *lob_locator = param.lob_locator_;
+  uint64_t tenant_id = param.tenant_id_;
   const ObAddr &self_addr = MYADDR;
   if (lob_locator == nullptr) {
     is_remote = false;
   } else if (!lob_locator->is_persist_lob()) {
     is_remote = false;
+  } else if (param.from_rpc_ == true) {
+    is_remote = false;
   } else {
-    uint64_t tenant_id = param.tenant_id_;
-    if (OB_FAIL(get_ls_leader(param, tenant_id, param.ls_id_, dst_addr))) {
-      LOG_WARN("failed to get ls leader", K(ret), K(tenant_id), K(param.ls_id_));
+    bool has_retry_info = false;
+    ObMemLobExternHeader *extern_header = nullptr;
+    if (OB_SUCC(lob_locator->get_extern_header(extern_header))) {
+      has_retry_info = extern_header->flags_.has_retry_info_;
+    }
+    uint64_t min_ver = GET_MIN_CLUSTER_VERSION();
+    if ((min_ver <= CLUSTER_VERSION_4_2_2_0) ||
+        (min_ver >= CLUSTER_VERSION_4_3_0_0 && min_ver <= CLUSTER_VERSION_4_3_1_0)) {
+      // compat old version
+      has_retry_info = false;
+    }
+    if (has_retry_info) {
+      ObMemLobRetryInfo *retry_info = nullptr;
+      if (OB_FAIL(lob_locator->get_retry_info(retry_info))) {
+        LOG_WARN("fail to get retry info", K(ret), KPC(lob_locator));
+      } else {
+        dst_addr = retry_info->addr_;
+      }
     } else {
+      if (OB_FAIL(get_ls_leader(param, tenant_id, param.ls_id_, dst_addr))) {
+        LOG_WARN("failed to get ls leader", K(ret), K(tenant_id), K(param.ls_id_));
+      }
+    }
+    if (OB_SUCC(ret)) {
       // lob from other tenant also should read by rpc
       is_remote = (dst_addr != self_addr) || (tenant_id != MTL_ID());
       if (param.from_rpc_ == true && is_remote) {
@@ -511,7 +535,14 @@ int ObLobManager::is_remote(ObLobAccessParam& param, bool& is_remote, common::Ob
 
 bool ObLobManager::is_remote_ret_can_retry(int ret)
 {
-  return (ret == OB_NOT_MASTER);
+  return (ret == OB_REPLICA_NOT_READABLE) ||
+         (ret == OB_RPC_CONNECT_ERROR) ||
+         (ret == OB_RPC_SEND_ERROR) ||
+         (ret == OB_RPC_POST_ERROR) ||
+         (ret == OB_NOT_MASTER) ||
+         (ret == OB_NO_READABLE_REPLICA) ||
+         (ret == OB_TABLET_NOT_EXIST) ||
+         (ret == OB_LS_NOT_EXIST);
 }
 
 int ObLobManager::lob_query_with_retry(ObLobAccessParam &param, ObAddr &dst_addr,
@@ -577,11 +608,19 @@ int ObLobManager::lob_query_with_retry(ObLobAccessParam &param, ObAddr &dst_addr
           LOG_INFO("[LOB RETRY] Retry is interrupted by worker check wait", KR(ret));
         } else {
           switch (ret) {
-            case OB_NOT_MASTER: {
+            case  OB_REPLICA_NOT_READABLE:
+            case  OB_RPC_CONNECT_ERROR:
+            case  OB_RPC_SEND_ERROR:
+            case  OB_RPC_POST_ERROR:
+            case  OB_NOT_MASTER:
+            case  OB_NO_READABLE_REPLICA:
+            case  OB_TABLET_NOT_EXIST:
+            case  OB_LS_NOT_EXIST: {
               remote_bret = false;
               // refresh location
-              if (OB_FAIL(is_remote(param, remote_bret, dst_addr))) {
-                LOG_WARN("fail to do check is remote", K(ret));
+              if (OB_FAIL(lob_refresh_location(param, dst_addr, remote_bret, ret, retry_cnt))) {
+                LOG_WARN("fail to do refresh location", K(ret));
+                is_continue = false;
               }
               break;
             }
@@ -597,6 +636,90 @@ int ObLobManager::lob_query_with_retry(ObLobAccessParam &param, ObAddr &dst_addr
       is_continue = false;
     }
   } while (is_continue);
+  return ret;
+}
+
+int ObLobManager::lob_check_tablet_not_exist(ObLobAccessParam &param, uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  bool tablet_exist = false;
+  schema::ObSchemaGetterGuard schema_guard;
+  const schema::ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", KR(ret), K(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(param.tenant_id_, schema_guard))) {
+    // tenant could be deleted
+    LOG_WARN("get tenant schema guard fail", KR(ret), K(param.tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(param.tenant_id_, table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", KR(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    //table could be dropped
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist, fast fail das task", K(table_id));
+  } else if (OB_FAIL(table_schema->check_if_tablet_exists(param.tablet_id_, tablet_exist))) {
+    LOG_WARN("check if tablet exists failed", K(ret), K(param), K(table_id));
+  } else if (!tablet_exist) {
+    ret = OB_PARTITION_NOT_EXIST;
+    LOG_WARN("partition not exist, maybe dropped by DDL", K(ret), K(param), K(table_id));
+  }
+  return ret;
+}
+
+int ObLobManager::lob_refresh_location(ObLobAccessParam &param, ObAddr &dst_addr, bool &remote_bret, int last_err, int retry_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObLobLocatorV2 *lob_locator = param.lob_locator_;
+  const ObAddr &self_addr = MYADDR;
+  ObMemLobExternHeader *extern_header = NULL;
+  bool has_retry_info = false;
+  if (OB_NOT_NULL(lob_locator) && OB_SUCC(lob_locator->get_extern_header(extern_header))) {
+    has_retry_info = extern_header->flags_.has_retry_info_;
+  }
+  uint64_t min_ver = GET_MIN_CLUSTER_VERSION();
+  if ((min_ver <= CLUSTER_VERSION_4_2_2_0) ||
+      (min_ver >= CLUSTER_VERSION_4_3_0_0 && min_ver <= CLUSTER_VERSION_4_3_1_0)) {
+    // compat old version
+    has_retry_info = false;
+  }
+  if (param.tenant_id_ != MTL_ID()) { // query over tenant id
+    has_retry_info = false;
+  }
+  if (!has_retry_info) {
+    // do check remote
+    if (OB_FAIL(is_remote(param, remote_bret, dst_addr))) {
+      LOG_WARN("fail to do check is remote", K(ret));
+    }
+  } else if (OB_FAIL(ObDASUtils::wait_das_retry(retry_cnt))) {
+    LOG_WARN("wait das retry failed", K(ret));
+  } else {
+    // do location refresh
+    ObArenaAllocator tmp_allocator("LobRefLoc", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+    ObDASLocationRouter router(tmp_allocator);
+    router.set_last_errno(last_err);
+    ObDASTableLocMeta loc_meta(tmp_allocator);
+    loc_meta.ref_table_id_ = extern_header->table_id_;
+    ObDASTabletLoc tablet_loc;
+    ObMemLobRetryInfo *retry_info = nullptr;
+    if (last_err == OB_TABLET_NOT_EXIST && OB_FAIL(lob_check_tablet_not_exist(param, extern_header->table_id_))) {
+      LOG_WARN("fail to check tablet not exist", K(ret), K(extern_header->table_id_));
+    } else if (OB_FAIL(lob_locator->get_retry_info(retry_info))) {
+      LOG_WARN("fail to get retry info", K(ret), KPC(lob_locator));
+    } else if (OB_FALSE_IT(loc_meta.select_leader_ = retry_info->is_select_leader_)) {
+       // use main tablet id to get location, for lob meta tablet is same location as main tablet
+    } else if (OB_FAIL(router.get_tablet_loc(loc_meta, param.tablet_id_, tablet_loc))) {
+      LOG_WARN("fail to refresh location", K(ret));
+    } else {
+      dst_addr = tablet_loc.server_;
+      remote_bret = (dst_addr != self_addr);
+      if (tablet_loc.ls_id_ != param.ls_id_) {
+        LOG_INFO("[LOB RETRY] lob retry find tablet ls id is changed",
+                 K(param.tablet_id_), K(param.ls_id_), K(tablet_loc.ls_id_));
+        param.ls_id_ = tablet_loc.ls_id_;
+      }
+    }
+  }
+  LOG_DEBUG("[LOB RETRY] after do fresh location", K(ret), K(has_retry_info), K(dst_addr), K(remote_bret));
   return ret;
 }
 
@@ -1647,7 +1770,7 @@ int ObLobManager::append(
     ObLobLocatorV2 &lob)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator("LobCmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+  ObArenaAllocator tmp_allocator("LobTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
   param.set_tmp_allocator(&tmp_allocator);
 
   bool is_char = param.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
@@ -1965,7 +2088,7 @@ int ObLobManager::append(
     ObString& data)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator("LobCmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+  ObArenaAllocator tmp_allocator("LobTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
   param.set_tmp_allocator(&tmp_allocator);
   bool save_is_reverse = param.scan_backward_;
   uint64_t save_param_len = param.len_;

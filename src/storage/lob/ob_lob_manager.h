@@ -217,7 +217,7 @@ public:
   static const int64_t LOB_OUTROW_FULL_SIZE = ObLobLocatorV2::DISK_LOB_OUTROW_FULL_SIZE;
   static const uint64_t LOB_READ_BUFFER_LEN = 1024L*1024L; // 1M
   static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K
-  static const uint64_t REMOTE_LOB_QUERY_RETRY_MAX = 10L; // 1M
+  static const uint64_t LOB_QUERY_RETRY_MAX  = 100L; // 100 times
   static const ObLobCommon ZERO_LOB; // static empty lob for zero val
 private:
   explicit ObLobManager(const uint64_t tenant_id)
@@ -270,6 +270,8 @@ public:
   int lob_remote_query_init_ctx(ObLobAccessParam &param,
                                 ObLobQueryArg::QueryType qtype,
                                 void *&ctx);
+  int lob_refresh_location(ObLobAccessParam &param, ObAddr &dst_addr, bool &remote_bret, int last_err, int retry_cnt);
+  int lob_check_tablet_not_exist(ObLobAccessParam &param, uint64_t table_id);
   int lob_remote_query_with_retry(
     ObLobAccessParam &param,
     common::ObAddr& dst_addr,
