@@ -2430,13 +2430,11 @@ int ObPartTransCtx::insert_mds_to_tx_table_(ObTxLogCb &log_cb)
   int ret = OB_SUCCESS;
   const ObTxBufferNodeArray &node_array = log_cb.get_mds_range().get_range_array();
   bool all_big_segment = true;
-  ObTxBufferNodeArray need_process_mds;
+  int64_t need_process_mds_count = 0;
   for (int64_t idx = 0; OB_SUCC(ret) && idx < node_array.count(); idx++) {
     if (!node_array.at(idx).allow_to_use_mds_big_segment()) {
       all_big_segment = false;
-      if (OB_FAIL(need_process_mds.push_back(node_array.at(idx)))) {
-        TRANS_LOG(WARN, "push to process_mds failed", KR(ret), K(log_cb));
-      }
+      need_process_mds_count++;
     }
   }
   if (OB_FAIL(ret)) {
@@ -2449,22 +2447,34 @@ int ObPartTransCtx::insert_mds_to_tx_table_(ObTxLogCb &log_cb)
   } else if (OB_ISNULL(log_cb.get_tx_op_array())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "log_cb tx_op is null", KR(ret), KPC(this), K(log_cb));
-  } else if (need_process_mds.count() != log_cb.get_tx_op_array()->count()) {
+  } else if (need_process_mds_count != log_cb.get_tx_op_array()->count()) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "log_cb mds size is not match", KR(ret), KPC(this), K(log_cb), K(need_process_mds));
+    TRANS_LOG(WARN, "log_cb mds size is not match", KR(ret), KPC(this), K(log_cb), K(need_process_mds_count));
   } else {
     SCN op_scn = log_cb.get_log_ts();
     ObTxOpArray &tx_op_array = *log_cb.get_tx_op_array();
     ObTxDataGuard tx_data_guard;
     // assign mds for pre_alloc node
+    int64_t mds_idx = 0;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < tx_op_array.count(); idx++) {
       tx_op_array.at(idx).set_op_scn(op_scn);
       ObTxBufferNodeWrapper &wrapper = *(ObTxBufferNodeWrapper*)(tx_op_array.at(idx).get_op_val());
-      if (wrapper.get_node().get_register_no() != need_process_mds.at(idx).get_register_no() ||
-          wrapper.get_node().get_data_source_type() != need_process_mds.at(idx).get_data_source_type()) {
+      // just for skip mds big_segment
+      while (mds_idx < node_array.count()) {
+        if (!node_array.at(mds_idx).allow_to_use_mds_big_segment()) {
+          break;
+        } else {
+          mds_idx++;
+        }
+      }
+      const ObTxBufferNode &mds_node = node_array.at(mds_idx);
+      mds_idx++;
+      if (mds_idx < idx ||
+          wrapper.get_node().get_register_no() != mds_node.get_register_no() ||
+          wrapper.get_node().get_data_source_type() != mds_node.get_data_source_type()) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "mds not match", KR(ret), KPC(this));
-      } else if (OB_FAIL(wrapper.assign(trans_id_, need_process_mds.at(idx), MTL(ObSharedMemAllocMgr*)->tx_data_op_allocator(), true))) {
+      } else if (OB_FAIL(wrapper.assign(trans_id_, mds_node, MTL(ObSharedMemAllocMgr*)->tx_data_op_allocator(), true))) {
         TRANS_LOG(WARN, "assign mds failed", KR(ret), KPC(this));
       }
     }
