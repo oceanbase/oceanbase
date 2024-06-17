@@ -773,8 +773,9 @@ int ObTableScanOp::prepare_pushdown_limit_param()
   int ret = OB_SUCCESS;
   if (!limit_param_.is_valid()) {
     //ignore, do nothing
-  } else if (in_batch_rescan_subplan()) {
+  } else if (in_batch_rescan_subplan() || nullptr != tsc_rtdef_.attach_rtinfo_) {
     //batch scan can not pushdown limit param to storage
+    // do final limit for TSC op with attached ops for now
     need_final_limit_ = true;
     tsc_rtdef_.scan_rtdef_.limit_param_.offset_ = 0;
     tsc_rtdef_.scan_rtdef_.limit_param_.limit_ = -1;
@@ -784,7 +785,6 @@ int ObTableScanOp::prepare_pushdown_limit_param()
       tsc_rtdef_.lookup_rtdef_->limit_param_.offset_ = 0;
       tsc_rtdef_.lookup_rtdef_->limit_param_.limit_  = -1;
     }
-
   } else if (tsc_rtdef_.has_lookup_limit() || (OB_NOT_NULL(scan_iter_) && scan_iter_->get_das_task_cnt() > 1)) {
     //for index back, need to final limit output rows in TableScan operator,
     //please see me for the reason:
@@ -1049,7 +1049,9 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.stmt_allocator_.set_alloc(&ctx_.get_allocator());
   das_rtdef.scan_allocator_.set_alloc(&ctx_.get_allocator());
   das_rtdef.eval_ctx_ = &get_eval_ctx();
-  if ((is_lookup_limit && is_lookup) || (!is_lookup_limit && !is_lookup)) {
+  if (nullptr != tsc_ctdef.attach_spec_.attach_ctdef_) {
+    // disable limit pushdown to das iter for table scan with attached pushdown ops
+  } else if ((is_lookup_limit && is_lookup) || (!is_lookup_limit && !is_lookup)) {
     //when is_lookup_limit = true means that the limit param should pushdown to the lookup rtdef
     //so is_lookup = true means that the das_rtdef is the lookup rtdef
     //when is_lookup_limit = false means that the limit param should pushdown to the scan rtdef
