@@ -649,7 +649,7 @@ int ObNumber::find_point_range_(const char *str, const int64_t length,
       if (lib::is_oracle_mode() &&
           ((0 == str_length && contains_sign) || (1 == str_length && *str_ptr == '.'))) {
         ret = OB_INVALID_NUMERIC;
-        LIB_LOG(WARN, "invalid number", K(ret), KCSTRING(str));
+        LIB_LOG(WARN, "invalid number", K(ret), K(str[0]), K(str_length), K(length));
       }
 
       if (OB_SUCC(ret)) {
@@ -3562,6 +3562,7 @@ int ObNumber::to_sci_str_(ObString &num_str, char *buf,
     if (OB_SUCC(ret)) {
       if (str_len > SCI_NUMBER_LENGTH && pos - origin != SCI_NUMBER_LENGTH) {
         ret = OB_INVALID_ARGUMENT;
+        buf[pos] = '\0';
         LOG_WARN("the value of pos is invalid after number to char in oracle mode",
                  KCSTRING(buf), K(pos), K(origin), K(ret));
       }
