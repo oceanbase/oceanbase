@@ -2575,22 +2575,6 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
       LOG_WARN("Identifier cannot be an empty string", K(ret), K(ident_name));
     }
     OZ (q_name.access_idents_.push_back(ObObjAccessIdent(ident_name, OB_INVALID_INDEX)), K(q_name));
-    // TODO: may move this check to pl resovler ?
-    if (OB_SUCC(ret)
-        && T_PL_SCOPE == ctx_.current_scope_
-        && q_name.access_idents_.count() > 1
-        && (0 == ident_name.case_compare("NEXT")
-            || 0 == ident_name.case_compare("PRIOR")
-            || 0 == ident_name.case_compare("EXISTS"))
-        && lib::is_oracle_mode()) {
-      AccessNameType name_type = UNKNOWN;
-      OZ (check_name_type(q_name, ctx_.current_scope_, name_type));
-      if (OB_SUCC(ret) && name_type == TYPE_METHOD) {
-        ret = OB_ERR_CALL_WRONG_ARG;
-        LOG_WARN("wrong number or types of arguments in call to procedure", K(ret), K(q_name));
-        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, ident_name.length(), ident_name.ptr());
-      }
-    }
   } else if (T_FUN_SYS == left_node.type_
              || T_FUN_SYS_XML_ELEMENT == left_node.type_
              || T_FUN_SYS_XMLPARSE == left_node.type_
