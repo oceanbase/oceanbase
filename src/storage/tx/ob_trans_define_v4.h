@@ -812,6 +812,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
   ObTxSEQ get_min_tx_seq() const;
+  int clear_state_for_autocommit_retry();
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;

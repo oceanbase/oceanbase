@@ -1091,8 +1091,20 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
       if (is_rollback && !is_will_retry_() && is_tx_active && !in_trans) {
         ObTransStatistic::get_instance().add_rollback_trans_count(MTL_ID(), 1);
       }
-      // 对于UPDATE等异步提交的语句，如果需要重试，那么中途的rollback也走同步接口
-      if (OB_LIKELY(false == is_end_trans_async()) || OB_LIKELY(false == is_user_sql_)) {
+      bool lock_conflict_skip_end_trans = false;
+      // if err is lock conflict retry, do not rollback transaction, but cleanup transaction
+      // state, keep transaction id unchanged, easy for deadlock detection and $OB_LOCKS view
+      if (is_rollback && ret == OB_TRY_LOCK_ROW_CONFLICT && is_will_retry_()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ObSqlTransControl::reset_trans_for_autocommit_lock_conflict(get_exec_context()))) {
+          LOG_WARN("cleanup trans state for lock conflict fail, fallback to end trans", K(tmp_ret));
+        } else {
+          lock_conflict_skip_end_trans = true;
+        }
+      }
+      if (lock_conflict_skip_end_trans) {
+      } else if (OB_LIKELY(false == is_end_trans_async()) || OB_LIKELY(false == is_user_sql_)) {
+        // 对于UPDATE等异步提交的语句，如果需要重试，那么中途的rollback也走同步接口
         // 如果没有设置end_trans_cb，就走同步接口。这个主要是为了InnerSQL提供的。
         // 因为InnerSQL没有走Obmp_query接口，而是直接操作ResultSet
         int save_ret = ret;
