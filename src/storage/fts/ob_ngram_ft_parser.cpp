@@ -95,36 +95,40 @@ int ObNgramFTParser::get_next_token(
     const char *next = next_;
     const char *end = end_;
     const ObCharsetInfo *cs = cs_;
-    do {
-      const int64_t c_len = ob_mbcharlen_ptr(cs, next, end);
-      if (next + c_len > end || 0 == c_len) { // if char is invalid, just skip the rest of doc.
-        ret = OB_ITER_END;
-        break;
-      } else {
-        int ctype;
-        cs->cset->ctype(cs, &ctype, (uchar *)next, (uchar *)end);
-        if (1 == c_len && (' ' == *next || !true_word_char(ctype, *next))) {
-          start = next + 1;
-          next = start;
-          c_nums = 0;
-          if (next == end) {
-            ret = OB_ITER_END;
+    if (next >= end) {
+      ret = OB_ITER_END;
+    } else {
+      do {
+        const int64_t c_len = ob_mbcharlen_ptr(cs, next, end);
+        if (next + c_len > end || 0 == c_len) { // if char is invalid, just skip the rest of doc.
+          ret = OB_ITER_END;
+          break;
+        } else {
+          int ctype;
+          cs->cset->ctype(cs, &ctype, (uchar *)next, (uchar *)end);
+          if (1 == c_len && (' ' == *next || !true_word_char(ctype, *next))) {
+            start = next + 1;
+            next = start;
+            c_nums = 0;
+            if (next == end) {
+              ret = OB_ITER_END;
+            }
+            continue;
           }
-          continue;
+          next += c_len;
+          ++c_nums;
         }
-        next += c_len;
-        ++c_nums;
-      }
-      if (NGRAM_TOKEN_SIZE == c_nums) {
-        word = start;
-        word_len = next - start;
-        char_len = c_nums;
-        word_freq = 1;
-        start += ob_mbcharlen_ptr(cs, start, end);
-        c_nums = NGRAM_TOKEN_SIZE - 1;
-        break;
-      }
-    } while (OB_SUCC(ret) && next < end);
+        if (NGRAM_TOKEN_SIZE == c_nums) {
+          word = start;
+          word_len = next - start;
+          char_len = c_nums;
+          word_freq = 1;
+          start += ob_mbcharlen_ptr(cs, start, end);
+          c_nums = NGRAM_TOKEN_SIZE - 1;
+          break;
+        }
+      } while (OB_SUCC(ret) && next < end);
+    }
     if (OB_ITER_END == ret || OB_SUCCESS == ret) {
       start_ = start;
       next_ = next;
