@@ -273,10 +273,13 @@ int StringCommandOperator::do_incrby(int64_t db, const ObString &key, const ObSt
       incr_num = ObFastAtoi<int64_t>::atoi(incr.ptr(), incr.ptr() + incr.length(), is_valid_incr);
       incr_num = -incr_num;
     }
-    if (!is_valid_val || !is_valid_incr || is_incr_out_of_range(old_value, incr_num)) {
-      // send redis err_msg instead of observer error
-      LOG_WARN("invalid old value", K(ret), K(old_str));
+    // send redis err_msg instead of observer error
+    if (!is_valid_val || !is_valid_incr) {
+      LOG_WARN("invalid value", K(ret), K(old_str), K(incr));
       err_msg = "ERR value is not an integer or out of range";
+    } else if (is_incr_out_of_range(old_value, incr_num)) {
+      LOG_WARN("increment or decrement would overflow", K(ret), K(old_value), K(incr_num));
+      err_msg = "ERR increment or decrement would overflow";
     }
   }
 
