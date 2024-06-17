@@ -389,9 +389,9 @@ STAT_EVENT_ADD_DEF(LS_ALL_TABLE_OPERATOR_GET_TIME, "log stream table operator ge
 STAT_EVENT_ADD_DEF(PALF_WRITE_IO_COUNT, "palf write io count to disk",  ObStatClassIds::CLOG, 80001, true, true, true)
 STAT_EVENT_ADD_DEF(PALF_WRITE_SIZE, "palf write size to disk",  ObStatClassIds::CLOG, 80002, true, true, true)
 STAT_EVENT_ADD_DEF(PALF_WRITE_TIME, "palf write total time to disk", ObStatClassIds::CLOG, 80003, true, true, true)
-STAT_EVENT_ADD_DEF(PALF_READ_COUNT_FROM_HOT_CACHE, "palf read count from hot cache", ObStatClassIds::CLOG, 80004, true, true, true)
-STAT_EVENT_ADD_DEF(PALF_READ_SIZE_FROM_HOT_CACHE, "palf read size from hot cache", ObStatClassIds::CLOG, 80005, true, true, true)
-STAT_EVENT_ADD_DEF(PALF_READ_TIME_FROM_HOT_CACHE, "palf read total time from hot cache", ObStatClassIds::CLOG, 80006, true, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_COUNT_FROM_HOT_CACHE, "palf read count from hot cache", ObStatClassIds::CLOG, 80004, true, true, true) // FARM COMPAT WHITELIST
+STAT_EVENT_ADD_DEF(PALF_READ_SIZE_FROM_HOT_CACHE, "palf read size from hot cache", ObStatClassIds::CLOG, 80005, true, true, true) // FARM COMPAT WHITELIST
+STAT_EVENT_ADD_DEF(PALF_READ_TIME_FROM_HOT_CACHE, "palf read total time from hot cache", ObStatClassIds::CLOG, 80006, true, true, true) // FARM COMPAT WHITELIST
 STAT_EVENT_ADD_DEF(PALF_READ_IO_COUNT_FROM_DISK, "palf read io count from disk", ObStatClassIds::CLOG, 80007, true, true, true)
 STAT_EVENT_ADD_DEF(PALF_READ_SIZE_FROM_DISK, "palf read size from disk", ObStatClassIds::CLOG, 80008, true, true, true)
 STAT_EVENT_ADD_DEF(PALF_READ_TIME_FROM_DISK, "palf read total time from disk", ObStatClassIds::CLOG, 80009, true, true, true)
