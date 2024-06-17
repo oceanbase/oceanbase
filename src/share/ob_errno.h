@@ -3724,6 +3724,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__USER_ERROR_MSG "Parent %.*s already contains child entry %s%.*s"
 #define OB_ERR_INVALID_VECTOR_DIM__USER_ERROR_MSG "inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__USER_ERROR_MSG "Column '%.*s' cannot be part of VECTOR index"
+#define OB_ERR_ARRAY_TYPE_MISMATCH__USER_ERROR_MSG "array type mismatch found between definition(%.*s) and data(%.*s)"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
@@ -5994,6 +5995,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__ORA_USER_ERROR_MSG "ORA-31003: Parent %.*s already contains child entry %s%.*s"
 #define OB_ERR_INVALID_VECTOR_DIM__ORA_USER_ERROR_MSG "ORA-00932: inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7601, Column '%.*s' cannot be part of VECTOR index"
+#define OB_ERR_ARRAY_TYPE_MISMATCH__ORA_USER_ERROR_MSG "ORA-00932: array type mismatch found between definition(%.*s) and data(%.*s)"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8003, Packet checksum error"
@@ -6433,7 +6435,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2266];
+extern int g_all_ob_errnos[2267];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
