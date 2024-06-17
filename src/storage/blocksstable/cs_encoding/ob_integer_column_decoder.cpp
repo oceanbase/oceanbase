@@ -719,7 +719,7 @@ int ObIntegerColumnDecoder::get_aggregate_result(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments to get aggregate result", KR(ret), KP(row_ids), K(row_cap));
   } else {
-    const bool is_reverse = row_cap > 1 && row_ids[2] < row_ids[1];
+    const bool is_reverse = row_cap > 1 && row_ids[1] < row_ids[0];
     int64_t row_id_start = is_reverse ? row_ids[row_cap - 1] : row_ids[0];
     if (integer_ctx.has_null_bitmap()) {
       if (OB_FAIL(agg_cell.reserve_bitmap(row_cap))) {
