@@ -449,7 +449,10 @@ public:
       SQL_RESV_LOG(WARN, "negative bitmap member not allowed", K(ret), K(index));
     } else {
       int64_t pos = index >> PER_BITSETWORD_MOD_BITS;
-      if (OB_UNLIKELY(pos >= desc_.cap_)) {
+      if (OB_UNLIKELY(pos + 1 > INT16_MAX)) {
+        ret = OB_SIZE_OVERFLOW;
+        SQL_RESV_LOG(WARN, "ObSqlBitSet pos overflow", K(ret), K(index), K(pos));
+      } else if (OB_UNLIKELY(pos >= desc_.cap_)) {
         int64_t new_word_cnt = pos * 2;
         if (OB_FAIL(alloc_new_buf(new_word_cnt))) {
           SQL_RESV_LOG(WARN, "failed to alloc new buf", K(ret));
