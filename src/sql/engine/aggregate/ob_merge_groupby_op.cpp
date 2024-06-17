@@ -270,7 +270,7 @@ int ObMergeGroupByOp::init()
     }
     LOG_DEBUG("debug distinct exprs", K(ret), K(MY_SPEC.distinct_exprs_.count()));
   }
-  if (OB_SUCC(ret) && aggr_processor_.has_distinct()) {
+  if (OB_SUCC(ret) && aggr_processor_.has_extra()) {
     // set group_batch_factor_ to 1 avoid out of memory error
     group_batch_factor_ = 1;
   }
