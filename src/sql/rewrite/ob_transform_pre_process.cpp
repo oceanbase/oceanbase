@@ -9621,20 +9621,20 @@ int ObTransformPreProcess::remove_shared_expr(ObDMLStmt *stmt,
   if (OB_SUCC(ret) && left->is_joined_table()) {
     bool left_is_nullside = is_nullside || (joined_table->is_right_join() ||
                                             joined_table->is_full_join());
-    if (OB_FAIL(remove_shared_expr(stmt,
-                                   static_cast<JoinedTable *>(left),
-                                   expr_set,
-                                   left_is_nullside))) {
+    if (OB_FAIL(SMART_CALL(remove_shared_expr(stmt,
+                                              static_cast<JoinedTable *>(left),
+                                              expr_set,
+                                              left_is_nullside)))) {
       LOG_WARN("failed to remove shared expr", K(ret));
     }
   }
   if (OB_SUCC(ret) && right->is_joined_table()) {
     bool right_is_nullside = is_nullside || (joined_table->is_left_join() ||
                                              joined_table->is_full_join());
-    if (OB_FAIL(remove_shared_expr(stmt,
-                                   static_cast<JoinedTable *>(right),
-                                   expr_set,
-                                   right_is_nullside))) {
+    if (OB_FAIL(SMART_CALL(remove_shared_expr(stmt,
+                                              static_cast<JoinedTable *>(right),
+                                              expr_set,
+                                              right_is_nullside)))) {
       LOG_WARN("failed to remove shared expr", K(ret));
     }
   }
@@ -9659,11 +9659,11 @@ int ObTransformPreProcess::do_remove_shared_expr(hash::ObHashSet<uint64_t> &expr
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
     bool has = false;
-    if (OB_FAIL(do_remove_shared_expr(expr_set,
-                                      padnull_exprs,
-                                      is_nullside,
-                                      expr->get_param_expr(i),
-                                      has))) {
+    if (OB_FAIL(SMART_CALL(do_remove_shared_expr(expr_set,
+                                                 padnull_exprs,
+                                                 is_nullside,
+                                                 expr->get_param_expr(i),
+                                                 has)))) {
       LOG_WARN("failed to remove shared expr", K(ret));
     } else if (has) {
       has_padnull_column = true;
