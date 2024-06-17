@@ -300,24 +300,18 @@ public:
         v.retry_type_ = RETRY_TYPE_NONE;
       }
       v.no_more_test_ = true;
-    } else if (stmt::T_LOAD_DATA == v.result_.get_stmt_type()) {
-      if (is_load_local(v)) {
-        v.client_ret_ = err;
-        v.retry_type_ = RETRY_TYPE_NONE;
-        v.no_more_test_ = true;
-      } else if (is_direct_load(v)) {
-        if (is_direct_load_retry_err(err)) {
-          try_packet_retry(v);
-        } else {
-          v.client_ret_ = err;
-          v.retry_type_ = RETRY_TYPE_NONE;
-        }
-        v.no_more_test_ = true;
+    } else if (is_direct_load(v) && !is_load_local(v)) {
+      if (is_direct_load_retry_err(err)) {
+        try_packet_retry(v);
       } else {
         v.client_ret_ = err;
         v.retry_type_ = RETRY_TYPE_NONE;
-        v.no_more_test_ = true;
       }
+      v.no_more_test_ = true;
+    } else if (stmt::T_LOAD_DATA == v.result_.get_stmt_type()) {
+      v.client_ret_ = err;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.no_more_test_ = true;
     }
   }
 };
