@@ -1924,7 +1924,7 @@ bool ObMemtable::ready_for_flush_()
         set_freeze_state(TabletMemtableFreezeState::READY_FOR_FLUSH);
         if (0 == mt_stat_.ready_for_flush_time_) {
           mt_stat_.ready_for_flush_time_ = ObTimeUtility::current_time();
-        freezer_->get_stat().remove_memtable_info(get_tablet_id());
+          freezer_->get_stat().remove_memtable_info(get_tablet_id());
         }
       }
 
