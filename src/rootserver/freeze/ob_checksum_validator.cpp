@@ -418,11 +418,17 @@ int ObChecksumValidator::get_tablet_replica_checksum_and_validate(const bool inc
 int ObChecksumValidator::verify_tablet_replica_checksum()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(replica_ckm_items_.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica_ckm_items_));
   } else {
     const ObTabletReplicaChecksumItem *prev_item = nullptr;
+    ObSEArray<ObTabletLSPair, 64> error_pairs;
+    error_pairs.set_attr(ObMemAttr(tenant_id_, "CkmErrPairs"));
+    ObLSID prev_error_ls_id;
+    ObTabletID prev_error_table_id;
+    int64_t affected_rows = 0;
     for (int64_t i = 0; OB_SUCC(ret) && (i < replica_ckm_items_.count()); ++i) {
       const ObTabletReplicaChecksumItem &curr_item = replica_ckm_items_.at(i);
       if (OB_NOT_NULL(prev_item)
@@ -432,12 +438,26 @@ int ObChecksumValidator::verify_tablet_replica_checksum()
             LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum error in tablet replica checksum", KR(ret),
                           K(curr_item), KPC(prev_item));
             ret = OB_SUCCESS; // continue checking next checksum
+            if (curr_item.ls_id_ != prev_error_ls_id || curr_item.tablet_id_ != prev_error_table_id) {
+              prev_error_ls_id = curr_item.ls_id_;
+              prev_error_table_id = curr_item.tablet_id_;
+              if (OB_TMP_FAIL(error_pairs.push_back(ObTabletLSPair(curr_item.tablet_id_, curr_item.ls_id_)))) {
+                LOG_WARN("fail to push back error pair", K(tmp_ret), "tablet_id", curr_item.tablet_id_, "ls_id", curr_item.ls_id_);
+              }
+            }
           } else {
             LOG_WARN("unexpected error in tablet replica checksum", KR(ret), K(curr_item), KPC(prev_item));
           }
         }
       }
       prev_item = &curr_item;
+    }
+    if (!error_pairs.empty()) {
+      if (OB_TMP_FAIL(ObTabletMetaTableCompactionOperator::batch_set_info_status(MTL_ID(), error_pairs, affected_rows))) {
+        LOG_WARN("fail to batch set info status", KR(tmp_ret));
+      } else {
+        LOG_INFO("succ to batch set info status", K(ret), K(affected_rows), K(error_pairs));
+      }
     }
   }
   return ret;
