@@ -27,7 +27,7 @@ public:
   virtual ~ObMockFTParserDesc() = default;
   virtual int init(lib::ObPluginParam *param) override;
   virtual int deinit(lib::ObPluginParam *param) override;
-  virtual int segment(lib::ObFTParserParam *param) const override;
+  virtual int segment(lib::ObFTParserParam *param, lib::ObITokenIterator *&iter) const override;
 };
 
 int ObMockFTParserDesc::init(lib::ObPluginParam *param)
@@ -42,7 +42,7 @@ int ObMockFTParserDesc::deinit(lib::ObPluginParam *param)
   return OB_SUCCESS;
 }
 
-int ObMockFTParserDesc::segment(lib::ObFTParserParam *param) const
+int ObMockFTParserDesc::segment(lib::ObFTParserParam *param, lib::ObITokenIterator *&iter) const
 {
   UNUSED(param);
   return OB_SUCCESS;

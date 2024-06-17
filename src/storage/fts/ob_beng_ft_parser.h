@@ -23,40 +23,41 @@ namespace oceanbase
 namespace storage
 {
 
-class ObBEngFTParser final
+class ObBEngFTParser final : public lib::ObITokenIterator
 {
 public:
   static const int64_t FT_MIN_WORD_LEN = 3;
   static const int64_t FT_MAX_WORD_LEN = 84;
 public:
-  static int segment(
-      lib::ObFTParserParam *param,
-      const char *fulltext,
-      const int64_t ft_len);
-
-private:
-  ObBEngFTParser()
-    : analysis_ctx_(),
+  explicit ObBEngFTParser(common::ObIAllocator &allocator)
+    : allocator_(allocator),
+      analysis_ctx_(),
       english_analyzer_(),
+      doc_(),
+      token_stream_(nullptr),
       is_inited_(false)
   {}
-  ~ObBEngFTParser() = default;
+  ~ObBEngFTParser() { reset(); }
 
-  static int add_word(
-      lib::ObFTParserParam *param,
-      common::ObIAllocator *allocator,
-      const char *word,
-      int64_t word_len);
   int init(lib::ObFTParserParam *param);
   void reset();
+  virtual int get_next_token(
+      const char *&word,
+      int64_t &word_len,
+      int64_t &char_len,
+      int64_t &word_freq) override;
+
+  VIRTUAL_TO_STRING_KV(K_(analysis_ctx), K_(english_analyzer), KP_(token_stream), K_(is_inited));
+private:
   int segment(
       const common::ObDatum &doc,
       share::ObITokenStream *&token_stream);
-  TO_STRING_KV(K_(analysis_ctx), K_(english_analyzer), K_(is_inited));
-
 private:
+  common::ObIAllocator &allocator_;
   share::ObTextAnalysisCtx analysis_ctx_;
   share::ObEnglishTextAnalyzer english_analyzer_;
+  common::ObDatum doc_;
+  share::ObITokenStream *token_stream_;
   bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBEngFTParser);
@@ -69,7 +70,8 @@ public:
   virtual ~ObBasicEnglishFTParserDesc() = default;
   virtual int init(lib::ObPluginParam *param) override;
   virtual int deinit(lib::ObPluginParam *param) override;
-  virtual int segment(lib::ObFTParserParam *param) const override;
+  virtual int segment(lib::ObFTParserParam *param, lib::ObITokenIterator *&iter) const override;
+  virtual void free_token_iter(lib::ObFTParserParam *param, lib::ObITokenIterator *&iter) const override;
   OB_INLINE void reset() { is_inited_ = false; }
 private:
   bool is_inited_;

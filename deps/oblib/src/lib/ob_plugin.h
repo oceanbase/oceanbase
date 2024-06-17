@@ -114,7 +114,7 @@ enum class ObPluginType : uint64_t
 // define plugin license
 enum class ObPluginLicenseType : uint64_t
 {
-  OB_MULAN_V2_LICENSE = 1,        // Mulan PubL v2 license
+  OB_Mulan_PubL_V2_LICENSE = 1,   // Mulan PubL v2 license
   OB_MAX_PLUGIN_LICENSE_TYPE = 2, // max plugin license type
 };
 
@@ -186,7 +186,7 @@ public:
         && nullptr != author_
         && nullptr != spec_
         && PLUGIN_VERSION == version_
-        && (ObPluginLicenseType::OB_MULAN_V2_LICENSE <= license_
+        && (ObPluginLicenseType::OB_Mulan_PubL_V2_LICENSE <= license_
             && license_ < ObPluginLicenseType::OB_MAX_PLUGIN_LICENSE_TYPE)
         && nullptr != desc_;
   }
@@ -218,23 +218,8 @@ public:
 class ObFTParserParam final
 {
 public:
-  class ObIAddWord
-  {
-  public:
-    ObIAddWord() = default;
-    virtual ~ObIAddWord() = default;
-    virtual int operator()(
-        ObFTParserParam *param,
-        const char *word,
-        const int64_t word_len,
-        const int64_t char_cnt) = 0;
-    virtual int64_t get_add_word_count() const = 0;
-    DECLARE_PURE_VIRTUAL_TO_STRING;
-  };
-public:
   ObFTParserParam()
     : allocator_(nullptr),
-      add_word_(nullptr),
       cs_(nullptr),
       fulltext_(nullptr),
       ft_length_(0),
@@ -245,34 +230,40 @@ public:
   inline bool is_valid() const
   {
     return nullptr != allocator_
-        && nullptr != add_word_
         && nullptr != cs_
         && nullptr != fulltext_
         && 0 < ft_length_
         && 0 <= parser_version_;
   }
-  inline int add_word(ObFTParserParam *param, const char *word, const int64_t word_len, const int64_t char_cnt)
-  {
-    return (*add_word_)(param, word, word_len, char_cnt);
-  }
   inline void reset()
   {
     allocator_ = nullptr;
-    add_word_ = nullptr;
     cs_ = nullptr;
     fulltext_ = nullptr;
     ft_length_ = 0;
     parser_version_ = 0;
   }
 
-  TO_STRING_KV(KP_(allocator), KP_(add_word), KP_(cs), K_(fulltext), K_(ft_length), K_(parser_version));
+  TO_STRING_KV(KP_(allocator), KP_(cs), K_(fulltext), K_(ft_length), K_(parser_version));
 public:
   common::ObIAllocator *allocator_;
-  ObIAddWord *add_word_;
   const ObCharsetInfo *cs_;
   const char *fulltext_;
   int64_t ft_length_;
   int64_t parser_version_;
+};
+
+class ObITokenIterator
+{
+public:
+  ObITokenIterator() = default;
+  virtual ~ObITokenIterator() = default;
+  virtual int get_next_token(
+      const char *&word,
+      int64_t &word_len,
+      int64_t &char_cnt,
+      int64_t &word_freq) = 0;
+  DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
 // fulltext parser descriptor interface for domain index
@@ -286,12 +277,22 @@ public:
   /**
    * split fulltext into multiple word segments
    *
-   * @param[in]  fulltext, the document to be tokenized.
-   * @param[out] words, the word segmentation after splitting.
+   * @param[in]  param, the document to be tokenized and parameters related to word segmentation.
+   * @param[out] iter, the tokenized words' iterator.
    *
    * @return error code, such as, OB_SUCCESS, OB_INVALID_ARGUMENT, ...
    */
-  virtual int segment(ObFTParserParam *param) const = 0;
+  virtual int segment(ObFTParserParam *param, ObITokenIterator *&iter) const = 0;
+
+  /**
+   * Release resources held by the iterator and free token iterator.
+   */
+  virtual void free_token_iter(ObFTParserParam *param, ObITokenIterator *&iter) const
+  {
+    if (OB_NOT_NULL(iter)) {
+      iter->~ObITokenIterator();
+    }
+  }
 };
 
 } // end namespace lib

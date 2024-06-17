@@ -24,10 +24,10 @@ ObAddWord::ObAddWord(
     const ObCollationType &type,
     const ObAddWordFlag &flag,
     common::ObIAllocator &allocator,
-    common::ObIArray<ObFTWord> &word)
+    ObFTWordMap &word_map)
   : collation_type_(type),
     allocator_(allocator),
-    words_(word),
+    word_map_(word_map),
     min_max_word_cnt_(0),
     non_stopword_cnt_(0),
     stopword_cnt_(0),
@@ -35,19 +35,19 @@ ObAddWord::ObAddWord(
 {
 }
 
-int ObAddWord::operator()(
-    lib::ObFTParserParam *param,
+int ObAddWord::process_word(
     const char *word,
     const int64_t word_len,
-    const int64_t char_cnt)
+    const int64_t char_cnt,
+    const int64_t word_freq)
 {
   int ret = OB_SUCCESS;
   bool is_stopword = false;
   ObFTWord src_word(word_len, word, collation_type_);
   ObFTWord dst_word;
-  if (OB_ISNULL(param) || OB_ISNULL(word) || OB_UNLIKELY(0 >= word_len)) {
+  if (OB_ISNULL(word) || OB_UNLIKELY(0 >= word_len || 0 >= char_cnt || 0 >= word_freq)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KPC(param), KP(word), K(word_len));
+    LOG_WARN("invalid arguments", K(ret), KP(word), K(word_len), K(char_cnt), K(word_freq));
   } else if (is_min_max_word(char_cnt)) {
     ++min_max_word_cnt_;
     LOG_DEBUG("skip too small or large word", K(ret), K(src_word), K(char_cnt));
@@ -58,11 +58,11 @@ int ObAddWord::operator()(
   } else if (OB_UNLIKELY(is_stopword)) {
     ++stopword_cnt_;
     LOG_DEBUG("skip stopword", K(ret), K(dst_word));
-  } else if (OB_FAIL(words_.push_back(dst_word))) {
-    LOG_WARN("fail to push word into words array", K(ret), K(dst_word));
+  } else if (OB_FAIL(groupby_word(dst_word, word_freq))) {
+    LOG_WARN("fail to groupby word into word map", K(ret), K(dst_word), K(word_freq));
   } else {
-    ++non_stopword_cnt_;
-    LOG_DEBUG("add word", K(ret), KPC(param), KP(word), K(word_len), K(char_cnt), K(src_word), K(dst_word));
+    non_stopword_cnt_ += word_freq;
+    LOG_DEBUG("add word", K(ret), KP(word), K(word_len), K(char_cnt), K(word_freq), K(src_word), K(dst_word));
   }
   return ret;
 }
@@ -100,6 +100,32 @@ int ObAddWord::check_stopword(const ObFTWord &ft_word, bool &is_stopword)
     LOG_WARN("invalid arguments", K(ret), K(ft_word));
   } else if (flag_.stopword() && OB_FAIL(OB_FT_PLUGIN_MGR.check_stopword(ft_word, is_stopword))) {
     LOG_WARN("fail to check stopword", K(ret));
+  }
+  return ret;
+}
+
+int ObAddWord::groupby_word(const ObFTWord &word, const int64_t word_freq)
+{
+  int ret = OB_SUCCESS;
+  int64_t word_count = 0;
+  if (OB_UNLIKELY(word.empty() || word_freq <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(word), K(word_freq));
+  } else if (!flag_.groupby_word()) {
+    if (OB_FAIL(word_map_.set_refactored(word, 1/*word count*/))) {
+      LOG_WARN("fail to set fulltext word and count", K(ret), K(word));
+    }
+  } else if (OB_FAIL(word_map_.get_refactored(word, word_count)) && OB_HASH_NOT_EXIST != ret) {
+    LOG_WARN("fail to get fulltext word", K(ret), K(word));
+  } else {
+    if (OB_HASH_NOT_EXIST == ret) {
+      word_count = 1;
+    } else {
+      word_count += word_freq;
+    }
+    if (OB_FAIL(word_map_.set_refactored(word, word_count, 1/*overwrite*/))) {
+      LOG_WARN("fail to set fulltext word and count", K(ret), K(word), K(word_count));
+    }
   }
   return ret;
 }
