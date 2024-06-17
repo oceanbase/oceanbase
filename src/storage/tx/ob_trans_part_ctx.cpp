@@ -3864,10 +3864,12 @@ int ObPartTransCtx::submit_abort_log_()
     if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
       TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
     }
-  } else if (OB_FAIL(acquire_ctx_ref_())) {
-    TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
   } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(1))) {
     TRANS_LOG(WARN, "reserve tx_op space failed", KR(ret), KPC(this));
+    return_log_cb_(log_cb);
+    log_cb = NULL;
+  } else if (OB_FAIL(acquire_ctx_ref_())) {
+    TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
   } else if (OB_FAIL(submit_log_block_out_(log_block, SCN::min_scn(), log_cb, replay_hint, barrier, 50 * 1000))) {
     TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
     return_log_cb_(log_cb);
@@ -7331,11 +7333,6 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
       } else if (log_block.get_cb_arg_array().count() == 0) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
-      } else if (OB_FAIL(acquire_ctx_ref_())) {
-        TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-        log_cb = nullptr;
-
-      } else if ((mds_base_scn.is_valid() ? OB_FALSE_IT(mds_base_scn = share::SCN::scn_inc(mds_base_scn)) : OB_FALSE_IT(mds_base_scn.set_min()))) {
       } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(log_cb->get_mds_range().count()))) {
         TRANS_LOG(WARN, "reserve tx_op space failed", KR(ret), KPC(this));
       } else if (OB_FAIL(ls_tx_ctx_mgr_->get_tx_table()->alloc_tx_data(log_cb->get_tx_data_guard(), true, INT64_MAX))) {
@@ -7350,6 +7347,11 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
                                             *log_cb->get_tx_op_array(),
                                             false))) {
           TRANS_LOG(WARN, "preapre tx_op failed", KR(ret), KPC(this));
+      } else if (OB_FAIL(acquire_ctx_ref_())) {
+        TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
+        log_cb = nullptr;
+
+      } else if ((mds_base_scn.is_valid() ? OB_FALSE_IT(mds_base_scn = share::SCN::scn_inc(mds_base_scn)) : OB_FALSE_IT(mds_base_scn.set_min()))) {
       } else if (OB_FAIL(submit_log_block_out_(log_block, mds_base_scn, log_cb, replay_hint, barrier_type))) {
         TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
         release_ctx_ref_();
