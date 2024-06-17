@@ -5250,7 +5250,7 @@ void ObPartTransCtx::check_no_need_replay_checksum(const SCN &log_ts, const int 
 }
 
 /*
- * since 4.3, redo_lsns can not be maintained on follower with order
+ * since 4.2.4, redo_lsns can not be maintained on follower with order
  * because the redo were replay parallelly, instead, redo_lsns only
  * maintained on leader and when switch to follower, it will persistent
  * redo_lsns with `RecordLog`
@@ -5273,7 +5273,7 @@ int ObPartTransCtx::check_and_merge_redo_lsns_(const palf::LSN &offset)
 /*
  * replay redo in tx ctx
  *
- * since 4.3, support parallel replay redo, and the design principle is
+ * since 4.2.4, support parallel replay redo, and the design principle is
  * seperate redo and other logs(named as Txn's Log), redo is belongs to
  * memtable (and locktable), and only Txn's Log will replay into Tx ctx
  * and affect the Tx ctx's state
@@ -5293,10 +5293,10 @@ int ObPartTransCtx::replay_redo_in_ctx(const ObTxRedoLog &redo_log,
   common::ObTimeGuard timeguard("replay_redo_in_ctx", 10 * 1000);
   {
     CtxLockGuard guard(lock_);
-    // before 4.3, cluster_version is in RedoLog, and
+    // before 4.2.4, cluster_version is in RedoLog, and
     // the cluster_version_ is initialized to CURRENT_CLUSTER_VERSION when ctx created
     // it should be correct with in redo
-    // since 4.3, cluster_version is in LogBlockHeader, so the cluster_version is correct
+    // since 4.2.4, cluster_version is in LogBlockHeader, so the cluster_version is correct
     // when created, and cluster_version in RedoLog is 0
     if (redo_log.get_cluster_version() > 0) {
       ret = correct_cluster_version_(redo_log.get_cluster_version());
@@ -5515,7 +5515,7 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
               KPC(this));
   }
 
-  // this is compatible code, since 4.3, redo_lsn not collect during replay
+  // this is compatible code, since 4.2.4, redo_lsn not collect during replay
   if (OB_SUCC(ret) && OB_FAIL(check_and_merge_redo_lsns_(offset))) {
     TRANS_LOG(WARN, "check and merge redo lsns failed", K(ret), K(trans_id_), K(timestamp), K(offset));
   }
@@ -6516,8 +6516,6 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_hea
         // do nothing
       } else if (OB_FALSE_IT(mt_ctx_.commit_to_replay())) {
         // do nothing
-      } else if (OB_FALSE_IT(mt_ctx_.merge_multi_callback_lists_for_changing_leader())) {
-        // do nothing
       } else if (OB_FAIL(mt_ctx_.clean_unlog_callbacks())) {
         TRANS_LOG(WARN, "clear unlog callbacks", KR(ret), K(*this));
       }
@@ -6633,8 +6631,6 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObTxCommitCallback *&cb_list_h
     }
     timeguard.click();
     if (OB_SUCC(ret) && need_submit_log && !need_force_abort_()) {
-      // We need merge all callbacklists before submitting active info
-      (void)mt_ctx_.merge_multi_callback_lists_for_changing_leader();
       if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
         if (OB_FAIL(submit_redo_commit_info_log_())) {
           // currently, if there is no log callback, switch leader would fail,
@@ -8440,23 +8436,23 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_scn, con
       // others must wait the first thread of parallel open the write epoch
       // hence this must be done in lock
       if (data_scn.support_branch() && pending_write == 1) {
-        callback_list_idx = mt_ctx_.acquire_callback_list(true, false);
+        callback_list_idx = mt_ctx_.acquire_callback_list(true);
       }
     }
   }
   // other operations are allowed to out of lock
   if (OB_SUCC(ret)) {
     mt_ctx_.inc_ref();
-    if (data_scn.support_branch()) { // NEW version >= 4.3
+    if (data_scn.support_branch()) {
       if (pending_write != 1) {
-        callback_list_idx = mt_ctx_.acquire_callback_list(false, false);
+        callback_list_idx = mt_ctx_.acquire_callback_list(false);
       }
       // remember selected callback_list idx into seq_no
       if (data_scn.get_branch() == 0 && alloc && callback_list_idx != 0) {
         data_scn.set_branch(callback_list_idx);
       }
-    } else { // OLD version < 4.3
-      mt_ctx_.acquire_callback_list(false, true /* need merge to main */);
+    } else { // OLD version < 4.2.4
+      ret = OB_ERR_UNEXPECTED;
     }
   }
   last_request_ts_ = ObClockGenerator::getClock();
@@ -10449,7 +10445,7 @@ int ObPartTransCtx::set_replay_completeness_(const bool complete, const SCN repl
 
 inline bool ObPartTransCtx::is_support_parallel_replay_() const
 {
-  return cluster_version_accurate_ && cluster_version_ >= CLUSTER_VERSION_4_3_0_0;
+  return cluster_version_accurate_ && cluster_version_ >= MOCK_CLUSTER_VERSION_4_2_4_0;
 }
 
 inline bool ObPartTransCtx::is_support_tx_op_() const

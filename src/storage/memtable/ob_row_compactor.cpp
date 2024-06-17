@@ -181,7 +181,7 @@ int ObMemtableRowCompactor::try_cleanout_tx_node_during_compact_(ObTxTableGuard 
       // cleanout and filled back through commit callback. So we add the error
       // log back
       //
-      // since 4.3 multiple callback list will not merged, in commiting phase
+      // since 4.2.4 multiple callback list will not merged, in commiting phase
       // if two TransNode of same row stay in different callback list, their
       // fill back order is undefined, and this situation can happened
       // ret = OB_ERR_UNEXPECTED;

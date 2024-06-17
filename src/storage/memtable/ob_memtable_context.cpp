@@ -640,7 +640,6 @@ int ObMemtableCtx::commit_to_replay()
   ATOMIC_STORE(&is_master_, false);
   WRLockGuard wrguard(rwlock_);
   trans_mgr_.set_for_replay(true);
-  trans_mgr_.merge_multi_callback_lists();
   return OB_SUCCESS;
 }
 
@@ -967,18 +966,6 @@ bool ObMemtableCtx::pending_log_size_too_large(const ObTxSEQ &write_seq_no)
   }
 
   return ret;
-}
-
-// NB: We also donot hold the memtable context latch because it changes only
-// callback list and multi callback lists which is protected by itself
-void ObMemtableCtx::merge_multi_callback_lists_for_changing_leader()
-{
-  trans_mgr_.merge_multi_callback_lists();
-}
-
-void ObMemtableCtx::merge_multi_callback_lists_for_immediate_logging()
-{
-  trans_mgr_.merge_multi_callback_lists();
 }
 
 int ObMemtableCtx::get_table_lock_store_info(ObTableLockInfo &table_lock_info)
