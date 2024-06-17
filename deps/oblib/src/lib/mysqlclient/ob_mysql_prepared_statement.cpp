@@ -1286,6 +1286,7 @@ ObMySQLPreparedResult *ObMySQLPreparedStatement::execute_query()
 }
 
 int ObMySQLProcStatement::bind_param(const int64_t col_idx,
+                                     const int64_t param_idx,
                                      const bool is_output_param,
                                      const ObTimeZoneInfo *tz_info,
                                      ObObj &param,
@@ -1296,10 +1297,10 @@ int ObMySQLProcStatement::bind_param(const int64_t col_idx,
   ObBindParam *bind_param = nullptr;
   const ObObjType obj_type = param.get_type();
   const share::schema::ObRoutineParam *routine_param = NULL;
-  if (col_idx >= routine_info.get_routine_params().count()) {
+  if (param_idx >= routine_info.get_routine_params().count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("col_idx invalid", K(ret), K(col_idx));
-  } else if (FALSE_IT(routine_param = routine_info.get_routine_params().at(col_idx))) {
+    LOG_WARN("col_idx invalid", K(ret), K(param_idx));
+  } else if (FALSE_IT(routine_param = routine_info.get_routine_params().at(param_idx))) {
   } else if (OB_ISNULL(routine_param)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("routine_param is NULL", K(ret), K(col_idx));
@@ -1447,7 +1448,7 @@ int ObMySQLProcStatement::bind_proc_param(ObIAllocator &allocator,
       LOG_WARN("result is NULL", K(ret));
     } else if (OB_FAIL(basic_out_param.push_back(std::make_pair(0, -1)))) {
       LOG_WARN("push back failed", K(ret));
-    } else if (OB_FAIL(bind_param(0, true, tz_info, *result, routine_info, allocator))) {
+    } else if (OB_FAIL(bind_param(0, 0, true, tz_info, *result, routine_info, allocator))) {
       LOG_WARN("failed to bind param", K(ret));
     }
   }
@@ -1466,7 +1467,8 @@ int ObMySQLProcStatement::bind_proc_param(ObIAllocator &allocator,
       is_output = r_param->is_out_sp_param() || r_param->is_inout_sp_param();
       if (is_output && OB_FAIL(basic_out_param.push_back(std::make_pair(i + start_pos - skip_cnt, i)))) {
         LOG_WARN("push back failed", K(ret), K(i));
-      } else if (OB_FAIL(bind_param(i + start_pos - skip_cnt, is_output, tz_info, param, routine_info, allocator))) {
+      } else if (OB_FAIL(bind_param(i + start_pos - skip_cnt, i + (routine_info.is_function() ? 1 : 0),
+                                    is_output, tz_info, param, routine_info, allocator))) {
         LOG_WARN("failed to bind param", K(ret));
       }
     }
@@ -1477,7 +1479,7 @@ int ObMySQLProcStatement::bind_proc_param(ObIAllocator &allocator,
       LOG_WARN("result is NULL", K(ret));
     } else if (OB_FAIL(basic_out_param.push_back(std::make_pair(params.count() - skip_cnt, -1)))) {
       LOG_WARN("push back failed", K(ret));
-    } else if (OB_FAIL(bind_param(params.count() - skip_cnt, true, tz_info, *result, routine_info, allocator))) {
+    } else if (OB_FAIL(bind_param(params.count() - skip_cnt, 0, true, tz_info, *result, routine_info, allocator))) {
       LOG_WARN("failed to bind param", K(ret));
     }
   }

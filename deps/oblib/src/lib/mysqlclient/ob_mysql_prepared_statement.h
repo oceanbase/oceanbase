@@ -248,6 +248,7 @@ private:
                       ObObj *result,
                       bool is_sql);
   int bind_param(const int64_t col_idx,
+                 const int64_t param_idx,
                  const bool is_output_param,
                  const ObTimeZoneInfo *tz_info,
                  ObObj &obj,
