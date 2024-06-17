@@ -66,7 +66,10 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
     {
       int ret = OB_SUCCESS;
       ObLSService *ls_svr = MTL(ObLSService*);
-      if (is_user_tenant(MTL_ID())) {
+      share::ObTenantRole::Role tenant_role = MTL_GET_TENANT_ROLE_CACHE();
+      if (! is_restore_tenant(tenant_role) && ! is_standby_tenant(tenant_role)) {
+        SERVER_LOG(TRACE, "not restore or standby tenant", K(tenant_role), K(MTL_ID()));
+      } else if (is_user_tenant(MTL_ID())) {
         if (OB_ISNULL(ls_svr)) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "mtl ObLSService should not be null", K(ret));
@@ -98,6 +101,7 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
                 SERVER_LOG(WARN, "restore handler is NULL", K(ret), K(ls));
               } else if (OB_FAIL(restore_handler->get_ls_restore_status_info(restore_status_info))) {
                 SERVER_LOG(WARN, "fail to get ls restore status info");
+                ret = OB_SUCCESS;
               } else if (!restore_status_info.is_valid()) {
                 SERVER_LOG(WARN, "restore status info is invalid", K(restore_status_info));
               } else if (!ls->is_sys_ls()) {  // not sys ls
