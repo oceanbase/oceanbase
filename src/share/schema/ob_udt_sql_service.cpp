@@ -552,7 +552,7 @@ int ObUDTSqlService::del_udt_objects_in_udt(common::ObISQLClient &sql_client,
                       obj_ti.at(1)->get_type(),
                       new_schema_version), udt_info);
   } else {
-    CK (0 < obj_ti.count() && 2 >= obj_ti.count());
+    CK (0 <= obj_ti.count() && 2 >= obj_ti.count());
     for (int64_t i = 0; OB_SUCC(ret) && i < obj_ti.count(); ++i) {
       OZ (del_udt_object(sql_client, 
                       udt_info, 
