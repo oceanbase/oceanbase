@@ -134,7 +134,7 @@ int ObUniqueIndexChecker::calc_column_checksum(
             column_checksum.at(i) += row->storage_datums_[i].checksum(0);
           }
         }
-        if (OB_FAIL(dag_yield())) {
+        if (OB_SUCC(ret) && OB_FAIL(dag_yield())) {
           STORAGE_LOG(WARN, "fail to yield dag", KR(ret));
         }
       }
