@@ -167,9 +167,8 @@ void ObTimeZoneInfoManager::TaskProcessThread::handle(void *task)
 int ObTimeZoneInfoManager::fetch_time_zone_info()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+  if (!inited_ && OB_FAIL(init())) {
+    LOG_WARN("init failed", K(ret));
   } else {
     int64_t current_tz_version = -1;
     ObSQLClientRetryWeak sql_client_retry_weak(&sql_proxy_, tenant_id_, OB_ALL_SYS_STAT_TID);
@@ -257,7 +256,8 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
               // According to current design, upgrade timezone is not supported,
               // so ObTZInfoMap will not be used again. This is a defense code.
               new (&tz_info_map_buf_) ObTZInfoMap();
-              LOG_INFO("reset tz info map buf", K(tenant_id_));
+              inited_ = false;
+              LOG_INFO("reset tz info map buf", K(tenant_id_), K(ret));
               tz_info_map_.id_map_ = shared_tz_info_map_.id_map_;
               tz_info_map_.name_map_ = shared_tz_info_map_.name_map_;
             } else {
