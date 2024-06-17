@@ -4992,6 +4992,10 @@ int ObSelectResolver::resolve_into_const_node(const ParseNode *node, ObObj &obj)
       obj.set_varchar(node_str);
       obj.set_collation_type(cs_type);
     }
+  } else if (T_HEX_STRING == node->type_) {
+    ObString node_str(node->str_len_, node->str_value_);
+    obj.set_varchar(node_str);
+    obj.set_collation_type(CS_TYPE_BINARY);
   } else if (T_QUESTIONMARK == node->type_) {
     obj.set_unknown(node->value_);
   } else {

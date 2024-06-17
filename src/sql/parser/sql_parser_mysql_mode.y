@@ -10202,19 +10202,19 @@ field_term_list field_term
 ;
 
 field_term:
-TERMINATED BY STRING_VALUE
+TERMINATED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FIELD_TERMINATED_STR, 1, $3);
 }
-| OPTIONALLY ENCLOSED BY STRING_VALUE
+| OPTIONALLY ENCLOSED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_OPTIONALLY_CLOSED_STR, 1, $4);
 }
-| ENCLOSED BY STRING_VALUE
+| ENCLOSED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CLOSED_STR, 1, $3);
 }
-| ESCAPED BY STRING_VALUE
+| ESCAPED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ESCAPED_STR, 1, $3);
 }
@@ -10290,11 +10290,11 @@ line_term_list line_term
 ;
 
 line_term:
-TERMINATED BY STRING_VALUE
+TERMINATED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINE_TERMINATED_STR, 1, $3);
 }
-| STARTING BY STRING_VALUE
+| STARTING BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINE_START_STR, 1, $3);
 }
