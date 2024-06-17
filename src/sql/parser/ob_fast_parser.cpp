@@ -2334,7 +2334,9 @@ inline void ObFastParserBase::remove_multi_stmt_end_space()
   for (; end_pos >= 0 && is_space(raw_sql_.char_at(end_pos)); --end_pos)
     ;
   copy_end_pos_ = end_pos + 1;
-  append_no_param_sql();
+  if (copy_end_pos_ > copy_begin_pos_) {
+    append_no_param_sql();
+  }
   copy_begin_pos_ = raw_sql_.cur_pos_;
   copy_end_pos_ = raw_sql_.cur_pos_;
 }
