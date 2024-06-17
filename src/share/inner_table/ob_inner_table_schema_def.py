@@ -10097,6 +10097,8 @@ def_table_schema(
   ('account_locked', 'varchar:1'),
   ('drop_database_link_priv', 'varchar:1'),
   ('create_database_link_priv', 'varchar:1'),
+  ('create_role_priv', 'varchar:1'),
+  ('drop_role_priv', 'varchar:1'),
   ],
 )
 
