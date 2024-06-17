@@ -620,16 +620,16 @@ OB_INLINE int ObTxCtxLogOperator<ObTxDirectLoadIncLog>::log_sync_fail_()
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (ddl_log_type == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_START) {
-      if (OB_FAIL(
-              tx_ctx_->exec_info_.dli_batch_set_.sync_ddl_start_fail(construct_arg_->batch_key_))) {
+      if (OB_FAIL(tx_ctx_->exec_info_.dli_batch_set_.sync_ddl_start_fail(
+              log_op_arg_.submit_arg_.log_cb_->get_batch_key()))) {
         TRANS_LOG(WARN, "update ddl_start key after log_sync_fail failed", K(ret),
-                  KPC(construct_arg_), K(scn_), KPC(tx_ctx_));
+                  KPC(log_op_arg_.submit_arg_.log_cb_), K(scn_), KPC(tx_ctx_));
       }
     } else if (ddl_log_type == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_END) {
-      if (OB_FAIL(
-              tx_ctx_->exec_info_.dli_batch_set_.sync_ddl_end_fail(construct_arg_->batch_key_))) {
+      if (OB_FAIL(tx_ctx_->exec_info_.dli_batch_set_.sync_ddl_end_fail(
+              log_op_arg_.submit_arg_.log_cb_->get_batch_key()))) {
         TRANS_LOG(WARN, "update ddl_end key after log_sync_fail failed", K(ret),
-                  KPC(construct_arg_), K(scn_), KPC(tx_ctx_));
+                  KPC(log_op_arg_.submit_arg_.log_cb_), K(scn_), KPC(tx_ctx_));
       }
     }
     TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> sync log fail", K(ret), KPC(this));

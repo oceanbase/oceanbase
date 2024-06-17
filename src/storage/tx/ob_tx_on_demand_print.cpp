@@ -49,7 +49,7 @@ IMPL_ON_DEMAND_PRINT_FUNC(ObTxExecInfo)
 
   ON_DEMAND_START_PRINT(ExecInfo);
 
-  TX_KV_PRINT_WITH_ERR(true, downstream_state, state_, ", ");
+  TX_KV_PRINT_WITH_ERR(true, downstream_state, to_str_tx_state(state_), ", ");
   TX_KV_PRINT_WITH_ERR(true, upstream, upstream_, ", ");
   TX_KV_PRINT_WITH_ERR(true, participants,participants_, ", ");
   TX_KV_PRINT_WITH_ERR(true, redo_log_no, redo_lsns_.count(), ", ");
