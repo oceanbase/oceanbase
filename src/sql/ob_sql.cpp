@@ -273,8 +273,14 @@ int ObSql::stmt_execute(const ObPsStmtId stmt_id,
     LOG_WARN("failed to do sanity check", K(ret));
   } else if (OB_FAIL(init_result_set(context, result))) {
     LOG_WARN("failed to init result set", K(ret));
-  } else if (OB_FAIL(handle_ps_execute(stmt_id, stmt_type, params,
-                                       context, result, is_inner_sql))) {
+  } else if (
+#ifdef ERRSIM
+      // inject error for pr-ex protocol only
+      // inject after `init_result_set` because retry test would check session ptr in the exec ctx,
+      // which is initialized by `init_result_set`.
+      OB_FAIL(EVENT_CALL(common::EventTable::COM_STMT_PREXECUTE_EXECUTE_ERROR, context.is_pre_execute_)) ||
+#endif
+      OB_FAIL(handle_ps_execute(stmt_id, stmt_type, params, context, result, is_inner_sql))) {
     if (OB_ERR_PROXY_REROUTE != ret) {
       LOG_WARN("failed to handle ps execute", K(stmt_id), K(ret));
     }
@@ -1790,6 +1796,13 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
   } else if (OB_FAIL(init_result_set(context, result))) {
     LOG_WARN("failed to init result set", K(ret));
   }
+
+#ifdef ERRSIM
+  // inject error for pr-ex protocol only
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::COM_STMT_PREXECUTE_PREPARE_ERROR, context.is_pre_execute_) OB_SUCCESS;
+  }
+#endif
 
   if (OB_SUCC(ret)) {
     ObSQLSessionInfo &session = result.get_session();
