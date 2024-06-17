@@ -149,8 +149,6 @@ public:
                         const bool get_hidden = false,
                         bool is_link = false);
 
-  int check_table_id_exists(uint64_t table_id, bool &is_exist);
-
 protected:
   int normalize_table_or_database_names(common::ObString &name);
 

@@ -126,6 +126,10 @@ public:
   static constexpr int64_t MAX_LOCK_HANDLE_ID = 1999999999;
   static constexpr int64_t DEFAULT_EXPIRATION_US = 60 * 1000 * 1000L; // 1min
 
+  static constexpr int64_t INVALID_RELEASE_CNT = -2;
+  static constexpr int64_t LOCK_NOT_EXIST_RELEASE_CNT = -1;
+  static constexpr int64_t LOCK_NOT_OWN_RELEASE_CNT = 0;
+
 public:
   int check_lock_exist_(const uint64_t &lock_id);
   int check_lock_exist_(ObLockFuncContext &ctx,
@@ -216,7 +220,8 @@ class ObReleaseLockExecutor : public ObLockFuncExecutor
 {
 public:
   int execute(sql::ObExecContext &ctx,
-              const ObString &lock_name);
+              const ObString &lock_name,
+              int64_t &release_cnt);
 };
 
 class ObReleaseAllLockExecutor : public ObLockFuncExecutor

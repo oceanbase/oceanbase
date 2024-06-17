@@ -363,22 +363,5 @@ int ObStmtResolver::get_column_schema(const uint64_t table_id,
   return ret;
 }
 
-int ObStmtResolver::check_table_id_exists(uint64_t table_id, bool &is_exist)
-{
-  int ret = OB_SUCCESS;
-  is_exist = false;
-  if (OB_HASH_EXIST == (ret = params_.table_ids_.exist_refactored(table_id))) {
-    ret = OB_SUCCESS;
-    is_exist = true;
-  } else if (OB_HASH_NOT_EXIST == ret) {
-    if (OB_FAIL(params_.table_ids_.set_refactored(table_id))) {
-      SQL_RESV_LOG(WARN, "insert table_id to set failed", K(table_id), K(ret));
-    }
-  } else {
-    SQL_RESV_LOG(WARN, "check table_id in table_ids set failed", K(table_id));
-  }
-  return ret;
-}
-
 }  // namespace sql
 }  // namespace oceanbase

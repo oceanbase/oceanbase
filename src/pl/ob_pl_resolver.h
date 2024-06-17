@@ -593,6 +593,7 @@ public:
                                     const ObIRoutineInfo *&routine_info);
   static int resolve_dblink_routine_with_synonym(ObPLResolveCtx &resolve_ctx,
                                                  const uint64_t pkg_syn_id,
+                                                 const ObString &cur_db_name,
                                                  const ObString &routine_name,
                                                  const common::ObIArray<sql::ObRawExpr *> &expr_params,
                                                  const ObIRoutineInfo *&routine_info);

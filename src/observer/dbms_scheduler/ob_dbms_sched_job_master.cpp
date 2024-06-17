@@ -373,7 +373,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
 
     const int64_t now = ObTimeUtility::current_time();
     int64_t next_check_date = now + MIN_SCHEDULER_INTERVAL;
-    if (OB_FAIL(ret) || !job_info.valid() || job_info.is_disabled() || job_info.is_broken()) {
+    if (OB_FAIL(ret) || !job_info.valid() || job_info.is_broken()) {
       free_job_key(job_key);
       job_key = NULL;
     } else if (job_info.is_running()) {
@@ -385,6 +385,9 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
           LOG_WARN("job is timeout, force update for end", K(job_info), K(now));
         }
       }
+    } else if (job_info.is_disabled()) {
+      free_job_key(job_key);
+      job_key = NULL;
     } else if (now > job_info.get_end_date()) {
       int tmp = OB_SUCCESS;
       if (OB_SUCCESS != (tmp = table_operator_.update_for_enddate(job_info))) {
@@ -419,6 +422,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
           LOG_WARN("failed to run job", K(ret), K(job_info), KPC(job_key));
         } else {
           next_check_date = min(new_next_date, now + CHECK_NEW_INTERVAL);
+          next_check_date = min(next_check_date, now + TO_TS(job_info.get_max_run_duration()));
         }
       }
     }

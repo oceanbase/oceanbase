@@ -101,6 +101,8 @@ public:
   static const int64_t MAX_VERSION = INT64_MAX;
   static const int64_t LOAD_CACHE_LOCK_CNT = 16;
   static const int64_t LOCK_TIMEOUT = 2 * 1000000L;
+
+  const char* auto_refresh_job_name = "auto_refresh_external_table_job";
   const char ip_delimiter = '%';
 
   ObExternalTableFileManager() {}
@@ -178,8 +180,19 @@ public:
     const uint64_t part_id,
     const ObIArray<ObAddr> &all_servers);
 
+  int refresh_external_table(const uint64_t tenant_id,
+                            const uint64_t table_id,
+                            ObSchemaGetterGuard &schema_guard,
+                            ObExecContext &exec_ctx);
 
+  int refresh_external_table(const uint64_t tenant_id,
+                              const ObTableSchema *table_schema,
+                              ObExecContext &exec_ctx);
+
+  int auto_refresh_external_table(ObExecContext &exec_ctx, const int64_t interval);
 private:
+  int delete_auto_refresh_job(ObExecContext &exec_ctx, ObMySQLTransaction &trans);
+  int create_auto_refresh_job(ObExecContext &ctx, const int64_t interval, ObMySQLTransaction &trans);
   int update_inner_table_files_list_by_part(
       ObMySQLTransaction &trans,
       const uint64_t tenant_id,
@@ -286,6 +299,17 @@ private:
   int add_partition_for_alter_stmt(ObAlterTableStmt *&alter_table_stmt,
                                   const ObString &part_name,
                                   ObNewRow &part_val);
+
+  int create_repeat_job_sql_(const bool is_oracle_mode,
+                            const uint64_t tenant_id,
+                            const int64_t job_id,
+                            const char *job_name,
+                            const ObString &exec_env,
+                            const int64_t start_usec,
+                            ObSqlString &job_action,
+                            ObSqlString &interval,
+                            const int64_t interval_ts,
+                            ObSqlString &raw_sql);
 
 private:
   common::ObSpinLock fill_cache_locks_[LOAD_CACHE_LOCK_CNT];

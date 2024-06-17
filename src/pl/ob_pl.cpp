@@ -844,15 +844,20 @@ void ObPLContext::destory(
         } else if (session_info.associated_xa()) {
           IS_DBLINK_TRANS;
           if (is_dblink) {
-            transaction::ObTransID tx_id;
-            const bool force_disconnect = false;
-            int rl_ret = OB_SUCCESS;
-            if (OB_SUCCESS != (rl_ret = ObTMService::tm_rollback(ctx, tx_id))) {
-              LOG_WARN("failed to rollback for dblink trans", K(ret), K(rl_ret), K(tx_id), K(xid), K(global_tx_type));
-            } else if (OB_SUCCESS != (rl_ret = session_info.get_dblink_context().clean_dblink_conn(force_disconnect))) {
-              LOG_WARN("dblink trans failed to release dblink connections", K(ret), K(rl_ret), K(tx_id), K(xid));
+            if (in_nested_sql_ctrl()) {
+              // rollback or commit by the top sql.
+            } else {
+              transaction::ObTransID tx_id;
+              const bool force_disconnect = false;
+              int rl_ret = OB_SUCCESS;
+              if (OB_SUCCESS != (rl_ret = ObTMService::tm_rollback(ctx, tx_id))) {
+                LOG_WARN("failed to rollback for dblink trans", K(ret), K(rl_ret), K(tx_id), K(xid), K(global_tx_type));
+              } else if (OB_SUCCESS != (rl_ret =
+                                        session_info.get_dblink_context().clean_dblink_conn(force_disconnect))) {
+                LOG_WARN("dblink trans failed to release dblink connections", K(ret), K(rl_ret), K(tx_id), K(xid));
+              }
+              ret = OB_SUCCESS == ret ? rl_ret : ret;
             }
-            ret = OB_SUCCESS == ret ? rl_ret : ret;
           } else if (OB_TRANS_XA_BRANCH_FAIL != ret) {
             tmp_ret = ObDbmsXA::xa_rollback_savepoint(ctx);
             if (OB_SUCCESS != tmp_ret) {

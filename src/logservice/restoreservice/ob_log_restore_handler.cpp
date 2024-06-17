@@ -64,9 +64,12 @@ const char *restore_comment_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_
   "Log source can not be accessed, the replication account may be incorrect or the privelege is insufficient",
   "Log source is unreachable, the log source access point may be unavailable",
   "Fetch log time out",
-  "Restore suspend, the standby has synchronized to recovery until scn",
+  "Restore suspend, the log stream has synchronized to recovery until scn",
   "Standby binary version is lower than primary data version, standby need to upgrade",
   "Primary tenant has been dropped",
+  "Waiting log stream created",
+  "Query primary failed",
+  "Restore handler has no leader",
   "Unexpected exceptions",
 };
 
@@ -82,6 +85,9 @@ const char *restore_status_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_S
   "RESTORE SUSPEND",
   "STANDBY NEED UPGRADE",
   "PRIMARY TENANT DROPPED",
+  "WAITING LS CREATED",
+  "QUERY PRIMARY FAILED",
+  "RESTORE HANDLER HAS NO LEADER",
   "NOT AVAILABLE",
 };
 
@@ -545,9 +551,10 @@ void ObLogRestoreHandler::mark_error(share::ObTaskId &trace_id,
       || (OB_TENANT_NOT_IN_SERVER == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)
       || (OB_IN_STOP_STATE == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)
       || (OB_SERVER_IS_INIT == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)
-      || (OB_ERR_OUT_OF_LOWER_BOUND == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)) {
+      || (OB_ERR_OUT_OF_LOWER_BOUND == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)
+      || (OB_SIZE_OVERFLOW == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)) {
       CLOG_LOG(WARN, "fetch log failed in restore", KPC(parent_), KPC(this));
-    } else if(OB_SUCCESS != ret_code) {
+    } else if (OB_SUCCESS != ret_code) {
       CLOG_LOG(ERROR, "fatal error occur in restore", KPC(parent_), KPC(this));
     }
   }
@@ -1053,10 +1060,29 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
   bool error_exist = false;
   bool is_leader = true;
   RestoreSyncStatus sync_status;
+  ObRole palf_role = FOLLOWER;
+  int64_t palf_proposal_id = -1;
+  bool is_pending_state = true;
 
-  if (!is_strong_leader(role_)) {
+  if (OB_FAIL(palf_handle_.get_role(palf_role, palf_proposal_id, is_pending_state))) {
+    CLOG_LOG(WARN, "fail to get palf role", K(ret), K_(id));
+  } else if (LEADER != palf_role || true == is_pending_state) {
+    CLOG_LOG(TRACE, "palf is not leader when get ls restore status info", K_(id), K(palf_role), K(is_pending_state));
+  } else if (LEADER == palf_role && !is_strong_leader(role_)) {
     is_leader = false;
-    CLOG_LOG(TRACE, "restore not leader", K(role_));
+    CLOG_LOG(WARN, "restore handler not leader", K_(id), K(role_), K(palf_role));
+    restore_status_info.ls_id_ = id_;
+    restore_status_info.err_code_ = OB_NOT_MASTER;
+    restore_status_info.sync_lsn_ = 0;
+    restore_status_info.sync_scn_ = SCN::min_scn();
+    if (OB_FAIL(get_restore_sync_status(restore_status_info.err_code_, context_.error_context_.error_type_, sync_status))) {
+      CLOG_LOG(WARN, "fail to get restore sync status", K_(restore_status_info.err_code), K(sync_status));
+    } else if (OB_FALSE_IT(restore_status_info.sync_status_ = sync_status)) { // set sync_status before get_restore_comment
+    } else if (OB_FAIL(restore_status_info.get_restore_comment())) {
+      CLOG_LOG(WARN, "fail to get restore comment", K(sync_status));
+    } else {
+      CLOG_LOG(TRACE, "success to get error code and message", K(restore_status_info));
+    }
   } else if (OB_FAIL(palf_handle_.get_end_lsn(lsn))) {
     CLOG_LOG(WARN, "fail to get end lsn when get ls restore status info");
   } else if (OB_FAIL(palf_handle_.get_end_scn(scn))) {
@@ -1083,7 +1109,7 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
     restore_status_info.sync_lsn_ = lsn.val_;
     restore_status_info.sync_scn_ = scn;
     if (OB_FAIL(restore_status_info.get_restore_comment())) {
-      CLOG_LOG(WARN, "fail to get comment", K(sync_status));
+      CLOG_LOG(WARN, "fail to get restore comment", K(sync_status));
     } else {
       CLOG_LOG(TRACE, "success to get error code and message", K(restore_status_info));
     }
@@ -1092,13 +1118,17 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
 }
 
 int ObLogRestoreHandler::get_restore_sync_status(int ret_code,
-    ObLogRestoreErrorContext::ErrorType error_type,
+    const ObLogRestoreErrorContext::ErrorType error_type,
     RestoreSyncStatus &sync_status)
 {
   int ret = OB_SUCCESS;
 
+  // RESTORE_SYNC_RESTORE_HANDLER_HAS_NO_LEADER
+  if (OB_NOT_MASTER == ret_code) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_RESTORE_HANDLER_HAS_NO_LEADER;
+  }
   // RESTORE_SYNC_SOURCE_HAS_A_GAP
-  if ((OB_ERR_OUT_OF_LOWER_BOUND == ret_code
+  else if ((OB_ERR_OUT_OF_LOWER_BOUND == ret_code
     || OB_ARCHIVE_ROUND_NOT_CONTINUOUS == ret_code
     || OB_ARCHIVE_LOG_RECYCLED == ret_code)
     && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
@@ -1133,6 +1163,14 @@ int ObLogRestoreHandler::get_restore_sync_status(int ret_code,
   // RESTORE_SYNC_PRIMARY_IS_DROPPED
   else if (OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
     sync_status = RestoreSyncStatus::RESTORE_SYNC_PRIMARY_IS_DROPPED;
+  }
+  // RESTORE_SYNC_WAITING_LS_CREATED
+  else if (OB_LS_NOT_EXIST == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_WAITING_LS_CREATED;
+  }
+  // RESTORE_SYNC_ACCESS_PRIMARY_FAILED
+  else if (OB_SIZE_OVERFLOW == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_QUERY_PRIMARY_FAILED;
   }
   // RESTORE_SYNC_NOT_AVAILABLE
   else if (OB_SUCCESS != ret_code) {
@@ -1230,7 +1268,7 @@ int RestoreStatusInfo::get_restore_comment()
   if (OB_FAIL(comment_.assign_fmt("%s", restore_comment_str[int(sync_status_)]))) {
     CLOG_LOG(WARN, "fail to assign comment", K_(sync_status));
   } else {
-    CLOG_LOG(TRACE, "success to get restore status comment", K_(sync_status));
+    CLOG_LOG(TRACE, "success to get restore status comment", K_(sync_status), K_(comment));
   }
   return ret;
 }

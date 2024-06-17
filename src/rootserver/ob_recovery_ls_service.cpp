@@ -910,6 +910,11 @@ int ObRecoveryLSService::process_ls_operator_in_trans_(
       //can not be creating, must be created or other status
       ret = OB_EAGAIN;
       LOG_WARN("ls not created, need wait", KR(ret), K(ls_status));
+      int tmp_ret = OB_SUCCESS;
+      //reuse OB_LS_NOT_EXIST error code, which means the ls has not created in this scenario.
+      if (OB_TMP_FAIL(init_restore_status(sync_scn, OB_LS_NOT_EXIST))) {
+        LOG_WARN("failed to init restore status", KR(tmp_ret), K(sync_scn));
+      }
     } else {
       ObLSStatus target_status = share::OB_LS_EMPTY;
       if (share::is_ls_create_end_op(ls_attr.get_ls_operation_type())) {
@@ -1067,7 +1072,7 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
           K(ls_recovery_stat), K(tenant_info));
     } else {
       last_report_ts_ = ObTimeUtility::current_time();
-      if (!only_update_readable_scn) {
+      if (!only_update_readable_scn && sync_scn >= restore_status_.sync_scn_) {
         //如果汇报了sync_scn，需要把restore_status重置掉
         restore_status_.reset();
       }

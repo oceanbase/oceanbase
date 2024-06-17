@@ -829,6 +829,13 @@ bool PageFilter::filter_row()
   return rows_accepted_ > page_size_;
 }
 
+int PageFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  UNUSED(cell);
+  ret_code = ReturnCode::INCLUDE;
+  return common::OB_SUCCESS;
+}
+
 bool PageFilter::filter_all_remaining()
 {
   return rows_accepted_ >= page_size_;
