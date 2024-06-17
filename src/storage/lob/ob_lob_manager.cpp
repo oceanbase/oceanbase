@@ -1464,7 +1464,11 @@ int ObLobManager::init_out_row_ctx(
       // use shema chunk size for full insert and default
       N += ((len + param.update_len_) / (param.get_schema_chunk_size() / 2) + 2);
       if (nullptr != param.tx_desc_) {
-        param.seq_no_st_ = param.tx_desc_->get_and_inc_tx_seq(param.parent_seq_no_.get_branch(), N);
+        if (OB_FAIL(param.tx_desc_->get_and_inc_tx_seq(param.parent_seq_no_.get_branch(),
+                                                       N,
+                                                       param.seq_no_st_))) {
+          LOG_WARN("get and inc tx seq failed", K(ret), K(N));
+        }
       } else {
         // do nothing, for direct load has no tx desc, do not use seq no
         LOG_DEBUG("tx_desc is null", K(param));
@@ -2467,11 +2471,14 @@ int ObLobManager::process_diff(ObLobAccessParam& param, ObLobLocatorV2& delta_lo
     LOG_WARN("chunk size not match", K(ret), K(iter.get_chunk_size()), K(store_chunk_size), KPC(param.lob_common_), K(param));
   } else {
     int64_t seq_cnt = iter.get_modified_chunk_cnt();
-    param.seq_no_st_ = param.tx_desc_->get_and_inc_tx_seq(param.parent_seq_no_.get_branch(), seq_cnt);
     param.used_seq_cnt_ = 0;
     param.total_seq_cnt_ = seq_cnt;
     param.op_type_ = ObLobDataOutRowCtx::OpType::DIFF;
-    if (OB_FAIL(init_out_row_ctx(param, 0, param.op_type_))) {
+    if (OB_FAIL(param.tx_desc_->get_and_inc_tx_seq(param.parent_seq_no_.get_branch(),
+                                                   seq_cnt,
+                                                   param.seq_no_st_))) {
+      LOG_WARN("get and inc tx seq failed", K(ret), K(seq_cnt));
+    } else if (OB_FAIL(init_out_row_ctx(param, 0, param.op_type_))) {
       LOG_WARN("init lob data out row ctx failed", K(ret));
     }
 
