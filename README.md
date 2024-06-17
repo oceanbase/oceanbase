@@ -68,6 +68,8 @@ See also [key features](https://en.oceanbase.com/product/opensource) for more 
 
 # Quick start
 
+See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://open.oceanbase.com/quickStart) for more details.
+
 ## 🔥 Start with all-in-one
 
 You can quickly deploy a stand-alone OceanBase Database to experience with the following commands:
@@ -98,7 +100,7 @@ obd demo
     docker exec -it oceanbase-ce ob-mysql sys # Connect to the root user of the sys tenant.
     ```
 
-See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://open.oceanbase.com/quickStart) for more details.
+See also [Docker Readme](https://github.com/oceanbase/docker-images/tree/main/oceanbase-ce) for more details.
 
 ## ☸️ Start with Kubernetes
 

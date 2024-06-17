@@ -67,6 +67,8 @@
 
 # 快速开始
 
+更多信息参考[快速体验 OceanBase 数据库](https://open.oceanbase.com/quickStart)。
+
 ## 🔥 使用 all-in-one
 
 可以执行下面的命令快速部署一个 OceanBase 数据库实例。
@@ -97,7 +99,7 @@ obd demo
     docker exec -it oceanbase-ce ob-mysql sys # 连接root用户sys租户
     ```
 
-更多信息参考[快速体验 OceanBase 数据库](https://open.oceanbase.com/quickStart)。
+更多信息参考[docker 文档](https://github.com/oceanbase/docker-images/tree/main/oceanbase-ce)。
 
 ## ☸️ 使用 Kubernetes
 
