@@ -434,6 +434,11 @@ public:
   static int get_tablet_count(const uint64_t tenant_id,
                               const int64_t table_id,
                               int64_t &tablet_count);
+  static int get_all_indexes_tablets_count(
+      schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      int64_t &all_tablet_count);
 
   // check if the major sstable of a table are exist in all needed replicas
   static int check_major_sstable_complete(

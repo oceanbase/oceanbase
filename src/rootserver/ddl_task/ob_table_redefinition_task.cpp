@@ -903,11 +903,14 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
             LOG_WARN("get ddl rpc timeout fail", K(ret));
   } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
       execute_ddl_task(alter_table_arg_, objs))) {
-    LOG_WARN("fail to swap original and hidden table state", K(ret));
-    if (OB_TIMEOUT == ret) {
+    int tmp_ret = OB_SUCCESS;
+    bool has_took_effect_succ = false;
+    if (OB_TMP_FAIL(check_take_effect_succ(has_took_effect_succ))) {
+      LOG_WARN("check took effect failed", K(ret), K(tmp_ret), K(target_object_id_));
+    } else if (has_took_effect_succ) {
       ret = OB_SUCCESS;
-      new_status = ObDDLTaskStatus::TAKE_EFFECT;
     }
+    LOG_WARN("swap orig and hidden table state failed", K(ret), K(tmp_ret), K(has_took_effect_succ), K(target_object_id_));
   }
   DEBUG_SYNC(TABLE_REDEFINITION_TAKE_EFFECT);
   if (new_status == next_task_status || OB_FAIL(ret)) {
@@ -927,6 +930,29 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     K_(schema_version),
     next_task_status);
   LOG_INFO("table redefinition task take effect", K(ret), "ddl_event_info", ObDDLEventInfo(), K(*this));
+  return ret;
+}
+
+int ObTableRedefinitionTask::check_take_effect_succ(bool &has_took_effect_succ)
+{
+  int ret = OB_SUCCESS;
+  has_took_effect_succ = false;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(dst_tenant_id_, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(dst_tenant_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema not exist", K(ret), K(target_object_id_));
+  } else if (!table_schema->is_user_hidden_table()) {
+    has_took_effect_succ = true;
+    LOG_INFO("target schema took effect", K(target_object_id_));
+  }
   return ret;
 }
 

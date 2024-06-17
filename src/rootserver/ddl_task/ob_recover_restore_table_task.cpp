@@ -172,28 +172,22 @@ int ObRecoverRestoreTableTask::fail()
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_arena("RestoreDDLClean");
+  bool already_cleanuped = false;
+
   int64_t rpc_timeout = 0;
-  int64_t all_orig_index_tablet_count = 0;
-  const ObDatabaseSchema *db_schema = nullptr;
-  const ObTableSchema *table_schema = nullptr;
-  bool is_oracle_mode = false;
-  ObRootService *root_service = GCTX.root_service_;
   obrpc::ObTableItem table_item;
   obrpc::ObDropTableArg drop_table_arg;
   obrpc::ObDDLRes drop_table_res;
-  bool need_cleanup = true;
-  bool all_complement_dag_exit = true;
+  ObRootService *root_service = GCTX.root_service_;
   {
+    bool is_oracle_mode = false;
+    int64_t all_indexes_tablets_count = 0;
+    const ObDatabaseSchema *db_schema = nullptr;
+    const ObTableSchema *table_schema = nullptr;
     ObSchemaGetterGuard dst_tenant_schema_guard;
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
-    } else if (OB_FAIL(check_and_cancel_complement_data_dag(all_complement_dag_exit))) {
-      LOG_WARN("check and cancel complement data dag failed", K(ret));
-    } else if (!all_complement_dag_exit) {
-      if (REACH_COUNT_INTERVAL(1000L)) {
-        LOG_INFO("wait all complement data dag exit", K(dst_tenant_id_), K(task_id_));
-      }
     } else if (OB_ISNULL(root_service)) {
       ret = OB_ERR_SYS;
       LOG_WARN("error sys, root service must not be nullptr", K(ret));
@@ -203,7 +197,7 @@ int ObRecoverRestoreTableTask::fail()
       LOG_WARN("get table schema failed", K(ret), K(dst_tenant_id_), K(target_object_id_));
     } else if (OB_ISNULL(table_schema)) {
       // already dropped.
-      need_cleanup = false;
+      already_cleanuped = true;
       LOG_INFO("already dropped", K(ret), K(dst_tenant_id_), K(target_object_id_));
     } else if (OB_FAIL(dst_tenant_schema_guard.get_database_schema(dst_tenant_id_, table_schema->get_database_id(), db_schema))) {
       LOG_WARN("get db schema failed", K(ret), K(dst_tenant_id_), KPC(table_schema));
@@ -212,7 +206,9 @@ int ObRecoverRestoreTableTask::fail()
       LOG_WARN("database id is invalid", K(ret), K(dst_tenant_id_), "db_id", table_schema->get_database_id());
     } else if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("failed to check if oralce compat mode", K(ret));
-    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(max(all_orig_index_tablet_count, table_schema->get_all_part_num()), rpc_timeout))) {
+    } else if (OB_FAIL(ObDDLUtil::get_all_indexes_tablets_count(dst_tenant_schema_guard, dst_tenant_id_, target_object_id_, all_indexes_tablets_count))) {
+      LOG_WARN("get all indexes tablets count failed", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(all_indexes_tablets_count + table_schema->get_all_part_num(), rpc_timeout))) {
       LOG_WARN("get ddl rpc timeout failed", K(ret));
     } else if (OB_FAIL(ob_write_string(tmp_arena, db_schema->get_database_name_str(), table_item.database_name_))) {
       LOG_WARN("deep cpy database name failed", K(ret), "db_name", db_schema->get_database_name_str());
@@ -232,15 +228,25 @@ int ObRecoverRestoreTableTask::fail()
       drop_table_arg.compat_mode_        = is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
     }
   }
-  if (OB_SUCC(ret) && need_cleanup) {
-    if (OB_FAIL(drop_table_arg.tables_.push_back(table_item))) {
+
+  if (OB_SUCC(ret) && !already_cleanuped) {
+    bool all_complement_dag_exit = true;
+    if (OB_FAIL(check_and_cancel_complement_data_dag(all_complement_dag_exit))) {
+      LOG_WARN("check and cancel complement data dag failed", K(ret));
+    } else if (!all_complement_dag_exit) {
+      if (REACH_COUNT_INTERVAL(1000L)) {
+        LOG_INFO("wait all complement data dag exit", K(dst_tenant_id_), K(task_id_));
+      }
+    } else if (OB_FAIL(drop_table_arg.tables_.push_back(table_item))) {
       LOG_WARN("push back failed", K(ret), K(drop_table_arg));
     } else if (OB_FAIL(root_service->get_common_rpc_proxy().to(GCTX.self_addr())
         .timeout(rpc_timeout).drop_table(drop_table_arg, drop_table_res))) {
       LOG_WARN("drop table failed", K(ret), K(rpc_timeout), K(drop_table_arg));
+    } else {
+      already_cleanuped = true;
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && already_cleanuped) {
     if (OB_FAIL(cleanup())) {
       LOG_WARN("clean up failed", K(ret));
     }
