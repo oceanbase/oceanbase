@@ -52,6 +52,7 @@ public:
   static int adjust_fts_args(
       obrpc::ObCreateIndexArg &index_arg,
       ObTableSchema &data_schema, // not const since will add column to data schema
+      ObIAllocator &allocator,
       ObIArray<ObColumnSchemaV2 *> &gen_columns);
   static int set_fts_rowkey_doc_table_columns(
       const obrpc::ObCreateIndexArg &arg,
@@ -75,14 +76,15 @@ private:
       const obrpc::ObCreateIndexArg *index_arg,
       ObTableSchema &data_schema); // not const since will add cascade flag
   static int adjust_fts_arg(
-      obrpc::ObCreateIndexArg *index_arg, // not const since index_arg.index_schema.allocator will be used
+      obrpc::ObCreateIndexArg *index_arg, // not const since index_columns_ will be modified
       const ObTableSchema &data_schema,
+      ObIAllocator &allocator,
       const ObIArray<const ObColumnSchemaV2 *> &fts_cols);
   static int inner_adjust_fts_arg(
       obrpc::ObCreateIndexArg *fts_arg,
       const ObIArray<const ObColumnSchemaV2 *> &fts_cols,
       const int index_column_cnt,
-      ObIAllocator *allocator);
+      ObIAllocator &allocator);
   static int generate_doc_id_column(
       const obrpc::ObCreateIndexArg *index_arg,
       const uint64_t col_id,
