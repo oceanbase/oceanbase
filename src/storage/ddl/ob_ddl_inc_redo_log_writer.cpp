@@ -400,6 +400,8 @@ int ObDDLIncRedoLogWriter::local_write_inc_start_log(
   ObDDLIncStartClogCb *cb = nullptr;
   ObPartTransCtx *trans_ctx = nullptr;
   ObDDLIncLogHandle handle;
+  const bool is_sync = true;
+  const int64_t abs_timeout_ts = ObClockGenerator::getClock() + DEFAULT_RETRY_TIMEOUT_US;
 
   ObDDLRedoLockGuard guard(tablet_id_.hash());
   if (OB_UNLIKELY(!log.is_valid())) {
@@ -410,10 +412,9 @@ int ObDDLIncRedoLogWriter::local_write_inc_start_log(
   } else if (OB_ISNULL(ls) || !tablet_id_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(ls), K(tablet_id_));
-  } else if (OB_FAIL(ls->sync_tablet_freeze_for_direct_load(tablet_id_, DEFAULT_RETRY_TIMEOUT_US))) {
+  } else if (OB_FAIL(ls->tablet_freeze(tablet_id_, is_sync, abs_timeout_ts))) {
     LOG_WARN("sync tablet freeze failed", K(ret), K(tablet_id_));
-  } else if (lob_meta_tablet_id.is_valid() &&
-             OB_FAIL(ls->sync_tablet_freeze_for_direct_load(lob_meta_tablet_id, DEFAULT_RETRY_TIMEOUT_US))) {
+  } else if (lob_meta_tablet_id.is_valid() && OB_FAIL(ls->tablet_freeze(lob_meta_tablet_id, is_sync, abs_timeout_ts))) {
     LOG_WARN("sync tablet freeze failed", K(ret), K(lob_meta_tablet_id));
   } else if (OB_ISNULL(cb = OB_NEW(ObDDLIncStartClogCb, ObMemAttr(MTL_ID(), "DDL_IRLW")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

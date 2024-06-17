@@ -659,7 +659,6 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(
     TRANS_LOG(INFO, "not set is_tablet_freeze because the memtable cannot be freezed", KPC(active_tablet_memtable));
   }
 
-
   return ret;
 }
 

@@ -48,7 +48,7 @@ using namespace palf;
 
 namespace storage
 {
-class TestTxDataTable;
+class TestTabletFreezeForDirectLoad;
 class MockTxDataTable;
 class MockTxTable;
 static const uint64_t TEST_TENANT_ID = 1;
@@ -111,7 +111,7 @@ public:
 
 class MockTxDataTable : public ObTxDataTable
 {
-  friend TestTxDataTable;
+  friend TestTabletFreezeForDirectLoad;
 
 public:
   MockTxDataTable() : ObTxDataTable() {}
@@ -154,11 +154,11 @@ public:
   MockTxTable(MockTxDataTable *tx_data_table) : ObTxTable(*tx_data_table) {}
 };
 
-class TestTxDataTable : public ::testing::Test
+class TestTabletFreezeForDirectLoad : public ::testing::Test
 {
 public:
-  TestTxDataTable() : tx_table_(&tx_data_table_) {}
-  virtual ~TestTxDataTable() {}
+  TestTabletFreezeForDirectLoad() : tx_table_(&tx_data_table_) {}
+  virtual ~TestTabletFreezeForDirectLoad() {}
 
   static void SetUpTestCase()
   {
@@ -221,7 +221,7 @@ public:
   ObArenaAllocator allocator_;
 };
 
-void TestTxDataTable::make_freezing_to_frozen_(ObTxDataMemtableMgr *memtable_mgr)
+void TestTabletFreezeForDirectLoad::make_freezing_to_frozen_(ObTxDataMemtableMgr *memtable_mgr)
 {
   ObArray<ObTableHandleV2> memtables;
   ObTxDataMemtable *memtable = nullptr;
@@ -234,7 +234,7 @@ void TestTxDataTable::make_freezing_to_frozen_(ObTxDataMemtableMgr *memtable_mgr
   }
 }
 
-void TestTxDataTable::insert_tx_data_()
+void TestTabletFreezeForDirectLoad::insert_tx_data_()
 {
   insert_start_scn.convert_for_logservice(ObTimeUtil::current_time_ns());
   ObTxData *tx_data = nullptr;
@@ -273,7 +273,7 @@ void TestTxDataTable::insert_tx_data_()
   }
 }
 
-void TestTxDataTable::insert_rollback_tx_data_()
+void TestTabletFreezeForDirectLoad::insert_rollback_tx_data_()
 {
   auto tx_id = transaction::ObTransID(INT64_MAX-2);
   share::SCN max_end_scn = share::SCN::min_scn();
@@ -306,7 +306,7 @@ void TestTxDataTable::insert_rollback_tx_data_()
   }
 }
 
-void TestTxDataTable::insert_abort_tx_data_()
+void TestTabletFreezeForDirectLoad::insert_abort_tx_data_()
 {
   insert_start_scn.convert_for_logservice(ObTimeUtil::current_time_ns());
   ObTxData *tx_data = nullptr;
@@ -328,7 +328,7 @@ void TestTxDataTable::insert_abort_tx_data_()
   ASSERT_EQ(OB_SUCCESS, tx_data_table_.insert(tx_data));
 }
 
-void TestTxDataTable::generate_past_commit_version_(ObCommitVersionsArray &past_commit_versions)
+void TestTabletFreezeForDirectLoad::generate_past_commit_version_(ObCommitVersionsArray &past_commit_versions)
 {
   share::SCN start_scn = share::SCN::minus(insert_start_scn, 300LL * ONE_SEC_NS);
   share::SCN commit_version = share::SCN::plus(start_scn, 2LL * ONE_SEC_NS);
@@ -339,7 +339,7 @@ void TestTxDataTable::generate_past_commit_version_(ObCommitVersionsArray &past_
   }
 }
 
-void TestTxDataTable::set_freezer_()
+void TestTabletFreezeForDirectLoad::set_freezer_()
 {
   ObLSID ls_id(1);
   ObLSWRSHandler ls_loop_worker;
@@ -351,7 +351,7 @@ void TestTxDataTable::set_freezer_()
   tx_data_table_.freezer_.init(&ls_);
 }
 
-void TestTxDataTable::init_memtable_mgr_(ObTxDataMemtableMgr *memtable_mgr)
+void TestTabletFreezeForDirectLoad::init_memtable_mgr_(ObTxDataMemtableMgr *memtable_mgr)
 {
   ASSERT_NE(nullptr, memtable_mgr);
   memtable_mgr->set_freezer(&tx_data_table_.freezer_);
@@ -359,7 +359,7 @@ void TestTxDataTable::init_memtable_mgr_(ObTxDataMemtableMgr *memtable_mgr)
   ASSERT_EQ(1, memtable_mgr->get_memtable_count_());
 }
 
-void TestTxDataTable::check_freeze_(ObTxDataMemtableMgr *memtable_mgr,
+void TestTabletFreezeForDirectLoad::check_freeze_(ObTxDataMemtableMgr *memtable_mgr,
                                     ObTxDataMemtable *&freezing_memtable,
                                     ObTxDataMemtable *&active_memtable)
 {
@@ -383,7 +383,7 @@ void TestTxDataTable::check_freeze_(ObTxDataMemtableMgr *memtable_mgr,
   freezing_memtable->set_state(ObTxDataMemtable::State::FROZEN);
 }
 
-void TestTxDataTable::do_basic_test()
+void TestTabletFreezeForDirectLoad::do_basic_test()
 {
   // init tx data table
   ASSERT_EQ(OB_SUCCESS, tx_data_table_.init(ls_));
@@ -457,7 +457,7 @@ void TestTxDataTable::do_basic_test()
   memtable_mgr->offline();
 }
 
-void TestTxDataTable::do_undo_status_test()
+void TestTabletFreezeForDirectLoad::do_undo_status_test()
 {
   // init tx data table
   ASSERT_EQ(OB_SUCCESS, tx_data_table_.init(ls_));
@@ -516,7 +516,7 @@ void TestTxDataTable::do_undo_status_test()
   }
 }
 
-void TestTxDataTable::test_serialize_with_action_cnt_(int cnt)
+void TestTabletFreezeForDirectLoad::test_serialize_with_action_cnt_(int cnt)
 {
     ObTxData *tx_data = nullptr;
     ObTxDataGuard tx_data_guard;
@@ -562,7 +562,7 @@ void TestTxDataTable::test_serialize_with_action_cnt_(int cnt)
 }
 
 
-void TestTxDataTable::do_tx_data_serialize_test()
+void TestTabletFreezeForDirectLoad::do_tx_data_serialize_test()
 {
   ASSERT_EQ(OB_SUCCESS, tx_data_table_.init(ls_));
   ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
@@ -578,7 +578,7 @@ void TestTxDataTable::do_tx_data_serialize_test()
   memtable_mgr->offline();
 }
 
-void TestTxDataTable::test_commit_versions_serialize_()
+void TestTabletFreezeForDirectLoad::test_commit_versions_serialize_()
 {
   ObCommitVersionsArray cur_array;
   ObCommitVersionsArray past_array;
@@ -637,7 +637,7 @@ void TestTxDataTable::test_commit_versions_serialize_()
   ASSERT_EQ(s_pos, d_pos);
 }
 
-void TestTxDataTable::do_repeat_insert_test() {
+void TestTabletFreezeForDirectLoad::do_repeat_insert_test() {
   ASSERT_EQ(OB_SUCCESS, tx_data_table_.init(ls_));
 
   set_freezer_();
@@ -682,7 +682,7 @@ void TestTxDataTable::do_repeat_insert_test() {
 
 }
 
-void TestTxDataTable::fake_ls_(ObLS &ls)
+void TestTabletFreezeForDirectLoad::fake_ls_(ObLS &ls)
 {
   ls.ls_meta_.tenant_id_ = 1;
   ls.ls_meta_.ls_id_.id_ = 1001;
@@ -692,7 +692,7 @@ void TestTxDataTable::fake_ls_(ObLS &ls)
   ls.ls_meta_.rebuild_seq_ = 0;
 }
 
-void TestTxDataTable::do_print_leak_slice_test()
+void TestTabletFreezeForDirectLoad::do_print_leak_slice_test()
 {
   const int32_t CONCURRENCY = 4;
   ObMemAttr attr;
@@ -727,17 +727,17 @@ void TestTxDataTable::do_print_leak_slice_test()
   slice_allocator.destroy();
 }
 
-TEST_F(TestTxDataTable, basic_test)
+TEST_F(TestTabletFreezeForDirectLoad, basic_test)
 {
   tx_data_num = const_data_num;
   do_basic_test();
 }
 
-TEST_F(TestTxDataTable, repeat_insert_test) { do_repeat_insert_test(); }
+TEST_F(TestTabletFreezeForDirectLoad, repeat_insert_test) { do_repeat_insert_test(); }
 
-TEST_F(TestTxDataTable, undo_status_test) { do_undo_status_test(); }
+TEST_F(TestTabletFreezeForDirectLoad, undo_status_test) { do_undo_status_test(); }
 
-TEST_F(TestTxDataTable, serialize_test) { do_tx_data_serialize_test(); }
+TEST_F(TestTabletFreezeForDirectLoad, serialize_test) { do_tx_data_serialize_test(); }
 
 // TEST_F(TestTxDataTable, print_leak_slice) { do_print_leak_slice_test(); }
 
