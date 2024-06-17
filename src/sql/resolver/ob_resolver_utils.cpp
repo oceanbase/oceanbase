@@ -7548,6 +7548,7 @@ int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObR
 }
 
 int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
+                                                 const ObSQLSessionInfo &session_info,
                                                  ObRawExprFactory &expr_factory,
                                                  int64_t &prepare_param_count,
                                                  ObRawExpr *&expr)
@@ -7582,6 +7583,12 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
         } else if (result_type.is_char() || result_type.is_nchar()) {  \
           result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);   \
         }  \
+      }  \
+      if (LS_INVALIED == result_type.get_length_semantics() && ob_is_string_tc(result_type.get_type())) {  \
+        const ObLengthSemantics default_length_semantics =  LS_INVALIED != session_info.get_actual_nls_length_semantics() \
+                                                             ? session_info.get_actual_nls_length_semantics()  \
+                                                             : LS_BYTE;  \
+        result_type.set_length_semantics(default_length_semantics);  \
       }  \
       expr->set_result_type(result_type); \
       param_expr = static_cast<ObConstRawExpr*>(expr); \

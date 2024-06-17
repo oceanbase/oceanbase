@@ -2997,9 +2997,9 @@ bool ObDMLResolver::check_expr_has_colref(ObRawExpr *expr)
 int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_ref_expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(real_ref_expr)) {
+  if (OB_ISNULL(real_ref_expr) || OB_ISNULL(params_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is NULL", K(ret));
+    LOG_WARN("expr or params_.session_info_ is NULL", K(ret), K(real_ref_expr), K(params_.session_info_));
   } else if (real_ref_expr->is_const_raw_expr() //local variable access
              || (real_ref_expr->is_obj_access_expr() && !check_expr_has_colref(real_ref_expr)) // composite variable access
              || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_expr_type() //package variable access, must not (system/user variable)
@@ -3008,9 +3008,10 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
     if (OB_FAIL(ObResolverUtils::revert_external_param_info(params_.external_param_info_, *params_.expr_factory_, real_ref_expr))) {
       LOG_WARN("failed to revert external param info", K(ret), KPC(real_ref_expr));
     } else if (OB_FAIL(ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
-                                                             *params_.expr_factory_,
-                                                             params_.prepare_param_count_,
-                                                             real_ref_expr))) {
+                                                                    *params_.session_info_,
+                                                                    *params_.expr_factory_,
+                                                                    params_.prepare_param_count_,
+                                                                    real_ref_expr))) {
       LOG_WARN("failed to resolve external param info", K(ret), KPC(real_ref_expr));
     }
   } else if (real_ref_expr->is_udf_expr() //replace self argument of udt routine
@@ -3022,7 +3023,7 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
         || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_param_expr(0)->get_expr_type()) {
       ObRawExpr *self = real_ref_expr->get_param_expr(0);
       if (OB_FAIL(ObResolverUtils::resolve_external_param_info(
-                        params_.external_param_info_, *params_.expr_factory_, params_.prepare_param_count_, self))) {
+                        params_.external_param_info_, *params_.session_info_, *params_.expr_factory_, params_.prepare_param_count_, self))) {
         LOG_WARN("failed to resolve external param info", K(ret), KPC(self));
       } else if (OB_FAIL(ObResolverUtils::revert_external_param_info(
                         params_.external_param_info_, *params_.expr_factory_, real_ref_expr->get_param_expr(0)))) {

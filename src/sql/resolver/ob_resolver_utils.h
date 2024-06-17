@@ -331,6 +331,7 @@ public:
                                      bool is_check_mode = false,
                                      bool is_sql_scope = false);
   static int resolve_external_param_info(ExternalParams &param_info,
+                                         const ObSQLSessionInfo &session_info,
                                          ObRawExprFactory &expr_factory,
                                          int64_t &prepare_param_count,
                                          ObRawExpr *&expr);
