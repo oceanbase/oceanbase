@@ -2698,6 +2698,34 @@ DEFINE_ERROR(OB_ERR_PS_NO_RECURSION, -11016, ER_PS_NO_RECURSION, "HY000", "The p
 DEFINE_ERROR_EXT(OB_ERR_PARTITION_EXCHANGE_PART_TABLE, -11017, ER_PARTITION_EXCHANGE_PART_TABLE, "HY000", "Table to exchange with partition is partitioned", "Table to exchange with partition is partitioned: \'%.*s\'");
 DEFINE_ERROR_EXT(OB_INVALID_EXTERNAL_FILE, -11018, -1, "HY000", "Invalid external file", "Invalid external file: %s");
 
+DEFINE_ERROR_DEP(OB_HDFS_CONNECT_FS_ERROR, -11019, -1, "HY000", "HDFS: could not connect the hdfs file system");
+DEFINE_ERROR_DEP(OB_HDFS_OPEN_FILE_ERROR, -11020, -1, "HY000", "HDFS: could not open file on hdfs");
+DEFINE_ERROR_DEP(OB_HDFS_READ_FILE_ERROR, -11021, -1, "HY000", "HDFS: error reading the file on hdfs");
+DEFINE_ERROR_DEP(OB_HDFS_CREATE_IO_SERVICE_ERROR, -11022, -1, "HY000", "HDFS: unable to create IoService for hdfs");
+DEFINE_ERROR_DEP(OB_HDFS_CREATE_FILE_SYSTEM_ERROR, -11023, -1, "HY000", "HDFS: unable to create hdfs file system");
+DEFINE_ERROR_DEP(OB_HDFS_CONNECT_DEFAULTFS_ERROR, -11024, -1, "HY000", "HDFS: error connecting to the cluster: defaultFS is empty");
+DEFINE_ERROR_DEP(OB_HDFS_LOAD_DEFAULT_RESOURCES_ERROR, -11025, -1, "HY000", "HDFS: could not load hdfs default resources");
+DEFINE_ERROR_DEP(OB_HDFS_VALIDATE_RESOURCES_ERROR, -11026, -1, "HY000", "HDFS: resources is invalid");
+DEFINE_ERROR_DEP(OB_HDFS_LOAD_OBJECT_ERROR, -11027, -1, "HY000", "HDFS: Could not load Options object");
+DEFINE_ERROR_DEP(OB_HDFS_RESOURCE_UNAVAILABLE, -11028, -1, "HY000", "HDFS: resource is unavailable");
+DEFINE_ERROR_DEP(OB_HDFS_FUNC_UNIMPLEMENTED, -11029, -1, "HY000", "HDFS: function is unimplemented");
+DEFINE_ERROR_DEP(OB_HDFS_OPERATION_CANCELED, -11030, -1, "HY000", "HDFS: operation is already canceled");
+DEFINE_ERROR_DEP(OB_HDFS_PERMISSION_DENIED, -11031, -1, "HY000", "HDFS: permission denied");
+DEFINE_ERROR_DEP(OB_HDFS_PATH_NOT_FOUND, -11032, -1, "HY000", "HDFS: path not found");
+DEFINE_ERROR_DEP(OB_HDFS_FILE_ALREADY_EXISTS, -11033, -1, "HY000", "HDFS: file already exists");
+DEFINE_ERROR_DEP(OB_HDFS_PATH_IS_NOT_EMPTY_DIRECTORY, -11034, -1, "HY000", "HDFS: path is not empty directory");
+DEFINE_ERROR_DEP(OB_HDFS_BUSY, -11035, -1, "HY000", "HDFS: io or resource is busy");
+DEFINE_ERROR_DEP(OB_HDFS_AUTHENTICATION_FAILED, -11036, -1, "HY000", "HDFS: authentication failed");
+DEFINE_ERROR_DEP(OB_HDFS_ACCESSCONTROL_ERROR, -11037, -1, "HY000", "HDFS: access control error");
+DEFINE_ERROR_DEP(OB_HDFS_STANDNDBY_ERROR, -11038, -1, "HY000", "HDFS: standby error");
+DEFINE_ERROR_DEP(OB_HDFS_SNAPSHOT_PROTOCOL_ERROR, -11039, -1, "HY000", "HDFS: snapshot protocol error");
+DEFINE_ERROR_DEP(OB_HDFS_INVALID_OFFSET, -11040, -1, "HY000", "HDFS: use invalid offset");
+DEFINE_ERROR_DEP(OB_HDFS_NOT_A_DIRECTORY, -11041, -1, "HY000", "HDFS: not a directory");
+DEFINE_ERROR_DEP(OB_HDFS_MALFORMED_URI, -11042, -1, "HY000", "HDFS: malformed uri");
+DEFINE_ERROR_DEP(OB_HDFS_INVALID_ARGUMENT, -11043, -1, "HY000", "HDFS: invalid argument");
+DEFINE_ERROR_DEP(OB_HDFS_NOT_IMPLEMENT, -11044, -1, "HY000", "HDFS: not implementation");
+DEFINE_ERROR_DEP(OB_HDFS_ERROR, -11045, -1, "HY000", "HDFS error");
+
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)
