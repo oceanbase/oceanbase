@@ -133,12 +133,12 @@ int ObSequenceOptionBuilder::check_sequence_option(
   ObNumberCalc max(option.get_max_value(), allocator);
   ObNumberCalc cache(option.get_cache_size(), allocator);
   // value_range = option.get_max_value() - option.get_min_value()
-  // cache_range = option.get_increment_by().abs() *  option.get_cache_size() - 1
+  // cache_range = option.get_increment_by().abs() *  (option.get_cache_size() - 1)
   if (OB_FAIL(check_sequence_option_integer(opt_bitset, option))) {
     LOG_WARN("fail check sequence options integer", K(option), K(ret));
   } else if (OB_FAIL(max.sub(option.get_min_value()).get_result(value_range))) {
     LOG_WARN("fail calc number", K(ret));
-  } else if (OB_FAIL(cache.mul(option.get_increment_by().abs()).sub(static_cast<int64_t>(1)).get_result(cache_range))) {
+  } else if (OB_FAIL(cache.sub(static_cast<int64_t>(1)).mul(option.get_increment_by().abs()).get_result(cache_range))) {
     LOG_WARN("fail calc number", K(ret));
   } else if (option.get_increment_by() == static_cast<int64_t>(0)) {
     // INCREMENT must be a nonzero integer
@@ -181,7 +181,7 @@ int ObSequenceOptionBuilder::check_sequence_option(
     // descending sequences that CYCLE must specify MINVALUE
     ret = OB_ERR_SEQ_REQUIRE_MINVALUE;
 
-  } else if (option.has_cycle() && value_range < cache_range) {
+  } else if (option.has_cycle() && value_range <= cache_range) {
     // number to CACHE must be less than one cycle
     ret = OB_ERR_SEQ_CACHE_TOO_LARGE;
 
