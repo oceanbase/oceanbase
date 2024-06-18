@@ -962,6 +962,14 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(const SCN &sstable_end_scn)
                 K(max_decided_scn),
                 K(calc_upper_info_),
                 K(min_start_scn_in_tx_data_memtable));
+  } else {
+    STORAGE_LOG(TRACE,
+                "do calculate upper trans version.",
+                K(need_skip),
+                K(sstable_end_scn),
+                K(max_decided_scn),
+                K(calc_upper_info_),
+                K(min_start_scn_in_tx_data_memtable));
   }
 
   return need_skip;

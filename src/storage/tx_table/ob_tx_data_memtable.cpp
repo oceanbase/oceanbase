@@ -690,7 +690,15 @@ int ObTxDataMemtable::get_split_ranges(const ObStoreRange &input_range,
     }
   }
 
-  STORAGE_LOG(INFO, "generate range bounds for parallel dump tx data memtable:", K(row_key_array_), K(tx_id_2_range_));
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    // reset ret code and use input_range as output result
+    ret = OB_SUCCESS;
+    if (OB_FAIL(range_array.push_back(input_range))) {
+      STORAGE_LOG(WARN, "Failed to push back the merge range to array", KR(ret), K(input_range));
+    }
+  }
+
+  STORAGE_LOG(INFO, "generate range bounds for parallel dump tx data memtable:", K(ret), K(row_key_array_), K(tx_id_2_range_));
   return ret;
 }
 
