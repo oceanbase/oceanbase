@@ -2323,6 +2323,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   // if `use_rich_format()` is used as part of key, added plan's key will be `false + other_info`.
   pc_key.use_rich_vector_format_ = session.initial_use_rich_format();
   pc_key.config_use_rich_format_ = session.config_use_rich_format();
+  pc_key.sys_var_config_hash_val_ = session.get_sys_var_config_hash_val();
   pc_key.is_weak_read_ = is_weak;
   return ret;
 }

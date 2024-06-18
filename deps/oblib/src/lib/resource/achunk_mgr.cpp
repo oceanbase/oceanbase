@@ -259,8 +259,9 @@ AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
     chunk->alloc_bytes_ = size;
     SANITY_UNPOISON(chunk, all_size); // maybe no need?
   } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "msg", "oops, over total memory limit" ,
-                "hold", get_hold(), "limit", get_limit());
+    LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED,
+        "[OOPS]: over total memory limit. ", "The details: ",
+        "hold= ", get_hold(), ", limit= ", get_limit());
   }
 
   return chunk;
@@ -320,8 +321,9 @@ AChunk *AChunkMgr::alloc_co_chunk(const uint64_t size)
     chunk->alloc_bytes_ = size;
     //SANITY_UNPOISON(chunk, all_size); // maybe no need?
   } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "msg", "oops, over total memory limit" ,
-                "hold", get_hold(), "limit", get_limit());
+    LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED,
+        "[OOPS]: over total memory limit. ", "The details: ",
+        "hold= ", get_hold(), ", limit= ", get_limit());
   }
 
   return chunk;

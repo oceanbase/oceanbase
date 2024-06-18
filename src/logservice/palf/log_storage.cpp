@@ -874,6 +874,7 @@ int LogStorage::read_block_header_(const block_id_t block_id,
     } else if (false == log_block_header.check_integrity()) {
       ret = OB_INVALID_DATA;
       PALF_LOG(ERROR, "info block has been corrupted!!!", K(log_block_header), K(block_id));
+      LOG_DBA_ERROR_V2(OB_LOG_CHECKSUM_MISMATCH, ret, "info block has been corrupted!!!");
     } else {
       PALF_LOG(TRACE, "read_block_header_ success", K(ret), K(block_id),
                K(log_block_header));

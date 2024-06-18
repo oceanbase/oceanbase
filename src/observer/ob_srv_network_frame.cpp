@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "io/easy_maccept.h"
 #include "observer/ob_srv_network_frame.h"
 #include "rpc/obmysql/ob_sql_nio_server.h"
 #include "observer/mysql/obsm_conn_callback.h"
@@ -167,6 +166,11 @@ int ObSrvNetworkFrame::init()
   } else {
     if (OB_FAIL(obrpc::global_poc_server.start(rpc_port, io_cnt, &deliver_))) {
       LOG_ERROR("poc rpc server start fail", K(ret));
+      if (OB_SERVER_LISTEN_ERROR == ret) {
+        LOG_DBA_ERROR_V2(OB_SERVER_LISTEN_FAIL, ret,
+            "listen port: ", rpc_port, " for rpc service failed. ",
+            "[suggestion] check whether if rpc_port: ", rpc_port, " being occupied by another process.");
+      }
     } else {
       LOG_INFO("poc rpc server start successfully");
     }

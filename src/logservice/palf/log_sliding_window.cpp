@@ -2229,7 +2229,8 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       // Verifying accum_checksum firstly.
       if (OB_FAIL(checksum_.verify_accum_checksum(log_task_header.data_checksum_,
                                                   log_task_header.accum_checksum_))) {
-        PALF_LOG(ERROR, "verify_accum_checksum failed", K(ret), KPC(this), K(log_id), KPC(log_task));
+        PALF_LOG(ERROR, "verify_accum_checksum failed", KR(ret), KPC(this), K(log_id), KPC(log_task));
+        LOG_DBA_ERROR_V2(OB_LOG_CHECKSUM_MISMATCH, ret, "verify_accum_checksum failed");
       } else {
         // Call fs_cb.
         int tmp_ret = OB_SUCCESS;

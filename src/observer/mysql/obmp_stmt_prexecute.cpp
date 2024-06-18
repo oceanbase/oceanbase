@@ -361,6 +361,11 @@ int ObMPStmtPrexecute::before_process()
                     ret = OB_ERR_PREPARE_STMT_CHECKSUM;
                     LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_sessid(),
                                                     K(ps_stmt_checksum), K(*ps_session_info));
+                    LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
+                                     "ps stmt checksum fail. ",
+                                     "the ps stmt checksum is ", ps_stmt_checksum,
+                                     ", but current session stmt checksum is ", ps_session_info->get_ps_stmt_checksum(),
+                                     ". current session id is ", session->get_sessid(), ". ");
                 } else {
                   PS_DEFENSE_CHECK(4) // extend_flag
                   {

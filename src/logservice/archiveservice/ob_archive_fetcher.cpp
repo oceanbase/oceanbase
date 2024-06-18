@@ -1040,10 +1040,9 @@ void ObArchiveFetcher::handle_log_fetch_ret_(
     if (OB_ERR_OUT_OF_LOWER_BOUND == ret_code) {
       int tmp_ret = OB_CLOG_RECYCLE_BEFORE_ARCHIVE;
       reason.set(ObArchiveInterruptReason::Factor::LOG_RECYCLE, lbt(), tmp_ret);
-      LOG_DBA_ERROR(OB_CLOG_RECYCLE_BEFORE_ARCHIVE, "msg", "observer clog is recycled "
-          "before archive, check if archive speed is less than clog writing speed "
-          "or archive device is full or archive device is not healthy",
-          "ret", tmp_ret);
+      LOG_DBA_ERROR_V2(OB_LOG_RECYCLE_BEFORE_ARCHIVE, OB_CLOG_RECYCLE_BEFORE_ARCHIVE, "msg", "observer clog is recycled "
+          "before archive.", "[suggesstion] check if archive speed is less than clog writing speed "
+          "or archive device is full or archive device is not healthy");
     } else {
       reason.set(ObArchiveInterruptReason::Factor::UNKONWN, lbt(), ret_code);
     }

@@ -536,7 +536,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     }
 #endif
     const char *msg = alloc_failed_msg();
-    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "[OOPS]", "alloc failed reason", KCSTRING(msg));
+    LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED, "[OOPS]: alloc failed reason is that ", msg);
     _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
                 "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
                 inner_attr.tenant_id_, inner_attr.ctx_id_,

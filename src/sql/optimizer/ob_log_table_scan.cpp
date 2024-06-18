@@ -481,6 +481,8 @@ int ObLogTableScan::generate_access_exprs()
                  && static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_) {
         if (OB_FAIL(add_var_to_array_no_dup(ext_file_column_exprs_, expr))) {
           LOG_WARN("fail to push back expr", K(ret));
+        } else if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
+          LOG_WARN("fail to push back expr", K(ret));
         } else if (OB_FAIL(access_exprs_.push_back(expr))) { //add access expr temp
           LOG_WARN("fail to push back expr", K(ret));
         }

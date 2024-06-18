@@ -162,7 +162,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       use_rich_vector_format_(false),
       last_refresh_schema_version_(OB_INVALID_VERSION),
       force_rich_vector_format_(ForceRichFormatStatus::Disable),
-      config_use_rich_format_(true)
+      config_use_rich_format_(true),
+      sys_var_config_hash_val_(0)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -472,6 +473,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   last_refresh_schema_version_ = OB_INVALID_VERSION;
   proxy_user_id_ = OB_INVALID_ID;
   config_use_rich_format_ = true;
+  sys_var_config_hash_val_ = 0;
 }
 
 int ObBasicSessionInfo::reset_timezone()
@@ -1522,6 +1524,14 @@ int ObBasicSessionInfo::get_influence_plan_sys_var(ObSysVarInPC &sys_vars) const
   return ret;
 }
 
+void ObBasicSessionInfo::eval_sys_var_config_hash_val()
+{
+  if (!sys_var_in_pc_str_.empty() && !config_in_pc_str_.empty()) {
+    sys_var_config_hash_val_ = sys_var_in_pc_str_.hash();
+    sys_var_config_hash_val_ = config_in_pc_str_.hash(sys_var_config_hash_val_);
+  }
+}
+
 /*
  **内部session与用户session对应的影响plan的系统变量的顺序
  *
@@ -1599,6 +1609,7 @@ int ObBasicSessionInfo::gen_sys_var_in_pc_str()
   } else {
     (void)sys_var_in_pc_str_.assign(buf, int32_t(pos));
   }
+  OX (eval_sys_var_config_hash_val());
 
   return ret;
 }
@@ -1801,6 +1812,7 @@ int ObBasicSessionInfo::gen_configs_in_pc_str()
         (void)config_in_pc_str_.assign(buf, int32_t(pos));
         inf_pc_configs_.update_version(cluster_config_version, cached_tenant_config_version_);
       }
+      OX (eval_sys_var_config_hash_val());
     }
   }
   return ret;
@@ -4610,6 +4622,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
                 thread_data_.proxy_host_name_,
                 enable_role_ids_);
   }
+  OB_UNIS_ENCODE(sys_var_config_hash_val_);
   return ret;
 }
 
@@ -4888,6 +4901,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
       }
     }
   }
+  OB_UNIS_DECODE(sys_var_config_hash_val_);
   return ret;
 }
 
@@ -5169,6 +5183,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               thread_data_.proxy_user_name_,
               thread_data_.proxy_host_name_,
               enable_role_ids_);
+  OB_UNIS_ADD_LEN(sys_var_config_hash_val_);
   return len;
 }
 

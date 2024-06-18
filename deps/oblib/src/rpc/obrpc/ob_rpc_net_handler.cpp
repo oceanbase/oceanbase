@@ -208,6 +208,10 @@ void *ObRpcNetHandler::decode(easy_message_t *ms)
             if (!pkt->is_resp() && fly_ts > common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
               LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "packet fly cost too much time", "pcode", pkt->get_pcode(),
                       "fly_ts", fly_ts, "send_timestamp", pkt->get_timestamp(), "connection", easy_connection_str(ms->c));
+              LOG_DBA_WARN_V2(OB_RPC_COST_TOO_MUCH_TIME, ret,
+                  "The RPC packet delay is large.",
+                  " [suggestion] check clockdiff and tcp retransmission rate first, it maybe cost by clock skew"
+                  " or network delay. Further more, it may be caused by hardware failure or software failure of the machine");
             }
             pkt->set_receive_ts(receive_ts);
             if (receive_ts - start_ts > common::OB_MAX_PACKET_DECODE_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {

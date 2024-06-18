@@ -859,6 +859,7 @@ void ObLogReplayService::process_replay_ret_code_(const int ret_code,
                                  replay_task.replay_hint_, false, cur_ts, ret_code);
       LOG_DBA_ERROR(OB_LOG_REPLAY_ERROR, "msg", "replay task encountered fatal error", "ret", ret_code,
                     K(replay_status), K(replay_task));
+      LOG_DBA_ERROR_V2(OB_LOG_REPLAY_FAIL, ret_code, "replay task encountered fatal error");
     } else {/*do nothing*/}
 
     if (OB_SUCCESS == task_queue.get_err_info_ret_code()) {

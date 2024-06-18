@@ -23,6 +23,7 @@ default_value	varchar(65536)	NO		NULL
 isdefault	bigint(20)	NO		NULL	
 select name from __all_virtual_sys_parameter_stat where name not like "module_test_%" group by name order by name;
 name
+alert_log_level
 all_server_list
 arbitration_timeout
 archive_lag_target

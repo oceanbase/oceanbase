@@ -403,6 +403,15 @@ int ObLSService::check_tenant_ls_num_()
       ret = OB_TOO_MANY_TENANT_LS;
       LOG_WARN("too many ls of a tenant", K(ret), K(normal_ls_count), K(removeing_ls_count),
                K(min_constraint_type), K(get_constraint_type_name(min_constraint_type)), K(min_constraint_value));
+      LOG_DBA_WARN_(OB_STORAGE_LS_COUNT_REACH_UPPER_LIMIT, ret,
+                    "The current tenant has too many log streams. ",
+                    "normal_ls_count(", normal_ls_count, ") + removeing_ls_count(", removeing_ls_count,
+                    ") >= min_constraint_value(", min_constraint_value, "). ",
+                    "The resource of ", get_constraint_type_name(min_constraint_type),
+                    " limits the number of log streams. ",
+                    "[suggestion] Expand the tenant's unit resources. ",
+                    "You can also query the GV$OB_TENANT_RESOURCE_LIMIT_DETAIL view ",
+                    "to get which resource limits the number of log streams. ");
     }
   }
   return ret;

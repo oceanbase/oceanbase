@@ -572,19 +572,21 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
         if (part_trans_action_ == ObPartTransAction::COMMIT || part_trans_action_ == ObPartTransAction::ABORT) {
           if (now >= trans_expired_time_ + OB_TRANS_WARN_USE_TIME) {
             tmp_ret = OB_TRANS_COMMIT_TOO_MUCH_TIME;
-            LOG_DBA_ERROR(OB_TRANS_COMMIT_TOO_MUCH_TIME,
-                    "msg", "transaction commit cost too much time",
-                    "ret", tmp_ret,
-                    K(*this));
+            LOG_DBA_ERROR_V2(OB_TRANS_COMMIT_COST_TOO_MUCH_TIME, tmp_ret,
+                             "Transaction commit cost too much time. ",
+                             "trans_id is ", trans_id_, ". ls_id is ", ls_id_, ". ",
+                             "[suggestion] You can query GV$OB_PROCESSLIST view to get more information.");
           }
         } else {
           if (now >= ctx_create_time_ + OB_TRANS_WARN_USE_TIME) {
             print_first_mvcc_callback_();
             tmp_ret = OB_TRANS_LIVE_TOO_MUCH_TIME;
-            LOG_DBA_WARN(OB_TRANS_LIVE_TOO_MUCH_TIME,
-                    "msg", "transaction live cost too much time without commit or abort",
-                    "ret", tmp_ret,
-                    K(*this));
+            LOG_DBA_WARN_V2(OB_TRANS_LIVE_TOO_LONG, tmp_ret,
+                            "Transaction live too long without commit or abort. ",
+                            "trans_id is ", trans_id_, ". ls_id is ", ls_id_, ". ",
+                            "[suggestion] This may be normal and simply because the client hasn't executed the 'commit' command yet. ",
+                            "You can query GV$OB_PROCESSLIST view to get more information ",
+                            "and confirm whether you need to submit this transaction.");
           }
         }
       }

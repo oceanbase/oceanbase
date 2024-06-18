@@ -712,6 +712,8 @@ public:
   int get_influence_plan_sys_var(ObSysVarInPC &sys_vars) const;
   const common::ObString &get_sys_var_in_pc_str() const { return sys_var_in_pc_str_; }
   const common::ObString &get_config_in_pc_str() const { return config_in_pc_str_; }
+  uint64_t get_sys_var_config_hash_val() const { return sys_var_config_hash_val_; }
+  void eval_sys_var_config_hash_val();
   int gen_sys_var_in_pc_str();
   int gen_configs_in_pc_str();
   uint32_t get_sessid() const { return sessid_; }
@@ -2417,6 +2419,7 @@ private:
   bool config_use_rich_format_;
 
   common::ObSEArray<uint64_t, 4> enable_role_ids_;
+  uint64_t sys_var_config_hash_val_;
 };
 
 

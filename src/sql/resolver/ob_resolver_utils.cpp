@@ -4835,7 +4835,7 @@ int ObResolverUtils::build_file_column_expr(ObRawExprFactory &expr_factory,
                                             ObCharsetType cs_type,
                                             const ObColumnSchemaV2 *generated_column)
 {
-int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   ObPseudoColumnRawExpr *file_column_expr = nullptr;
   ObItemType type = T_INVALID;
   uint64_t extra = UINT64_MAX;
@@ -8355,6 +8355,11 @@ int ObResolverUtils::escape_char_for_oracle_mode(ObIAllocator &allocator,
   return ret;
 }
 
+// Submit a product behavior change request before modifying the whitelist.
+static const char * const sys_tenant_white_list[] = {
+  "log/alert"
+};
+
 int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv, const common::ObString &full_path)
 {
   int ret = OB_SUCCESS;
@@ -8364,8 +8369,6 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
 
   if (secure_file_priv.empty() || 0 == secure_file_priv.case_compare(N_NULL)) {
     ret = OB_ERR_NO_PRIVILEGE;
-    FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
-    LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
   } else if (OB_UNLIKELY(secure_file_priv.length() >= DEFAULT_BUF_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("secure file priv string length exceeds default buf length", K(ret),
@@ -8378,8 +8381,6 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
     stat(buf, &path_stat);
     if (0 == S_ISDIR(path_stat.st_mode)) {
       ret = OB_ERR_NO_PRIVILEGE;
-      FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
-      LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
     } else {
       MEMSET(buf, 0, sizeof(buf));
       char *real_secure_file = nullptr;
@@ -8390,20 +8391,50 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
         const int64_t pos = secure_file_priv_tmp.length();
         if (full_path.length() < secure_file_priv_tmp.length()) {
           ret = OB_ERR_NO_PRIVILEGE;
-          FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
-          LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (!full_path.prefix_match(secure_file_priv_tmp)) {
           ret = OB_ERR_NO_PRIVILEGE;
-          FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
-          LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (full_path.length() > secure_file_priv_tmp.length()
                    && secure_file_priv_tmp != "/" && full_path[pos] != '/') {
           ret = OB_ERR_NO_PRIVILEGE;
-          FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
-          LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         }
       }
     }
+  }
+  if (OB_ERR_NO_PRIVILEGE == ret && OB_SYS_TENANT_ID == MTL_ID()) {
+    char buf[DEFAULT_BUF_LENGTH] = { 0 };
+    const int list_size = ARRAYSIZEOF(sys_tenant_white_list);
+    for (int i = 0; OB_ERR_NO_PRIVILEGE == ret && i < list_size; i++) {
+      const char * const secure_file_path = sys_tenant_white_list[i];
+      struct stat path_stat;
+      stat(secure_file_path, &path_stat);
+      if (0 == S_ISDIR(path_stat.st_mode)) {
+        // continue
+      } else {
+        MEMSET(buf, 0, sizeof(buf));
+        char *real_secure_file = nullptr;
+        if (NULL == (real_secure_file = ::realpath(secure_file_path, buf))) {
+          // continue
+        } else {
+          ObString secure_file_path_tmp(real_secure_file);
+          const int64_t pos = secure_file_path_tmp.length();
+          if (full_path.length() < secure_file_path_tmp.length()) {
+            // continue
+          } else if (!full_path.prefix_match(secure_file_path_tmp)) {
+            // continue
+          } else if (full_path.length() > secure_file_path_tmp.length()
+                    && secure_file_path_tmp != "/" && full_path[pos] != '/') {
+            // continue
+          } else {
+            ret = OB_SUCCESS;
+            LOG_INFO("check sys tenant whitelist success.", K(ret), K(secure_file_path), K(full_path));
+          }
+        }
+      }
+    }
+  }
+  if (OB_ERR_NO_PRIVILEGE == ret) {
+    FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
+    LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
   }
 
   return ret;

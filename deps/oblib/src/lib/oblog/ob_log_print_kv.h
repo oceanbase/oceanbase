@@ -578,7 +578,71 @@ private:
   const T &value_;
 };
 
+// for dba log (alert.log)
+template<class T>
+inline int logdata_print_value(char *buf, const int64_t buf_len, int64_t &pos, T obj)
+{
+  return logdata_print_obj(buf, buf_len, pos, obj);
 }
+template <>
+inline int logdata_print_value<char*>(char *buf, const int64_t buf_len, int64_t &pos, char *obj)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == obj) {
+    ret = logdata_printf(buf, buf_len, pos, "NULL");
+  } else {
+    ret = logdata_printf(buf, buf_len, pos, "%s", obj);
+  }
+  return ret;
+}
+template <>
+inline int logdata_print_value<const char*>(char *buf, const int64_t buf_len, int64_t &pos, const char *obj)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == obj) {
+    ret = logdata_printf(buf, buf_len, pos, "NULL");
+  } else {
+    ret = logdata_printf(buf, buf_len, pos, "%s", obj);
+  }
+  return ret;
+}
+
+class ObILogValue
+{
+public:
+  virtual int print(char *buf, int64_t buf_len, int64_t &pos) const = 0;
+};
+
+template<typename T,  const bool is_rvalue>
+class ObLogValue;
+
+template<typename T>
+class ObLogValue<T, false> : public ObILogValue
+{
+public:
+  ObLogValue(const T &value) : value_(value) {}
+  int print(char *buf, int64_t buf_len, int64_t &pos) const override
+  {
+    return logdata_print_value(buf, buf_len, pos, value_);
+  }
+private:
+  const T &value_;
+};
+
+template<typename T>
+class ObLogValue<T, true> : public ObILogValue
+{
+public:
+  ObLogValue(const T &&value) : value_(unmove(value)) {}
+  int print(char *buf, int64_t buf_len, int64_t &pos) const override
+  {
+    return logdata_print_value(buf, buf_len, pos, value_);
+  }
+private:
+  const T &value_;
+};
+
+} // common
 }
 
 #define LOG_PRINT_INFO(obj)                                                      \
@@ -741,5 +805,43 @@ private:
 
 #define LOG_KVS_(N, ...) CONCAT(LOG_KVS_, N)(__VA_ARGS__)
 #define LOG_KVS(...) "placeholder" LOG_KVS_(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
+
+#define LOG_VALUE(obj) \
+  (::oceanbase::common::ObILogValue&&)::oceanbase::common::ObLogValue<decltype(obj), \
+  std::is_rvalue_reference<decltype((obj))&&>::value>(obj)
+#define LOG_VALUES_0()
+#define LOG_VALUES_1(obj)           , LOG_VALUE(obj)
+#define LOG_VALUES_2(obj, args...)  , LOG_VALUE(obj) LOG_VALUES_1(args)
+#define LOG_VALUES_3(obj, args...)  , LOG_VALUE(obj) LOG_VALUES_2(args)
+#define LOG_VALUES_4(obj, args...)  , LOG_VALUE(obj) LOG_VALUES_3(args)
+#define LOG_VALUES_5(obj, args...)  , LOG_VALUE(obj) LOG_VALUES_4(args)
+#define LOG_VALUES_6(obj, args...)  , LOG_VALUE(obj) LOG_VALUES_5(args)
+#define LOG_VALUES_7(obj, args...)  , LOG_VALUE(obj) LOG_VALUES_6(args)
+#define LOG_VALUES_8(obj, args...)  , LOG_VALUE(obj) LOG_VALUES_7(args)
+#define LOG_VALUES_9(obj, args...)  , LOG_VALUE(obj) LOG_VALUES_8(args)
+#define LOG_VALUES_10(obj, args...) , LOG_VALUE(obj) LOG_VALUES_9(args)
+#define LOG_VALUES_11(obj, args...) , LOG_VALUE(obj) LOG_VALUES_10(args)
+#define LOG_VALUES_12(obj, args...) , LOG_VALUE(obj) LOG_VALUES_11(args)
+#define LOG_VALUES_13(obj, args...) , LOG_VALUE(obj) LOG_VALUES_12(args)
+#define LOG_VALUES_14(obj, args...) , LOG_VALUE(obj) LOG_VALUES_13(args)
+#define LOG_VALUES_15(obj, args...) , LOG_VALUE(obj) LOG_VALUES_14(args)
+#define LOG_VALUES_16(obj, args...) , LOG_VALUE(obj) LOG_VALUES_15(args)
+#define LOG_VALUES_17(obj, args...) , LOG_VALUE(obj) LOG_VALUES_16(args)
+#define LOG_VALUES_18(obj, args...) , LOG_VALUE(obj) LOG_VALUES_17(args)
+#define LOG_VALUES_19(obj, args...) , LOG_VALUE(obj) LOG_VALUES_18(args)
+#define LOG_VALUES_20(obj, args...) , LOG_VALUE(obj) LOG_VALUES_19(args)
+#define LOG_VALUES_21(obj, args...) , LOG_VALUE(obj) LOG_VALUES_20(args)
+#define LOG_VALUES_22(obj, args...) , LOG_VALUE(obj) LOG_VALUES_21(args)
+#define LOG_VALUES_23(obj, args...) , LOG_VALUE(obj) LOG_VALUES_22(args)
+#define LOG_VALUES_24(obj, args...) , LOG_VALUE(obj) LOG_VALUES_23(args)
+#define LOG_VALUES_25(obj, args...) , LOG_VALUE(obj) LOG_VALUES_24(args)
+#define LOG_VALUES_26(obj, args...) , LOG_VALUE(obj) LOG_VALUES_25(args)
+#define LOG_VALUES_27(obj, args...) , LOG_VALUE(obj) LOG_VALUES_26(args)
+#define LOG_VALUES_28(obj, args...) , LOG_VALUE(obj) LOG_VALUES_27(args)
+#define LOG_VALUES_29(obj, args...) , LOG_VALUE(obj) LOG_VALUES_28(args)
+#define LOG_VALUES_30(obj, args...) , LOG_VALUE(obj) LOG_VALUES_29(args)
+
+#define LOG_VALUES_(N, ...) CONCAT(LOG_VALUES_, N)(__VA_ARGS__)
+#define LOG_VALUES(...) "placeholder" LOG_VALUES_(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
 
 #endif

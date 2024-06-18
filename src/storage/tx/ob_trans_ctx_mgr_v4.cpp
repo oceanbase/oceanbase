@@ -483,7 +483,7 @@ int ObLSTxCtxMgr::get_tx_ctx_(const ObTransID &tx_id, const bool for_replay, ObP
         //   ls_tx_ctx_map_.revert(tmp_ctx);
         //   tmp_ctx = NULL;
         // }
-        ctx = dynamic_cast<transaction::ObPartTransCtx*>(tmp_ctx);
+        ctx = static_cast<transaction::ObPartTransCtx*>(tmp_ctx);
       }
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_TRANS_CTX_NOT_EXIST;

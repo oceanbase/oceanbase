@@ -3471,7 +3471,9 @@ void ObIOFaultDetector::set_device_error()
   last_device_error_ts_ = ObTimeUtility::fast_current_time();
   is_device_error_ = true;
   LOG_ERROR_RET(OB_IO_ERROR, "set_disk_error: attention!!!");
-  LOG_DBA_ERROR(OB_DISK_ERROR, "msg", "The disk may be corrupted");
+  LOG_DBA_ERROR_V2(OB_COMMON_DISK_INVALID, OB_DISK_ERROR,
+                    "The disk may be corrupted. ",
+                    "[suggestion] check disk.");
 }
 
 ObIOTracer::ObIOTracer()

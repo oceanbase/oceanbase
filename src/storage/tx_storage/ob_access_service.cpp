@@ -524,11 +524,10 @@ int ObAccessService::construct_store_ctx_other_variables_(
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = ls.get_ls_id();
   ObLSTabletService *tablet_service = ls.get_tablet_svr();
-  ObLSTabletService::AllowToReadMgr::AllowToReadInfo read_info;
   if (OB_ISNULL(tablet_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null.", K(ret), K(ls_id));
-  } else if (OB_FAIL(tablet_service->check_allow_to_read(read_info))) {
+  } else if (OB_FAIL(tablet_service->check_allow_to_read())) {
     if (OB_REPLICA_NOT_READABLE == ret) {
       LOG_WARN("replica unreadable", K(ret), K(ls_id), K(tablet_id));
     } else {

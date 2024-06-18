@@ -162,6 +162,18 @@ int ObPLPackageManager::read_and_exec_package_sql(
       // but we need to create system packages with oralce compatibility
       // here hack to oracle mode
       bool eof = false;
+      bool skip_affected_rows_check = false;
+      ObSessionParam param;
+      ObSessionParam *param_ptr = nullptr;
+      char *last_slash = strrchr(const_cast<char*>(package_full_path), '/');
+      const char *pacakge_filename = (last_slash != NULL) ? last_slash + 1 : package_full_path;
+      int64_t sql_mode = SMO_STRICT_ALL_TABLES | SMO_NO_ZERO_IN_DATE | SMO_NO_AUTO_CREATE_USER;
+      // allow affected_rows > 0 when exec sql in external_table_alert_log.sql
+      if (strcmp(pacakge_filename, "external_table_alert_log.sql") == 0) {
+        skip_affected_rows_check = true;
+        param.sql_mode_ = &sql_mode;
+        param_ptr = &param;
+      }
       SMART_VAR(char[OB_MAX_SQL_LENGTH], sql_buf) {
         while (OB_SUCC(ret) && !eof) {
           if (OB_FAIL(read_package_sql(file, sql_buf, OB_MAX_SQL_LENGTH, eof))) {
@@ -170,9 +182,10 @@ int ObPLPackageManager::read_and_exec_package_sql(
                     && OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID,
                                                 sql_buf,
                                                 affected_rows,
-                                                static_cast<int64_t>(compa_mode)))) {
+                                                static_cast<int64_t>(compa_mode),
+                                                param_ptr))) {
             LOG_WARN("fail to exec package sql", K(sql_buf), K(ret));
-          } else if (affected_rows != 0) {
+          } else if (affected_rows != 0 && !skip_affected_rows_check) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("affected_rows expected to be zero", K(affected_rows), K(ret));
           } else {
@@ -288,7 +301,8 @@ static ObSysPackageFile mysql_sys_package_file_table[] = {
   {"dbms_mview_stats", "dbms_mview_stats_mysql.sql", "dbms_mview_stats_body_mysql.sql"},
   {"dbms_trusted_certificate_manager", "dbms_trusted_certificate_manager_mysql.sql", "dbms_trusted_certificate_manager_body_mysql.sql"},
   {"dbms_ob_limit_calculator", "dbms_ob_limit_calculator_mysql.sql", "dbms_ob_limit_calculator_body_mysql.sql"},
-  {"dbms_external_table", "dbms_external_table_mysql.sql", "dbms_external_table_body_mysql.sql"}
+  {"dbms_external_table", "dbms_external_table_mysql.sql", "dbms_external_table_body_mysql.sql"},
+  {"external_table_alert_log", "external_table_alert_log.sql", "none"}
 };
 
 int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy, ObString &package_name, ObCompatibilityMode compa_mode)

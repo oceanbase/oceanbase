@@ -448,6 +448,7 @@ int LogBlockHandler::inner_write_impl_(const int fd, const char *buf, const int6
       if (palf_reach_time_interval(1000 * 1000, time_interval)) {
         ret = convert_sys_errno();
         PALF_LOG(ERROR, "ob_pwrite failed", K(ret), K(fd), K(offset), K(count), K(errno));
+        LOG_DBA_ERROR_V2(OB_LOG_PWRITE_FAIL, ret, "ob_pwrite failed, please check the output of dmesg");
       }
       ob_usleep(RETRY_INTERVAL);
     } else {

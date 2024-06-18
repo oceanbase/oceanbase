@@ -279,6 +279,7 @@ private:
                                        int64_t &has_allocated_block_cnt);
   int64_t lower_align_(const int64_t new_size_byte);
   int remove_tmp_file_or_directory_for_tenant_(const char *log_disk_path);
+  int get_free_disk_space(int64_t &free_disk_space);
 private:
   int open_until_success_(const char *src_block_path, const int flag,
                           palf::FileDesc &out_fd);

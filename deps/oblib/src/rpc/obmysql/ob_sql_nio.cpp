@@ -812,7 +812,10 @@ public:
     } else {
       if ((lfd_ = listen_create(!oceanbase::lib::use_ipv6() ? AF_INET : AF_INET6, port, need_monopolize)) < 0) {
         ret = OB_SERVER_LISTEN_ERROR;
-        LOG_WARN("listen create fail", K(ret), K(port), K(errno), KERRNOMSG(errno));
+        LOG_ERROR("listen create fail", K(ret), K(port), K(errno), KERRNOMSG(errno));
+        LOG_DBA_ERROR_V2(OB_SERVER_LISTEN_FAIL, ret,
+                         "listen port: ", port, " for mysql service failed. ",
+                         "[suggestion] check whether if mysql_port: ", port, " being occupied by another process.");
       } else if (0 != epoll_regist(epfd_, lfd_, epflag, NULL)) {
         ret = OB_IO_ERROR;
         LOG_WARN("regist listen fd fail", K(ret));

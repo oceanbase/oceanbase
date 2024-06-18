@@ -1958,6 +1958,10 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
   int ret = OB_SUCCESS;
   const obrpc::ObServerInfoList &server_list = arg.server_list_;
   BOOTSTRAP_LOG(INFO, "STEP_1.1:execute_bootstrap start to executor.");
+  DBA_STEP_RESET(bootstrap);
+  LOG_DBA_INFO_V2(OB_BOOTSTRAP_BEGIN,
+                  DBA_STEP_INC_INFO(bootstrap),
+                  "cluster bootstrap begin.");
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("root_service not inited", K(ret));
@@ -2040,6 +2044,17 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
     ret = OB_SUCC(ret) ? tmp_ret : ret;
   }
   BOOTSTRAP_LOG(INFO, "execute_bootstrap finished", K(ret));
+  if (OB_FAIL(ret)) {
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_BOOTSTRAP_FAIL, ret,
+                        DBA_STEP_INC_INFO(bootstrap),
+                        "cluster bootstrap fail. "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "cluster bootstrap success.");
+  }
+
   return ret;
 }
 
@@ -10992,11 +11007,14 @@ void ObRootService::update_fail_count(int ret)
   if (count > OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT
       && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
     LOG_ERROR("rs_monitor_check : fail to start root service", KR(ret), K(count));
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_ROOTSERVICE_START_FAIL, ret,
+                        "rootservice start()/do_restart() has failed ", count, " times. "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
   } else {
     LOG_WARN("rs_monitor_check : fail to start root service", KR(ret), K(count));
+    LOG_DBA_WARN(OB_ERR_ROOTSERVICE_START, "msg", "rootservice start()/do_restart() has failure",
+                 KR(ret), "fail_cnt", count);
   }
-  LOG_DBA_WARN(OB_ERR_ROOTSERVICE_START, "msg", "rootservice start()/do_restart() has failure",
-               KR(ret), "fail_cnt", count);
 }
 
 int ObRootService::send_physical_restore_result(const obrpc::ObPhysicalRestoreResult &res)
