@@ -116,7 +116,7 @@ public:
         } else {
           // ret = OB_SIZE_OVERFLOW;
         }
-        SlotLock_[pop_idx].wlock()->unlock();
+        SlotLock_[pop_idx % N_ROOT_SIZE].wlock()->unlock();
       }
     }
     return p;
