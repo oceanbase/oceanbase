@@ -1219,24 +1219,14 @@ int ObTenantCloneTableOperator::build_insert_dml_(
     LOG_WARN("add column failed", KR(ret));
   } else if (OB_FAIL(dml.add_column("job_type", get_job_type_str(job.get_job_type())))) {
     LOG_WARN("add column failed", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(share::ObShareUtil::check_compat_version_for_clone_standby_tenant(
-                         job.get_source_tenant_id(), is_compatible_with_clone_standby_tenant))) {
-    LOG_WARN("fail to check whether tenant is compatible to clone standby tenant", KR(ret), K(job));
-  } else if (is_compatible_with_clone_standby_tenant) {
-    if (OB_FAIL(dml.add_column("data_version", job.get_data_version()))) {
-      LOG_WARN("add data_version column failed", KR(ret), K(job));
-    } else if (OB_FAIL(dml.add_column("min_cluster_version", job.get_min_cluster_version()))) {
-      LOG_WARN("add min_cluster_version failed", KR(ret), K(job));
-    }
-  } else {
-    // check data_version and min_cluster_version is 0 when clone standby tenant not supported
-    if (OB_UNLIKELY(0 != job.get_data_version()) || OB_UNLIKELY(0 != job.get_min_cluster_version())) {
-      ret = OB_STATE_NOT_MATCH;
-      LOG_WARN("data version should equals to 0 when not compatible with cloning standby tenant", KR(ret), K(job));
-    }
+  } else if (0 != job.get_data_version()
+             && OB_FAIL(dml.add_column("data_version", job.get_data_version()))) {
+    // data_version not 0 means (sys/meta/user)tenant's data_version must promoted to 4.3.2
+    LOG_WARN("add data_version column failed", KR(ret), K(job));
+  } else if (0 != job.get_min_cluster_version()
+             && OB_FAIL(dml.add_column("min_cluster_version", job.get_min_cluster_version()))) {
+    // min_cluster_version not 0 means (sys/meta/user)tenant's data_version must promoted to 4.3.2
+    LOG_WARN("add min_cluster_version failed", KR(ret), K(job));
   }
   return ret;
 }
