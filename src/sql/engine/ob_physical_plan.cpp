@@ -141,7 +141,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     mview_ids_(&allocator_),
     enable_inc_direct_load_(false),
     enable_replace_(false),
-    insert_overwrite_(false)
+    insert_overwrite_(false),
+    online_sample_percent_(1.)
 {
 }
 
@@ -242,6 +243,7 @@ void ObPhysicalPlan::reset()
   enable_inc_direct_load_ = false;
   enable_replace_ = false;
   insert_overwrite_ = false;
+  online_sample_percent_ = 1.;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -815,7 +817,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     enable_inc_direct_load_,
                     enable_replace_,
                     immediate_refresh_external_table_ids_,
-                    insert_overwrite_);
+                    insert_overwrite_,
+                    online_sample_percent_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
