@@ -91,8 +91,14 @@ int ObTextStringHelper::read_real_string_data(
 {
   int ret = OB_SUCCESS;
   if (is_lob_storage(type)) {
+    uint64_t tenant_id = MTL_ID();
+    ObArenaAllocator *tmp_alloc_ptr = nullptr;
+    ObArenaAllocator tmp_allocator("ObLobRRSD", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+    if (tenant_id != OB_INVALID_TENANT_ID) {
+      tmp_alloc_ptr = &tmp_allocator;
+    }
     ObTextStringIter str_iter(type, cs_type, str, has_lob_header);
-    if (OB_FAIL(build_text_iter(str_iter, exec_ctx, nullptr/*session*/, allocator))) {
+    if (OB_FAIL(build_text_iter(str_iter, exec_ctx, nullptr/*session*/, allocator, tmp_alloc_ptr))) {
       LOG_WARN("Lob: init lob str iter failed ", K(ret), K(str_iter));
     } else if (OB_FAIL(str_iter.get_full_data(str))) {
       COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
