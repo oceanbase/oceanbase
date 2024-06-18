@@ -8090,7 +8090,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
             int64_t ddl_task_id = 0;
             const ObOptParamHint *opt_params = &log_plan.get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
             OZ(opt_params->get_integer_opt_param(ObOptParamHint::DDL_TASK_ID, ddl_task_id));
-            log_plan.get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx().set_ddl_task_id(ddl_task_id);
+            phy_plan.set_ddl_task_id(ddl_task_id);
           }
         }
       }

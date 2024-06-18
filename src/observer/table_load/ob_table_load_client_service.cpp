@@ -55,9 +55,6 @@ int ObTableLoadClientService::init()
     if (OB_FAIL(
           client_task_map_.create(bucket_num, "TLD_ClientTask", "TLD_ClientTask", MTL_ID()))) {
       LOG_WARN("fail to create hashmap", KR(ret), K(bucket_num));
-    } else if (OB_FAIL(client_task_index_map_.create(bucket_num, "TLD_ClientTask", "TLD_ClientTask",
-                                                     MTL_ID()))) {
-      LOG_WARN("fail to create hashmap", KR(ret), K(bucket_num));
     } else if (OB_FAIL(client_task_brief_map_.init("TLD_ClientBrief", MTL_ID()))) {
       LOG_WARN("fail to init link hashmap", KR(ret));
     } else {
@@ -181,23 +178,6 @@ int ObTableLoadClientService::get_task(const ObTableLoadUniqueKey &key,
   return ret;
 }
 
-int ObTableLoadClientService::get_task(const ObTableLoadKey &key,
-                                       ObTableLoadClientTask *&client_task)
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadService *service = nullptr;
-  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("null table load service", KR(ret));
-  } else {
-    if (OB_FAIL(
-          service->get_client_service().get_client_task_by_table_id(key.table_id_, client_task))) {
-      LOG_WARN("fail to get client task", KR(ret), K(key));
-    }
-  }
-  return ret;
-}
-
 int ObTableLoadClientService::add_client_task(const ObTableLoadUniqueKey &key,
                                               ObTableLoadClientTask *client_task)
 {
@@ -209,22 +189,12 @@ int ObTableLoadClientService::add_client_task(const ObTableLoadUniqueKey &key,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(key), KP(client_task));
   } else {
-    const uint64_t table_id = key.table_id_;
     obsys::ObWLockGuard guard(rwlock_);
     if (OB_FAIL(client_task_map_.set_refactored(key, client_task))) {
       if (OB_UNLIKELY(OB_HASH_EXIST != ret)) {
         LOG_WARN("fail to set refactored", KR(ret), K(key));
       } else {
         ret = OB_ENTRY_EXIST;
-      }
-    }
-    // force update client task index
-    else if (OB_FAIL(client_task_index_map_.set_refactored(table_id, client_task, 1))) {
-      LOG_WARN("fail to set refactored", KR(ret), K(table_id));
-      // erase from client task map, avoid wild pointer is been use
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(client_task_map_.erase_refactored(key))) {
-        LOG_WARN("fail to erase refactored", KR(tmp_ret), K(key));
       }
     } else {
       client_task->inc_ref_count(); // hold by map
@@ -244,7 +214,6 @@ int ObTableLoadClientService::remove_client_task(const ObTableLoadUniqueKey &key
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(key));
   } else {
-    const uint64_t table_id = key.table_id_;
     HashMapEraseIfEqual erase_if_equal(client_task);
     bool is_erased = false;
     obsys::ObWLockGuard guard(rwlock_);
@@ -257,14 +226,6 @@ int ObTableLoadClientService::remove_client_task(const ObTableLoadUniqueKey &key
     } else if (OB_UNLIKELY(!is_erased)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected client task", KR(ret), KPC(client_task));
-    }
-    // try remove index
-    else if (OB_FAIL(client_task_index_map_.erase_if(table_id, erase_if_equal, is_erased))) {
-      if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
-        LOG_WARN("fail to get refactored", KR(ret), K(table_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
     }
     if (OB_SUCC(ret)) {
       client_task->dec_ref_count();
@@ -334,29 +295,6 @@ int ObTableLoadClientService::get_client_task(const ObTableLoadUniqueKey &key,
     if (OB_FAIL(client_task_map_.get_refactored(key, client_task))) {
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("fail to get refactored", KR(ret), K(key));
-      } else {
-        ret = OB_ENTRY_NOT_EXIST;
-      }
-    } else {
-      client_task->inc_ref_count();
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadClientService::get_client_task_by_table_id(uint64_t table_id,
-                                                          ObTableLoadClientTask *&client_task)
-{
-  int ret = OB_SUCCESS;
-  client_task = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadClientService not init", KR(ret), KP(this));
-  } else {
-    obsys::ObRLockGuard guard(rwlock_);
-    if (OB_FAIL(client_task_index_map_.get_refactored(table_id, client_task))) {
-      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
-        LOG_WARN("fail to get refactored", KR(ret), K(table_id));
       } else {
         ret = OB_ENTRY_NOT_EXIST;
       }

@@ -58,7 +58,6 @@ public:
   // get ctx
   static int get_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *&table_ctx);
   // get ctx by table_id
-  static int get_ctx(const ObTableLoadKey &key, ObTableLoadTableCtx *&table_ctx);
   static void put_ctx(ObTableLoadTableCtx *table_ctx);
 
   // for direct load control api

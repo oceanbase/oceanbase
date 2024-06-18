@@ -688,19 +688,6 @@ int ObTableLoadService::get_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTabl
   return ret;
 }
 
-int ObTableLoadService::get_ctx(const ObTableLoadKey &key, ObTableLoadTableCtx *&table_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadService *service = nullptr;
-  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("null table load service", KR(ret));
-  } else {
-    ret = service->get_manager().get_table_ctx_by_table_id(key.table_id_, table_ctx);
-  }
-  return ret;
-}
-
 void ObTableLoadService::put_ctx(ObTableLoadTableCtx *table_ctx)
 {
   int ret = OB_SUCCESS;

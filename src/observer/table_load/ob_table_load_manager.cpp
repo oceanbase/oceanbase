@@ -44,9 +44,6 @@ int ObTableLoadManager::init()
     if (OB_FAIL(
           table_ctx_map_.create(bucket_num, "TLD_TableCtxMgr", "TLD_TableCtxMgr", MTL_ID()))) {
       LOG_WARN("fail to create hashmap", KR(ret), K(bucket_num));
-    } else if (OB_FAIL(table_ctx_index_map_.create(bucket_num, "TLD_TblCtxIMgr", "TLD_TblCtxIMgr",
-                                                   MTL_ID()))) {
-      LOG_WARN("fail to create hashmap", KR(ret), K(bucket_num));
     } else {
       is_inited_ = true;
     }
@@ -68,22 +65,12 @@ int ObTableLoadManager::add_table_ctx(const ObTableLoadUniqueKey &key,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected dirty table ctx", KR(ret), KP(table_ctx));
   } else {
-    const uint64_t table_id = key.table_id_;
     obsys::ObWLockGuard guard(rwlock_);
     if (OB_FAIL(table_ctx_map_.set_refactored(key, table_ctx))) {
       if (OB_UNLIKELY(OB_HASH_EXIST != ret)) {
         LOG_WARN("fail to set refactored", KR(ret), K(key));
       } else {
         ret = OB_ENTRY_EXIST;
-      }
-    }
-    // force update table ctx index
-    else if (OB_FAIL(table_ctx_index_map_.set_refactored(table_id, table_ctx, 1))) {
-      LOG_WARN("fail to set refactored", KR(ret), K(table_id));
-      // erase from table ctx map, avoid wild pointer is been use
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(table_ctx_map_.erase_refactored(key))) {
-        LOG_WARN("fail to erase refactored", KR(tmp_ret), K(key));
       }
     } else {
       table_ctx->inc_ref_count();
@@ -104,7 +91,6 @@ int ObTableLoadManager::remove_table_ctx(const ObTableLoadUniqueKey &key,
     LOG_WARN("invalid args", KR(ret), K(key), KP(table_ctx));
   } else {
     {
-      const uint64_t table_id = key.table_id_;
       HashMapEraseIfEqual erase_if_equal(table_ctx);
       bool is_erased = false;
       obsys::ObWLockGuard guard(rwlock_);
@@ -118,14 +104,6 @@ int ObTableLoadManager::remove_table_ctx(const ObTableLoadUniqueKey &key,
       } else if (OB_UNLIKELY(!is_erased)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected table ctx not in manager", KR(ret), K(key), KPC(table_ctx));
-      }
-      // try remove table ctx index
-      else if (OB_FAIL(table_ctx_index_map_.erase_if(table_id, erase_if_equal, is_erased))) {
-        if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
-          LOG_WARN("fail to get refactored", KR(ret), K(table_id));
-        } else {
-          ret = OB_SUCCESS;
-        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -180,29 +158,6 @@ int ObTableLoadManager::get_table_ctx(const ObTableLoadUniqueKey &key,
     if (OB_FAIL(table_ctx_map_.get_refactored(key, table_ctx))) {
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("fail to get refactored", KR(ret), K(key));
-      } else {
-        ret = OB_ENTRY_NOT_EXIST;
-      }
-    } else {
-      table_ctx->inc_ref_count();
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadManager::get_table_ctx_by_table_id(uint64_t table_id,
-                                                  ObTableLoadTableCtx *&table_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadManager not init", KR(ret), KP(this));
-  } else {
-    table_ctx = nullptr;
-    obsys::ObRLockGuard guard(rwlock_);
-    if (OB_FAIL(table_ctx_index_map_.get_refactored(table_id, table_ctx))) {
-      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
-        LOG_WARN("fail to get refactored", KR(ret), K(table_id));
       } else {
         ret = OB_ENTRY_NOT_EXIST;
       }

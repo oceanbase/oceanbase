@@ -34,12 +34,13 @@ public:
       table_load_instance_(nullptr),
       is_inited_(false),
       is_direct_(false),
-      is_online_gather_statistics_(false),
-      ddl_task_id_(0) {}
+      is_online_gather_statistics_(false){}
   ~ObTableDirectInsertCtx();
-  TO_STRING_KV(K_(is_inited));
+  TO_STRING_KV(K_(is_inited), K_(is_direct),
+               K_(is_online_gather_statistics));
 public:
   int init(sql::ObExecContext *exec_ctx,
+           sql::ObPhysicalPlan &phy_plan,
            const uint64_t table_id,
            const int64_t parallel,
            const bool is_incremental,
@@ -59,14 +60,6 @@ public:
     is_online_gather_statistics_ = is_online_gather_statistics;
   }
 
-  void set_ddl_task_id(const int64_t ddl_task_id) {
-    ddl_task_id_ = ddl_task_id;
-  }
-
-  int64_t get_ddl_task_id() const {
-    return ddl_task_id_;
-  }
-
 private:
   int get_compressor_type(const uint64_t tenant_id, const uint64_t table_id, const int64_t parallel,
                           ObCompressorType &compressor_type);
@@ -76,7 +69,6 @@ private:
   bool is_inited_;
   bool is_direct_; //indict whether the plan is direct load plan including insert into append and load data direct
   bool is_online_gather_statistics_;
-  int64_t ddl_task_id_;
 };
 } // namespace observer
 } // namespace oceanbase

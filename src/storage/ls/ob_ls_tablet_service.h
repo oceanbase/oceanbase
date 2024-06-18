@@ -774,7 +774,8 @@ private:
       bool &is_same);
 private:
   int direct_insert_rows(const uint64_t table_id,
-                         const int64_t task_id,
+                         const int64_t px_task_id,
+                         const int64_t ddl_task_id,
                          const common::ObTabletID &tablet_id,
                          const common::ObIArray<uint64_t> &column_ids,
                          common::ObNewRowIterator *row_iter,

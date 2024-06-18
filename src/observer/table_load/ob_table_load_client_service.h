@@ -45,13 +45,11 @@ public:
   static int add_task(ObTableLoadClientTask *client_task);
   static int remove_task(ObTableLoadClientTask *client_task);
   static int get_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *&client_task);
-  static int get_task(const ObTableLoadKey &key, ObTableLoadClientTask *&client_task);
 
   int add_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *client_task);
   int remove_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *client_task);
   int get_all_client_task(common::ObIArray<ObTableLoadClientTask *> &client_task_array);
   int get_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *&client_task);
-  int get_client_task_by_table_id(uint64_t table_id, ObTableLoadClientTask *&client_task);
   int64_t get_client_task_count() const;
   void purge_client_task();
 
@@ -81,10 +79,6 @@ private:
   typedef common::hash::ObHashMap<ObTableLoadUniqueKey, ObTableLoadClientTask *,
                                   common::hash::NoPthreadDefendMode>
     ClientTaskMap;
-  // table_id => client_task
-  typedef common::hash::ObHashMap<uint64_t, ObTableLoadClientTask *,
-                                  common::hash::NoPthreadDefendMode>
-    ClientTaskIndexMap;
   // key => client_task_brief
   typedef common::ObLinkHashMap<ObTableLoadUniqueKey, ObTableLoadClientTaskBrief>
     ClientTaskBriefMap;
@@ -121,7 +115,6 @@ private:
 private:
   mutable obsys::ObRWLock rwlock_;
   ClientTaskMap client_task_map_;
-  ClientTaskIndexMap client_task_index_map_;
   ClientTaskBriefMap client_task_brief_map_; // thread safety
   int64_t next_task_id_;
   bool is_inited_;

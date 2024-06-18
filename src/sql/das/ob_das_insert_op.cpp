@@ -53,6 +53,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator>::write_rows(cons
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
   dml_param_.direct_insert_task_id_ = rtdef.direct_insert_task_id_;
+  dml_param_.ddl_task_id_ = rtdef.ddl_task_id_;
 
   if (ctdef.table_param_.get_data_table().is_mlog_table()
       && !ctdef.is_access_mlog_as_master_table_) {
