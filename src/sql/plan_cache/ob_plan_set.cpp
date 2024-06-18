@@ -1239,13 +1239,10 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
         } else {
           if (OB_FAIL(add_physical_plan(OB_PHY_PLAN_LOCAL, pc_ctx, plan))) {
             SQL_PC_LOG(TRACE, "fail to add local plan", K(ret));
-          } else if (OB_SUCC(ret)
-#ifdef OB_BUILD_SPM
-                    && is_spm_closed_
-#endif
-                    && FALSE_IT(direct_local_plan_ = &plan)) {
+//           } else if (OB_SUCC(ret)
+//                     && FALSE_IT(direct_local_plan_ = &plan)) {
             // do nothing
-          } else {
+          // } else {
            // local_phy_locations_.reset();
            // if (OB_FAIL(init_phy_location(table_locs.count()))) {
            //   SQL_PC_LOG(WARN, "init phy location failed");
@@ -1327,19 +1324,10 @@ int ObSqlPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
   outline_param_idx_ = outline_param_idx;
   need_try_plan_ = 0;
   has_duplicate_table_ = false;
-#ifdef OB_BUILD_SPM
-  int64_t spm_mode = 0;
-#endif
   const ObSQLSessionInfo *session_info = sql_ctx.session_info_;
   if (OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null plan cache or session info", K(ret), K(session_info));
-#ifdef OB_BUILD_SPM
-  } else if (OB_FAIL(session_info->get_spm_mode(spm_mode))) {
-    LOG_WARN("failed to get spm mode", K(ret));
-  } else if (FALSE_IT(is_spm_closed_ = (0 == spm_mode))) {
-    // do nothing
-#endif
   } else if (OB_ISNULL(pc_malloc_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pc_allocator has not been initialized.", K(ret));
@@ -1594,7 +1582,7 @@ int ObSqlPlanSet::add_physical_plan(const ObPhyPlanType plan_type,
     LOG_WARN("failed to add dist plan", K(ret), K(plan));
   }
 #else
-  } else if (!pc_ctx.need_evolution_ || is_spm_closed_) {
+  } else if (!pc_ctx.need_evolution_) {
     // Addition of other non-evolving plans is prohibited in plan evolution
     if (OB_PHY_PLAN_LOCAL == plan_type) {
       if (local_evolution_plan_.get_is_evolving_flag()) {
@@ -1615,20 +1603,33 @@ int ObSqlPlanSet::add_physical_plan(const ObPhyPlanType plan_type,
     ObSpmCacheCtx& spm_ctx = pc_ctx.sql_ctx_.spm_ctx_;
     if (ObSpmCacheCtx::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
       if (OB_PHY_PLAN_LOCAL == spm_ctx.evolution_plan_type_) {
-        OZ (local_evolution_plan_.add_plan(pc_ctx, &plan));
+        // if local plan start evolving, clear local_plan_ which is added between adding
+        // evolving plan and baseline plan.
+        if (OB_FAIL(local_evolution_plan_.add_plan(pc_ctx, &plan))) {
+          LOG_WARN("failed to add local baseline plan");
+        } else if (local_evolution_plan_.get_is_evolving_flag() && NULL != local_plan_) {
+          remove_cache_obj_entry(local_plan_->get_plan_id());
+          local_plan_ = NULL;
+        }
       } else {
-        OZ (dist_evolution_plan_.add_plan(pc_ctx, &plan));
+        if (OB_FAIL(dist_evolution_plan_.add_plan(pc_ctx, &plan))) {
+          LOG_WARN("failed to add dist baseline plan");
+        } else if (dist_evolution_plan_.get_is_evolving_flag() &&
+                   OB_FAIL(dist_plans_.remove_plan_stat())) {
+          LOG_WARN("failed to remove dist plans");
+        }
       }
     } else {
       if (OB_PHY_PLAN_LOCAL == plan_type) {
         if (NULL != local_plan_) {
-          remove_cache_obj_entry(local_plan_->get_plan_id());
-          local_plan_ = NULL;
+          // if a baseline local plan already exists, no need to evolve
+          ret = OB_SQL_PC_PLAN_DUPLICATE;
+        } else if (OB_FAIL(local_evolution_plan_.add_plan(pc_ctx, &plan))) {
+          LOG_WARN("failed to add local evolving plan");
+        } else {
+          spm_ctx.evolution_plan_type_ = OB_PHY_PLAN_LOCAL;
         }
-        OZ (local_evolution_plan_.add_plan(pc_ctx, &plan));
-        OX (spm_ctx.evolution_plan_type_ = OB_PHY_PLAN_LOCAL);
       } else {
-        OZ (dist_plans_.remove_plan_stat());
         OZ (dist_evolution_plan_.add_plan(pc_ctx, &plan));
         OX (spm_ctx.evolution_plan_type_ = OB_PHY_PLAN_DISTRIBUTED);
       }
@@ -1699,12 +1700,7 @@ int ObSqlPlanSet::add_evolution_plan_for_spm(ObPhysicalPlan *plan, ObPlanCacheCt
     LOG_WARN("not supported type", K(ret), K(plan->get_plan_type()));
   } else if (FALSE_IT(pc = plan_cache_value_->get_pcv_set()->get_plan_cache())) {
   } else if (OB_PHY_PLAN_LOCAL == plan->get_plan_type()) {
-    if (NULL != local_plan_) {
-      ret = OB_SQL_PC_PLAN_DUPLICATE;
-      LOG_WARN("local plan duplicate", K(ret));
-    } else {
-      local_plan_ = plan;
-    }
+    local_plan_ = plan;
   } else if (OB_FAIL(dist_plans_.add_evolution_plan(*plan, ctx))) {
     LOG_WARN("failed to add dist plan", K(ret), K(plan));
   }
@@ -1818,7 +1814,7 @@ int ObSqlPlanSet::try_get_local_evolution_plan(ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   plan = NULL;
   get_next = false;
-  if ((!is_spm_closed_ && local_evolution_plan_.get_is_evolving_flag())
+  if ((local_evolution_plan_.get_is_evolving_flag())
     || pc_ctx.sql_ctx_.spm_ctx_.force_get_evolution_plan()) {
     if (OB_FAIL(local_evolution_plan_.get_plan(pc_ctx, plan))) {
       if (OB_SQL_PC_NOT_EXIST == ret) {
@@ -1840,7 +1836,7 @@ int ObSqlPlanSet::try_get_dist_evolution_plan(ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   plan = NULL;
   get_next = false;
-  if ((!is_spm_closed_ && dist_evolution_plan_.get_is_evolving_flag())
+  if ((dist_evolution_plan_.get_is_evolving_flag())
     || pc_ctx.sql_ctx_.spm_ctx_.force_get_evolution_plan()) {
     if (OB_FAIL(dist_evolution_plan_.get_plan(pc_ctx, plan))) {
       if (OB_SQL_PC_NOT_EXIST == ret) {

@@ -278,12 +278,7 @@ public:
       has_duplicate_table_(false),
       //has_array_binding_(false),
       is_contain_virtual_table_(false),
-#ifdef OB_BUILD_SPM
-      enable_inner_part_parallel_exec_(false),
-      is_spm_closed_(false)
-#else
       enable_inner_part_parallel_exec_(false)
-#endif
       {
       }
 
@@ -418,9 +413,6 @@ private:
   bool is_contain_virtual_table_;
   // px并行度是否大于1
   bool enable_inner_part_parallel_exec_;
-#ifdef OB_BUILD_SPM
-  bool is_spm_closed_;
-#endif
 };
 
 inline ObPlanSetType ObPlanSet::get_plan_set_type_by_cache_obj_type(ObLibCacheNameSpace ns)
