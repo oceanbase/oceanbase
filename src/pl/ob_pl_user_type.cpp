@@ -3051,7 +3051,7 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
     LOG_WARN("failed to alloc collection allocator", K(ret));
   }
   OX (new (collection_allocator) ObPLCollAllocator(dst_table));
-  if (OB_SUCC(ret)
+  if (OB_SUCC(ret) && src_table->get_count() > 0
     && OB_ISNULL(table_data
       = static_cast<char *>(
           collection_allocator->alloc(element_init_size * src_table->get_count())))) {
@@ -3070,8 +3070,13 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
     dst_table->set_type(src_table->get_type());
     dst_table->set_allocator(collection_allocator);
     dst_table->set_count(src_table->get_count());
-    dst_table->set_first(1);
-    dst_table->set_last(src_table->get_count());
+    if (src_table->get_count() > 0) {
+      dst_table->set_first(1);
+      dst_table->set_last(src_table->get_count());
+    } else {
+      dst_table->set_first(OB_INVALID_INDEX);
+      dst_table->set_last(OB_INVALID_INDEX);
+    }
     dst_table->set_data(reinterpret_cast<ObObj*>(table_data));
 
     ObElemDesc elem_desc;
