@@ -136,7 +136,7 @@ int ObTableLoadStoreCtx::init(
         if (OB_SUCC(ret)) {
           if (table_data_desc_.is_heap_table_) {
             int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE);
-            if (ls_partition_ids_.count() <= bucket_cnt) {
+            if ((ls_partition_ids_.count() <= bucket_cnt) || !ctx_->param_.need_sort_) {
               is_fast_heap_table_ = true;
             } else {
               is_multiple_mode_ = true;
