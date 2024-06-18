@@ -109,8 +109,8 @@ char *alloc_failed_msg()
                afc.alloc_size_);
       break;
     }
-  case ERRSIM: {
-      snprintf(msg, len, "errsim");
+  case ERRSIM_INJECTION: {
+      snprintf(msg, len, "errsim injection");
       break;
     }
   default: {

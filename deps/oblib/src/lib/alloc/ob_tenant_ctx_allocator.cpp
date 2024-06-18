@@ -498,7 +498,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   int ret = OB_E(EventTable::EN_4) OB_SUCCESS;
   if (OB_UNLIKELY(OB_FAIL(ret) || is_errsim)) {
     AllocFailedCtx &afc = g_alloc_failed_ctx();
-    afc.reason_ = AllocFailedReason::ERRSIM;
+    afc.reason_ = AllocFailedReason::ERRSIM_INJECTION;
     if (OB_NOT_NULL(obj)) {
       allocator.free_object(obj);
       obj = NULL;
