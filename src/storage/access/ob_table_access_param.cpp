@@ -284,11 +284,7 @@ int ObTableAccessParam::init(
       iter_param_.set_use_stmt_iter_pool();
     }
 
-    if (OB_UNLIKELY(iter_param_.enable_pd_group_by() && scan_param.use_index_skip_scan())) {
-      ret = OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "Invalid argument for group by pushdown, vectorize must be enabled and not skip scan",
-          K(ret), K(iter_param_.vectorized_enabled_), K(scan_param.use_index_skip_scan()));
-    } else if (!iter_param_.is_use_column_store()
+    if (!iter_param_.is_use_column_store()
         && iter_param_.enable_pd_blockscan()
         && iter_param_.enable_pd_filter()
         && iter_param_.enable_skip_index()
