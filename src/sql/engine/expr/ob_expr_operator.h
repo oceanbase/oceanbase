@@ -1558,8 +1558,7 @@ protected:
         is_finish = true;
       }
     }
-    SQL_LOG(DEBUG, "finish get_arith_operand", KPC(expr.args_[0]), KPC(expr.args_[1]),
-            K(result), K(is_finish));
+    SQL_LOG(DEBUG, "finish get_arith_operand", KPC(expr.args_[0]), KPC(expr.args_[1]), K(is_finish));
     return ret;
   }
 
