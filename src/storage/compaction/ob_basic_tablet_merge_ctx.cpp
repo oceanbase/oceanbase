@@ -861,11 +861,12 @@ void ObBasicTabletMergeCtx::build_update_table_store_param(
   if (is_meta_major_merge(get_merge_type())) {
     param.multi_version_start_ = tablet_handle_.get_obj()->get_multi_version_start();
     param.snapshot_version_ = tablet_handle_.get_obj()->get_snapshot_version();
+  } else {
+    param.multi_version_start_ = get_tablet_id().is_ls_inner_tablet() ? 1 : static_param_.version_range_.multi_version_start_;
+    param.snapshot_version_ = static_param_.version_range_.snapshot_version_;
   }
 
   param.sstable_ = sstable;
-  param.snapshot_version_ = static_param_.version_range_.snapshot_version_;
-  param.multi_version_start_ = get_tablet_id().is_ls_inner_tablet() ? 1 : static_param_.version_range_.multi_version_start_;
   param.storage_schema_ = static_param_.schema_;
   param.rebuild_seq_ = get_ls_rebuild_seq();
   param.need_report_ = is_major_merge_type(merge_type);
