@@ -17,7 +17,6 @@
 #include "lib/alloc/object_set.h"
 #include "lib/alloc/memory_sanity.h"
 #include "lib/alloc/memory_dump.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_page_manager.h"
 #include "lib/rc/ob_rc.h"
@@ -102,7 +101,7 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
 #else
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   ObDisableDiagnoseGuard disable_diagnose_guard;
-  int ret = OB_E(EventTable::EN_4) OB_SUCCESS;
+  int ret = OB_SUCCESS;
   void *ptr = NULL;
   ObTenantCtxAllocatorGuard allocator = NULL;
   lib::ObMemAttr attr = _attr;
@@ -184,23 +183,10 @@ void *ObMallocAllocator::realloc(
   ObDisableDiagnoseGuard disable_diagnose_guard;
   // Won't create tenant allocator!!
   void *nptr = NULL;
-  int ret = OB_E(EventTable::EN_4) OB_SUCCESS;
-  if (NULL != ptr) {
-    AObject *obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
-    abort_unless(NULL != obj);
-    abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE
-                 || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
-    abort_unless(obj->in_use_);
-
-    get_mem_leak_checker().on_free(*obj);
-  }
-  oceanbase::lib::ObMemAttr inner_attr = attr;
   ObTenantCtxAllocatorGuard allocator = NULL;
-  if (OB_FAIL(ret) && NULL == ptr) {
+  if (OB_ISNULL(allocator = get_tenant_ctx_allocator(attr.tenant_id_, attr.ctx_id_))) {
     // do nothing
-  } else if (OB_ISNULL(allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_))) {
-    // do nothing
-  } else if (OB_ISNULL(nptr = allocator->realloc(ptr, size, inner_attr))) {
+  } else if (OB_ISNULL(nptr = allocator->realloc(ptr, size, attr))) {
     // do nothing
   }
   return nptr;

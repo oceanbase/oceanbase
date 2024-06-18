@@ -238,6 +238,7 @@ public:
   inline static AChunk *ptr2chunk(const void *ptr);
   bool update_hold(int64_t bytes, bool high_prio);
   virtual int madvise(void *addr, size_t length, int advice);
+  void munmap(void *addr, size_t length);
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
   inline void set_limit(int64_t limit);

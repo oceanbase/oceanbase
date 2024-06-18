@@ -256,6 +256,10 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
       sub_mgr_.unlock();
       return new_obj;
     }
+    void free_object(AObject *obj)
+    {
+      sub_mgr_.free_object(obj);
+    }
   private:
     SubObjectMgr& sub_mgr_;
   } root_mgr(static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_);

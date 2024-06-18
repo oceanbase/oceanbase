@@ -174,7 +174,7 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
     ssize_t shad_size = SANITY_TO_SHADOW_SIZE(size);
     if (MAP_FAILED == ::mmap(shad_ptr, shad_size, prot, flags, fd, offset)) {
       LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "sanity alloc shadow failed", K(errno), KP(shad_ptr));
-      ::munmap(ptr, size);
+      this->munmap(ptr, size);
       ptr = nullptr;
     } else {
       IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, shad_size);
@@ -194,9 +194,9 @@ void AChunkMgr::low_free(const void *ptr, const uint64_t size)
     void *shad_ptr  = SANITY_TO_SHADOW((void*)ptr);
     ssize_t shad_size = SANITY_TO_SHADOW_SIZE(size);
     IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, -shad_size);
-    ::munmap(shad_ptr, shad_size);
+    this->munmap(shad_ptr, shad_size);
   }
-  ::munmap((void*)ptr, size);
+  this->munmap((void*)ptr, size);
   unset_ob_mem_mgr_path();
 }
 
@@ -209,24 +209,26 @@ AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
   // Reuse chunk from self-cache
   if (OB_NOT_NULL(chunk = pop_chunk_with_size(all_size))) {
     int64_t orig_hold_size = chunk->hold();
+    bool need_free = false;
     if (hold_size == orig_hold_size) {
       // do-nothing
     } else if (hold_size > orig_hold_size) {
-      if (!update_hold(hold_size - orig_hold_size, high_prio)) {
-        direct_free(chunk, all_size);
-        IGNORE_RETURN update_hold(-orig_hold_size, false);
-        chunk = nullptr;
-      }
+      need_free = !update_hold(hold_size - orig_hold_size, high_prio);
+    } else if (chunk->is_hugetlb_) {
+      need_free = true;
     } else {
       int result = this->madvise((char*)chunk + hold_size, orig_hold_size - hold_size, MADV_DONTNEED);
       if (-1 == result) {
         LOG_WARN_RET(OB_ERR_SYS, "madvise failed", K(errno));
-        direct_free(chunk, all_size);
-        IGNORE_RETURN update_hold(-orig_hold_size, false);
-        chunk = nullptr;
+        need_free = true;
       } else {
         IGNORE_RETURN update_hold(hold_size - orig_hold_size, false);
       }
+    }
+    if (need_free) {
+      direct_free(chunk, all_size);
+      IGNORE_RETURN update_hold(-orig_hold_size, false);
+      chunk = nullptr;
     }
   }
   if (OB_ISNULL(chunk)) {
@@ -369,6 +371,14 @@ int AChunkMgr::madvise(void *addr, size_t length, int advice)
     } while (result == -1 && errno == EAGAIN);
   }
   return result;
+}
+
+void AChunkMgr::munmap(void *addr, size_t length)
+{
+  int orig_errno = errno;
+  if (-1 == ::munmap(addr, length)) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "munmap failed", KP(addr), K(length), K(orig_errno), K(errno));
+  }
 }
 
 int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
