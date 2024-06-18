@@ -272,15 +272,11 @@ public:
   int clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove);
   // when not inc, return -1
   int64_t inc_pending_log_size(const int64_t size);
-  void inc_flushed_log_size(const int64_t size) {
-    if (!serial_final_scn_.is_valid()) {
-      UNUSED(ATOMIC_FAA(&flushed_log_size_, size));
-    }
-  }
+  void inc_flushed_log_size(const int64_t size);
   void clear_pending_log_size() { ATOMIC_STORE(&pending_log_size_, 0); }
-  int64_t get_pending_log_size() const { return ATOMIC_LOAD(&pending_log_size_); }
+  int64_t get_pending_log_size() const;
   bool pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no, const int64_t limit);
-  int64_t get_flushed_log_size() const { return ATOMIC_LOAD(&flushed_log_size_); }
+  int64_t get_flushed_log_size() const;
   int get_log_guard(const transaction::ObTxSEQ &write_seq,
                     ObCallbackListLogGuard &log_guard,
                     int &cb_list_idx);
