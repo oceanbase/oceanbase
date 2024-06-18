@@ -187,6 +187,8 @@ int ObDDLTaskQueue::add_task_to_last(ObDDLTask *task)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
     LOG_WARN("ObDDLTaskQueue has not been inited", K(ret));
+  } else if (has_set_stop()) { /* skip, task queue is stopped, not add*/
+    LOG_INFO("queue is stop, skip add task", K(ret), KPC(task));
   } else if (OB_ISNULL(task)) {
     ret = common::OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(task));
