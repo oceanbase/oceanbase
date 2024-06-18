@@ -220,7 +220,11 @@ int ObStaticMergeParam::cal_minor_merge_param()
     LOG_WARN("tables handle is invalid", K(ret), K(tables_handle_));
   } else {
     read_base_version_ = 0;
-    set_full_merge_and_level(false/*is_full_merge*/);
+    if (get_tablet_id().is_ls_inner_tablet() && !is_mini_merge(get_merge_type())) {
+      // full merge has been setted when preparing compaction filter
+    } else {
+      set_full_merge_and_level(false/*is_full_merge*/);
+    }
   }
   return ret;
 }
