@@ -264,6 +264,7 @@ static ObSysPackageFile oracle_sys_package_file_table[] = {
   {"json_array_t", "json_array_type.sql", "json_array_type_body.sql"},
   {"xmlsequence", "xml_sequence_type.sql", "xml_sequence_type_body.sql"},
   {"sdo_geometry", "sdo_geometry.sql", "sdo_geometry_body.sql"},
+  {"sdo_geom", "sdo_geom.sql", "sdo_geom_body.sql"},
   {"dbms_external_table", "dbms_external_table.sql", "dbms_external_table_body.sql"},
   {"dbms_profiler", "dbms_profiler.sql", "dbms_profiler_body.sql"},
 #endif

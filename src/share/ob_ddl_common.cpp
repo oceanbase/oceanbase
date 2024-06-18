@@ -609,12 +609,14 @@ int ObDDLUtil::generate_order_by_str(
   } else if (OB_FAIL(sql_string.append("order by "))) {
     LOG_WARN("append failed", K(ret));
   } else {
+    bool append_comma = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < order_column_ids.count(); ++i) {
       for (int64_t j = 0; OB_SUCC(ret) && j < select_column_ids.count(); ++j) {
-        const bool append_comma = 0 != i;
         if (select_column_ids.at(j) == order_column_ids.at(i)) {
           if (OB_FAIL(sql_string.append_fmt("%s %ld", append_comma ? ",": "", j + 1))) {
             LOG_WARN("append fmt failed", K(ret));
+          } else if (!append_comma) {
+            append_comma = true;
           }
         }
       }

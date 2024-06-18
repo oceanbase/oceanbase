@@ -347,7 +347,7 @@ public:
   inline bool is_like_key() const { return T_LIKE_KEY == key_type_ && like_keypart_ != NULL; }
   inline bool is_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_IN_KEY_PART; }
   inline bool is_not_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_NOT_IN_KEY_PART; }
-  inline bool is_geo_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL && (domain_keypart_->domain_op_ >= ObDomainOpType::T_GEO_COVERS && domain_keypart_->domain_op_ <= ObDomainOpType::T_GEO_COVEREDBY); }
+  inline bool is_geo_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL && (domain_keypart_->domain_op_ >= ObDomainOpType::T_GEO_COVERS && domain_keypart_->domain_op_ <= ObDomainOpType::T_GEO_RELATE); }
   inline bool is_domain_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL; }
 
   int create_normal_key();

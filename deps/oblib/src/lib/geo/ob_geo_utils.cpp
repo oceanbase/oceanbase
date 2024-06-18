@@ -42,6 +42,13 @@
 #include "lib/geo/ob_geo_affine_visitor.h"
 #include "lib/geo/ob_geo_simplify_visitor.h"
 #include "lib/geo/ob_geo_grid_visitor.h"
+#include "lib/geo/ob_geo_cache.h"
+#include "lib/geo/ob_geo_cache_polygon.h"
+#include "lib/geo/ob_geo_cache_point.h"
+#include "lib/geo/ob_geo_cache_linestring.h"
+#include "lib/geo/ob_geo_vertex_collect_visitor.h"
+#include "lib/geo/ob_geo_point_location_visitor.h"
+#include "lib/geo/ob_geo_zoom_in_visitor.h"
 
 namespace oceanbase
 {
@@ -693,6 +700,25 @@ int ObGeoTypeUtil::construct_geometry(ObIAllocator &allocator,
     }
   }
 
+  return ret;
+}
+
+int ObGeoTypeUtil::copy_geometry(ObIAllocator &allocator,
+                                  ObGeometry &origin_geo,
+                                  ObGeometry *&copy_geo)
+{
+  int ret = OB_SUCCESS;
+  copy_geo = nullptr;
+  ObString data;
+  if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, origin_geo.type(), origin_geo.crs() == ObGeoCRS::Geographic, true, copy_geo))) {
+    LOG_WARN("fail to create geo by type", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, ObString(origin_geo.length(), origin_geo.val()), data))) {
+    LOG_WARN("fail to copy geo data", K(ret));
+  } else {
+    copy_geo->set_data(data);
+    copy_geo->set_srid(origin_geo.get_srid());
+    copy_geo->set_zoom_in_value(origin_geo.get_zoom_in_value());
+  }
   return ret;
 }
 
@@ -1439,13 +1465,15 @@ int ObGeoBoxUtil::clip_by_box(ObGeometry &geo_in, ObIAllocator &allocator, const
   } else {
     geo_bin = &geo_in;
     ObGeoToTreeVisitor tree_visitor(&allocator);
-    if (OB_FAIL(geo_in.do_visit(tree_visitor))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(geo_in.do_visit(tree_visitor))) {
       LOG_WARN("fail to do tree visitor", K(ret));
     } else {
       geo_tree = tree_visitor.get_geometry();
     }
   }
-  if (OB_ISNULL(geo_tree) || OB_ISNULL(geo_bin)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(geo_tree) || OB_ISNULL(geo_bin)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for geometry", K(ret));
   }
@@ -2594,6 +2622,12 @@ bool ObGeoTypeUtil::is_2d_geo_type(ObGeoType geo_type) {
          geo_type == ObGeoType::GEOMETRYCOLLECTION;
 }
 
+bool ObGeoTypeUtil::is_multi_geo_type(ObGeoType geo_type) {
+  return geo_type == ObGeoType::MULTIPOINT ||
+         geo_type == ObGeoType::MULTILINESTRING || geo_type == ObGeoType::MULTIPOLYGON ||
+         geo_type == ObGeoType::GEOMETRYCOLLECTION;
+}
+
 int ObGeoTypeUtil::get_coll_dimension(ObIWkbGeomCollection *geo, int8_t &dimension)
 {
   int ret = OB_SUCCESS;
@@ -2646,6 +2680,70 @@ int ObGeoTypeUtil::get_coll_dimension(ObIWkbGeomCollection *geo, int8_t &dimensi
   }
   return ret;
 }
+int ObLineSegment::get_box(ObCartesianBox &box)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(verts)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("vertexes is null", K(ret));
+  } else if (begin >= end) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("line segment don't have enough points", K(begin), K(end), K(ret));
+  } else {
+    double min_x = (*verts)[begin].x;
+    double min_y = (*verts)[begin].y;
+    double max_x = (*verts)[begin].x;
+    double max_y = (*verts)[begin].y;
+    for (uint32_t i = begin + 1; i <= end; i++) {
+      min_x = std::min(min_x, (*verts)[i].x);
+      min_y = std::min(min_y, (*verts)[i].y);
+      max_x = std::max(max_x, (*verts)[i].x);
+      max_y = std::max(max_y, (*verts)[i].y);
+    }
+    box.min_corner().set<0>(min_x);
+    box.min_corner().set<1>(min_y);
+    box.max_corner().set<0>(max_x);
+    box.max_corner().set<1>(max_y);
+  }
+  return ret;
+}
+
+int ObSegment::get_box(ObCartesianBox &box)
+{
+  double min_x = std::min(begin.x, end.x);
+  double min_y = std::min(begin.y, end.y);
+  double max_x = std::max(begin.x, end.x);
+  double max_y = std::max(begin.y, end.y);
+  box.min_corner().set<0>(min_x);
+  box.min_corner().set<1>(min_y);
+  box.max_corner().set<0>(max_x);
+  box.max_corner().set<1>(max_y);
+  return OB_SUCCESS;
+}
+
+int ObGeoTypeUtil::get_quadrant_direction(const ObPoint2d &start, const ObPoint2d &end, QuadDirection &res)
+{
+  int ret = OB_SUCCESS;
+  if(start.x == end.x && start.y == end.y) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("start and end is same", K(start.x), K(start.y));
+  } else {
+    if (end.x >= start.x) {
+      if (end.y >= start.y) {
+        res = QuadDirection::NORTH_EAST;
+      } else {
+        res = QuadDirection::SOUTH_EAST;
+      }
+    } else {
+      if (end.y >= start.y) {
+        res = QuadDirection::NORTH_WEST;
+      } else {
+        res = QuadDirection::SOUTH_WEST;
+      }
+    }
+  }
+  return ret;
+}
 
 double ObGeoTypeUtil::distance_point_squre(const ObWkbGeomInnerPoint& p1, const ObWkbGeomInnerPoint& p2)
 {
@@ -2689,6 +2787,433 @@ int ObGeoMVTUtil::affine_transformation(ObGeometry *geo, const ObAffineMatrix &a
   return ret;
 }
 
+template<typename CachedGeoType>
+int ObGeoTypeUtil::create_cached_geometry(ObIAllocator &allocator, ObGeometry *geo, ObCachedGeom *&cached_geo, const ObSrsItem *srs)
+{
+  int ret = OB_SUCCESS;
+  CachedGeoType *tmp_cached = reinterpret_cast<CachedGeoType *>(allocator.alloc(sizeof(CachedGeoType)));
+  if (OB_ISNULL(tmp_cached)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc cached polygon", K(ret));
+  } else {
+    cached_geo = new(tmp_cached) CachedGeoType(geo, allocator, srs);
+  }
+  return ret;
+}
+
+int ObGeoTypeUtil::get_polygon_size(ObGeometry &geo)
+{
+  int size = 0;
+  if (geo.crs() == ObGeoCRS::Cartesian) {
+    if (geo.type() == ObGeoType::POLYGON) {
+      size = (static_cast<ObIWkbGeomPolygon*>(&geo))->size();
+    } else {
+      const ObWkbGeomMultiPolygon *multi_poly = reinterpret_cast<const ObWkbGeomMultiPolygon*>(&geo);
+      size = multi_poly->size();
+    }
+  } else {
+    if (geo.type() == ObGeoType::POLYGON) {
+      size = (static_cast<ObIWkbGeogPolygon*>(&geo))->size();
+    } else {
+      const ObWkbGeogMultiPolygon *multi_poly = reinterpret_cast<const ObWkbGeogMultiPolygon*>(&geo);
+      size = multi_poly->size();
+    }
+  }
+  return size;
+}
+
+int ObGeoTypeUtil::magnify_and_recheck(ObIAllocator &allocator, ObGeometry &geo, ObGeoEvalCtx& gis_context, bool& invalid_for_cache)
+{
+  int ret = OB_SUCCESS;
+  ObGeometry *tmp_geo = nullptr;
+  bool valid = false;
+  bool need_recheck = false;
+  ObGeoZoomInVisitor zoom_in_visitor(RECHECK_ZOOM_IN_VALUE);
+  const ObGeoNormalVal *val_arg = nullptr;
+  if (OB_FAIL(copy_geometry(allocator, geo, tmp_geo)) || OB_ISNULL(tmp_geo)) {
+    // do nothing, return invalid_for_cache
+  } else if (OB_FAIL(tmp_geo->do_visit(zoom_in_visitor))) {
+    LOG_WARN("failed to zoom in visit", K(ret));
+  } else {
+    gis_context.ut_set_geo_arg(0, tmp_geo);
+    ret = check_valid_and_self_intersects(gis_context, invalid_for_cache, need_recheck);
+  }
+  return ret;
+}
+
+int ObGeoTypeUtil::check_valid_and_self_intersects(ObGeoEvalCtx& gis_context, bool& invalid_for_cache, bool& need_recheck)
+{
+  int ret = OB_SUCCESS;
+  bool valid = false;
+  const ObGeoNormalVal *val_arg = nullptr;
+  if (OB_FAIL(ObGeoFunc<ObGeoFuncType::IsValid>::geo_func::eval(gis_context, valid))) {
+    LOG_WARN("eval geo func isvalid failed", K(ret));
+  } else if (valid) {
+    invalid_for_cache = false;
+  } else if (OB_FALSE_IT(val_arg = gis_context.get_val_arg(0))) {
+  } else if (OB_ISNULL(val_arg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not be null", K(ret));
+  } else if (static_cast<int64_t>(bg::validity_failure_type::failure_self_intersections) == val_arg->int64_) {
+    invalid_for_cache = true;
+    need_recheck = true;
+  } else if (static_cast<int64_t>(bg::validity_failure_type::failure_wrong_topological_dimension) == val_arg->int64_) {
+    invalid_for_cache = true;
+    need_recheck = false;
+  } else {
+    invalid_for_cache = false;
+  }
+  return ret;
+}
+
+int ObGeoTypeUtil::polygon_check_self_intersections(ObIAllocator &allocator, ObGeometry &geo, const ObSrsItem *srs, bool& invalid_for_cache)
+{
+  int ret = OB_SUCCESS;
+  ObGeoEvalCtx gis_context(&allocator, srs);
+  ObGeoNormalVal reason;
+  bool valid = false;
+  const ObGeoNormalVal *val_arg = nullptr;
+  bool need_recheck = false;
+  if (OB_FAIL(gis_context.append_geo_arg(&geo))) {
+    LOG_WARN("build geo gis context failed", K(ret));
+  } else if (OB_FAIL(gis_context.append_val_arg(reason))) {
+    LOG_WARN("add reason val to context failed", K(ret));
+  } else if (OB_FAIL(check_valid_and_self_intersects(gis_context, invalid_for_cache, need_recheck))) {
+    LOG_WARN("fail to check_valid_if_self_intersects.", K(ret));
+  } else if (invalid_for_cache && need_recheck && OB_FAIL(magnify_and_recheck(allocator, geo, gis_context, invalid_for_cache))) {
+    LOG_WARN("fail to magnify_and_recheck.", K(ret));
+  } else if (invalid_for_cache) {
+    LOG_WARN("self intersects, use geo cache base.", K(ret));
+  }
+  return ret;
+}
+
+int ObGeoTypeUtil::create_cached_geometry(ObIAllocator &allocator,
+                                          ObIAllocator &tmp_allocator,
+                                          ObGeometry *geo,
+                                          const ObSrsItem *srs,
+                                          ObCachedGeom *&cached_geo)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(geo)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not be null", K(ret));
+  } else {
+    switch (geo->type()) {
+      case ObGeoType::POINT:
+      case ObGeoType::MULTIPOINT: {
+        ret = create_cached_geometry<ObCachedGeoPoint>(allocator, geo, cached_geo, srs);
+        break;
+      }
+      case ObGeoType::LINESTRING:
+      case ObGeoType::MULTILINESTRING:
+      {
+        ret = create_cached_geometry<ObCachedGeoLinestring>(allocator, geo, cached_geo, srs);
+        break;
+      }
+      case ObGeoType::POLYGON:
+      case ObGeoType::MULTIPOLYGON: {
+        ret = create_cached_geometry<ObCachedGeoPolygon>(allocator, geo, cached_geo, srs);
+        break;
+      }
+      case ObGeoType::GEOMETRYCOLLECTION: {
+        ret = create_cached_geometry<ObCachedGeomBase>(allocator, geo, cached_geo, srs);
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("type not supported yet.", K(geo->type()) ,K(ret));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObGeoTypeUtil::get_geo_dimension(ObGeometry *geo, ObGeoDimension& dim)
+{
+  int ret = OB_SUCCESS;
+  dim = ObGeoDimension::MAX_DIMENSION;
+  if (OB_ISNULL(geo)) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("should not be null.", K(ret));
+  } else {
+    switch (geo->type()) {
+      case ObGeoType::POINT:
+      case ObGeoType::MULTIPOINT: {
+        dim = ObGeoDimension::ZERO_DIMENSION;
+        break;
+      }
+      case ObGeoType::LINESTRING:
+      case ObGeoType::MULTILINESTRING:
+      {
+        dim = ObGeoDimension::ONE_DIMENSION;
+        break;
+      }
+      case ObGeoType::POLYGON:
+      case ObGeoType::MULTIPOLYGON: {
+        dim = ObGeoDimension::TWO_DIMENSION;
+        break;
+      }
+      case ObGeoType::GEOMETRYCOLLECTION: {
+        if (geo->crs() == ObGeoCRS::Cartesian) {
+          ret = get_collection_dimension<ObIWkbGeomCollection, ObWkbGeomCollection>(static_cast<ObIWkbGeomCollection*>(geo), dim);
+        } else {
+          ret = get_collection_dimension<ObIWkbGeogCollection, ObWkbGeogCollection>(static_cast<ObIWkbGeogCollection*>(geo), dim);
+        }
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("type not supported yet.", K(geo->type()), K(ret));
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (dim == ObGeoDimension::MAX_DIMENSION) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get geo dimension.", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObGeoTypeUtil::has_dimension(ObGeometry& geo, ObGeoDimension dim, bool& res)
+{
+  int ret = OB_SUCCESS;
+  res = false;
+  if (geo.type() == ObGeoType::GEOMETRYCOLLECTION) {
+    if (geo.crs() == ObGeoCRS::Cartesian) {
+      ret = collection_has_dimension<ObIWkbGeomCollection, ObWkbGeomCollection>(static_cast<ObIWkbGeomCollection*>(&geo), dim, res);
+    } else {
+      ret = collection_has_dimension<ObIWkbGeogCollection, ObWkbGeogCollection>(static_cast<ObIWkbGeogCollection*>(&geo), dim, res);
+    }
+  } else if (dim == ObGeoDimension::ZERO_DIMENSION) {
+    res = is_point(geo);
+  } else if (dim == ObGeoDimension::ONE_DIMENSION) {
+    res = is_line(geo);
+  } else if (dim == ObGeoDimension::TWO_DIMENSION) {
+    res = is_polygon(geo);
+  }
+  return ret;
+}
+
+bool ObGeoTypeUtil::use_point_polygon_short_circuit(const ObGeometry& geo1, const ObGeometry& geo2, ObItemType func_type)
+{
+  bool ret_bool = false;
+  if (func_type == ObItemType::T_FUN_SYS_ST_INTERSECTS) {
+    ret_bool = (is_point(geo1) && is_polygon(geo2)) || (is_point(geo2) && is_polygon(geo1));
+  } else if (func_type == ObItemType::T_FUN_SYS_ST_COVERS || func_type == ObItemType::T_FUN_SYS_ST_CONTAINS){
+    ret_bool = is_polygon(geo1) && is_point(geo2);
+  } else if (func_type == ObItemType::T_FUN_SYS_ST_WITHIN) {
+    ret_bool = is_point(geo1) && is_polygon(geo2);
+  }
+  return ret_bool;
+}
+
+int ObGeoTypeUtil::point_polygon_short_circuit(ObGeometry *poly, ObGeometry *point, ObPointLocation& loc, bool& has_internal, bool get_fartest)
+{
+  int ret = OB_SUCCESS;
+  if (point->type() == ObGeoType::POINT) {
+    ObIWkbPoint* tmp_p = static_cast<ObIWkbPoint*>(point);
+    ObPoint2d p;
+    p.x = tmp_p->x();
+    p.y = tmp_p->y();
+    ObGeoPointLocationVisitor point_loc_visitor(p);
+    if (OB_FAIL(poly->do_visit(point_loc_visitor))) {
+      LOG_WARN("failed to do point location visitor", K(ret));
+    } else {
+      loc = point_loc_visitor.get_point_location();
+      has_internal = (loc == ObPointLocation::INTERIOR);
+    }
+  } else {
+    // check if geo point on cached line
+    ObVertexes input_vertexes;
+    ObGeoVertexCollectVisitor vertex_visitor(input_vertexes);
+    if (OB_FAIL(point->do_visit(vertex_visitor))) {
+      LOG_WARN("failed to collect geo vertexes", K(ret));
+    } else {
+      ObPointLocation tmp_loc = ObPointLocation::INVALID;
+      int size = input_vertexes.size();
+      for (uint32_t i = 0; i < size && OB_SUCC(ret) && (loc == ObPointLocation::INVALID); i++) {
+        ObGeoPointLocationVisitor point_loc_visitor(input_vertexes[i]);
+        if (OB_FAIL(poly->do_visit(point_loc_visitor))) {
+          LOG_WARN("failed to do point location visitor", K(ret));
+        } else if (!get_fartest && (point_loc_visitor.get_point_location() == ObPointLocation::INTERIOR
+                  || point_loc_visitor.get_point_location() == ObPointLocation::BOUNDARY)) {
+          loc = point_loc_visitor.get_point_location();
+        } else if (get_fartest) {
+          if (!has_internal && point_loc_visitor.get_point_location() == ObPointLocation::INTERIOR) {
+              has_internal = true;
+            }
+          if (tmp_loc == ObPointLocation::INVALID || tmp_loc < point_loc_visitor.get_point_location()) {
+            tmp_loc = point_loc_visitor.get_point_location();
+          }
+          if (tmp_loc == ObPointLocation::EXTERIOR) {
+            loc = tmp_loc;
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && loc == ObPointLocation::INVALID) {
+        loc = get_fartest ? tmp_loc : ObPointLocation::EXTERIOR;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObGeoTypeUtil::get_point_polygon_res(ObGeometry *geo1, ObGeometry *geo2, ObItemType func_type, bool& result)
+{
+  int ret = OB_SUCCESS;
+  ObPointLocation loc = ObPointLocation::INVALID;
+  ObGeometry *poly = nullptr;
+  ObGeometry *point = nullptr;
+  if (OB_ISNULL(geo1) || OB_ISNULL(geo2)) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("should not be null.", K(ret));
+  } else {
+    point = is_point(*geo1) ? geo1 : geo2;
+    poly = is_point(*geo1) ? geo2 : geo1;
+    bool get_fartest = (func_type != ObItemType::T_FUN_SYS_ST_INTERSECTS);
+    bool has_internal = false;
+    if (OB_FAIL(point_polygon_short_circuit(poly, point, loc, has_internal, get_fartest))) {
+      LOG_WARN("fail to get point polygon position.", K(ret));
+    } else if (!get_fartest) {
+      result = (loc == ObPointLocation::INTERIOR || loc == ObPointLocation::BOUNDARY);
+    } else if (get_fartest) {
+      if (loc == ObPointLocation::EXTERIOR) {
+        result = false;
+      } else if (loc == ObPointLocation::INTERIOR || (loc == ObPointLocation::BOUNDARY && has_internal)) {
+        result = true;
+      } else {
+        result = (func_type == ObItemType::T_FUN_SYS_ST_COVERS);
+      }
+    }
+  }
+  return ret;
+}
+
+template<typename T_IBIN, typename T_BIN>
+int ObGeoTypeUtil::get_collection_dimension(T_IBIN *geo, ObGeoDimension& dim)
+{
+  int ret = OB_SUCCESS;
+  const T_BIN *collection = reinterpret_cast<const T_BIN*>(geo->val());
+  typename T_BIN::iterator iter = collection->begin();
+  uint64_t total_len = geo->length();
+  uint64_t pos = WKB_COMMON_WKB_HEADER_LEN;
+  dim = ObGeoDimension::MAX_DIMENSION;
+  for ( ; iter != collection->end() && OB_SUCC(ret) && !(dim == ObGeoDimension::TWO_DIMENSION); iter++) {
+    ObGeoDimension tmp_dim = ObGeoDimension::ZERO_DIMENSION;
+    typename ObWkbGeomCollection::const_pointer sub_ptr = iter.operator->();
+    if (pos + WKB_GEO_TYPE_SIZE + WKB_GEO_BO_SIZE > total_len) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid wkb geo", K(ret), K(total_len), K(pos), K(geo->val()));
+    } else {
+      ObGeoType sub_type = collection->get_sub_type(sub_ptr);
+      switch (sub_type) {
+        case ObGeoType::POINT:
+        case ObGeoType::MULTIPOINT : {
+          tmp_dim = ObGeoDimension::ZERO_DIMENSION;
+          break;
+        }
+        case ObGeoType::LINESTRING:
+        case ObGeoType::MULTILINESTRING : {
+          tmp_dim = ObGeoDimension::ONE_DIMENSION;
+          break;
+        }
+        case ObGeoType::POLYGON:
+        case ObGeoType::MULTIPOLYGON : {
+          tmp_dim = ObGeoDimension::TWO_DIMENSION;
+          break;
+        }
+        case ObGeoType::GEOMETRYCOLLECTION : {
+          const T_BIN *subgc = reinterpret_cast<const T_BIN *>(sub_ptr);
+          T_IBIN sub_collection;
+          ObString data(total_len - pos, reinterpret_cast<const char *>(subgc));
+          sub_collection.set_data(data);
+          ret = get_collection_dimension<T_IBIN, T_BIN>(&sub_collection, tmp_dim);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to do wkb geom sub collection visit", K(ret));
+          } else {
+            pos += sub_collection.length();
+          }
+          break;
+        }
+        default : {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid geo type", K(ret), K(sub_type));
+          break;
+        }
+      }
+      if (OB_FAIL(ret) || tmp_dim == ObGeoDimension::MAX_DIMENSION) {
+      } else if (dim == ObGeoDimension::MAX_DIMENSION
+              || dim < tmp_dim) {
+        dim = tmp_dim;
+      }
+    }
+  }
+  return ret;
+}
+
+template<typename T_IBIN, typename T_BIN>
+int ObGeoTypeUtil::collection_has_dimension(T_IBIN *geo, ObGeoDimension dim, bool& res)
+{
+  int ret = OB_SUCCESS;
+  const T_BIN *collection = reinterpret_cast<const T_BIN*>(geo->val());
+  typename T_BIN::iterator iter = collection->begin();
+  uint64_t total_len = geo->length();
+  uint64_t pos = WKB_COMMON_WKB_HEADER_LEN;
+  for ( ; iter != collection->end() && OB_SUCC(ret) && !res; iter++) {
+    ObGeoDimension tmp_dim = ObGeoDimension::MAX_DIMENSION;
+    typename ObWkbGeomCollection::const_pointer sub_ptr = iter.operator->();
+    if (pos + WKB_GEO_TYPE_SIZE + WKB_GEO_BO_SIZE > total_len) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid wkb geo", K(ret), K(total_len), K(pos), K(geo->val()));
+    } else {
+      ObGeoType sub_type = collection->get_sub_type(sub_ptr);
+      switch (sub_type) {
+        case ObGeoType::POINT:
+        case ObGeoType::MULTIPOINT : {
+          res = (dim == ObGeoDimension::ZERO_DIMENSION);
+          break;
+        }
+        case ObGeoType::LINESTRING:
+        case ObGeoType::MULTILINESTRING : {
+          res = (dim == ObGeoDimension::ONE_DIMENSION);
+          break;
+        }
+        case ObGeoType::POLYGON:
+        case ObGeoType::MULTIPOLYGON : {
+          res = (dim == ObGeoDimension::TWO_DIMENSION);
+          break;
+        }
+        case ObGeoType::GEOMETRYCOLLECTION : {
+          ret = get_collection_dimension<T_IBIN, T_BIN>(geo, dim);
+          break;
+        }
+        default : {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid geo type", K(ret), K(sub_type));
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObGeoTypeUtil::need_get_srs(const uint32_t srid)
+{
+  bool ret_bool = true;
+  if (lib::is_oracle_mode() && srid == UINT_MAX32) {
+    ret_bool = false;
+  } else if (0 == srid) {
+    ret_bool = false;
+  }
+  return ret_bool;
+}
+
 int ObGeoMVTUtil::snap_to_grid(ObGeometry *geo, const ObGeoGrid &grid, bool use_floor)
 {
   int ret = OB_SUCCESS;
@@ -2718,6 +3243,5 @@ int ObGeoMVTUtil::simplify_geometry(ObGeometry *geo, double tolerance, bool keep
   }
   return ret;
 }
-
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

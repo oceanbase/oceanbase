@@ -93,7 +93,7 @@ int ObExprPrivSTGeomFromEwkt::eval_st_geomfromewkt(const ObExpr &expr, ObEvalCtx
     } else if (srid < 0 || srid > UINT_MAX32) {
       ret = OB_OPERATE_OVERFLOW;
       LOG_WARN("srid input value out of range", K(ret), K(datum->get_int()));
-    } else if (0 != srid) {
+    } else if (ObGeoTypeUtil::need_get_srs(srid)) {
       if (OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
         LOG_WARN("failed to get srs guard", K(ret));
       } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs_item))) {

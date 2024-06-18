@@ -9555,3 +9555,23 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_nic_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_spatial_reference_systems;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+srs_id	bigint(20) unsigned	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+srs_version	bigint(20) unsigned	NO		NULL	
+srs_name	varchar(128)	NO		NULL	
+organization	varchar(256)	YES		NULL	
+organization_coordsys_id	bigint(20) unsigned	YES		NULL	
+definition	varchar(4096)	NO		NULL	
+minX	decimal(38,10)	YES		NULL	
+maxX	decimal(38,10)	YES		NULL	
+minY	decimal(38,10)	YES		NULL	
+maxY	decimal(38,10)	YES		NULL	
+proj4text	varchar(2048)	YES		NULL	
+description	varchar(2048)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_spatial_reference_systems;
+IF(count(*) >= 0, 1, 0)
+1

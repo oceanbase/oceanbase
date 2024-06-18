@@ -1958,6 +1958,7 @@ public:
   bool is_deterministic() const { return is_deterministic_; }
   bool is_bool_expr() const;
   bool is_spatial_expr() const;
+  bool is_oracle_spatial_expr() const;
   bool is_json_domain_expr() const;
   ObRawExpr* get_json_domain_param_expr();
   bool is_geo_expr() const;

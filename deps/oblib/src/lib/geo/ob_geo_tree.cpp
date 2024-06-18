@@ -354,6 +354,22 @@ int ObCartesianGeometrycollection::do_visit(ObIGeoVisitor &visitor)
   return ObGeoTreeVisitorImplement::collection_do_visit(this, visitor);
 }
 
+ObCartesianBox::ObCartesianBox(double min_x, double min_y, double max_x, double max_y)
+{
+  min_p_.set<0>(min_x);
+  min_p_.set<1>(min_y);
+  max_p_.set<0>(max_x);
+  max_p_.set<1>(max_y);
+}
+
+void ObCartesianBox::set_box(double min_x, double min_y, double max_x, double max_y)
+{
+  min_p_.set<0>(min_x);
+  min_p_.set<1>(min_y);
+  max_p_.set<0>(max_x);
+  max_p_.set<1>(max_y);
+}
+
 bool ObCartesianBox::Contains(ObCartesianBox &other)
 {
   double this_min_x = min_corner().get<0>();

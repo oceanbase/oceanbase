@@ -73,7 +73,11 @@ int eval_intersects_with_point_strategy(const ObGeometry *g1,
     bg::strategy::within::geographic_winding<ObWkbGeogPoint> point_strategy(geog_sphere);
     const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
     const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+#ifdef USE_SPHERE_GEO
     result = bg::intersects(*geo1, *geo2, point_strategy);
+#else
+    result = bg::intersects(*geo1, *geo2);
+#endif
   }
   return ret;
 }
@@ -94,7 +98,11 @@ int eval_intersects_with_nonpoint_strategy(const ObGeometry *g1,
     bg::strategy::intersection::geographic_segments<> nonpoint_strategy(geog_sphere);
     const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
     const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+#ifdef USE_SPHERE_GEO
     result = bg::intersects(*geo1, *geo2, nonpoint_strategy);
+#else
+    result = bg::intersects(*geo1, *geo2);
+#endif
   }
   return ret;
 }

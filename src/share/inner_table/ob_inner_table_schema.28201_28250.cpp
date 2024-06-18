@@ -775,6 +775,56 @@ int ObInnerTableSchema::v_ob_nic_info_ora_schema(ObTableSchema &table_schema)
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_spatial_columns_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_SPATIAL_COLUMNS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_SPATIAL_COLUMNS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   select G.TABLE_SCHEMA AS TABLE_SCHEMA,        G.TABLE_NAME AS TABLE_NAME,        G.COLUMN_NAME AS COLUMN_NAME,        G.SRS_NAME AS SRS_NAME,        G.SRS_ID AS SRS_ID,        G.GEOMETRY_TYPE_NAME AS GEOMETRY_TYPE_NAME,        CAST('SDO_DIM_ARRAY(SDO_DIM_ELEMENT(NULL, -180, 180, 0.5), SDO_DIM_ELEMENT(NULL, -90, 90, 0.5))'          AS VARCHAR2(512)) AS DIMINFO,        D.INDEX_NAME AS INDEX_NAME from     (select CAST(db.database_name AS VARCHAR2(128)) as TABLE_SCHEMA,          CAST(tbl.table_name AS VARCHAR2(256))  as TABLE_NAME,          CAST(col.column_name AS VARCHAR2(128)) as COLUMN_NAME,          CAST(srs.srs_name AS VARCHAR2(128)) as SRS_NAME,          CAST(               CASE                  WHEN TRUNC(col.srs_id / POWER(2, 32)) = 4294967295 THEN NULL                 ELSE TRUNC(col.srs_id / POWER(2, 32))               END           AS NUMBER(10)) AS SRS_ID,         CAST(             CASE                WHEN (BITAND(col.srs_id, 31) IN (0, 1, 2, 3, 4, 5, 6, 7)) THEN 'SDO_GEOMETRY'               ELSE 'invalid'             END           AS VARCHAR2(128)) AS GEOMETRY_TYPE_NAME,          db.tenant_id as TENANT_ID,          tbl.table_id AS TABLE_ID,          tbl.database_id AS DATABASE_ID     from       SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT col left join SYS.ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT srs on TRUNC(col.srs_id / POWER(2, 32)) = srs.srs_id       join SYS.ALL_VIRTUAL_TABLE_REAL_AGENT tbl on (tbl.table_id = col.table_id and tbl.tenant_id = col.tenant_id)       join SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db on (db.database_id = tbl.database_id and db.tenant_id = tbl.tenant_id)       and db.database_name != '__recyclebin'     where col.data_type = 48         AND BITAND(TRUNC(tbl.table_mode / POWER(2, 12)), 15) IN (0, 1)) G left join      (select T.TABLE_NAME AS TABLE_NAME,            T.INDEX_NAME AS INDEX_NAME,            C.COLUMN_NAME AS COLUMN_NAME,            C.COLUMN_ID AS COLUMN_ID,             T.DATABASE_ID AS DATABASE_ID,            T.TENANT_ID AS TENANT_ID,             C.TABLE_ID AS TABLE_ID     from      (select A.TABLE_NAME AS TABLE_NAME,             A.INDEX_NAME AS INDEX_NAME,             A.COLUMN_NAME  AS COLUMN_NAME,             B.COLUMN_ID AS COLUMN_ID,              B.TENANT_ID as TENANT_ID,             B.TABLE_ID as TABLE_ID,             B.DATABASE_ID AS DATABASE_ID,             B.SRS_ID AS SRS_ID     from (select TABLE_NAME, INDEX_NAME, COLUMN_NAME from ALL_IND_COLUMNS idx_col) A      join (select cl.COLUMN_ID as COLUMN_ID, cl.COLUMN_NAME as COLUMN_NAME, cl.TENANT_ID as TENANT_ID, cl.TABLE_ID as TABLE_ID,            tb.TABLE_NAME as TABLE_NAME, cl.IS_HIDDEN as IS_HIDDEN,            cl.SRS_ID as SRS_ID, tb.DATABASE_ID as DATABASE_ID from SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT cl            join SYS.ALL_VIRTUAL_TABLE_REAL_AGENT tb on (tb.table_id = cl.table_id and tb.tenant_id = cl.tenant_id)) B on            (B.COLUMN_NAME = A.COLUMN_NAME AND B.TABLE_NAME = A.TABLE_NAME)           where b.IS_HIDDEN = 1 and SUBSTR(A.COLUMN_NAME, 1, 5) = '__mbr') T            join SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C on (T.SRS_ID = C.COLUMN_ID and T.TENANT_ID = C.TENANT_ID)           where C.DATA_TYPE = 48) D            ON D.TABLE_ID = G.TABLE_ID and D.TENANT_ID = G.TENANT_ID and D.DATABASE_ID = G.DATABASE_ID and D.COLUMN_NAME = G.COLUMN_NAME           ORDER BY 1, 2, 3 )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::all_table_idx_data_table_id_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

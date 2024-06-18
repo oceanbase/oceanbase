@@ -651,6 +651,7 @@ private:
   int pre_extract_geo_op(const ObOpRawExpr *geo_expr,
                          ObKeyPart *&out_key_part,
                          const ObDataTypeCastParams &dtc_params);
+  int can_be_extract_orcl_spatial_range(const ObRawExpr *const_expr, bool& can_extract);
   int prepare_multi_in_info(const ObOpRawExpr *l_expr,
                             const ObOpRawExpr *r_expr,
                             ObKeyPart *&tmp_key_part,
@@ -729,7 +730,8 @@ private:
                             const common::ObDataTypeCastParams &dtc_params,
                             bool &is_bound_modified);
   int or_single_head_graphs(ObKeyPartList &or_list, ObExecContext *exec_ctx,
-                            const common::ObDataTypeCastParams &dtc_params);
+                            const common::ObDataTypeCastParams &dtc_params,
+                            const bool& need_geo_rebuild);
   int union_in_with_in(ObKeyPartList &or_list,
                        ObKeyPart *cur1,
                        ObKeyPart *cur2,
@@ -858,7 +860,7 @@ private:
                                 ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params);
   // functions used for geo predicate
   int get_geo_range(const common::ObObj &wkb, const ObDomainOpType op_type, ObKeyPart *out_key_part);
-  int get_dwithin_item(const ObRawExpr *expr, const ObConstRawExpr *&extra_item);
+  int get_spatial_relationship_by_mask(ObKeyPart *out_key_part, ObDomainOpType& op_type);
   int get_domain_equal_keypart(const ObObj &val_start, const ObObj &val_end, ObKeyPart &out_keypart) const;
   int get_geo_intersects_keypart(uint32_t input_srid,
                                  const common::ObString &wkb,

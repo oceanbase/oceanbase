@@ -1088,6 +1088,8 @@ public:
   ObCartesianBox() = default;
   ObCartesianBox(ObWkbGeomInnerPoint &min_point, ObWkbGeomInnerPoint &max_point)
       : min_p_(min_point), max_p_(max_point) {}
+  ObCartesianBox(double min_x, double min_y, double max_x, double max_y);
+  void set_box(double min_x, double min_y, double max_x, double max_y);
   ObGeoCRS coordinate_system() const {
     return ObGeoCRS::Cartesian;
   }

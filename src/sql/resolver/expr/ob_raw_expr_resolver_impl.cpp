@@ -3639,6 +3639,46 @@ int ObRawExprResolverImpl::process_operator_node(const ParseNode *node, ObRawExp
       ctx_.op_exprs_->push_back(b_expr);
       LOG_DEBUG("ctx_.op_exprs_ push", K(b_expr->get_param_count()), K(*b_expr));
     }
+  } else if (lib::is_oracle_mode()
+            && ((T_FUN_SYS_SDO_RELATE == sub_expr1->get_expr_type() && sub_expr2->is_const_expr())
+            || (T_FUN_SYS_SDO_RELATE == sub_expr2->get_expr_type() && sub_expr1->is_const_expr()))) {
+    ParseNode* const_node = sub_expr1->is_const_expr() ? node->children_[0] : node->children_[1];
+    if (OB_ISNULL(const_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KP(const_node));
+    } else if (T_QUESTIONMARK == const_node->type_) {
+      if (OB_ISNULL(ctx_.param_list_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param_list_ is null", K(ret), K(ctx_.param_list_));
+      } else if (ctx_.param_list_->count() == 0) {
+        //prepare phase of ps protocol, do nothing
+      } else if (OB_UNLIKELY(const_node->value_ < 0 || const_node->value_ >= ctx_.param_list_->count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index is out of range", K(const_node->value_), K(ctx_.param_list_->count()));
+      } else {
+        const int64_t idx = const_node->value_;
+        ObPCConstParamInfo const_param_info;
+        ObObj val;
+        ObString str_value;
+        char *str_buf = nullptr;
+        if (OB_ISNULL(str_buf = static_cast<char*>(ctx_.expr_factory_.get_allocator().alloc(strlen("TRUE"))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc failed", K(ret));
+        } else if (OB_FALSE_IT(str_value.assign_buffer(str_buf, strlen("TRUE")))) {
+        } else if (OB_UNLIKELY(strlen("TRUE") != str_value.write("TRUE", strlen("TRUE")))) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("write amp char failed", K(ret));
+        } else {
+          val.set_string(ObVarcharType, str_value);
+          if (OB_FAIL(const_param_info.const_idx_.push_back(idx))
+                    || OB_FAIL(const_param_info.const_params_.push_back(val))) {
+            LOG_WARN("failed to push back param idx and value", K(ret));
+          } else if (OB_FAIL(ctx_.query_ctx_->all_plan_const_param_constraints_.push_back(const_param_info))) {
+            LOG_WARN("failed to push back const param info", K(ret));
+          }
+        }
+      }
+    }
   }
   return ret;
 }

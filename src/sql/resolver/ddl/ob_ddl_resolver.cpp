@@ -4180,7 +4180,7 @@ int ObDDLResolver::resolve_srid_node(share::schema::ObColumnSchemaV2 &column,
     ret = OB_INVALID_ARGUMENT;
     SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(srid_node.type_));
   } else {
-    if (is_oracle_mode()) {
+    if (is_oracle_mode() && tenant_data_version < DATA_VERSION_4_3_2_0) {
       ret = OB_NOT_SUPPORTED;
       SQL_RESV_LOG(WARN, "srid column attribute is not supported in oracle mode",
           K(ret), K(srid_node.type_));
@@ -6925,10 +6925,15 @@ int ObDDLResolver::resolve_spatial_index_constraint(
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *column_schema = NULL;
   bool is_oracle_mode = false;
+  uint64_t tenant_data_version = 0;
+  uint64_t tenant_id = 0;
 
-  if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
+  if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(session_info_), K(allocator_));
+  } else if (OB_FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("check oracle compat mode failed", K(ret));
   } else if (is_func_index && is_mysql_mode()) {
@@ -6977,14 +6982,6 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(column_schema) && OB_FALSE_IT(column_schema = table_schema.get_column_schema(column_name))) {
-    } else if (is_oracle_mode) {
-      if (OB_NOT_NULL(column_schema) && ob_is_geometry_tc(column_schema->get_data_type())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("oracle spatial index not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "oracle spatial index");
-      } else {
-        // do nothing
-      }
     } else if (OB_ISNULL(column_schema)) {
       if (index_keyname_value != static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY)) {
         // do nothing
@@ -7031,7 +7028,9 @@ int ObDDLResolver::resolve_spatial_index_constraint(
   bool is_geo_column = ob_is_geometry_tc(column_schema.get_data_type());
   uint64_t tenant_data_version = 0;
 
-  if (is_oracle_mode) {
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (is_oracle_mode && tenant_data_version < DATA_VERSION_4_3_2_0) {
     if (is_geo_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("oracle spatial index not supported", K(ret), K(is_geo_column), K(is_spatial_index));
@@ -7039,13 +7038,11 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     } else {
       // do nothing
     }
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-    LOG_WARN("get tenant data version failed", K(ret));
   } else if ((is_geo_column || is_spatial_index) && tenant_data_version < DATA_VERSION_4_1_0_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant version is less than 4.1, spatial index not supported", K(ret), K(is_geo_column), K(is_spatial_index));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, spatial index");
-  } else { // mysql mode
+  } else {
     if (is_spatial_index) { // has 'SPATIAL' keyword
       if (is_geo_column) {
         index_keyname_ = SPATIAL_KEY;
@@ -7054,7 +7051,7 @@ int ObDDLResolver::resolve_spatial_index_constraint(
         LOG_USER_ERROR(OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL);
         LOG_WARN("spatial index can only be built on spatial column", K(ret), K(column_schema));
       }
-    } else if (is_default_index) { // there are no keyword
+    } else if (is_default_index && lib::is_mysql_mode()) { // there are no keyword, not allowed in oracle mode
       if (is_geo_column) {
         index_keyname_ = SPATIAL_KEY;
       } else {
@@ -7062,10 +7059,17 @@ int ObDDLResolver::resolve_spatial_index_constraint(
       }
     } else { // other index type (UNIQUE_KEY, FULLTEXT)
       if (is_geo_column) {
-        ret = OB_ERR_SPATIAL_UNIQUE_INDEX;
-        LOG_USER_ERROR(OB_ERR_SPATIAL_UNIQUE_INDEX);
-        LOG_WARN("spatial column can only be indexed spatial index, can't build other index.",
-            K(ret), K(column_schema));
+        if (lib::is_mysql_mode()) {
+          ret = OB_ERR_SPATIAL_UNIQUE_INDEX;
+          LOG_USER_ERROR(OB_ERR_SPATIAL_UNIQUE_INDEX);
+          LOG_WARN("spatial column can only be indexed spatial index, can't build other index.",
+              K(ret), K(column_schema));
+        } else {
+          ret = OB_ERR_XML_INDEX;
+          LOG_USER_ERROR(OB_ERR_XML_INDEX, column_schema.get_column_name_str().length(), column_schema.get_column_name_str().ptr());
+          LOG_WARN("cannot create index on expression with datatype ADT.",
+              K(ret), K(column_schema));
+        }
       } else {
         // do nothing
       }
@@ -7082,7 +7086,7 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     } else if (is_explicit_order) {
       ret = OB_ERR_INDEX_ORDER_WRONG_USAGE;
       LOG_USER_ERROR(OB_ERR_INDEX_ORDER_WRONG_USAGE);
-    } else if (column_schema.is_nullable()) {
+    } else if (lib::is_mysql_mode() && column_schema.is_nullable()) {
       ret = OB_ERR_SPATIAL_CANT_HAVE_NULL;
       LOG_USER_ERROR(OB_ERR_SPATIAL_CANT_HAVE_NULL);
       LOG_WARN("column of a spatial index must be NOT NULL.", K(ret), K(column_schema));

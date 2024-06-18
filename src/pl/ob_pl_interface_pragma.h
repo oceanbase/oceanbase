@@ -63,6 +63,7 @@
 #include "pl/sys_package/ob_dbms_mview_stats.h"
 #include "pl/sys_package/ob_json_array_type.h"
 #include "pl/sys_package/ob_xml_type.h"
+#include "pl/sys_package/ob_sdo_geom.h"
 #include "pl/sys_package/ob_dbms_profiler.h"
 #endif
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
@@ -466,6 +467,10 @@
   INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_CONSTRUCTOR, "SDO_GEOMETRY_CONSTRUCTOR", (ObSdoGeometry::constructor))
   INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_GEOJSON, "SDO_GEOMETRY_GET_GEOJSON", (ObSdoGeometry::get_geojson))
   //end of sdo_geometry
+
+  //start of sdo_geom
+  INTERFACE_DEF(INTERFACE_SDO_GEOM_DISTANCE, "SDO_GEOM_DISTANCE", (ObSdoGeom::sdo_distance))
+  //end of sdo_geom
 
   //start of xmltype
   INTERFACE_DEF(INTERFACE_XML_TYPE_TRANSFORM, "XML_TYPE_TRANSFORM", (ObXmlType::transform))

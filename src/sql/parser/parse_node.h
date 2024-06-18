@@ -419,6 +419,7 @@ extern int64_t get_question_mark_by_defined_name(ObQuestionMarkCtx *ctx, const c
 // @param [in] pat_len     length of pattern
 extern bool nodename_equal(const ParseNode *node, const char *pattern, int64_t pat_len);
 
+extern bool nodename_is_sdo_geometry_type(const ParseNode *node);
 #define OB_NODE_CAST_TYPE_IDX 0
 #define OB_NODE_CAST_COLL_IDX 1
 #define OB_NODE_CAST_N_PREC_IDX 2

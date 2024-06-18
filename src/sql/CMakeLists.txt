@@ -664,6 +664,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_spatial_collection.cpp
   engine/expr/ob_expr_st_geomfromtext.cpp
   engine/expr/ob_expr_st_intersects.cpp
+  engine/expr/ob_expr_sdo_relate.cpp
   engine/expr/ob_expr_st_area.cpp
   engine/expr/ob_expr_st_x.cpp
   engine/expr/ob_expr_st_transform.cpp

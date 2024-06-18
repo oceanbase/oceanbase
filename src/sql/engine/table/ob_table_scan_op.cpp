@@ -3138,6 +3138,7 @@ int ObTableScanOp::inner_get_next_row()
 int ObTableScanOp::inner_get_next_spatial_index_row()
 {
   int ret = OB_SUCCESS;
+  bool need_ignore_null = false;
   if (OB_ISNULL(spat_index_.spat_rows_)) {
     if (OB_FAIL(init_spatial_index_rows())) {
       LOG_WARN("init spatial row store failed", K(ret));
@@ -3155,10 +3156,11 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
         const ObExprPtrIArray &exprs = MY_SPEC.output_;
         ObExpr *expr = exprs.at(3);
         ObDatum *in_datum = NULL;
+        ObString geo_wkb;
         if (OB_FAIL(expr->eval(eval_ctx_, in_datum))) {
           LOG_WARN("expression evaluate failed", K(ret));
-        } else {
-          ObString geo_wkb = in_datum->get_string();
+        } else if (OB_FALSE_IT(geo_wkb = in_datum->get_string())) {
+        } else if (geo_wkb.length() > 0) {
           uint32_t srid = UINT32_MAX;
           omt::ObSrsCacheGuard srs_guard;
           const ObSrsItem *srs_item = NULL;
@@ -3211,10 +3213,12 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
               }
             }
           }
+        } else {
+          need_ignore_null = true;
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !need_ignore_null) {
       ObNewRow &row = (*(spat_index_.spat_rows_))[spat_index_.spat_row_index_++];
       ObObj &cellid= row.get_cell(0);
       ObObj &mbr = row.get_cell(1);

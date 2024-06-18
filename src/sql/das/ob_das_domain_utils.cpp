@@ -43,7 +43,9 @@ int ObDASDomainUtils::generate_spatial_index_rows(
   uint64_t rowkey_num = das_ctdef.table_param_.get_data_table().get_rowkey_column_num();
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
 
-  if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
+  if (lib::is_oracle_mode() && wkb_str.length() == 0) {
+    // in oracle mode, ignore null value
+  } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
     LOG_WARN("failed to get srid", K(ret), K(wkb_str));
   } else if (srid != 0 &&
       OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
