@@ -85,10 +85,6 @@ private:
   share::ObTenantCloneStatus get_sys_next_status_in_failed_(const share::ObTenantCloneStatus current_status);
   share::ObTenantCloneStatus get_user_next_status_(const int return_ret,
                              const share::ObTenantCloneStatus current_status);
-  void record_rs_event_(const share::ObCloneJob &job,
-                        const share::ObTenantCloneStatus prev_status,
-                        const share::ObTenantCloneStatus cur_status,
-                        const int return_ret);
   int check_sys_tenant_(const uint64_t tenant_id);
   int check_meta_tenant_(const uint64_t tenant_id);
 
@@ -131,6 +127,7 @@ private:
                                    const ObArray<share::ObLSInfo>& ls_info_array,
                                    const ObArray<share::ObTenantSnapLSReplicaSimpleItem>& ls_snapshot_array,
                                    TenantRestoreStatus &tenant_restore_status);
+  int check_data_version_before_finish_clone_(const uint64_t source_tenant_id);
 private:
   static const int32_t MAX_RETRY_CNT = 5;
   static const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;

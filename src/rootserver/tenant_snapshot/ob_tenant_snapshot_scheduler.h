@@ -101,6 +101,32 @@ private:
                                        const ObArray<common::ObAddr> &addr_array);
   int finish_delete_tenant_snapshot_(const share::ObTenantSnapshotID &tenant_snapshot_id,
                                      const uint64_t user_tenant_id);
+
+  // decide snapshot scn for clone tenant snapshot
+  // @params[in]  table_op, operator to use
+  // @params[in]  tenant_snapshot_id, snapshot_id
+  // @params[in]  tenant_info, user tenant info
+  // @params[in]  snapshot_scn, the scn of snapshot
+  // @params[out] output_snapshot_scn, the scn to persist
+  // @params[out] need_persist_scn, whether persist scn in table
+  int decide_tenant_snapshot_scn_(
+      ObTenantSnapshotTableOperator &table_op,
+      const ObTenantSnapshotID &tenant_snapshot_id,
+      const ObAllTenantInfo &tenant_info,
+      const SCN &snapshot_scn,
+      SCN &output_snapshot_scn,
+      bool &need_persist_scn);
+
+  // check standby tenant gts_scn exceed sync_scn
+  // @params[in] table_op, table operator to use
+  // @params[in] tenant_id, which tenant
+  // @params[in] tenant_snapshot_id, which snapshot
+  // @params[in] snapshot_scn_to_check, snapshot scn
+  int check_standby_gts_exceed_snapshot_scn_(
+      ObTenantSnapshotTableOperator &table_op,
+      const uint64_t &tenant_id,
+      const ObTenantSnapshotID &tenant_snapshot_id,
+      const SCN &snapshot_scn_to_check);
 private:
   static const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;
   static const int64_t DEFAULT_IDLE_TIME = 60 * 1000 * 1000L;

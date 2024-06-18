@@ -446,32 +446,103 @@ bool ObShareUtil::is_tenant_enable_transfer(const uint64_t tenant_id)
   return bret;
 }
 
+int ObShareUtil::check_compat_version_for_tenant(
+    const uint64_t tenant_id,
+    const uint64_t target_data_version,
+    bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
+  is_compatible = false;
+  uint64_t data_version = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
+      || OB_UNLIKELY(0 == target_data_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(target_data_version));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret));
+  } else if (target_data_version > data_version) {
+    is_compatible = false;
+  } else if (is_sys_tenant(tenant_id)) {
+    is_compatible = true;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_user_tenant_id(tenant_id), data_version))) {
+    LOG_WARN("fail to get user tenant data version", KR(ret), "tenant_id", gen_user_tenant_id(tenant_id));
+  } else if (target_data_version > data_version) {
+    is_compatible = false;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), data_version))) {
+     LOG_WARN("fail to get meta tenant data version", KR(ret), "tenant_id", gen_meta_tenant_id(tenant_id));
+  } else if (target_data_version > data_version) {
+    is_compatible = false;
+  } else {
+    is_compatible = true;
+  }
+  return ret;
+}
+
+int ObShareUtil::check_compat_version_for_clone_standby_tenant(
+    const uint64_t tenant_id,
+    bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
+  is_compatible = false;
+  uint64_t target_data_version = DATA_VERSION_4_3_2_0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_compat_version_for_tenant(
+                         tenant_id, target_data_version, is_compatible))) {
+    LOG_WARN("fail to check data version for clone tenant", KR(ret),
+             K(tenant_id), K(target_data_version));
+  }
+  return ret;
+}
+
 int ObShareUtil::check_compat_version_for_clone_tenant(
     const uint64_t tenant_id,
     bool &is_compatible)
 {
   int ret = OB_SUCCESS;
   is_compatible = false;
-  uint64_t data_version = 0;
+  uint64_t target_data_version = DATA_VERSION_4_3_0_0;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
-    LOG_WARN("fail to get sys tenant data version", KR(ret));
-  } else if (DATA_VERSION_4_3_0_0 > data_version) {
-    is_compatible = false;
-  } else if (is_sys_tenant(tenant_id)) {
-    is_compatible = true;
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_user_tenant_id(tenant_id), data_version))) {
-    LOG_WARN("fail to get user tenant data version", KR(ret), "tenant_id", gen_user_tenant_id(tenant_id));
-  } else if (DATA_VERSION_4_3_0_0 > data_version) {
-    is_compatible = false;
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), data_version))) {
-     LOG_WARN("fail to get meta tenant data version", KR(ret), "tenant_id", gen_meta_tenant_id(tenant_id));
-  } else if (DATA_VERSION_4_3_0_0 > data_version) {
-    is_compatible = false;
+  } else if (OB_FAIL(check_compat_version_for_tenant(
+                         tenant_id, target_data_version, is_compatible))) {
+    LOG_WARN("fail to check data version for clone tenant", KR(ret),
+             K(tenant_id), K(target_data_version));
+  }
+  return ret;
+}
+
+int ObShareUtil::check_compat_version_for_clone_tenant_with_tenant_role(
+    const uint64_t tenant_id,
+    bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
+  is_compatible = false;
+  ObAllTenantInfo all_tenant_info;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                         tenant_id, GCTX.sql_proxy_,
+                         false/*for_update*/, all_tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id), K(all_tenant_info));
+  } else if (all_tenant_info.is_standby()) {
+    if (OB_FAIL(check_compat_version_for_clone_standby_tenant(tenant_id, is_compatible))) {
+      LOG_WARN("fail to check compatible version for standby tenant", KR(ret), K(tenant_id));
+    }
+  } else if (all_tenant_info.is_primary()) {
+    if (OB_FAIL(check_compat_version_for_clone_tenant(tenant_id, is_compatible))) {
+      LOG_WARN("fail to check compatible version for primary tenant", KR(ret), K(tenant_id));
+    }
   } else {
-    is_compatible = true;
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not clone tenant with tenant role is neither PRIMARY nor STANDBY",
+              KR(ret), K(all_tenant_info));
   }
   return ret;
 }

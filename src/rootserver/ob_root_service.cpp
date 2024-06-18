@@ -2479,7 +2479,7 @@ int ObRootService::clone_resource_pool(const obrpc::ObCloneResourcePoolArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument to clone resource pool", KR(ret), K(arg));
-  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant(
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant_with_tenant_role(
                          arg.get_source_tenant_id(),
                          is_compatible))) {
     LOG_WARN("fail to check compat version", KR(ret), K(arg));
@@ -2779,7 +2779,7 @@ int ObRootService::create_tenant(const ObCreateTenantArg &arg, UInt64 &tenant_id
   } else if (!tmp_tenant && OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(tenant_name))) {
     LOG_WARN("unsupported tenant name", KR(ret), K(tenant_name));
   } else if (arg.is_clone_tenant()
-             && OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant(
+             && OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant_with_tenant_role(
                             arg.source_tenant_id_,
                             compatible_with_clone_tenant))) {
     LOG_WARN("fail to check compatible version with clone tenant", KR(ret), K(arg));
@@ -5407,10 +5407,10 @@ int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected schema_service_", KR(ret), KP(schema_service_));
-  } else if (GCTX.is_standby_cluster() || GCONF.in_upgrade_mode()) {
+  } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("clone tenant while in standby cluster or in upgrade mode is not allowed", KR(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "clone tenant while in standby cluster or in upgrade mode");
+    LOG_WARN("clone tenant while in upgrade mode is not allowed", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "clone tenant while in upgrade mode");
   } else if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(clone_tenant_name))) {
     LOG_WARN("unsupported clone tenant name", KR(ret), K(clone_tenant_name));
   } else {

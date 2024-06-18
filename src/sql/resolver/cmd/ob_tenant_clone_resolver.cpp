@@ -58,7 +58,8 @@ int ObCloneTenantResolver::resolve(const ParseNode &parse_tree)
   } else {
     bool is_compatible = false;
     const uint64_t tenant_id = session_info_->get_login_tenant_id();
-    if (OB_FAIL(share::ObShareUtil::check_compat_version_for_clone_tenant(tenant_id, is_compatible))) {
+    if (OB_FAIL(share::ObShareUtil::check_compat_version_for_clone_tenant_with_tenant_role(
+                    tenant_id, is_compatible))) {
       LOG_WARN("fail to check compat version", KR(ret), K(tenant_id));
     } else if (!is_compatible) {
       ret = OB_NOT_SUPPORTED;

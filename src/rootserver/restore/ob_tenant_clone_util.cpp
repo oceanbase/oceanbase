@@ -16,6 +16,7 @@
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "share/restore/ob_tenant_clone_table_operator.h"
 #include "share/location_cache/ob_location_service.h"
+#include "share/ob_global_stat_proxy.h" // for ObGlobalStatProxy
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
 
 using namespace oceanbase::rootserver;
@@ -85,6 +86,8 @@ int ObTenantCloneUtil::fill_clone_job(const int64_t job_id,
   clone_job.reset();
   ObTenantCloneJobType job_type = ObTenantCloneJobType::CLONE_JOB_MAX_TYPE;
   common::ObCurTraceId::TraceId trace_id;
+  uint64_t data_version = 0;
+  uint64_t min_cluster_version = 0;
 
   if (OB_UNLIKELY(job_id < 0
                   || !arg.is_valid()
@@ -93,10 +96,12 @@ int ObTenantCloneUtil::fill_clone_job(const int64_t job_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(job_id), K(arg), K(source_tenant_id),
                                  K(source_tenant_name), K(snapshot_item));
-  } else if (FALSE_IT(job_type = snapshot_item.is_valid() ?
-                                 ObTenantCloneJobType::RESTORE :
-                                 ObTenantCloneJobType::FORK)) {
+  } else if (OB_FAIL(construct_data_version_to_record_(source_tenant_id, data_version, min_cluster_version))) {
+    LOG_WARN("fail to construct data version to record", KR(ret), K(source_tenant_id));
   } else {
+    job_type = snapshot_item.is_valid() ?
+               ObTenantCloneJobType::RESTORE :
+               ObTenantCloneJobType::FORK;
     ObCurTraceId::TraceId *cur_trace_id = ObCurTraceId::get_trace_id();
     if (nullptr != cur_trace_id) {
       trace_id = *cur_trace_id;
@@ -120,12 +125,45 @@ int ObTenantCloneUtil::fill_clone_job(const int64_t job_id,
           .status_                     = ObTenantCloneStatus(ObTenantCloneStatus::Status::CLONE_SYS_LOCK),
           .job_type_                   = job_type,
           .ret_code_                   = OB_SUCCESS,
+          .data_version_               = data_version,
+          .min_cluster_version_        = min_cluster_version,
     };
     if (OB_FAIL(clone_job.init(init_arg))) {
       LOG_WARN("fail to init clone job", KR(ret), K(init_arg));
     }
   }
 
+  return ret;
+}
+
+int ObTenantCloneUtil::construct_data_version_to_record_(
+    const uint64_t tenant_id,
+    uint64_t &data_version,
+    uint64_t &min_cluster_version)
+{
+  int ret = OB_SUCCESS;
+  data_version = 0;
+  min_cluster_version = 0;
+  bool need_to_record_data_version = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
+      || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_clone_standby_tenant(
+                         tenant_id, need_to_record_data_version))) {
+    LOG_WARN("fail to check whether need to record data version", KR(ret), K(tenant_id));
+  } else if (need_to_record_data_version) {
+    ObGlobalStatProxy proxy(*GCTX.sql_proxy_, tenant_id);
+    if (OB_FAIL(proxy.get_current_data_version(data_version))) {
+      LOG_WARN("fail to get current data version", KR(ret), K(tenant_id));
+    } else {
+      min_cluster_version = GET_MIN_CLUSTER_VERSION();
+    }
+  } else {
+    // data version not promoted, make sure data_version and min_cluster_version are 0
+    data_version = 0;
+    min_cluster_version = 0;
+  }
   return ret;
 }
 
@@ -523,22 +561,136 @@ int ObTenantCloneUtil::get_clone_job_failed_message(common::ObISQLClient &sql_cl
   return ret;
 }
 
-//This function is called by the user executing "cancel clone" sql.
-int ObTenantCloneUtil::cancel_clone_job(common::ObISQLClient &sql_client,
-                                        const ObString &clone_tenant_name,
-                                        bool &clone_already_finish)
+int ObTenantCloneUtil::inner_cancel_clone_job_(
+    ObTenantCloneTableOperator &clone_op,
+    const ObCloneJob &clone_job,
+    const ObCancelCloneJobReason &reason,
+    bool &clone_already_finish)
 {
   int ret = OB_SUCCESS;
+  clone_already_finish = false;
+  ObSqlString err_msg;
+  const ObTenantCloneStatus next_status(ObTenantCloneStatus::Status::CLONE_SYS_CANCELING);
+
+  if (OB_UNLIKELY(!clone_op.is_inited())
+      || OB_UNLIKELY(!clone_job.is_valid())
+      || OB_UNLIKELY(!reason.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(clone_job), K(reason));
+  } else if (clone_job.get_status().is_user_status()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected sys clone job status", KR(ret), K(clone_job));
+  } else if (ObTenantCloneStatus::Status::CLONE_SYS_RELEASE_RESOURCE == clone_job.get_status()
+             || !clone_job.get_status().is_sys_processing_status()) {
+    clone_already_finish = true;
+  } else if (OB_FAIL(clone_op.update_job_status(clone_job.get_job_id(),
+                                                clone_job.get_status(), /*old_status*/
+                                                next_status))) {
+    LOG_WARN("fail to update job status", KR(ret), K(clone_job));
+  } else if (OB_FAIL(err_msg.append_fmt("clone job has been canceled in %s status %s",
+                                        ObTenantCloneStatus::get_clone_status_str(clone_job.get_status()),
+                                        reason.get_reason_str()))) {
+    LOG_WARN("fail to construct error message", KR(ret), K(reason), K(clone_job));
+  } else if (OB_FAIL(clone_op.update_job_failed_info(clone_job.get_job_id(), OB_CANCELED, err_msg.string()))) {
+    LOG_WARN("fail to update job failed info", KR(ret), K(clone_job));
+  }
+  return ret;
+}
+
+void ObTenantCloneUtil::try_to_record_clone_status_change_rs_event(
+     const ObCloneJob &clone_job,
+     const share::ObTenantCloneStatus &prev_clone_status,
+     const share::ObTenantCloneStatus &cur_clone_status,
+     const int ret_code,
+     const ObCancelCloneJobReason &reason)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString execute_result;
+  if (OB_UNLIKELY(!clone_job.is_valid())
+      || OB_UNLIKELY(!prev_clone_status.is_valid())
+      || OB_UNLIKELY(!cur_clone_status.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(clone_job), K(prev_clone_status), K(cur_clone_status));
+  } else if (OB_FAIL(execute_result.assign_fmt("%s(%d)", common::ob_error_name(ret_code), ret_code))) {
+    LOG_WARN("fail to build execute result", KR(ret), K(ret_code));
+  } else {
+    ROOTSERVICE_EVENT_ADD("clone", "change_clone_status",
+                          "job_id", clone_job.get_job_id(),
+                          K(execute_result), K(prev_clone_status), K(cur_clone_status),
+                          reason.is_valid() ? "reason" : "",
+                          reason.is_valid() ? reason.get_reason_str() : "");
+  }
+  LOG_INFO("[CLONE] switch job status", KR(ret), K(clone_job), K(prev_clone_status),
+           K(cur_clone_status), K(ret_code), K(reason));
+}
+
+int ObTenantCloneUtil::cancel_clone_job_by_source_tenant_id(
+    common::ObISQLClient &sql_client,
+    const uint64_t source_tenant_id,
+    const ObCancelCloneJobReason &reason,
+    bool &clone_already_finish)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   clone_already_finish = false;
   ObTenantCloneTableOperator clone_op;
   ObCloneJob clone_job;
   ObMySQLTransaction trans;
-  ObSqlString err_msg;
-  const ObTenantCloneStatus next_status(ObTenantCloneStatus::Status::CLONE_SYS_CANCELING);
+  FLOG_INFO("begin to cancel clone job", K(source_tenant_id), K(reason));
 
-  if (OB_UNLIKELY(clone_tenant_name.empty())) {
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == source_tenant_id)
+      || OB_UNLIKELY(!reason.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(clone_tenant_name));
+    LOG_WARN("invalid argument", KR(ret), K(source_tenant_id), K(reason));
+  } else if (OB_FAIL(trans.start(&sql_client, OB_SYS_TENANT_ID))) {
+    LOG_WARN("failed to start trans", KR(ret));
+  } else if (OB_FAIL(clone_op.init(OB_SYS_TENANT_ID, &trans))) {
+    LOG_WARN("fail init clone op", KR(ret));
+  } else if (OB_FAIL(clone_op.get_clone_job_by_source_tenant_id(source_tenant_id, clone_job))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to get clone job", KR(ret), K(source_tenant_id));
+    } else {
+      ret = OB_SUCCESS;
+      clone_already_finish = true;
+      LOG_INFO("clone job has already finished", KR(ret), K(source_tenant_id));
+    }
+  } else if (OB_FAIL(inner_cancel_clone_job_(clone_op, clone_job, reason, clone_already_finish))) {
+    LOG_WARN("fail to cancel clone job", KR(ret), K(clone_job), K(reason));
+  }
+
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", "is_commit", (OB_SUCCESS == ret), KR(tmp_ret));
+      ret = (OB_SUCC(ret)) ? tmp_ret : ret;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    (void)try_to_record_clone_status_change_rs_event(
+          clone_job, clone_job.get_status(), ObTenantCloneStatus(ObTenantCloneStatus::Status::CLONE_SYS_CANCELING), ret, reason);
+  }
+  return ret;
+}
+
+//This function is called by the user executing "cancel clone" sql.
+int ObTenantCloneUtil::cancel_clone_job_by_name(
+    common::ObISQLClient &sql_client,
+    const ObString &clone_tenant_name,
+    bool &clone_already_finish,
+    const ObCancelCloneJobReason &reason)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  clone_already_finish = false;
+  ObTenantCloneTableOperator clone_op;
+  ObCloneJob clone_job;
+  ObMySQLTransaction trans;
+
+  if (OB_UNLIKELY(clone_tenant_name.empty()) || OB_UNLIKELY(!reason.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(clone_tenant_name), K(reason));
   } else if (OB_FAIL(trans.start(&sql_client, OB_SYS_TENANT_ID))) {
     LOG_WARN("failed to start trans", KR(ret));
   } else if (OB_FAIL(clone_op.init(OB_SYS_TENANT_ID, &trans))) {
@@ -551,20 +703,8 @@ int ObTenantCloneUtil::cancel_clone_job(common::ObISQLClient &sql_client,
       ret = OB_SUCCESS;
       clone_already_finish = true;
     }
-  } else if (clone_job.get_status().is_user_status()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected sys clone job status", KR(ret), K(clone_job));
-  } else if (ObTenantCloneStatus::Status::CLONE_SYS_RELEASE_RESOURCE == clone_job.get_status()
-             || !clone_job.get_status().is_sys_processing_status()) {
-    clone_already_finish = true;
-  } else if (OB_FAIL(clone_op.update_job_status(clone_job.get_job_id(),
-                                                clone_job.get_status(), /*old_status*/
-                                                next_status))) {
-    LOG_WARN("fail to update job status", KR(ret), K(clone_tenant_name), K(clone_job));
-  } else if (OB_FAIL(err_msg.append_fmt("clone job has been canceled in %s status",
-                                        ObTenantCloneStatus::get_clone_status_str(clone_job.get_status())))) {
-  } else if (OB_FAIL(clone_op.update_job_failed_info(clone_job.get_job_id(), OB_CANCELED, err_msg.string()))) {
-    LOG_WARN("fail to update job failed info", KR(ret), K(clone_job));
+  } else if (OB_FAIL(inner_cancel_clone_job_(clone_op, clone_job, reason, clone_already_finish))) {
+    LOG_WARN("fail to cancel clone job", KR(ret), K(clone_job), K(reason));
   }
 
   if (trans.is_started()) {
@@ -575,17 +715,10 @@ int ObTenantCloneUtil::cancel_clone_job(common::ObISQLClient &sql_client,
     }
   }
 
-  if (OB_SUCC(ret)) {
-    LOG_INFO("[RESTORE] switch job status", KR(ret), K(clone_job), K(next_status));
-
-    const char *prev_status_str = ObTenantCloneStatus::get_clone_status_str(clone_job.get_status());
-    const char *cur_status_str = ObTenantCloneStatus::get_clone_status_str(next_status);
-
-    ROOTSERVICE_EVENT_ADD("clone", "change_clone_status",
-                          "job_id", clone_job.get_job_id(),
-                          K(ret),
-                          "prev_clone_status", prev_status_str,
-                          "cur_clone_status", cur_status_str);
+  if (OB_FAIL(ret)) {
+  } else {
+    (void)try_to_record_clone_status_change_rs_event(
+              clone_job, clone_job.get_status(), ObTenantCloneStatus(ObTenantCloneStatus::Status::CLONE_SYS_CANCELING), ret, reason);
   }
   return ret;
 }
