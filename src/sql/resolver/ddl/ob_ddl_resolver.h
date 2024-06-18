@@ -892,6 +892,7 @@ protected:
 
   int add_new_indexkey_for_oracle_temp_table();
 
+  int resolve_vector_index_parameters(const ParseNode *option_node);
   void reset();
   int get_mv_container_table(uint64_t tenant_id,
                              const uint64_t mv_container_table_id,
@@ -953,6 +954,8 @@ protected:
   int64_t table_dop_; // default value is 1
   int64_t hash_subpart_num_;
   int64_t vector_ivfflat_lists_;
+  int64_t vector_hnsw_m_;
+  int64_t vector_hnsw_ef_construction_;
   bool is_external_table_;
   common::ObString ttl_definition_;
   common::ObString kv_attributes_;

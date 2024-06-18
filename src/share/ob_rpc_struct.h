@@ -2522,6 +2522,8 @@ public:
         exist_all_column_group_(false),
         index_cgs_(),
         container_table_id_(common::OB_INVALID_ID),
+        vector_hnsw_m_(0),
+        vector_hnsw_ef_construction_(0),
         vector_help_schema_()
   {
     index_action_type_ = ADD_INDEX;
@@ -2555,6 +2557,8 @@ public:
     exist_all_column_group_ = false;
     index_cgs_.reset();
     container_table_id_ = common::OB_INVALID_ID;
+    vector_hnsw_m_ = 0;
+    vector_hnsw_ef_construction_ = 0;
     vector_help_schema_.reset();
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
@@ -2596,6 +2600,8 @@ public:
       consumer_group_id_ = other.consumer_group_id_;
       exist_all_column_group_ = other.exist_all_column_group_;
       container_table_id_ = other.container_table_id_;
+      vector_hnsw_m_ = other.vector_hnsw_m_;
+      vector_hnsw_ef_construction_ = other.vector_hnsw_ef_construction_;
     }
     return ret;
   }
@@ -2668,6 +2674,8 @@ public:
   bool exist_all_column_group_;
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
   int64_t container_table_id_;
+  int64_t vector_hnsw_m_;
+  int64_t vector_hnsw_ef_construction_;
   common::ObSArray<share::schema::ObTableSchema> vector_help_schema_; // table schema for ivffalt index container
 
 };

@@ -283,6 +283,8 @@ const int64_t OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH_STORE = 128;
 
 // for vector
 const int64_t OB_DEFAULT_VECTOR_IVFFLAT_LISTS = 128;
+const int64_t OB_DEFAULT_VECTOR_HNSW_M = 16;
+const int64_t OB_DEFAULT_VECTOR_HNSW_EF_CONSTRUCTION = 200;
 
 //for recybin
 const int64_t OB_MAX_OBJECT_NAME_LENGTH = 128; //should include index_name

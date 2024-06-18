@@ -44,6 +44,9 @@ public:
   void set_index_dop(int64_t index_dop);
   int64_t get_index_dop();
   void set_vector_ivfflat_lists(const int64_t vector_ivfflat_lists);
+  void set_vector_hnsw_m(const int64_t vector_hnsw_m);
+  void set_vector_hnsw_ef_construction(const int64_t vector_hnsw_ef_construction);
+
   inline void set_database_name(const common::ObString &db_name);
   inline const common::ObString &get_database_name() const;
   inline const common::ObString &get_table_name() const;
@@ -174,6 +177,16 @@ inline int64_t ObCreateIndexStmt::get_index_dop()
 inline void ObCreateIndexStmt::set_vector_ivfflat_lists(const int64_t vector_ivfflat_lists)
 {
   create_index_arg_.index_schema_.set_vector_ivfflat_lists(vector_ivfflat_lists);
+}
+
+inline void ObCreateIndexStmt::set_vector_hnsw_m(const int64_t vector_hnsw_m)
+{
+  create_index_arg_.vector_hnsw_m_ = vector_hnsw_m;
+}
+
+inline void ObCreateIndexStmt::set_vector_hnsw_ef_construction(const int64_t vector_hnsw_ef_construction)
+{
+  create_index_arg_.vector_hnsw_ef_construction_ = vector_hnsw_ef_construction;
 }
 }//namespace sql
 }//namespace oceanbase

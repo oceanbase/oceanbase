@@ -383,6 +383,8 @@ int ObCreateIndexResolver::resolve_index_option_node(
     // ivfflat
     if (OB_SUCC(ret)) {
       crt_idx_stmt->set_vector_ivfflat_lists(vector_ivfflat_lists_);
+      crt_idx_stmt->set_vector_hnsw_m(vector_hnsw_m_);
+      crt_idx_stmt->set_vector_hnsw_ef_construction(vector_hnsw_ef_construction_);
     }
 
     // block_size
@@ -459,8 +461,6 @@ int ObCreateIndexResolver::resolve_index_method_node(
   } else {
     if (T_USING_HASH == index_method_node->type_) {
       crt_idx_stmt->set_index_using_type(USING_HASH);
-    } else if (T_USING_IVFFLAT == index_method_node->type_) {
-      crt_idx_stmt->set_index_using_type(USING_IVFFLAT);
     } else {
       crt_idx_stmt->set_index_using_type(USING_BTREE);
     }

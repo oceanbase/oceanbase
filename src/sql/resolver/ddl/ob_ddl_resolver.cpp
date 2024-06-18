@@ -111,6 +111,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     table_dop_(DEFAULT_TABLE_DOP),
     hash_subpart_num_(-1),
     vector_ivfflat_lists_(OB_DEFAULT_VECTOR_IVFFLAT_LISTS),
+    vector_hnsw_m_(OB_DEFAULT_VECTOR_HNSW_M),
+    vector_hnsw_ef_construction_(OB_DEFAULT_VECTOR_HNSW_EF_CONSTRUCTION),
     is_external_table_(false),
     ttl_definition_(),
     kv_attributes_(),
@@ -1843,16 +1845,6 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         index_using_type_ = USING_HASH;
         break;
       }
-      case T_USING_HNSW: {
-        has_index_using_type_ = true;
-        index_using_type_ = USING_HNSW;
-        break;
-      }
-      case T_USING_IVFFLAT: {
-        has_index_using_type_ = true;
-        index_using_type_ = USING_IVFFLAT;
-        break;
-      }
       case T_ENGINE: {
         if (OB_ISNULL(option_node->children_[0])) {
           ret = OB_ERR_UNEXPECTED;
@@ -2285,20 +2277,15 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         ret = resolve_lob_inrow_threshold(option_node, is_index_option);
         break;
       }
-      case T_VECTOR_IVFFLAT_LISTS: {
+      case T_VECTOR_INDEX_PARAMS: {
+        ObString tmp_str;
+        tmp_str.assign_ptr(const_cast<char *>(option_node->str_value_),
+                              static_cast<int32_t>(option_node->str_len_));
         if (OB_ISNULL(option_node->children_[0])) {
           ret = OB_ERR_UNEXPECTED;
-          SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
-        } else {
-          const int64_t vector_ivfflat_lists = option_node->children_[0]->value_;
-          if (vector_ivfflat_lists <= 0) {
-            ret = OB_INVALID_ARGUMENT;
-            SQL_RESV_LOG(WARN, "invalid vector_ivfflat_lists", K(vector_ivfflat_lists),
-                K(ret));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector_ivfflat_lists");
-          } else {
-            vector_ivfflat_lists_ = vector_ivfflat_lists;
-          }
+          SQL_RESV_LOG(ERROR,"children can't be null", K(ret));
+        } else if (OB_FAIL(resolve_vector_index_parameters(option_node))) {
+          LOG_WARN("fail to check ttl definition", K(ret));
         }
         break;
       }
@@ -2311,6 +2298,99 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
     }
   }
 
+  return ret;
+}
+
+int ObDDLResolver::resolve_vector_index_parameters(const ParseNode *option_node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(option_node) ) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(ERROR, "unexpected parse node", K(ret), KP(option_node));
+  } else if (option_node->type_ != T_VECTOR_INDEX_PARAMS) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(ERROR, "unexpected parse node type", K(ret), K(option_node->type_));
+  } else if (OB_ISNULL(option_node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("option_node child is null", K(ret), KP(option_node->children_[0]));
+  } else {
+    ObString last_variable;
+    ObString parser_name;
+    int64_t parser_value = 0;
+    int32_t str_len = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < option_node->num_child_; ++i) {
+      int32_t child_node_index = i % 2;
+      if (child_node_index == 0) {
+        str_len = static_cast<int32_t>(option_node->children_[i]->str_len_);
+        parser_name_.assign_ptr(option_node->children_[i]->str_value_, str_len);
+        if (parser_name_ != "lib" &&
+            parser_name_ != "type" &&
+            parser_name_ != "m" &&
+            parser_name_ != "ef_construction" &&
+            parser_name_ != "ef_search" &&
+            parser_name_ != "lists") {
+          SQL_RESV_LOG(ERROR, "unexpected vector variable name", K(ret), K(parser_name_));
+        } else {
+          last_variable = parser_name_;
+        }
+      } else {
+        if (option_node->children_[i]->type_ == T_NUMBER) {
+          parser_value = option_node->children_[i]->value_;
+        } else {
+          str_len = static_cast<int32_t>(option_node->children_[i]->str_len_);
+          parser_name.assign_ptr(option_node->children_[i]->str_value_, str_len);
+        }
+        if (last_variable == "lib") {
+          // do nothing now
+        } else if (last_variable == "type") {
+          has_index_using_type_ = true;
+          if (parser_name == "hnsw") {
+            index_using_type_ = USING_HNSW;
+          } else if (parser_name == "ivfflat") {
+            index_using_type_ = USING_IVFFLAT;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(ERROR, "not support vector index type", K(ret), K(parser_name));
+          }
+        } else if (last_variable == "lists") {
+          if (parser_value <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_RESV_LOG(WARN, "invalid vector_ivfflat_lists", K(parser_value),
+                K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector_ivfflat_lists");
+          } else {
+            vector_ivfflat_lists_ = parser_value;
+          }
+        } else if (last_variable == "m") {
+          if (parser_value <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_RESV_LOG(WARN, "invalid vector_hnsw_m", K(parser_value),
+                K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector_hnsw_m");
+          } else {
+            vector_hnsw_m_ = parser_value;
+          }
+        } else if (last_variable == "ef_construction") {
+          if (parser_value <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_RESV_LOG(WARN, "invalid vector_hnsw_ef_construction", K(parser_value),
+                K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector_hnsw_ef_construction");
+          } else {
+            vector_hnsw_ef_construction_ = parser_value;
+          }
+        } else if (last_variable == "ef_search") {
+          // do nothing
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(ERROR, "not support vector index param", K(ret), K(last_variable));
+        }
+      }
+    }
+    if (!has_index_using_type_) {
+      index_using_type_ = USING_IVFFLAT; // default
+    }
+  }
   return ret;
 }
 
