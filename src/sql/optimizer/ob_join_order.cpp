@@ -354,7 +354,7 @@ int ObJoinOrder::compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &ac
 int ObJoinOrder::prune_paths_due_to_parallel(ObIArray<AccessPath *> &access_paths)
 {
   int ret = OB_SUCCESS;
-  if (access_paths.empty()) {
+  if (access_paths.count() < 2) {
     /* do nothing */
   } else if (OB_ISNULL(access_paths.at(0)) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
@@ -366,7 +366,6 @@ int ObJoinOrder::prune_paths_due_to_parallel(ObIArray<AccessPath *> &access_path
   } else {
     ObSEArray<AccessPath*, 16> tmp_paths;
     AccessPath *path = NULL;
-    AccessPath *default_path = NULL;  // to reserve at least one path
     bool need_prune = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); i++) {
       need_prune = false;
@@ -375,30 +374,26 @@ int ObJoinOrder::prune_paths_due_to_parallel(ObIArray<AccessPath *> &access_path
         LOG_WARN("get unexpected null", K(path), K(ret));
       } else if (!path->is_global_index_) {
         /* do nothing */
-      } else if (!path->use_das_ && 1 >= path->parallel_) {
-        default_path = NULL == default_path ? path : default_path;
-        need_prune = true;
-      } else if (path->use_das_) {
-        AccessPath *cur_path = NULL;
-        for (int64_t j = 0; NULL == cur_path && j < access_paths.count(); ++j) {
-          if (i != j && NULL != access_paths.at(j) && path->index_id_ == access_paths.at(j)->index_id_) {
-            cur_path = access_paths.at(j);
+      } else {
+        AccessPath *target_path = NULL;
+        for (int64_t j = 0; NULL == target_path && j < access_paths.count(); ++j) {
+          if (i != j && NULL != access_paths.at(j) && path->index_id_ == access_paths.at(j)->index_id_
+              && path->use_column_store_ == access_paths.at(j)->use_column_store_) {
+            target_path = access_paths.at(j);
           }
         }
-        need_prune = NULL != cur_path && cur_path->parallel_ > 1;
+        if (NULL != target_path) {
+          need_prune = path->use_das_ ? 1 < target_path->parallel_
+                                      : 1 >= path->parallel_;
+        }
       }
       if (OB_SUCC(ret) && !need_prune && OB_FAIL(tmp_paths.push_back(path))) {
         LOG_WARN("failed to push back access path", K(ret));
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (tmp_paths.count() == access_paths.count()) {
-      /* do nothing */
-    } else if (OB_FAIL(access_paths.assign(tmp_paths))) {
+    if (OB_SUCC(ret) && tmp_paths.count() != access_paths.count()
+        && OB_FAIL(access_paths.assign(tmp_paths))) {
       LOG_WARN("failed to assign paths", K(ret));
-    } else if (access_paths.empty() && NULL != default_path && !default_path->is_inner_path_
-               && OB_FAIL(access_paths.push_back(default_path))) {
-      LOG_WARN("failed to push back access path", K(ret));
     }
   }
   return ret;

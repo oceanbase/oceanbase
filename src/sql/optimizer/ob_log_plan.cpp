@@ -7775,7 +7775,8 @@ int ObLogPlan::inner_candi_allocate_subplan_filter(ObIArray<ObLogPlan*> &subplan
   } else if (OB_FAIL(get_valid_subplan_filter_dist_method(subplans, for_cursor_expr, false,
                                                           dist_methods))) {
     LOG_WARN("failed to get valid subplan filter dist method", K(ret));
-  } else if (OB_FAIL(inner_candi_allocate_subplan_filter(best_subplan_list,
+  } else if (DIST_INVALID_METHOD != dist_methods &&
+             OB_FAIL(inner_candi_allocate_subplan_filter(best_subplan_list,
                                                           best_dist_subplan_list,
                                                           query_refs,
                                                           params,
@@ -8020,7 +8021,7 @@ int ObLogPlan::inner_candi_allocate_subplan_filter(ObIArray<ObSEArray<CandidateP
         // reset pos for next generation
         if (OB_SUCC(ret)) {
           has_next = false;
-          for (int64_t j = move_pos.count() - 1; OB_SUCC(ret) && j >= 0; j--) {
+          for (int64_t j = move_pos.count() - 1; !has_next && OB_SUCC(ret) && j >= 0; j--) {
             if (move_pos.at(j) < best_list.at(j).count() - 1) {
               ++move_pos.at(j);
               has_next = true;
