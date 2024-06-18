@@ -98,7 +98,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
         OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                               db_name,
                                               package_name,
-                                              PACKAGE_TYPE,
+                                              share::schema::PACKAGE_TYPE,
                                               compatible_mode,
                                               package_spec_info));
         if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) { // may be not old package header
@@ -149,7 +149,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
           create_package_arg.db_name_ = db_name;
           package_info.set_tenant_id(session_info_->get_effective_tenant_id());
           package_info.set_owner_id(session_info_->get_user_id());
-          package_info.set_type(PACKAGE_TYPE);
+          package_info.set_type(share::schema::PACKAGE_TYPE);
           package_info.set_compatibility_mode(compa_mode);
           if (is_invoker_right) {
             package_info.set_invoker_right();
@@ -220,7 +220,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
           OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                                 db_name,
                                                 package_name,
-                                                PACKAGE_BODY_TYPE,
+                                                share::schema::PACKAGE_BODY_TYPE,
                                                 compatible_mode,
                                                 package_body_info));
           if (OB_SUCC(ret) && OB_NOT_NULL(package_body_info) && !package_body_info->is_for_trigger()) {
@@ -605,7 +605,7 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
         OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                               db_name,
                                               package_name,
-                                              PACKAGE_TYPE,
+                                              share::schema::PACKAGE_TYPE,
                                               compatible_mode,
                                               package_spec_info));
         if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
@@ -715,7 +715,7 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
 
       package_info.set_tenant_id(session_info_->get_effective_tenant_id());
       package_info.set_owner_id(session_info_->get_user_id());
-      package_info.set_type(PACKAGE_BODY_TYPE);
+      package_info.set_type(share::schema::PACKAGE_BODY_TYPE);
       package_info.set_compatibility_mode(compa_mode);
       if (!create_package_arg.is_editionable_) {
         create_package_arg.package_info_.set_noneditionable();

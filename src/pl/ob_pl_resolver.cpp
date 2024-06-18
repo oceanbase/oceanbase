@@ -15284,13 +15284,13 @@ int ObPLResolver::resolve_condition(const ObStmtNodeTree *parse_tree,
       const ObPLCondition *condition = NULL;
       OZ (resolve_ctx_.schema_guard_.get_database_id(tenant_id, db_name, database_id));
       OZ (resolve_ctx_.schema_guard_.get_package_info(
-          tenant_id, database_id, package_name, PACKAGE_TYPE, compatible_mode, package_info));
+          tenant_id, database_id, package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
       if (OB_SUCC(ret)
           && OB_ISNULL(package_info)
           && 0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
         OZ (resolve_ctx_.schema_guard_.get_package_info(OB_SYS_TENANT_ID,
                                                 OB_SYS_DATABASE_ID,
-                                                package_name, PACKAGE_TYPE,
+                                                package_name, share::schema::PACKAGE_TYPE,
                                                 compatible_mode, package_info));
       }
       if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
@@ -15907,12 +15907,12 @@ int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
   OX (cursor = NULL);
   OZ (resolve_ctx_.schema_guard_.get_database_id(tenant_id, db_name, database_id));
   OZ (resolve_ctx_.schema_guard_.get_package_info(
-      tenant_id, database_id, package_name, PACKAGE_TYPE, compatible_mode, package_info));
+      tenant_id, database_id, package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
   if (OB_SUCC(ret)
       && OB_ISNULL(package_info) && 0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
     OZ (resolve_ctx_.schema_guard_.get_package_info(
       OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID,
-      package_name, PACKAGE_TYPE, compatible_mode, package_info));
+      package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
   }
   if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
     ObSchemaChecker checker;
@@ -15924,12 +15924,12 @@ int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
       checker, synonym_checker, tenant_id, database_id, package_name, database_id, new_package_name, is_exist));
     if (OB_SUCC(ret) && is_exist) {
       OZ (resolve_ctx_.schema_guard_.get_package_info(
-        tenant_id, database_id, new_package_name, PACKAGE_TYPE, compatible_mode, package_info));
+        tenant_id, database_id, new_package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
     }
     if (OB_SUCC(ret)
         && OB_ISNULL(package_info) && OB_SYS_DATABASE_ID == database_id) {
       OZ (resolve_ctx_.schema_guard_.get_package_info(
-        OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, new_package_name, PACKAGE_TYPE, compatible_mode, package_info));
+        OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, new_package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
     }
   }
   if ((OB_SUCC(ret) && OB_ISNULL(package_info)) || OB_SYNONYM_NOT_EXIST == ret) {

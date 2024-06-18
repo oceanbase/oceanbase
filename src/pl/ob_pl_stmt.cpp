@@ -1462,7 +1462,7 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
                   schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, object_id))
       || object_id == OB_INVALID_ID) {
     if (OB_FAIL(schema_guard.get_package_id(tenant_id, object_db_id, object_name,
-                                            PACKAGE_TYPE, compatible_mode, object_id))
+                                            share::schema::PACKAGE_TYPE, compatible_mode, object_id))
         || OB_INVALID_ID == object_id) {
       if (OB_FAIL(schema_guard.get_udt_id(
                   tenant_id, object_db_id, OB_INVALID_ID/*package_id*/, object_name, object_id))
@@ -1993,7 +1993,7 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
     if (OB_SUCC(ret) && !package_name.empty()) {
       // search package
       if (OB_FAIL(resolve_ctx_.schema_guard_.get_package_info(tenant_id, db_id, package_name,
-                                                              PACKAGE_TYPE, compatible_mode,
+                                                              share::schema::PACKAGE_TYPE, compatible_mode,
                                                               package_info))) {
          LOG_WARN("get package id failed", K(ret));
       }
@@ -2010,7 +2010,7 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
         // try system package
         if (db_name.empty() || 0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
           if (OB_FAIL(resolve_ctx_.schema_guard_.get_package_info(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID,
-              package_name, PACKAGE_TYPE, compatible_mode, package_info))) {
+              package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info))) {
             LOG_WARN("get package id failed", K(ret));
           }
         }
@@ -3537,12 +3537,12 @@ int ObPLBlockNS::get_cursor_by_name(const ObExprResolveContext &ctx,
       OX (cursor = NULL);
       OZ (resolve_ctx.schema_guard_.get_database_id(tenant_id, db_name, database_id));
       OZ (resolve_ctx.schema_guard_.get_package_info(
-          tenant_id, database_id, package_name, PACKAGE_TYPE, compatible_mode, package_info));
+          tenant_id, database_id, package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
       if (OB_SUCC(ret)
           && OB_ISNULL(package_info) && db_name.case_compare(OB_SYS_DATABASE_NAME)) {
         OZ (resolve_ctx.schema_guard_.get_package_info(
           OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID,
-          package_name, PACKAGE_TYPE, compatible_mode, package_info));
+          package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_info));
       }
       if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
         ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;

@@ -167,7 +167,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
     OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                           db_name,
                                           package_name,
-                                          PACKAGE_TYPE,
+                                          share::schema::PACKAGE_TYPE,
                                           compatible_mode,
                                           package_spec_info));
     OZ (package_spec_ast.init(db_name,
@@ -190,7 +190,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
         OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                               db_name,
                                               package_name,
-                                              PACKAGE_BODY_TYPE,
+                                              share::schema::PACKAGE_BODY_TYPE,
                                               compatible_mode,
                                               package_body_info));
         if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
@@ -206,7 +206,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
         OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                               db_name,
                                               package_name,
-                                              PACKAGE_BODY_TYPE,
+                                              share::schema::PACKAGE_BODY_TYPE,
                                               compatible_mode,
                                               package_body_info));
         if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {

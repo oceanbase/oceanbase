@@ -63,8 +63,8 @@ enum ObPLCacheObjectType
 {
   INVALID_PL_OBJECT_TYPE = 5, // start with OB_PHY_PLAN_UNCERTAIN, distict ObPhyPlanType
   STANDALONE_ROUTINE_TYPE,
-  PACKAGE_ROUTINE_TYPE,
-  UDT_ROUTINE_TYPE,
+  PACKAGE_TYPE,
+  PACKAGE_BODY_TYPE,
   ANONYMOUS_BLOCK_TYPE,
   CALL_STMT_TYPE,
   MAX_TYPE_NUM
@@ -74,6 +74,7 @@ struct PLCacheObjStat
 {
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   int64_t pl_schema_id_;
+  uint64_t db_id_;
   common::ObString raw_sql_; // sql txt for anonymous block
   common::ObString name_;
   common::ObCollationType sql_cs_type_;
@@ -92,6 +93,7 @@ struct PLCacheObjStat
 
   PLCacheObjStat()
     : pl_schema_id_(OB_INVALID_ID),
+      db_id_(OB_INVALID_ID),
       raw_sql_(),
       name_(),
       sql_cs_type_(common::CS_TYPE_INVALID),
@@ -120,6 +122,7 @@ struct PLCacheObjStat
   {
     sql_id_[0] = '\0';
     pl_schema_id_ = OB_INVALID_ID;
+    db_id_ = OB_INVALID_ID;
     sql_cs_type_ = common::CS_TYPE_INVALID;
     raw_sql_.reset();
     name_.reset();
@@ -137,6 +140,7 @@ struct PLCacheObjStat
   }
 
   TO_STRING_KV(K_(pl_schema_id),
+               K_(db_id),
                K_(gen_time),
                K_(last_active_time),
                K_(hit_count),

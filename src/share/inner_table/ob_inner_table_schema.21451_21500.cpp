@@ -160,7 +160,7 @@ int ObInnerTableSchema::gv_ob_pl_cache_object_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT TENANT_ID,            SVR_IP,            SVR_PORT,            PLAN_ID AS CACHE_OBJECT_ID,            STATEMENT AS PARAMETERIZE_TEXT,            QUERY_SQL AS OBJECT_TEXT,            FIRST_LOAD_TIME,            LAST_ACTIVE_TIME,            AVG_EXE_USEC,            SLOWEST_EXE_TIME,            SLOWEST_EXE_USEC,            HIT_COUNT,            PLAN_SIZE AS CACHE_OBJ_SIZE,            EXECUTIONS,            ELAPSED_TIME,            OBJECT_TYPE,            PL_SCHEMA_ID AS OBJECT_ID,            COMPILE_TIME,            SCHEMA_VERSION,            PS_STMT_ID     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT TENANT_ID,            SVR_IP,            SVR_PORT,            PLAN_ID AS CACHE_OBJECT_ID,            STATEMENT AS PARAMETERIZE_TEXT,            QUERY_SQL AS OBJECT_TEXT,            FIRST_LOAD_TIME,            LAST_ACTIVE_TIME,            AVG_EXE_USEC,            SLOWEST_EXE_TIME,            SLOWEST_EXE_USEC,            HIT_COUNT,            PLAN_SIZE AS CACHE_OBJ_SIZE,            EXECUTIONS,            ELAPSED_TIME,            OBJECT_TYPE,            PL_SCHEMA_ID AS OBJECT_ID,            COMPILE_TIME,            SCHEMA_VERSION,            PS_STMT_ID,            DB_ID     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -210,7 +210,7 @@ int ObInnerTableSchema::v_ob_pl_cache_object_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT TENANT_ID,            SVR_IP,            SVR_PORT,            CACHE_OBJECT_ID,            PARAMETERIZE_TEXT,            OBJECT_TEXT,            FIRST_LOAD_TIME,            LAST_ACTIVE_TIME,            AVG_EXE_USEC,            SLOWEST_EXE_TIME,            SLOWEST_EXE_USEC,            HIT_COUNT,            CACHE_OBJ_SIZE,            EXECUTIONS,            ELAPSED_TIME,            OBJECT_TYPE,            OBJECT_ID,            COMPILE_TIME,            SCHEMA_VERSION,            PS_STMT_ID     FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT TENANT_ID,            SVR_IP,            SVR_PORT,            CACHE_OBJECT_ID,            PARAMETERIZE_TEXT,            OBJECT_TEXT,            FIRST_LOAD_TIME,            LAST_ACTIVE_TIME,            AVG_EXE_USEC,            SLOWEST_EXE_TIME,            SLOWEST_EXE_USEC,            HIT_COUNT,            CACHE_OBJ_SIZE,            EXECUTIONS,            ELAPSED_TIME,            OBJECT_TYPE,            OBJECT_ID,            COMPILE_TIME,            SCHEMA_VERSION,            PS_STMT_ID,            DB_ID     FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
