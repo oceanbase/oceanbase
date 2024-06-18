@@ -177,12 +177,6 @@ TEST_F(TestIOStruct, IOFlag)
   flag2.set_mode((ObIOMode)88);
   ASSERT_FALSE(flag2.is_valid());
 
-  // test io group
-  flag2 = flag;
-  ASSERT_TRUE(flag2.is_valid());
-  flag2.set_resource_group_id(OB_INVALID_GROUP_ID);
-  ASSERT_FALSE(flag2.is_valid());
-
   // test wait event number
   flag2 = flag;
   ASSERT_TRUE(flag2.is_valid());

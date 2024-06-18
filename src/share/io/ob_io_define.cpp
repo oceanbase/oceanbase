@@ -170,7 +170,11 @@ ObIOMode ObIOFlag::get_mode() const
 
 void ObIOFlag::set_resource_group_id(const uint64_t group_id)
 {
-  group_id_ = group_id;
+  if (!is_valid_resource_group(group_id)) {
+    group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
+  } else {
+    group_id_ = group_id;
+  }
 }
 
 void ObIOFlag::set_wait_event(int64_t wait_event_id)
