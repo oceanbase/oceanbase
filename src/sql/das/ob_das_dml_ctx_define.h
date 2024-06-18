@@ -170,14 +170,16 @@ public:
       need_fetch_conflict_(false),
       is_duplicated_(false),
       direct_insert_task_id_(0),
-      use_put_(false)
+      use_put_(false),
+      ddl_task_id_(0)
   { }
 
   INHERIT_TO_STRING_KV("ObDASBaseRtDef", ObDASDMLBaseRtDef,
                        K_(need_fetch_conflict),
                        K_(is_duplicated),
                        K_(direct_insert_task_id),
-                       K_(use_put));
+                       K_(use_put),
+                       K_(ddl_task_id));
 
   // used to check whether need to fetch_duplicate_key, will set in table_replace_op
   bool need_fetch_conflict_;
@@ -188,6 +190,7 @@ public:
   int64_t direct_insert_task_id_;
   // use put, only use in obkv for overlay writting.
   bool use_put_;
+  int64_t ddl_task_id_;
 };
 typedef DASDMLRtDefArray DASInsRtDefArray;
 
