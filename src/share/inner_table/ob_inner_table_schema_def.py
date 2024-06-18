@@ -15839,6 +15839,11 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+# 20020: INNODB_FT_BEING_DELETED
+# 20021: INNODB_FT_CONFIG
+# 20022: INNODB_FT_DELETED
+# 20023: INNODB_FT_INDEX_CACHE
+
 def_table_schema(
   owner = 'yuzhong.zhao',
   tablegroup_id  = 'OB_INVALID_ID',
