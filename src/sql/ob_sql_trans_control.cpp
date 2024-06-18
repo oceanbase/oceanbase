@@ -730,12 +730,13 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
   int ret = OB_SUCCESS;
   ObConsistencyLevel current_consist_level = plan_ctx->get_consistency_level();
   CK (current_consist_level != ObConsistencyLevel::INVALID_CONSISTENCY);
+  const bool contain_inner_table = plan->is_contain_inner_table();
 
   // adjust stmt's consistency level
   if (OB_SUCC(ret)) {
     // Weak read statement with inner table should be converted to strong read.
     // For example, schema refresh statement;
-    if (plan->is_contain_inner_table() ||
+    if (contain_inner_table ||
       (!plan->is_plain_select() && current_consist_level != ObConsistencyLevel::STRONG)) {
       plan_ctx->set_consistency_level(ObConsistencyLevel::STRONG);
     }
@@ -761,6 +762,13 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
                 KR(ret), "trans_id", session->get_tx_id(), "consistency_level", cl);
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE and REPEATABLE-READ isolation level");
     }
+  }
+  if (OB_SUCC(ret)
+      && !plan_ctx->check_consistency_level_validation(contain_inner_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected consistency level", K(ret), K(contain_inner_table),
+                                                    "current_level", current_consist_level,
+                                                    "plan_ctx_level", plan_ctx->get_consistency_level());
   }
 
   return ret;
