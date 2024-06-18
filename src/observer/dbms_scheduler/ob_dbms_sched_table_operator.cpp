@@ -322,10 +322,8 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
   OZ (_check_need_record(job_info, need_record, false));
 
   if (OB_FAIL(ret)) {
-  } else if (job_info.is_date_expression_job_class()) {
-    if (now >= job_info.end_date_ && true == job_info.auto_drop_) {
-      OZ (_build_job_drop_dml(now, job_info, sql1));
-    }
+  } else if (job_info.is_date_expression_job_class() && now >= job_info.end_date_ && true == job_info.auto_drop_) {
+    OZ (_build_job_drop_dml(now, job_info, sql1));
   } else if ((now >= job_info.end_date_ || job_info.get_interval_ts() == 0) && (true == job_info.auto_drop_)) {
     OZ (_build_job_drop_dml(now, job_info, sql1));
   } else {
