@@ -280,10 +280,11 @@ private:
   {
     bool bret = true;
     if (OB_NOT_NULL(chunk)) {
+      int64_t hold = chunk->hold();
       int32_t chunk_index = get_chunk_index(chunk->aligned());
       bret = slots_[chunk_index]->push(chunk);
       if (bret) {
-        ATOMIC_FAA(&cache_hold_, chunk->hold());
+        ATOMIC_FAA(&cache_hold_, hold);
       }
     }
     return bret;
