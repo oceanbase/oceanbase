@@ -6024,7 +6024,7 @@ total	bigint(20)	YES		0
 interval#	varchar(4000)	NO		NULL	
 failures	bigint(20)	YES		0	
 flag	bigint(20)	NO		NULL	
-what	varchar(4000)	YES		NULL	
+what	varchar(65536)	YES		NULL	
 nlsenv	varchar(4000)	YES		NULL	
 charenv	varchar(4000)	YES		NULL	
 field1	varchar(128)	YES		NULL	
@@ -6033,7 +6033,7 @@ exec_env	varchar(2048)	YES		NULL
 job_style	varchar(128)	YES		NULL	
 program_name	varchar(128)	YES		NULL	
 job_type	varchar(128)	YES		NULL	
-job_action	varchar(4000)	YES		NULL	
+job_action	varchar(65536)	YES		NULL	
 number_of_argument	bigint(20)	YES		NULL	
 start_date	timestamp(6)	YES		NULL	
 repeat_interval	varchar(4000)	YES		NULL	
@@ -6046,7 +6046,7 @@ run_count	bigint(20)	YES		NULL
 retry_count	bigint(20)	YES		NULL	
 last_run_duration	bigint(20)	YES		NULL	
 max_run_duration	bigint(20)	YES		NULL	
-comments	varchar(128)	YES		NULL	
+comments	varchar(4096)	YES		NULL	
 credential_name	varchar(128)	YES		NULL	
 destination_name	varchar(128)	YES		NULL	
 interval_ts	bigint(20)	YES		NULL	
