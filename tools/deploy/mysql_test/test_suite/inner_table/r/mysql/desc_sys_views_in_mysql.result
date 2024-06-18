@@ -5135,9 +5135,11 @@ SVR_IP	varchar(46)	NO		NULL
 SVR_PORT	bigint(20)	NO		NULL	
 TENANT_ID	bigint(20)	NO		NULL	
 TRANS_ID	bigint(20)	NO		NULL	
+SESSION_ID	bigint(20)	NO		NULL	
 TYPE	varchar(9)	NO			
 ID1	bigint(20)	NO		NULL	
-ID2	varchar(533)	NO			
+ID2	bigint(20)	NO		NULL	
+ID3	varchar(533)	NO			
 LMODE	varchar(4)	NO			
 REQUEST	varchar(8)	NO		NULL	
 CTIME	bigint(20)	NO		NULL	
@@ -5151,9 +5153,11 @@ SVR_IP	varchar(46)	NO
 SVR_PORT	bigint(20)	NO			
 TENANT_ID	bigint(20)	NO			
 TRANS_ID	bigint(20)	NO			
+SESSION_ID	bigint(20)	NO			
 TYPE	varchar(9)	NO			
 ID1	bigint(20)	NO			
-ID2	varchar(533)	NO			
+ID2	bigint(20)	NO			
+ID3	varchar(533)	NO			
 LMODE	varchar(8)	NO			
 REQUEST	varchar(8)	NO			
 CTIME	bigint(20)	NO			

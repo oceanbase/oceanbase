@@ -439,6 +439,28 @@ int ObTransService::iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_i
   return ret;
 }
 
+int ObTransService::get_trans_start_session_id(const share::ObLSID &ls_id, const ObTransID &tx_id, uint32_t &session_id)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObPartTransCtx *part_ctx = nullptr;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(tx_ctx_mgr_.get_tx_ctx(ls_id, tx_id, false, part_ctx))) {
+    TRANS_LOG(WARN, "get ObPartTransCtx by ls_id and tx_id failed", K(ls_id), K(tx_id));
+  } else if (OB_ISNULL(part_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "ObPartTransCtx is null", K(ls_id), K(tx_id));
+  } else {
+    session_id = part_ctx->get_session_id();
+    tx_ctx_mgr_.revert_tx_ctx(part_ctx);
+  }
+
+  return ret;
+}
 
 int ObTransService::end_1pc_trans(ObTxDesc &trans_desc,
                                   ObITxCallback *endTransCb,
