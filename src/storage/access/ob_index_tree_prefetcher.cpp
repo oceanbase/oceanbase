@@ -138,7 +138,9 @@ int ObIndexTreePrefetcher::init_basic_info(
         LOG_WARN("Unexpected state, index_scanner_ is valid at first scan", K(ret), KPC(this), K(index_scanner_), K(iter_param), K(lbt()));
       } else {
         const ObTablet *cur_tablet = OB_ISNULL(iter_param_->tablet_handle_) ? nullptr : iter_param_->tablet_handle_->get_obj();
-        index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_);
+        index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_,
+          ObRowkeyVectorHelper::can_use_non_datum_rowkey_vector(sstable.is_normal_cg_sstable(), iter_param_->tablet_id_)
+            ? iter_param_->get_rowkey_col_descs() : nullptr);
       }
     } else if (OB_FAIL(init_index_scanner(index_scanner_))) {
       LOG_WARN("Fail to init index_scanner", K(ret));
@@ -282,16 +284,18 @@ int ObIndexTreePrefetcher::lookup_in_index_tree(ObSSTableReadHandle &read_handle
 int ObIndexTreePrefetcher::init_index_scanner(ObIndexBlockRowScanner &index_scanner)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(index_scanner.init(
+  if (OB_ISNULL(iter_param_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
+  } else if (OB_FAIL(index_scanner.init(
       *datum_utils_,
       *access_ctx_->stmt_allocator_,
       access_ctx_->query_flag_,
       sstable_->get_macro_offset(),
-      sstable_->is_normal_cg_sstable()))) {
+      sstable_->is_normal_cg_sstable(),
+      ObRowkeyVectorHelper::can_use_non_datum_rowkey_vector(sstable_->is_normal_cg_sstable(), iter_param_->tablet_id_)
+        ? iter_param_->get_rowkey_col_descs() : nullptr))) {
     LOG_WARN("init index scanner fail", K(ret), KPC(sstable_), KP(sstable_));
-  } else if (OB_ISNULL(iter_param_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
   } else {
     const ObTablet *cur_tablet = OB_ISNULL(iter_param_->tablet_handle_) ? nullptr : iter_param_->tablet_handle_->get_obj();
     index_scanner.set_iter_param(sstable_, cur_tablet);
@@ -315,7 +319,6 @@ bool ObIndexTreePrefetcher::last_handle_hit(const ObMicroIndexInfo &block_info,
     }
   } else if (micro_handle.match(macro_id, offset, size)) {
     EVENT_INC(ObStatEventIds::INDEX_BLOCK_CACHE_HIT);
-    ++access_ctx_->table_store_stat_.index_block_cache_hit_cnt_;
     bret = true;
   }
   return bret;
@@ -398,7 +401,8 @@ int ObIndexTreePrefetcher::prefetch_block_data(
                          index_block_info,
                          is_data,
                          true, /* need submit io */
-                         micro_handle))) {
+                         micro_handle,
+                         cur_level_))) {
     LOG_WARN("Fail to get micro block handle from handle mgr", K(ret));
   } else if (is_rescan() && is_data && micro_handle.in_block_state()) {
     last_micro_block_handle_ = micro_handle;
@@ -630,7 +634,8 @@ int ObIndexTreeMultiPrefetcher::multi_prefetch()
                     cur_index_info,
                     cur_index_info.is_data_block(),
                     false, /* need submit io */
-                    next_handle))) {
+                    next_handle,
+                    cur_level_))) {
           //not in cache yet, stop this rowkey prefetching if it's not the rowkey to be feteched
           ret = OB_SUCCESS;
           if (is_rowkey_to_fetched) {
@@ -954,7 +959,9 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::s
           LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
         } else {
           const ObTablet *cur_tablet = OB_ISNULL(iter_param_->tablet_handle_) ? nullptr : iter_param_->tablet_handle_->get_obj();
-          tree_handles_[level].index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_);
+          tree_handles_[level].index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_,
+            ObRowkeyVectorHelper::can_use_non_datum_rowkey_vector(sstable.is_normal_cg_sstable(), iter_param_->tablet_id_)
+              ? iter_param_->get_rowkey_col_descs() : nullptr);
         }
       } else if (OB_FAIL(init_index_scanner(tree_handles_[level].index_scanner_))) {
         LOG_WARN("Fail to init index_scanner", K(ret), K(level));
@@ -1441,8 +1448,8 @@ public:
     } else if (OB_UNLIKELY(!index_info.is_valid() || !rowkey.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Invalid MicroIndexInfo", K(ret), K(index_info), K(rowkey));
-    } else if (OB_FAIL(index_info.endkey_->compare(rowkey, datum_utils_, cmp_ret, false))) {
-      LOG_WARN("fail to compare rowkey", K(ret), KPC(index_info.endkey_), K(rowkey));
+    } else if (OB_FAIL(index_info.endkey_.compare(rowkey, datum_utils_, cmp_ret, false))) {
+      LOG_WARN("fail to compare rowkey", K(ret), K(index_info.endkey_), K(rowkey));
     }
     return cmp_ret;
   }
@@ -1482,10 +1489,10 @@ OB_INLINE static int binary_check_micro_infos(
           // move to left if the two rightmost endkeys is same(possible in multiple ranges)
           int cmp_ret = 0;
           for (; OB_SUCC(ret) && check_border_idx > start; check_border_idx--) {
-            const ObDatumRowkey *cur_endkey = (micro_infos + check_border_idx)->endkey_;
-            const ObDatumRowkey *prev_endkey = (micro_infos + check_border_idx - 1)->endkey_;
-            if (OB_FAIL(cur_endkey->compare(*prev_endkey, datum_utils, cmp_ret, false))) {
-              LOG_WARN("fail to compare rowkey", K(ret), KPC(cur_endkey), KPC(prev_endkey));
+            const ObCommonDatumRowkey &cur_endkey = (micro_infos + check_border_idx)->endkey_;
+            const ObCommonDatumRowkey &prev_endkey = (micro_infos + check_border_idx - 1)->endkey_;
+            if (OB_FAIL(cur_endkey.compare(prev_endkey, datum_utils, cmp_ret, false))) {
+              LOG_WARN("fail to compare rowkey", K(ret), K(cur_endkey), K(prev_endkey));
             } else if (cmp_ret != 0) {
               break;
             }
@@ -1520,8 +1527,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
     int64_t start_idx = start_pos % max_micro_handle_cnt_;
     int64_t end_idx = end_pos % max_micro_handle_cnt_;
     if (!is_reverse) {
-      if (OB_FAIL(micro_data_infos_[end_idx].endkey_->compare(border_rowkey, datum_utils, cmp_ret, false))) {
-        LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[start_idx].endkey_));
+      if (OB_FAIL(micro_data_infos_[end_idx].endkey_.compare(border_rowkey, datum_utils, cmp_ret, false))) {
+        LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[end_idx].endkey_));
       } else if (cmp_ret < 0) {
         for (int64_t pos = start_pos; pos <= end_pos; pos++) {
           micro_data_infos_[pos % max_micro_handle_cnt_].set_blockscan();
@@ -1538,7 +1545,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
           } else {
             cmp_ret = 0;
             // split to [start_idx, max_micro_handle_cnt_ - 1], [0, end_idx - 1]
-            if (OB_FAIL(micro_data_infos_[max_micro_handle_cnt_ - 1].endkey_->compare(border_rowkey, datum_utils, cmp_ret, false))) {
+            if (OB_FAIL(micro_data_infos_[max_micro_handle_cnt_ - 1].endkey_.compare(border_rowkey, datum_utils, cmp_ret, false))) {
               LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[max_micro_handle_cnt_ - 1]));
             } else if (cmp_ret < 0) {
               for (int64_t idx = start_idx; idx < max_micro_handle_cnt_; idx++) {
@@ -1567,7 +1574,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
         } else {
           cmp_ret = 0;
           // split to [start_idx, max_micro_handle_cnt_ - 1], [0, end_idx]
-          if (OB_FAIL(micro_data_infos_[0].endkey_->compare(border_rowkey, datum_utils, cmp_ret, false))) {
+          if (OB_FAIL(micro_data_infos_[0].endkey_.compare(border_rowkey, datum_utils, cmp_ret, false))) {
             LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[0]));
           } else if (cmp_ret > 0) {
             for (int64_t idx = start_idx; idx < max_micro_handle_cnt_; idx++) {

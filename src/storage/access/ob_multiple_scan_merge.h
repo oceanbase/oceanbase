@@ -53,7 +53,6 @@ protected:
   virtual int can_batch_scan(bool &can_batch) override;
   virtual int is_range_valid() const override;
   virtual int prepare() override;
-  virtual void collect_merge_stat(ObTableStoreStat &stat) const override;
   virtual int supply_consume();
   virtual int inner_merge_row(blocksstable::ObDatumRow &row);
   int set_rows_merger(const int64_t table_cnt);

@@ -68,6 +68,7 @@ struct ObKVCachePair
       : magic_(KVPAIR_MAGIC_NUM), size_(0), key_(NULL), value_(NULL)
   {
   }
+  TO_STRING_KV(K_(magic), K_(size), KP_(key), KP_(value));
 };
 
 enum ObKVCachePolicy

@@ -96,6 +96,10 @@ public:
   { return is_valid() ? &(micro_block_->get_block_data()) : NULL; }
   int64_t get_block_size() const { return is_valid() ? micro_block_->get_block_data().total_size() : 0; }
   inline bool is_valid() const { return NULL != micro_block_ && handle_.is_valid(); }
+  inline ObKVMemBlockHandle* get_mb_handle() const { return handle_.get_mb_handle(); }
+  inline const ObMicroBlockCacheValue* get_micro_block() const { return micro_block_; }
+  inline void set_mb_handle(ObKVMemBlockHandle *mb_handle) { handle_.set_mb_handle(mb_handle); }
+  inline void set_micro_block(const ObMicroBlockCacheValue *micro_block) { micro_block_ = micro_block; }
   TO_STRING_KV(K_(handle), KP_(micro_block));
 private:
   friend class ObIMicroBlockCache;
@@ -160,6 +164,10 @@ public:
   virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size);
   virtual ObIAllocator *get_allocator() { return allocator_; }
   void set_micro_des_meta(const ObIndexBlockRowHeader *idx_row_header);
+  OB_INLINE void set_rowkey_col_descs(const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
+  {
+    rowkey_col_descs_ = rowkey_col_descs;
+  }
 protected:
   friend class ObIMicroBlockCache;
   friend class ObDataMicroBlockCache;
@@ -192,6 +200,7 @@ protected:
   ObMicroBlockDesMeta block_des_meta_;
   bool use_block_cache_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
+  const ObIArray<share::schema::ObColDesc> *rowkey_col_descs_;
   DISALLOW_COPY_AND_ASSIGN(ObIMicroBlockIOCallback);
 };
 
@@ -310,7 +319,8 @@ public:
       ObMacroBlockReader &reader,
       ObIAllocator &allocator,
       const ObMicroBlockCacheValue *&micro_block,
-      common::ObKVCacheHandle &cache_handle) = 0;
+      common::ObKVCacheHandle &cache_handle,
+      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr) = 0;
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
       ObKVCacheInstHandle &inst_handle,
@@ -319,6 +329,9 @@ public:
       int64_t &kvpair_size) = 0;
   virtual ObMicroBlockData::Type get_type() = 0;
   virtual int add_put_size(const int64_t put_size) override;
+  virtual void cache_bypass() = 0;
+  virtual void cache_hit(int64_t &hit_cnt) = 0;
+  virtual void cache_miss(int64_t &miss_cnt) = 0;
 
 protected:
   int prefetch(
@@ -367,7 +380,8 @@ public:
       ObMacroBlockReader &reader,
       ObIAllocator &allocator,
       const ObMicroBlockCacheValue *&micro_block,
-      common::ObKVCacheHandle &cache_handle) override;
+      common::ObKVCacheHandle &cache_handle,
+      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr) override;
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
       ObKVCacheInstHandle &inst_handle,
@@ -375,6 +389,9 @@ public:
       ObKVCachePair *&kvpair,
       int64_t &kvpair_size) override;
   virtual ObMicroBlockData::Type get_type() override;
+  virtual void cache_bypass();
+  virtual void cache_hit(int64_t &hit_cnt);
+  virtual void cache_miss(int64_t &miss_cnt);
 private:
   int64_t calc_value_size(const int64_t data_length, const ObRowStoreType &type, bool &need_decoder);
   int write_extra_buf(
@@ -407,7 +424,8 @@ public:
       ObMacroBlockReader &reader,
       ObIAllocator &allocator,
       const ObMicroBlockCacheValue *&micro_block,
-      common::ObKVCacheHandle &cache_handle) override;
+      common::ObKVCacheHandle &cache_handle,
+      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr) override;
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
       ObKVCacheInstHandle &inst_handle,
@@ -419,6 +437,9 @@ public:
     return OB_NOT_SUPPORTED;
   }
   virtual ObMicroBlockData::Type get_type() override;
+  virtual void cache_bypass();
+  virtual void cache_hit(int64_t &hit_cnt);
+  virtual void cache_miss(int64_t &miss_cnt);
 };
 
 

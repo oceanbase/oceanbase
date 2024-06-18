@@ -13,6 +13,7 @@
 #include "ob_datum_rowkey.h"
 #include "ob_datum_range.h"
 #include "share/schema/ob_table_param.h"
+#include "storage/blocksstable/ob_datum_rowkey_vector.h"
 
 namespace oceanbase
 {
@@ -121,6 +122,30 @@ int ObDatumRowkey::compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &
     }
   }
 
+  return ret;
+}
+
+int ObDatumRowkey::compare(const ObDiscreteDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+                           const bool compare_datum_cnt) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(rhs.compare(*this, datum_utils, cmp_ret, compare_datum_cnt))) {
+    STORAGE_LOG(WARN, "Failed to compare", K(ret));
+  } else {
+    cmp_ret = -cmp_ret;
+  }
+  return ret;
+}
+
+int ObDatumRowkey::compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+                           const bool compare_datum_cnt) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(rhs.compare(*this, datum_utils, cmp_ret, compare_datum_cnt))) {
+    STORAGE_LOG(WARN, "Failed to compare", K(ret));
+  } else {
+    cmp_ret = -cmp_ret;
+  }
   return ret;
 }
 
@@ -376,6 +401,169 @@ void ObDatumRowkey::reuse()
   for (int64_t i = 0; i < datum_cnt_; ++i) {
     datums_[i].reuse();
   }
+}
+
+int ObDiscreteDatumRowkey::compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+                                   const bool compare_datum_cnt) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid() || !rhs.is_valid() || !datum_utils.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to compare datum rowkey", K(ret), K(*this), K(rhs), K(datum_utils));
+  } else if (OB_FAIL(rowkey_vector_->compare_rowkey(rhs, row_idx_, datum_utils, cmp_ret, compare_datum_cnt))) {
+    STORAGE_LOG(WARN, "Failed to compare rowkey in rowkey vector", K(ret));
+  }
+  return ret;
+}
+
+int ObDiscreteDatumRowkey::compare(const ObDiscreteDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+                                   const bool compare_datum_cnt) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid() || !rhs.is_valid() || !datum_utils.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to compare datum rowkey", K(ret), K(*this), K(rhs), K(datum_utils));
+  } else if (OB_FAIL(rowkey_vector_->compare_rowkey(rhs, row_idx_, datum_utils, cmp_ret, compare_datum_cnt))) {
+    STORAGE_LOG(WARN, "Failed to compare rowkey in rowkey vector", K(ret), K(*this), K(rhs));
+  }
+  return ret;
+}
+
+int ObDiscreteDatumRowkey::compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+                                   const bool compare_datum_cnt) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid() || !rhs.is_valid() || !datum_utils.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to compare datum rowkey", K(ret), K(*this), K(rhs), K(datum_utils));
+  } else if (rhs.is_compact_rowkey()) {
+    ret = compare(*rhs.get_compact_rowkey(), datum_utils, cmp_ret, compare_datum_cnt);
+  } else {
+    ret = compare(*rhs.get_discrete_rowkey(), datum_utils, cmp_ret, compare_datum_cnt);
+  }
+  return ret;
+}
+
+int ObDiscreteDatumRowkey::deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected error for deep copy invalid rowkey", K(ret), K(*this));
+  } else {
+    char *buf = nullptr;
+    int64_t deep_copy_size = 0;
+    if (OB_FAIL(rowkey_vector_->get_deep_copy_rowkey_size(row_idx_, deep_copy_size))) {
+      STORAGE_LOG(WARN, "Failed to get deep copy rowkey size", K(ret));
+    } else if (OB_UNLIKELY(deep_copy_size <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected deep copy size", K(ret), KPC(rowkey_vector_));
+    } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(deep_copy_size)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Failed to alloc memory for datum rowkey", K(ret), K(deep_copy_size));
+    } else if (OB_FAIL(rowkey_vector_->deep_copy_rowkey(row_idx_, dest, buf, deep_copy_size))) {
+      STORAGE_LOG(WARN, "Failed to deep copy datum rowkey", K(ret));
+    }
+    if (OB_FAIL(ret) && nullptr != buf) {
+      dest.reset();
+      allocator.free(buf);
+    }
+  }
+  return ret;
+}
+
+int ObDiscreteDatumRowkey::get_column_int(const int64_t col_idx, int64_t &int_val) const
+{
+  return rowkey_vector_->get_column_int(row_idx_, col_idx, int_val);
+}
+
+int ObCommonDatumRowkey::compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+                                 const bool compare_datum_cnt) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid() || !rhs.is_valid() || !datum_utils.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to compare datum rowkey", K(ret), K(*this), K(rhs), K(datum_utils));
+  } else if (is_compact_rowkey()) {
+    if (OB_FAIL(rowkey_->compare(rhs, datum_utils, cmp_ret, compare_datum_cnt))) {
+      STORAGE_LOG(WARN, "Failed to compare compact rowkey", K(ret));
+    }
+  } else if (OB_FAIL(discrete_rowkey_->compare(rhs, datum_utils, cmp_ret, compare_datum_cnt))) {
+    STORAGE_LOG(WARN, "Failed to compare discrete rowkey", K(ret));
+  }
+  return ret;
+}
+
+int ObCommonDatumRowkey::compare(const ObDiscreteDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+                                 const bool compare_datum_cnt) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(rhs.compare(*this, datum_utils, cmp_ret, compare_datum_cnt))) {
+    STORAGE_LOG(WARN, "Failed to compare", K(ret));
+  } else {
+    cmp_ret = -cmp_ret;
+  }
+  return ret;
+}
+
+int ObCommonDatumRowkey::compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
+                                 const bool compare_datum_cnt) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid() || !rhs.is_valid() || !datum_utils.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to compare datum rowkey", K(ret), K(*this), K(rhs), K(datum_utils));
+  } else if (is_compact_rowkey()) {
+    if (OB_FAIL(rhs.compare(*rowkey_, datum_utils, cmp_ret, compare_datum_cnt))) {
+      STORAGE_LOG(WARN, "Failed to compare", K(ret));
+    } else {
+      cmp_ret = -cmp_ret;
+    }
+  } else {
+    ret = discrete_rowkey_->compare(rhs, datum_utils, cmp_ret, compare_datum_cnt);
+  }
+  return ret;
+}
+
+int ObCommonDatumRowkey::deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected error for deep copy invalid rowkey", K(ret), K(*this));
+  } else if (is_compact_rowkey()) {
+    ret = rowkey_->deep_copy(dest, allocator);
+  } else {
+    ret = discrete_rowkey_->deep_copy(dest, allocator);
+  }
+  return ret;
+}
+
+int ObCommonDatumRowkey::get_column_int(const int64_t col_idx, int64_t &int_val) const
+{
+  int ret = OB_SUCCESS;
+  int_val = 0;
+  if (is_compact_rowkey()) {
+    int_val = rowkey_->datums_[col_idx].get_int();
+  } else {
+    ret = discrete_rowkey_->get_column_int(col_idx, int_val);
+  }
+  return ret;
+}
+
+DEF_TO_STRING(ObCommonDatumRowkey)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(key_ptr));
+  J_COMMA();
+  if (is_compact_rowkey()) {
+    KPC_(rowkey);
+  } else if (is_discrete_rowkey()) {
+    KPC_(discrete_rowkey);
+  }
+  J_OBJ_END();
+  return pos;
 }
 
 int ObDatumRowkeyHelper::convert_datum_rowkey(const common::ObRowkey &rowkey, ObDatumRowkey &datum_rowkey)

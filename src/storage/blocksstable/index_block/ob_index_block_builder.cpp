@@ -1340,7 +1340,10 @@ int ObBaseIndexBlockBuilder::init(const ObDataStoreDesc &data_store_desc,
     } else {
       if (need_pre_warm() && index_store_desc.get_tablet_id().is_user_tablet()) {
         int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(index_block_pre_warmer_.init())) {
+        if (OB_TMP_FAIL(index_block_pre_warmer_.init(ObRowkeyVectorHelper::can_use_non_datum_rowkey_vector(
+                                                     index_store_desc_->is_cg(), index_store_desc_->get_tablet_id()) ?
+                                                     &index_store_desc_->get_rowkey_col_descs()
+                                                     : nullptr))) {
           STORAGE_LOG(WARN, "Failed to init index block prewarmer", K(tmp_ret));
         }
       }

@@ -133,6 +133,8 @@ public:
   int64_t &get_extra_size() { return extra_size_; }
 
   int64_t total_size() const { return size_ + extra_size_; }
+
+  bool is_normal_block() const { return INDEX_BLOCK == type_ || DATA_BLOCK == type_; }
   bool is_index_block() const { return INDEX_BLOCK == type_ || DDL_BLOCK_TREE == type_ || DDL_MERGE_INDEX_BLOCK == type_;}
 
   void reset() { *this = ObMicroBlockData(); }

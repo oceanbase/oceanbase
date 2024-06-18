@@ -15,7 +15,6 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_iarray.h"
-#include "storage/ob_table_store_stat_mgr.h"
 #include "storage/blocksstable/ob_datum_range.h"
 
 namespace oceanbase

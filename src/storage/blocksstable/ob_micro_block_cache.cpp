@@ -312,7 +312,8 @@ ObIMicroBlockIOCallback::ObIMicroBlockIOCallback()
     block_id_(),
     offset_(0),
     block_des_meta_(),
-    use_block_cache_(true)
+    use_block_cache_(true),
+    rowkey_col_descs_(nullptr)
 {
   MEMSET(encrypt_key_, 0, sizeof(encrypt_key_));
   block_des_meta_.encrypt_key_ = encrypt_key_;
@@ -326,6 +327,7 @@ ObIMicroBlockIOCallback::~ObIMicroBlockIOCallback()
     data_buffer_ = nullptr;
   }
   allocator_ = nullptr;
+  rowkey_col_descs_ = nullptr;
 }
 
 void ObIMicroBlockIOCallback::set_micro_des_meta(const ObIndexBlockRowHeader *idx_row_header)
@@ -401,7 +403,7 @@ int ObIMicroBlockIOCallback::process_block(
       } else if (OB_UNLIKELY(OB_SUCCESS == (ret = kvcache->get(key, micro_block, cache_handle)))) {
         // entry exist, no need to put
       } else if (OB_FAIL(cache_->put_cache_block(
-          block_des_meta_, buffer, key, *reader, *allocator_, micro_block, cache_handle))) {
+          block_des_meta_, buffer, key, *reader, *allocator_, micro_block, cache_handle, rowkey_col_descs_))) {
         LOG_WARN("Failed to put block to cache", K(ret));
       }
     }
@@ -794,7 +796,7 @@ int ObIMicroBlockCache::prefetch(
       callback = new (buf) ObAsyncSingleMicroBlockIOCallback;
       callback->allocator_ = allocator;
       callback->use_block_cache_ = use_cache;
-      if (OB_FAIL(prefetch(tenant_id, macro_id, idx_row, macro_handle, *callback))) {
+            if (OB_FAIL(prefetch(tenant_id, macro_id, idx_row, macro_handle, *callback))) {
         LOG_WARN("Fail to prefetch data micro block", K(ret));
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
@@ -825,6 +827,7 @@ int ObIMicroBlockCache::prefetch(
     callback.tenant_id_ = tenant_id;
     callback.block_id_ = macro_id;
     callback.offset_ = idx_row.get_block_offset();
+    callback.set_rowkey_col_descs(idx_row.get_rowkey_col_descs());
     callback.set_micro_des_meta(idx_row_header);
     // fill read info
     ObMacroBlockReadInfo read_info;
@@ -1186,7 +1189,8 @@ int ObDataMicroBlockCache::put_cache_block(
     ObMacroBlockReader &reader,
     ObIAllocator &allocator,
     const ObMicroBlockCacheValue *&micro_block,
-    common::ObKVCacheHandle &cache_handle)
+    common::ObKVCacheHandle &cache_handle,
+    const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
 {
   UNUSED(allocator);
   int ret = OB_SUCCESS;
@@ -1329,6 +1333,22 @@ ObMicroBlockData::Type ObDataMicroBlockCache::get_type()
   return ObMicroBlockData::DATA_BLOCK;
 }
 
+void ObDataMicroBlockCache::cache_bypass()
+{
+  EVENT_INC(ObStatEventIds::DATA_BLOCK_READ_CNT);
+}
+
+void ObDataMicroBlockCache::cache_hit(int64_t &hit_cnt)
+{
+  ++hit_cnt;
+  EVENT_INC(ObStatEventIds::DATA_BLOCK_CACHE_HIT);
+}
+
+void ObDataMicroBlockCache::cache_miss(int64_t &miss_cnt)
+{
+  ++miss_cnt;
+  EVENT_INC(ObStatEventIds::DATA_BLOCK_READ_CNT);
+}
 
 /*-------------------------------------ObIndexMicroBlockCache-------------------------------------*/
 ObIndexMicroBlockCache::ObIndexMicroBlockCache()
@@ -1425,7 +1445,8 @@ int ObIndexMicroBlockCache::put_cache_block(
     ObMacroBlockReader &reader,
     ObIAllocator &allocator,
     const ObMicroBlockCacheValue *&micro_block,
-    common::ObKVCacheHandle &cache_handle)
+    common::ObKVCacheHandle &cache_handle,
+    const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
 {
   int ret = OB_SUCCESS;
   ObMicroBlockHeader header;
@@ -1464,7 +1485,7 @@ int ObIndexMicroBlockCache::put_cache_block(
       ObMicroBlockData &block_data = cache_value.get_block_data();
       block_data.type_ = get_type();
       char *allocated_buf = nullptr;
-      if (OB_FAIL(idx_transformer.transform(block_data, block_data, allocator, allocated_buf))) {
+      if (OB_FAIL(idx_transformer.transform(block_data, block_data, allocator, allocated_buf, rowkey_col_descs))) {
         LOG_WARN("Fail to transform index block to memory format", K(ret));
       } else if (OB_FAIL(put_and_fetch(key, cache_value, micro_block, cache_handle, false /* overwrite */))) {
         if (OB_ENTRY_EXIST != ret) {
@@ -1499,6 +1520,22 @@ ObMicroBlockData::Type ObIndexMicroBlockCache::get_type()
   return ObMicroBlockData::INDEX_BLOCK;
 }
 
+void ObIndexMicroBlockCache::cache_bypass()
+{
+  EVENT_INC(ObStatEventIds::INDEX_BLOCK_READ_CNT);
+}
+
+void ObIndexMicroBlockCache::cache_hit(int64_t &hit_cnt)
+{
+  ++hit_cnt;
+  EVENT_INC(ObStatEventIds::INDEX_BLOCK_CACHE_HIT);
+}
+
+void ObIndexMicroBlockCache::cache_miss(int64_t &miss_cnt)
+{
+  ++miss_cnt;
+  EVENT_INC(ObStatEventIds::INDEX_BLOCK_READ_CNT);
+}
 
 }//end namespace blocksstable
 }//end namespace oceanbase

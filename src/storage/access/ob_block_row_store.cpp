@@ -91,7 +91,7 @@ int ObBlockRowStore::init(const ObTableAccessParam &param)
 int ObBlockRowStore::apply_blockscan(
     blocksstable::ObIMicroBlockRowScanner &micro_scanner,
     const bool can_pushdown,
-    ObTableStoreStat &table_store_stat)
+    ObTableScanStoreStat &table_store_stat)
 {
   int ret = OB_SUCCESS;
   int64_t access_count = micro_scanner.get_access_cnt();
@@ -116,12 +116,9 @@ int ObBlockRowStore::apply_blockscan(
     // Check pushdown filter successed
     can_blockscan_ = true;
     ++table_store_stat.pushdown_micro_access_cnt_;
-    table_store_stat.pushdown_row_access_cnt_ += access_count;
     if (!filter_applied_ || nullptr == pd_filter_info_.filter_) {
-      table_store_stat.pushdown_row_select_cnt_ += access_count;
     } else {
       int64_t select_cnt = pd_filter_info_.filter_->get_result()->popcnt();
-      table_store_stat.pushdown_row_select_cnt_ += select_cnt;
       EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, select_cnt);
     }
     if (iter_param_->has_lob_column_out()) {

@@ -33,7 +33,6 @@ protected:
   virtual int construct_iters() override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
   virtual int is_range_valid() const override;
-  virtual void collect_merge_stat(ObTableStoreStat &stat) const override;
 private:
   const ObIArray<blocksstable::ObDatumRange> *ranges_;
   common::ObSEArray<blocksstable::ObDatumRange, 32> cow_ranges_;

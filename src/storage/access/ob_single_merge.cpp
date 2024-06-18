@@ -388,11 +388,5 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
   return ret;
 }
 
-void ObSingleMerge::collect_merge_stat(ObTableStoreStat &stat) const
-{
-  stat.single_get_stat_.call_cnt_++;
-  stat.single_get_stat_.output_row_cnt_ += access_ctx_->table_store_stat_.output_row_cnt_;
-}
-
 } /* namespace storage */
 } /* namespace oceanbase */

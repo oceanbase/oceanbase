@@ -97,6 +97,10 @@ public:
   {
     return (read_info_ != nullptr) ? &read_info_->get_columns_desc() : nullptr;
   }
+  OB_INLINE const ObColDescIArray *get_rowkey_col_descs() const
+  {
+    return (rowkey_read_info_ != nullptr) ? &rowkey_read_info_->get_columns_desc() : nullptr;
+  }
   OB_INLINE bool read_with_same_schema() const
   {
     return is_same_schema_column_;
@@ -219,7 +223,7 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_ && iter_param_.is_valid(); }
   // used for query
   int init(const ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
-  // used for merge
+    // used for merge
   int init_merge_param(const uint64_t table_id,
                        const common::ObTabletID &tablet_id,
                        const ObITableReadInfo &read_info,

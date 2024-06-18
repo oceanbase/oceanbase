@@ -30,7 +30,7 @@ struct ObTableIterParam;
 struct ObTableAccessContext;
 struct ObRowSampleFilter;
 class ObBlockRowStore;
-class ObTableStoreStat;
+class ObTableScanStoreStat;
 class ObCGAggCells;
 }
 namespace blocksstable
@@ -65,7 +65,7 @@ public:
   virtual int get_next_rows();
   virtual int apply_blockscan(
       storage::ObBlockRowStore *block_row_store,
-      storage::ObTableStoreStat &table_store_stat);
+      storage::ObTableScanStoreStat &table_store_stat);
   virtual int set_ignore_shadow_row() { return OB_NOT_SUPPORTED;}
   int end_of_block() const;
   OB_INLINE int get_access_cnt() const { return reverse_scan_ ? (current_ - last_ + 1) : (last_ - current_ + 1);}
@@ -373,7 +373,7 @@ public:
   void reuse() override;
   virtual int apply_blockscan(
       storage::ObBlockRowStore *block_row_store,
-      storage::ObTableStoreStat &table_store_stat) override final
+      storage::ObTableScanStoreStat &table_store_stat) override final
   {
     UNUSEDx(block_row_store, table_store_stat);
     return OB_NOT_SUPPORTED;

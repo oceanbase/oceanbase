@@ -91,6 +91,22 @@ struct ObDatumComparor
   {
     return compare<T>(left, right);
   }
+  OB_INLINE bool is_reverse() const
+  {
+    return reverse_;
+  }
+  OB_INLINE bool is_lower_bound() const
+  {
+    return lower_bound_;
+  }
+  OB_INLINE bool is_compare_datum_cnt() const
+  {
+    return compare_datum_cnt_;
+  }
+  OB_INLINE const ObStorageDatumUtils &get_datum_utils() const
+  {
+    return datum_utils_;
+  }
 private:
   template <typename DataType>
   OB_INLINE bool compare(const DataType &left, const DataType &right)

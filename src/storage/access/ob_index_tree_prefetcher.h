@@ -22,7 +22,6 @@
 #include "storage/blocksstable/ob_row_cache.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/access/ob_micro_block_handle_mgr.h"
-#include "storage/ob_table_store_stat_mgr.h"
 #include "storage/access/ob_rows_info.h"
 
 namespace oceanbase {

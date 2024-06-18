@@ -28,7 +28,8 @@ ObDataBlockCachePreWarmer::ObDataBlockCachePreWarmer()
     update_step_(0),
     kvpair_(nullptr),
     inst_handle_(),
-    cache_handle_()
+    cache_handle_(),
+    col_descs_(nullptr)
 {
 }
 
@@ -44,6 +45,7 @@ void ObDataBlockCachePreWarmer::reset()
   rest_size_ = 0;
   warm_size_percentage_ = 100;
   update_step_ = 0;
+  col_descs_ = nullptr;
   reuse();
 }
 
@@ -54,9 +56,10 @@ void ObDataBlockCachePreWarmer::reuse()
   cache_handle_.reset();
 }
 
-int ObDataBlockCachePreWarmer::init()
+int ObDataBlockCachePreWarmer::init(const ObIArray<share::schema::ObColDesc> *col_desc_array)
 {
   int ret = OB_SUCCESS;
+  col_descs_ = col_desc_array;
   cache_ = &OB_STORE_CACHE.get_block_cache();
   warm_size_percentage_ = DATA_BLOCK_CACHE_PERCENTAGE;
   inner_update_rest();
@@ -194,9 +197,10 @@ ObIndexBlockCachePreWarmer::~ObIndexBlockCachePreWarmer()
 {
 }
 
-int ObIndexBlockCachePreWarmer::init()
+int ObIndexBlockCachePreWarmer::init(const ObIArray<share::schema::ObColDesc> *col_desc_array)
 {
   int ret = OB_SUCCESS;
+  col_descs_ = col_desc_array;
   cache_ = &OB_STORE_CACHE.get_index_block_cache();
   warm_size_percentage_ = INDEX_BLOCK_BASE_PERCENTAGE;
   inner_update_rest();
@@ -217,7 +221,7 @@ int ObIndexBlockCachePreWarmer::do_reserve_kvpair(
   allocator_.reuse();
   blocksstable::ObMicroBlockData micro_data(micro_block_desc.get_block_buf(), micro_block_desc.get_block_size());
   char *allocated_buf = nullptr;
-  if (OB_FAIL(idx_transformer_.transform(micro_data, value_.get_block_data(), allocator_, allocated_buf))) {
+  if (OB_FAIL(idx_transformer_.transform(micro_data, value_.get_block_data(), allocator_, allocated_buf, col_descs_))) {
     COMMON_LOG(WARN, "Fail to transform index block to memory format", K(ret));
   } else {
     kvpair_size = sizeof(blocksstable::ObMicroBlockCacheKey) + value_.size();

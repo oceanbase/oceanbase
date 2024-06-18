@@ -708,15 +708,12 @@ int ObCOSSTableRowScanner::inner_filter(
     } else {
       int64_t select_cnt = result_bitmap->popcnt();
       EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, select_cnt);
-      access_ctx_->table_store_stat_.pushdown_row_select_cnt_ += select_cnt;
     }
   } else {
     EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, group_size);
-    access_ctx_->table_store_stat_.pushdown_row_select_cnt_ += group_size;
   }
   if (OB_SUCC(ret)) {
     EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, group_size);
-    access_ctx_->table_store_stat_.pushdown_row_access_cnt_ += group_size;
     access_ctx_->table_store_stat_.logical_read_cnt_ += group_size;
     access_ctx_->table_store_stat_.physical_read_cnt_ += group_size;
     LOG_TRACE("[COLUMNSTORE] COSSTableRowScanner inner filter", K(ret), "begin", begin, "count", group_size,
@@ -972,7 +969,6 @@ int ObCOSSTableRowScanner::filter_group_by_rows()
           LOG_WARN("Unexpected result bitmap", K(ret), KPC(rows_filter_));
         } else {
           EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, result_bitmap->popcnt());
-          access_ctx_->table_store_stat_.pushdown_row_select_cnt_ += result_bitmap->popcnt();
           if (result_bitmap->is_all_false()) {
             update_current(group_size_);
             continue;
@@ -980,7 +976,6 @@ int ObCOSSTableRowScanner::filter_group_by_rows()
         }
       } else {
         EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, group_size_);
-        access_ctx_->table_store_stat_.pushdown_row_select_cnt_ += group_size_;
       }
       if (OB_SUCC(ret)) {
         break;
@@ -994,7 +989,6 @@ int ObCOSSTableRowScanner::filter_group_by_rows()
   } else {
     is_new_group_ = true;
     EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, group_size_);
-    access_ctx_->table_store_stat_.pushdown_row_access_cnt_ += group_size_;
     access_ctx_->table_store_stat_.logical_read_cnt_ += group_size_;
     access_ctx_->table_store_stat_.physical_read_cnt_ += group_size_;
   }

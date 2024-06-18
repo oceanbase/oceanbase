@@ -285,7 +285,7 @@ int ObMicroBlockRowGetter::get_block_row(
     }
   } else {
     if (store_row->row_flag_.is_not_exist()) {
-      ++context_->table_store_stat_.get_row_.empty_read_cnt_;
+      ++context_->table_store_stat_.empty_read_cnt_;
       EVENT_INC(ObStatEventIds::GET_ROW_EMPTY_READ);
       if (!context_->query_flag_.is_index_back()
           && context_->query_flag_.is_use_bloomfilter_cache()
@@ -295,12 +295,8 @@ int ObMicroBlockRowGetter::get_block_row(
             param_->table_id_,
             read_handle.micro_handle_->macro_block_id_,
             read_handle.get_rowkey().get_datum_cnt());
-        if (read_handle.is_bf_contain_) {
-          ++context_->table_store_stat_.bf_empty_read_cnt_;
-        }
       }
     } else {
-      ++context_->table_store_stat_.get_row_.effect_read_cnt_;
       EVENT_INC(ObStatEventIds::GET_ROW_EFFECT_READ);
     }
   }

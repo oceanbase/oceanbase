@@ -142,12 +142,6 @@ int ObMultipleMultiScanMerge::is_range_valid() const
   return ret;
 }
 
-void ObMultipleMultiScanMerge::collect_merge_stat(ObTableStoreStat &stat) const
-{
-  stat.multi_scan_stat_.call_cnt_++;
-  stat.multi_scan_stat_.output_row_cnt_ += access_ctx_->table_store_stat_.output_row_cnt_;
-}
-
 int ObMultipleMultiScanMerge::construct_iters()
 {
   int ret = OB_SUCCESS;

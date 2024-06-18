@@ -996,7 +996,7 @@ int ObMacroBlockWriter::init_data_pre_warmer(const ObMacroDataSeq &start_seq)
       need_pre_warm = true;
     }
     if (need_pre_warm) {
-      if (OB_TMP_FAIL(data_block_pre_warmer_.init())) {
+      if (OB_TMP_FAIL(data_block_pre_warmer_.init(nullptr))) {
         STORAGE_LOG(WARN, "Failed to init pre warmer", K(tmp_ret));
       }
     }

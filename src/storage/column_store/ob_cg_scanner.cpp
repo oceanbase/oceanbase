@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_scanner.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
-#include "storage/ob_table_store_stat_mgr.h"
 
 namespace oceanbase
 {

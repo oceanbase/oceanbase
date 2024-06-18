@@ -29,7 +29,7 @@ public:
   virtual ~ObDataBlockCachePreWarmer();
   void reset();
   void reuse();
-  int init();
+  int init(const ObIArray<share::schema::ObColDesc> *col_desc_array);
   OB_INLINE bool is_valid() const { return nullptr != cache_; }
   int reserve_kvpair(const blocksstable::ObMicroBlockDesc &micro_block_desc, const int64_t level = 0);
   int update_and_put_kvpair(const blocksstable::ObMicroBlockDesc &micro_block_desc);
@@ -58,6 +58,7 @@ protected:
   ObKVCachePair *kvpair_;
   ObKVCacheInstHandle inst_handle_;
   ObKVCacheHandle cache_handle_;
+  const ObIArray<share::schema::ObColDesc> *col_descs_;
 };
 
 class ObIndexBlockCachePreWarmer : public ObDataBlockCachePreWarmer
@@ -65,7 +66,7 @@ class ObIndexBlockCachePreWarmer : public ObDataBlockCachePreWarmer
 public:
   ObIndexBlockCachePreWarmer();
   virtual ~ObIndexBlockCachePreWarmer();
-  int init();
+  int init(const ObIArray<share::schema::ObColDesc> *col_desc_array);
 protected:
   virtual void calculate_base_percentage(const int64_t free_memory) override;
   virtual int do_reserve_kvpair(

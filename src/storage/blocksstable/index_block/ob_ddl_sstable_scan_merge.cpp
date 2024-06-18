@@ -44,10 +44,10 @@ int ObDDLSSTableMergeLoserTreeCompare::cmp(const ObDDLSSTableMergeLoserTreeItem 
   if (OB_UNLIKELY(nullptr == datum_utils_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadSSTableScanMergeLoserTreeCompare not init", K(ret), KP(this));
-  } else if (OB_UNLIKELY(nullptr == lhs.end_key_ || nullptr == rhs.end_key_)) {
+  } else if (OB_UNLIKELY(!lhs.end_key_.is_valid() || !rhs.end_key_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(lhs), K(rhs));
-  } else if (OB_FAIL(lhs.end_key_->compare(*rhs.end_key_, *datum_utils_, tmp_cmp_ret))) {
+  } else if (OB_FAIL(lhs.end_key_.compare(rhs.end_key_, *datum_utils_, tmp_cmp_ret))) {
     LOG_WARN("fail to compare rowkey", K(ret), K(lhs), K(rhs), KPC(datum_utils_));
   } else {
     cmp_ret = tmp_cmp_ret * (reverse_scan_ ? -1 : 1);

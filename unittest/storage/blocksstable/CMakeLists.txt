@@ -24,6 +24,7 @@ storage_unittest(test_agg_row_struct)
 storage_unittest(test_skip_index_filter)
 storage_unittest(test_sstable_index_filter)
 storage_unittest(test_data_store_desc)
+storage_unittest(test_datum_rowkey_vector)
 
 add_subdirectory(encoding)
 add_subdirectory(cs_encoding)

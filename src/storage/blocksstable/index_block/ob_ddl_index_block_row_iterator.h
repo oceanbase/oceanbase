@@ -37,9 +37,9 @@ public:
                    const bool is_reverse_scan,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                          const ObDatumRowkey *&endkey) override;
+                          ObCommonDatumRowkey &endkey) override;
   virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                       const ObDatumRowkey *&endkey,
+                       ObCommonDatumRowkey &endkey,
                        bool &is_scan_left_border,
                        bool &is_scan_right_border,
                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -76,7 +76,7 @@ public:
   int get_next_meta(const ObDataMacroBlockMeta *&meta);
 private:
   int inner_get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                        const ObDatumRowkey *&endkey,
+                        ObCommonDatumRowkey &endkey,
                         int64_t &row_offset/*for co sstable*/);
 private:
   bool is_iter_start_;
@@ -99,9 +99,9 @@ public:
                    const bool is_reverse_scan,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                          const ObDatumRowkey *&endkey) override;
+                          ObCommonDatumRowkey &endkey) override;
   virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                       const ObDatumRowkey *&endkey,
+                       ObCommonDatumRowkey &endkey,
                        bool &is_scan_left_border,
                        bool &is_scan_right_border,
                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -148,9 +148,9 @@ public:
                    const bool is_reverse_scan,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                          const ObDatumRowkey *&endkey) override;
+                          ObCommonDatumRowkey &endkey) override;
   virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                       const ObDatumRowkey *&endkey,
+                       ObCommonDatumRowkey &endkey,
                        bool &is_scan_left_border,
                        bool &is_scan_right_border,
                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -187,9 +187,9 @@ public:
                    const bool is_reverse_scan,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                          const ObDatumRowkey *&endkey) override;
+                          ObCommonDatumRowkey &endkey) override;
   virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                       const ObDatumRowkey *&endkey,
+                       ObCommonDatumRowkey &endkey,
                        bool &is_scan_left_border,
                        bool &is_scan_right_border,
                        const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -227,7 +227,7 @@ public:
     }
     int init(ObIAllocator *allocator,
              const ObIndexBlockRowHeader *idx_row_header,
-             const ObDatumRowkey *endkey,
+             const ObCommonDatumRowkey &endkey,
              const bool is_scan_left_border,
              const bool is_scan_right_border,
              const ObIndexBlockRowMinorMetaInfo *idx_minor_info,
@@ -270,7 +270,7 @@ private:
                               const ObIndexBlockIterParam &iter_param);
   int init_merger();
   int inner_get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                     const ObDatumRowkey *&endkey,
+                     ObCommonDatumRowkey &endkey,
                      bool &is_scan_left_border,
                      bool &is_scan_right_border,
                      const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,

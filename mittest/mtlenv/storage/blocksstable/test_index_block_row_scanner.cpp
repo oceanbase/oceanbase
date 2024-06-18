@@ -34,6 +34,7 @@ public:
   virtual void SetUp();
   virtual void TearDown();
 protected:
+  int prepare_tmp_rowkey(ObDatumRowkey &rowkey);
   ObFixedArray<ObColDesc, common::ObIAllocator> full_index_cols_;
 };
 
@@ -74,6 +75,21 @@ void TestIndexBlockRowScanner::TearDown()
   TestIndexBlockDataPrepare::TearDown();
 }
 
+int TestIndexBlockRowScanner::prepare_tmp_rowkey(ObDatumRowkey &rowkey)
+{
+  int ret = OB_SUCCESS;
+  // schema_rowkey + mvcc
+  const int64_t index_rokwey_cnt = TEST_ROWKEY_COLUMN_CNT + 2;
+  void *buf = allocator_.alloc(sizeof(ObStorageDatum) * index_rokwey_cnt);
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    ObStorageDatum *datums = new (buf) ObStorageDatum[index_rokwey_cnt];
+    ret = rowkey.assign(datums, index_rokwey_cnt);
+  }
+  return ret;
+}
+
 TEST_F(TestIndexBlockRowScanner, transform)
 {
   ObIndexBlockDataTransformer index_block_transformer;
@@ -84,8 +100,11 @@ TEST_F(TestIndexBlockRowScanner, transform)
   const ObIndexBlockDataHeader *idx_blk_header
       = reinterpret_cast<const ObIndexBlockDataHeader *>(root_block_data_buf_.get_extra_buf());
   ASSERT_TRUE(idx_blk_header->is_valid());
+  ObDatumRowkey tmp_rowkey;
+  ASSERT_EQ(OB_SUCCESS, prepare_tmp_rowkey(tmp_rowkey));
   for (int64_t i = 0; i < idx_blk_header->row_cnt_; ++i) {
-    STORAGE_LOG(INFO, "Show transformed root block rowkey", K(idx_blk_header->rowkey_array_[i]));
+    ASSERT_EQ(OB_SUCCESS, idx_blk_header->rowkey_vector_->get_rowkey(i, tmp_rowkey));
+    STORAGE_LOG(INFO, "Show transformed root block rowkey", K(tmp_rowkey));
   }
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
@@ -93,7 +112,8 @@ TEST_F(TestIndexBlockRowScanner, transform)
   ObDatumRowkey last_rowkey;
   ASSERT_EQ(OB_SUCCESS, last_rowkey.assign(row.storage_datums_, TEST_ROWKEY_COLUMN_CNT));
   ObDatumRowkey index_rowkey;
-  ASSERT_EQ(OB_SUCCESS, index_rowkey.assign(idx_blk_header->rowkey_array_[idx_blk_header->row_cnt_ - 1].datums_, TEST_ROWKEY_COLUMN_CNT));
+  ASSERT_EQ(OB_SUCCESS, idx_blk_header->rowkey_vector_->get_rowkey(idx_blk_header->row_cnt_ - 1, tmp_rowkey));
+  ASSERT_EQ(OB_SUCCESS, index_rowkey.assign(tmp_rowkey.datums_, TEST_ROWKEY_COLUMN_CNT));
   ASSERT_EQ(last_rowkey, index_rowkey);
 
   // Test update index block on deep copy
@@ -109,10 +129,14 @@ TEST_F(TestIndexBlockRowScanner, transform)
   ASSERT_TRUE(new_idx_blk_header.is_valid());
   ASSERT_EQ(new_idx_blk_header.row_cnt_, idx_blk_header->row_cnt_);
   ASSERT_EQ(new_idx_blk_header.col_cnt_, idx_blk_header->col_cnt_);
+  ObDatumRowkey tmp_new_rowkey;
+  ASSERT_EQ(OB_SUCCESS, prepare_tmp_rowkey(tmp_new_rowkey));
   for (int64_t i = 0; i < idx_blk_header->row_cnt_; ++i) {
+    ASSERT_EQ(OB_SUCCESS, idx_blk_header->rowkey_vector_->get_rowkey(i, tmp_rowkey));
+    ASSERT_EQ(OB_SUCCESS, new_idx_blk_header.rowkey_vector_->get_rowkey(i, tmp_new_rowkey));
     STORAGE_LOG(INFO, "cmp deep copy rowkey", K(i),
-        K(new_idx_blk_header.rowkey_array_[i]), K(idx_blk_header->rowkey_array_[i]));
-    ASSERT_EQ(new_idx_blk_header.rowkey_array_[i], idx_blk_header->rowkey_array_[i]);
+        K(tmp_new_rowkey), K(tmp_rowkey));
+    ASSERT_EQ(tmp_new_rowkey, tmp_rowkey);
   }
 
   // clear src block extra buf
@@ -121,7 +145,8 @@ TEST_F(TestIndexBlockRowScanner, transform)
   ObIndexBlockRowParser idx_row_parser;
   for (int64_t i = 0; i < new_idx_blk_header.row_cnt_; ++i) {
     idx_row_parser.reset();
-    const ObDatumRowkey &rowkey = new_idx_blk_header.rowkey_array_[i];
+    ASSERT_EQ(OB_SUCCESS, new_idx_blk_header.rowkey_vector_->get_rowkey(i, tmp_new_rowkey));
+    const ObDatumRowkey &rowkey = tmp_new_rowkey;
     for (int64_t j = 0; j < rowkey.get_datum_cnt(); ++j) {
       ASSERT_NE(nullptr, rowkey.datums_[j].ptr_);
     }
@@ -164,8 +189,11 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
   ASSERT_EQ(OB_SUCCESS, root_blk_header->get_index_data(root_row_id, index_data_ptr, index_data_len));
   ASSERT_EQ(OB_SUCCESS, idx_row_parser.init(index_data_ptr, index_data_len));
   ASSERT_EQ(OB_SUCCESS, idx_row_parser.get_header(idx_row_header));
+  ObDatumRowkey tmp_rowkey;
+  ASSERT_EQ(OB_SUCCESS, prepare_tmp_rowkey(tmp_rowkey));
+  ASSERT_EQ(OB_SUCCESS, root_blk_header->rowkey_vector_->get_rowkey(root_row_id, tmp_rowkey));
   ObMicroIndexInfo idx_row;
-  idx_row.endkey_ = &root_blk_header->rowkey_array_[root_row_id];
+  idx_row.endkey_.set_compact_rowkey(&tmp_rowkey);
   idx_row.row_header_ = idx_row_header;
   ASSERT_EQ(OB_SUCCESS, index_block_cache.prefetch(
       table_schema_.get_tenant_id(),
@@ -197,11 +225,11 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
   ASSERT_EQ(OB_SUCCESS, idx_scanner.open(
       ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID,
       *read_block,
-      root_blk_header->rowkey_array_[root_row_id]));
+      tmp_rowkey));
   ASSERT_EQ(OB_SUCCESS, raw_idx_scanner.open(
       ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID,
       *raw_block,
-      root_blk_header->rowkey_array_[root_row_id]));
+      tmp_rowkey));
 
   idx_scanner.reuse();
   raw_idx_scanner.reuse();
