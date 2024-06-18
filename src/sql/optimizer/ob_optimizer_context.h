@@ -233,7 +233,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     optimizer_sortmerge_join_enabled_(true),
     nested_loop_join_enabled_(true),
     system_stat_(),
-    storage_estimation_enabled_(false)
+    storage_estimation_enabled_(false),
+    generate_random_plan_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -603,6 +604,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_nested_join_enabled(bool enabled) { nested_loop_join_enabled_ = enabled; }
   inline OptSystemStat& get_system_stat() { return system_stat_; }
   inline const OptSystemStat& get_system_stat() const { return system_stat_; }
+  inline bool generate_random_plan() const { return generate_random_plan_; }
+  inline void set_generate_random_plan(bool rand_plan) { generate_random_plan_ = rand_plan; }
 
 private:
   ObSQLSessionInfo *session_info_;
@@ -687,6 +690,8 @@ private:
   bool nested_loop_join_enabled_;
   OptSystemStat system_stat_;
   bool storage_estimation_enabled_;
+
+  bool generate_random_plan_;
 };
 }
 }

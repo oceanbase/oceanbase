@@ -164,7 +164,8 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
                                        const ParamsIArray *params,
                                        const bool phy_rowid_for_table_loc,
                                        const bool ignore_calc_failure,
-                                       const bool use_in_optimization)
+                                       const bool use_in_optimization,
+                                       const int64_t index_prefix/* = -1*/)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -183,6 +184,7 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
     query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, expr_constraints, params);
     query_range_ctx_->phy_rowid_for_table_loc_ = phy_rowid_for_table_loc;
     query_range_ctx_->ignore_calc_failure_ = ignore_calc_failure;
+    query_range_ctx_->index_prefix_ = index_prefix;
     query_range_ctx_->range_optimizer_max_mem_size_ = exec_ctx->get_my_session()->get_range_optimizer_max_mem_size();
     query_range_ctx_->cur_datetime_ = exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime();
     if (0 == query_range_ctx_->range_optimizer_max_mem_size_) {
@@ -272,12 +274,13 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   ObExecContext *exec_ctx,
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
                                                   const ParamsIArray *params /* = NULL */,
-                                                  const bool use_in_optimization /* = false */)
+                                                  const bool use_in_optimization /* = false */,
+                                                  const int64_t index_prefix/* = -1*/)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
   if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx, expr_constraints, params,
-                                   false, true, use_in_optimization))) {
+                                   false, true, use_in_optimization, index_prefix))) {
     LOG_WARN("init query range context failed", K(ret));
   } else if (OB_ISNULL(query_range_ctx_)) {
     ret = OB_NOT_INIT;
@@ -742,7 +745,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   const ParamsIArray *params /* = NULL */,
                                                   const bool phy_rowid_for_table_loc /* = false*/,
                                                   const bool ignore_calc_failure /* = true*/,
-                                                  const bool use_in_optimization /* = false */)
+                                                  const bool use_in_optimization /* = false */,
+                                                  const int64_t index_prefix/* = -1*/)
 {
   int ret = OB_SUCCESS;
   ObKeyPartList and_ranges;
@@ -755,7 +759,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
   if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx,
                                    expr_constraints, params, phy_rowid_for_table_loc,
-                                   ignore_calc_failure, use_in_optimization))) {
+                                   ignore_calc_failure, use_in_optimization, index_prefix))) {
     LOG_WARN("init query range context failed", K(ret));
   } else if (OB_ISNULL(query_range_ctx_)) {
     ret = OB_NOT_INIT;
@@ -4758,6 +4762,9 @@ int ObQueryRange::is_key_part(const ObKeyPartId &id, ObKeyPartPos *&pos, bool &i
     if (OB_SUCCESS == map_ret && OB_NOT_NULL(pos) &&
         (max_off == -1 || (max_off != - 1 && pos->offset_ <= max_off))) {
       is_key_part = true;
+      if (query_range_ctx_->index_prefix_ > -1 && pos->offset_ >= query_range_ctx_->index_prefix_) {
+        is_key_part = false;
+      }
       SQL_REWRITE_LOG(DEBUG, "id pair is  key part", K_(id.table_id), K_(id.column_id));
     } else if (OB_HASH_NOT_EXIST != map_ret) {
       ret = map_ret;

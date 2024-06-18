@@ -25,7 +25,9 @@ class ObLogExprValues : public ObLogicalOperator
         : ObLogicalOperator(plan),
           err_log_define_(),
           is_values_table_(false),
-          table_name_()
+          table_name_(),
+          table_id_(common::OB_INVALID_ID),
+          table_def_(NULL)
 
     {}
     virtual ~ObLogExprValues() {}
@@ -77,12 +79,14 @@ class ObLogExprValues : public ObLogicalOperator
                                 ObSqlPlanItem &plan_item) override;
     int get_array_param_group_id(int64_t &group_id, bool &find);
     void set_is_values_table(bool is_values_table) { is_values_table_ = is_values_table; }
-    int64_t get_values_row_count() const {
-      return is_values_table_ && value_desc_.count() > 0 ? value_exprs_.count() / value_desc_.count() : 1;
-    }
+    inline bool is_values_table() const { return is_values_table_; }
     inline common::ObString &get_table_name() { return table_name_; }
     inline const common::ObString &get_table_name() const { return table_name_; }
     inline void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
+    inline uint64_t get_table_id() const { return table_id_; }
+    inline void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
+    inline const ObValuesTableDef *get_values_table_def() { return table_def_; }
+    inline void set_values_table_def(ObValuesTableDef *table_def) { table_def_ = table_def; }
   private:
     int construct_array_binding_values();
     int construct_sequence_values();
@@ -94,6 +98,8 @@ class ObLogExprValues : public ObLogicalOperator
     //for values table
     bool is_values_table_;
     common::ObString table_name_;
+    uint64_t table_id_; //table id or alias table id
+    ObValuesTableDef *table_def_;
 
     DISALLOW_COPY_AND_ASSIGN(ObLogExprValues);
   };

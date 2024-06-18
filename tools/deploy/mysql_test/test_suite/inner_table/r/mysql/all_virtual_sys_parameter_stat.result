@@ -352,6 +352,7 @@ _ha_rpc_timeout
 _ha_tablet_info_batch_count
 _hidden_sys_tenant_memory
 _ignore_system_memory_over_limit_error
+_inlist_rewrite_threshold
 _io_callback_thread_count
 _iut_enable
 _iut_max_entries

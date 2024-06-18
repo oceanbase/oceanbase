@@ -350,6 +350,7 @@ public:
   ObDMLStmt *get_stmt();
   void set_upper_insert_resolver(ObInsertResolver *insert_resolver) {
     upper_insert_resolver_ = insert_resolver; }
+  int estimate_values_table_stats(ObValuesTableDef &table_def);
 protected:
   int generate_pl_data_type(ObRawExpr *expr, pl::ObPLDataType &pl_data_type);
   int resolve_into_variables(const ParseNode *node,
@@ -470,6 +471,7 @@ protected:
       ObRawExpr *&doc_id_expr);
   int build_partid_expr(ObRawExpr *&expr, const uint64_t table_id);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
+  virtual int resolve_inlist_info(common::ObIArray<ObInListInfo> &inlist_infos);
   virtual int resolve_aggr_exprs(ObRawExpr *&expr, common::ObIArray<ObAggFunRawExpr*> &aggr_exprs,
                                  const bool need_analyze = true);
   virtual int resolve_win_func_exprs(ObRawExpr *&expr, common::ObIArray<ObWinFunRawExpr*> &win_exprs);
@@ -856,6 +858,9 @@ protected:
                                       const share::schema::ObTableSchema *table_schema,
                                       common::ObIArray<ObRawExpr*> &check_exprs,
                                       ObIArray<int64_t> *check_flags = NULL);
+  int gen_values_table_column_items(const int64_t column_cnt,
+                                    const ObIArray<ObExprResType> &res_types,
+                                    TableItem &table_item);
   int resolve_match_against_expr(ObMatchFunRawExpr &expr);
 private:
   int resolve_function_table_column_item_udf(const TableItem &table_item,
@@ -943,6 +948,7 @@ private:
   int resolve_eliminate_join_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_win_magic_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_place_group_by_hint(const ParseNode &hint_node, ObTransHint *&hint);
+  int resolve_coalesce_aggr_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_mv_rewrite_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_tb_name_list(const ParseNode *tb_name_list_node, ObIArray<ObSEArray<ObTableInHint, 4>> &tb_name_list);
   int resolve_alloc_ops(const ParseNode &alloc_op_node, ObIArray<ObAllocOpHint> &alloc_op_hints);
@@ -986,18 +992,10 @@ private:
   bool check_expr_has_colref(ObRawExpr *expr);
 
   int resolve_values_table_item(const ParseNode &table_node, TableItem *&table_item);
-  int resolve_table_values_for_select(const ParseNode &table_node,
-                                      ObIArray<ObRawExpr*> &table_values,
-                                      ObIArray<ObExprResType> &res_types,
-                                      int64_t &column_cnt);
-  int resolve_table_values_for_insert(const ParseNode &table_node,
-                                      ObIArray<ObRawExpr*> &table_values,
-                                      ObIArray<ObExprResType> &res_types,
-                                      int64_t &column_cnt);
-
-  int gen_values_table_column_items(const int64_t column_cnt,
-                                    const ObIArray<ObExprResType> &res_types,
-                                    TableItem &table_item);
+  int resolve_values_table_for_select(const ParseNode &table_node,
+                                      ObValuesTableDef &table_values);
+  int resolve_values_table_for_insert(const ParseNode &table_node,
+                                      ObValuesTableDef &table_values);
   int get_values_res_types(const ObIArray<ObExprResType> &cur_values_types,
                            ObIArray<ObExprResType> &res_types);
   int try_add_cast_to_values(const ObIArray<ObExprResType> &res_types,
@@ -1023,6 +1021,8 @@ private:
                                 bool &is_true,
                                 ObIArray<ObExprConstraint> &constraints);
   int add_udt_dependency(const pl::ObUserDefinedType &udt_type);
+  int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
+  int compute_values_table_row_count(ObValuesTableDef &table_def);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

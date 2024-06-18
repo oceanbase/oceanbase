@@ -109,14 +109,14 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(resolve_where_clause(parse_tree.children_[WHERE]))) {
+      if (OB_FAIL(resolve_hints(parse_tree.children_[HINT]))) {
+        LOG_WARN("resolve hints failed", K(ret));
+      } else if (OB_FAIL(resolve_where_clause(parse_tree.children_[WHERE]))) {
         LOG_WARN("resolve delete where clause failed", K(ret));
       } else if (OB_FAIL(resolve_order_clause(parse_tree.children_[ORDER_BY]))) {
         LOG_WARN("resolve delete order clause failed", K(ret));
       } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT], disable_limit_offset))) {
         LOG_WARN("resolve delete limit clause failed", K(ret));
-      } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT]))) {
-        LOG_WARN("resolve hints failed", K(ret));
       } else if (OB_FAIL(resolve_returning(parse_tree.children_[RETURNING]))) {
         LOG_WARN("resolve returning failed", K(ret));
       } else if (is_oracle_mode() && NULL != parse_tree.children_[ERRORLOGGING] &&

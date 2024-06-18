@@ -1670,6 +1670,7 @@ int ObStmtComparer::compare_set_stmt(const ObSelectStmt *first,
   return ret;
 }
 
+/* two values table uncomparable as default */
 int ObStmtComparer::compare_values_table_item(const ObDMLStmt *first,
                                               const TableItem *first_table,
                                               const ObDMLStmt *second,
@@ -1680,49 +1681,18 @@ int ObStmtComparer::compare_values_table_item(const ObDMLStmt *first,
   int ret = OB_SUCCESS;
   ObStmtCompareContext context(first, second, map_info, &first->get_query_ctx()->calculable_items_);
   relation = QueryRelation::QUERY_UNCOMPARABLE;
-  if (OB_ISNULL(first) || OB_ISNULL(first_table)
-     || OB_ISNULL(second) || OB_ISNULL(second_table)) {
+  ObValuesTableDef *first_def = nullptr;
+  ObValuesTableDef *second_def = nullptr;
+  const int64_t max_compare_count = 2000;
+  if (OB_ISNULL(first) || OB_ISNULL(first_table) || OB_ISNULL(second) || OB_ISNULL(second_table) ||
+      OB_UNLIKELY(!first_table->is_values_table() || !second_table->is_values_table()) ||
+      OB_ISNULL(first_def = first_table->values_table_def_) ||
+      OB_ISNULL(second_def = second_table->values_table_def_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("param has null", K(first), K(first_table), K(second), K(second_table));
-  } else if (first_table->is_values_table() &&
-             second_table->is_values_table() &&
-             first->get_column_size(first_table->table_id_) == second->get_column_size(second_table->table_id_) &&
-             first_table->table_values_.count() % first->get_column_size(first_table->table_id_) == 0 &&
-             second_table->table_values_.count() % second->get_column_size(second_table->table_id_) == 0) {
-    //Perhaps in the future, the comparison of different row orders can be considered
-    int64_t match_count = 0;
-    bool is_match = true;
-    for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < first_table->table_values_.count(); ++i) {
-      bool is_match = false;
-      if (i >= second_table->table_values_.count()) {
-        break;
-      } else if (OB_FAIL(is_same_condition(first_table->table_values_.at(i),
-                                           second_table->table_values_.at(i),
-                                           context,
-                                           is_match))) {
-        LOG_WARN("failed to check is condition equal", K(ret));
-      } else if (!is_match) {
-        // do nothing
-      } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      } else if (OB_FAIL(append(map_info.const_param_map_, context.const_param_info_))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      } else {
-        ++match_count;
-      }
-    }
-    if (OB_SUCC(ret) && is_match) {
-      if (match_count == first_table->table_values_.count() &&
-          match_count == second_table->table_values_.count()) {//first table is equal second table
-        relation = QueryRelation::QUERY_EQUAL;
-      } else if (match_count == first_table->table_values_.count()) {//first table is subset second table
-        relation = QueryRelation::QUERY_LEFT_SUBSET;
-      } else if (match_count == second_table->table_values_.count()) {////second table is subset first table
-        relation = QueryRelation::QUERY_RIGHT_SUBSET;
-      }
-    }
-  } else {
-    /*do nothing*/
+    LOG_WARN("param has null", K(ret), KP(first), KP(first_table), KP(second), KP(second_table),
+             KP(first_def), KP(second_def));
+  } else if (first_def == second_def) {
+    relation = QueryRelation::QUERY_EQUAL;
   }
   return ret;
 }

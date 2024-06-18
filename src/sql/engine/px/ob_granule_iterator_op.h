@@ -213,7 +213,7 @@ private:
   bool is_not_init() { return state_ == GI_UNINITIALIZED; }
   // 获得消费GI task的node：
   // 目前仅仅支持TSC或者Join
-  int get_gi_task_consumer_node(ObOperator *cur, ObOperator *&child) const;
+  int get_gi_task_consumer_node(ObOperator *cur, ObOperator *&consumer) const;
   // ---for nlj pkey
   int try_pruning_repart_partition(
       const ObGITaskSet &taskset,

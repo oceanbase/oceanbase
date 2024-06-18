@@ -113,6 +113,7 @@ namespace sql
     int add_win_dist_options(const ObLogicalOperator *op,
                              const ObIArray<ObWinFunRawExpr*> &all_win_funcs,
                              ObWindowDistHint &win_dist_hint);
+    virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   private:
     ObSEArray<ObWinFunRawExpr *, 4, common::ModulePageAllocator, true> win_exprs_;
 

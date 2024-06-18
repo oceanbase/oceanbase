@@ -383,5 +383,17 @@ int ObLogDistinct::get_card_without_filter(double &card)
   return ret;
 }
 
+int ObLogDistinct::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_AGGREGATE == get_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  }
+  return ret;
+}
+
 }
 }

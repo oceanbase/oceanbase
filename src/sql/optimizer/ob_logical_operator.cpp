@@ -3547,8 +3547,10 @@ int ObLogicalOperator::project_pruning_pre()
   int ret = OB_SUCCESS;
   // delete exprs who appeared in current op's output_exprs
   // but not used by it's parent's output_exprs_
-  if (NULL != parent_ && !is_plan_root() && (LOG_EXPR_VALUES != type_) &&
-      !(LOG_EXCHANGE == type_ && static_cast<ObLogExchange*>(this)->get_is_remote())) {
+  if (NULL != parent_ && !is_plan_root() &&
+      LOG_EXPR_VALUES != type_ &&
+      !(LOG_EXCHANGE == type_ && static_cast<ObLogExchange*>(this)->get_is_remote()) &&
+      LOG_VALUES_TABLE_ACCESS != type_) {
     PPDeps deps;
     if (OB_FAIL(parent_->check_output_dependance(get_output_exprs(), deps))) {
       LOG_WARN("parent_->check_output_dep() fails", K(ret));
@@ -3594,8 +3596,7 @@ int ObLogicalOperator::project_pruning_pre()
   return ret;
 }
 
-void ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs,
-                                           PPDeps &deps)
+void ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs, PPDeps &deps)
 {
   int64_t i = 0;
   int64_t j = 0;
@@ -4230,6 +4231,7 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
 	int ret = OB_SUCCESS;
 	bool partition_granule = false;
   bool has_temp_table_access = false;
+  const ObDMLStmt *stmt = NULL;
   //  op    granule iterator
   //   |    ->    |
   //  other      op
@@ -4237,7 +4239,8 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
   //             other
 	if (!ctx.alloc_gi_) {
 		//do nothing
-	} else if (OB_ISNULL(get_plan()) || OB_ISNULL(get_sharding())) {
+	} else if (OB_ISNULL(get_plan()) || OB_ISNULL(get_sharding()) ||
+             OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpected null", K(ret), K(get_plan()), K(get_sharding()));
   } else if (!get_plan()->get_optimizer_context().get_temp_table_infos().empty() &&
@@ -4269,6 +4272,17 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
     } else {
       ObLogGranuleIterator *gi_op = static_cast<ObLogGranuleIterator *>(log_op);
       if (NULL != get_parent()) {
+        //check topN sort
+        if (((stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3 &&
+              stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_0) ||
+              stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_2) &&
+            LOG_SORT == get_parent()->get_type()) {
+          ObLogSort *parent = static_cast<ObLogSort*>(get_parent());
+          if (parent->is_local_merge_sort() &&
+              NULL != parent->get_topn_expr()) {
+            gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
+          }
+        }
         bool found_child = false;
         for (int64_t i = 0; OB_SUCC(ret) && !found_child && i < get_parent()->get_num_of_child(); ++i) {
           if (get_parent()->get_child(i) == this) {
@@ -6012,6 +6026,35 @@ int ObLogicalOperator::alloc_nodes_above(AllocOpContext& ctx, const uint64_t &fl
   return ret;
 }
 
+int ObLogicalOperator::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  if (get_num_of_child() > 0) {
+    if (LOG_GRANULE_ITERATOR == get_type() ||
+        LOG_TEMP_TABLE_TRANSFORMATION == get_type() ||
+        LOG_TEMP_TABLE_INSERT == get_type() ||
+        LOG_SUBPLAN_SCAN == get_type() ||
+        LOG_SUBPLAN_FILTER == get_type() ||
+        LOG_MATERIAL == get_type() ||
+        LOG_JOIN_FILTER == get_type() ||
+        LOG_FOR_UPD == get_type() ||
+        LOG_COUNT == get_type() ||
+        LOG_LIMIT == get_type() ||
+        LOG_STAT_COLLECTOR == get_type() ||
+        LOG_OPTIMIZER_STATS_GATHERING == get_type() ||
+        LOG_SELECT_INTO == get_type()) {
+      used = false;
+    } else {
+      used = true;
+    }
+    inherit_child_ordering_index = first_child;
+  } else {
+    used = false;
+    inherit_child_ordering_index = -1;
+  }
+  return ret;
+}
+
 int ObLogicalOperator::open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG)
 {
   int ret = OB_SUCCESS;
@@ -6196,6 +6239,45 @@ int ObLogicalOperator::find_max_px_resource_child(OPEN_PX_RESOURCE_ANALYZE_DECLA
     }
     LOG_TRACE("[PxResAnaly] find max px resource child", K(get_op_id()), K(max_px_thread_branch_),
             K(max_px_group_branch_));
+  }
+  return ret;
+}
+
+
+int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  bool is_first_child = true;
+  bool inherit_child_ordering = true;
+  int64_t inherit_child_ordering_index = -1;
+  ObLogicalOperator *parent = get_parent();
+  ObLogicalOperator *child = this;
+  while (OB_SUCC(ret) && NULL != parent) {
+    if (OB_FAIL(parent->check_use_child_ordering(used, inherit_child_ordering_index))) {
+      LOG_WARN("failed to check use child ordering", K(ret));
+    } else {
+      inherit_child_ordering = child == parent->get_child(inherit_child_ordering_index);
+      if (!used && inherit_child_ordering && child->is_plan_root()) {
+        ObLogPlan *plan = child->get_plan();
+        const ObDMLStmt *stmt = NULL;
+        if (OB_ISNULL(plan) || OB_ISNULL(stmt=plan->get_stmt())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null param", K(ret));
+        } else if (0 == stmt->get_order_item_size()) {
+          //do nothing
+        } else {
+          used = true;
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (used || !inherit_child_ordering) {
+      break;
+    } else {
+      child = parent;
+      parent = parent->get_parent();
+    }
   }
   return ret;
 }

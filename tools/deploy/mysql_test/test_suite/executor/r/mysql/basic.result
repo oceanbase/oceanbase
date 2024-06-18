@@ -489,7 +489,7 @@ Outputs & filters:
   6 - output([t_r4_01_20.b], [t_r4_01_20.a]), filter(nil), rowset=256
       sort_keys([t_r4_01_20.b, ASC])
   7 - output([t_r4_01_20.a], [t_r4_01_20.b]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   8 - output([t_r4_01_20.a], [t_r4_01_20.b]), filter(nil), rowset=256
       access([t_r4_01_20.a], [t_r4_01_20.b]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -544,7 +544,7 @@ Outputs & filters:
   6 - output([t_r5_09_28.b], [t_r5_09_28.a]), filter(nil), rowset=256
       sort_keys([t_r5_09_28.b, DESC])
   7 - output([t_r5_09_28.a], [t_r5_09_28.b]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   8 - output([t_r5_09_28.a], [t_r5_09_28.b]), filter(nil), rowset=256
       access([t_r5_09_28.a], [t_r5_09_28.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
@@ -1168,7 +1168,7 @@ Outputs & filters:
   2 - output([t_r4_01_20.b], [t_r4_01_20.a]), filter(nil), rowset=16
       sort_keys([t_r4_01_20.b, ASC])
   3 - output([t_r4_01_20.a], [t_r4_01_20.b]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t_r4_01_20.a], [t_r4_01_20.b]), filter(nil), rowset=16
       access([t_r4_01_20.a], [t_r4_01_20.b]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1211,7 +1211,7 @@ Outputs & filters:
   2 - output([t_r4_09_28.b], [t_r4_09_28.a]), filter(nil), rowset=16
       sort_keys([t_r4_09_28.b, DESC])
   3 - output([t_r4_09_28.a], [t_r4_09_28.b]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t_r4_09_28.a], [t_r4_09_28.b]), filter(nil), rowset=16
       access([t_r4_09_28.a], [t_r4_09_28.b]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1696,7 +1696,7 @@ Outputs & filters:
   2 - output([t1.a], [t2.aa], [t1.b], [t1.c], [t2.a], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       equal_conds([t1.a = t2.aa]), other_conds(nil)
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1745,7 +1745,7 @@ Outputs & filters:
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
   5 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   6 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1788,7 +1788,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1834,7 +1834,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1876,7 +1876,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1918,7 +1918,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -2706,7 +2706,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.b], [t1.c], [t2.b], [t2.c]), filter(nil), rowset=16
-      partition wise, force partition granule, asc
+      partition wise, force partition granule
   3 - output([t1.a], [t2.a], [t1.b], [t1.c], [t2.b], [t2.c]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a]), other_conds(nil)
       merge_directions([ASC])
@@ -2760,7 +2760,7 @@ Outputs & filters:
   6 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 19)], [t1.b], [t1.c]), filter(nil), rowset=16
       (#keys=1, [INTERNAL_FUNCTION(t1.a, 110, 19)]), dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -2802,7 +2802,7 @@ Outputs & filters:
   6 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 17)], [t1.b], [t1.c]), filter(nil), rowset=16
       (#keys=1, [INTERNAL_FUNCTION(t1.a, 110, 17)]), dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -2835,7 +2835,7 @@ Outputs & filters:
   2 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       dop=1
   3 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.c], [t2.b]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -2844,7 +2844,7 @@ Outputs & filters:
   6 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -2887,7 +2887,7 @@ Outputs & filters:
   6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.b], [t2.c]), filter(nil), rowset=16
       (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 19)]), dop=1
   7 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -3013,7 +3013,7 @@ Outputs & filters:
   6 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       dop=1
   7 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.c], [t2.b]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -3060,7 +3060,7 @@ Outputs & filters:
   6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.b], [t2.c]), filter(nil), rowset=16
       (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 17)]), dop=1
   7 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -3186,7 +3186,7 @@ Outputs & filters:
   6 - output([t2.c], [cast(t2.c, DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
       (#keys=1, [cast(t2.c, DATETIME(19, 0))]), dop=1
   7 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.c], [t2.b]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -3489,7 +3489,7 @@ Outputs & filters:
   2 - output([t1.a], [t2.aa], [t1.b], [t1.c], [t2.a], [t2.b], [t2.bb], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
       equal_conds([t1.a = t2.aa]), other_conds(nil)
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -3538,7 +3538,7 @@ Outputs & filters:
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       (#keys=1, [t1.a]), dop=1
   5 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   6 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -3581,7 +3581,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -3627,7 +3627,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -3669,7 +3669,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -3711,7 +3711,7 @@ Outputs & filters:
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -4764,7 +4764,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t2.a, t2.b, t2.c)]), filter(nil), rowset=16
       dop=1
   2 - output([t1.a], [t2.a], [t1.b], [t1.c], [t2.b], [t2.c]), filter(nil), rowset=16
-      partition wise, force partition granule, asc
+      partition wise, force partition granule
   3 - output([t1.a], [t2.a], [t1.b], [t1.c], [t2.b], [t2.c]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a]), other_conds(nil)
       merge_directions([ASC])
@@ -4818,7 +4818,7 @@ Outputs & filters:
   6 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 19)], [t1.b], [t1.c]), filter(nil), rowset=16
       (#keys=1, [INTERNAL_FUNCTION(t1.a, 110, 19)]), dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -4860,7 +4860,7 @@ Outputs & filters:
   6 - output([t1.a], [INTERNAL_FUNCTION(t1.a, 110, 17)], [t1.b], [t1.c]), filter(nil), rowset=16
       (#keys=1, [INTERNAL_FUNCTION(t1.a, 110, 17)]), dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -4893,7 +4893,7 @@ Outputs & filters:
   2 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       dop=1
   3 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   4 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.c], [t2.b]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -4902,7 +4902,7 @@ Outputs & filters:
   6 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       dop=1
   7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -4945,7 +4945,7 @@ Outputs & filters:
   6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 19)], [t2.b], [t2.c]), filter(nil), rowset=16
       (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 19)]), dop=1
   7 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -5071,7 +5071,7 @@ Outputs & filters:
   6 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       dop=1
   7 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.c], [t2.b]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -5118,7 +5118,7 @@ Outputs & filters:
   6 - output([t2.a], [INTERNAL_FUNCTION(t2.a, 110, 17)], [t2.b], [t2.c]), filter(nil), rowset=16
       (#keys=1, [INTERNAL_FUNCTION(t2.a, 110, 17)]), dop=1
   7 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
       access([t2.a], [t2.b], [t2.c]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -5244,7 +5244,7 @@ Outputs & filters:
   6 - output([t2.c], [cast(t2.c, DATETIME(19, 0))], [t2.a], [t2.b]), filter(nil), rowset=16
       (#keys=1, [cast(t2.c, DATETIME(19, 0))]), dop=1
   7 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
-      force partition granule, asc
+      force partition granule
   8 - output([t2.a], [t2.c], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.c], [t2.b]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 

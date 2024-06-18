@@ -3385,6 +3385,23 @@ int ObSql::generate_plan(ParseResult &parse_result,
     OPT_TRACE_TITLE("CURRENT SQL TEXT");
     OPT_TRACE("sql_id =", ObString(strlen(sql_ctx.sql_id_), sql_ctx.sql_id_));
     OPT_TRACE(ObString(parse_result.input_sql_len_, parse_result.input_sql_));
+
+    // hint seed injected random status rand
+    const ObQueryHint &query_hint = stmt->get_query_ctx()->get_query_hint();
+    if (query_hint.has_outline_data() || session_info->is_inner()){
+      // if there is outline data no error inject
+    } else {
+      int64_t tmp_ret = (OB_E(EventTable::EN_GENERATE_RANDOM_PLAN) OB_SUCCESS);
+      if (OB_SUCCESS == tmp_ret) {
+        // do nothing
+      } else {
+        time_t seed = OB_ERROR == tmp_ret ? time(NULL) : std::abs(tmp_ret);
+        stmt->get_query_ctx()->set_injected_random_status(true);
+        stmt->get_query_ctx()->set_random_plan_seed(seed);
+        LOG_TRACE("The random seed for plan gen is ", K(seed));
+      }
+    }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(transform_stmt(&stmt->get_query_ctx()->sql_schema_guard_,
                                       opt_stat_mgr_,

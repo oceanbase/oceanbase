@@ -516,6 +516,47 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
   return ret;
 }
 
+int OptTableMetas::add_values_table_meta_info(const ObDMLStmt *stmt,
+                                              const uint64_t table_id,
+                                              const OptSelectivityCtx &ctx,
+                                              ObValuesTableDef *table_def)
+{
+  int ret = OB_SUCCESS;
+  OptTableMeta *table_meta = NULL;
+  OptColumnMeta *column_meta = NULL;
+  ObSEArray<ColumnItem, 8> column_items;
+  if (OB_ISNULL(stmt) || OB_ISNULL(table_def)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null stmt", K(ret), KP(stmt), KP(table_def));
+  } else if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate place holder for table meta", K(ret));
+  } else if (OB_FAIL(stmt->get_column_items(table_id, column_items))) {
+    LOG_WARN("failed to get column items", K(ret));
+  } else {
+    table_meta->set_table_id(table_id);
+    table_meta->set_ref_table_id(OB_INVALID_ID);
+    table_meta->set_rows(table_def->row_cnt_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
+      const ColumnItem &column_item = column_items.at(i);
+      int64_t idx = column_item.column_id_ - OB_APP_MIN_COLUMN_ID;
+      if (OB_UNLIKELY(idx >= table_def->column_ndvs_.count() ||
+                      idx >= table_def->column_nnvs_.count()) ||
+          OB_ISNULL(column_meta = table_meta->get_column_metas().alloc_place_holder())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate place holder for column meta", K(ret));
+      } else {
+        double avg_len = ObOptEstCost::get_estimate_width_from_type(column_item.expr_->get_result_type());
+        column_meta->init(column_item.column_id_,
+                          revise_ndv(table_def->column_ndvs_.at(idx)),
+                          table_def->column_nnvs_.at(idx),
+                          avg_len);
+      }
+    }
+  }
+  return ret;
+}
+
 int OptTableMetas::get_set_stmt_output_statistics(const ObSelectStmt &stmt,
                                                   const OptTableMetas &child_table_metas,
                                                   const int64_t idx,

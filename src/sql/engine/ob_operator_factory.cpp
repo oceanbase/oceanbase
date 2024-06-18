@@ -173,6 +173,8 @@
 #include "sql/engine/basic/ob_temp_table_access_vec_op.h"
 #include "sql/engine/basic/ob_temp_table_transformation_vec_op.h"
 #include "sql/engine/sort/ob_sort_vec_op.h"
+#include "sql/optimizer/ob_log_values_table_access.h"
+#include "sql/engine/basic/ob_values_table_access_op.h"
 
 namespace oceanbase
 {

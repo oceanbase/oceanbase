@@ -911,3 +911,20 @@ int ObLogSet::get_card_without_filter(double &card)
   }
   return ret;
 }
+
+int ObLogSet::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_SET == get_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  } else if (!is_set_distinct()) {
+    used = false;
+  }
+  if (is_recursive_union()) {
+    inherit_child_ordering_index = -1;
+  }
+  return ret;
+}

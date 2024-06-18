@@ -177,6 +177,7 @@ PROJECT_PRUNE NO_PROJECT_PRUNE SIMPLIFY_SET NO_SIMPLIFY_SET OUTER_TO_INNER NO_OU
 COALESCE_SQ NO_COALESCE_SQ COUNT_TO_EXISTS NO_COUNT_TO_EXISTS LEFT_TO_ANTI NO_LEFT_TO_ANTI
 ELIMINATE_JOIN NO_ELIMINATE_JOIN PUSH_LIMIT NO_PUSH_LIMIT PULLUP_EXPR NO_PULLUP_EXPR
 WIN_MAGIC NO_WIN_MAGIC AGGR_FIRST_UNNEST NO_AGGR_FIRST_UNNEST JOIN_FIRST_UNNEST NO_JOIN_FIRST_UNNEST
+COALESCE_AGGR NO_COALESCE_AGGR WITH_PULLUP WO_PULLUP
 MV_REWRITE NO_MV_REWRITE
 DECORRELATE NO_DECORRELATE
 // optimize hint
@@ -424,11 +425,12 @@ END_P SET_VAR DELIMITER
 %type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list relation_factor_in_mv_hint_list opt_relation_factor_in_mv_hint_list
 %type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery table_subquery_alias
 %type <node> relation_factor_with_star relation_with_star_list opt_with_star
-%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list
+%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list opt_index_prefix
 %type <node> add_key_or_index_opt add_key_or_index add_unique_key_opt add_unique_key add_constraint_uniq_key_opt add_constraint_uniq_key add_constraint_pri_key_opt add_constraint_pri_key add_primary_key_opt add_primary_key add_spatial_index_opt add_spatial_index
 %type <node> index_hint_definition index_hint_list
 %type <node> intnum_list
 %type <node> qb_name_option qb_name_string qb_name_list multi_qb_name_list
+%type <node> coalesce_strategy_list
 %type <node> join_condition inner_join_type opt_inner outer_join_type opt_outer natural_join_type except_full_outer_join_type opt_full_table_factor
 %type <ival> string_length_i opt_string_length_i opt_string_length_i_v2 opt_int_length_i opt_bit_length_i opt_datetime_fsp_i opt_unsigned_i opt_zerofill_i opt_year_i opt_time_func_fsp_i opt_cast_float_precision
 %type <node> opt_float_precision opt_number_precision
@@ -10888,6 +10890,18 @@ NO_REWRITE opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_DECORRELATE, 1, $2);
 }
+| COALESCE_AGGR opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COALESCE_AGGR, 1, $2);
+}
+| COALESCE_AGGR '(' qb_name_option coalesce_strategy_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COALESCE_AGGR, 2, $3, $4);
+}
+| NO_COALESCE_AGGR opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_COALESCE_AGGR, 1, $2);
+}
 ;
 
 multi_qb_name_list:
@@ -10919,9 +10933,9 @@ qb_name_list:
   ;
 
 optimize_hint:
-INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
+INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 3, $3, $4, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 4, $3, $4, $5,$6);
 }
 | NO_INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
@@ -11149,6 +11163,18 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_COLUMN_STORE_HINT, 2, $3, $4);
 }
 ;
+
+opt_index_prefix:
+INTNUM
+{
+  $$=$1;
+}
+| NEG_SIGN INTNUM
+{
+  $2->value_ = -$2->value_;
+  $$ = $2;
+}
+| /*emtpy*/ {$$ = NULL;};
 
 win_dist_list:
 win_dist_desc
@@ -12844,6 +12870,32 @@ relation_factor_in_hint
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, table_list);
 }
 ;
+
+coalesce_strategy_list:
+WO_PULLUP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VARCHAR);
+  $$->str_value_ = "WO_PULLUP";
+  $$->str_len_ = strlen("WO_PULLUP");
+}
+| WITH_PULLUP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VARCHAR);
+  $$->str_value_ = "WITH_PULLUP";
+  $$->str_len_ = strlen("WITH_PULLUP");
+}
+| WO_PULLUP WITH_PULLUP
+{
+  ParseNode *basic_node = NULL;
+  ParseNode *split_node = NULL;
+  malloc_terminal_node(basic_node, result->malloc_pool_, T_VARCHAR);
+  basic_node->str_value_ = "WO_PULLUP";
+  basic_node->str_len_ = strlen("WO_PULLUP");
+  malloc_terminal_node(split_node, result->malloc_pool_, T_VARCHAR);
+  split_node->str_value_ = "WITH_PULLUP";
+  split_node->str_len_ = strlen("WITH_PULLUP");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, basic_node, split_node);
+}
 
 intnum_list:
 INTNUM relation_sep_option intnum_list

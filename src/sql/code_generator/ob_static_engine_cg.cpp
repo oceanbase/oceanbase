@@ -157,6 +157,8 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
+#include "sql/optimizer/ob_log_values_table_access.h"
+#include "sql/engine/basic/ob_values_table_access_op.h"
 
 namespace oceanbase
 {
@@ -2549,6 +2551,81 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues &op,
 
   } else if (OB_FAIL(dml_cg_service_.generate_err_log_ctdef(op.get_err_log_define(), spec.err_log_ct_def_))) {
     LOG_WARN("fail to cg err_log_ins_ctdef", K(ret));
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogValuesTableAccess &op,
+                                    ObValuesTableAccessSpec &spec,
+                                    const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(in_root_job);
+  const ObValuesTableDef *table_def = NULL;
+  if (OB_ISNULL(table_def = op.get_values_table_def()) ||
+      OB_UNLIKELY(op.get_output_exprs().empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret), KP(table_def), K(op.get_output_exprs()));
+  } else {
+    spec.access_type_ = table_def->access_type_;
+    spec.start_param_idx_ = table_def->start_param_idx_;
+    spec.end_param_idx_ = table_def->end_param_idx_;
+    ObIAllocator &allocator = phy_plan_->get_allocator();
+    if (OB_FAIL(spec.column_exprs_.prepare_allocate(op.get_column_exprs().count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(op.get_column_exprs().count()));
+    } else if (OB_FAIL(spec.value_exprs_.prepare_allocate(table_def->access_exprs_.count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(table_def->access_exprs_.count()));
+    } else if (OB_FAIL(spec.obj_params_.prepare_allocate(table_def->access_objs_.count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(table_def->access_objs_.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < op.get_column_exprs().count(); i++) {
+        ObColumnRefRawExpr *col_expr = op.get_column_exprs().at(i);
+        ObExpr *expr = NULL;
+        if (OB_ISNULL(col_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("raw_expr is null", K(ret), K(i), K(col_expr));
+        } else if (OB_FAIL(mark_expr_self_produced(col_expr))) {
+          LOG_WARN("mark expr self produced failed", K(ret), KPC(col_expr));
+        } else if (OB_FAIL(generate_rt_expr(*col_expr, expr))) {
+          LOG_WARN("fail to generate_rt_expr", K(ret), K(i), KPC(col_expr));
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("value_info.expr_ is null", K(ret), K(i), KPC(expr));
+        } else {
+          spec.column_exprs_.at(i) = expr;
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_def->access_exprs_.count(); i++) {
+        ObRawExpr *raw_expr = table_def->access_exprs_.at(i);
+        ObExpr *expr = NULL;
+        if (OB_ISNULL(raw_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("raw_expr is null", K(ret), K(i), K(raw_expr));
+        } else if (OB_FAIL(mark_expr_self_produced(raw_expr))) {
+          LOG_WARN("mark expr self produced failed", K(ret), KPC(raw_expr));
+        } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
+          LOG_WARN("fail to generate_rt_expr", K(ret), K(i), KPC(raw_expr));
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("value_info.expr_ is null", K(ret), K(i), KPC(raw_expr));
+        } else {
+          spec.value_exprs_.at(i) = expr;
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_def->access_objs_.count(); i++) {
+        if (OB_FAIL(ob_write_obj(allocator,
+                                 table_def->access_objs_.at(i),
+                                 spec.obj_params_.at(i)))) {
+          LOG_WARN("failed to write obj", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(mark_expr_self_produced(op.get_output_exprs()))) {
+        LOG_WARN("mark expr self produced failed", K(ret));
+      } else {
+        spec.rows_ = table_def->row_cnt_;
+      }
+    }
   }
   return ret;
 }
@@ -8630,6 +8707,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
     }
     case log_op_def::LOG_OPTIMIZER_STATS_GATHERING: {
       type = PHY_OPTIMIZER_STATS_GATHERING;
+      break;
+    }
+    case log_op_def::LOG_VALUES_TABLE_ACCESS: {
+      type = PHY_VALUES_TABLE_ACCESS;
       break;
     }
     default:

@@ -468,8 +468,9 @@ int ObLogExchange::do_re_est_cost(EstimateCostInfo &param, double &card, double 
     double child_cost = child->get_cost();
     const int64_t parallel = param.need_parallel_;
     param.need_parallel_ = ObGlobalHint::UNSET_PARALLEL;
-    if (is_block_op()) {
-      param.need_row_count_ = -1; //reset need row count
+    //forbit limit re estimate cost
+    if (is_producer() || is_block_op()) {
+      param.need_row_count_ = -1;
     }
     if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est exchange cost", K(ret));
@@ -1096,6 +1097,17 @@ int ObLogExchange::close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_A
     }
     LOG_TRACE("[PxResAnaly] px coord close_px_resource_analyze", K(get_op_id()), KPC(px_info_),
               K(append_map), K(cur_parallel_thread_count), K(cur_parallel_group_count));
+    }
+  return ret;
+}
+
+int ObLogExchange::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (is_producer() || !is_merge_sort()) {
+    used = false;
   }
   return ret;
 }

@@ -991,25 +991,48 @@ int ObGranuleIteratorOp::set_dml_op(const ObTableModifySpec *dml_op)
   return OB_SUCCESS;
 }
 
+// NOTE: this function is only used for the GI which only control one scan operator.
+// Think about the following case, the GI attempt to control the right tsc op rather than
+// the values table op(or maybe json table op), thus we need to traverse the OP tree to find the
+// real consumer node(tsc op).
+//          PX GI
+//            |
+//           GBY
+//            |
+//          SORT
+//            |
+//           HJ
+//        /       \
+//    values      tsc
+//    table
+//
 int ObGranuleIteratorOp::get_gi_task_consumer_node(ObOperator *cur,
-                                                   ObOperator *&child) const
+                                                   ObOperator *&consumer) const
 {
   int ret = OB_SUCCESS;
-  ObOperator *first_child = NULL;
-  if (0 >= cur->get_child_cnt()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("can't get the consumer node", K(ret), K(cur->get_child_cnt()));
-  } else if (OB_ISNULL(first_child = cur->get_child(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child is null", K(ret));
-  } else if (PHY_TABLE_SCAN == first_child->get_spec().type_ ||
-            PHY_BLOCK_SAMPLE_SCAN == first_child->get_spec().type_ ||
-            PHY_ROW_SAMPLE_SCAN == first_child->get_spec().type_) {
-    child = first_child;
-  } else if (OB_FAIL(get_gi_task_consumer_node(first_child, child))) {
-    LOG_WARN("failed to get gi task consumer node", K(ret));
+  int64_t child_cnt = cur->get_child_cnt();
+  if (0 == child_cnt) {
+    if (PHY_TABLE_SCAN == cur->get_spec().type_
+        || PHY_BLOCK_SAMPLE_SCAN == cur->get_spec().type_
+        || PHY_ROW_SAMPLE_SCAN == cur->get_spec().type_) {
+      consumer = cur;
+      LOG_TRACE("find the gi_task consumer node", K(cur->get_spec().id_),
+                K(cur->get_spec().type_));
+    }
+  } else {
+    ObOperator *child = nullptr;
+    for (int64_t i = 0; i < child_cnt && OB_SUCC(ret) && OB_ISNULL(consumer); ++i) {
+      if (OB_ISNULL(child = cur->get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child is null", K(ret));
+      } else if (OB_FAIL(get_gi_task_consumer_node(child, consumer))) {
+        LOG_WARN("failed to get gi task consumer node", K(ret));
+      }
+    }
   }
-  if (OB_SUCC(ret) && OB_ISNULL(child)) {
+
+  // cur == this means only check the output stack
+  if (OB_SUCC(ret) && OB_ISNULL(consumer) && cur == this) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can't find the tsc phy op", K(ret));
   }

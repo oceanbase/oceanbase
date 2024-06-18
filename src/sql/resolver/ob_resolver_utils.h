@@ -820,10 +820,25 @@ public:
   static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);
   static int check_encryption_name(common::ObString &encryption_name, bool &need_encrypt);
   static int check_not_supported_tenant_name(const common::ObString &tenant_name);
-  static int check_allowed_alter_operations_for_mlog(
-      const uint64_t tenant_id,
-      const obrpc::ObAlterTableArg &arg,
-      const share::schema::ObTableSchema &table_schema);
+  static int check_allowed_alter_operations_for_mlog(const uint64_t tenant_id,
+                                                  const obrpc::ObAlterTableArg &arg,
+                                                  const share::schema::ObTableSchema &table_schema);
+  static int fast_get_param_type(const ParseNode &parse_node,
+                                 const ParamStore *param_store,
+                                 const ObCollationType connect_collation,
+                                 const ObCollationType nchar_collation,
+                                 const ObCollationType server_collation,
+                                 const bool enable_decimal_int,
+                                 ObIAllocator &alloc,
+                                 ObObjType &obj_type,
+                                 ObCollationType &coll_type,
+                                 ObCollationLevel &coll_level);
+  static int create_values_table_query(ObSQLSessionInfo *session_info,
+                                       ObIAllocator *allocator,
+                                       ObRawExprFactory *expr_factory,
+                                       ObQueryCtx *query_ctx,
+                                       ObSelectStmt *select_stmt,
+                                       ObValuesTableDef *table_def);
 
   static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
   static int check_schema_valid_for_mview(const share::schema::ObTableSchema &table_schema);

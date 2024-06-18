@@ -102,6 +102,7 @@ private:
         row_in_offsets_(),
         only_one_expr_(false),
         is_oracle_char_gt_varchar_(false),
+        index_prefix_(-1),
         cur_datetime_(0)
     {
     }
@@ -126,6 +127,7 @@ private:
     ObSEArray<int64_t, 4> row_in_offsets_;
     bool only_one_expr_;
     bool is_oracle_char_gt_varchar_;
+    int64_t index_prefix_;
     int64_t cur_datetime_;
   };
 public:
@@ -387,7 +389,8 @@ public:
                                       ObExecContext *exec_ctx,
                                       ExprConstrantArray *expr_constraints = NULL,
                                       const ParamsIArray *params = NULL,
-                                      const bool use_in_optimization = false);
+                                      const bool use_in_optimization = false,
+                                      const int64_t index_prefix = -1);
   /**
    * @brief
    * @param range_columns: columns used to extract range, index column or partition column
@@ -410,7 +413,8 @@ public:
                                       const ParamsIArray *params = NULL,
                                       const bool phy_rowid_for_table_loc = false,
                                       const bool ignore_calc_failure = true,
-                                      const bool use_in_optimization = false);
+                                      const bool use_in_optimization = false,
+                                      const int64_t index_prefix = -1);
 
   //  final_extract_query_range extracts the final query range of its physical plan.
   //  It will get the real-time value of some const which are unknown during physical plan generating.
@@ -529,7 +533,8 @@ private:
                            const ParamsIArray *params,
                            const bool phy_rowid_for_table_loc,
                            const bool ignore_calc_failure,
-                           const bool use_in_optimization);
+                           const bool use_in_optimization,
+                           const int64_t index_prefix);
   void destroy_query_range_ctx(common::ObIAllocator &allocator);
   int add_expr_offsets(ObIArray<int64_t> &cur_pos, const ObKeyPart *cur_key);
   int extract_valid_exprs(const ExprIArray &root_exprs,

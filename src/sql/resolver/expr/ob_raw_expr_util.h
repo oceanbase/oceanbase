@@ -422,6 +422,9 @@ public:
   static int extract_column_exprs(const common::ObIArray<ObRawExpr*> &exprs,
                                   int64_t table_id,
                                   common::ObIArray<ObRawExpr *> &column_exprs);
+  static int extract_column_exprs(const common::ObIArray<ObRawExpr*> &exprs,
+                                  const common::ObIArray<int64_t> &table_ids,
+                                  common::ObIArray<ObRawExpr *> &column_exprs);
   // no need to add cast.
   static int extract_column_exprs(const ObRawExpr *expr,
                                   ObIArray<const ObRawExpr*> &column_exprs);

@@ -838,6 +838,10 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
+    case INLIST_REWRITE_THRESHOLD: {
+      is_valid = val.is_int() && (0 < val.get_int());
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -988,6 +992,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_AGGR_FIRST_UNNEST:           return T_AGGR_FIRST_UNNEST;
     case T_NO_JOIN_FIRST_UNNEST:           return T_JOIN_FIRST_UNNEST;
     case T_NO_DECORRELATE :       return T_DECORRELATE;
+    case T_NO_COALESCE_AGGR:      return T_COALESCE_AGGR;
     case T_MV_NO_REWRITE:       return T_MV_REWRITE;
 
     // optimize hint
@@ -1046,6 +1051,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_AGGR_FIRST_UNNEST:           return is_enable_hint ? "AGGR_FIRST_UNNEST" : "NO_AGGR_FIRST_UNNEST";
     case T_JOIN_FIRST_UNNEST:           return is_enable_hint ? "JOIN_FIRST_UNNEST" : "NO_JOIN_FIRST_UNNEST";
     case T_DECORRELATE :        return is_enable_hint ? "DECORRELATE" : "NO_DECORRELATE";
+    case T_COALESCE_AGGR:       return is_enable_hint ? "COALESCE_AGGR" : "NO_COALESCE_AGGR";
     case T_MV_REWRITE:          return is_enable_hint ? "MV_REWRITE" : "NO_MV_REWRITE";
     // optimize hint
     case T_INDEX_HINT:          return "INDEX";
@@ -1154,6 +1160,7 @@ int ObHint::deep_copy_hint_contain_table(ObIAllocator *allocator, ObHint *&hint)
     case HINT_GROUPBY_PLACEMENT: DEEP_COPY_NORMAL_HINT(ObGroupByPlacementHint); break;
     case HINT_JOIN_FILTER:  DEEP_COPY_NORMAL_HINT(ObJoinFilterHint); break;
     case HINT_WIN_MAGIC: DEEP_COPY_NORMAL_HINT(ObWinMagicHint); break;
+    case HINT_COALESCE_AGGR: DEEP_COPY_NORMAL_HINT(ObCoalesceAggrHint); break;
     default:  {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type to deep copy", K(ret), K(hint_class_));
@@ -1664,6 +1671,34 @@ bool ObGroupByPlacementHint::enable_groupby_placement(ObCollationType cs_type,
   return bret;
 }
 
+int ObCoalesceAggrHint::assign(const ObCoalesceAggrHint &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  } else {
+    enable_trans_wo_pullup_ = other.enable_trans_wo_pullup_;
+    enable_trans_with_pullup_ = other.enable_trans_with_pullup_;
+  }
+  return ret;
+}
+
+int ObCoalesceAggrHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  if (enable_trans_wo_pullup_ && enable_trans_with_pullup_ && OB_FAIL(BUF_PRINTF("WO_PULLUP WITH_PULLUP"))) {
+    LOG_WARN("failed to do BUF_PRINTF", K(ret));
+  } else if (enable_trans_wo_pullup_ && !enable_trans_with_pullup_ && OB_FAIL(BUF_PRINTF("WO_PULLUP"))) {
+    LOG_WARN("failed to do BUF_PRINTF", K(ret));
+  } else if (!enable_trans_wo_pullup_ && enable_trans_with_pullup_ && OB_FAIL(BUF_PRINTF("WITH_PULLUP"))) {
+    LOG_WARN("failed to do BUF_PRINTF", K(ret));
+  }
+  return ret;
+}
+
 int ObWinMagicHint::assign(const ObWinMagicHint &other)
 {
   int ret = OB_SUCCESS;
@@ -2008,6 +2043,7 @@ int ObIndexHint::assign(const ObIndexHint &other)
 {
   int ret = OB_SUCCESS;
   index_name_ = other.index_name_;
+  index_prefix_ = other.index_prefix_;
   if (OB_FAIL(table_.assign(other.table_))) {
     LOG_WARN("fail to assign table", K(ret));
   } else if (OB_FAIL(ObOptHint::assign(other))) {
@@ -2030,6 +2066,10 @@ int ObIndexHint::print_hint_desc(PlanText &plan_text) const
     /* do nothing */
   } else if (OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_.length(), index_name_.ptr()))) {
     LOG_WARN("fail to print index name", K(ret));
+  } else if (T_INDEX_HINT != hint_type_  || index_prefix_ < 0) {
+    //do nothing
+  } else if (OB_FAIL(BUF_PRINTF(" %ld", index_prefix_))) {
+    LOG_WARN("fail to print index prefix", K(ret));
   }
   return ret;
 }

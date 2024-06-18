@@ -425,10 +425,10 @@ Query Plan
 ================================================================
 |ID|OPERATOR                    |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |LIMIT                       |        |3       |12          |
-|1 |└─PX COORDINATOR MERGE SORT |        |3       |12          |
-|2 |  └─EXCHANGE OUT DISTR      |:EX10000|3       |10          |
-|3 |    └─TOP-N SORT            |        |3       |8           |
+|0 |LIMIT                       |        |3       |15          |
+|1 |└─PX COORDINATOR MERGE SORT |        |6       |15          |
+|2 |  └─EXCHANGE OUT DISTR      |:EX10000|6       |12          |
+|3 |    └─TOP-N SORT            |        |6       |8           |
 |4 |      └─PX BLOCK ITERATOR   |        |14      |7           |
 |5 |        └─TABLE FULL SCAN   |stu     |14      |7           |
 ================================================================
