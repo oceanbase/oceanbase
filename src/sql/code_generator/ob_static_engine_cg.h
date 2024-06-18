@@ -564,6 +564,7 @@ private:
 
   int extract_all_mview_ids(const ObIArray<ObRawExpr *> &exprs);
   int extract_all_mview_ids(const ObRawExpr *expr);
+  int check_is_insert_overwrite_stmt(const ObLogPlan *plan, bool &is_insert_overwrite);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)

@@ -347,8 +347,16 @@ int ObInsertLogPlan::set_is_direct_insert() {
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_stmt()), K(session_info));
+  } else if (get_stmt()->is_overwrite()) {
+    // insert overwrite with full direct load
+    if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
+      LOG_WARN("failed to get auto commit", KR(ret));
+    } else if (auto_commit && !session_info->is_in_transaction()){
+      is_direct_insert_ = true;
+      set_is_insert_overwrite(true);
+    }
   } else if (!get_stmt()->value_from_select()
-             || !get_optimizer_context().get_global_hint().has_direct_load()
+             || (!get_optimizer_context().get_global_hint().has_direct_load())
              || !GCONF._ob_enable_direct_load) {
   } else if (get_optimizer_context().get_global_hint().has_inc_direct_load()) {
     is_direct_insert_ = true;
@@ -709,6 +717,7 @@ int ObInsertLogPlan::allocate_insert_as_top(ObLogicalOperator *&top,
     insert_op->set_is_returning(insert_stmt->is_returning());
     insert_op->set_replace(insert_stmt->is_replace());
     insert_op->set_ignore(insert_stmt->is_ignore());
+    insert_op->set_overwrite(insert_stmt->is_overwrite());
     insert_op->set_is_multi_part_dml(is_multi_part_dml);
     insert_op->set_table_partition_info(table_partition_info);
     insert_op->set_lock_row_flag_expr(lock_row_flag_expr);

@@ -106,6 +106,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 %nonassoc   LOWER_COMMA
 %nonassoc   REMAP
 %nonassoc   ',' WITH
+%nonassoc OVERWRITE
 %left	UNION EXCEPT MINUS
 %left	INTERSECT
 %left   JOIN CROSS LEFT FULL RIGHT INNER WINDOW
@@ -376,6 +377,8 @@ END_P SET_VAR DELIMITER
         YEAR
 
         ZONE ZONE_LIST ZONE_TYPE
+
+        OVERWRITE
 //-----------------------------non_reserved keyword end---------------------------------------------
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
@@ -9272,6 +9275,27 @@ insert_with_opt_hint opt_priority opt_ignore opt_into single_table_insert opt_on
                            $1->children_[1], /* hint */
                            $3 /*ignore node*/);
 }
+| insert_with_opt_hint opt_priority opt_ignore OVERWRITE single_table_insert
+{
+  (void)($2);
+  (void)($4);
+  if (NULL == $5) {
+    yyerror(NULL, result, "invalid single table insert node\n");
+    YYABORT_UNEXPECTED;
+  }
+
+  ParseNode *overwrite_node;
+  malloc_terminal_node(overwrite_node, result->malloc_pool_, T_BOOL);
+  overwrite_node->value_ = 1;
+
+  $5->children_[2] = NULL; /*duplicate key node is null*/
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INSERT, 5,
+                           $5, /*single or multi table insert node*/
+                           $1->children_[0], /* is replacement */
+                           $1->children_[1], /* hint */
+                           $3, /*ignore node*/
+                           overwrite_node);
+}
 | replace_with_opt_hint opt_low_priority opt_ignore opt_into single_table_insert
 {
   (void)($2);
@@ -9417,8 +9441,7 @@ INTO
 {
   $$ = NULL;
 }
-/* empty */
-| {
+| /* empty */ %prec BASIC {
   $$ = NULL;
 }
 ;
@@ -22389,6 +22412,7 @@ ACCOUNT
 |       TRANSFER
 |       SUM_OPNSIZE
 |       VALIDATION
+|       OVERWRITE
 ;
 
 unreserved_keyword_special:

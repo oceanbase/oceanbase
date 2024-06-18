@@ -432,7 +432,8 @@ int ObTableLoadService::check_tenant()
 int ObTableLoadService::check_support_direct_load(
     const uint64_t table_id,
     const ObDirectLoadMethod::Type method,
-    const ObDirectLoadInsertMode::Type insert_mode)
+    const ObDirectLoadInsertMode::Type insert_mode,
+    const storage::ObDirectLoadMode::Type load_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -446,7 +447,7 @@ int ObTableLoadService::check_support_direct_load(
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode);
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode);
     }
   }
   return ret;
@@ -455,7 +456,8 @@ int ObTableLoadService::check_support_direct_load(
 int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
                                                   uint64_t table_id,
                                                   const ObDirectLoadMethod::Type method,
-                                                  const ObDirectLoadInsertMode::Type insert_mode)
+                                                  const ObDirectLoadInsertMode::Type insert_mode,
+                                                  const storage::ObDirectLoadMode::Type load_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -470,7 +472,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", KR(ret));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode);
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode);
     }
   }
   return ret;
@@ -479,7 +481,8 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
 int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
                                                   const ObTableSchema *table_schema,
                                                   const ObDirectLoadMethod::Type method,
-                                                  const ObDirectLoadInsertMode::Type insert_mode)
+                                                  const ObDirectLoadInsertMode::Type insert_mode,
+                                                  const storage::ObDirectLoadMode::Type load_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == table_schema ||
@@ -596,6 +599,15 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
+      } else if (ObDirectLoadMode::is_insert_overwrite(load_mode)) {
+        uint64_t compat_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+          LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+        } else if (compat_version < DATA_VERSION_4_3_2_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("version lower than 4.3.2.0 does not support insert overwrite", KR(ret));
+          FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.2.0 does not support insert overwrite");
+        }
       }
     }
   }

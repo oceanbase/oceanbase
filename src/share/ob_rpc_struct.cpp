@@ -707,6 +707,7 @@ int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
     parallelism_ = arg.parallelism_;
     ddl_type_ = arg.ddl_type_;
     sql_mode_ = arg.sql_mode_;
+    is_insert_overwrite_ = arg.is_insert_overwrite_;
     for (int64_t i = 0; OB_SUCC(ret) && i < common::ObNLSFormatEnum::NLS_MAX; i++) {
       nls_formats_[i].assign_ptr(arg.nls_formats_[i].ptr(), static_cast<int32_t>(arg.nls_formats_[i].length()));
     }

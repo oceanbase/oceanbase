@@ -91,6 +91,7 @@ private:
                  K_(dup_action),
                  "method", storage::ObDirectLoadMethod::get_type_string(method_),
                  "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
+                 "load_mode", storage::ObDirectLoadMode::get_type_string(load_mode_),
                  K_(data_access_param),
                  K_(column_ids));
   public:
@@ -111,6 +112,7 @@ private:
     sql::ObLoadDupActionType dup_action_;
     storage::ObDirectLoadMethod::Type method_;
     storage::ObDirectLoadInsertMode::Type insert_mode_;
+    storage::ObDirectLoadMode::Type load_mode_;
     DataAccessParam data_access_param_;
     ObArray<uint64_t> column_ids_;
   };

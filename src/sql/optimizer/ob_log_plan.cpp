@@ -11394,6 +11394,9 @@ int ObLogPlan::add_explain_note()
   } else if (NULL != (insert_plan = dynamic_cast<ObInsertLogPlan*>(this))
              && insert_plan->is_direct_insert()
              && OB_FALSE_IT(opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT))) {
+  } else if (NULL != (insert_plan = dynamic_cast<ObInsertLogPlan*>(this))
+             && insert_plan->is_insert_overwrite()
+             && OB_FALSE_IT(opt_ctx.add_plan_note(INSERT_OVERWRITE_TABLE))) {
   }
   return ret;
 }

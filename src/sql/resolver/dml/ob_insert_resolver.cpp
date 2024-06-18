@@ -83,6 +83,14 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     insert_stmt->set_ignore(NULL != parse_tree.children_[IGNORE_NODE] ? true : false);
   }
 
+  if (OB_SUCC(ret) && 5 <= parse_tree.num_child_) {
+    bool overwrite = false;
+    if (OB_NOT_NULL(parse_tree.children_[OVERWRITE_NODE]) && 1 == parse_tree.children_[OVERWRITE_NODE]->value_) {
+      overwrite = true;
+      insert_stmt->set_overwrite(overwrite);
+    }
+  }
+
   // resolve outline data hints first
   if (OB_SUCC(ret)) {
     if (OB_FAIL(resolve_outline_data_hints())) {
@@ -110,6 +118,20 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     } else { /*do nothing*/ }
   }
 
+  if (OB_SUCC(ret) && insert_stmt->is_overwrite()) {
+    TableItem *tmp_table_item = insert_stmt->get_table_item_by_id(insert_stmt->get_insert_table_info().table_id_);
+    if (OB_ISNULL(tmp_table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(tmp_table_item), K(ret));
+    } else if (!insert_stmt->value_from_select()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite with values");
+    } else if (!tmp_table_item->access_all_part()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with partitions");
+    }
+  }
+
   // resolve hints and inner cast
   if (OB_SUCC(ret)) {
     if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
@@ -121,9 +143,21 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
       if (OB_ISNULL(query_ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("query ctx should not be NULL", KR(ret), KP(query_ctx));
-      } else if (query_ctx->get_query_hint().get_global_hint().has_direct_load()) {
-        // For insert into select clause with direct-insert mode, plan cache is disabled
-        query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
+      } else {
+        if (insert_stmt->is_overwrite()) {
+          // For insert overwrite select
+          // 1. not allow add direct load hint
+          // 2. disable plan cache as direct load
+          if (query_ctx->get_query_hint_for_update().global_hint_.has_direct_load()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with direct load hint");
+          } else {
+            query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
+          }
+        } else if (query_ctx->get_query_hint().get_global_hint().has_direct_load()) {
+          // For insert into select clause with direct-insert mode, plan cache is disabled
+          query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
+        }
       }
     }
   }
@@ -231,6 +265,20 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
       } else if (NULL != node.children_[ERR_LOG_NODE] &&
                  OB_FAIL(resolve_error_logging(node.children_[ERR_LOG_NODE]))) {
         LOG_WARN("resolve_error_logging fail", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        if (5 <= node.num_child_) {
+          bool overwrite = false;
+          if (OB_NOT_NULL(node.children_[OVERWRITE_NODE]) && 1 == node.children_[OVERWRITE_NODE]->value_) {
+            if (!insert_stmt->value_from_select()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite not support insert values now");
+            } else {
+              overwrite = true;
+              insert_stmt->set_overwrite(overwrite);
+            }
+          }
+        }
       }
     } else if (NULL != node.children_[DUPLICATE_NODE] && // resolve assignments
                OB_FAIL(resolve_insert_update_assignment(node.children_[DUPLICATE_NODE],
@@ -450,6 +498,16 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
                                            false))) {
       LOG_WARN("failed to generate insert table info", K(ret));
     } else { /*do nothing*/ }
+  }
+
+  if (OB_SUCC(ret) && 2 == insert_into.num_child_) {
+    ParseNode *tmp_node = insert_into.children_[1];
+    if (OB_NOT_NULL(tmp_node) && T_COLUMN_LIST == tmp_node->type_) {
+      if (insert_stmt->is_overwrite()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with column list");
+      }
+    }
   }
 
   if (OB_SUCC(ret) && 2 == insert_into.num_child_ &&

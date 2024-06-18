@@ -43,7 +43,8 @@ public:
            const uint64_t table_id,
            const int64_t parallel,
            const bool is_incremental,
-           const bool enable_inc_replace);
+           const bool enable_inc_replace,
+           const bool is_insert_overwrite);
   int commit();
   int finish();
   void destroy();

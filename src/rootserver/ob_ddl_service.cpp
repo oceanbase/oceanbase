@@ -13891,6 +13891,10 @@ int ObDDLService::create_hidden_table(
                                                            owner_id,
                                                            trans))) {
           LOG_WARN("failed to lock ddl lock", K(ret));
+        } else if (create_hidden_table_arg.is_insert_overwrite_ && !orig_table_schema->get_foreign_key_infos().empty()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("insert overwrite not support foreign key", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite table with foreign key");
         } else if (OB_FAIL(create_user_hidden_table(
                   *orig_table_schema,
                   new_table_schema,

@@ -619,6 +619,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"outfile", OUTFILE},
   {"outline", OUTLINE},
   {"owner", OWNER},
+  {"overwrite", OVERWRITE},
   {"pack_keys", PACK_KEYS},
   {"page", PAGE},
   {"parameters", PARAMETERS},

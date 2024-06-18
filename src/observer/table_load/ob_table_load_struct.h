@@ -150,6 +150,7 @@ public:
       exe_mode_(ObTableLoadExeMode::MAX_TYPE),
       method_(storage::ObDirectLoadMethod::INVALID_METHOD),
       insert_mode_(storage::ObDirectLoadInsertMode::INVALID_INSERT_MODE),
+      load_mode_(storage::ObDirectLoadMode::INVALID_MODE),
       compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
   {
   }
@@ -176,6 +177,7 @@ public:
            sql::ObLoadDupActionType::LOAD_INVALID_MODE != dup_action_ &&
            storage::ObDirectLoadMethod::is_type_valid(method_) &&
            storage::ObDirectLoadInsertMode::is_type_valid(insert_mode_) &&
+           storage::ObDirectLoadMode::is_type_valid(load_mode_) &&
            (storage::ObDirectLoadMethod::is_full(method_)
               ? storage::ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode_)
               : true) &&
@@ -205,6 +207,7 @@ public:
                K_(exe_mode),
                "method", storage::ObDirectLoadMethod::get_type_string(method_),
                "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
+               "direct_load_mode", storage::ObDirectLoadMode::get_type_string(load_mode_),
                K_(compressor_type));
 
 public:
@@ -225,6 +228,7 @@ public:
   ObTableLoadExeMode exe_mode_;
   storage::ObDirectLoadMethod::Type method_;
   storage::ObDirectLoadInsertMode::Type insert_mode_;
+  storage::ObDirectLoadMode::Type load_mode_;
   ObCompressorType compressor_type_;
 };
 

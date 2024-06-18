@@ -40,7 +40,8 @@ int ObTableDirectInsertCtx::init(
     const uint64_t table_id,
     const int64_t parallel,
     const bool is_incremental,
-    const bool enable_inc_replace)
+    const bool enable_inc_replace,
+    const bool is_insert_overwrite)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -80,19 +81,21 @@ int ObTableDirectInsertCtx::init(
       ObCompressorType compressor_type = ObCompressorType::NONE_COMPRESSOR;
       ObDirectLoadMethod::Type method = (is_incremental ? ObDirectLoadMethod::INCREMENTAL : ObDirectLoadMethod::FULL);
       ObDirectLoadInsertMode::Type insert_mode = ObDirectLoadInsertMode::INVALID_INSERT_MODE;
-      if (session_info->get_ddl_info().is_mview_complete_refresh()) {
+      if (session_info->get_ddl_info().is_mview_complete_refresh() || is_insert_overwrite) {
         insert_mode = ObDirectLoadInsertMode::OVERWRITE;
       } else if (enable_inc_replace) {
         insert_mode = ObDirectLoadInsertMode::INC_REPLACE;
       } else {
         insert_mode = ObDirectLoadInsertMode::NORMAL;
       }
+      ObDirectLoadMode::Type load_mode = is_insert_overwrite ? ObDirectLoadMode::INSERT_OVERWRITE : ObDirectLoadMode::INSERT_INTO;
       if (OB_FAIL(GCTX.omt_->get_tenant(MTL_ID(), tenant))) {
         LOG_WARN("fail to get tenant handle", KR(ret), K(MTL_ID()));
       } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(*schema_guard,
                                                                        table_id,
                                                                        method,
-                                                                       insert_mode))) {
+                                                                       insert_mode,
+                                                                       load_mode))) {
         LOG_WARN("fail to check support direct load", KR(ret));
       } else if (OB_FAIL(get_compressor_type(MTL_ID(), table_id, parallel, compressor_type))) {
         LOG_WARN("fail to get compressor type", KR(ret));
@@ -117,8 +120,8 @@ int ObTableDirectInsertCtx::init(
                                                 : sql::ObLoadDupActionType::LOAD_STOP_ON_DUP);
         param.online_opt_stat_gather_ = is_online_gather_statistics_;
         param.method_ = method;
-
         param.insert_mode_ = insert_mode;
+        param.load_mode_ = load_mode;
         param.compressor_type_ = compressor_type;
         if (OB_FAIL(table_load_instance_->init(param, column_ids, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret));

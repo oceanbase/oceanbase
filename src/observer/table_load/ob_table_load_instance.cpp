@@ -92,7 +92,8 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
     // double check support for concurrency of direct load and ddl
     else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_,
                                                                    param.method_,
-                                                                   param.insert_mode_))) {
+                                                                   param.insert_mode_,
+                                                                   param.load_mode_))) {
       LOG_WARN("fail to check support direct load", KR(ret), K(param));
     }
     // start direct load
@@ -434,6 +435,7 @@ int ObTableLoadInstance::start_redef_table(const ObTableLoadParam &param)
   start_arg.table_id_ = param.table_id_;
   start_arg.parallelism_ = param.parallel_;
   start_arg.is_load_data_ = !param.px_mode_;
+  start_arg.is_insert_overwrite_ = ObDirectLoadMode::is_insert_overwrite(param.load_mode_);
   if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *stmt_ctx_.session_info_))) {
     LOG_WARN("fail to start redef table", KR(ret), K(start_arg));
   } else {

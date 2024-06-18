@@ -1787,7 +1787,8 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(*schema_guard,
                                                                      execute_param_.table_id_,
                                                                      execute_param_.method_,
-                                                                     execute_param_.insert_mode_))) {
+                                                                     execute_param_.insert_mode_,
+                                                                     ObDirectLoadMode::LOAD_DATA))) {
       LOG_WARN("fail to check support direct load", KR(ret));
     } else if (OB_FAIL(init_execute_context())) {
       LOG_WARN("fail to init execute context", KR(ret), K(ctx), K(load_stmt));
@@ -2015,6 +2016,7 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.online_opt_stat_gather_ = execute_param_.online_opt_stat_gather_;
   load_param.method_ = execute_param_.method_;
   load_param.insert_mode_ = execute_param_.insert_mode_;
+  load_param.load_mode_ = ObDirectLoadMode::LOAD_DATA;
   if (OB_FAIL(ObTableLoadSchema::get_table_compressor_type(
         execute_param_.tenant_id_, execute_param_.table_id_, table_compressor_type))) {
     LOG_WARN("fail to get table compressor type", KR(ret));

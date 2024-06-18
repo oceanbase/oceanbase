@@ -170,6 +170,7 @@ public:
                K_(exe_mode),
                "method", storage::ObDirectLoadMethod::get_type_string(method_),
                "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
+               "load_mode", storage::ObDirectLoadMode::get_type_string(load_mode_),
                K_(compressor_type));
 
 public:
@@ -190,6 +191,7 @@ public:
   ObTableLoadExeMode exe_mode_;
   storage::ObDirectLoadMethod::Type method_;
   storage::ObDirectLoadInsertMode::Type insert_mode_;
+  storage::ObDirectLoadMode::Type load_mode_;
   ObCompressorType compressor_type_;
 };
 

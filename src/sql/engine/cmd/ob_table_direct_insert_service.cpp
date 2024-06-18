@@ -29,7 +29,9 @@ namespace sql
 {
 bool ObTableDirectInsertService::is_direct_insert(const ObPhysicalPlan &phy_plan)
 {
-  return (phy_plan.get_enable_append() && (0 != phy_plan.get_append_table_id()));
+  return ((phy_plan.get_enable_append() ||
+           phy_plan.get_is_insert_overwrite()) &&
+           (0 != phy_plan.get_append_table_id()));
 }
 
 int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
@@ -44,6 +46,7 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
   } else {
     const bool is_inc_direct_load = phy_plan.get_enable_inc_direct_load();
     const bool is_inc_replace = phy_plan.get_enable_replace();
+    const bool is_insert_overwrite = phy_plan.get_is_insert_overwrite();
     ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
     bool auto_commit = false;
     CK (OB_NOT_NULL(session));
@@ -59,9 +62,9 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
       ObTableDirectInsertCtx &table_direct_insert_ctx = ctx.get_table_direct_insert_ctx();
       uint64_t table_id = phy_plan.get_append_table_id();
       int64_t parallel = phy_plan.get_px_dop();
-      if (OB_FAIL(table_direct_insert_ctx.init(&ctx, table_id, parallel, is_inc_direct_load, is_inc_replace))) {
+      if (OB_FAIL(table_direct_insert_ctx.init(&ctx, table_id, parallel, is_inc_direct_load, is_inc_replace, is_insert_overwrite))) {
         LOG_WARN("failed to init table direct insert ctx",
-            KR(ret), K(table_id), K(parallel), K(is_inc_direct_load), K(is_inc_replace));
+            KR(ret), K(table_id), K(parallel), K(is_inc_direct_load), K(is_inc_replace), K(is_insert_overwrite));
       }
     }
   }

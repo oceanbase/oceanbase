@@ -618,7 +618,8 @@ int ObTableLoadClientTask::init_instance()
     } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(schema_guard,
                                                                      table_id,
                                                                      method,
-                                                                     insert_mode))) {
+                                                                     insert_mode,
+                                                                     ObDirectLoadMode::TABLE_LOAD))) {
       LOG_WARN("fail to check support direct load", KR(ret));
     } else if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(schema_guard,
                                                               tenant_id,
@@ -642,6 +643,7 @@ int ObTableLoadClientTask::init_instance()
       load_param.dup_action_ = param_.get_dup_action();
       load_param.method_ = method;
       load_param.insert_mode_ = insert_mode;
+      load_param.load_mode_ = ObDirectLoadMode::TABLE_LOAD;
       load_param.compressor_type_ = compressor_type;
       const ObTableLoadTableCtx *tmp_ctx = nullptr;
       if (OB_FAIL(instance_.init(load_param, column_ids, exec_ctx_))) {

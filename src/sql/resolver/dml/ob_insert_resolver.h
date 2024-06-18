@@ -30,6 +30,7 @@ public:
   static const int64_t REPLACE_NODE = 1;
   static const int64_t HINT_NODE = 2;
   static const int64_t IGNORE_NODE = 3;
+  static const int64_t OVERWRITE_NODE = 4;
   static const int64_t INTO_NODE = 0;
   static const int64_t VALUE_NODE = 1;
   static const int64_t DUPLICATE_NODE = 2;
