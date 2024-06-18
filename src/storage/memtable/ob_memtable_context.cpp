@@ -169,6 +169,8 @@ void ObMemtableCtx::reset()
     retry_info_.reset();
     trans_mgr_.reset();
     log_gen_.reset();
+    query_allocator_.reset(/*only_check*/ true);
+    ctx_cb_allocator_.reset(/*only_check*/ true);
     ref_ = 0;
     is_master_ = true;
     is_read_only_ = false;

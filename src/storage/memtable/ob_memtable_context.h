@@ -182,16 +182,21 @@ public:
     ATOMIC_STORE(&alloc_size_, 0);
     return ret;
   }
-  void reset()
+  void reset(bool only_check = false)
   {
     if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "query allocator leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
+#ifdef ENABLE_DEBUG_LOG
+      ob_abort();
+#endif
     }
-    allocator_.reset();
-    ATOMIC_STORE(&alloc_count_, 0);
-    ATOMIC_STORE(&free_count_, 0);
-    ATOMIC_STORE(&alloc_size_, 0);
-    ATOMIC_STORE(&is_inited_, false);
+    if (!only_check) {
+      allocator_.reset();
+      ATOMIC_STORE(&alloc_count_, 0);
+      ATOMIC_STORE(&free_count_, 0);
+      ATOMIC_STORE(&alloc_size_, 0);
+      ATOMIC_STORE(&is_inited_, false);
+    }
   }
   void *alloc(const int64_t size) override
   {
@@ -269,16 +274,21 @@ public:
     ATOMIC_STORE(&alloc_size_, 0);
     return ret;
   }
-  void reset()
+  void reset(bool only_check = false)
   {
     if (OB_UNLIKELY(free_count_ != alloc_count_)) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
+#ifdef ENABLE_DEBUG_LOG
+      ob_abort();
+#endif
     }
-    allocator_.reset();
-    ATOMIC_STORE(&alloc_count_, 0);
-    ATOMIC_STORE(&free_count_, 0);
-    ATOMIC_STORE(&alloc_size_, 0);
-    ATOMIC_STORE(&is_inited_, false);
+    if (!only_check) {
+      allocator_.reset();
+      ATOMIC_STORE(&alloc_count_, 0);
+      ATOMIC_STORE(&free_count_, 0);
+      ATOMIC_STORE(&alloc_size_, 0);
+      ATOMIC_STORE(&is_inited_, false);
+    }
   }
   void *alloc(const int64_t size) override
   {
