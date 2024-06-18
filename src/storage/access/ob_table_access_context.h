@@ -67,6 +67,18 @@ struct ObTableScanStoreStat
   {
     MEMSET(this, 0, sizeof(ObTableScanStoreStat));
   }
+  // for rescan query, keep row cache and bf releated stats unchanged
+  OB_INLINE void reuse()
+  {
+    block_cache_hit_cnt_ = 0;
+    block_cache_miss_cnt_ = 0;
+    micro_access_cnt_ = 0;
+    pushdown_micro_access_cnt_ = 0;
+    empty_read_cnt_ = 0;
+    rowkey_prefix_ = 0;
+    logical_read_cnt_ = 0;
+    physical_read_cnt_ = 0;
+  }
 public:
   OB_INLINE bool enable_get_row_cache() const
   {
