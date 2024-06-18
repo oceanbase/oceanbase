@@ -48,6 +48,7 @@ public:
                     const common::ObString &pattern,
                     const ObExprRegexpSessionVariables &regexp_vars,
                     common::ObIArray<common::ObString> &file_urls,
+                    common::ObIArray<int64_t> &file_sizes,
                     common::ObIAllocator &allocator);
   common::ObStorageType get_storage_type() { return storage_type_; }
   void close();

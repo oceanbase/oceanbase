@@ -129,9 +129,12 @@ class ObExternalFileListArrayOpWithFilter : public ObBaseDirEntryOperator
 {
 public:
   ObExternalFileListArrayOpWithFilter(ObIArray <common::ObString>& name_array,
+                                      ObIArray <int64_t>& file_size,
                               ObExternalPathFilter *filter,
                               ObIAllocator& array_allocator)
-    : name_array_(name_array), filter_(filter), allocator_(array_allocator) {}
+    : name_array_(name_array), file_size_(file_size), filter_(filter), allocator_(array_allocator) {}
+
+  virtual bool need_get_file_size() const override { return true; }
   int func(const dirent *entry) {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(entry)) {
@@ -152,6 +155,8 @@ public:
             OB_LOG(WARN, "fail to save file name", K(ret), K(file_name));
           } else if (OB_FAIL(name_array_.push_back(tmp_file))) {
             OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));
+          } else if (OB_FAIL(file_size_.push_back(get_size()))) {
+            OB_LOG(WARN, "fail to push size to array", K(ret), K(tmp_file));
           }
         }
       }
@@ -161,6 +166,7 @@ public:
 
 private:
   ObIArray <ObString>& name_array_;
+  ObIArray <int64_t>& file_size_;
   ObExternalPathFilter *filter_;
   ObIAllocator& allocator_;
 };
@@ -169,12 +175,14 @@ class ObLocalFileListArrayOpWithFilter : public ObBaseDirEntryOperator
 {
 public:
   ObLocalFileListArrayOpWithFilter(ObIArray <common::ObString> &name_array,
+                                   ObIArray <int64_t>& file_size,
                                    const ObString &path,
                                    const ObString &origin_path,
                                    ObExternalPathFilter *filter,
                                    ObIAllocator &array_allocator)
-    : name_array_(name_array), path_(path), origin_path_(origin_path),
+    : name_array_(name_array), file_size_(file_size), path_(path), origin_path_(origin_path),
       filter_(filter), allocator_(array_allocator) {}
+  virtual bool need_get_file_size() const override { return true; }
   int func(const dirent *entry)
   {
     int ret = OB_SUCCESS;
@@ -217,6 +225,8 @@ public:
           OB_LOG(WARN, "fail to save file name", K(ret), K(file_name));
         } else if (OB_FAIL(name_array_.push_back(tmp_file))) {
           OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));
+        } else if (OB_FAIL(file_size_.push_back(get_size()))) {
+          OB_LOG(WARN, "fail to push size to array", K(ret), K(tmp_file));
         }
       }
     }
@@ -224,6 +234,7 @@ public:
   }
 private:
   ObIArray <ObString> &name_array_;
+  ObIArray <int64_t> &file_size_;
   const ObString &path_;
   const ObString &origin_path_;
   ObExternalPathFilter *filter_;
@@ -235,6 +246,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
                                               const ObString &pattern,
                                               const ObExprRegexpSessionVariables &regexp_vars,
                                               ObIArray<ObString> &file_urls,
+                                              ObIArray<int64_t> &file_sizes,
                                               ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -260,10 +272,11 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     } else {
       OZ (file_dirs.push_back(path));
     }
+    ObArray<int64_t> useless_size;
     for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
       ObString file_dir = file_dirs.at(i);
-      ObLocalFileListArrayOpWithFilter dir_op(file_dirs, file_dir, path, NULL, allocator);
-      ObLocalFileListArrayOpWithFilter file_op(file_urls, file_dir, path,
+      ObLocalFileListArrayOpWithFilter dir_op(file_dirs, useless_size, file_dir, path, NULL, allocator);
+      ObLocalFileListArrayOpWithFilter file_op(file_urls, file_sizes, file_dir, path,
                                                pattern.empty() ? NULL : &filter, allocator);
       dir_op.set_dir_flag();
       if (OB_FAIL(device_handle_->scan_dir(to_cstring(file_dir), file_op))) {
@@ -276,7 +289,7 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
       }
     }
   } else {
-    ObExternalFileListArrayOpWithFilter file_op(file_urls, pattern.empty() ? NULL : &filter, allocator);
+    ObExternalFileListArrayOpWithFilter file_op(file_urls, file_sizes, pattern.empty() ? NULL : &filter, allocator);
     if (OB_FAIL(device_handle_->scan_dir(to_cstring(path), file_op))) {
       LOG_WARN("scan dir failed", K(ret));
     }
