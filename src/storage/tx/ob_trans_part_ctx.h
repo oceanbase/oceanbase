@@ -961,6 +961,8 @@ protected:
   // for xa
   virtual bool is_sub2pc() const override
   { return exec_info_.is_sub2pc_; }
+  virtual bool is_dup_tx() const override
+  { return exec_info_.is_dup_tx_; }
 
   // =========================== TREE COMMITTER START ===========================
 public:

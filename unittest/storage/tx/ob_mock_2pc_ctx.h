@@ -129,6 +129,8 @@ protected:
   // for xa
   virtual bool is_sub2pc() const override;
 
+  virtual bool is_dup_tx() const override;
+
   virtual int merge_intermediate_participants() override;
 
   void add_intermediate_participants(const int64_t ls_id);
