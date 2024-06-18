@@ -2094,6 +2094,21 @@ bool ObCharset::is_bin_sort(ObCollationType collation_type)
   return ret;
 }
 
+bool ObCharset::is_ci_collate(ObCollationType collation_type)
+{
+  bool ret = false;
+  if (OB_UNLIKELY(collation_type <= CS_TYPE_INVALID ||
+                  collation_type >= CS_TYPE_MAX) ||
+                  OB_ISNULL(ObCharset::charset_arr[collation_type])) {
+    LOG_WARN("unexpected error. invalid argument(s)",
+              K(ret), K(collation_type), K(lbt()));
+  } else {
+    ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
+    ret = (0 != (cs->state & OB_CS_CI));
+  }
+  return ret;
+}
+
 ObCharsetType ObCharset::default_charset_type_ = CHARSET_UTF8MB4;
 ObCollationType ObCharset::default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
 

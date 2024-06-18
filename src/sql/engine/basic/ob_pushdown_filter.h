@@ -287,6 +287,17 @@ public:
   {}
 };
 
+// Suppose f(x) is a black filter, the monotonicity of f(x) can be utilized to filter rows and accelerate query.
+// The rules for different monotonicities are as follows:
+enum PushdownFilterMonotonicity
+{
+  MON_NON = 0,    // no monotonicity
+  MON_ASC = 1,    // If f(min) is true, all f(x) is true if x >= min. If f(max) is false, all f(x) is false if x <= max.
+  MON_DESC = 2,   // If f(max) is true, all f(x) if true if x <= max. If f(min) is false, all f(x) is false if x >= min.
+  MON_EQ_ASC = 3, // f(x) = const and f(x) is monotonicity asc. If f(min) > const || f(max) < const, f(x) is false if x in [min, max].
+  MON_EQ_DESC = 4 // f(x) = const and f(x) is monotonicity desc. If f(min) < const || f(max) > const, f(x) is false if x in [min, max].
+};
+
 class ObPushdownBlackFilterNode : public ObPushdownFilterNode
 {
   OB_UNIS_VERSION_V(1);
@@ -295,14 +306,17 @@ public:
       : ObPushdownFilterNode(alloc, PushdownFilterType::BLACK_FILTER),
       column_exprs_(alloc),
       filter_exprs_(alloc),
-      tmp_expr_(nullptr)
+      tmp_expr_(nullptr),
+      assist_exprs_(alloc),
+      mono_(MON_NON)
   {}
   ~ObPushdownBlackFilterNode() {}
 
   int merge(common::ObIArray<ObPushdownFilterNode*> &merged_node) override;
   virtual int postprocess() override;
+  OB_INLINE bool is_monotonic() const { return MON_NON != mono_; }
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterNode", ObPushdownFilterNode,
-                       K_(column_exprs), K_(filter_exprs));
+                       K_(column_exprs), K_(filter_exprs), K_(assist_exprs), K_(mono));
 
   int64_t get_filter_expr_count()
   { return filter_exprs_.empty() ? 1 : filter_exprs_.count(); }
@@ -312,6 +326,10 @@ public:
   // 下压临时保存的filter，如果发生merge，则所有的filter放入filter_exprs_
   // 如果没有发生merge，则将自己的tmp_expr_放入filter_exprs_中
   ObExpr *tmp_expr_;
+  // The exprs to judge greater or less when mono_ is MON_EQ_ASC/MON_EQ_DESC.
+  // assist_exprs_[0] is greater expr, assist_exprs_[1] is less expr.
+  ExprFixedArray assist_exprs_;
+  PushdownFilterMonotonicity mono_;
 };
 
 enum ObWhiteFilterOperatorType
@@ -458,15 +476,20 @@ private:
 class ObPushdownFilterConstructor
 {
 public:
-  ObPushdownFilterConstructor(common::ObIAllocator *alloc, ObStaticEngineCG &static_cg,
+  ObPushdownFilterConstructor(common::ObIAllocator *alloc,
+                              ObStaticEngineCG &static_cg,
+                              const ObLogTableScan *op,
                               bool use_column_store)
-      : alloc_(alloc), factory_(alloc), static_cg_(static_cg), use_column_store_(use_column_store)
+      : alloc_(alloc), factory_(alloc), static_cg_(static_cg), op_(op), use_column_store_(use_column_store)
   {}
   int apply(common::ObIArray<ObRawExpr*> &exprs, ObPushdownFilterNode *&filter_tree);
 
 private:
   int is_white_mode(const ObRawExpr* raw_expr, bool &is_white);
   int create_black_filter_node(ObRawExpr *raw_expr, ObPushdownFilterNode *&filter_tree);
+  int get_black_filter_monotonicity(const ObRawExpr *raw_expr,
+                                   common::ObIArray<ObRawExpr *> &column_exprs,
+                                   ObPushdownBlackFilterNode *black_filter_node);
   template <typename ClassT, PushdownFilterType type>
   int create_white_or_dynamic_filter_node(ObRawExpr *raw_expr,
       ObPushdownFilterNode *&filter_tree, int64_t col_idx = 0);
@@ -489,6 +512,7 @@ private:
   common::ObIAllocator *alloc_;
   ObPushdownFilterFactory factory_;
   ObStaticEngineCG &static_cg_;
+  const ObLogTableScan *op_;
   bool use_column_store_;
 };
 
@@ -729,7 +753,7 @@ public:
                        K_(n_eval_infos), KP_(eval_infos));
 protected:
   int init_eval_param(const int32_t cur_eval_info_cnt, const int64_t eval_expr_cnt);
-  void clear_evaluated_datums();
+  void clear_evaluated_flags();
   void clear_evaluated_infos();
 protected:
   int32_t n_eval_infos_;
@@ -762,6 +786,13 @@ public:
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterExecutor", ObPhysicalFilterExecutor,
                        K_(filter), KP_(skip_bit));
   virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) override;
+  virtual int filter(blocksstable::ObStorageDatum &datum, const sql::ObBitVector &skip_bit, bool &ret_val);
+  virtual int judge_greater_or_less(blocksstable::ObStorageDatum &datum,
+                                   const sql::ObBitVector &skip_bit,
+                                   const bool is_greater,
+                                   bool &ret_val);
+  OB_INLINE bool is_monotonic() const { return filter_.is_monotonic(); }
+  OB_INLINE PushdownFilterMonotonicity get_monotonicity() const { return filter_.mono_; }
 private:
   int eval_exprs_batch(ObBitVector &skip, const int64_t bsize);
 

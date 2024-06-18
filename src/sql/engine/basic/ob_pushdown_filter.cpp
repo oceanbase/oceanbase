@@ -60,7 +60,7 @@ OB_SERIALIZE_MEMBER(ObPushdownFilterNode, type_, n_child_, col_ids_);
 OB_SERIALIZE_MEMBER((ObPushdownAndFilterNode,ObPushdownFilterNode), is_runtime_filter_root_node_);
 OB_SERIALIZE_MEMBER((ObPushdownOrFilterNode,ObPushdownFilterNode));
 OB_SERIALIZE_MEMBER((ObPushdownBlackFilterNode,ObPushdownFilterNode),
-                    column_exprs_, filter_exprs_);
+                    column_exprs_, filter_exprs_, assist_exprs_, mono_);
 OB_DEF_SERIALIZE(ObPushdownWhiteFilterNode)
 {
   int ret = OB_SUCCESS;
@@ -373,6 +373,8 @@ int ObPushdownFilterConstructor::create_black_filter_node(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("black filter node is null", K(ret));
   } else if (FALSE_IT(black_filter_node = static_cast<ObPushdownBlackFilterNode*>(filter_node))) {
+  } else if (OB_FAIL(get_black_filter_monotonicity(raw_expr, column_exprs, black_filter_node))) {
+    LOG_WARN("failed to get black filter monotonicity", K(ret));
   } else if (0 < column_exprs.count()) {
     if (OB_FAIL(black_filter_node->col_ids_.init(column_exprs.count()))) {
       LOG_WARN("failed to init col ids", K(ret));
@@ -397,6 +399,39 @@ int ObPushdownFilterConstructor::create_black_filter_node(
   if (OB_SUCC(ret)) {
     black_filter_node->tmp_expr_ = expr;
     LOG_DEBUG("[PUSHDOWN] black_filter_node", K(*raw_expr), K(*expr), K(black_filter_node->col_ids_));
+  }
+  return ret;
+}
+
+int ObPushdownFilterConstructor::get_black_filter_monotonicity(
+    const ObRawExpr *raw_expr,
+    common::ObIArray<ObRawExpr *> &column_exprs,
+    ObPushdownBlackFilterNode *black_filter_node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(raw_expr) || OB_ISNULL(black_filter_node) || OB_ISNULL(op_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Unexpected status", K(ret), K(raw_expr), K(black_filter_node), K(op_));
+  } else if (1 == column_exprs.count()) {
+    ObSEArray<ObRawExpr*, 2> tmp_exprs;
+    PushdownFilterMonotonicity mono;
+    if (OB_FAIL(op_->get_filter_monotonicity(raw_expr, static_cast<ObColumnRefRawExpr *>(column_exprs.at(0)),
+                                             mono, tmp_exprs))) {
+      LOG_WARN("Failed to get filter monotonicity", K(ret), KPC(raw_expr), K(column_exprs));
+    } else if (OB_UNLIKELY(mono < MON_NON || mono > MON_EQ_DESC)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected filter monotonicity", K(mono));
+    } else if (FALSE_IT(black_filter_node->mono_ = mono)) {
+    } else if (tmp_exprs.count() == 0) {
+    } else if (tmp_exprs.count() != 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected expr count", K(ret), K(tmp_exprs));
+    } else if (OB_FAIL(black_filter_node->assist_exprs_.init(2))) {
+      LOG_WARN("Failed to init assist exprs", K(ret));
+    } else if (OB_FAIL(static_cg_.generate_rt_exprs(tmp_exprs, black_filter_node->assist_exprs_))) {
+      LOG_WARN("Failed to generate rt exprs", K(ret), K(tmp_exprs));
+    }
+    LOG_TRACE("[PUSHDOWN] check black filter monotonicity", K(ret), KPC(raw_expr), K(column_exprs), KPC(black_filter_node));
   }
   return ret;
 }
@@ -481,7 +516,9 @@ int ObPushdownFilterConstructor::merge_filter_node(
   if (OB_ISNULL(other) || OB_ISNULL(dst) || dst == other) {
   } else if (dst->get_type() == other->get_type()) {
     if (dst->get_type() == PushdownFilterType::BLACK_FILTER
-        && is_array_equal(dst->get_col_ids(), other->get_col_ids()))
+        && is_array_equal(dst->get_col_ids(), other->get_col_ids())
+        && !static_cast<ObPushdownBlackFilterNode *>(dst)->is_monotonic()
+        && !static_cast<ObPushdownBlackFilterNode *>(other)->is_monotonic())
     {
       if (OB_FAIL(merged_node.push_back(other))) {
         LOG_WARN("failed to push back", K(ret));
@@ -1765,10 +1802,16 @@ int ObPhysicalFilterExecutor::init_eval_param(const int32_t cur_eval_info_cnt, c
   return ret;
 }
 
-void ObPhysicalFilterExecutor::clear_evaluated_datums()
+void ObPhysicalFilterExecutor::clear_evaluated_flags()
 {
-  for (int i = 0; i < n_datum_eval_flags_; i++) {
-    datum_eval_flags_[i]->unset(op_.get_eval_ctx().get_batch_idx());
+  if (op_.is_vectorized()) {
+    for (int i = 0; i < n_datum_eval_flags_; i++) {
+      datum_eval_flags_[i]->unset(op_.get_eval_ctx().get_batch_idx());
+    }
+  } else {
+    for (int i = 0; i < n_eval_infos_; i++) {
+      eval_infos_[i]->clear_evaluated_flag();
+    }
   }
 }
 
@@ -2000,12 +2043,7 @@ int ObWhiteFilterExecutor::filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &s
       filtered = !res->is_true(batch_idx);
     }
   }
-
-  if (op_.is_vectorized()) {
-    clear_evaluated_datums();
-  } else {
-    clear_evaluated_infos();
-  }
+  clear_evaluated_flags();
   return ret;
 }
 
@@ -2043,11 +2081,65 @@ int ObBlackFilterExecutor::filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &s
       }
     }
   }
+  clear_evaluated_flags();
+  return ret;
+}
 
-  if (op_.is_vectorized()) {
-    clear_evaluated_datums();
+int ObBlackFilterExecutor::filter(blocksstable::ObStorageDatum &datum, const sql::ObBitVector &skip_bit, bool &ret_val)
+{
+  return ObPhysicalFilterExecutor::filter(&datum, 1, skip_bit, ret_val);
+}
+
+int ObBlackFilterExecutor::judge_greater_or_less(
+    blocksstable::ObStorageDatum &datum,
+    const sql::ObBitVector &skip_bit,
+    const bool is_greater,
+    bool &ret_val)
+{
+  int ret = OB_SUCCESS;
+  ret_val = false;
+  sql::ObExpr *assist_expr = nullptr;
+  sql::ObExpr *column_expr = nullptr;
+  ObEvalCtx &eval_ctx = op_.get_eval_ctx();
+  const common::ObIArray<ObExpr *> *column_exprs = get_cg_col_exprs();
+  if (OB_UNLIKELY(nullptr == column_exprs || column_exprs->count() != 1 ||
+                  filter_.assist_exprs_.count() != 2 ||
+                  filter_.mono_ < MON_NON || filter_.mono_ > MON_EQ_DESC)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected filter status", K(ret), KPC(column_exprs), K_(filter));
+  } else if (FALSE_IT(assist_expr = is_greater ? filter_.assist_exprs_.at(0) : filter_.assist_exprs_.at(1))) {
+  } else if (FALSE_IT(column_expr = column_exprs->at(0))) {
+  } else if (OB_ISNULL(assist_expr) || OB_ISNULL(column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpect null expr", K(ret), K(filter_.assist_exprs_), KPC(column_exprs));
   } else {
-    clear_evaluated_infos();
+    ObDatum &expr_datum = column_expr->locate_datum_for_write(eval_ctx);
+    if (OB_FAIL(expr_datum.from_storage_datum(datum, column_expr->obj_datum_map_))) {
+      LOG_WARN("Failed to convert from datum", K(ret), K(datum));
+    } else if (!op_.enable_rich_format_) {
+      ObDatum *cmp_res = nullptr;
+      if (OB_FAIL(assist_expr->eval(eval_ctx, cmp_res))) {
+        LOG_WARN("failed to filter child", K(ret));
+      } else {
+        ret_val = !is_row_filtered(*cmp_res);
+      }
+    } else {
+      const int64_t batch_idx = eval_ctx.get_batch_idx();
+      EvalBound eval_bound(eval_ctx.get_batch_size(), batch_idx, batch_idx + 1, true);
+      if (OB_FAIL(assist_expr->eval_vector(eval_ctx, skip_bit, eval_bound))) {
+        LOG_WARN("Failed to evaluate vector", K(ret));
+      } else {
+        ObIVector *res = assist_expr->get_vector(eval_ctx);
+        ret_val = res->is_true(batch_idx);
+      }
+    }
+    clear_evaluated_flags();
+    if (op_.is_vectorized() && assist_expr->is_batch_result()) {
+      assist_expr->get_evaluated_flags(eval_ctx).unset(eval_ctx.get_batch_idx());
+    } else {
+      assist_expr->get_eval_info(eval_ctx).clear_evaluated_flag();
+    }
+    LOG_DEBUG("check judge greater or less status", K(expr_datum), K(datum), KPC(column_expr), KPC(assist_expr), K(is_greater));
   }
   return ret;
 }

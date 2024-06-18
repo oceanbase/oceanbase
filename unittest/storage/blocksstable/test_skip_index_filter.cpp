@@ -317,6 +317,7 @@ int TestSkipIndexFilter::test_skip_index_filter_pushdown (
   sql::ObPushdownExprSpec expr_spec(allocator_);
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
+  eval_ctx.batch_size_ = 256;
   filter.col_offsets_.init(COLUMN_CNT);
   filter.col_params_.init(COLUMN_CNT);
   const ObColumnParam *col_param = nullptr;
@@ -381,9 +382,10 @@ int TestSkipIndexFilter::test_skip_index_filter_pushdown (
   index_info.agg_row_buf_ = buf;
   index_info.agg_buf_size_ = buf_size;
   index_info.row_header_ = &row_header;
+  EXPECT_EQ(OB_SUCCESS, skip_index_filter.init(op.get_eval_ctx().get_batch_size(), &allocator_));
 
   ret = skip_index_filter.falsifiable_pushdown_filter(col_idx, filter.filter_.expr_->args_[0]->obj_meta_,
-      ObSkipIndexType::MIN_MAX, index_info, filter, allocator_);
+      ObSkipIndexType::MIN_MAX, index_info, filter, allocator_, true);
   fal_desc = filter.get_filter_bool_mask();
 
 

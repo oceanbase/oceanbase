@@ -456,7 +456,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       LOG_WARN("generate scan ctdef pushdown filter");
     } else if (pd_filter) {
       ObPushdownFilterConstructor filter_constructor(
-          &cg_.phy_plan_->get_allocator(), cg_,
+          &cg_.phy_plan_->get_allocator(), cg_, &op,
           scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_use_column_store());
       if (OB_FAIL(filter_constructor.apply(
           scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
@@ -470,7 +470,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       LOG_WARN("generate lookup ctdef pushdown filter failed", K(ret));
     } else if (pd_filter) {
       ObPushdownFilterConstructor filter_constructor(
-          &cg_.phy_plan_->get_allocator(), cg_,
+          &cg_.phy_plan_->get_allocator(), cg_, &op,
           lookup_ctdef->pd_expr_spec_.pd_storage_flag_.is_use_column_store());
       if (OB_FAIL(filter_constructor.apply(
           lookup_pushdown_filters, lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {

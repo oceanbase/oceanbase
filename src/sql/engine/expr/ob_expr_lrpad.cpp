@@ -478,7 +478,7 @@ int ObExprBaseLRpad::get_padding_info_mysql(const ObCollationType &cs,
              || OB_UNLIKELY(pad_size <= 0)) {
     // this should been resolve outside
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("wrong len", K(ret), K(len), K(text_len));
+    LOG_WARN("wrong len", K(ret), K(len), K(text_len), K(pad_len), K(pad_size));
   } else {
     repeat_count = std::min((len - text_len) / pad_len, (max_result_size - text_size) / pad_size);
     int64_t remain_len = len - (text_len + pad_len * repeat_count);

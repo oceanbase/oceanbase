@@ -1249,6 +1249,7 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
       LOG_WARN("failed to push back const column", K(ret));
     }
   }
+
   //1.检查是否是single set query
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(ObTransformUtils::check_stmt_unique(subquery, ctx_->session_info_,

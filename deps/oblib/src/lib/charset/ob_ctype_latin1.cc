@@ -72,7 +72,7 @@ static ObCharsetHandler ob_charset_latin1_handler=
 
 ObCharsetInfo ob_charset_latin1 = {
     8,0,0,
-    OB_CS_COMPILED | OB_CS_PRIMARY,
+    OB_CS_COMPILED | OB_CS_PRIMARY | OB_CS_CI,
     OB_LATIN1,
     OB_LATIN1_SWEDISH_CI,
     "cp1252 West European",

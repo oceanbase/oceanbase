@@ -32,6 +32,14 @@ enum PartitionRelation
   COMPATIBLE_COMMON
 };
 
+enum Monotonicity
+{
+  NONE_MONO,
+  ASC,
+  DESC,
+  CONST
+};
+
 struct MergeKeyInfo
 {
   MergeKeyInfo(common::ObIAllocator &allocator, int64_t size)
@@ -186,6 +194,23 @@ public:
                                      const common::ObIArray<ObRawExpr *> &const_exprs,
                                      const ObIArray<ObRawExpr *> &exec_ref_exprs,
                                      int64_t &number);
+
+
+  static int get_expr_monotonicity(const ObRawExpr *expr,
+                                   const ObRawExpr *var,
+                                   ObExecContext &ctx,
+                                   Monotonicity &monotonicity,
+                                   bool &is_strict,
+                                   const ParamStore &param_store,
+                                   ObPCConstParamInfo& const_param_info);
+
+  static int get_expr_monotonicity_recursively(const ObRawExpr *expr,
+                                               const ObColumnRefRawExpr *var,
+                                               ObExecContext &ctx,
+                                               Monotonicity &monotonicity,
+                                               bool &is_strict,
+                                               const ParamStore &param_store,
+                                               ObPCConstParamInfo &const_param_info);
 
   static bool is_sub_expr(const ObRawExpr *sub_expr, const ObRawExpr *expr);
   static bool is_sub_expr(const ObRawExpr *sub_expr, const ObIArray<ObRawExpr*> &exprs);

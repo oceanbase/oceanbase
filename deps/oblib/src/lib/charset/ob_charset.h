@@ -429,6 +429,9 @@ public:
                                  ObCollationLevel &res_level,
                                  ObCollationType &res_type);
   static bool is_bin_sort(ObCollationType collation_type);
+
+  static bool is_ci_collate(ObCollationType collation_type);
+
   static ObCollationType get_bin_collation(const ObCharsetType charset_type);
   static int first_valid_char(const ObCollationType collation_type,
                               const char *buf,
