@@ -1049,8 +1049,6 @@ int ObDbmsWorkloadRepository::print_ash_summary_info(const AshReportParams &ash_
       LOG_WARN("failed to assign Elapsed Time string", K(ret));
     } else if (OB_FAIL(temp_string.append_fmt("          Num of Sample: %ld \n", num_samples))) {
       LOG_WARN("failed to assign Num of Sample string", K(ret));
-    } else if (OB_FAIL(temp_string.append_fmt("          Num of Events: %ld \n", num_events))) {
-      LOG_WARN("failed to assign Num of Events string", K(ret));
     } else if (OB_FAIL(
                    temp_string.append_fmt("Average Active Sessions: %.2f \n", avg_active_sess))) {
       LOG_WARN("failed to assign Average Active Sessions string", K(ret));
