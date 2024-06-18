@@ -14,6 +14,8 @@
 
 #include "core/ob_jit_allocator.h"
 #include "common/ob_clock_generator.h"
+#include "lib/container/ob_fixed_array.h"
+#include "lib/allocator/page_arena.h"
 #include <unistd.h>
 
 using namespace oceanbase::common;
@@ -103,6 +105,10 @@ ObJitMemoryBlock ObJitMemory::allocate_mapped_memory(int64_t num_bytes,
   uintptr_t start = 0;
   int64_t mm_flags = MAP_PRIVATE | MAP_ANONYMOUS;
   void *addr = nullptr;
+  ObArenaAllocator allocator;
+  int64_t capacity = 64;
+  ObFixedArray<int64_t, ObIAllocator> addr_array(allocator, capacity);
+  int ret = OB_SUCCESS;
   //循环mmap内存, 直到分配出内存, 避免分配不出内存后, llvm内部直接core
   do {
     addr = ::mmap(reinterpret_cast<void*>(start), page_size*num_pages,
@@ -118,8 +124,19 @@ ObJitMemoryBlock ObJitMemory::allocate_mapped_memory(int64_t num_bytes,
       ::usleep(100000); //100ms
 #if defined(__aarch64__)
       if (MAP_FAILED != addr) {
-        if (0 != ::munmap(addr, page_size*num_pages)) {
-          LOG_WARN_RET(OB_ERR_SYS, "jit block munmap failed", K(addr), K(page_size*num_pages));
+        if (capacity == addr_array.count()) {
+          for (uint64_t i = 0; i < addr_array.count(); i++) {
+            if (0 != ::munmap(reinterpret_cast<void *>(addr_array.at(i)), page_size*num_pages)) {
+              LOG_WARN("jit block munmap failed", K(addr), K(page_size*num_pages));
+            }
+          }
+          addr_array.reuse();
+        }
+        if (OB_FAIL(addr_array.push_back(reinterpret_cast<int64_t>(addr)))) {
+          LOG_WARN("addr_array push back failed", K(ret));
+          if (0 != ::munmap(addr, page_size*num_pages)) {
+            LOG_WARN("jit block munmap failed", K(addr), K(page_size*num_pages));
+          }
         }
         start = reinterpret_cast<int64_t>(addr) + UINT32_MAX - page_size*num_pages; //先向上移4G，再移动此次分配的大小，以保证此次分配的地址高16位一致
         LOG_INFO("aarch64 memory allocated not safe, try again", K(addr), K(start), K(page_size), K(num_pages));
@@ -128,8 +145,13 @@ ObJitMemoryBlock ObJitMemory::allocate_mapped_memory(int64_t num_bytes,
 #endif
     } else {
       LOG_DEBUG("allocate mapped memory success!",
-                K(addr), K(start),
+                K(addr), K(start), K(addr_array.count()),
                 K(page_size), K(num_pages), K(num_pages*page_size), K(num_bytes), K(p_flags));
+      for (uint64_t i = 0; i < addr_array.count(); i++) {
+        if (0 != ::munmap(reinterpret_cast<void *>(addr_array.at(i)), page_size*num_pages)) {
+          LOG_WARN("jit block munmap failed", K(addr), K(page_size*num_pages));
+        }
+      }
     }
   } while (MAP_FAILED == addr);
 
