@@ -261,7 +261,7 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode &parse_tree, b
       if (is_oracle_mode()){
         /* do nothing */
         LOG_WARN("Failed to resolve child stmt", K(ret));
-      } else if (params_.has_recursive_word_) {
+      } else if (cte_ctx_.has_recursive_word_) {
         ret = OB_ERR_CTE_NEED_QUERY_BLOCKS;  // mysql error: Recursive Common Table Expression 'cte' should have one or
                                              // more non-recursive query blocks followed by one or more recursive ones
         LOG_WARN("Failed to resolve child stmt", K(ret));
@@ -287,7 +287,7 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode &parse_tree, b
   } 
   
   if (OB_SUCC(ret)) {
-    if (!params_.has_cte_param_list_ && 
+    if (!cte_ctx_.has_cte_param_list_ &&
         !left_resolver.cte_ctx_.cte_col_names_.empty()) {
       right_resolver.cte_ctx_.cte_col_names_.reset();
       cte_ctx_.cte_col_names_.reset();
@@ -1315,7 +1315,7 @@ int ObSelectResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-  if (OB_SUCC(ret) && !is_oracle_mode() && !params_.has_cte_param_list_) {
+  if (OB_SUCC(ret) && !is_oracle_mode() && !cte_ctx_.has_cte_param_list_) {
     cte_ctx_.cte_col_names_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); i++) {
       if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(select_stmt->get_select_item(i).alias_name_))) {

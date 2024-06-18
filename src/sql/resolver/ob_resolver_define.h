@@ -355,8 +355,6 @@ struct ObResolverParams
        new_cte_tid_(common::OB_MIN_CTE_TABLE_ID + 1),
        new_gen_wid_(1),
        is_resolve_table_function_expr_(false),
-       has_cte_param_list_(false),
-       has_recursive_word_(false),
        tg_timing_event_(-1),
        is_column_ref_(true),
        hidden_column_scope_(T_NONE_SCOPE),
@@ -368,7 +366,8 @@ struct ObResolverParams
        is_in_sys_view_(false),
        star_expansion_infos_(),
        is_resolve_lateral_derived_table_(false),
-       package_guard_(NULL)
+       package_guard_(NULL),
+       is_resolve_fake_cte_table_(false)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -423,8 +422,6 @@ private:
   friend class ObStmtResolver;
 public:
   bool is_resolve_table_function_expr_;  // used to mark resolve table function expr.
-  bool has_cte_param_list_;
-  bool has_recursive_word_;
   int64_t tg_timing_event_;      // mysql mode, trigger的触发时机和类型
   bool is_column_ref_;                   // used to mark normal column ref
   ObStmtScope hidden_column_scope_; // record scope for first hidden column which need check hidden_column_visable in opt_param hint
@@ -437,6 +434,7 @@ public:
   common::ObArray<ObStarExpansionInfo> star_expansion_infos_;
   bool is_resolve_lateral_derived_table_; // used to mark resolve lateral derived table.
   pl::ObPLPackageGuard *package_guard_;
+  bool is_resolve_fake_cte_table_;
 };
 } // end namespace sql
 } // end namespace oceanbase

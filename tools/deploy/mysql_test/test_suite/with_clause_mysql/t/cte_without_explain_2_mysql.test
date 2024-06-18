@@ -583,7 +583,6 @@ with RECURSIVE outermost(x) AS (
 )
 SELECT * FROM outermost ORDER BY 1;
 
---error 5741
 with RECURSIVE outermost(x) AS (
   SELECT 1 FROM DUAL
   UNION (with RECURSIVE innermost as (SELECT 2 FROM DUAL)

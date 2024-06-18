@@ -148,6 +148,8 @@ public:
                         const bool get_hidden = false,
                         bool is_link = false);
 
+  int check_table_name_equal(const ObString &name1, const ObString &name2, bool &equal);
+
 protected:
   int normalize_table_or_database_names(common::ObString &name);
 

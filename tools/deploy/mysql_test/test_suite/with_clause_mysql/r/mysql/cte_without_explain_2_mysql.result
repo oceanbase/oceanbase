@@ -1114,6 +1114,10 @@ with RECURSIVE outermost(x) AS (
          )
 )
 SELECT * FROM outermost ORDER BY 1;
-ERROR HY000: recursive WITH clause must have column alias list
++------+
+| x    |
++------+
+|    1 |
++------+
 
 drop database cte_st;
