@@ -552,7 +552,8 @@ int ObDomainDMLIterator::get_next_domain_rows(ObNewRow *&row, int64_t &row_count
   int ret = OB_SUCCESS;
   const ObChunkDatumStore::StoredRow *sr = nullptr;
   bool got_row = false;
-  if (!das_ctdef_->table_param_.get_data_table().is_fts_index()) { // batch only for fulltext
+  // batch for fulltext and multivalue
+  if (das_ctdef_->table_param_.get_data_table().is_spatial_index()) {
     if (OB_FAIL(get_next_domain_row(row))) {
       LOG_WARN("fail to get next domain row", K(ret));
     } else {

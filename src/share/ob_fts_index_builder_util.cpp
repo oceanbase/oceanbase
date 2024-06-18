@@ -2053,6 +2053,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
       ObRawExpr *expr = nullptr;
       ObColumnSchemaV2 *gen_col = nullptr;
       budy_mulvalue_col = nullptr;
+      bool force_rebuild = false;
 
       if (OB_FAIL(session.init(0 /*default session id*/,
                                 0 /*default proxy id*/,
@@ -2077,6 +2078,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
                                                               session,
                                                               data_schema,
                                                               &schema_checker,
+                                                              force_rebuild,
                                                               gen_col,
                                                               budy_mulvalue_col))) {
         LOG_WARN("session load default configs failed", K(ret));
@@ -2110,6 +2112,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
     const ObSQLSessionInfo &session_info,
     ObTableSchema &table_schema,
     sql::ObSchemaChecker *schema_checker,
+    bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&budy_col)
 {
@@ -2132,7 +2135,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
     LOG_WARN("multivalue generated expr should be function, not column ref.", K(ret));
   } else {
     //real index expr, so generate hidden generated column in data table schema
-    if (OB_FAIL(generate_multivalue_column(*expr, table_schema, schema_checker->get_schema_guard(), gen_col, budy_col))) {
+    if (OB_FAIL(generate_multivalue_column(*expr, table_schema, schema_checker->get_schema_guard(), force_rebuild, gen_col, budy_col))) {
       LOG_WARN("generate ordinary generated column failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::check_generated_column_expr_str(
         gen_col->get_cur_default_value().get_string(), session_info, table_schema))) {
@@ -2150,6 +2153,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
     sql::ObRawExpr &expr,
     ObTableSchema &data_schema,
     ObSchemaGetterGuard *schema_guard,
+    bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&gen_budy_col)
 {
@@ -2169,7 +2173,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
       size_t expr_str_len = strlen(expr_def_buf);
       expr_def.assign_ptr(expr_def_buf, expr_str_len);
 
-      if (OB_FAIL(data_schema.get_generated_column_by_define(expr_def,
+      if (!force_rebuild && OB_FAIL(data_schema.get_generated_column_by_define(expr_def,
                                                              true/*only hidden column*/,
                                                              old_gen_col))) {
         LOG_WARN("get generated column by define failed", K(ret), K(expr_def));

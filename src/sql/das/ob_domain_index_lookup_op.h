@@ -112,7 +112,7 @@ protected:
 
   bool need_scan_aux_;
 
-  static const int64_t SORT_MEMORY_LIMIT = 32L * 1024L * 1024L;
+  static const int64_t SORT_MEMORY_LIMIT = 48L * 1024L * 1024L;
   static const int64_t MAX_NUM_PER_BATCH = 1000;
 };
 
