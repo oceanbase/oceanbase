@@ -2492,9 +2492,9 @@ double ObInequalJoinSelEstimator::get_gt_sel(double min1,
     selectivity = 1.0;
   } else if (offset < max1 + min2 && offset < min1 + max2 && total > OB_DOUBLE_EPSINON) {
     selectivity = 1 - (offset - min1  - min2) * (offset - min1  - min2) / (2 * total);
-  } else if (offset >= max1 + min2 && offset < min1 + max2 && max1 - min1 > OB_DOUBLE_EPSINON) {
+  } else if (offset >= max1 + min2 && offset < min1 + max2 && max2 - min2 > OB_DOUBLE_EPSINON) {
     selectivity = (2 * max2 + min1 + max1 - 2 * offset) / (2 * (max2 - min2));
-  } else if (offset >= min1 + max2 && offset < max1 + min2 && max2 - min2 > OB_DOUBLE_EPSINON) {
+  } else if (offset >= min1 + max2 && offset < max1 + min2 && max1 - min1 > OB_DOUBLE_EPSINON) {
     selectivity = (min2 + max2 + 2 * max1 - 2 * offset) / (2 * (max1 - min1));
   } else if (offset < max1 + max2 && total > OB_DOUBLE_EPSINON) {
     selectivity = (max1 + max2 - offset) * (max1 + max2 - offset) / (2 * total);
@@ -2666,14 +2666,24 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
       if (OB_ISNULL(ctx.get_left_rel_ids()) || OB_ISNULL(ctx.get_right_rel_ids())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ctx.get_left_rel_ids()), K(ctx.get_right_rel_ids()));
-      } else if (term_.col1_->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
-                 term_.col2_->get_relation_ids().overlap(*ctx.get_left_rel_ids())) {
+      } else if (IS_LEFT_SEMI_ANTI_JOIN(ctx.get_join_type()) &&
+                (term_.col1_->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
+                 term_.col2_->get_relation_ids().overlap(*ctx.get_left_rel_ids()))) {
+        std::swap(min1, min2);
+        std::swap(max1, max2);
+        std::swap(ndv1, ndv2);
+        std::swap(nns1, nns2);
+      } else if (IS_RIGHT_SEMI_ANTI_JOIN(ctx.get_join_type()) &&
+                 (term_.col1_->get_relation_ids().overlap(*ctx.get_left_rel_ids()) ||
+                  term_.col2_->get_relation_ids().overlap(*ctx.get_right_rel_ids()))) {
         std::swap(min1, min2);
         std::swap(max1, max2);
         std::swap(ndv1, ndv2);
         std::swap(nns1, nns2);
       }
     }
+    ndv1 = std::max(ndv1, 1.0);
+    ndv2 = std::max(ndv2, 1.0);
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(min1 > max1) ||
         OB_UNLIKELY(min2 > max2)) {
@@ -2720,8 +2730,10 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
 
     // process not null sel
     if (is_semi) {
+      selectivity = std::max(selectivity, 1 / ndv1);
       selectivity *= nns1;
     } else {
+      selectivity = std::max(selectivity, 1 / (ndv1 * ndv2));
       selectivity *= nns1 * nns2;
     }
   }
