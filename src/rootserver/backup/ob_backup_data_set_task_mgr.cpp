@@ -1954,6 +1954,9 @@ int ObBackupSetTaskMgr::write_log_format_file_()
     LOG_WARN("failed to get_tenant_schema_guard", KR(ret), "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(schema_guard.get_tenant_info(job_attr_->tenant_id_, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), "tenant_id", job_attr_->tenant_id_);
+  } else if (OB_ISNULL(tenant_info)) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(format_desc.cluster_name_.assign(GCONF.cluster.str()))) {
     LOG_WARN("failed to assign cluster name", K(ret));
   } else if (OB_FAIL(format_desc.tenant_name_.assign(tenant_info->get_tenant_name()))) {
@@ -2103,6 +2106,9 @@ int ObBackupSetTaskMgr::write_extern_locality_info_(ObExternTenantLocalityInfoDe
     LOG_WARN("[DATA_BACKUP]failed to get_tenant_schema_guard", KR(ret), "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(schema_guard.get_tenant_info(job_attr_->tenant_id_, tenant_info))) {
     LOG_WARN("[DATA_BACKUP]failed to get tenant info", K(ret), "tenant_id", job_attr_->tenant_id_);
+  } else if (OB_ISNULL(tenant_info)) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(locality_info.tenant_name_.assign(tenant_info->get_tenant_name()))) {
     LOG_WARN("[DATA_BACKUP]failed to assign tenant name", K(ret), K(tenant_info));
   } else if (OB_FAIL(locality_info.locality_.assign(tenant_info->get_locality()))) {
