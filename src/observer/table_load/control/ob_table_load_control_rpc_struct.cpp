@@ -66,7 +66,8 @@ ObDirectLoadControlPreBeginArg::ObDirectLoadControlPreBeginArg()
     write_session_count_(0),
     exe_mode_(ObTableLoadExeMode::MAX_TYPE),
     method_(ObDirectLoadMethod::INVALID_METHOD),
-    insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE)
+    insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE),
+    compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
@@ -107,7 +108,8 @@ OB_DEF_SERIALIZE(ObDirectLoadControlPreBeginArg)
               write_session_count_,
               exe_mode_,
               method_,
-              insert_mode_);
+              insert_mode_,
+              compressor_type_);
   return ret;
 }
 
@@ -136,7 +138,8 @@ OB_DEF_DESERIALIZE(ObDirectLoadControlPreBeginArg)
               write_session_count_,
               exe_mode_,
               method_,
-              insert_mode_);
+              insert_mode_,
+              compressor_type_);
   return ret;
 }
 
@@ -167,7 +170,8 @@ OB_DEF_SERIALIZE_SIZE(ObDirectLoadControlPreBeginArg)
               write_session_count_,
               exe_mode_,
               method_,
-              insert_mode_);
+              insert_mode_,
+              compressor_type_);
   return len;
 }
 

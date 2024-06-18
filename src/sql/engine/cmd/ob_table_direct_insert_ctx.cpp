@@ -77,6 +77,7 @@ int ObTableDirectInsertCtx::init(
       load_exec_ctx_->exec_ctx_ = exec_ctx;
       ObArray<uint64_t> column_ids;
       omt::ObTenant *tenant = nullptr;
+      ObCompressorType compressor_type = ObCompressorType::NONE_COMPRESSOR;
       ObDirectLoadMethod::Type method = (is_incremental ? ObDirectLoadMethod::INCREMENTAL : ObDirectLoadMethod::FULL);
       ObDirectLoadInsertMode::Type insert_mode = ObDirectLoadInsertMode::INVALID_INSERT_MODE;
       if (session_info->get_ddl_info().is_mview_complete_refresh()) {
@@ -93,6 +94,8 @@ int ObTableDirectInsertCtx::init(
                                                                        method,
                                                                        insert_mode))) {
         LOG_WARN("fail to check support direct load", KR(ret));
+      } else if (OB_FAIL(get_compressor_type(MTL_ID(), table_id, parallel, compressor_type))) {
+        LOG_WARN("fail to get compressor type", KR(ret));
       } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(*schema_guard,
                                                            tenant_id,
                                                            table_id,
@@ -116,6 +119,7 @@ int ObTableDirectInsertCtx::init(
         param.method_ = method;
 
         param.insert_mode_ = insert_mode;
+        param.compressor_type_ = compressor_type;
         if (OB_FAIL(table_load_instance_->init(param, column_ids, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret));
         } else {
@@ -169,6 +173,29 @@ void ObTableDirectInsertCtx::destroy()
   is_inited_ = false;
   is_direct_ = false;
   is_online_gather_statistics_ = false;
+}
+
+int ObTableDirectInsertCtx::get_compressor_type(const uint64_t tenant_id,
+                                                const uint64_t table_id,
+                                                const int64_t parallel,
+                                                ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
+                                                                                  schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema->get_compressor_type(),
+                                                             parallel, compressor_type))) {
+    LOG_WARN("fail to get tmp store compressor type", KR(ret));
+  }
+  return ret;
 }
 
 } // namespace sql

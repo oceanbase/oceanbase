@@ -64,6 +64,8 @@ public:
                               uint64_t &lob_meta_table_id);
   static int check_has_invisible_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_unused_column(const share::schema::ObTableSchema *table_schema, bool &bret);
+  static int get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
+                                       ObCompressorType &compressor_type);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();

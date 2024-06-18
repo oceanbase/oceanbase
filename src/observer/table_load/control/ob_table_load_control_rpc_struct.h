@@ -169,7 +169,8 @@ public:
                K_(write_session_count),
                K_(exe_mode),
                "method", storage::ObDirectLoadMethod::get_type_string(method_),
-               "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_));
+               "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
+               K_(compressor_type));
 
 public:
   uint64_t table_id_;
@@ -189,6 +190,7 @@ public:
   ObTableLoadExeMode exe_mode_;
   storage::ObDirectLoadMethod::Type method_;
   storage::ObDirectLoadInsertMode::Type insert_mode_;
+  ObCompressorType compressor_type_;
 };
 
 class ObDirectLoadControlConfirmBeginArg final

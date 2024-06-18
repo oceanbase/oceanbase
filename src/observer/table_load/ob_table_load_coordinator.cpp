@@ -469,6 +469,7 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
     arg.exe_mode_ = ctx_->param_.exe_mode_;
     arg.method_ = param_.method_;
     arg.insert_mode_ = param_.insert_mode_;
+    arg.compressor_type_ = param_.compressor_type_;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_leader_info_array.count(); ++i) {
       const ObTableLoadPartitionLocation::LeaderInfo &leader_info = all_leader_info_array.at(i);
       const ObTableLoadPartitionLocation::LeaderInfo &target_leader_info =

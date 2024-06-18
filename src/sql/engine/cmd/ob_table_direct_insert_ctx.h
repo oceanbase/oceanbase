@@ -67,6 +67,9 @@ public:
   }
 
 private:
+  int get_compressor_type(const uint64_t tenant_id, const uint64_t table_id, const int64_t parallel,
+                          ObCompressorType &compressor_type);
+private:
   observer::ObTableLoadSqlExecCtx *load_exec_ctx_;
   observer::ObTableLoadInstance *table_load_instance_;
   bool is_inited_;

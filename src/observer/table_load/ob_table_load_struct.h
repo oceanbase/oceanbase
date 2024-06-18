@@ -149,7 +149,8 @@ public:
       write_session_count_(0),
       exe_mode_(ObTableLoadExeMode::MAX_TYPE),
       method_(storage::ObDirectLoadMethod::INVALID_METHOD),
-      insert_mode_(storage::ObDirectLoadInsertMode::INVALID_INSERT_MODE)
+      insert_mode_(storage::ObDirectLoadInsertMode::INVALID_INSERT_MODE),
+      compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
   {
   }
 
@@ -183,7 +184,8 @@ public:
               : true) &&
            (storage::ObDirectLoadInsertMode::INC_REPLACE == insert_mode_
               ? sql::ObLoadDupActionType::LOAD_REPLACE == dup_action_
-              : true);
+              : true) &&
+           ObCompressorType::INVALID_COMPRESSOR != compressor_type_;
   }
 
   TO_STRING_KV(K_(tenant_id),
@@ -202,7 +204,9 @@ public:
                K_(write_session_count),
                K_(exe_mode),
                "method", storage::ObDirectLoadMethod::get_type_string(method_),
-               "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_));
+               "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
+               K_(compressor_type));
+
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -221,6 +225,7 @@ public:
   ObTableLoadExeMode exe_mode_;
   storage::ObDirectLoadMethod::Type method_;
   storage::ObDirectLoadInsertMode::Type insert_mode_;
+  ObCompressorType compressor_type_;
 };
 
 struct ObTableLoadDDLParam

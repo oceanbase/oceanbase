@@ -124,6 +124,10 @@ private:
   int init_instance();
   int commit_instance();
   void destroy_instance();
+  int get_compressor_type(const uint64_t tenant_id,
+                          const uint64_t table_id,
+                          const int64_t parallel,
+                          ObCompressorType &compressor_type);
 
 private:
   class ClientTaskExectueProcessor;

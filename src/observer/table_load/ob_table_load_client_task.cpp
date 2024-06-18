@@ -578,6 +578,24 @@ void ObTableLoadClientTask::get_status(ObTableLoadClientStatus &client_status,
   error_code = error_code_;
 }
 
+int ObTableLoadClientTask::get_compressor_type(const uint64_t tenant_id,
+                                               const uint64_t table_id,
+                                               const int64_t parallel,
+                                               ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+  ObCompressorType table_compressor_type = ObCompressorType::NONE_COMPRESSOR;
+  if (OB_FAIL(
+        ObTableLoadSchema::get_table_compressor_type(tenant_id, table_id, table_compressor_type))) {
+    LOG_WARN("fail to get table compressor type", KR(ret));
+  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_compressor_type, parallel,
+                                                             compressor_type))) {
+    LOG_WARN("fail to get tmp store compressor type", KR(ret));
+  }
+  return ret;
+}
+
+
 int ObTableLoadClientTask::init_instance()
 {
   int ret = OB_SUCCESS;
@@ -592,6 +610,7 @@ int ObTableLoadClientTask::init_instance()
     omt::ObTenant *tenant = nullptr;
     ObSchemaGetterGuard schema_guard;
     ObArray<uint64_t> column_ids;
+    ObCompressorType compressor_type = INVALID_COMPRESSOR;
     if (OB_FAIL(GCTX.omt_->get_tenant(param_.get_tenant_id(), tenant))) {
       LOG_WARN("fail to get tenant handle", KR(ret), K(param_.get_tenant_id()));
     } else if (OB_FAIL(ObTableLoadSchema::get_schema_guard(tenant_id, schema_guard))) {
@@ -606,6 +625,8 @@ int ObTableLoadClientTask::init_instance()
                                                               table_id,
                                                               column_ids))) {
       LOG_WARN("fail to get user column ids", KR(ret));
+    } else if (OB_FAIL(get_compressor_type(param_.get_tenant_id(), param_.get_table_id(), session_count_, compressor_type))) {
+      LOG_WARN("fail to get compressor type", KR(ret));
     } else {
       ObTableLoadParam load_param;
       load_param.tenant_id_ = tenant_id;
@@ -621,6 +642,7 @@ int ObTableLoadClientTask::init_instance()
       load_param.dup_action_ = param_.get_dup_action();
       load_param.method_ = method;
       load_param.insert_mode_ = insert_mode;
+      load_param.compressor_type_ = compressor_type;
       const ObTableLoadTableCtx *tmp_ctx = nullptr;
       if (OB_FAIL(instance_.init(load_param, column_ids, exec_ctx_))) {
         LOG_WARN("fail to init instance", KR(ret));
