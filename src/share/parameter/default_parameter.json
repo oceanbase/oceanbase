@@ -54,6 +54,11 @@
           "name":"large_query_threshold",
           "value":"0ms",
           "comment":"disable large query detection for AP query"
+        },
+        {
+          "name":"_enable_kv_feature",
+          "value": false,
+          "comment":"disable kv feature for AP cluster"
         }
       ],
       "tenant": [
