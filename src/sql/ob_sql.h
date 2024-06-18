@@ -496,6 +496,7 @@ private:
   int get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_sql);
   static int add_param_to_param_store(const ObObjParam &param,
                                       ParamStore &param_store);
+  int check_need_switch_thread(ObSqlCtx &ctx, const ObStmt *stmt, bool &need_switch);
   void rollback_implicit_trans_when_fail(ObResultSet &result, int &ret);
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;

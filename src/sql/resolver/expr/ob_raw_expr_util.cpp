@@ -9355,6 +9355,26 @@ int ObRawExprUtils::check_contain_case_when_exprs(const ObRawExpr *raw_expr, boo
   return ret;
 }
 
+int ObRawExprUtils::check_contain_lock_exprs(const ObRawExpr *raw_expr, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(raw_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr passed in is NULL", K(ret));
+  } else if (T_FUN_SYS_GET_LOCK == raw_expr->get_expr_type() ||
+             T_FUN_SYS_RELEASE_LOCK == raw_expr->get_expr_type() ||
+             T_FUN_SYS_RELEASE_ALL_LOCKS == raw_expr->get_expr_type()) {
+    contain = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !contain && i < raw_expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(check_contain_lock_exprs(raw_expr->get_param_expr(i), contain)))) {
+        LOG_WARN("failed to replace_ref_column", KPC(raw_expr), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
 bool ObRawExprUtils::decimal_int_need_cast(const ObAccuracy &src_acc, const ObAccuracy &dst_acc)
 {
   return decimal_int_need_cast(src_acc.get_precision(), src_acc.get_scale(),

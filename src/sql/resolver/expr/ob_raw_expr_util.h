@@ -1212,6 +1212,7 @@ public:
   static bool decimal_int_need_cast(const common::ObAccuracy &src_acc,
                                     const common::ObAccuracy &dst_acc);
   static int check_contain_case_when_exprs(const ObRawExpr *raw_expr, bool &contain);
+  static int check_contain_lock_exprs(const ObRawExpr *raw_expr, bool &contain);
   static bool decimal_int_need_cast(const common::ObPrecision src_p, const common::ObScale src_s,
                                     const common::ObPrecision dst_p, const common::ObScale dst_s);
   static int transform_udt_column_value_expr(ObRawExprFactory &expr_factory, ObRawExpr *old_expr, ObRawExpr *&new_expr);

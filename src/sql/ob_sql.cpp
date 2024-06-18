@@ -5980,5 +5980,24 @@ void ObSql::rollback_implicit_trans_when_fail(ObResultSet &result, int &ret)
   }
 }
 
+int ObSql::check_need_switch_thread(ObSqlCtx &ctx, const ObStmt *stmt, bool &need_switch)
+{
+  int ret = OB_SUCCESS;
+  need_switch = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(stmt), K(ctx.session_info_));
+  } else {
+    bool is_multi_stmt = ctx.multi_stmt_item_.is_part_of_multi_stmt();
+    bool in_pl = NULL != ctx.session_info_->get_pl_context();
+    if (is_multi_stmt || in_pl) {
+      // do nothing
+    } else if (OB_FAIL(stmt->check_is_simple_lock_stmt(need_switch))) {
+      LOG_WARN("failed to check stmt", K(ret), KPC(stmt));
+    }
+  }
+  return ret;
+}
+
 }//end of namespace sql
 }//end of namespace oceanbase

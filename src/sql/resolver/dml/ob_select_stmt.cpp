@@ -1456,3 +1456,31 @@ int ObSelectStmt::get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) c
   LOG_TRACE("succeed to get all group by exprs", K(group_by_exprs));
   return ret;
 }
+
+int ObSelectStmt::check_is_simple_lock_stmt(bool &is_valid) const
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  if (get_from_item_size() == 0 &&
+      get_subquery_expr_size() == 0 &&
+      get_select_item_size() > 0 &&
+      !has_distinct() &&
+      !has_group_by() &&
+      !is_set_stmt() &&
+      !has_rollup() &&
+      !has_order_by() &&
+      get_aggr_item_size() == 0 &&
+      !is_contains_assignment() &&
+      !has_window_function() &&
+      !has_sequence() &&
+      !is_hierarchical_query()) {
+    bool contain_lock_expr = false;
+    for (int64_t i = 0; !contain_lock_expr && i < select_items_.count(); i ++) {
+      if (OB_FAIL(ObRawExprUtils::check_contain_lock_exprs(select_items_.at(i).expr_, contain_lock_expr))) {
+        LOG_WARN("failed to check contain lock exprs", K(ret));
+      }
+    }
+    is_valid = contain_lock_expr;
+  }
+  return ret;
+}
