@@ -403,30 +403,16 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
                                           ObDatumRow &datum_row, int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  ObObj out_obj;
+  if (OB_UNLIKELY(row.count_ != table_data_desc_->column_count_)) {
+    ret = OB_ERR_INVALID_COLUMN_NUM;
+    LOG_WARN("column count not match", KR(ret), K(row.count_), K(table_data_desc_->column_count_));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_data_desc_->column_count_; ++i) {
-    out_obj.set_null();
     const ObColumnSchemaV2 *column_schema = column_schemas_.at(i);
-    ObCastCtx cast_ctx(&cast_allocator, &cast_params, CM_NONE, column_schema->get_collation_type());
-    ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
-    const bool is_null_autoinc =
-      (column_schema->is_autoincrement() || column_schema->is_identity_column()) &&
-      row.cells_[i].is_null();
-    if (!is_null_autoinc && OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema,
-                                                                   row.cells_[i], out_obj))) {
-      LOG_WARN("fail to cast obj and check", KR(ret), K(i), K(row.cells_[i]));
-    } else if (OB_FAIL(check_support_obj(out_obj))) {
-      LOG_WARN("failed to check support obj", KR(ret), K(out_obj));
-    } else if (OB_FAIL(datum_row.storage_datums_[i].from_obj_enhance(out_obj))) {
-      LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
-    } else if (column_schema->is_autoincrement() &&
-               OB_FAIL(handle_autoinc_column(column_schema, datum_row.storage_datums_[i],
-                                             column_schema->get_meta_type().get_type_class(),
-                                             session_id))) {
-      LOG_WARN("fail to handle autoinc column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
-    } else if (column_schema->is_identity_column() && !column_schema->is_tbl_part_key_column() &&
-               OB_FAIL(handle_identity_column(column_schema, datum_row.storage_datums_[i], cast_allocator))) {
-      LOG_WARN("fail to handle identity column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
+    const ObObj &obj = row.cells_[i];
+    ObStorageDatum &datum = datum_row.storage_datums_[i];
+    if (OB_FAIL(cast_column(cast_allocator, cast_params, column_schema, obj, datum, session_id))) {
+      LOG_WARN("fail to cast column", KR(ret), K(i), K(obj), KPC(column_schema));
     }
   }
   if (OB_FAIL(ret)) {
@@ -436,6 +422,52 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
       LOG_WARN("failed to handle error row", K(ret), K(row));
     } else {
       ret = OB_EAGAIN;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadTransStoreWriter::cast_column(
+    ObArenaAllocator &cast_allocator,
+    ObDataTypeCastParams cast_params,
+    const ObColumnSchemaV2 *column_schema,
+    const ObObj &obj,
+    ObStorageDatum &datum,
+    int32_t session_id)
+{
+  int ret = OB_SUCCESS;
+  ObCastCtx cast_ctx(&cast_allocator, &cast_params, CM_NONE, column_schema->get_collation_type());
+  ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
+  const bool is_null_autoinc =
+    (column_schema->is_autoincrement() || column_schema->is_identity_column()) &&
+    (obj.is_null() || obj.is_nop_value());
+  ObObj out_obj;
+  if (is_null_autoinc) {
+    out_obj.set_null();
+  } else if (obj.is_nop_value()) {
+    if (OB_UNLIKELY(column_schema->is_not_null_for_write())) {
+      ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+      LOG_WARN("column can not be null", KR(ret), KPC(column_schema));
+    } else {
+      out_obj = column_schema->get_cur_default_value();
+    }
+  } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema, obj, out_obj))) {
+    LOG_WARN("fail to cast obj and check", KR(ret), K(obj));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_support_obj(out_obj))) {
+    LOG_WARN("failed to check support obj", KR(ret), K(out_obj));
+  } else if (OB_FAIL(datum.from_obj_enhance(out_obj))) {
+    LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
+  } else if (column_schema->is_autoincrement()) {
+    if (OB_FAIL(handle_autoinc_column(
+          column_schema, datum, column_schema->get_meta_type().get_type_class(), session_id))) {
+      LOG_WARN("fail to handle autoinc column", KR(ret), K(datum));
+    }
+  } else if (column_schema->is_identity_column() && !column_schema->is_tbl_part_key_column()) {
+    // if identity column is part key column, the value is determined before partition calculation
+    if (OB_FAIL(handle_identity_column(column_schema, datum, cast_allocator))) {
+      LOG_WARN("fail to handle identity column", KR(ret), K(datum));
     }
   }
   return ret;

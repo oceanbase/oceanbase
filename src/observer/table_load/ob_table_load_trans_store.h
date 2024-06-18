@@ -89,6 +89,12 @@ private:
   int cast_row(common::ObArenaAllocator &cast_allocator, ObDataTypeCastParams cast_params,
                const common::ObNewRow &row, blocksstable::ObDatumRow &datum_row,
                int32_t session_id);
+  int cast_column(common::ObArenaAllocator &cast_allocator,
+                  ObDataTypeCastParams cast_params,
+                  const share::schema::ObColumnSchemaV2 *column_schema,
+                  const common::ObObj &obj,
+                  blocksstable::ObStorageDatum &datum,
+                  int32_t session_id);
   int handle_autoinc_column(const share::schema::ObColumnSchemaV2 *column_schema,
                             blocksstable::ObStorageDatum &datum,
                             const ObObjTypeClass &tc,
