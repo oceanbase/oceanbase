@@ -374,7 +374,7 @@ static ObCharsetHandler ob_charset_gbk_handler=
 ObCharsetInfo ob_charset_gbk_chinese_ci=
 {
     28,0,0,
-    OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM,
+    OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM|OB_CS_CI,
     "gbk",
     "gbk_chinese_ci",
     "",

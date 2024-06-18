@@ -102,6 +102,7 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
   int64_t unused_pid = -1;
   const bool is_cluster_already_4200 = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
   if (OB_ISNULL(log_service)) {
+    ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "ObLogService is nullptr");
   } else if (CLICK_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
     COORDINATOR_LOG_(WARN, "open_palf failed");
@@ -189,6 +190,7 @@ int PriorityV1::get_role_(const share::ObLSID &ls_id, common::ObRole &role) cons
   role = FOLLOWER;
 
   if (OB_ISNULL(ls_srv)) {
+    ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "ObLSService is nullptr");
   } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
     COORDINATOR_LOG_(WARN, "get_ls failed", K(ls_id));

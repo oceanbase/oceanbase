@@ -858,6 +858,11 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
                                                                            package_schema->get_package_id(),
                                                                            new_schema_version, trans))) {
            LOG_WARN("drop package failed", KR(ret), "package_id", package_schema->get_package_id());
+         } else if (OB_FAIL(pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
+                                                                              tenant_id,
+                                                                              package_schema->get_package_id(),
+                                                                              package_schema->get_database_id()))) {
+          LOG_WARN("fail to delete ddl from disk", K(ret));
          } else {
            // delete audit in package
            audits.reuse();
@@ -923,6 +928,11 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
         } else if (OB_FAIL(schema_service_impl->get_routine_sql_service().drop_routine(
                            *routine_info, new_schema_version, trans))) {
           LOG_WARN("drop routine failed", KR(ret), "routine_id", routine_id);
+        } else if (OB_FAIL(pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
+                                                                             routine_info->get_tenant_id(),
+                                                                             routine_info->get_routine_id(),
+                                                                             routine_info->get_database_id()))) {
+          LOG_WARN("fail to delete ddl from disk", K(ret));
         } else {
           // delete audit in routine
           audits.reuse();
@@ -986,6 +996,25 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
         } else if (OB_FAIL(schema_service_impl->get_udt_sql_service().drop_udt(
                            *udt_info, new_schema_version, trans))) {
           LOG_WARN("drop routine failed", "routine_id", udt_info->get_type_id(), K(ret));
+        }
+        if (OB_SUCC(ret)) {
+          if (udt_info->is_object_spec_ddl() &&
+              OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id))) {
+            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                          ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id)),
+                          udt_info->get_database_id()));
+            if (udt_info->has_type_body() &&
+                OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id))) {
+              OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                            ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id)),
+                            udt_info->get_database_id()));
+            }
+          } else if (udt_info->is_object_body_ddl() &&
+                    OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id))) {
+            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                                      ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id)),
+                                      udt_info->get_database_id()));
+          }
         }
       }
     }
@@ -4583,6 +4612,7 @@ int ObDDLOperator::drop_obj_privs(
     int64_t new_schema_version = OB_INVALID_VERSION;
 
     if (OB_ISNULL(obj_priv)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("obj_priv priv is NULL", K(ret), K(obj_priv));
     } else {
       OZ (schema_service.gen_new_schema_version(tenant_id, new_schema_version));
@@ -4654,7 +4684,8 @@ int ObDDLOperator::drop_table(
     const ObString *ddl_stmt_str/*=NULL*/,
     const bool is_truncate_table/*false*/,
     DropTableIdHashSet *drop_table_set/*=NULL*/,
-    const bool is_drop_db/*false*/)
+    const bool is_drop_db/*false*/,
+    const bool delete_priv)
 {
   int ret = OB_SUCCESS;
   bool tmp = false;
@@ -4734,7 +4765,8 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
     const ObString *ddl_stmt_str/*=NULL*/,
     const bool is_truncate_table/*false*/,
     DropTableIdHashSet *drop_table_set/*=NULL*/,
-    const bool is_drop_db/*false*/)
+    const bool is_drop_db/*false*/,
+    const bool delete_priv)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -4750,8 +4782,10 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
   //delete all object privileges granted on the object
   uint64_t obj_type = static_cast<uint64_t>(ObObjectType::TABLE);
   uint64_t table_id = table_schema.get_table_id();
-  if (OB_SUCC(ret) && !is_drop_db) {
+  if (OB_SUCC(ret) && !is_drop_db && delete_priv) {
     OZ (drop_obj_privs(tenant_id, table_id, obj_type, trans),tenant_id, table_id, obj_type);
+  } else {
+    LOG_WARN("do not cascade drop obj priv", K(ret), K(is_drop_db), K(delete_priv));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
@@ -6827,6 +6861,7 @@ int ObDDLOperator::drop_db_table_privs(
         const ObDBPriv *db_priv = db_privs.at(i);
         int64_t new_schema_version = OB_INVALID_VERSION;
         if (OB_ISNULL(db_priv)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("db priv is NULL", K(ret), K(db_priv));
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
@@ -6850,6 +6885,7 @@ int ObDDLOperator::drop_db_table_privs(
         const ObTablePriv *table_priv = table_privs.at(i);
         int64_t new_schema_version = OB_INVALID_VERSION;
         if (OB_ISNULL(table_priv)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table priv is NULL", K(ret), K(table_priv));
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
@@ -6900,6 +6936,7 @@ int ObDDLOperator::drop_db_table_privs(
       const ObObjPriv *obj_priv = obj_privs.at(i);
       int64_t new_schema_version = OB_INVALID_VERSION;
       if (OB_ISNULL(obj_priv)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("obj_priv priv is NULL", K(ret), K(obj_priv));
       } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));

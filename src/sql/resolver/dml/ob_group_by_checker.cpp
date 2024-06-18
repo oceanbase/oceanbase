@@ -250,7 +250,8 @@ int ObGroupByChecker::check_group_by(const ParamStore *param_store,
         }
       }
     }
-    if (OB_FAIL(append(all_rollup_exprs, ref_stmt->get_rollup_exprs()))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(all_rollup_exprs, ref_stmt->get_rollup_exprs()))) {
       LOG_WARN("failed to expr", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_rollup_items_size(); ++i) {

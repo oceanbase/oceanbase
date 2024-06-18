@@ -306,7 +306,7 @@ public:
   virtual void reset();
   void reset_key();
   typedef common::hash::ObHashMap<int64_t, ObSEArray<int64_t, 16>> SameValIdxMap;
-  static int try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
+  static int try_cast_value(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime, ObIAllocator &alloc,
                             const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
                             common::ObCmpOp cmp_op = CO_EQ, bool left_border = true);
   inline bool operator <=(const ObKeyPart &other) const { return pos_.offset_ <= other.pos_.offset_; }
@@ -347,7 +347,7 @@ public:
   inline bool is_like_key() const { return T_LIKE_KEY == key_type_ && like_keypart_ != NULL; }
   inline bool is_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_IN_KEY_PART; }
   inline bool is_not_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_NOT_IN_KEY_PART; }
-  inline bool is_geo_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL && (domain_keypart_->domain_op_ >= ObDomainOpType::T_GEO_COVERS && domain_keypart_->domain_op_ <= ObDomainOpType::T_GEO_COVEREDBY); }
+  inline bool is_geo_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL && (domain_keypart_->domain_op_ >= ObDomainOpType::T_GEO_COVERS && domain_keypart_->domain_op_ <= ObDomainOpType::T_GEO_RELATE); }
   inline bool is_domain_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL; }
 
   int create_normal_key();
@@ -409,7 +409,8 @@ public:
   int remove_in_dup_vals();
   int convert_to_true_or_false(bool is_always_true);
 
-  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row, bool &is_bound_modified);
+  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
+                      bool contain_row, bool &is_bound_modified);
 
   // copy all except next_ pointer
   int deep_node_copy(const ObKeyPart &other);

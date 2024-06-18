@@ -829,19 +829,31 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
         break;
       }
       case WORKAREA_MEM: {
-        cells[cell_idx].set_null();
+        if(need_rt_node_) {
+          int64_t int_value = node.workarea_mem_;
+          cells[cell_idx].set_int(int_value);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case WORKAREA_MAX_MEM: {
-        cells[cell_idx].set_null();
+        int64_t int_value = node.workarea_max_mem_;
+        cells[cell_idx].set_int(int_value);
         break;
       }
       case WORKAREA_TEMPSEG: {
-        cells[cell_idx].set_null();
+        if (need_rt_node_) {
+          int64_t int_value = node.workarea_tempseg_;
+          cells[cell_idx].set_int(int_value);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case WORKAREA_MAX_TEMPSEG: {
-        cells[cell_idx].set_null();
+        int64_t int_value = node.workarea_max_tempseg_;
+        cells[cell_idx].set_int(int_value);
         break;
       }
       default: {

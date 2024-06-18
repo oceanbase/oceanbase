@@ -1390,6 +1390,7 @@ int ObDDLService::generate_schema(
   const ObIArray<ObConstraint> &constraints = arg.constraint_list_;
   const uint64_t tenant_id = schema.get_tenant_id();
   uint64_t new_table_id = schema.get_table_id();
+  uint64_t compat_version = 0;
   ObSchemaService *schema_service = NULL;
   const ObDatabaseSchema *database_schema = NULL;
   const ObTenantSchema *tenant_schema = NULL;
@@ -1398,6 +1399,12 @@ int ObDDLService::generate_schema(
   ObSchemaGetterGuard guard;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (not_compat_for_queuing_mode(compat_version) && arg.schema_.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(tenant_id), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, QUEUING_MODE_NOT_COMPAT_USER_ERROR_STR);
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
     LOG_WARN("get schema guard failed", K(ret));
   } else {
@@ -3340,13 +3347,38 @@ int ObDDLService::set_raw_table_options(
           break;
         }
         case ObAlterTableArg::TABLE_MODE: {
-          new_table_schema.set_table_mode(alter_table_schema.get_table_mode());
-          need_update_index_table = true;
+          uint64_t compat_version = 0;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (not_compat_for_queuing_mode(compat_version) && alter_table_schema.is_new_queuing_table_mode()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(compat_version), K(alter_table_schema.get_table_mode()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, QUEUING_MODE_NOT_COMPAT_USER_ERROR_STR);
+          } else {
+            new_table_schema.set_table_mode(alter_table_schema.get_table_mode());
+            need_update_index_table = true;
+          }
           break;
         }
         case ObAlterTableArg::INCREMENT_MODE : {
           new_table_schema.set_table_auto_increment_mode(
             alter_table_schema.get_table_auto_increment_mode());
+          break;
+        }
+        case ObAlterTableArg::INCREMENT_CACHE_SIZE : {
+          uint64_t data_version = OB_INVALID_VERSION;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (data_version < MOCK_DATA_VERSION_4_2_3_0 ||
+              (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_2_0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("table auto_increment_cache_size less than 4.2.3 not support", K(ret),
+                     K(data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "table auto_increment_cache_size less than 4.2.3");
+          } else {
+            new_table_schema.set_auto_increment_cache_size(
+              alter_table_schema.get_auto_increment_cache_size());
+          }
           break;
         }
         case ObAlterTableArg::ENABLE_EXTENDED_ROWID: {
@@ -10812,6 +10844,117 @@ int ObDDLService::alter_not_null_cst_in_column_flag(
   return ret;
 }
 
+int ObDDLService::alter_table_auto_increment(
+    const ObTableSchema &orig_table_schema,
+    const AlterTableSchema &alter_table_schema,
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    ObTableSchema &new_table_schema,
+    ObDDLOperator &ddl_operator,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObAutoincrementService &auto_inc_service = ObAutoincrementService::get_instance();
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  const uint64_t table_id = orig_table_schema.get_table_id();
+  const uint64_t column_id = orig_table_schema.get_autoinc_column_id();
+  const bool is_order_mode = orig_table_schema.is_order_auto_increment_mode();
+  const int64_t truncate_version = orig_table_schema.get_truncate_version();
+  uint64_t current_auto_increment = 0;
+  // Step 1: Determine whether the auto-increment value needs to be increased or decreased.
+  // If increased, only the table schema needs to be updated. It reduces the complexity of the
+  // alter_table operation.
+  const bool is_reduced_autoinc =
+      (alter_table_schema.get_auto_increment() < orig_table_schema.get_auto_increment());
+  if (!is_reduced_autoinc && OB_FAIL(auto_inc_service.get_sequence_value(tenant_id,
+                table_id, column_id, is_order_mode, truncate_version, current_auto_increment))) {
+    LOG_WARN("fail to get sequence value", K(ret));
+  } else if (is_reduced_autoinc ||
+      (alter_table_schema.get_auto_increment() < current_auto_increment)) {
+    // Step 2: Query the maximum value of the auto-increment column and use it as a base value.
+    const ObDatabaseSchema *db_schema = nullptr;
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_database_schema(tenant_id, orig_table_schema.get_database_id(),
+                                                 db_schema))) {
+      LOG_WARN("failed to get database schema", K(ret), K(orig_table_schema.get_data_table_id()));
+    } else if (OB_ISNULL(db_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, database schema must not be nullptr", K(ret));
+    } else if (OB_ISNULL(column_schema = orig_table_schema.get_column_schema(column_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get alter column schema", K(ret), K(column_id));
+    } else if (OB_FAIL(lock_table(trans, orig_table_schema))) {
+      LOG_WARN("failed to lock table for alter auto_increment", K(ret));
+    } else {
+      uint64_t current_max_value = 0;
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObTimeoutCtx timeout_ctx;
+        ObSqlString sql;
+        sqlclient::ObMySQLResult *result = NULL;
+        common::ObCommonSqlProxy *user_sql_proxy = GCTX.ddl_sql_proxy_;
+        ObSessionParam session_param;
+        int64_t sql_mode = alter_table_arg.sql_mode_;
+        session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode);
+        session_param.ddl_info_.set_is_ddl(true);
+        // if data_table_id != dest_table_id, meaning this is happening in ddl double write
+        session_param.ddl_info_.set_source_table_hidden(orig_table_schema.is_user_hidden_table());
+        ObObj obj;
+        const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
+        const bool is_unsigned_type = ob_is_unsigned_type(column_schema->get_data_type());
+        if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+          LOG_WARN("set trx timeout failed", K(ret));
+        } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+          LOG_WARN("set timeout failed", K(ret));
+        } else if (OB_FAIL(sql.assign_fmt("SELECT /*+no_rewrite*/ CAST(MAX(`%s`) AS %s) AS MAX_VALUE FROM `%s`.`%s`",
+                                    column_schema->get_column_name(),
+                                    is_unsigned_type ? "UNSIGNED" : "SIGNED",
+                                    db_schema->get_database_name(),
+                                    orig_table_schema.get_table_name()))) {
+          LOG_WARN("failed to assign fmt", K(ret), K(column_schema->get_column_name_str()),
+                                           K(db_schema->get_database_name_str()));
+        } else if (OB_FAIL(user_sql_proxy->read(res, tenant_id, sql.ptr(), &session_param))) {
+          LOG_WARN("fail to read", KR(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get result failed", K(ret));
+        } else if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            // empty table
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to get next", KR(ret));
+          }
+        } else if (OB_FAIL(result->get_obj("MAX_VALUE", obj))) {
+          LOG_WARN("fail to get result obj", K(ret));
+        } else if (is_unsigned_type) {
+          current_max_value = obj.get_uint64();
+        } else {
+          current_max_value = MAX(0, obj.get_int());
+        }
+      }
+
+      // Step 3: Clear the auto increment cache and reset the inner table of the auto-increment
+      // column. all new auto_inc request will be based on the auto_increment value in the table
+      // schema.
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(auto_inc_service.clear_autoinc_cache_all(tenant_id, table_id,
+                                                                  column_id, is_order_mode,
+                                                                  false /* ignore_rpc_errors */))) {
+        LOG_WARN("fail to clear autoinc cache all", K(ret));
+      } else if (OB_FAIL(ddl_operator.reinit_autoinc_row(new_table_schema, trans))) {
+        LOG_WARN("fail to reinit autoinc row", K(ret));
+      } else {
+        // Step 4: Update the table schema with the maximum values of auto_increment by setting and
+        // max_value plus 1.
+        const uint64_t next_value =
+          (current_max_value == UINT64_MAX) ? UINT64_MAX : (current_max_value + 1);
+        new_table_schema.set_auto_increment(MAX(next_value, new_table_schema.get_auto_increment()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::alter_table_constraints(const ObAlterTableArg::AlterConstraintType op_type,
                                           share::schema::ObSchemaGetterGuard &schema_guard,
                                           const ObTableSchema &orig_table_schema,
@@ -11439,6 +11582,8 @@ const char* ObDDLService::ddl_type_str(const ObDDLType ddl_type)
   const char *str = "";
   if (DDL_CREATE_INDEX == ddl_type) {
     str = "create index";
+  } else if (DDL_CREATE_PARTITIONED_LOCAL_INDEX == ddl_type) {
+    str = "create partitioned local index";
   } else if (DDL_MODIFY_COLUMN == ddl_type) {
     str = "alter column";
   } else if (DDL_CHECK_CONSTRAINT == ddl_type) {
@@ -12571,6 +12716,21 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           }
         }
 
+        // alter table auto increment value
+        if (OB_SUCC(ret) &&
+              alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::AUTO_INCREMENT) &&
+              0 != new_table_schema.get_autoinc_column_id()) {
+          if (OB_FAIL(alter_table_auto_increment(*orig_table_schema,
+                                                 alter_table_schema,
+                                                 alter_table_arg,
+                                                 schema_guard,
+                                                 new_table_schema,
+                                                 ddl_operator,
+                                                 trans))) {
+            LOG_WARN("fail to alter table auto increment value", K(ret));
+          }
+        }
+
         if (OB_SUCC(ret)) {
           ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
           if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == alter_table_arg.alter_part_type_) {
@@ -12800,7 +12960,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         }
 
         if (OB_FAIL(ret)) {
-        } else if (DDL_CREATE_INDEX == ddl_type || DDL_NORMAL_TYPE == ddl_type) {
+        } else if (DDL_CREATE_INDEX == ddl_type || DDL_CREATE_PARTITIONED_LOCAL_INDEX == ddl_type || DDL_NORMAL_TYPE == ddl_type) {
           ObIndexBuilder index_builder(*this);
           const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
           int tmp_ret = OB_SUCCESS;
@@ -13747,6 +13907,10 @@ int ObDDLService::create_hidden_table(
                                                            owner_id,
                                                            trans))) {
           LOG_WARN("failed to lock ddl lock", K(ret));
+        } else if (create_hidden_table_arg.is_insert_overwrite_ && !orig_table_schema->get_foreign_key_infos().empty()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("insert overwrite not support foreign key", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite table with foreign key");
         } else if (OB_FAIL(create_user_hidden_table(
                   *orig_table_schema,
                   new_table_schema,
@@ -14054,6 +14218,8 @@ int ObDDLService::recover_restore_table_ddl_task(
     const uint64_t src_tenant_id = arg.src_tenant_id_;
     const uint64_t dst_tenant_id = arg.target_schema_.get_tenant_id();
     ObDDLSQLTransaction dst_tenant_trans(schema_service_); // for dst tenant only.
+    bool has_fts_index = false;
+    bool has_mv_index = false;
     HEAP_VARS_2((ObTableSchema, dst_table_schema),
                 (obrpc::ObAlterTableArg, alter_table_arg)) {
       if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(
@@ -14066,6 +14232,18 @@ int ObDDLService::recover_restore_table_ddl_task(
       } else if (OB_ISNULL(src_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("orig table schema is nullptr", K(ret), K(session_id), K(arg));
+      } else if (OB_FAIL(src_table_schema->check_has_fts_index(*src_tenant_schema_guard, has_fts_index))) {
+        LOG_WARN("failed to check if data table has fulltext index", K(ret));
+      } else if (has_fts_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("failed to import table when table has fulltext index", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "import table with fulltext index");
+      } else if (OB_FAIL(src_table_schema->check_has_multivalue_index(*src_tenant_schema_guard, has_mv_index))) {
+        LOG_WARN("failed to check if data table has multivalue index", K(ret));
+      } else if (has_mv_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("failed to import table when table has fulltext index", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "import table with multivalue index");
       } else if (OB_FAIL(src_tenant_schema_guard->get_database_schema(src_tenant_id, src_table_schema->get_database_id(), src_db_schema))) {
         LOG_WARN("fail to get orig database schema", K(ret));
       } else if (OB_ISNULL(src_db_schema)) {
@@ -19188,10 +19366,12 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
                                                       based_table_schema))) {
               LOG_WARN("fail to get table schema", KR(ret), K(based_info));
             } else if (OB_ISNULL(based_table_schema)) {
+              // ignore ret
               LOG_WARN("based table is not exist", KR(ret), K(based_info));
               is_based_schema_version_consistent = false;
             } else if (OB_UNLIKELY(based_table_schema->get_schema_version() !=
                                    based_info.schema_version_)) {
+              // ignore ret
               LOG_WARN("based table schema version is changed", KR(ret), K(based_info),
                       KPC(based_table_schema));
               is_based_schema_version_consistent = false;
@@ -21782,7 +21962,8 @@ int ObDDLService::drop_table_in_trans(
     const ObString *ddl_stmt_str,
     ObMySQLTransaction *sql_trans,
     DropTableIdHashSet *drop_table_set,
-    ObMockFKParentTableSchema *mock_fk_parent_table_ptr /* will use it when drop a fk_parent_table */)
+    ObMockFKParentTableSchema *mock_fk_parent_table_ptr, /* will use it when drop a fk_parent_table */
+    const bool delete_priv)
 {
   int ret = OB_SUCCESS;
   UNUSED(is_index);
@@ -21896,7 +22077,7 @@ int ObDDLService::drop_table_in_trans(
         }
         if (OB_SUCC(ret) && OB_FAIL(ddl_operator.drop_table(
                                     table_schema, trans, ddl_stmt_str,
-                                    false/*is_truncate_table*/, drop_table_set, false))) {
+                                    false/*is_truncate_table*/, drop_table_set, false, delete_priv))) {
           LOG_WARN("ddl_operator drop_table failed", K(table_schema), KR(ret));
         }
       }
@@ -23670,7 +23851,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         const ObTableSchema *data_table_schema = nullptr;
         tmp_table_schema.reset();
         is_db_in_recyclebin = false;
-        bool is_drop_index_or_mlog = (MATERIALIZED_VIEW_LOG == drop_table_arg.table_type_)
+        const bool is_drop_index_or_mlog = (MATERIALIZED_VIEW_LOG == drop_table_arg.table_type_)
                                       || (USER_INDEX == drop_table_arg.table_type_);
         //ensure use the newest schema of each table
         if (OB_FAIL(check_table_exists(tenant_id,
@@ -23720,6 +23901,10 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         if (OB_SUCC(ret)) {
           ObString ddl_stmt_str;
           ObSqlString drop_sql;
+          // do not record drop table stmt for recover restore table.
+          const bool is_offline_ddl_hidden_data_table =
+              ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL == table_schema->get_table_state_flag();
+          const bool use_drop_table_stmt_in_arg = (is_drop_index_or_mlog || is_offline_ddl_hidden_data_table);
           bool is_cascade_constrains = false;
           lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
           if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
@@ -23729,7 +23914,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
             is_cascade_constrains = drop_table_arg.if_exist_;
           }
           if (OB_FAIL(ret)) {
-          } else if (is_drop_index_or_mlog) {
+          } else if (use_drop_table_stmt_in_arg) {
             ddl_stmt_str = drop_table_arg.ddl_stmt_str_;
           } else if (OB_FAIL(construct_drop_sql(table_item,
                                                 drop_table_arg.table_type_,
@@ -24529,7 +24714,7 @@ int ObDDLService::add_table_schema(
   return ret;
 }
 
-int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_schema)
+int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_schema, const bool delete_priv)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
@@ -24558,7 +24743,7 @@ int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_sch
                                          table_schema.is_index_table(),
                                          false, /* to recyclebin*/
                                          stmt,
-                                         NULL, NULL, NULL))) {
+                                         NULL, NULL, NULL, delete_priv))) {
     LOG_WARN("drop table in transaction failed", KR(ret), K(tenant_id), K(table_id));
   }
   LOG_INFO("[UPGRADE] drop inner table", KR(ret),
@@ -29366,6 +29551,7 @@ int ObDDLService::check_tenant_has_been_dropped_(
   } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant))) {
     LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(tenant)) {
+    // ignore ret
     LOG_WARN("tenant not exist, maybe schema is fall behind", KR(ret), K(tenant_id));
   } else if (tenant->is_dropping()) {
     ObLSStatusOperator ls_status;

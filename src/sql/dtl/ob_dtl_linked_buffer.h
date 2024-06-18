@@ -78,6 +78,96 @@ public:
   int64_t dfo_id_;
 };
 
+class ObDtlOpInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDtlOpInfo() :
+    dop_(-1), plan_id_(-1), exec_id_(-1), session_id_(-1), database_id_(0),
+    op_id_(UINT64_MAX), input_rows_(0), input_width_(-1),
+    disable_auto_mem_mgr_(false)
+  {
+    sql_id_[0] = '\0';
+  }
+  uint64_t hash() const
+  {
+    uint64_t val = common::murmurhash(&dop_, sizeof(dop_), 0);
+    val = common::murmurhash(&plan_id_, sizeof(plan_id_), val);
+    val = common::murmurhash(&exec_id_, sizeof(exec_id_), val);
+    val = common::murmurhash(&session_id_, sizeof(session_id_), val);
+    val = common::murmurhash(&database_id_, sizeof(database_id_), val);
+    val = common::murmurhash(sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1, val);
+    return val;
+  }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
+  bool operator== (const ObDtlOpInfo &other) const
+  {
+    return dop_ == other.dop_
+        && plan_id_ == other.plan_id_
+        && exec_id_ == other.exec_id_
+        && session_id_ == other.session_id_
+        && database_id_ == other.database_id_
+        && memcmp(sql_id_, other.sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1)
+        && op_id_ == other.op_id_
+        && input_rows_ == other.input_rows_
+        && input_width_ == other.input_width_
+        && disable_auto_mem_mgr_ == other.disable_auto_mem_mgr_;
+  }
+
+  void set(int64_t dop,
+          int64_t plan_id,
+          int64_t exec_id,
+          int64_t session_id,
+          uint64_t database_id,
+          const char *sql_id,
+          uint64_t op_id,
+          int64_t input_rows,
+          int64_t input_width,
+          bool disable_auto_mem_mgr)
+  {
+    dop_ = dop;
+    plan_id_ = plan_id;
+    exec_id_ = exec_id;
+    session_id_ = session_id;
+    database_id_ = database_id;
+    op_id_ = op_id;
+    input_rows_ = input_rows;
+    input_width_ = input_width;
+    disable_auto_mem_mgr_ = disable_auto_mem_mgr;
+    if (OB_ISNULL(sql_id)) {
+      sql_id_[0] = '\0';
+    } else {
+      memcpy(sql_id_, sql_id, OB_MAX_SQL_ID_LENGTH);
+      sql_id_[OB_MAX_SQL_ID_LENGTH] = '\0';
+    }
+  }
+
+  int64_t get_dop() { return dop_; }
+  int64_t get_plan_id() { return plan_id_; }
+  int64_t get_exec_id() { return exec_id_; }
+  int64_t get_session_id() { return session_id_; }
+  uint64_t get_database_id() { return database_id_; }
+  const char *get_sql_id() { return sql_id_; };
+  uint64_t get_op_id() { return op_id_; }
+  int64_t get_input_rows() { return input_rows_; }
+  int64_t get_input_width() { return input_width_; }
+  bool get_disable_auto_mem_mgr() { return disable_auto_mem_mgr_; }
+
+  TO_STRING_KV(K_(dop), K_(plan_id), K_(exec_id), K_(session_id), K_(sql_id), K_(database_id));
+public:
+  int64_t dop_;
+  int64_t plan_id_;
+  int64_t exec_id_;
+  int64_t session_id_;
+  uint64_t database_id_;
+  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  uint64_t op_id_;
+  int64_t input_rows_;
+  int64_t input_width_;
+  bool disable_auto_mem_mgr_;
+};
+
 class ObDtlSqcInfo
 {
 public:
@@ -138,7 +228,8 @@ public:
         sqc_id_(common::OB_INVALID_ID),
         enable_channel_sync_(false),
         register_dm_info_(),
-        row_meta_()
+        row_meta_(),
+        op_info_()
   {}
   ObDtlLinkedBuffer(char * buf, int64_t size)
       : buf_(buf), size_(size), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),
@@ -149,11 +240,12 @@ public:
         sqc_id_(common::OB_INVALID_ID),
         enable_channel_sync_(false),
         register_dm_info_(),
-        row_meta_()
+        row_meta_(),
+        op_info_()
   {}
-  ~ObDtlLinkedBuffer() { reset_batch_info(); }
   TO_STRING_KV(K_(size), K_(pos), K_(is_data_msg), K_(seq_no), K_(tenant_id), K_(allocated_chid),
-      K_(is_eof), K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()), K_(rows_cnt), K_(enable_channel_sync));
+      K_(is_eof), K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()), K_(rows_cnt), K_(enable_channel_sync),
+      K_(dfo_key), K_(op_info));
 
   ObDtlLinkedBuffer *next() const {
     return reinterpret_cast<ObDtlLinkedBuffer*>(next_);
@@ -295,6 +387,7 @@ public:
     dst->enable_channel_sync_ = src.enable_channel_sync_;
     dst->register_dm_info_ = src.register_dm_info_;
     dst->row_meta_ = src.row_meta_;
+    dst->op_info_ = src.op_info_;
   }
 
   void shallow_copy(const ObDtlLinkedBuffer &src)
@@ -315,6 +408,7 @@ public:
     enable_channel_sync_ = src.enable_channel_sync_;
     register_dm_info_ = src.register_dm_info_;
     row_meta_ = src.row_meta_;
+    op_info_ = src.op_info_;
   }
 
   OB_INLINE ObDtlDfoKey &get_dfo_key() {
@@ -329,6 +423,15 @@ public:
   {
     return dfo_key_.is_valid();
   }
+
+  OB_INLINE ObDtlOpInfo &get_op_info() {
+    return op_info_;
+  }
+
+  OB_INLINE void set_op_info(ObDtlOpInfo &op_info) {
+    op_info_ = op_info;
+  }
+
   OB_INLINE int64_t allocated_chid() const {
     return allocated_chid_;
   }
@@ -368,7 +471,47 @@ public:
   int64_t get_dfo_id() { return dfo_id_; }
   int64_t get_sqc_id() { return sqc_id_; }
   RowMeta &get_row_meta() { return row_meta_; }
+  uint64_t get_px_sequence_id() { return dfo_key_.px_sequence_id_; }
 
+  int64_t get_dop() { return op_info_.dop_; }
+  void set_dop(int64_t dop) { op_info_.dop_ = dop; }
+
+  int64_t get_plan_id() { return op_info_.plan_id_; }
+  void set_plan_id(int64_t plan_id) { op_info_.plan_id_ = plan_id; }
+
+  int64_t get_exec_id() { return op_info_.exec_id_; }
+  void set_exec_id(int64_t exec_id) { op_info_.exec_id_ = exec_id; }
+
+  int64_t get_session_id() { return op_info_.session_id_; }
+  void set_session_id(int64_t session_id) { op_info_.session_id_ = session_id; }
+
+  uint64_t get_database_id() { return op_info_.database_id_; }
+  void set_database_id(uint64_t database_id) { op_info_.database_id_ = database_id; }
+
+  const char *get_sql_id() { return op_info_.sql_id_; };
+  void set_sql_id(const char *sql_id) {
+    if (OB_ISNULL(sql_id)) {
+      op_info_.sql_id_[0] = '\0';
+    } else {
+      memcpy(op_info_.sql_id_, sql_id, OB_MAX_SQL_ID_LENGTH);
+      op_info_.sql_id_[OB_MAX_SQL_ID_LENGTH] = '\0';
+    }
+  }
+
+  uint64_t get_op_id() { return op_info_.op_id_; }
+  void set_op_id(uint64_t op_id) { op_info_.op_id_ = op_id; }
+
+  int64_t get_input_rows() { return op_info_.input_rows_; }
+  void set_input_rows(int64_t input_rows) { op_info_.input_rows_ = input_rows; }
+
+  int64_t get_input_width() { return op_info_.input_width_; }
+  void set_input_width(int64_t input_width) { op_info_.input_width_ = input_width; }
+
+  bool get_disable_auto_mem_mgr() { return op_info_.disable_auto_mem_mgr_; }
+  void set_disable_auto_mem_mgr(bool disable_auto_mem_mgr)
+  {
+    op_info_.disable_auto_mem_mgr_ = disable_auto_mem_mgr;
+  }
 private:
 /*
 
@@ -437,6 +580,7 @@ The memory layout is as below:
   bool enable_channel_sync_;
   common::ObRegisterDmInfo register_dm_info_;
   RowMeta row_meta_;
+  ObDtlOpInfo op_info_;
 };
 
 }  // dtl

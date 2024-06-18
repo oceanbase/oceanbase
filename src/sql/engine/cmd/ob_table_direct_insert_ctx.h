@@ -43,7 +43,8 @@ public:
            const uint64_t table_id,
            const int64_t parallel,
            const bool is_incremental,
-           const bool enable_inc_replace);
+           const bool enable_inc_replace,
+           const bool is_insert_overwrite);
   int commit();
   int finish();
   void destroy();
@@ -67,8 +68,8 @@ public:
   }
 
 private:
-  int init_store_column_idxs(const uint64_t tenant_id, const uint64_t table_id,
-                             common::ObIArray<int64_t> &store_column_idxs);
+  int get_compressor_type(const uint64_t tenant_id, const uint64_t table_id, const int64_t parallel,
+                          ObCompressorType &compressor_type);
 private:
   observer::ObTableLoadSqlExecCtx *load_exec_ctx_;
   observer::ObTableLoadInstance *table_load_instance_;

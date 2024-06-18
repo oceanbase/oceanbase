@@ -630,6 +630,7 @@ int ObPxCoordOp::destroy_all_channel()
    * release root task channel here.
    * */
   if (OB_FAIL(ObPxChannelUtil::unlink_ch_set(task_ch_set_, &dfc_, true))) {
+    // overwrite ret
     LOG_WARN("unlink channel failed", K(ret));
   }
 

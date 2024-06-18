@@ -753,6 +753,7 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
                                                              left_unique_exprs))) {
     LOG_WARN("faield to get table rel ids", K(ret), K(*right_table));
   } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
   } else if (flag_table->is_generated_table() || flag_table->is_temp_table()) {
     // add const to generate table select
@@ -844,6 +845,7 @@ int ObTransformOrExpansion::recover_flag_temp_table(ObSelectStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(stmt));
   } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
   } else if (!flag_table->is_temp_table()) {
     // do nothing
@@ -1251,15 +1253,10 @@ int ObTransformOrExpansion::convert_expect_ordering(ObDMLStmt *orig_stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected expr", K(ret), K(expr));
       } else if (OB_FALSE_IT(col = static_cast<ObColumnRefRawExpr*>(expr))) {
-      } else if (OB_FAIL(orig_stmt->get_table_item_idx(col->get_table_id(), idx))) {
-        LOG_WARN("failed to get table item idx", K(ret), K(idx), K(table_size));
-      } else if (OB_UNLIKELY(idx < 0 || idx > table_size)
-                 || OB_ISNULL(table = spj_stmt->get_table_item(idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected idx", K(ret), K(idx), K(table_size), K(table));
-      } else if (OB_ISNULL(spj_col = spj_stmt->get_column_expr_by_id(table->table_id_,
+      } else if (OB_ISNULL(spj_col = spj_stmt->get_column_expr_by_id(col->get_table_id(),
                                                                      col->get_column_id()))) {
-        LOG_WARN("failed to get column expr by id", K(ret), K(spj_col));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column expr by id", K(ret), K(col->get_table_id()), K(col->get_column_id()));
       } else if (OB_FAIL(spj_expect_ordering.push_back(spj_col))) {
         LOG_WARN("failed to push back exprs", K(ret), K(spj_col));
       }

@@ -206,9 +206,10 @@ int ObDDLIncCommitClogCb::on_success()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(log_basic_.get_tablet_id()));
   } else {
-    (void)ls->async_tablet_freeze_for_direct_load(log_basic_.get_tablet_id());
+    const bool is_sync = false;
+    (void)ls->tablet_freeze(log_basic_.get_tablet_id(), is_sync);
     if (log_basic_.get_lob_meta_tablet_id().is_valid()) {
-      (void)ls->async_tablet_freeze_for_direct_load(log_basic_.get_lob_meta_tablet_id());
+      (void)ls->tablet_freeze(log_basic_.get_lob_meta_tablet_id(), is_sync);
     }
   }
 

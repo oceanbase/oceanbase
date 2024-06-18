@@ -332,6 +332,7 @@ int ObSMUtils::cell_str(
             OB_LOG(WARN, "failed to get udt info", K(ret), K(field));
           }
           if (OB_ISNULL(udt_info)) {
+            // overwrite ret
             // try system udt
             if (0 == field->type_owner_.case_compare(OB_SYS_DATABASE_NAME)
                 || 0 == field->type_owner_.case_compare("SYS")) {

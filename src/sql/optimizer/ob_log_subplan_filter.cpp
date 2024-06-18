@@ -319,22 +319,6 @@ int ObLogSubPlanFilter::allocate_granule_post(AllocGIContext &ctx)
   int ret = OB_SUCCESS;
   if (OB_FAIL(pw_allocate_granule_post(ctx))) {
     LOG_WARN("failed to do pw allocate granule post", K(ret));
-  } else if (DistAlgo::DIST_NONE_ALL == dist_algo_) {
-    ObLogicalOperator *op = NULL;
-    bool cnt_pd_range_cond = false;
-    if (OB_ISNULL(get_child(first_child))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid child", K(ret));
-    } else if (OB_FAIL(get_child(first_child)->find_first_recursive(log_op_def::LOG_GRANULE_ITERATOR, op))) {
-      LOG_WARN("find granule iterator in right failed", K(ret));
-    } else if (NULL == op) {
-      // granule iterator not found, do nothing
-    } else if (OB_FAIL(ObOptimizerUtil::check_pushdown_range_cond(get_child(first_child), cnt_pd_range_cond))) {
-      LOG_WARN("failed to check any push down range cond", K(ret));
-    } else if (cnt_pd_range_cond) {
-      static_cast<ObLogGranuleIterator *>(op)->add_flag(GI_NLJ_PARAM_DOWN);
-      static_cast<ObLogGranuleIterator *>(op)->add_flag(GI_FORCE_PARTITION_GRANULE);
-    }
   } else if (DistAlgo::DIST_PARTITION_NONE == dist_algo_) {
     ObLogicalOperator *op = NULL;
     ObLogicalOperator *child = NULL;

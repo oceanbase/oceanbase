@@ -227,6 +227,7 @@ int ObDMLService::check_rowkey_whether_distinct(const ObExprPtrIArray &row,
           ObExpr *expr = row.at(i);
           ObDatum *col_datum = nullptr;
           if (OB_ISNULL(expr)) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr in rowkey is nullptr", K(ret), K(i));
           } else if (OB_FAIL(expr->eval(eval_ctx, col_datum))) {
             LOG_WARN("failed to evaluate expr in rowkey", K(ret), K(i));

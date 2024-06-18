@@ -446,6 +446,7 @@ void ObReplayRestartTest::restart_test()
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
+  ObTxTable *tx_table = nullptr;
   ObTxDataTable *tx_data_table = nullptr;
   share::SCN max_decided_scn = share::SCN::min_scn();
   share::SCN upper_trans_version = share::SCN::min_scn();
@@ -457,11 +458,12 @@ void ObReplayRestartTest::restart_test()
     ASSERT_EQ(OB_SUCCESS, ls->get_max_decided_scn(max_decided_scn));
     ASSERT_EQ(false, max_decided_scn.is_min());
 
-    tx_data_table = ls->get_tx_table()->get_tx_data_table();
+    tx_table = ls->get_tx_table();
+    tx_data_table = tx_table->get_tx_data_table();
 
     {
       // 场景一： keep alive日志没有被回放，min_start_scn为初始值状态，跳过计算upper_trans_version
-      ASSERT_EQ(SCN::min_scn(), tx_data_table->calc_upper_info_.min_start_scn_in_ctx_);
+      ASSERT_EQ(SCN::min_scn(), tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_);
       upper_trans_version.set_min();
       FLOG_INFO("get upper trans version, situation 1:", K(SSTABLE_END_SCN));
       ASSERT_EQ(OB_SUCCESS,
@@ -473,8 +475,8 @@ void ObReplayRestartTest::restart_test()
       REPLAY_BARRIER = SCN::plus(KEEP_ALIVE_SCN, 1);
       int64_t retry_times = 100;
       while (--retry_times > 0) {
-        tx_data_table->update_calc_upper_info_(SCN::max_scn() /*max_decided_scn*/);
-        if ( !tx_data_table->calc_upper_info_.min_start_scn_in_ctx_.is_min()) {
+        tx_table->update_min_start_scn_info(SCN::max_scn() /*max_decided_scn*/);
+        if ( !tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_.is_min()) {
           break;
         } else {
           ::sleep(1);
@@ -502,8 +504,8 @@ void ObReplayRestartTest::restart_test()
       MinStartScnStatus status;
       while (--retry_times > 0) {
         ls->get_min_start_scn(min_start_scn, keep_alive_scn, status);
-        tx_data_table->update_calc_upper_info_(SCN::max_scn() /*max_decided_scn*/);
-        if (tx_data_table->calc_upper_info_.min_start_scn_in_ctx_ > SSTABLE_END_SCN) {
+        tx_table->update_min_start_scn_info(SCN::max_scn() /*max_decided_scn*/);
+        if (tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_ > SSTABLE_END_SCN) {
           break;
         } else {
           ::sleep(1);
@@ -514,21 +516,21 @@ void ObReplayRestartTest::restart_test()
                   status);
         }
       }
-      ASSERT_GT(tx_data_table->calc_upper_info_.min_start_scn_in_ctx_, SSTABLE_END_SCN);
+      ASSERT_GT(tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_, SSTABLE_END_SCN);
 
       retry_times = 60;
       while (--retry_times > 0) {
         ASSERT_EQ(OB_SUCCESS, ls->get_max_decided_scn(max_decided_scn));
-        if (max_decided_scn > tx_data_table->calc_upper_info_.keep_alive_scn_) {
+        if (max_decided_scn > tx_table->ctx_min_start_scn_info_.keep_alive_scn_) {
           break;
         } else {
           ::sleep(1);
           fprintf(stdout, "waiting max decided scn, max_decided_scn = %lu keep_alive_scn = %lu\n",
                   max_decided_scn.get_val_for_inner_table_field(),
-                  tx_data_table->calc_upper_info_.keep_alive_scn_.get_val_for_inner_table_field());
+                  tx_table->ctx_min_start_scn_info_.keep_alive_scn_.get_val_for_inner_table_field());
         }
       }
-      ASSERT_GT(max_decided_scn, tx_data_table->calc_upper_info_.keep_alive_scn_);
+      ASSERT_GT(max_decided_scn, tx_table->ctx_min_start_scn_info_.keep_alive_scn_);
 
       upper_trans_version.set_min();
       FLOG_INFO("get upper trans version, situation 3:", K(SSTABLE_END_SCN));
@@ -537,7 +539,7 @@ void ObReplayRestartTest::restart_test()
 
 
       ::sleep(10);
-      STORAGE_LOG(INFO, "finish restart test", K(upper_trans_version), K(SSTABLE_END_SCN), K(tx_data_table->calc_upper_info_));
+      STORAGE_LOG(INFO, "finish restart test", K(upper_trans_version), K(SSTABLE_END_SCN), K(tx_table->ctx_min_start_scn_info_));
       ASSERT_LT(upper_trans_version, SCN::max_scn());
     }
   }
@@ -639,47 +641,6 @@ int main(int argc, char **argv)
 
 namespace oceanbase {
 namespace storage {
-
-void ObTxDataTable::update_calc_upper_info_(const SCN &max_decided_scn)
-{
-  int64_t cur_ts = common::ObTimeUtility::fast_current_time();
-  SpinWLockGuard lock_guard(calc_upper_info_.lock_);
-  // recheck update condition and do update calc_upper_info
-
-  /**********************************************************/
-  //if (cur_ts - calc_upper_info_.update_ts_ > 30_s && max_decided_scn> calc_upper_info_.keep_alive_scn_) {
-  /**********************************************************/
-
-  SCN min_start_scn = SCN::min_scn();
-  SCN keep_alive_scn = SCN::min_scn();
-  MinStartScnStatus status;
-  ls_->get_min_start_scn(min_start_scn, keep_alive_scn, status);
-  if (MinStartScnStatus::UNKOWN == status) {
-    // do nothing
-  } else {
-    int ret = OB_SUCCESS;
-    CalcUpperInfo tmp_calc_upper_info;
-    tmp_calc_upper_info.keep_alive_scn_ = keep_alive_scn;
-    tmp_calc_upper_info.update_ts_ = cur_ts;
-    if (MinStartScnStatus::NO_CTX == status) {
-      // use the previous keep_alive_scn as min_start_scn
-      tmp_calc_upper_info.min_start_scn_in_ctx_ = calc_upper_info_.keep_alive_scn_;
-    } else if (MinStartScnStatus::HAS_CTX == status) {
-      tmp_calc_upper_info.min_start_scn_in_ctx_ = min_start_scn;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "invalid min start scn status", K(min_start_scn), K(keep_alive_scn), K(status));
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (tmp_calc_upper_info.min_start_scn_in_ctx_ < calc_upper_info_.min_start_scn_in_ctx_) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "invalid min start scn", K(tmp_calc_upper_info), K(calc_upper_info_));
-    } else {
-      calc_upper_info_ = tmp_calc_upper_info;
-    }
-  }
-}
 
 int ObLSService::online_ls()
 {

@@ -216,8 +216,6 @@ int ObMPQuery::process()
         retry_ctrl_.set_sys_global_schema_version(sys_version);
         session.partition_hit().reset();
         session.set_pl_can_retry(true);
-        ObLockWaitNode &lock_wait_node  = req_->get_lock_wait_node();
-        lock_wait_node.set_session_info(session.get_sessid());
 
         bool has_more = false;
         bool force_sync_resp = false;
@@ -811,6 +809,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
                                            async_resp_used))) {
           ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
           if (OB_ISNULL(plan_ctx)) {
+            // ignore ret
             LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
           } else {
             if (OB_TRANSACTION_SET_VIOLATION != ret && OB_REPLICA_NOT_READABLE != ret) {
@@ -958,6 +957,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         //do nothing
       } else {
         audit_record.consistency_level_ = plan_ctx->get_consistency_level();
+        audit_record.total_memstore_read_row_count_ = plan_ctx->get_total_memstore_read_row_count();
+        audit_record.total_ssstore_read_row_count_ = plan_ctx->get_total_ssstore_read_row_count();
       }
     }
       //update v$sql statistics

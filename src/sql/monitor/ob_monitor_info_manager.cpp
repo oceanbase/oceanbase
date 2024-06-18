@@ -49,7 +49,7 @@ int ObMonitorInfoManager::init()
     LOG_WARN("fail to init plan execution time map", K(ret));
   } else {
     allocator_.set_label(ObModIds::OB_SQL_PLAN_MONITOR);
-    if (timer_.schedule(elimination_task_, delay, true)) {
+    if (OB_FAIL(timer_.schedule(elimination_task_, delay, true))) {
       LOG_WARN("fail to schedule timer task", K(ret));
     }
   }

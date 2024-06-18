@@ -1206,13 +1206,13 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
@@ -1280,13 +1280,13 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1348,7 +1348,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1422,7 +1422,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
@@ -1478,7 +1478,7 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1552,7 +1552,7 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
@@ -1750,13 +1750,13 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
@@ -1824,13 +1824,13 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1892,7 +1892,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -1966,7 +1966,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
@@ -2022,7 +2022,7 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -2096,7 +2096,7 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
@@ -2294,13 +2294,13 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
@@ -2368,13 +2368,13 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -2436,7 +2436,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -2510,7 +2510,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
-      affinitize, force partition granule, asc
+      affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
@@ -2566,7 +2566,7 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, 
@@ -2640,7 +2640,7 @@ Outputs & filters:
   5 - output([t1.a]), filter(nil), rowset=256
       (#keys=1, [t1.a]), dop=1
   6 - output([t1.a]), filter(nil), rowset=256
-      force partition granule, asc
+      force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 

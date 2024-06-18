@@ -652,6 +652,9 @@ int ObTransformEliminateOuterJoin::get_extra_condition_from_parent(ObIArray<ObPa
              stmt->has_sequence() ||
              has_rownum) {
     // do nothing
+  } else if (stmt->is_select_stmt() &&
+             !static_cast<const ObSelectStmt*>(stmt)->get_window_func_exprs().empty()) {
+    // do nothing
   } else if (OB_ISNULL(parent_stmt = parent_stmts.at(parent_stmts.count() - 1).stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));

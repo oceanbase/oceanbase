@@ -47,13 +47,13 @@ int ObLSTabletService::table_scan(ObTableScanIterator &iter, ObTableScanParam &p
   int ret = OB_SUCCESS;
   NG_TRACE(S_table_scan_begin);
   ObTabletHandle data_tablet;
-  AllowToReadMgr::AllowToReadInfo read_info;
+  bool allow_to_read = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
-  } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(read_info))) {
-  } else if (!read_info.allow_to_read()) {
+  } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(allow_to_read))) {
+  } else if (!allow_to_read) {
     ret = OB_REPLICA_NOT_READABLE;
     STORAGE_LOG(WARN, "ls is not allow to read", K(ret), KPC(ls_));
   } else if (OB_FAIL(prepare_scan_table_param(param, *(MTL(ObTenantSchemaService*)->get_schema_service())))) {
@@ -62,13 +62,6 @@ int ObLSTabletService::table_scan(ObTableScanIterator &iter, ObTableScanParam &p
     STORAGE_LOG(WARN, "failed to check and get tablet", K(ret), K(param));
   } else if (OB_FAIL(inner_table_scan(data_tablet, iter, param))) {
     STORAGE_LOG(WARN, "failed to do table scan", K(ret), KP(&iter), K(param));
-  } else {
-    bool is_same = false;
-    allow_to_read_mgr_.check_read_info_same(read_info, is_same);
-    if (!is_same) {
-      ret = OB_REPLICA_NOT_READABLE;
-      STORAGE_LOG(WARN, "ls is not allow to read", K(ret), KPC(ls_), KP(&iter));
-    }
   }
   NG_TRACE(S_table_scan_end);
 

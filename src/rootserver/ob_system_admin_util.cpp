@@ -1484,7 +1484,12 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
     }
   } else if (OB_ISNULL(exist_schema)) {
     // missed table
-  } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
+
+    // in oracle mode, drop table will drop priv on it cascade
+    // here the exist_schema will be upgraded, and it will be dropped and created again.
+    // then the priv on it will be lost
+    // so do not delete the priv on it here.
+  } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema, false/*delete_priv*/))) {
     LOG_WARN("drop table schema failed", KR(ret), "table_schema", *exist_schema);
   } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
              tenant_id, schema_guard))) {

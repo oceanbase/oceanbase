@@ -148,6 +148,8 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   NO_EXIST_PRIV_CASE(EVENT);
                   NO_EXIST_PRIV_CASE(TRIGGER);
                   EXIST_PRIV_CASE(CREATE_TABLESPACE);
+                  NO_EXIST_PRIV_CASE(CREATE_ROLE);
+                  NO_EXIST_PRIV_CASE(DROP_ROLE);
                   COLUMN_SET_WITH_TYPE(SSL_TYPE, varchar, ssl_type_str);
                   COLUMN_SET_WITH_TYPE(SSL_CIPHER, varchar, user_info->get_ssl_cipher());
                   COLUMN_SET_WITH_TYPE(X509_ISSUER, varchar, user_info->get_x509_issuer());

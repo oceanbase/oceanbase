@@ -120,6 +120,8 @@ const static double comparison_params_normal[ObMaxTC+1] = {
   NORMAL_CMP_CHAR_COST,           // user defined type
   NORMAL_CMP_NUMBER_COST,         // ObDecimalIntTC
   NORMAL_CMP_CHAR_COST,           // collection sql type
+  NORMAL_CMP_INT_COST,            // mysql date
+  NORMAL_CMP_INT_COST,            // mysql datetime
 };
 
 const static double hash_params_normal[ObMaxTC+1] = {
@@ -150,6 +152,8 @@ const static double hash_params_normal[ObMaxTC+1] = {
   NORMAL_HASH_CHAR_COST,           // user defined type
   NORMAL_HASH_NUMBER_COST,         // ObDecimalIntTC
   NORMAL_HASH_CHAR_COST,           // collection sql type
+  NORMAL_HASH_INT_COST,            // mysql date
+  NORMAL_HASH_INT_COST,            // mysql datetime
 };
 
 const static double project_params_normal[2][2][MAX_PROJECT_TYPE] = {

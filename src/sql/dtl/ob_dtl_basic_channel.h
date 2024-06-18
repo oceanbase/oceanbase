@@ -402,7 +402,8 @@ OB_INLINE int ObDtlVectorRowMsgWriter::try_append_batch(const common::ObIArray<O
       SQL_DTL_LOG(WARN, "failed init row meta", K(ret));
     }
   }
-  if (OB_FAIL(ObTempRowStore::RowBlock::calc_rows_size(vectors, write_buffer_->get_row_meta(),
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTempRowStore::RowBlock::calc_rows_size(vectors, write_buffer_->get_row_meta(),
                                                        selector, size, row_size_arr))) {
     SQL_DTL_LOG(WARN, "failed to calc size", K(ret));
   } else {
@@ -717,7 +718,7 @@ protected:
   int push_back_send_list();
   int wait_unblocking();
   int switch_buffer(const int64_t min_size, const bool is_eof,
-      const int64_t timeout_ts);
+      const int64_t timeout_ts, ObEvalCtx *eval_ctx);
   int write_msg(const ObDtlMsg &msg, int64_t timeout_ts,
       ObEvalCtx *eval_ctx, bool is_eof);
   int inner_write_msg(const ObDtlMsg &msg, int64_t timeout_ts, ObEvalCtx *eval_ctx, bool is_eof);

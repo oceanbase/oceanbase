@@ -110,21 +110,28 @@ void* ObMemstoreAllocator::alloc(AllocHandle& handle, int64_t size, const int64_
     COMMON_LOG(TRACE, "MTALLOC.first_alloc", KP(&handle.mt_));
     LockGuard guard(lock_);
     if (handle.is_frozen()) {
-      COMMON_LOG(ERROR, "cannot alloc because allocator is frozen", K(ret), K(handle.mt_));
+      ret = OB_EAGAIN;
+      if (!handle.mt_.get_offlined()) {
+        COMMON_LOG(ERROR, "cannot alloc because allocator is frozen", K(ret), K(handle.mt_));
+      } else {
+        COMMON_LOG(WARN, "cannot alloc because allocator is frozen", K(ret), K(handle.mt_));
+      }
     } else if (!handle.is_id_valid()) {
       handle.set_clock(arena_.retired());
       hlist_.set_active(handle);
     }
   }
 
-  storage::ObTenantFreezer *freezer = nullptr;
-  if (is_virtual_tenant_id(tenant_id)) {
-    // virtual tenant should not have memstore.
-    ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(ERROR, "virtual tenant should not have memstore", K(ret), K(tenant_id));
-  } else if (FALSE_IT(freezer = MTL(storage::ObTenantFreezer *))) {
-  } else if (OB_FAIL(freezer->check_memstore_full_internal(is_out_of_mem))) {
-    COMMON_LOG(ERROR, "fail to check tenant out of mem limit", K(ret), K(tenant_id));
+  if (OB_SUCC(ret)) {
+    storage::ObTenantFreezer *freezer = nullptr;
+    if (is_virtual_tenant_id(tenant_id)) {
+      // virtual tenant should not have memstore.
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "virtual tenant should not have memstore", K(ret), K(tenant_id));
+    } else if (FALSE_IT(freezer = MTL(storage::ObTenantFreezer *))) {
+    } else if (OB_FAIL(freezer->check_memstore_full_internal(is_out_of_mem))) {
+      COMMON_LOG(ERROR, "fail to check tenant out of mem limit", K(ret), K(tenant_id));
+    }
   }
 
   void *res = nullptr;

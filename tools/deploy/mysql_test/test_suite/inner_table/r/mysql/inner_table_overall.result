@@ -749,6 +749,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12481	__all_virtual_tenant_resource_limit	2	201001	1
 12482	__all_virtual_tenant_resource_limit_detail	2	201001	1
 12487	__all_virtual_nic_info	2	201001	1
+12490	__all_virtual_spatial_reference_systems	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1

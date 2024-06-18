@@ -659,7 +659,6 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(
     TRANS_LOG(INFO, "not set is_tablet_freeze because the memtable cannot be freezed", KPC(active_tablet_memtable));
   }
 
-
   return ret;
 }
 
@@ -995,6 +994,7 @@ int ObTabletMemtableMgr::set_frozen_for_all_memtables()
         STORAGE_LOG(WARN, "memtable is nullptr", K(ret), K(ls_id), KP(memtable), K(i));
       } else {
         STORAGE_LOG(INFO, "set frozen for offline", K(ls_id), K(i), KPC(memtable));
+        memtable->set_offlined();
         memtable->set_frozen();
       }
     }

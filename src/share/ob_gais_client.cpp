@@ -186,6 +186,7 @@ int ObGAISClient::local_push_to_global_value(const AutoincKey &key,
                                              const uint64_t max_value,
                                              const uint64_t local_sync_value,
                                              const int64_t &autoinc_version,
+                                             const int64_t cache_size,
                                              uint64_t &global_sync_value)
 {
   int ret = OB_SUCCESS;
@@ -200,7 +201,8 @@ int ObGAISClient::local_push_to_global_value(const AutoincKey &key,
     if (OB_FAIL(get_leader_(tenant_id, leader))) {
       LOG_WARN("get leader fail", K(ret));
       (void)refresh_location_(tenant_id);
-    } else if (OB_FAIL(msg.init(key, local_sync_value, max_value, self_, autoinc_version))) {
+    } else if (OB_FAIL(msg.init(key, local_sync_value, max_value, self_, autoinc_version,
+                                cache_size))) {
       LOG_WARN("fail to init request msg", KR(ret), K(key), K(autoinc_version));
     } else if (OB_UNLIKELY(!msg.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
@@ -272,6 +274,40 @@ int ObGAISClient::clear_global_autoinc_cache(const AutoincKey &key)
       (void)refresh_location_(key.tenant_id_);
     } else {
       LOG_DEBUG("clear global autoinc cache success", K(msg));
+    }
+  }
+  return ret;
+}
+
+int ObGAISClient::get_sequence_next_value(const schema::ObSequenceSchema &schema,
+                ObSequenceValue &nextval)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = schema.get_tenant_id();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else {
+    ObGAISNextSequenceValReq msg;
+    ObGAISNextSequenceValRpcResult rpc_result;
+    ObAddr leader;
+    if (OB_FAIL(get_leader_(tenant_id, leader))) {
+      LOG_WARN("get leader fail", K(ret));
+      (void)refresh_location_(tenant_id);
+    } else if (OB_FAIL(msg.init(schema, self_))) {
+      LOG_WARN("fail to init request msg", K(ret));
+    } else if (OB_UNLIKELY(!msg.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(msg));
+    } else if (OB_UNLIKELY(OB_ISNULL(gais_request_rpc_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("gais request rpc is null", K(ret));
+    }else if (OB_FAIL(gais_request_rpc_->next_sequence_val(leader, msg, rpc_result))) {
+      LOG_WARN("handle gais request failed", K(ret), K(msg), K(rpc_result));
+      (void)refresh_location_(tenant_id);
+    } else {
+      nextval.assign(rpc_result.nextval_);
+      LOG_DEBUG("handle gais success", K(rpc_result));
     }
   }
   return ret;

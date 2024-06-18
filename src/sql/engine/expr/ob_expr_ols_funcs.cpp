@@ -1786,9 +1786,9 @@ int ObExprOLSCharToLabel::eval_char_to_label(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("schema guard is NULL", K(ret));
   } else if (OB_FAIL(expr.eval_param_value(ctx, param1, param2))) {
     LOG_WARN("failed to eval params", K(ret));
-  } else if (param1->to_obj(obj1, expr.args_[0]->obj_meta_)) {
+  } else if (OB_FAIL(param1->to_obj(obj1, expr.args_[0]->obj_meta_))) {
     LOG_WARN("failed to convert to obj", K(ret));
-  } else if (param2->to_obj(obj2, expr.args_[1]->obj_meta_)) {
+  } else if (OB_FAIL(param2->to_obj(obj2, expr.args_[1]->obj_meta_))) {
     LOG_WARN("failed to convert to obj", K(ret));
   } else {
     tenant_id = session->get_effective_tenant_id();

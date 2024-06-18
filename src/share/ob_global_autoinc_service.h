@@ -37,48 +37,47 @@ namespace share
 struct ObGAISNextAutoIncValReq;
 struct ObGAISAutoIncKeyArg;
 struct ObGAISPushAutoIncValReq;
+struct ObGAISBroadcastAutoIncCacheReq;
 
 struct ObAutoIncCacheNode
 {
-  ObAutoIncCacheNode() : sequence_value_(0), last_available_value_(0), sync_value_(0), autoinc_version_(OB_INVALID_VERSION) {}
-  int init(const uint64_t sequence_value,
-           const uint64_t last_available_value,
+  OB_UNIS_VERSION(1);
+public:
+  ObAutoIncCacheNode() : start_(0), end_(0), sync_value_(0), autoinc_version_(OB_INVALID_VERSION),
+    is_received_(false) {}
+  int init(const uint64_t start,
+           const uint64_t end,
            const uint64_t sync_value,
            const int64_t autoinc_version);
-  bool is_valid() const {
-    return sequence_value_ > 0 && last_available_value_ >= sequence_value_ &&
-             sync_value_ <= sequence_value_;
-  }
-  bool is_continuous(const uint64_t next_sequence_val,
-                     const uint64_t sync_val,
-                     const uint64_t max_val) const
+  inline bool is_valid() const
   {
-    return !is_valid() || (sync_val == sync_value_ &&
-      ((last_available_value_ == max_val && next_sequence_val == max_val) ||
-        last_available_value_ == next_sequence_val - 1));
+    return start_ > 0 && end_ >= start_ && sync_value_ <= start_;
   }
   inline bool need_fetch_next_node(const uint64_t base_value,
                                    const uint64_t desired_cnt,
                                    const uint64_t max_value) const;
   inline bool need_sync(const uint64_t new_sync_value) const
   {
-    return new_sync_value > sync_value_;
+    return new_sync_value > sync_value_ && new_sync_value > end_;
   }
-  int update_sequence_value(const uint64_t sequence_value);
-  int update_available_value(const uint64_t available_value);
-  int update_sync_value(const uint64_t sync_value);
+  inline bool is_received() const { return is_received_; }
+  int with_new_start(const uint64_t new_start);
+  int with_new_end(const uint64_t new_end);
+  int with_sync_value(const uint64_t sync_value);
   void reset() {
-    sequence_value_ = 0;
-    last_available_value_ = 0;
+    start_ = 0;
+    end_ = 0;
     sync_value_ = 0;
     autoinc_version_ = OB_INVALID_VERSION;
+    is_received_ = false;
   }
-  TO_STRING_KV(K_(sequence_value), K_(last_available_value), K_(sync_value), K_(autoinc_version));
+  TO_STRING_KV(K_(start), K_(end), K_(sync_value), K_(autoinc_version), K_(is_received));
 
-  uint64_t sequence_value_; // next auto_increment value can be used
-  uint64_t last_available_value_; // last available value in the cache
+  uint64_t start_; // next auto_increment value can be used
+  uint64_t end_;   // last available value in the cache(included)
   uint64_t sync_value_;
   int64_t autoinc_version_;
+  bool is_received_;
 };
 
 class ObGlobalAutoIncService : public logservice::ObIReplaySubHandler,
@@ -87,11 +86,15 @@ class ObGlobalAutoIncService : public logservice::ObIReplaySubHandler,
 {
 public:
   ObGlobalAutoIncService() : is_inited_(false), is_leader_(false),
-    cache_ls_lock_(common::ObLatchIds::AUTO_INCREMENT_LEADER_LOCK), cache_ls_(NULL) {}
+    cache_ls_lock_(common::ObLatchIds::AUTO_INCREMENT_LEADER_LOCK), cache_ls_(NULL),
+    gais_request_rpc_(NULL), is_switching_(false),
+    switching_mutex_(common::ObLatchIds::AUTO_INCREMENT_LEADER_LOCK)
+    {}
   virtual ~ObGlobalAutoIncService() {}
 
   const static int MUTEX_NUM = 1024;
   const static int INIT_HASHMAP_SIZE = 1000;
+  const static int64_t BROADCAST_OP_TIMEOUT = 1000 * 1000; // 1000ms, for broadcast auto increment cache
   int init(const common::ObAddr &addr, common::ObMySQLProxy *mysql_proxy);
   static int mtl_init(ObGlobalAutoIncService *&gais);
   void destroy();
@@ -123,15 +126,25 @@ public:
                                   uint64_t &sync_value);
 
   int handle_clear_autoinc_cache_request(const ObGAISAutoIncKeyArg &request);
+  int receive_global_autoinc_cache(const ObGAISBroadcastAutoIncCacheReq &request);
+
+    /*
+   * This method handles the request for getting next (batch) sequence value.
+   * If the cache can satisfy the request, use the sequence in the cache to return,
+   * otherwise, need to require sequence from inner table and fill it in the cache,
+   * and then consume the sequence in the cache.
+   */
+  int handle_next_sequence_request(const ObGAISNextSequenceValReq &request,
+                                  obrpc::ObGAISNextSequenceValRpcResult &result);
 
 public:
-  void switch_to_follower_forcedly() {
-    ATOMIC_STORE(&is_leader_, false);
-    clear();
+  void switch_to_follower_forcedly()
+  {
+    inner_switch_to_follower();
   }
-  int switch_to_follower_gracefully() {
-    ATOMIC_STORE(&is_leader_, false);
-    return clear();
+  int switch_to_follower_gracefully()
+  {
+    return inner_switch_to_follower();
   }
   int resume_leader() {
     ATOMIC_STORE(&is_leader_, true);
@@ -139,7 +152,7 @@ public:
   }
   int switch_to_leader() {
     ATOMIC_STORE(&is_leader_, true);
-    return clear();
+    return common::OB_SUCCESS;
   }
 
   // for replay, do nothing
@@ -174,6 +187,9 @@ public:
     cache_ls_ = ls_ptr;
   }
 
+  TO_STRING_KV(K_(is_inited), K_(is_leader), K_(self), K(autoinc_map_.size()), KP_(cache_ls),
+    K_(is_switching));
+
 private:
   int check_leader_(const uint64_t tenant_id, bool &is_leader);
   int fetch_next_node_(const ObGAISNextAutoIncValReq &request, ObAutoIncCacheNode &node);
@@ -184,16 +200,45 @@ private:
   int sync_value_to_inner_table_(const ObGAISPushAutoIncValReq &request,
                                  ObAutoIncCacheNode &node,
                                  uint64_t &sync_value);
+  static uint64_t calc_next_cache_boundary(const uint64_t insert_value,
+                                           const uint64_t cache_size,
+                                           const uint64_t max_value)
+  {
+    uint64_t next_cache_boundary = 0;
+    if (max_value < cache_size || insert_value > max_value - cache_size) {
+      next_cache_boundary = max_value;
+    } else {
+      next_cache_boundary = insert_value + cache_size;
+    }
+    return next_cache_boundary;
+  }
+  int inner_switch_to_follower();
+  int broadcast_global_autoinc_cache();
+  int64_t serialize_size_autoinc_cache();
+  int serialize_autoinc_cache(SERIAL_PARAMS);
+  int deserialize_autoinc_cache(DESERIAL_PARAMS);
+  int wait_all_requests_to_finish();
+  /*
+   * The function will check whether the data of the received node and inner table are consistent.
+   * If they are consistent, the inner table will be pushed up by increasing seq_value.
+   * Otherwise, the node will be set as invalid.
+   */
+  int read_and_push_inner_table(const AutoincKey &key,
+                                const uint64_t max_value,
+                                ObAutoIncCacheNode &received_node);
 
 private:
   bool is_inited_;
   bool is_leader_;
   common::ObAddr self_;
   share::ObAutoIncInnerTableProxy inner_table_proxy_;
-  common::hash::ObHashMap<share::AutoincKey, ObAutoIncCacheNode> autoinc_map_;
+  common::hash::ObHashMap<uint64_t, ObAutoIncCacheNode> autoinc_map_; // table_id -> node
   common::ObSpinLock cache_ls_lock_;
   storage::ObLS *cache_ls_;
   lib::ObMutex op_mutex_[MUTEX_NUM];
+  ObGAISRequestRpc* gais_request_rpc_;
+  bool is_switching_;
+  lib::ObMutex switching_mutex_;
 };
 
 } // share

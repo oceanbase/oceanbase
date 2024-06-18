@@ -373,6 +373,7 @@
 #include "sql/engine/expr/ob_expr_st_buffer.h"
 #include "sql/engine/expr/ob_expr_spatial_cellid.h"
 #include "sql/engine/expr/ob_expr_spatial_mbr.h"
+#include "sql/engine/expr/ob_expr_sdo_relate.h"
 #include "sql/engine/expr/ob_expr_st_geomfromewkb.h"
 #include "sql/engine/expr/ob_expr_st_geomfromwkb.h"
 #include "sql/engine/expr/ob_expr_st_geomfromewkt.h"
@@ -1267,8 +1268,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprSysExtractUtc);
   REG_OP_ORCL(ObExprTzOffset);
   REG_OP_ORCL(ObExprFromTz);
-  // REG_OP_ORCL(ObExprSpatialCellid);
-  // REG_OP_ORCL(ObExprSpatialMbr);
+  REG_OP_ORCL(ObExprSpatialCellid);
+  REG_OP_ORCL(ObExprSpatialMbr);
   //label security
   REG_OP_ORCL(ObExprOLSPolicyCreate);
   REG_OP_ORCL(ObExprOLSPolicyAlter);
@@ -1406,7 +1407,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprInnerTableOptionPrinter);
   REG_OP_ORCL(ObExprInnerTableSequenceGetter);
   // REG_OP_ORCL(ObExprTopNFilter);
-  // REG_OP_ORCL(ObExprSdoRelate);
+  REG_OP_ORCL(ObExprSdoRelate);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

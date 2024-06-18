@@ -264,10 +264,6 @@ public:
         !opt_bitset.has_member(ObSequenceArg::NOORDER)) {
       order_ = from.order_;
     }
-    // The flag field will not be modified through alter, just copy the value in from.
-    if (OB_SUCC(ret)) {
-      flag_ = from.flag_;
-    }
     return ret;
   }
 
@@ -279,7 +275,8 @@ public:
                K_(minvalue),
                K_(cache),
                K_(cycle),
-               K_(order));
+               K_(order),
+               K_(flag));
 
 private:
   ObSequenceValue increment_by_;

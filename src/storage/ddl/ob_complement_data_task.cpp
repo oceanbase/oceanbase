@@ -2273,6 +2273,7 @@ int ObLocalScan::get_next_row(
     LOG_WARN("invalid arguments", K(ret), KP(row));
   } else {
     for (int64_t i = 0, j = 0; OB_SUCC(ret) && i < exist_column_mapping_.size(); i++) {
+      ObObjMeta &obj_meta = extended_gc_.org_extended_col_ids_.at(i).col_type_;
       if (exist_column_mapping_.test(i)) {
         // fill with value stored in origin data table.
         if (OB_UNLIKELY(j >= extended_gc_.extended_col_ids_.count())) {
@@ -2284,6 +2285,11 @@ int ObLocalScan::get_next_row(
       } else {
         // the column is newly added, thus fill with default value.
         tmp_row_.storage_datums_[i] = default_row_.storage_datums_[i];
+      }
+      if (OB_FAIL(ret)) {
+      } else if (obj_meta.is_fixed_len_char_type()
+        && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(tmp_row_.storage_datums_[i], obj_meta))) {
+        LOG_WARN("reshape failed", K(ret), K(obj_meta));
       }
     }
   }

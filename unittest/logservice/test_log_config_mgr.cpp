@@ -1856,7 +1856,7 @@ TEST_F(TestLogConfigMgr, test_check_children_health)
     cm.children_.add_learner(timeout_child);
     cm.children_.add_learner(dup_region_child);
     cm.children_.add_learner(normal_child);
-    EXPECT_EQ(OB_SUCCESS, cm.check_children_health());
+    (void) cm.check_children_health();
     EXPECT_EQ(1, cm.children_.get_member_number());
     EXPECT_TRUE(cm.children_.contains(normal_child.server_));
   }
@@ -1874,7 +1874,7 @@ TEST_F(TestLogConfigMgr, test_check_children_health)
     cm.children_.add_learner(timeout_child);
     cm.children_.add_learner(diff_region_child);
     cm.children_.add_learner(normal_child);
-    EXPECT_EQ(OB_SUCCESS, cm.check_children_health());
+    (void) cm.check_children_health();
     LogLearnerList children;
     EXPECT_EQ(OB_SUCCESS, cm.get_children_list(children));
     EXPECT_EQ(1, children.get_member_number());

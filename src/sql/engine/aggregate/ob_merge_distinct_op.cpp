@@ -201,7 +201,8 @@ int ObMergeDistinctOp::deduplicate_for_batch(bool has_last, const ObBatchRows *c
     //we found all distinct row in this batch, store last row and return
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
     batch_info_guard.set_batch_idx(last_idx);
-    if (OB_FAIL(last_row_.save_store_row(MY_SPEC.distinct_exprs_, eval_ctx_, 0))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(last_row_.save_store_row(MY_SPEC.distinct_exprs_, eval_ctx_, 0))) {
       LOG_WARN("failed to save last row");
     }
   } else {
@@ -237,7 +238,8 @@ int ObMergeDistinctOp::deduplicate_for_batch(bool has_last, const ObBatchRows *c
       //we found all distinct row in this batch, store last row and return
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
       batch_info_guard.set_batch_idx(last_idx);
-      if (OB_FAIL(last_row_.save_store_row(MY_SPEC.distinct_exprs_, eval_ctx_, 0))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(last_row_.save_store_row(MY_SPEC.distinct_exprs_, eval_ctx_, 0))) {
         LOG_WARN("failed to save last row");
       }
     }

@@ -164,7 +164,8 @@ int ObRemoteScheduler::build_remote_task(ObExecContext &ctx,
       K(task_exec_ctx.get_query_sys_begin_schema_version()));
   remote_task.set_remote_sql_info(&plan_ctx->get_remote_sql_info());
   ObDASTabletLoc *first_tablet_loc = DAS_CTX(ctx).get_table_loc_list().get_first()->get_first_tablet_loc();
-  if (OB_ISNULL(session = ctx.get_my_session())) {
+  if (OB_FAIL(ret)){
+  } else if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else {

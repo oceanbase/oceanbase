@@ -117,9 +117,10 @@ public:
     }
     return chunk;
   }
-  inline AChunk *popall()
+  inline AChunk *popall(int64_t &hold)
   {
     AChunk *chunk = NULL;
+    hold = 0;
     if (!OB_ISNULL(header_)) {
       ObDisableDiagnoseGuard disable_diagnose_guard;
       if (with_mutex_) {
@@ -128,6 +129,7 @@ public:
       DEFER(if (with_mutex_) {mutex_.unlock();});
       if (!OB_ISNULL(header_)) {
         chunk = header_;
+        hold = hold_;
         hold_ = 0;
         pops_ = pushes_;
         header_ = NULL;
@@ -206,11 +208,11 @@ private:
   static constexpr int64_t DEFAULT_LIMIT = 4L << 30;  // 4GB
   static constexpr int64_t ACHUNK_ALIGN_SIZE = INTACT_ACHUNK_SIZE;
   static constexpr int64_t NORMAL_ACHUNK_SIZE = INTACT_ACHUNK_SIZE;
-  static constexpr int32_t N = 10;
+  static constexpr int32_t MAX_ACHUNK_INDEX = 10;
   static constexpr int32_t NORMAL_ACHUNK_INDEX = 0;
   static constexpr int32_t MIN_LARGE_ACHUNK_INDEX = NORMAL_ACHUNK_INDEX + 1;
-  static constexpr int32_t MAX_LARGE_ACHUNK_INDEX = N - 1;
-  static constexpr int32_t HUGE_ACHUNK_INDEX = MAX_LARGE_ACHUNK_INDEX + 1;
+  static constexpr int32_t MAX_LARGE_ACHUNK_INDEX = MAX_ACHUNK_INDEX - 1;
+  static constexpr int32_t HUGE_ACHUNK_INDEX = MAX_ACHUNK_INDEX;
 public:
   static AChunkMgr &instance();
 
@@ -236,6 +238,7 @@ public:
   inline static AChunk *ptr2chunk(const void *ptr);
   bool update_hold(int64_t bytes, bool high_prio);
   virtual int madvise(void *addr, size_t length, int advice);
+  void munmap(void *addr, size_t length);
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
   inline void set_limit(int64_t limit);
@@ -259,23 +262,75 @@ private:
   // wrap for mmap
   void *low_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);
   void low_free(const void *ptr, const uint64_t size);
-  Slot &get_slot(const uint64_t size)
+  int32_t get_chunk_index(const uint64_t size)
   {
-    int64_t index = (size - 1) / INTACT_ACHUNK_SIZE;
-    if (index > HUGE_ACHUNK_INDEX) {
-      index = HUGE_ACHUNK_INDEX;
-    }
-    return slots_[index];
+    return MIN(HUGE_ACHUNK_INDEX, (size - 1) / INTACT_ACHUNK_SIZE);
   }
+  void inc_maps(const uint64_t size)
+  {
+    int32_t chunk_index = get_chunk_index(size);
+    ATOMIC_FAA(&slots_[chunk_index].maps_, 1);
+  }
+  void inc_unmaps(const uint64_t size)
+  {
+    int32_t chunk_index = get_chunk_index(size);
+    ATOMIC_FAA(&slots_[chunk_index].unmaps_, 1);
+  }
+  bool push_chunk(AChunk* chunk)
+  {
+    bool bret = true;
+    if (OB_NOT_NULL(chunk)) {
+      int64_t hold = chunk->hold();
+      int32_t chunk_index = get_chunk_index(chunk->aligned());
+      bret = slots_[chunk_index]->push(chunk);
+      if (bret) {
+        ATOMIC_FAA(&cache_hold_, hold);
+      }
+    }
+    return bret;
+  }
+  AChunk* pop_chunk_with_index(int32_t chunk_index)
+  {
+    AChunk *chunk = slots_[chunk_index]->pop();
+    if (OB_NOT_NULL(chunk)) {
+      ATOMIC_FAA(&cache_hold_, -chunk->hold());
+    }
+    return chunk;
+  }
+
+  AChunk* pop_chunk_with_size(const uint64_t size)
+  {
+    int32_t chunk_index = get_chunk_index(size);
+    return pop_chunk_with_index(chunk_index);
+  }
+
+  AChunk* popall_with_index(int32_t chunk_index, int64_t &hold)
+  {
+    return slots_[chunk_index]->popall(hold);
+  }
+
+  int64_t get_maps(int32_t chunk_index) const
+  {
+    return slots_[chunk_index].maps_;
+  }
+  int64_t get_unmaps(int32_t chunk_index) const
+  {
+    return slots_[chunk_index].unmaps_;
+  }
+  const AChunkList& get_freelist(int32_t chunk_index) const
+  {
+    return slots_[chunk_index].free_list_;
+  }
+
 protected:
   int64_t limit_;
   int64_t urgent_;
   int64_t hold_; // Including the memory occupied by free_list, limited by memory_limit
   int64_t total_hold_; // Including virtual memory, just for statifics.
-  int64_t used_;
+  int64_t cache_hold_;
   int64_t shadow_hold_;
   int64_t max_chunk_cache_size_;
-  Slot slots_[N + 1];
+  Slot slots_[MAX_ACHUNK_INDEX + 1];
 }; // end of class AChunkMgr
 
 OB_INLINE AChunk *AChunkMgr::ptr2chunk(const void *ptr)
@@ -320,12 +375,12 @@ inline int64_t AChunkMgr::get_hold() const
 
 inline int64_t AChunkMgr::get_used() const
 {
-  return used_;
+  return hold_ - cache_hold_;
 }
 
 inline int64_t AChunkMgr::get_freelist_hold() const
 {
-  return hold_ - used_;
+  return cache_hold_;
 }
 } // end of namespace lib
 } // end of namespace oceanbase

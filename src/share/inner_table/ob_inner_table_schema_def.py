@@ -4404,7 +4404,7 @@ def_table_schema(
     ('interval#', 'varchar:4000', 'false'),
     ('failures', 'int', 'true', '0'),
     ('flag', 'int', 'false'),
-    ('what', 'varchar:4000', 'true'),
+    ('what', 'varchar:65536', 'true'),
     ('nlsenv', 'varchar:4000', 'true'),
     ('charenv', 'varchar:4000', 'true'),
     ('field1', 'varchar:MAX_ZONE_LENGTH', 'true'),
@@ -4413,7 +4413,7 @@ def_table_schema(
     ('job_style', 'varchar:128', 'true'),
     ('program_name', 'varchar:128', 'true'),
     ('job_type', 'varchar:128', 'true'),
-    ('job_action', 'varchar:4000', 'true'),
+    ('job_action', 'varchar:65536', 'true'),
     ('number_of_argument', 'int', 'true'),
     ('start_date', 'timestamp', 'true'),
     ('repeat_interval', 'varchar:4000', 'true'),
@@ -4426,10 +4426,12 @@ def_table_schema(
     ('retry_count', 'int', 'true'),
     ('last_run_duration', 'int', 'true'),
     ('max_run_duration', 'int', 'true'),
-    ('comments', 'varchar:128', 'true'),
+    ('comments', 'varchar:4096', 'true'),
     ('credential_name', 'varchar:128', 'true'),
     ('destination_name', 'varchar:128', 'true'),
     ('interval_ts', 'int', 'true'),
+    ('user_id', 'int', 'true', 'OB_INVALID_ID'),
+    ('database_id', 'int', 'true', 'OB_INVALID_ID')
   ],
 )
 
@@ -10095,6 +10097,8 @@ def_table_schema(
   ('account_locked', 'varchar:1'),
   ('drop_database_link_priv', 'varchar:1'),
   ('create_database_link_priv', 'varchar:1'),
+  ('create_role_priv', 'varchar:1'),
+  ('drop_role_priv', 'varchar:1'),
   ],
 )
 
@@ -10161,6 +10165,7 @@ def_table_schema(
   ('try_lock_times', 'int'),
   ('time_after_recv', 'int'),
   ('session_id', 'int'),
+  ('holder_session_id', 'int'),
   ('block_session_id', 'int'),
   ('type', 'int'),
   ('lock_mode', 'varchar:MAX_LOCK_MODE_BUF_LENGTH'),
@@ -14459,7 +14464,10 @@ def_table_schema(
 
 # 12488: __all_virtual_scheduler_job_run_detail_v2
 # 12489: __all_virtual_deadlock_detector_stat
-# 12490: __all_virtual_spatial_reference_systems
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12490',
+  table_name = '__all_virtual_spatial_reference_systems',
+  keywords = all_def_keywords['__all_spatial_reference_systems']))
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14941,7 +14949,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15456', all_def_keywords['__all_virtual_nic_info'])))
 # 15457: __all_virtual_query_response_time
 # 15458: __all_scheduler_job_run_detail_v2
-# 15459: __all_spatial_reference_systems
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15459', all_def_keywords['__all_spatial_reference_systems'])))
 # 15460: idx_scheduler_job_run_detail_v2_time_real_agent
 #
 # 余留位置（此行之前占位）
@@ -15772,8 +15780,18 @@ def_table_schema(
                       mysql.proc as mp
                       join oceanbase.__all_database a
                       on mp.DB = a.DATABASE_NAME
+                      and  a.in_recyclebin = 0
                       join oceanbase.__all_routine as r on mp.specific_name = r.routine_name
                       and r.DATABASE_ID = a.DATABASE_ID
+                      and
+                      CAST(
+                        CASE r.routine_type
+                        WHEN 1 THEN 'PROCEDURE'
+                        WHEN 2 THEN 'FUNCTION'
+                        ELSE NULL
+                        END
+                          AS CHAR(9)
+                      ) = mp.type
                       left join oceanbase.__all_routine_param as rp on rp.subprogram_id = r.subprogram_id
                       and rp.tenant_id = r.tenant_id
                       and rp.routine_id = r.routine_id
@@ -16968,10 +16986,10 @@ def_table_schema(
           CAST( NULL AS UNSIGNED) AS PHYSICAL_READ_BYTES,
           CAST( NULL AS UNSIGNED) AS PHYSICAL_WRITE_REQUESTS,
           CAST( NULL AS UNSIGNED) AS PHYSICAL_WRITE_BYTES,
-          CAST( NULL AS UNSIGNED) AS WORKAREA_MEM,
-          CAST( NULL AS UNSIGNED) AS WORKAREA_MAX_MEM,
-          CAST( NULL AS UNSIGNED) AS WORKAREA_TEMPSEG,
-          CAST( NULL AS UNSIGNED) AS WORKAREA_MAX_TEMPSEG,
+          CAST( WORKAREA_MEM AS UNSIGNED) AS WORKAREA_MEM,
+          CAST( WORKAREA_MAX_MEM AS UNSIGNED) AS WORKAREA_MAX_MEM,
+          CAST( WORKAREA_TEMPSEG AS UNSIGNED) AS WORKAREA_TEMPSEG,
+          CAST( WORKAREA_MAX_TEMPSEG AS UNSIGNED) AS WORKAREA_MAX_TEMPSEG,
           CAST( NULL AS UNSIGNED) AS OTHERSTAT_GROUP_ID,
           OTHERSTAT_1_ID,
           CAST(NULL AS UNSIGNED) AS OTHERSTAT_1_TYPE,
@@ -21052,7 +21070,7 @@ def_table_schema(
       CAST(NULL AS CHAR(15)) AS DURATION,
       CAST(NULL AS NUMBER) AS PCT_DIRECT_ACCESS,
       CAST(NULL AS CHAR(128)) AS ITYP_OWNER,
-      CAST(NULL AS CHAR(128)) AS ITYP_NAME,
+      CAST(INDEX_ITYP_NAME AS CHAR(128)) AS ITYP_NAME,
       CAST(NULL AS CHAR(1000)) AS PARAMETERS,
       CAST(NULL AS CHAR(3)) AS GLOBAL_STATS,
       CAST(NULL AS CHAR(12)) AS DOMIDX_STATUS,
@@ -21081,7 +21099,7 @@ def_table_schema(
              ELSE (CONS_TAB.CONSTRAINT_NAME) END AS INDEX_NAME,
 
         CASE
-          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (15, 18, 21) THEN 'DOMAIN'
+          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (10, 11, 12, 15, 18, 21) THEN 'DOMAIN'
           WHEN A.TABLE_TYPE = 5 AND EXISTS (
             SELECT 1
             FROM OCEANBASE.__ALL_VIRTUAL_COLUMN T_COL_INDEX,
@@ -21096,6 +21114,11 @@ def_table_schema(
           ) THEN 'FUNCTION-BASED NORMAL'
           ELSE 'NORMAL'
         END AS INDEX_TYPE_NAME,
+
+        CASE
+          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (10, 11, 12) THEN 'SPATIAL_INDEX'
+          ELSE 'NULL'
+        END AS INDEX_ITYP_NAME,
 
         DATABASE_NAME AS TABLE_OWNER,
 
@@ -30850,20 +30873,18 @@ def_table_schema(
     SVR_PORT AS SVR_PORT,
     TENANT_ID AS TENANT_ID,
     TRANS_ID AS TRANS_ID,
+    SESSION_ID AS SESSION_ID,
     CASE WHEN TYPE = 1 THEN 'TR'
          WHEN TYPE = 2 THEN 'TX'
          WHEN TYPE = 3 THEN 'TM'
          ELSE 'UNDEFINED' END
     AS TYPE,
-    CASE WHEN TYPE = 1 THEN TABLET_ID
-         WHEN TYPE = 2 THEN HOLDER_TRANS_ID
-         WHEN TYPE = 3 THEN (SELECT DISTINCT OBJ_ID FROM oceanbase.__ALL_VIRTUAL_OBJ_LOCK WHERE oceanbase.__ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
-         ELSE -1 END
-    AS ID1,
-    CASE WHEN TYPE = 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
+    HOLDER_TRANS_ID AS ID1,
+    HOLDER_SESSION_ID AS ID2,
+    CASE WHEN TYPE = 1 THEN CONCAT(CONCAT(TABLET_ID, '-'), ROWKEY)
          WHEN TYPE = 2 OR TYPE = 3 THEN NULL
          ELSE 'ERROR' END
-    AS ID2,
+    AS ID3,
     'NONE' AS LMODE,
     LOCK_MODE AS REQUEST,
     TIME_AFTER_RECV AS CTIME,
@@ -30878,45 +30899,11 @@ def_table_schema(
     SVR_PORT AS SVR_PORT,
     TENANT_ID AS TENANT_ID,
     TRANS_ID AS TRANS_ID,
-    'TX' AS TYPE,
-    HOLDER_TRANS_ID AS ID1,
-    NULL AS ID2,
-    'NONE' AS LMODE,
-    LOCK_MODE AS REQUEST,
-    TIME_AFTER_RECV AS CTIME,
-    1 AS BLOCK
-    FROM
-    oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT
-    WHERE TYPE = 1
-
-    UNION ALL
-
-    SELECT
-    SVR_IP AS SVR_IP,
-    SVR_PORT AS SVR_PORT,
-    TENANT_ID AS TENANT_ID,
-    TRANS_ID AS TRANS_ID,
+    SESSION_ID AS SESSION_ID,
     'TR' AS TYPE,
-    TABLET_ID AS ID1,
-    CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY) AS ID2,
-    'NONE' AS LMODE,
-    LOCK_MODE AS REQUEST,
-    TIME_AFTER_RECV AS CTIME,
-    1 AS BLOCK
-    FROM
-    oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT
-    WHERE TYPE = 2
-
-    UNION ALL
-
-    SELECT
-    SVR_IP AS SVR_IP,
-    SVR_PORT AS SVR_PORT,
-    TENANT_ID AS TENANT_ID,
-    TRANS_ID AS TRANS_ID,
-    'TR' AS TYPE,
-    TABLET_ID AS ID1,
-    CONCAT(CONCAT(TRANS_ID, '-'), ROWKEY) AS ID2,
+    TRANS_ID AS ID1,
+    SESSION_ID AS ID2,
+    CONCAT(CONCAT(TABLET_ID, '-'), ROWKEY) AS ID3,
     'X' AS LMODE,
     'NONE' AS REQUEST,
     TIME_AFTER_RECV AS CTIME,
@@ -30932,16 +30919,18 @@ def_table_schema(
     SVR_PORT AS SVR_PORT,
     TENANT_ID AS TENANT_ID,
     TRANS_ID AS TRANS_ID,
+    SESSION_ID AS SESSION_ID,
     'TX' AS TYPE,
     TRANS_ID AS ID1,
-    NULL AS ID2,
+    SESSION_ID AS ID2,
+    NULL AS ID3,
     'X' AS LMODE,
     'NONE' AS REQUEST,
     MIN(TIME_AFTER_RECV) AS CTIME,
     0 AS BLOCK
     FROM
     oceanbase.__ALL_VIRTUAL_TRANS_LOCK_STAT
-    GROUP BY SVR_IP, SVR_PORT, TENANT_ID, TRANS_ID
+    GROUP BY SVR_IP, SVR_PORT, TENANT_ID, TRANS_ID, SESSION_ID
 
     UNION ALL
 
@@ -30950,18 +30939,26 @@ def_table_schema(
     OBJ_LOCK.SVR_PORT AS SVR_PORT,
     OBJ_LOCK.TENANT_ID AS TENANT_ID,
     OBJ_LOCK.CREATE_TRANS_ID AS TRANS_ID,
+    TRX_PART.SESSION_ID AS SESSION_ID,
     CASE WHEN OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET') THEN 'TM'
          WHEN OBJ_LOCK.OBJ_TYPE = 'DBMS_LOCK' THEN 'UL'
          ELSE 'UNKONWN' END
     AS TYPE,
-    OBJ_LOCK.OBJ_ID AS ID1,
-    NULL AS ID2,
+    OBJ_LOCK.CREATE_TRANS_ID AS ID1,
+    TRX_PART.SESSION_ID AS ID2,
+    OBJ_LOCK.OBJ_ID AS ID3,
     OBJ_LOCK.LOCK_MODE AS LMODE,
     'NONE' AS REQUEST,
     OBJ_LOCK.TIME_AFTER_CREATE AS CTIME,
     0 AS BLOCK
     FROM
     oceanbase.__ALL_VIRTUAL_OBJ_LOCK AS OBJ_LOCK
+    LEFT JOIN
+    oceanbase.GV$OB_TRANSACTION_PARTICIPANTS TRX_PART
+    ON
+    TRX_PART.TENANT_ID = OBJ_LOCK.TENANT_ID AND
+    TRX_PART.LS_ID = OBJ_LOCK.LS_ID AND
+    TRX_PART.TX_ID = OBJ_LOCK.CREATE_TRANS_ID
     INNER JOIN
     oceanbase.__ALL_VIRTUAL_LS_INFO AS LS_INFO
     ON
@@ -30989,9 +30986,11 @@ def_table_schema(
     SVR_PORT,
     TENANT_ID,
     TRANS_ID,
+    SESSION_ID,
     TYPE,
     ID1,
     ID2,
+    ID3,
     LMODE,
     REQUEST,
     CTIME,
@@ -39582,7 +39581,7 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(15)) AS DURATION,
       CAST(NULL AS NUMBER) AS PCT_DIRECT_ACCESS,
       CAST(NULL AS VARCHAR2(128)) AS ITYP_OWNER,
-      CAST(NULL AS VARCHAR2(128)) AS ITYP_NAME,
+      CAST(INDEX_ITYP_NAME AS VARCHAR2(128)) AS ITYP_NAME,
       CAST(NULL AS VARCHAR2(1000)) AS PARAMETERS,
       CAST(NULL AS VARCHAR2(3)) AS GLOBAL_STATS,
       CAST(NULL AS VARCHAR2(12)) AS DOMIDX_STATUS,
@@ -39609,7 +39608,7 @@ def_table_schema(
              ELSE (CONS_TAB.CONSTRAINT_NAME) END AS INDEX_NAME,
 
         CASE
-          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (15, 18, 21) THEN 'DOMAIN'
+          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (10, 11, 12, 15, 18, 21) THEN 'DOMAIN'
           WHEN A.TABLE_TYPE = 5 AND EXISTS (
             SELECT 1
             FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT T_COL_INDEX,
@@ -39624,6 +39623,11 @@ def_table_schema(
           ) THEN 'FUNCTION-BASED NORMAL'
           ELSE 'NORMAL'
         END AS INDEX_TYPE_NAME,
+
+        CASE
+          WHEN  A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (10, 11, 12) THEN 'SPATIAL_INDEX'
+          ELSE 'NULL'
+        END AS INDEX_ITYP_NAME,
 
         DATABASE_NAME AS TABLE_OWNER,
 
@@ -39750,7 +39754,7 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(15)) AS DURATION,
       CAST(NULL AS NUMBER) AS PCT_DIRECT_ACCESS,
       CAST(NULL AS VARCHAR2(128)) AS ITYP_OWNER,
-      CAST(NULL AS VARCHAR2(128)) AS ITYP_NAME,
+      CAST(INDEX_ITYP_NAME AS VARCHAR2(128)) AS ITYP_NAME,
       CAST(NULL AS VARCHAR2(1000)) AS PARAMETERS,
       CAST(NULL AS VARCHAR2(3)) AS GLOBAL_STATS,
       CAST(NULL AS VARCHAR2(12)) AS DOMIDX_STATUS,
@@ -39777,7 +39781,7 @@ def_table_schema(
              ELSE (CONS_TAB.CONSTRAINT_NAME) END AS INDEX_NAME,
 
         CASE
-          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (15, 18, 21) THEN 'DOMAIN'
+          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (10, 11, 12, 15, 18, 21) THEN 'DOMAIN'
           WHEN A.TABLE_TYPE = 5 AND EXISTS (
             SELECT 1
             FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT T_COL_INDEX,
@@ -39792,6 +39796,11 @@ def_table_schema(
           ) THEN 'FUNCTION-BASED NORMAL'
           ELSE 'NORMAL'
         END AS INDEX_TYPE_NAME,
+
+        CASE
+          WHEN  A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (10, 11, 12) THEN 'SPATIAL_INDEX'
+          ELSE 'NULL'
+        END AS INDEX_ITYP_NAME,
 
         DATABASE_NAME AS TABLE_OWNER,
 
@@ -39921,7 +39930,7 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(15)) AS DURATION,
       CAST(NULL AS NUMBER) AS PCT_DIRECT_ACCESS,
       CAST(NULL AS VARCHAR2(128)) AS ITYP_OWNER,
-      CAST(NULL AS VARCHAR2(128)) AS ITYP_NAME,
+      CAST(INDEX_ITYP_NAME AS VARCHAR2(128)) AS ITYP_NAME,
       CAST(NULL AS VARCHAR2(1000)) AS PARAMETERS,
       CAST(NULL AS VARCHAR2(3)) AS GLOBAL_STATS,
       CAST(NULL AS VARCHAR2(12)) AS DOMIDX_STATUS,
@@ -39948,7 +39957,7 @@ def_table_schema(
              ELSE (CONS_TAB.CONSTRAINT_NAME) END AS INDEX_NAME,
 
         CASE
-          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (15, 18, 21) THEN 'DOMAIN'
+          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (10, 11, 12, 15, 18, 21) THEN 'DOMAIN'
           WHEN A.TABLE_TYPE = 5 AND EXISTS (
             SELECT 1
             FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT T_COL_INDEX,
@@ -39963,6 +39972,11 @@ def_table_schema(
           ) THEN 'FUNCTION-BASED NORMAL'
           ELSE 'NORMAL'
         END AS INDEX_TYPE_NAME,
+
+        CASE
+          WHEN  A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (10, 11, 12) THEN 'SPATIAL_INDEX'
+          ELSE 'NULL'
+        END AS INDEX_ITYP_NAME,
 
         DATABASE_NAME AS TABLE_OWNER,
 
@@ -42451,6 +42465,7 @@ def_table_schema(
         AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
     WHERE
       D.IN_RECYCLEBIN = 0
+      AND P.DATABASE_ID = USERENV('SCHEMAID')
     UNION ALL
     SELECT
       CAST(R.ROUTINE_NAME AS VARCHAR2(128)) AS NAME,
@@ -57026,10 +57041,10 @@ def_table_schema(
           CAST(NULL AS NUMBER) PHYSICAL_READ_BYTES,
           CAST(NULL AS NUMBER) PHYSICAL_WRITE_REQUESTS,
           CAST(NULL AS NUMBER) PHYSICAL_WRITE_BYTES,
-          CAST(NULL AS NUMBER) WORKAREA_MEM,
-          CAST(NULL AS NUMBER) WORKAREA_MAX_MEM,
-          CAST(NULL AS NUMBER) WORKAREA_TEMPSEG,
-          CAST(NULL AS NUMBER) WORKAREA_MAX_TEMPSEG,
+          CAST(WORKAREA_MEM AS NUMBER) WORKAREA_MEM,
+          CAST(WORKAREA_MAX_MEM AS NUMBER) WORKAREA_MAX_MEM,
+          CAST(WORKAREA_TEMPSEG AS NUMBER) WORKAREA_TEMPSEG,
+          CAST(WORKAREA_MAX_TEMPSEG AS NUMBER) WORKAREA_MAX_TEMPSEG,
           CAST(NULL AS NUMBER) OTHERSTAT_GROUP_ID,
           CAST(OTHERSTAT_1_ID AS NUMBER) OTHERSTAT_1_ID,
           CAST(NULL AS NUMBER) OTHERSTAT_1_TYPE,
@@ -61635,45 +61650,24 @@ SELECT
   SVR_PORT AS SVR_PORT,
   TENANT_ID AS TENANT_ID,
   TRANS_ID AS TRANS_ID,
+  SESSION_ID AS SESSION_ID,
   CASE WHEN TYPE = 1 THEN 'TR'
        WHEN TYPE = 2 THEN 'TX'
        WHEN TYPE = 3 THEN 'TM'
        ELSE 'UNDEFINED' END
   AS TYPE,
-  CASE WHEN TYPE = 1 THEN TABLET_ID
-       WHEN TYPE = 2 THEN HOLDER_TRANS_ID
-       WHEN TYPE = 3 THEN (SELECT DISTINCT OBJ_ID FROM SYS.ALL_VIRTUAL_OBJ_LOCK WHERE SYS.ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = SYS.ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
-       ELSE -1 END
-  AS ID1,
-  CASE WHEN TYPE = 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
-       WHEN TYPE = 2 THEN NULL
-       WHEN TYPE = 3 THEN NULL
-       ELSE 'ERROR' END
-  AS ID2,
-  'NONE' AS LMODE,
-  LOCK_MODE AS REQUEST,
-  TIME_AFTER_RECV AS CTIME,
-  1 AS BLOCK
-FROM
-  SYS.ALL_VIRTUAL_LOCK_WAIT_STAT
-
-UNION ALL
-
-SELECT
-  SVR_IP AS SVR_IP,
-  SVR_PORT AS SVR_PORT,
-  TENANT_ID AS TENANT_ID,
-  TRANS_ID AS TRANS_ID,
-  'TX' AS TYPE,
   HOLDER_TRANS_ID AS ID1,
-  NULL AS ID2,
+  HOLDER_SESSION_ID AS ID2,
+  CASE WHEN TYPE = 1 THEN CONCAT(CONCAT(TABLET_ID, '-'), ROWKEY)
+       WHEN TYPE = 2 OR TYPE = 3 THEN NULL
+       ELSE 'ERROR' END
+  AS ID3,
   'NONE' AS LMODE,
   LOCK_MODE AS REQUEST,
   TIME_AFTER_RECV AS CTIME,
   1 AS BLOCK
 FROM
   SYS.ALL_VIRTUAL_LOCK_WAIT_STAT
-WHERE TYPE = 1
 
 UNION ALL
 
@@ -61682,27 +61676,11 @@ SELECT
   SVR_PORT AS SVR_PORT,
   TENANT_ID AS TENANT_ID,
   TRANS_ID AS TRANS_ID,
+  SESSION_ID AS SESSION_ID,
   'TR' AS TYPE,
-  TABLET_ID AS ID1,
-  CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY) AS ID2,
-  'NONE' AS LMODE,
-  LOCK_MODE AS REQUEST,
-  TIME_AFTER_RECV AS CTIME,
-  1 AS BLOCK
-FROM
-  SYS.ALL_VIRTUAL_LOCK_WAIT_STAT
-WHERE TYPE = 2
-
-UNION ALL
-
-SELECT
-  SVR_IP AS SVR_IP,
-  SVR_PORT AS SVR_PORT,
-  TENANT_ID AS TENANT_ID,
-  TRANS_ID AS TRANS_ID,
-  'TR' AS TYPE,
-  TABLET_ID AS ID1,
-  CONCAT(CONCAT(TRANS_ID, '-'), ROWKEY) AS ID2,
+  TRANS_ID AS ID1,
+  SESSION_ID AS ID2,
+  CONCAT(CONCAT(TABLET_ID, '-'), ROWKEY) AS ID3,
   'X' AS LMODE,
   'NONE' AS REQUEST,
   TIME_AFTER_RECV AS CTIME,
@@ -61718,16 +61696,18 @@ SELECT
   SVR_PORT AS SVR_PORT,
   TENANT_ID AS TENANT_ID,
   TRANS_ID AS TRANS_ID,
+  SESSION_ID AS SESSION_ID,
   'TX' AS TYPE,
   TRANS_ID AS ID1,
-  NULL AS ID2,
+  SESSION_ID AS ID2,
+  NULL AS ID3,
   'X' AS LMODE,
   'NONE' AS REQUEST,
   MIN(TIME_AFTER_RECV) AS CTIME,
   0 AS BLOCK
 FROM
   SYS.ALL_VIRTUAL_TRANS_LOCK_STAT
-GROUP BY SVR_IP, SVR_PORT, TENANT_ID, TRANS_ID
+GROUP BY SVR_IP, SVR_PORT, TENANT_ID, TRANS_ID, SESSION_ID
 
 UNION ALL
 
@@ -61736,18 +61716,26 @@ SELECT
   OBJ_LOCK.SVR_PORT AS SVR_PORT,
   OBJ_LOCK.TENANT_ID AS TENANT_ID,
   OBJ_LOCK.CREATE_TRANS_ID AS TRANS_ID,
+  TRX_PART.SESSION_ID AS SESSION_ID,
   CASE WHEN OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET') THEN 'TM'
        WHEN OBJ_LOCK.OBJ_TYPE = 'DBMS_LOCK' THEN 'UL'
        ELSE 'UNKOWN' END
   AS TYPE,
-  OBJ_LOCK.OBJ_ID AS ID1,
-  NULL AS ID2,
+  OBJ_LOCK.CREATE_TRANS_ID AS ID1,
+  TRX_PART.SESSION_ID AS ID2,
+  CAST(OBJ_LOCK.OBJ_ID AS VARCHAR2(32)) AS ID3,
   OBJ_LOCK.LOCK_MODE AS LMODE,
   'NONE' AS REQUEST,
   OBJ_LOCK.TIME_AFTER_CREATE AS CTIME,
   0 AS BLOCK
 FROM
   SYS.ALL_VIRTUAL_OBJ_LOCK OBJ_LOCK
+LEFT JOIN
+  SYS.GV$OB_TRANSACTION_PARTICIPANTS TRX_PART
+ON
+  TRX_PART.TENANT_ID = OBJ_LOCK.TENANT_ID AND
+  TRX_PART.LS_ID = OBJ_LOCK.LS_ID AND
+  TRX_PART.TX_ID = OBJ_LOCK.CREATE_TRANS_ID
 INNER JOIN
   SYS.ALL_VIRTUAL_LS_INFO LS_INFO
 ON
@@ -61775,15 +61763,17 @@ SELECT SVR_IP,
   SVR_PORT,
   TENANT_ID,
   TRANS_ID,
+  SESSION_ID,
   TYPE,
   ID1,
   ID2,
+  ID3,
   LMODE,
   REQUEST,
   CTIME,
   BLOCK
-    FROM SYS.GV$OB_LOCKS
-    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+FROM SYS.GV$OB_LOCKS
+WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
   """.replace("\n", " "),
 )
 
@@ -62774,7 +62764,85 @@ def_table_schema(
 )
 # 28232: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 # 28233: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
-# 28234: DBA_OB_SPATIAL_COLUMNS
+
+def_table_schema(
+  owner = 'wuxingying.wxy',
+  table_name      = 'DBA_OB_SPATIAL_COLUMNS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28234',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  select G.TABLE_SCHEMA AS TABLE_SCHEMA,
+       G.TABLE_NAME AS TABLE_NAME,
+       G.COLUMN_NAME AS COLUMN_NAME,
+       G.SRS_NAME AS SRS_NAME,
+       G.SRS_ID AS SRS_ID,
+       G.GEOMETRY_TYPE_NAME AS GEOMETRY_TYPE_NAME,
+       CAST('SDO_DIM_ARRAY(SDO_DIM_ELEMENT(NULL, -180, 180, 0.5), SDO_DIM_ELEMENT(NULL, -90, 90, 0.5))'
+         AS VARCHAR2(512)) AS DIMINFO,
+       D.INDEX_NAME AS INDEX_NAME
+from
+    (select CAST(db.database_name AS VARCHAR2(128)) as TABLE_SCHEMA,
+         CAST(tbl.table_name AS VARCHAR2(256))  as TABLE_NAME,
+         CAST(col.column_name AS VARCHAR2(128)) as COLUMN_NAME,
+         CAST(srs.srs_name AS VARCHAR2(128)) as SRS_NAME,
+         CAST(
+              CASE
+                WHEN TRUNC(col.srs_id / POWER(2, 32)) = 4294967295 THEN NULL
+                ELSE TRUNC(col.srs_id / POWER(2, 32))
+              END
+         AS NUMBER(10)) AS SRS_ID,
+        CAST(
+            CASE
+              WHEN (BITAND(col.srs_id, 31) IN (0, 1, 2, 3, 4, 5, 6, 7)) THEN 'SDO_GEOMETRY'
+              ELSE 'invalid'
+            END
+         AS VARCHAR2(128)) AS GEOMETRY_TYPE_NAME,
+         db.tenant_id as TENANT_ID,
+         tbl.table_id AS TABLE_ID,
+         tbl.database_id AS DATABASE_ID
+    from
+      SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT col left join SYS.ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT srs on TRUNC(col.srs_id / POWER(2, 32)) = srs.srs_id
+      join SYS.ALL_VIRTUAL_TABLE_REAL_AGENT tbl on (tbl.table_id = col.table_id and tbl.tenant_id = col.tenant_id)
+      join SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db on (db.database_id = tbl.database_id and db.tenant_id = tbl.tenant_id)
+      and db.database_name != '__recyclebin'
+    where col.data_type = 48
+        AND BITAND(TRUNC(tbl.table_mode / POWER(2, 12)), 15) IN (0, 1)) G
+left join
+    (select T.TABLE_NAME AS TABLE_NAME,
+           T.INDEX_NAME AS INDEX_NAME,
+           C.COLUMN_NAME AS COLUMN_NAME,
+           C.COLUMN_ID AS COLUMN_ID,
+           T.DATABASE_ID AS DATABASE_ID,
+           T.TENANT_ID AS TENANT_ID,
+           C.TABLE_ID AS TABLE_ID
+    from
+    (select A.TABLE_NAME AS TABLE_NAME,
+            A.INDEX_NAME AS INDEX_NAME,
+            A.COLUMN_NAME  AS COLUMN_NAME,
+            B.COLUMN_ID AS COLUMN_ID,
+            B.TENANT_ID as TENANT_ID,
+            B.TABLE_ID as TABLE_ID,
+            B.DATABASE_ID AS DATABASE_ID,
+            B.SRS_ID AS SRS_ID
+    from (select TABLE_NAME, INDEX_NAME, COLUMN_NAME from ALL_IND_COLUMNS idx_col) A
+    join (select cl.COLUMN_ID as COLUMN_ID, cl.COLUMN_NAME as COLUMN_NAME, cl.TENANT_ID as TENANT_ID, cl.TABLE_ID as TABLE_ID,
+          tb.TABLE_NAME as TABLE_NAME, cl.IS_HIDDEN as IS_HIDDEN,
+          cl.SRS_ID as SRS_ID, tb.DATABASE_ID as DATABASE_ID from SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT cl
+          join SYS.ALL_VIRTUAL_TABLE_REAL_AGENT tb on (tb.table_id = cl.table_id and tb.tenant_id = cl.tenant_id)) B on
+          (B.COLUMN_NAME = A.COLUMN_NAME AND B.TABLE_NAME = A.TABLE_NAME)
+          where b.IS_HIDDEN = 1 and SUBSTR(A.COLUMN_NAME, 1, 5) = '__mbr') T
+          join SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C on (T.SRS_ID = C.COLUMN_ID and T.TENANT_ID = C.TENANT_ID)
+          where C.DATA_TYPE = 48) D
+          ON D.TABLE_ID = G.TABLE_ID and D.TENANT_ID = G.TENANT_ID and D.DATABASE_ID = G.DATABASE_ID and D.COLUMN_NAME = G.COLUMN_NAME
+          ORDER BY 1, 2, 3
+""".replace("\n", " ")
+)
 #
 # 28235 - 28237 placeholder by gaishun.gs
 # 28235: DBA_OB_SERVER_SPACE_USAGE_ORA

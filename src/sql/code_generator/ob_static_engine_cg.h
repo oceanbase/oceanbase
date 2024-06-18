@@ -131,6 +131,9 @@ struct ObDASScanCtDef;
 struct InsertAllTableInfo;
 class ObHashDistinctVecSpec;
 class ObSortVecSpec;
+class ObLogValuesTableAccess;
+class ObValuesTableAccessSpec;
+
 typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
                           1, common::ModulePageAllocator, true> RowParamMap;
@@ -352,6 +355,7 @@ private:
   int set_partition_range_info(ObLogTableScan &op, ObTableScanSpec &spec);
 
   int generate_spec(ObLogExprValues &op, ObExprValuesSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogValuesTableAccess &op, ObValuesTableAccessSpec &spec, const bool in_root_job);
 
   int generate_merge_with_das(ObLogMerge &op, ObTableMergeSpec &spec, const bool in_root_job);
 
@@ -560,6 +564,7 @@ private:
 
   int extract_all_mview_ids(const ObIArray<ObRawExpr *> &exprs);
   int extract_all_mview_ids(const ObRawExpr *expr);
+  int check_is_insert_overwrite_stmt(const ObLogPlan *plan, bool &is_insert_overwrite);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)

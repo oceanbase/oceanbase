@@ -62,6 +62,7 @@ int ObPLResolver::init(ObPLFunctionAST &func_ast)
     LOG_WARN("failed to make block", K(current_block_), K(ret));
   } else {
     current_level_ = 0;
+    current_block_->set_level(current_level_);
     func_ast.set_body(current_block_);
     arg_cnt_ = func_ast.get_arg_count();
     question_mark_cnt_ = 0;
@@ -366,11 +367,15 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
         break;
       case T_SP_IF: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_IF, resolve_if, ObPLIfStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_CASE: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_CASE, resolve_case, ObPLCaseStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_ITERATE: {
@@ -382,31 +387,43 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
         break;
       case T_SP_WHILE: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_WHILE, resolve_while, ObPLWhileStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_FOR_LOOP: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_FOR_LOOP, resolve_for_loop, ObPLForLoopStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_CURSOR_FOR_LOOP: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_CURSOR_FOR_LOOP, resolve_cursor_for_loop, ObPLCursorForLoopStmt);
-        if (!func.is_modifies_sql_data()) {
+        OX (--current_level_);
+        if (OB_SUCC(ret) && !func.is_modifies_sql_data()) {
           func.set_reads_sql_data();
         }
       }
         break;
       case T_SP_FORALL: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_FORALL, resolve_forall, ObPLForAllStmt);
-        func.set_modifies_sql_data();
+        OX (--current_level_);
+        OX (func.set_modifies_sql_data());
       }
         break;
       case T_SP_REPEAT: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_REPEAT, resolve_repeat, ObPLRepeatStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_LOOP: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_LOOP, resolve_loop, ObPLLoopStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_RETURN: {
@@ -867,6 +884,7 @@ int ObPLResolver::init(ObPLPackageAST &package_ast)
     LOG_WARN("failed to make block", K(current_block_), K(ret));
   } else {
     current_level_ = 0;
+    current_block_->set_level(current_level_);
     package_ast.set_body(current_block_);
     external_ns_.set_dependency_table(&package_ast.get_dependency_table());
     current_block_->get_namespace().set_explicit_block();
@@ -4202,6 +4220,7 @@ int ObPLResolver::resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *s
           if (OB_FAIL(stmt_factory_.allocate(PL_SIGNAL, else_block, stmt))) {
             LOG_WARN("failed to alloc stmt", K(ret));
           } else if (OB_ISNULL(signal_stmt = static_cast<ObPLSignalStmt*>(stmt))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to cast stmt", K(ret));
           } else {
             signal_stmt->set_cond_type(ERROR_CODE);
@@ -10546,7 +10565,7 @@ int ObPLResolver::resolve_inner_call(
           } else {
             is_routine = true;
           }
-        } else {
+        } else if (obj_access_idents.at(i).is_unknown()) {
           obj_access_idents.at(i).set_pl_udf();
         }
         int64_t idx_cnt = access_idxs.count();
@@ -10557,7 +10576,7 @@ int ObPLResolver::resolve_inner_call(
                                 access_idxs,
                                 func,
                                 is_routine),
-                                K(access_idxs), K(i));
+                                K(access_idxs), K(obj_access_idents), K(i));
         OZ (obj_access_idents.at(i).extract_params(0, expr_params));
         OX (idx_cnt = (idx_cnt >= access_idxs.count()) ? 0 : idx_cnt);
         if (OB_SUCC(ret)
@@ -10951,6 +10970,9 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
         if (OB_NOT_NULL(node.children_[0]->children_[i])) {
           ObString ident_name(static_cast<int32_t>(node.children_[0]->children_[i]->str_len_), node.children_[0]->children_[i]->str_value_);
           ObObjAccessIdent access_ident(ident_name);
+          if (T_QUESTIONMARK == node.children_[0]->children_[i]->type_) {
+            access_ident.set_pl_var();
+          }
           if (OB_FAIL(obj_access_idents.push_back(access_ident))) {
             LOG_WARN("push back access ident failed", K(ret));
           }
@@ -15328,7 +15350,7 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
       break;
     }
   }
-  if (OB_NOT_NULL(cur_desc)) {
+  if (OB_NOT_NULL(cur_desc) && lib::is_mysql_mode()) {
     for (int64_t j = 0; !dup && j < cur_desc->get_conditions().count(); ++j) {
       if (value.type_ == cur_desc->get_condition(j).type_ &&
           value.error_code_ == cur_desc->get_condition(j).error_code_ &&
@@ -16172,6 +16194,7 @@ int ObPLResolver::make_block(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to static cast", K(block), K(ret));
   } else {
+    block->set_level(current_level_);
     block->get_namespace().set_symbol_table(&func.get_symbol_table());
     block->get_namespace().set_label_table(&func.get_label_table());
     block->get_namespace().set_type_table(&func.get_user_type_table());
@@ -16233,6 +16256,7 @@ int ObPLResolver::make_block(ObPLPackageAST &package_ast, ObPLStmtBlock *&block)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to allocate block", K(block), K(ret));
   } else {
+    block->set_level(current_level_);
     block->get_namespace().set_symbol_table(&package_ast.get_symbol_table());
     block->get_namespace().set_label_table(&package_ast.get_label_table());
     block->get_namespace().set_type_table(&package_ast.get_user_type_table());

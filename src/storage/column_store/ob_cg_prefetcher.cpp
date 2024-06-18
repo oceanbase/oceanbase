@@ -399,7 +399,8 @@ int ObCGPrefetcher::prefetch_micro_data()
           } else if (nullptr != sstable_index_filter_
                      && can_index_filter_skip(block_info)
                      && OB_FAIL(sstable_index_filter_->check_range(
-                             iter_param_->read_info_, block_info, *(access_ctx_->allocator_)))) {
+                             iter_param_->read_info_, block_info,
+                             *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
           } else if (nullptr != sstable_index_filter_
                      && (block_info.is_filter_always_false() || block_info.is_filter_always_true())) {
@@ -526,7 +527,8 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
                  && OB_FAIL(prefetcher.sstable_index_filter_->check_range(
                          prefetcher.iter_param_->read_info_,
                          index_info,
-                         *(prefetcher.access_ctx_->allocator_)))) {
+                         *(prefetcher.access_ctx_->allocator_),
+                         prefetcher.iter_param_->vectorized_enabled_))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
         // TODO: skip data block which is always_false/always_true and record the result in filter bitmap
       } else if (OB_FAIL(prefetcher.can_agg_micro_index(index_info, can_agg))) {
@@ -732,7 +734,8 @@ int ObCGPrefetcher::prewarm()
                    && block_info.has_agg_data()
                    && block_info.is_filter_uncertain()
                    && OB_FAIL(sstable_index_filter_->check_range(
-                           iter_param_->read_info_, block_info, *(access_ctx_->allocator_)))) {
+                           iter_param_->read_info_, block_info,
+                           *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
           LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
         } else if (nullptr != sstable_index_filter_
                    && (block_info.is_filter_always_false() || block_info.is_filter_always_true())) {

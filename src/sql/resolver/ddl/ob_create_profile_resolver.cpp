@@ -307,6 +307,7 @@ int ObUserProfileResolver::resolver_password_verify_function(const ParseNode *no
              "actual_num", node->num_child_,
              K(ret));
   } else if (OB_ISNULL(node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null", K(ret));
   } else {
     LOG_DEBUG("check node type", K(node->type_));

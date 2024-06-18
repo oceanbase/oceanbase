@@ -155,12 +155,20 @@ public:
   ObDictDecoderIterator end(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
 
 private:
+  static const int DICT_SKIP_THRESHOLD = 32;
   bool fast_eq_ne_operator_valid(
       const int64_t dict_ref_cnt,
       const ObColumnDecoderCtx &col_ctx) const;
   bool fast_string_equal_valid(
       const ObColumnDecoderCtx &col_ctx,
       const ObDatum &ref_datum) const;
+
+  int check_skip_block(
+      const ObColumnDecoderCtx &col_ctx,
+      sql::ObBlackFilterExecutor &filter,
+      sql::PushdownFilterInfo &pd_filter_info,
+      ObBitmap &result_bitmap,
+      sql::ObBoolMask &bool_mask) const;
 
   // unpacked refs should be stores in datums.pack_
   int batch_get_bitpacked_refs(

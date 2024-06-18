@@ -65,12 +65,14 @@ private:
       bool &need_fast_freeze);
   void check_tombstone_need_fast_freeze(
       const storage::ObTablet &tablet,
+      const ObTableQueuingModeCfg &queuing_cfg,
       memtable::ObMemtable &memtable,
       bool &need_fast_freeze);
   void try_update_tablet_threshold(
       const storage::ObTabletStatKey &key,
       const storage::ObMtStat &mt_stat,
       const int64_t memtable_create_timestamp,
+      const ObTableQueuingModeCfg &queuing_cfg,
       int64_t &adaptive_threshold);
 private:
   static const int64_t FAST_FREEZE_INTERVAL_US = 300 * 1000 * 1000L;  //300s
@@ -121,6 +123,28 @@ private:
   int64_t transfer_flag_cnt_;
   mutable obsys::ObRWLock lock_;
   common::hash::ObHashMap<ObTabletID, ProhibitFlag> tablet_id_map_; // tablet is used for transfer of medium compaction
+};
+
+struct ObTenantTabletMediumParam
+{
+public:
+  explicit ObTenantTabletMediumParam(const int64_t &merge_version, bool is_tombstone = false)
+    : merge_version_(merge_version),
+      is_tombstone_(is_tombstone),
+      is_leader_(false),
+      could_major_merge_(false),
+      enable_adaptive_compaction_(false)
+    {}
+  ~ObTenantTabletMediumParam() = default;
+  TO_STRING_KV(K_(merge_version), K_(is_tombstone), K_(is_leader), K_(could_major_merge), K_(enable_adaptive_compaction));
+public:
+  const int64_t merge_version_;
+  bool is_tombstone_; // tombstone scene after mini
+  bool is_leader_;
+  bool could_major_merge_;
+  bool enable_adaptive_compaction_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTenantTabletMediumParam);
 };
 
 class ObTenantTabletScheduler
@@ -179,6 +203,7 @@ public:
   int64_t get_bf_queue_size() const { return bf_queue_.task_count(); }
   int schedule_merge(const int64_t broadcast_version);
   int update_upper_trans_version_and_gc_sstable();
+  int try_update_upper_trans_version_and_gc_sstable(ObLS &ls, ObCompactionScheduleIterator &iter);
   int check_ls_compaction_finish(const share::ObLSID &ls_id);
   int schedule_all_tablets_minor();
 
@@ -208,6 +233,10 @@ public:
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle,
       bool &has_created_dag);
+  static int schedule_tablet_medium_merge(
+      ObLSHandle &ls_handle,
+      const ObTabletID &tablet_id,
+      bool &succ_create_dag);
   template <class T>
   static int schedule_merge_execute_dag(
       const compaction::ObTabletMergeDagParam &param,
@@ -229,7 +258,22 @@ public:
       ObTabletHandle &tablet_handle);
 
   int get_min_dependent_schema_version(int64_t &min_schema_version);
-
+  int prepare_ls_medium_merge(
+      ObLS &ls,
+      ObTenantTabletMediumParam &param,
+      bool &all_ls_weak_read_ts_ready);
+  int try_schedule_tablet_medium(
+      ObLS &ls,
+      const share::ObLSID &ls_id,
+      ObTabletHandle &tablet_handle,
+      const share::SCN &weak_read_ts,
+      ObTenantTabletMediumParam &param,
+      const bool scheduler_called,
+      bool &tablet_merge_finish,
+      bool &medium_clog_submitted,
+      bool &succ_create_dag,
+      ObTabletSchedulePair &schedule_pair,
+      ObCompactionTimeGuard &time_guard);
   int try_schedule_tablet_medium_merge(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
@@ -255,14 +299,13 @@ private:
   OB_INLINE int schedule_tablet_medium(
     ObLS &ls,
     ObTabletHandle &tablet_handle,
-    const int64_t major_frozen_scn,
     const share::SCN &weak_read_ts,
-    const bool could_major_merge,
+    ObTenantTabletMediumParam &param,
     const bool tablet_could_schedule_medium,
-    const int64_t merge_version,
-    const bool enable_adaptive_compaction,
-    bool &is_leader,
+    const bool scheduler_called,
     bool &tablet_merge_finish,
+    bool &medium_clog_submitted,
+    bool &succ_create_dag,
     ObTabletSchedulePair &schedule_pair,
     ObCompactionTimeGuard &time_guard);
   int after_schedule_tenant_medium(

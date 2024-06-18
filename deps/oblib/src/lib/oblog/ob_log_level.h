@@ -30,6 +30,7 @@ namespace common
 
 // WARN log, show as "WARN" in log file
 #define OB_LOG_LEVEL_DBA_WARN  1
+#define OB_LOG_LEVEL_DBA_INFO  2
 #define OB_LOG_LEVEL_INFO  2
 
 // Error Diagnosis log, LEVEL_ERROR is an alias of EDIAG, show as "EDIAG" in log file

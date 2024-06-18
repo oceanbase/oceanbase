@@ -36,8 +36,15 @@ public:
       is_async_(false)
   {
   }
-  TO_STRING_KV(K_(table_name), K_(parallel), K_(max_error_row_count), K_(dup_action), K_(timeout),
-               K_(heartbeat_timeout), K_(force_create), K_(is_async));
+  TO_STRING_KV(K_(table_name),
+               K_(parallel),
+               K_(max_error_row_count),
+               K_(dup_action),
+               K_(timeout),
+               K_(heartbeat_timeout),
+               K_(force_create),
+               K_(is_async),
+               K_(load_method));
 public:
   ObString table_name_;
   int64_t parallel_;
@@ -47,6 +54,7 @@ public:
   int64_t heartbeat_timeout_;
   bool force_create_; // unused
   bool is_async_;
+  ObString load_method_;
 };
 
 struct ObTableDirectLoadBeginRes

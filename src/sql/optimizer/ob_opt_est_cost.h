@@ -246,6 +246,9 @@ public:
                                       double card,
                                       double &cost,
                                       const ObOptimizerContext &opt_ctx);
+  static double cost_values_table(double rows,
+                                  ObIArray<ObRawExpr*> &filters,
+                                  const ObOptimizerContext &opt_ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptEstCost);
 };

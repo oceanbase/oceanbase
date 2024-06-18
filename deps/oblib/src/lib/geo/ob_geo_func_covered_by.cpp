@@ -41,7 +41,11 @@ static bool ob_apply_bg_covered_by_with_pl_strategy(const ObGeometry *g1, const 
   const ObSrsItem *srs = context.get_srs();
   boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
   ObPlPaStrategy point_strategy(geog_sphere);
+#ifdef USE_SPHERE_GEO
   return boost::geometry::covered_by(*geo1, *geo2, point_strategy);
+#else
+  return boost::geometry::covered_by(*geo1, *geo2);
+#endif
 }
 
 template<typename GeoType1, typename GeoType2>
@@ -53,7 +57,11 @@ static bool ob_apply_bg_covered_by_with_ll_strategy(const ObGeometry *g1, const 
   const ObSrsItem *srs = context.get_srs();
   boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
   ObLlLaAaStrategy line_strategy(geog_sphere);
+#ifdef USE_SPHERE_GEO
   return boost::geometry::covered_by(*geo1, *geo2, line_strategy);
+#else
+  return boost::geometry::covered_by(*geo1, *geo2);
+#endif
 }
 
 // ----- ObGeoFuncCoveredByImpl -----
@@ -655,8 +663,13 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogC
         } else {
           ObWkbGeogPolygon *poly_copy = reinterpret_cast<ObWkbGeogPolygon*>(pol_data.ptr());
           boost::geometry::strategy::area::geographic<> area_strategy(geog_sphere);
+#ifdef USE_SPHERE_GEO
           boost::geometry::correct(*poly_copy, area_strategy);
           result = boost::geometry::covered_by(*geo1, *poly_copy, point_strategy);
+#else
+          boost::geometry::correct(*poly_copy);
+          result = boost::geometry::covered_by(*geo1, *poly_copy);
+#endif
         }
         break;
       }
@@ -669,8 +682,13 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogC
         } else {
           ObWkbGeogMultiPolygon *multipoly_copy = reinterpret_cast<ObWkbGeogMultiPolygon*>(multipol_data.ptr());
           boost::geometry::strategy::area::geographic<> area_strategy(geog_sphere);
+#ifdef USE_SPHERE_GEO
           boost::geometry::correct(*multipoly_copy, area_strategy);
           result = boost::geometry::covered_by(*geo1, *multipoly_copy, point_strategy);
+#else
+          boost::geometry::correct(*multipoly_copy);
+          result = boost::geometry::covered_by(*geo1, *multipoly_copy);
+#endif
         }
         break;
       }
@@ -741,7 +759,11 @@ OB_GEO_GEOG_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPoint, 
   boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
   ObPlPaStrategy point_strategy(geog_sphere);
   FOREACH_X(item, *geo1, (result == true)) {
-    result = boost::geometry::covered_by(*item, *geo2, point_strategy);
+#ifdef USE_SPHERE_GEO
+  result = boost::geometry::covered_by(*item, *geo2, point_strategy);
+#else
+    result = boost::geometry::covered_by(*item, *geo2);
+#endif
   }
   return OB_SUCCESS;
 } OB_GEO_FUNC_END;
@@ -791,9 +813,14 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogLineString, ObWkb
     ObLlLaAaStrategy line_strategy(geog_sphere);
     const ObWkbGeogLineString *geo1 = reinterpret_cast<const ObWkbGeogLineString *>(g1->val());
     ObGeographMultilinestring res_geo1(srid, *allocator);
-    boost::geometry::difference(*geo1, *multi_line, res_geo1, line_strategy);
     ObGeographMultilinestring res_geo2(srid, *allocator);
+#ifdef USE_SPHERE_GEO
+    boost::geometry::difference(*geo1, *multi_line, res_geo1, line_strategy);
     boost::geometry::difference(res_geo1, *multi_poly, res_geo2, line_strategy);
+#else
+    boost::geometry::difference(*geo1, *multi_line, res_geo1);
+    boost::geometry::difference(res_geo1, *multi_poly, res_geo2);
+#endif
     result = res_geo2.is_empty();
   }
   return ret;
@@ -888,9 +915,14 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiLineString, 
     ObLlLaAaStrategy line_strategy(geog_sphere);
     const ObWkbGeogMultiLineString *geo1 = reinterpret_cast<const ObWkbGeogMultiLineString *>(g1->val());
     ObGeographMultilinestring res_geo1(srid, *allocator);
-    boost::geometry::difference(*geo1, *multi_line, res_geo1, line_strategy);
     ObGeographMultilinestring res_geo2(srid, *allocator);
+#ifdef USE_SPHERE_GEO
+    boost::geometry::difference(*geo1, *multi_line, res_geo1, line_strategy);
     boost::geometry::difference(res_geo1, *multi_poly, res_geo2, line_strategy);
+#else
+    boost::geometry::difference(*geo1, *multi_line, res_geo1);
+    boost::geometry::difference(res_geo1, *multi_poly, res_geo2);
+#endif
     result = res_geo2.is_empty();
   }
   return ret;
@@ -987,11 +1019,19 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
     boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
     ObLlLaAaStrategy line_strategy(geog_sphere);
     if (!multi_line->empty()) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*multi_line, *geo2, line_strategy);
+#else
+      result = boost::geometry::covered_by(*multi_line, *geo2);
+#endif
     }
     ObPlPaStrategy point_strategy(geog_sphere);
     FOREACH_X(item, *multi_point, (result == true)) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*item, *geo2, point_strategy);
+#else
+      result = boost::geometry::covered_by(*item, *geo2);
+#endif
     }
   }
   return ret;
@@ -1017,14 +1057,26 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
     ObLlLaAaStrategy line_strategy(geog_sphere);
     const ObWkbGeogPolygon *geo2 = reinterpret_cast<const ObWkbGeogPolygon *>(g2->val());
     if (!multi_poly->empty()) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*multi_poly, *geo2, line_strategy);
+#else
+      result = boost::geometry::covered_by(*multi_poly, *geo2);
+#endif
     }
     if (result == true && !multi_line->empty()) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*multi_line, *geo2, line_strategy);
+#else
+      result = boost::geometry::covered_by(*multi_line, *geo2);
+#endif
     }
     ObPlPaStrategy point_strategy(geog_sphere);
     FOREACH_X(item, *multi_point, (result == true)) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*item, *geo2, point_strategy);
+#else
+      result = boost::geometry::covered_by(*item, *geo2);
+#endif
     }
   }
   return ret;
@@ -1086,11 +1138,19 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
     boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
     ObLlLaAaStrategy line_strategy(geog_sphere);
     if (!multi_line->empty()) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*multi_line, *geo2, line_strategy);
+#else
+      result = boost::geometry::covered_by(*multi_line, *geo2);
+#endif
     }
     ObPlPaStrategy point_strategy(geog_sphere);
     FOREACH_X(item, *multi_point, (result == true)) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*item, *geo2, point_strategy);
+#else
+      result = boost::geometry::covered_by(*item, *geo2);
+#endif
     }
   }
   return ret;
@@ -1116,14 +1176,26 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
     ObLlLaAaStrategy line_strategy(geog_sphere);
     const ObWkbGeogMultiPolygon *geo2 = reinterpret_cast<const ObWkbGeogMultiPolygon *>(g2->val());
     if (!multi_poly->empty()) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*multi_poly, *geo2, line_strategy);
+#else
+      result = boost::geometry::covered_by(*multi_poly, *geo2);
+#endif
     }
     if (result == true && !multi_line->empty()) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*multi_line, *geo2, line_strategy);
+#else
+      result = boost::geometry::covered_by(*multi_line, *geo2);
+#endif
     }
     ObPlPaStrategy point_strategy(geog_sphere);
     FOREACH_X(item, *multi_point, (result == true)) {
+#ifdef USE_SPHERE_GEO
       result = boost::geometry::covered_by(*item, *geo2, point_strategy);
+#else
+      result = boost::geometry::covered_by(*item, *geo2);
+#endif
     }
   }
   return ret;
@@ -1159,22 +1231,36 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
     ObGeographMultipoint diff_geo1(srid, *allocator);
     boost::geometry::difference(*multi_point1, *multi_point2, diff_geo1);
     ObGeographMultipoint diff_geo2(srid, *allocator);
-    boost::geometry::difference(diff_geo1, *multi_line2, diff_geo2, point_strategy);
     ObGeographMultipoint diff_geo3(srid, *allocator);
+#ifdef USE_SPHERE_GEO
+    boost::geometry::difference(diff_geo1, *multi_line2, diff_geo2, point_strategy);
     boost::geometry::difference(diff_geo2, *multi_poly2, diff_geo3, point_strategy);
+#else
+    boost::geometry::difference(diff_geo1, *multi_line2, diff_geo2);
+    boost::geometry::difference(diff_geo2, *multi_poly2, diff_geo3);
+#endif
     if (!diff_geo3.empty()) {
       result = false;
     } else {
       ObLlLaAaStrategy line_strategy(geog_sphere);
       ObGeographMultilinestring diff_line1(srid, *allocator);
-      boost::geometry::difference(*multi_line1, *multi_line2, diff_line1, line_strategy);
       ObGeographMultilinestring diff_line2(srid, *allocator);
+#ifdef USE_SPHERE_GEO
+      boost::geometry::difference(*multi_line1, *multi_line2, diff_line1, line_strategy);
       boost::geometry::difference(diff_line1, *multi_poly2, diff_line2, line_strategy);
+#else
+      boost::geometry::difference(*multi_line1, *multi_line2, diff_line1);
+      boost::geometry::difference(diff_line1, *multi_poly2, diff_line2);
+#endif
       if (!diff_line2.empty()) {
         result = false;
       } else {
         ObGeographMultipolygon diff_poly(srid, *allocator);
+#ifdef USE_SPHERE_GEO
         boost::geometry::difference(*multi_poly1, *multi_poly2, diff_poly, line_strategy);
+#else
+        boost::geometry::difference(*multi_poly1, *multi_poly2, diff_poly);
+#endif
         if (!diff_poly.empty()) {
           result = false;
         }

@@ -3764,7 +3764,7 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_schema(ObTableSchema &t
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      4000, //column_length
+      65536, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -3903,7 +3903,7 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_schema(ObTableSchema &t
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      4000, //column_length
+      65536, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -4100,7 +4100,7 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_schema(ObTableSchema &t
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      128, //column_length
+      4096, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -4150,6 +4150,44 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_schema(ObTableSchema &t
       -1, //column_scale
       true, //is_nullable
       false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj user_id_default;
+    user_id_default.set_int(OB_INVALID_ID);
+    ADD_COLUMN_SCHEMA_T("user_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      user_id_default,
+      user_id_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj database_id_default;
+    database_id_default.set_int(OB_INVALID_ID);
+    ADD_COLUMN_SCHEMA_T("database_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      database_id_default,
+      database_id_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);

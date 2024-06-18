@@ -190,6 +190,7 @@ int ObExprGeneratorImpl::add_child_infix_expr(ObRawExpr &raw_expr, const int64_t
       for (int64_t i = start_pos; i < end_pos && OB_SUCC(ret); i++) {
         ObRawExpr *e = visited_exprs.at(i);
         if (OB_ISNULL(e)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("NULL raw expr pointer", K(ret));
         } else if (OB_FAIL(add_child_infix_expr(*e, i, visited_exprs))) {
           LOG_WARN("add child infix expr failed", K(ret), K(*e));
@@ -974,7 +975,7 @@ int ObExprGeneratorImpl::visit_strcmp_expr(ObNonTerminalRawExpr &expr, ObExprStr
   if (OB_ISNULL(strcmp_op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("strcmp_op expr op is null", K(ret));
-  } else if (strcmp_op->set_cmp_func(ObVarcharType, ObVarcharType)) {
+  } else if (OB_FAIL(strcmp_op->set_cmp_func(ObVarcharType, ObVarcharType))) {
     LOG_WARN("set cmp func failed", K(ret), K(expr), K(*strcmp_op));
   }
   return ret;
@@ -1892,7 +1893,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
                 }
               } // end for
 
-              FOREACH(e, columnlized_exprs) {
+              FOREACH_X(e, columnlized_exprs, OB_SUCC(ret)) {
                 if (OB_FAIL((*e)->clear_flag(IS_COLUMNLIZED))) {
                   LOG_WARN("failed to clear flag", K(ret));
                 }

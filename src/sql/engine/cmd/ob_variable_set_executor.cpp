@@ -115,7 +115,7 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
       if (OB_ISNULL(expr_ctx.exec_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("expr_ctx.exec_ctx_ is NULL", K(ret));
-      } else if (password_ctx.init(stmt.get_actual_tenant_id())) {
+      } else if (OB_FAIL(password_ctx.init(stmt.get_actual_tenant_id()))) {
         LOG_WARN("fail to init password ctx", K(ret));
       } else {
         expr_ctx.exec_ctx_->set_sql_proxy(sql_proxy);

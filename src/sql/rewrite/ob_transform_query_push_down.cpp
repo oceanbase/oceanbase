@@ -246,7 +246,8 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
   can_transform = false;
   need_distinct = false;
   transform_having = false;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(select_stmt) || OB_ISNULL(view_stmt)) {
+  if (OB_ISNULL(ctx_) || OB_ISNULL(select_stmt) || OB_ISNULL(view_stmt) ||
+      OB_ISNULL(select_stmt->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(select_stmt), K(view_stmt), K(ret));
   } else if (select_stmt->is_recursive_union() ||
@@ -254,8 +255,11 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
              (view_stmt->is_recursive_union() && !select_stmt->is_spj()) ||
              select_stmt->is_set_stmt() ||
              (select_stmt->has_sequence() && !view_stmt->is_spj()) ||
-             view_stmt->has_ora_rowscn() ||
-             view_stmt->is_values_table_query()) {//判断1, 2
+             view_stmt->has_ora_rowscn()) {//判断1, 2
+    can_transform = false;
+    OPT_TRACE("stmt is not spj");
+  } else if (select_stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_2 &&
+             view_stmt->is_values_table_query()) {
     can_transform = false;
     OPT_TRACE("stmt is not spj");
   } else if (OB_FAIL(check_rownum_push_down(select_stmt, view_stmt, check_status))) {//判断3

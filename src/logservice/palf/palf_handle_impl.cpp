@@ -600,6 +600,19 @@ int PalfHandleImpl::get_election_leader(ObAddr &addr) const
   return ret;
 }
 
+int PalfHandleImpl::get_parent(common::ObAddr &parent) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
+  } else {
+    parent = config_mgr_.get_parent();
+    ret = (parent.is_valid())? OB_SUCCESS: OB_ENTRY_NOT_EXIST;
+  }
+  return ret;
+}
+
 int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
                                                    const LogGetMCStReq &req,
                                                    LogGetMCStResp &resp)
@@ -2650,6 +2663,7 @@ int PalfHandleImpl::check_and_switch_state()
     do {
       RLockGuard guard(lock_);
       if (OB_FAIL(config_mgr_.leader_do_loop_work(config_state_changed))) {
+        // overwrite ret
         PALF_LOG(WARN, "LogConfigMgr::leader_do_loop_work failed", KR(ret), K_(self), K_(palf_id));
       } else if (OB_FAIL(mode_mgr_.leader_do_loop_work())) {
         PALF_LOG(WARN, "LogModeMgr::leader_do_loop_work failed", KR(ret), K_(self), K_(palf_id));
@@ -2659,6 +2673,7 @@ int PalfHandleImpl::check_and_switch_state()
     if (OB_UNLIKELY(config_state_changed)) {
       WLockGuard guard(lock_);
       if (OB_FAIL(config_mgr_.switch_state())) {
+        // overwrite ret
         PALF_LOG(WARN, "switch_state failed", K(ret));
       }
     }
@@ -2683,6 +2698,7 @@ int PalfHandleImpl::check_and_switch_state()
     }
     if (palf_reach_time_interval(PALF_UPDATE_REGION_INTERVAL_US, last_update_region_time_us_) &&
         OB_FAIL(update_self_region_())) {
+      // overwrite ret
       PALF_LOG(WARN, "update_region failed", K(ret), KPC(this));
     }
   }

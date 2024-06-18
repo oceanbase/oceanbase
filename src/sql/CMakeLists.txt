@@ -207,6 +207,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/chunk_store/ob_chunk_block_compressor.cpp
   #engine/basic/chunk_store/ob_encoded_block_writer.cpp
   #engine/basic/chunk_store/ob_encoded_block_reader.cpp
+  engine/basic/ob_values_table_access_op.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd
@@ -664,6 +665,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_spatial_collection.cpp
   engine/expr/ob_expr_st_geomfromtext.cpp
   engine/expr/ob_expr_st_intersects.cpp
+  engine/expr/ob_expr_sdo_relate.cpp
   engine/expr/ob_expr_st_area.cpp
   engine/expr/ob_expr_st_x.cpp
   engine/expr/ob_expr_st_transform.cpp
@@ -993,6 +995,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_stat_collector.cpp
   optimizer/ob_log_optimizer_stats_gathering.cpp
   optimizer/ob_dynamic_sampling.cpp
+  optimizer/ob_log_values_table_access.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache
@@ -1232,6 +1235,7 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_update_resolver.cpp
   resolver/dml/ob_update_stmt.cpp
   resolver/dml/ob_view_table_resolver.cpp
+  resolver/dml/ob_inlist_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_expr
@@ -1303,6 +1307,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_expr_pullup.cpp
   rewrite/ob_transformer_impl.cpp
   rewrite/ob_transform_dblink.cpp
+  rewrite/ob_transform_conditional_aggr_coalesce.cpp
   rewrite/ob_transform_mv_rewrite.cpp
   rewrite/ob_union_find.cpp
   rewrite/ob_transform_decorrelate.cpp

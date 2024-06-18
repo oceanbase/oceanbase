@@ -128,7 +128,7 @@ struct ObTxCreateArg
         && trans_expired_time_ > 0
         && NULL != trans_service_;
   }
-  TO_STRING_KV(K_(for_replay), "ctx_source_", to_str(ctx_source_),
+  TO_STRING_KV(K_(for_replay), "ctx_source", to_str_ctx_source(ctx_source_),
                  K_(tenant_id), K_(tx_id),
                  K_(ls_id), K_(cluster_id), K_(cluster_version),
                  K_(session_id), K_(scheduler), K_(trans_expired_time), KP_(trans_service),

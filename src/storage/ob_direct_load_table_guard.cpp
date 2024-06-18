@@ -37,7 +37,7 @@ ObDirectLoadTableGuard::ObDirectLoadTableGuard(ObTablet &tablet, const share::SC
 
 void ObDirectLoadTableGuard::reset()
 {
-  const int64_t MAX_HOLD_GUARD_TIME = 1LL * 1000LL * 1000LL; // one second
+  const int64_t MAX_HOLD_GUARD_TIME = 10LL * 1000LL * 1000LL; // ten seconds
   const int64_t reset_time = ObClockGenerator::getClock();
   bool need_print_debug_log = false;
   if (reset_time - construct_timestamp_ > MAX_HOLD_GUARD_TIME) {
@@ -241,7 +241,8 @@ void ObDirectLoadTableGuard::async_freeze_()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "ls should not be null", K(ret), KPC(this));
   } else {
-    (void)ls->async_tablet_freeze_for_direct_load(tablet_id_);
+    const bool is_sync = false;
+    (void)ls->tablet_freeze(tablet_id_, is_sync);
   }
 }
 

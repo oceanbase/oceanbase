@@ -1502,6 +1502,7 @@ int ObTransformPreProcess::create_groupby_substmt(const ObIArray<ObRawExpr*> &or
                                                       stmt_copy))) {
     LOG_WARN("failed to deep copy from stmt.", K(ret));
   } else if (OB_ISNULL(sub_stmt = static_cast<ObSelectStmt*>(stmt_copy))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed. get unexpected NULL", K(ret));
   } else if (OB_FAIL(origin_stmt.get_relation_exprs(origin_exprs, origin_visitor))) {
     LOG_WARN("failed to get relation exprs on origin stmt", K(ret));
@@ -7781,9 +7782,9 @@ int ObTransformPreProcess::recursive_generate_rowid_select_item(ObSelectStmt *se
           // ignore create rowid item.
         } else if (OB_FAIL(create_rowid_item_for_stmt(select_stmt, table_item, rowid_expr))) {
           LOG_WARN("create rowid item for stmt failed", K(ret));
-        } else if (ObTransformUtils::create_select_item(*(ctx_->allocator_),
-                                                        rowid_expr,
-                                                        select_stmt)) {
+        } else if (OB_FAIL(ObTransformUtils::create_select_item(*(ctx_->allocator_),
+                                                                rowid_expr,
+                                                                select_stmt))) {
           LOG_WARN("failed to create select item", K(ret));
         } else {/*do nothing*/}
       } else if (OB_FAIL(build_rowid_expr(select_stmt, table_item, rowid_func_expr))) {
@@ -9620,20 +9621,20 @@ int ObTransformPreProcess::remove_shared_expr(ObDMLStmt *stmt,
   if (OB_SUCC(ret) && left->is_joined_table()) {
     bool left_is_nullside = is_nullside || (joined_table->is_right_join() ||
                                             joined_table->is_full_join());
-    if (OB_FAIL(remove_shared_expr(stmt,
-                                   static_cast<JoinedTable *>(left),
-                                   expr_set,
-                                   left_is_nullside))) {
+    if (OB_FAIL(SMART_CALL(remove_shared_expr(stmt,
+                                              static_cast<JoinedTable *>(left),
+                                              expr_set,
+                                              left_is_nullside)))) {
       LOG_WARN("failed to remove shared expr", K(ret));
     }
   }
   if (OB_SUCC(ret) && right->is_joined_table()) {
     bool right_is_nullside = is_nullside || (joined_table->is_left_join() ||
                                              joined_table->is_full_join());
-    if (OB_FAIL(remove_shared_expr(stmt,
-                                   static_cast<JoinedTable *>(right),
-                                   expr_set,
-                                   right_is_nullside))) {
+    if (OB_FAIL(SMART_CALL(remove_shared_expr(stmt,
+                                              static_cast<JoinedTable *>(right),
+                                              expr_set,
+                                              right_is_nullside)))) {
       LOG_WARN("failed to remove shared expr", K(ret));
     }
   }
@@ -9658,11 +9659,11 @@ int ObTransformPreProcess::do_remove_shared_expr(hash::ObHashSet<uint64_t> &expr
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
     bool has = false;
-    if (OB_FAIL(do_remove_shared_expr(expr_set,
-                                      padnull_exprs,
-                                      is_nullside,
-                                      expr->get_param_expr(i),
-                                      has))) {
+    if (OB_FAIL(SMART_CALL(do_remove_shared_expr(expr_set,
+                                                 padnull_exprs,
+                                                 is_nullside,
+                                                 expr->get_param_expr(i),
+                                                 has)))) {
       LOG_WARN("failed to remove shared expr", K(ret));
     } else if (has) {
       has_padnull_column = true;

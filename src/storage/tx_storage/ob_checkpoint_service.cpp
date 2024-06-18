@@ -134,10 +134,12 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
   common::ObSharedGuard<ObLSIterator> guard;
   ObLSService *ls_svr = MTL(ObLSService*);
   if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
   } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
     STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter is NULL", K(ret));
   } else {
     DEBUG_SYNC(BEFORE_CHECKPOINT_TASK);
@@ -163,6 +165,7 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
       } else if (OB_FAIL(data_checkpoint->check_can_move_to_active_in_newcreate())) {
         STORAGE_LOG(WARN, "check can move to active failed", K(ret), K(ls->get_ls_id()));
       } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
+        ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
       } else if (OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
         STORAGE_LOG(WARN, "update_clog_checkpoint failed", K(ret), K(ls->get_ls_id()));
@@ -229,10 +232,12 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
   bool cannot_recycle_log_over_threshold = false;
   int64_t cannot_recycle_log_size = 0;
   if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
   } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
     STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter is NULL", K(ret));
   } else {
     ObLS *ls = nullptr;
@@ -246,6 +251,7 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "log stream not exist", K(ret), K(ls->get_ls_id()));
       } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
+        ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
       } else if (need_update_checkpoint_scn && OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
         STORAGE_LOG(WARN, "update_clog_checkpoint failed", K(ret), K(ls->get_ls_id()));
@@ -274,10 +280,12 @@ int ObCheckPointService::flush_to_recycle_clog_()
   common::ObSharedGuard<ObLSIterator> guard;
   ObLSService *ls_svr = MTL(ObLSService*);
   if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
   } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
     STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter is NULL", K(ret));
   } else {
     ObLS *ls = nullptr;
@@ -310,10 +318,12 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
   ObLSService *ls_svr = MTL(ObLSService*);
   ObCurTraceId::init(GCONF.self_addr_);
   if (OB_ISNULL(ls_svr)) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
   } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
     STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter is NULL", K(ret));
   } else {
     ObLS *ls = nullptr;
@@ -327,6 +337,7 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "log stream not exist", K(ret), K(ls->get_ls_id()));
       } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
+        ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
       } else if (OB_FAIL(checkpoint_executor->traversal_flush())) {
         STORAGE_LOG(WARN, "traversal_flush failed", K(ret), K(ls->get_ls_id()));

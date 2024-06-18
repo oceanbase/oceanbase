@@ -43,8 +43,8 @@ void ObTenantLSMetaTableCheckTask::runTimerTask()
   if (OB_FAIL(checker_.check_ls_table())) {
     LOG_WARN("fail to check ls meta table", KR(ret));
   }
-  // ignore ret
   if (OB_FAIL(checker_.schedule_ls_meta_check_task())) {
+    // overwrite ret
     LOG_WARN("fail to schedule ls meta check task", KR(ret));
   }
 }
@@ -61,8 +61,8 @@ void ObTenantTabletMetaTableCheckTask::runTimerTask()
   if (OB_FAIL(checker_.check_tablet_table())) {
     LOG_WARN("fail to check tablet meta table", KR(ret));
   }
-  // ignore ret
   if (OB_FAIL(checker_.schedule_tablet_meta_check_task())) {
+    // overwrite ret
     LOG_WARN("fail to schedule tablet meta check task", KR(ret));
   }
 }

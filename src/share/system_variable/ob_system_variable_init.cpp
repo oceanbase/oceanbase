@@ -3416,7 +3416,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[242].default_value_ = "4096" ;
+      ObSysVars[242].default_value_ = "8192" ;
       ObSysVars[242].info_ = "default lob inrow threshold config" ;
       ObSysVars[242].name_ = "ob_default_lob_inrow_threshold" ;
       ObSysVars[242].data_type_ = ObIntType ;

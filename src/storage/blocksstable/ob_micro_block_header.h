@@ -105,7 +105,7 @@ public:
   }
   TO_STRING_KV(K_(magic), K_(version), K_(header_size), K_(header_checksum),
       K_(column_count), K_(rowkey_column_count), K_(has_column_checksum), K_(row_count), K_(row_store_type),
-      K_(opt), K_(var_column_count), K_(compressor_type), K_(row_offset), K_(original_length), K_(max_merged_trans_version),
+      K_(opt), K_(var_column_count), K_(compressor_type), K_(row_offset), K_(original_length), K_(max_merged_trans_version), K_(min_merged_trans_version),
       K_(data_length), K_(data_zlength), K_(data_checksum), KP_(column_checksums), K_(single_version_rows),
       K_(contain_uncommitted_rows),  K_(is_last_row_last_flag), K(is_valid()));
 public:

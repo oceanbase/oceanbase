@@ -46,6 +46,7 @@
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "share/restore/ob_tenant_clone_table_operator.h" //ObCancelCloneJobReason
 #include "share/table/ob_ttl_util.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 
@@ -2780,9 +2781,9 @@ int ObCancelCloneExecutor::execute(ObExecContext &ctx, ObCancelCloneStmt &stmt)
     }
   }
 
-  if (FAILEDx(rootserver::ObTenantCloneUtil::cancel_clone_job(*sql_proxy,
-                                                              clone_tenant_name,
-                                                              clone_already_finish))) {
+  if (FAILEDx(rootserver::ObTenantCloneUtil::cancel_clone_job_by_name(
+                  *sql_proxy, clone_tenant_name, clone_already_finish,
+                  ObCancelCloneJobReason(ObCancelCloneJobReason::CANCEL_BY_USER)))) {
     LOG_WARN("cancel clone job failed", KR(ret), K(clone_tenant_name));
   } else if (clone_already_finish) {
     ret = OB_OP_NOT_ALLOW;

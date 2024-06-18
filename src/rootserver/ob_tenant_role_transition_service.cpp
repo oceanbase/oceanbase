@@ -802,6 +802,7 @@ int do_nonblock_renew(const ARRAY_L &array_l, const ARRAY_R &array_r, const uint
       bool found = false;
       FOREACH_CNT_X(r, array_r, !found) {
         if (OB_ISNULL(r)) {
+          // ignore ret
           LOG_WARN("r is null", KR(ret), K(array_r));
         } else if (*r == ls_id) {
           found = true;

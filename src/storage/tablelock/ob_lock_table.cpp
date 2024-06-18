@@ -756,6 +756,7 @@ int ObLockTable::switch_to_leader()
 
   if (OB_FAIL(ret)) {
     if (OB_ISNULL(parent_)) {
+      // ignore ret
       LOG_WARN("parent ls of ObLockTable is null", K(ret));
     } else {
       LOG_WARN("collect obj lock garbage when switch to leader failed", K(ret),

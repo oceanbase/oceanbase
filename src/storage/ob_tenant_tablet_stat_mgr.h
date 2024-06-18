@@ -17,6 +17,7 @@
 #include "share/ob_ls_id.h"
 #include "lib/hash/ob_hashmap.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/schema/ob_table_schema.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/lock/ob_bucket_lock.h"
@@ -105,6 +106,32 @@ public:
   uint64_t delete_row_cnt_;
 };
 
+class ObTableQueuingModeCfg
+{
+public:
+  using QueuingMode = share::schema::ObTableModeFlag;
+  ObTableQueuingModeCfg()
+    :mode_(QueuingMode::TABLE_MODE_NORMAL),
+     total_delete_row_cnt_(30 * 10000),
+     queuing_factor_(1.0)
+    {}
+  ~ObTableQueuingModeCfg() = default;
+  static const ObTableQueuingModeCfg& get_basic_config(const QueuingMode mode);
+  int64_t get_memtable_alive_threshold(const int64_t fast_freeze_interval) const;
+  int64_t get_tombstone_row_threshold(const int64_t tombstone_default_cnt) const;
+  bool is_queuing_mode() const { return is_queuing_table_mode(mode_); }
+  TO_STRING_KV(K_(mode), K_(total_delete_row_cnt), K_(queuing_factor));
+private:
+  explicit ObTableQueuingModeCfg(QueuingMode mode, int64_t delete_cnt, double factor)
+    :mode_(mode),
+     total_delete_row_cnt_(delete_cnt),
+     queuing_factor_(factor)
+    {}
+public:
+  QueuingMode mode_;
+  int64_t total_delete_row_cnt_;
+  double queuing_factor_;
+};
 
 struct ObTabletStatAnalyzer
 {
@@ -115,7 +142,8 @@ public:
   bool is_insert_mostly() const;
   bool is_update_or_delete_mostly() const;
   bool has_slow_query() const;
-  TO_STRING_KV(K_(tablet_stat), K_(is_small_tenant), K_(boost_factor));
+  bool has_accumnulated_delete() const;
+  TO_STRING_KV(K_(tablet_stat), K_(total_tablet_stat), K_(is_small_tenant), K_(boost_factor));
 public:
   static constexpr int64_t ACCESS_FREQUENCY = 5;
   static constexpr int64_t BASE_FACTOR = 10;
@@ -126,8 +154,10 @@ public:
   static constexpr int64_t QUERY_BASIC_ITER_TABLE_CNT = 5;
   static constexpr int64_t MERGE_BASIC_ROW_CNT = 10000;
 public:
-  ObTabletStat tablet_stat_;
-  int64_t boost_factor_;
+  ObTabletStat tablet_stat_;       // tablet statistics recently
+  ObTabletStat total_tablet_stat_; // tablet statistics since last compaction
+  share::schema::ObTableModeFlag mode_;
+  double boost_factor_;
   bool is_small_tenant_;
 };
 
@@ -234,6 +264,7 @@ public:
   ObTabletStream();
   virtual ~ObTabletStream();
   void reset();
+  void clear_stat();
   void add_stat(const ObTabletStat &stat);
   void refresh();
 
@@ -242,6 +273,7 @@ public:
       const ObTabletStatBucket<SIZE> &bucket,
       common::ObIArray<ObTabletStat> &tablet_stats) const;
   int get_all_tablet_stat(common::ObIArray<ObTabletStat> &tablet_stats) const;
+  const ObTabletStat& get_total_stats() const { return total_stat_; }
   OB_INLINE ObTabletStatKey& get_tablet_stat_key() { return key_; }
   OB_INLINE void get_latest_stat(ObTabletStat &tablet_stat) const { curr_buckets_.get_tablet_stat(tablet_stat); }
   TO_STRING_KV(K_(key), K_(curr_buckets), K_(latest_buckets), K_(past_buckets));
@@ -255,6 +287,7 @@ private:
   static constexpr uint32_t PAST_BUCKET_STEP = 32; // 64min for each unit, total 256min
 
   ObTabletStatKey key_;
+  ObTabletStat total_stat_;
   ObTabletStatBucket<CURR_BUCKET_CNT> curr_buckets_;
   ObTabletStatBucket<LATEST_BUCKET_CNT> latest_buckets_;
   ObTabletStatBucket<PAST_BUCKET_CNT> past_buckets_;
@@ -264,15 +297,18 @@ private:
 class ObTabletStreamNode : public ObDLinkBase<ObTabletStreamNode>
 {
 public:
+  using QueuingMode = share::schema::ObTableModeFlag;
   explicit ObTabletStreamNode(const int64_t flag = 0)
-    : stream_(), flag_(flag) {}
+    : stream_(), flag_(flag), mode_(QueuingMode::TABLE_MODE_NORMAL) {}
   ~ObTabletStreamNode() { reset(); }
   void reset() { stream_.reset(); }
+  void clear_stat() { stream_.clear_stat(); }
   TO_STRING_KV(K_(stream), K_(flag));
 
 public:
   ObTabletStream stream_;
   const int64_t flag_;
+  QueuingMode mode_;
 };
 
 
@@ -361,7 +397,9 @@ public:
   int get_latest_tablet_stat(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      ObTabletStat &tablet_stat);
+      ObTabletStat &tablet_stat,
+      ObTabletStat &total_tablet_stat,
+      share::schema::ObTableModeFlag &mode);
   int get_history_tablet_stats(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
@@ -375,8 +413,17 @@ public:
   int clear_tablet_stat(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
+  int batch_clear_tablet_stat(
+      const share::ObLSID &ls_id,
+      const ObIArray<ObTabletID> &tablet_ids);
   void process_stats();
   void refresh_all(const int64_t step);
+  void refresh_queuing_mode();
+  int get_queuing_cfg(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      ObTableQueuingModeCfg& queuing_cfg);
+  int64_t get_last_update_time() { return report_stat_task_.last_update_time_; }
   bool is_high_tenant_cpu_load() const { return get_load_shedding_factor() >= ObTenantSysLoadShedder::DEFAULT_LOAD_SHEDDING_FACTOR; }
   int64_t get_load_shedding_factor() const { return load_shedder_.get_load_shedding_factor(); }
   void refresh_sys_stat();
@@ -384,9 +431,11 @@ private:
   class TabletStatUpdater : public common::ObTimerTask
   {
   public:
-    TabletStatUpdater(ObTenantTabletStatMgr &mgr) : mgr_(mgr) {}
+    TabletStatUpdater(ObTenantTabletStatMgr &mgr) : last_update_time_(0), mgr_(mgr) {}
     virtual ~TabletStatUpdater() {}
     virtual void runTimerTask();
+  public:
+    int64_t last_update_time_; // for mittest
   private:
     ObTenantTabletStatMgr &mgr_;
   };
@@ -394,6 +443,7 @@ private:
 private:
   int update_tablet_stream(const ObTabletStat &report_stat);
   int fetch_node(ObTabletStreamNode *&node);
+  int inner_clear_tablet_stat(const ObTabletStatKey &key); // hold lock!
 private:
   typedef common::hash::ObHashMap<ObTabletStatKey,
                           ObTabletStreamNode *,
@@ -412,6 +462,7 @@ private:
   static constexpr int32_t DEFAULT_BUCKET_NUM = 1543; // should be a prime to guarantee the bucket nums of hashmap and bucketlock are equal
   static constexpr int32_t DEFAULT_MAX_PENDING_CNT = 40000;
   static constexpr int32_t MAX_REPORT_RETRY_CNT = 5;
+  static constexpr int32_t MAX_SCHEMA_GUARD_REFRESH_CNT = 100;
 
   TabletStatUpdater report_stat_task_;
   ObTabletStreamPool stream_pool_;

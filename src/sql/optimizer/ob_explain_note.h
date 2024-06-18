@@ -37,6 +37,7 @@ namespace sql
 #define PARALLEL_DISABLED_BY_DBLINK  "Degree of Parallelisim is %ld because stmt contain dblink which force das scan"
 #define PDML_DISABLED_BY_INSERT_PK_AUTO_INC "PDML disabled because the insert statement primary key has specified auto-increment column"
 #define PDML_DISABLED_BY_TRANSFORMATIONS "PDML disabled because transformations like or-expansion"
+#define INSERT_OVERWRITE_TABLE  "Overwrite table with full direct mode"
 
 }
 }

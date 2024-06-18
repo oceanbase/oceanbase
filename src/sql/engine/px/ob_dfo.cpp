@@ -677,6 +677,7 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitSqcArgs)
   int ret = OB_SUCCESS;
   int64_t len = 0;
   if (OB_ISNULL(exec_ctx_) || OB_ISNULL(ser_phy_plan_) || OB_ISNULL(op_spec_root_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("task not init", K_(exec_ctx), K_(ser_phy_plan), K(ret));
   } else {
     ObPhyOpSeriCtx seri_ctx;
@@ -868,7 +869,8 @@ OB_DEF_DESERIALIZE(ObPxRpcInitTaskArgs)
   pos = 0;
   char *tmp_buf = (char *)des_allocator_->alloc(data_len);
 
-  if (OB_ISNULL(tmp_buf)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(tmp_buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(tmp_buf));
   } else {
@@ -915,6 +917,7 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitTaskArgs)
   int ret = OB_SUCCESS;
   int64_t len = 0;
   if (OB_ISNULL(exec_ctx_) || OB_ISNULL(ser_phy_plan_) || OB_ISNULL(op_spec_root_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("task not init", K_(exec_ctx), K_(ser_phy_plan));
   } else {
     uint64_t sqc_task_ptr_val = reinterpret_cast<uint64_t>(sqc_task_ptr_);

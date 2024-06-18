@@ -102,6 +102,7 @@ namespace sql
     virtual int compute_op_ordering() override;
     virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+    virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   protected:
     virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer);
     int est_sort_key_width();

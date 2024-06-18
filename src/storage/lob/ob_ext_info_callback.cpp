@@ -249,9 +249,12 @@ int ObExtInfoCbRegister::register_cb(
     LOG_WARN("init_header_ fail", K(ret), K(ext_info_data));
   } else if (OB_FAIL(build_data_iter(ext_info_data))) {
     LOG_WARN("build data iter fail", K(ret));
+  } else if (FALSE_IT(seq_no_cnt_ = data_size_/OB_EXT_INFO_LOG_BLOCK_MAX_SIZE + 1)) {
+  } else if (OB_FAIL(tx_desc->get_and_inc_tx_seq(parent_seq_no.get_branch(),
+                                                 seq_no_cnt_,
+                                                 seq_no_st_))) {
+    LOG_WARN("get and inc tx seq failed", K(ret), K_(seq_no_cnt));
   } else {
-    seq_no_cnt_ = data_size_/OB_EXT_INFO_LOG_BLOCK_MAX_SIZE + 1;
-    seq_no_st_ = tx_desc->get_and_inc_tx_seq(parent_seq_no.get_branch(), seq_no_cnt_);
     transaction::ObTxSEQ seq_no_cur = seq_no_st_;
     ObString data;
     ObIAllocator &allocator = lob_mngr->get_ext_info_log_allocator();

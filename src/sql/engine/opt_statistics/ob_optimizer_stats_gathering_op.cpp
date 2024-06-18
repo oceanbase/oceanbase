@@ -246,6 +246,7 @@ int ObOptimizerStatsGatheringOp::send_stats()
   ObPxSqcHandler *handler = ctx_.get_sqc_handler();
   const ObOptStatsGatherWholeMsg *whole_msg = NULL;
   if (OB_ISNULL(handler)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("do not need sqc in serial mode");
   } else if (OB_FAIL(build_piece_msg(piece_msg_, handler->get_sqc_proxy()))) {
     LOG_WARN("failed to build piece msg", K(ret));

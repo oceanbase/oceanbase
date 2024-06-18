@@ -97,9 +97,9 @@ int ObUniqueIndexChecker::calc_column_checksum(
   const int64_t column_cnt = output_projector.count();
   row_count = 0;
   column_checksum.reuse();
-  if (OB_UNLIKELY(column_cnt <= 0)) {
+  if (OB_UNLIKELY(column_cnt <= 0 || column_cnt > need_reshape.count() || column_cnt > cols_desc.count())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(column_cnt));
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(column_cnt), K(need_reshape), K(cols_desc));
   } else if (OB_FAIL(column_checksum.reserve(column_cnt))) {
     STORAGE_LOG(WARN, "fail to reserve column", K(ret), K(column_cnt));
   } else {
@@ -128,9 +128,13 @@ int ObUniqueIndexChecker::calc_column_checksum(
       } else {
         ++row_count;
         for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-          column_checksum.at(i) += row->storage_datums_[i].checksum(0);
+          if (need_reshape.at(i) && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(row->storage_datums_[i], cols_desc.at(i).col_type_))) {
+            LOG_WARN("reshape ddl column obj failed", K(ret));
+          } else {
+            column_checksum.at(i) += row->storage_datums_[i].checksum(0);
+          }
         }
-        if (OB_FAIL(dag_yield())) {
+        if (OB_SUCC(ret) && OB_FAIL(dag_yield())) {
           STORAGE_LOG(WARN, "fail to yield dag", KR(ret));
         }
       }
@@ -200,7 +204,7 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to get column schema", K(ret), K(param), K(col_id));
           } else {
-            const bool col_need_reshape = !param.is_scan_index_ && col->is_virtual_generated_column()
+            const bool col_need_reshape = !param.is_scan_index_ && (col->is_virtual_generated_column() || !col->get_orig_default_value().is_null())
               && col->get_meta_type().is_fixed_len_char_type();
             if (OB_FAIL(need_reshape.push_back(col_need_reshape))) {
               LOG_WARN("failed to push back is virtual col", K(ret));
@@ -208,7 +212,7 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(calc_column_checksum(need_reshape, *param.col_ids_, *param.output_projector_, local_scan, column_checksum, row_count))) {
+        } else if (OB_FAIL(calc_column_checksum(need_reshape, *param.org_col_ids_, *param.output_projector_, local_scan, column_checksum, row_count))) {
           LOG_WARN("fail to calc column checksum", K(ret));
         }
       }

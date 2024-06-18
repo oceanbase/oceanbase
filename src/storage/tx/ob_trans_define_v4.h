@@ -689,6 +689,7 @@ public:
   void set_cluster_id(uint64_t cluster_id) { cluster_id_ = cluster_id; }
   uint64_t get_cluster_id() const { return cluster_id_; }
   uint32_t get_session_id() const { return sess_id_; }
+  uint32_t get_assoc_session_id() const { return assoc_sess_id_; }
   ObAddr get_addr() const { return addr_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   ObTxConsistencyType get_tx_consistency_type() const { return tx_consistency_type_; }
@@ -808,10 +809,11 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   void clear_interrupt() { flags_.INTERRUPTED_ = false; }
   void mark_part_abort(const ObTransID tx_id, const int abort_cause);
   int64_t get_coord_epoch() const;
-  ObTxSEQ get_and_inc_tx_seq(int16_t branch, int N) const;
+  int get_and_inc_tx_seq(const int16_t branch, const int N, ObTxSEQ &tx_seq) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
   ObTxSEQ get_min_tx_seq() const;
+  int clear_state_for_autocommit_retry();
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
@@ -1072,14 +1074,20 @@ inline ObTxSEQ ObTxDesc::get_min_tx_seq() const
   }
 }
 
-inline ObTxSEQ ObTxDesc::get_and_inc_tx_seq(int16_t branch, int N) const
+inline int ObTxDesc::get_and_inc_tx_seq(const int16_t branch,
+                                        const int N,
+                                        ObTxSEQ &tx_seq) const
 {
-  int64_t seq = ObSequence::get_and_inc_max_seq_no(N);
-  if (OB_LIKELY(support_branch())) {
-    return ObTxSEQ(seq - seq_base_, branch);
+  int ret = OB_SUCCESS;
+  int64_t seq = 0;
+  if (OB_FAIL(ObSequence::get_and_inc_max_seq_no(N, seq))) {
+    TRANS_LOG(ERROR, "inc max seq no failed", K(ret), K(N));
+  } else if (OB_LIKELY(support_branch())) {
+    tx_seq = ObTxSEQ(seq - seq_base_, branch);
   } else {
-    return ObTxSEQ::mk_v0(seq);
+    tx_seq = ObTxSEQ::mk_v0(seq);
   }
+  return ret;
 }
 
 inline ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const

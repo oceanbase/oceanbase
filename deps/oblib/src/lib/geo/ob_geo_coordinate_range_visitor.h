@@ -49,6 +49,7 @@ public:
                                    double lati,
                                    bool is_normalized,
                                    ObGeoCoordRangeResult &result);
+  bool set_after_visitor() { return false; }
 
 private:
   const ObSrsItem *srs_;

@@ -1901,6 +1901,8 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
   DEF_FUNC_ENTRY(ObDecimalIntType),     // 50, decimal int
   DEF_FUNC_ENTRY(ObCollectionSQLType), // 51, collection
+  DEF_FUNC_ENTRY(ObNullType),           // 52, mysql date
+  DEF_FUNC_ENTRY(ObNullType),           // 53, mysql datetime
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)
@@ -2357,6 +2359,25 @@ int ObObj::convert_string_value_charset(ObCharsetType charset_type, ObIAllocator
           set_collation_type(collation_type);
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObObj::get_real_param_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  count = 1;
+  if (ObExtendType == meta_.get_type()) {
+    const ObSqlArrayObj *array_obj = NULL;
+    if (OB_ISNULL(array_obj = reinterpret_cast<const ObSqlArrayObj*>(v_.ext_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(v_.ext_));
+    } else if (array_obj->count_ < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected group_idx", K(ret), K(array_obj->count_));
+    } else {
+      count = array_obj->count_;
     }
   }
   return ret;

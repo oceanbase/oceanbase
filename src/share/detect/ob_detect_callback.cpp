@@ -263,6 +263,7 @@ int ObSingleDfoDetectCB::do_callback()
   if (OB_SUCC(clean_ret)) {
     dtl::ObDTLIntermResultManager *interm_res_manager = MTL(dtl::ObDTLIntermResultManager*);
     if (OB_ISNULL(interm_res_manager)) {
+      // ignore ret
       LIB_LOG(WARN, "[DM] single dfo erase_interm_result_info, but interm_res_manager is null",
                     K(ret), K(key_), K_(trace_id));
     } else {
@@ -279,6 +280,7 @@ int ObTempTableDetectCB::do_callback()
   int ret = OB_SUCCESS;
   dtl::ObDTLIntermResultManager *interm_res_manager = MTL(dtl::ObDTLIntermResultManager*);
   if (OB_ISNULL(interm_res_manager)) {
+    // ignore ret
     LIB_LOG(WARN, "[DM] temp table erase_interm_result_info, but interm_res_manager is null",
                   K(ret), K(key_), K_(trace_id));
   } else {

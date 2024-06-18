@@ -43,6 +43,11 @@ public:
     }
   }
   bool is_replace() const { return table_info_.is_replace_; }
+  void set_overwrite(const bool is_overwrite) {
+    table_info_.is_overwrite_ = is_overwrite;
+    set_stmt_type(stmt::T_INSERT);
+  }
+  bool is_overwrite() const { return table_info_.is_overwrite_; }
   bool value_from_select() const { return !from_items_.empty(); }
   common::ObIArray<ObAssignment> &get_table_assignments() { return table_info_.assignments_; }
   const common::ObIArray<ObAssignment> &get_table_assignments() const { return table_info_.assignments_; }

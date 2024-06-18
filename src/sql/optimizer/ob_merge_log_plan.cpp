@@ -543,6 +543,7 @@ int ObMergeLogPlan::generate_equal_constraint(ObLogicalOperator &top,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt));
   } else if (OB_ISNULL(target_table = stmt->get_table_item_by_id(stmt->get_target_table_id()))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get target table", K(ret));
   } else if (OB_FAIL(get_target_table_scan(target_table->get_base_table_item().table_id_,
                                            &top, target_table_scan))) {

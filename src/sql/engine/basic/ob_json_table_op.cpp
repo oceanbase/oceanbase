@@ -2154,6 +2154,9 @@ int RegularCol::check_default_value_inner_mysql(JtScanCtx* ctx,
 {
   INIT_SUCC(ret);
   ObDatum res;
+  char datum_buff[OBJ_DATUM_STRING_RES_SIZE] = {0};
+  res.ptr_ = datum_buff;
+
   ObDatum* tmp_datum = nullptr;
   uint8_t is_type_mismatch = 0;
   ObAccuracy accuracy = col_node.col_info_.data_type_.get_accuracy();

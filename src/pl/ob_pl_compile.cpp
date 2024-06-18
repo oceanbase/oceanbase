@@ -177,6 +177,7 @@ int ObPLCompiler::compile(
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_compile);
   int64_t compile_start = ObTimeUtility::current_time();
+  uint64_t block_hash = OB_INVALID_ID;
 
   //Step 1：构造匿名块的ObPLFunctionAST
   HEAP_VAR(ObPLFunctionAST, func_ast, allocator_) {
@@ -211,6 +212,11 @@ int ObPLCompiler::compile(
       }
     }
 
+    if (OB_SUCC(ret)) {
+      block_hash = murmurhash(block->str_value_, block->str_len_, 0);
+      func.set_profiler_unit_info(block_hash, STANDALONE_ANONYMOUS);
+    }
+
     // Process Prepare SQL Ref
     if (OB_SUCC(ret)) {
       func.set_proc_type(STANDALONE_ANONYMOUS);
@@ -231,8 +237,8 @@ int ObPLCompiler::compile(
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
-        uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(block->str_value_, block->str_len_, 0);
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
+        uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : block_hash;
 
         // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
         ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, lock_idx * 8);
@@ -451,6 +457,8 @@ int ObPLCompiler::compile(
     }
   }
 
+  OX (func.set_profiler_unit_info(routine.get_routine_id(), func.get_proc_type()));
+
   int64_t resolve_end = ObTimeUtility::current_time();
   LOG_INFO(">>>>>>>>Resolve Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(resolve_end - parse_end));
 
@@ -475,7 +483,8 @@ int ObPLCompiler::compile(
       bool enable_persistent = GCONF._enable_persistent_compiled_routine
                                && func_ast.get_can_cached()
                                && !cg.get_debug_mode()
-                               && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
+                               && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty())
+                               && !cg.get_profile_mode();
 
       OZ (cg.init());
       OZ (read_dll_from_disk(enable_persistent, routine_storage, func_ast, cg, routine, func, op));
@@ -732,7 +741,8 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
       bool need_read_dll = GCONF._enable_persistent_compiled_routine
                              && package_ast.get_can_cached()
-                             && (!session_info_.is_pl_debug_on() || get_tenant_id_by_object_id(package.get_id()) == OB_SYS_TENANT_ID);
+                             && (!session_info_.is_pl_debug_on() || get_tenant_id_by_object_id(package.get_id()) == OB_SYS_TENANT_ID)
+                             && session_info_.get_pl_profiler() == nullptr;
       CK (package.is_inited());
       OZ (package.get_dependency_table().assign(package_ast.get_dependency_table()));
       OZ (generate_package_conditions(package_ast.get_condition_table(), package));
@@ -1398,7 +1408,22 @@ int ObPLCompiler::generate_package_routines(
              K(package.get_db_name()),
              K(package.get_name()),
              K(ret));
-  } else { /*do nothing*/ }
+  } else {
+    uint64_t package_id = package.get_id();
+    if (ObTriggerInfo::is_trigger_package_id(package_id)) {
+      package_id = ObTriggerInfo::get_package_trigger_id(package_id);
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < package.get_routine_table().count(); ++i) {
+      if (OB_NOT_NULL(package.get_routine_table().at(i))) {
+        package.get_routine_table().at(i)->set_profiler_unit_info(
+            package_id, package.get_routine_table().at(i)->get_proc_type());
+
+        OZ (SMART_CALL(
+              ObPLCodeGenerator::set_profiler_unit_info_recursive(*package.get_routine_table().at(i))));
+      }
+    }
+  }
   return ret;
 }
 

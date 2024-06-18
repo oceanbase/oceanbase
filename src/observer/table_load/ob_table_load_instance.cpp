@@ -63,7 +63,8 @@ void ObTableLoadInstance::destroy()
   }
 }
 
-int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &idx_array,
+int ObTableLoadInstance::init(ObTableLoadParam &param,
+                              const ObIArray<uint64_t> &column_ids,
                               ObTableLoadExecCtx *execute_ctx)
 {
   int ret = OB_SUCCESS;
@@ -84,18 +85,19 @@ int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &
     else if (OB_FAIL(ObTableLoadService::check_tenant())) {
       LOG_WARN("fail to check tenant", KR(ret), K(param.tenant_id_));
     }
-    // check support
-    else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_,
-                                                                   param.method_,
-                                                                   param.insert_mode_))) {
-      LOG_WARN("fail to check support direct load", KR(ret), K(param));
-    }
     // start stmt
     else if (OB_FAIL(start_stmt(param))) {
       LOG_WARN("fail to start stmt", KR(ret), K(param));
     }
+    // double check support for concurrency of direct load and ddl
+    else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_,
+                                                                   param.method_,
+                                                                   param.insert_mode_,
+                                                                   param.load_mode_))) {
+      LOG_WARN("fail to check support direct load", KR(ret), K(param));
+    }
     // start direct load
-    else if (OB_FAIL(start_direct_load(param, idx_array))) {
+    else if (OB_FAIL(start_direct_load(param, column_ids))) {
       LOG_WARN("fail to start direct load", KR(ret));
     }
     // start trans
@@ -433,6 +435,7 @@ int ObTableLoadInstance::start_redef_table(const ObTableLoadParam &param)
   start_arg.table_id_ = param.table_id_;
   start_arg.parallelism_ = param.parallel_;
   start_arg.is_load_data_ = !param.px_mode_;
+  start_arg.is_insert_overwrite_ = ObDirectLoadMode::is_insert_overwrite(param.load_mode_);
   if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *stmt_ctx_.session_info_))) {
     LOG_WARN("fail to start redef table", KR(ret), K(start_arg));
   } else {
@@ -479,7 +482,7 @@ int ObTableLoadInstance::abort_redef_table()
 }
 
 int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
-                                           const ObIArray<int64_t> &idx_array)
+                                           const ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
   ObTableLoadTableCtx *table_ctx = nullptr;
@@ -492,7 +495,7 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
   } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info))) {
     LOG_WARN("fail to init table ctx", KR(ret));
-  } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, idx_array, execute_ctx_))) {
+  } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, column_ids, execute_ctx_))) {
     LOG_WARN("fail to coordinator init ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
     LOG_WARN("fail to add ctx", KR(ret));

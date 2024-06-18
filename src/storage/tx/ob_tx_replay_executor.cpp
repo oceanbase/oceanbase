@@ -286,7 +286,7 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
       ret = OB_SUCCESS;
       bool tx_ctx_existed = false;
       common::ObAddr scheduler = log_block_.get_header().get_scheduler();
-      // since 4.3, cluster version in log_block_header
+      // since 4.2.4, cluster version in log_block_header
       const uint64_t cluster_version = log_block_.get_header().get_cluster_version();
       ObTxCreateArg arg(true, /* for_replay */
                         PartCtxSource::REPLAY,

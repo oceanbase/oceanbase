@@ -226,6 +226,7 @@ public:
                                              int64_t &paxos_replica_num,
                                              GlobalLearnerList &learner_list) const;
   int get_election_leader(common::ObAddr &addr) const;
+  int get_parent(common::ObAddr &parent) const;
 
   // @brief: a special config change interface, change replica number of paxos group
   // @param[in] common::ObMemberList: current memberlist, for pre-check

@@ -1035,7 +1035,8 @@ int ObDtlBasicChannel::inner_write_msg(const ObDtlMsg &msg, int64_t timeout_ts,
   } else if (OB_FAIL(msg_writer_->need_new_buffer(msg, eval_ctx, need_size, need_new))) {
     LOG_WARN("failed to judge need new buffer", K(ret));
   } else if (OB_UNLIKELY(need_new)) {
-    if (OB_FAIL(switch_buffer(need_size, is_eof, timeout_ts))) {
+    if (OB_FAIL(switch_buffer(need_size, is_eof, timeout_ts,
+                              eval_ctx))) {
       LOG_WARN("failed to switch buffer", K(ret));
     }
   }
@@ -1069,7 +1070,7 @@ int ObDtlBasicChannel::write_msg(const ObDtlMsg &msg, int64_t timeout_ts,
 }
 
 int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
-    const int64_t timeout_ts)
+    const int64_t timeout_ts, ObEvalCtx *eval_ctx)
 {
   int ret = OB_SUCCESS;
   if (write_buffer_ != nullptr && write_buffer_->pos() != 0) {
@@ -1103,6 +1104,28 @@ int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
         write_buffer_->set_dfo_key(dfc_->get_dfo_key());
         write_buffer_->set_sqc_id(dfc_->get_sender_sqc_info().sqc_id_);
         write_buffer_->set_dfo_id(dfc_->get_sender_sqc_info().dfo_id_);
+      }
+      if (OB_NOT_NULL(eval_ctx)) {
+        write_buffer_->set_dop(ObPxSqcUtil::get_actual_worker_count(&eval_ctx->exec_ctx_));
+        write_buffer_->set_plan_id(ObPxSqcUtil::get_plan_id(&eval_ctx->exec_ctx_));
+        write_buffer_->set_exec_id(ObPxSqcUtil::get_exec_id(&eval_ctx->exec_ctx_));
+        write_buffer_->set_session_id(ObPxSqcUtil::get_session_id(&eval_ctx->exec_ctx_));
+        ObPhysicalPlanCtx *plan_ctx = eval_ctx->exec_ctx_.get_physical_plan_ctx();
+        if (OB_NOT_NULL(plan_ctx) && OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+          write_buffer_->set_sql_id(plan_ctx->get_phy_plan()->get_sql_id());
+          write_buffer_->set_disable_auto_mem_mgr(plan_ctx->get_phy_plan()->
+                                                is_disable_auto_memory_mgr());
+        }
+        ObSQLSessionInfo *sql_session = eval_ctx->exec_ctx_.get_my_session();
+        if (OB_NOT_NULL(sql_session)) {
+          write_buffer_->set_database_id(sql_session->get_database_id());
+        }
+        write_buffer_->set_op_id(get_op_id());
+        ObOperatorKit *kit = eval_ctx->exec_ctx_.get_operator_kit(get_op_id());
+        if (OB_NOT_NULL(kit) && OB_NOT_NULL(kit->op_)) {
+          write_buffer_->set_input_rows(kit->op_->get_spec().rows_);
+          write_buffer_->set_input_width(kit->op_->get_spec().width_);
+        }
       }
       write_buffer_->timeout_ts() = timeout_ts;
       msg_writer_->write_msg_type(write_buffer_);

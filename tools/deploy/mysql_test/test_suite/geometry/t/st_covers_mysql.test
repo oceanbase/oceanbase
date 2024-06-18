@@ -39,13 +39,13 @@ SET @pt_long_minus_181 = x'E610000001010000000000000000A066C00000000000000000';
 SET @pt_long_plus_181 = x'E610000001010000000000000000A066400000000000000000';
 
 --error 3732
-SELECT _st_covers(@pt_lat_minus_91, @pt);
+SELECT _st_covers(cast(@pt_lat_minus_91 as point), @pt);
 --error 3732
-SELECT _st_covers(@pt_lat_plus_91, @pt);
+SELECT _st_covers(cast(@pt_lat_plus_91 as point), @pt);
 --error 3731
-SELECT _st_covers(@pt_long_minus_181, @pt);
+SELECT _st_covers(cast(@pt_long_minus_181 as point), @pt);
 --error 3731
-SELECT _st_covers(@pt_long_plus_181, @pt);
+SELECT _st_covers(cast(@pt_long_plus_181 as point), @pt);
 
   --disable_warnings
   drop table if exists gis_geometrycollection, gis_geometrycollection_2;

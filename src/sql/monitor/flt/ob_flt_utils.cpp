@@ -707,7 +707,8 @@ namespace sql
 
         // span id
         org_pos = pos;
-        if (OB_FAIL(span->span_id_.tostring(buf, len, pos))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(span->span_id_.tostring(buf, len, pos))) {
           LOG_WARN ("failed to deserialize uuid", K(ret), K(buf), K(pos));
         } else {
           data.span_id_.assign(buf+org_pos, pos - org_pos);
@@ -719,7 +720,8 @@ namespace sql
 
         //parent_span_id_
         org_pos = pos;
-        if (OB_ISNULL(span->source_span_) &&
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(span->source_span_) &&
             OB_FAIL(OBTRACE->get_root_span_id().tostring(buf, len, pos))) {
           LOG_WARN ("failed to deserialize uuid", K(ret), K(buf), K(pos));
         } else if (!OB_ISNULL(span->source_span_) &&

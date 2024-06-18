@@ -31,7 +31,8 @@ namespace oceanbase {
 namespace common {
 
 const char *TEST_DIR = "testoblogcompressdir";
-const char *RM_COMMAND = "rm -rf testoblogcompressdir";
+const char *TEST_ALERT_DIR = "testoblogcompressdiralert";
+const char *RM_COMMAND = "rm -rf testoblogcompressdir testoblogcompressdiralert";
 
 #define  CREATE_FILES(file_count, modify_time, timestamp) \
   for (int i = 0; i < file_count; i++) {  \
@@ -304,6 +305,7 @@ TEST(ObLogCompressor, syslog_compressor_thread_test)
   ASSERT_EQ(OB_SUCCESS, OB_LOG_COMPRESSOR.init());
   ASSERT_EQ(true, OB_LOG_COMPRESSOR.is_inited_);
   strncpy(OB_LOG_COMPRESSOR.syslog_dir_, TEST_DIR, strlen(TEST_DIR));
+  strncpy(OB_LOG_COMPRESSOR.alert_log_dir_, TEST_ALERT_DIR, strlen(TEST_ALERT_DIR));
 
   // prepare syslog file
   const int MAX_SYSLOG_COUNT = 8;
@@ -335,6 +337,7 @@ TEST(ObLogCompressor, syslog_compressor_thread_test)
   last_modified_time -= 1000;
   ASSERT_EQ(0, system(RM_COMMAND));
   ASSERT_EQ(0, mkdir(TEST_DIR, 0777));
+  ASSERT_EQ(0, mkdir(TEST_ALERT_DIR, 0777));
   for (int i = 0; i < OB_SYSLOG_COMPRESS_TYPE_COUNT; i++) {
     snprintf(file_name, sizeof(file_name), "%s/%s", TEST_DIR, OB_SYSLOG_FILE_PREFIX[i%OB_SYSLOG_COMPRESS_TYPE_COUNT]);
     FILE *file =fopen(file_name, "w");

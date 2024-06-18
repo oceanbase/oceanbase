@@ -870,6 +870,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
     // 无论如何都reset_op_ctx
     bool err_ignored = false;
     if (OB_ISNULL(plan_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("plan is not NULL, but plan ctx is NULL", K(ret), K(errcode));
     } else {
       err_ignored = plan_ctx->is_error_ignored();
@@ -985,6 +986,7 @@ int ObResultSet::do_close(int *client_ret)
   bool async = false; // for debug purpose
   if (OB_TRANS_XA_BRANCH_FAIL == ret) {
     if (my_session_.associated_xa()) {
+      // ignore ret
       //兼容oracle，这里需要重置session状态
       LOG_WARN("branch fail in global transaction", KPC(my_session_.get_tx_desc()));
       ObSqlTransControl::clear_xa_branch(my_session_.get_xid(), my_session_.get_tx_desc());
@@ -1089,8 +1091,20 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
       if (is_rollback && !is_will_retry_() && is_tx_active && !in_trans) {
         ObTransStatistic::get_instance().add_rollback_trans_count(MTL_ID(), 1);
       }
-      // 对于UPDATE等异步提交的语句，如果需要重试，那么中途的rollback也走同步接口
-      if (OB_LIKELY(false == is_end_trans_async()) || OB_LIKELY(false == is_user_sql_)) {
+      bool lock_conflict_skip_end_trans = false;
+      // if err is lock conflict retry, do not rollback transaction, but cleanup transaction
+      // state, keep transaction id unchanged, easy for deadlock detection and $OB_LOCKS view
+      if (is_rollback && ret == OB_TRY_LOCK_ROW_CONFLICT && is_will_retry_()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ObSqlTransControl::reset_trans_for_autocommit_lock_conflict(get_exec_context()))) {
+          LOG_WARN("cleanup trans state for lock conflict fail, fallback to end trans", K(tmp_ret));
+        } else {
+          lock_conflict_skip_end_trans = true;
+        }
+      }
+      if (lock_conflict_skip_end_trans) {
+      } else if (OB_LIKELY(false == is_end_trans_async()) || OB_LIKELY(false == is_user_sql_)) {
+        // 对于UPDATE等异步提交的语句，如果需要重试，那么中途的rollback也走同步接口
         // 如果没有设置end_trans_cb，就走同步接口。这个主要是为了InnerSQL提供的。
         // 因为InnerSQL没有走Obmp_query接口，而是直接操作ResultSet
         int save_ret = ret;
@@ -1114,6 +1128,7 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
           // don't need to set ret
           ObSqlCtx *sql_ctx = get_exec_context().get_sql_ctx();
           if (OB_ISNULL(sql_ctx)) {
+            // ignore ret
             LOG_WARN("sql_ctx is null when handle security audit");
           } else {
             ObSecurityAuditUtils::handle_security_audit(*this,
@@ -1883,6 +1898,7 @@ uint64_t ObResultSet::get_field_cnt() const
   int64_t cnt = 0;
   uint64_t ret = 0;
   if (OB_ISNULL(get_field_columns())) {
+    // ignore ret
     LOG_ERROR("unexpected error. field columns is null");
     right_to_die_or_duty_to_live();
   }

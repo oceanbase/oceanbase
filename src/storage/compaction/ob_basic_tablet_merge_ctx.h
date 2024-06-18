@@ -164,6 +164,7 @@ public:
   virtual int update_tablet(
     const blocksstable::ObSSTable &sstable,
     ObTabletHandle &new_tablet_handle);
+  int try_set_upper_trans_version(blocksstable::ObSSTable &sstable);
   int update_tablet_after_merge();
   ObITable::TableType get_merged_table_type(
     const ObStorageColumnGroupSchema *cg_schema,

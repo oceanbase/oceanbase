@@ -1514,6 +1514,12 @@ protected:
                       const ObIArray<ObConflictDetector*> &valid_detectors,
                       JoinInfo &join_info);
 
+  int check_detector_valid(ObJoinOrder *left_tree,
+                          ObJoinOrder *right_tree,
+                          const ObIArray<ObConflictDetector*> &valid_detectors,
+                          ObJoinOrder *cur_tree,
+                          bool &is_valid);
+
   int remove_redundancy_pred(ObJoinOrder *left_tree,
                             ObJoinOrder *right_tree,
                             JoinInfo &join_info);
@@ -1710,6 +1716,10 @@ public:
   bool has_added_win_dist() const { return outline_print_flags_ & ADDED_WIN_DIST_HINT; }
   void set_added_win_dist() { outline_print_flags_ |= ADDED_WIN_DIST_HINT; }
   const common::ObIArray<ObRawExpr*> &get_onetime_query_refs() const { return onetime_query_refs_; }
+  int do_alloc_values_table_path(ValuesTablePath *values_table_path,
+                                 ObLogExprValues *&out_access_path_op);
+  int do_alloc_values_table_path(ValuesTablePath *values_table_path,
+                                 ObLogValuesTableAccess *&out_access_path_op);
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable

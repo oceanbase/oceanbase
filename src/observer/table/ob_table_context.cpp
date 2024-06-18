@@ -480,13 +480,13 @@ int ObTableCtx::cons_column_info(const ObColumnSchemaV2 &column_schema,
 int ObTableCtx::convert_lob(ObIAllocator &allocator, ObObj &obj)
 {
   int ret = OB_SUCCESS;
-
-  if (obj.is_persist_lob()) {
+  ObLobLocatorV2 locator(obj.get_string(), obj.has_lob_header());
+  if (obj.is_persist_lob() || locator.is_inrow_disk_lob_locator()) {
     // do nothing
   } else if (obj.has_lob_header()) { // we add lob header in write_datum
     ret = OB_ERR_UNEXPECTED;
     LOG_USER_ERROR(OB_ERR_UNEXPECTED, "lob object should not have lob header");
-    LOG_WARN("object should not have lob header", K(ret), K(obj));
+    LOG_WARN("object should not have lob header", K(ret), K(obj), K(locator));
   }
 
   return ret;
@@ -1693,7 +1693,8 @@ int ObTableCtx::add_auto_inc_param(const ObColumnSchemaV2 &column_schema)
     param.autoinc_first_part_num_ = table_schema_->get_first_part_num();
     param.autoinc_table_part_num_ = table_schema_->get_all_part_num();
     param.autoinc_col_id_ = column_schema.get_column_id();
-    param.auto_increment_cache_size_ = auto_increment_cache_size;
+    param.auto_increment_cache_size_ = get_auto_increment_cache_size(
+      table_schema_->get_auto_increment_cache_size(), auto_increment_cache_size);
     param.part_level_ = table_schema_->get_part_level();
     ObObjType column_type = column_schema.get_data_type();
     param.autoinc_col_type_ = column_type;

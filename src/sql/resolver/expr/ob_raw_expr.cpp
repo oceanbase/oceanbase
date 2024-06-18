@@ -603,6 +603,32 @@ bool ObRawExpr::is_spatial_expr() const
   return IS_SPATIAL_OP(expr->get_expr_type());
 }
 
+bool ObRawExpr::is_oracle_spatial_expr() const
+{
+  bool ret_bool = false;
+  if (lib::is_oracle_mode() && get_expr_type() == T_OP_EQ) {
+    const ObRawExpr *l_expr = get_param_expr(0);
+    const ObRawExpr *r_expr = get_param_expr(1);
+    if (OB_NOT_NULL(l_expr) && OB_NOT_NULL(r_expr)) {
+      const ObRawExpr *l_inner = ObRawExprUtils::skip_inner_added_expr(l_expr);
+      const ObRawExpr *r_inner = ObRawExprUtils::skip_inner_added_expr(r_expr);
+      const ObRawExpr *const_expr = nullptr;
+      const ObRawExpr *geo_expr = nullptr;
+      if (l_inner->get_expr_type() == T_FUN_SYS_SDO_RELATE && r_inner->is_const_expr()) {
+        geo_expr = l_inner;
+        const_expr = r_inner;
+      } else if (r_inner->get_expr_type() == T_FUN_SYS_SDO_RELATE && l_inner->is_const_expr()) {
+        geo_expr = r_inner;
+        const_expr = l_inner;
+      }
+      if (OB_NOT_NULL(const_expr) && OB_NOT_NULL(geo_expr)) {
+        ret_bool = true;
+      }
+    } // do nothing
+  }
+  return ret_bool;
+}
+
 bool ObRawExpr::is_json_domain_expr() const
 {
   const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
@@ -1967,6 +1993,8 @@ int ObColumnRefRawExpr::assign(const ObRawExpr &other)
       is_unique_key_column_ = tmp.is_unique_key_column_;
       is_mul_key_column_ = tmp.is_mul_key_column_;
       is_strict_json_column_ = tmp.is_strict_json_column_;
+      srs_id_ = tmp.srs_id_;
+      udt_set_id_ = tmp.udt_set_id_;
     }
   }
   return ret;

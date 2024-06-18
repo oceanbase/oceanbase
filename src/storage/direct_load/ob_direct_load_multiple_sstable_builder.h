@@ -30,8 +30,9 @@ public:
   ObDirectLoadMultipleSSTableBuildParam();
   ~ObDirectLoadMultipleSSTableBuildParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_data_desc), KP_(datum_utils), KP_(file_mgr));
+  TO_STRING_KV(K_(tablet_id), K_(table_data_desc), KP_(datum_utils), KP_(file_mgr));
 public:
+  common::ObTabletID tablet_id_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   ObDirectLoadTmpFileManager *file_mgr_;

@@ -698,8 +698,8 @@ int ObSelectLogPlan::create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &gro
   } else if (OB_ISNULL(rollup_collector = dynamic_cast<ObLogGroupBy *>(top))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rollup collector is null", K(ret));
-  } else if (rollup_collector->set_rollup_info(ObRollupStatus::ROLLUP_COLLECTOR,
-                                                        groupby_helper.rollup_id_expr_)) {
+  } else if (OB_FAIL(rollup_collector->set_rollup_info(ObRollupStatus::ROLLUP_COLLECTOR,
+                                                       groupby_helper.rollup_id_expr_))) {
     LOG_WARN("failed to set rollup id expr", K(ret));
   } else {
     rollup_collector->set_group_by_outline_info(false, true);

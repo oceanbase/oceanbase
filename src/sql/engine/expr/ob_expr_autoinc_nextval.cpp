@@ -357,7 +357,10 @@ int ObExprAutoincNextval::generate_autoinc_value(const ObSQLSessionInfo &my_sess
           }
         }
       }
-
+      if (OB_UNLIKELY(OB_DATA_OUT_OF_RANGE == ret) && !is_strict_mode(my_session.get_sql_mode())) {
+        ret = OB_SUCCESS;
+        value = ObAutoincrementService::get_max_value(autoinc_param->autoinc_col_type_);
+      }
       if (OB_SUCC(ret)) {
         new_val = value;
         plan_ctx->set_autoinc_id_tmp(value);

@@ -75,6 +75,7 @@ public:
   inline bool is_partition_ig() const { return is_partition_gi_; }
   inline void set_is_partition_gi(bool v) { is_partition_gi_ = v; }
   virtual int get_card_without_filter(double &card) override;
+  virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
 
 private:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;

@@ -1006,6 +1006,7 @@ int ObOperator::try_deregister_rt_monitor_node()
       && ctx_.is_rt_monitor_node_registered()) {
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
     if (OB_ISNULL(list)) {
+      // ignore ret
       LOG_WARN("fail to revert monitor node", K(list));
     } else if (OB_FAIL(list->revert_monitor_node(op_monitor_info_))) {
       LOG_ERROR("fail to revert monitor node", K(ret), K(op_monitor_info_));

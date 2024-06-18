@@ -136,8 +136,13 @@ const static char *TABLET_MEMTABLE_FREEZE_STATE_TO_STR(const int64_t state)
   STATIC_ASSERT(TabletMemtableFreezeState::FLUSHED == 4, "Invalid State Enum");
   STATIC_ASSERT(TabletMemtableFreezeState::RELEASED == 5, "Invalid State Enum");
   STATIC_ASSERT(TabletMemtableFreezeState::FORCE_RELEASED == 6, "Invalid State Enum");
-  const static char TABLET_MEMTABLE_FREEZE_STATE_TO_STR[7][20] =
-    {"INVALID", "ACTIVE", "FREEZING", "READY_FOR_FLUSH", "FLUSHED", "RELEASED", "FORCE_RELEASED"};
+  const static char TABLET_MEMTABLE_FREEZE_STATE_TO_STR[7][20] = {"INVALID",
+                                                                  "ACTIVE",
+                                                                  "FREEZING",
+                                                                  "READY_FOR_FLUSH",
+                                                                  "FLUSHED",
+                                                                  "RELEASED",
+                                                                  "FORCE_RELEASED"};
   return TABLET_MEMTABLE_FREEZE_STATE_TO_STR[state];
 }
 
@@ -199,6 +204,7 @@ public:
     resolved_active_memtable_left_boundary_(true),
     unset_active_memtable_logging_blocked_(false),
     has_backoffed_(false),
+    offlined_(false),
     read_barrier_(false),
     unsubmitted_cnt_(0),
     logging_blocked_start_time_(0),
@@ -224,6 +230,7 @@ public:
     resolved_active_memtable_left_boundary_ = true;
     unset_active_memtable_logging_blocked_ = false;
     has_backoffed_ = false;
+    offlined_ = false;
     read_barrier_ = false;
     freeze_clock_ = 0;
     freeze_state_ = TabletMemtableFreezeState::INVALID;
@@ -314,6 +321,8 @@ public:
                                    UNSET_ACTIVE_MEMTABLE_LOGGING_BLOCKED);
 
   OB_MEMTABLE_DEFINE_FLAG_OPERATOR(has_backoffed, HAS_BACKOFFED);
+
+  OB_MEMTABLE_DEFINE_FLAG_OPERATOR(offlined, OFFLINED);
   // ************* memtable flag operator *************
 
 public:
@@ -330,7 +339,7 @@ public:
   void set_push_table_into_gc_queue_time(const int64_t timestamp) { mt_stat_.push_table_into_gc_queue_time_ = timestamp; }
   void set_freeze_state(const TabletMemtableFreezeState state)
   {
-    if (state >= TabletMemtableFreezeState::ACTIVE && state <= TabletMemtableFreezeState::FORCE_RELEASED) {
+    if (state >= TabletMemtableFreezeState::ACTIVE && state < TabletMemtableFreezeState::MAX_FREEZE_STATE) {
       freeze_state_ = state;
     }
   }
@@ -379,6 +388,7 @@ public:
                        K(resolved_active_memtable_left_boundary_),
                        K(unset_active_memtable_logging_blocked_),
                        K(has_backoffed_),
+                       K(offlined_),
                        K(read_barrier_),
                        K(freeze_clock_),
                        K(freeze_state_),
@@ -435,6 +445,7 @@ private:
   static const uint8_t MEMTABLE_RESOLVED_ACTIVE_MEMTABLE_LEFT_BOUNDARY_MASK  = 1 << 4;
   static const uint8_t MEMTABLE_UNSET_ACTIVE_MEMTABLE_LOGGING_BLOCKED_MASK   = 1 << 5;
   static const uint8_t MEMTABLE_HAS_BACKOFFED_MASK                           = 1 << 6;
+  static const uint8_t MEMTABLE_OFFLINED_MASK                                = 1 << 7;
 
   union {
     // NB: not allow to use it directly
@@ -457,6 +468,8 @@ private:
       // whether the memtable has backoffed its
       // right boundary because of sync_log_fail
       bool has_backoffed_                          :1;
+      // whether the memtable is during offline
+      bool offlined_                               :1;
     };
   };
 

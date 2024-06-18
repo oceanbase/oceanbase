@@ -51,10 +51,11 @@ public:
   ObDirectLoadMultipleSSTableCreateParam();
   ~ObDirectLoadMultipleSSTableCreateParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(rowkey_column_num), K_(column_count), K_(index_block_size), K_(data_block_size),
+  TO_STRING_KV(K_(tablet_id), K_(rowkey_column_num), K_(column_count), K_(index_block_size), K_(data_block_size),
                K_(index_block_count), K_(data_block_count), K_(row_count), K_(max_data_block_size),
                K_(start_key), K_(end_key), K_(fragments));
 public:
+  common::ObTabletID tablet_id_;
   int64_t rowkey_column_num_;
   int64_t column_count_;
   int64_t index_block_size_;
@@ -130,7 +131,7 @@ public:
   TO_STRING_KV(K_(meta), K_(start_key), K_(end_key), K_(fragments));
 private:
   common::ObArenaAllocator allocator_;
-  common::ObTabletID tablet_id_; // invalid
+  common::ObTabletID tablet_id_; // invalid in multiple mode
   ObDirectLoadMultipleSSTableMeta meta_;
   ObDirectLoadMultipleDatumRowkey start_key_;
   ObDirectLoadMultipleDatumRowkey end_key_;

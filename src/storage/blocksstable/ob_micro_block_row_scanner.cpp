@@ -886,7 +886,7 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_cg(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(pd_filter_info.filter_->execute(parent, pd_filter_info, this, true))) {
+    } else if (OB_FAIL(pd_filter_info.filter_->execute(parent, pd_filter_info, this, param_->vectorized_enabled_))) {
       LOG_WARN("Fail to filter", K(ret), KPC(pd_filter_info.filter_), K(pd_filter_info.start_), K(pd_filter_info.count_));
     } else {
       access_count = row_count;

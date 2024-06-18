@@ -280,6 +280,7 @@ int ObTableScanWithIndexBackOp::inner_close()
   }
   tmp_ret = ret;
   if (OB_FAIL(ObTableScanOp::inner_close())) {
+    // overwrite ret
     LOG_WARN("inner close ooerator failed", K(ret));
   }
   ret = (OB_SUCCESS == ret) ? tmp_ret : ret;

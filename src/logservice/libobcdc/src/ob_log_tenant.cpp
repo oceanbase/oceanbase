@@ -958,6 +958,7 @@ void ObLogTenant::flush_storage()
     }
 
     if (OB_FAIL(store_service->flush(redo_cf_handle_))) {
+      // overwrite ret
       LOG_WARN("flush tenant redo_column_family failed", KR(ret), K_(tenant_id));
     } else {
       LOG_INFO("flush tenant redo column_family succ", K_(tenant_id));

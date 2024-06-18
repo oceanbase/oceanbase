@@ -15,7 +15,7 @@
 #include "observer/table_load/ob_table_load_stat.h"
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
 #include "storage/direct_load/ob_direct_load_fast_heap_table_builder.h"
-#include "storage/direct_load/ob_direct_load_sstable_builder.h"
+#include "storage/direct_load/ob_direct_load_multiple_sstable_builder.h"
 #include "storage/direct_load/ob_direct_load_table_builder_allocator.h"
 
 namespace oceanbase
@@ -118,16 +118,18 @@ int ObDirectLoadTableStoreBucket::init(const ObDirectLoadTableStoreParam &param,
     } else {
       abort_unless(!param.table_data_desc_.is_heap_table_);
       // new sstable
-      ObDirectLoadSSTableBuildParam sstable_build_param;
+      ObDirectLoadMultipleSSTableBuildParam sstable_build_param;
       sstable_build_param.tablet_id_ = tablet_id;
       sstable_build_param.table_data_desc_ = param.table_data_desc_;
       sstable_build_param.datum_utils_ = param.datum_utils_;
       sstable_build_param.file_mgr_ = param.file_mgr_;
-      ObDirectLoadSSTableBuilder *sstable_builder = nullptr;
+      sstable_build_param.extra_buf_ = param.extra_buf_;
+      sstable_build_param.extra_buf_size_ = param.extra_buf_size_;
+      ObDirectLoadMultipleSSTableBuilder *sstable_builder = nullptr;
       if (OB_ISNULL(sstable_builder =
-                      table_builder_allocator_->alloc<ObDirectLoadSSTableBuilder>())) {
+                      table_builder_allocator_->alloc<ObDirectLoadMultipleSSTableBuilder>())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc ObDirectLoadSSTableBuilder", KR(ret));
+        LOG_WARN("fail to alloc ObDirectLoadMultipleSSTableBuilder", KR(ret));
       } else if (OB_FAIL(sstable_builder->init(sstable_build_param))) {
         LOG_WARN("fail to init sstable builder", KR(ret));
       }

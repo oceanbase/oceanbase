@@ -234,19 +234,18 @@ int ObLSTransferStatus::enable_upper_trans_calculation_(const share::SCN op_scn)
 {
   int ret = OB_SUCCESS;
   ObTxTableGuard guard;
-  ObTxDataTable *tx_data_table = nullptr;
+  ObTxTable *tx_table = nullptr;
 
   if (OB_FAIL(ls_->get_tx_table_guard(guard))) {
     TRANS_LOG(WARN, "failed to get tx table", K(ret));
   } else if (OB_UNLIKELY(!guard.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tx table guard is invalid", K(ret), K(guard));
-  } else if (OB_ISNULL(tx_data_table =
-                       guard.get_tx_table()->get_tx_data_table())) {
+  } else if (OB_ISNULL(tx_table = guard.get_tx_table())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tx data table in tx table is nullptr.", K(ret));
   } else {
-    tx_data_table->enable_upper_trans_calculation(op_scn);
+    tx_table->enable_upper_trans_calculation(op_scn);
     TRANS_LOG(INFO, "enable upper trans calculation", KPC(ls_), K(guard), KPC(this));
   }
 
@@ -257,23 +256,23 @@ int ObLSTransferStatus::disable_upper_trans_calculation_()
 {
   int ret = OB_SUCCESS;
   ObTxTableGuard guard;
-  ObTxDataTable *tx_data_table = nullptr;
+  ObTxTable *tx_table = nullptr;
 
   if (OB_FAIL(ls_->get_tx_table_guard(guard))) {
     TRANS_LOG(WARN, "failed to get tx table", K(ret));
   } else if (OB_UNLIKELY(!guard.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tx table guard is invalid", K(ret), K(guard));
-  } else if (OB_ISNULL(tx_data_table =
-                       guard.get_tx_table()->get_tx_data_table())) {
+  } else if (OB_ISNULL(tx_table = guard.get_tx_table())) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "tx data table in tx table is nullptr.", K(ret));
+    TRANS_LOG(WARN, "tx table is nullptr.", K(ret));
   } else {
-    tx_data_table->disable_upper_trans_calculation();
+    (void)tx_table->disable_upper_trans_calculation();
     TRANS_LOG(INFO, "disable upper trans calculation", KPC(ls_), K(guard), KPC(this));
   }
 
   return ret;
 }
-}
-}
+
+}  // namespace storage
+}  // namespace oceanbase

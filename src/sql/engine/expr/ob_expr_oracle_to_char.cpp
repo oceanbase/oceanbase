@@ -61,6 +61,7 @@ int ObExprOracleToChar::calc_result_typeN(ObExprResType &type,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument.", K(ret), K(type_array), K(params_count));
   } else if (OB_ISNULL(type_ctx.get_session())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else {
     const ObObjTypeClass type_class = type_array[0].get_type_class();
@@ -185,6 +186,7 @@ int ObExprOracleToNChar::calc_result_typeN(ObExprResType &type,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument.", K(ret), K(type_array), K(params_count));
   } else if (OB_ISNULL(type_ctx.get_session())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else {
     const ObObjTypeClass type_class = type_array[0].get_type_class();

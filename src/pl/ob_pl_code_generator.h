@@ -98,6 +98,9 @@ public:
     jit::ObLLVMFunction spi_check_composite_not_null_;
     jit::ObLLVMFunction spi_process_resignal_error_;
     jit::ObLLVMFunction spi_check_autonomous_trans_;
+    jit::ObLLVMFunction spi_opaque_assign_null_;
+    jit::ObLLVMFunction spi_pl_profiler_before_record_;
+    jit::ObLLVMFunction spi_pl_profiler_after_record_;
   };
 
   struct EHStack
@@ -190,7 +193,8 @@ public:
     di_user_type_map_(),
     debug_mode_(session_info_.is_pl_debug_on() && func_ast.is_routine()),
     oracle_mode_(oracle_mode),
-    out_params_(allocator)
+    out_params_(allocator),
+    profile_mode_(session_info_.get_pl_profiler() != nullptr)
     { }
 
   virtual ~ObPLCodeGenerator() {}
@@ -788,9 +792,17 @@ public:
   inline ObPLSEArray<jit::ObLLVMValue> &get_out_params() { return out_params_; }
   inline void reset_out_params() { out_params_.reset(); }
   inline int add_out_params(jit::ObLLVMValue &value) { return out_params_.push_back(value); }
+  bool get_profile_mode() { return profile_mode_; }
+
+  int generate_spi_pl_profiler_before_record(const ObPLStmt &s);
+  int generate_spi_pl_profiler_after_record(const ObPLStmt &s);
+
+  static int set_profiler_unit_info_recursive(const ObPLCompileUnit &unit);
+
 private:
   int init_di_adt_service();
   int generate_di_prototype();
+
 private:
   jit::ObLLVMDIHelper &di_helper_;
   ObPLDIADTService di_adt_service_;
@@ -798,6 +810,7 @@ private:
   bool debug_mode_;
   bool oracle_mode_;
   ObPLSEArray<jit::ObLLVMValue> out_params_;
+  bool profile_mode_;
 };
 
 class ObPLCodeGenerateVisitor : public ObPLStmtVisitor

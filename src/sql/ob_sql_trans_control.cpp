@@ -1658,5 +1658,16 @@ int ObSqlTransControl::alloc_branch_id(ObExecContext &exec_ctx, const int64_t co
   return ret;
 }
 
+int ObSqlTransControl::reset_trans_for_autocommit_lock_conflict(ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
+  ObTxDesc *tx_desc = NULL;
+  CK (OB_NOT_NULL(session));
+  CK (OB_NOT_NULL(tx_desc = session->get_tx_desc()));
+  OZ (tx_desc->clear_state_for_autocommit_retry());
+  return ret;
+}
+
 }/* ns sql*/
 }/* ns oceanbase */

@@ -362,6 +362,7 @@ public:
                                                      int64_t &paxos_replica_num,
                                                      common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_election_leader(common::ObAddr &addr) const = 0;
+  virtual int get_parent(common::ObAddr &parent) const = 0;
 
   // @brief: a special config change interface, change replica number of paxos group
   // @param[in] common::ObMemberList: current memberlist, for pre-check
@@ -904,6 +905,7 @@ public:
                                              int64_t &paxos_replica_num,
                                              common::GlobalLearnerList &learner_list) const override final;
   int get_election_leader(common::ObAddr &addr) const;
+  int get_parent(common::ObAddr &parent) const;
   int force_set_as_single_replica() override final;
   int change_replica_num(const common::ObMemberList &member_list,
                          const int64_t curr_replica_num,

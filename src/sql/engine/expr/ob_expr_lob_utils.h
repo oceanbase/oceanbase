@@ -195,7 +195,7 @@ public:
   };
 
   static int read_real_string_data(ObIAllocator &allocator, const ObDatum &datum, const ObDatumMeta &meta,
-                                   bool has_lob_header, ObString &str)
+                                   bool has_lob_header, ObString &str, sql::ObExecContext *exec_ctx = nullptr)
   {
     int ret = OB_SUCCESS;
     str = datum.get_string();
@@ -222,11 +222,15 @@ public:
             }
           }
         } else {
-          ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
-          if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
-            COMMON_LOG(WARN, "Lob: str iter init failed ", K(ret), K(str_iter));
-          } else if (OB_FAIL(str_iter.get_full_data(str))) {
-            COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
+          // read outrow lob data
+          if (OB_FAIL(read_real_string_data(
+              &allocator,
+              meta.type_,
+              meta.cs_type_,
+              has_lob_header,
+              str,
+              exec_ctx))) {
+            COMMON_LOG(WARN, "read_real_string_data fail", K(ret), K(meta), K(has_lob_header), K(datum));
           }
         }
       }
@@ -237,7 +241,7 @@ public:
   template <typename VectorType>
   static int read_real_string_data(ObIAllocator &allocator, const VectorType &vector,
                                    const ObDatumMeta &meta, bool has_lob_header, ObString &str,
-                                   const int64_t idx)
+                                   const int64_t idx, sql::ObExecContext *exec_ctx = nullptr)
   {
     int ret = OB_SUCCESS;
     str = vector->get_string(idx);
@@ -269,11 +273,15 @@ public:
             }
           }
         } else {
-          ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
-          if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
-            COMMON_LOG(WARN, "Lob: str iter init failed ", K(ret), K(str_iter));
-          } else if (OB_FAIL(str_iter.get_full_data(str))) {
-            COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
+          // read outrow lob data
+          if (OB_FAIL(read_real_string_data(
+              &allocator,
+              meta.type_,
+              meta.cs_type_,
+              has_lob_header,
+              str,
+              exec_ctx))) {
+            COMMON_LOG(WARN, "read_real_string_data fail", K(ret), K(meta), K(has_lob_header), K(vector));
           }
         }
       }
@@ -281,38 +289,30 @@ public:
     return ret;
   };
 
-  static int read_real_string_data(ObIAllocator *allocator, const common::ObObj &obj, ObString &str)
+  static int read_real_string_data(
+      ObIAllocator *allocator,
+      const common::ObObj &obj,
+      ObString &str,
+      sql::ObExecContext *exec_ctx = nullptr);
+
+  static int read_real_string_data(
+      ObIAllocator *allocator,
+      ObObjType type,
+      ObCollationType cs_type,
+      bool has_lob_header,
+      ObString &str,
+      sql::ObExecContext *exec_ctx = nullptr);
+
+  static int read_real_string_data(
+      ObIAllocator *allocator,
+      ObObjType type,
+      bool has_lob_header,
+      ObString &str,
+      sql::ObExecContext *exec_ctx)
   {
-    int ret = OB_SUCCESS;
-    const ObObjMeta& meta = obj.get_meta();
-    str = obj.get_string();
-    if (meta.is_null()) {
-      str.reset();
-    } else if (is_lob_storage(meta.get_type())) {
-      ObTextStringIter str_iter(meta.get_type(), meta.get_collation_type(), str, obj.has_lob_header());
-      if (OB_FAIL(str_iter.init(0, NULL, allocator))) {
-        COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
-      } else if (OB_FAIL(str_iter.get_full_data(str))) {
-        COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
-      }
-    }
-    return ret;
+    return read_real_string_data(allocator, type, CS_TYPE_BINARY, has_lob_header, str, exec_ctx);
   }
 
-  static int read_real_string_data(ObIAllocator *allocator, ObObjType type, ObCollationType cs_type,
-                                   bool has_lob_header, ObString &str)
-  {
-    int ret = OB_SUCCESS;
-    if (is_lob_storage(type)) {
-      ObTextStringIter str_iter(type, cs_type, str, has_lob_header);
-      if (OB_FAIL(str_iter.init(0, NULL, allocator))) {
-        COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
-      } else if (OB_FAIL(str_iter.get_full_data(str))) {
-        COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
-      }
-    }
-    return ret;
-  }
 
   // get outrow lob prefix or inrow/string tc full data
   static int read_prefix_string_data(ObEvalCtx &ctx,
@@ -410,7 +410,12 @@ public:
     return ret;
   }
 
-
+  static int build_text_iter(
+      ObTextStringIter &text_iter,
+      sql::ObExecContext *exec_ctx,
+      const sql::ObBasicSessionInfo *session = NULL,
+      ObIAllocator *res_allocator = NULL,
+      ObIAllocator *tmp_allocator = NULL);
 
 };
 

@@ -324,6 +324,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigLogLevelChecker);
 };
 
+class ObConfigAlertLogLevelChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAlertLogLevelChecker() {}
+  virtual ~ObConfigAlertLogLevelChecker() {};
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAlertLogLevelChecker);
+};
+
 class ObConfigAuditTrailChecker
   : public ObConfigChecker
 {
@@ -786,6 +798,15 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigTableStoreFormatChecker);
 };
 
+class ObConfigArchiveLagTargetChecker {
+public:
+  ObConfigArchiveLagTargetChecker(){}
+  virtual ~ObConfigArchiveLagTargetChecker(){}
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigArchiveLagTargetChecker);
+};
+
 class ObConfigMigrationChooseSourceChecker
   : public ObConfigChecker
 {
@@ -795,15 +816,6 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigMigrationChooseSourceChecker);
-};
-
-class ObConfigArchiveLagTargetChecker {
-public:
-  ObConfigArchiveLagTargetChecker(){}
-  virtual ~ObConfigArchiveLagTargetChecker(){}
-  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObConfigArchiveLagTargetChecker);
 };
 
 typedef __ObConfigContainer<ObConfigStringKey,

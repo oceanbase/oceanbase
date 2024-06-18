@@ -365,6 +365,73 @@ private:
   share::ObBackupDest archive_dest_;
 };
 
+class ObLogRawPathPieceContext
+{
+  class GetFileEndLSN
+  {
+    public:
+    palf::LSN operator()() const {return palf::LSN(palf::LOG_MAX_LSN_VAL);}
+  };
+
+public:
+  ObLogRawPathPieceContext();
+  ~ObLogRawPathPieceContext();
+
+public:
+  int init(const share::ObLSID &id, const DirArray &array);
+  void reset();
+  bool is_valid() const;
+  int deep_copy_to(ObLogRawPathPieceContext &other);
+  int get_cur_uri(char *buf, const int64_t buf_size);
+  int get_cur_storage_info(char *buf, const int64_t buf_size);
+  int get_file_id(int64_t &file_id);
+  int locate_precise_piece(palf::LSN &fetch_lsn);
+  int list_dir_files(const ObString &base,
+    const share::ObBackupStorageInfo *storage_info,
+    int64_t &min_file_id,
+  int64_t &max_file_id);
+  int get_ls_piece_info(const int64_t curr_index, bool &exist);
+  int get_max_lsn(palf::LSN &lsn);
+  bool piece_index_match(const palf::LSN &lsn) const;
+  int cal_lsn_to_file_id(const palf::LSN &lsn);
+  int update_file(const int64_t file_id,
+    const int64_t file_offset,
+    const palf::LSN &lsn);
+  int update_max_lsn(const palf::LSN &lsn);
+  int update_min_lsn(const palf::LSN &lsn);
+  int get_max_archive_log(palf::LSN &lsn, share::SCN &scn);
+
+  TO_STRING_KV(K_(is_inited), K_(id), K_(array), K_(index), K_(file_id),
+      K_(min_file_id), K_(max_file_id), K_(min_lsn), K_(max_lsn), K_(file_offset));
+
+private:
+  int get_max_archive_log_(const ObLogRawPathPieceContext &origin, palf::LSN &lsn, share::SCN &scn);
+  int get_max_log_in_file_(const ObLogRawPathPieceContext &origin,
+    const int64_t file_id,
+    palf::LSN &lsn,
+    share::SCN &scn);
+  int extract_file_base_lsn_(const char *buf,
+    const int64_t buf_size,
+    palf::LSN &base_lsn);
+  int read_part_file_(const int64_t file_id,
+    const int64_t file_offset,
+    char *buf,
+    const int64_t buf_size,
+    int64_t &read_size);
+
+private:
+  bool is_inited_;
+  share::ObLSID id_;
+  DirArray array_;        // piece list
+  int64_t index_;         // current read piece index
+  int64_t file_id_;       // current read file id
+  int64_t min_file_id_;   // min file id in current piece
+  int64_t max_file_id_;   // max file id in current piece
+  palf::LSN min_lsn_;     // min lsn in current piece
+  palf::LSN max_lsn_;     // max lsn in current piece
+  int64_t file_offset_;     // 当前piece已读最大文件内偏移
+};
+
 } // namespace logservice
 } // namespace oceanbase
 #endif /* OCEANBASE_LOGSERVICE_OB_LOG_ARCHIVE_PIECE_MGR_H_ */

@@ -1074,10 +1074,24 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_int(set_v);
         } break;
         case TOTAL_MEMSTORE_READ_ROW_COUNT: {
-          cells[cell_idx].set_int(record.data_.total_memstore_read_row_count_);
+          if (record.data_.sql_len_ > 0) {
+            // qc thread
+            cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_
+                                + record.data_.total_memstore_read_row_count_);
+          } else {
+            // work thread
+            cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_);
+          }
         } break;
         case TOTAL_SSSTORE_READ_ROW_COUNT: {
-          cells[cell_idx].set_int(record.data_.total_ssstore_read_row_count_);
+          if (record.data_.sql_len_ > 0) {
+            // qc thread
+            cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_
+                                  + record.data_.total_ssstore_read_row_count_);
+          } else {
+            // work thread
+            cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_);
+          }
         } break;
         case PROXY_USER_NAME: {
           int64_t len = min(record.data_.proxy_user_name_len_, OB_MAX_USER_NAME_LENGTH);

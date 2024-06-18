@@ -80,6 +80,7 @@ public:
   ~ObSSTableMetaCache() = default;
   void reset();
   int init(const blocksstable::ObSSTableMeta *meta, const bool has_multi_version_row = false);
+  void set_upper_trans_version(const int64_t upper_trans_version);
   bool is_valid() const { return version_ >= SSTABLE_META_CACHE_VERSION; }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
@@ -202,7 +203,9 @@ public:
       storage::ObTableAccessContext &context,
       share::SCN &max_trans_version,
       ObRowsInfo &rows_info);
-  int set_upper_trans_version(const int64_t upper_trans_version, const bool force_update);
+  int set_upper_trans_version(
+      common::ObArenaAllocator &allocator,
+      const int64_t upper_trans_version);
   virtual int64_t get_upper_trans_version() const override
   {
     return meta_cache_.upper_trans_version_;
@@ -273,6 +276,8 @@ public:
   OB_INLINE bool is_valid() const { return valid_for_reading_; }
   OB_INLINE bool is_loaded() const { return nullptr != meta_; }
   int get_meta(ObSSTableMetaHandle &meta_handle, common::ObSafeArenaAllocator *allocator = nullptr) const;
+  // load sstable meta bypass. Lifetime is guaranteed by allocator, which should cover this sstable
+  int bypass_load_meta(common::ObArenaAllocator &allocator);
   int set_status_for_read(const ObSSTableStatus status);
 
   // TODO: get_index_tree_root and get_last_rowkey now required sstable to be loaded

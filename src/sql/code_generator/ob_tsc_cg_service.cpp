@@ -456,7 +456,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       LOG_WARN("generate scan ctdef pushdown filter");
     } else if (pd_filter) {
       ObPushdownFilterConstructor filter_constructor(
-          &cg_.phy_plan_->get_allocator(), cg_,
+          &cg_.phy_plan_->get_allocator(), cg_, &op,
           scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_use_column_store());
       if (OB_FAIL(filter_constructor.apply(
           scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
@@ -470,7 +470,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       LOG_WARN("generate lookup ctdef pushdown filter failed", K(ret));
     } else if (pd_filter) {
       ObPushdownFilterConstructor filter_constructor(
-          &cg_.phy_plan_->get_allocator(), cg_,
+          &cg_.phy_plan_->get_allocator(), cg_, &op,
           lookup_ctdef->pd_expr_spec_.pd_storage_flag_.is_use_column_store());
       if (OB_FAIL(filter_constructor.apply(
           lookup_pushdown_filters, lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
@@ -752,8 +752,8 @@ int ObTscCgService::generate_access_ctdef(const ObLogTableScan &op,
       OZ(access_column_ids.push_back(common::OB_HIDDEN_GROUP_IDX_COLUMN_ID));
     } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
       //TODO EXTERNAL-TABLE
-    } else if (T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type()) {
     } else if (T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type()) {
+    } else if (T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type()) {
     } else {
       ObColumnRefRawExpr* col_expr = static_cast<ObColumnRefRawExpr *>(expr);
       bool is_mapping_vt_table = op.get_real_ref_table_id() != op.get_ref_table_id();
@@ -1081,7 +1081,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   }
   if (OB_SUCC(ret) && !table_schema.is_global_index_table()) {
     TableLocRelInfo *rel_info = nullptr;
-    ObTableID data_table_id = table_schema.is_index_table() ?
+    ObTableID data_table_id = table_schema.is_index_table() && !table_schema.is_rowkey_doc_id() ?
                               table_schema.get_data_table_id() :
                               real_table_id;
     rel_info = cg_.opt_ctx_->get_loc_rel_info_by_id(table_loc_id, data_table_id);

@@ -202,6 +202,7 @@ int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &t
   char *merge_buffer = (char*)DEFAULT_TX_DATA_ALLOCATOR.alloc(total_buffer_size);
   int64_t pos = 0;
   if (OB_ISNULL(merge_buffer)) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "fail to alloc merge buffer", KR(ret), K(total_buffer_size));
   } else {
     char *p_dest = merge_buffer;

@@ -1766,7 +1766,7 @@ int ObStorageOssUtil::del_dir(const common::ObString &uri)
 
 //datetime formate : Tue, 09 Apr 2019 06:24:00 GMT
 //time unit is second
-int ObStorageOssUtil::strtotime(const char *date_time, int64_t &time)
+int ObStorageOssUtil::ob_strtotime(const char *date_time, int64_t &time)
 {
   int ret = OB_SUCCESS;
   time = 0;
@@ -1774,8 +1774,9 @@ int ObStorageOssUtil::strtotime(const char *date_time, int64_t &time)
   memset(&tm_time, 0, sizeof(struct tm));
   if (OB_ISNULL(date_time)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "strtotime get invalid argument", K(ret), KP(date_time));
+    OB_LOG(WARN, "ob_strtotime get invalid argument", K(ret), KP(date_time));
   } else if (OB_ISNULL(strptime(date_time, "%a, %d %b %Y %H:%M:%S %Z", &tm_time))) {
+    // ignore ret
     //skip set ret, for compat data formate
     OB_LOG(WARN, "failed to strptime", K(ret), K(*date_time));
   } else {
@@ -2158,6 +2159,7 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
                   int64_t cur_pos = -1;
                   char *append_pos_str = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
                   if (OB_ISNULL(append_pos_str)) {
+                    // ignore ret
                     OB_LOG(WARN, "after append fail, current append pos is not found", K(ret));
                   } else if (OB_TMP_FAIL(c_str_to_int(append_pos_str, cur_pos))) {
                     OB_LOG(WARN, "after append fail, fail to get append pos",

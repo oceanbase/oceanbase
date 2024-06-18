@@ -157,18 +157,18 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
 {
   int tmp_ret = OB_SUCCESS;
   bool is_restore = false;
-  bool create_meta_dag = false;
+  bool create_dag = false;
   // when restoring, some log stream may be not ready,
   // thus the inner sql in ObTenantFreezeInfoMgr::try_update_info may timeout
   if (!MTL(ObTenantTabletScheduler *)->is_restore()) {
     if (get_tablet_id().is_ls_inner_tablet() ||
         0 == get_merge_info().get_sstable_merge_info().macro_block_count_) {
       // do nothing
-    } else if (OB_TMP_FAIL(try_schedule_meta_merge(tablet_handle, create_meta_dag))) {
+    } else if (OB_TMP_FAIL(try_schedule_adaptive_merge(tablet_handle, create_dag))) {
       LOG_WARN_RET(tmp_ret, "failed to schedule meta merge", K(get_dag_param()));
     }
 
-    if (create_meta_dag || 0 == get_merge_info().get_sstable_merge_info().macro_block_count_) {
+    if (create_dag || 0 == get_merge_info().get_sstable_merge_info().macro_block_count_) {
       // no need to schedule minor merge
     } else if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(
         static_param_.ls_handle_, tablet_handle))) {
@@ -182,62 +182,69 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
   time_guard_click(ObStorageCompactionTimeGuard::SCHEDULE_OTHER_COMPACTION);
 }
 
-int ObTabletMiniMergeCtx::try_schedule_meta_merge(
+int ObTabletMiniMergeCtx::try_schedule_adaptive_merge(
     ObTabletHandle &tablet_handle,
-    bool &create_meta_dag)
+    bool &create_dag)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  create_meta_dag = false;
-
-  bool is_tombstone_scene = info_collector_.tnode_stat_.delete_row_count_ >= compaction::ObAdaptiveMergePolicy::TOMBSTONE_ROW_COUNT_THRESHOLD;
-  bool medium_is_cooling_down = tablet_handle.get_obj()->get_last_major_snapshot_version() / 1000 + 600_s > ObTimeUtility::fast_current_time();
-#ifdef ERRSIM
-  #define SCHEDULE_META_ERRSIM(tracepoint)                    \
-    do {                                                      \
-      if (OB_SUCC(ret)) {                                     \
-        ret = OB_E((EventTable::tracepoint)) OB_SUCCESS;      \
-        if (OB_FAIL(ret)) {                                   \
-          ret = OB_SUCCESS;                                   \
-          STORAGE_LOG(INFO, "ERRSIM " #tracepoint);           \
-          is_tombstone_scene = true;                          \
-          medium_is_cooling_down = true;                      \
-        }                                                     \
-      }                                                       \
-    } while(0);
-  SCHEDULE_META_ERRSIM(EN_COMPACTION_SCHEDULE_META_MERGE);
-  #undef SCHEDULE_META_ERRSIM
-#endif
-
-  // try to schedule meta major merge
-  if (is_tombstone_scene && medium_is_cooling_down) {
-    if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_meta_merge(static_param_.ls_handle_, tablet_handle, create_meta_dag))) {
-      LOG_WARN_RET(tmp_ret, "failed to schedule meta merge for tablet", "param", get_dag_param());
+  const ObLSID &ls_id = get_ls_id();
+  const ObTabletID &tablet_id = get_tablet_id();
+  ObTablet *tablet = tablet_handle.get_obj();
+  bool medium_is_cooling_down = tablet->get_last_major_snapshot_version() + ObAdaptiveMergePolicy::MEDIUM_COOLING_TIME_THRESHOLD_NS > ObTimeUtility::current_time_ns();
+  create_dag = false;
+  ObTableQueuingModeCfg queuing_cfg;
+  (void) try_report_tablet_stat_after_mini(); // try report after mini every time for updating table mode for tablet.
+  if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->get_queuing_cfg(ls_id, tablet_id, queuing_cfg))) {
+    LOG_WARN_RET(tmp_ret, "failed to get table queuing mode, treat it as normal table", K(ls_id), K(tablet_id));
+  }
+  const int64_t adaptive_threshold = ObAdaptiveMergePolicy::TOMBSTONE_ROW_COUNT_THRESHOLD * queuing_cfg.queuing_factor_;
+  const ObTransNodeDMLStat &tnode_stat = info_collector_.tnode_stat_;
+  bool is_tombstone_scene = (tnode_stat.update_row_count_ + tnode_stat.delete_row_count_) >= adaptive_threshold
+                     || tnode_stat.delete_row_count_ > queuing_cfg.total_delete_row_cnt_;
+  if (!is_tombstone_scene && queuing_cfg.is_queuing_mode()) {
+    ObAdaptiveMergePolicy::AdaptiveMergeReason adaptive_merge_reason = ObAdaptiveMergePolicy::NONE;
+    if (OB_TMP_FAIL(ObAdaptiveMergePolicy::get_adaptive_merge_reason(*tablet, adaptive_merge_reason))) {
+      LOG_WARN("failed to get adaptive reason", K(tmp_ret));
+    } else if (ObAdaptiveMergePolicy::NONE != adaptive_merge_reason) {
+      is_tombstone_scene = true;
     }
   }
+#ifdef ERRSIM
+  // ATTENTION !!!: 2 tracepoint can only hit one at once
+  #define SCHEDULE_META_MEDIUM_ERRSIM(tracepoint, cooling_down)              \
+    do {                                                                     \
+      if (OB_SUCC(ret)) {                                                    \
+        ret = OB_E((EventTable::tracepoint)) OB_SUCCESS;                     \
+        if (OB_FAIL(ret)) {                                                  \
+          ret = OB_SUCCESS;                                                  \
+          STORAGE_LOG(INFO, "ERRSIM " #tracepoint);                          \
+          is_tombstone_scene = true;                                         \
+          medium_is_cooling_down = cooling_down;                             \
+        }                                                                    \
+      }                                                                      \
+    } while(0);
+  SCHEDULE_META_MEDIUM_ERRSIM(EN_COMPACTION_SCHEDULE_MEDIUM_MERGE_AFTER_MINI, false /*cooling_down*/);
+  SCHEDULE_META_MEDIUM_ERRSIM(EN_COMPACTION_SCHEDULE_META_MERGE, true /*cooling_down*/);
+  #undef SCHEDULE_META_MEDIUM_ERRSIM
+  STORAGE_LOG(INFO, "try_schedule_adaptive_merge hit errsim", K(ret), K(is_tombstone_scene), K(medium_is_cooling_down));
+#endif
 
-  // deal with tablet stat
-  if (create_meta_dag) {
-    MTL(ObTenantTabletStatMgr *)->clear_tablet_stat(get_ls_id(), get_tablet_id());
-    FLOG_INFO("clear tablet stat", "ls_id", get_ls_id(), "tablet_id", get_tablet_id(), "tnode_stat", info_collector_.tnode_stat_);
-  } else {
-    (void) try_report_tablet_stat_after_mini();
-  }
-
-  // try schedule medium merge
-  if (!medium_is_cooling_down) {
-    bool non_used_schedule_dag_flag = false;
-    ObTabletSchedulePair non_used_schedule_pair;
-    if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
-            *get_ls(),
-            *tablet_handle.get_obj(),
-            non_used_schedule_pair,
-            non_used_schedule_dag_flag))) {
-      if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
-        LOG_WARN_RET(tmp_ret, "failed to schedule tablet medium merge", K(tmp_ret), "param", get_dag_param());
+  if (is_tombstone_scene) {
+    if (ObAdaptiveMergePolicy::is_schedule_medium(queuing_cfg.mode_) && !medium_is_cooling_down) {
+      if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_medium_merge(static_param_.ls_handle_, tablet_id, create_dag))) {
+        LOG_WARN_RET(tmp_ret, "failed to schedule medium merge for tablet after mini", "param",get_dag_param(), K(tablet_id));
+      }
+    } else if (ObAdaptiveMergePolicy::is_schedule_meta(queuing_cfg.mode_)) {
+      // TODO(chengkong): if ls offine or deleted, affect meta compaction?
+      if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_meta_merge(static_param_.ls_handle_, tablet_handle, create_dag))) {
+        LOG_WARN_RET(tmp_ret, "failed to schedule meta merge for tablet", "param", get_dag_param(), K(tablet_id));
       }
     }
   }
+
+  LOG_INFO("[Buffer-Opt] Try to schedule tablet medium/meta after mini", K(tmp_ret), K(ls_id), K(tablet_id), K(is_tombstone_scene),
+                "mode", table_mode_flag_to_str(queuing_cfg.mode_), K(medium_is_cooling_down),  K(tnode_stat), K(create_dag));
   return ret;
 }
 
@@ -255,7 +262,6 @@ int ObTabletMiniMergeCtx::try_report_tablet_stat_after_mini()
     // insufficient data, skip to report
   } else {
     ObTabletStat report_stat;
-    bool report_succ = false;
     report_stat.ls_id_ = get_ls_id().id();
     report_stat.tablet_id_ = get_tablet_id().id();
     report_stat.merge_cnt_ = 1;

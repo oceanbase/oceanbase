@@ -24,22 +24,74 @@ namespace storage
 
 #define true_word_char(ctype, character) ((ctype) & (_MY_U | _MY_L | _MY_NMR) || (character) == '_')
 
-int ObSpaceFTParser::segment(
-    lib::ObFTParserParam *param,
-    const char *ft,
-    const int64_t ft_len)
+ObSpaceFTParser::ObSpaceFTParser()
+  : cs_(nullptr),
+    start_(nullptr),
+    next_(nullptr),
+    end_(nullptr),
+    is_inited_(false)
+{}
+
+ObSpaceFTParser::~ObSpaceFTParser()
+{
+  reset();
+}
+
+void ObSpaceFTParser::reset()
+{
+  cs_ = nullptr;
+  start_ = nullptr;
+  next_ = nullptr;
+  end_ = nullptr;
+  is_inited_ = false;
+}
+
+int ObSpaceFTParser::init(lib::ObFTParserParam *param)
 {
   int ret = OB_SUCCESS;
-  const char *start = ft;
-  const char *next = start;
-  const char *end = start + ft_len;
-  int mbl = 0;
-  if (OB_ISNULL(param) || OB_ISNULL(param->cs_) || OB_ISNULL(ft) || OB_UNLIKELY(0 >= ft_len)) {
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), KPC(param), KPC(this));
+  } else if (OB_ISNULL(param)
+      || OB_ISNULL(param->cs_)
+      || OB_ISNULL(param->fulltext_)
+      || OB_UNLIKELY(0 >= param->ft_length_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KPC(param), KP(ft), K(ft_len));
+    LOG_WARN("invalid arguments", K(ret), KPC(param));
   } else {
-    const ObCharsetInfo *cs = param->cs_;
-    while (OB_SUCC(ret) && next < end) {
+    cs_ = param->cs_;
+    start_ = param->fulltext_;
+    next_ = start_;
+    end_ = start_ + param->ft_length_;
+    is_inited_ = true;
+  }
+  if (OB_FAIL(ret) && OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObSpaceFTParser::get_next_token(
+    const char *&word,
+    int64_t &word_len,
+    int64_t &char_len,
+    int64_t &word_freq)
+{
+  int ret = OB_SUCCESS;
+  int mbl = 0;
+  word = nullptr;
+  word_len = 0;
+  char_len = 0;
+  word_freq = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("space ft parser isn't initialized", K(ret), K(is_inited_));
+  } else {
+    const char *start = start_;
+    const char *next = next_;
+    const char *end = end_;
+    const ObCharsetInfo *cs = cs_;
+    do {
       while (next < end) {
         int ctype;
         mbl = cs->cset->ctype(cs, &ctype, (uchar *)next, (uchar *)end);
@@ -62,34 +114,24 @@ int ObSpaceFTParser::segment(
           ++c_nums;
           next += mbl > 0 ? mbl : (mbl < 0 ? -mbl : 1);
         }
-        if (0 < c_nums && OB_FAIL(add_word(param, start, next - start, c_nums))) {
-          LOG_WARN("fail to add word", K(ret), KPC(param), KP(start), K(next));
+        if (0 < c_nums) {
+          word = start;
+          word_len = next - start;
+          char_len = c_nums;
+          word_freq = 1;
+          start = next;
+          break;
         } else {
           start = next;
         }
       }
+    } while (OB_SUCC(ret) && next < end);
+    if (OB_ITER_END == ret || OB_SUCCESS == ret) {
+      start_ = start;
+      next_ = next;
+      end_ = end;
     }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-  }
-  return ret;
-}
-
-int ObSpaceFTParser::add_word(
-    lib::ObFTParserParam *param,
-    const char *word,
-    const int64_t word_len,
-    const int64_t char_cnt)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(param)
-      || OB_ISNULL(word)
-      || OB_UNLIKELY(0 >= word_len)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KPC(param), KP(word), K(word_len));
-  } else if (OB_FAIL(param->add_word(param, word, word_len, char_cnt))) {
-    LOG_WARN("fail to add word", K(ret), KPC(param), K(char_cnt),  K(ObString(word_len, word)));
+    LOG_DEBUG("next word", K(ObString(word_len, word)), KP(start_), KP(next_), KP(end_));
   }
   return ret;
 }
@@ -111,20 +153,42 @@ int ObWhiteSpaceFTParserDesc::deinit(lib::ObPluginParam *param)
   return OB_SUCCESS;
 }
 
-int ObWhiteSpaceFTParserDesc::segment(lib::ObFTParserParam *param) const
+int ObWhiteSpaceFTParserDesc::segment(
+    lib::ObFTParserParam *param,
+    lib::ObITokenIterator *&iter) const
 {
   int ret = OB_SUCCESS;
+  void *buf = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("default ft parser desc hasn't be initialized", K(ret), K(is_inited_));
   } else if (OB_ISNULL(param) || OB_ISNULL(param->fulltext_) || OB_UNLIKELY(!param->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(param));
-  } else if (OB_FAIL(ObSpaceFTParser::segment(param, param->fulltext_, param->ft_length_))) {
-    LOG_WARN("fail to segment words for fulltext by spaces", K(ret), KPC(param),
-        K(param->fulltext_), K(param->ft_length_));
+  } else if (OB_ISNULL(buf = param->allocator_->alloc(sizeof(ObSpaceFTParser)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate space ft parser", K(ret));
+  } else {
+    ObSpaceFTParser *parser = new (buf) ObSpaceFTParser();
+    if (OB_FAIL(parser->init(param))) {
+      LOG_WARN("fail to init whitespace fulltext parser", K(ret), KPC(param));
+    } else {
+      iter = parser;
+    }
   }
   return ret;
+}
+
+void ObWhiteSpaceFTParserDesc::free_token_iter(
+    lib::ObFTParserParam *param,
+    lib::ObITokenIterator *&iter) const
+{
+  if (OB_NOT_NULL(iter)) {
+    abort_unless(nullptr != param);
+    abort_unless(nullptr != param->allocator_);
+    iter->~ObITokenIterator();
+    param->allocator_->free(iter);
+  }
 }
 
 } // end namespace storage

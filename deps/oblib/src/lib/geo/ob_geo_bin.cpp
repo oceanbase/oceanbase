@@ -119,6 +119,32 @@ double ObWkbGeomInnerPoint::get<1>(ObGeoWkbByteOrder bo/* = ObGeoWkbByteOrder::L
   return ObGeoWkbByteOrderUtil::read<double>(ptr, bo);
 }
 
+double ObWkbGeomInnerPoint::get_x(ObGeoWkbByteOrder bo/* = ObGeoWkbByteOrder::LittleEndian */) const
+{
+  char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeomInnerPoint*>(this));
+  return ObGeoWkbByteOrderUtil::read_double(ptr, bo);
+}
+
+double ObWkbGeomInnerPoint::get_y(ObGeoWkbByteOrder bo/* = ObGeoWkbByteOrder::LittleEndian */) const
+{
+  char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeomInnerPoint*>(this));
+  ptr = ptr +  sizeof(double);
+  return ObGeoWkbByteOrderUtil::read_double(ptr, bo);
+}
+
+double ObWkbGeogInnerPoint::get_x(ObGeoWkbByteOrder bo/* = ObGeoWkbByteOrder::LittleEndian */) const
+{
+  char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeogInnerPoint*>(this));
+  return ObGeoWkbByteOrderUtil::read_double(ptr, bo);
+}
+
+double ObWkbGeogInnerPoint::get_y(ObGeoWkbByteOrder bo/* = ObGeoWkbByteOrder::LittleEndian */) const
+{
+  char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeogInnerPoint*>(this));
+  ptr = ptr +  sizeof(double);
+  return ObGeoWkbByteOrderUtil::read_double(ptr, bo);
+}
+
 template<>
 void ObWkbGeomInnerPoint::set<0>(double d)
 {

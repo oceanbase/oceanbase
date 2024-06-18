@@ -606,7 +606,8 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
             }
           } else if (!table->is_frozen_memtable()) {
             is_memtable_ready = false;
-            if (OB_FAIL(ls->tablet_freeze(tablet_info_.tablet_id_))) {
+            const bool is_sync = false;
+            if (OB_FAIL(ls->tablet_freeze(tablet_info_.tablet_id_, is_sync))) {
               if (OB_EAGAIN == ret) {
                 ret = OB_SUCCESS;
               } else {

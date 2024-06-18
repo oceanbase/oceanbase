@@ -49,7 +49,6 @@ public:
                     const ObExprRegexpSessionVariables &regexp_vars,
                     common::ObIArray<common::ObString> &file_urls,
                     common::ObIAllocator &allocator);
-  static int resolve_storage_type(const ObString &location, common::ObStorageType &device_type);
   common::ObStorageType get_storage_type() { return storage_type_; }
   void close();
 

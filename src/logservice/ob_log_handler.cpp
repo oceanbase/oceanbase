@@ -474,6 +474,12 @@ int ObLogHandler::get_election_leader(common::ObAddr &addr) const
   return palf_handle_.get_election_leader(addr);
 }
 
+int ObLogHandler::get_parent(common::ObAddr &parent) const
+{
+  RLockGuard guard(lock_);
+  return palf_handle_.get_parent(parent);
+}
+
 int ObLogHandler::enable_sync()
 {
   RLockGuard guard(lock_);

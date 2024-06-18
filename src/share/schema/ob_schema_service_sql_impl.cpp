@@ -314,6 +314,7 @@ int ObSchemaServiceSQLImpl::init(
               ObModIds::OB_GEN_SCHEMA_VERSION_MAP, ObModIds::OB_GEN_SCHEMA_VERSION_MAP))) {
   } else {
     if (OB_ISNULL(dblink_proxy)) {
+      // ignore ret
       LOG_WARN("dblink proxy is null");
     }
     mysql_proxy_ = sql_proxy;
@@ -1633,6 +1634,7 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_info(
       const uint64_t table_id = table_ids[i];
       table_schema = ObSchemaRetrieveUtils::find_table_schema(table_id, table_schema_array);
       if (OB_ISNULL(table_schema)) {
+        // ignore ret
         LOG_WARN("fail to find table schema", KR(ret), K(table_id));
         continue; // for compatibility
       } else if (need_column_group(*table_schema)) {
@@ -1644,7 +1646,7 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_info(
         } else {
           // TODO @donglou.zl user table only mock default cg now.
           if (table_schema->get_column_group_count() < 1) {
-            if (table_schema->add_default_column_group()) {
+            if (OB_FAIL(table_schema->add_default_column_group())) {
               LOG_WARN("fail to add default column group", KR(ret), K(tenant_id), K(table_id));
             }
           }
@@ -1856,7 +1858,7 @@ int ObSchemaServiceSQLImpl::fetch_all_constraint_info_ignore_inner_table(
       uint64_t table_id = table_ids[i];
       if (OB_ISNULL(table_schema = ObSchemaRetrieveUtils::find_table_schema(table_id,
                                                                             table_schema_array))) {
-        //ret = OB_ERR_UNEXPECTED;
+        // ignore ret
         LOG_WARN("Failed to find table schema", K(ret), K(table_id));
         // for compatibility
         continue;
@@ -2289,7 +2291,7 @@ int ObSchemaServiceSQLImpl::gen_batch_fetch_array(
       uint64_t table_id = table_ids[i];
       if (OB_ISNULL(table_schema = ObSchemaRetrieveUtils::find_table_schema(
                                    table_id, table_schema_array))) {
-        //ret = OB_ERR_UNEXPECTED;
+        //ignore ret
         LOG_WARN("Failed to find table schema", K(ret), K(table_id));
         // for compatibility
         continue;

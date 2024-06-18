@@ -976,6 +976,14 @@ public:
            (loc->is_valid()) && (loc->is_mem_loc_ == 0);
   }
 
+  OB_INLINE bool is_inrow_disk_lob_locator() const
+  {
+    // Notice: should be called only when ptr_ is not null
+    ObLobCommon *loc = reinterpret_cast<ObLobCommon *>(ptr_);
+    return has_lob_header_ && (loc != nullptr) && (size_ >= sizeof(ObLobCommon)) &&
+           (loc->is_valid()) && (loc->is_mem_loc_ == 0) && (loc->in_row_);
+  }
+
   OB_INLINE bool is_valid(bool is_assert = true) const
   {
     bool bret = true;
@@ -1721,6 +1729,7 @@ public:
 
   OB_INLINE bool get_bool() const { return (0 != v_.int64_); }
   inline int64_t get_ext() const;
+  int get_real_param_count(int64_t &count) const;
   OB_INLINE int64_t get_unknown() const { return v_.unknown_; }
   OB_INLINE uint64_t get_bit() const { return v_.uint64_; }
   OB_INLINE uint64_t get_enum() const { return v_.uint64_; }

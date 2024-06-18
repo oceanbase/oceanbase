@@ -26,6 +26,7 @@ namespace storage
 ObStorageHAMacroBlockWriter::ObStorageHAMacroBlockWriter()
  : is_inited_(false),
    tenant_id_(OB_INVALID_ID),
+   dag_id_(),
    reader_(NULL),
    macro_checker_(),
    index_block_rebuilder_(nullptr)
@@ -34,6 +35,7 @@ ObStorageHAMacroBlockWriter::ObStorageHAMacroBlockWriter()
 
 int ObStorageHAMacroBlockWriter::init(
     const uint64_t tenant_id,
+    const ObDagId &dag_id,
     ObICopyMacroBlockReader *reader,
     ObIndexBlockRebuilder *index_block_rebuilder)
 {
@@ -41,12 +43,16 @@ int ObStorageHAMacroBlockWriter::init(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("writer should not be init twice", K(ret));
-  } else if (OB_ISNULL(reader) || OB_INVALID_ID == tenant_id || OB_ISNULL(index_block_rebuilder)) {
+  } else if (OB_ISNULL(reader)
+            || OB_INVALID_ID == tenant_id
+            || dag_id.is_invalid()
+            || OB_ISNULL(index_block_rebuilder)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("reader should not be null ", K(ret), KP(reader), KP(index_block_rebuilder));
+    LOG_WARN("invalid argument", K(ret), KP(reader), KP(index_block_rebuilder), K(dag_id));
   } else {
     reader_ = reader;
     tenant_id_ = tenant_id;
+    dag_id_.set(dag_id);
     index_block_rebuilder_ = index_block_rebuilder;
     is_inited_ = true;
   }
@@ -117,6 +123,7 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
   int64_t write_count = 0;
   int64_t log_seq_num = 0;
   int64_t data_size = 0;
+  bool is_cancel = false;
   obrpc::ObCopyMacroBlockHeader header;
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_WRITE);
   write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
@@ -131,6 +138,13 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
       if (!GCTX.omt_->has_tenant(tenant_id_)) {
         ret = OB_TENANT_NOT_EXIST;
         STORAGE_LOG(WARN, "tenant not exists, stop migrate", K(ret), K(tenant_id_));
+        break;
+      } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(dag_id_, is_cancel))) {
+        STORAGE_LOG(WARN, "failed to check is task canceled", K(ret), K_(dag_id));
+      } else if (is_cancel){
+        ret = OB_CANCELED;
+        STORAGE_LOG(WARN, "copy task has been canceled, skip remaining macro blocks",
+          K(ret), K_(dag_id), "finished_macro_block_count", copied_ctx.macro_block_list_.count());
         break;
       }
       if (OB_FAIL(dag_yield())) {

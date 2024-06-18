@@ -363,6 +363,7 @@ private:
       const int64_t consumer_group_id,
       const int32_t sub_task_trace_id,
       const obrpc::ObCreateIndexArg *create_index_arg,
+      const share::ObDDLType task_type,
       const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);

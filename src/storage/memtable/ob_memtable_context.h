@@ -182,16 +182,21 @@ public:
     ATOMIC_STORE(&alloc_size_, 0);
     return ret;
   }
-  void reset()
+  void reset(bool only_check = false)
   {
     if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "query allocator leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
+#ifdef ENABLE_DEBUG_LOG
+      ob_abort();
+#endif
     }
-    allocator_.reset();
-    ATOMIC_STORE(&alloc_count_, 0);
-    ATOMIC_STORE(&free_count_, 0);
-    ATOMIC_STORE(&alloc_size_, 0);
-    ATOMIC_STORE(&is_inited_, false);
+    if (!only_check) {
+      allocator_.reset();
+      ATOMIC_STORE(&alloc_count_, 0);
+      ATOMIC_STORE(&free_count_, 0);
+      ATOMIC_STORE(&alloc_size_, 0);
+      ATOMIC_STORE(&is_inited_, false);
+    }
   }
   void *alloc(const int64_t size) override
   {
@@ -269,16 +274,21 @@ public:
     ATOMIC_STORE(&alloc_size_, 0);
     return ret;
   }
-  void reset()
+  void reset(bool only_check = false)
   {
     if (OB_UNLIKELY(free_count_ != alloc_count_)) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
+#ifdef ENABLE_DEBUG_LOG
+      ob_abort();
+#endif
     }
-    allocator_.reset();
-    ATOMIC_STORE(&alloc_count_, 0);
-    ATOMIC_STORE(&free_count_, 0);
-    ATOMIC_STORE(&alloc_size_, 0);
-    ATOMIC_STORE(&is_inited_, false);
+    if (!only_check) {
+      allocator_.reset();
+      ATOMIC_STORE(&alloc_count_, 0);
+      ATOMIC_STORE(&free_count_, 0);
+      ATOMIC_STORE(&alloc_size_, 0);
+      ATOMIC_STORE(&is_inited_, false);
+    }
   }
   void *alloc(const int64_t size) override
   {
@@ -424,8 +434,6 @@ public:
   void add_lock_for_read_elapse(const int64_t elapse) { lock_for_read_elapse_ += elapse; }
   int64_t get_lock_for_read_elapse() const { return lock_for_read_elapse_; }
   bool pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no);
-  void merge_multi_callback_lists_for_changing_leader();
-  void merge_multi_callback_lists_for_immediate_logging();
   void reset_pdml_stat();
   int clean_unlog_callbacks();
   int check_tx_mem_size_overflow(bool &is_overflow);
@@ -465,8 +473,8 @@ public: // callback
   int append_callback(ObITransCallback *cb) { return trans_mgr_.append(cb); }
   int64_t get_pending_log_size() { return trans_mgr_.get_pending_log_size(); }
   int64_t get_flushed_log_size() { return trans_mgr_.get_flushed_log_size(); }
-  int acquire_callback_list(const bool new_epoch, const bool need_merge)
-  { return trans_mgr_.acquire_callback_list(new_epoch, need_merge); }
+  int acquire_callback_list(const bool new_epoch)
+  { return trans_mgr_.acquire_callback_list(new_epoch); }
   void revert_callback_list() { trans_mgr_.revert_callback_list(); }
   void set_for_replay(const bool for_replay) { trans_mgr_.set_for_replay(for_replay); }
   void inc_pending_log_size(const int64_t size) { trans_mgr_.inc_pending_log_size(size); }

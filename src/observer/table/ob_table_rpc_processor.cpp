@@ -394,7 +394,7 @@ int ObTableApiProcessorBase::init_read_trans(const ObTableConsistencyLevel consi
   bool strong_read = ObTableConsistencyLevel::STRONG == consistency_level;
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);
 
-  if (OB_FAIL(txs->acquire_tx(trans_desc_, session().get_sessid(), session().get_data_version()))) {
+  if (OB_FAIL(txs->acquire_tx(trans_desc_, session().get_sessid()))) {
     LOG_WARN("failed to acquire tx desc", K(ret));
   } else if (OB_FAIL(setup_tx_snapshot_(*trans_desc_, tx_snapshot_, strong_read, ls_id, timeout_ts))) {
     LOG_WARN("setup txn snapshot fail", K(ret), KPC_(trans_desc), K(strong_read), K(ls_id), K(timeout_ts));
@@ -485,7 +485,7 @@ int ObTableApiProcessorBase::start_trans_(bool is_readonly,
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("start_trans is executed", K(ret));
     } else {
-      if (OB_FAIL(txs->acquire_tx(trans_desc, session().get_sessid(), session().get_data_version()))) {
+      if (OB_FAIL(txs->acquire_tx(trans_desc, session().get_sessid()))) {
         LOG_WARN("failed to acquire tx desc", K(ret));
       } else if (OB_FAIL(txs->start_tx(*trans_desc, tx_param))) {
         LOG_WARN("failed to start trans", K(ret), KPC(trans_desc));

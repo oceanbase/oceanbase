@@ -136,17 +136,12 @@ int ObRSTCollector::init()
 int ObRSTCollector::collect_query_response_time(uint64_t tenant_id, uint64_t time)
 {
   int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    if (tenant_config->query_response_time_stats) {
-      ObRSTTimeCollector* time_collector;
-      if (OB_FAIL(collector_map_.get_refactored(tenant_id, time_collector))) {
-        SERVER_LOG(WARN, "time collector of the tenant does not exist", K(tenant_id), K(time), K(ret));
-      } else {
-        if(OB_FAIL(time_collector->collect(time))) {
-          SERVER_LOG(WARN, "time collector of the tenant collect time failed", K(tenant_id), K(time), K(ret));
-        }
-      }
+  ObRSTTimeCollector* time_collector;
+  if (OB_FAIL(collector_map_.get_refactored(tenant_id, time_collector))) {
+    SERVER_LOG(WARN, "time collector of the tenant does not exist", K(tenant_id), K(time), K(ret));
+  } else {
+    if(OB_FAIL(time_collector->collect(time))) {
+      SERVER_LOG(WARN, "time collector of the tenant collect time failed", K(tenant_id), K(time), K(ret));
     }
   }
   return ret;

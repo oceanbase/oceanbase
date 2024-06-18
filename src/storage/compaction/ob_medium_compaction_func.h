@@ -89,11 +89,13 @@ public:
     ObCompactionTimeGuard &time_guard);
 
   int schedule_next_medium_for_leader(
-    const int64_t major_snapshot);
+    const int64_t major_snapshot,
+    const bool is_tombstone,
+    bool &medium_clog_submitted);
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 protected:
-  int decide_medium_snapshot();
+  int decide_medium_snapshot(bool &medium_clog_submitted);
   static int get_status_from_inner_table(
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
@@ -163,7 +165,9 @@ protected:
       bool &tablet_need_freeze_flag,
       bool &create_dag_flag);
   int schedule_next_medium_primary_cluster(
-    const int64_t major_snapshot);
+    const int64_t major_snapshot,
+    const bool is_tombstone,
+    bool &medium_clog_submitted);
 
   int choose_new_medium_snapshot(
     const int64_t max_reserved_snapshot,

@@ -235,6 +235,7 @@ void ElectionAcceptor::on_prepare_request(const ElectionPrepareRequestMsg &prepa
     // 0. 收到leader prepare的时候无须比较优先级，直接返回投票结果
     if (prepare_req.get_role() == common::ObRole::LEADER) {
       if (prepare_req.get_ballot_number() <= ballot_number_) {
+        // ignore ret
         LOG_PHASE(WARN, phase, "leader prepare message's ballot number is smaller than self");
       } else {
         advance_ballot_number_and_reset_related_states_(prepare_req.get_ballot_number(), phase);

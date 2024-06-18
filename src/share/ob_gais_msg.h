@@ -96,11 +96,12 @@ public:
            const uint64_t base_value,
            const uint64_t max_value,
            const common::ObAddr &sender,
-           const int64_t &autoinc_version);
+           const int64_t &autoinc_version,
+           const int64_t cache_size);
   bool is_valid() const
   {
     return is_valid_tenant_id(autoinc_key_.tenant_id_) && max_value_ > 0 && base_value_ <= max_value_
-            && sender_.is_valid() && autoinc_version_ >= OB_INVALID_VERSION;
+            && sender_.is_valid() && autoinc_version_ >= OB_INVALID_VERSION && cache_size_ >= 0;
   }
   TO_STRING_KV(K_(autoinc_key), K_(base_value), K_(max_value), K_(sender), K_(autoinc_version),
                K_(cache_size));
@@ -111,6 +112,53 @@ public:
   common::ObAddr sender_;
   int64_t autoinc_version_;
   int64_t cache_size_;
+};
+
+struct ObGAISBroadcastAutoIncCacheReq
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObGAISBroadcastAutoIncCacheReq() : tenant_id_(0), buf_(NULL), buf_size_(0) {}
+
+  int init(const uint64_t tenant_id, const char *buf, const int64_t size)
+  {
+    tenant_id_ = tenant_id;
+    buf_ = buf;
+    buf_size_ = size;
+    return common::OB_SUCCESS;
+  }
+
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && NULL != buf_ && buf_size_ > 0;
+  }
+
+  TO_STRING_KV(K_(tenant_id), KP_(buf), K_(buf_size));
+  uint64_t tenant_id_;
+  const char *buf_;
+  int64_t buf_size_;
+};
+
+/* Request for get next sequence value */
+struct ObGAISNextSequenceValReq
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObGAISNextSequenceValReq() : schema_(), sender_()
+  {}
+  int init(const schema::ObSequenceSchema &schema, const common::ObAddr &sender);
+  int assign(const ObGAISNextSequenceValReq &src_req);
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(schema_.get_tenant_id()) && schema_.get_sequence_id() != OB_INVALID_ID
+           && schema_.get_cache_size() > static_cast<int64_t>(0) && sender_.is_valid();
+  }
+  TO_STRING_KV(K_(schema), K_(sender));
+
+  schema::ObSequenceSchema schema_;
+  common::ObAddr sender_;
 };
 
 } // share

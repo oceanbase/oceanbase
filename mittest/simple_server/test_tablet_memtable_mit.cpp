@@ -47,11 +47,16 @@ public:
 TestRunCtx RunCtx;
 ObLSID      LS_ID;
 ObTabletID  TABLET_ID;
+bool FLUSH_DISABLED;
 
 namespace storage {
 
 int ObDDLKV::flush(ObLSID ls_id)
 {
+  if (FLUSH_DISABLED) {
+    return 0;
+  }
+
   int ret = OB_SUCCESS;
   if (!ready_for_flush()) {
     return OB_ERR_UNEXPECTED;
@@ -174,7 +179,7 @@ void TestTabletMemtable::basic_test() {
   // *********** DO TABLET FREEZE ************
   ObFreezer *freezer = nullptr;
   ASSERT_NE(nullptr, freezer = ls->get_freezer());
-  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID, true /* is_sync */));
+  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID, false /* need_rewrite_meta */, true /* is_sync */, 0));
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, protected_handle->get_active_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_boundary_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, memtable_handle.get_tablet_memtable(memtable));
@@ -191,9 +196,8 @@ void TestTabletMemtable::basic_test() {
   memtable->inc_write_ref();
 
   // *********** CONCURRENT TABLET FREEZE ************
-  ObFuture<int> result;
   int64_t freeze_start_time = ObClockGenerator::getClock();
-  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze_with_rewrite_meta(TABLET_ID, &result));
+  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID, false /*need_rewrite_meta*/, false /*is_sync*/, INT64_MAX));
 
   sleep(2);
   ASSERT_EQ(TabletMemtableFreezeState::ACTIVE, memtable->get_freeze_state());
@@ -201,8 +205,8 @@ void TestTabletMemtable::basic_test() {
 
   // *********** DIRECT LOAD MEMTABLE WRITE FINISH ************
   memtable->dec_write_ref();
-  ASSERT_EQ(OB_SUCCESS, ls->wait_freeze_finished(result));
   STORAGE_LOG(INFO, "write_ref_cnt should be zero", KPC(memtable));
+  sleep(1);
 
   // *********** CHECK FREEZE RESULT ************
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, protected_handle->get_active_memtable(memtable_handle));
@@ -227,7 +231,7 @@ void TestTabletMemtable::basic_test() {
   // *********** CHECK DIRECT LOAD TABLE GUARD UASBLE ************
   ObDDLKV *memtable_for_direct_load = nullptr;
   ASSERT_EQ(OB_SUCCESS, direct_load_guard.prepare_memtable(memtable_for_direct_load));
-  ASSERT_EQ(OB_ERR_UNEXPECTED, direct_load_guard.prepare_memtable(memtable_for_direct_load));
+  ASSERT_NE(nullptr, memtable_for_direct_load);
   ASSERT_EQ(OB_SUCCESS, memtable_for_direct_load->set_rec_scn(fake_ddl_redo_scn));
   ASSERT_EQ(memtable, memtable_for_direct_load);
   ASSERT_EQ(1, memtable_for_direct_load->get_write_ref());
@@ -235,7 +239,7 @@ void TestTabletMemtable::basic_test() {
   ASSERT_EQ(0, memtable_for_direct_load->get_write_ref());
 
   // *********** DO LOGSTREAM FREEZE ************
-  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(true /* is_sync */));
+  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(checkpoint::INVALID_TRACE_ID, true /* is_sync */));
   STORAGE_LOG(INFO, "finish logstream freeze");
 
   // *********** CHECK LOGSTREAM FREEZE RESULT ************
@@ -249,6 +253,7 @@ void TestTabletMemtable::basic_test() {
   STORAGE_LOG(INFO, "finish check logstream freeze result", KPC(memtable));
 
   // *********** WAIT ALL MEMTABLES FLUSH ************
+  FLUSH_DISABLED = false;
   int64_t retry_times = 0;
   while (retry_times <= 10) {
     sleep(1);
@@ -304,6 +309,7 @@ TEST_F(TestTabletMemtable, create_table)
 
 TEST_F(TestTabletMemtable, basic_test)
 {
+  FLUSH_DISABLED = true;
   basic_test();
 }
 

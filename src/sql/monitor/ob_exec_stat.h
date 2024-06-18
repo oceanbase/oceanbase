@@ -145,6 +145,32 @@ struct ObExecRecord
     UPDATE_EVENT(blockscan_row_cnt);
     UPDATE_EVENT(pushdown_storage_filter_row_cnt);
   }
+
+  uint64_t get_cur_memstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
+    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+    uint64_t cur_memstore_read_row_count = 0;
+    if (NULL != diag_session_info) {
+      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
+      cur_memstore_read_row_count = memstore_read_row_count_ +
+                                    (EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT)
+                                    - memstore_read_row_count_start_);
+    }
+    return cur_memstore_read_row_count;
+  }
+
+  uint64_t get_cur_ssstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
+    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+    uint64_t cur_ssstore_read_row_count = 0;
+    if (NULL != diag_session_info) {
+      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
+      cur_ssstore_read_row_count = ssstore_read_row_count_ +
+                                   (EVENT_STAT_GET(arr, ObStatEventIds::SSSTORE_READ_ROW_COUNT)
+                                   - ssstore_read_row_count_start_);
+    }
+    return cur_ssstore_read_row_count;
+  }
 };
 
 enum ExecType {
@@ -416,10 +442,10 @@ struct ObAuditRecordData {
   bool is_perf_event_closed_;
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
   char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
-  uint64_t total_memstore_read_row_count_;
-  uint64_t total_ssstore_read_row_count_;
   ObCurTraceId::TraceId pl_trace_id_;
   int64_t plsql_exec_time_;
+  uint64_t total_memstore_read_row_count_;
+  uint64_t total_ssstore_read_row_count_;
 };
 
 } //namespace sql

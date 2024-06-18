@@ -639,6 +639,7 @@ int ObMvccRow::elr(const ObTransID &tx_id,
     } else {
       ObLockWaitMgr *lwm = NULL;
       if (OB_ISNULL(lwm = MTL(ObLockWaitMgr*))) {
+        ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", K(ret), KPC(this));
       } else {
         lwm->wakeup(tx_id);
@@ -727,6 +728,7 @@ int ObMvccRow::remove_callback(ObMvccRowCallback &cb)
   if (OB_NOT_NULL(node)) {
     node->remove_callback();
     if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
+      ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", K(ret), KPC(this));
     } else {
       auto tx_ctx = cb.get_trans_ctx();
@@ -758,6 +760,7 @@ int ObMvccRow::wakeup_waiter(const ObTabletID &tablet_id,
   int ret = OB_SUCCESS;
   ObLockWaitMgr *lwm = NULL;
   if (OB_ISNULL(lwm = MTL(ObLockWaitMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", K(ret), KPC(this));
   } else {
     lwm->wakeup(tablet_id, key);

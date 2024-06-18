@@ -339,6 +339,23 @@ bool ObDDLTableStoreParam::is_valid() const
     && data_format_version_ >= 0;
 }
 
+UpdateUpperTransParam::UpdateUpperTransParam()
+  : new_upper_trans_(nullptr),
+    last_minor_end_scn_()
+{
+  last_minor_end_scn_.set_min();
+}
+
+UpdateUpperTransParam::~UpdateUpperTransParam()
+{
+  reset();
+}
+
+void UpdateUpperTransParam::reset()
+{
+  new_upper_trans_ = nullptr;
+  last_minor_end_scn_.set_min();
+}
 
 ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const int64_t snapshot_version,
@@ -358,7 +375,33 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_duplicate_sstable_(false),
     need_check_transfer_seq_(false),
     transfer_seq_(-1),
-    merge_type_(MERGE_TYPE_MAX)
+    merge_type_(MERGE_TYPE_MAX),
+    upper_trans_param_()
+{
+  clog_checkpoint_scn_.set_min();
+}
+
+ObUpdateTableStoreParam::ObUpdateTableStoreParam(
+    const int64_t snapshot_version,
+    const int64_t multi_version_start,
+    const ObStorageSchema *storage_schema,
+    const int64_t rebuild_seq,
+    const UpdateUpperTransParam upper_trans_param)
+  : sstable_(nullptr),
+    snapshot_version_(snapshot_version),
+    clog_checkpoint_scn_(),
+    multi_version_start_(multi_version_start),
+    need_report_(false),
+    storage_schema_(storage_schema),
+    rebuild_seq_(rebuild_seq),
+    update_with_major_flag_(false),
+    need_check_sstable_(false),
+    ddl_info_(),
+    allow_duplicate_sstable_(false),
+    need_check_transfer_seq_(false),
+    transfer_seq_(-1),
+    merge_type_(MERGE_TYPE_MAX),
+    upper_trans_param_(upper_trans_param)
 {
   clog_checkpoint_scn_.set_min();
 }
@@ -389,7 +432,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_duplicate_sstable_(allow_duplicate_sstable),
     need_check_transfer_seq_(need_check_transfer_seq),
     transfer_seq_(transfer_seq),
-    merge_type_(merge_type)
+    merge_type_(merge_type),
+    upper_trans_param_()
 {
   clog_checkpoint_scn_ = clog_checkpoint_scn;
 }
@@ -416,7 +460,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_duplicate_sstable_(false),
     need_check_transfer_seq_(false),
     transfer_seq_(-1),
-    merge_type_(merge_type)
+    merge_type_(merge_type),
+    upper_trans_param_()
 {
   clog_checkpoint_scn_.set_min();
 }

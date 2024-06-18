@@ -522,18 +522,10 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
                                                               ObQueryRefRawExpr *query_ref)
 {
   int ret = OB_SUCCESS;
-  TableItem *right_table = NULL;
-  SemiInfo *info = NULL;
-  ObSEArray<ObRawExpr*, 4> semi_conds;
   if (OB_ISNULL(stmt) || OB_ISNULL(subquery) || OB_ISNULL(expr) || OB_ISNULL(ctx_)
       || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(subquery), K(expr));
-  } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_, stmt, subquery, right_table))) {
-    LOG_WARN("failed to add new table_item", K(ret));
-  } else if (OB_ISNULL(right_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("right_table should not be null", K(ret), K(right_table));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), expr))) {
     LOG_WARN("failed to remove condition expr", K(ret));
   } else {
@@ -551,8 +543,12 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
     ObSEArray<ObRawExpr*, 4> right_hand_exprs;
     ObSEArray<ObRawExpr*, 4> candi_semi_conds;
     ObSEArray<ObRawExpr*, 4> column_exprs;
-    ObSEArray<ObRawExpr*, 4> upper_column_exprs;
-    ObRawExprCopier copier(*ctx_->expr_factory_);
+    ObSEArray<TableItem*, 4> right_tables;
+    ObSEArray<ObSEArray<ObRawExpr*, 4>, 4> semi_conds;
+    ObJoinType join_type = UNKNOWN_JOIN;
+    SemiInfoSplitHelper split_helper;
+    bool can_split = false;
+
     if (OB_FAIL(ObTransformUtils::get_correlated_conditions(query_ref->get_exec_params(),
                                                             subquery->get_condition_exprs(),
                                                             candi_semi_conds))) {
@@ -574,51 +570,108 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
                                                     candi_semi_conds))) {
       LOG_WARN("failed to remove condition expr", K(ret));
     } else if (OB_FALSE_IT(subquery->get_select_items().reset())) {
-    } else if (column_exprs.empty()) {
-      if (OB_FAIL(ObTransformUtils::create_dummy_select_item(*subquery, ctx_))) {
-        LOG_WARN("failed to create dummy select item", K(ret));
-      } else if (OB_FAIL(semi_conds.assign(candi_semi_conds))) {
-        LOG_WARN("failed to assign semi conditions", K(ret));
+    } else if (T_OP_EXISTS == expr->get_expr_type() || expr->has_flag(IS_WITH_ANY)) {
+      join_type = LEFT_SEMI_JOIN;
+      // add as LEFT_SEMI/ANTI_JOIN,
+      // RIGHT_SEMI/ANTI_JOIN path is added in ObJoinOrder::generate_join_paths()
+    } else if (T_OP_NOT_EXISTS == expr->get_expr_type() || expr->has_flag(IS_WITH_ALL)) {
+      join_type = LEFT_ANTI_JOIN;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected expr type", K(ret), K(expr->get_expr_type()));
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(check_can_split(subquery, candi_semi_conds, join_type, split_helper))) {
+      LOG_WARN("fail to check can split", K(ret));
+    } else if (!split_helper.can_split_) {
+      TableItem *table_item = NULL;
+      ObSEArray<ObRawExpr*, 4> upper_column_exprs;
+      ObSEArray<ObRawExpr*, 4> final_semi_conds;
+      ObRawExprCopier copier(*ctx_->expr_factory_);
+      if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_, stmt, subquery, table_item))) {
+        LOG_WARN("failed to add new table_item", K(ret));
+      } else if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item should not be null", K(ret));
+      } else if (column_exprs.empty()) {
+        if (OB_FAIL(ObTransformUtils::create_dummy_select_item(*subquery, ctx_))) {
+          LOG_WARN("failed to create dummy select item", K(ret));
+        } else if (OB_FAIL(final_semi_conds.assign(candi_semi_conds))) {
+          LOG_WARN("failed to assign semi conditions", K(ret));
+        }
+      } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, column_exprs,
+                                                              subquery))) {
+        LOG_WARN("failed to create select item", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *table_item, stmt,
+                                                                  upper_column_exprs))) {
+        LOG_WARN("failed to create columns for view", K(ret));
+      } else if (OB_FAIL(copier.add_replaced_expr(column_exprs, upper_column_exprs))) {
+        LOG_WARN("failed to add replace pair", K(ret));
+      } else if (OB_FAIL(copier.copy_on_replace(candi_semi_conds, final_semi_conds))) {
+        LOG_WARN("failed to copy on replace expr", K(ret));
       }
-    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, column_exprs,
-                                                            subquery))) {
-      LOG_WARN("failed to create select item", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *right_table, stmt,
-                                                                 upper_column_exprs))) {
-      LOG_WARN("failed to create columns for view", K(ret));
-    } else if (OB_FAIL(copier.add_replaced_expr(column_exprs, upper_column_exprs))) {
-      LOG_WARN("failed to add replace pair", K(ret));
-    } else if (OB_FAIL(copier.copy_on_replace(candi_semi_conds, semi_conds))) {
-      LOG_WARN("failed to copy on replace expr", K(ret));
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(right_tables.push_back(table_item))) {
+        LOG_WARN("fail to push back table item", K(ret));
+      } else if (OB_FAIL(semi_conds.push_back(final_semi_conds))) {
+        LOG_WARN("fail to push back semi conditions", K(ret));
+      }
+    } else if (OB_FAIL(ObTransformUtils::do_split_cartesian_tables(ctx_, stmt, subquery, candi_semi_conds,
+                                                  split_helper.connected_tables_, right_tables, semi_conds))) {
+      LOG_WARN("fail to split cartesian tables", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_UNLIKELY(right_tables.count() != semi_conds.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unequal tables and semi conds count", K(ret), K(right_tables.count()), K(semi_conds.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < right_tables.count(); ++i) {
+        SemiInfo *info = NULL;
+        TableItem *split_right_table = right_tables.at(i);
+        ObIArray<ObRawExpr*> &split_semi_conditions = semi_conds.at(i);
+        ObSelectStmt *split_subquery = NULL;
+        if (OB_ISNULL(split_right_table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("split right table is NULL", K(ret));
+        } else if (OB_ISNULL(split_subquery = split_right_table->ref_query_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("split ref query is NULL", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::decorrelate(split_semi_conditions, query_ref->get_exec_params()))) {
+          LOG_WARN("failed to decorrelate semi conditions", K(ret));
+        } else if (OB_FAIL(generate_semi_info(stmt, split_right_table, split_semi_conditions, join_type, info))) {
+          LOG_WARN("failed to generate semi info", K(ret));
+        } else if (OB_FAIL(split_subquery->adjust_subquery_list())) {
+          LOG_WARN("failed to adjust subquery list", K(ret));
+        } else if (OB_FAIL(split_subquery->formalize_stmt(ctx_->session_info_))) {
+          LOG_WARN("formalize child stmt failed", K(ret));
+        }
+      }
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObTransformUtils::decorrelate(semi_conds, query_ref->get_exec_params()))) {
-      LOG_WARN("failed to decorrelate semi conditions", K(ret));
-    } else if (OB_FAIL(generate_semi_info(stmt, expr, right_table, semi_conds, info))) {
-      LOG_WARN("failed to generate semi info", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
-      LOG_WARN("formalize child stmt failed", K(ret));
-    }
+  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
 }
 
 // create semi info with a generate table
 int ObWhereSubQueryPullup::generate_semi_info(ObDMLStmt *stmt,
-                                              ObRawExpr *expr,
                                               TableItem *right_table,
                                               ObIArray<ObRawExpr*> &semi_conditions,
+                                              ObJoinType join_type,
                                               SemiInfo *&semi_info)
 {
   int ret = OB_SUCCESS;
   semi_info = NULL;
   SemiInfo *info = NULL;
   ObIAllocator *alloc = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(right_table) ||
+  if (OB_ISNULL(stmt) || OB_ISNULL(right_table) ||
       OB_ISNULL(ctx_) || OB_ISNULL(alloc = ctx_->allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("NULL pointer error", K(stmt), K(expr), K(right_table), K(alloc), K(ret));
+    LOG_WARN("NULL pointer error", K(stmt), K(right_table), K(alloc), K(ret));
   } else if (OB_UNLIKELY(!right_table->is_generated_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected right table type in semi info", K(ret), K(right_table->type_));
@@ -633,15 +686,8 @@ int ObWhereSubQueryPullup::generate_semi_info(ObDMLStmt *stmt,
     LOG_WARN("failed to fill semi left table ids", K(ret));
   } else if (OB_FAIL(stmt->add_semi_info(info))) {
     LOG_WARN("failed to add semi info", K(ret));
-  } else if (T_OP_EXISTS == expr->get_expr_type() || expr->has_flag(IS_WITH_ANY)) {
-    info->join_type_ = LEFT_SEMI_JOIN;
-    // add as LEFT_SEMI/ANTI_JOIN,
-    // RIGHT_SEMI/ANTI_JOIN path is added in ObJoinOrder::generate_join_paths()
-  } else if (T_OP_NOT_EXISTS == expr->get_expr_type() || expr->has_flag(IS_WITH_ALL)) {
-    info->join_type_ = LEFT_ANTI_JOIN;
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expr type", K(ret), K(expr->get_expr_type()));
+    info->join_type_ = join_type;
   }
 
   if (OB_SUCC(ret)) {
@@ -995,10 +1041,13 @@ int ObWhereSubQueryPullup::pullup_non_correlated_subquery_as_view(ObDMLStmt *stm
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory *expr_factory = NULL;
-  TableItem *table_item = NULL;
-  ObSEArray<ObRawExpr *, 4> column_exprs;
+  ObSEArray<ObRawExpr*, 4> right_exprs;
   ObSEArray<ObRawExpr *, 4> new_conditions;
-  SemiInfo *info = NULL;
+  ObSEArray<TableItem*, 4> right_tables;
+  ObSEArray<ObSEArray<ObRawExpr*, 4>, 4> semi_conds;
+  ObJoinType join_type = UNKNOWN_JOIN;
+  SemiInfoSplitHelper split_helper;
+  bool can_split;
   if (OB_ISNULL(stmt) || OB_ISNULL(subquery) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt or subquery, query ctx should not be null",
@@ -1006,26 +1055,81 @@ int ObWhereSubQueryPullup::pullup_non_correlated_subquery_as_view(ObDMLStmt *stm
   } else if (OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx or expr_factory is null", K(ret), K(ctx_), K(expr_factory));
-  } else if (!expr->has_flag(IS_WITH_ANY) && !expr->has_flag(IS_WITH_ALL)) {
+  } else if (expr->has_flag(IS_WITH_ANY)) {
+    join_type = LEFT_SEMI_JOIN;
+    // add as LEFT_SEMI/ANTI_JOIN,
+    // RIGHT_SEMI/ANTI_JOIN path is added in ObJoinOrder::generate_join_paths()
+  } else if (expr->has_flag(IS_WITH_ALL)) {
+    join_type = LEFT_ANTI_JOIN;
+  } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expression is invalid", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_, stmt, subquery, table_item))) {
-    LOG_WARN("failed to add new table_item", K(ret));
-  } else if (OB_ISNULL(table_item)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table_item should not be null", K(ret));
+    LOG_WARN("unexpected expr type", K(ret), K(expr->get_expr_type()));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), expr))) {
     LOG_WARN("failed to remove condition expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *table_item,
-                                                               stmt, column_exprs))) {
-    LOG_WARN("failed to create columns for view", K(ret));
-  } else if (OB_FAIL(generate_conditions(stmt, column_exprs, subquery, expr, new_conditions, new_conditions))) {
-    //首先根据left_hand和subquery的targetlist生成新的条件
+  } else if (OB_FAIL(subquery->get_select_exprs(right_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(generate_conditions(stmt, right_exprs, subquery, expr,
+                                         new_conditions, new_conditions))) {
     LOG_WARN("failed to generate new condition exprs", K(ret));
-  } else if (OB_FAIL(generate_semi_info(stmt, expr, table_item, new_conditions, info))) {
-    LOG_WARN("generate semi info failed", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
-    LOG_WARN("formalize child stmt failed", K(ret));
+  } else if (OB_FAIL(check_can_split(subquery, new_conditions, join_type, split_helper))) {
+    LOG_WARN("fail to check can split", K(ret));
+  } else if (!split_helper.can_split_) {
+    TableItem *table_item = NULL;
+    right_exprs.reuse();
+    new_conditions.reuse();
+    if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_, stmt, subquery, table_item))) {
+      LOG_WARN("failed to add new table_item", K(ret));
+    } else if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_item should not be null", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *table_item,
+                                                               stmt, right_exprs))) {
+      LOG_WARN("failed to create columns for view", K(ret));
+    } else if (OB_FAIL(generate_conditions(stmt, right_exprs, subquery, expr,
+                                           new_conditions, new_conditions))) {
+      LOG_WARN("failed to generate new condition exprs", K(ret));
+    } else if (OB_FAIL(right_tables.push_back(table_item))) {
+      LOG_WARN("fail to push back table item", K(ret));
+    } else if (OB_FAIL(semi_conds.push_back(new_conditions))) {
+      LOG_WARN("fail to push back semi conditions", K(ret));
+    }
+  } else if (OB_FALSE_IT(subquery->get_select_items().reset())) {
+  } else if (OB_FAIL(ObTransformUtils::do_split_cartesian_tables(ctx_, stmt, subquery, new_conditions,
+                                                split_helper.connected_tables_, right_tables, semi_conds))) {
+    LOG_WARN("fail to split cartesian tables", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_UNLIKELY(right_tables.count() != semi_conds.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unequal tables and semi conds count", K(ret), K(right_tables.count()), K(semi_conds.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < right_tables.count(); ++i) {
+      SemiInfo *info = NULL;
+      TableItem *split_right_table = right_tables.at(i);
+      ObIArray<ObRawExpr*> &split_semi_conditions = semi_conds.at(i);
+      ObSelectStmt *split_subquery = NULL;
+      if (OB_ISNULL(split_right_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("split right table is NULL", K(ret));
+      } else if (OB_ISNULL(split_subquery = split_right_table->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("split ref query is NULL", K(ret));
+      } else if (OB_FAIL(generate_semi_info(stmt, split_right_table, split_semi_conditions, join_type, info))) {
+        LOG_WARN("failed to generate semi info", K(ret));
+      } else if (OB_FAIL(split_subquery->adjust_subquery_list())) {
+        LOG_WARN("failed to adjust subquery list", K(ret));
+      } else if (OB_FAIL(split_subquery->formalize_stmt(ctx_->session_info_))) {
+        LOG_WARN("formalize child stmt failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
 }
@@ -1223,7 +1327,8 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
   bool is_valid = true;
   OPT_TRACE("try to pullup single set subquery:", query_ref);
   if (OB_ISNULL(root_expr) || OB_ISNULL(query_ref) ||
-      OB_ISNULL(subquery = query_ref->get_ref_stmt())) {
+      OB_ISNULL(subquery = query_ref->get_ref_stmt()) ||
+      OB_ISNULL(stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subquery is null", K(ret), K(subquery));
   } else if (OB_FAIL(check_hint_allowed_unnest(stmt, *subquery, is_valid))) {
@@ -1231,7 +1336,9 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
   } else if (!is_valid) {
     // do nothing
     OPT_TRACE("hint reject transform");
-  } else if (!subquery->is_spj() || subquery->has_subquery() || subquery->is_values_table_query()) {
+  } else if (!subquery->is_spj() || subquery->has_subquery() ||
+             (subquery->is_values_table_query() &&
+              !ObTransformUtils::is_enable_values_table_rewrite(stmt.get_query_ctx()->optimizer_features_enable_version_))) {
     is_valid = false;
     OPT_TRACE("subquery is not spj or has subquery");
   } else if (OB_FAIL(subquery->get_column_exprs(columns))) {
@@ -1249,6 +1356,7 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
       LOG_WARN("failed to push back const column", K(ret));
     }
   }
+
   //1.检查是否是single set query
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(ObTransformUtils::check_stmt_unique(subquery, ctx_->session_info_,
@@ -1713,6 +1821,84 @@ int ObWhereSubQueryPullup::construct_transform_hint(ObDMLStmt &stmt, void *trans
         hint->set_qb_name(child_qb_name);
       }
     }
+  }
+  return ret;
+}
+
+/**
+ * @brief ObWhereSubQueryPullup::check_can_split
+ * Check whether the semi join can be split.
+ *
+ * Check Rules:
+ *   1. subquery is a spj query;
+ *   2. subquery should not contains having;
+ *   3. subquery should not contains subquery;
+ *   4. join type is SEMI JOIN (ANTI JOIN can be support later).
+ *
+ *  Besides, pre split subquery and check the subquery can be split into
+ *  more than ONE view tables.
+ */
+int ObWhereSubQueryPullup::check_can_split(ObSelectStmt *subquery,
+                                           ObIArray<ObRawExpr*> &semi_conditions,
+                                           ObJoinType join_type,
+                                           SemiInfoSplitHelper &helper)
+{
+  int ret = OB_SUCCESS;
+  bool can_split = true;
+  bool is_contain = false;
+  if (OB_ISNULL(subquery) || OB_ISNULL(subquery->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(subquery));
+  } else if (subquery->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_3
+             || (subquery->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_0
+                 && subquery->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_2)) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, optimizer features version lower than 4.3.2");
+  } else if (join_type != LEFT_SEMI_JOIN) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, not a semi join");
+  } else if (!subquery->is_spj()) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, it is not a spj");
+  } else if (subquery->has_having()) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, contain having");
+  } else if (subquery->has_subquery()) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, contain subquery");
+  } else if (OB_FAIL(ObTransformUtils::check_contain_cannot_duplicate_expr(semi_conditions,
+                                                                           is_contain))) {
+    LOG_WARN("failed to check contain can not duplicate expr", K(ret));
+  } else if (is_contain) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, contain can not duplicate function");
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_function_table(subquery,
+                                                                               is_contain))) {
+    LOG_WARN("failed to check contain correlated function table", K(ret));
+  } else if (is_contain) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, contain correlated function table");
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_json_table(subquery,
+                                                                           is_contain))) {
+    LOG_WARN("failed to check contain correlated json table", K(ret));
+  } else if (is_contain) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, contain correlated json table");
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_lateral_table(subquery,
+                                                                              is_contain))) {
+    LOG_WARN("failed to check contain correlated lateral table", K(ret));
+  } else if (is_contain) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, contain correlated lateral derived table");
+  } else if (OB_FAIL(ObTransformUtils::cartesian_tables_pre_split(subquery,
+                                    semi_conditions, helper.connected_tables_))){
+    LOG_WARN("fail to pre split cartesian tables", K(ret));
+  } else if (helper.connected_tables_.count() <= 1) {
+    can_split = false;
+    OPT_TRACE("can not split cartesian tables, all tables releated");
+  }
+  if (OB_SUCC(ret)) {
+    helper.can_split_ = can_split;
   }
   return ret;
 }

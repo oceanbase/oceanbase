@@ -312,21 +312,9 @@ int ObTextRetrievalMerge::init_query_tokens(const ObDASIRScanCtDef *ir_ctdef, Ob
     } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
       LOG_WARN("failed to create token map", K(ret));
     } else if (OB_FAIL(tokenize_helper.segment(
-        cs_type, search_text_string.ptr(), search_text_string.length(), doc_length, tokens))) {
+        cs_type, search_text_string.ptr(), search_text_string.length(), doc_length, token_map))) {
       LOG_WARN("failed to segment");
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tokens.count(); ++i) {
-        const ObFTWord &token = tokens.at(i);
-        int64_t word_count = 0;
-        if (OB_FAIL(token_map.get_refactored(token, word_count)) && OB_HASH_NOT_EXIST != ret) {
-          LOG_WARN("fail to get ft word", K(ret), K(token));
-        } else {
-          word_count = OB_HASH_NOT_EXIST == ret ? 1 : ++word_count;
-          if (OB_FAIL(token_map.set_refactored(token, word_count, 1/*overwrite*/))) {
-            LOG_WARN("fail to set ft word and count", K(ret), K(token));
-          }
-        }
-      }
       for (hash::ObHashMap<ObFTWord, int64_t>::const_iterator iter = token_map.begin();
           OB_SUCC(ret) && iter != token_map.end();
           ++iter) {

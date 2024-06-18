@@ -48,6 +48,8 @@ namespace storage
 {
 
 ERRSIM_POINT_DEF(EN_TRANSFER_ALLOW_RETRY);
+ERRSIM_POINT_DEF(EN_CHECK_LOG_NEED_REBUILD);
+
 int ObStorageHAUtils::get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader)
 {
   int ret = OB_SUCCESS;
@@ -412,6 +414,7 @@ int ObStorageHAUtils::check_ls_is_leader(
   } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be null", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
     LOG_WARN("failed to get role", K(ret), KP(ls));
@@ -440,6 +443,34 @@ int ObStorageHAUtils::check_tenant_will_be_deleted(
   } else if (ObUnitInfoGetter::is_unit_will_be_deleted_in_observer(unit_status)) {
     is_deleted = true;
     FLOG_INFO("unit wait gc in observer, allow gc", K(tenant->id()), K(unit_status));
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info)
+{
+  int ret = OB_SUCCESS;
+  ObMigrationStatus migration_status;
+  share::ObLSRestoreStatus restore_status;
+  if (!ls_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ls_info));
+  } else if (OB_FAIL(check_server_version(ls_info.version_))) {
+    if (OB_MIGRATE_NOT_COMPATIBLE == ret) {
+      LOG_WARN("this src is not compatible", K(ret), K(ls_info));
+    } else {
+      LOG_WARN("failed to check version", K(ret), K(ls_info));
+    }
+  } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), K(ls_info));
+  } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
+    ret = OB_DATA_SOURCE_NOT_VALID;
+    LOG_WARN("this src is not suitable, migration status check failed", K(ret), K(ls_info));
+  } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_restore_status(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), K(ls_info));
+  } else if (restore_status.is_failed()) {
+    ret = OB_DATA_SOURCE_NOT_EXIST;
+    LOG_WARN("some ls replica restore failed, can not migrate", K(ret), K(ls_info));
   }
   return ret;
 }
@@ -593,6 +624,46 @@ int64_t ObStorageHAUtils::get_rpc_timeout()
     rpc_timeout = std::max(rpc_timeout, tmp_rpc_timeout);
   }
   return rpc_timeout;
+}
+
+int ObStorageHAUtils::check_log_need_rebuild(const uint64_t tenant_id, const share::ObLSID &ls_id, bool &need_rebuild)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  common::ObAddr parent_addr;
+  ObLSHandle ls_handle;
+  bool is_log_sync = false;
+
+  if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument is not valid", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log handler should not be NULL", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls->get_log_handler()->is_in_sync(is_log_sync, need_rebuild))) {
+    LOG_WARN("failed to get is_in_sync", K(ret), K(tenant_id), K(ls_id));
+  }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = EN_CHECK_LOG_NEED_REBUILD ? : OB_SUCCESS;
+    if (OB_TMP_FAIL(tmp_ret)) {
+      need_rebuild = true;
+      SERVER_EVENT_ADD("storage_ha", "check_log_need_rebuild",
+                      "tenant_id", tenant_id,
+                      "ls_id", ls_id.id(),
+                      "result", tmp_ret);
+      DEBUG_SYNC(AFTER_CHECK_LOG_NEED_REBUILD);
+    }
+  }
+#endif
+  return ret;
 }
 
 void ObTransferUtils::set_transfer_module()

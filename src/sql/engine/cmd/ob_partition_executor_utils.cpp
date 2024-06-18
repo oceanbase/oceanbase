@@ -997,7 +997,7 @@ int ObPartitionExecutorUtils::cast_range_expr_to_obj(
           ObObjType fun_expr_type = expr->get_data_type();
           // 对于tablegroup分区语法而言，由于缺乏column type信息，需要校验同列的value的类型是否一致
           if (fun_expr_type_array.count() < j + 1) {
-            if (fun_expr_type_array.push_back(fun_expr_type)) {
+            if (OB_FAIL(fun_expr_type_array.push_back(fun_expr_type))) {
               LOG_WARN("array push back fail", K(ret), K(j), "count", fun_expr_type_array.count());
             }
           } else if (fun_expr_type_array.at(j) == ObMaxType) {
@@ -1015,7 +1015,7 @@ int ObPartitionExecutorUtils::cast_range_expr_to_obj(
               LOG_WARN("array push back fail", K(ret));
             } else {
               if (fun_expr_type_array.count() < j + 1) {
-                if (fun_expr_type_array.push_back(ObMaxType)) {
+                if (OB_FAIL(fun_expr_type_array.push_back(ObMaxType))) {
                   LOG_WARN("array push back fail", K(ret), K(j), "count", fun_expr_type_array.count());
                 }
               }

@@ -418,6 +418,7 @@ public:
   virtual int get_arbitration_member(common::ObMember &arb_member) const;
   virtual int get_prev_member_list(common::ObMemberList &member_list) const;
   virtual int get_children_list(LogLearnerList &children) const;
+  virtual int get_log_sync_children_list(LogLearnerList &children) const;
   virtual int get_config_version(LogConfigVersion &config_version) const;
   // @brief get replica_num of expected paxos member list, excluding arbitraion member,
   // and including degraded members.
@@ -500,7 +501,7 @@ public:
   int handle_register_parent_req(const LogLearner &child, const bool is_to_leader);
   int handle_retire_parent(const LogLearner &child);
   int handle_learner_keepalive_resp(const LogLearner &child);
-  int check_children_health();
+  void check_children_health();
   // ==================== Parent ========================
   int64_t to_string(char* buf, const int64_t buf_len) const
   {
@@ -779,6 +780,9 @@ private:
   // ==================== Parent ========================
   mutable common::ObSpinLock child_lock_;
   LogLearnerList children_;
+  // cached children_ for pushing logs
+  // log_sync_children_ = children_ - migrating learners - learners not in learnerlist_
+  LogLearnerList log_sync_children_;
   int64_t last_submit_keepalive_time_us_;
   // ==================== Parent ========================
   LogEngine *log_engine_;

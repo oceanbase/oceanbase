@@ -155,6 +155,13 @@ public:
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &compacted_sstable_handle);
 
+  static int update_storage_schema(
+      ObTablet &tablet,
+      const ObTabletDDLParam &ddl_param,
+      common::ObArenaAllocator &allocator,
+      ObStorageSchema *&storage_schema,
+      const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs);
+
   static int report_ddl_checksum(const share::ObLSID &ls_id,
                                  const ObTabletID &tablet_id,
                                  const uint64_t table_id,

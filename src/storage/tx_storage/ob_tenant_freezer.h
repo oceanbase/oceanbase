@@ -210,6 +210,8 @@ public:
                          int64_t &pos);
   // if major freeze is failed and need retry, set the major freeze into at retry_major_info_.
   const ObRetryMajorInfo &get_retry_major_info() const { return retry_major_info_; }
+  void record_freeze_failed_tablet(const ObTabletID &tablet_id);
+  void erase_freeze_failed_tablet(const ObTabletID &tablet_id);
   void set_retry_major_info(const ObRetryMajorInfo &retry_major_info)
   {
     retry_major_info_ = retry_major_info;
@@ -238,10 +240,7 @@ private:
                            int64_t &last_check_timestamp,
                            bool &is_out_of_mem,
                            const bool from_user = true);
-  static int ls_freeze_(ObLS *ls,
-                        const bool is_sync = true,
-                        const bool need_rewrite_tablet_meta = true,
-                        const int64_t abs_timeout_ts = INT64_MAX);
+  static int ls_freeze_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts);
   static int ls_freeze_all_unit_(ObLS *ls,
                                  const int64_t abs_timeout_ts = INT64_MAX);
   static int tablet_freeze_(ObLS *ls,

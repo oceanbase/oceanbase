@@ -90,7 +90,7 @@ void MockObTxCtx::init(const uint64_t tenant_id,
   tenant_id_ = tenant_id;
 
   // mock trans ctx end
-  cluster_version_ = CLUSTER_VERSION_4_0_0_0;
+  cluster_version_ = CLUSTER_VERSION_4_3_0_0;
   timer_ = NULL;
   // trans part ctx
   ls_id_ = ls_id;
@@ -138,6 +138,7 @@ void MockTxEnv::start_tx(const ObTransID &tx_id,
 {
   my_ctx.tx_desc_.tx_id_ = tx_id;
   my_ctx.tx_desc_.state_ = ObTxDesc::State::ACTIVE;
+  my_ctx.tx_desc_.seq_base_ = ObTimeUtility::current_time();
   my_ctx.tx_ctx_.ctx_tx_data_.test_tx_data_reset();
   my_ctx.tx_ctx_.ctx_tx_data_.test_set_tx_id(tx_id);
   my_ctx.tx_ctx_.init(tenant_id_,

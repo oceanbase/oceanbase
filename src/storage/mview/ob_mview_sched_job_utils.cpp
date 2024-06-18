@@ -14,6 +14,7 @@
 
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 #include "storage/ob_common_id_utils.h"
 #include "lib/ob_errno.h"
@@ -366,9 +367,15 @@ int ObMViewSchedJobUtils::calc_date_expression(
     CREATE_WITH_TEMP_CONTEXT(ctx_param) {
       ObIAllocator &tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
       SMART_VAR(ObSQLSessionInfo, session) {
-        if (OB_FAIL(session.init(1, 1, &tmp_allocator))) {
+        ObDBMSSchedJobExecutor executor;
+        if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_)) {
+          ret = OB_INVALID_ERROR;
+          LOG_WARN("null ptr", K(ret), K(GCTX.sql_proxy_), K(GCTX.schema_service_));
+        } else if (OB_FAIL(executor.init(GCTX.sql_proxy_,GCTX.schema_service_))) {
+          LOG_WARN("fail to init dbms sched job executor", K(ret));
+        } else if (OB_FAIL(session.init(1, 1, &tmp_allocator))) {
           LOG_WARN("failed to init session", KR(ret));
-        } else if (OB_FAIL(ObDBMSSchedJobUtils::init_env(job_info, session))) {
+        } else if (OB_FAIL(executor.init_env(job_info, session))) {
           LOG_WARN("failed to init env", KR(ret), K(job_info));
         } else {
           bool is_oracle_mode = lib::is_oracle_mode();

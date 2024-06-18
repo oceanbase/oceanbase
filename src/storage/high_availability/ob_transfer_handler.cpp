@@ -1153,6 +1153,7 @@ int ObTransferHandler::wait_tablet_write_end_(
     // table lock operation end
     ObTransID failed_tx_id;
     bool has_active_memtable = false;
+    const bool is_sync = true;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ls->get_lock_table()->enable_check_tablet_status(true))) {
       LOG_WARN("failed to enable check tablet status", KR(ret), K(task_info));
@@ -1160,7 +1161,7 @@ int ObTransferHandler::wait_tablet_write_end_(
       LOG_WARN("failed to wait tx_write end", KR(ret), K(task_info));
     } else if (OB_FAIL(ls->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
       LOG_WARN("failed to submit tx log", KR(ret), K(task_info));
-    } else if (OB_FAIL(ls->batch_tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_list, true))) {
+    } else if (OB_FAIL(ls->tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_list, is_sync))) {
       LOG_WARN("batch tablet freeze failed", KR(ret), KPC(ls), K(task_info));
     } else if (OB_FAIL(ls->check_tablet_no_active_memtable(tablet_list, has_active_memtable))) {
       LOG_WARN("check tablet has active memtable failed", KR(ret), KPC(ls), K(task_info));

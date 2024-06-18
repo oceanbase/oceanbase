@@ -16,6 +16,8 @@
 #include "rootserver/ob_ls_service_helper.h" //ObTenantLSInfo
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/balance/ob_balance_job_table_operator.h" //ObBalanceJob
+#include "share/balance/ob_balance_task_table_operator.h" //ObBalanceTaskArray
+#include "share/balance/ob_balance_task_helper_operator.h" //ObBalanceTaskHelper
 #include "share/location_cache/ob_location_service.h"
 #include "share/ls/ob_ls_operator.h" //ObLSAttrOperator
 #include "share/ob_global_stat_proxy.h" //ObGlobalStatProxy
@@ -37,7 +39,10 @@ static const char* conflict_case_with_clone_strs[] = {
   "MODIFY_LS",
   "MODIFY_REPLICA",
   "MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS",
-  "DELAY_DROP_TENANT"
+  "DELAY_DROP_TENANT",
+  "STANDBY_UPGRADE",
+  "STANDBY_TRANSFER",
+  "STANDBY_MODIFY_LS"
 };
 
 const char* ObConflictCaseWithClone::get_case_name_str() const
@@ -326,17 +331,6 @@ int ObTenantSnapshotUtil::check_source_tenant_info(const uint64_t tenant_id,
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("tenant data version is below 4.3", KR(ret), K(tenant_id), K(compatibility_satisfied));
     if (OB_TMP_FAIL(print_str.assign_fmt("source tenant data version is below 4.3, %s", get_op_print_str(op)))) {
-      LOG_WARN("assign failed", KR(tmp_ret), K(get_op_print_str(op)));
-    } else {
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, print_str.ptr());
-    }
-  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_,
-                     false/*for_update*/, all_tenant_info))) {
-    LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
-  } else if (!all_tenant_info.is_primary()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("tenant is not primary tenant", KR(ret), K(tenant_id));
-    if (OB_TMP_FAIL(print_str.assign_fmt("source tenant is not primary tenant, %s", get_op_print_str(op)))) {
       LOG_WARN("assign failed", KR(tmp_ret), K(get_op_print_str(op)));
     } else {
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, print_str.ptr());
@@ -949,6 +943,7 @@ int ObTenantSnapshotUtil::check_and_get_data_version(const uint64_t tenant_id,
   uint64_t target_data_version = 0;
   uint64_t compatible_version = 0;
   ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::UPGRADE);
+  ObAllTenantInfo all_tenant_info;
   if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
@@ -959,16 +954,26 @@ int ObTenantSnapshotUtil::check_and_get_data_version(const uint64_t tenant_id,
     LOG_WARN("fail to get current data version", KR(ret), K(tenant_id));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compatible_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(check_tenant_is_in_upgrading_procedure_(tenant_id, target_data_version))) {
-    LOG_WARN("fail to check or tenant is in upgrading procedure", KR(ret), K(tenant_id));
-  } else if (current_data_version != compatible_version
-             || current_data_version != target_data_version) {
+  } else if (current_data_version != compatible_version) {
     ret = OB_CONFLICT_WITH_CLONE;
     LOG_WARN("source tenant is in upgrading procedure, can not do clone", KR(ret), K(tenant_id),
-              K(current_data_version), K(target_data_version), K(compatible_version));
+             K(current_data_version), K(compatible_version));
     LOG_USER_ERROR(OB_CONFLICT_WITH_CLONE, tenant_id, case_to_check.get_case_name_str(), CLONE_PROCEDURE_STR);
-  } else {
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                         tenant_id, GCTX.sql_proxy_, false/*for_update*/, all_tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
+  } else if (all_tenant_info.is_standby()) {
     data_version = current_data_version;
+  } else if (all_tenant_info.is_primary()) {
+    if (OB_FAIL(check_tenant_is_in_upgrading_procedure_(tenant_id, target_data_version))) {
+      LOG_WARN("fail to check or tenant is in upgrading procedure", KR(ret), K(tenant_id));
+    } else {
+      data_version = current_data_version;
+    }
+  } else {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not clone tenant with source tenant neither primary nor standby",
+             KR(ret), K(tenant_id), K(all_tenant_info));
   }
   return ret;
 }
@@ -1081,13 +1086,8 @@ int ObTenantSnapshotUtil::check_tenant_in_cloning_procedure_in_trans_(
   int ret = OB_SUCCESS;
   is_tenant_in_cloning = true;
   common::ObMySQLTransaction trans;
-  int64_t user_tenant_id = OB_INVALID_TENANT_ID;
   int64_t meta_tenant_id = OB_INVALID_TENANT_ID;
-  ObTenantSnapshotTableOperator tenant_snapshot_table_operator;
-  ObTenantSnapItem tenant_snapshot_item;
-  bool lock_line = true;
   bool tenant_snapshot_table_exist = false;
-
   // is_tenant_in_cloning = false if one of conditions below is satisfied
   //   (1) tenant is not up to version 4.3, __all_tenant_snapshot not exists, clone is not supported
   //   (2) line with snapshot_id = 0 in __all_tenant_snapshot not exists
@@ -1104,14 +1104,45 @@ int ObTenantSnapshotUtil::check_tenant_in_cloning_procedure_in_trans_(
     is_tenant_in_cloning = false;
     LOG_INFO("tenant snapshot table not exists, tenant is not cloning", K(tenant_id));
   } else {
-    user_tenant_id = gen_user_tenant_id(tenant_id);
     meta_tenant_id = gen_meta_tenant_id(tenant_id);
     if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret));
     } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
       LOG_WARN("failed to start trans", KR(ret), K(tenant_id), K(meta_tenant_id));
-    } else if (OB_FAIL(tenant_snapshot_table_operator.init(user_tenant_id, &trans))) {
+    } else if (OB_FAIL(inner_check_tenant_in_cloning_procedure_in_trans_(
+                           trans, tenant_id, is_tenant_in_cloning))) {
+      LOG_WARN("fail to inner check tenant in cloning procedure", KR(ret), K(tenant_id));
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", KR(tmp_ret), KR(ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantSnapshotUtil::inner_check_tenant_in_cloning_procedure_in_trans_(
+    common::ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    bool &is_tenant_in_cloning)
+{
+  int ret = OB_SUCCESS;
+  is_tenant_in_cloning = true;
+  int64_t user_tenant_id = OB_INVALID_TENANT_ID;
+  ObTenantSnapshotTableOperator tenant_snapshot_table_operator;
+  ObTenantSnapItem tenant_snapshot_item;
+  bool lock_line = true;
+
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else {
+    user_tenant_id = gen_user_tenant_id(tenant_id);
+    if (OB_FAIL(tenant_snapshot_table_operator.init(user_tenant_id, &trans))) {
       LOG_WARN("fail to init tenant snapshot table operator", KR(ret), K(tenant_id), K(user_tenant_id));
     // 1. lock __all_tenant_snapshot where snapshot_id = 0
     } else if (OB_FAIL(tenant_snapshot_table_operator.get_tenant_snap_item(
@@ -1134,15 +1165,8 @@ int ObTenantSnapshotUtil::check_tenant_in_cloning_procedure_in_trans_(
       // good, there is no ls snapshot exists for this tenant
       is_tenant_in_cloning = false;
       LOG_TRACE("snapshot with GLOBAL_STATE_ID is in NORMAL status,"
-               " tenant is not in cloning procedure", K(tenant_id), K(user_tenant_id), K(meta_tenant_id),
+               " tenant is not in cloning procedure", K(tenant_id), K(user_tenant_id),
                K(tenant_snapshot_item));
-    }
-    if (trans.is_started()) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", KR(tmp_ret), KR(ret));
-        ret = OB_SUCC(ret) ? tmp_ret : ret;
-      }
     }
   }
   return ret;
@@ -1231,6 +1255,85 @@ int ObTenantSnapshotUtil::check_snapshot_table_exists_(
   return ret;
 }
 
+int ObTenantSnapshotUtil::cancel_existed_clone_job_if_need(
+    const uint64_t tenant_id,
+    const ObConflictCaseWithClone &case_to_check)
+{
+  int ret = OB_SUCCESS;
+  bool clone_already_finish = false; // not used
+  uint64_t meta_tenant_id = OB_INVALID_TENANT_ID;
+  bool is_cloning = false;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))
+      || OB_UNLIKELY(!case_to_check.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(case_to_check));
+  } else {
+    common::ObMySQLTransaction trans;
+    meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
+      LOG_WARN("failed to start trans", KR(ret), K(tenant_id), K(meta_tenant_id));
+    } else if (OB_FAIL(check_standby_tenant_not_in_cloning_procedure(trans, tenant_id, is_cloning))) {
+      LOG_WARN("fail to check standby tenant whether in cloning procedure", KR(ret), K(tenant_id));
+    } else if (is_cloning) {
+      ObCancelCloneJobReason reason;
+      if (OB_FAIL(reason.init_by_conflict_case(case_to_check))) {
+        LOG_WARN("fail to inti cancel reason by conflict case", KR(ret), K(case_to_check));
+      } else if (OB_FAIL(ObTenantCloneUtil::cancel_clone_job_by_source_tenant_id(
+                             *GCTX.sql_proxy_, tenant_id, reason, clone_already_finish))) {
+        LOG_WARN("fail to cancel clone job by source tenant id", KR(ret), K(tenant_id), K(reason));
+      }
+    } else {
+      // This function will cancel existed clone job
+      // If no clone job exists, there is no need to cancel, just do nothing
+      LOG_TRACE("there is no clone job to cancel", K(tenant_id));
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", KR(tmp_ret), KR(ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantSnapshotUtil::check_standby_tenant_not_in_cloning_procedure(
+    common::ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    bool &is_cloning)
+{
+  int ret = OB_SUCCESS;
+  is_cloning = false;
+  bool is_compatible = false;
+  int64_t check_begin_time = ObTimeUtility::current_time();
+  LOG_TRACE("start to check whether standby tenant is in cloning procedure", K(tenant_id));
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    is_cloning = false;
+    LOG_TRACE("sys and meta tenant can not in cloning procedure", K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_clone_standby_tenant(
+                         tenant_id, is_compatible))) {
+    LOG_WARN("fail to check compatible version for clone standby tenant", KR(ret), K(tenant_id));
+  } else if (!is_compatible) {
+    // tenant can not be in cloning procedure, do nothing
+    is_cloning = false;
+    LOG_TRACE("standby tenant not in 432 version, can not in clonine procedure", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(inner_check_tenant_in_cloning_procedure_in_trans_(
+                         trans, tenant_id, is_cloning))) {
+    LOG_WARN("fail to inner check tenant in cloning procedure", KR(ret), K(tenant_id));
+  }
+  int64_t cost = ObTimeUtility::current_time() - check_begin_time;
+  LOG_TRACE("finish check whether standby tenant is in cloning procedure", KR(ret), K(tenant_id),
+            K(is_cloning), K(cost));
+  return ret;
+}
+
 int ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(
     const uint64_t tenant_id,
     const ObConflictCaseWithClone &case_to_check)
@@ -1267,35 +1370,183 @@ int ObTenantSnapshotUtil::check_tenant_has_no_conflict_tasks(
   int ret = OB_SUCCESS;
   int64_t check_begin_time = ObTimeUtility::current_time();
   uint64_t data_version = 0;
+  ObAllTenantInfo all_tenant_info;
+  bool is_compatible_to_clone = false;
   LOG_INFO("begin to check whether tenant has conflict tasks", K(tenant_id));
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("sys or meta tenant can not in clone procedure, clone not allowed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant_with_tenant_role(
+                         tenant_id, is_compatible_to_clone))) {
+    LOG_WARN("fail to check tenant compatible with clone tenant", KR(ret), K(tenant_id));
+  } else if (!is_compatible_to_clone) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can not clone tenant with tenant role not expected", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_is_in_dropping_procedure_(tenant_id))) {
     LOG_WARN("fail to check tenant in dropping procedure", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(check_tenant_is_in_upgrading_procedure_(tenant_id, data_version))) {
-    LOG_WARN("fail to check tenant in upgrading procedure", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(check_tenant_is_in_transfer_procedure_(tenant_id))) {
-    LOG_WARN("fail to check tenant in transfer procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_is_in_modify_resource_pool_procedure_(tenant_id))) {
     LOG_WARN("fail to check tenant in modify resource pool  procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_is_in_modify_unit_procedure_(tenant_id))) {
     LOG_WARN("fail to check tenant in modify unit procedure", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(check_tenant_is_in_modify_ls_procedure_(tenant_id))) {
-    LOG_WARN("fail to check tenant in modify ls procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_is_in_modify_replica_procedure_(tenant_id))) {
     LOG_WARN("fail to check tenant in modify replica procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_is_in_switchover_procedure_(tenant_id))) {
     LOG_WARN("fail to check tenant in switchover procedure", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_,
+                     false/*for_update*/, all_tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
+  } else if (all_tenant_info.is_primary()) {
+    if (OB_FAIL(check_tenant_is_in_upgrading_procedure_(tenant_id, data_version))) {
+      LOG_WARN("fail to check tenant in upgrading procedure", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(check_tenant_is_in_transfer_procedure_(tenant_id))) {
+      LOG_WARN("fail to check tenant in transfer procedure", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(check_tenant_is_in_modify_ls_procedure_(tenant_id))) {
+      LOG_WARN("fail to check tenant in modify ls procedure", KR(ret), K(tenant_id));
+    }
+    //TODO@jingyu.cr: need to consider these cases:
+    //   (1) conflict check for arbitration service status
+  } else if (all_tenant_info.is_standby()) {
+    if (OB_FAIL(check_standby_tenant_has_no_conflict_tasks_(tenant_id))) {
+      LOG_WARN("fail to check conflict tasks for standby tenant", KR(ret), K(tenant_id));
+    }
+  } else {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not clone tenant with source tenant neither primary nor standby",
+             KR(ret), K(tenant_id), K(all_tenant_info));
   }
-  //TODO@jingyu.cr: need to consider these cases:
-  //   (1) conflict check for arbitration service status
   int64_t cost = ObTimeUtility::current_time() - check_begin_time;
   LOG_INFO("finish check whether tenant has conflict tasks", KR(ret),
            K(tenant_id), K(check_begin_time), K(cost));
+  return ret;
+}
+
+int ObTenantSnapshotUtil::check_standby_tenant_has_no_conflict_tasks_(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSRecoveryStatOperator recovery_op;
+  ObLSRecoveryStat ls_recovery_stat;
+  ObMySQLTransaction trans;
+  // for standby tenant, we try to make positive check for upgrade/transfer/ls-modify
+  // upgrade operation will be double checked just before finish creating snapshot
+  // in function ObTenantSnapshotScheduler::check_data_version_before_finish_snapshot_creation_
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
+    LOG_WARN("failed to start trans", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(recovery_op.get_ls_recovery_stat(
+                         tenant_id, SYS_LS, true/* for update */, ls_recovery_stat, trans))) {
+    LOG_WARN("failed to get SYS ls recovery stat", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_standby_tenant_is_in_transfer_procedure_(tenant_id))) {
+    LOG_WARN("fail to check standby tenant whether in transfer or modify ls procedure", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_standby_tenant_is_in_modify_ls_procedure_(tenant_id))) {
+    LOG_WARN("fail to check standby tenant whether in modify ls procedure", KR(ret), K(tenant_id));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", KR(tmp_ret), KR(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
+int ObTenantSnapshotUtil::check_standby_tenant_is_in_modify_ls_procedure_(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t check_begin_time = ObTimeUtility::current_time();
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::STANDBY_MODIFY_LS);
+  LOG_INFO("begin to check whether standby tenant is in modify_ls procedure", K(tenant_id));
+
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else {
+    share::ObLSStatusOperator ls_status_operator;
+    common::ObArray<share::ObLSStatusInfo> ls_status_info_array;
+    if (OB_FAIL(ls_status_operator.get_all_ls_status_by_order(tenant_id, ls_status_info_array, *GCTX.sql_proxy_))) {
+      LOG_WARN("fail to get all ls status", KR(ret), K(tenant_id));
+    } else if (ls_status_info_array.count() <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls_status_info_array has no member", KR(ret), K(ls_status_info_array));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ls_status_info_array.count(); ++i) {
+        share::ObLSStatusInfo &ls_status_info = ls_status_info_array.at(i);
+        if (!ls_status_info.is_valid()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", KR(ret), K(ls_status_info));
+        } else if (ls_status_info.ls_is_creating()
+                   || ls_status_info.ls_is_created()
+                   || ls_status_info.ls_is_create_abort()) {
+          ret = OB_CONFLICT_WITH_CLONE;
+          LOG_WARN("ls not in normal status, conflict with clone procedure", KR(ret), K(ls_status_info));
+          LOG_USER_ERROR(OB_CONFLICT_WITH_CLONE, tenant_id, case_to_check.get_case_name_str(), CLONE_PROCEDURE_STR);
+        } else {
+          LOG_TRACE("ls status not conflict with clone procedure", KR(ret), K(ls_status_info));
+        }
+      }
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - check_begin_time;
+  LOG_INFO("finish check whether standby tenant is in modify ls procedure",
+           KR(ret), K(tenant_id), K(check_begin_time), K(cost));
+  return ret;
+}
+
+int ObTenantSnapshotUtil::check_standby_tenant_is_in_transfer_procedure_(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t check_begin_time = ObTimeUtility::current_time();
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::STANDBY_TRANSFER);
+  ObBalanceTaskArray balance_tasks;
+  ObArray<ObBalanceTaskHelper> ls_balance_tasks;
+  SCN max_scn;
+  max_scn.set_max();
+  LOG_INFO("begin to check whether standby tenant is in transfer procedure", K(tenant_id));
+
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(ObBalanceTaskTableOperator::load_task(tenant_id, balance_tasks, *GCTX.sql_proxy_))) {
+    LOG_WARN("failed to load task from __all_balance_task", KR(ret), K(tenant_id));
+  } else if (0 != balance_tasks.count()) {
+    ret = OB_CONFLICT_WITH_CLONE;
+    LOG_WARN("balance task is running, can not clone standby tenant", KR(ret), K(tenant_id), K(balance_tasks));
+    LOG_USER_ERROR(OB_CONFLICT_WITH_CLONE, tenant_id, case_to_check.get_case_name_str(), CLONE_PROCEDURE_STR);
+  } else if (OB_FAIL(ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(
+                         tenant_id, *GCTX.sql_proxy_, max_scn, ls_balance_tasks))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // good, no transfer task exists
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to load task from __all_balance_task_helper", KR(ret), K(tenant_id));
+    }
+  } else {
+    // load_tasks_order_by_scn return OB_SUCCESS means task array not empty
+    ret = OB_CONFLICT_WITH_CLONE;
+    LOG_WARN("balance task in task_helper is running, can not clone standby tenant",
+             KR(ret), K(tenant_id), K(ls_balance_tasks));
+    LOG_USER_ERROR(OB_CONFLICT_WITH_CLONE, tenant_id, case_to_check.get_case_name_str(), CLONE_PROCEDURE_STR);
+  }
+  int64_t cost = ObTimeUtility::current_time() - check_begin_time;
+  LOG_INFO("finish check whether standby tenant is in transfer procedure",
+           KR(ret), K(tenant_id), K(check_begin_time), K(cost));
   return ret;
 }
 
@@ -1617,11 +1868,15 @@ int ObTenantSnapshotUtil::check_tenant_is_in_switchover_procedure_(
                          true/*for_update*/,
                          tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
-  } else if (!tenant_info.is_primary() || !tenant_info.is_normal_status()) {
+  } else if (!tenant_info.is_normal_status()) {
     ret = OB_CONFLICT_WITH_CLONE;
-    LOG_WARN("tenant is not PRIMARY or NORMAL, create snapshot or clone tenant not allowed",
+    LOG_WARN("tenant is not NORMAL, create snapshot or clone tenant not allowed",
              KR(ret), K(tenant_id), K(tenant_info));
     LOG_USER_ERROR(OB_CONFLICT_WITH_CLONE, tenant_id, case_to_check.get_case_name_str(), CLONE_PROCEDURE_STR);
+  } else if (!tenant_info.is_standby() && !tenant_info.is_primary()) {
+    ret = OB_CONFLICT_WITH_CLONE;
+    LOG_WARN("tenant is not PRIMARY or STANDBY, create snapshot or clone tenant not allowed",
+             KR(ret), K(tenant_id), K(tenant_info));
   }
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -1866,6 +2121,46 @@ int ObTenantSnapshotUtil::inner_lock_line_for_all_tenant_table_(
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObTenantSnapshotUtil::check_current_and_target_data_version(
+    const uint64_t tenant_id,
+    uint64_t &data_version)
+{
+  int ret = OB_SUCCESS;
+  data_version = 0;
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::UPGRADE);
+  uint64_t data_version_in_tenant_param_table = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else {
+    ObGlobalStatProxy proxy(*GCTX.sql_proxy_, tenant_id);
+    uint64_t target_data_version = 0;
+    uint64_t current_data_version = 0;
+    if (OB_FAIL(proxy.get_target_data_version(false/*for_update*/, target_data_version))) {
+      LOG_WARN("fail to get target data version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(proxy.get_current_data_version(current_data_version))) {
+      LOG_WARN("fail to get current data version", KR(ret), K(tenant_id));
+    } else if (target_data_version != current_data_version) {
+      ret = OB_CONFLICT_WITH_CLONE;
+      LOG_WARN("source tenant is in upgrading procedure, can not do clone", KR(ret),
+               K(tenant_id), K(current_data_version), K(target_data_version));
+    } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(
+                         *GCTX.sql_proxy_, tenant_id, data_version_in_tenant_param_table))) {
+      LOG_WARN("fail to fetch current data version from tenant parameter table", KR(ret), K(tenant_id));
+    } else if (data_version_in_tenant_param_table != current_data_version) {
+      ret = OB_CONFLICT_WITH_CLONE;
+      LOG_WARN("source tenant is in upgrading procedure, can not do clone", KR(ret),
+               K(tenant_id), K(current_data_version), K(data_version_in_tenant_param_table));
+    } else {
+      data_version = current_data_version;
     }
   }
   return ret;

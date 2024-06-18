@@ -18,6 +18,7 @@
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_store_trans.h"
+#include "observer/table_load/ob_table_load_store_trans_px_writer.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
@@ -69,14 +70,15 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
   } else {
     LOG_INFO("store abort");
     // 1. mark status abort, speed up background task exit
-    if (OB_FAIL(ctx->store_ctx_->set_status_abort())) {
-      LOG_WARN("fail to set store status abort", KR(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = ctx->store_ctx_->set_status_abort())) {
+      LOG_WARN("fail to set store status abort", KR(tmp_ret));
     }
     // 2. disable heart beat check
     ctx->store_ctx_->set_enable_heart_beat_check(false);
     // 3. mark all active trans abort
-    if (OB_FAIL(abort_active_trans(ctx))) {
-      LOG_WARN("fail to abort active trans", KR(ret));
+    if (OB_SUCCESS != (tmp_ret = abort_active_trans(ctx))) {
+      LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
     ctx->store_ctx_->insert_table_ctx_->cancel();
     ctx->store_ctx_->merger_->stop();
@@ -231,7 +233,7 @@ public:
             LOG_WARN("fail to check status", KR(ret));
           } else if (OB_FAIL(tablet_ctx->open())) {
             LOG_WARN("fail to open tablet context", KR(ret), K(tablet_id));
-            if (ret == OB_EAGAIN) {
+            if (ret == OB_EAGAIN || ret == OB_MINOR_FREEZE_NOT_ALLOW) {
               LOG_WARN("retry to open tablet context", K(tablet_id));
               ret = OB_SUCCESS;
             }
@@ -1055,36 +1057,17 @@ int ObTableLoadStore::px_finish_trans(const ObTableLoadTransId &trans_id)
   return ret;
 }
 
-int ObTableLoadStore::px_check_for_write(const ObTabletID &tablet_id)
+int ObTableLoadStore::px_get_trans_writer(const ObTableLoadTransId &trans_id,
+                                          ObTableLoadStoreTransPXWriter &writer)
 {
   int ret = OB_SUCCESS;
+  writer.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
-  } else {
-    bool is_exist = false;
-    for (int64_t i = 0; i < store_ctx_->ls_partition_ids_.count(); ++i) {
-      const ObTableLoadLSIdAndPartitionId &ls_part_id = store_ctx_->ls_partition_ids_.at(i);
-      if (ls_part_id.part_tablet_id_.tablet_id_ == tablet_id) {
-        is_exist = true;
-        break;
-      }
-    }
-    if (OB_UNLIKELY(!is_exist)) {
-      ret = OB_NOT_MASTER;
-      LOG_WARN("not partition master", KR(ret), K(tablet_id), K(store_ctx_->ls_partition_ids_));
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadStore::px_write(const ObTableLoadTransId &trans_id,
-    const ObTabletID &tablet_id, const ObIArray<ObNewRow> &row_array)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!trans_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(trans_id));
   } else {
     ObTableLoadStoreTrans *trans = nullptr;
     ObTableLoadTransStoreWriter *store_writer = nullptr;
@@ -1095,16 +1078,8 @@ int ObTableLoadStore::px_write(const ObTableLoadTransId &trans_id,
       LOG_WARN("unexpected trans id", KR(ret), K(trans_id), KPC(trans));
     } else if (OB_FAIL(trans->get_store_writer(store_writer))) {
       LOG_WARN("fail to get store writer", KR(ret));
-    } else {
-      if (OB_SUCC(trans->check_trans_status(ObTableLoadTransStatusType::RUNNING)) ||
-          OB_SUCC(trans->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
-        int32_t session_id = 1; // in px mode, each trans contains only 1 session
-        if (OB_FAIL(store_writer->write(session_id, tablet_id, row_array))) {
-          LOG_WARN("fail to write store", KR(ret));
-        } else {
-          LOG_DEBUG("succeed to write store", K(trans_id), K(tablet_id));
-        }
-      }
+    } else if (OB_FAIL(writer.init(store_ctx_, trans, store_writer))) {
+      LOG_WARN("fail to init writer", KR(ret));
     }
     if (OB_NOT_NULL(trans)) {
       if (OB_NOT_NULL(store_writer)) {

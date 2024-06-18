@@ -435,7 +435,9 @@ OB_INLINE int ObTxCtxLogOperator<T>::operator()(const ObTxLogOpType op_type)
     if (OB_FAIL(prepare_special_resource_())) {
       TRANS_LOG(WARN, "prepare special resource failed", K(ret), K(T::LOG_TYPE), KPC(this));
     } else if (OB_FAIL(prepare_generic_resource_())) {
-      TRANS_LOG(WARN, "prepare generic resource failed", K(ret), K(T::LOG_TYPE), KPC(this));
+      if (OB_TX_NOLOGCB != ret) {
+        TRANS_LOG(WARN, "prepare generic resource failed", K(ret), K(T::LOG_TYPE), KPC(this));
+      }
     } else if (OB_FAIL(construct_log_object_())) {
       TRANS_LOG(WARN, "construct log object failed", K(ret), K(T::LOG_TYPE), KPC(this));
     } else if (OB_FAIL(insert_into_log_block_())) {
@@ -560,7 +562,7 @@ OB_INLINE void ObTxCtxLogOperator<ObTxDirectLoadIncLog>::after_submit_log_succ_(
     log_op_arg_.submit_arg_.log_cb_->set_ddl_batch_key(construct_arg_->batch_key_);
     log_op_arg_.submit_arg_.log_cb_->get_extra_cb()->__set_scn(scn_);
   }
-  TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> after submit log succ", K(ret), KPC(this));
+  TRANS_LOG(DEBUG, "<ObTxDirectLoadIncLog> after submit log succ", K(ret), KPC(this));
 }
 
 template <>
@@ -590,7 +592,7 @@ OB_INLINE int ObTxCtxLogOperator<ObTxDirectLoadIncLog>::log_sync_succ_()
     TRANS_LOG(WARN, "invoke the on_success of a extra_cb_ failed", K(ret),
               KPC(log_op_arg_.submit_arg_.log_cb_));
   } else {
-    TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> sync log succ", K(ret), KPC(this));
+    TRANS_LOG(DEBUG, "<ObTxDirectLoadIncLog> sync log succ", K(ret), KPC(this));
   }
 
   return ret;
@@ -618,16 +620,16 @@ OB_INLINE int ObTxCtxLogOperator<ObTxDirectLoadIncLog>::log_sync_fail_()
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (ddl_log_type == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_START) {
-      if (OB_FAIL(
-              tx_ctx_->exec_info_.dli_batch_set_.sync_ddl_start_fail(construct_arg_->batch_key_))) {
+      if (OB_FAIL(tx_ctx_->exec_info_.dli_batch_set_.sync_ddl_start_fail(
+              log_op_arg_.submit_arg_.log_cb_->get_batch_key()))) {
         TRANS_LOG(WARN, "update ddl_start key after log_sync_fail failed", K(ret),
-                  KPC(construct_arg_), K(scn_), KPC(tx_ctx_));
+                  KPC(log_op_arg_.submit_arg_.log_cb_), K(scn_), KPC(tx_ctx_));
       }
     } else if (ddl_log_type == ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_END) {
-      if (OB_FAIL(
-              tx_ctx_->exec_info_.dli_batch_set_.sync_ddl_end_fail(construct_arg_->batch_key_))) {
+      if (OB_FAIL(tx_ctx_->exec_info_.dli_batch_set_.sync_ddl_end_fail(
+              log_op_arg_.submit_arg_.log_cb_->get_batch_key()))) {
         TRANS_LOG(WARN, "update ddl_end key after log_sync_fail failed", K(ret),
-                  KPC(construct_arg_), K(scn_), KPC(tx_ctx_));
+                  KPC(log_op_arg_.submit_arg_.log_cb_), K(scn_), KPC(tx_ctx_));
       }
     }
     TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> sync log fail", K(ret), KPC(this));
@@ -691,9 +693,10 @@ OB_INLINE int ObTxCtxLogOperator<ObTxDirectLoadIncLog>::replay_out_ctx_()
     }
   }
 
-  TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> replay out ctx", K(ret), KPC(this), K(log_object_ptr_),
-            K(log_op_arg_.replay_arg_));
-
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> replay out ctx", K(ret), KPC(this), K(log_object_ptr_),
+              K(log_op_arg_.replay_arg_));
+  }
   return ret;
 }
 
@@ -703,7 +706,7 @@ OB_INLINE int ObTxCtxLogOperator<ObTxDirectLoadIncLog>::replay_fail_out_ctx_()
   int ret = OB_SUCCESS;
   // TODO direct_load_inc
   // replay data into ddl kv?
-  TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> replay fail out ctx", K(ret));
+  TRANS_LOG(DEBUG, "<ObTxDirectLoadIncLog> replay fail out ctx", K(ret));
 
   return ret;
 }
@@ -767,8 +770,10 @@ OB_INLINE int ObTxCtxLogOperator<ObTxDirectLoadIncLog>::replay_in_ctx_()
     }
   }
 
-  TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> replay in ctx", K(ret), KPC(this), K(log_object_ptr_),
-            K(log_op_arg_.replay_arg_));
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> replay in ctx", K(ret), KPC(this), K(log_object_ptr_),
+              K(log_op_arg_.replay_arg_));
+  }
   return ret;
 }
 

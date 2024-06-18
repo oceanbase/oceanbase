@@ -68,6 +68,7 @@ class ObIRawExprCopier;
 class ObSelectStmt;
 class ObRTDatumArith;
 class ObLogicalOperator;
+class ObInListInfo;
 extern ObRawExpr *USELESS_POINTER;
 
 // If is_stack_overflow is true, the printing will not continue
@@ -449,7 +450,10 @@ public:
       SQL_RESV_LOG(WARN, "negative bitmap member not allowed", K(ret), K(index));
     } else {
       int64_t pos = index >> PER_BITSETWORD_MOD_BITS;
-      if (OB_UNLIKELY(pos >= desc_.cap_)) {
+      if (OB_UNLIKELY(pos + 1 > INT16_MAX)) {
+        ret = OB_SIZE_OVERFLOW;
+        SQL_RESV_LOG(WARN, "ObSqlBitSet pos overflow", K(ret), K(index), K(pos));
+      } else if (OB_UNLIKELY(pos >= desc_.cap_)) {
         int64_t new_word_cnt = pos * 2;
         if (OB_FAIL(alloc_new_buf(new_word_cnt))) {
           SQL_RESV_LOG(WARN, "failed to alloc new buf", K(ret));
@@ -1602,6 +1606,7 @@ class ObPseudoColumnRawExpr;
 class ObOpRawExpr;
 class ObWinFunRawExpr;
 class ObUserVarIdentRawExpr;
+class ObDMLResolver;
 struct ObUDFInfo;
 class ObMatchFunRawExpr;
 template <typename ExprFactoryT>
@@ -1630,6 +1635,7 @@ struct ObResolveContext
     udf_info_(NULL),
     op_exprs_(NULL),
     user_var_exprs_(nullptr),
+    inlist_infos_(NULL),
     is_extract_param_type_(true),
     param_list_(NULL),
     prepare_param_count_(0),
@@ -1647,9 +1653,10 @@ struct ObResolveContext
     view_ref_id_(OB_INVALID_ID),
     is_variable_allowed_(true),
     is_expanding_view_(false),
+    is_need_print_(false),
+    is_from_show_resolver_(false),
     is_in_system_view_(false),
-    match_exprs_(NULL),
-    is_from_show_resolver_(false)
+    match_exprs_(NULL)
   {
   }
 
@@ -1670,6 +1677,7 @@ struct ObResolveContext
   common::ObIArray<ObUDFInfo> *udf_info_;
   common::ObIArray<ObOpRawExpr*> *op_exprs_;
   common::ObIArray<ObUserVarIdentRawExpr*> *user_var_exprs_;
+  common::ObIArray<ObInListInfo> *inlist_infos_;
   //由于单测expr resolver中包含一些带？的表达式case，
   //所以为expr resolver ctx增添一个配置变量isextract_param_type
   //如果配置该参数为true，那么遇到？将为其填上真实的参数类型，
@@ -1696,9 +1704,10 @@ struct ObResolveContext
   uint64_t view_ref_id_;
   bool is_variable_allowed_;
   bool is_expanding_view_;
+  bool is_need_print_;
+  bool is_from_show_resolver_;
   bool is_in_system_view_;
   common::ObIArray<ObMatchFunRawExpr*> *match_exprs_;
-  bool is_from_show_resolver_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;
@@ -1955,6 +1964,7 @@ public:
   bool is_deterministic() const { return is_deterministic_; }
   bool is_bool_expr() const;
   bool is_spatial_expr() const;
+  bool is_oracle_spatial_expr() const;
   bool is_json_domain_expr() const;
   ObRawExpr* get_json_domain_param_expr();
   bool is_geo_expr() const;
@@ -2073,7 +2083,7 @@ inline void ObRawExpr::unset_result_flag(uint32_t result_flag)
 inline int ObRawExpr::add_relation_id(int64_t rel_idx)
 {
   int ret = common::OB_SUCCESS;
-  if (rel_idx < 0) {
+  if (OB_UNLIKELY(rel_idx < 0)) {
     ret = common::OB_INVALID_ARGUMENT;
   } else {
     ret = rel_ids_.add_member(rel_idx);
@@ -4716,8 +4726,8 @@ public:
   bool is_cte_query_type() const { return T_CTE_SEARCH_COLUMN == type_ || T_CTE_CYCLE_COLUMN == type_; }
   void set_cte_cycle_value(ObRawExpr *v, ObRawExpr *d_v) {cte_cycle_value_ = v; cte_cycle_default_value_ = d_v; };
   void get_cte_cycle_value(ObRawExpr *&v, ObRawExpr *&d_v) {v = cte_cycle_value_; d_v = cte_cycle_default_value_; };
-  void set_table_id(int64_t table_id) { table_id_ = table_id; }
-  int64_t get_table_id() const { return table_id_; }
+  void set_table_id(uint64_t table_id) { table_id_ = table_id; }
+  uint64_t get_table_id() const { return table_id_; }
   void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
   const common::ObString & get_table_name() const { return table_name_; }
 
@@ -4730,7 +4740,7 @@ public:
 private:
   ObRawExpr *cte_cycle_value_;
   ObRawExpr *cte_cycle_default_value_;
-  int64_t table_id_;
+  uint64_t table_id_;
   common::ObString table_name_;
   DISALLOW_COPY_AND_ASSIGN(ObPseudoColumnRawExpr);
 };

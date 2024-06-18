@@ -202,8 +202,19 @@ int ObPxTaskProcess::process()
     }
 
     if (enable_sql_audit) {
+      if (OB_ISNULL(arg_.sqc_task_ptr_)){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the sqc task ptr is null", K(ret));
+      } else {
+        arg_.sqc_task_ptr_->set_memstore_read_row_count(exec_record.get_memstore_read_row_count());
+        arg_.sqc_task_ptr_->set_ssstore_read_row_count(exec_record.get_ssstore_read_row_count());
+      }
+    }
+
+    if (enable_sql_audit) {
       ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
       if ( OB_ISNULL(phy_plan)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(ret), K(phy_plan));
       } else {
         audit_record.try_cnt_++;
@@ -231,6 +242,8 @@ int ObPxTaskProcess::process()
         audit_record.is_hit_plan_cache_ = true;
         audit_record.is_multi_stmt_ = false;
         audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
+        audit_record.total_memstore_read_row_count_ = exec_record.get_memstore_read_row_count();
+        audit_record.total_ssstore_read_row_count_ = exec_record.get_ssstore_read_row_count();
       }
     }
     ObSQLUtils::handle_audit_record(false, EXECUTE_DIST, *session);

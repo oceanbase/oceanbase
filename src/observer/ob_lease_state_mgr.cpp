@@ -135,8 +135,8 @@ int ObLeaseStateMgr::register_self()
     }
 
     LOG_INFO("start_heartbeat anyway");
-    // ignore ret overwrite
     if (OB_FAIL(start_heartbeat())) {
+      // overwrite ret
       LOG_ERROR("start_heartbeat failed", K(ret));
     }
   }
@@ -288,6 +288,7 @@ int ObLeaseStateMgr::renew_lease()
     }
     const bool repeat = false;
     if (OB_FAIL(hb_timer_.schedule(hb_, DELAY_TIME, repeat))) {
+      // overwrite ret
       LOG_WARN("schedule failed", LITERAL_K(DELAY_TIME), K(repeat), K(ret));
     }
   }

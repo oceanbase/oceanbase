@@ -187,6 +187,8 @@ int ObDDLTaskQueue::add_task_to_last(ObDDLTask *task)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
     LOG_WARN("ObDDLTaskQueue has not been inited", K(ret));
+  } else if (has_set_stop()) { /* skip, task queue is stopped, not add*/
+    LOG_INFO("queue is stop, skip add task", K(ret), KPC(task));
   } else if (OB_ISNULL(task)) {
     ret = common::OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(task));
@@ -885,7 +887,7 @@ void ObDDLScheduler::run1()
     lib::set_thread_name("DDLTaskExecutor");
     THIS_WORKER.set_worker_level(1);
     THIS_WORKER.set_curr_request_level(1);
-    while (true) {
+    while (!has_set_stop()) {
       const bool stop = task_queue_.has_set_stop();
       bool do_idle = false;
       if (OB_FAIL(task_queue_.get_next_task(task))) {
@@ -984,6 +986,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
     switch (param.type_) {
       case DDL_CREATE_INDEX:
       case DDL_CREATE_MLOG:
+      case DDL_CREATE_PARTITIONED_LOCAL_INDEX:
         create_index_arg = static_cast<const obrpc::ObCreateIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_build_index_task(proxy,
                                             param.type_,
@@ -994,6 +997,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                             param.consumer_group_id_,
                                             param.sub_task_trace_id_,
                                             create_index_arg,
+                                            param.type_,
                                             param.tenant_data_version_,
                                             *param.allocator_,
                                             task_record))) {
@@ -1527,6 +1531,7 @@ int ObDDLScheduler::create_build_index_task(
     const int64_t consumer_group_id,
     const int32_t sub_task_trace_id,
     const obrpc::ObCreateIndexArg *create_index_arg,
+    const share::ObDDLType task_type,
     const uint64_t tenant_data_version,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
@@ -1553,6 +1558,7 @@ int ObDDLScheduler::create_build_index_task(
                                       consumer_group_id,
                                       sub_task_trace_id,
                                       *create_index_arg,
+                                      task_type,
                                       parent_task_id,
                                       tenant_data_version))) {
       LOG_WARN("init global index task failed", K(ret), K(data_table_schema), K(index_schema));
@@ -2147,6 +2153,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
     switch (record.ddl_type_) {
       case ObDDLType::DDL_CREATE_INDEX:
       case ObDDLType::DDL_CREATE_MLOG:
+      case ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX:
         ret = schedule_build_index_task(record);
         break;
       case ObDDLType::DDL_DROP_INDEX:
@@ -2699,7 +2706,7 @@ int ObDDLScheduler::on_column_checksum_calc_reply(
     LOG_WARN("invalid argument", K(ret), K(task_key), K(tablet_id), K(ret_code));
   } else if (OB_FAIL(task_queue_.modify_task(task_key, [&tablet_id, &ret_code](ObDDLTask &task) -> int {
         int ret = OB_SUCCESS;
-        if (OB_UNLIKELY(ObDDLType::DDL_CREATE_INDEX != task.get_task_type())) {
+        if (OB_UNLIKELY(!is_create_index(task.get_task_type()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ddl task type not global index", K(ret), K(task));
         } else if (OB_FAIL(DDL_SIM(task.get_tenant_id(), task.get_task_id(), ON_COLUMN_CHECKSUM_REPLY_FAILED))) {
@@ -2753,6 +2760,7 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
         const int64_t task_type = task.get_task_type();
         switch (task_type) {
           case ObDDLType::DDL_CREATE_INDEX:
+          case ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX:
             if (OB_FAIL(static_cast<ObIndexBuildTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status failed", K(ret));
             }

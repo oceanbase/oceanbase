@@ -1390,8 +1390,11 @@ int ObIndexMicroBlockCache::load_block(
       char *raw_idx_block_buf = nullptr;
       if (OB_FAIL(ObBlockManager::read_block(macro_read_info, macro_handle))) {
         LOG_WARN("Fail to sync read block", K(ret), K(macro_read_info));
-      } else if (FALSE_IT(raw_idx_block_buf = const_cast<char *>(block_data.get_buf()))) {
-      } else if (OB_FAIL(idx_transformer.transform(block_data, block_data, *allocator, transform_buf))) {
+      }
+      // the reason why block_data.get_buf() can be released by this allocator directly is that the
+      // memory is deep coiped in ObSyncSingleMicroBLockIOCallback. Maybe we should deep copy the memory in any case.
+      raw_idx_block_buf = const_cast<char *>(block_data.get_buf());
+      if (FAILEDx(idx_transformer.transform(block_data, block_data, *allocator, transform_buf))) {
         LOG_WARN("Fail to transform index block to memory format", K(ret));
       } else {
         EVENT_INC(ObStatEventIds::IO_READ_PREFETCH_MICRO_COUNT);

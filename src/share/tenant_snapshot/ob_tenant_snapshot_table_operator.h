@@ -335,6 +335,7 @@ class ObTenantSnapshotTableOperator
 public:
   ObTenantSnapshotTableOperator();
   int init(const uint64_t user_tenant_id, ObISQLClient *proxy);
+  bool is_inited() const { return is_inited_; }
 
 public:
   ObTenantSnapStatus str_to_tenant_snap_status(const ObString &status_str);

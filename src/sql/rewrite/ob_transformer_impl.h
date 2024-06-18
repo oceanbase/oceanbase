@@ -61,7 +61,8 @@ public:
   int transform_heuristic_rule(ObDMLStmt *&stmt);
   int transform_rule_set(ObDMLStmt *&stmt,
                          uint64_t needed_types,
-                         int64_t iteration_count);
+                         int64_t iteration_count,
+                         bool &trans_happened);
   int transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
                                           uint64_t needed_types,
                                           bool &trans_happened);
@@ -175,6 +176,15 @@ private:
                         TRANSFORM_TYPE type,
                         const char *rule_name,
                         bool &trans_happened);
+
+  int transform_random_order(ObDMLStmt *&stmt,
+                             ObQueryCtx *query_ctx,
+                             uint64_t need_types,
+                             int iter_count);
+
+  static int get_random_order_array(uint64_t need_types,
+                                    ObQueryCtx *query_ctx,
+                                    ObArray<uint64_t> &need_types_array);
 
 private:
   ObTransformerCtx *ctx_;

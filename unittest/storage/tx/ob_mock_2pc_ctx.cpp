@@ -437,6 +437,11 @@ bool MockOb2pcCtx::is_sub2pc() const
   return false;
 }
 
+bool MockOb2pcCtx::is_dup_tx() const
+{
+  return false;
+}
+
 int MockOb2pcCtx::merge_intermediate_participants()
 {
   int ret = OB_SUCCESS;

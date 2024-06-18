@@ -162,14 +162,13 @@ class ObPlanDirective
 public:
   ObPlanDirective() :
       tenant_id_(common::OB_INVALID_ID),
-      mgmt_p1_(100),
-      utilization_limit_(100),
+      mgmt_p1_(1),
+      utilization_limit_(1),
       min_iops_(0),
       max_iops_(100),
       weight_iops_(0),
       group_id_(),
-      group_name_(),
-      level_(1)
+      group_name_()
   {}
   ~ObPlanDirective() = default;
 public:
@@ -226,18 +225,16 @@ public:
                K_(min_iops),
                K_(max_iops),
                K_(weight_iops),
-               K_(group_id),
-               K_(level));
+               K_(group_id));
 public:
   uint64_t tenant_id_;
-  int64_t mgmt_p1_;
-  int64_t utilization_limit_;
+  double mgmt_p1_;
+  double utilization_limit_;
   uint64_t min_iops_;
   uint64_t max_iops_;
   uint64_t weight_iops_;
   uint64_t group_id_;
   share::ObGroupName group_name_;
-  int level_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanDirective);
 };

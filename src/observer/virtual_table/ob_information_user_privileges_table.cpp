@@ -166,6 +166,7 @@ int ObInfoSchemaUserPrivilegesTable::get_user_infos(const uint64_t tenant_id,
       } else {
         const share::schema::ObUserInfo *user_info = NULL;
         if (OB_ISNULL(user_info = schema_guard_->get_user_info(tenant_id_, user_id))) {
+          // ignore ret
           SERVER_LOG(WARN, "Get user infos with tenant user id error", K(ret), K_(tenant_id));
         } else if (OB_FAIL(user_infos.push_back(user_info))) {
           SERVER_LOG(WARN, "Failed to add user info", K(ret));

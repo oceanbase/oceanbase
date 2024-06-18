@@ -231,6 +231,7 @@ int ObFtsIndexBuilderUtil::generate_fts_aux_index_name(
 int ObFtsIndexBuilderUtil::adjust_fts_args(
     obrpc::ObCreateIndexArg &index_arg,
     ObTableSchema &data_schema, // not const since will add column to data schema
+    ObIAllocator &allocator,
     ObIArray<ObColumnSchemaV2 *> &gen_columns)
 {
   int ret = OB_SUCCESS;
@@ -292,6 +293,7 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
         LOG_WARN("failed to push back doc id col", K(ret));
       } else if (OB_FAIL(adjust_fts_arg(&index_arg,
                                         data_schema,
+                                        allocator,
                                         tmp_cols))) {
         LOG_WARN("failed to append fts_index arg", K(ret));
       }
@@ -352,6 +354,7 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
           LOG_WARN("fail to push back document length column", K(ret));
         } else if (OB_FAIL(adjust_fts_arg(&index_arg,
                                           data_schema,
+                                          allocator,
                                           tmp_cols))) {
           LOG_WARN("failed to append fts_index arg", K(ret));
         }
@@ -374,6 +377,7 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
           LOG_WARN("fail to push back document length column", K(ret));
         } else if (OB_FAIL(adjust_fts_arg(&index_arg,
                                           data_schema,
+                                          allocator,
                                           tmp_cols))) {
           LOG_WARN("failed to append fts_index arg", K(ret));
         }
@@ -690,8 +694,9 @@ int ObFtsIndexBuilderUtil::check_ft_cols(
 }
 
 int ObFtsIndexBuilderUtil::adjust_fts_arg(
-    ObCreateIndexArg *index_arg, // not const since index_arg.index_schema.allocator will be used
+    ObCreateIndexArg *index_arg, // not const since index_columns_ will be modified
     const ObTableSchema &data_schema,
+    ObIAllocator &allocator,
     const ObIArray<const ObColumnSchemaV2 *> &fts_cols)
 {
   int ret = OB_SUCCESS;
@@ -715,12 +720,8 @@ int ObFtsIndexBuilderUtil::adjust_fts_arg(
     } else {
       index_arg->index_columns_.reuse();
       index_arg->store_columns_.reuse();
-      ObIAllocator *allocator = index_arg->index_schema_.get_allocator();
 
-      if (OB_ISNULL(allocator)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("allocator is nullptr", K(ret));
-      } else if (is_rowkey_doc) {
+      if (is_rowkey_doc) {
         // 1. add rowkey column to arg->index_columns
         const ObRowkeyInfo &rowkey_info = data_schema.get_rowkey_info();
         for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
@@ -733,7 +734,7 @@ int ObFtsIndexBuilderUtil::adjust_fts_arg(
             ret = OB_ERR_BAD_FIELD_ERROR;
             LOG_WARN("get_column_schema failed", "table_id",
                 data_schema.get_table_id(), K(column_id), K(ret));
-          } else if (OB_FAIL(ob_write_string(*allocator,
+          } else if (OB_FAIL(ob_write_string(allocator,
                                              rowkey_col->get_column_name_str(),
                                              rowkey_column.column_name_))) {
             //to keep the memory lifetime of column_name consistent with index_arg
@@ -745,7 +746,7 @@ int ObFtsIndexBuilderUtil::adjust_fts_arg(
         // 2. add doc id column to arg->store_columns
         const ObColumnSchemaV2 *doc_id_col = fts_cols.at(0);
         ObString doc_id_col_name;
-        if (FAILEDx(ob_write_string(*allocator, doc_id_col->get_column_name_str(), doc_id_col_name))) {
+        if (FAILEDx(ob_write_string(allocator, doc_id_col->get_column_name_str(), doc_id_col_name))) {
           LOG_WARN("fail to deep copy doc id column name", K(ret));
         } else if (OB_FAIL(index_arg->store_columns_.push_back( doc_id_col_name))) {
           LOG_WARN("failed to push back doc id column", K(ret));
@@ -758,7 +759,7 @@ int ObFtsIndexBuilderUtil::adjust_fts_arg(
         } else if (OB_ISNULL(doc_id_col)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fts_col is null", K(ret));
-        } else if (OB_FAIL(ob_write_string(*allocator,
+        } else if (OB_FAIL(ob_write_string(allocator,
                                            doc_id_col->get_column_name_str(),
                                            doc_id_column.column_name_))) {
           //to keep the memory lifetime of column_name consistent with index_arg
@@ -793,16 +794,15 @@ int ObFtsIndexBuilderUtil::inner_adjust_fts_arg(
     obrpc::ObCreateIndexArg *fts_arg,
     const ObIArray<const ObColumnSchemaV2 *> &fts_cols,
     const int index_column_cnt,
-    ObIAllocator *allocator)
+    ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(fts_arg) ||
       (!share::schema::is_fts_index_aux(fts_arg->index_type_) &&
        !share::schema::is_fts_doc_word_aux(fts_arg->index_type_)) ||
-      OB_ISNULL(allocator) ||
       fts_cols.count() != index_column_cnt + 2) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret), KPC(fts_arg), KP(allocator),
+    LOG_WARN("invalid argument", K(ret), KPC(fts_arg),
         K(fts_cols.count()), K(index_column_cnt));
   } else {
     // 1. add doc id column, word column to arg->index_columns
@@ -812,7 +812,7 @@ int ObFtsIndexBuilderUtil::inner_adjust_fts_arg(
       if (OB_ISNULL(fts_col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fts_col is null", K(ret), K(i));
-      } else if (OB_FAIL(ob_write_string(*allocator,
+      } else if (OB_FAIL(ob_write_string(allocator,
               fts_col->get_column_name_str(),
               fts_column.column_name_))) {
         //to keep the memory lifetime of column_name consistent with index_arg
@@ -824,7 +824,7 @@ int ObFtsIndexBuilderUtil::inner_adjust_fts_arg(
     // 2. add word count column to arg->store_columns
     const ObColumnSchemaV2 *word_count_col = fts_cols.at(index_column_cnt);
     ObString word_count_col_name;
-    if (FAILEDx(ob_write_string(*allocator, word_count_col->get_column_name_str(), word_count_col_name))) {
+    if (FAILEDx(ob_write_string(allocator, word_count_col->get_column_name_str(), word_count_col_name))) {
       LOG_WARN("fail to deep copy word count column name", K(ret));
     } else if (OB_FAIL(fts_arg->store_columns_.push_back(word_count_col_name))) {
       LOG_WARN("failed to push back word count column", K(ret));
@@ -832,7 +832,7 @@ int ObFtsIndexBuilderUtil::inner_adjust_fts_arg(
     // 3. add document length column to arg->store_columns
     const ObColumnSchemaV2 *doc_length_col = fts_cols.at(index_column_cnt + 1);
     ObString doc_length_col_name;
-    if (FAILEDx(ob_write_string(*allocator, doc_length_col->get_column_name_str(), doc_length_col_name))) {
+    if (FAILEDx(ob_write_string(allocator, doc_length_col->get_column_name_str(), doc_length_col_name))) {
       LOG_WARN("fail to deep copy doc length column", K(ret));
     } else if (OB_FAIL(fts_arg->store_columns_.push_back(doc_length_col_name))) {
       LOG_WARN("fail to push document length column", K(ret));

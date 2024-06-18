@@ -1958,6 +1958,10 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
   int ret = OB_SUCCESS;
   const obrpc::ObServerInfoList &server_list = arg.server_list_;
   BOOTSTRAP_LOG(INFO, "STEP_1.1:execute_bootstrap start to executor.");
+  DBA_STEP_RESET(bootstrap);
+  LOG_DBA_INFO_V2(OB_BOOTSTRAP_BEGIN,
+                  DBA_STEP_INC_INFO(bootstrap),
+                  "cluster bootstrap begin.");
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("root_service not inited", K(ret));
@@ -2040,6 +2044,17 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
     ret = OB_SUCC(ret) ? tmp_ret : ret;
   }
   BOOTSTRAP_LOG(INFO, "execute_bootstrap finished", K(ret));
+  if (OB_FAIL(ret)) {
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_BOOTSTRAP_FAIL, ret,
+                        DBA_STEP_INC_INFO(bootstrap),
+                        "cluster bootstrap fail. "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "cluster bootstrap success.");
+  }
+
   return ret;
 }
 
@@ -2479,7 +2494,7 @@ int ObRootService::clone_resource_pool(const obrpc::ObCloneResourcePoolArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument to clone resource pool", KR(ret), K(arg));
-  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant(
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant_with_tenant_role(
                          arg.get_source_tenant_id(),
                          is_compatible))) {
     LOG_WARN("fail to check compat version", KR(ret), K(arg));
@@ -2779,7 +2794,7 @@ int ObRootService::create_tenant(const ObCreateTenantArg &arg, UInt64 &tenant_id
   } else if (!tmp_tenant && OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(tenant_name))) {
     LOG_WARN("unsupported tenant name", KR(ret), K(tenant_name));
   } else if (arg.is_clone_tenant()
-             && OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant(
+             && OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant_with_tenant_role(
                             arg.source_tenant_id_,
                             compatible_with_clone_tenant))) {
     LOG_WARN("fail to check compatible version with clone tenant", KR(ret), K(arg));
@@ -5407,10 +5422,10 @@ int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected schema_service_", KR(ret), KP(schema_service_));
-  } else if (GCTX.is_standby_cluster() || GCONF.in_upgrade_mode()) {
+  } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("clone tenant while in standby cluster or in upgrade mode is not allowed", KR(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "clone tenant while in standby cluster or in upgrade mode");
+    LOG_WARN("clone tenant while in upgrade mode is not allowed", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "clone tenant while in upgrade mode");
   } else if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(clone_tenant_name))) {
     LOG_WARN("unsupported clone tenant name", KR(ret), K(clone_tenant_name));
   } else {
@@ -9257,7 +9272,13 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
     HEAP_VAR(ObPhysicalRestoreJob, job_info) {
       // just to check sys tenant's schema with latest schema version
       ObDDLSQLTransaction trans(schema_service_, false /*end_signal*/);
-      if (OB_FAIL(trans.start(&sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
+      ObTimeoutCtx ctx;
+      const int64_t DEFAULT_TIMEOUT = 60_s;
+      const int64_t INNER_SQL_TIMEOUT = GCONF.internal_sql_execute_timeout;
+      const int64_t timeout = MAX(DEFAULT_TIMEOUT, INNER_SQL_TIMEOUT);
+      if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, timeout))) {
+        LOG_WARN("failed to set default timeout ctx", K(ret), K(timeout));
+      } else if (OB_FAIL(trans.start(&sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
         LOG_WARN("failed to start trans, ", K(ret));
       } else if (OB_FAIL(RS_JOB_CREATE_EXT(job_id, RESTORE_TENANT, trans,
                          "sql_text", ObHexEscapeSqlStr(arg.get_sql_stmt())))) {
@@ -10986,11 +11007,14 @@ void ObRootService::update_fail_count(int ret)
   if (count > OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT
       && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
     LOG_ERROR("rs_monitor_check : fail to start root service", KR(ret), K(count));
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_ROOTSERVICE_START_FAIL, ret,
+                        "rootservice start()/do_restart() has failed ", count, " times. "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
   } else {
     LOG_WARN("rs_monitor_check : fail to start root service", KR(ret), K(count));
+    LOG_DBA_WARN(OB_ERR_ROOTSERVICE_START, "msg", "rootservice start()/do_restart() has failure",
+                 KR(ret), "fail_cnt", count);
   }
-  LOG_DBA_WARN(OB_ERR_ROOTSERVICE_START, "msg", "rootservice start()/do_restart() has failure",
-               KR(ret), "fail_cnt", count);
 }
 
 int ObRootService::send_physical_restore_result(const obrpc::ObPhysicalRestoreResult &res)

@@ -319,6 +319,7 @@ ObRoutineInfo &ObRoutineInfo::operator =(const ObRoutineInfo &src_schema)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < src_schema.routine_params_.count(); ++i) {
       if (OB_ISNULL(src_schema.routine_params_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("routine param is null", K(i));
       } else if (OB_FAIL(add_routine_param(*src_schema.routine_params_.at(i)))) {
         LOG_WARN("add routine param to routine info failed", K(ret), K(i));

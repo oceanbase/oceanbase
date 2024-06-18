@@ -262,6 +262,7 @@ int ObTxCtxTable::acquire_ref_(const ObLSID& ls_id)
 
   if (NULL == ls_tx_ctx_mgr_) {
     if (OB_ISNULL(txs = MTL(ObTransService*))) {
+      ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "trans_service get fail", K(ret));
     } else if (OB_FAIL(txs->get_tx_ctx_mgr().get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr_))) {
       TRANS_LOG(ERROR, "get ls tx ctx mgr with ref failed", KP(txs));
@@ -283,6 +284,7 @@ int ObTxCtxTable::release_ref_()
 
   if (NULL != ls_tx_ctx_mgr_) {
     if (OB_ISNULL(txs = MTL(ObTransService*))) {
+      ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "trans_service get fail", K(ret));
     } else if (OB_FAIL(txs->get_tx_ctx_mgr().revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr_))) {
       TRANS_LOG(ERROR, "revert ls tx ctx mgr with ref failed", KP(txs));

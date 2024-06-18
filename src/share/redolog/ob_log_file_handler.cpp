@@ -379,7 +379,7 @@ int ObLogFileHandler::open(const char *file_path, const int flags, const mode_t 
     while (OB_SUCC(ret)) {
       if (OB_FAIL(THE_IO_DEVICE->open(file_path, flags, mode, io_fd))) {
         LOG_WARN("failed to open file", K(ret), K(file_path), K(errno), KERRMSG);
-        if (OB_TIMEOUT == ret || OB_EAGAIN == ret) {
+        if (OB_TIMEOUT == ret || OB_EAGAIN == ret || OB_SERVER_OUTOF_DISK_SPACE == ret) {
           ret = OB_SUCCESS;
           ob_usleep<ObWaitEventIds::SLOG_NORMAL_RETRY_SLEEP>(ObLogDefinition::RETRY_SLEEP_TIME_IN_US);
         }

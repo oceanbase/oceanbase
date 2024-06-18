@@ -543,4 +543,11 @@ GLOBAL_ERRSIM_POINT_DEF(2304, EN_TRACEPOINT_TEST, "For testing new versions of t
 GLOBAL_ERRSIM_POINT_DEF(2400, EN_SQL_FORCE_DUMP, "For testing force dump once");
 GLOBAL_ERRSIM_POINT_DEF(2401, EN_TEST_FOR_HASH_UNION, "Used to control whether to turn off the vectorization 2.0 hash set operator. It is turned on by default.");
 
+// Protocol begin 2450 - 2500
+// pr-exec protocol
+GLOBAL_ERRSIM_POINT_DEF(2450, COM_STMT_PREXECUTE_PREPARE_ERROR, "inject error at prepare stage for pr-exec protocol");
+GLOBAL_ERRSIM_POINT_DEF(2451, COM_STMT_PREXECUTE_PS_CURSOR_OPEN_ERROR, "inject error at cursor open stage for pr-exec protocol");
+GLOBAL_ERRSIM_POINT_DEF(2452, COM_STMT_PREXECUTE_EXECUTE_ERROR, "inject error at execute stage for pr-exec protocol");
+// Protocol end
+
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

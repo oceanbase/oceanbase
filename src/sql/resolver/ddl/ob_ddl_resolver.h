@@ -113,7 +113,8 @@ public:
     SPATIAL_KEY = 2,
     FTS_KEY = 3,
     MULTI_KEY = 4,
-    MULTI_UNIQUE_KEY = 5
+    MULTI_UNIQUE_KEY = 5,
+    VEC_KEY = 6,
   };
   enum COLUMN_NODE {
     COLUMN_REF_NODE = 0,
@@ -234,6 +235,7 @@ public:
   static int check_urowid_column_length(
       const share::schema::ObColumnSchemaV2 &column);
   static int check_default_value_length(
+      const bool is_mysql_mode,
       const share::schema::ObColumnSchemaV2 &column,
       common::ObObj &default_value);
   static int cast_default_value(
@@ -572,6 +574,7 @@ protected:
       const bool is_create_table_as = false,
       const bool is_external_table = false,
       const bool allow_has_default = true);
+  int resolve_file_prefix(ObString &url, ObSqlString &prefix_str, common::ObStorageType &device_type);
   int resolve_uk_name_from_column_attribute(
       ParseNode *attrs_node,
       common::ObString &uk_name);
@@ -963,6 +966,7 @@ protected:
                              const uint64_t mv_container_table_id,
                              const share::schema::ObTableSchema *&mv_container_table_schema,
                              common::ObString &mv_container_table_name);
+  static int trim_space_for_default_value(const bool is_mysql_mode, const ObCollationType &collation_type, ObObj &default_value, ObString &str);
   int64_t block_size_;
   int64_t consistency_level_;
   INDEX_TYPE index_scope_;
@@ -1025,6 +1029,7 @@ protected:
   bool have_generate_fts_arg_;
   bool is_set_lob_inrow_threshold_;
   int64_t lob_inrow_threshold_;
+  int64_t auto_increment_cache_size_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

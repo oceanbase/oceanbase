@@ -87,6 +87,8 @@ public:
   uint64_t length() const;
   template<std::size_t K>
   double get(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
+  double get_x(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
+  double get_y(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
   template<std::size_t K>
   void set(double d);
   // candidate function not viable: 'this' argument has type 'point_type' (aka 'const oceanbase::common::ObWkbGeomInnerPoint'), but method is not marked const
@@ -457,6 +459,8 @@ public:
   uint64_t length() const;
   template<std::size_t K>
   double get(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
+  double get_x(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
+  double get_y(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
   template<std::size_t K>
   void set(double d, ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian);
   ObWkbGeogInnerPoint& operator=(const ObWkbGeogInnerPoint& p);

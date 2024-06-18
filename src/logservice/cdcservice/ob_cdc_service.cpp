@@ -40,6 +40,7 @@ bool ExpiredArchiveClientLSFunctor::operator()(const ClientLSKey &key, ClientLSC
   int ret = OB_SUCCESS;
   bool bret = true;
   if (OB_ISNULL(value)) {
+    // ignore ret
     EXTLOG_LOG(WARN, "get null clientls ctx", K(key));
   } else {
     const FetchMode fetch_mode = value->get_fetch_mode();

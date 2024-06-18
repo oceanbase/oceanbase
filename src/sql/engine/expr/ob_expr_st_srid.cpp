@@ -150,7 +150,7 @@ int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
           LOG_WARN("failed to parse geometry from wkb", K(ret));
         } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
           LOG_WARN("failed to get srid from wkb", K(ret));
-        } else if (0 != srid && srs == NULL) {
+        } else if (ObGeoTypeUtil::need_get_srs(srid) && srs == NULL) {
           LOG_USER_WARN(OB_ERR_WARN_SRS_NOT_FOUND, srid);
           LOG_WARN("srs not found");
         }

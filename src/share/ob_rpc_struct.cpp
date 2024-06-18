@@ -707,6 +707,7 @@ int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
     parallelism_ = arg.parallelism_;
     ddl_type_ = arg.ddl_type_;
     sql_mode_ = arg.sql_mode_;
+    is_insert_overwrite_ = arg.is_insert_overwrite_;
     for (int64_t i = 0; OB_SUCC(ret) && i < common::ObNLSFormatEnum::NLS_MAX; i++) {
       nls_formats_[i].assign_ptr(arg.nls_formats_[i].ptr(), static_cast<int32_t>(arg.nls_formats_[i].length()));
     }
@@ -3874,7 +3875,8 @@ int ObLSMigrateReplicaArg::init(
     const common::ObReplicaMember &dst,
     const common::ObReplicaMember &data_source,
     const int64_t paxos_replica_number,
-    const bool skip_change_member_list)
+    const bool skip_change_member_list,
+    const common::ObReplicaMember &force_data_source)
 {
   int ret = OB_SUCCESS;
   task_id_ = task_id;
@@ -3885,6 +3887,7 @@ int ObLSMigrateReplicaArg::init(
   data_source_ = data_source;
   paxos_replica_number_ = paxos_replica_number;
   skip_change_member_list_ = skip_change_member_list;
+  force_data_source_ = force_data_source;
   return ret;
 }
 
@@ -3925,7 +3928,8 @@ int ObLSAddReplicaArg::init(
     const common::ObReplicaMember &data_source,
     const int64_t orig_paxos_replica_number,
     const int64_t new_paxos_replica_number,
-    const bool skip_change_member_list)
+    const bool skip_change_member_list,
+    const common::ObReplicaMember &force_data_source)
 {
   int ret = OB_SUCCESS;
   task_id_ = task_id;
@@ -3936,6 +3940,7 @@ int ObLSAddReplicaArg::init(
   orig_paxos_replica_number_ = orig_paxos_replica_number;
   new_paxos_replica_number_ = new_paxos_replica_number;
   skip_change_member_list_ = skip_change_member_list;
+  force_data_source_ = force_data_source;
   return ret;
 }
 

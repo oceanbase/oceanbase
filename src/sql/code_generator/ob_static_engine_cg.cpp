@@ -157,6 +157,8 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
+#include "sql/optimizer/ob_log_values_table_access.h"
+#include "sql/engine/basic/ob_values_table_access_op.h"
 
 namespace oceanbase
 {
@@ -2553,6 +2555,81 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues &op,
   return ret;
 }
 
+int ObStaticEngineCG::generate_spec(ObLogValuesTableAccess &op,
+                                    ObValuesTableAccessSpec &spec,
+                                    const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(in_root_job);
+  const ObValuesTableDef *table_def = NULL;
+  if (OB_ISNULL(table_def = op.get_values_table_def()) ||
+      OB_UNLIKELY(op.get_output_exprs().empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret), KP(table_def), K(op.get_output_exprs()));
+  } else {
+    spec.access_type_ = table_def->access_type_;
+    spec.start_param_idx_ = table_def->start_param_idx_;
+    spec.end_param_idx_ = table_def->end_param_idx_;
+    ObIAllocator &allocator = phy_plan_->get_allocator();
+    if (OB_FAIL(spec.column_exprs_.prepare_allocate(op.get_column_exprs().count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(op.get_column_exprs().count()));
+    } else if (OB_FAIL(spec.value_exprs_.prepare_allocate(table_def->access_exprs_.count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(table_def->access_exprs_.count()));
+    } else if (OB_FAIL(spec.obj_params_.prepare_allocate(table_def->access_objs_.count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(table_def->access_objs_.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < op.get_column_exprs().count(); i++) {
+        ObColumnRefRawExpr *col_expr = op.get_column_exprs().at(i);
+        ObExpr *expr = NULL;
+        if (OB_ISNULL(col_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("raw_expr is null", K(ret), K(i), K(col_expr));
+        } else if (OB_FAIL(mark_expr_self_produced(col_expr))) {
+          LOG_WARN("mark expr self produced failed", K(ret), KPC(col_expr));
+        } else if (OB_FAIL(generate_rt_expr(*col_expr, expr))) {
+          LOG_WARN("fail to generate_rt_expr", K(ret), K(i), KPC(col_expr));
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("value_info.expr_ is null", K(ret), K(i), KPC(expr));
+        } else {
+          spec.column_exprs_.at(i) = expr;
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_def->access_exprs_.count(); i++) {
+        ObRawExpr *raw_expr = table_def->access_exprs_.at(i);
+        ObExpr *expr = NULL;
+        if (OB_ISNULL(raw_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("raw_expr is null", K(ret), K(i), K(raw_expr));
+        } else if (OB_FAIL(mark_expr_self_produced(raw_expr))) {
+          LOG_WARN("mark expr self produced failed", K(ret), KPC(raw_expr));
+        } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
+          LOG_WARN("fail to generate_rt_expr", K(ret), K(i), KPC(raw_expr));
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("value_info.expr_ is null", K(ret), K(i), KPC(raw_expr));
+        } else {
+          spec.value_exprs_.at(i) = expr;
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_def->access_objs_.count(); i++) {
+        if (OB_FAIL(ob_write_obj(allocator,
+                                 table_def->access_objs_.at(i),
+                                 spec.obj_params_.at(i)))) {
+          LOG_WARN("failed to write obj", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(mark_expr_self_produced(op.get_output_exprs()))) {
+        LOG_WARN("mark expr self produced failed", K(ret));
+      } else {
+        spec.rows_ = table_def->row_cnt_;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObStaticEngineCG::generate_spec(ObLogMerge &op,
                                     ObTableMergeSpec &spec,
                                     const bool in_root_job)
@@ -2675,11 +2752,35 @@ int ObStaticEngineCG::generate_spec(ObLogicalOperator &op,
   UNUSED(in_root_job);
   return OB_SUCCESS;
 }
+int ObStaticEngineCG::check_is_insert_overwrite_stmt(const ObLogPlan *plan, bool &is_insert_overwrite)
+{
+  int ret = OB_SUCCESS;
+  is_insert_overwrite = false;
+  stmt::StmtType stmt_type = stmt::T_NONE;
+
+  if (OB_ISNULL(plan)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("log plan is null", K(ret), KP(this));
+  } else {
+    if (OB_FAIL(plan->get_stmt_type(stmt_type))) {
+      LOG_WARN("get stmt type of log plan failed", K(ret));
+    } else if (IS_INSERT_OR_REPLACE_STMT(stmt_type)) {
+      const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt *>(plan->get_stmt());
+      if (OB_NOT_NULL(insert_stmt)) {
+        if (insert_stmt->is_overwrite()) {
+          is_insert_overwrite = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpec &spec)
 {
   int ret = OB_SUCCESS;
   spec.check_fk_batch_ = true;
+  const ObLogPlan *log_plan = op.get_plan();
   const ObIArray<IndexDMLInfo *> &index_dml_infos = op.get_index_dml_infos();
   if (OB_ISNULL(phy_plan_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2689,6 +2790,16 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
   if (OB_SUCC(ret) && op.get_stmt_id_expr() != nullptr) {
     if (OB_FAIL(generate_rt_expr(*op.get_stmt_id_expr(), spec.ab_stmt_id_))) {
       LOG_WARN("generate ab stmt id expr failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    bool is_insert_overwrite = false;
+    if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
+      LOG_WARN("check is insert overwrite failed", K(ret));
+    } else if (is_insert_overwrite) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite need open pdml");
     }
   }
 
@@ -5720,7 +5831,8 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
             }
             ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
               ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
-              if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
                                                                                  &nlj,
                                                                                  false)))) {
                 LOG_WARN("fail to push back param expr", K(ret));
@@ -6152,7 +6264,8 @@ int ObStaticEngineCG::generate_spec(
     }
     ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
       ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
-      if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
                                                                       &spec,
                                                                       false)))) {
         LOG_WARN("fail to push back param expr", K(ret));
@@ -6381,8 +6494,10 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
 {
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
+  const ObLogPlan *log_plan = op.get_plan();
   if (OB_UNLIKELY(op.get_index_dml_infos().count() != 1) ||
-      OB_ISNULL(op.get_index_dml_infos().at(0))) {
+      OB_ISNULL(op.get_index_dml_infos().at(0)) ||
+      OB_ISNULL(log_plan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index dml info is invalid", K(ret), K(op.get_index_dml_infos().count()));
   } else {
@@ -6398,9 +6513,18 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
       spec.plan_->set_enable_append(global_hint.has_direct_load());
       spec.plan_->set_enable_inc_direct_load(global_hint.has_inc_direct_load());
       spec.plan_->set_enable_replace(global_hint.has_replace());
+      // check is insert overwrite
+      bool is_insert_overwrite = false;
+      if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
+        LOG_WARN("check is insert overwrite failed", K(ret));
+      } else if (is_insert_overwrite) {
+        spec.plan_->set_is_insert_overwrite(true);
+      }
     }
     int64_t partition_expr_idx = OB_INVALID_INDEX;
-    if (OB_FAIL(get_pdml_partition_id_column_idx(spec.get_child(0)->output_, partition_expr_idx))) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(get_pdml_partition_id_column_idx(spec.get_child(0)->output_, partition_expr_idx))) {
       LOG_WARN("failed to get partition id column idx", K(ret));
     } else {
       spec.row_desc_.set_part_id_index(partition_expr_idx);
@@ -8628,6 +8752,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
     }
     case log_op_def::LOG_OPTIMIZER_STATS_GATHERING: {
       type = PHY_OPTIMIZER_STATS_GATHERING;
+      break;
+    }
+    case log_op_def::LOG_VALUES_TABLE_ACCESS: {
+      type = PHY_VALUES_TABLE_ACCESS;
       break;
     }
     default:

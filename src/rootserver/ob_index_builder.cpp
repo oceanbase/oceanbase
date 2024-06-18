@@ -442,7 +442,7 @@ int ObIndexBuilder::submit_build_index_task(
   int ret = OB_SUCCESS;
   ObTableLockOwnerID owner_id;
   ObCreateDDLTaskParam param(index_schema->get_tenant_id(),
-                             ObDDLType::DDL_CREATE_INDEX,
+                             ((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_2_0) && index_schema->is_storage_local_index_table() && index_schema->is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX,
                              data_schema,
                              index_schema,
                              0/*object_id*/,
@@ -676,7 +676,7 @@ int ObIndexBuilder::do_create_local_index(
           my_arg.index_schema_.set_index_type(INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE);
         }
       }
-      if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
+      if (FAILEDx(ObIndexBuilderUtil::adjust_expr_index_args(
               my_arg, new_table_schema, allocator, gen_columns))) {
         LOG_WARN("fail to adjust expr index args", K(ret));
       } else if (OB_FAIL(generate_schema(

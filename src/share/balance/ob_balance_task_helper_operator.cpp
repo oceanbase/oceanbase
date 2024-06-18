@@ -311,6 +311,7 @@ int ObBalanceTaskHelperTableOperator::remove_task(const uint64_t tenant_id,
   int64_t affected_rows = 0;
   ObSqlString sql;
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  DEBUG_SYNC(BEFORE_REMOVE_BALANCE_TASK_HELPER);
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !operation_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(operation_scn));

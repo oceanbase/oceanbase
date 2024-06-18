@@ -241,7 +241,7 @@ public:
   virtual int is_tagging(const common::ObString &uri, bool &is_tagging);
   virtual int del_unmerged_parts(const ObString &uri) override;
 private:
-  int strtotime(const char *date_time, int64_t &time);
+  int ob_strtotime(const char *date_time, int64_t &time);
   int tagging_object_(
       const common::ObString &uri,
       ObStorageOssBase &oss_base,

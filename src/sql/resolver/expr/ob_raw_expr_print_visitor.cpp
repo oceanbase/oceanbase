@@ -58,7 +58,7 @@ int ObRawExprPrintVisitor::visit(ObExecParamRawExpr &expr)
   if (OB_ISNULL(expr.get_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null", K(ret));
-  } else if (expr.get_ref_expr()->preorder_accept(*this)) {
+  } else if (OB_FAIL(expr.get_ref_expr()->preorder_accept(*this))) {
     LOG_WARN("failed to visit ref expr", K(ret));
   }
   return ret;

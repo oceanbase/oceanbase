@@ -447,8 +447,9 @@ int ObTabletGroupRestoreDagNet::fill_comment(char *buf, const int64_t buf_len) c
   } else if (ctx_->arg_.tablet_id_array_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group restore tablet id array should not be empty", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
-    LOG_WARN("failed to trace task id to string", K(ret), K(*ctx_));
+  } else if (OB_UNLIKELY(0 > ctx_->task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("failed to get trace id string", K(ret), K(*ctx_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
           "ObTabletGroupRestoreDagNet: ls_id=%s,first_tablet_id=%s, trace_id=%s",
           to_cstring(ctx_->arg_.ls_id_), to_cstring(ctx_->arg_.tablet_id_array_.at(0)), task_id_str))) {
@@ -2086,7 +2087,7 @@ int ObTabletRestoreTask::process()
     LOG_WARN("failed to get src info", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(try_update_tablet_())) {
     LOG_WARN("failed to try update tablet", K(ret), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(OB_FAIL(tablet_restore_ctx_->get_copy_tablet_status(status)))) {
+  } else if (OB_FAIL(tablet_restore_ctx_->get_copy_tablet_status(status))) {
     LOG_WARN("failed to get copy tablet status", K(ret), KPC(tablet_restore_ctx_));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
     FLOG_INFO("copy tablet is not exist, skip copy it", KPC(tablet_restore_ctx_));

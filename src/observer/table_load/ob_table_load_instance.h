@@ -37,7 +37,9 @@ public:
   ObTableLoadInstance();
   ~ObTableLoadInstance();
   void destroy();
-  int init(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array,
+  // column_ids不包含堆表的hidden pk
+  int init(ObTableLoadParam &param,
+           const common::ObIArray<uint64_t> &column_ids,
            ObTableLoadExecCtx *execute_ctx);
   int write(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
   int commit();
@@ -62,7 +64,7 @@ private:
   int abort_redef_table();
 private:
   // direct load
-  int start_direct_load(const ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array);
+  int start_direct_load(const ObTableLoadParam &param, const common::ObIArray<uint64_t> &column_ids);
   int wait_begin_finish();
   int end_direct_load(const bool commit);
   int add_tx_result_to_user_session();

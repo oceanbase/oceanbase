@@ -78,9 +78,31 @@ public:
   static int check_compat_version_for_arbitration_service(
       const uint64_t tenant_id,
       bool &is_compatible);
-  // data version must up to 4.3 with clone tenant
+  // check whether sys/meta/user tenant has been promoted to target data version
+  // params[in]  tenant_id, which tenant to check
+  // params[in]  target_data_version, data version to check
+  // params[out] is_compatible, whether tenants are promoted to target data version
+  static int check_compat_version_for_tenant(
+      const uint64_t tenant_id,
+      const uint64_t target_data_version,
+      bool &is_compatible);
+  // tenant data version should up to 430 when cloning primary tenant
+  // tenant data version should up to 432 when cloning standby tenant
   // params[in]  tenant_id, which tenant to check
   // params[out] is_compatible, whether it is up to 4.3
+  static int check_compat_version_for_clone_tenant_with_tenant_role(
+      const uint64_t tenant_id,
+      bool &is_compatible);
+
+  // data version must up to 432 with clone standby tenant
+  // params[in]  tenant_id, which tenant to check
+  // params[out] is_compatible, whether it is up to 4.3.2
+  static int check_compat_version_for_clone_standby_tenant(
+      const uint64_t tenant_id,
+      bool &is_compatible);
+  // data version must up to 430 with clone primary tenant
+  // params[in]  tenant_id, which tenant to check
+  // params[out] is_compatible, whether it is up to 4.3.0
   static int check_compat_version_for_clone_tenant(
       const uint64_t tenant_id,
       bool &is_compatible);

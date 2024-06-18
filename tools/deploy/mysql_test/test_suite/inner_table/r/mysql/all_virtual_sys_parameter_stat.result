@@ -23,6 +23,7 @@ default_value	varchar(65536)	NO		NULL
 isdefault	bigint(20)	NO		NULL	
 select name from __all_virtual_sys_parameter_stat where name not like "module_test_%" group by name order by name;
 name
+alert_log_level
 all_server_list
 arbitration_timeout
 archive_lag_target
@@ -84,6 +85,7 @@ enable_crazy_medium_compaction
 enable_dblink
 enable_ddl
 enable_early_lock_release
+enable_global_background_resource_isolation
 enable_kv_ttl
 enable_major_freeze
 enable_monotonic_weak_read
@@ -109,6 +111,7 @@ enable_user_defined_rewrite_rules
 external_kms_info
 freeze_trigger_percentage
 fuse_row_cache_priority
+global_background_cpu_quota
 ha_high_thread_score
 ha_low_thread_score
 ha_mid_thread_score
@@ -123,6 +126,7 @@ large_query_threshold
 large_query_worker_percentage
 leak_mod_to_check
 lease_time
+lob_enable_block_cache_threshold
 local_ip
 location_cache_cpu_quota
 location_cache_refresh_min_interval
@@ -348,6 +352,7 @@ _ha_rpc_timeout
 _ha_tablet_info_batch_count
 _hidden_sys_tenant_memory
 _ignore_system_memory_over_limit_error
+_inlist_rewrite_threshold
 _io_callback_thread_count
 _iut_enable
 _iut_max_entries

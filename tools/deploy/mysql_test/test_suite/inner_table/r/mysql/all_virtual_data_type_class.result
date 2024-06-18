@@ -27,6 +27,8 @@ data_type_class	data_type_class_str
 24	UDT
 25	DECIMAL_INT
 26	COLLECTION
+27	MYSQL_DATE
+28	MYSQL_DATETIME
 select data_type_class, data_type_class_str from __all_virtual_data_type_class;
 data_type_class	data_type_class_str
 0	NULL
@@ -55,6 +57,8 @@ data_type_class	data_type_class_str
 24	UDT
 25	DECIMAL_INT
 26	COLLECTION
+27	MYSQL_DATE
+28	MYSQL_DATETIME
 select * from __all_virtual_data_type_class where data_type_class = 10;
 data_type_class	data_type_class_str
 10	STRING
@@ -110,6 +114,8 @@ GEOMETRY	GEOMETRY
 UDT	UDT
 DECIMAL_INT	DECIMAL_INT
 COLLECTION	COLLECTION
+MYSQL_DATE	MYSQL_DATE
+MYSQL_DATETIME	MYSQL_DATETIME
 show create table __all_virtual_data_type_class;
 Table	Create Table
 __all_virtual_data_type_class	CREATE TABLE `__all_virtual_data_type_class` (

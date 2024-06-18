@@ -391,7 +391,7 @@ int ObMultipleMerge::project2output_exprs(ObDatumRow &unprojected_row, ObDatumRo
   if (OB_FAIL(access_param_->row2exprs_projector_->project(
               *access_param_->output_exprs_, unprojected_row.storage_datums_,
               nop_pos_.nops_, nop_pos_.count_))) {
-    LOG_WARN("Fail to project row", K(unprojected_row), K(cur_row));
+    LOG_WARN("Fail to project row", K(unprojected_row));
   } else {
     LOG_DEBUG("Project row", K(unprojected_row));
   }
@@ -471,7 +471,7 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
     }
   }
   if (OB_SUCC(ret)) {
-    STORAGE_LOG(DEBUG, "chaser debug get next", KPC(row), K(unprojected_row_), K(ret));
+    STORAGE_LOG(DEBUG, "chaser debug get next", K(unprojected_row_), K(ret));
   }
   return ret;
 }
@@ -833,7 +833,7 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
     }
     if (OB_FAIL(ret)) {
     } else if (is_filter_filtered) {
-      LOG_DEBUG("store row is filtered", K(in_row), K(cur_row_));
+      LOG_DEBUG("store row is filtered", K(in_row));
     } else if (nullptr != access_ctx_->limit_param_
                && access_ctx_->out_cnt_ < access_ctx_->limit_param_->offset_) {
       // clear evaluated flag for next row.
@@ -846,7 +846,7 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
       ++access_ctx_->out_cnt_;
     }
   }
-  LOG_DEBUG("multiple merge process fuse row", K(ret), K(cur_row_), K(need_skip), K(is_filter_filtered));
+  LOG_DEBUG("multiple merge process fuse row", K(ret), K(need_skip), K(is_filter_filtered));
   return ret;
 }
 
@@ -1574,9 +1574,13 @@ int ObMultipleMerge::handle_4377(const char* func)
   } else {
     ObString func_name = ObString::make_string(func);
     LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-    LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg",
+    LOG_ERROR_RET(OB_ERR_DEFENSIVE_CHECK,
                   "Fatal Error!!! Catch a defensive error! index lookup: row not found in data-table",
                   K(ret), KPC(access_ctx_->store_ctx_));
+    LOG_DBA_ERROR_V2(OB_STORAGE_DEFENSIVE_CHECK_FAIL,
+                     OB_ERR_DEFENSIVE_CHECK,
+                     "msg", "Fatal Error!!! Catch a defensive error!",
+                     "index lookup: row not found in data-table");
     concurrency_control::ObDataValidationService::set_delay_resource_recycle(access_ctx_->ls_id_);
     dump_table_statistic_for_4377();
     dump_tx_statistic_for_4377(access_ctx_->store_ctx_);

@@ -604,6 +604,24 @@ int ObResourceGroup::clear_worker()
   return ret;
 }
 
+int ObResourceGroup::get_throttled_time(int64_t &throttled_time)
+{
+  int ret = OB_SUCCESS;
+  int64_t current_throttled_time_us = -1;
+  if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(tenant_->id(),
+                 current_throttled_time_us,
+                 group_id_,
+                 GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+    LOG_WARN("get throttled time failed", K(ret), K(tenant_->id()), K(group_id_));
+  } else if (current_throttled_time_us > 0) {
+    throttled_time = current_throttled_time_us - throttled_time_us_;
+    throttled_time_us_ = current_throttled_time_us;
+  }
+  return ret;
+}
+
 int GroupMap::create_and_insert_group(int32_t group_id, ObTenant *tenant, ObCgroupCtrl *cgroup_ctrl, ObResourceGroup *&group)
 {
   int ret = OB_SUCCESS;
@@ -1127,8 +1145,9 @@ void ObTenant::destroy()
     DESTROY_ENTITY(ctx_);
     ctx_ = nullptr;
   }
-  if (cgroup_ctrl_.is_valid()
-      && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.remove_tenant_cgroup(id_))) {
+  if (cgroup_ctrl_.is_valid() &&
+      OB_TMP_FAIL(cgroup_ctrl_.remove_both_cgroup(
+          id_, OB_INVALID_GROUP_ID, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
     LOG_WARN_RET(tmp_ret, "remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
   group_map_.destroy_group();
@@ -1165,36 +1184,14 @@ void ObTenant::set_unit_max_cpu(double cpu)
 {
   int tmp_ret = OB_SUCCESS;
   unit_max_cpu_ = cpu;
-  int32_t cfs_period_us = 0;
-  int32_t cfs_period_us_new = 0;
   if (!cgroup_ctrl_.is_valid() || is_meta_tenant(id_)) {
     // do nothing
-  } else if (is_sys_tenant(id_)) {
-    int32_t sys_cfs_quota_us = -1;
-    if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(sys_cfs_quota_us, id_))) {
-      LOG_WARN_RET(tmp_ret, "set sys tennat cpu cfs quota failed", K(tmp_ret), K_(id), K(sys_cfs_quota_us));
-    }
-  } else if (OB_TMP_FAIL(cgroup_ctrl_.get_cpu_cfs_period(cfs_period_us_new, id_, INT64_MAX))) {
-    LOG_WARN_RET(tmp_ret, "fail get cpu cfs period", K_(id));
-  } else {
-    uint32_t loop_times = 0;
-    // to avoid kernel scaling cfs_period_us after get cpu_cfs_period,
-    // we should check whether cfs_period_us has been changed after set cpu_cfs_quota.
-    while (OB_SUCCESS == tmp_ret && cfs_period_us_new != cfs_period_us) {
-      cfs_period_us = cfs_period_us_new;
-      int32_t cfs_quota_us = static_cast<int32_t>(cfs_period_us * cpu);
-      if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(cfs_quota_us, id_))) {
-        LOG_WARN_RET(tmp_ret, "set cpu cfs quota failed", K_(id), K(cfs_quota_us));
-      } else if (OB_TMP_FAIL(cgroup_ctrl_.get_cpu_cfs_period(cfs_period_us_new, id_, INT64_MAX))) {
-        LOG_ERROR_RET(tmp_ret, "fail get cpu cfs period", K_(id));
-      } else {
-        loop_times++;
-        if (loop_times > 3) {
-          tmp_ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR_RET(tmp_ret, "cpu_cfs_period has been always changing, thread may be hung", K_(id), K(cfs_period_us), K(cfs_period_us_new), K(cfs_quota_us));
-        }
-      }
-    }
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_cfs_quota(
+                 id_,
+                 is_sys_tenant(id_) ? -1 : cpu,
+                 OB_INVALID_GROUP_ID,
+                 GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+    LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K_(id));
   }
 }
 
@@ -1202,11 +1199,13 @@ void ObTenant::set_unit_min_cpu(double cpu)
 {
   int tmp_ret = OB_SUCCESS;
   unit_min_cpu_ = cpu;
-  const double default_cpu_shares = 1024.0;
-  int32_t cpu_shares = static_cast<int32_t>(default_cpu_shares * cpu);
-  if (cgroup_ctrl_.is_valid()
-      && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.set_cpu_shares(cpu_shares, id_))) {
-    LOG_WARN_RET(tmp_ret, "set cpu shares failed", K(tmp_ret), K_(id), K(cpu_shares));
+  if (cgroup_ctrl_.is_valid() &&
+      OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_shares(
+          id_,
+          cpu,
+          OB_INVALID_GROUP_ID,
+          GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+    LOG_WARN_RET(tmp_ret, "set tenant cpu shares failed", K(tmp_ret), K_(id), K(cpu));
   }
 }
 
@@ -1604,6 +1603,73 @@ int ObTenant::timeup()
     IGNORE_RETURN unlock(handle);
   }
   return OB_SUCCESS;
+}
+
+void ObTenant::print_throttled_time()
+{
+  class ThrottledTimeLog
+  {
+  public:
+    ThrottledTimeLog(ObTenant *tenant) : tenant_(tenant)
+    {}
+    ~ThrottledTimeLog()
+    {}
+    int64_t to_string(char *buf, const int64_t len) const
+    {
+      int64_t pos = 0;
+      int tmp_ret = OB_SUCCESS;
+      int64_t tenant_throttled_time = 0;
+      int64_t group_throttled_time = 0;
+      ObResourceGroupNode *iter = NULL;
+      ObResourceGroup *group = nullptr;
+      ObCgSet &set = ObCgSet::instance();
+      while (NULL != (iter = tenant_->group_map_.quick_next(iter))) {
+        group = static_cast<ObResourceGroup *>(iter);
+        if (!is_user_group(group->group_id_)) {
+          if (OB_TMP_FAIL(group->get_throttled_time(group_throttled_time))) {
+            LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(group));
+          } else {
+            tenant_throttled_time += group_throttled_time;
+            databuff_printf(buf, len, pos, "group_id: %d, group: %s, throttled_time: %ld;", group->group_id_, set.name_of_id(group->group_id_), group_throttled_time);
+          }
+        }
+      }
+
+      share::ObGroupName g_name;
+      ObRefHolder<ObTenantIOManager> tenant_holder;
+      if (OB_TMP_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_->id_, tenant_holder))) {
+        LOG_WARN_RET(tmp_ret, "get tenant io manager failed", K(tmp_ret), K(tenant_->id_));
+      } else {
+        for (int64_t i = 0; i < tenant_holder.get_ptr()->get_group_num(); i++) {
+          if (!tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).deleted_ &&
+              !tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).cleared_) {
+            uint64_t group_id = tenant_holder.get_ptr()->get_io_config().group_ids_.at(i);
+            if (OB_TMP_FAIL(tenant_holder.get_ptr()->get_throttled_time(group_id, group_throttled_time))) {
+              LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(group_id));
+            } else if (OB_TMP_FAIL(tenant_->cgroup_ctrl_.get_group_info_by_group_id(tenant_->id_, group_id, g_name))) {
+              LOG_WARN_RET(tmp_ret, "get group_name by id failed", K(tmp_ret), K(group_id));
+            } else {
+              tenant_throttled_time += group_throttled_time;
+              databuff_printf(buf,
+                  len,
+                  pos,
+                  "group_id: %ld, group: %.*s, throttled_time: %ld;",
+                  group_id,
+                  g_name.get_value().length(),
+                  g_name.get_value().ptr(),
+                  group_throttled_time);
+            }
+          }
+        }
+      }
+      databuff_printf(
+          buf, len, pos, "tenant_id: %lu, tenant_throttled_time: %ld;", tenant_->id_, tenant_throttled_time);
+      return pos;
+    }
+    ObTenant *tenant_;
+  };
+  ThrottledTimeLog throttled_time_log(this);
+  LOG_INFO("dump throttled time info", K(id_), K(throttled_time_log));
 }
 
 void ObTenant::handle_retry_req(bool need_clear)

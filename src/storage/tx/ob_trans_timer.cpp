@@ -150,8 +150,10 @@ void ObTxTimeoutTask::runTimerTask()
   if (!is_inited_) {
     TRANS_LOG(WARN, "ObTxTimeoutTask not inited", KPC(this));
   } else if (OB_ISNULL(tx_desc_)) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "ctx is null, unexpected error", KPC(this));
   } else if (OB_ISNULL(txs_)) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "txs_ is null, unexpected error", KPC(this));
   } else {
     // NOTE: save tx_desc_/txs_ is required

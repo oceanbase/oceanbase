@@ -252,7 +252,7 @@ int ObExprFuncRound::calc_round_decimalint(
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
     }
   } else {
-    res_datum.set_datum(in_datum);
+    res_datum.set_decimal_int(in_datum.get_decimal_int(), in_datum.len_); // need deep copy
   }
   return ret;
 }

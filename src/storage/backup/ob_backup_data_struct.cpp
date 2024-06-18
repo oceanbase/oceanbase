@@ -895,38 +895,44 @@ DEFINE_DESERIALIZE(ObBackupMacroBlockIDMappingsMeta)
   int64_t num_of_sstable = 0;
   reuse();
   OB_UNIS_DECODE(version);
-  if (version < MAPPING_META_VERSION_V1 || version > MAPPING_META_VERSION_MAX) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (version < MAPPING_META_VERSION_V1 || version > MAPPING_META_VERSION_MAX) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(version));
   } else {
     version_ = version;
-  }
-  OB_UNIS_DECODE(num_of_sstable);
-  if (OB_FAIL(prepare_id_mappings(num_of_sstable))) {
-    LOG_WARN("failed to prepare id mappings", K(ret), K(num_of_sstable));
-  } else {
-    ObITable::TableKey table_key;
-    ObLogicMacroBlockId logic_id;
-    ObBackupMacroBlockIDPair pair;
-    int64_t num_of_entries = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < num_of_sstable; ++i) {
-      table_key.reset();
-      OB_UNIS_DECODE(table_key);
-      OB_UNIS_DECODE(num_of_entries);
-      if (!table_key.is_valid() || num_of_entries < 0) {
-        ret = OB_ERR_SYS;
-        LOG_WARN("table key is not valid", K(ret), K(table_key), K(num_of_entries));
-      } else {
-        id_map_list_[i]->table_key_ = table_key;
-      }
-      for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
-        pair.reset();
-        OB_UNIS_DECODE(pair);
-        if (!pair.is_valid()) {
+    OB_UNIS_DECODE(num_of_sstable);
+    if (FAILEDx(prepare_id_mappings(num_of_sstable))) {
+      LOG_WARN("failed to prepare id mappings", K(ret), K(num_of_sstable));
+    } else {
+      ObITable::TableKey table_key;
+      ObLogicMacroBlockId logic_id;
+      ObBackupMacroBlockIDPair pair;
+      int64_t num_of_entries = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < num_of_sstable; ++i) {
+        table_key.reset();
+        OB_UNIS_DECODE(table_key);
+        OB_UNIS_DECODE(num_of_entries);
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (!table_key.is_valid() || num_of_entries < 0) {
           ret = OB_ERR_SYS;
-          LOG_WARN("get invalid data", K(ret), K(pair));
-        } else if (OB_FAIL(id_map_list_[i]->id_pair_list_.push_back(pair))) {
-          LOG_WARN("failed to push back", K(ret), K(pair));
+          LOG_WARN("table key is not valid", K(ret), K(table_key), K(num_of_entries));
+        } else {
+          id_map_list_[i]->table_key_ = table_key;
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
+          pair.reset();
+          OB_UNIS_DECODE(pair);
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (!pair.is_valid()) {
+            ret = OB_ERR_SYS;
+            LOG_WARN("get invalid data", K(ret), K(pair));
+          } else if (OB_FAIL(id_map_list_[i]->id_pair_list_.push_back(pair))) {
+            LOG_WARN("failed to push back", K(ret), K(pair));
+          }
         }
       }
     }

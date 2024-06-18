@@ -31,7 +31,7 @@ static void convert_io_error(const int sys_err, int &ob_error_code)
 {
   if (ENOENT == sys_err) {
     ob_error_code = OB_BACKUP_FILE_NOT_EXIST;
-  } else if (EPERM == sys_err) {
+  } else if (EPERM == sys_err || EACCES == sys_err) {
     ob_error_code = OB_BACKUP_PERMISSION_DENIED;
   } else if (ENOSPC == sys_err || EDQUOT == sys_err) {
     ob_error_code = OB_BACKUP_DEVICE_OUT_OF_SPACE;

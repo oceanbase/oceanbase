@@ -2212,6 +2212,7 @@ int64_t ObPxTreeSerializer::get_tree_serialize_size(ObOpSpec &root, bool is_full
   for (int32_t i = 0; OB_SUCC(ret) && i < child_cnt; ++i) {
     ObOpSpec *child_op = root.get_child(i);
     if (OB_ISNULL(child_op)) {
+      // ignore ret
       // 这里无法抛出错误，不过在serialize阶段会再次检测是否有null child。
       // 所以是安全的
       LOG_ERROR("null child op", K(i), K(root.get_child_cnt()), K(root.get_type()));

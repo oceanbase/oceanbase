@@ -713,7 +713,8 @@ int ObSubPlanFilterOp::handle_next_row()
       left_rows_iter_.reset();
       left_rows_.reset();
       last_store_row_mem_->get_arena_allocator().reset();
-      if (OB_ISNULL(last_store_row_.get_store_row())) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(last_store_row_.get_store_row())) {
         if (save_last_row_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected status: store row is null", K(ret));

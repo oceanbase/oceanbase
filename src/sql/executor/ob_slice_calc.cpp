@@ -460,7 +460,8 @@ int ObSlaveMapRepartIdxCalcBase::init(uint64_t tenant_id)
     }
 
     const TaskIdxArray *task_idx_array = part_to_task_array_map_.get(tablet_id);
-    if (OB_ISNULL(task_idx_array)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(task_idx_array)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("task idx list is null", K(ret), K(tablet_id));
     } else if (OB_FAIL(const_cast<TaskIdxArray *>(task_idx_array)->push_back(task_idx))) {

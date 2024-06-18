@@ -530,6 +530,7 @@ int ObLogWindowFunction::print_used_hint(PlanText &plan_text)
   const ObWindowDistHint *win_dist_hint = NULL;
   const ObSelectStmt *stmt = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = dynamic_cast<const ObSelectStmt*>(get_plan()->get_stmt()))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
   } else if (OB_FALSE_IT(win_dist_hint = get_plan()->get_log_plan_hint().get_window_dist())) {
   } else if (NULL == win_dist_hint || get_plan()->has_added_win_dist()) {
@@ -612,4 +613,15 @@ int ObLogWindowFunction::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
 {
   is_fixed = ObOptimizerUtil::find_item(win_exprs_, expr);
   return OB_SUCCESS;
+}
+
+int ObLogWindowFunction::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (get_sort_keys().empty()) {
+    used = false;
+  }
+  return ret;
 }

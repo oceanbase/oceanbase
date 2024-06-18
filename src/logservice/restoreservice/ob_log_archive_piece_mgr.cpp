@@ -1746,5 +1746,460 @@ int ObLogArchivePieceContext::get_ls_meta_file_in_array_(const SCN &timestamp,
   }
   return ret;
 }
+
+ObLogRawPathPieceContext::ObLogRawPathPieceContext() :
+  is_inited_(false),
+  id_(),
+  array_(),
+  index_(0),
+  file_id_(0),
+  min_file_id_(0),
+  max_file_id_(0),
+  min_lsn_(),
+  max_lsn_(),
+  file_offset_(0)
+{}
+
+ObLogRawPathPieceContext::~ObLogRawPathPieceContext()
+{
+  reset();
+}
+
+void ObLogRawPathPieceContext::reset()
+{
+  is_inited_ = false;
+  id_.reset();
+  array_.reset();
+  index_ = 0;
+  file_id_ = 0;
+  min_file_id_ = 0;
+  max_file_id_ = 0;
+  min_lsn_.reset();
+  max_lsn_.reset();
+  file_offset_ = 0;
+}
+
+int ObLogRawPathPieceContext::init(const ObLSID &id, const DirArray &array)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_UNLIKELY(!id.is_valid() || array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(id));
+  } else if (OB_FAIL(array_.assign(array))) {
+    CLOG_LOG(WARN, "fail to assign array", K(id), K(array));
+  } else {
+    is_inited_ = true;
+    id_ = id;
+  }
+  return ret;
+}
+
+bool ObLogRawPathPieceContext::is_valid() const
+{
+  return is_inited_
+    && id_.is_valid()
+    && !array_.empty()
+    && index_ >= 0
+    && file_id_ >= 0
+    && min_file_id_ >= 0
+    && max_file_id_ >= min_file_id_
+    && file_offset_ >= 0;
+}
+
+int ObLogRawPathPieceContext::deep_copy_to(ObLogRawPathPieceContext &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(other.array_.assign(array_))) {
+    CLOG_LOG(WARN, "deep copy failed", K(ret), K_(id));
+  } else {
+    other.is_inited_ = is_inited_;
+    other.id_ = id_;
+    other.index_ = index_;
+    other.file_id_ = file_id_;
+    other.min_file_id_ = min_file_id_;
+    other.max_file_id_ = max_file_id_;
+    other.min_lsn_ = min_lsn_;
+    other.max_lsn_ = max_lsn_;
+    other.file_offset_ = file_offset_;
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::get_cur_uri(char *buf, const int64_t buf_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_ISNULL(buf) || buf_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument when get cur uri ptr");
+  } else if (OB_UNLIKELY(array_.empty() || index_ < 0 || index_ > array_.count() - 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "rawpath is invalid", KPC(this));
+  } else if (OB_FAIL(databuff_printf(buf, buf_size, "%s", array_[index_].first.ptr()))) {
+    CLOG_LOG(WARN, "fail to print uri ptr");
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::get_cur_storage_info(char *buf, const int64_t buf_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_ISNULL(buf) || buf_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument when get cur storage info ptr");
+  } else if (OB_UNLIKELY(array_.empty() || index_ < 0 || index_ > array_.count() - 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "rawpath is invalid when get cur storage info", KPC(this));
+  } else if (OB_FAIL(databuff_printf(buf, buf_size, "%s", array_[index_].second.ptr()))) {
+    CLOG_LOG(WARN, "fail to print storage ptr");
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::get_file_id(int64_t &file_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(! is_valid())){
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "array may be invalid");
+  } else {
+    file_id = file_id_;
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::locate_precise_piece(palf::LSN &fetch_lsn)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDest backup_dest;
+  bool file_exist;
+  if (OB_UNLIKELY(array_.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "dest array is empty", K(ret), K_(id), KPC(this));
+  } else if (piece_index_match(fetch_lsn)) {
+    CLOG_LOG(TRACE, "piecec index matched", K_(id), K(fetch_lsn));
+  } else {
+    int64_t min_file_id = 0;
+    int64_t max_file_id = 0;
+    bool locate = false;
+    for (int64_t curr_index = index_; OB_SUCC(ret) && curr_index < array_.count(); curr_index++) {  // piece list is in sort
+      ObString uri(array_[curr_index].first.ptr());
+      share::ObBackupStorageInfo storage_info;
+      if (curr_index != index_) {   //reset if switch piece
+        min_lsn_.reset();
+        max_lsn_.reset();
+      }
+      if (OB_FAIL(storage_info.set(uri.ptr(), array_[curr_index].second.ptr()))) {
+        CLOG_LOG(WARN, "fail to set storage info", K(ret), K_(id), KPC(this));
+      } else if (OB_FAIL(list_dir_files(uri, &storage_info, min_file_id, max_file_id))) {
+        CLOG_LOG(WARN, "list dir files failed", K(ret), K_(id), KPC(this));
+      } else if (file_id_ >= min_file_id && file_id_ <= max_file_id) {
+        if (OB_FAIL(get_ls_piece_info(curr_index, file_exist))) {
+          CLOG_LOG(WARN, "fail to get piece info", K(ret), K_(id), KPC(this), K(file_exist), K(curr_index));
+        } else if ((min_lsn_.is_valid() && fetch_lsn < min_lsn_) || (max_lsn_.is_valid() && fetch_lsn >= max_lsn_)) {
+          CLOG_LOG(TRACE, "piece lsn not match", K_(id), K(fetch_lsn), K_(min_lsn), K_(max_lsn), K(curr_index));
+        } else {
+          locate = true;
+          index_ = curr_index;
+          min_file_id_ = min_file_id;
+          max_file_id_ = max_file_id;
+          CLOG_LOG(TRACE, "raw path piece matched", K_(id), K(curr_index), K(fetch_lsn), KPC(this), K(file_exist));
+          break;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && locate && ! file_exist && index_ == array_.count() - 1 && fetch_lsn >= max_lsn_) {
+      ret = OB_ITER_END;
+      CLOG_LOG(TRACE, "fetch to piece list end", K_(index), K(fetch_lsn), KPC(this));
+    }
+
+    if (OB_SUCC(ret) && ! locate) {
+      ret = OB_ENTRY_NOT_EXIST;
+      CLOG_LOG(INFO, "locate failed", K_(id), K(fetch_lsn), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::list_dir_files(const ObString &base,
+    const share::ObBackupStorageInfo *storage_info,
+    int64_t &min_file_id,
+    int64_t &max_file_id)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath prefix;
+  if (OB_FAIL(ObArchivePathUtil::build_restore_prefix(base.ptr(), id_, prefix))) {
+    CLOG_LOG(WARN, "fail to build_restore_prefix", K(base), K_(id));
+  } else {
+    ObString uri(prefix.get_obstr());
+    ret = archive::ObArchiveFileUtils::get_file_range(uri, storage_info, min_file_id, max_file_id);
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      CLOG_LOG(WARN, "file may not exist", K(ret), K(base), K_(id));
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::get_ls_piece_info(const int64_t curr_index, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  const ObLSID ls_id(id_);
+  share::ObArchiveStore archive_store;
+  share::ObSingleLSInfoDesc desc;
+  ObBackupDest dest;
+  exist = false;
+  if (OB_UNLIKELY(array_.empty() || curr_index > array_.count() - 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument to get ls inner piece info");
+  } else if (OB_FAIL(dest.set(array_[curr_index].first.ptr(), array_[curr_index].second.ptr()))) {
+    CLOG_LOG(WARN, "fail to set backup dest", K_(id), KPC(this));
+  } else if (OB_FAIL(archive_store.init(dest))) {
+    CLOG_LOG(WARN, "archive store init failed", K(ret), K_(id));
+  } else if (OB_FAIL(archive_store.read_single_ls_info(ls_id, desc))
+      && OB_BACKUP_FILE_NOT_EXIST != ret) {
+    CLOG_LOG(WARN, "get single piece file failed", K(ret), K_(id));
+  } else if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+    exist = false;
+    ret = OB_SUCCESS;
+    CLOG_LOG(INFO, "ls not exist in cur piece", K_(id));
+  } else if (OB_UNLIKELY(!desc.is_valid())) {
+    ret = OB_INVALID_DATA;
+    CLOG_LOG(WARN, "invalid single piece file", K(ret), K_(id), K(desc));
+  } else {
+    exist = true;
+    min_lsn_ = palf::LSN(desc.min_lsn_);
+    max_lsn_ = palf::LSN(desc.max_lsn_);
+  }
+  return ret;
+}
+
+bool ObLogRawPathPieceContext::piece_index_match(const palf::LSN &lsn) const
+{
+  bool bret = true;
+  if (min_lsn_.is_valid() && lsn.is_valid() && lsn < min_lsn_) {
+    bret = false;
+  } else if (max_lsn_.is_valid() && lsn.is_valid() && lsn >= max_lsn_) {
+    bret = false;
+  }
+  CLOG_LOG(INFO, "piece_index_match", KPC(this));
+  return bret
+    && index_ >= 0
+    && min_file_id_ <= file_id_
+    && max_file_id_ >= file_id_;
+}
+
+int ObLogRawPathPieceContext::cal_lsn_to_file_id(const palf::LSN &lsn)
+{
+  file_id_ = archive::cal_archive_file_id(lsn, palf::PALF_BLOCK_SIZE);
+  return OB_SUCCESS;
+}
+
+int ObLogRawPathPieceContext::update_file(
+    const int64_t file_id,
+    const int64_t file_offset,
+    const palf::LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(file_id > max_file_id_ || file_id < min_file_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(file_id), K(file_offset), K(lsn));
+  } else {
+    file_id_ = file_id;
+    file_offset_ = file_offset;
+    max_lsn_ = lsn;
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::update_max_lsn(const palf::LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  max_lsn_ = lsn;
+  return ret;
+}
+
+int ObLogRawPathPieceContext::update_min_lsn(const palf::LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  min_lsn_ = lsn;
+  return ret;
+}
+
+int ObLogRawPathPieceContext::get_max_archive_log(palf::LSN &lsn, SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  ObLogRawPathPieceContext orign_context;
+  if (OB_FAIL(deep_copy_to(orign_context))) {
+    CLOG_LOG(WARN, "piece context deep copy failed", K_(id), KPC(this));
+  } else if (OB_FAIL(get_max_archive_log_(orign_context, lsn, scn))) {
+    CLOG_LOG(WARN, "get max archive log failed", K(ret), K_(id), KPC(this));
+  } else {
+    CLOG_LOG(INFO, "get max archive log succ", K(ret), K_(id), K(lsn), K(scn), KPC(this));
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::get_max_archive_log_(const ObLogRawPathPieceContext &origin, palf::LSN &archive_lsn, SCN &archive_scn)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_index = array_.count() - 1;  //assume that rawpath is sorted
+  ObString uri(array_[max_index].first.ptr());
+  ObString storage_info_ptr(array_[max_index].second.ptr());
+  share::ObBackupDest dest;
+  share::ObBackupStorageInfo storage_info;
+  int64_t min_file_id = 0;
+  int64_t max_file_id = 0;
+  share::ObBackupPath prefix;
+  share::ObArchiveStore archive_store;
+  share::ObSingleLSInfoDesc ls_info_desc;
+
+  if (OB_FAIL(dest.set(uri.ptr(), array_[max_index].second.ptr()))) {
+    CLOG_LOG(WARN, "fial to set dest", K_(id), KPC(this));
+  } else if (OB_FAIL(storage_info.set(uri.ptr(), storage_info_ptr.ptr()))) {
+    CLOG_LOG(WARN, "fail to set storage info", K(ret), K_(id), KPC(this));
+  } else if (OB_FAIL(ObArchivePathUtil::build_restore_prefix(uri.ptr(), id_, prefix))) {
+    CLOG_LOG(WARN, "fail to build_restore_prefix", K(uri), K_(id));
+  } else if (OB_FAIL(archive::ObArchiveFileUtils::get_file_range(ObString(prefix.get_obstr()), &storage_info, min_file_id, max_file_id))) {
+    CLOG_LOG(WARN, "fail to get file range", K(ret), K_(id));
+  } else if (OB_FAIL(archive_store.init(dest))) {
+    CLOG_LOG(WARN, "fail to init archive store", K(ret), K_(id));
+  } else if (OB_FAIL(archive_store.read_single_ls_info(id_, ls_info_desc))
+      && OB_BACKUP_FILE_NOT_EXIST != ret) {
+    CLOG_LOG(WARN, "get single ls info failed", K(ret), K_(id));
+  } else if (OB_BACKUP_FILE_NOT_EXIST == ret) {  // active piece
+    CLOG_LOG(WARN, "ls not exist in cur piece", K_(id));
+    ret = get_max_log_in_file_(origin, max_file_id_, archive_lsn, archive_scn);
+  } else if (OB_UNLIKELY(!ls_info_desc.is_valid())) {
+    ret = OB_INVALID_DATA;
+    CLOG_LOG(WARN, "invalid single piece file", K(ret), K_(id), K(ls_info_desc));
+  } else {
+    archive_scn = ls_info_desc.checkpoint_scn_;
+    archive_lsn = palf::LSN(ls_info_desc.max_lsn_);
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::get_max_log_in_file_(const ObLogRawPathPieceContext &origin,
+    const int64_t file_id,
+    palf::LSN &lsn,
+    SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  const int64_t buf_size = archive::ARCHIVE_FILE_DATA_BUF_SIZE;
+  const int64_t header_size = archive::ARCHIVE_FILE_HEADER_SIZE;
+  int64_t read_size = 0;
+  palf::MemoryStorage mem_storage;
+  palf::MemPalfGroupBufferIterator iter;
+  bool exist;
+
+  const int64_t file_offset = 0;
+  palf::LSN base_lsn = palf::LSN(palf::LOG_INVALID_LSN_VAL);
+  common::ObTimeGuard guard("get_max_log_in_file", 1000 * 1000L);
+
+  if (OB_ISNULL(buf = (char *)mtl_malloc(buf_size, "ArcFile"))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    CLOG_LOG(WARN, "alloc memory failed", K(ret), K_(id));
+  } else if (OB_FAIL(read_part_file_(file_id, file_offset, buf, buf_size, read_size))) {
+    CLOG_LOG(WARN, "read part file failed", K(ret), K_(id));
+  } else if (OB_FAIL(extract_file_base_lsn_(buf, buf_size, base_lsn))) {
+    CLOG_LOG(WARN, "extract base_lsn failed", KPC(this));
+  } else {
+    guard.click("read_data");
+    const char *log_buf = buf + header_size;
+    const int64_t log_buf_size = read_size - header_size;
+    if (OB_FAIL(mem_storage.init(base_lsn))) {
+      CLOG_LOG(WARN, "MemoryStorage init failed", K(ret), K(base_lsn), KPC(this));
+    } else if (OB_FAIL(mem_storage.append(log_buf, log_buf_size))) {
+      CLOG_LOG(WARN, "MemoryStorage append failed", K(log_buf), K(log_buf_size),
+         K(file_id), K(file_offset), K(id_));
+    } else if (OB_FAIL(iter.init(base_lsn, GetFileEndLSN(), &mem_storage))) {
+      CLOG_LOG(WARN, "iter init failed", K(id_), K(base_lsn), K(log_buf), K(log_buf_size));
+    } else {
+      palf::LogGroupEntry entry;
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(iter.next())) {
+          if (OB_ITER_END != ret) {
+            CLOG_LOG(WARN, "iter next failed", K(ret), KPC(this), K(iter));
+          }
+        } else if (OB_FAIL(iter.get_entry(entry, lsn))) {
+          CLOG_LOG(WARN, "get entry failed", K(ret));
+        } else if (! entry.check_integrity()) {
+          ret = OB_INVALID_DATA;
+          CLOG_LOG(WARN, "invalid data", K(ret), KPC(this), K(iter), K(entry));
+        } else {
+          lsn = lsn + entry.get_serialize_size();
+          scn = entry.get_scn();
+          exist = true;
+        }
+      }
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        if (exist) {
+          CLOG_LOG(INFO, "get max archive log through log iteration from archive log",
+              K(lsn), K(scn), K(base_lsn), K(origin), KPC(this));
+        }
+      }
+      guard.click("iterate_log");
+    }
+  }
+  if (NULL != buf) {
+    mtl_free(buf);
+    buf = NULL;
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::read_part_file_(const int64_t file_id,
+    const int64_t file_offset,
+    char *buf,
+    const int64_t buf_size,
+    int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  int64_t pos = 0;
+  archive::ObArchiveFileHeader header;
+  char uri_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
+  char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+  share::ObBackupStorageInfo storage_info;
+  if (OB_FAIL((get_cur_uri(uri_str, sizeof(uri_str))))) {
+    CLOG_LOG(WARN, "fail to get current uri ptr", KPC(this));
+  } else if (OB_FAIL(get_cur_storage_info(storage_info_str, sizeof(storage_info_str)))) {
+    CLOG_LOG(WARN, "fail to get current storage info ptr", KPC(this));
+  } else if (OB_FAIL(ObArchivePathUtil::build_restore_path(uri_str, id_, file_id, path))) {
+    CLOG_LOG(WARN, "get ls archive file path failed", K(ret), KPC(this));
+  } else if (OB_FAIL(storage_info.set(uri_str, storage_info_str))) {
+    CLOG_LOG(WARN, "fail to set storage info", K(ret));
+  } else if (OB_FAIL(archive::ObArchiveFileUtils::range_read(path.get_ptr(),
+          &storage_info, buf, buf_size, file_offset, read_size))) {
+    CLOG_LOG(WARN, "range read failed", K(ret), K(path));
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::extract_file_base_lsn_(const char *buf,
+    const int64_t buf_size,
+    palf::LSN &base_lsn)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  archive::ObArchiveFileHeader header;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size < archive::ARCHIVE_FILE_HEADER_SIZE)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid buffer", K(buf), K(buf_size), K(id_));
+  } else if (OB_FAIL(header.deserialize(buf, buf_size, pos))) {
+    CLOG_LOG(WARN, "archive file header deserialize failed", K(buf), K(buf_size));
+  } else if (OB_UNLIKELY(! header.is_valid())) {
+    ret = OB_INVALID_DATA;
+    CLOG_LOG(WARN, "archive file header not valid", K(header), K(buf), K(buf_size));
+  } else {
+    base_lsn = palf::LSN(header.start_lsn_);
+  }
+  return ret;
+}
+
 } // namespace logservice
 } // namespace oceanbase

@@ -1657,7 +1657,7 @@ bool ObMicroBlockCSDecoder::can_pushdown_decoder(
       bool is_col_signed = false;
       const ObObjType store_col_type = integer_ctx.col_header_->get_store_obj_type();
       const bool can_convert = ObCSDecodingUtil::can_convert_to_integer(store_col_type, is_col_signed);
-      const int64_t row_gap = std::abs(row_ids[0] - row_ids[row_cap - 1] + 1);
+      const int64_t row_gap = std::abs(row_ids[0] - row_ids[row_cap - 1]) + 1;
       bret = ((PD_MIN == agg_type || PD_MAX == agg_type) &&
               row_cap == row_gap &&
               can_convert);

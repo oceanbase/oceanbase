@@ -344,8 +344,6 @@ public:
   int get_tablet_size(const bool ignore_shared_block, int64_t &meta_size, int64_t &data_size);
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
   int get_ddl_kvs(common::ObIArray<ObDDLKV *> &ddl_kvs) const;
-  int check_need_remove_old_table(const int64_t multi_version_start, bool &need_remove) const;
-  int update_upper_trans_version(ObLS &ls, bool &is_updated);
 
   // memtable operation
   // ATTENTION!!!

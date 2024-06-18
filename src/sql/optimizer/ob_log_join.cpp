@@ -715,7 +715,7 @@ bool ObLogJoin::is_scan_operator(log_op_def::ObLogOpType type)
 {
   return LOG_TABLE_SCAN == type || LOG_SUBPLAN_SCAN == type ||
          LOG_FUNCTION_TABLE == type || LOG_UNPIVOT == type ||
-         LOG_TEMP_TABLE_ACCESS == type || LOG_JSON_TABLE == type;
+         LOG_TEMP_TABLE_ACCESS == type || LOG_JSON_TABLE == type || LOG_VALUES_TABLE_ACCESS == type;
 }
 
 int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)
@@ -1506,6 +1506,28 @@ int ObLogJoin::get_card_without_filter(double &card)
     card = get_card() / path->other_cond_sel_;
   } else {
     card = 1.0;
+  }
+  return ret;
+}
+
+int ObLogJoin::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_JOIN == get_join_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  } else if (NESTED_LOOP_JOIN == get_join_algo()) {
+    used = false;
+    if (CONNECT_BY_JOIN == get_join_type()) {
+      inherit_child_ordering_index = -1;
+    } else {
+      inherit_child_ordering_index = first_child;
+    }
+  } else if (MERGE_JOIN == get_join_algo()) {
+    used = true;
+    inherit_child_ordering_index = first_child;
   }
   return ret;
 }

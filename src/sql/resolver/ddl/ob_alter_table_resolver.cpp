@@ -404,6 +404,7 @@ int ObAlterTableResolver::set_table_options()
     alter_table_schema.set_tablespace_id(tablespace_id_);
     alter_table_schema.set_dop(table_dop_);
     alter_table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
+    alter_table_schema.set_auto_increment_cache_size(auto_increment_cache_size_);
     //deep copy
     if (OB_FAIL(ret)) {
       //do nothing
@@ -1626,6 +1627,7 @@ int ObAlterTableResolver::get_table_schema_for_check(ObTableSchema &table_schema
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
   const ObTableSchema *tbl_schema = NULL;
   if (OB_ISNULL(alter_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
   } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
                                                 alter_table_stmt->get_org_database_name(),
@@ -1688,7 +1690,8 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
       }
     }
     ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
-    if (OB_ISNULL(alter_table_stmt)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(alter_table_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
     } else {
@@ -4022,13 +4025,36 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode &action_node_lis
               LOG_WARN("modify check constraint state failed", K(ret));
             }
           } else {  // OB_INVALID_ID == constraint_id
-            ret = OB_ERR_MODIFY_NONEXISTENT_CONSTRAINT;
-            SQL_RESV_LOG(WARN,
-                "Cannot modify constraint - nonexistent constraint",
-                K(ret),
-                K(constraint_name),
-                K(table_schema_->get_table_name_str()));
-            LOG_USER_ERROR(OB_ERR_MODIFY_NONEXISTENT_CONSTRAINT, constraint_name.length(), constraint_name.ptr());
+            const ObSimpleTableSchemaV2* simple_table_schema = nullptr;
+            ObString unique_index_name_with_prefix;
+            if (OB_FAIL(ObTableSchema::build_index_table_name(*allocator_,
+                        table_schema_->get_table_id(),
+                        constraint_name,
+                        unique_index_name_with_prefix))) {
+              LOG_WARN("build_index_table_name failed", K(ret), K(table_schema_->get_table_id()), K(constraint_name));
+            } else if (OB_FAIL(schema_guard->get_simple_table_schema(table_schema_->get_tenant_id(),
+                               table_schema_->get_database_id(),
+                               unique_index_name_with_prefix,
+                               true,
+                               simple_table_schema))) {
+              LOG_WARN("failed to get simple table schema",
+                        K(ret),
+                        K(table_schema_->get_tenant_id()),
+                        K(table_schema_->get_database_id()),
+                        K(unique_index_name_with_prefix));
+            } else if (OB_NOT_NULL(simple_table_schema) && simple_table_schema->is_unique_index()) {
+              ret = OB_NOT_SUPPORTED;
+              SQL_RESV_LOG(WARN, "modify unique constraint is not supported", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify unique constraint");
+            } else {
+              ret = OB_ERR_MODIFY_NONEXISTENT_CONSTRAINT;
+              SQL_RESV_LOG(WARN,
+                  "Cannot modify constraint - nonexistent constraint",
+                  K(ret),
+                  K(constraint_name),
+                  K(table_schema_->get_table_name_str()));
+              LOG_USER_ERROR(OB_ERR_MODIFY_NONEXISTENT_CONSTRAINT, constraint_name.length(), constraint_name.ptr());
+            }
           }
         }
       }

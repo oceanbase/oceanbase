@@ -967,7 +967,7 @@ int ObPxSubCoord::end_ddl(const bool need_commit)
         }
       }
     }
-    FLOG_INFO("end ddl sstable", K(ret), K(need_commit), K(ls_tablet_ids));
+    FLOG_INFO("end ddl", "context_id", ddl_ctrl_.context_id_, K(ret), K(need_commit));
     DEBUG_SYNC(END_DDL_IN_PX_SUBCOORD);
   }
   if (OB_EAGAIN == ret) {

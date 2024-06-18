@@ -28,6 +28,14 @@ def do_special_upgrade(conn, cur, timeout, user, passwd):
   # when upgrade across version, disable enable_ddl/major_freeze
   if current_version != target_version:
     actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
+    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+    # wait scheduler in storage to notice adaptive_compaction is switched to false
+    time.sleep(60 * 2)
+    query_cur = actions.QueryCursor(cur)
+    wait_major_timeout = 600
+    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
+    actions.do_suspend_merge(cur, timeout)
   # When upgrading from a version prior to 4.2 to version 4.2, the bloom_filter should be disabled.
   # The param _bloom_filter_enabled is no longer in use as of version 4.2, there is no need to enable it again.
   if actions.get_version(current_version) < actions.get_version('4.2.0.0')\

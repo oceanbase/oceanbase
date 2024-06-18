@@ -186,7 +186,8 @@ struct ObDMLBaseParam
         branch_id_(0),
         direct_insert_task_id_(0),
         write_flag_(),
-        check_schema_version_(true)
+        check_schema_version_(true),
+        ddl_task_id_(0)
   {
   }
 
@@ -220,6 +221,7 @@ struct ObDMLBaseParam
   // write flag for inner write processing
   concurrent_control::ObWriteFlag write_flag_;
   bool check_schema_version_;
+  int64_t ddl_task_id_;
   bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0) && nullptr != store_ctx_guard_; }
   bool is_direct_insert() const { return (direct_insert_task_id_ > 0); }
   DECLARE_TO_STRING;

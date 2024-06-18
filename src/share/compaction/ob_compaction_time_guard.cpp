@@ -215,6 +215,7 @@ const char *ObStorageCompactionTimeGuard::CompactionEventStr[] = {
     "GET_PARALLEL_RANGE",
     "EXECUTE",
     "CREATE_SSTABLE",
+    "UPDATE_UPPER_TRANS",
     "UPDATE_TABLET",
     "RELEASE_MEMTABLE",
     "SCHEDULE_OTHER_COMPACTION",

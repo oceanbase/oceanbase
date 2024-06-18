@@ -419,8 +419,20 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
       const common::ObTabletID &tablet_id = tablet_->get_tablet_meta().tablet_id_;
       if (need_log_error) {
         LOG_ERROR_RET(OB_ERR_TOO_MUCH_TIME, "refresh table too much times", K(ret), K(exit_flag), K(ls_id), K(tablet_id), KP(table));
+        LOG_DBA_ERROR_V2(OB_STORAGE_MEMTABLE_REFRESH_TIMEOUT,
+                         OB_ERR_TOO_MUCH_TIME,
+                         "refresh table too much times",
+                         ", with ls_id=", ls_id,
+                         ", with tablet_id=", tablet_id,
+                         ", with exit_flag=", exit_flag);
       } else {
         LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "refresh table too much times", K(ret), K(exit_flag), K(ls_id), K(tablet_id), KP(table));
+        LOG_DBA_WARN_V2(OB_STORAGE_MEMTABLE_REFRESH_TOO_MUCH_TIME,
+                        OB_ERR_TOO_MUCH_TIME,
+                        "refresh table too much times",
+                        ", with ls_id=", ls_id,
+                        ", with tablet_id=", tablet_id,
+                        ", with exit_flag=", exit_flag);
       }
       if (0 == exit_flag) {
         LOG_WARN("table is null or not memtable", K(ret), K(ls_id), K(tablet_id), KP(table));

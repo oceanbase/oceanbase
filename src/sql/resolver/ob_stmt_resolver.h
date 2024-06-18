@@ -114,8 +114,10 @@ public:
     int ret = common::OB_SUCCESS;
     T *stmt = NULL;
     if (OB_ISNULL(params_.stmt_factory_)) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(ERROR, "stmt_factory_ is null, not be init");
     } else if (OB_ISNULL(params_.stmt_factory_->get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "query ctx is null", K(ret));
     } else if (OB_FAIL(params_.stmt_factory_->create_stmt(stmt))) {
       SQL_RESV_LOG(WARN, "create stmt failed", K(ret));
@@ -148,6 +150,8 @@ public:
                         const share::schema::ObColumnSchemaV2 *&column_schema,
                         const bool get_hidden = false,
                         bool is_link = false);
+
+  int check_table_name_equal(const ObString &name1, const ObString &name2, bool &equal);
 
 protected:
   int normalize_table_or_database_names(common::ObString &name);

@@ -216,7 +216,7 @@ int ObSqlWorkareaActive::fill_row(
         break;
       }
       case TEMPSEG_SIZE: {
-        cells[cell_idx].set_int(wa_active.profile_.get_dumped_size());
+        cells[cell_idx].set_int(wa_active.profile_.get_max_dumped_size());
         break;
       }
       case TENAND_ID: {

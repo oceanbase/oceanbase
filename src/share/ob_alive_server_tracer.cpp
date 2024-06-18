@@ -257,6 +257,7 @@ void ObAliveServerRefreshTask::runTimerTask()
 
     if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerTracerTimer, *this,
                             REFRESH_INTERVAL_US))) {
+      // overwrite ret
       // schedule task fail is fatal ERROR
       if (OB_CANCELED != ret) {
         LOG_ERROR("schedule task failed", K(ret), "task", *this);

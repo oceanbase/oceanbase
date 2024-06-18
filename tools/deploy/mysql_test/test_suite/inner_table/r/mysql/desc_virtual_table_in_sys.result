@@ -1657,7 +1657,7 @@ backup_id	bigint(20)	NO		NULL
 backup_dest	varchar(2048)	YES		NULL	
 description	varchar(2048)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__tenant_virtual_show_restore_preview;
-ERROR 0A000: show restore preview do not specify backup dest not supported
+ERROR 0A000: show restore preview before ALTER SYSTEM RESTORE PREVIEW is not supported
 desc oceanbase.__all_virtual_master_key_version_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO	PRI	NULL	
@@ -2044,6 +2044,8 @@ password_expired	varchar(1)	NO		NULL
 account_locked	varchar(1)	NO		NULL	
 drop_database_link_priv	varchar(1)	NO		NULL	
 create_database_link_priv	varchar(1)	NO		NULL	
+create_role_priv	varchar(1)	NO		NULL	
+drop_role_priv	varchar(1)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from mysql.user;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2089,6 +2091,7 @@ abs_timeout	bigint(20)	NO		NULL
 try_lock_times	bigint(20)	NO		NULL	
 time_after_recv	bigint(20)	NO		NULL	
 session_id	bigint(20)	NO		NULL	
+holder_session_id	bigint(20)	NO		NULL	
 block_session_id	bigint(20)	NO		NULL	
 type	bigint(20)	NO		NULL	
 lock_mode	varchar(8)	NO		NULL	
@@ -6021,7 +6024,7 @@ total	bigint(20)	YES		0
 interval#	varchar(4000)	NO		NULL	
 failures	bigint(20)	YES		0	
 flag	bigint(20)	NO		NULL	
-what	varchar(4000)	YES		NULL	
+what	varchar(65536)	YES		NULL	
 nlsenv	varchar(4000)	YES		NULL	
 charenv	varchar(4000)	YES		NULL	
 field1	varchar(128)	YES		NULL	
@@ -6030,7 +6033,7 @@ exec_env	varchar(2048)	YES		NULL
 job_style	varchar(128)	YES		NULL	
 program_name	varchar(128)	YES		NULL	
 job_type	varchar(128)	YES		NULL	
-job_action	varchar(4000)	YES		NULL	
+job_action	varchar(65536)	YES		NULL	
 number_of_argument	bigint(20)	YES		NULL	
 start_date	timestamp(6)	YES		NULL	
 repeat_interval	varchar(4000)	YES		NULL	
@@ -6043,10 +6046,12 @@ run_count	bigint(20)	YES		NULL
 retry_count	bigint(20)	YES		NULL	
 last_run_duration	bigint(20)	YES		NULL	
 max_run_duration	bigint(20)	YES		NULL	
-comments	varchar(128)	YES		NULL	
+comments	varchar(4096)	YES		NULL	
 credential_name	varchar(128)	YES		NULL	
 destination_name	varchar(128)	YES		NULL	
 interval_ts	bigint(20)	YES		NULL	
+user_id	bigint(20)	YES		-1	
+database_id	bigint(20)	YES		-1	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_scheduler_job;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9548,5 +9553,25 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 "oceanbase.__all_virtual_nic_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_spatial_reference_systems;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+srs_id	bigint(20) unsigned	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+srs_version	bigint(20) unsigned	NO		NULL	
+srs_name	varchar(128)	NO		NULL	
+organization	varchar(256)	YES		NULL	
+organization_coordsys_id	bigint(20) unsigned	YES		NULL	
+definition	varchar(4096)	NO		NULL	
+minX	decimal(38,10)	YES		NULL	
+maxX	decimal(38,10)	YES		NULL	
+minY	decimal(38,10)	YES		NULL	
+maxY	decimal(38,10)	YES		NULL	
+proj4text	varchar(2048)	YES		NULL	
+description	varchar(2048)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_spatial_reference_systems;
 IF(count(*) >= 0, 1, 0)
 1

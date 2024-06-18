@@ -26,8 +26,9 @@ public:
   ObDirectLoadMultipleSSTableCompactParam();
   ~ObDirectLoadMultipleSSTableCompactParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_data_desc), KP_(datum_utils));
+  TO_STRING_KV(K_(tablet_id), K_(table_data_desc), KP_(datum_utils));
 public:
+  common::ObTabletID tablet_id_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
 };

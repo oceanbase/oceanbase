@@ -35,6 +35,7 @@
 #include "share/rc/ob_context.h"
 #include "share/ob_light_hashmap.h"
 #include "ob_tx_elr_handler.h"
+#include "storage/tx/ob_tx_on_demand_print.h"
 
 namespace oceanbase
 {
@@ -63,19 +64,6 @@ class ObITsMgr;
 class KillTransArg;
 class ObLSTxCtxMgr;
 }
-
-#define TO_STRING_KV_(args...) DEFINE_TO_STRING_(J_KV(args))
-
-#define DEFINE_TO_STRING_(body) DECLARE_TO_STRING_  \
-  {                                                 \
-    int64_t pos = 0;                                \
-    J_OBJ_START();                                  \
-    body;                                           \
-    J_OBJ_END();                                    \
-    return pos;                                     \
-  }
-
-#define DECLARE_TO_STRING_ int64_t to_string_(char* buf, const int64_t buf_len) const
 
 namespace transaction
 {

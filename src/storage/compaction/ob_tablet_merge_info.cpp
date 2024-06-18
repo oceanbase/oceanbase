@@ -264,6 +264,8 @@ int ObTabletMergeInfo::create_sstable(
           STORAGE_LOG(WARN, "Failed to get sstable", K(ret));
         } else if (OB_FAIL(sstable->deep_copy(ctx.mem_ctx_.get_safe_arena(), new_sstable, true/*transfer macro ref*/))) {
           STORAGE_LOG(WARN, "Failed to deep copy sstable", K(ret));
+        } else if (OB_FAIL(ctx.try_set_upper_trans_version(*sstable))) {
+          LOG_WARN("failed to set upper trans version", K(ret), K(param));
         } else if (OB_FAIL(merge_table_handle.set_sstable(new_sstable, &ctx.mem_ctx_.get_safe_arena()))) {
           STORAGE_LOG(WARN, "Failed to set sstable", K(ret));
         }

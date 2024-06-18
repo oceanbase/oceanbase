@@ -108,7 +108,7 @@ int ObJsonExprHelper::get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("input type error", K(val_type));
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *json_datum,
-                expr->datum_meta_, expr->obj_meta_.has_lob_header(), str))) {
+                expr->datum_meta_, expr->obj_meta_.has_lob_header(), str, &ctx.exec_ctx_))) {
     LOG_WARN("fail to get real data.", K(ret), K(str));
   }
   return ret;
@@ -351,7 +351,7 @@ int ObJsonExprHelper::get_json_for_partial_update(
         LOG_WARN("get real data fail", KR(ret), K(json_datum), K(json_expr));
       }
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, json_datum,
-                json_expr.datum_meta_, json_expr.obj_meta_.has_lob_header(), j_str))) {
+                json_expr.datum_meta_, json_expr.obj_meta_.has_lob_header(), j_str, &ctx.exec_ctx_))) {
       LOG_WARN("get real data fail", KR(ret), K(json_datum), K(json_expr));
     }
     if (OB_FAIL(ret)) {

@@ -273,8 +273,14 @@ int ObSql::stmt_execute(const ObPsStmtId stmt_id,
     LOG_WARN("failed to do sanity check", K(ret));
   } else if (OB_FAIL(init_result_set(context, result))) {
     LOG_WARN("failed to init result set", K(ret));
-  } else if (OB_FAIL(handle_ps_execute(stmt_id, stmt_type, params,
-                                       context, result, is_inner_sql))) {
+  } else if (
+#ifdef ERRSIM
+      // inject error for pr-ex protocol only
+      // inject after `init_result_set` because retry test would check session ptr in the exec ctx,
+      // which is initialized by `init_result_set`.
+      OB_FAIL(EVENT_CALL(common::EventTable::COM_STMT_PREXECUTE_EXECUTE_ERROR, context.is_pre_execute_)) ||
+#endif
+      OB_FAIL(handle_ps_execute(stmt_id, stmt_type, params, context, result, is_inner_sql))) {
     if (OB_ERR_PROXY_REROUTE != ret) {
       LOG_WARN("failed to handle ps execute", K(stmt_id), K(ret));
     }
@@ -996,7 +1002,8 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
                 LOG_WARN("fail to alloc string", K(ret), K(table_item->table_name_));
               }
             }
-            if (OB_FAIL(ob_write_string(alloc, table_item->table_name_, field.org_tname_))) {
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(ob_write_string(alloc, table_item->table_name_, field.org_tname_))) {
               LOG_WARN("fail to alloc string", K(ret), K(table_item->table_name_));
             }
           }
@@ -1160,7 +1167,7 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
           ObPsStmtId inner_stmt_id = ps_stmt_item->get_ps_stmt_id();
           ps_cache->deref_stmt_info(inner_stmt_id); //需要决定是否摘除
         }
-        ps_stmt_item->dec_ref_count_check_erase();
+        ps_stmt_item->dec_ref_count();
       }
     }
   }
@@ -1791,6 +1798,13 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
     LOG_WARN("failed to init result set", K(ret));
   }
 
+#ifdef ERRSIM
+  // inject error for pr-ex protocol only
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::COM_STMT_PREXECUTE_PREPARE_ERROR, context.is_pre_execute_) OB_SUCCESS;
+  }
+#endif
+
   if (OB_SUCC(ret)) {
     ObSQLSessionInfo &session = result.get_session();
     ObPsCache *ps_cache = session.get_ps_cache();
@@ -1903,7 +1917,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
           || need_do_real_prepare
           || duplicate_prepare) {
         if (NULL != stmt_item) {
-          stmt_item->dec_ref_count_check_erase();
+          stmt_item->dec_ref_count();
         }
         if (NULL != stmt_info) {
           ps_cache->deref_stmt_info(inner_stmt_id); //需要决定是否摘除
@@ -3011,6 +3025,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
                 K(context.multi_stmt_item_.is_part_of_multi_stmt()),
                 K(context.multi_stmt_item_.get_seq_num()));
       if (result.get_session().get_group_id_not_expected()) {
+        // ignore ret
         LOG_USER_WARN(OB_NEED_SWITCH_CONSUMER_GROUP);
         result.get_session().set_group_id_not_expected(false);
       }
@@ -3370,6 +3385,23 @@ int ObSql::generate_plan(ParseResult &parse_result,
     OPT_TRACE_TITLE("CURRENT SQL TEXT");
     OPT_TRACE("sql_id =", ObString(strlen(sql_ctx.sql_id_), sql_ctx.sql_id_));
     OPT_TRACE(ObString(parse_result.input_sql_len_, parse_result.input_sql_));
+
+    // hint seed injected random status rand
+    const ObQueryHint &query_hint = stmt->get_query_ctx()->get_query_hint();
+    if (query_hint.has_outline_data() || session_info->is_inner()){
+      // if there is outline data no error inject
+    } else {
+      int64_t tmp_ret = (OB_E(EventTable::EN_GENERATE_RANDOM_PLAN) OB_SUCCESS);
+      if (OB_SUCCESS == tmp_ret) {
+        // do nothing
+      } else {
+        time_t seed = OB_ERROR == tmp_ret ? time(NULL) : std::abs(tmp_ret);
+        stmt->get_query_ctx()->set_injected_random_status(true);
+        stmt->get_query_ctx()->set_random_plan_seed(seed);
+        LOG_TRACE("The random seed for plan gen is ", K(seed));
+      }
+    }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(transform_stmt(&stmt->get_query_ctx()->sql_schema_guard_,
                                       opt_stat_mgr_,
@@ -4109,19 +4141,12 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
       pc_ctx.sql_ctx_.plan_cache_hit_ = true;
       session->set_early_lock_release(plan->stat_.enable_early_lock_release_);
       //极限性能场景下(perf_event=true)，不再校验权限信息
-      if (!session->has_user_super_privilege() && !pc_ctx.sql_ctx_.is_remote_sql_ && GCONF.enable_perf_event) {
-        //we don't care about commit or rollback here because they will not cache in plan cache
-        if (ObStmt::is_write_stmt(plan->get_stmt_type(), false)
-            && OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->verify_read_only(
-                       session->get_effective_tenant_id(),
-                       plan->get_stmt_need_privs()))) {
-          LOG_WARN("database or table is read only, cannot execute this stmt");
-        }
-      }
-      //极限性能场景下(perf_event=true)，不再校验权限信息
       if (OB_SUCC(ret) && !pc_ctx.sql_ctx_.is_remote_sql_ && GCONF.enable_perf_event) {
         //如果是remote sql第二次重入plan cache，不需要再做权限检查，因为在第一次进入plan cache已经检查过了
-        if (!ObSchemaChecker::is_ora_priv_check()) {
+        if (OB_FAIL(ObPrivilegeCheck::check_read_only(pc_ctx.sql_ctx_, plan->get_stmt_type(), false,
+                                                      plan->get_stmt_need_privs()))) {
+          LOG_WARN("database or table is read only, cannot execute this stmt");
+        } else if (!ObSchemaChecker::is_ora_priv_check()) {
           if (OB_FAIL(ObPrivilegeCheck::check_privilege(
                                           pc_ctx.sql_ctx_,
                                           plan->get_stmt_need_privs()))) {
@@ -4687,7 +4712,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
         }
       }
       // init auto increment param
-      if (OB_FAIL(pc_ctx.exec_ctx_.init_physical_plan_ctx(*phy_plan))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(pc_ctx.exec_ctx_.init_physical_plan_ctx(*phy_plan))) {
         LOG_WARN("fail init exec context", K(ret), K(phy_plan->get_stmt_type()));
       } else if (OB_FAIL(DAS_CTX(pc_ctx.exec_ctx_).init(*phy_plan, pc_ctx.exec_ctx_))) {
         LOG_WARN("init das context failed", K(ret));

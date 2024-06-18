@@ -376,6 +376,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_big_segment_buf.cpp
   tx/ob_tx_ls_log_writer.cpp
   tx/ob_tx_msg.cpp
+  tx/ob_tx_on_demand_print.cpp
   tx/ob_tx_replay_executor.cpp
   tx/ob_dup_table_util.cpp
   tx/ob_dup_table_lease.cpp
@@ -585,6 +586,7 @@ ob_set_subtarget(ob_storage common
   ob_direct_load_table_guard.cpp
   ob_tenant_tablet_stat_mgr.cpp
   ob_protected_memtable_mgr_handle.cpp
+  ob_gc_upper_trans_helper.cpp
 )
 
 ob_set_subtarget(ob_storage common_mixed
@@ -803,6 +805,10 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_util.cpp
   lob/ob_lob_rpc_struct.cpp
   lob/ob_ext_info_callback.cpp
+  lob/ob_lob_access_param.cpp
+  lob/ob_lob_persistent_reader.cpp
+  lob/ob_lob_persistent_iterator.cpp
+  lob/ob_lob_write_buffer.cpp
 )
 
 ob_set_subtarget(ob_storage mview

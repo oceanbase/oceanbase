@@ -34,7 +34,6 @@ int ObDASIDService::init()
 int ObDASIDService::handle_request(const ObDASIDRequest &request, obrpc::ObDASIDRpcResult &result)
 {
   int ret = OB_SUCCESS;
-  int save_ret = ret;
   if (OB_UNLIKELY(!request.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(request));
@@ -49,13 +48,13 @@ int ObDASIDService::handle_request(const ObDASIDRequest &request, obrpc::ObDASID
     } else if (OB_FAIL(get_number(range, 0, start_id, end_id))) {
       LOG_WARN("get das id failed", KR(ret));
     }
-    save_ret = ret;
+    // overwrite ret
     if (OB_FAIL(result.init(tenant_id, ret, start_id, end_id))) {
       LOG_WARN("das id result init failed", KR(ret), K(request));
     }
-    ret = save_ret;
   }
-  return ret;
+  // overwrite ret
+  return OB_SUCCESS;
 }
 } // namespace sql
 } // namespace oceanbase

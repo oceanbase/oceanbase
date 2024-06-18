@@ -329,7 +329,7 @@ int ObTransformMVRewrite::get_base_table_id_string(const ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> table_id_list;
-  ObSqlBitSet<> visited_id;
+  ObSEArray<uint64_t, 4> visited_id;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt));
@@ -337,10 +337,10 @@ int ObTransformMVRewrite::get_base_table_id_string(const ObDMLStmt *stmt,
     LOG_WARN("failed to get table ids", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_id_list.count(); ++i) {
-    if (visited_id.has_member(table_id_list.at(i))) {
+    if (is_contain(visited_id, table_id_list.at(i))) {
       // do nothing
-    } else if (OB_FAIL(visited_id.add_member(table_id_list.at(i)))) {
-      LOG_WARN("failed to add member", K(ret));
+    } else if (OB_FAIL(visited_id.push_back(table_id_list.at(i)))) {
+      LOG_WARN("failed to push back table ref id", K(ret));
     } else if (i > 0 && OB_FAIL(table_ids.append(","))) {
       LOG_WARN("failed to append comma", K(ret));
     } else if (OB_FAIL(table_ids.append(to_cstring(table_id_list.at(i))))) {

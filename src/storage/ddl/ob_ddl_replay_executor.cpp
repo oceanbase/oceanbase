@@ -638,6 +638,38 @@ int ObDDLIncStartReplayExecutor::init(
   return ret;
 }
 
+struct SyncTabletFreezeHelper {
+  SyncTabletFreezeHelper(ObLS *ls, const ObTabletID &tablet_id, const ObTabletID &lob_meta_tablet_id)
+      : ls_(ls), tablet_id_(tablet_id), lob_meta_tablet_id_(lob_meta_tablet_id) {}
+  int operator()()
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(ls_) || !tablet_id_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KP(ls_), K(tablet_id_));
+    } else {
+      const bool is_sync = true;
+      // try freeze for ten seconds
+      int64_t abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
+      int tmp_ret = ls_->tablet_freeze(tablet_id_, is_sync, abs_timeout_ts);
+      int tmp_ret_lob = OB_SUCCESS;
+      if (lob_meta_tablet_id_.is_valid()) {
+        abs_timeout_ts = ObClockGenerator::getClock() + 10LL * 1000LL * 1000LL;
+        tmp_ret_lob = ls_->tablet_freeze(lob_meta_tablet_id_, is_sync, abs_timeout_ts);
+      }
+      if (OB_SUCCESS != (tmp_ret | tmp_ret_lob)) {
+        ret = OB_EAGAIN;
+        LOG_WARN("sync freeze failed", K(ret), K(tmp_ret), K(tmp_ret_lob), K(tablet_id_), K(lob_meta_tablet_id_));
+      }
+    }
+    return ret;
+  }
+
+  ObLS *ls_;
+  const ObTabletID &tablet_id_;
+  const ObTabletID &lob_meta_tablet_id_;
+};
+
 int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
@@ -655,22 +687,9 @@ int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   } else if (!need_replay) {
     // do nothing
   } else {
-    ObTabletID tablet_id = log_->get_log_basic().get_tablet_id();
-    ObTabletID lob_meta_tablet_id = log_->get_log_basic().get_lob_meta_tablet_id();
-    if (OB_ISNULL(ls_) || !tablet_id.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", KP(ls_), K(tablet_id));
-    } else {
-      int tmp_ret = ls_->sync_tablet_freeze_for_direct_load(tablet_id);
-      int tmp_ret_lob = OB_SUCCESS;
-      if (lob_meta_tablet_id.is_valid()) {
-        tmp_ret_lob = ls_->sync_tablet_freeze_for_direct_load(lob_meta_tablet_id);
-      }
-      if (OB_SUCCESS != (tmp_ret | tmp_ret_lob)) {
-        ret = OB_EAGAIN;
-        LOG_WARN("sync freeze failed", KR(ret), KR(tmp_ret), KR(tmp_ret_lob), K(tablet_id), K(lob_meta_tablet_id));
-      }
-    }
+    SyncTabletFreezeHelper sync_tablet_freeze(
+        ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
+    return sync_tablet_freeze();
   }
 
   return ret;
@@ -723,22 +742,9 @@ int ObDDLIncCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
   } else if (!need_replay) {
     // do nothing
   } else {
-    ObTabletID tablet_id = log_->get_log_basic().get_tablet_id();
-    ObTabletID lob_meta_tablet_id = log_->get_log_basic().get_lob_meta_tablet_id();
-    if (OB_ISNULL(ls_) || !tablet_id.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", KP(ls_), K(tablet_id));
-    } else {
-      int tmp_ret = ls_->sync_tablet_freeze_for_direct_load(tablet_id);
-      int tmp_ret_lob = OB_SUCCESS;
-      if (lob_meta_tablet_id.is_valid()) {
-        tmp_ret_lob = ls_->sync_tablet_freeze_for_direct_load(lob_meta_tablet_id);
-      }
-      if (OB_SUCCESS != (tmp_ret | tmp_ret_lob)) {
-        ret = OB_EAGAIN;
-        LOG_WARN("sync freeze failed", KR(ret), KR(tmp_ret), KR(tmp_ret_lob), K(tablet_id), K(lob_meta_tablet_id));
-      }
-    }
+    SyncTabletFreezeHelper sync_tablet_freeze(
+        ls_, log_->get_log_basic().get_tablet_id(), log_->get_log_basic().get_lob_meta_tablet_id());
+    return sync_tablet_freeze();
   }
   return ret;
 }

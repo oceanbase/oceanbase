@@ -61,6 +61,7 @@ void ObLobLocatorHelper::reset()
   rowkey_str_.reset();
   enable_locator_v2_ = false;
   is_inited_ = false;
+  scan_flag_.reset();
 }
 
 int ObLobLocatorHelper::init(const ObTableScanParam &scan_param,
@@ -212,6 +213,19 @@ int ObLobLocatorHelper::fill_lob_locator(ObDatumRow &row,
   return ret;
 }
 
+bool ObLobLocatorHelper::can_skip_build_mem_lob_locator(const common::ObString &payload)
+{
+  int bret = false;
+  const ObLobCommon *lob_common = reinterpret_cast<const ObLobCommon *>(payload.ptr());
+  if (payload.length() == 0) {
+    // do nothing
+  } else if (lob_common->in_row_ && lib::is_mysql_mode()) {
+    // mysql mode inrow lob can skip build mem lob locator
+    bret = true;
+  }
+  return bret;
+}
+
 int ObLobLocatorHelper::fill_lob_locator_v2(ObDatumRow &row,
                                             const ObTableAccessContext &access_ctx,
                                             const ObTableAccessParam &access_param)
@@ -240,6 +254,11 @@ int ObLobLocatorHelper::fill_lob_locator_v2(ObDatumRow &row,
         ObLobLocatorV2 locator;
         if (datum_meta.is_lob_storage()) {
           if (datum.is_null() || datum.is_nop()) {
+          // read sys table is changed to mysql mode for normal oracle tenant
+          // and that may return disk lob lob locator to jdbc
+          // and cause jdbc error because jdbc can not handle disk lob locator
+          // so sys table can not skip build mem lob locator
+          } else if (! is_sys_table(access_param.iter_param_.table_id_) && can_skip_build_mem_lob_locator(datum.get_string())) {
           } else if (OB_FAIL(build_lob_locatorv2(locator,
                                                  datum.get_string(),
                                                  out_cols_param->at(i)->get_column_id(),
@@ -550,7 +569,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
                                read_snapshot_.scn_.cast_to_int());
         ObMemLobRetryInfo retry_info;
         retry_info.addr_ = MYADDR;
-        retry_info.is_select_leader_ = true;
+        retry_info.is_select_leader_ = !scan_flag_.is_select_follower_;
         retry_info.read_latest_ = scan_flag_.read_latest_;
         retry_info.timeout_ = access_ctx.timeout_;
         if (retry_info.read_latest_) {

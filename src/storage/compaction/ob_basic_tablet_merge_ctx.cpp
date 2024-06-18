@@ -21,6 +21,7 @@
 #include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "storage/blocksstable/ob_data_store_desc.h"
 #include "storage/ob_storage_schema_util.h"
+#include "storage/ob_gc_upper_trans_helper.h"
 #include "ob_medium_list_checker.h"
 #include "share/schema/ob_tenant_schema_service.h"
 
@@ -220,7 +221,11 @@ int ObStaticMergeParam::cal_minor_merge_param()
     LOG_WARN("tables handle is invalid", K(ret), K(tables_handle_));
   } else {
     read_base_version_ = 0;
-    set_full_merge_and_level(false/*is_full_merge*/);
+    if (get_tablet_id().is_ls_inner_tablet() && !is_mini_merge(get_merge_type())) {
+      // full merge has been setted when preparing compaction filter
+    } else {
+      set_full_merge_and_level(false/*is_full_merge*/);
+    }
   }
   return ret;
 }
@@ -857,11 +862,12 @@ void ObBasicTabletMergeCtx::build_update_table_store_param(
   if (is_meta_major_merge(get_merge_type())) {
     param.multi_version_start_ = tablet_handle_.get_obj()->get_multi_version_start();
     param.snapshot_version_ = tablet_handle_.get_obj()->get_snapshot_version();
+  } else {
+    param.multi_version_start_ = get_tablet_id().is_ls_inner_tablet() ? 1 : static_param_.version_range_.multi_version_start_;
+    param.snapshot_version_ = static_param_.version_range_.snapshot_version_;
   }
 
   param.sstable_ = sstable;
-  param.snapshot_version_ = static_param_.version_range_.snapshot_version_;
-  param.multi_version_start_ = get_tablet_id().is_ls_inner_tablet() ? 1 : static_param_.version_range_.multi_version_start_;
   param.storage_schema_ = static_param_.schema_;
   param.rebuild_seq_ = get_ls_rebuild_seq();
   param.need_report_ = is_major_merge_type(merge_type);
@@ -894,6 +900,40 @@ int ObBasicTabletMergeCtx::update_tablet(
     CTX_SET_DIAGNOSE_LOCATION(*this);
   } else {
     time_guard_click(ObStorageCompactionTimeGuard::UPDATE_TABLET);
+  }
+  return ret;
+}
+
+int ObBasicTabletMergeCtx::try_set_upper_trans_version(blocksstable::ObSSTable &sstable)
+{
+  int ret = OB_SUCCESS;
+  const ObMergeType merge_type = get_inner_table_merge_type();
+  const int64_t rebuild_seq = get_ls_rebuild_seq();
+  // update upper_trans_version for param.sstable_, and then update table store
+  if (is_mini_merge(merge_type) || is_minor_merge(merge_type)) {
+    // upper_trans_version calculated from ls is invalid when ls is rebuilding, use rebuild_seq to prevent concurrency bug.
+    int tmp_ret = OB_SUCCESS;
+    ObLS *ls = get_ls();
+    int64_t new_upper_trans_version = INT64_MAX;
+    int64_t new_rebuild_seq = 0;
+    bool ls_is_migration = false;
+
+    if (INT64_MAX != sstable.get_upper_trans_version()) {
+      // all row committed, has set as max_merged_trans_version
+    } else if (OB_TMP_FAIL(ls->check_ls_migration_status(ls_is_migration, new_rebuild_seq))) {
+      LOG_WARN("failed to check ls migration status", K(tmp_ret), K(ls_is_migration), K(new_rebuild_seq));
+    } else if (ls_is_migration) {
+    } else if (rebuild_seq != new_rebuild_seq) {
+      ret = OB_EAGAIN;
+      LOG_WARN("rebuild seq not same, need retry merge", K(ret), "ls_meta", ls->get_ls_meta(), K(new_rebuild_seq), K(rebuild_seq));
+    } else if (OB_TMP_FAIL(ObGCUpperTransHelper::try_get_sstable_upper_trans_version(*ls, sstable, new_upper_trans_version))) {
+      LOG_WARN("failed to get new upper_trans_version for sstable", K(tmp_ret), K(sstable));
+    } else if (INT64_MAX != new_upper_trans_version
+            && OB_TMP_FAIL(sstable.set_upper_trans_version(mem_ctx_.get_allocator(), new_upper_trans_version))) {
+      LOG_WARN("failed to set upper trans version", K(tmp_ret), K(sstable));
+    } else {
+      time_guard_click(ObStorageCompactionTimeGuard::UPDATE_UPPER_TRANS);
+    }
   }
   return ret;
 }

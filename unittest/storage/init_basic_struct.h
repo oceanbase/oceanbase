@@ -22,12 +22,12 @@ namespace oceanbase
 namespace storage
 {
 
-int __attribute__((weak))  build_test_schema(share::schema::ObTableSchema &table_schema, uint64_t table_id)
+int __attribute__((weak))  build_test_schema(share::schema::ObTableSchema &table_schema, uint64_t table_id, const char* table_name)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 column;
   table_schema.reset();
-  table_schema.set_table_name("test_merge");
+  table_schema.set_table_name(table_name);
   table_schema.set_tenant_id(1);
   table_schema.set_tablegroup_id(1);
   table_schema.set_database_id(1);
@@ -45,6 +45,11 @@ int __attribute__((weak))  build_test_schema(share::schema::ObTableSchema &table
    STORAGE_LOG(WARN, "failed to add column", KR(ret), K(column));
   }
   return ret;
+}
+
+int __attribute__((weak))  build_test_schema(share::schema::ObTableSchema &table_schema, uint64_t table_id)
+{
+  return build_test_schema(table_schema, table_id, "test_merge");
 }
 
 int __attribute__((weak)) gen_create_ls_arg(const int64_t tenant_id,

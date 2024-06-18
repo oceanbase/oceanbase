@@ -292,8 +292,17 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("get unexpected null", K(ret), K(view_table_resolver.get_select_stmt()));
       } else if (OB_ISNULL(select_stmt->get_real_stmt())) {
         if (!resolve_succ) {
-          //if set query resolve failed, child stmt is null
-          //do not persist column schema
+          //if the first child stmt of set query resolve failed, real stmt is null
+          ObArray<SelectItem> select_items;
+          if (!column_list.empty() && OB_FAIL(add_undefined_column_infos(
+                                                          session_info_->get_effective_tenant_id(),
+                                                          select_items,
+                                                          table_schema,
+                                                          column_list))) {
+            if (OB_FAIL(try_add_error_info(ret, create_arg.error_info_))) {
+              LOG_WARN("failed to add error info to for force view", K(ret));
+            }
+          }
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get real stmt", K(ret), KPC(select_stmt));
@@ -752,7 +761,7 @@ int ObCreateViewResolver::get_sel_priv_tables_in_subquery(const ObSelectStmt *se
           if (OB_ISNULL(child_stmts.at(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("child stmt is NULL", K(ret));
-          } else if (SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables))) {
+          } else if (OB_FAIL(SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables)))) {
             LOG_WARN("failed to get need privs in child stmt", K(ret));
           }
         }
@@ -818,7 +827,7 @@ int ObCreateViewResolver::get_need_priv_tables(ObSelectStmt &root_stmt,
         if (OB_ISNULL(child_stmts.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("child stmt is NULL", K(ret));
-        } else if (SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables))) {
+        } else if (OB_FAIL(SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables)))) {
           LOG_WARN("failed to get need privs in child stmt", K(ret));
         }
       }
@@ -1529,7 +1538,12 @@ int ObCreateViewResolver::try_add_undefined_column_infos(const uint64_t tenant_i
   int ret = OB_SUCCESS;
   bool add_undefined_columns = false;
   ObArray<SelectItem> select_items;
-  if (has_resolved_field_list) {
+  if (OB_ISNULL(select_stmt_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse node is null", K(ret));
+  } else if (select_stmt_node->children_[PARSE_SELECT_SET] != NULL && column_list.empty()) {
+    // do nothing
+  } else if (has_resolved_field_list) {
     if (OB_FAIL(add_undefined_column_infos(tenant_id,
                                            select_stmt.get_select_items(),
                                            table_schema,

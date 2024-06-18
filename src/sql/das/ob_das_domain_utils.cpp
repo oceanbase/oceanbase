@@ -43,7 +43,9 @@ int ObDASDomainUtils::generate_spatial_index_rows(
   uint64_t rowkey_num = das_ctdef.table_param_.get_data_table().get_rowkey_column_num();
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
 
-  if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
+  if (lib::is_oracle_mode() && wkb_str.length() == 0) {
+    // in oracle mode, ignore null value
+  } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
     LOG_WARN("failed to get srid", K(ret), K(wkb_str));
   } else if (srid != 0 &&
       OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
@@ -207,30 +209,16 @@ int ObDASDomainUtils::generate_spatial_index_rows(
     ObFTWordMap &words_count)
 {
   int ret = OB_SUCCESS;
-  common::ObSEArray<ObFTWord, 256> words;
   if (OB_ISNULL(helper)
       || OB_UNLIKELY(ObCollationType::CS_TYPE_INVALID == type
                   || ObCollationType::CS_TYPE_EXTENDED_MARK < type)
       || OB_UNLIKELY(!words_count.created())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(helper), K(type), K(words_count.created()));
-  } else if (OB_FAIL(helper->segment(type, fulltext.ptr(), fulltext.length(), doc_length, words))) {
+  } else if (OB_FAIL(helper->segment(type, fulltext.ptr(), fulltext.length(), doc_length, words_count))) {
     LOG_WARN("fail to segment", K(ret), KPC(helper), K(type), K(fulltext));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < words.count(); ++i) {
-      const ObFTWord &ft_word = words.at(i);
-      int64_t word_count = 0;
-      if (OB_FAIL(words_count.get_refactored(ft_word, word_count)) && OB_HASH_NOT_EXIST != ret) {
-        LOG_WARN("fail to get ft word", K(ret), K(ft_word));
-      } else {
-        word_count = OB_HASH_NOT_EXIST == ret ? 1 : ++word_count;
-        if (OB_FAIL(words_count.set_refactored(ft_word, word_count, 1/*overwrite*/))) {
-          LOG_WARN("fail to set ft word and count", K(ret), K(ft_word));
-        }
-      }
-    }
   }
-  STORAGE_FTS_LOG(DEBUG, "segment and calc word count", K(ret), K(words), K(type));
+  STORAGE_FTS_LOG(DEBUG, "segment and calc word count", K(ret), K(words_count.size()), K(type));
   return ret;
 }
 
@@ -484,6 +472,7 @@ void ObDomainDMLIterator::reset()
   row_projector_ = nullptr;
   das_ctdef_ = nullptr;
   main_ctdef_ = nullptr;
+  allocator_.reset();
 }
 
 void ObDomainDMLIterator::set_ctdef(
@@ -520,10 +509,12 @@ int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
   while (OB_SUCC(ret) && !got_row) {
     if (row_idx_ >= rows_.count()) {
       rows_.reuse();
+      allocator_.reuse();
       row_idx_ = 0;
       if (OB_UNLIKELY(!das_ctdef_->table_param_.get_data_table().is_domain_index())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, not domain index", K(ret), K(das_ctdef_->table_param_.get_data_table()));
+
       } else if (FAILEDx(write_iter_.get_next_row(sr))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("get next row from result iterator failed", K(ret));
@@ -562,6 +553,7 @@ int ObDomainDMLIterator::get_next_domain_rows(ObNewRow *&row, int64_t &row_count
     while (OB_SUCC(ret) && !got_row) {
       if (row_idx_ >= rows_.count()) {
         rows_.reuse();
+        allocator_.reuse();
         row_idx_ = 0;
         if (OB_UNLIKELY(!das_ctdef_->table_param_.get_data_table().is_domain_index())) {
           ret = OB_ERR_UNEXPECTED;
@@ -757,7 +749,7 @@ int ObFTDMLIterator::get_ft_and_doc_id(
     const ObChunkDatumStore::StoredRow *store_row,
     ObString &doc_id,
     ObString &ft,
-    common::ObObjMeta &ft_meta) const
+    common::ObObjMeta &ft_meta)
 {
   int ret = OB_SUCCESS;
   const uint64_t doc_id_col_id = das_ctdef_->table_param_.get_data_table().get_doc_id_col_id();
@@ -793,7 +785,7 @@ int ObFTDMLIterator::get_ft_and_doc_id_for_update(
     const ObChunkDatumStore::StoredRow *store_row,
     ObString &doc_id,
     ObString &ft,
-    common::ObObjMeta &ft_meta) const
+    common::ObObjMeta &ft_meta)
 {
   int ret = OB_SUCCESS;
   const uint64_t rowkey_col_cnt = das_ctdef_->table_param_.get_data_table().get_rowkey_column_num();
@@ -863,7 +855,7 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data(
     const ObChunkDatumStore::StoredRow *store_row,
     int64_t& multivalue_idx,
     int64_t& multivalue_arr_idx,
-    ObString &multivalue_data) const
+    ObString &multivalue_data)
 {
   int ret = OB_SUCCESS;
   multivalue_idx = OB_INVALID_ID;
@@ -910,7 +902,7 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data_for_update(
     const ObChunkDatumStore::StoredRow *store_row,
     int64_t& multivalue_idx,
     int64_t& multivalue_arr_idx,
-    ObString &multivalue_data) const
+    ObString &multivalue_data)
 {
   int ret = OB_SUCCESS;
   bool found = false;

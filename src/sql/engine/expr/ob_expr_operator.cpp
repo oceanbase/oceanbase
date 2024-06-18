@@ -404,7 +404,7 @@ int ObExprOperator::call(ObObj *stack, int64_t &stack_size, ObExprCtx &expr_ctx)
                 K_(row_dimension), K(input_types_.count()),
                 K(stack_size), K(ret));
     }
-    if (OB_UNLIKELY(real_param_num_ < 0)) {
+    if (OB_SUCC(ret) && OB_UNLIKELY(real_param_num_ < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("bug! real_param_num is less than 0", K_(name), K(get_type_name(type_)),
                 K_(type), K_(param_num), K_(real_param_num),
@@ -1579,6 +1579,8 @@ ObObjType ObExprOperator::enumset_calc_types_[ObMaxTC] =
   ObNullType, /*UDT*/
   ObUInt64Type, /*ObDecimalIntTC*/
   ObNullType, /*COLLECTION*/
+  ObVarcharType, /*ObMySQLDateTC*/
+  ObVarcharType, /*ObMySQLDateTimeTC*/
 };
 ////////////////////////////////////////////////////////////////
 

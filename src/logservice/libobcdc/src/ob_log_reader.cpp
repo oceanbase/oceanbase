@@ -301,6 +301,7 @@ int ObLogReader::read_store_service_(ObLogEntryTask &log_entry_task,
       }
     } else {
       if (OB_ISNULL(data_buf = static_cast<char *>(log_entry_task.alloc(value_len + 1)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("ReadLogBufFactory alloc fail", KR(ret));
       } else {
         MEMCPY(data_buf, value_str, value_len);

@@ -39,7 +39,6 @@ int ObPlanMatchHelper::match_plan(const ObPlanCacheCtx &pc_ctx,
   const ObIArray<ObTableLocation> &plan_tbl_locs = plan->get_table_locations();
   PWJTabletIdMap pwj_map;
   bool use_pwj_map = false;
-
   if (0 == base_cons.count()) {
     // match all
     is_matched = true;

@@ -773,8 +773,9 @@ int ObTableScanOp::prepare_pushdown_limit_param()
   int ret = OB_SUCCESS;
   if (!limit_param_.is_valid()) {
     //ignore, do nothing
-  } else if (in_batch_rescan_subplan()) {
+  } else if (in_batch_rescan_subplan() || nullptr != tsc_rtdef_.attach_rtinfo_) {
     //batch scan can not pushdown limit param to storage
+    // do final limit for TSC op with attached ops for now
     need_final_limit_ = true;
     tsc_rtdef_.scan_rtdef_.limit_param_.offset_ = 0;
     tsc_rtdef_.scan_rtdef_.limit_param_.limit_ = -1;
@@ -784,7 +785,6 @@ int ObTableScanOp::prepare_pushdown_limit_param()
       tsc_rtdef_.lookup_rtdef_->limit_param_.offset_ = 0;
       tsc_rtdef_.lookup_rtdef_->limit_param_.limit_  = -1;
     }
-
   } else if (tsc_rtdef_.has_lookup_limit() || (OB_NOT_NULL(scan_iter_) && scan_iter_->get_das_task_cnt() > 1)) {
     //for index back, need to final limit output rows in TableScan operator,
     //please see me for the reason:
@@ -1049,7 +1049,9 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.stmt_allocator_.set_alloc(&ctx_.get_allocator());
   das_rtdef.scan_allocator_.set_alloc(&ctx_.get_allocator());
   das_rtdef.eval_ctx_ = &get_eval_ctx();
-  if ((is_lookup_limit && is_lookup) || (!is_lookup_limit && !is_lookup)) {
+  if (nullptr != tsc_ctdef.attach_spec_.attach_ctdef_) {
+    // disable limit pushdown to das iter for table scan with attached pushdown ops
+  } else if ((is_lookup_limit && is_lookup) || (!is_lookup_limit && !is_lookup)) {
     //when is_lookup_limit = true means that the limit param should pushdown to the lookup rtdef
     //so is_lookup = true means that the das_rtdef is the lookup rtdef
     //when is_lookup_limit = false means that the limit param should pushdown to the scan rtdef
@@ -1089,6 +1091,11 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
                  K(DAS_CTX(ctx_).get_table_loc_list()));
       } else if (OB_FAIL(DAS_CTX(ctx_).extended_table_loc(*loc_meta, das_rtdef.table_loc_))) {
         LOG_WARN("extended table location failed", K(ret), KPC(loc_meta));
+      }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(das_rtdef.table_loc_) && OB_NOT_NULL(das_rtdef.table_loc_->loc_meta_)) {
+      if (das_rtdef.table_loc_->loc_meta_->select_leader_ == 0) {
+        das_rtdef.scan_flag_.set_is_select_follower();
       }
     }
   }
@@ -3131,6 +3138,7 @@ int ObTableScanOp::inner_get_next_row()
 int ObTableScanOp::inner_get_next_spatial_index_row()
 {
   int ret = OB_SUCCESS;
+  bool need_ignore_null = false;
   if (OB_ISNULL(spat_index_.spat_rows_)) {
     if (OB_FAIL(init_spatial_index_rows())) {
       LOG_WARN("init spatial row store failed", K(ret));
@@ -3148,10 +3156,11 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
         const ObExprPtrIArray &exprs = MY_SPEC.output_;
         ObExpr *expr = exprs.at(3);
         ObDatum *in_datum = NULL;
+        ObString geo_wkb;
         if (OB_FAIL(expr->eval(eval_ctx_, in_datum))) {
           LOG_WARN("expression evaluate failed", K(ret));
-        } else {
-          ObString geo_wkb = in_datum->get_string();
+        } else if (OB_FALSE_IT(geo_wkb = in_datum->get_string())) {
+        } else if (geo_wkb.length() > 0) {
           uint32_t srid = UINT32_MAX;
           omt::ObSrsCacheGuard srs_guard;
           const ObSrsItem *srs_item = NULL;
@@ -3204,10 +3213,12 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
               }
             }
           }
+        } else {
+          need_ignore_null = true;
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !need_ignore_null) {
       ObNewRow &row = (*(spat_index_.spat_rows_))[spat_index_.spat_row_index_++];
       ObObj &cellid= row.get_cell(0);
       ObObj &mbr = row.get_cell(1);

@@ -99,7 +99,7 @@ int ObSqlPlan::store_sql_plan(ObLogPlan* log_plan, ObPhysicalPlan* phy_plan)
     LOG_WARN("failed to get sql plan infos", K(ret));
   } else if (OB_FAIL(compress_plan.compress_logical_plan(allocator_, sql_plan_infos))) {
     LOG_WARN("failed to compress logical plan", K(ret));
-  } else if (phy_plan->set_logical_plan(compress_plan)) {
+  } else if (OB_FAIL(phy_plan->set_logical_plan(compress_plan))) {
     LOG_WARN("failed to set logical plan", K(ret));
   }
   if (OB_FAIL(ret)) {
@@ -132,6 +132,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
     LOG_WARN("failed to get sql plan infos", K(ret));
   }
   allocate_mem_failed |= OB_ALLOCATE_MEMORY_FAILED == ret;
+  // overwrite ret
   if (OB_FAIL(format_sql_plan(sql_plan_infos,
                               type,
                               option,
@@ -140,6 +141,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
   }
   allocate_mem_failed |= OB_ALLOCATE_MEMORY_FAILED == ret;
   if (OB_FAIL(plan_text_to_strings(out_plan_text, plan_strs))) {
+    // overwrite ret
     LOG_WARN("failed to convert plan text to strings", K(ret));
   } else if (OB_FAIL(inner_store_sql_plan_for_explain(ctx,
                                                       plan_table,

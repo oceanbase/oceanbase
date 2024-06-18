@@ -527,7 +527,8 @@ int ObColumnNamespaceChecker::find_column_in_table(const TableItem &table_item,
   int ret = OB_SUCCESS;
   if (table_item.is_joined_table()) {
     const JoinedTable &joined_table = static_cast<const JoinedTable&>(table_item);
-    ret = find_column_in_joined_table(joined_table, q_name, found_table, need_check_unique);
+    ret = SMART_CALL(find_column_in_joined_table(joined_table, q_name,
+                                                 found_table, need_check_unique));
   } else {
     if (OB_SUCC(find_column_in_single_table(table_item, q_name, need_check_unique))) {
       found_table = &table_item;

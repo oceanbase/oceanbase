@@ -38,6 +38,7 @@ public:
                       common::ObIArray<ObUDFInfo> &udf_exprs,
                       common::ObIArray<ObOpRawExpr*> &op_exprs,
                       common::ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs,
+                      common::ObIArray<ObInListInfo> &inlist_infos,
                       common::ObIArray<ObMatchFunRawExpr*> &match_exprs) = 0;
 private:
   // disallow copy

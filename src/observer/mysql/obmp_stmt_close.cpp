@@ -93,6 +93,7 @@ int ObMPStmtClose::process()
         }
       }
       if (OB_FAIL(session->close_ps_stmt(stmt_id_))) {
+        // overwrite ret, 优先级低，被覆盖
         LOG_WARN("fail to close ps stmt", K(ret), K_(stmt_id), K(session->get_sessid()));
       }
       if (OB_SUCCESS != tmp_ret) {

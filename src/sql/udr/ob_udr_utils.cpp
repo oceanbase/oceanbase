@@ -240,7 +240,7 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
       }
     }
     if (OB_SUCC(ret)) {
-      if (phy_ctx->get_param_store_for_update().assign(param_store)) {
+      if (OB_FAIL(phy_ctx->get_param_store_for_update().assign(param_store))) {
         LOG_WARN("failed to assign param store", K(ret));
       } else {
         pc_ctx.fp_result_.cache_params_ = &(phy_ctx->get_param_store_for_update());

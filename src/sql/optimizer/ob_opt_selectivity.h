@@ -75,8 +75,7 @@ class OptSelectivityCtx
     dependency_type_(FilterDependencyType::INDEPENDENT)
   { }
 
-  ObOptimizerContext &get_opt_ctx() { return opt_ctx_; }
-  const ObOptimizerContext &get_opt_ctx() const { return opt_ctx_; }
+  ObOptimizerContext &get_opt_ctx() const { return const_cast<ObOptimizerContext &>(opt_ctx_); }
   const ObDMLStmt *get_stmt() const { return stmt_; }
   const ObLogPlan *get_plan() const { return plan_; }
   
@@ -277,7 +276,10 @@ public:
     ds_level_(ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING),
     all_used_global_parts_(),
     scale_ratio_(1.0),
-    distinct_rows_(0.0)
+    distinct_rows_(0.0),
+    table_partition_info_(NULL),
+    base_meta_info_(NULL),
+    real_rows_(-1.0)
   {}
   int assign(const OptTableMeta &other);
 
@@ -293,7 +295,9 @@ public:
            common::ObIArray<uint64_t> &column_ids,
            ObIArray<int64_t> &all_used_global_parts,
            const double scale_ratio,
-           const OptSelectivityCtx &ctx);
+           const OptSelectivityCtx &ctx,
+           const ObTablePartitionInfo *table_partition_info,
+           const ObTableMetaInfo *base_meta_info);
 
   // int update_stat(const double rows, const bool can_reduce, const bool can_enlarge);
 
@@ -341,9 +345,17 @@ public:
 
   share::schema::ObTableType get_table_type() const { return table_type_; }
 
+  // The ratio of the increase in the number of rows in the system table compared to the number of rows in the statistics.
+  int get_increase_rows_ratio(ObOptimizerContext &ctx, double &increase_rows_ratio) const;
+  void clear_base_table_info() {
+    table_partition_info_ = NULL;
+    base_meta_info_ = NULL;
+    real_rows_ = -1.0;
+  }
+
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(table_type), K_(rows), K_(stat_type), K_(ds_level),
                K_(all_used_parts), K_(all_used_tablets), K_(pk_ids), K_(column_metas),
-               K_(all_used_global_parts), K_(scale_ratio), K_(stat_locked), K_(distinct_rows));
+               K_(all_used_global_parts), K_(scale_ratio), K_(stat_locked), K_(distinct_rows), K_(real_rows));
 private:
   uint64_t table_id_;
   uint64_t ref_table_id_;
@@ -365,6 +377,11 @@ private:
 
   // only valid for child stmt meta of set distinct stmt
   double distinct_rows_;
+
+  // only for base table
+  const ObTablePartitionInfo *table_partition_info_;
+  const ObTableMetaInfo *base_meta_info_;
+  double real_rows_;
 };
 
 struct OptSelectivityDSParam {
@@ -397,7 +414,9 @@ public:
                                ObIArray<int64_t> &all_used_global_parts,
                                const double scale_ratio,
                                int64_t last_analyzed,
-                               bool is_stat_locked);
+                               bool is_stat_locked,
+                               const ObTablePartitionInfo *table_partition_info,
+                               const ObTableMetaInfo *base_meta_info);
 
   int add_set_child_stmt_meta_info(const ObSelectStmt *parent_stmt,
                                    const ObSelectStmt *child_stmt,
@@ -412,7 +431,10 @@ public:
                                    const OptTableMetas &child_table_metas,
                                    const OptSelectivityCtx &child_ctx,
                                    const double child_rows);
-
+  int add_values_table_meta_info(const ObDMLStmt *stmt,
+                                 const uint64_t table_id,
+                                 const OptSelectivityCtx &ctx,
+                                 ObValuesTableDef *table_def);
   int get_set_stmt_output_statistics(const ObSelectStmt &stmt,
                                      const OptTableMetas &child_table_metas,
                                      const int64_t idx,
@@ -517,6 +539,7 @@ public:
                                   const OptSelectivityCtx &ctx,
                                   const ObColumnRefRawExpr &col_expr,
                                   const ObRawExpr &qual,
+                                  const bool need_out_of_bounds,
                                   double &selectivity);
 
   //param:As some expr, query range can't calc range, then range will be (min, max).
@@ -526,6 +549,7 @@ public:
                                   const OptSelectivityCtx &ctx,
                                   const ObColumnRefRawExpr &col_expr,
                                   const ObIArray<ObRawExpr* > &quals,
+                                  const bool need_out_of_bounds,
                                   double &selectivity);
 
   static int get_column_range_min_max(const OptSelectivityCtx &ctx,
@@ -561,6 +585,20 @@ public:
                                  bool discrete,
                                  bool include_start,
                                  bool include_end);
+
+  static int refine_out_of_bounds_sel(const OptTableMetas &table_metas,
+                                      const OptSelectivityCtx &ctx,
+                                      const ObColumnRefRawExpr &col_expr,
+                                      const ObQueryRangeArray &ranges,
+                                      const ObObj &min_val,
+                                      const ObObj &max_val,
+                                      double &selectivity);
+
+  static int get_single_range_out_of_bounds_sel(const ObObj &min_val,
+                                                const ObObj &max_val,
+                                                const ObObj &start_val,
+                                                const ObObj &end_val,
+                                                double &selectivity);
 
   static int check_column_in_current_level_stmt(const ObDMLStmt *stmt,
                                                 const ObRawExpr &expr);

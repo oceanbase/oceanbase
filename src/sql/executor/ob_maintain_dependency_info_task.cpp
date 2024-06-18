@@ -221,6 +221,7 @@ void ObMaintainDepInfoTaskQueue::run2()
           view_info_set_.clear();
         }
         if (sys_view_consistent_.size() >= MAX_SYS_VIEW_SIZE) {
+          // ignore ret
           LOG_WARN("sys_view_consistent size too much", K(sys_view_consistent_.size()));
           sys_view_consistent_.clear();
         }

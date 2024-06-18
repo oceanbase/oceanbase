@@ -362,13 +362,18 @@ OB_INLINE int ObTableInsertOp::check_insert_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_insert_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table insert affected row is not match with index table", K(ret),
+        LOG_ERROR_RET(OB_ERR_DEFENSIVE_CHECK,
+                  "Fatal Error!!! data table insert affected row is not match with index table",
+                  K(ret),
                   "primary_affected_rows", pri_rtdef.das_rtdef_.affected_rows_,
                   "index_affected_rows", idx_rtdef.das_rtdef_.affected_rows_,
                   "primary_ins_ctdef", pri_ctdef,
                   "index_ins_ctdef", idx_ctdef,
                   "primary_ins_rtdef", pri_rtdef,
                   "index_ins_rtdef", idx_rtdef);
+        LOG_DBA_ERROR_V2(OB_SQL_INSERT_AFFECTED_ROW_FAIL, ret, "Attention!!!", "data table delete affected row is not match with index table "
+                  ", data table delete affected_rows is: ", pri_rtdef.das_rtdef_.affected_rows_,
+                  ", index table delete affected_rows is: ", idx_rtdef.das_rtdef_.affected_rows_);
       }
     }
     if (OB_SUCC(ret) && !pri_ctdef.das_ctdef_.is_ignore_) {
@@ -376,10 +381,14 @@ OB_INLINE int ObTableInsertOp::check_insert_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_insert_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table insert affected row is not match with found rows", K(ret),
+        LOG_ERROR_RET(OB_ERR_DEFENSIVE_CHECK, "Fatal Error!!! data table insert affected row is not match with found rows", K(ret),
                   "primary_affected_rows", pri_rtdef.das_rtdef_.affected_rows_,
+                  "primary_found_rows", pri_rtdef.cur_row_num_,
                   "primary_ins_ctdef", pri_ctdef,
                   "primary_ins_rtdef", pri_rtdef);
+       LOG_DBA_ERROR_V2(OB_SQL_INSERT_AFFECTED_ROW_FAIL, ret, "Attention!!!", "data table insert affected row is not match with found rows"
+                  ", primary_affected_rows is: ", pri_rtdef.das_rtdef_.affected_rows_,
+                  ", primary_get_rows is: ", pri_rtdef.cur_row_num_);
       }
     }
   }

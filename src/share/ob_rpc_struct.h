@@ -1860,7 +1860,8 @@ public:
                K_(ddl_stmt_str),
                K_(sql_mode),
                K_(tz_info_wrap),
-               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
+               K_(is_insert_overwrite));
   ObCreateHiddenTableArg() :
     ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
@@ -1872,6 +1873,7 @@ public:
     ddl_stmt_str_(),
     sql_mode_(0),
     tz_info_wrap_(),
+    is_insert_overwrite_(false),
     nls_formats_{}
     {}
   ~ObCreateHiddenTableArg()
@@ -1887,6 +1889,7 @@ public:
     dest_tenant_id_ = common::OB_INVALID_ID;
     session_id_ = common::OB_INVALID_ID;
     ddl_type_ = share::DDL_INVALID;
+    is_insert_overwrite_ = false;
     ddl_stmt_str_.reset();
     sql_mode_ = 0;
   }
@@ -1904,6 +1907,7 @@ public:
   common::ObArenaAllocator allocator_;
   common::ObTimeZoneInfo tz_info_;
   common::ObTimeZoneInfoWrap tz_info_wrap_;
+  bool is_insert_overwrite_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
 };
 
@@ -4179,7 +4183,8 @@ public:
       const common::ObReplicaMember &dst,
       const common::ObReplicaMember &data_source,
       const int64_t paxos_replica_number,
-      const bool skip_change_member_list);
+      const bool skip_change_member_list,
+      const common::ObReplicaMember &force_data_source);
 
   TO_STRING_KV(K_(task_id),
                K_(tenant_id),
@@ -4242,7 +4247,8 @@ public:
       const common::ObReplicaMember &data_source,
       const int64_t orig_paxos_replica_number,
       const int64_t new_paxos_replica_number,
-      const bool skip_change_member_list);
+      const bool skip_change_member_list,
+      const common::ObReplicaMember &force_data_source);
 
   TO_STRING_KV(K_(task_id),
                K_(tenant_id),
@@ -5860,7 +5866,6 @@ public:
                K_(passwd_array),
                K_(kms_info),
                K_(table_items),
-               K_(multi_uri),
                K_(with_restore_scn),
                K_(encrypt_key),
                K_(kms_uri),

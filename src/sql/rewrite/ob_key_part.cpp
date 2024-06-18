@@ -1437,7 +1437,8 @@ int ObKeyPart::remove_in_params_vals(const ObIArray<int64_t> &val_idx)
   return ret;
 }
 
-int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool contain_row, bool &is_bound_modified)
+int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
+                               bool contain_row, bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   int64_t start_cmp = 0;
@@ -1445,10 +1446,10 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool cont
   if (OB_UNLIKELY(!is_normal_key())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keypart isn't normal key", K_(key_type));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, pos_,
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
                                                normal_keypart_->start_, start_cmp, common::CO_LE, true))) {
     LOG_WARN("failed to try cast value type", K(ret));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, pos_,
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
                                                normal_keypart_->end_, end_cmp, common::CO_LE, false))) {
     LOG_WARN("failed to try cast value type", K(ret));
   } else {
@@ -1479,8 +1480,8 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool cont
   return ret;
 }
 
-int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
-                              const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
+int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
+                              ObIAllocator &alloc, const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
                               common::ObCmpOp cmp_op /* CO_EQ */, bool left_border /*true*/)
 {
   int ret = OB_SUCCESS;
@@ -1489,7 +1490,7 @@ int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocat
           || value.is_decimal_int())) {
     const ObObj *dest_val = NULL;
     ObCollationType collation_type = pos.column_type_.get_collation_type();
-    ObCastCtx cast_ctx(&alloc, &dtc_params, CM_WARN_ON_FAIL, collation_type);
+    ObCastCtx cast_ctx(&alloc, &dtc_params, cur_datetime, CM_WARN_ON_FAIL, collation_type);
     ObAccuracy acc(pos.column_type_.get_accuracy());
     if (pos.column_type_.is_decimal_int()) {
       cast_ctx.res_accuracy_ = &acc;
