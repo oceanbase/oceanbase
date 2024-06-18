@@ -369,7 +369,6 @@ int ObVectorStore::fill_group_by_rows(
       set_end();
       if (!group_by_cell_->is_processing()) {
         begin_index = end_index;
-        ret = OB_ITER_END;
       }
     }
   }
