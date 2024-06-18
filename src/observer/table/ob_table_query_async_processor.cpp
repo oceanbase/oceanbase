@@ -378,6 +378,8 @@ int ObTableQueryAsyncP::get_query_session(uint64_t sessid, ObTableQueryAsyncSess
   }
 
   if (OB_SUCC(ret)) {
+    // use session trans_state_ which storage transaction state in query_next()
+    trans_param_.trans_state_ptr_ = query_session->get_trans_state();
     query_session->set_timout_ts(get_timeout_ts());
   }
 
