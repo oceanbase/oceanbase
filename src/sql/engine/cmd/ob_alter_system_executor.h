@@ -197,6 +197,7 @@ private:
   int construct_wait_leader_switch_sql_(
       const obrpc::ObServerList &svr_list,
       ObSqlString &sql);
+  int check_server_empty_(obrpc::ObSrvRpcProxy &rpc_proxy, const obrpc::ObServerList &servers);
   DISALLOW_COPY_AND_ASSIGN(ObAdminServerExecutor);
 };
 
