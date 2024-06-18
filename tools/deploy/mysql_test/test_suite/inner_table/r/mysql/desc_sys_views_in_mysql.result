@@ -1103,10 +1103,10 @@ PHYSICAL_READ_REQUESTS	bigint(0) unsigned	NO
 PHYSICAL_READ_BYTES	bigint(0) unsigned	NO			
 PHYSICAL_WRITE_REQUESTS	bigint(0) unsigned	NO			
 PHYSICAL_WRITE_BYTES	bigint(0) unsigned	NO			
-WORKAREA_MEM	bigint(0) unsigned	NO			
-WORKAREA_MAX_MEM	bigint(0) unsigned	NO			
-WORKAREA_TEMPSEG	bigint(0) unsigned	NO			
-WORKAREA_MAX_TEMPSEG	bigint(0) unsigned	NO			
+WORKAREA_MEM	bigint(20) unsigned	NO		NULL	
+WORKAREA_MAX_MEM	bigint(20) unsigned	NO		NULL	
+WORKAREA_TEMPSEG	bigint(20) unsigned	NO		NULL	
+WORKAREA_MAX_TEMPSEG	bigint(20) unsigned	NO		NULL	
 OTHERSTAT_GROUP_ID	bigint(0) unsigned	NO			
 OTHERSTAT_1_ID	bigint(20)	NO		NULL	
 OTHERSTAT_1_TYPE	bigint(0) unsigned	NO			
@@ -1194,10 +1194,10 @@ PHYSICAL_READ_REQUESTS	bigint(0) unsigned	NO
 PHYSICAL_READ_BYTES	bigint(0) unsigned	NO			
 PHYSICAL_WRITE_REQUESTS	bigint(0) unsigned	NO			
 PHYSICAL_WRITE_BYTES	bigint(0) unsigned	NO			
-WORKAREA_MEM	bigint(0) unsigned	NO			
-WORKAREA_MAX_MEM	bigint(0) unsigned	NO			
-WORKAREA_TEMPSEG	bigint(0) unsigned	NO			
-WORKAREA_MAX_TEMPSEG	bigint(0) unsigned	NO			
+WORKAREA_MEM	bigint(20) unsigned	NO			
+WORKAREA_MAX_MEM	bigint(20) unsigned	NO			
+WORKAREA_TEMPSEG	bigint(20) unsigned	NO			
+WORKAREA_MAX_TEMPSEG	bigint(20) unsigned	NO			
 OTHERSTAT_GROUP_ID	bigint(0) unsigned	NO			
 OTHERSTAT_1_ID	bigint(20)	NO			
 OTHERSTAT_1_TYPE	bigint(0) unsigned	NO			

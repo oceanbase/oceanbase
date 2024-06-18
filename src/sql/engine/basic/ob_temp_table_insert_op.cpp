@@ -331,7 +331,7 @@ int ObTempTableInsertOp::insert_chunk_row_store()
     } else {
       dtl_int_key.channel_id_ = interm_result_id;
       dtl_int_key.start_time_ = oceanbase::common::ObTimeUtility::current_time();
-      dtl_int_key.time_us_ = phy_plan_ctx->get_timeout_timestamp();
+      dtl_int_key.timeout_ts_ = phy_plan_ctx->get_timeout_timestamp();
       row_store->set_eof(true);
       //chunk row store不需要管理dump逻辑
       row_store->is_read_ = true;
@@ -377,7 +377,7 @@ int ObTempTableInsertOp::clear_all_datum_store()
   for (int64_t i = 0; OB_SUCC(ret) && i < all_datum_store_.count(); ++i) {
     ObDTLIntermResultInfo *datum_store = all_datum_store_.at(i);
     if (NULL != datum_store) {
-      dtl::ObDTLIntermResultManager::dec_interm_result_ref_count(datum_store);
+      MTL(dtl::ObDTLIntermResultManager*)->dec_interm_result_ref_count(datum_store);
     }
   }
   all_datum_store_.reset();

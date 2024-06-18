@@ -1274,7 +1274,7 @@ int select_sql_workarea_active(lua_State *L)
         // number_passes
         gen.next_column(wa_active.profile_.get_number_pass());
         // tempseg_size
-        gen.next_column(wa_active.profile_.get_dumped_size());
+        gen.next_column(wa_active.profile_.get_max_dumped_size());
         // tenant_id
         gen.next_column(tenant_id);
         // policy

@@ -1027,6 +1027,7 @@ protected:
   bool have_generate_fts_arg_;
   bool is_set_lob_inrow_threshold_;
   int64_t lob_inrow_threshold_;
+  int64_t auto_increment_cache_size_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

@@ -1181,7 +1181,7 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
         param.autoinc_desired_count_ = 0;
         param.autoinc_increment_ = 1;
         param.autoinc_offset_ = 1;
-        param.auto_increment_cache_size_ = 1; // TODO(shuangcan): should we use the sysvar on session?
+        param.auto_increment_cache_size_ = 0; // set cache size to 0 to disable prefetch
         param.autoinc_mode_is_order_ = dest_table_schema->is_order_auto_increment_mode();
         param.autoinc_auto_increment_ = dest_table_schema->get_auto_increment();
         param.autoinc_version_ = dest_table_schema->get_truncate_version();
@@ -1326,7 +1326,8 @@ int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status
       param.autoinc_increment_ = 1;
       param.autoinc_offset_ = 1;
       param.global_value_to_sync_ = autoinc_val - 1;
-      param.auto_increment_cache_size_ = 1; // TODO(shuangcan): should we use the sysvar on session?
+      param.auto_increment_cache_size_ = 0; // set cache size to 0 to disable prefetch
+      param.autoinc_mode_is_order_ = new_table_schema->is_order_auto_increment_mode();
       param.autoinc_version_ = new_table_schema->get_truncate_version();
       if (OB_FAIL(auto_inc_service.sync_insert_value_global(param))) {
         LOG_WARN("fail to clear autoinc cache", K(ret), K(param));

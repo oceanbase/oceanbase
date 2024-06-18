@@ -270,7 +270,7 @@ int ObTempTableInsertVecOp::insert_interm_result_info()
     } else {
       dtl_int_key.channel_id_ = interm_result_id;
       dtl_int_key.start_time_ = oceanbase::common::ObTimeUtility::current_time();
-      dtl_int_key.time_us_ = phy_plan_ctx->get_timeout_timestamp();
+      dtl_int_key.timeout_ts_ = phy_plan_ctx->get_timeout_timestamp();
       cur_interm_res_info->set_eof(true);
       // The chunk row store does not require managing the dump logic.
       cur_interm_res_info->is_read_ = true;
@@ -317,7 +317,7 @@ int ObTempTableInsertVecOp::clear_all_interm_res_info()
   for (int64_t i = 0; OB_SUCC(ret) && i < all_interm_res_info_.count(); ++i) {
     ObDTLIntermResultInfo *col_store = all_interm_res_info_.at(i);
     if (NULL != col_store) {
-      dtl::ObDTLIntermResultManager::dec_interm_result_ref_count(col_store);
+      MTL(dtl::ObDTLIntermResultManager*)->dec_interm_result_ref_count(col_store);
     }
   }
   all_interm_res_info_.reset();

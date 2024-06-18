@@ -311,12 +311,12 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       sql::ObPlanCache*,                             \
       oceanbase::common::ObDetectManager*,           \
       sql::dtl::ObTenantDfc*,                        \
-      sql::dtl::ObDTLIntermResultManager*,           \
       omt::ObPxPools*,                               \
       lib::Worker::CompatMode,                       \
       obmysql::ObMySQLRequestManager*,               \
       transaction::ObTenantWeakReadService*,         \
       sql::ObTenantSqlMemoryManager*,                \
+      sql::dtl::ObDTLIntermResultManager*,           \
       sql::ObPlanMonitorNodeList*,                   \
       sql::ObDataAccessService*,                     \
       sql::ObDASIDService*,                          \

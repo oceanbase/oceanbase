@@ -226,6 +226,12 @@ public:
                          const int64_t autoinc_version,
                          uint64_t &seq_value,
                          uint64_t &sync_value);
+  int read_and_push_inner_table(const AutoincKey &key,
+                                const uint64_t max_value,
+                                const uint64_t cache_end,
+                                const int64_t autoinc_version,
+                                bool &is_valid,
+                                uint64_t &new_end);
 private:
   int check_inner_autoinc_version(const int64_t &request_autoinc_version,
                                   const int64_t &inner_autoinc_version,
@@ -256,15 +262,17 @@ public:
       const int64_t &autoinc_version,
       uint64_t &sync_value,
       uint64_t &start_inclusive,
-      uint64_t &end_inclusive) override;
+      uint64_t &end_inclusive) override final;
 
-  virtual int get_sequence_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &sequence_value) override;
+  virtual int get_sequence_value(const AutoincKey &key,
+                                 const int64_t &autoinc_version,
+                                 uint64_t &sequence_value) override final;
 
   virtual int get_auto_increment_values(
       const uint64_t tenant_id,
       const common::ObIArray<AutoincKey> &autoinc_keys,
       const common::ObIArray<int64_t> &autoinc_versions,
-      common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values) override;
+      common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values) override final;
 
   // when we push local value to global, we may find in global end that the local value
   // is obsolete. we will piggy back the larger global value to caller via global_sync_value,
@@ -274,9 +282,12 @@ public:
       const uint64_t max_value,
       const uint64_t value,
       const int64_t &autoinc_version,
-      uint64_t &global_sync_value) override;
+      const int64_t cache_size,
+      uint64_t &global_sync_value) override final;
 
-  virtual int local_sync_with_global_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &value) override;
+  virtual int local_sync_with_global_value(const AutoincKey &key,
+                                           const int64_t &autoinc_version,
+                                           uint64_t &value) override final;
 private:
   ObAutoIncInnerTableProxy inner_table_proxy_;
 };
@@ -301,15 +312,17 @@ public:
       const int64_t &autoinc_version,
       uint64_t &sync_value,
       uint64_t &start_inclusive,
-      uint64_t &end_inclusive) override;
+      uint64_t &end_inclusive) override final;
 
-  virtual int get_sequence_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &sequence_value) override;
+  virtual int get_sequence_value(const AutoincKey &key,
+                                 const int64_t &autoinc_version,
+                                 uint64_t &sequence_value) override final;
 
   virtual int get_auto_increment_values(
       const uint64_t tenant_id,
       const common::ObIArray<AutoincKey> &autoinc_keys,
       const common::ObIArray<int64_t> &autoinc_versions,
-      common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values) override;
+      common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values) override final;
 
   // when we push local value to global, we may find in global end that the local value
   // is obsolete. we will piggy back the larger global value to caller via global_sync_value,
@@ -319,11 +332,17 @@ public:
       const uint64_t max_value,
       const uint64_t value,
       const int64_t &autoinc_version,
-      uint64_t &global_sync_value) override;
+      const int64_t cache_size,
+      uint64_t &global_sync_value) override final;
 
-  virtual int local_sync_with_global_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &value) override;
+  virtual int local_sync_with_global_value(const AutoincKey &key,
+                                           const int64_t &autoinc_version,
+                                           uint64_t &value) override final;
 
   int clear_global_autoinc_cache(const AutoincKey &key);
+  ObGAISRequestRpc *get_gais_request_rpc() { return &gais_request_rpc_; }
+
+  int get_sequence_next_value(const ObSequenceSchema &schema, ObSequenceValue &nextval);
 
 private:
   bool is_inited_;
@@ -353,6 +372,7 @@ public:
                       share::schema::ObMultiVersionSchemaService *schema_service,
                       rpc::frame::ObReqTransport *req_transport);
   int get_handle(AutoincParam &param, CacheHandle *&handle);
+  int get_handle(const ObSequenceSchema &schema, ObSequenceValue &nextval);
   void release_handle(CacheHandle *&handle);
 
   int sync_insert_value_global(AutoincParam &param);
@@ -372,7 +392,8 @@ public:
   int clear_autoinc_cache_all(const uint64_t tenant_id,
                               const uint64_t table_id,
                               const uint64_t column_id,
-                              const bool autoinc_mode_is_order);
+                              const bool autoinc_mode_is_order,
+                              const bool ignore_rpc_errors = true);
   int clear_autoinc_cache(const obrpc::ObAutoincSyncArg &arg);
 
   int get_sequence_value(const uint64_t tenant_id,
@@ -417,6 +438,10 @@ public:
                              const uint64_t offset,
                              const uint64_t increment,
                              uint64_t &prev_value);
+  ObGAISRequestRpc* get_gais_request_rpc()
+  { return global_autoinc_service_.get_gais_request_rpc(); }
+  static uint64_t get_max_value(const common::ObObjType type);
+
 private:
   int get_handle_order(AutoincParam &param, CacheHandle *&handle);
   int get_handle_noorder(AutoincParam &param, CacheHandle *&handle);
@@ -426,7 +451,6 @@ private:
                                const uint64_t value_to_sync);
 
 private:
-  uint64_t get_max_value(const common::ObObjType type);
   int get_table_node(const AutoincParam &param, TableNode *&table_node);
   int fetch_table_node(const AutoincParam &param,
                        TableNode *table_node,

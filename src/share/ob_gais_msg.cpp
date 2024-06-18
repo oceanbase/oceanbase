@@ -36,6 +36,44 @@ OB_SERIALIZE_MEMBER(ObGAISAutoIncKeyArg, autoinc_key_, sender_, autoinc_version_
 OB_SERIALIZE_MEMBER(ObGAISPushAutoIncValReq, autoinc_key_, base_value_, max_value_, sender_,
                     autoinc_version_, cache_size_);
 
+OB_DEF_SERIALIZE(ObGAISBroadcastAutoIncCacheReq)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(tenant_id_);
+  OB_UNIS_ENCODE(buf_size_);
+  if (OB_SUCC(ret)) {
+    if (pos + buf_size_ > buf_len) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else {
+      MEMCPY(buf + pos, buf_, buf_size_);
+      pos += buf_size_;
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObGAISBroadcastAutoIncCacheReq)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(tenant_id_);
+  OB_UNIS_DECODE(buf_size_);
+  if (OB_SUCC(ret)) {
+    buf_ = buf + pos;
+    pos += buf_size_;
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObGAISBroadcastAutoIncCacheReq)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(tenant_id_);
+  OB_UNIS_ADD_LEN(buf_size_);
+  len += buf_size_;
+  return len;
+}
+OB_SERIALIZE_MEMBER(ObGAISNextSequenceValReq, schema_, sender_);
+
 int ObGAISNextAutoIncValReq::init(const AutoincKey &autoinc_key,
                                   const uint64_t offset,
                                   const uint64_t increment,
@@ -85,7 +123,8 @@ int ObGAISPushAutoIncValReq::init(const AutoincKey &autoinc_key,
                                   const uint64_t base_value,
                                   const uint64_t max_value,
                                   const common::ObAddr &sender,
-                                  const int64_t &autoinc_version)
+                                  const int64_t &autoinc_version,
+                                  const int64_t cache_size)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(autoinc_key.tenant_id_) ||
@@ -98,6 +137,35 @@ int ObGAISPushAutoIncValReq::init(const AutoincKey &autoinc_key,
     max_value_ = max_value;
     sender_ = sender;
     autoinc_version_ = get_modify_autoinc_version(autoinc_version);
+    cache_size_ = cache_size;
+  }
+  return ret;
+}
+
+int ObGAISNextSequenceValReq::init(const schema::ObSequenceSchema &schema,
+                                   const common::ObAddr &sender)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(schema.get_tenant_id()) || !sender.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(schema), K(sender));
+  } else if (OB_FAIL(schema_.assign(schema))){
+    LOG_WARN("fail to init schemar_", K(ret));
+  } else {
+    sender_ = sender;
+  }
+  return ret;
+}
+
+int ObGAISNextSequenceValReq::assign(const ObGAISNextSequenceValReq &src_req)
+{
+  int ret = OB_SUCCESS;
+  if (this != &src_req) {
+    if (OB_FAIL(schema_.assign(src_req.schema_))) {
+      LOG_WARN("fail assign schema_", K(src_req));
+    } else {
+      sender_ = src_req.sender_;
+    }
   }
   return ret;
 }

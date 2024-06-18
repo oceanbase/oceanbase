@@ -27,6 +27,44 @@ OB_SERIALIZE_MEMBER(ObDtlDfoKey, server_id_, px_sequence_id_, qc_id_, dfo_id_);
 
 OB_SERIALIZE_MEMBER(ObDtlBatchInfo, batch_id_, start_, end_, rows_);
 
+OB_DEF_SERIALIZE(ObDtlOpInfo)
+{
+  using namespace oceanbase::common;
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, dop_, plan_id_, exec_id_, session_id_, database_id_);
+  if (OB_SUCC(ret)) {
+    MEMCPY(buf + pos, sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
+    pos += common::OB_MAX_SQL_ID_LENGTH + 1;
+  }
+  LST_DO_CODE(OB_UNIS_ENCODE, op_id_, input_rows_, input_width_,
+              disable_auto_mem_mgr_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDtlOpInfo)
+{
+  using namespace oceanbase::common;
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, dop_, plan_id_, exec_id_, session_id_, database_id_);
+  if (OB_SUCC(ret)) {
+    MEMCPY(sql_id_, (char*)buf + pos, common::OB_MAX_SQL_ID_LENGTH + 1);
+    pos += common::OB_MAX_SQL_ID_LENGTH + 1;
+  }
+  LST_DO_CODE(OB_UNIS_DECODE, op_id_, input_rows_, input_width_,
+              disable_auto_mem_mgr_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDtlOpInfo)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, dop_, plan_id_, exec_id_, session_id_, database_id_);
+  len += common::OB_MAX_SQL_ID_LENGTH + 1;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, op_id_, input_rows_, input_width_,
+              disable_auto_mem_mgr_);
+  return len;
+}
+
 int ObDtlLinkedBuffer::deserialize_msg_header(const ObDtlLinkedBuffer &buffer,
                                               ObDtlMsgHeader &header,
                                               bool keep_pos /*= false*/)
@@ -138,6 +176,9 @@ OB_DEF_SERIALIZE(ObDtlLinkedBuffer)
       if (OB_SUCC(ret)) {
         LST_DO_CODE(OB_UNIS_ENCODE, row_meta_);
       }
+      if (OB_SUCC(ret) && seq_no_ == 1) {
+        LST_DO_CODE(OB_UNIS_ENCODE, op_info_);
+      }
     }
   }
   return ret;
@@ -179,6 +220,9 @@ OB_DEF_DESERIALIZE(ObDtlLinkedBuffer)
     if (OB_SUCC(ret)) {
       LST_DO_CODE(OB_UNIS_DECODE, row_meta_);
     }
+    if (OB_SUCC(ret) && seq_no_ == 1) {
+      LST_DO_CODE(OB_UNIS_DECODE, op_info_);
+    }
   }
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
@@ -216,13 +260,16 @@ OB_DEF_SERIALIZE_SIZE(ObDtlLinkedBuffer)
     use_interm_result_,
     batch_id_,
     batch_info_valid_);
-    if (batch_info_valid_) {
-      LST_DO_CODE(OB_UNIS_ADD_LEN, batch_info_);
-    }
-    LST_DO_CODE(OB_UNIS_ADD_LEN, dfo_id_, sqc_id_);
-    LST_DO_CODE(OB_UNIS_ADD_LEN, enable_channel_sync_);
-    LST_DO_CODE(OB_UNIS_ADD_LEN, register_dm_info_);
-    LST_DO_CODE(OB_UNIS_ADD_LEN, row_meta_);
+  if (batch_info_valid_) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, batch_info_);
+  }
+  LST_DO_CODE(OB_UNIS_ADD_LEN, dfo_id_, sqc_id_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, enable_channel_sync_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, register_dm_info_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, row_meta_);
+  if (seq_no_ == 1) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, op_info_);
+  }
   return len;
 }
 
