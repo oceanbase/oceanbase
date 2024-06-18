@@ -711,7 +711,7 @@ void ObDDLIncRedoLogWriterCallback::reset()
 }
 
 int ObDDLIncRedoLogWriterCallback::write(
-    const ObMacroBlockHandle &macro_handle,
+    ObMacroBlockHandle &macro_handle,
     const ObLogicMacroBlockId &logic_id,
     char *buf,
     const int64_t buf_len,
@@ -724,6 +724,8 @@ int ObDDLIncRedoLogWriterCallback::write(
   } else if (OB_UNLIKELY(!macro_handle.is_valid() || !logic_id.is_valid() || nullptr == buf || row_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(macro_handle), K(logic_id), KP(buf), K(row_count));
+  } else if (OB_FAIL(macro_handle.wait())) {
+    STORAGE_LOG(WARN, "macro block writer fail to wait io finish", K(ret));
   } else {
     macro_block_id_ = macro_handle.get_macro_id();
     redo_info_.table_key_ = table_key_;
