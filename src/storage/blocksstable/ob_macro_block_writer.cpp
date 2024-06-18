@@ -868,7 +868,8 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
       LOG_ERROR("Unexpected current row trans version in major merge", K(ret), K(row),
         "snapshot_version", data_store_desc_->get_snapshot_version());
     } else if (!row.mvcc_row_flag_.is_uncommitted_row()) { // update max commit version
-      if (data_store_desc_->is_major_merge_type() && data_store_desc_->get_major_working_cluster_version() < DATA_VERSION_4_3_0_0) {
+      const int64_t cluster_version = data_store_desc_->get_major_working_cluster_version();
+      if (data_store_desc_->is_major_merge_type() && not_compat_for_queuing_mode_42x(cluster_version) && cluster_version < DATA_VERSION_4_3_0_0) {
         micro_writer_->update_max_merged_trans_version(-cur_row_version);
       }
       if (!row.mvcc_row_flag_.is_shadow_row()) {
@@ -920,8 +921,7 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
         }
       } else { // another schema rowkey
         if (nullptr != merge_info_
-            && !is_major_merge_type(merge_info_->merge_type_)
-            && !is_meta_major_merge(merge_info_->merge_type_)
+            && !is_major_or_meta_merge_type(merge_info_->merge_type_)
             && !is_macro_or_micro_block_reused_
             && !last_key_with_L_flag_) {
           ret = OB_ERR_UNEXPECTED;
@@ -950,8 +950,14 @@ int ObMacroBlockWriter::update_micro_commit_info(const ObDatumRow &row)
   } else {
     const int64_t trans_version_col_idx = data_store_desc_->get_schema_rowkey_col_cnt();
     const int64_t cur_row_version = row.storage_datums_[trans_version_col_idx].get_int();
-    if (!data_store_desc_->is_major_merge_type() || data_store_desc_->get_major_working_cluster_version() >= DATA_VERSION_4_3_0_0) {
+    // data_store_desc_->get_major_working_cluster_version() only set in major merge. it is 0 for mini/minor
+    const int64_t cluster_version = data_store_desc_->get_major_working_cluster_version();
+    if (!data_store_desc_->is_major_merge_type() || cluster_version >= DATA_VERSION_4_3_0_0) {
+      // see ObMicroBlockWriter::build_block, column_checksums_ and min_merged_trans_version_ share the same memory space.
+      // Only major merge set column_checksums_, so we can set min_merged_trans_version_ regardless of data version.
       micro_writer_->update_merged_trans_version(-cur_row_version);
+    } else if (!not_compat_for_queuing_mode_42x(cluster_version)) {
+      micro_writer_->update_max_merged_trans_version(-cur_row_version);
     }
   }
   return ret;

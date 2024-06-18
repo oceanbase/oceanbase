@@ -24,6 +24,7 @@ namespace storage
 {
 class ObIMemtableMgr;
 struct ObUpdateTableStoreParam;
+struct UpdateUpperTransParam;
 struct ObBatchUpdateTableStoreParam;
 class ObTablet;
 class ObTableStoreIterator;
@@ -248,7 +249,8 @@ private:
       const ObTabletTableStore &old_store,
       const bool need_check_sstable,
       const int64_t inc_base_snapshot_version,
-      const ObTabletHAStatus &ha_status);
+      const ObTabletHAStatus &ha_status,
+      const UpdateUpperTransParam &upper_trans_param);
   int build_meta_major_table(
       common::ObArenaAllocator &allocator,
       const blocksstable::ObSSTable *new_sstable,

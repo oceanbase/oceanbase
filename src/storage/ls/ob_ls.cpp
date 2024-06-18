@@ -1671,6 +1671,32 @@ int ObLS::build_new_tablet_from_mds_table(
   return ret;
 }
 
+int ObLS::check_ls_migration_status(
+    bool &ls_is_migration,
+    int64_t &rebuild_seq)
+{
+  int ret = OB_SUCCESS;
+  RDLockGuard guard(meta_rwlock_);
+  ls_is_migration = false;
+  rebuild_seq = 0;
+  ObMigrationStatus migration_status;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_UNLIKELY(is_stopped())) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(ls_meta_.get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), KPC(this));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+    //no need update upper trans version
+    ls_is_migration = true;
+  } else {
+    rebuild_seq = get_rebuild_seq();
+  }
+  return ret;
+}
+
 int ObLS::finish_slog_replay()
 {
   int ret = OB_SUCCESS;
@@ -2254,83 +2280,6 @@ int ObLS::disable_replay_without_lock()
   return ret;
 }
 
-int ObLS::try_update_upper_trans_version_and_gc_sstable(
-    compaction::ObCompactionScheduleIterator &iter)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  RDLockGuard guard(meta_rwlock_);
-  bool update_upper_trans_version = true;
-  const share::ObLSID &ls_id = get_ls_id();
-  ObMigrationStatus migration_status;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_UNLIKELY(is_stopped())) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(ls_meta_.get_migration_status(migration_status))) {
-    LOG_WARN("failed to get migration status", K(ret), KPC(this));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
-    update_upper_trans_version = false;
-  }
-
-  ObTabletHandle tablet_handle;
-  ObTablet *tablet = nullptr;
-  common::ObTabletID tablet_id;
-  while (OB_SUCC(ret)) {
-    if (OB_FAIL(iter.get_next_tablet(tablet_handle))) {
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-        break;
-      } else {
-        LOG_WARN("failed to get tablet", K(ret), K(tablet_handle));
-      }
-    } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-    } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-    } else if (FALSE_IT(tablet_id = tablet->get_tablet_meta().tablet_id_)) {
-    } else {
-      // 1. try to update upper trans version
-      bool is_updated = false;
-      if (!update_upper_trans_version || !tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
-        // no need to update upper trans version
-      } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_upper_trans_version(*this, is_updated))) {
-        LOG_WARN("failed to update upper trans version", K(tmp_ret), K(ls_id), K(tablet_id), KPC(tablet));
-      }
-
-      // 2. try to gc sstable
-      ObStorageSnapshotInfo snapshot_info;
-      bool need_remove = false;
-      if (tablet_id.is_special_merge_tablet()) {
-        // no need to gc sstable for special tablet
-      } else if (OB_TMP_FAIL(tablet->get_kept_snapshot_info(get_min_reserved_snapshot(), snapshot_info))) {
-        LOG_WARN("failed to get multi version start", K(tmp_ret), K(tablet_id));
-      } else if (OB_TMP_FAIL(tablet->check_need_remove_old_table(snapshot_info.snapshot_, need_remove))) {
-        LOG_WARN("failed to check need remove old store", K(tmp_ret), K(snapshot_info), K(tablet_id));
-      } else if (need_remove) {
-        ObArenaAllocator tmp_arena("RmOldTblTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-        ObStorageSchema *storage_schema = nullptr;
-        if (OB_TMP_FAIL(tablet->load_storage_schema(tmp_arena, storage_schema))) {
-          LOG_WARN("failed to load storage schema", K(tmp_ret), K(tablet));
-        } else {
-          ObUpdateTableStoreParam param(tablet->get_snapshot_version(), snapshot_info.snapshot_, storage_schema, get_rebuild_seq());
-          ObTabletHandle new_tablet_handle; // no use here
-          if (OB_TMP_FAIL(update_tablet_table_store_without_lock_(tablet_id, param, new_tablet_handle))) {
-            LOG_WARN("failed to update table store", K(tmp_ret), K(param), K(ls_id), K(tablet_id));
-          } else {
-            FLOG_INFO("success to remove old table in table store", K(tmp_ret), K(ls_id),
-                K(tablet_id), K(snapshot_info), KPC(tablet));
-          }
-        }
-        ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
-      }
-    }
-  } // end while
-  return ret;
-}
 
 int ObLS::update_ls_meta(const bool update_restore_status,
                          const ObLSMeta &src_ls_meta)

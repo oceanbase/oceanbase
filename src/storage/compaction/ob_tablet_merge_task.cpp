@@ -186,7 +186,7 @@ int64_t ObMergeParameter::to_string(char* buf, const int64_t buf_len) const
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(static_param), K_(merge_range), K_(merge_rowid_range), K_(merge_scn));
+    J_KV(K_(static_param), K_(merge_version_range), K_(merge_range), K_(merge_rowid_range), K_(merge_scn));
     J_OBJ_END();
   }
   return pos;

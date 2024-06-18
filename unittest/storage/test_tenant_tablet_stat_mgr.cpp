@@ -99,6 +99,7 @@ void TestTenantTabletStatMgr::batch_report_stat(int64_t report_num)
   ASSERT_TRUE(NULL != stat_mgr_);
   ASSERT_EQ(true, stat_mgr_->is_inited_);
 
+  std::thread *threads = new std::thread[report_num];
   for (int64_t i = 0; i < report_num; ++i) {
     ObTabletStat curr_stat;
     curr_stat.ls_id_ = 1;
@@ -106,11 +107,14 @@ void TestTenantTabletStatMgr::batch_report_stat(int64_t report_num)
     curr_stat.query_cnt_ = 100 * (i + 1);
     curr_stat.scan_physical_row_cnt_ = 10000 + i;
 
-    std::thread sub_report_thread(report, stat_mgr_, curr_stat);
-    if (sub_report_thread.joinable()) {
-      sub_report_thread.join();
+    threads[i] = std::thread(report, stat_mgr_, curr_stat);
+  }
+  for (int64_t i = 0; i < report_num; ++i) {
+    if (threads[i].joinable()) {
+      threads[i].join();
     }
   }
+  delete []threads;
 }
 
 namespace unittest
@@ -382,9 +386,34 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_mgr)
   ObTabletStat res;
   share::ObLSID ls_id(1);
   common::ObTabletID tablet_id(200123);
-  ret = stat_mgr_->get_latest_tablet_stat(ls_id, tablet_id, res);
+  storage::ObTabletStat unused_tablet_stat;
+  share::schema::ObTableModeFlag unused_mode;
+  ret = stat_mgr_->get_latest_tablet_stat(ls_id, tablet_id, res, unused_tablet_stat, unused_mode);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(100, res.query_cnt_);
+
+  ASSERT_EQ(1, stat_mgr_->stream_map_.size());
+  ASSERT_EQ(OB_SUCCESS, stat_mgr_->clear_tablet_stat(ls_id, tablet_id));
+  const ObTabletStatKey key(ls_id, tablet_id);
+  ObTabletStreamNode *stream_node = nullptr;
+  ASSERT_TRUE(key.is_valid());
+  ASSERT_EQ(OB_SUCCESS, stat_mgr_->stream_map_.get_refactored(key, stream_node));
+  ASSERT_TRUE(stream_node->stream_.key_.is_valid());
+  ASSERT_FALSE(stream_node->stream_.total_stat_.is_valid());
+
+  tablet_stat.delete_row_cnt_ = 12345;
+  for (int64_t i = 0; i < 1000; i++) {
+    ret = stat_mgr_->report_stat(tablet_stat, report_succ);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+  stat_mgr_->process_stats();
+  storage::ObTabletStat total_tablet_stat;
+  ret = stat_mgr_->get_latest_tablet_stat(ls_id, tablet_id, res, total_tablet_stat, unused_mode);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(100 * 1000, total_tablet_stat.query_cnt_);
+  ASSERT_EQ(100000 * 1000, total_tablet_stat.scan_logical_row_cnt_);
+  ASSERT_EQ(1000000 * 1000, total_tablet_stat.scan_physical_row_cnt_);
+  ASSERT_EQ(12345 * 1000, total_tablet_stat.delete_row_cnt_);
 }
 
 TEST_F(TestTenantTabletStatMgr, multi_report_tablet_stat)
@@ -403,7 +432,32 @@ TEST_F(TestTenantTabletStatMgr, multi_report_tablet_stat)
   for ( ; iter != stat_mgr_->stream_map_.end(); ++iter) {
     ++report_cnt;
   }
-  ASSERT_TRUE(report_cnt > 5);
+  ASSERT_TRUE(report_cnt == 10);
+}
+
+TEST_F(TestTenantTabletStatMgr, bacth_clear_tablet_stat)
+{
+  EXPECT_EQ(OB_SYS_TENANT_ID, MTL_ID());
+  ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
+  ASSERT_TRUE(NULL != stat_mgr);
+  ASSERT_TRUE(stat_mgr->is_inited_);
+
+  int64_t report_num = 100;
+  batch_report_stat(report_num);
+  stat_mgr_->process_stats();
+
+  ObLSID ls_id(1);
+  ObSEArray<ObTabletID, 100> tablet_ids;
+  for (int64_t i = 0; i < report_num; i++) {
+    ASSERT_EQ(OB_SUCCESS, tablet_ids.push_back(ObTabletID(300001 + i)));
+  }
+  ASSERT_EQ(100, stat_mgr_->stream_map_.size());
+  ASSERT_EQ(OB_SUCCESS, stat_mgr->batch_clear_tablet_stat(ls_id, tablet_ids));
+  ObTenantTabletStatMgr::TabletStreamMap::iterator iter = stat_mgr_->stream_map_.begin();
+  for ( ; iter != stat_mgr_->stream_map_.end(); ++iter) {
+    ASSERT_TRUE(iter->second->stream_.key_.is_valid());
+    ASSERT_FALSE(iter->second->stream_.total_stat_.is_valid());
+  }
 }
 
 } // end unittest

@@ -620,6 +620,8 @@ int ObSharedMacroBlockMgr::update_tablet(
             *new_sstable))) {
           LOG_WARN("fail to rebuild sstable and update tablet", K(ret));
         } else if (OB_FAIL(new_sstables.push_back(new_sstable))) {
+          new_sstable->~ObSSTable();
+          allocator.free(new_sstable);
           LOG_WARN("fail to push table handle to array", K(ret), KPC(sstable));
         }
       }
@@ -651,6 +653,7 @@ int ObSharedMacroBlockMgr::update_tablet(
       ObITable *table = new_sstables[i];
       if (OB_LIKELY(nullptr != table)) {
         table->~ObITable();
+        allocator.free(table);
       }
     }
   }
@@ -712,7 +715,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
     LOG_WARN("fail to close sstable index builder", K(ret));
   } else if (OB_FAIL(create_new_sstable(allocator, res, old_sstable, block_info, new_sstable))) {
     LOG_WARN("fail to create new sstable", K(ret), K(tablet.get_tablet_meta()), K(old_sstable));
-  } else if (OB_FAIL(new_sstable.set_upper_trans_version(old_sstable.get_upper_trans_version(), false/*force_update*/))) {
+  } else if (OB_FAIL(new_sstable.set_upper_trans_version(allocator, old_sstable.get_upper_trans_version()))) {
     LOG_WARN("fail to update upper trans version", K(ret), K(old_sstable.get_upper_trans_version()));
   } else if (OB_FAIL(new_sstable.get_meta(new_meta_handle))) {
     LOG_WARN("get meta handle fail", K(ret), K(new_sstable));

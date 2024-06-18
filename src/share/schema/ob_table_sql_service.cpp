@@ -3006,6 +3006,9 @@ int ObTableSqlService::gen_table_dml(
     LOG_WARN("ttl definition and kv attributes is not supported in version less than 4.2.1",
         "ttl_definition", table.get_ttl_definition().empty(),
         "kv_attributes", table.get_kv_attributes().empty());
+  } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table));
   } else {}
   if (OB_SUCC(ret)) {
     const ObPartitionOption &part_option = table.get_part_option();
@@ -3215,6 +3218,9 @@ int ObTableSqlService::gen_table_options_dml(
     } else if (data_version < DATA_VERSION_4_1_0_0 && OB_UNLIKELY(table.view_column_filled())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("option is not support before 4.1", K(ret), K(table));
+    } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table));
     } else if (OB_FAIL(check_column_store_valid(table, data_version))) {
       LOG_WARN("fail to check column store valid", KR(ret), K(table));
     } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
@@ -3330,6 +3336,9 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
              && OB_UNLIKELY((OB_INVALID_VERSION != new_table_schema.get_truncate_version()))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("truncate version is not support before 4.1", K(ret), K(new_table_schema));
+  } else if (not_compat_for_queuing_mode(data_version) && new_table_schema.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(new_table_schema));
   } else if (OB_FAIL(check_column_store_valid(new_table_schema, data_version))) {
     LOG_WARN("fail to check column store valid", KR(ret), K(tenant_id), K(new_table_schema));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(

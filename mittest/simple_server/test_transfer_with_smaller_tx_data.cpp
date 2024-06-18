@@ -28,7 +28,7 @@ namespace oceanbase
 
 namespace storage
 {
-int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 0;
+int64_t ObTxTable::UPDATE_MIN_START_SCN_INTERVAL = 0;
 
 int ObTransferHandler::wait_src_ls_advance_weak_read_ts_(
   const share::ObTransferTaskInfo &task_info,
@@ -325,11 +325,11 @@ TEST_F(ObTransferWithSmallerStartSCN, smaller_start_scn)
 
   // Step4: let the tx data table update upper info
   ObLS *ls = get_ls(tenant_id, loc1);
-  storage::ObTxDataTable *tx_data_table = ls->get_tx_table()->get_tx_data_table();
+  ObTxTable *tx_table = ls->get_tx_table();
   fprintf(stdout, "start update upper info the first time\n");
   TRANS_LOG(INFO, "start update upper info the first time");
-  tx_data_table->update_calc_upper_info_(SCN::max_scn());
-  uint64_t first_min_start_scn = tx_data_table->calc_upper_info_.min_start_scn_in_ctx_.val_;
+  tx_table->update_min_start_scn_info(SCN::max_scn());
+  uint64_t first_min_start_scn = tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_.val_;
   fprintf(stdout, "end update upper info the first time, %lu\n", first_min_start_scn);
   TRANS_LOG(INFO, "end update upper info the first time");
 
@@ -371,6 +371,7 @@ TEST_F(ObTransferWithSmallerStartSCN, smaller_start_scn)
   bool unused;
   fprintf(stdout, "start get min start in tx data table first time\n");
   TRANS_LOG(INFO, "start get min start in tx data table first time");
+  ObTxDataTable *tx_data_table = tx_table->get_tx_data_table();
   tx_data_table->check_min_start_in_tx_data_(SCN::invalid_scn(), min_start_scn_in_tx_data, unused);
   uint64_t first_min_start_scn_in_tx_data = min_start_scn_in_tx_data.val_;
   fprintf(stdout, "end get min start in tx data table first time, %lu, %lu\n", min_start_scn_in_tx_data.val_, tx_id.get_id());
@@ -402,8 +403,8 @@ TEST_F(ObTransferWithSmallerStartSCN, smaller_start_scn)
 
   fprintf(stdout, "start update upper info the second time\n");
   TRANS_LOG(INFO, "start update upper info the second time");
-  tx_data_table->update_calc_upper_info_(SCN::max_scn());
-  uint64_t second_min_start_scn = tx_data_table->calc_upper_info_.min_start_scn_in_ctx_.val_;
+  tx_table->update_min_start_scn_info(SCN::max_scn());
+  uint64_t second_min_start_scn = tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_.val_;
   fprintf(stdout, "end update upper info the second time %lu\n", second_min_start_scn);
   TRANS_LOG(INFO, "end update upper info the second time");
 

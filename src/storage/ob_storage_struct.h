@@ -343,6 +343,18 @@ public:
   int64_t data_format_version_;
 };
 
+struct UpdateUpperTransParam final
+{
+public:
+  UpdateUpperTransParam();
+  ~UpdateUpperTransParam();
+  void reset();
+  TO_STRING_KV(K_(new_upper_trans), K_(last_minor_end_scn));
+public:
+  ObIArray<int64_t> *new_upper_trans_;
+  share::SCN last_minor_end_scn_;
+};
+
 struct ObUpdateTableStoreParam
 {
   ObUpdateTableStoreParam() = default;
@@ -351,6 +363,12 @@ struct ObUpdateTableStoreParam
     const int64_t multi_version_start,
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq);
+  ObUpdateTableStoreParam(
+    const int64_t snapshot_version,
+    const int64_t multi_version_start,
+    const ObStorageSchema *storage_schema,
+    const int64_t rebuild_seq,
+    const UpdateUpperTransParam upper_trans_param);
   ObUpdateTableStoreParam(
     const blocksstable::ObSSTable *sstable,
     const int64_t snapshot_version,
@@ -380,7 +398,7 @@ struct ObUpdateTableStoreParam
                K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
                K_(need_check_sstable), K_(ddl_info), K_(allow_duplicate_sstable),
                "merge_type", merge_type_to_str(merge_type_),
-               K_(need_check_transfer_seq), K_(transfer_seq));
+               K_(need_check_transfer_seq), K_(transfer_seq), K_(upper_trans_param));
 
   const blocksstable::ObSSTable *sstable_;
   int64_t snapshot_version_;
@@ -396,6 +414,7 @@ struct ObUpdateTableStoreParam
   bool need_check_transfer_seq_;
   int64_t transfer_seq_;
   compaction::ObMergeType merge_type_; // set merge_type only when update tablet in compaction
+  UpdateUpperTransParam upper_trans_param_; // set upper_trans_param_ only when update upper_trans_version
 };
 
 struct ObBatchUpdateTableStoreParam final

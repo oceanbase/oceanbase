@@ -1671,7 +1671,10 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         break;
       }
       case T_TABLE_MODE: {
-        if (OB_ISNULL(option_node->children_[0])) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (OB_ISNULL(option_node->children_[0])) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
         } else {
@@ -1681,23 +1684,42 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           if (OB_FAIL(ObResolverUtils::check_sync_ddl_user(session_info_, is_sync_ddl_user))) {
             LOG_WARN("Failed to check sync_ddl_user", K(ret));
           } else if (is_sync_ddl_user) { // in backup mode
-            if (OB_FAIL(ObBackUpTableModeOp::get_table_mode(table_mode_str, table_mode_))) {
+            if (OB_FAIL(ObBackUpTableModeOp::get_table_mode(table_mode_str, table_mode_, tenant_data_version))) {
               LOG_WARN("Failed to get table mode from string", K(ret), K(table_mode_str));
             }
           } else if (0 == table_mode_str.case_compare("normal")) {
             table_mode_.mode_flag_ = TABLE_MODE_NORMAL;
           } else if (0 == table_mode_str.case_compare("queuing")) {
             table_mode_.mode_flag_ = TABLE_MODE_QUEUING;
+          } else if (0 == table_mode_str.case_compare("moderate")) {
+            table_mode_.mode_flag_ = TABLE_MODE_QUEUING_MODERATE;
+          } else if (0 == table_mode_str.case_compare("super")) {
+            table_mode_.mode_flag_ = TABLE_MODE_QUEUING_SUPER;
+          } else if (0 == table_mode_str.case_compare("extreme")) {
+            table_mode_.mode_flag_ = TABLE_MODE_QUEUING_EXTREME;
           } else if (0 == table_mode_str.case_compare("heap_organized_table")) {
             table_mode_.organization_mode_ = TOM_HEAP_ORGANIZED;
             table_mode_.pk_mode_ = TPKM_TABLET_SEQ_PK;
           } else if (0 == table_mode_str.case_compare("index_organized_table")) {
             table_mode_.organization_mode_ = TOM_INDEX_ORGANIZED;
           } else {
-            ret = OB_ERR_PARSER_SYNTAX;
+            ret = OB_NOT_SUPPORTED;
+            int tmp_ret = OB_SUCCESS;
+            ObSqlString err_msg;
+            if (OB_TMP_FAIL(err_msg.append_fmt("Table mode %s is", table_mode_str.ptr()))) {
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "this table mode is");
+              LOG_WARN("failed to append err msg", K(tmp_ret), K(err_msg), K(table_mode_str));
+            } else {
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+            }
           }
           if (OB_FAIL(ret)) {
             SQL_RESV_LOG(WARN, "failed to resolve table mode str!", K(ret));
+          } else if (not_compat_for_queuing_mode(tenant_data_version)
+                 && is_new_queuing_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table_mode_str), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, QUEUING_MODE_NOT_COMPAT_USER_ERROR_STR);
           }
         }
         if (OB_SUCCESS == ret && stmt::T_ALTER_TABLE ==stmt_->get_stmt_type()) {
@@ -1708,7 +1730,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
                 LOG_WARN("get table schema failed", K(ret));
               } else if ((tmp_table_schema.is_primary_aux_vp_table() || tmp_table_schema.is_aux_vp_table())
-                  && table_mode_.mode_flag_ == TABLE_MODE_QUEUING) {
+                  && is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
                 ret = OB_NOT_SUPPORTED;
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "set vertical partition table as queuing table mode");
                 SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));

@@ -80,34 +80,20 @@ public:
     TO_STRING_KV(K(memtable_head_), K(memtable_tail_), K(memtable_handles_));
   };
 
-  struct CalcUpperInfo
-  {
-    CalcUpperInfo() {reset();}
 
-    void reset()
-    {
-      min_start_scn_in_ctx_.set_min();
-      keep_alive_scn_.set_min();
-      update_ts_ = 0;
-    }
+  using SliceAllocator = ObSliceAlloc;
 
-    CalcUpperInfo &operator= (const CalcUpperInfo &rhs)
-    {
-      min_start_scn_in_ctx_ = rhs.min_start_scn_in_ctx_;
-      keep_alive_scn_ = rhs.keep_alive_scn_;
-      update_ts_ = rhs.update_ts_;
-      return *this;
-    }
+  static const int64_t TX_DATA_MAX_CONCURRENCY = 32;
+  // A tx data is 128 bytes, 128 * 262144 = 32MB
+  static const int64_t SSTABLE_CACHE_MAX_RETAIN_CNT = 262144;
+  // The max tps is 150w which means the cache can be inserted 15w tx data during 100ms. So once
+  // cache cleaning task will delete at least 11w tx data.
+  static const int64_t DEFAULT_CACHE_RETAINED_TIME = 100_ms; // 100ms
 
-    share::SCN min_start_scn_in_ctx_;
-    share::SCN keep_alive_scn_;
-    int64_t update_ts_;
-    common::SpinRWLock lock_;
-
-    TO_STRING_KV(K(min_start_scn_in_ctx_), K(keep_alive_scn_), K(update_ts_));
-  };
-
-  static int64_t UPDATE_CALC_UPPER_INFO_INTERVAL;
+  // The tx data memtable will trigger a freeze if its memory use is more than 2%
+  static constexpr double TX_DATA_FREEZE_TRIGGER_PERCENTAGE = 2;
+  // TODO : @gengli.wzy The active & frozen tx data memtable can not use memory more than 10%
+  static constexpr double TX_DATA_MEM_LIMIT_PERCENTAGE = 10;
 
   enum COLUMN_ID_LIST
   {
@@ -133,7 +119,6 @@ public:  // ObTxDataTable
       memtable_mgr_(nullptr),
       tx_ctx_table_(nullptr),
       read_schema_(),
-      calc_upper_info_(),
       calc_upper_trans_version_cache_(),
       memtables_cache_() {}
   ~ObTxDataTable() {}
@@ -233,7 +218,6 @@ public:  // ObTxDataTable
                K_(is_started),
                K_(ls_id),
                K_(tablet_id),
-               K_(calc_upper_info),
                K_(memtables_cache),
                KP_(ls),
                KP_(ls_tablet_svr),
@@ -315,15 +299,17 @@ private:
                                 const share::SCN &sstable_end_scn,
                                 share::SCN &tmp_upper_trans_version);
   bool skip_this_sstable_end_scn_(const share::SCN &sstable_end_scn);
-  int check_min_start_in_ctx_(const share::SCN &sstable_end_scn, const share::SCN &max_decided_scn, bool &need_skip);
+  int check_min_start_in_ctx_(const share::SCN &sstable_end_scn,
+                              const share::SCN &max_decided_scn,
+                              share::SCN &min_start_scn,
+                              share::SCN &effective_scn,
+                              bool &need_skip);
   int check_min_start_in_tx_data_(const share::SCN &sstable_end_scn,
                                   share::SCN &min_start_ts_in_tx_data_memtable,
                                   bool &need_skip);
   void print_alloc_size_for_test_();
   // free the whole undo status list allocated by slice allocator
   void free_undo_status_list_(ObUndoStatusNode *node_ptr);
-  void clean_sstable_cache_task_(int64_t cache_keeped_time);
-  void update_calc_upper_info_(const share::SCN &max_decided_log_ts);
 private:
   static const int64_t LS_TX_DATA_SCHEMA_VERSION = 0;
   static const int64_t LS_TX_DATA_SCHEMA_ROWKEY_CNT = 2;
@@ -344,7 +330,6 @@ private:
   ObTxDataMemtableMgr *memtable_mgr_;
   ObTxCtxTable *tx_ctx_table_;
   TxDataReadSchema read_schema_;
-  CalcUpperInfo calc_upper_info_;
   CalcUpperTransSCNCache calc_upper_trans_version_cache_;
   MemtableHandlesCache memtables_cache_;
 };  // tx_table

@@ -1233,7 +1233,7 @@ int ObTabletTableStore::build_new_table_store(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(build_major_tables(allocator, param, old_store, inc_base_snapshot_version))) {
     LOG_WARN("failed to build major_tables", K(ret));
-  } else if (OB_FAIL(build_minor_tables(allocator, param.sstable_, old_store, param.need_check_sstable_, inc_base_snapshot_version, ha_status))) {
+  } else if (OB_FAIL(build_minor_tables(allocator, param.sstable_, old_store, param.need_check_sstable_, inc_base_snapshot_version, ha_status, param.upper_trans_param_))) {
     if (OB_UNLIKELY(OB_NO_NEED_MERGE != ret)) {
       LOG_WARN("failed to build minor_tables", K(ret));
     }
@@ -1366,7 +1366,8 @@ int ObTabletTableStore::build_minor_tables(
     const ObTabletTableStore &old_store,
     const bool need_check_sstable,
     const int64_t inc_base_snapshot_version,
-    const ObTabletHAStatus &ha_status)
+    const ObTabletHAStatus &ha_status,
+      const UpdateUpperTransParam &upper_trans_param)
 {
   int ret = OB_SUCCESS;
   ObITable *new_table = const_cast<ObITable *>(static_cast<const ObITable *>(new_sstable)); //table can be null
@@ -1436,20 +1437,59 @@ int ObTabletTableStore::build_minor_tables(
       LOG_WARN("failed to sort minor tables", K(ret));
     } else {
       int64_t inc_pos = -1;
+      const int64_t minor_cnt = minor_tables.count();
+      const ObIArray<int64_t> *new_upper_trans = upper_trans_param.new_upper_trans_;
+      const bool has_valid_update = new_upper_trans != nullptr
+                                 && minor_cnt == new_upper_trans->count()
+                                 && minor_cnt > 0
+                                 && minor_tables.at(minor_cnt-1)->get_end_scn() == upper_trans_param.last_minor_end_scn_;
+      int64_t current_upper_trans_version = INT64_MAX;
       if (!ha_status.is_none()) {
         inc_pos = 0; //in ha status do not recycle minor sstable
         LOG_INFO("tablet in ha status, no need recycle minor sstable", K(ha_status));
       } else {
+        /*
+        * if the upper trans version of the ith sstable can't be calculated, the sstables with bigger end_scn can't be calculated either.
+        * new_upper_trans means the latest value of upper_trans_version for minor_tables.
+        *
+        * upper trans versions in old minors:
+        * --------- ascending by end_scn -------------->
+        * |  0   |  1   |  2   |  3   |  4   |  5   |  6   |
+        * | val1 | val2 | val3 | MAX  | MAX  | MAX  | MAX  |
+        * new_upper_trans:
+        * |  0   |  1   |  2   |  3   |  4   |  5   |  6   |
+        * | val1 | val2 | val3 | new1 | new2 | MAX  | MAX  |
+        */
         for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables.count(); ++i) {
-          if (minor_tables.at(i)->get_upper_trans_version() > inc_base_snapshot_version) {
+          current_upper_trans_version = has_valid_update ? new_upper_trans->at(i) : minor_tables.at(i)->get_upper_trans_version();
+          if (current_upper_trans_version > inc_base_snapshot_version) {
             inc_pos = i;
             break;
           }
         }
       }
-      if (OB_FAIL(ret)) {
-      } else if (inc_pos >= 0 && OB_FAIL(init_minor_sstables_with_check(allocator, minor_tables, inc_pos))) {
+      if (OB_FAIL(ret) || inc_pos < 0) {
+      } else if (OB_FAIL(init_minor_sstables_with_check(allocator, minor_tables, inc_pos))) {
         LOG_WARN("failed to init minor_tables", K(ret));
+      } else if (ha_status.is_none() && has_valid_update && minor_tables_.count() > 0) {
+        // update upper_trans_version of new table store with latest value
+        for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables_.count(); ++i) {
+          ObSSTable *sstable = minor_tables_[i];
+          if (OB_ISNULL(sstable)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null sstable pointer", K(ret), K(i));
+          } else if (INT64_MAX != sstable->get_upper_trans_version()) {
+          } else if (i+inc_pos >= new_upper_trans->count()) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("index of new_upper_trans overflow", K(ret), K(i), K(inc_pos), KPC(new_upper_trans));
+          } else if (FALSE_IT(current_upper_trans_version = new_upper_trans->at(i+inc_pos))) {
+          } else if (INT64_MAX == current_upper_trans_version) {
+            break;
+          } else if (OB_FAIL(sstable->set_upper_trans_version(allocator, current_upper_trans_version))) {
+            LOG_WARN("failed to set new upper_trans_version", K(ret), K(i), KPC(sstable));
+          }
+        }
+        LOG_INFO("Finish update upper_trans_version", K(ret), K(upper_trans_param), K_(minor_tables));
       }
     }
   }
