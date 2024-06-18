@@ -190,7 +190,7 @@ OB_INLINE int ObMultipleMerge::update_and_report_tablet_stat()
   if (MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
     report_tablet_stat();
   }
-  access_ctx_->table_store_stat_.reset();
+  access_ctx_->table_store_stat_.reuse();
   return ret;
 }
 
