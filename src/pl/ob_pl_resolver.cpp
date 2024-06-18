@@ -2752,28 +2752,30 @@ int ObPLResolver::resolve_extern_type_info(bool is_row_type,
   CK (OB_NOT_NULL(extern_type_info));
   if (OB_FAIL(ret)) {
   } else if (is_row_type) { // must be table%rowtype or dbname.table%rowtype
-    CK (access_idents.count() <= 2 && access_idents.count() >= 1);
-    if (OB_FAIL(ret)) {
-    } else if (2 == access_idents.count()) {
-      OZ (schema_guard.get_database_id(session_info.get_effective_tenant_id(),
-        access_idents.at(0).access_name_, extern_type_info->type_owner_));
-    } else {
-      OZ (session_info.get_database_id(extern_type_info->type_owner_));
+    if (access_idents.count() <= 2 && access_idents.count() >= 1) {
+      if (OB_FAIL(ret)) {
+      } else if (2 == access_idents.count()) {
+        OZ (schema_guard.get_database_id(session_info.get_effective_tenant_id(),
+          access_idents.at(0).access_name_, extern_type_info->type_owner_));
+      } else {
+        OZ (session_info.get_database_id(extern_type_info->type_owner_));
+      }
+      OX (extern_type_info->type_name_ = access_idents.at(access_idents.count() - 1).access_name_);
+      OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_TAB);
     }
-    OX (extern_type_info->type_name_ = access_idents.at(access_idents.count() - 1).access_name_);
-    OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_TAB);
   } else { // dbname.table.col%type or table.col%type, dbname.pack.var%type, pack.var%type
-    CK (access_idents.count() <= 3 && access_idents.count() >= 2);
-    if (OB_FAIL(ret)) {
-    } else if (3 == access_idents.count()) {
-      OZ (schema_guard.get_database_id(session_info.get_effective_tenant_id(),
-        access_idents.at(0).access_name_, extern_type_info->type_owner_));
-    } else {
-      OZ (session_info.get_database_id(extern_type_info->type_owner_));
+    if (access_idents.count() <= 3 && access_idents.count() >= 2) {
+      if (OB_FAIL(ret)) {
+      } else if (3 == access_idents.count()) {
+        OZ (schema_guard.get_database_id(session_info.get_effective_tenant_id(),
+          access_idents.at(0).access_name_, extern_type_info->type_owner_));
+      } else {
+        OZ (session_info.get_database_id(extern_type_info->type_owner_));
+      }
+      OX (extern_type_info->type_name_ = access_idents.at(access_idents.count() - 1).access_name_);
+      OX (extern_type_info->type_subname_ = access_idents.at(access_idents.count() - 2).access_name_);
+      OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_PKGVAR_OR_TABCOL);
     }
-    OX (extern_type_info->type_name_ = access_idents.at(access_idents.count() - 1).access_name_);
-    OX (extern_type_info->type_subname_ = access_idents.at(access_idents.count() - 2).access_name_);
-    OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_PKGVAR_OR_TABCOL);
   }
   return ret;
 }
@@ -16731,7 +16733,8 @@ int ObPLResolver::resolve_routine_decl_param_list(const ParseNode *param_list,
                 if (ObPLBlockNS::BlockType::BLOCK_OBJECT_SPEC == top_ns->get_block_type()
                     || ObPLBlockNS::BlockType::BLOCK_OBJECT_BODY == top_ns->get_block_type()) {
                   const ObString &obj_name = top_ns->get_package_name();
-                  if (0 != obj_name.case_compare(param->get_type_name())) {
+                  if (0 != obj_name.case_compare(param->get_type_name()) ||
+                     (lib::is_oracle_mode() && (T_SP_TYPE == type_node->type_ || T_SP_ROWTYPE == type_node->type_))) {
                     ret = OB_ERR_EXPRESSION_WRONG_TYPE;
                     LOG_WARN("PLS-00382: expression is of wrong type", K(ret), K(obj_name), K(param->get_type_name()));
                     LOG_USER_ERROR(OB_ERR_EXPRESSION_WRONG_TYPE);
