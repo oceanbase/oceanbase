@@ -667,14 +667,6 @@ int ObRangeGenerator::formalize_complex_range(const ObRangeNode *node)
         if (OB_FAIL(generate_one_range(*always_false_tmp_range_))) {
           LOG_WARN("failed to generate one range", K(ret));
         }
-      } else if (tmp_in_param->in_param_.empty()) {
-        if (cur_node->and_next_ == nullptr) {
-          if (OB_FAIL(generate_one_complex_range())) {
-            LOG_WARN("faield to generate one range");
-          }
-        } else if (OB_FAIL(SMART_CALL(formalize_complex_range(cur_node->and_next_)))) {
-          LOG_WARN("failed to formalize range");
-        }
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < tmp_in_param->in_param_.count() + 1; ++i) {
           ObTmpRange *new_range = nullptr;
@@ -1480,6 +1472,21 @@ int ObRangeGenerator::final_not_in_range_node(const ObRangeNode &node,
     }
 
     if (OB_FAIL(ret)) {
+    } else if (tmp_in_param->in_param_.empty()) {
+      if (lib::is_mysql_mode()) {
+        range->start_[range->min_offset_].set_null();
+        start_padding = OB_RANGE_MAX_VALUE;
+      } else {
+        range->start_[range->min_offset_].set_min_value();
+        start_padding = OB_RANGE_MIN_VALUE;
+      }
+      if (lib::is_oracle_mode()) {
+        range->end_[range->min_offset_].set_null();
+        end_padding = OB_RANGE_MIN_VALUE;
+      } else {
+        range->end_[range->min_offset_].set_max_value();
+        end_padding = OB_RANGE_MAX_VALUE;
+      }
     } else if (0 == not_in_idx) {
       if (lib::is_mysql_mode()) {
         range->start_[range->min_offset_].set_null();
