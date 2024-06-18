@@ -1117,7 +1117,7 @@ int ObRangeGenerator::try_cast_value(const ObRangeColumnMeta &meta,
       && !ObSQLUtils::is_same_type_for_compare(value.get_meta(), meta.column_type_.get_obj_meta())) {
     const ObObj *dest_val = NULL;
     ObCollationType collation_type = meta.column_type_.get_collation_type();
-    ObCastCtx cast_ctx(&allocator_, &dtc_params_, CM_WARN_ON_FAIL, collation_type);
+    ObCastCtx cast_ctx(&allocator_, &dtc_params_, cur_datetime_, CM_WARN_ON_FAIL, collation_type);
     ObExpectType expect_type;
     expect_type.set_type(meta.column_type_.get_type());
     expect_type.set_collation_type(collation_type);

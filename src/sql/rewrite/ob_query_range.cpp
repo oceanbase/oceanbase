@@ -176,7 +176,8 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
   } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObQueryRangeCtx)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc query range context failed", K(ret));
-  } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
+  } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session()) ||
+             OB_ISNULL(exec_ctx->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(exec_ctx));
   } else {
@@ -185,6 +186,7 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
     query_range_ctx_->ignore_calc_failure_ = ignore_calc_failure;
     query_range_ctx_->index_prefix_ = index_prefix;
     query_range_ctx_->range_optimizer_max_mem_size_ = exec_ctx->get_my_session()->get_range_optimizer_max_mem_size();
+    query_range_ctx_->cur_datetime_ = exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime();
     if (0 == query_range_ctx_->range_optimizer_max_mem_size_) {
       query_range_ctx_->range_optimizer_max_mem_size_ = INT64_MAX;
     }
@@ -1430,9 +1432,10 @@ int ObQueryRange::get_const_key_part(const ObRawExpr *l_expr,
                                      const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) || (OB_ISNULL(escape_expr) && T_OP_LIKE == cmp_type)) {
+  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) || (OB_ISNULL(escape_expr) && T_OP_LIKE == cmp_type) ||
+      OB_ISNULL(query_range_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument.", K(ret), KP(l_expr), KP(r_expr));
+    LOG_WARN("invalid argument.", K(ret), KP(l_expr), KP(r_expr), KP(query_range_ctx_));
   } else if (!l_expr->is_immutable_const_expr() || !r_expr->is_immutable_const_expr()) {
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
   } else {
@@ -1459,7 +1462,7 @@ int ObQueryRange::get_const_key_part(const ObRawExpr *l_expr,
       ObObjType compare_type = ObMaxType;
       int64_t eq_cmp = 0;
       ObCastMode cast_mode = CM_WARN_ON_FAIL;
-      ObCastCtx cast_ctx(&allocator_, &dtc_params, cast_mode, cmp_cs_type);
+      ObCastCtx cast_ctx(&allocator_, &dtc_params, query_range_ctx_->cur_datetime_, cast_mode, cmp_cs_type);
       if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(compare_type,
                                                                 l_val.get_type(),
                                                                 r_val.get_type()))) {
@@ -1879,7 +1882,8 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
           }
         }
         if (OB_SUCC(ret) && out_key_part->is_normal_key() && !out_key_part->is_question_mark()) {
-          if (OB_FAIL(out_key_part->cast_value_type(dtc_params, contain_row_, is_bound_modified))) {
+          if (OB_FAIL(out_key_part->cast_value_type(dtc_params, query_range_ctx_->cur_datetime_,
+                                                    contain_row_, is_bound_modified))) {
             LOG_WARN("cast keypart value type failed", K(ret));
           } else {
             // do nothing
@@ -2140,8 +2144,8 @@ int ObQueryRange::check_row_bound(ObKeyPart *key_part,
     LOG_WARN("failed to calculate val", K(ret), K(*const_expr), K(const_val), K(is_valid));
   } else if (!is_valid) {
     // do nothing
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, key_part->pos_,
-                                                const_val, cmp))) {
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, query_range_ctx_->cur_datetime_,
+                                               allocator_, key_part->pos_, const_val, cmp))) {
     LOG_WARN("failed to cast value", K(ret));
   } else if (cmp != 0 || ob_obj_type_class(const_expr->get_data_type()) !=
                          ob_obj_type_class(key_part->pos_.column_type_.get_type())) {
@@ -3113,7 +3117,7 @@ int ObQueryRange::check_const_val_valid(const ObRawExpr *l_expr,
                                         bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
+  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) || OB_ISNULL(query_range_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
@@ -3136,7 +3140,7 @@ int ObQueryRange::check_const_val_valid(const ObRawExpr *l_expr,
       ObObjType compare_type = ObMaxType;
       int64_t eq_cmp = 0;
       ObCastMode cast_mode = CM_WARN_ON_FAIL;
-      ObCastCtx cast_ctx(&allocator_, &dtc_params, cast_mode, cmp_cs_type);
+      ObCastCtx cast_ctx(&allocator_, &dtc_params, query_range_ctx_->cur_datetime_, cast_mode, cmp_cs_type);
       if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(compare_type,
                                                                 l_val.get_type(),
                                                                 r_val.get_type()))) {
@@ -3162,9 +3166,10 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
 {
   int ret = OB_SUCCESS;
   is_val_valid = true;
-  if (OB_ISNULL(in_key) || OB_ISNULL(param_meta) || OB_ISNULL(const_expr)) {
+  if (OB_ISNULL(in_key) || OB_ISNULL(param_meta) || OB_ISNULL(const_expr) ||
+      OB_ISNULL(query_range_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(in_key), K(param_meta), K(const_expr));
+    LOG_WARN("get unexpected null", K(in_key), K(param_meta), K(const_expr), K(query_range_ctx_));
   } else {
     ObObj val;
     bool is_valid = false;
@@ -3187,8 +3192,8 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
     }
     int64_t cmp = 0;
     if (OB_FAIL(ret) || !is_val_valid) {
-    } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_,
-                                                 pos, val, cmp))) {
+    } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, query_range_ctx_->cur_datetime_,
+                                                 allocator_, pos, val, cmp))) {
       LOG_WARN("failed to try cast value type", K(ret));
     } else if (cmp == 0) {
       val.set_collation_type(pos.column_type_.get_collation_type());
@@ -6090,10 +6095,15 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
   size_t range_size = sizeof(ObNewRange) + rowkey_size;
   void *range_buffer = nullptr;
   bool contain_phy_rowid_key = false;
-  if (OB_ISNULL(range_buffer = allocator.alloc(range_size))) {
+  int64_t cur_datetime = 0;
+  if (OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null physical plan", K(ret));
+  } else if (OB_ISNULL(range_buffer = allocator.alloc(range_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for ObNewRange failed", K(ret));
   } else {
+    cur_datetime = exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime();
     range = new(range_buffer) ObNewRange();
     start = reinterpret_cast<ObObj*>(static_cast<char*>(range_buffer) + sizeof(ObNewRange));
     end = start + column_count_;
@@ -6131,7 +6141,8 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
         //fast cast with integer value
         cur_val->set_meta_type(cur->pos_.column_type_);
         new(end + i) ObObj(*cur_val);
-      } else if (OB_FAIL(cold_cast_cur_node(cur, allocator, dtc_params, *cur_val, always_false))) {
+      } else if (OB_FAIL(cold_cast_cur_node(cur, allocator, dtc_params,
+                                            cur_datetime, *cur_val, always_false))) {
         LOG_WARN("cold fill cur node failed", K(ret));
       } else if (OB_LIKELY(!always_false)) {
         new(end + i) ObObj(*cur_val);
@@ -6182,6 +6193,7 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
 OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
                                                  ObIAllocator &allocator,
                                                  const ObDataTypeCastParams &dtc_params,
+                                                 const int64_t cur_datetime,
                                                  ObObj &cur_val,
                                                  bool &always_false) const
 {
@@ -6192,6 +6204,7 @@ OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
   } else if (!cur_val.is_min_value() && !cur_val.is_max_value()) {
     ObCastCtx cast_ctx(&allocator,
                        &dtc_params,
+                       cur_datetime,
                        CM_WARN_ON_FAIL,
                        cur->pos_.column_type_.get_collation_type());
     ObExpectType expect_type;
@@ -6853,16 +6866,19 @@ OB_NOINLINE int ObQueryRange::gen_skip_scan_range(ObIAllocator &allocator,
   bool is_get_range = false;
   ObSearchState search_state(allocator);
   ObNewRange *ss_range = NULL;
-  if (OB_ISNULL(ss_root) || OB_UNLIKELY(1 > post_column_count)) {
+  int64_t cur_datetime = 0;
+  if (OB_ISNULL(ss_root) || OB_UNLIKELY(1 > post_column_count) || OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected skip scan range", K(ret), K(ss_root), K(post_column_count));
+    LOG_WARN("unexpected skip scan range", K(ret), K(ss_root), K(post_column_count), K(exec_ctx.get_physical_plan_ctx()));
   } else if (OB_FAIL(search_state.init_search_state(post_column_count, true, table_graph_.key_part_head_->id_.table_id_))) {
     LOG_WARN("failed to init postfix search state", K(ret));
+  } else {
+    cur_datetime = exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime();
   }
   for (const ObKeyPart *cur = ss_root; OB_SUCC(ret) && NULL != cur && !search_state.is_empty_range_;
        cur = cur->and_next_) {
     if (OB_FAIL(get_single_key_value(cur, exec_ctx, search_state, dtc_params,
-                                     table_graph_.skip_scan_offset_))) {
+                                     cur_datetime, table_graph_.skip_scan_offset_))) {
       LOG_WARN("get single key value failed", K(ret));
     }
   }
@@ -6887,13 +6903,19 @@ OB_NOINLINE int ObQueryRange::gen_simple_scan_range(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObSearchState search_state(allocator);
-  if (OB_FAIL(search_state.init_search_state(column_count_, true, table_graph_.key_part_head_->id_.table_id_))) {
+  int64_t cur_datetime = 0;
+  if (OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null physical plan ctx", K(ret));
+  } else if (OB_FAIL(search_state.init_search_state(column_count_, true, table_graph_.key_part_head_->id_.table_id_))) {
     LOG_WARN("failed to init search state", K(ret));
+  } else {
+    cur_datetime = exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime();
   }
   for (ObKeyPart *cur = table_graph_.key_part_head_;
        OB_SUCC(ret) && NULL != cur && !search_state.is_empty_range_;
        cur = cur->and_next_) {
-    if (OB_FAIL(get_single_key_value(cur, exec_ctx, search_state, dtc_params))) {
+    if (OB_FAIL(get_single_key_value(cur, exec_ctx, search_state, dtc_params, cur_datetime))) {
       LOG_WARN("get single key value failed", K(ret));
     }
   }
@@ -6920,7 +6942,7 @@ if (OB_SUCC(ret) ) { \
   const ObObj *dest_val = NULL; \
   if (!start.is_min_value() && !start.is_max_value() && !start.is_unknown() \
     && !ObSQLUtils::is_same_type_for_compare(start.get_meta(), column_type.get_obj_meta())) { \
-    ObCastCtx cast_ctx(&allocator, &dtc_params, CM_WARN_ON_FAIL, expect_type.get_collation_type()); \
+    ObCastCtx cast_ctx(&allocator, &dtc_params, cur_datetime, CM_WARN_ON_FAIL, expect_type.get_collation_type()); \
     ObObj &tmp_start = start; \
     EXPR_CAST_OBJ_V2(expect_type, tmp_start, dest_val); \
     if (OB_FAIL(ret)) { \
@@ -6951,7 +6973,7 @@ if (OB_SUCC(ret) ) { \
   if (OB_SUCC(ret)) { \
     if (!end.is_min_value() && !end.is_max_value() && !end.is_unknown() \
       && !ObSQLUtils::is_same_type_for_compare(end.get_meta(), column_type.get_obj_meta())) { \
-      ObCastCtx cast_ctx(&allocator, &dtc_params, CM_WARN_ON_FAIL, expect_type.get_collation_type()); \
+      ObCastCtx cast_ctx(&allocator, &dtc_params, cur_datetime, CM_WARN_ON_FAIL, expect_type.get_collation_type()); \
         ObObj &tmp_end = end; \
         EXPR_CAST_OBJ_V2(expect_type, tmp_end, dest_val); \
       if (OB_FAIL(ret)) { \
@@ -6987,6 +7009,7 @@ inline int ObQueryRange::get_single_key_value(const ObKeyPart *key,
                                               ObExecContext &exec_ctx,
                                               ObSearchState &search_state,
                                               const ObDataTypeCastParams &dtc_params,
+                                              const int64_t cur_datetime,
                                               int64_t skip_offset /* default 0 */ ) const
 {
   int ret = OB_SUCCESS;
@@ -7321,9 +7344,9 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
 {
   int ret = OB_SUCCESS;
   bool is_inconsistent_rowid = false;
-  if (OB_ISNULL(root)) {
+  if (OB_ISNULL(root) || OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("root=null ", K(ret));
+    LOG_WARN("root=null ", K(ret), K(root), K(exec_ctx.get_physical_plan_ctx()));
   } else if (root->is_normal_key()) {
     if (root->normal_keypart_->start_.is_unknown()) {
       if (OB_FAIL(get_result_value_with_rowid(*root, root->normal_keypart_->start_, exec_ctx, is_inconsistent_rowid))) {
@@ -7412,6 +7435,7 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
         int64_t cmp = 0;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params,
+                                                     exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime(),
                                                      allocator_,
                                                      cur_param->pos_,
                                                      val,
@@ -7438,7 +7462,8 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
   if (OB_SUCC(ret)) {
     if (root->is_phy_rowid_key_part() || root->is_in_key()) {
       ////physical rowid no need cast, it's will be transformed in table scan phase.
-    } else if (OB_FAIL(root->cast_value_type(dtc_params, contain_row_, is_bound_modified))) {
+    } else if (OB_FAIL(root->cast_value_type(dtc_params, exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime(),
+                                             contain_row_, is_bound_modified))) {
       LOG_WARN("cast value type failed", K(ret));
     }
   }

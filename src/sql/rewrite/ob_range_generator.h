@@ -93,8 +93,13 @@ public:
       tmp_range_lists_(nullptr),
       all_tmp_node_caches_(allocator),
       always_false_tmp_range_(nullptr),
-      is_generate_ss_range_(false)
-  {}
+      is_generate_ss_range_(false),
+      cur_datetime_(0)
+  {
+    if (OB_NOT_NULL(exec_ctx_.get_physical_plan_ctx())) {
+      cur_datetime_ = exec_ctx_.get_physical_plan_ctx()->get_cur_time().get_datetime();
+    }
+  }
 
   int generate_ranges();
   int generate_ss_ranges();
@@ -144,6 +149,7 @@ private:
   ObFixedArray<void*, ObIAllocator> all_tmp_node_caches_;
   ObTmpRange *always_false_tmp_range_;
   bool is_generate_ss_range_;
+  int64_t cur_datetime_;
 };
 
 

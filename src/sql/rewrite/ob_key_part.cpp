@@ -1436,7 +1436,8 @@ int ObKeyPart::remove_in_params_vals(const ObIArray<int64_t> &val_idx)
   return ret;
 }
 
-int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool contain_row, bool &is_bound_modified)
+int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
+                               bool contain_row, bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   int64_t start_cmp = 0;
@@ -1444,10 +1445,10 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool cont
   if (OB_UNLIKELY(!is_normal_key())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keypart isn't normal key", K_(key_type));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, pos_,
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
                                                normal_keypart_->start_, start_cmp))) {
     LOG_WARN("failed to try cast value type", K(ret));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, pos_,
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
                                                normal_keypart_->end_, end_cmp))) {
     LOG_WARN("failed to try cast value type", K(ret));
   } else {
@@ -1478,15 +1479,15 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool cont
   return ret;
 }
 
-int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
-                              const ObKeyPartPos &pos, ObObj &value, int64_t &cmp)
+int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
+                              ObIAllocator &alloc, const ObKeyPartPos &pos, ObObj &value, int64_t &cmp)
 {
   int ret = OB_SUCCESS;
   if (!value.is_min_value() && !value.is_max_value() && !value.is_unknown()
       && !ObSQLUtils::is_same_type_for_compare(value.get_meta(), pos.column_type_.get_obj_meta())) {
     const ObObj *dest_val = NULL;
     ObCollationType collation_type = pos.column_type_.get_collation_type();
-    ObCastCtx cast_ctx(&alloc, &dtc_params, CM_WARN_ON_FAIL, collation_type);
+    ObCastCtx cast_ctx(&alloc, &dtc_params, cur_datetime, CM_WARN_ON_FAIL, collation_type);
     ObObj &tmp_start = value;
     ObExpectType expect_type;
     expect_type.set_type(pos.column_type_.get_type());
