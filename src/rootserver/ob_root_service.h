@@ -571,12 +571,24 @@ public:
 
   //----Functions for managing routines----
   int create_routine(const obrpc::ObCreateRoutineArg &arg);
+  int create_routine_common(const obrpc::ObCreateRoutineArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int create_routine_with_res(const obrpc::ObCreateRoutineArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int drop_routine(const obrpc::ObDropRoutineArg &arg);
+  int alter_routine_common(const obrpc::ObCreateRoutineArg &arg,
+                           obrpc::ObRoutineDDLRes* res = nullptr);
   int alter_routine(const obrpc::ObCreateRoutineArg &arg);
+  int alter_routine_with_res(const obrpc::ObCreateRoutineArg &arg,
+                             obrpc::ObRoutineDDLRes &res);
   //----End of functions for managing routines----
 
   //----Functions for managing routines----
   int create_udt(const obrpc::ObCreateUDTArg &arg);
+  int create_udt_common(const obrpc::ObCreateUDTArg &arg,
+                        obrpc::ObRoutineDDLRes *res = nullptr);
+  int create_udt_with_res(const obrpc::ObCreateUDTArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int drop_udt(const obrpc::ObDropUDTArg &arg);
   //----End of functions for managing routines----
 
@@ -606,7 +618,15 @@ public:
 
   //----Functions for managing package----
   int create_package(const obrpc::ObCreatePackageArg &arg);
+  int create_package_common(const obrpc::ObCreatePackageArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int create_package_with_res(const obrpc::ObCreatePackageArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int alter_package(const obrpc::ObAlterPackageArg &arg);
+  int alter_package_common(const obrpc::ObAlterPackageArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int alter_package_with_res(const obrpc::ObAlterPackageArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int drop_package(const obrpc::ObDropPackageArg &arg);
   //----End of functions for managing package----
 
@@ -615,6 +635,10 @@ public:
   int create_trigger_with_res(const obrpc::ObCreateTriggerArg &arg,
                               obrpc::ObCreateTriggerRes &res);
   int alter_trigger(const obrpc::ObAlterTriggerArg &arg);
+  int alter_trigger_common(const obrpc::ObAlterTriggerArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int alter_trigger_with_res(const obrpc::ObAlterTriggerArg &arg,
+                             obrpc::ObRoutineDDLRes &res);
   int drop_trigger(const obrpc::ObDropTriggerArg &arg);
   //----End of functions for managing trigger----
 

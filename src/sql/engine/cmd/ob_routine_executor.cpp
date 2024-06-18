@@ -29,11 +29,73 @@
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_rpc_struct.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
+#include "share/config/ob_config_helper.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+int ObCompileRoutineInf::compile_routine(ObExecContext &ctx,
+                                          uint64_t tenant_id,
+                                          uint64_t database_id,
+                                          ObString &routine_name,
+                                          ObRoutineType routine_type,
+                                          int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
+  const ObRoutineInfo *routine_info = nullptr;
+  pl::ObPLFunction* routine = nullptr;
+  uint64_t db_id = OB_INVALID_ID;
+  CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
+  OZ (ctx.get_task_exec_ctx().schema_service_->
+    get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
+  if (ROUTINE_PROCEDURE_TYPE == routine_type) {
+    OZ (ctx.get_sql_ctx()->schema_guard_->get_standalone_procedure_info(tenant_id,
+                                                                        database_id,
+                                                                        routine_name,
+                                                                        routine_info));
+  } else {
+    OZ (ctx.get_sql_ctx()->schema_guard_->get_standalone_function_info(tenant_id,
+                                                                      database_id,
+                                                                      routine_name,
+                                                                      routine_info));
+  }
+  OZ (ctx.get_my_session()->get_database_id(db_id));
+  if (OB_SUCC(ret) && OB_NOT_NULL(routine_info) && schema_version == routine_info->get_schema_version()) {
+    pl::ObPLCacheCtx pc_ctx;
+    pc_ctx.session_info_ = ctx.get_my_session();
+    pc_ctx.schema_guard_ = ctx.get_sql_ctx()->schema_guard_;
+
+    pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PRCR;
+    pc_ctx.key_.db_id_ = db_id;
+    pc_ctx.key_.key_id_ = routine_info->get_routine_id();
+    pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
+    CK (OB_NOT_NULL(ctx.get_pl_engine()));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(pl::ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
+      LOG_TRACE("get pl function from ol cache failed", K(ret), K(pc_ctx.key_));
+      ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+    } else {
+      routine = static_cast<pl::ObPLFunction*>(cacheobj_guard.get_cache_obj());
+    }
+    if (OB_SUCC(ret) && OB_ISNULL(routine)) {
+      OZ (ctx.get_pl_engine()->generate_pl_function(ctx, routine_info->get_routine_id(), cacheobj_guard));
+      OX (routine = static_cast<pl::ObPLFunction*>(cacheobj_guard.get_cache_obj()));
+      CK (OB_NOT_NULL(routine));
+      OZ (ctx.get_my_session()->get_database_id(db_id));
+      if (OB_SUCC(ret)
+          && routine->get_can_cached()) {
+        routine->get_stat_for_update().name_ = routine->get_function_name();
+        routine->get_stat_for_update().type_ = pl::ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE;
+        OZ (ctx.get_pl_engine()->add_pl_lib_cache(routine, pc_ctx));
+      }
+    }
+  }
+
+  return ret;
+}
 
 int ObCreateRoutineExecutor::execute(ObExecContext &ctx, ObCreateRoutineStmt &stmt)
 {
@@ -43,12 +105,22 @@ int ObCreateRoutineExecutor::execute(ObExecContext &ctx, ObCreateRoutineStmt &st
   obrpc::UInt64 table_id;
   obrpc::ObCreateRoutineArg &crt_routine_arg = stmt.get_routine_arg();
   ObString first_stmt;
+  uint64_t tenant_id = crt_routine_arg.routine_info_.get_tenant_id();
+  uint64_t database_id = crt_routine_arg.routine_info_.get_database_id();
+  ObString db_name = crt_routine_arg.db_name_;
+  ObString routine_name = crt_routine_arg.routine_info_.get_routine_name();
+  ObRoutineType type = crt_routine_arg.routine_info_.get_routine_type();
+  obrpc::ObRoutineDDLRes res;
+  bool with_res = (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_3_0
+                   && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
+                  || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0;
+  bool has_error = ERROR_STATUS_HAS_ERROR == crt_routine_arg.error_info_.get_error_status();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
     crt_routine_arg.ddl_stmt_str_ = first_stmt;
   }
-
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -58,8 +130,29 @@ int ObCreateRoutineExecutor::execute(ObExecContext &ctx, ObCreateRoutineStmt &st
   } else if (OB_ISNULL(common_rpc_proxy)){
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy should not be null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->create_routine(crt_routine_arg))) {
+  } else if (!with_res && OB_FAIL(common_rpc_proxy->create_routine(crt_routine_arg))) {
     LOG_WARN("rpc proxy create procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
+  } else if (with_res && OB_FAIL(common_rpc_proxy->create_routine_with_res(crt_routine_arg, res))) {
+    LOG_WARN("rpc proxy create procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
+  }
+  if (OB_SUCC(ret) && !has_error && with_res &&
+      tenant_config.is_valid() &&
+      tenant_config->plsql_v2_compatibility) {
+    CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
+    OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
+    OZ (compile_routine(ctx, tenant_id, database_id, routine_name, type,
+                        res.store_routine_schema_version_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to persistent routine", K(ret));
+      ret = OB_SUCCESS;
+      if (NULL != ctx.get_my_session()) {
+        ctx.get_my_session()->reset_warnings_buf();
+      }
+    }
+  }
+  if(crt_routine_arg.with_if_not_exist_ && ret == OB_ERR_SP_ALREADY_EXISTS) {
+    LOG_USER_WARN(OB_ERR_SP_ALREADY_EXISTS, "ROUTINE",  crt_routine_arg.routine_info_.get_routine_name().length(), crt_routine_arg.routine_info_.get_routine_name().ptr());
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -328,23 +421,86 @@ int ObAlterRoutineExecutor::execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   obrpc::ObCreateRoutineArg &alter_routine_arg = stmt.get_routine_arg();
+  uint64_t tenant_id = alter_routine_arg.routine_info_.get_tenant_id();
+  uint64_t database_id = alter_routine_arg.routine_info_.get_database_id();
+  ObString db_name = alter_routine_arg.db_name_;
+  ObString routine_name = alter_routine_arg.routine_info_.get_routine_name();
+  ObRoutineType type = alter_routine_arg.routine_info_.get_routine_type();
+  bool has_error = ERROR_STATUS_HAS_ERROR == alter_routine_arg.error_info_.get_error_status();
+  bool need_create_routine = (lib::is_oracle_mode() && alter_routine_arg.is_or_replace_) ||
+                            (lib::is_mysql_mode() && alter_routine_arg.is_need_alter_);
   ObString first_stmt;
-  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    LOG_WARN("fail to get first stmt" , K(ret));
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
+  if (need_create_routine) {
+    obrpc::ObRoutineDDLRes res;
+    bool with_res = (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_3_0
+                     && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
+                    || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0;
+    if (OB_ISNULL(ctx.get_pl_engine())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pl engine is null", K(ret));
+    } else if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+      LOG_WARN("fail to get first stmt" , K(ret));
+    } else {
+      alter_routine_arg.ddl_stmt_str_ = first_stmt;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("get task executor context failed", K(ret));
+    } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
+      LOG_WARN("get common rpc proxy failed", K(ret));
+    } else if (OB_ISNULL(common_rpc_proxy)){
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("common rpc proxy should not be null", K(ret));
+    } else if (!with_res && OB_FAIL(common_rpc_proxy->alter_routine(alter_routine_arg))) {
+      LOG_WARN("rpc proxy alter procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
+    } else if (with_res && OB_FAIL(common_rpc_proxy->alter_routine_with_res(alter_routine_arg, res))) {
+      LOG_WARN("rpc proxy alter procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
+    }
+    if (OB_SUCC(ret) && !has_error && with_res &&
+        tenant_config.is_valid() &&
+        tenant_config->plsql_v2_compatibility) {
+      CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
+      OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
+      OZ (compile_routine(ctx, tenant_id, database_id, routine_name, type,
+                          res.store_routine_schema_version_));
+      if (OB_FAIL(ret)) {
+        LOG_WARN("fail to persistent routine", K(ret));
+        common::ob_reset_tsi_warning_buffer();
+        ret = OB_SUCCESS;
+      }
+    }
   } else {
-    alter_routine_arg.ddl_stmt_str_ = first_stmt;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("get task executor context failed", K(ret));
-  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
-    LOG_WARN("get common rpc proxy failed", K(ret));
-  } else if (OB_ISNULL(common_rpc_proxy)){
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("common rpc proxy should not be null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->alter_routine(alter_routine_arg))) {
-    LOG_WARN("rpc proxy alter procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
+    ObMySQLTransaction trans;
+    const ObRoutineInfo *routine_info = nullptr;
+    ObSchemaGetterGuard schema_guard;
+    OZ (ctx.get_task_exec_ctx().schema_service_->
+        get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), schema_guard));
+    OZ(schema_guard.get_routine_info(tenant_id, alter_routine_arg.routine_info_.get_routine_id(), routine_info));
+    CK (OB_NOT_NULL(routine_info));
+    OZ (trans.start(GCTX.sql_proxy_, tenant_id, true));
+    OZ (alter_routine_arg.error_info_.handle_error_info(trans, routine_info));
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCCESS == ret))) {
+        LOG_WARN("trans end failed", K(ret), K(tmp_ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
+    }
+    if (OB_SUCC(ret) && !has_error
+        && ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_3_0
+             && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
+            || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0)
+        && tenant_config.is_valid() && tenant_config->plsql_v2_compatibility) {
+      OZ (compile_routine(ctx, tenant_id, database_id, routine_name, type,
+                          routine_info->get_schema_version()));
+      if (OB_FAIL(ret)) {
+        LOG_WARN("fail to persistent routine", K(ret));
+        common::ob_reset_tsi_warning_buffer();
+        ret = OB_SUCCESS;
+      }
+    }
   }
   return ret;
 }

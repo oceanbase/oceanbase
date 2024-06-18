@@ -34151,7 +34151,7 @@ int ObDDLService::create_package(ObSchemaGetterGuard &schema_guard,
 }
 
 int ObDDLService::alter_package(ObSchemaGetterGuard &schema_guard,
-                                const ObPackageInfo &package_info,
+                                ObPackageInfo &package_info,
                                 ObIArray<ObRoutineInfo> &public_routine_infos,
                                 share::schema::ObErrorInfo &error_info,
                                 const ObString *ddl_stmt_str)
@@ -34290,7 +34290,7 @@ int ObDDLService::create_trigger(const ObCreateTriggerArg &arg,
                                         schema_guard,
                                         table_schema_version))) {
       LOG_WARN("create trigger in trans failed", K(ret));
-    } else if (with_res && !arg.in_second_stage_) {
+    } else if (with_res) {
       res->table_schema_version_ = table_schema_version;
       res->trigger_schema_version_ = new_trigger_info.get_schema_version();
     }
@@ -34416,7 +34416,8 @@ int ObDDLService::drop_trigger_in_trans(const ObTriggerInfo &trigger_info,
   return ret;
 }
 
-int ObDDLService::alter_trigger(const ObAlterTriggerArg &arg)
+int ObDDLService::alter_trigger(const ObAlterTriggerArg &arg,
+                                obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -34456,6 +34457,10 @@ int ObDDLService::alter_trigger(const ObAlterTriggerArg &arg)
           OX (new_tg_info.set_is_enable(is_enable));
         }
         OZ (ddl_operator.alter_trigger(new_tg_info, trans, &arg.ddl_stmt_str_));
+      }
+      // alter trigger scenes
+      if (OB_SUCC(ret) && 1 == arg.trigger_infos_.count() && OB_NOT_NULL(res)) {
+        res->store_routine_schema_version_ = new_tg_info.get_schema_version();
       }
     }
     if (trans.is_started()) {

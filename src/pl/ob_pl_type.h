@@ -741,6 +741,8 @@ public:
 
   static bool is_table(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_table_column(const common::ObIArray<ObObjAccessIdx> &access_idxs);
+  static bool is_dblink_table(const common::ObIArray<ObObjAccessIdx> &access_idxs);
+  static bool is_dblink_table_column(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_local_variable(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_function_return_variable(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_subprogram_variable(const common::ObIArray<ObObjAccessIdx> &access_idxs);

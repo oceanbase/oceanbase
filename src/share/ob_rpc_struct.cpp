@@ -5983,6 +5983,9 @@ OB_SERIALIZE_MEMBER(ObAdminSetTPArg,
                     zone_,
                     cond_);
 
+OB_SERIALIZE_MEMBER(ObRoutineDDLRes,
+                    store_routine_schema_version_);
+
 bool ObCreateRoutineArg::is_valid() const
 {
   return OB_INVALID_ID != routine_info_.get_tenant_id()

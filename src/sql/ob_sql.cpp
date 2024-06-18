@@ -5496,8 +5496,9 @@ void ObSql::generate_sql_id(ObPlanCacheCtx &pc_ctx,
 {
   // It has been checked during parser_and_check, there is no need to check again here
   if (OB_SUCCESS == err_code
-    && parse_result.result_tree_->children_[0]->type_ == T_SP_CALL_STMT) {
-    signature_sql = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+      && PC_TEXT_MODE == pc_ctx.mode_
+      && T_SP_CALL_STMT == parse_result.result_tree_->children_[0]->type_) {
+    signature_sql = pc_ctx.fp_result_.pc_key_.name_;
   } else if (add_plan_to_pc == false
             || PC_PS_MODE == pc_ctx.mode_
             || PC_PL_MODE == pc_ctx.mode_

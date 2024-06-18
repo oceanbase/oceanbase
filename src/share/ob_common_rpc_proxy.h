@@ -122,10 +122,13 @@ public:
   //----End of definitions for managing outlines----
 
   RPC_S(PRD create_routine, obrpc::OB_CREATE_ROUTINE, (ObCreateRoutineArg));
+  RPC_S(PRD create_routine_with_res, obrpc::OB_CREATE_ROUTINE_WITH_RES, (ObCreateRoutineArg), ObRoutineDDLRes);
   RPC_S(PRD drop_routine, obrpc::OB_DROP_ROUTINE, (ObDropRoutineArg));
   RPC_S(PRD alter_routine, obrpc::OB_ALTER_ROUTINE, (ObCreateRoutineArg));
+  RPC_S(PRD alter_routine_with_res, obrpc::OB_ALTER_ROUTINE_WITH_RES, (ObCreateRoutineArg), ObRoutineDDLRes);
 
   RPC_S(PRD create_udt, obrpc::OB_CREATE_UDT, (ObCreateUDTArg));
+  RPC_S(PRD create_udt_with_res, obrpc::OB_CREATE_UDT_WITH_RES, (ObCreateUDTArg), ObRoutineDDLRes);
   RPC_S(PRD drop_udt, obrpc::OB_DROP_UDT, (ObDropUDTArg));
 
   //----Definitions for managing dblinks----
@@ -175,12 +178,15 @@ public:
   //----End of definitions for managing profile----
 
   RPC_S(PRD create_package, obrpc::OB_CREATE_PACKAGE, (ObCreatePackageArg));
+  RPC_S(PRD create_package_with_res, obrpc::OB_CREATE_PACKAGE_WITH_RES, (ObCreatePackageArg), ObRoutineDDLRes);
   RPC_S(PRD alter_package, obrpc::OB_ALTER_PACKAGE, (ObAlterPackageArg));
+  RPC_S(PRD alter_package_with_res, obrpc::OB_ALTER_PACKAGE_WITH_RES, (ObAlterPackageArg), ObRoutineDDLRes);
   RPC_S(PRD drop_package, obrpc::OB_DROP_PACKAGE, (ObDropPackageArg));
 
   RPC_S(PRD create_trigger, obrpc::OB_CREATE_TRIGGER, (ObCreateTriggerArg));
   RPC_S(PRD create_trigger_with_res, obrpc::OB_CREATE_TRIGGER_WITH_RES, (ObCreateTriggerArg), ObCreateTriggerRes);
   RPC_S(PRD alter_trigger, obrpc::OB_ALTER_TRIGGER, (ObAlterTriggerArg));
+  RPC_S(PRD alter_trigger_with_res, obrpc::OB_ALTER_TRIGGER_WITH_RES, (ObAlterTriggerArg), ObRoutineDDLRes);
   RPC_S(PRD drop_trigger, obrpc::OB_DROP_TRIGGER, (ObDropTriggerArg));
 
   RPC_S(PR5 execute_bootstrap, OB_EXECUTE_BOOTSTRAP, (ObBootstrapArg));

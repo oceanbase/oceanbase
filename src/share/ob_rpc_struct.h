@@ -6927,7 +6927,7 @@ public:
   bool is_or_replace_;
   bool is_need_alter_; // used in mysql mode
   share::schema::ObErrorInfo error_info_;
-  common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
+  common::ObSArray<oceanbase::share::schema::ObDependencyInfo> dependency_infos_;
   bool with_if_not_exist_;
 };
 
@@ -7083,6 +7083,22 @@ public:
   };
   share::schema::ObErrorInfo error_info_;
   common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
+};
+
+struct ObRoutineDDLRes
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObRoutineDDLRes() :
+    store_routine_schema_version_(OB_INVALID_VERSION)
+  {}
+  int assign(const ObRoutineDDLRes &other) {
+    store_routine_schema_version_ = other.store_routine_schema_version_;
+    return common::OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(store_routine_schema_version));
+  int64_t store_routine_schema_version_;
 };
 
 struct ObCreateTriggerRes

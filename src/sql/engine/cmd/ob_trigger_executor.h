@@ -29,7 +29,21 @@ class ObCreateTriggerStmt;
 class ObAlterTriggerStmt;
 class ObDropTriggerStmt;
 
-class ObCreateTriggerExecutor
+class ObCompileTriggerInf
+{
+public:
+  ObCompileTriggerInf() {}
+  virtual ~ObCompileTriggerInf() {}
+  static int compile_trigger(sql::ObExecContext &ctx,
+                      uint64_t tenant_id,
+                      uint64_t db_id,
+                      const ObString &trigger_name,
+                      int64_t schema_version);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCompileTriggerInf);
+};
+
+class ObCreateTriggerExecutor : ObCompileTriggerInf
 {
 public:
   ObCreateTriggerExecutor() {}
@@ -56,7 +70,7 @@ private:
   void operator=(const ObDropTriggerExecutor&);
 };
 
-class ObAlterTriggerExecutor
+class ObAlterTriggerExecutor : ObCompileTriggerInf
 {
 public:
   ObAlterTriggerExecutor() {}

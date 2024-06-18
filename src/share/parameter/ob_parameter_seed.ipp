@@ -1307,7 +1307,7 @@ DEF_BOOL(plsql_debug, OB_TENANT_PARAMETER, "False",
          "specifies whether or not PL/SQL library units will be compiled for debugging",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(plsql_v2_compatibility, OB_TENANT_PARAMETER, "False",
-         "allows some abnormal behavior that Version 8 disallows, not available",
+         "allows to control store routine compile action at DDL stage",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // for bloom filter
 DEF_BOOL(_bloom_filter_enabled, OB_TENANT_PARAMETER, "True",
