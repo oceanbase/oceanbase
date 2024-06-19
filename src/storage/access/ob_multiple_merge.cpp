@@ -675,6 +675,7 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
   bool need_skip = false;
   bool is_filter_filtered = false;
   out_row = nullptr;
+  access_ctx_->table_store_stat_.logical_read_cnt_++;
   if (OB_FAIL((not_using_static_engine)
           ?  project_row(in_row,
                          access_param_->iter_param_.out_cols_project_,

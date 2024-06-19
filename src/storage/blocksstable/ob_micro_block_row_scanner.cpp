@@ -265,7 +265,6 @@ int ObIMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&row)
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(context_)) {
-    ++context_->table_store_stat_.logical_read_cnt_;
     ++context_->table_store_stat_.physical_read_cnt_;
   }
   LOG_DEBUG("get next row", K(ret), KPC(row), K_(macro_id));
@@ -892,9 +891,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumRow
       LOG_ERROR("row is invalid", KPC(ret_row));
     } else {
       LOG_DEBUG("row is valid", KPC(ret_row));
-      if (OB_NOT_NULL(context_)) {
-        ++context_->table_store_stat_.logical_read_cnt_;
-      }
     }
   } else if (OB_UNLIKELY(OB_SUCCESS == ret || OB_ITER_END == ret)) {
     if (!reverse_scan_ && (last_ < reader_->row_count() - 1) &&
