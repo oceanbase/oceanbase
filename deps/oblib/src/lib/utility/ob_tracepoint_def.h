@@ -534,6 +534,8 @@ GLOBAL_ERRSIM_POINT_DEF(2208, EN_DISABLE_SORTKEY_SEPARATELY, "Used to control wh
 GLOBAL_ERRSIM_POINT_DEF(2209, EN_ENABLE_VECTOR_IN, "Used to control whether the capability for in-expr vectorization 2.0 is enabled.");
 GLOBAL_ERRSIM_POINT_DEF(2210, EN_SQL_MEMORY_MRG_OPTION, "Control automatic memory management global bound size");
 GLOBAL_ERRSIM_POINT_DEF(2211, EN_ENABLE_RANDOM_TSC, "wether to randomize batch_size & skips of table scan's output ");
+GLOBAL_ERRSIM_POINT_DEF(2212, EN_LOCK_CONFLICT_RETRY_THEN_REROUTE, "force reroute sql when lock conflict and retry a few times");
+
 // WR && ASH
 GLOBAL_ERRSIM_POINT_DEF(2301, EN_CLOSE_ASH, "");
 GLOBAL_ERRSIM_POINT_DEF(2302, EN_DISABLE_HASH_BASE_DISTINCT, "");
