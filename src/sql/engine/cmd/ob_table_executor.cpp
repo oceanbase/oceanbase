@@ -2088,6 +2088,14 @@ int ObTruncateTableExecutor::check_use_parallel_truncate(const obrpc::ObTruncate
     use_parallel_truncate = (table_schema->get_autoinc_column_id() == 0 && compat_version >= DATA_VERSION_4_1_0_0)
                             || compat_version >= DATA_VERSION_4_1_0_2;
   }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (use_parallel_truncate
+             && OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                        ObParallelDDLControlMode::TRUNCATE_TABLE,
+                        tenant_id, use_parallel_truncate))) {
+    LOG_WARN("fail to check whether is parallel truncate table", KR(ret), K(tenant_id));
+  }
   return ret;
 }
 
