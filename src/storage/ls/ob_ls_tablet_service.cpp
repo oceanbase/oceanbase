@@ -1570,14 +1570,39 @@ int ObLSTabletService::update_tablet_snapshot_version(
     const ObTabletMapKey key(ls_id, tablet_id);
     ObMetaDiskAddr disk_addr;
 
-    if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
+    ObTabletCreateDeleteMdsUserData user_data;
+    bool is_committed = false;
+    int64_t transfer_ts = INT64_MAX;
+    int64_t update_snapshot_version = 0;
+
+    if (tablet_id.is_ls_inner_tablet()) {
+      //do nothing
+    } else if (OB_FAIL(old_tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+      LOG_WARN("fail to get latest tablet status", K(ret), KPC(old_tablet));
+    } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
+        && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
+      //do nothing
+    } else if (is_committed || ObTabletStatus::TRANSFER_OUT_DELETED == user_data.tablet_status_) {
+      transfer_ts = user_data.transfer_scn_.get_val_for_tx();
+    }
+
+    if (OB_SUCC(ret)) {
+      update_snapshot_version = std::min(snapshot_version, transfer_ts);
+      if (update_snapshot_version != snapshot_version) {
+        FLOG_INFO("update tablet snapshot version changed snapshot version for transfer",
+            K(update_snapshot_version), K(snapshot_version), K(transfer_ts), K(user_data));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_TABLET_NOT_EXIST;
       } else {
         LOG_WARN("failed to acquire tablet", K(ret), K(key));
       }
     } else if (FALSE_IT(tmp_tablet = tmp_tablet_hdl.get_obj())) {
-    } else if (OB_FAIL(tmp_tablet->init_with_new_snapshot_version(allocator, *old_tablet, snapshot_version))) {
+    } else if (OB_FAIL(tmp_tablet->init_with_new_snapshot_version(allocator, *old_tablet, update_snapshot_version))) {
       LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
     } else if (FALSE_IT(time_guard.click("InitNew"))) {
     } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_hdl))) {
