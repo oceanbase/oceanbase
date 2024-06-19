@@ -47,7 +47,6 @@ private:
   int flush_directive_to_iops_control(const uint64_t tenant_id,
                                       ObPlanDirectiveSet &directives,
                                       ObPlanDirective &other_group_directive);
-  int normalize_cpu_directives(ObPlanDirectiveSet &directives);
   int normalize_iops_directives(const uint64_t tenant_id,
                                 ObPlanDirectiveSet &directives,
                                 ObPlanDirective &other_group_directive);

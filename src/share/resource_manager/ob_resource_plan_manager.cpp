@@ -70,23 +70,6 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
     }
 
     if (OB_SUCC(ret)) {
-      ObRefHolder<ObTenantIOManager> tenant_holder;
-      if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
-        LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
-      } else {
-        int tmp_ret = OB_SUCCESS;
-        for (int64_t i = 0; i < tenant_holder.get_ptr()->get_group_num(); i++) {
-          uint64_t group_id = tenant_holder.get_ptr()->get_io_config().group_ids_.at(i);
-          if (GCTX.cgroup_ctrl_->is_valid() &&
-              OB_TMP_FAIL(GCTX.cgroup_ctrl_->remove_both_cgroup(
-                  tenant_id, group_id, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-            LOG_WARN("remove tenant cgroup failed", K(tmp_ret), K(tenant_id));
-          }
-        }
-      }
-    }
-
-    if (OB_SUCC(ret)) {
       if (OB_FAIL(tenant_plan_map_.set_refactored(tenant_id, cur_plan, 1))) {  // overrite
         LOG_WARN("set plan failed", K(ret), K(tenant_id));
       } else {
@@ -192,8 +175,6 @@ int ObResourcePlanManager::refresh_resource_plan(const uint64_t tenant_id, ObStr
       //      - 如果 utilization = 100，那么 cfs_cpu_quota = -1
     } else if (OB_FAIL(refresh_global_background_cpu())) {
       LOG_WARN("fail refresh background cpu quota", K(ret));
-    } else if (OB_FAIL(normalize_cpu_directives(directives))) {
-      LOG_WARN("fail normalize directive", K(ret));
     } else if (OB_FAIL(flush_directive_to_cgroup_fs(directives))) {  // for CPU
       LOG_WARN("fail flush directive to cgroup fs", K(ret));
     }
@@ -220,61 +201,6 @@ int ObResourcePlanManager::get_cur_plan(const uint64_t tenant_id, ObResMgrVarcha
       LOG_INFO("delete plan success with no_releated_io_module", K(plan_name), K(tenant_id));
     } else {
       LOG_WARN("get plan failed", K(ret), K(tenant_id), K(plan_name));
-    }
-  }
-  return ret;
-}
-
-int ObResourcePlanManager::normalize_cpu_directives(ObPlanDirectiveSet &directives)
-{
-  int ret = OB_SUCCESS;
-  double total_mgmt = 0;
-  for (int64_t i = 0; i < directives.count(); ++i) {
-    const ObPlanDirective &d = directives.at(i);
-    total_mgmt += d.mgmt_p1_;
-  }
-
-  // 计算：cfs_cpu_quota 值
-  // 公式
-  //  {
-  //   cfs_cpu_quota = d.utilization_limit_percent_ * tenant.cfs_cpu_peroid * unit_min_cpu / 100
-  //   unit_min_cpu = tenant.cpu.shares / 1024   # 租户的 shares 值是根据 unit 的 min_cpu 计算而得，
-  //  }
-  //  =>
-  //  {
-  //   cfs_cpu_quota = d.utilization_limit_percent_ * tenant.cfs_cpu_peroid * / 100 * tenant.cpu.shares / 1024
-  //                 = d.utilization_limit_ * 100 / total * tenant.cfs_cpu_peroid * / 100 * tenant.cpu.shares / 1024
-  //                 = (d.utilization_limit_ / total) * tenant.cfs_cpu_peroid *  (tenant.cpu.shares / 1024)
-  //  }
-  //
-  // 特殊值考虑：
-  //  如果 mgmt 设置为 0，意味着用户希望它的 share 尽可能小
-  //  如果 limit 设置为 0，意味着用户希望它的 cpu quota 尽可能小
-  //  注意：mgmt, limit 的默认值都不是 0
-  for (int64_t i = 0; i < directives.count(); ++i) {
-    ObPlanDirective &d = directives.at(i);
-    if (0 == total_mgmt) {
-      d.mgmt_p1_ = 0;
-    } else {
-      d.mgmt_p1_ = d.mgmt_p1_ / total_mgmt;
-    }
-    double tenant_shares_cpu = 0;
-    int32_t cfs_period_us = 0;
-    if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_shares(
-            d.tenant_id_,
-            tenant_shares_cpu,
-            OB_INVALID_GROUP_ID,
-            GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP
-                                                              : ""))) {
-      LOG_WARN("fail get cpu shares", K(d), K(ret));
-    } else {
-      if (d.utilization_limit_ == 100) {
-        // 不限制
-        d.utilization_limit_ = -1;
-      } else {
-        d.utilization_limit_ =
-            tenant_shares_cpu * d.utilization_limit_ / 100;
-      }
     }
   }
   return ret;
@@ -373,15 +299,30 @@ int ObResourcePlanManager::flush_directive_to_cgroup_fs(ObPlanDirectiveSet &dire
     } else if (!tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).deleted_ &&
                !tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).cleared_) {
       if (OB_FAIL(GCTX.cgroup_ctrl_->set_both_cpu_shares(d.tenant_id_,
-              d.mgmt_p1_,
+              d.mgmt_p1_ / 100,
               d.group_id_,
               GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
         LOG_ERROR("fail set cpu shares. tenant isolation function may not functional!!", K(d), K(ret));
-      } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_both_cpu_cfs_quota(d.tenant_id_,
-                     d.utilization_limit_,
-                     d.group_id_,
-                     GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-        LOG_ERROR("fail set cpu quota. tenant isolation function may not functional!!", K(d), K(ret));
+      } else {
+        double tenant_cpu_quota = 0;
+        if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_quota(d.tenant_id_, tenant_cpu_quota, OB_INVALID_GROUP_ID))) {
+          LOG_WARN("fail get cpu quota", K(d), K(ret));
+        } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(d.tenant_id_,
+                       -1 == tenant_cpu_quota ? -1 : tenant_cpu_quota * d.utilization_limit_ / 100,
+                       d.group_id_))) {
+          LOG_ERROR("fail set cpu quota. tenant isolation function may not functional!!", K(ret), K(d), K(tenant_cpu_quota));
+        }
+        if (OB_SUCC(ret) && GCONF.enable_global_background_resource_isolation) {
+          if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_quota(
+                  d.tenant_id_, tenant_cpu_quota, OB_INVALID_GROUP_ID, BACKGROUND_CGROUP))) {
+            LOG_WARN("fail get cpu quota", K(d), K(ret));
+          } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(d.tenant_id_,
+                         -1 == tenant_cpu_quota ? -1 : tenant_cpu_quota * d.utilization_limit_ / 100,
+                         d.group_id_,
+                         BACKGROUND_CGROUP))) {
+            LOG_ERROR("fail set cpu quota. tenant isolation function may not functional!!", K(ret), K(d), K(tenant_cpu_quota));
+          }
+        }
       }
     }
     // ignore ret, continue
