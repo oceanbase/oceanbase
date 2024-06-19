@@ -1131,6 +1131,7 @@ int ObOptimizerUtil::get_expr_monotonicity_recursively(const ObRawExpr* expr,
         if (OB_FAIL(ObTransformUtils::get_expr_int_value(const_cast<ObRawExpr*>(param_expr_pos), &param_store,
                                                          &ctx, &local_allocator, value, is_null_value))) {
           LOG_WARN("failed to check limit value", K(ret));
+          ret = OB_SUCCESS;   /* ignore the error check inside */
         } else if (is_null_value || value != 1) {
           /* monotonicity = Monotonicity::NONE_MONO; is_strict = false; */
         } else if (OB_FAIL(SMART_CALL(get_expr_monotonicity_recursively(param_expr_str, var, ctx,
