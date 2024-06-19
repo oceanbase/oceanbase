@@ -24,7 +24,7 @@ def check_data_version(cur, query_cur, timeout):
   (desc, results) = query_cur.exec_query(sql)
   if len(results) == 0:
     logging.warn('result cnt not match')
-    raise e
+    raise MyError('result cnt not match')
   tenant_count = len(results)
   tenant_ids_str = ''
   for index, row in enumerate(results):
@@ -35,7 +35,7 @@ def check_data_version(cur, query_cur, timeout):
   (desc, results) = query_cur.exec_query(sql)
   if len(results) != 1 or len(results[0]) != 1:
     logging.warn('result cnt not match')
-    raise e
+    raise MyError('result cnt not match')
   server_count = results[0][0]
 
   # check compatible sync
@@ -55,7 +55,7 @@ def check_data_version(cur, query_cur, timeout):
     result = cur.fetchall()
     if len(result) != 1 or len(result[0]) != 1:
       logging.exception('result cnt not match')
-      raise e
+      raise MyError('result cnt not match')
     elif result[0][0] == parameter_count:
       logging.info("""'compatible' is sync, value is {0}""".format(current_data_version))
       break
@@ -65,7 +65,7 @@ def check_data_version(cur, query_cur, timeout):
     times -= 1
     if times == -1:
       logging.exception("""check compatible:{0} sync timeout""".format(current_data_version))
-      raise e
+      raise MyError("""check compatible:{0} sync timeout""".format(current_data_version))
     time.sleep(5)
 
   actions.set_session_timeout(cur, 10)
@@ -76,10 +76,10 @@ def check_data_version(cur, query_cur, timeout):
   (desc, results) = query_cur.exec_query(sql)
   if len(results) != 1 or len(results[0]) != 1:
     logging.warn('result cnt not match')
-    raise e
+    raise MyError('result cnt not match')
   elif 2 * tenant_count != results[0][0]:
     logging.warn('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
-    raise e
+    raise MyError('target_data_version/current_data_version not match with {0}, tenant_cnt:{1}, result_cnt:{2}'.format(current_data_version, tenant_count, results[0][0]))
   else:
     logging.info("all tenant's target_data_version/current_data_version are match with {0}".format(current_data_version))
 
@@ -99,7 +99,7 @@ def check_root_inspection(cur, query_cur, timeout):
 
   if times == -1:
     logging.warn('check root inspection failed!')
-    raise e
+    raise MyError('check root inspection failed!')
   logging.info('check root inspection success')
 
 # 4 开ddl
@@ -130,6 +130,6 @@ def do_check(conn, cur, query_cur, timeout):
     enable_ddl(cur, timeout)
     enable_rebalance(cur, timeout)
     enable_rereplication(cur, timeout)
-  except Exception, e:
+  except Exception as e:
     logging.exception('run error')
-    raise e
+    raise
