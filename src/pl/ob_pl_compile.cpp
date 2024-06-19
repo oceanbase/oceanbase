@@ -823,7 +823,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
       OZ (ObTriggerInfo::gen_package_source(package_info.get_tenant_id(),
                                             package_info.get_package_id(),
                                             source,
-                                            PACKAGE_TYPE == package_info.get_type(),
+                                            schema::PACKAGE_TYPE == package_info.get_type(),
                                             schema_guard_, package.get_allocator()));
       LOG_DEBUG("trigger package source", K(source), K(package_info.get_type()), K(ret));
     } else {
@@ -904,7 +904,11 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 
   int64_t compile_end = ObTimeUtility::current_time();
   OX (package.get_stat_for_update().compile_time_ = compile_end - compile_start);
-  OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_ROUTINE_TYPE);
+  if (PL_PACKAGE_BODY == package_ast.get_package_type()) {
+    OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_BODY_TYPE);
+  } else {
+    OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_TYPE);
+  }
 
   LOG_INFO(">>>>>>>>Final Compile Package Time: ", K(package.get_id()), K(package.get_name()), K(compile_end - compile_start));
   return ret;

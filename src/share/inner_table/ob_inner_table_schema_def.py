@@ -31836,7 +31836,8 @@ def_table_schema(
            PL_SCHEMA_ID AS OBJECT_ID,
            COMPILE_TIME,
            SCHEMA_VERSION,
-           PS_STMT_ID
+           PS_STMT_ID,
+           DB_ID
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
 """.replace("\n", " "),
     normal_columns = [
@@ -31871,7 +31872,9 @@ def_table_schema(
            OBJECT_ID,
            COMPILE_TIME,
            SCHEMA_VERSION,
-           PS_STMT_ID FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
+           PS_STMT_ID,
+           DB_ID
+    FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
 
@@ -61452,9 +61455,10 @@ def_table_schema(
            ELAPSED_TIME,
            OBJECT_TYPE,
            PL_SCHEMA_ID AS OBJECT_ID,
-           COMPILE_TIME,
-           SCHEMA_VERSION,
-           PS_STMT_ID
+           COMPILE_TIME AS COMPILE_TIME,
+           SCHEMA_VERSION AS SCHEMA_VERSION,
+           PS_STMT_ID AS PS_STMT_ID,
+           DB_ID AS DB_ID
     FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
 """.replace("\n", " "),
     normal_columns = [
@@ -61472,26 +61476,28 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-    SELECT TENANT_ID,
-           SVR_IP,
-           SVR_PORT,
-           CACHE_OBJECT_ID,
-           PARAMETERIZE_TEXT,
-           OBJECT_TEXT,
-           FIRST_LOAD_TIME,
-           LAST_ACTIVE_TIME,
-           AVG_EXE_USEC,
-           SLOWEST_EXE_TIME,
-           SLOWEST_EXE_USEC,
-           HIT_COUNT,
-           CACHE_OBJ_SIZE,
-           EXECUTIONS,
-           ELAPSED_TIME,
-           OBJECT_TYPE,
-           OBJECT_ID,
-           COMPILE_TIME,
-           SCHEMA_VERSION,
-           PS_STMT_ID FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
+    SELECT TENANT_ID AS TENANT_ID,
+           SVR_IP AS SVR_IP,
+           SVR_PORT AS SVR_PORT,
+           CACHE_OBJECT_ID AS CACHE_OBJECT_ID,
+           PARAMETERIZE_TEXT AS PARAMETERIZE_TEXT,
+           OBJECT_TEXT AS OBJECT_TEXT,
+           FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
+           LAST_ACTIVE_TIME AS LAST_ACTIVE_TIME,
+           AVG_EXE_USEC AS AVG_EXE_USEC,
+           SLOWEST_EXE_TIME AS SLOWEST_EXE_TIME,
+           SLOWEST_EXE_USEC AS SLOWEST_EXE_USEC,
+           HIT_COUNT AS HIT_COUNT,
+           CACHE_OBJ_SIZE AS CACHE_OBJ_SIZE,
+           EXECUTIONS AS EXECUTIONS,
+           ELAPSED_TIME AS ELAPSED_TIME,
+           OBJECT_TYPE AS OBJECT_TYPE,
+           OBJECT_ID AS OBJECT_ID,
+           COMPILE_TIME AS COMPILE_TIME,
+           SCHEMA_VERSION AS SCHEMA_VERSION,
+           PS_STMT_ID AS PS_STMT_ID,
+           DB_ID AS DB_ID
+    FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
 
