@@ -246,7 +246,6 @@ int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(
 
 void ObMemtable::destroy()
 {
-  is_inited_ = false;
   ObTimeGuard time_guard("ObMemtable::destroy()", 100 * 1000);
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -258,6 +257,7 @@ void ObMemtable::destroy()
     STORAGE_LOG(INFO, "memtable destroyed", K(*this));
     time_guard.click();
   }
+  is_inited_ = false;
   mvcc_engine_.destroy();
   time_guard.click();
   query_engine_.destroy();
