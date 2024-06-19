@@ -26,6 +26,7 @@ class MacroBlockId;
 }
 namespace compaction
 {
+struct ObStaticMergeParam;
 
 class ObSSTableRebuildMicroBlockIter final
 {
@@ -80,7 +81,7 @@ public:
   void reset();
   int set_index_read_info(const ObITableReadInfo *read_info);
   int prepare_index_builder();
-  int build_sstable_merge_res(const share::SCN end_scn, ObSSTableMergeInfo &sstable_merge_info_, blocksstable::ObSSTableMergeRes &res);
+  int build_sstable_merge_res(const ObStaticMergeParam &merge_param, ObSSTableMergeInfo &sstable_merge_info_, blocksstable::ObSSTableMergeRes &res);
   int build_reused_small_sst_merge_res(
       const int64_t macro_read_size,
       const int64_t macro_offset,
@@ -100,10 +101,11 @@ private:
       const blocksstable::ObDataMacroBlockMeta &curr_macro_meta,
       bool &need_merge);
   int rewrite_macro_block(ObSSTableRebuildMicroBlockIter &micro_iter);
-  int check_need_rebuild(const share::SCN end_scn,
+  int check_need_rebuild(const ObStaticMergeParam &merge_param,
                          ObIArray<blocksstable::MacroBlockId> &macro_id_array,
                          MetaIter &iter,
                          int64_t &multiplexed_macro_block_count);
+  int pre_check_rebuild(const ObStaticMergeParam &merge_param, bool &need_check_rebuild);
   bool check_macro_block_could_merge(const blocksstable::ObDataMacroBlockMeta &macro_meta) const
   {
     return data_store_desc_.get_desc().get_row_store_type() == macro_meta.val_.row_store_type_

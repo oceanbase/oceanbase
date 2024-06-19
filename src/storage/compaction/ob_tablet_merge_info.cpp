@@ -231,7 +231,7 @@ int ObTabletMergeInfo::create_sstable(
 
     SMART_VARS_2((ObSSTableMergeRes, res), (ObTabletCreateSSTableParam, param)) {
       if (!is_reused_small_sst
-          && OB_FAIL(sstable_builder_.build_sstable_merge_res(ctx.static_param_.scn_range_.end_scn_, sstable_merge_info_, res))) {
+          && OB_FAIL(sstable_builder_.build_sstable_merge_res(ctx.static_param_, sstable_merge_info_, res))) {
         LOG_WARN("fail to close index builder", K(ret), KPC(sstable), "is_small_sst", sstable->is_small_sstable());
         CTX_SET_DIAGNOSE_LOCATION(ctx);
       } else if (is_reused_small_sst && OB_FAIL(sstable_builder_.build_reused_small_sst_merge_res(sstable->get_macro_read_size(),

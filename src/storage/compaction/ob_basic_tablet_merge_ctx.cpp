@@ -227,6 +227,7 @@ int ObStaticMergeParam::cal_minor_merge_param(const bool has_compaction_filter)
     } else {
       set_full_merge_and_level(false/*is_full_merge*/);
     }
+    data_version_ = DATA_CURRENT_VERSION;
   }
   return ret;
 }
