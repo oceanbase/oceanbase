@@ -121,8 +121,6 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     table_data_desc_(nullptr),
     lob_inrow_threshold_(0),
     ref_count_(0),
-    is_incremental_(false),
-    is_inc_replace_(false),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -164,8 +162,6 @@ int ObTableLoadTransStoreWriter::init()
     } else if (OB_FAIL(init_column_schemas_and_lob_info())) {
       LOG_WARN("fail to init column schemas and lob info", KR(ret));
     } else {
-      is_incremental_ = ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
-      is_inc_replace_ = (ObDirectLoadInsertMode::INC_REPLACE == store_ctx_->ctx_->param_.insert_mode_);
       is_inited_ = true;
     }
   }
@@ -333,9 +329,7 @@ int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const ObN
     for (int64_t i = 0; OB_SUCC(ret) && i < table_data_desc_->column_count_; ++i) {
       ObStorageDatum &datum = session_ctx.datum_row_.storage_datums_[i];
       const ObObj &obj = row.cells_[i];
-      if (OB_FAIL(check_support_obj(obj))) {
-        LOG_WARN("failed to check support obj", KR(ret), K(obj));
-      } else if (OB_FAIL(datum.from_obj_enhance(obj))) {
+      if (OB_FAIL(datum.from_obj_enhance(obj))) {
         LOG_WARN("fail to from obj enhance", KR(ret), K(obj));
       }
     }
@@ -453,8 +447,6 @@ int ObTableLoadTransStoreWriter::cast_column(
     LOG_WARN("fail to cast obj and check", KR(ret), K(obj));
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_support_obj(out_obj))) {
-    LOG_WARN("failed to check support obj", KR(ret), K(out_obj));
   } else if (OB_FAIL(datum.from_obj_enhance(out_obj))) {
     LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
   } else if (column_schema->is_autoincrement()) {
@@ -527,51 +519,6 @@ int ObTableLoadTransStoreWriter::write_row_to_table_store(ObDirectLoadTableStore
     } else if (OB_LIKELY(OB_ROWKEY_ORDER_ERROR == ret)) {
       if (OB_FAIL(error_row_handler->handle_error_row(ret, datum_row))) {
         LOG_WARN("fail to handle error row", KR(ret), K(tablet_id), K(datum_row));
-      }
-    }
-  }
-  return ret;
-}
-
-static int check_lob_is_inrow(const ObObj &obj, const int64_t lob_inrow_threshold, bool &is_inrow)
-{
-  int ret = OB_SUCCESS;
-  is_inrow = false;
-  ObLobManager *lob_mngr = MTL(ObLobManager*);
-  if (OB_UNLIKELY(!obj.is_lob_storage() || lob_inrow_threshold < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(obj), K(lob_inrow_threshold));
-  } else if (OB_ISNULL(lob_mngr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get lob manager handle.", K(ret));
-  } else {
-    ObString data = obj.get_string();
-    const bool set_has_lob_header = data.length() > 0;
-    ObLobLocatorV2 src(data, set_has_lob_header);
-    int64_t byte_len = 0;
-    if (OB_FAIL(src.get_lob_data_byte_len(byte_len))) {
-      LOG_WARN("fail to get lob data byte len", K(ret), K(src));
-    } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(byte_len, lob_inrow_threshold)) {
-      is_inrow = true;
-    } else {
-      is_inrow = false;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadTransStoreWriter::check_support_obj(const ObObj &obj)
-{
-  int ret = OB_SUCCESS;
-  if (is_incremental_ && is_inc_replace_) {
-    if (obj.is_lob_storage()) {
-      bool is_inrow = false;
-      if (OB_FAIL(check_lob_is_inrow(obj, lob_inrow_threshold_, is_inrow))) {
-        LOG_WARN("fail to check lob is inrow", KR(ret));
-      } else if (OB_UNLIKELY(!is_inrow)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("incremental direct-load does not support outrow lob", KR(ret), K(obj));
-        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support outrow lob");
       }
     }
   }

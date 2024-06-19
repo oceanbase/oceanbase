@@ -1484,7 +1484,9 @@ int ObMultipleMerge::read_lob_columns_full_data(blocksstable::ObDatumRow &row)
 
 bool ObMultipleMerge::need_read_lob_columns(const blocksstable::ObDatumRow &row)
 {
-  return (access_param_->iter_param_.has_lob_column_out_ && row.row_flag_.is_exist());
+  return (!access_ctx_->query_flag_.is_skip_read_lob() &&
+          access_param_->iter_param_.has_lob_column_out_ &&
+          row.row_flag_.is_exist());
 }
 
 // handle lobs before process_fuse_row

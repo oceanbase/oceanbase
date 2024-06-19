@@ -262,6 +262,7 @@ protected:
       const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool enable_output_hidden_primary_key,
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
+      const bool is_macroblock_row,
       ColValueList &cols);
   int parse_rowkey_(
       ColValueList &rowkey_cols,
@@ -306,7 +307,9 @@ protected:
   int parse_columns_(
       const bool is_parse_new_col,
       const blocksstable::ObDatumRow &datum_row,
+      const int64_t rowkey_cnt,
       const CDC_INNER_TABLE_SCHEMA &inner_table_schema,
+      const bool is_macroblock_row,
       ColValueList &cols);
   template<class TABLE_SCHEMA>
   int parse_rowkey_(

@@ -16,6 +16,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/hash/ob_link_hashmap.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
+#include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
 
 namespace oceanbase
 {
@@ -49,6 +50,45 @@ public:
   common::ObArenaAllocator allocator_;
   common::ObArray<storage::ObIDirectLoadPartitionTable *> all_table_array_;
   TabletResultMap tablet_result_map_;
+};
+
+class ObTableLoadTableCompactConfig
+{
+public:
+  ObTableLoadTableCompactConfig() : is_sort_lobid_(false) {}
+  virtual int handle_table_compact_success() = 0;
+  virtual int get_tables(common::ObIArray<storage::ObIDirectLoadPartitionTable *> &table_array,
+                 common::ObIAllocator &allocator) = 0;
+
+  bool is_sort_lobid_;
+};
+
+class ObTableLoadTableCompactConfigMainTable : public ObTableLoadTableCompactConfig
+{
+public:
+  int init(ObTableLoadStoreCtx *store_ctx, ObTableLoadMerger &merger);
+
+  int handle_table_compact_success() override;
+  int get_tables(common::ObIArray<storage::ObIDirectLoadPartitionTable *> &table_array,
+                 common::ObIAllocator &allocator) override;
+private:
+  ObTableLoadStoreCtx *store_ctx_;
+  ObTableLoadMerger *merger_;
+};
+
+class ObTableLoadTableCompactConfigLobIdTable : public ObTableLoadTableCompactConfig
+{
+public:
+  ObTableLoadTableCompactConfigLobIdTable();
+  ~ObTableLoadTableCompactConfigLobIdTable();
+
+  int init(ObTableLoadMerger &merger);
+
+  int handle_table_compact_success() override;
+  int get_tables(common::ObIArray<storage::ObIDirectLoadPartitionTable *> &table_array,
+                 common::ObIAllocator &allocator) override;
+private:
+  ObTableLoadMerger *merger_;
 };
 
 class ObTableLoadTableCompactor
@@ -104,12 +144,12 @@ class ObTableLoadTableCompactCtx
 public:
   ObTableLoadTableCompactCtx();
   ~ObTableLoadTableCompactCtx();
-  int init(ObTableLoadStoreCtx *store_ctx, ObTableLoadMerger &merger);
+  int init(ObTableLoadStoreCtx *store_ctx, ObTableLoadTableCompactConfig *compact_config);
   bool is_valid() const;
   int start();
   void stop();
   int handle_table_compact_success();
-  TO_STRING_KV(KP_(store_ctx), KP_(merger), K_(compactor_handle));
+  TO_STRING_KV(KP_(store_ctx), KP_(compact_config), K_(compactor_handle));
 private:
   int new_compactor(ObTableLoadTableCompactorHandle &compactor_handle);
   void release_compactor();
@@ -117,7 +157,7 @@ private:
 
 public:
   ObTableLoadStoreCtx *store_ctx_;
-  ObTableLoadMerger *merger_;
+  ObTableLoadTableCompactConfig *compact_config_;
   mutable obsys::ObRWLock rwlock_;
   ObTableLoadTableCompactorHandle compactor_handle_;
   ObTableLoadTableCompactResult result_;

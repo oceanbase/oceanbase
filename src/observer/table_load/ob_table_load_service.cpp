@@ -576,10 +576,10 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with materialized view log");
     } else if (ObDirectLoadMethod::is_incremental(method)) { // incremental direct-load
       uint64_t compat_version = 0;
-      if (OB_UNLIKELY(ObDirectLoadInsertMode::INC_REPLACE != insert_mode)) {
+      if (!ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("using incremental direct-load without inc_replace is not supported", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "using incremental direct-load without inc_replace is not supported");
+        LOG_WARN("using incremental direct-load without inc_replace or normal is not supported", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "using incremental direct-load without inc_replace or normal is not supported");
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
         LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
       } else if (compat_version < DATA_VERSION_4_3_1_0) {

@@ -312,7 +312,7 @@ int ObDirectLoadSSTableDataFuse::init(const ObDirectLoadDataFuseParam &param,
     LOG_WARN("Invalid argument", K(ret), K(param), KP(origin_table), K(range));
   } else {
     // construct iters
-    if (OB_FAIL(origin_table->scan(range, allocator_, origin_iter_))) {
+    if (OB_FAIL(origin_table->scan(range, allocator_, origin_iter_, false/*skip_read_lob*/))) {
       LOG_WARN("fail to scan origin table", KR(ret));
     } else {
       ObDirectLoadSSTableScanMergeParam scan_merge_param;
@@ -384,7 +384,7 @@ int ObDirectLoadMultipleSSTableDataFuse::init(
       LOG_WARN("fail to assign range", KR(ret));
     }
     // construct iters
-    else if (OB_FAIL(origin_table->scan(range, allocator_, origin_iter_))) {
+    else if (OB_FAIL(origin_table->scan(range, allocator_, origin_iter_, false/*skip_read_lob*/))) {
       LOG_WARN("fail to scan origin table", KR(ret));
     } else {
       ObDirectLoadMultipleSSTableScanMergeParam scan_merge_param;

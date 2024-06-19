@@ -1920,9 +1920,12 @@ int ObLoadDataDirectImpl::init_execute_param()
                                                : ObDirectLoadMethod::FULL);
       execute_param_.insert_mode_ = ObDirectLoadInsertMode::NORMAL;
       if (OB_UNLIKELY(direct_load_hint.is_inc_load_method())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("inc load method not supported", KR(ret), K(direct_load_hint));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "inc load method in direct load is");
+        if (OB_UNLIKELY(ObLoadDupActionType::LOAD_REPLACE == load_args.dupl_action_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("replace for inc load method not supported", KR(ret),
+                   K(direct_load_hint), K(load_args.dupl_action_));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace for inc load method in direct load is");
+        }
       } else if (direct_load_hint.is_inc_replace_load_method()) {
         if (OB_UNLIKELY(ObLoadDupActionType::LOAD_STOP_ON_DUP != load_args.dupl_action_)) {
           ret = OB_NOT_SUPPORTED;

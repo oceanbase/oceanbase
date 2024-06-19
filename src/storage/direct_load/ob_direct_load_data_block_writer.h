@@ -74,6 +74,7 @@ ObDirectLoadDataBlockWriter<Header, T, align>::ObDirectLoadDataBlockWriter()
     offset_(0),
     block_count_(0),
     max_block_size_(0),
+    callback_(nullptr),
     is_opened_(false),
     is_inited_(false)
 {
@@ -122,7 +123,7 @@ int ObDirectLoadDataBlockWriter<Header, T, align>::init(
   ObIDirectLoadDataBlockFlushCallback *callback)
 {
   int ret = common::OB_SUCCESS;
-  if (IS_INIT) {
+  if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDirectLoadDataBlockWriter init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(data_block_size <= 0 || data_block_size % DIO_ALIGN_SIZE != 0 ||

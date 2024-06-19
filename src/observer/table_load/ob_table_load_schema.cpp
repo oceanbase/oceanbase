@@ -16,6 +16,7 @@
 #include "observer/table_load/ob_table_load_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "storage/lob/ob_lob_meta.h"
 
 namespace oceanbase
 {
@@ -27,6 +28,7 @@ using namespace share::schema;
 using namespace table;
 using namespace blocksstable;
 using namespace sql;
+using namespace storage;
 
 int ObTableLoadSchema::get_schema_guard(uint64_t tenant_id, ObSchemaGetterGuard &schema_guard)
 {
@@ -303,29 +305,6 @@ int ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(const uint64_t 
   return ret;
 }
 
-int ObTableLoadSchema::get_lob_meta_tid(
-    const uint64_t tenant_id,
-    const uint64_t data_table_id,
-    uint64_t &lob_meta_table_id)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *data_table_schema = nullptr;
-  lob_meta_table_id = OB_INVALID_ID;
-  if (OB_FAIL(ObTableLoadSchema::get_table_schema(
-      tenant_id, data_table_id, schema_guard, data_table_schema))) {
-    LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_ISNULL(data_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("data table not exist", KR(ret), K(tenant_id), K(data_table_id));
-  } else if (!data_table_schema->has_lob_aux_table()) {
-    // bypass
-  } else {
-    lob_meta_table_id = data_table_schema->get_aux_lob_meta_tid();
-  }
-  return ret;
-}
-
 int ObTableLoadSchema::check_has_invisible_column(const ObTableSchema *table_schema, bool &bret)
 {
   int ret = OB_SUCCESS;
@@ -385,15 +364,17 @@ ObTableLoadSchema::ObTableLoadSchema()
     has_identity_column_(false),
     rowkey_column_count_(0),
     store_column_count_(0),
-    lob_column_cnt_(0),
     collation_type_(CS_TYPE_INVALID),
     part_level_(PARTITION_LEVEL_ZERO),
     schema_version_(0),
+    lob_meta_table_id_(OB_INVALID_ID),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+  lob_column_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
   column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
   multi_version_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
+  lob_meta_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
 }
 
 ObTableLoadSchema::~ObTableLoadSchema()
@@ -411,13 +392,16 @@ void ObTableLoadSchema::reset()
   has_identity_column_ = false;
   rowkey_column_count_ = 0;
   store_column_count_ = 0;
-  lob_column_cnt_ = 0;
   collation_type_ = CS_TYPE_INVALID;
   part_level_ = PARTITION_LEVEL_ZERO;
   schema_version_ = 0;
+  lob_meta_table_id_ = OB_INVALID_ID;
+  lob_column_idxs_.reset();
   column_descs_.reset();
   multi_version_column_descs_.reset();
   datum_utils_.reset();
+  lob_meta_column_descs_.reset();
+  lob_meta_datum_utils_.reset();
   cmp_funcs_.reset();
   partition_ids_.reset();
   allocator_.reset();
@@ -459,6 +443,9 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     collation_type_ = table_schema->get_collation_type();
     part_level_ = table_schema->get_part_level();
     schema_version_ = table_schema->get_schema_version();
+    if (table_schema->has_lob_aux_table()) {
+      lob_meta_table_id_ = table_schema->get_aux_lob_meta_tid();
+    }
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));
@@ -477,6 +464,8 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       LOG_WARN("fail to init datum utils", KR(ret));
     } else if (OB_FAIL(init_lob_storage(column_descs_))) {
       LOG_WARN("fail to check lob storage", KR(ret));
+    } else if (OB_FAIL(gen_lob_meta_datum_utils())) {
+      LOG_WARN("fail to gen lob meta datum utils", KR(ret));
     } else if (OB_FAIL(init_cmp_funcs(column_descs_, lib::is_oracle_mode()))) {
       LOG_WARN("fail to init cmp funcs", KR(ret));
     }
@@ -517,14 +506,17 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
 int ObTableLoadSchema::init_lob_storage(common::ObIArray<share::schema::ObColDesc> &column_descs)
 {
   int ret = OB_SUCCESS;
-  lob_column_cnt_ = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColDesc &col_desc = column_descs.at(i);
     if (col_desc.col_type_.is_lob_storage()) {
       column_descs.at(i).col_type_.set_has_lob_header();
-      ++lob_column_cnt_;
+      if (OB_FAIL(lob_column_idxs_.push_back(i))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
     }
   }
+  LOG_INFO("ObTableLoadSchema::init_lob_storage", K(lob_column_idxs_));
+
   return ret;
 }
 
@@ -600,6 +592,27 @@ int ObTableLoadSchema::prepare_col_desc(const ObTableSchema *table_schema, commo
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::gen_lob_meta_datum_utils()
+{
+  int ret = OB_SUCCESS;
+  ObColDesc col_desc1;
+  col_desc1.col_id_ = ObLobMetaUtil::LOB_ID_COL_ID;
+  col_desc1.col_type_.set_varbinary();
+  col_desc1.col_order_ = ObOrderType::ASC;
+  ObColDesc col_desc2;
+  col_desc2.col_id_ = ObLobMetaUtil::SEQ_ID_COL_ID;
+  col_desc2.col_type_.set_varbinary();
+  col_desc2.col_order_ = ObOrderType::ASC;
+  if (OB_FAIL(lob_meta_column_descs_.push_back(col_desc1))) {
+    LOG_WARN("fail to push back col_desc", KR(ret));
+  } else if (OB_FAIL(lob_meta_column_descs_.push_back(col_desc2))) {
+    LOG_WARN("fail to push back col_desc", KR(ret));
+  } else if (OB_FAIL(lob_meta_datum_utils_.init(lob_meta_column_descs_, ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT, false, allocator_))) {
+    LOG_WARN("fail to init", KR(ret));
   }
   return ret;
 }

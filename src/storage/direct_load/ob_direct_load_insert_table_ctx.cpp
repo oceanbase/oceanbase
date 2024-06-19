@@ -19,6 +19,7 @@
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "share/stat/ob_stat_item.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
+#include "storage/lob/ob_lob_meta.h"
 
 namespace oceanbase
 {
@@ -37,7 +38,6 @@ using namespace share;
 
 ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
   : table_id_(OB_INVALID_ID),
-    lob_meta_tid_(OB_INVALID_ID),
     schema_version_(OB_INVALID_VERSION),
     snapshot_version_(0),
     ddl_task_id_(0),
@@ -147,56 +147,10 @@ int ObDirectLoadInsertTabletContext::init(ObDirectLoadInsertTableContext *table_
       tablet_id_ = tablet_id;
       lob_tablet_id_ = ddl_data.lob_meta_tablet_id_;
       start_seq_.set_parallel_degree(param_->reserved_parallel_);
-      if (param_->is_incremental_ && OB_FAIL(check_lob_meta_empty())) {
-        LOG_WARN("failed to check lob meta empty", KR(ret));
-      } else {
-        is_inited_ = true;
+      if (need_del_lob()) {
+        lob_start_seq_.set_parallel_degree(param_->parallel_);
       }
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadInsertTabletContext::check_lob_meta_empty()
-{
-  int ret = OB_SUCCESS;
-  uint64_t lob_meta_tid = param_->lob_meta_tid_;
-  if (OB_INVALID_ID == lob_meta_tid) {
-    // bypass
-  } else {
-    ObArenaAllocator iter_allocator("TLD_Iter");
-    ObDirectLoadOriginTable origin_table;
-    ObIStoreRowIterator *lob_row_iter = nullptr;
-    const blocksstable::ObDatumRow *row = nullptr;
-    blocksstable::ObDatumRange range;
-    ObDirectLoadOriginTableCreateParam table_param;
-    table_param.table_id_ = lob_meta_tid;
-    table_param.tablet_id_ = lob_tablet_id_;
-    table_param.ls_id_ = ls_id_;
-    table_param.insert_mode_ = ObDirectLoadInsertMode::NORMAL;
-    iter_allocator.set_tenant_id(MTL_ID());
-    range.set_whole_range();
-
-    if (OB_FAIL(origin_table.init(table_param))) {
-      LOG_WARN("failed to init origin table", KR(ret));
-    } else if (OB_FAIL(origin_table.scan(range, iter_allocator, lob_row_iter))) {
-      LOG_WARN("fail to scan origin table", KR(ret));
-    } else if (OB_FAIL(lob_row_iter->get_next_row(row))) {
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS; // empty table
-      } else {
-        LOG_WARN("failed to get next row", KR(ret));
-      }
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("incremental direct-load to table with outrow lob data is not supported", KR(ret));
-      FORWARD_USER_ERROR(ret, "incremental direct-load to table with outrow lob data is not supported");
-    }
-    // release row iter
-    if (OB_NOT_NULL(lob_row_iter)) {
-      lob_row_iter->~ObIStoreRowIterator();
-      iter_allocator.free(lob_row_iter);
-      lob_row_iter = nullptr;
+      is_inited_ = true;
     }
   }
   return ret;
@@ -408,6 +362,35 @@ int ObDirectLoadInsertTabletContext::init_datum_row(ObDatumRow &datum_row)
   return ret;
 }
 
+int ObDirectLoadInsertTabletContext::init_lob_datum_row(blocksstable::ObDatumRow &datum_row, const bool is_delete)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", K(ret), KP(this));
+  } else {
+    const int64_t rowkey_column_count = ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT;
+    const int64_t real_column_count =
+      ObLobMetaUtil::LOB_META_COLUMN_CNT + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    if (OB_FAIL(datum_row.init(real_column_count))) {
+      LOG_WARN("fail to init datum row", KR(ret), K(real_column_count));
+    } else {
+      const int64_t trans_version =
+        !param_->is_incremental_ ? param_->snapshot_version_ : INT64_MAX;
+      datum_row.trans_id_ = param_->trans_param_.tx_id_;
+      datum_row.row_flag_.set_flag(is_delete ? ObDmlFlag::DF_DELETE : ObDmlFlag::DF_INSERT);
+      datum_row.mvcc_row_flag_.set_last_multi_version_row(true);
+      datum_row.mvcc_row_flag_.set_uncommitted_row(param_->is_incremental_);
+      // fill trans_version
+      datum_row.storage_datums_[rowkey_column_count].set_int(-trans_version);
+      // fill sql_no
+      datum_row.storage_datums_[rowkey_column_count + 1].set_int(
+        -param_->trans_param_.tx_seq_.cast_to_int());
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadInsertTabletContext::fill_sstable_slice(const int64_t &slice_id,
                                                         ObIStoreRowIterator &iter,
                                                         int64_t &affected_rows)
@@ -431,6 +414,40 @@ int ObDirectLoadInsertTabletContext::fill_sstable_slice(const int64_t &slice_id,
     slice_info.context_id_ = context_id_;
     if (OB_FAIL(sstable_insert_mgr->fill_sstable_slice(slice_info, &iter, affected_rows))) {
       LOG_WARN("fail to fill sstable slice", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTabletContext::fill_lob_meta_sstable_slice(const int64_t &lob_slice_id,
+                                                                 ObIStoreRowIterator &iter,
+                                                                 int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
+  } else {
+    ObDirectLoadInsertTabletContext *tablet_ctx = nullptr;
+    ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
+    ObDirectLoadSliceInfo slice_info;
+    slice_info.is_full_direct_load_ = !param_->is_incremental_;
+    slice_info.is_lob_slice_ = true;
+    slice_info.ls_id_ = ls_id_;
+    slice_info.data_tablet_id_ = tablet_id_;
+    slice_info.slice_id_ = lob_slice_id;
+    slice_info.context_id_ = context_id_;
+    if (OB_UNLIKELY(!handle_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid handle", KR(ret));
+    } else if (OB_FAIL(handle_.get_obj()->fill_lob_meta_sstable_slice(slice_info,
+                                                                      start_scn_,
+                                                                      &iter,
+                                                                      affected_rows))) {
+      LOG_WARN("fail to fill lob meta sstable slice", KR(ret), K(slice_info));
     }
   }
   return ret;

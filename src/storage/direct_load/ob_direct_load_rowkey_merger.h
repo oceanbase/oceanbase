@@ -97,7 +97,7 @@ int ObDirectLoadRowkeyMerger<Rowkey, Compare>::init(const common::ObIArray<Rowke
   if (IS_INIT) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDirectLoadMacroBlockEndRowkeyMerger init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(iters.empty() || OB_ISNULL(compare))) {
+  } else if (OB_UNLIKELY(OB_ISNULL(compare))) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", KR(ret), K(iters.count()), KP(compare));
   } else {
@@ -120,7 +120,9 @@ int ObDirectLoadRowkeyMerger<Rowkey, Compare>::get_next_rowkey(const Rowkey *&ro
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDirectLoadRowkeyMerger not init", KR(ret), KP(this));
   } else {
-    if (1 == iters_->count()) {
+    if (0 == iters_->count()) {
+      ret = OB_ITER_END;
+    } else if (1 == iters_->count()) {
       if (OB_FAIL(direct_get_next_rowkey(rowkey))) {
         if (OB_UNLIKELY(common::OB_ITER_END != ret)) {
           STORAGE_LOG(WARN, "fail to direct get next rowkey", KR(ret));

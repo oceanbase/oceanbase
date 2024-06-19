@@ -339,10 +339,8 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       }
     } else {
       ObTransService *txs = MTL(transaction::ObTransService*);
-      ObTxReadSnapshot snapshot;
-      // 4.0 text tc compatiable
       ObLobAccessParam lob_param;
-      // lob_param.tx_desc_ = tx_desc;
+      lob_param.tx_desc_ = tx_desc;
       // lob_param.snapshot_ = snapshot;
       lob_param.sql_mode_ = SMO_DEFAULT;
       lob_param.ls_id_ = ls_id;

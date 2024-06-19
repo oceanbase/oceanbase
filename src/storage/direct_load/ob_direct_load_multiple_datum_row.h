@@ -37,7 +37,7 @@ public:
   int to_datums(blocksstable::ObStorageDatum *datums, int64_t column_count) const;
   OB_INLINE bool is_valid() const
   {
-    return rowkey_.is_valid() && seq_no_.is_valid() && buf_size_ > 0 && nullptr != buf_;
+    return rowkey_.is_valid() && seq_no_.is_valid() && (buf_size_ == 0 || nullptr != buf_);
   }
   OB_INLINE int64_t get_raw_size() const { return buf_size_; }
   TO_STRING_KV(K_(rowkey), K_(seq_no), K_(buf_size), KP_(buf));

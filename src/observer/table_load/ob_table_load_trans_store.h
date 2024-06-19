@@ -105,7 +105,6 @@ private:
                                const common::ObTabletID &tablet_id,
                                const table::ObTableLoadSequenceNo &seq_no,
                                const blocksstable::ObDatumRow &datum_row);
-  int check_support_obj(const common::ObObj &obj);
 private:
   ObTableLoadTransStore *const trans_store_;
   ObTableLoadTransCtx *const trans_ctx_;
@@ -134,8 +133,6 @@ private:
   SessionContext *session_ctx_array_;
   int64_t lob_inrow_threshold_; // for incremental direct load
   int64_t ref_count_ CACHE_ALIGNED;
-  bool is_incremental_;
-  bool is_inc_replace_;
   bool is_inited_;
   ObSchemaGetterGuard schema_guard_;
 };

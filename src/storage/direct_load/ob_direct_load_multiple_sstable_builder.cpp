@@ -261,6 +261,8 @@ int ObDirectLoadMultipleSSTableBuilder::get_tables(
   } else if (OB_UNLIKELY(!is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("multiple sstable builder is not closed", KR(ret));
+  } else if (row_count_ == 0) {
+    // do nothing
   } else {
     ObDirectLoadMultipleSSTableFragment fragment;
     ObDirectLoadMultipleSSTableCreateParam create_param;

@@ -132,14 +132,14 @@ class ObLobQueryIter;
 class ObLobMetaManager;
 
 struct ObLobMetaWriteResult {
-  ObLobMetaWriteResult() : info_(), data_(), need_alloc_macro_id_(false), is_update_(false), old_info_() {}
+  ObLobMetaWriteResult() : info_(), data_(), need_alloc_macro_id_(false), is_update_(false), old_info_(), seq_no_(0) {}
   ObLobMetaInfo info_;
   ObString data_;
   bool need_alloc_macro_id_;
   bool is_update_;
   ObLobMetaInfo old_info_;
-
-  TO_STRING_KV(K_(is_update), K_(info), K_(old_info), K_(data));
+  int64_t seq_no_;
+  TO_STRING_KV(K_(is_update), K_(seq_no), K_(info), K_(old_info), K_(data));
 };
 
 class ObLobMetaWriteIter {
@@ -179,7 +179,7 @@ public:
   int close();
   void set_end() { is_end_ = true; }
   void reuse();
-  void set_data(const ObString& data);
+
   TO_STRING_KV(K_(seq_id), K_(offset), K_(lob_id), K_(piece_id), K_(coll_type), K_(piece_block_size),
                K_(scan_iter), K_(padding_size), K_(seq_id_end), K_(last_info), K_(is_store_char_len));
 private:

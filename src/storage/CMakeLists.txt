@@ -726,8 +726,10 @@ ob_set_subtarget(ob_storage tablelock
 
 ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_compare.cpp
+  direct_load/ob_direct_load_conflict_check.cpp
   direct_load/ob_direct_load_data_block.cpp
   direct_load/ob_direct_load_data_fuse.cpp
+  direct_load/ob_direct_load_data_insert.cpp
   direct_load/ob_direct_load_datum.cpp
   direct_load/ob_direct_load_external_fragment.cpp
   direct_load/ob_direct_load_external_multi_partition_row.cpp
@@ -769,6 +771,7 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_multiple_sstable_scan_merge_loser_tree.cpp
   direct_load/ob_direct_load_multiple_sstable_scanner.cpp
   direct_load/ob_direct_load_origin_table.cpp
+  direct_load/ob_direct_load_partition_del_lob_task.cpp
   direct_load/ob_direct_load_partition_merge_task.cpp
   direct_load/ob_direct_load_partition_rescan_task.cpp
   direct_load/ob_direct_load_range_splitter.cpp
@@ -793,6 +796,7 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_mem_context.cpp
   direct_load/ob_direct_load_multiple_heap_table_map.cpp
   direct_load/ob_direct_load_multiple_heap_table_sorter.cpp
+  direct_load/ob_direct_load_lob_meta_row_iter.cpp
 )
 
 ob_set_subtarget(ob_storage lob

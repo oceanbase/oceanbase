@@ -203,6 +203,8 @@ int ObDirectLoadMultipleHeapTableBuilder::get_tables(
   } else if (OB_UNLIKELY(!is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("multiple heap table builder is not closed", KR(ret));
+  } else if (row_count_ == 0) {
+    // do nothing
   } else {
     ObDirectLoadMultipleHeapTableDataFragment data_fragment;
     ObDirectLoadMultipleHeapTableCreateParam create_param;

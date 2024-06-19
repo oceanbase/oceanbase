@@ -19,6 +19,7 @@
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scan_merge.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
@@ -97,7 +98,7 @@ protected:
   bool is_inited_;
 };
 
-class ObDirectLoadSSTableDataFuse
+class ObDirectLoadSSTableDataFuse : public ObIStoreRowIterator
 {
 public:
   ObDirectLoadSSTableDataFuse();
@@ -105,7 +106,7 @@ public:
   int init(const ObDirectLoadDataFuseParam &param, ObDirectLoadOriginTable *origin_table,
            const common::ObIArray<ObDirectLoadSSTable *> &sstable_array,
            const blocksstable::ObDatumRange &range);
-  int get_next_row(const blocksstable::ObDatumRow *&datum_row);
+  int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
 private:
   common::ObArenaAllocator allocator_;
   ObIStoreRowIterator *origin_iter_;
@@ -114,7 +115,7 @@ private:
   bool is_inited_;
 };
 
-class ObDirectLoadMultipleSSTableDataFuse
+class ObDirectLoadMultipleSSTableDataFuse : public ObIStoreRowIterator
 {
 public:
   ObDirectLoadMultipleSSTableDataFuse();
@@ -122,7 +123,7 @@ public:
   int init(const ObDirectLoadDataFuseParam &param, ObDirectLoadOriginTable *origin_table,
            const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
            const blocksstable::ObDatumRange &range);
-  int get_next_row(const blocksstable::ObDatumRow *&datum_row);
+  int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
 private:
   common::ObArenaAllocator allocator_;
   ObDirectLoadMultipleDatumRange range_;
