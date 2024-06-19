@@ -91,7 +91,8 @@ private:
   int insert_row_with_fetch();
   int store_conflict_row(ObDASInsertResult &ins_result);
 
-  int insert_index_with_fetch(ObAccessService *as,
+  int insert_index_with_fetch(ObDMLBaseParam &dml_param,
+                              ObAccessService *as,
                               common::ObNewRowIterator &dml_iter,
                               ObDASConflictIterator *result_iter,
                               const ObDASInsCtDef *ins_ctdef,

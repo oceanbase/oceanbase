@@ -147,7 +147,8 @@ int ObDASInsertOp::insert_rows()
   }
   return ret;
 }
-int ObDASInsertOp::insert_index_with_fetch(ObAccessService *as,
+int ObDASInsertOp::insert_index_with_fetch(ObDMLBaseParam &dml_param,
+                                           ObAccessService *as,
                                            ObNewRowIterator &dml_iter,
                                            ObDASConflictIterator *result_iter,
                                            const ObDASInsCtDef *ins_ctdef,
@@ -159,7 +160,6 @@ int ObDASInsertOp::insert_index_with_fetch(ObAccessService *as,
   int ret = OB_SUCCESS;
   ObNewRow *insert_row = NULL;
   int64_t affected_rows = 0;
-  ObDMLBaseParam dml_param;
   if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef,
                                            *ins_rtdef,
                                            *snapshot_,
@@ -248,7 +248,8 @@ int ObDASInsertOp::insert_row_with_fetch()
   // 1. insert primary table
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(insert_index_with_fetch(as,
+  } else if (OB_FAIL(insert_index_with_fetch(dml_param,
+                                             as,
                                              dml_iter,
                                              result_iter,
                                              ins_ctdef_,
@@ -270,7 +271,8 @@ int ObDASInsertOp::insert_row_with_fetch()
       // insert it later
     } else if (OB_FAIL(dml_iter.rewind(index_ins_ctdef))) {
       LOG_WARN("rewind dml iter failed", K(ret));
-    } else if (OB_FAIL(insert_index_with_fetch(as,
+    } else if (OB_FAIL(insert_index_with_fetch(dml_param,
+                                               as,
                                                dml_iter,
                                                result_iter,
                                                index_ins_ctdef,
@@ -303,7 +305,8 @@ int ObDASInsertOp::insert_row_with_fetch()
       } else {
         new_iter = &dml_iter;
       }
-      if (OB_FAIL(insert_index_with_fetch(as,
+      if (OB_FAIL(insert_index_with_fetch(dml_param,
+                                          as,
                                           *new_iter,
                                           result_iter,
                                           index_ins_ctdef,
