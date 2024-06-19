@@ -381,6 +381,14 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
     case PL_OPAQUE_TYPE: {
       ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(src.get_ext());
       CK (OB_NOT_NULL(opaque));
+      // json pl object manage
+      if (OB_NOT_NULL(opaque) && opaque->is_json_type()) {
+        ObPLJsonBaseType* pl_jsontype = static_cast<ObPLJsonBaseType*>(opaque);
+        ObPlJsonNode* pl_json_node = pl_jsontype->get_data();
+        if (OB_NOT_NULL(pl_json_node) && OB_NOT_NULL(pl_json_node->get_data_node())) {
+          pl_jsontype->destroy();
+        }
+      }
       OX (opaque->~ObPLOpaque());
     }
       break;
@@ -5291,21 +5299,6 @@ int ObPLXmlType::deep_copy(ObPLOpaque *dst)
     if (OB_SUCC(ret)) {
       OZ(ob_write_obj(copy->get_allocator(), *data_, *(copy->get_data())));
     }
-  }
-
-  return ret;
-}
-
-int ObPLJsonBaseType::deep_copy(ObPLOpaque *dst)
-{
-  int ret = OB_SUCCESS;
-
-  ObPLJsonBaseType *copy = NULL;
-  OZ (ObPLOpaque::deep_copy(dst));
-  CK (OB_NOT_NULL(copy = new(dst)ObPLJsonBaseType()));
-  OX (copy->set_err_behavior(static_cast<int32_t>(behavior_)));
-  if (OB_NOT_NULL(data_)) {
-    OX (copy->set_data(data_));
   }
 
   return ret;

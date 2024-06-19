@@ -17,7 +17,7 @@
 #include "lib/json_type/ob_json_tree.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl_json_type.h"
 
 namespace oceanbase
 {
@@ -40,7 +40,11 @@ public:
 
   static int parse(sql::ObExecContext &ctx, sql::ParamStore &params,
                    common::ObObj &result, ObJsonNodeType expect_type = ObJsonNodeType::J_ERROR);
-  static int get_jsontree(sql::ObExecContext &ctx, ObObj &obj, ObJsonNode *&json_doc, int32_t &err_behavior);
+  static int get_jsontree(sql::ObExecContext &ctx,
+                          ObObj &obj,
+                          ObJsonNode*& json_doc,
+                          ObPlJsonNode*& pl_json_node,
+                          int32_t &err_behavior);
   static int get_jsontype(sql::ObExecContext &ctx,
                           sql::ParamStore &params,
                           ObJsonNodeType &json_type,
@@ -50,9 +54,17 @@ public:
   static int make_jsontype(sql::ObExecContext &ctx, const ObString &str,
                            ObJsonInType in_type, ObJsonNodeType expect_type,
                            ObPLJsonBaseType *&jsontype);
+  static int make_jsontype(sql::ObExecContext &ctx,
+                           ObJsonNode* data,
+                           int behavior,
+                           ObPLJsonBaseType *&jsontype);
   static int transform_JsonBase_2_PLJsonType(sql::ObExecContext &ctx,
                                              ObJsonNode* json_val,
                                              ObPLJsonBaseType *&jsontype);
+  static int transform_JsonBase_2_PLJsonType(sql::ObExecContext &ctx,
+                                                 ObJsonNode* json_ref_val,
+                                                 ObJsonNode* json_val,
+                                                 ObPLJsonBaseType *&jsontype);
   static int print_decimal(number::ObNumber &num, ObScale scale, ObJsonBuffer &j_buf);
   static int get_json_object(sql::ObExecContext &ctx, ObJsonNode*& json_val);
   static int get_json_boolean(sql::ObExecContext &ctx, ObObj &data, ObJsonNode*& json_val);

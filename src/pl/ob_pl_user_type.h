@@ -14,6 +14,7 @@
 #define DEV_SRC_PL_OB_PL_USER_TYPE_H_
 #include "pl/ob_pl_type.h"
 #include "rpc/obmysql/ob_mysql_util.h"
+#include "lib/hash/ob_hashmap.h"
 #include "lib/hash/ob_array_index_hash_set.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/json_type/ob_json_tree.h"
@@ -1417,43 +1418,6 @@ public:
 
 private:
   ObObj *data_;
-};
-
-class ObPLJsonBaseType : public ObPLOpaque
-{
-public:
-  enum JSN_ERR_BEHAVIOR {
-    JSN_PL_NULL_ON_ERR,
-    JSN_PL_ERR_ON_ERR,
-    JSN_PL_ERR_ON_EMP,
-    JSN_PL_ERR_ON_MISMATCH,
-    JSN_PL_ERR_ON_INVALID = 7
-  };
-
-  ObPLJsonBaseType()
-    : ObPLOpaque(ObPLOpaqueType::PL_JSON_TYPE),
-      data_(NULL),
-      behavior_(0)
-      {}
-
-  virtual ~ObPLJsonBaseType()
-  {
-    data_ = NULL;
-    behavior_ = 0;
-  }
-
-public:
-  virtual int deep_copy(ObPLOpaque *dst);
-  void set_data(ObJsonNode *data) { data_ = data; }
-  void set_err_behavior(int behavior) { behavior_ = behavior; }
-  int get_err_behavior() { return behavior_ ; }
-  ObJsonNode* get_data() { return data_; }
-
-  TO_STRING_KV(KPC(data_), K_(behavior));
-
-private:
-  ObJsonNode *data_;
-  int behavior_;
 };
 
 #endif

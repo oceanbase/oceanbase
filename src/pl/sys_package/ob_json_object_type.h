@@ -65,6 +65,7 @@ private:
   static int get_object_value(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
                               ObJsonNode *&json_val,
+                              ObPlJsonNode *&pl_json_node,
                               int& error_behavior,
                               int expect_param_nums = 2);
   static int get_lob_proc(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result, bool is_clob);
