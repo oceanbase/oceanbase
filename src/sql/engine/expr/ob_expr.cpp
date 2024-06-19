@@ -1344,10 +1344,10 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
 }
 
 template <typename VectorType>
-int ToStrVectorHeader::to_string_helper(char *buf, const int64_t buf_len) const
+int ToStrVectorHeader::to_string_helper(const VectorHeader &header, char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  const VectorType *vector = reinterpret_cast<const VectorType *>(header_.vector_buf_);
+  const VectorType *vector = reinterpret_cast<const VectorType *>(header.vector_buf_);
   J_COMMA();
   BUF_PRINTF("meta: ");
   pos += vector->to_string(buf + pos, buf_len - pos);
@@ -1372,7 +1372,7 @@ int ToStrVectorHeader::to_string_helper(char *buf, const int64_t buf_len) const
       }
     }
     J_OBJ_END();
-    if (VEC_UNIFORM_CONST == header_.format_) {
+    if (VEC_UNIFORM_CONST == header.format_) {
       break;
     }
     if (i != bound_.end() - 1) {
@@ -1386,33 +1386,38 @@ int ToStrVectorHeader::to_string_helper(char *buf, const int64_t buf_len) const
 DEF_TO_STRING(ToStrVectorHeader)
 {
   int64_t pos = 0;
-  J_OBJ_START();
-  switch (header_.format_) {
+  int ret = OB_SUCCESS;
+  if (NULL != skip_ && OB_FAIL(expr_.eval_vector(ctx_, *skip_, bound_))) {
+    LOG_WARN("fail to eval_vector", K(ret));
+  } else {
+    const VectorHeader header = expr_.get_vector_header(ctx_);
+    J_OBJ_START();
+    switch (header.format_) {
     case VEC_FIXED: {
       J_KV("format", "VEC_FIXED");
-      pos += to_string_helper<ObFixedLengthBase>(buf + pos, buf_len - pos);
+      pos += to_string_helper<ObFixedLengthBase>(header, buf + pos, buf_len - pos);
       break;
     }
     case VEC_DISCRETE: {
       J_KV("format", "VEC_DISCRETE");
-      pos += to_string_helper<ObDiscreteBase>(buf + pos, buf_len - pos);
+      pos += to_string_helper<ObDiscreteBase>(header, buf + pos, buf_len - pos);
       break;
     }
     case VEC_UNIFORM: {
       J_KV("format", "VEC_UNIFORM");
       ObDatum d;
-      pos += to_string_helper<UniformFormat>(buf + pos, buf_len - pos);
+      pos += to_string_helper<UniformFormat>(header, buf + pos, buf_len - pos);
       break;
     }
     case VEC_UNIFORM_CONST: {
       J_KV("format", "VEC_UNIFORM_CONST");
-      pos += to_string_helper<ConstUniformFormat>(buf + pos, buf_len - pos);
+      pos += to_string_helper<ConstUniformFormat>(header, buf + pos, buf_len - pos);
       break;
     }
-    default:
-      J_KV(K_(header_.format));
+    default: J_KV(K_(header.format));
+    }
+    J_OBJ_END();
   }
-  J_OBJ_END();
   return pos;
 }
 

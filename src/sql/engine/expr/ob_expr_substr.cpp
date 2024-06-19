@@ -998,8 +998,8 @@ int ObExprSubstr::eval_substr_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     }
   }
   if (OB_SUCC(ret)) {
-    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, bound)));
-    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, bound)));
+    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr, ctx, &skip, bound)));
+    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(*expr.args_[0], ctx, &skip, bound)));
   }
   return ret;
 }

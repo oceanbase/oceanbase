@@ -592,8 +592,8 @@ int ObCGRowScanner::get_next_rows(uint64_t &count, const uint64_t capacity, cons
     if (iter_param_->op_->enable_rich_format_) {
       LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count), K(capacity),
                 "new format datums",
-                sql::ToStrVectorHeader(datum_infos_.at(0).expr_->get_vector_header(iter_param_->op_->get_eval_ctx()),
-                                       *datum_infos_.at(0).expr_,
+                sql::ToStrVectorHeader(*datum_infos_.at(0).expr_,
+                                       iter_param_->op_->get_eval_ctx(),
                                        nullptr,
                                        sql::EvalBound(datum_offset + count, true)));
     } else {
@@ -742,8 +742,8 @@ int ObCGRowScanner::deep_copy_projected_rows(const int64_t datum_offset, const u
     if (iter_param_->op_->enable_rich_format_) {
       LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K(datum_offset), K(count),
                 "new format datums",
-                sql::ToStrVectorHeader(datum_infos_.at(0).expr_->get_vector_header(iter_param_->op_->get_eval_ctx()),
-                                       *datum_infos_.at(0).expr_,
+                sql::ToStrVectorHeader(*datum_infos_.at(0).expr_,
+                                       iter_param_->op_->get_eval_ctx(),
                                        nullptr,
                                        sql::EvalBound(datum_offset + count, true)));
     } else {

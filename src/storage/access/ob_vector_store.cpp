@@ -516,8 +516,8 @@ int64_t ObVectorStore::to_string(char *buf, const int64_t buf_len) const
         J_KV(K(i));
         J_COLON();
         J_KV("new format datums",
-             sql::ToStrVectorHeader(datum_infos_.at(i).expr_->get_vector_header(iter_param_->op_->get_eval_ctx()),
-                                    *datum_infos_.at(i).expr_,
+             sql::ToStrVectorHeader(*datum_infos_.at(i).expr_,
+                                    iter_param_->op_->get_eval_ctx(),
                                     nullptr,
                                     bound));
       }

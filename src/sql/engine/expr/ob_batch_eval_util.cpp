@@ -77,11 +77,11 @@ int binary_operand_vector_eval(const ObExpr &expr,
   right_evaluated = true;
   const ObExpr &left = *expr.args_[0];
   const ObExpr &right = *expr.args_[1];
+  const ObBitVector *rskip = &skip;
   if (null_short_circuit) {
     if (OB_FAIL(left.eval_vector(ctx, skip, bound))) {
       LOG_WARN("batch evaluate failed", K(ret), K(expr));
     } else if (left.get_format(ctx) != VEC_UNIFORM_CONST) {
-      const ObBitVector *rskip = &skip;
       if (OB_LIKELY(!left.get_vector(ctx)->has_null())) {
         if (OB_FAIL(right.eval_vector(ctx, *rskip, bound))) {
           LOG_WARN("batch evaluated failed", K(ret), K(right));
@@ -136,6 +136,10 @@ int binary_operand_vector_eval(const ObExpr &expr,
         || OB_FAIL(right.eval_vector(ctx, skip, bound))) {
       LOG_WARN("batch evaluate failed", K(ret), K(expr));
     }
+  }
+  if (OB_SUCC(ret)) {
+    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(*expr.args_[0], ctx, &skip, bound)));
+    SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(*expr.args_[1], ctx, rskip, bound)));
   }
   return ret;
 }
