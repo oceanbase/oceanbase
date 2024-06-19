@@ -1046,7 +1046,10 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(group_by_cell_->pad_column_in_group_by(output_cnt))) {
+      LOG_WARN("Failed to pad column in group by", K(ret), K(output_cnt));
+    } else {
       int64_t group_idx = 0;
       if (OB_FAIL(get_group_idx(group_idx))) {
         LOG_WARN("Fail to get group idx", K(ret));
