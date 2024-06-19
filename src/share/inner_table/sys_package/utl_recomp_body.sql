@@ -220,12 +220,6 @@ create or replace package body utl_recomp AS
     drop_jobs();
   end;
 
-  procedure invalidate_objs(obj_info_arr OBJECT_INFO_ARRAY);
-    PRAGMA INTERFACE(C, UTL_RECOMP_INVALIDATE_OBJS);
-
-  procedure delete_errors;
-    PRAGMA INTERFACE(C, UTL_RECOMP_DELETE_ERRORS);
-
   PROCEDURE COMPUTE_NUM_THREADS(threads PLS_INTEGER) AS
   begin
     num_threads := threads;
@@ -247,8 +241,7 @@ create or replace package body utl_recomp AS
       'insert into sys.utl_recomp_sorted (obj#, owner, objname, edition_name, namespace)
         select o.object_id, o.owner, o.object_name, o.edition_name, o.namespace
           from sys.all_objects o
-          where o.status != ''VALID''
-            and o.object_id not in
+          where o.object_id not in
               (select c.OBJ# from sys.utl_recomp_compiled c
                 union all
                 select l.OBJ# from sys.utl_recomp_skip_list l)
@@ -329,7 +322,6 @@ create or replace package body utl_recomp AS
 
 
   procedure recomp_parallel(threads PLS_INTEGER := NULL, schema varchar2 := NULL, flags PLS_INTEGER := 0) as
-    obj_info_arr OBJECT_INFO_ARRAY;
   begin
     current_batch := 0;
     check_privilege();
@@ -339,17 +331,6 @@ create or replace package body utl_recomp AS
     prepare_table(errors_table, errors_table_ddl, flags);
 
     init(schema);
-
-    execute immediate 'select o.object_id, o.owner, o.object_name, o.object_type from sys.all_objects o
-                        where o.status = ''VALID''
-                              and (:1 is null or :2 = owner)
-                              and o.object_type in (''PACKAGE'', ''PROCEDURE'', ''FUNCTION'', ''TYPE'', ''TRIGGER'')
-                              and o.object_id not in (select obj# from sys.utl_recomp_skip_list)
-                              and o.object_id > 500000'
-            bulk collect into obj_info_arr using schema, schema;
-    delete_errors();
-    invalidate_objs(obj_info_arr);
-
     COMPUTE_NUM_THREADS(threads);
     collect_and_sort_object(schema);
 
@@ -358,7 +339,6 @@ create or replace package body utl_recomp AS
       wait_jobs();
       drop_jobs();
     end loop;
-    delete_errors();
   end;
 
 

@@ -62,7 +62,6 @@
 #include "pl/sys_package/ob_dbms_mview.h"
 #include "pl/sys_package/ob_dbms_mview_stats.h"
 #include "pl/sys_package/ob_json_array_type.h"
-#include "pl/sys_package/ob_utl_recomp.h"
 #include "pl/sys_package/ob_xml_type.h"
 #include "pl/sys_package/ob_sdo_geom.h"
 #include "pl/sys_package/ob_dbms_profiler.h"
@@ -787,12 +786,6 @@
   // start of dbms_external_table
   INTERFACE_DEF(INTERFACE_DBMS_EXTERNAL_TABLE_AUTO_REFRESH_EXTERNAL_TABLE, "AUTO_REFRESH_EXTERNAL_TABLE", (ObDBMSExternalTable::auto_refresh_external_table))
   //end of dbms_external_table
-#ifdef OB_BUILD_ORACLE_PL
-  // start of utl_recomp
-  INTERFACE_DEF(INTERFACE_UTL_RECOMP_INVALIDATE_OBJS, "UTL_RECOMP_INVALIDATE_OBJS", (ObUtlRecomp::invalidate_objs))
-  INTERFACE_DEF(INTERFACE_UTL_RECOMP_DELETE_ERRORS, "UTL_RECOMP_DELETE_ERRORS", (ObUtlRecomp::delete_errors))
-  // end of utl_recomp
-#endif
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif
