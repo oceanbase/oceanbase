@@ -977,8 +977,7 @@ bool ObKVCacheStore::compute_tenant_wash_size()
   TenantWashInfo *tenant_wash_info = NULL;
   WashMap::iterator wash_iter;
   int64_t global_cache_size = 0;
-  int64_t sys_total_wash_size = lib::get_memory_used() - lib::get_memory_limit()
-  + lib::ob_get_reserved_urgent_memory();
+  int64_t sys_total_wash_size = MIN(lib::get_memory_used() - lib::get_memory_limit(), 0) + lib::ob_get_reserved_urgent_memory();
 
   if (OB_FAIL(mem_limit_getter_->get_all_tenant_id(tenant_ids_))) {
     COMMON_LOG(WARN, "Fail to get all tenant ids, ", K(ret));
