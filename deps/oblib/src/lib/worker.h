@@ -81,7 +81,7 @@ public:
   OB_INLINE void set_curr_request_level(const int32_t level) { curr_request_level_ = level; }
   OB_INLINE int32_t get_curr_request_level() const { return curr_request_level_; }
 
-  OB_INLINE void set_group_id(int32_t group_id) { group_id_ = group_id; }
+  void set_group_id(int32_t group_id);
   OB_INLINE int32_t get_group_id() const { return group_id_; }
 
   OB_INLINE void set_rpc_stat_srv(void *rpc_stat_srv) { rpc_stat_srv_ = rpc_stat_srv; }
