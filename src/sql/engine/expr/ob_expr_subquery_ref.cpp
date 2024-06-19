@@ -364,17 +364,18 @@ int ObExprSubQueryRef::expr_eval(
     if (OB_LIKELY(OB_ITER_END == ret)) {
       ret = OB_SUCCESS;
     } else {
+      if (OB_NOT_NULL(spi_cursor)) {
+        spi_cursor->~ObSPICursor();
+      }
       LOG_WARN("get next row from row iterator failed", K(ret));
     }
     if (OB_SUCC(ret)) {
       OX (spi_cursor->row_store_.finish_add_row());
       OX (cursor->open(spi_cursor));
-    }
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-      transaction::ObTxReadSnapshot &snapshot = ctx.exec_ctx_.get_das_ctx().get_snapshot();
-      OZ (cursor->set_and_register_snapshot(snapshot));
-    }
-    if (OB_SUCC(ret)) {
+      if (lib::is_oracle_mode()) {
+        transaction::ObTxReadSnapshot &snapshot = ctx.exec_ctx_.get_das_ctx().get_snapshot();
+        OZ (cursor->set_and_register_snapshot(snapshot));
+      }
       ObExprSubQueryRefCtx *sub_query_ctx = NULL;
       uint64_t ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
       if (NULL == (sub_query_ctx = static_cast<ObExprSubQueryRefCtx *>
@@ -383,6 +384,10 @@ int ObExprSubQueryRef::expr_eval(
       }
       CK (OB_NOT_NULL(sub_query_ctx));
       OZ (sub_query_ctx->add_cursor_info(cursor, ctx.exec_ctx_.get_my_session()));
+      if (OB_FAIL(ret)) {
+        cursor->close(*ctx.exec_ctx_.get_my_session());
+        cursor->~ObPLCursorInfo();
+      }
     }
 #endif
   } else if (extra.is_scalar_) {
