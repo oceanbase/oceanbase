@@ -344,10 +344,12 @@ public:
   {
     buffer->msg_type() = ObDtlMsgType::PX_VECTOR_ROW;
   }
+  OB_INLINE ObTempRowStore::DtlRowBlock *get_block() { return block_; }
+  OB_INLINE ObDtlLinkedBuffer *get_write_buffer() { return write_buffer_; }
 private:
   DtlWriterType type_;
   ObDtlLinkedBuffer *write_buffer_;
-  ObTempRowStore::RowBlock* block_;
+  ObTempRowStore::DtlRowBlock *block_;
   ObTempRowStore::ShrinkBuffer *block_buffer_;
   RowMeta row_meta_;
   int64_t row_cnt_;

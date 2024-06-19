@@ -75,7 +75,7 @@ int ObRLEDecoder::update_pointer(const char *old_block, const char *cur_block)
 int ObRLEDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -138,7 +138,7 @@ int ObRLEDecoder::decode_vector(
 int ObRLEDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {
@@ -524,7 +524,7 @@ int ObRLEDecoder::set_res_with_bitset(
 
 template<typename T>
 int ObRLEDecoder::extract_ref_and_null_count(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     T ref_buf,
     int64_t &null_count) const
@@ -625,7 +625,7 @@ int ObRLEDecoder::read_distinct(
 
 int ObRLEDecoder::read_reference(
     const ObColumnDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
 {

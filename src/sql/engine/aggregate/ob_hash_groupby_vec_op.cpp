@@ -445,10 +445,10 @@ int ObHashGroupByVecOp::next_duplicate_data_permutation(
       const int64_t aggr_code = last_group ? MY_SPEC.dist_col_group_idxs_.count() : nth_group;
       ObExpr *aggr_code_expr = all_groupby_exprs_.at(first_idx - 1);
       ObIVector *aggr_code_col = nullptr;
-      if (OB_FAIL(aggr_code_expr->init_vector_default(eval_ctx_, MY_SPEC.max_batch_size_))) {
+      if (OB_FAIL(aggr_code_expr->init_vector(eval_ctx_, VEC_FIXED, MY_SPEC.max_batch_size_))) {
         LOG_WARN("failed to init vector", K(ret));
       } else {
-        aggr_code_col = aggr_code_expr->get_vector(eval_ctx_);
+        ObFixedLengthFormat<int64_t> *aggr_code_col = static_cast<ObFixedLengthFormat<int64_t> *> (aggr_code_expr->get_vector(eval_ctx_));
         ObBitVector &eval_flags = aggr_code_expr->get_evaluated_flags(eval_ctx_);
         for (int64_t i = 0; i < child_brs->size_; ++i) {
           if (child_brs->skip_->exist(i)) {
@@ -1010,6 +1010,8 @@ int ObHashGroupByVecOp::inner_get_next_batch(const int64_t max_row_cnt)
                                                         all_groupby_exprs_, op_max_batch_size, brs_,
                                                         curr_group_id_))) {
         LOG_WARN("failed to collect batch result", K(ret), K(curr_group_id_));
+      } else {
+        brs_.all_rows_active_ = true;
       }
     } else {
       int64_t read_rows = 0;
@@ -1025,8 +1027,21 @@ int ObHashGroupByVecOp::inner_get_next_batch(const int64_t max_row_cnt)
       } else {
         curr_group_id_ += read_rows;
       }
+      if (OB_SUCC(ret)) {
+        brs_.all_rows_active_ = true;
+      }
     }
   }
+
+#ifdef ENABLE_DEBUG_LOG
+  // check all_row_active_
+  if (OB_SUCC(ret) && brs_.size_ > 0) {
+    bool is_all_false = brs_.skip_->is_all_false(brs_.size_);
+    if (is_all_false != brs_.all_rows_active_) {
+      ob_abort();
+    }
+  }
+#endif
   LOG_DEBUG("after inner_get_next_batch",
             K(get_aggr_used_size()), K(get_aggr_used_size()),
             K(get_hash_table_used_size()),
@@ -1113,16 +1128,13 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
         } else if (OB_FAIL(aggr_processor_.eval_aggr_param_batch(*child_brs))) {
           LOG_WARN("fail to eval aggr param batch", K(ret), K(*child_brs));
         }
-        // prefetch the result that they will be processed
-        for (int64_t j = 0; OB_SUCC(ret) && j < child_brs->size_; ++j) {
-          if (batch_old_rows_[j]) {
-            aggr_processor_.prefetch_aggregate_row(batch_old_rows_[j]);
-          }
-        } // end for
         //batch calc aggr for each group
         int32_t start_agg_id = -1;
         int32_t end_agg_id = -1;
-        for (int64_t i = 0; i < MY_SPEC.aggr_infos_.count(); ++i) {
+        bool calc_multi_groups = (MY_SPEC.aggr_stage_ == ObThreeStageAggrStage::FIRST_STAGE
+                                  || MY_SPEC.aggr_stage_ == ObThreeStageAggrStage::NONE_STAGE);
+
+        for (int64_t i = 0; !calc_multi_groups && i < MY_SPEC.aggr_infos_.count(); ++i) {
           if (MY_SPEC.aggr_infos_.at(i).param_exprs_.count() == 1) {
             aggr_vectors_[i] = MY_SPEC.aggr_infos_.at(i).param_exprs_.at(0)->get_vector(eval_ctx_);
           } else if (MY_SPEC.aggr_infos_.at(i).is_implicit_first_aggr()) {
@@ -1132,10 +1144,16 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
           }
         }
         if (OB_FAIL(ret)) {
+        } else if (calc_multi_groups) { // do nothing
         } else if (OB_FAIL(aggr_processor_.prepare_adding_one_row())) {
           LOG_WARN("prepare add one row failed", K(ret));
         }
-        for (int64_t i = 0; OB_SUCC(ret) && i < child_brs->size_; i++) {
+        if (OB_SUCC(ret) && calc_multi_groups) {
+          if (OB_FAIL(process_multi_groups(batch_new_rows_, *child_brs))) {
+            LOG_WARN("process multiple groups failed", K(ret));
+          }
+        }
+        for (int64_t i = 0; !calc_multi_groups && OB_SUCC(ret) && i < child_brs->size_; i++) {
           if ((!batch_new_rows_[i])) {
             continue;
           }
@@ -1162,8 +1180,14 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
         }
         start_agg_id = -1;
         end_agg_id = -1;
-        if (!reorder_aggr_rows_ || !batch_aggr_rows_table_.is_valid()) {
-          for (int64_t i = 0; OB_SUCC(ret) && i < child_brs->size_; i++) {
+        if (OB_FAIL(ret)) {
+        } else if (!reorder_aggr_rows_ || !batch_aggr_rows_table_.is_valid()) {
+          if (calc_multi_groups) {
+            if (OB_FAIL(process_multi_groups(batch_old_rows_, *child_brs))) {
+              LOG_WARN("process multiple groups failed", K(ret));
+            }
+          }
+          for (int64_t i = 0; !calc_multi_groups && OB_SUCC(ret) && i < child_brs->size_; i++) {
             if ((!batch_old_rows_[i])) {
               continue;
             }
@@ -1220,7 +1244,7 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(aggr_processor_.finish_adding_one_row())) {
+        } else if (!calc_multi_groups && OB_FAIL(aggr_processor_.finish_adding_one_row())) {
           LOG_WARN("finish add one row failed", K(ret));
         }
       }
@@ -1978,6 +2002,7 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
     }
   }
   if (OB_FAIL(ret) || no_non_distinct_aggr_) {
+    brs_.all_rows_active_ = by_pass_child_brs_->all_rows_active_;
   } else if (OB_UNLIKELY(by_pass_batch_size_ <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("by pass group row is not init", K(ret), K(by_pass_batch_size_));
@@ -2235,6 +2260,30 @@ int ObHashGroupByVecOp::bypass_add_llc_map_batch(bool ready_to_check_ndv) {
   if ((llc_est_.est_cnt_ - llc_est_.last_est_cnt_) > LlcEstimate::ESTIMATE_MOD_NUM_ &&
        ready_to_check_ndv && OB_FAIL(check_llc_ndv())) {
     LOG_WARN("failed to check llc ndv", K(ret));
+  }
+  return ret;
+}
+
+int ObHashGroupByVecOp::process_multi_groups(aggregate::AggrRowPtr *agg_rows, const ObBatchRows &brs)
+{
+  int ret = OB_SUCCESS;
+  int32_t start_agg_id = -1, end_agg_id = -1;
+  for (int i = 0; OB_SUCC(ret) && i < brs.size_; i++) {
+    if ((!agg_rows[i])) { continue; }
+    if (OB_FAIL(ObGroupByVecOp::calculate_3stage_agg_info(
+          agg_rows[i], local_group_rows_.get_row_meta(), i, start_agg_id, end_agg_id))) {
+      LOG_WARN("calculate 3stage aggregate info failed", K(ret));
+    } else if (OB_UNLIKELY(start_agg_id == -1 || end_agg_id == -1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected aggregate idx", K(ret), K(start_agg_id), K(end_agg_id));
+    } else {
+      break;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(aggr_processor_.add_batch_for_multi_groups(start_agg_id, end_agg_id, agg_rows,
+                                                                brs.size_))) {
+    LOG_WARN("failed to calculate multiple groups", K(ret));
   }
   return ret;
 }

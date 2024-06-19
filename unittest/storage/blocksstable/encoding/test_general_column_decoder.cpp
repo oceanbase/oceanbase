@@ -172,7 +172,7 @@ TEST_F(TestDictDecoder, batch_decode_single_var_len_dict) {
   ObMicroBlockDecoder decoder;
   ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
-  int64_t row_id = 0;
+  int32_t row_id = 0;
   const char *cell_data = nullptr;
   ObDatum datum;
   char datum_buf[40];

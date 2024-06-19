@@ -7545,10 +7545,8 @@ int ObPartitionUtils::calc_hash_part_idx(const uint64_t val,
         partition_idx += powN;
       }
     }
-    LOG_TRACE("get hash part idx", K(lbt()), K(ret), K(val), K(part_num), K(N), K(powN), K(partition_idx));
   } else {
     partition_idx = val % part_num;
-    LOG_TRACE("get hash part idx", K(lbt()), K(ret), K(val), K(part_num), K(partition_idx));
   }
   return ret;
 }

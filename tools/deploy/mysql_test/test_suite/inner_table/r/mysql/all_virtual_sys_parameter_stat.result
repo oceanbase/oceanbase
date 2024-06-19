@@ -224,6 +224,7 @@ standby_db_fetch_log_rpc_timeout
 standby_db_preferred_upstream_log_region
 standby_fetch_log_bandwidth_limit
 storage_meta_cache_priority
+storage_rowsets_size
 strict_check_os_params
 syslog_compress_func
 syslog_disk_size
@@ -354,6 +355,8 @@ _hidden_sys_tenant_memory
 _ignore_system_memory_over_limit_error
 _inlist_rewrite_threshold
 _io_callback_thread_count
+_io_read_batch_size
+_io_read_redundant_limit_percentage
 _iut_enable
 _iut_max_entries
 _iut_stat_collection_type

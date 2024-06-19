@@ -582,15 +582,6 @@ private:
       const auto &curr_bkt = buckets->at(bkt_idx);
       __builtin_prefetch(&curr_bkt, 0/* read */, 2 /*high temp locality*/);
     }
-    for (int i = 0; i < batch_size; ++i) {
-      int64_t bkt_idx = (hash_values_for_batch[i] & num_cnt);
-      const auto &curr_bkt = buckets->at(bkt_idx);
-      if ((OB_NOT_NULL(skip) && skip->at(i))
-          || !curr_bkt.check_hash(hash_values_for_batch[i])) {
-        continue;
-      }
-      __builtin_prefetch(&curr_bkt.item_, 0/* read */, 2 /*high temp locality*/);
-    }
     return ret;
   }
 

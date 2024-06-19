@@ -523,6 +523,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
   enable_newsort_ = GCONF._enable_newsort;
   is_strict_defensive_check_ = GCONF.enable_strict_defensive_check();
   is_enable_px_fast_reclaim_ = GCONF._enable_px_fast_reclaim;
+  bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
 
   // For Tenant configs
   // tenant config use tenant_config to get configs
@@ -588,6 +589,9 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d", enable_var_assign_use_das_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_var_assign_use_das_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d", bloom_filter_ratio_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(bloom_filter_ratio_));
   } else {
     // do nothing
   }

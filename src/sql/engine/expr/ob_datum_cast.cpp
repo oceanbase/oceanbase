@@ -3950,12 +3950,17 @@ CAST_FUNC_NAME(text, string)
     common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     ObExprStrResAlloc res_alloc(expr, ctx);
     ObTextStringIter instr_iter(in_type, in_cs_type, child_res->get_string(), has_lob_header);
-    if (OB_FAIL(ObTextStringHelper::build_text_iter(instr_iter, &ctx.exec_ctx_, ctx.exec_ctx_.get_my_session(),
+    const ObLobCommon& lob = child_res->get_lob_data();
+    if (child_res->len_ != 0 && !lob.is_mem_loc_ && lob.in_row_ && has_lob_header) {
+      data.assign_ptr(lob.get_inrow_data_ptr(), static_cast<int32_t>(lob.get_byte_size(child_res->len_)));
+    } else if (OB_FAIL(ObTextStringHelper::build_text_iter(instr_iter, &ctx.exec_ctx_, ctx.exec_ctx_.get_my_session(),
                                 is_same_charset ? reinterpret_cast<ObIAllocator *>(&res_alloc) : &temp_allocator,
                                 &temp_allocator))) {
       LOG_WARN("init lob str iter failed ", K(ret), K(in_type));
     } else if (OB_FAIL(instr_iter.get_full_data(data))) {
       LOG_WARN("init lob str iter failed ", K(ret), K(in_type));
+    }
+    if (OB_FAIL(ret)) {
     } else if (lib::is_oracle_mode()
                && ob_is_clob(in_type, in_cs_type)
                && (0 == data.length())

@@ -54,7 +54,8 @@ ObTableIterParam::ObTableIterParam()
       limit_prefetch_(false),
       is_non_unique_local_index_(false),
       ss_rowkey_prefix_cnt_(0),
-      pd_storage_flag_()
+      pd_storage_flag_(),
+      table_scan_opt_()
 {
 }
 
@@ -100,6 +101,7 @@ void ObTableIterParam::reset()
   is_for_foreign_check_ = false;
   limit_prefetch_ = false;
   is_non_unique_local_index_ = false;
+  table_scan_opt_.reset();
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
@@ -184,7 +186,8 @@ DEF_TO_STRING(ObTableIterParam)
        K_(is_for_foreign_check),
        K_(limit_prefetch),
        K_(is_non_unique_local_index),
-       K_(ss_rowkey_prefix_cnt));
+       K_(ss_rowkey_prefix_cnt),
+       K_(table_scan_opt));
   J_OBJ_END();
   return pos;
 }
@@ -260,6 +263,18 @@ int ObTableAccessParam::init(
         iter_param_.read_info_->get_schema_column_count() == iter_param_.rowkey_read_info_->get_schema_column_count();
 
     iter_param_.pd_storage_flag_ = scan_param.pd_storage_flag_;
+    if (scan_param.table_scan_opt_.is_io_valid()) {
+      iter_param_.table_scan_opt_.io_read_batch_size_ = scan_param.table_scan_opt_.io_read_batch_size_;
+      iter_param_.table_scan_opt_.io_read_gap_size_ = scan_param.table_scan_opt_.io_read_gap_size_;
+    } else {
+      iter_param_.table_scan_opt_.io_read_batch_size_ = 0;
+      iter_param_.table_scan_opt_.io_read_gap_size_ = 0;
+    }
+    if (scan_param.table_scan_opt_.is_rowsets_valid()) {
+      iter_param_.table_scan_opt_.storage_rowsets_size_ = scan_param.table_scan_opt_.storage_rowsets_size_;
+    } else {
+      iter_param_.table_scan_opt_.storage_rowsets_size_ = 1;
+    }
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
      // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
      // disable blockscan if use index skip scan as no large range to scan

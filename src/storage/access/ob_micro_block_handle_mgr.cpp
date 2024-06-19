@@ -39,7 +39,6 @@ ObMicroBlockDataHandle::ObMicroBlockDataHandle()
     handle_mgr_(nullptr),
     allocator_(nullptr),
     loaded_block_data_(),
-    need_release_data_buf_(false),
     is_loaded_block_(false)
 {
   des_meta_.encrypt_key_ = encrypt_key_;
@@ -98,7 +97,7 @@ int ObMicroBlockDataHandle::get_micro_block_data(
   int ret = OB_SUCCESS;
   if (ObSSTableMicroBlockState::NEED_SYNC_IO == block_state_ || OB_FAIL(get_loaded_block_data(block_data))) {
     if (is_loaded_block_ && loaded_block_data_.is_valid()) {
-      LOG_DEBUG("Use sync loaded index block data", K_(macro_block_id),
+      LOG_DEBUG("Use sync loaded index block data", K(is_data_block), K_(macro_block_id),
                 K(loaded_block_data_), K_(io_handle));
       block_data = loaded_block_data_;
     } else {
@@ -211,8 +210,8 @@ int ObMicroBlockDataHandle::get_loaded_block_data(ObMicroBlockData &block_data)
       } else {
         //multi block io
         const ObMultiBlockIOResult *io_result = reinterpret_cast<const ObMultiBlockIOResult *>(io_buf);
-        if (OB_FAIL(io_result->get_block_data(block_index_, block_data))) {
-          LOG_WARN("get_block_data failed", K(ret), K_(block_index));
+        if (OB_FAIL(io_result->get_block_data(block_index_, micro_info_, block_data))) {
+          LOG_WARN("get_block_data failed", K(ret), K_(block_index), K_(micro_info));
         }
       }
     }
@@ -399,6 +398,7 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
     ObMicroIndexInfo &index_block_info,
     const bool is_data_block,
     const bool need_submit_io,
+    const bool use_multi_block_prefetch,
     ObMicroBlockDataHandle &micro_block_handle,
     int16_t cur_level)
 {
@@ -436,7 +436,12 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
     // get data / index block cache from disk
     if (!need_submit_io) {
     } else if (cache_mem_ctrl_.need_sync_io(*query_flag_, micro_block_handle, cache, block_io_allocator_)) {
-    } else if (OB_FAIL(submit_async_io(cache, tenant_id, index_block_info, is_data_block, micro_block_handle))) {
+    } else if (OB_FAIL(submit_async_io(cache,
+                                       tenant_id,
+                                       index_block_info,
+                                       is_data_block,
+                                       use_multi_block_prefetch,
+                                       micro_block_handle))) {
       LOG_WARN("Fail to submit async io for prefetch", K(ret), K(index_block_info), K(micro_block_handle));
     }
   } else {
@@ -454,11 +459,71 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
   return ret;
 }
 
+int ObMicroBlockHandleMgr::prefetch_multi_data_block(
+    const ObMicroIndexInfo *micro_data_infos,
+    ObMicroBlockDataHandle *micro_data_handles,
+    const int64_t max_micro_handle_cnt,
+    const int64_t max_prefetch_idx,
+    const ObMultiBlockIOParam &multi_io_params)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObMacroBlockHandle macro_handle;
+  if (OB_UNLIKELY(!multi_io_params.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected io params", K(ret), K(multi_io_params));
+  } else {
+    const MacroBlockId &macro_id = micro_data_infos[multi_io_params.prefetch_idx_[0] % max_micro_handle_cnt].get_macro_id();
+    if (1 == multi_io_params.count()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < multi_io_params.count(); i++) {
+        const ObMicroIndexInfo &index_info = micro_data_infos[multi_io_params.prefetch_idx_[i] % max_micro_handle_cnt];
+        if (OB_FAIL(data_block_cache_->prefetch(tenant_id, macro_id, index_info, true,
+                                                macro_handle, &block_io_allocator_))) {
+          LOG_WARN("Fail to prefetch micro block", K(ret), K(index_info), K(macro_handle));
+        } else {
+          ObMicroBlockDataHandle &micro_handle = micro_data_handles[multi_io_params.prefetch_idx_[i] % max_micro_handle_cnt];
+          micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
+          cache_mem_ctrl_.add_hold_size(micro_handle.get_handle_size());
+          micro_handle.io_handle_ = macro_handle;
+          micro_handle.allocator_ = &block_io_allocator_;
+          cache_mem_ctrl_.update_data_block_io_size(index_info.get_block_size(), true, true);
+        }
+      }
+    } else if (OB_FAIL(data_block_cache_->prefetch_multi_block(
+                tenant_id,
+                macro_id,
+                multi_io_params,
+                true, /* use_cache */
+                macro_handle))) {
+      LOG_WARN("Fail to prefetch multi blocks", K(ret), K(multi_io_params));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < multi_io_params.count(); i++) {
+        if (multi_io_params.prefetch_idx_[i] >= max_prefetch_idx) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected prefetch idx", K(ret), K(i), K(multi_io_params.prefetch_idx_[i]), K(max_prefetch_idx));
+        } else {
+          ObMicroBlockDataHandle &micro_handle = micro_data_handles[multi_io_params.prefetch_idx_[i] % max_micro_handle_cnt];
+          micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
+          micro_handle.io_handle_ = macro_handle;
+          micro_handle.allocator_ = &block_io_allocator_;
+          micro_handle.block_index_ = i;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        cache_mem_ctrl_.add_hold_size(multi_io_params.get_data_cache_size());
+        cache_mem_ctrl_.update_data_block_io_size(multi_io_params.get_data_cache_size(), true, true);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMicroBlockHandleMgr::submit_async_io(
     blocksstable::ObIMicroBlockCache *cache,
     const uint64_t tenant_id,
     const ObMicroIndexInfo &index_block_info,
     const bool is_data_block,
+    const bool use_multi_block_prefetch,
     ObMicroBlockDataHandle &micro_block_handle)
 {
   int ret = OB_SUCCESS;
@@ -469,7 +534,11 @@ int ObMicroBlockHandleMgr::submit_async_io(
   bool is_use_block_cache = query_flag_->is_use_block_cache();
   bool use_cache = is_data_block ? is_use_block_cache && cache_mem_ctrl_.get_cache_use_flag()
                                     : is_use_block_cache;
-  if (OB_FAIL(cache->prefetch(tenant_id, macro_id, index_block_info, use_cache,
+  if (use_cache && is_data_block && use_multi_block_prefetch) {
+    micro_block_handle.block_state_ = ObSSTableMicroBlockState::NEED_MULTI_IO;
+    ret = OB_SUCCESS;
+    // continue and use prefetch in batch later
+  } else if (OB_FAIL(cache->prefetch(tenant_id, macro_id, index_block_info, use_cache,
                               macro_handle, &block_io_allocator_))) {
     LOG_WARN("Fail to prefetch micro block", K(ret), K(index_block_info), K(macro_handle),
                                               K(micro_block_handle));
@@ -478,7 +547,6 @@ int ObMicroBlockHandleMgr::submit_async_io(
     cache_mem_ctrl_.add_hold_size(micro_block_handle.get_handle_size());
     micro_block_handle.io_handle_ = macro_handle;
     micro_block_handle.allocator_ = &block_io_allocator_;
-    micro_block_handle.need_release_data_buf_ = true;
     cache_mem_ctrl_.update_data_block_io_size(size, is_data_block, use_cache);
   }
   return ret;

@@ -22,15 +22,16 @@
 #include "storage/ob_handle_mgr.h"
 
 namespace oceanbase {
+using namespace blocksstable;
 namespace storage {
-
 
 struct ObSSTableMicroBlockState {
   enum ObSSTableMicroBlockStateEnum {
     UNKNOWN_STATE = 0,
     IN_BLOCK_CACHE,
     IN_BLOCK_IO,
-    NEED_SYNC_IO
+    NEED_SYNC_IO,
+    NEED_MULTI_IO
   };
 };
 
@@ -58,7 +59,9 @@ struct ObMicroBlockDataHandle {
   ObMicroBlockDataHandle & operator=(const ObMicroBlockDataHandle &other);
   OB_INLINE bool in_block_state() const
   { return ObSSTableMicroBlockState::IN_BLOCK_CACHE == block_state_ || ObSSTableMicroBlockState::IN_BLOCK_IO == block_state_; }
-  TO_STRING_KV(K_(tenant_id), K_(macro_block_id), K_(micro_info), K_(need_release_data_buf), K_(is_loaded_block),
+  OB_INLINE bool need_multi_io() const
+  { return ObSSTableMicroBlockState::NEED_MULTI_IO == block_state_; }
+  TO_STRING_KV(K_(tenant_id), K_(macro_block_id), K_(micro_info), K_(is_loaded_block),
                K_(block_state), K_(block_index), K_(cache_handle), K_(io_handle), K_(loaded_block_data), KP_(allocator));
   uint64_t tenant_id_;
   blocksstable::MacroBlockId macro_block_id_;
@@ -72,7 +75,6 @@ struct ObMicroBlockDataHandle {
   ObMicroBlockHandleMgr *handle_mgr_;
   ObIAllocator *allocator_;
   blocksstable::ObMicroBlockData loaded_block_data_;
-  bool need_release_data_buf_;  // TODO : @lvling to be removed
   bool is_loaded_block_;
 
 private:
@@ -171,13 +173,22 @@ public:
       blocksstable::ObMicroIndexInfo &index_block_info,
       const bool is_data_block,
       const bool need_submit_io,
+      const bool use_multi_block_prefetch,
       ObMicroBlockDataHandle &micro_block_handle,
       int16_t cur_level);
+  int prefetch_multi_data_block(
+      const ObMicroIndexInfo *micro_data_infos,
+      ObMicroBlockDataHandle *micro_data_handles,
+      const int64_t max_micro_handle_cnt,
+      const int64_t max_prefetch_idx,
+      const ObMultiBlockIOParam &multi_io_params);
+
   int submit_async_io(
       blocksstable::ObIMicroBlockCache *cache,
       const uint64_t tenant_id,
       const blocksstable::ObMicroIndexInfo &index_block_info,
       const bool is_data_block,
+      const bool use_multi_block_prefetch,
       ObMicroBlockDataHandle &micro_block_handle);
   void dec_hold_size(ObMicroBlockDataHandle &handle);
   bool reach_hold_limit() const;

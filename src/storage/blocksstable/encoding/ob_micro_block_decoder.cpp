@@ -152,7 +152,7 @@ int ObColumnDecoder::decode(common::ObDatum &datum, const int64_t row_id,
 
 int ObColumnDecoder::batch_decode(
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums)
@@ -175,7 +175,7 @@ int ObColumnDecoder::batch_decode(
   }
 
   LOG_DEBUG("[Batch decode] Batch decoded datums: ",
-      K(ret), K(row_cap), K(*ctx_), K(ObArrayWrap<int64_t>(row_ids, row_cap)),
+      K(ret), K(row_cap), K(*ctx_), K(ObArrayWrap<int32_t>(row_ids, row_cap)),
       K(ObArrayWrap<ObDatum>(datums, row_cap)));
   return ret;
 }
@@ -197,7 +197,7 @@ int ObColumnDecoder::decode_vector(
 
 int ObColumnDecoder::get_row_count(
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const bool contains_null,
     int64_t &count)
@@ -1948,7 +1948,7 @@ int ObMicroBlockDecoder::filter_black_filter_batch(
 int ObMicroBlockDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObIArray<ObSqlDatumInfo> &datum_infos,
@@ -1989,7 +1989,7 @@ int ObMicroBlockDecoder::get_rows(
 
 int ObMicroBlockDecoder::get_row_count(
     int32_t col_id,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const bool contains_null,
     const share::schema::ObColumnParam *col_param,
@@ -2008,7 +2008,7 @@ int ObMicroBlockDecoder::get_row_count(
               contains_null,
               count))) {
     LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(row_cap),
-             "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+             "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
   }
   return ret;
 }
@@ -2018,7 +2018,7 @@ int ObMicroBlockDecoder::get_aggregate_result(
     const ObTableAccessContext &context,
     const int32_t col_offset,
     const share::schema::ObColumnParam &col_param,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObAggDatumBuf &agg_datum_buf,
     storage::ObAggCell &agg_cell)
@@ -2050,7 +2050,7 @@ int ObMicroBlockDecoder::get_aggregate_result(
 
 int ObMicroBlockDecoder::get_col_datums(
     int32_t col_id,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *col_datums)
@@ -2084,7 +2084,7 @@ int ObMicroBlockDecoder::get_col_datums(
               row_cap,
               col_datums))) {
     LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(row_cap),
-              "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+              "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
   }
   return ret;
 }
@@ -2160,7 +2160,7 @@ int ObMicroBlockDecoder::read_distinct(
 
 int ObMicroBlockDecoder::read_reference(
     const int32_t group_by_col,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
 {
@@ -2178,7 +2178,7 @@ int ObMicroBlockDecoder::read_reference(
 }
 
 int ObMicroBlockDecoder::get_group_by_aggregate_result(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell)
@@ -2216,7 +2216,7 @@ int ObMicroBlockDecoder::get_group_by_aggregate_result(
 int ObMicroBlockDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const char **cell_datas,
     const int64_t vec_offset,

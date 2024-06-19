@@ -6435,6 +6435,7 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
     }
     CK(NULL != rt_expr.eval_func_);
     CK(NULL != rt_expr.eval_batch_func_);
+    CK(NULL != rt_expr.eval_vector_func_);
   }
   return ret;
 }

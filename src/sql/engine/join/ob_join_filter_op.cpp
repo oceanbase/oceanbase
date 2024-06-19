@@ -392,6 +392,9 @@ int ObJoinFilterOpInput::construct_msg_details(
           "RFInFilter",
           "RFInFilter"))) {
         LOG_WARN("fail to init in hash set", K(ret));
+      } else if (OB_FAIL(in_msg.sm_hash_set_.init(config.runtime_filter_max_in_num_,
+                                                  in_msg.get_tenant_id()))) {
+        LOG_WARN("failed to init sm_hash_set_", K(config.runtime_filter_max_in_num_));
       } else if (OB_FAIL(in_msg.need_null_cmp_flags_.assign(spec.need_null_cmp_flags_))) {
         LOG_WARN("fail to init cmp flags", K(ret));
       } else if (OB_FAIL(in_msg.build_row_cmp_info_.assign(spec.rf_build_cmp_infos_))) {

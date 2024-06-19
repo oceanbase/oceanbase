@@ -380,6 +380,10 @@ public:
                                     const sql::ObBitVector &skip, const sql::EvalBound &bound,
                                     char *agg_cell,
                                     const RowSelector row_sel = RowSelector{}) = 0;
+
+  inline virtual int add_batch_for_multi_groups(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
+                                                RowSelector &row_sel, const int64_t batch_size,
+                                                const int32_t agg_col_id) = 0;
   inline virtual int add_one_row(RuntimeContext &agg_ctx, const int64_t batch_idx,
                                  const int64_t batch_size, const bool is_null, const char *data,
                                  const int32_t data_len, int32_t agg_col_idx, char *agg_cell) = 0;

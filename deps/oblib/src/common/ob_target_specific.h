@@ -14,6 +14,7 @@
 #define OCEANBASE_COMMON_OB_TARGET_SPECIFIC_H_
 
 #include <stdint.h>
+#include "lib/cpu/ob_cpu_topology.h"
 
 namespace oceanbase
 {
@@ -36,14 +37,14 @@ bool is_arch_supported(ObTargetArch arch);
 
 #if defined(__clang__)
 
-#define OB_AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw")))
+#define OB_AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl")))
 #define OB_AVX2_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2")))
 #define OB_AVX_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx")))
 #define OB_SSE42_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt")))
 #define OB_DEFAULT_FUNCTION_SPECIFIC_ATTRIBUTE
 
 #   define OB_BEGIN_AVX512_SPECIFIC_CODE \
-        _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw\"))),apply_to=function)")
+        _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl\"))),apply_to=function)")
 #   define OB_BEGIN_AVX2_SPECIFIC_CODE \
         _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2\"))),apply_to=function)")
 #   define OB_BEGIN_AVX_SPECIFIC_CODE \
@@ -56,7 +57,7 @@ bool is_arch_supported(ObTargetArch arch);
 #   define OB_DUMMY_FUNCTION_DEFINITION [[maybe_unused]] void _dummy_function_definition();
 #else
 
-#define OB_AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,tune=native")))
+#define OB_AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl,tune=native")))
 #define OB_AVX2_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,tune=native")))
 #define OB_AVX_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,tune=native")))
 #define OB_SSE42_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt",tune=native)))
@@ -64,7 +65,7 @@ bool is_arch_supported(ObTargetArch arch);
 
 #   define OB_BEGIN_AVX512_SPECIFIC_CODE \
         _Pragma("GCC push_options") \
-        _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,tune=native\")")
+        _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl,tune=native\")")
 #   define OB_BEGIN_AVX2_SPECIFIC_CODE \
         _Pragma("GCC push_options") \
         _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,tune=native\")")
@@ -213,6 +214,30 @@ OB_DECLARE_AVX512_SPECIFIC_CODE(
     FUNCTION_BODY \
 
 #endif
+
+OB_INLINE uint32_t get_supported_archs()
+{
+  uint32_t result = 0;
+  if (ObCpuFlagsCache::support_sse42()) {
+    result |= static_cast<uint32_t>(ObTargetArch::SSE42);
+  }
+  if (ObCpuFlagsCache::support_avx()) {
+    result |= static_cast<uint32_t>(ObTargetArch::AVX);
+  }
+  if (ObCpuFlagsCache::support_avx2()) {
+    result |= static_cast<uint32_t>(ObTargetArch::AVX2);
+  }
+  if (ObCpuFlagsCache::support_avx512()) {
+    result |= static_cast<uint32_t>(ObTargetArch::AVX512);
+  }
+  return result;
+}
+
+OB_INLINE bool is_arch_supported(ObTargetArch arch)
+{
+  static uint32_t arches = get_supported_archs();
+  return arch == ObTargetArch::Default || (arches & static_cast<uint32_t>(arch));
+}
 
 } // namespace common
 } // namespace oceanbase

@@ -256,7 +256,7 @@ public:
       const ObTableAccessContext &context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_count);
   virtual int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg = false);
   // For group by pushdown
@@ -349,7 +349,7 @@ public:
       const ObTableAccessContext &context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_count) override;
   virtual int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg = false) override;
   virtual int eval_batch_in_group_by(
@@ -486,7 +486,7 @@ public:
       const ObTableAccessContext &context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_count) override;
   virtual int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg = false);
   virtual int eval_batch_in_group_by(
@@ -659,7 +659,7 @@ public:
       const ObTableAccessContext &context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_count) override;
   virtual int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg = false) override;
   virtual int eval_batch_in_group_by(

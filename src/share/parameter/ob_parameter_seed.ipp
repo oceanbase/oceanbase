@@ -166,6 +166,10 @@ DEF_STR_WITH_CHECKER(default_table_store_format, OB_TENANT_PARAMETER, "row",
                      "values: row, column, compound",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(storage_rowsets_size, OB_TENANT_PARAMETER, "8192", "(0,1048576]",
+        "the row number processed by vectorized storage engine within one batch in column storage. Range: (0,1048576]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(weak_read_version_refresh_interval, OB_CLUSTER_PARAMETER, "100ms", "[50ms,)",
          "the time interval to refresh cluster weak read version "
          "Range: [50ms, +∞)",
@@ -1066,6 +1070,12 @@ DEF_INT(_max_ls_cnt_per_server, OB_TENANT_PARAMETER, "0", "[0, 1024]",
         "WARNING: Modifying this can potentially destabilize the cluster. It is strongly advised to avoid making such changes as they are unlikely to be necessary."
         "0: the cluster will adapt the max ls number according to the memory size of tenant itself",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_CAP(_io_read_batch_size, OB_TENANT_PARAMETER, "0K", "[0K,16M]", "Maximum batch size in one read io request. Range:[0K,16M]",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_io_read_redundant_limit_percentage, OB_TENANT_PARAMETER, "0", "[0, 99]",
+        "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read. Range:[0,99]",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // TODO bin.lb: to be remove
 DEF_CAP(dtl_buffer_size, OB_CLUSTER_PARAMETER, "64K", "[4K,2M]", "to be removed",

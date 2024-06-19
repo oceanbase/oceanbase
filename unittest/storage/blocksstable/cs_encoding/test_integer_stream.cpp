@@ -125,7 +125,7 @@ public:
   template<int32_t WIDTH_TAG>
   static void do_decode_raw_array(const ObStreamData &data,
                     const ObIntegerStreamDecoderCtx &ctx,
-                    const int64_t *row_ids,
+                    const int32_t *row_ids,
                     const int64_t row_count,
                     char *out_buf)
   {
@@ -140,7 +140,7 @@ public:
 
   static void decode_raw_array(const ObStreamData &data,
                     const ObIntegerStreamDecoderCtx &ctx,
-                    const int64_t *row_ids,
+                    const int32_t *row_ids,
                     const int64_t row_count,
                     char *out_buf)
   {
@@ -208,8 +208,8 @@ public:
 
     // test batch decode
     int64_t row_id_count = size;
-    int64_t *row_ids = new int64_t[row_id_count];
-    for (int64_t i = 0; i < row_id_count; i++) {
+    int32_t *row_ids = new int32_t[row_id_count];
+    for (int32_t i = 0; i < row_id_count; i++) {
       row_ids[i] = i;
     }
 
@@ -335,8 +335,8 @@ public:
     }
 
     // decode batch
-    int64_t *row_ids = new int64_t[size];
-    for (int64_t i = 0; i < size; i++) {
+    int32_t *row_ids = new int32_t[size];
+    for (int32_t i = 0; i < size; i++) {
       row_ids[i] = i;
     }
     ObBaseColumnDecoderCtx base_ctx;
@@ -391,7 +391,7 @@ public:
       datums2[i].ptr_ = (datums2_buf + i * sizeof(uint64_t));
     }
     int64_t random_idx = ObTimeUtility::current_time() % size;
-    int64_t row_id = 0;
+    int32_t row_id = 0;
     for (int64_t i = 0; i < size; i++) {
       ref_arr[i] = i;
       row_id = (i + random_idx) % size;

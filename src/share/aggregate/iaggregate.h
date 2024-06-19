@@ -177,6 +177,87 @@ public:
     return ret;
   }
 
+  inline int add_batch_for_multi_groups(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
+                                        RowSelector &row_sel, const int64_t batch_size,
+                                        const int32_t agg_col_id) override
+  {
+#define INNER_ADD(vec_tc)                                                                          \
+  case (vec_tc): {                                                                                 \
+    ret = inner_add_for_multi_groups<ObFixedLengthFormat<RTCType<vec_tc>>>(                        \
+      agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));       \
+  } break
+
+    int ret = OB_SUCCESS;
+    ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_id);
+    ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
+    VectorFormat fmt = VEC_INVALID;
+    ObExpr *param_expr = nullptr;
+    Derived *derived_this = static_cast<Derived *>(this);
+#ifndef NDEBUG
+    int64_t mock_skip_data = 0;
+    ObBitVector *mock_skip = to_bit_vector(&mock_skip_data);
+    helper::print_input_rows(row_sel, *mock_skip, sql::EvalBound(), aggr_info,
+                             aggr_info.is_implicit_first_aggr(), eval_ctx, this, agg_col_id);
+#endif
+    if (aggr_info.is_implicit_first_aggr()) {
+      fmt = aggr_info.expr_->get_format(eval_ctx);
+      param_expr = aggr_info.expr_;
+    } else if (aggr_info.param_exprs_.count() == 1) {
+      param_expr = aggr_info.param_exprs_.at(0);
+      fmt = param_expr->get_format(eval_ctx);
+    }
+    if (OB_ISNULL(param_expr)) { // count(*)
+      for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
+        int batch_idx = row_sel.index(i);
+        char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
+        if (OB_FAIL(derived_this->add_one_row(agg_ctx, batch_idx, batch_size, false, nullptr, 0,
+                                              agg_col_id, agg_cell))) {
+          SQL_LOG(WARN, "inner add one row failed", K(ret));
+        }
+      }
+    } else {
+      VecValueTypeClass vec_tc = param_expr->get_vec_value_tc();
+      switch(fmt) {
+      case common::VEC_UNIFORM: {
+        ret = inner_add_for_multi_groups<ObUniformFormat<false>>(
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));
+        break;
+      }
+      case common::VEC_UNIFORM_CONST: {
+        ret = inner_add_for_multi_groups<ObUniformFormat<true>>(
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));
+        break;
+      }
+      case common::VEC_DISCRETE: {
+        ret = inner_add_for_multi_groups<ObDiscreteFormat>(
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));
+        break;
+      }
+      case common::VEC_CONTINUOUS: {
+        ret = inner_add_for_multi_groups<ObContinuousFormat>(
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));
+        break;
+      }
+      case common::VEC_FIXED: {
+        switch(vec_tc) {
+          LST_DO_CODE(INNER_ADD, AGG_VEC_TC_LIST);
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_LOG(WARN, "unexpected type class", K(vec_tc));
+        }
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        break;
+      }
+      }
+    }
+    return ret;
+#undef INNER_ADD
+  }
+
   int collect_batch_group_results(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                                   const int32_t cur_group_id, const int32_t output_start_idx,
                                   const int32_t expect_batch_size, int32_t &output_size,
@@ -290,6 +371,28 @@ public:
 
 
 protected:
+  template <typename ColumnFmt>
+  int inner_add_for_multi_groups(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows, RowSelector &row_sel,
+                                 const int64_t batch_size, const int32_t agg_col_id,
+                                 ObIVector *ivec)
+  {
+    int ret = OB_SUCCESS;
+    ColumnFmt *param_vec = static_cast<ColumnFmt *>(ivec);
+    bool is_null = false;
+    const char *payload = nullptr;
+    int32_t len = 0;
+    Derived *derived_this = static_cast<Derived *>(this);
+    for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
+      int64_t batch_idx = row_sel.index(i);
+      param_vec->get_payload(batch_idx, is_null, payload, len);
+      char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
+      if (OB_FAIL(derived_this->add_one_row(agg_ctx, batch_idx, batch_size, is_null, payload, len,
+                                            agg_col_id, agg_cell))) {
+        SQL_LOG(WARN, "inner add one row failed", K(ret));
+      }
+    }
+    return ret;
+  }
   template <typename ColumnFmt>
   int add_batch_rows(RuntimeContext &agg_ctx, const sql::ObBitVector &skip,
                      const sql::EvalBound &bound, const ObExpr &param_expr,

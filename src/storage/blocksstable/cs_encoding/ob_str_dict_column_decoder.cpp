@@ -23,7 +23,7 @@ namespace oceanbase
 namespace blocksstable
 {
 int ObStrDictColumnDecoder::decode(
-  const ObColumnCSDecoderCtx &ctx, const int64_t row_id, common::ObDatum &datum) const
+  const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;
@@ -96,7 +96,7 @@ int ObStrDictColumnDecoder::decode_and_aggregate(
   return ret;
 }
 
-int ObStrDictColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx, const int64_t *row_ids,
+int ObStrDictColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx, const int32_t *row_ids,
   const int64_t row_cap, common::ObDatum *datums) const
 {
   int ret = OB_SUCCESS;

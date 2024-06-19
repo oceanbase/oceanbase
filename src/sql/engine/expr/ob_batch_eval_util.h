@@ -689,6 +689,23 @@ struct ObArithOpBase : public ObArithOpRawType<char, char, char>
   }
 };
 
+template <typename Res, typename Left, typename Right>
+struct ObArithTypedBase : public ObArithOpRawType<Res, Left, Right>
+{
+  constexpr static bool is_raw_op_supported()
+  {
+    return false;
+  }
+
+  template <typename... Args>
+  static void raw_op(Res &, const Left &, const Right, Args &...args)
+  {}
+  static int raw_check(const Res &, const Left &, const Right &)
+  {
+    return common::OB_ERR_UNEXPECTED;
+  }
+};
+
 // Wrap arith operate with null check.
 template <typename DatumFunctor>
 struct ObWrapArithOpNullCheck: public ObArithOpBase
@@ -707,8 +724,8 @@ struct ObWrapArithOpNullCheck: public ObArithOpBase
 };
 
 // Wrap arith operate with null check for vector.
-template <typename VectorFunctor>
-struct ObWrapVectorArithOpNullCheck: public ObArithOpBase
+template <typename VectorFunctor, typename Base>
+struct ObWrapVectorArithOpNullCheck: public Base
 {
   template <typename ResVector, typename LeftVector, typename RightVector, typename... Args>
   static int vector_op(ResVector &res_vec, const LeftVector &left_vec,
@@ -738,17 +755,17 @@ int def_batch_arith_op_by_datum_func(BATCH_EVAL_FUNC_ARG_DECL, Args &...args)
       BATCH_EVAL_FUNC_ARG_LIST, args...);
 }
 
-template <typename VectorFunctor, typename... Args>
+template <typename VectorFunctor, typename ArithBase, typename... Args>
 int def_fixed_len_vector_arith_op_func(VECTOR_EVAL_FUNC_ARG_DECL, Args &...args)
 {
-  return def_fixed_len_vector_arith_op<ObWrapVectorArithOpNullCheck<VectorFunctor>, Args...>(
+  return def_fixed_len_vector_arith_op<ObWrapVectorArithOpNullCheck<VectorFunctor, ArithBase>, Args...>(
       VECTOR_EVAL_FUNC_ARG_LIST, args...);
 }
 
-template <typename VectorFunctor, typename... Args>
+template <typename VectorFunctor, typename ArithBase, typename... Args>
 int def_variable_len_vector_arith_op_func(VECTOR_EVAL_FUNC_ARG_DECL, Args &...args)
 {
-  return def_variable_len_vector_arith_op<ObWrapVectorArithOpNullCheck<VectorFunctor>, Args...>(
+  return def_variable_len_vector_arith_op<ObWrapVectorArithOpNullCheck<VectorFunctor, ArithBase>, Args...>(
       VECTOR_EVAL_FUNC_ARG_LIST, args...);
 }
 

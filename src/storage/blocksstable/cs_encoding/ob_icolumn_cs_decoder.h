@@ -40,7 +40,7 @@ public:
   OB_INLINE void reuse() {}
 
   VIRTUAL_TO_STRING_KV(K(this));
-  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int64_t row_id, common::ObDatum &datum) const = 0;
+  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const = 0;
 
   virtual ObCSColumnHeader::Type get_type() const = 0;
 
@@ -53,7 +53,7 @@ public:
   // Performance critical, only check pointer once in caller
   virtual int batch_decode(
       const ObColumnCSDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums) const
   {
@@ -93,7 +93,7 @@ public:
 
   virtual int get_aggregate_result(
       const ObColumnCSDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObAggCell &agg_cell) const
   {
@@ -103,7 +103,7 @@ public:
 
   virtual int get_null_count(
       const ObColumnCSDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const;
 
@@ -123,7 +123,7 @@ public:
 
   virtual int read_reference(
       const ObColumnCSDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const
   {
@@ -137,7 +137,7 @@ class ObNoneExistColumnCSDecoder : public ObIColumnCSDecoder
 public:
   static const ObCSColumnHeader::Type type_ = ObCSColumnHeader::MAX_TYPE;
 
-  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int64_t row_id, common::ObDatum &datum) const override
+  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const override
   {
     datum.set_ext();
     datum.no_cv(datum.extend_obj_)->set_ext(common::ObActionFlag::OP_NOP);

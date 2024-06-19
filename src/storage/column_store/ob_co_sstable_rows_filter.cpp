@@ -28,7 +28,7 @@ ObCOSSTableRowsFilter::ObCOSSTableRowsFilter()
     prepared_(false),
     subtree_filter_iter_to_locate_(0),
     subtree_filter_iter_to_filter_(0),
-    batch_size_(OB_CS_SCAN_GROUP_SIZE),
+    batch_size_(1),
     iter_param_(nullptr),
     access_ctx_(nullptr),
     co_sstable_(nullptr),
@@ -69,6 +69,7 @@ int ObCOSSTableRowsFilter::init(
   } else {
     iter_param_ = &param;
     allocator_ = context.stmt_allocator_;
+    batch_size_ = param.get_storage_rowsets_size();
     if (nullptr != param.pushdown_filter_ && OB_FAIL(rewrite_filter(depth))) {
       LOG_WARN("Failed rewriter filter", K(ret), KPC(block_row_store), KPC_(filter));
     } else if (nullptr != context.sample_filter_
@@ -139,6 +140,7 @@ int ObCOSSTableRowsFilter::switch_context(
   } else {
     iter_param_ = &param;
     access_ctx_ = &context;
+    batch_size_ = param.get_storage_rowsets_size();
     common::ObSEArray<ObTableIterParam*, 8> iter_params;
     for (int64_t i = 0; i < iter_filter_node_.count(); i++) {
       sql::ObPushdownFilterExecutor *filter = iter_filter_node_.at(i);
@@ -164,7 +166,7 @@ void ObCOSSTableRowsFilter::reset()
   prepared_ = false;
   subtree_filter_iter_to_locate_ = 0;
   subtree_filter_iter_to_filter_ = 0;
-  batch_size_ = OB_CS_SCAN_GROUP_SIZE;
+  batch_size_ = 1;
   iter_param_ = nullptr;
   access_ctx_ = nullptr;
   co_sstable_ = nullptr;
@@ -502,7 +504,7 @@ int ObCOSSTableRowsFilter::judge_whether_use_common_cg_iter(
         } else if (0 == i) {
           status = children[i]->get_status();
         } else {
-          status = merge_common_filter_tree_status(status, children[i]->get_status());
+          status = (sql::ObCommonFilterTreeStatus)(filter_tree_merge_status[status][children[i]->get_status()]);
         }
       }
       if (OB_SUCC(ret)) {
@@ -524,39 +526,39 @@ int ObCOSSTableRowsFilter::transform_filter_tree(
     sql::ObPushdownFilterExecutor &filter)
 {
   int ret = OB_SUCCESS;
-  sql::ObPushdownFilterExecutor **children = filter.get_childs();
   ObSEArray<uint32_t, 4> tmp_filter_indexes;
-  uint32_t pos = 0;
+  common::ObSEArray<uint32_t, 4> common_cg_ids;
+  common::ObSEArray<sql::ObExpr*, 4> common_cg_exprs;
   int64_t base_filter_idx = 0;
-  const uint32_t origin_child_count = filter.get_child_count();
   while (OB_SUCC(ret)) {
     sql::ObPushdownFilterExecutor *common_filter_executor = nullptr;
-    common::ObIArray<uint32_t> *common_col_group_ids = nullptr;
-    common::ObIArray<sql::ObExpr *> *common_col_exprs = nullptr;
-    if (OB_FAIL(find_common_sub_filter_tree(filter, tmp_filter_indexes, common_col_group_ids,
-                                             common_col_exprs, base_filter_idx))) {
+    if (OB_FAIL(find_common_sub_filter_tree(filter,
+                                            tmp_filter_indexes,
+                                            common_cg_ids,
+                                            common_cg_exprs,
+                                            base_filter_idx))) {
       LOG_WARN("Failed to find common sub filter tree", K(ret), K(base_filter_idx));
-    } else if (origin_child_count == tmp_filter_indexes.count()) {
-      common_filter_executor = &filter;
-    } else if (1 < tmp_filter_indexes.count() &&
-               OB_FAIL(filter.pull_up_common_node(tmp_filter_indexes, common_filter_executor))) {
-      LOG_WARN("Failed to pull up common node", K(ret), K(tmp_filter_indexes));
-    }
-    if (OB_SUCC(ret)) {
-      if (1 < tmp_filter_indexes.count()) {
+    } else if (1 < tmp_filter_indexes.count()) {
+      if (filter.get_child_count() == tmp_filter_indexes.count()) {
+        common_filter_executor = &filter;
+      } else if (OB_FAIL(filter.pull_up_common_node(tmp_filter_indexes, common_filter_executor))) {
+        LOG_WARN("Failed to pull up common node", K(ret), K(tmp_filter_indexes));
+      }
+
+      if (OB_SUCC(ret)) {
         if (OB_ISNULL(common_filter_executor)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected null common_filter_executor", K(ret));
-        } else if (OB_FAIL(common_filter_executor->set_cg_param(*common_col_group_ids, common_col_exprs))) {
+        } else if (OB_FAIL(common_filter_executor->set_cg_param(common_cg_ids, common_cg_exprs))) {
           LOG_WARN("Failed to set cg param to filter", K(ret), KPC(common_filter_executor),
-                   KP(common_col_group_ids), KP(common_col_exprs));
+                   K(common_cg_ids), K(common_cg_exprs));
         }
       }
-      if (OB_SUCC(ret)) {
-        ++base_filter_idx;
-        if (common_filter_executor == &filter || base_filter_idx >= filter.get_child_count()) {
-          break;
-        }
+    }
+    if (OB_SUCC(ret)) {
+      ++base_filter_idx;
+      if (common_filter_executor == &filter || base_filter_idx >= filter.get_child_count()) {
+        break;
       }
     }
   }
@@ -566,30 +568,37 @@ int ObCOSSTableRowsFilter::transform_filter_tree(
 int ObCOSSTableRowsFilter::find_common_sub_filter_tree(
     sql::ObPushdownFilterExecutor &filter,
     ObIArray<uint32_t> &filter_indexes,
-    common::ObIArray<uint32_t> *&common_col_group_ids,
-    common::ObIArray<sql::ObExpr *> *&common_col_exprs,
+    common::ObIArray<uint32_t> &common_cg_ids,
+    common::ObIArray<sql::ObExpr *> &common_cg_exprs,
     const int64_t base_filter_idx)
 {
   int ret = OB_SUCCESS;
   filter_indexes.reuse();
+  common_cg_ids.reuse();
+  common_cg_exprs.reuse();
   sql::ObPushdownFilterExecutor **children_filters = filter.get_childs();
   sql::ObPushdownFilterExecutor *base_filter = children_filters[base_filter_idx];
   sql::ObCommonFilterTreeStatus prev_status = base_filter->get_status();
+  const common::ObIArray<uint32_t> &base_cg_ids = base_filter->get_cg_idxs();
+  const common::ObIArray<sql::ObExpr *> *base_cg_exprs = base_filter->get_cg_col_exprs();
   const uint32_t child_count = filter.get_child_count();
-  common_col_group_ids = &(base_filter->get_cg_idxs());
-  common_col_exprs = base_filter->get_cg_col_exprs();
-  if (OB_FAIL(filter_indexes.push_back(base_filter_idx))) {
+  if (OB_FAIL(common_cg_ids.assign(base_cg_ids))) {
+    LOG_WARN("Failed to assign common cg ids", K(ret));
+  } else if (nullptr != base_cg_exprs && OB_FAIL(common_cg_exprs.assign(*base_cg_exprs))) {
+    LOG_WARN("Failed to assign common cg exprs", K(ret));
+  } else if (OB_FAIL(filter_indexes.push_back(base_filter_idx))) {
     LOG_WARN("Failed to push back filters", K(ret), K(base_filter_idx), K(filter_indexes));
   } else {
+    bool is_common = false;
     for (uint32_t i = base_filter_idx + 1; OB_SUCC(ret) && i < child_count; ++i) {
       if (is_common_filter_tree_status(prev_status, children_filters[i]->get_status())) {
-        bool is_common = true;
         if (OB_FAIL(assign_common_col_groups(
-                     children_filters[i],
-                     common_col_group_ids,
-                     common_col_exprs,
-                     is_common))) {
-          LOG_WARN("Failed to assign common col groups", K(ret), KP(common_col_group_ids));
+                    children_filters[i],
+                    prev_status,
+                    common_cg_ids,
+                    common_cg_exprs,
+                    is_common))) {
+          LOG_WARN("Failed to assign common col groups", K(ret), KPC(base_filter), KPC(children_filters[i]));
         } else if (is_common) {
           prev_status = merge_common_filter_tree_status(prev_status, children_filters[i]->get_status());
           if (OB_FAIL(filter_indexes.push_back(i))) {
@@ -699,39 +708,50 @@ int ObCOSSTableRowsFilter::prepare_bitmap_buffer(
 }
 
 int ObCOSSTableRowsFilter::assign_common_col_groups(
-    sql::ObPushdownFilterExecutor *filter,
-    common::ObIArray<uint32_t> *&common_col_group_ids,
-    common::ObIArray<sql::ObExpr *> *&common_cg_col_exprs,
+    const sql::ObPushdownFilterExecutor *filter,
+    const sql::ObCommonFilterTreeStatus prev_status,
+    common::ObIArray<uint32_t> &common_cg_ids,
+    common::ObIArray<sql::ObExpr *> &common_cg_exprs,
     bool &is_common)
 {
   // Asssert that there is no duplication in col_group_idxs.
   int ret = OB_SUCCESS;
-  is_common = true;
   if (OB_UNLIKELY(nullptr == filter || !filter->is_cg_param_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), KPC(filter));
-  } else if (OB_UNLIKELY(nullptr == common_col_group_ids ||
-                         nullptr == common_cg_col_exprs ||
-                         common_col_group_ids->empty() ||
-                         common_col_group_ids->count() < common_cg_col_exprs->count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", KPC(common_col_group_ids), KPC(common_cg_col_exprs));
   } else {
-    common::ObIArray<uint32_t> &cur_col_group_ids = filter->get_cg_idxs();
-    common::ObIArray<sql::ObExpr *> *cur_cg_col_exprs = filter->get_cg_col_exprs();
+    is_common = false;
+    const common::ObIArray<uint32_t> &cur_cg_ids = filter->get_cg_idxs();
+    const common::ObIArray<sql::ObExpr *> *cur_cg_exprs = filter->get_cg_col_exprs();
     ObSEArray<uint32_t, 4> tmp_array;
-    const common::ObIArray<uint32_t> &longer_array = cur_col_group_ids.count() > common_col_group_ids->count()
-      ? cur_col_group_ids : *common_col_group_ids;
-    const common::ObIArray<uint32_t> &shorter_array = cur_col_group_ids.count() > common_col_group_ids->count()
-      ? *common_col_group_ids : cur_col_group_ids;
+    const common::ObIArray<uint32_t> &longer_array = cur_cg_ids.count() > common_cg_ids.count()
+        ? cur_cg_ids : common_cg_ids;
+    const common::ObIArray<uint32_t> &shorter_array = cur_cg_ids.count() > common_cg_ids.count()
+        ? common_cg_ids : cur_cg_ids;
     if (OB_FAIL(common::get_difference(shorter_array, longer_array, tmp_array))) {
-      LOG_WARN("Failed to get difference", K(ret), KP(common_col_group_ids),
-                K(cur_col_group_ids));
-    } else if (!tmp_array.empty()) {
-      is_common = false;
-    } else if (cur_col_group_ids.count() > common_col_group_ids->count()) {
-      common_col_group_ids = &cur_col_group_ids;
-      common_cg_col_exprs = cur_cg_col_exprs;
+      LOG_WARN("Failed to get difference", K(ret), K(common_cg_ids), K(cur_cg_ids));
+    } else if (tmp_array.empty()) {
+      is_common = true;
+      if (cur_cg_ids.count() > common_cg_ids.count()) {
+        if (OB_FAIL(common_cg_ids.assign(cur_cg_ids))) {
+          LOG_WARN("Fail to assign cg ids", K(ret));
+        } else if (nullptr != cur_cg_exprs && OB_FAIL(common_cg_exprs.assign(*cur_cg_exprs))) {
+          LOG_WARN("Fail to assign cg exprs", K(ret));
+        }
+      }
+    } else if (prev_status > sql::ObCommonFilterTreeStatus::WHITE &&
+               filter->get_status() > sql::ObCommonFilterTreeStatus::WHITE &&
+               tmp_array.count() < shorter_array.count()) {
+      is_common = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < cur_cg_ids.count(); i++) {
+        if (!is_contain(common_cg_ids, cur_cg_ids.at(i))) {
+          if (OB_FAIL(common_cg_ids.push_back(cur_cg_ids.at(i)))) {
+            LOG_WARN("Fail to push back cg idx", K(ret));
+          } else if (nullptr != cur_cg_exprs && OB_FAIL(common_cg_exprs.push_back(cur_cg_exprs->at(i)))) {
+            LOG_WARN("Fail to push back cg expr", K(ret));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -757,15 +777,26 @@ sql::ObCommonFilterTreeStatus ObCOSSTableRowsFilter::merge_common_filter_tree_st
 {
   sql::ObCommonFilterTreeStatus ret = sql::ObCommonFilterTreeStatus::NONE_FILTER;
   if (is_common_filter_tree_status(status_one, status_two)) {
-    ret = sql::ObCommonFilterTreeStatus::SINGLE_BLACK == status_one ?
-            status_two : status_one;
+    ret = (sql::ObCommonFilterTreeStatus)(filter_tree_merge_status[status_one][status_two]);
   }
   return ret;
 }
 
+/*
+ *   filter1        filter2       is_common  status
+ *     NOP            NOP            O       NONE_FILTER
+ *    WHITE          WHITE           X       WHITE
+ *    WHITE        SINGLE_BLACK      X      SINGLE_BLACK
+ *    WHITE        MULTI_BLACK       O      NONE_FILTER
+ *  SINGLE_BLACK   SINGLE_BLACK      X      SINGLE_BLACK
+ *  SINGLE_BLACK   MULTI_BLACK       X      MULTI_BLACK
+ *  MULTI_BLACK    MULTI_BLACK       X      MULTI_BLACK
+ *
+ *  merge condition: cg idxs is contained by the other
+ */
 bool ObCOSSTableRowsFilter::is_common_filter_tree_status(
-    sql::ObCommonFilterTreeStatus status_one,
-    sql::ObCommonFilterTreeStatus status_two)
+    const sql::ObCommonFilterTreeStatus status_one,
+    const sql::ObCommonFilterTreeStatus status_two)
 {
   bool ret = true;
   if (sql::ObCommonFilterTreeStatus::NONE_FILTER == status_one

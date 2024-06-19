@@ -97,8 +97,8 @@ TEST_F(TestColumnEqualMicroDecoder, small_uint_with_large_exception)
     int32_t col_offset = i;
     LOG_INFO("Current col: ", K(i), K(col_meta),  K(*decoder.decoders_[col_offset].ctx_), K(precision), K(vec_tc));
 
-    int64_t row_ids[ROW_CNT];
-    for (int64_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
+    int32_t row_ids[ROW_CNT];
+    for (int32_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
       row_ids[datum_idx] = datum_idx;
     }
 

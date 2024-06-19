@@ -315,7 +315,7 @@ int ObVectorStore::fill_output_rows(
   }
   LOG_TRACE("[Vectorized] vector store copy rows", K(ret),
             K(begin_index), K(end_index), K(row_capacity), K(res),
-            "row_ids", common::ObArrayWrap<const int64_t>(row_ids_, row_capacity),
+            "row_ids", common::ObArrayWrap<const int32_t>(row_ids_, row_capacity),
             KPC(this));
   return ret;
 }

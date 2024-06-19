@@ -756,8 +756,8 @@ void TestRawDecoder::test_batch_decode_to_vector(
     LOG_INFO("Current col: ", K(i), K(col_meta),  K(*decoder.decoders_[col_offset].ctx_),
         K(precision), K(vec_tc), K(need_test_column));
 
-    int64_t row_ids[test_row_cnt];
-    int64_t row_id_idx = 0;
+    int32_t row_ids[test_row_cnt];
+    int32_t row_id_idx = 0;
     for (int64_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
       if (!align_row_id && 0 == datum_idx % 2) {
         // skip
@@ -1246,8 +1246,8 @@ TEST_F(TestRawDecoder, batch_decode_to_datum)
     int32_t col_offset = i;
     LOG_INFO("Current col: ", K(i), K(col_descs_.at(i)),  K(*decoder.decoders_[col_offset].ctx_));
     ObDatum datums[ROW_CNT];
-    int64_t row_ids[ROW_CNT];
-    for (int64_t j = 0; j < ROW_CNT; ++j) {
+    int32_t row_ids[ROW_CNT];
+    for (int32_t j = 0; j < ROW_CNT; ++j) {
       datums[j].ptr_ = reinterpret_cast<char *>(datum_buf) + j * 128;
       row_ids[j] = j;
     }
@@ -1324,8 +1324,8 @@ TEST_F(TestRawDecoder, opt_batch_decode_to_datum)
     int32_t col_offset = i;
     STORAGE_LOG(INFO, "Current col: ", K(i),K(col_descs_.at(i)), K(*decoder.decoders_[col_offset].ctx_));
     ObDatum datums[ROW_CNT];
-    int64_t row_ids[ROW_CNT];
-    for (int64_t j = 0; j < ROW_CNT; ++j) {
+    int32_t row_ids[ROW_CNT];
+    for (int32_t j = 0; j < ROW_CNT; ++j) {
       datums[j].ptr_ = reinterpret_cast<char *>(datum_buf) + j * 128;
       row_ids[j] = j;
     }

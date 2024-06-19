@@ -41,15 +41,13 @@ public:
                          const int64_t fixed_len, const int64_t start_idx,
                          const int64_t read_rows, char *data)
   {
-    has_null_ = has_null;
-    // TODO: fix deep copy bug
-    //nulls_->deep_copy(nulls, start_idx, start_idx + read_rows);
+    UNUSED(has_null);
+    has_null_ = false;
     nulls_->reset(read_rows);
-    if (has_null) {
-      for (int64_t i = 0; i < read_rows; ++i) {
-        if (nulls.at(start_idx + i)) {
-          nulls_->set(i);
-        }
+    for (int64_t i = 0; i < read_rows; ++i) {
+      if (nulls.at(start_idx + i)) {
+        nulls_->set(i);
+        has_null_ = true;
       }
     }
     len_ = static_cast<int32_t> (fixed_len);

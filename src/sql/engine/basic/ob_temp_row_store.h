@@ -67,6 +67,14 @@ public:
                                const int64_t col_idx);
   };
 
+  struct DtlRowBlock : public RowBlock {
+    static int calc_rows_size(const IVectorPtrs &vectors,
+                              const RowMeta &row_meta,
+                              const ObBatchRows &brs,
+                              uint32_t row_size_arr[]);
+
+  };
+
   const static int64_t BLOCK_SIZE = (64L << 10);
   class Iterator : public ObTempBlockStore::BlockReader
   {

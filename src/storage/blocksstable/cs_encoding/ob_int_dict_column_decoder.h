@@ -30,8 +30,8 @@ public:
   ObIntDictColumnDecoder &operator=(const ObDictColumnDecoder &) = delete;
 
   virtual int decode(
-    const ObColumnCSDecoderCtx &ctx, const int64_t row_id, common::ObDatum &datum) const override;
-  virtual int batch_decode(const ObColumnCSDecoderCtx &ctx, const int64_t *row_ids,
+    const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const override;
+  virtual int batch_decode(const ObColumnCSDecoderCtx &ctx, const int32_t *row_ids,
     const int64_t row_cap, common::ObDatum *datums) const override;
   virtual int decode_vector(const ObColumnCSDecoderCtx &ctx, ObVectorDecodeCtx &vector_ctx) const override;
   virtual int decode_and_aggregate(

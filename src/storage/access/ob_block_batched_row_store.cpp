@@ -27,7 +27,7 @@ static bool copy_row_ids(
     const int64_t offset,
     const int64_t cap,
     const int64_t step,
-    int64_t *row_ids);
+    int32_t *row_ids);
 
 ObBlockBatchedRowStore::ObBlockBatchedRowStore(
     const int64_t batch_size,
@@ -59,14 +59,14 @@ int ObBlockBatchedRowStore::init(const ObTableAccessParam &param)
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc cell data ptr", K(ret), K(batch_size_));
   } else if (FALSE_IT(cell_data_ptrs_ = reinterpret_cast<const char **>(buf))) {
-  } else if (OB_ISNULL(buf = context_.stmt_allocator_->alloc(sizeof(int64_t) * batch_size_))) {
+  } else if (OB_ISNULL(buf = context_.stmt_allocator_->alloc(sizeof(int32_t) * batch_size_))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc row_ids", K(ret), K(batch_size_));
   } else if (OB_ISNULL(len_array_buf = context_.stmt_allocator_->alloc(sizeof(uint32_t) * batch_size_))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc len_array_buf", K(ret), K_(batch_size));
   } else {
-    row_ids_ = reinterpret_cast<int64_t *>(buf);
+    row_ids_ = reinterpret_cast<int32_t *>(buf);
     len_array_ = reinterpret_cast<uint32_t *>(len_array_buf);
   }
   return ret;
@@ -187,8 +187,8 @@ int ObBlockBatchedRowStore::get_row_ids(
 }
 
 static const int32_t DEFAULT_BATCH_ROW_COUNT = 1024;
-static int64_t default_batch_row_ids_[DEFAULT_BATCH_ROW_COUNT];
-static int64_t default_batch_reverse_row_ids_[DEFAULT_BATCH_ROW_COUNT];
+static int32_t default_batch_row_ids_[DEFAULT_BATCH_ROW_COUNT];
+static int32_t default_batch_reverse_row_ids_[DEFAULT_BATCH_ROW_COUNT];
 static void  __attribute__((constructor)) init_row_ids_array()
 {
   for (int32_t i = 0; i < DEFAULT_BATCH_ROW_COUNT; i++) {
@@ -200,14 +200,14 @@ bool copy_row_ids(
     const int64_t offset,
     const int64_t cap,
     const int64_t step,
-    int64_t *row_ids)
+    int32_t *row_ids)
 {
   bool is_success = false;
   if (1 == step && offset + cap <= DEFAULT_BATCH_ROW_COUNT) {
-    memcpy(row_ids, default_batch_row_ids_ + offset, sizeof(int64_t ) * cap);
+    MEMCPY(row_ids, default_batch_row_ids_ + offset, sizeof(int32_t ) * cap);
     is_success = true;
   } else if (-1 == step && offset < DEFAULT_BATCH_ROW_COUNT) {
-    memcpy(row_ids, default_batch_reverse_row_ids_ + DEFAULT_BATCH_ROW_COUNT - offset - 1, sizeof(int64_t ) * cap);
+    MEMCPY(row_ids, default_batch_reverse_row_ids_ + DEFAULT_BATCH_ROW_COUNT - offset - 1, sizeof(int32_t ) * cap);
     is_success = true;
   }
   return is_success;

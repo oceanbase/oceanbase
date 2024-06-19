@@ -22,11 +22,16 @@ class ObCGGroupByScanner final : public ObCGRowScanner, public ObICGGroupByProce
 public:
   ObCGGroupByScanner();
   virtual ~ObCGGroupByScanner();
+  virtual void reuse() override;
   virtual void reset() override;
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
       ObSSTableWrapper &wrapper) override;
+  virtual int switch_context(
+      const ObTableIterParam &iter_param,
+      ObTableAccessContext &access_ctx,
+      ObSSTableWrapper &wrapper) override final;
   virtual ObCGIterType get_type() override
   { return OB_CG_GROUP_BY_SCANNER; }
   virtual int init_group_by_info() override;
@@ -35,6 +40,7 @@ public:
   virtual int read_distinct(const int32_t group_by_col) override;
   virtual int read_reference(const int32_t group_by_col) override;
   virtual int calc_aggregate(const bool is_group_by_col) override;
+  virtual int locate_micro_index(const ObCSRange &range) override;
   INHERIT_TO_STRING_KV("ObCGRowScanner", ObCGRowScanner,
       KPC_(output_exprs), K_(group_by_agg_idxs), KP_(group_by_cell));
 private:
@@ -44,6 +50,7 @@ private:
   // aggregate cell indexes for each output(agg) expr
   ObSEArray<ObGroupByAggIdxArray, 2> group_by_agg_idxs_;
   ObGroupByCell *group_by_cell_;
+  ObCGIndexPrefetcher index_prefetcher_;
 };
 
 }

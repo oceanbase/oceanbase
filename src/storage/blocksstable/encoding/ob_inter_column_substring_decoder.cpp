@@ -154,7 +154,7 @@ int ObInterColSubStrDecoder::inner_decode_vector(
         if (col_ref_end_idx >= col_ref_start_idx) {
           // decode previous referenced range
           const int64_t row_cap = col_ref_end_idx - col_ref_start_idx + 1;
-          const int64_t *row_id_arr = vector_ctx.row_ids_ + col_ref_start_idx;
+          const int32_t *row_id_arr = vector_ctx.row_ids_ + col_ref_start_idx;
           const char **ptr_arr = vector_ctx.ptr_arr_ + col_ref_start_idx;
           uint32_t *len_arr = vector_ctx.len_arr_ + col_ref_start_idx;
           const int64_t vec_offset = vector_ctx.vec_offset_ + col_ref_start_idx;
@@ -187,7 +187,7 @@ int ObInterColSubStrDecoder::inner_decode_vector(
   if (OB_SUCC(ret) && col_ref_end_idx >= col_ref_start_idx) {
     // decode last referenced range
     const int64_t row_cap = col_ref_end_idx - col_ref_start_idx + 1;
-    const int64_t *row_id_arr = vector_ctx.row_ids_ + col_ref_start_idx;
+    const int32_t *row_id_arr = vector_ctx.row_ids_ + col_ref_start_idx;
     const char **ptr_arr = vector_ctx.ptr_arr_ + col_ref_start_idx;
     uint32_t *len_arr = vector_ctx.len_arr_ + col_ref_start_idx;
     const int64_t vec_offset = vector_ctx.vec_offset_ + col_ref_start_idx;

@@ -337,6 +337,8 @@ private:
                                          const ObBatchRows *child_brs, ObBatchRows &my_brs,
                                          const int64_t batch_size, bool &insert_group_ht);
   int init_by_pass_op();
+
+  int process_multi_groups(aggregate::AggrRowPtr *agg_rows, const ObBatchRows &brs);
   // Alloc one batch group_row_item at a time
   static const int64_t BATCH_GROUP_ITEM_SIZE = 16;
   // const int64_t EXTEND_BKT_NUM_PUSH_DOWN = INIT_L3_CACHE_SIZE / ObExtendHashTableVec<ObGroupRowBucket>::get_sizeof_aggr_row();

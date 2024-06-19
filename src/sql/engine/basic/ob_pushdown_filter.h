@@ -545,12 +545,13 @@ private:
   ObPushdownFilterNode *filter_tree_;
 };
 
-enum ObCommonFilterTreeStatus
+enum ObCommonFilterTreeStatus : uint8_t
 {
   NONE_FILTER = 0,
   WHITE = 1,
   SINGLE_BLACK = 2,
-  MULTI_BLACK = 3
+  MULTI_BLACK = 3,
+  MAX_STATUS = 4
 };
 
 // executor interface
@@ -620,10 +621,10 @@ public:
   OB_INLINE const common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &get_default_datums() const
   { return default_datums_; }
   OB_INLINE const common::ObIArray<uint32_t> &get_cg_idxs() const { return cg_idxs_; }
-  OB_INLINE common::ObIArray<uint32_t> &get_cg_idxs() { return cg_idxs_; }
-  virtual common::ObIArray<ObExpr *> *get_cg_col_exprs() const { return cg_col_exprs_; }
+  virtual const common::ObIArray<ObExpr *> *get_cg_col_exprs() const
+  { return cg_col_exprs_.empty() ? nullptr : &cg_col_exprs_; }
   OB_INLINE bool is_cg_param_valid() const
-  { return !cg_idxs_.empty() && (nullptr == cg_col_exprs_ || cg_col_exprs_->count() <= cg_idxs_.count()); }
+  { return !cg_idxs_.empty() && cg_col_exprs_.count() <= cg_idxs_.count(); }
   OB_INLINE uint32_t get_child_count() const { return n_child_; }
   OB_INLINE int64_t get_cg_iter_idx() const { return cg_iter_idx_; }
   OB_INLINE void set_cg_iter_idx(const int64_t cg_iter_idx)
@@ -677,7 +678,7 @@ public:
       const common::ObIArray<int32_t> &output_projector,
       const bool need_padding);
   int init_co_filter_param(const storage::ObTableIterParam &iter_param, const bool need_padding);
-  int set_cg_param(const common::ObIArray<uint32_t> &cg_idxs, common::ObIArray<ObExpr *> *exprs);
+  int set_cg_param(const common::ObIArray<uint32_t> &cg_idxs, const common::ObIArray<ObExpr *> &exprs);
   int pull_up_common_node(
       const common::ObIArray<uint32_t> &filter_indexes,
       ObPushdownFilterExecutor *&common_filter_executor);
@@ -725,7 +726,7 @@ protected:
   common::ObFixedArray<int32_t, common::ObIAllocator> cg_col_offsets_;
   common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> default_datums_;
   common::ObFixedArray<uint32_t, common::ObIAllocator> cg_idxs_;
-  common::ObIArray<ObExpr *> *cg_col_exprs_;
+  common::ObFixedArray<ObExpr *, common::ObIAllocator> cg_col_exprs_;
   common::ObIAllocator &allocator_;
   ObPushdownOperator &op_;
 private:
@@ -776,7 +777,7 @@ public:
   OB_INLINE ObPushdownBlackFilterNode &get_filter_node() { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual common::ObIArray<ObExpr *> *get_cg_col_exprs() const override { return &filter_.column_exprs_; }
+  virtual const common::ObIArray<ObExpr *> *get_cg_col_exprs() const override { return &filter_.column_exprs_; }
   OB_INLINE bool can_vectorized();
   int filter_batch(ObPushdownFilterExecutor *parent,
                    const int64_t start,
@@ -921,7 +922,7 @@ public:
   OB_INLINE const ObPushdownWhiteFilterNode &get_filter_node() const  { return filter_; }
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
-  virtual common::ObIArray<ObExpr *> *get_cg_col_exprs() const override { return &filter_.column_exprs_; }
+  virtual const common::ObIArray<ObExpr *> *get_cg_col_exprs() const override { return &filter_.column_exprs_; }
   virtual int init_evaluated_datums() override;
   OB_INLINE const common::ObIArray<common::ObDatum> &get_datums() const
   { return datum_params_; }
@@ -1247,7 +1248,7 @@ struct PushdownFilterInfo
   sql::ObPushdownFilterExecutor *filter_;
   // for black filter vectorize
   const char **cell_data_ptrs_;
-  int64_t *row_ids_;
+  int32_t *row_ids_;
   uint32_t *len_array_;
   common::ObBitmap *ref_bitmap_;
   sql::ObBitVector *skip_bit_;

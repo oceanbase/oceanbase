@@ -262,6 +262,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.limit_param_ = scan_rtdef_->limit_param_;
   scan_param_.need_scn_ = scan_rtdef_->need_scn_;
   scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_.pd_flag_;
+  scan_param_.table_scan_opt_ = scan_ctdef_->table_scan_opt_;
   scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
   scan_param_.fb_read_tx_uncommitted_ = scan_rtdef_->fb_read_tx_uncommitted_;
   if (scan_rtdef_->is_for_foreign_check_) {
@@ -1641,6 +1642,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.limit_param_ = lookup_rtdef_->limit_param_;
   scan_param_.need_scn_ = lookup_rtdef_->need_scn_;
   scan_param_.pd_storage_flag_ = lookup_ctdef_->pd_expr_spec_.pd_storage_flag_.pd_flag_;
+  scan_param_.table_scan_opt_ = lookup_ctdef_->table_scan_opt_;
   scan_param_.fb_snapshot_ = lookup_rtdef_->fb_snapshot_;
   scan_param_.fb_read_tx_uncommitted_ = lookup_rtdef_->fb_read_tx_uncommitted_;
   scan_param_.ls_id_ = ls_id_;

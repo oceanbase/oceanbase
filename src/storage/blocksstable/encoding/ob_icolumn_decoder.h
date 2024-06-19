@@ -99,7 +99,7 @@ struct ObVectorDecodeCtx
   explicit ObVectorDecodeCtx(
       const char **ptr_arr,
       uint32_t *len_arr,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const int64_t vec_offset,
       sql::VectorHeader &vec_header)
@@ -128,7 +128,7 @@ struct ObVectorDecodeCtx
 
   const char **ptr_arr_; // tmp mem buf as pointer array
   uint32_t *len_arr_; // tmp mem buf as 4-byte array
-  const int64_t *row_ids_; // projection row-ids
+  const int32_t *row_ids_; // projection row-ids
   const int64_t row_cap_; // batch size / array size
   const int64_t vec_offset_; // vector start projection offset
   sql::VectorHeader &vec_header_; // result
@@ -174,7 +174,7 @@ public:
   virtual int batch_decode(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums) const
@@ -234,7 +234,7 @@ public:
   OB_INLINE virtual int batch_locate_row_data(
       const ObColumnDecoderCtx &col_ctx,
       const ObIRowIndex *row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const char **row_datas,
       common::ObDatum *datums) const;
@@ -253,7 +253,7 @@ public:
 
   virtual int set_null_datums_from_fixed_column(
       const ObColumnDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const unsigned char *col_data,
       common::ObDatum *datums) const;
@@ -261,13 +261,13 @@ public:
   virtual int set_null_datums_from_var_column(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums) const;
 
   virtual int set_null_vector_from_fixed_column(
       const ObColumnDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const int64_t vec_offset,
       const unsigned char *col_data,
@@ -282,13 +282,13 @@ public:
   virtual int get_null_count(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex *row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const;
 
   virtual int get_null_count_from_fixed_column(
       const ObColumnDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const unsigned char *col_data,
       int64_t &null_count) const;
@@ -296,7 +296,7 @@ public:
   virtual int get_null_count_from_var_column(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const;
 
@@ -317,7 +317,7 @@ public:
 
   virtual int read_reference(
       const ObColumnDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const
   { return OB_NOT_SUPPORTED; }
@@ -326,7 +326,7 @@ protected:
   int get_null_count_from_extend_value(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const char *meta_data_,
     int64_t &null_count) const;
@@ -338,7 +338,7 @@ protected:
       const Header &header,
       const char **data_arr,
       uint32_t *len_arr,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap);
 
   template <typename T>
@@ -419,7 +419,7 @@ OB_INLINE int ObIColumnDecoder::locate_row_data(
 OB_INLINE int ObIColumnDecoder::batch_locate_row_data(
     const ObColumnDecoderCtx &col_ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const char **row_datas,
     common::ObDatum *datums) const
@@ -443,7 +443,7 @@ int ObIColumnDecoder::batch_locate_cell_data(
     const Header &header,
     const char **data_arr,
     uint32_t *len_arr,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap)
 {
   // for var-length data, nullptr == data_arr[row_id] represent for this row is null

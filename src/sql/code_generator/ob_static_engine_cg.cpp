@@ -5111,6 +5111,8 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
       LOG_WARN("failed to init tenant config", K(tenant_id));
     } else {
       const int64_t pd_level = tenant_config->_pushdown_storage_level;
+      const int64_t io_read_batch_size = tenant_config->_io_read_batch_size;
+      const int64_t io_read_gap_size = io_read_batch_size * tenant_config->_io_read_redundant_limit_percentage / 100;
       pd_blockscan = ObPushdownFilterUtils::is_blockscan_pushdown_enabled(pd_level);
       pd_filter = ObPushdownFilterUtils::is_filter_pushdown_enabled(pd_level);
       enable_skip_index = tenant_config->_enable_skip_index;
@@ -5120,9 +5122,15 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
       ObDASScanCtDef *lookup_ctdef = spec.tsc_ctdef_.lookup_ctdef_;
       scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
                                                           enable_column_store, enable_prefetch_limit);
+      scan_ctdef.table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
+      scan_ctdef.table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
+      scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
       if (nullptr != lookup_ctdef) {
         lookup_ctdef->pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
                                                                enable_column_store, enable_prefetch_limit);
+        lookup_ctdef->table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
+        lookup_ctdef->table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
+        lookup_ctdef->table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
       }
     }
   }

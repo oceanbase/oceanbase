@@ -1379,7 +1379,7 @@ int ObDtlVectorRowMsgWriter::init(ObDtlLinkedBuffer *buffer, uint64_t tenant_id)
     if (OB_FAIL(ObTempBlockStore::init_block_buffer(buffer->buf(), buffer->size(), blk))) {
       LOG_WARN("fail to init block buffer", K(ret));
     } else {
-      block_ = static_cast<ObTempRowStore::RowBlock*>(blk);
+      block_ = static_cast<ObTempRowStore::DtlRowBlock*>(blk);
       block_buffer_ = block_->get_buffer();
       write_buffer_ = buffer;
     }

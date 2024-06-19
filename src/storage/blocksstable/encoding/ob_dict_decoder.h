@@ -34,14 +34,14 @@ typedef void (*dict_var_batch_decode_func)(
                 const char *base_data,
                 const char *base_data_end,
                 const int64_t dict_cnt,
-                const int64_t *row_ids, const int64_t row_cap,
+                const int32_t *row_ids, const int64_t row_cap,
                 common::ObDatum *datums);
 
 typedef void (*dict_fix_batch_decode_func)(
                   const char *ref_data, const char *base_data,
                   const int64_t fixed_len,
                   const int64_t dict_cnt,
-                  const int64_t *row_ids, const int64_t row_cap,
+                  const int32_t *row_ids, const int64_t row_cap,
                   common::ObDatum *datums);
 
 typedef void (*dict_cmp_ref_func)(
@@ -71,7 +71,7 @@ public:
   virtual int batch_decode(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums) const override;
@@ -84,7 +84,7 @@ public:
   virtual int get_null_count(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex *row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const override;
 
@@ -141,7 +141,7 @@ public:
 
   virtual int read_reference(
       const ObColumnDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const override;
   int batch_read_distinct(
@@ -172,13 +172,13 @@ private:
 
   // unpacked refs should be stores in datums.pack_
   int batch_get_bitpacked_refs(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const unsigned char *col_data,
       common::ObDatum *datums) const;
 
   int batch_get_null_count(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const unsigned char *col_data,
     int64_t &null_count) const;
@@ -313,7 +313,7 @@ template <typename RefType>
 struct ObFixedDictDataLocator_T
 {
   explicit ObFixedDictDataLocator_T(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char *dict_payload,
       const int64_t dict_len,
       const int64_t dict_cnt,
@@ -338,7 +338,7 @@ struct ObFixedDictDataLocator_T
     is_null = ref == dict_cnt_;
   }
 
-  const int64_t *__restrict row_ids_;
+  const int32_t *__restrict row_ids_;
   const char *__restrict dict_payload_;
   const int64_t dict_cnt_;
   const int64_t dict_len_;
@@ -349,7 +349,7 @@ template <typename RefType, typename OffType>
 struct ObVarDictDataLocator_T
 {
   explicit ObVarDictDataLocator_T(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char *dict_payload,
       const int64_t last_dict_entry_len,
       const int64_t dict_cnt,
@@ -376,7 +376,7 @@ struct ObVarDictDataLocator_T
     is_null = ref == dict_cnt_;
   }
 
-  const int64_t *__restrict row_ids_;
+  const int32_t *__restrict row_ids_;
   const char *__restrict dict_payload_;
   const int64_t dict_cnt_;
   const int64_t last_dict_entry_len_;

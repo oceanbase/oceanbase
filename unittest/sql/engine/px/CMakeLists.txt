@@ -1,2 +1,3 @@
 sql_unittest(test_random_affi)
 #sql_unittest(test_slice_calc)
+sql_unittest(test_ob_small_hashset)

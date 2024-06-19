@@ -1126,8 +1126,8 @@ void TestDecoderFilterPerf::init_encoding_ctx(
       } \
     } else { \
       const int64_t cur_column_cnt = full_column_cnt_; \
-      int64_t row_ids[SIMPLE_ROW_CNT]; \
-      for (int64_t i = 0; i < SIMPLE_ROW_CNT; ++i) { \
+      int32_t row_ids[SIMPLE_ROW_CNT]; \
+      for (int32_t i = 0; i < SIMPLE_ROW_CNT; ++i) { \
         row_ids[i] = i; \
       } \
       ObSEArray<int32_t, OB_DEFAULT_SE_ARRAY_COUNT> cols; \

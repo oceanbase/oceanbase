@@ -160,7 +160,7 @@ void ObDictValueIterator::build_decode_by_ref_func_()
 
 int ObDictColumnDecoder::get_null_count(
     const ObColumnCSDecoderCtx &col_ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {
@@ -204,7 +204,7 @@ int ObDictColumnDecoder::get_null_count(
 int ObDictColumnDecoder::extract_ref_and_null_count_(
     const ObConstEncodingRefDesc &ref_desc,
     const int64_t dict_count,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums,
     int64_t &null_count,
@@ -2225,7 +2225,7 @@ int ObDictColumnDecoder::read_distinct(
 
 int ObDictColumnDecoder::read_reference(
     const ObColumnCSDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
 {
@@ -2258,7 +2258,7 @@ int ObDictColumnDecoder::read_reference(
 
 int ObDictColumnDecoder::get_aggregate_result(
     const ObColumnCSDecoderCtx &col_ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObAggCell &agg_cell) const
 {

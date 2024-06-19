@@ -30,11 +30,11 @@ struct exist_type<T, First, Rest...> {
   static const bool value = std::is_same<T, First>::value || exist_type<T, Rest...>::value;
 };
 
-#define TYPE_CHECKER_DEF(checker_name, ...)                          \
-template <typename T>                                                \
-struct checker_name {                                                \
-  static constexpr bool value = exist_type<T, ##__VA_ARGS__>::value; \
-};
+// #define TYPE_CHECKER_DEF(checker_name, ...)                          \
+// template <typename T>                                                \
+// struct checker_name {                                                \
+//   static constexpr bool value = exist_type<T, ##__VA_ARGS__>::value; \
+// };
 
 // define VALUE_CHECK
 // eg: DEF_CHECK_VALUE(VecValueTypeClass, is_decimal_tc,

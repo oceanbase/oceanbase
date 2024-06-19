@@ -92,6 +92,9 @@ public:
     inline int fill_head(int64_t size);
     inline int fill_tail(int64_t size);
     inline int compact();
+    inline int64_t head_pos() const { return head_; }
+    inline int64_t tail_pos() const { return tail_;}
+    inline void fast_update_head(const int64_t pos) { head_ = pos; }
     TO_STRING_KV(KP_(data), K_(head), K_(tail), K_(cap));
   private:
     char *data_;

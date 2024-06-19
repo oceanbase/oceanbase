@@ -484,15 +484,15 @@ int ObCGRowScanner::init(
       // TODO: remove these later
     } else if (OB_ISNULL(buf = access_ctx.stmt_allocator_->alloc(sizeof(char *) * sql_batch_size))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc row_ids", K(ret), K(sql_batch_size));
+      LOG_WARN("fail to alloc cell data", K(ret), K(sql_batch_size));
     } else if (FALSE_IT(cell_data_ptrs_ = reinterpret_cast<const char **>(buf))) {
-    } else if (OB_ISNULL(buf = access_ctx.stmt_allocator_->alloc(sizeof(int64_t) * sql_batch_size))) {
+    } else if (OB_ISNULL(buf = access_ctx.stmt_allocator_->alloc(sizeof(int32_t) * sql_batch_size))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc row_ids", K(ret), K(sql_batch_size));
+    } else if (FALSE_IT(row_ids_ = reinterpret_cast<int32_t *>(buf))) {
     } else if (OB_ISNULL(len_array_buf = access_ctx.stmt_allocator_->alloc(sizeof(uint32_t) * sql_batch_size))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc len_array_buf", K(ret), K(sql_batch_size));
-    } else if (FALSE_IT(row_ids_ = reinterpret_cast<int64_t *>(buf))) {
     } else if (FALSE_IT(len_array_ = reinterpret_cast<uint32_t *>(len_array_buf))) {
     } else if (!iter_param.enable_pd_aggregate()) {
       bool need_padding = common::is_pad_char_to_full_length(access_ctx.sql_mode_);

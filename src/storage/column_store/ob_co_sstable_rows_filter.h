@@ -30,7 +30,14 @@ class ObCOSSTableV2;
 class ObCOSSTableRowsFilter
 {
 public:
-  static const uint32_t MAX_NUM_OF_CG_ITER_TO_LOCATE_IN_ADVANCE = 2;
+  static constexpr uint32_t MAX_NUM_OF_CG_ITER_TO_LOCATE_IN_ADVANCE = 2;
+  static constexpr uint8_t filter_tree_merge_status[sql::ObCommonFilterTreeStatus::MAX_STATUS][sql::ObCommonFilterTreeStatus::MAX_STATUS] =
+  { {0, 0, 0, 0}, \
+    {0, 1, 2, 0}, \
+    {0, 2, 2, 3}, \
+    {0, 0, 3, 3}
+  };
+
 public:
   ObCOSSTableRowsFilter();
   ~ObCOSSTableRowsFilter();
@@ -84,8 +91,8 @@ private:
   int find_common_sub_filter_tree(
       sql::ObPushdownFilterExecutor &filter,
       ObIArray<uint32_t> &filter_indexes,
-      common::ObIArray<uint32_t> *&common_col_group_ids,
-      common::ObIArray<sql::ObExpr *> *&common_col_exprs,
+      common::ObIArray<uint32_t> &common_cg_ids,
+      common::ObIArray<sql::ObExpr *> &common_cg_exprs,
       const int64_t base_filter_idx);
   int rewrite_filter_tree(
       sql::ObPushdownFilterExecutor *filter,
@@ -104,16 +111,17 @@ private:
   void adjust_batch_size();
   OB_INLINE ObCGBitmap* get_child_bitmap(uint32_t depth);
   static int assign_common_col_groups(
-      sql::ObPushdownFilterExecutor *filter,
-      common::ObIArray<uint32_t> *&common_col_group_ids,
-      common::ObIArray<sql::ObExpr *> *&common_cg_col_exprs,
+      const sql::ObPushdownFilterExecutor *filter,
+      const sql::ObCommonFilterTreeStatus prev_status,
+      common::ObIArray<uint32_t> &common_cg_ids,
+      common::ObIArray<sql::ObExpr *> &common_cg_exprs,
       bool &is_common);
   static sql::ObCommonFilterTreeStatus merge_common_filter_tree_status(
-      sql::ObCommonFilterTreeStatus status_one,
-      sql::ObCommonFilterTreeStatus status_two);
+      const sql::ObCommonFilterTreeStatus status_one,
+      const sql::ObCommonFilterTreeStatus status_two);
   static bool is_common_filter_tree_status(
-      sql::ObCommonFilterTreeStatus status_one,
-      sql::ObCommonFilterTreeStatus status_two);
+      const sql::ObCommonFilterTreeStatus status_one,
+      const sql::ObCommonFilterTreeStatus status_two);
   static void set_status_of_filter_tree(sql::ObPushdownFilterExecutor *filter);
   static void clear_filter_state(sql::ObPushdownFilterExecutor *filter);
 private:

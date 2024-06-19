@@ -249,6 +249,68 @@ int ObTempRowStore::RowBlock::calc_rows_size(const IVectorPtrs &vectors,
   return ret;
 }
 
+int ObTempRowStore::DtlRowBlock::calc_rows_size(const IVectorPtrs &vectors,
+                                                const RowMeta &row_meta,
+                                                const ObBatchRows &brs,
+                                                uint32_t row_size_arr[]) {
+  int ret = OB_SUCCESS;
+  const int64_t fixed_row_size = row_meta.get_row_fixed_size();
+  const bool reordered = row_meta.fixed_expr_reordered();
+  for (int64_t i = 0; i < brs.size_; i++) {
+    row_size_arr[i] = fixed_row_size;
+  }
+  for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < vectors.count(); col_idx++) {
+    ObIVector *vec = vectors.at(col_idx);
+    if (reordered && row_meta.project_idx(col_idx) < row_meta.fixed_cnt_) {
+      continue;
+    }
+    VectorFormat format = vec->get_format();
+    if (VEC_DISCRETE == format) {
+      ObDiscreteBase *disc_vec = static_cast<ObDiscreteBase *>(vec);
+      ObLength *lens = disc_vec->get_lens();
+      for (int64_t i = 0; i < brs.size_; i++) {
+        if (brs.skip_->at(i)) {
+          continue;
+        }
+        if (!disc_vec->is_null(i)) {
+          row_size_arr[i] += lens[i];
+        }
+      }
+    } else if (VEC_CONTINUOUS == format) {
+      ObContinuousBase *cont_vec = static_cast<ObContinuousBase*>(vec);
+      uint32_t *offsets = cont_vec->get_offsets();
+      for (int64_t i = 0; i < brs.size_; i++) {
+        if (brs.skip_->at(i)) {
+          continue;
+        }
+        row_size_arr[i] += offsets[i + 1] - offsets[i];
+      }
+    } else if (is_uniform_format(format)) {
+      ObUniformBase *uni_vec = static_cast<ObUniformBase *>(vec);
+      ObDatum *datums = uni_vec->get_datums();
+      const uint16_t idx_mask = VEC_UNIFORM_CONST == format ? 0 : UINT16_MAX;
+      for (int64_t i = 0; i < brs.size_; i++) {
+        if (brs.skip_->at(i)) {
+          continue;
+        }
+        if (!datums[i & idx_mask].is_null()) {
+          row_size_arr[i] += datums[i & idx_mask].len_;
+        }
+      }
+    } else if (VEC_FIXED == format) {
+      ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase*>(vec);
+      for (int64_t i = 0; i < brs.size_; i++) {
+        if (brs.skip_->at(i)) {
+          continue;
+        }
+        row_size_arr[i] += fixed_vec->get_length();
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObTempRowStore::Iterator::init(ObTempRowStore *store)
 {
   reset();

@@ -36,13 +36,13 @@ public:
                                      uint32_t *offsets, const int64_t start_idx,
                                      const int64_t read_rows, char *data)
   {
-    has_null_ = has_null;
+    UNUSED(has_null);
+    has_null_ = false;
     nulls_->reset(read_rows);
-    if (has_null) {
-      for (int64_t i = 0; i < read_rows; ++i) {
-        if (nulls.at(start_idx + i)) {
-          nulls_->set(i);
-        }
+    for (int64_t i = 0; i < read_rows; ++i) {
+      if (nulls.at(start_idx + i)) {
+        nulls_->set(i);
+        has_null_ = true;
       }
     }
     offsets_ = offsets + start_idx;

@@ -496,7 +496,7 @@ int ObAggCell::eval_micro_block(
     const ObTableAccessContext &context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_count)
 {
   int ret = OB_SUCCESS;
@@ -933,7 +933,7 @@ int ObCountAggCell::eval_micro_block(
     const ObTableAccessContext &context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_count)
 {
   int ret = OB_SUCCESS;
@@ -1854,7 +1854,7 @@ int ObSumOpSizeAggCell::eval_micro_block(
     const ObTableAccessContext &context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_count)
 {
   int ret = OB_SUCCESS;
@@ -3140,7 +3140,7 @@ int ObFirstRowAggCell::eval_micro_block(
     const ObTableAccessContext &context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_count)
 {
   int ret = OB_SUCCESS;

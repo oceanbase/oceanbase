@@ -175,6 +175,12 @@ public:
         !pd_storage_flag_.is_group_by_pushdown() &&
         !pd_storage_flag_.is_aggregate_pushdown();
   }
+  OB_INLINE int64_t get_io_read_batch_size() const
+  { return table_scan_opt_.io_read_batch_size_; }
+  OB_INLINE int64_t get_io_read_gap_size() const
+  { return table_scan_opt_.io_read_gap_size_; }
+  OB_INLINE int64_t get_storage_rowsets_size() const
+  { return table_scan_opt_.storage_rowsets_size_; }
   DECLARE_TO_STRING;
 public:
   uint64_t table_id_;
@@ -212,6 +218,7 @@ public:
   bool is_non_unique_local_index_;
   int64_t ss_rowkey_prefix_cnt_;
   sql::ObStoragePushdownFlag pd_storage_flag_;
+  ObTableScanOption table_scan_opt_;
 };
 
 struct ObTableAccessParam
