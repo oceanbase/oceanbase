@@ -2578,23 +2578,13 @@ int ObSelectResolver::resolve_all_generated_table_columns(
     *  但是对于select * from(select c1,c1 from t1)；这样的查询肯定引用了，因此必须在展开*对应的查询时进行一次
     *  检查，如果存在重复列是不允许的；
      */
-    // if the select item is a duplicable column in generated table, skip the check.
-    // else we should set the skip_join_dup parameter to true. 
-    if (OB_FAIL(is_need_check_col_dup(select_item.expr_, need_check_col_dup))) {
-      LOG_WARN("failed to check if need to check col duplicate", K(ret));
-    } else if ((!is_skip || need_check_col_dup)
-      && OB_FAIL(column_namespace_checker_.check_column_exists(table_item,
-                                                               select_item.alias_name_,
-                                                               is_exists, // the return value of is_exists is unused.
-                                                               !table_ref->is_view_stmt()))) { //if is a view stmt, do not pass the duplicated column.
-      LOG_WARN("failed to check column exists", K(ret));
-    } else if (OB_FAIL(resolve_generated_table_column_item(table_item,
-                                                           select_item.alias_name_,
-                                                           col_item,
-                                                           NULL,
-                                                           OB_INVALID_ID,
-                                                           i,
-                                                           is_skip))) {
+    if (OB_FAIL(resolve_generated_table_column_item(table_item,
+                                                    select_item.alias_name_,
+                                                    col_item,
+                                                    NULL,
+                                                    i + OB_APP_MIN_COLUMN_ID,
+                                                    i,
+                                                    is_skip))) {
       LOG_WARN("resolve column item failed", K(ret));
     } else if (column_items != NULL) {
       if (OB_FAIL(column_items->push_back(*col_item))) {
