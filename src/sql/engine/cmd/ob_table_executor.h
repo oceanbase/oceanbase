@@ -210,6 +210,7 @@ private:
                                             ObExecContext &exec_ctx,
                                             ObIArray<ObString> &file_urls,
                                             ObIArray<int64_t> &file_sizes);
+  int populate_based_schema_obj_info_(obrpc::ObAlterTableArg &alter_table_arg);
 private:
   //DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);
 };
