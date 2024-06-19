@@ -421,6 +421,8 @@ int ObDbmsWorkloadRepository::generate_ash_report_text(
     // calc ASH_BEGIN_TIME and ASH_END_TIME
     int64_t ash_begin_time = 0;
     int64_t ash_end_time = 0;
+    int64_t wr_begin_time = 0;
+    int64_t wr_end_time = 0;
     if (OB_FAIL(print_ash_report_header(ash_report_params, buff))) {
       LOG_WARN("failed to append string into buff", K(ret));
     }
@@ -433,6 +435,19 @@ int ObDbmsWorkloadRepository::generate_ash_report_text(
         ash_report_params.ash_end_time = ash_end_time;
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (ash_begin_time != 0) {
+        ash_report_params.wr_end_time = ash_begin_time - 1;
+      }
+      if (OB_FAIL(get_wr_begin_and_end_time(ash_report_params, wr_begin_time, wr_end_time))) {
+        LOG_WARN("failed to get ash begin time and end time", K(ret));
+      } else {
+        ash_report_params.wr_begin_time = wr_begin_time;
+        ash_report_params.wr_end_time = wr_end_time;
+      }
+    }
+
 
     // calc num_samples and num_events
     int64_t num_samples = 0;
@@ -766,6 +781,190 @@ const char *ASH_VIEW_SQL_421 =
 " %s"
 " WHERE sample_time between '%.*s' and '%.*s'";
 
+const char * mysql_wr_table_4_2_1_0 = " FROM oceanbase.CDB_WR_ACTIVE_SESSION_HISTORY WR"
+" LEFT JOIN oceanbase.GV$EVENT_NAME WR_EVENT ON WR.EVENT_NO = WR_EVENT.`EVENT#`";
+
+const char * mysql_wr_table = " FROM oceanbase.CDB_WR_ACTIVE_SESSION_HISTORY WR"
+" LEFT JOIN oceanbase.CDB_WR_EVENT_NAME WR_EVENT ON WR.EVENT_ID = WR_EVENT.EVENT_ID";
+
+const char * oracle_wr_table = "";
+
+const char * WR_VIEW_SQL_424 =
+"SELECT"
+"  WR.SVR_IP AS SVR_IP,"
+"  WR.SVR_PORT AS SVR_PORT,"
+"  WR.SAMPLE_TIME AS SAMPLE_TIME,"
+"  WR.TENANT_ID AS TENANT_ID,"
+"  WR.USER_ID AS USER_ID,"
+"  WR.SESSION_ID AS SESSION_ID,"
+"  WR.SESSION_TYPE AS SESSION_TYPE,"
+"  WR.SQL_ID AS SQL_ID,"
+"  WR.PLAN_ID AS PLAN_ID,"
+"  WR.TRACE_ID AS TRACE_ID,"
+"  WR_EVENT.EVENT_NAME AS EVENT,"
+"  WR.EVENT_NO AS EVENT_NO,"
+"  WR.EVENT_ID AS EVENT_ID,"
+"  WR.P1 AS P1,"
+"  WR_EVENT.PARAMETER1 AS P1TEXT,"
+"  WR.P2 AS P2,"
+"  WR_EVENT.PARAMETER2 AS P2TEXT,"
+"  WR.P3 AS P3,"
+"  WR_EVENT.PARAMETER3 AS P3TEXT,"
+"  WR_EVENT.WAIT_CLASS AS WAIT_CLASS,"
+"  WR_EVENT.WAIT_CLASS_ID AS WAIT_CLASS_ID,"
+"  WR.TIME_WAITED AS TIME_WAITED,"
+"  WR.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,"
+"  WR.GROUP_ID AS GROUP_ID,"
+"  WR.PLAN_HASH AS PLAN_HASH,"
+"  WR.THREAD_ID AS THREAD_ID,"
+"  WR.STMT_TYPE AS STMT_TYPE,"
+"  WR.PROGRAM AS PROGRAM,"
+"  WR.MODULE AS MODULE,"
+"  WR.ACTION AS ACTION,"
+"  WR.CLIENT_ID AS CLIENT_ID,"
+"  WR.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,"
+"  WR.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,"
+"  WR.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,"
+"  WR.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,"
+"  WR.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
+"  WR.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
+"  WR.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+"  WR.TIME_MODEL AS TIME_MODEL"
+"  %s"
+"  WHERE sample_time between '%.*s' and '%.*s'";
+
+const char * WR_VIEW_SQL_423 =
+"SELECT"
+"  WR.SVR_IP AS SVR_IP,"
+"  WR.SVR_PORT AS SVR_PORT,"
+"  WR.SAMPLE_TIME AS SAMPLE_TIME,"
+"  WR.TENANT_ID AS TENANT_ID,"
+"  WR.USER_ID AS USER_ID,"
+"  WR.SESSION_ID AS SESSION_ID,"
+"  WR.SESSION_TYPE AS SESSION_TYPE,"
+"  WR.SQL_ID AS SQL_ID,"
+"  WR.PLAN_ID AS PLAN_ID,"
+"  WR.TRACE_ID AS TRACE_ID,"
+"  WR_EVENT.EVENT_NAME AS EVENT,"
+"  WR.EVENT_NO AS EVENT_NO,"
+"  WR.EVENT_ID AS EVENT_ID,"
+"  WR.P1 AS P1,"
+"  WR_EVENT.PARAMETER1 AS P1TEXT,"
+"  WR.P2 AS P2,"
+"  WR_EVENT.PARAMETER2 AS P2TEXT,"
+"  WR.P3 AS P3,"
+"  WR_EVENT.PARAMETER3 AS P3TEXT,"
+"  WR_EVENT.WAIT_CLASS AS WAIT_CLASS,"
+"  WR_EVENT.WAIT_CLASS_ID AS WAIT_CLASS_ID,"
+"  WR.TIME_WAITED AS TIME_WAITED,"
+"  WR.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,"
+"  WR.GROUP_ID AS GROUP_ID,"
+"  NULL AS PLAN_HASH,"
+"  NULL AS THREAD_ID,"
+"  NULL AS STMT_TYPE,"
+"  WR.PROGRAM AS PROGRAM,"
+"  WR.MODULE AS MODULE,"
+"  WR.ACTION AS ACTION,"
+"  WR.CLIENT_ID AS CLIENT_ID,"
+"  WR.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,"
+"  WR.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,"
+"  WR.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,"
+"  WR.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,"
+"  WR.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
+"  WR.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
+"  WR.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+"  0 AS TIME_MODEL"
+"  %s"
+"  WHERE sample_time between '%.*s' and '%.*s'";
+
+const char * WR_VIEW_SQL_422 = 
+"SELECT"
+"  WR.SVR_IP AS SVR_IP,"
+"  WR.SVR_PORT AS SVR_PORT,"
+"  WR.SAMPLE_TIME AS SAMPLE_TIME,"
+"  WR.TENANT_ID AS TENANT_ID,"
+"  WR.USER_ID AS USER_ID,"
+"  WR.SESSION_ID AS SESSION_ID,"
+"  WR.SESSION_TYPE AS SESSION_TYPE,"
+"  WR.SQL_ID AS SQL_ID,"
+"  WR.PLAN_ID AS PLAN_ID,"
+"  WR.TRACE_ID AS TRACE_ID,"
+"  WR_EVENT.EVENT_NAME AS EVENT,"
+"  WR.EVENT_NO AS EVENT_NO,"
+"  WR.EVENT_ID AS EVENT_ID,"
+"  WR.P1 AS P1,"
+"  WR_EVENT.PARAMETER1 AS P1TEXT,"
+"  WR.P2 AS P2,"
+"  WR_EVENT.PARAMETER2 AS P2TEXT,"
+"  WR.P3 AS P3,"
+"  WR_EVENT.PARAMETER3 AS P3TEXT,"
+"  WR_EVENT.WAIT_CLASS AS WAIT_CLASS,"
+"  WR_EVENT.WAIT_CLASS_ID AS WAIT_CLASS_ID,"
+"  WR.TIME_WAITED AS TIME_WAITED,"
+"  WR.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,"
+"  NULL AS GROUP_ID,"
+"  NULL AS PLAN_HASH,"
+"  NULL AS THREAD_ID,"
+"  NULL AS STMT_TYPE,"
+"  WR.PROGRAM AS PROGRAM,"
+"  WR.MODULE AS MODULE,"
+"  WR.ACTION AS ACTION,"
+"  WR.CLIENT_ID AS CLIENT_ID,"
+"  WR.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,"
+"  WR.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,"
+"  WR.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,"
+"  WR.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,"
+"  WR.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
+"  WR.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
+"  WR.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+"  0 AS TIME_MODEL"
+"  %s"
+"  WHERE sample_time between '%.*s' and '%.*s'";
+
+const char *WR_VIEW_SQL_421 =
+"SELECT"
+"  WR.SVR_IP AS SVR_IP,"
+"  WR.SVR_PORT AS SVR_PORT,"
+"  WR.SAMPLE_TIME AS SAMPLE_TIME,"
+"  WR.TENANT_ID AS TENANT_ID,"
+"  WR.USER_ID AS USER_ID,"
+"  WR.SESSION_ID AS SESSION_ID,"
+"  WR.SESSION_TYPE AS SESSION_TYPE,"
+"  WR.SQL_ID AS SQL_ID,"
+"  WR.PLAN_ID AS PLAN_ID,"
+"  WR.TRACE_ID AS TRACE_ID,"
+"  WR_EVENT.EVENT_NAME AS EVENT,"
+"  WR.EVENT_NO AS EVENT_NO,"
+"  0 AS EVENT_ID,"
+"  WR.P1 AS P1,"
+"  WR_EVENT.PARAMETER1 AS P1TEXT,"
+"  WR.P2 AS P2,"
+"  WR_EVENT.PARAMETER2 AS P2TEXT,"
+"  WR.P3 AS P3,"
+"  WR_EVENT.PARAMETER3 AS P3TEXT,"
+"  WR_EVENT.WAIT_CLASS AS WAIT_CLASS,"
+"  WR_EVENT.WAIT_CLASS_ID AS WAIT_CLASS_ID,"
+"  WR.TIME_WAITED AS TIME_WAITED,"
+"  WR.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,"
+"  NULL AS GROUP_ID,"
+"  NULL AS PLAN_HASH,"
+"  NULL AS THREAD_ID,"
+"  NULL AS STMT_TYPE,"
+"  '' AS PROGRAM,"
+"  WR.MODULE AS MODULE,"
+"  WR.ACTION AS ACTION,"
+"  WR.CLIENT_ID AS CLIENT_ID,"
+"  NULL AS TOP_LEVEL_SQL_ID,"
+"  NULL AS PLSQL_ENTRY_OBJECT_ID,"
+"  NULL AS PLSQL_ENTRY_SUBPROGRAM_ID,"
+"  NULL AS PLSQL_ENTRY_SUBPROGRAM_NAME,"
+"  NULL AS PLSQL_OBJECT_ID,"
+"  NULL AS PLSQL_SUBPROGRAM_ID,"
+"  NULL AS PLSQL_SUBPROGRAM_NAME,"
+"  0 AS TIME_MODEL"
+"  %s"
+"  WHERE sample_time between '%.*s' and '%.*s'";
+
 #define EXTRACT_INT_FIELD_FOR_ASH(result, column_name, field, type) \
   if (OB_SUCC(ret)) { \
     if (lib::is_oracle_mode()) {\
@@ -868,6 +1067,76 @@ int ObDbmsWorkloadRepository::append_fmt_ash_view_sql(
   return ret;
 }
 
+int ObDbmsWorkloadRepository::append_fmt_wr_view_sql(
+    const AshReportParams &ash_report_params, ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  const int64_t time_buf_len = 128;
+  int64_t time_buf_pos = 0;
+  char wr_begin_time_buf[time_buf_len];
+  char wr_end_time_buf[time_buf_len];
+  char port_buf[time_buf_len];
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("get_min_data_version failed", K(ret), K(MTL_ID()));
+  } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info, ash_report_params.wr_begin_time,
+                  wr_begin_time_buf, time_buf_len, time_buf_pos))) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
+  } else if (FALSE_IT(time_buf_pos = 0)) {
+  } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info, ash_report_params.wr_end_time,
+                  wr_end_time_buf, time_buf_len, time_buf_pos))) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
+  } else if (FALSE_IT(sprintf(port_buf, "%ld", ash_report_params.port))) {
+  } else if (OB_FAIL(sql_string.append_fmt(data_version >= DATA_VERSION_4_2_4_0   ? WR_VIEW_SQL_424
+                                           : data_version == DATA_VERSION_4_2_3_0 ? WR_VIEW_SQL_423
+                                           : data_version == DATA_VERSION_4_2_2_0
+                                               ? WR_VIEW_SQL_422
+                                               : WR_VIEW_SQL_421,
+                data_version >= DATA_VERSION_4_2_2_0 ? lib::is_oracle_mode() ?
+                oracle_wr_table : mysql_wr_table
+                : lib::is_oracle_mode() ?
+                oracle_wr_table : mysql_wr_table_4_2_1_0,
+                static_cast<int>(time_buf_pos), wr_begin_time_buf,
+                static_cast<int>(time_buf_pos), wr_end_time_buf))) {
+    LOG_WARN("failed to assign query string", K(ret));
+  } else {
+    if (ash_report_params.svr_ip != "") {
+      if (OB_FAIL(sql_string.append_fmt(" AND WR.SVR_IP = '%.*s'",
+              ash_report_params.svr_ip.length(), ash_report_params.svr_ip.ptr()))) {
+        LOG_WARN("failed to assign query string", K(ret));
+      }
+    }
+    if (ash_report_params.port != -1) {
+      if (OB_FAIL(sql_string.append_fmt(" AND WR.PORT = '%lu'", ash_report_params.port))) {
+        LOG_WARN("failed to assign query string", K(ret));
+      }
+    }
+    if (ash_report_params.sql_id != "") {
+      if (OB_FAIL(sql_string.append_fmt(" AND WR.SQL_ID = '%.*s'",
+              ash_report_params.sql_id.length(), ash_report_params.sql_id.ptr()))) {
+        LOG_WARN("failed to assign query string", K(ret));
+      }
+    }
+    if (ash_report_params.trace_id != "") {
+      if (OB_FAIL(sql_string.append_fmt(" AND WR.TRACE_ID = '%.*s'",
+              ash_report_params.trace_id.length(), ash_report_params.trace_id.ptr()))) {
+        LOG_WARN("failed to assign query string", K(ret));
+      }
+    }
+    if (ash_report_params.wait_class != "") {
+      if (OB_FAIL(sql_string.append_fmt(" AND WR_EVENT.WAIT_CLASS = '%.*s'",
+              ash_report_params.wait_class.length(), ash_report_params.wait_class.ptr()))) {
+        LOG_WARN("failed to assign query string", K(ret));
+      }
+    }
+    if (ash_report_params.tenant_id > 0) {
+      if (OB_FAIL(sql_string.append_fmt(" AND WR.TENANT_ID = '%lu'", ash_report_params.tenant_id))) {
+        LOG_WARN("failed to assign query string", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 int ObDbmsWorkloadRepository::get_ash_begin_and_end_time(
     const AshReportParams &ash_report_params, int64_t &ash_begin_time, int64_t &ash_end_time)
 {
@@ -883,12 +1152,18 @@ int ObDbmsWorkloadRepository::get_ash_begin_and_end_time(
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
       ObMySQLResult *result = nullptr;
-      if (OB_FAIL(sql_string.append("SELECT MIN(SAMPLE_TIME) AS ASH_BEGIN_TIME, MAX(SAMPLE_TIME)"
+      if (OB_FAIL(sql_string.append("SELECT MAX(ASH_BEGIN_TIME) AS ASH_BEGIN_TIME, MAX(ASH_END_TIME) as ASH_END_TIME FROM ("))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql_string.append("SELECT MIN(SAMPLE_TIME) AS ASH_BEGIN_TIME, MAX(SAMPLE_TIME)"
                                     " AS ASH_END_TIME  FROM   ("))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_ash_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
       } else if (OB_FAIL(sql_string.append(") top_event "))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql_string.append(" group by SVR_IP, SVR_PORT"))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql_string.append(")"))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("failed to execute sql", KR(ret), K(tenant_id), K(sql_string));
@@ -916,6 +1191,66 @@ int ObDbmsWorkloadRepository::get_ash_begin_and_end_time(
               if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
                 ret = OB_SUCCESS;
                 ash_end_time = 0;
+              } else {
+                LOG_WARN("failed to get timestamp", K(ret));
+              }
+            }
+          }
+        }  // end while
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsWorkloadRepository::get_wr_begin_and_end_time(
+    const AshReportParams &ash_report_params, int64_t &wr_begin_time, int64_t &wr_end_time)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is nullptr", K(ret));
+  } else {
+    ObOracleSqlProxy oracle_proxy(*(static_cast<ObMySQLProxy *>(GCTX.sql_proxy_)));
+    ObCommonSqlProxy *sql_proxy =
+        lib::is_oracle_mode() ? &oracle_proxy : static_cast<ObCommonSqlProxy *>(GCTX.sql_proxy_);
+    const uint64_t tenant_id = MTL_ID();
+    HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
+    {
+      ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql_string.append("SELECT MIN(SAMPLE_TIME) AS WR_BEGIN_TIME, MAX(SAMPLE_TIME)"
+                                    " AS WR_END_TIME  FROM   ("))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(append_fmt_wr_view_sql(ash_report_params, sql_string))) {
+        LOG_WARN("failed to append fmt ash view sql", K(ret));
+      } else if (OB_FAIL(sql_string.append(") top_event "))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql_string.ptr()))) {
+        LOG_WARN("failed to execute sql", KR(ret), K(tenant_id), K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql_string));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("fail to get next row", KR(ret));
+            }
+          } else {
+            if (OB_FAIL(result->get_timestamp("WR_BEGIN_TIME", nullptr, wr_begin_time))) {
+              if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
+                ret = OB_SUCCESS;
+                wr_begin_time = 0;
+              } else {
+                LOG_WARN("failed to get timestamp", K(ret));
+              }
+            } else if (OB_FAIL(result->get_timestamp("WR_END_TIME", nullptr, wr_end_time))) {
+              if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
+                ret = OB_SUCCESS;
+                wr_end_time = 0;
               } else {
                 LOG_WARN("failed to get timestamp", K(ret));
               }
@@ -986,10 +1321,14 @@ int ObDbmsWorkloadRepository::print_ash_summary_info(const AshReportParams &ash_
   int64_t l_etime_buf_pos = 0;
   int64_t ash_begin_time_buf_pos = 0;
   int64_t ash_end_time_buf_pos = 0;
+  int64_t wr_begin_time_buf_pos = 0;
+  int64_t wr_end_time_buf_pos = 0;
   char l_btime_buf[time_buf_len] = "";
   char l_etime_buf[time_buf_len] = "";
   char ash_begin_time_buf[time_buf_len] = "";
   char ash_end_time_buf[time_buf_len] = "";
+  char wr_begin_time_buf[time_buf_len] = "";
+  char wr_end_time_buf[time_buf_len] = "";
   double avg_active_sess = static_cast<double>(num_samples) / dur_elapsed_time;
   avg_active_sess = round(avg_active_sess * 100) / 100;  // round to two decimal places
   if (ash_report_params.is_html) {
@@ -1015,6 +1354,19 @@ int ObDbmsWorkloadRepository::print_ash_summary_info(const AshReportParams &ash_
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
     } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info, ash_report_params.ash_end_time,
                    ash_end_time_buf, time_buf_len, ash_end_time_buf_pos))) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
+    }
+
+    if (ash_report_params.wr_begin_time <= 0 && ash_report_params.wr_end_time <= 0) {
+      wr_begin_time_buf[0] = '\0';
+      wr_begin_time_buf_pos = 0;
+      wr_end_time_buf[0] = '\0';
+      wr_end_time_buf_pos = 0;
+    } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info, ash_report_params.wr_begin_time,
+                   wr_begin_time_buf, time_buf_len, wr_begin_time_buf_pos))) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
+    } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info, ash_report_params.wr_end_time,
+                   wr_end_time_buf, time_buf_len, wr_end_time_buf_pos))) {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
     }
 
@@ -1050,6 +1402,15 @@ int ObDbmsWorkloadRepository::print_ash_summary_info(const AshReportParams &ash_
     } else if (OB_FAIL(
                    temp_string.append_fmt("           Elapsed Time: %ld \n", dur_elapsed_time))) {
       LOG_WARN("failed to assign Elapsed Time string", K(ret));
+    // } else if (OB_FAIL(temp_string.append_fmt("         WR Begin Time: %.*s \n",
+    //                static_cast<int>(wr_begin_time_buf_pos), wr_begin_time_buf))) {
+    //   LOG_WARN("failed to assign Analysis Begin Time string", K(ret));
+    // } else if (OB_FAIL(temp_string.append_fmt("           WR End Time: %.*s \n",
+    //                static_cast<int>(wr_end_time_buf_pos), wr_end_time_buf))) {
+    //   LOG_WARN("failed to assign Analysis End Time string", K(ret));
+    // } else if (OB_FAIL(
+    //                temp_string.append_fmt("           Elapsed Time: %ld \n", dur_elapsed_time))) {
+    //   LOG_WARN("failed to assign Elapsed Time string", K(ret));
     } else if (OB_FAIL(temp_string.append_fmt("          Num of Sample: %ld \n", num_samples))) {
       LOG_WARN("failed to assign Num of Sample string", K(ret));
     } else if (OB_FAIL(temp_string.append_fmt("          Num of Events: %ld \n", num_events))) {
@@ -3360,6 +3721,8 @@ int ObDbmsWorkloadRepository::process_ash_report_params(
 
       ash_report_params.user_input_ash_begin_time = ash_report_params.ash_begin_time;
       ash_report_params.user_input_ash_end_time = ash_report_params.ash_end_time;
+      ash_report_params.wr_begin_time = ash_report_params.ash_begin_time;
+      ash_report_params.wr_end_time = ash_report_params.ash_end_time;
 
       if (7 >= params.count() && data_version >= DATA_VERSION_4_2_3_0) {
         if (OB_FAIL(params.at(5).get_string(ash_report_params.svr_ip))) {
