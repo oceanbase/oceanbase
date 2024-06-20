@@ -228,6 +228,14 @@ public:
              const uint64_t tenant_id,
              const int64_t task_id,
              const int64_t consensus_schema_version);
+
+  static int update_ret_code_and_message(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int ret_code,
+      ObString &message);
+
   static int delete_record(
       common::ObMySQLProxy &proxy,
       const uint64_t tenant_id,

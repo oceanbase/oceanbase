@@ -111,6 +111,7 @@ private:
   bool is_copy_foreign_keys_;
   bool is_ignore_errors_;
   bool is_do_finish_;
+  int64_t target_cg_cnt_;
 };
 
 }  // end namespace rootserver
