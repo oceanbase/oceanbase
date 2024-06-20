@@ -1404,6 +1404,9 @@ int ObDDLRedoLogWriter::switch_to_remote_write()
                                                   true, /*force_renew*/
                                                   leader_addr_))) {
       LOG_WARN("get leader failed", K(ret), K(leader_ls_id_));
+  } else if (GCTX.self_addr() == leader_addr_) {
+    remote_write_ = false;
+    LOG_INFO("leader is local", K(ret), K_(tablet_id), K_(leader_ls_id));
   } else {
     remote_write_ = true;
     LOG_INFO("switch to remote write", K(ret), K_(tablet_id), K_(leader_ls_id), K_(leader_addr));
