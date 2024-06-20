@@ -26,14 +26,11 @@ class UpgradeParams:
 class PasswordMaskingFormatter(logging.Formatter):
   def format(self, record):
     s = super(PasswordMaskingFormatter, self).format(record)
-    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+    return re.sub(r'password="(?:[^"\\]|\\.)*"', 'password="******"', s)
 
 def config_logging_module(log_filenamme):
-  logging.basicConfig(level=logging.INFO,\
-      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
-      datefmt='%Y-%m-%d %H:%M:%S',\
-      filename=log_filenamme,\
-      filemode='w')
+  logger = logging.getLogger('')
+  logger.setLevel(logging.INFO)
   # 定义日志打印格式
   formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
   #######################################
