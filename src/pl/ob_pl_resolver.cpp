@@ -2212,7 +2212,8 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
                                          const ObString &ident_name,
                                          const ObSQLSessionInfo &session_info,
                                          ObPLDataType &data_type,
-                                         bool is_for_param_type)
+                                         bool is_for_param_type,
+                                         uint64_t package_id)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(sp_data_type_node));
@@ -2257,10 +2258,18 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
         if (lib::is_mysql_mode()) {
           OZ (session_info.get_character_set_connection(charset_type));
           OZ (session_info.get_collation_connection(collation_type));
-        } else {
-          OX (collation_type = scalar_data_type.get_meta_type().is_nstring() ?
-                session_info.get_nls_collation_nation()
-              : session_info.get_nls_collation());
+        } else { // oracle mode
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_MIN_SYS_PL_OBJECT_ID < package_id
+                       && package_id < OB_MAX_SYS_PL_OBJECT_ID) {
+            // system package
+            session_info.get_collation_database(collation_type);
+          } else {
+            collation_type = scalar_data_type.get_meta_type().is_nstring() ?
+              session_info.get_nls_collation_nation()
+            : session_info.get_nls_collation();
+          }
           if (OB_SUCC(ret)) {
             charset_type = CS_TYPE_ANY == collation_type ?
                            CHARSET_ANY : ObCharset::charset_type_by_coll(collation_type);
@@ -3362,7 +3371,8 @@ int ObPLResolver::resolve_sp_data_type(const ParseNode *sp_data_type_node,
                                  ident_name,
                                  resolve_ctx_.session_info_,
                                  data_type,
-                                 is_for_param_type));
+                                 is_for_param_type,
+                                 get_current_namespace().get_package_id()));
     }
   }
 

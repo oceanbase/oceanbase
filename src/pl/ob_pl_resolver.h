@@ -325,7 +325,8 @@ public:
                                     const ObString &ident_name,
                                     const sql::ObSQLSessionInfo &session_info,
                                     ObPLDataType &data_type,
-                                    bool is_for_param_type = false);
+                                    bool is_for_param_type = false,
+                                    uint64_t package_id = OB_INVALID_ID);
   int resolve_var(sql::ObQualifiedName &q_name,
                   ObPLBlockNS &ns,
                   sql::ObRawExprFactory &expr_factory,
