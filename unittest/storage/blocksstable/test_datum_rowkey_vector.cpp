@@ -841,6 +841,131 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_compare_rowkey)
   ASSERT_EQ(int_val, 2);
 }
 
+TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_compare_rowkey_datum)
+{
+  int ret = 0;
+  ObStorageDatumUtils datum_utils;
+  prepare_datum_util(2, datum_utils);
+
+  int64_t row_count = 13;
+  int64_t int_arr0[13] =   {1,1,1,2,2,2,2,2,3,3,4,5,7};
+  bool bool_arr0[13] = {false,false,false,false,false,false,false,false,false,false,false,false,false};
+  uint64_t uint_arr1[13] = {2,3,4,1,1,1,2,3,4,5,6,6,8};
+  bool bool_arr1[13] = {false,false,false,false,false,false,false,false,false,false,false,false,false};
+  ObColumnVector int_vec0;
+  int_vec0.type_ = ObColumnVectorType::SIGNED_INTEGER_TYPE;
+  int_vec0.row_cnt_ = row_count;
+  int_vec0.has_null_ = false;
+  int_vec0.signed_ints_ = int_arr0;
+  int_vec0.nulls_ = bool_arr0;
+  ObColumnVector uint_vec1;
+  uint_vec1.type_ = ObColumnVectorType::UNSIGNED_INTEGER_TYPE;
+  uint_vec1.row_cnt_ = row_count;
+  uint_vec1.has_null_ = false;
+  uint_vec1.unsigned_ints_ = uint_arr1;
+  uint_vec1.nulls_ = bool_arr1;
+
+  ObColumnVector col_vectors1[2];
+  col_vectors1[0] = int_vec0;
+  col_vectors1[1] = uint_vec1;
+  ObRowkeyVector rowkey_vector1;
+  rowkey_vector1.columns_ = col_vectors1;
+  rowkey_vector1.col_cnt_ = 2;
+  rowkey_vector1.row_cnt_ = row_count;
+
+  void *buf = allocator_.alloc(sizeof(ObStorageDatum) * row_count);
+  ASSERT_TRUE(buf != nullptr);
+  ObStorageDatum *datums = new (buf) ObStorageDatum[row_count];
+  ObColumnVector datum_vec0;
+  datum_vec0.type_ = ObColumnVectorType::DATUM_TYPE;
+  datum_vec0.row_cnt_ = row_count;
+  datum_vec0.datums_ = datums;
+  for (int64_t i = 0; i < row_count; ++i) {
+    datums[i].set_int(i);
+  }
+
+  buf = allocator_.alloc(sizeof(ObStorageDatum) *row_count);
+  ASSERT_TRUE(buf != nullptr);
+  datums = new (buf) ObStorageDatum[row_count];
+  ObColumnVector datum_vec1;
+  datum_vec1.type_ = ObColumnVectorType::DATUM_TYPE;
+  datum_vec1.row_cnt_ = row_count;
+  datum_vec1.datums_ = datums;
+  for (int64_t i = 0; i < row_count; ++i) {
+    datums[i].set_uint(i);
+  }
+
+  ObColumnVector col_vectors2[2];
+  col_vectors2[0] = datum_vec0;
+  col_vectors2[1] = datum_vec1;
+  ObRowkeyVector rowkey_vector2;
+  rowkey_vector2.columns_ = col_vectors2;
+  rowkey_vector2.col_cnt_ = 2;
+  rowkey_vector2.row_cnt_ = row_count;
+  rowkey_vector2.is_datum_vectors_ = 1;
+
+  ObDiscreteDatumRowkey discrete_rowkey;
+  discrete_rowkey.row_idx_ = 0;
+  discrete_rowkey.rowkey_vector_ = &rowkey_vector2;
+  int cmp_ret = 0;
+  bool compare_datum_cnt = true;
+  ret = rowkey_vector1.compare_rowkey(discrete_rowkey, 0, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret > 0);
+
+  discrete_rowkey.row_idx_ = 2;
+  ret = rowkey_vector1.compare_rowkey(discrete_rowkey, 6, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret == 0);
+
+  discrete_rowkey.row_idx_ = 3;
+  ret = rowkey_vector1.compare_rowkey(discrete_rowkey, 3, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret < 0);
+
+  discrete_rowkey.row_idx_ = 12;
+  discrete_rowkey.rowkey_vector_ = &rowkey_vector1;
+  ret = rowkey_vector2.compare_rowkey(discrete_rowkey, 9, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret > 0);
+
+  discrete_rowkey.row_idx_ = 6;
+  ret = rowkey_vector2.compare_rowkey(discrete_rowkey, 2, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret == 0);
+
+  discrete_rowkey.row_idx_ = 8;
+  ret = rowkey_vector2.compare_rowkey(discrete_rowkey, 3, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret < 0);
+
+  discrete_rowkey.row_idx_ = 12;
+  discrete_rowkey.rowkey_vector_ = &rowkey_vector2;
+  for (int64_t i = 0; i < row_count; ++i) {
+    datum_vec0.datums_[i].set_null();
+  }
+  ret = rowkey_vector1.compare_rowkey(discrete_rowkey, 0, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret > 0);
+
+  bool_arr0[0] = bool_arr0[1] = true;
+  discrete_rowkey.row_idx_ = 1;
+  discrete_rowkey.rowkey_vector_ = &rowkey_vector1;
+  ret = rowkey_vector2.compare_rowkey(discrete_rowkey, 3, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret == 0);
+
+  discrete_rowkey.row_idx_ = 1;
+  ret = rowkey_vector2.compare_rowkey(discrete_rowkey, 4, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret > 0);
+
+  discrete_rowkey.row_idx_ = 1;
+  ret = rowkey_vector2.compare_rowkey(discrete_rowkey, 1, datum_utils, cmp_ret, compare_datum_cnt);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(cmp_ret < 0);
+}
+
 TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_deep_copy)
 {
   int ret = 0;

@@ -738,6 +738,38 @@ int compare_column_row_idx<ObStorageDatum>(
   return ret;
 }
 
+template<typename T>
+int compare_column_datum_row_idx(
+    ObColumnVector &left_vector,
+    ObStorageDatum &right_datum,
+    const int64_t left_row_idx,
+    const bool is_oracle_mode,
+    int &cmp_ret)
+{
+  int ret = OB_SUCCESS;
+  ObRVIntegerWithNullComparor<int64_t> comparor(!is_oracle_mode);
+  ObRVIntegerCell<int64_t> left(left_vector.signed_ints_[left_row_idx], left_vector.nulls_[left_row_idx]);
+  ObRVIntegerCell<int64_t> right(right_datum.get_int(), right_datum.is_null());
+  cmp_ret = comparor.compare(left, right);
+  return ret;
+}
+
+template<>
+int compare_column_datum_row_idx<uint64_t>(
+    ObColumnVector &left_vector,
+    ObStorageDatum &right_datum,
+    const int64_t left_row_idx,
+    const bool is_oracle_mode,
+    int &cmp_ret)
+{
+  int ret = OB_SUCCESS;
+  ObRVIntegerWithNullComparor<uint64_t> comparor(!is_oracle_mode);
+  ObRVIntegerCell<uint64_t> left(left_vector.unsigned_ints_[left_row_idx], left_vector.nulls_[left_row_idx]);
+  ObRVIntegerCell<uint64_t> right(right_datum.get_uint(), right_datum.is_null());
+  cmp_ret = comparor.compare(left, right);
+  return ret;
+}
+
 typedef int (*compare_column_value_func) (
     ObColumnVector &left_vector,
     ObColumnVector &right_vector,
@@ -748,6 +780,15 @@ typedef int (*compare_column_value_func) (
     int &cmp_ret);
 static compare_column_value_func COMPARE_COLUMN_VALUE_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE + 1] =
 { compare_column_row_idx<ObStorageDatum>, compare_column_row_idx<int64_t>, compare_column_row_idx<uint64_t> };
+
+typedef int (*compare_column_value_datum_func) (
+    ObColumnVector &left_vector,
+    ObStorageDatum &right_datum,
+    const int64_t left_row_idx,
+    const bool is_oracle_mode,
+    int &cmp_ret);
+static compare_column_value_datum_func COMPARE_COLUMN_VALUE_DATUM_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE + 1] =
+{ nullptr, compare_column_datum_row_idx<int64_t>, compare_column_datum_row_idx<uint64_t> };
 
 int ObRowkeyVector::compare_rowkey(
     const ObDiscreteDatumRowkey &rowkey,
@@ -772,12 +813,26 @@ int ObRowkeyVector::compare_rowkey(
     const bool is_oracle_mode = datum_utils.is_oracle_mode();
     cmp_ret = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt_ && 0 == cmp_ret; ++i) {
-      compare_column_value_func func = COMPARE_COLUMN_VALUE_FUNCS[(int8_t)columns_[i].type_];
-      if (OB_UNLIKELY(columns_[i].type_ != rowkey.rowkey_vector_->columns_[i].type_)) {
+      if (OB_LIKELY(columns_[i].type_ == rowkey.rowkey_vector_->columns_[i].type_)) {
+        compare_column_value_func func = COMPARE_COLUMN_VALUE_FUNCS[(int8_t)columns_[i].type_];
+        if (OB_FAIL(func(columns_[i], rowkey.rowkey_vector_->columns_[i], row_idx, rowkey.row_idx_, cmp_funcs.at(i), is_oracle_mode, cmp_ret))) {
+          LOG_WARN("Failed to compare key", K(ret));
+        }
+      } else if (ObColumnVectorType::DATUM_TYPE == rowkey.rowkey_vector_->columns_[i].type_) {
+        compare_column_value_datum_func func = COMPARE_COLUMN_VALUE_DATUM_FUNCS[(int8_t)columns_[i].type_];
+        if (OB_FAIL(func(columns_[i], rowkey.rowkey_vector_->columns_[i].datums_[rowkey.row_idx_], row_idx, is_oracle_mode, cmp_ret))) {
+          LOG_WARN("Failed to compare key", K(ret));
+        }
+      } else if (ObColumnVectorType::DATUM_TYPE == columns_[i].type_) {
+        compare_column_value_datum_func func = COMPARE_COLUMN_VALUE_DATUM_FUNCS[(int8_t)rowkey.rowkey_vector_->columns_[i].type_];
+        if (OB_FAIL(func(rowkey.rowkey_vector_->columns_[i], columns_[i].datums_[row_idx], rowkey.row_idx_, is_oracle_mode, cmp_ret))) {
+          LOG_WARN("Failed to compare key", K(ret));
+        } else {
+          cmp_ret = -cmp_ret;
+        }
+      } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected not equal column type", K(ret), K(columns_[i]), K(rowkey.rowkey_vector_->columns_[i]));
-      } else if (OB_FAIL(func(columns_[i], rowkey.rowkey_vector_->columns_[i], row_idx, rowkey.row_idx_, cmp_funcs.at(i), is_oracle_mode, cmp_ret))) {
-        LOG_WARN("Failed to compare key", K(ret));
+        LOG_WARN("Unexpected not equal column type", K(ret), K(i), K(columns_[i]), K(rowkey.rowkey_vector_->columns_[i]));
       }
     }
   }
