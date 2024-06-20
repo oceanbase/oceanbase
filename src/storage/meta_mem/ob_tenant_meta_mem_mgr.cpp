@@ -615,13 +615,15 @@ void ObTenantMetaMemMgr::batch_gc_memtable_()
         } else {
           (void)batch_destroy_memtable_(memtable_set);
 
+          int64_t batch_destroyed_occupy_size = 0;
           for (common::hash::ObHashSet<uint64_t>::iterator set_iter = memtable_set->begin();
                set_iter != memtable_set->end();
                ++set_iter) {
+            batch_destroyed_occupy_size += ((ObMemtable *)(set_iter->first))->get_occupied_size();
             pool_arr_[static_cast<int>(ObITable::TableType::DATA_MEMTABLE)]->free_obj((void *)(set_iter->first));
           }
 
-          LOG_INFO("batch gc memtable successfully", K(memtable_set->size()));
+          FLOG_INFO("batch gc memtable successfully", K(memtable_set->size()), K(batch_destroyed_occupy_size));
           while (OB_TMP_FAIL(memtable_set->clear())) {
             LOG_ERROR("clear memtable set failed", K(tmp_ret), KPC(memtable_set));
           }
