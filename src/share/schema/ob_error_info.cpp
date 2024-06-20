@@ -462,7 +462,8 @@ int ObErrorInfo::handle_error_info(const IObErrorInfo *info,
   return ret;
 }
 
-int ObErrorInfo::delete_error(const IObErrorInfo *info)
+int ObErrorInfo::delete_error(const IObErrorInfo *info,
+                              const ObObjectType obj_type)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = nullptr;
@@ -471,7 +472,7 @@ int ObErrorInfo::delete_error(const IObErrorInfo *info)
   } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    if (OB_FAIL(collect_error_info(info, NULL, true))) {
+    if (OB_FAIL(collect_error_info(info, NULL, true, obj_type))) {
       LOG_WARN("collect error info failed.", K(ret), K(info), K(*this));
     } else {
       if (OB_FAIL(del_error(sql_proxy))) {
