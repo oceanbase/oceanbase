@@ -6164,6 +6164,33 @@ bool ObTableSchema::has_generated_and_partkey_column() const
   return result;
 }
 
+int ObTableSchema::check_column_has_multivalue_index_depend(
+  const ObColumnSchemaV2 &data_column_schema,
+  bool &has_func_idx_col_deps) const
+{
+  int ret = OB_SUCCESS;
+  has_func_idx_col_deps = false;
+  const uint64_t tenant_id = get_tenant_id();
+
+  if (data_column_schema.has_generated_column_deps()) {
+    for (ObTableSchema::const_column_iterator iter = column_begin();
+        OB_SUCC(ret) && iter != column_end(); iter++) {
+      const ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret), KPC(this));
+      } else if (column->is_multivalue_generated_column()) {
+        if (column->has_cascaded_column_id(data_column_schema.get_column_id())) {
+          has_func_idx_col_deps = true;
+          break;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObTableSchema::check_functional_index_columns_depend(
   const ObColumnSchemaV2 &data_column_schema,
   ObSchemaGetterGuard &schema_guard,

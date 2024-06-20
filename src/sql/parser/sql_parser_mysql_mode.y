@@ -2649,23 +2649,40 @@ MOD '(' expr ',' expr ')'
     ParseNode *path = NULL;
     ParseNode *data = NULL;
 
-    if (OB_NOT_NULL($3) && $3->num_child_ == 2 && $3->type_ == T_FUN_SYS) {
-      ParseNode* expr_param = $3->children_[1];
-      ParseNode* expr_name = $3->children_[0];
-      if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
-           && expr_param->num_child_ == 2) {
-        path = expr_param->children_[1];
-        data = expr_param->children_[0];
-      } else if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0)
-                  && expr_param->num_child_ == 1
-                  && OB_NOT_NULL(expr_param->children_[0])
-                  && expr_param->children_[0]->num_child_ == 2) {
-        expr_name = expr_param->children_[0]->children_[0];
-        expr_param = expr_param->children_[0]->children_[1];
+    if (OB_NOT_NULL($3)) {
+      if ($3->type_ == T_COLUMN_REF) {
+        data = $3;
+
+        malloc_terminal_node(path, result->malloc_pool_, T_VARCHAR);
+        path->str_value_ = "";
+        path->str_len_ = 0;
+        path->is_hidden_const_ = 1;
+      } else if ($3->type_ == T_FUN_SYS_JSON_VALUE) {
+        path = $3->children_[1];
+        data = $3->children_[0];
+      } else if ($3->num_child_ == 2) {
+        ParseNode* expr_param = $3->children_[1];
+        ParseNode* expr_name = $3->children_[0];
         if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
-           && expr_param->num_child_ == 2) {
+            && expr_param->num_child_ == 2) {
           path = expr_param->children_[1];
           data = expr_param->children_[0];
+        } else if ((OB_NOT_NULL(expr_name->str_value_)
+                   && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0)
+                   && OB_NOT_NULL(expr_param->children_[0])) {
+          ParseNode* param = expr_param->children_[0];
+          if (param->type_ == T_FUN_SYS_JSON_VALUE) {
+            path = param->children_[1];
+            data = param->children_[0];
+          } else if (expr_param->children_[0]->num_child_ >= 2) {
+            expr_name = expr_param->children_[0]->children_[0];
+            expr_param = expr_param->children_[0]->children_[1];
+            if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
+              && expr_param->num_child_ == 2) {
+              path = expr_param->children_[1];
+              data = expr_param->children_[0];
+            }
+          }
         }
       }
     }

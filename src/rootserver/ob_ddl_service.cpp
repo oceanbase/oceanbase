@@ -17467,6 +17467,7 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_inde
       create_index_arg.index_type_ = index_schema.get_index_type();
       if (INDEX_TYPE_NORMAL_LOCAL == create_index_arg.index_type_
           || INDEX_TYPE_UNIQUE_LOCAL == create_index_arg.index_type_
+          || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == create_index_arg.index_type_
           || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == create_index_arg.index_type_) {
         if (OB_FAIL(sql::ObResolverUtils::check_unique_index_cover_partition_column(
                     new_table_schema, create_index_arg))) {

@@ -202,16 +202,21 @@ extern ObRawExpr *USELESS_POINTER;
    || ((op) == T_FUN_SYS_JSON_CONTAINS_PATH) \
    || ((op) == T_FUN_SYS_JSON_QUOTE) \
    || ((op) == T_FUN_SYS_JSON_UNQUOTE) \
+   || ((op) == T_FUN_SYS_JSON_QUERY) \
    || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
    || ((op) == T_FUN_SYS_JSON_MEMBER_OF) \
    || ((op) == T_FUN_SYS_JSON_VALUE))
 
 // JSON_CONTAINS & JSON_OVERLAPS not support yet
 #define IS_JSON_DOMAIN_OP(op) \
-  (((op) == T_FUN_SYS_JSON_MEMBER_OF) /*\
-    || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
-    || ((op) == T_FUN_SYS_JSON_CONTAINS)*/) \
+  ((op) == T_FUN_SYS_JSON_MEMBER_OF \
+  || (op) == T_FUN_SYS_JSON_OVERLAPS \
+  || (op) == T_FUN_SYS_JSON_CONTAINS)
 
+#define IS_MULTIVALUE_EXPR(op) \
+  (((op) == T_FUN_SYS_JSON_MEMBER_OF) \
+   || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
+   || ((op) == T_FUN_SYS_JSON_CONTAINS))
 
 // ObSqlBitSet is a simple bitset, in order to avoid memory exposure
 // ObBitSet is too large just for a simple bitset
@@ -1966,6 +1971,7 @@ public:
   bool is_spatial_expr() const;
   bool is_oracle_spatial_expr() const;
   bool is_json_domain_expr() const;
+  bool is_multivalue_expr() const;
   ObRawExpr* get_json_domain_param_expr();
   bool is_geo_expr() const;
   bool is_domain_expr() const;
@@ -1985,7 +1991,10 @@ public:
     may_add_interval_part_ = flag;
   }
   bool is_wrappered_json_extract() const {
-   return (type_ == T_FUN_SYS_JSON_UNQUOTE && OB_NOT_NULL(get_param_expr(0)) && get_param_expr(0)->type_ == T_FUN_SYS_JSON_EXTRACT);
+   return (type_ == T_FUN_SYS_JSON_UNQUOTE &&
+           OB_NOT_NULL(get_param_expr(0)) &&
+           (get_param_expr(0)->type_ == T_FUN_SYS_JSON_EXTRACT ||
+            get_param_expr(0)->type_ == T_FUN_SYS_JSON_VALUE));
   }
   bool extract_multivalue_json_expr(const ObRawExpr*& json_expr) const;
   bool is_multivalue_define_json_expr() const;

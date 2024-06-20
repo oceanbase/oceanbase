@@ -1866,6 +1866,7 @@ int ObMulValueIndexBuilderUtil::is_multivalue_index_type(
       if (std::regex_match(buf, pattern)) {
         is_multi_value_index = true;
       } else {
+        is_multi_value_index = false;
         std::regex pattern1(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*MULTIVALUE\s*\))", std::regex_constants::icase);
         if (std::regex_match(buf, pattern1)) {
           is_multi_value_index = true;
@@ -2052,6 +2053,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
       ObRawExpr *expr = nullptr;
       ObColumnSchemaV2 *gen_col = nullptr;
       budy_mulvalue_col = nullptr;
+      bool force_rebuild = false;
 
       if (OB_FAIL(session.init(0 /*default session id*/,
                                 0 /*default proxy id*/,
@@ -2076,6 +2078,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
                                                               session,
                                                               data_schema,
                                                               &schema_checker,
+                                                              force_rebuild,
                                                               gen_col,
                                                               budy_mulvalue_col))) {
         LOG_WARN("session load default configs failed", K(ret));
@@ -2109,6 +2112,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
     const ObSQLSessionInfo &session_info,
     ObTableSchema &table_schema,
     sql::ObSchemaChecker *schema_checker,
+    bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&budy_col)
 {
@@ -2131,7 +2135,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
     LOG_WARN("multivalue generated expr should be function, not column ref.", K(ret));
   } else {
     //real index expr, so generate hidden generated column in data table schema
-    if (OB_FAIL(generate_multivalue_column(*expr, table_schema, schema_checker->get_schema_guard(), gen_col, budy_col))) {
+    if (OB_FAIL(generate_multivalue_column(*expr, table_schema, schema_checker->get_schema_guard(), force_rebuild, gen_col, budy_col))) {
       LOG_WARN("generate ordinary generated column failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::check_generated_column_expr_str(
         gen_col->get_cur_default_value().get_string(), session_info, table_schema))) {
@@ -2149,6 +2153,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
     sql::ObRawExpr &expr,
     ObTableSchema &data_schema,
     ObSchemaGetterGuard *schema_guard,
+    bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&gen_budy_col)
 {
@@ -2168,7 +2173,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
       size_t expr_str_len = strlen(expr_def_buf);
       expr_def.assign_ptr(expr_def_buf, expr_str_len);
 
-      if (OB_FAIL(data_schema.get_generated_column_by_define(expr_def,
+      if (!force_rebuild && OB_FAIL(data_schema.get_generated_column_by_define(expr_def,
                                                              true/*only hidden column*/,
                                                              old_gen_col))) {
         LOG_WARN("get generated column by define failed", K(ret), K(expr_def));
@@ -2391,6 +2396,9 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
     common::ObOrderType order_type;
     const ObColumnSchemaV2 *mvi_array_column = nullptr;
     int32_t multi_column_cnt = 0;
+    // 2 means : multivalue column, multivalue array column
+    bool is_complex_index = arg.index_columns_.count() > 2;
+    bool is_real_unique = index_schema.is_unique_index() && !is_complex_index;
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.index_columns_.count(); ++i) {
       const ObColumnSchemaV2 *mvi_column = nullptr;
       const ObColumnSortItem &mvi_col_item = arg.index_columns_.at(i);
@@ -2431,13 +2439,13 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
     } else if (OB_ISNULL(mvi_array_column)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get multivalue array column", K(ret));
-    } else if (index_schema.is_unique_index()) {
+    } else if (is_real_unique) {
       // json-array column is not index coumn, not rowkey column
       index_schema.set_rowkey_column_num(row_desc.get_column_num());
       index_schema.set_index_column_num(row_desc.get_column_num());
     }
 
-    bool is_rowkey = !index_schema.is_unique_index();
+    bool is_rowkey = !is_real_unique;
     bool is_index_column = is_rowkey;
 
     const ObColumnSchemaV2 *rowkey_column = nullptr;
@@ -2489,7 +2497,7 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
       LOG_WARN("add column failed", "mvi_array_column", *mvi_array_column, K(row_desc), K(ret));
     }
 
-    if (OB_SUCC(ret) && !index_schema.is_unique_index()) {
+    if (OB_SUCC(ret) && !is_real_unique) {
       // json-array column is not index coumn, not rowkey column
       index_schema.set_rowkey_column_num(row_desc.get_column_num() - 1);
       index_schema.set_index_column_num(row_desc.get_column_num() - 1);

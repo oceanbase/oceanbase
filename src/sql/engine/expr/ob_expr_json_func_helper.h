@@ -277,6 +277,10 @@ public:
   static int get_json_val(const common::ObObj &data, ObExecContext *ctx,
                           bool is_bool, common::ObIAllocator *allocator,
                           ObIJsonBase*& j_base, bool to_bin= false);
+  static int refine_range_json_value_const(
+                          const common::ObObj &data, ObExecContext *ctx,
+                          bool is_bool, common::ObIAllocator *allocator,
+                          ObIJsonBase*& j_base, bool to_bin = false);
   static int get_json_val(const common::ObDatum &data,
                           ObExecContext &ctx,
                           ObExpr* expr,
@@ -313,6 +317,15 @@ public:
   static int is_json_zero(const ObString& data, int& result);
 
   static int is_json_true(const ObString& data, int& result);
+
+  static int get_sql_scalar_type(ObEvalCtx& ctx,
+                                 int64_t origin,
+                                 ObObjType& scalar_type,
+                                 int32_t& scalar_len,
+                                 int32_t& precision,
+                                 int32_t& scale,
+                                 ObAccuracy& accuracy,
+                                 ObLengthSemantics& length_semantics);
   
   /*
   try to transfrom scalar data to jsonBase

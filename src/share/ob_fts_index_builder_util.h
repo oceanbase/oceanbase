@@ -206,12 +206,14 @@ public:
    const sql::ObSQLSessionInfo &session_info,
    ObTableSchema &table_schema,
    sql::ObSchemaChecker *schema_checker,
+   bool force_rebuild,
    ObColumnSchemaV2 *&gen_col,
    ObColumnSchemaV2 *&budy_col);
  static int generate_multivalue_column(
     sql::ObRawExpr &expr,
     ObTableSchema &data_schema,
     ObSchemaGetterGuard *schema_guard,
+    bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&gen_budy_col);
  static int inner_adjust_multivalue_arg(

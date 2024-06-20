@@ -1172,12 +1172,29 @@ int cast_to_time(common::ObIAllocator *allocator,
     LOG_WARN("json base is null", K(ret));
   } else if (CAST_FAIL(j_base->to_time(val))) {
     if (ret == OB_ERR_UNEXPECTED
-        && j_base->json_type() == ObJsonNodeType::J_INT
-        && cast_param.is_json_table_) {
-      ret = OB_SUCCESS;
-      int64_t in_val = j_base->get_int();
-      if (OB_FAIL(ObTimeConverter::int_to_time(in_val, val))) {
-        LOG_WARN("int_to_time failed", K(ret), K(in_val), K(val));
+        && cast_param.relaxed_time_convert_) {
+      if (j_base->json_type() == ObJsonNodeType::J_INT) {
+        ret = OB_SUCCESS;
+        int64_t in_val = j_base->get_int();
+        if (OB_FAIL(ObTimeConverter::int_to_time(in_val, val))) {
+          LOG_WARN("int_to_time failed", K(ret), K(in_val), K(val));
+        }
+      } else if (j_base->json_type() == ObJsonNodeType::J_DOUBLE) {
+        // double to time, refer to: datum_cast common_double_time
+        ret = OB_SUCCESS;
+        double in_val = j_base->get_double();
+        char buf[MAX_DOUBLE_PRINT_SIZE];
+        MEMSET(buf, 0, MAX_DOUBLE_PRINT_SIZE);
+        int64_t length = ob_gcvt(in_val, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL);
+        ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
+        ObScale res_scale;
+        if (CAST_FAIL(ObTimeConverter::str_to_time(str, val, &res_scale))) {
+          LOG_WARN("str_to_time failed", K(ret));
+        }
+      } else {
+        LOG_WARN("wrapper to time failed.", K(ret), K(*j_base));
+        ret = OB_OPERATE_OVERFLOW;
+        LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "TIME", "json_value");
       }
     } else {
       LOG_WARN("wrapper to time failed.", K(ret), K(*j_base));
@@ -1224,7 +1241,7 @@ int cast_to_year(common::ObIAllocator *allocator,
     LOG_WARN("json base is null", K(ret));
   } else if (CAST_FAIL(j_base->to_int(int_val))) {
     LOG_WARN("wrapper to year failed.", K(ret), K(*j_base));
-  } else if ((lib::is_oracle_mode() || !cast_param.is_json_table_)
+  } else if ((lib::is_oracle_mode() || !cast_param.relaxed_time_convert_)
               && (0 != int_val && (int_val < min_year || int_val > max_year))) {
     // different with cast, if 0 < int val < 100, do not add base year
     LOG_DEBUG("int out of year range", K(int_val));
@@ -1497,6 +1514,7 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
                                             ObCollationType collation,
                                             ObAccuracy &accuracy,
                                             ObObjType obj_type,
+                                            ObScale scale,
                                             ObObj &res_obj)
 {
   INIT_SUCC(ret);
@@ -1504,20 +1522,36 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr is null.", K(ret));
   } else {
-
+    bool is_use_dynamic_buffer = (ob_is_number_or_decimal_int_tc(obj_type));
     ObDatum res_datum;
     char datum_buffer[OBJ_DATUM_STRING_RES_SIZE] = {0};
     res_datum.ptr_ = datum_buffer;
+
+    if (is_use_dynamic_buffer) {
+      void* buffer = allocator->alloc(OBJ_DATUM_STRING_RES_SIZE);
+      if (OB_ISNULL(buffer)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate tmp buffer failed.", K(ret));
+      } else {
+        res_datum.ptr_ = static_cast<char*>(buffer);
+      }
+    }
+
     ObJsonCastParam cast_param(obj_type, ObCollationType::CS_TYPE_UTF8MB4_BIN, collation, false);
+    cast_param.relaxed_time_convert_ = true;
     uint8_t is_type_mismatch = false;
-    if (OB_FAIL(cast_to_res(allocator, ctx, j_base, accuracy, cast_param, res_datum, is_type_mismatch))) {
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(cast_to_res(allocator, ctx, j_base, accuracy, cast_param, res_datum, is_type_mismatch))) {
       LOG_WARN("fail to cast.", K(ret));
     } else {
       res_obj.set_type(obj_type);
       res_obj.set_collation_type(collation);
+      res_obj.set_scale(scale);
 
-      res_datum.to_obj(res_obj, res_obj.meta_);
-      res_obj.set_collation_type(collation);
+      if (OB_FAIL(res_datum.to_obj(res_obj, res_obj.meta_))) {
+        LOG_WARN("fail datum to obj.", K(ret));
+      }
     }
   }
   return ret;
@@ -1540,6 +1574,7 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
                                       col_res_type.get_collation_type(),
                                       temp_accuracy,
                                       col_res_type.get_type(),
+                                      col_res_type.get_scale(),
                                       res_obj);
   }
   return ret;
@@ -1760,7 +1795,9 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 0, true, param_ctx->is_json_path_const_))) {
+    if (j_path_text.empty()) {
+        param_ctx->json_param_.json_path_ = nullptr;
+    } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 0, true, param_ctx->is_json_path_const_))) {
       is_cover_by_error = false;
       if (lib::is_oracle_mode()) {
         ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;

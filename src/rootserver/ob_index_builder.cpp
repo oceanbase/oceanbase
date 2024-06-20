@@ -907,6 +907,7 @@ int ObIndexBuilder::generate_schema(
       if (OB_SUCC(ret)
           && (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
               || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
+              || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == arg.index_type_
               || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == arg.index_type_)) {
         if (OB_FAIL(sql::ObResolverUtils::check_unique_index_cover_partition_column(
                 data_schema, arg))) {

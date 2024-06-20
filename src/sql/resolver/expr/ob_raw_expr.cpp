@@ -635,6 +635,12 @@ bool ObRawExpr::is_json_domain_expr() const
   return IS_JSON_DOMAIN_OP(expr->get_expr_type());
 }
 
+bool ObRawExpr::is_multivalue_expr() const
+{
+  const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
+  return IS_MULTIVALUE_EXPR(expr->get_expr_type());
+}
+
 ObRawExpr* ObRawExpr::get_json_domain_param_expr()
 {
   ObRawExpr* param_expr = nullptr;
@@ -4148,9 +4154,19 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
       }
     }
     if (OB_ISNULL(r_param_expr)) {
+    } else if (r_param_expr->get_expr_type() == T_REF_COLUMN) {
+      r_column_expr = r_param_expr;
+      r_param_expr = nullptr;
+      if (l_param_expr->is_const_expr()) {
+        ObString path_str = (static_cast<const ObConstRawExpr*>(l_param_expr))->get_value().get_string();
+        bool_ret = path_str.empty();
+      }
     } else if (r_param_expr->is_wrappered_json_extract()) {
       r_column_expr = r_param_expr->get_param_expr(0)->get_param_expr(0);
       r_param_expr = r_param_expr->get_param_expr(0)->get_param_expr(1);
+    } else if (r_param_expr->get_expr_type() == T_FUN_SYS_JSON_VALUE) {
+      r_column_expr = r_param_expr->get_param_expr(0);
+      r_param_expr = r_param_expr->get_param_expr(1);
     } else if (r_param_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
       r_column_expr = r_param_expr->get_param_expr(0);
       r_param_expr = r_param_expr->get_param_expr(1);
@@ -4165,14 +4181,6 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
     }
   } else if (l_expr->get_expr_type() == r_expr->get_expr_type()) {
     bool_ret = l_expr->same_as(*r_expr, check_context);
-  } else if (l_expr->is_wrappered_json_extract()
-              && r_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
-    l_expr = l_expr->get_param_expr(0);
-    bool_ret = l_expr->same_as(*r_expr, check_context);
-  } else if (r_expr->is_wrappered_json_extract()
-              && l_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
-    r_expr = r_expr->get_param_expr(0);
-    bool_ret = l_expr->same_as(*r_expr, check_context);
   }
 
   return bool_ret;
@@ -4184,7 +4192,11 @@ bool ObSysFunRawExpr::inner_same_as(
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
-    if (IS_QUERY_JSON_EXPR(expr.get_expr_type()) || IS_QUERY_JSON_EXPR(get_expr_type())) {
+    if (expr.get_expr_type() ==  T_OP_BOOL && expr.is_domain_json_expr() &&
+        IS_QUERY_JSON_EXPR(get_expr_type())) {
+      const ObRawExpr* right_expr = ObRawExprUtils::skip_inner_added_expr(&expr);
+      bool_ret = inner_json_expr_same_as(*right_expr, check_context);
+    } else if (IS_QUERY_JSON_EXPR(expr.get_expr_type()) || IS_QUERY_JSON_EXPR(get_expr_type())) {
       bool_ret = inner_json_expr_same_as(expr, check_context);
     } else if (check_context != NULL && check_context->ora_numeric_compare_ && expr.is_const_raw_expr()
         && T_FUN_SYS_CAST == get_expr_type() && lib::is_oracle_mode()) {

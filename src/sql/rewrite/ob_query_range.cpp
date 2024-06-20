@@ -4095,7 +4095,8 @@ int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKey
     ObObj cast_obj = const_param;
     if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, out_key_part->pos_, cast_obj, cmp))) {
       LOG_WARN("failed to try cast value type", K(ret));
-    } else if (cmp != 0) {
+    }
+    if (OB_FAIL(ret) || cmp != 0) {
       if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
         LOG_WARN("failed set normal key", K(ret));
       } else if (OB_NOT_NULL(query_range_ctx_)) {
@@ -4149,13 +4150,17 @@ int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&ou
         LOG_WARN("get json array element result is null.", K(i), K(ret));
       } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base,
                                                                   col_res_type, val))) {
-        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
         always_true = true;
       } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, query_range_ctx_->cur_datetime_,
                                                    allocator_, *key_pos, val, cmp))) {
         LOG_WARN("failed to try cast value type", K(ret));
       } else if (cmp != 0) {
-        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
         always_true = true;
       } else {
         val.set_collation_type(col_res_type.get_collation_type());
@@ -4167,7 +4172,9 @@ int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&ou
     if (OB_SUCC(ret) && !always_true) {
       if (OB_UNLIKELY(new_param_meta->vals_.empty())) {
         // all always false
-        GET_ALWAYS_TRUE_OR_FALSE(false, out_key_part);
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, false))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
       } else if (OB_FAIL(out_key_part->in_keypart_->in_params_.push_back(new_param_meta))) {
         LOG_WARN("failed to push back param meta", K(ret));
       } else if (OB_FAIL(out_key_part->formalize_keypart(contain_row_))) {
@@ -4191,6 +4198,7 @@ int ObQueryRange::get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPar
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get wrong json_type", K(ret));
   } else {
+    int64_t cur_datetime = exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime();
     for (int i = 0; i < j_base->element_count(); ++i) {
       ObKeyPart *tmp_key_part = nullptr;
       ObIJsonBase* tmp_j_base = nullptr;
@@ -4206,13 +4214,18 @@ int ObQueryRange::get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPar
         ObObj val;
         tmp_key_part->id_ = out_key_part->id_;
         tmp_key_part->pos_ = out_key_part->pos_;
-        if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base,
-                                                            tmp_key_part->pos_.column_type_, val))) {
-          if (OB_NOT_NULL(query_range_ctx_)) {
-            query_range_ctx_->cur_expr_is_precise_ = false;
+        ObExprResType& column_type = tmp_key_part->pos_.column_type_;
+        if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base, column_type, val))) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+            LOG_WARN("failed set normal key", K(ret));
+          } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params, cur_datetime))) {
+            LOG_WARN("fail to get member of keyparts", K(ret));
+          } else if (OB_FAIL(key_parts.push_back(tmp_key_part))) {
+            LOG_WARN("fail to push keypart", K(ret));
           }
-        } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params,
-                                                  exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime()))) {
+          break;
+        } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params, cur_datetime))) {
           LOG_WARN("fail to get member of keyparts", K(ret));
         } else if (OB_FAIL(key_parts.push_back(tmp_key_part))) {
           LOG_WARN("fail to push keypart", K(ret));
@@ -4234,15 +4247,27 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
   if (OB_ISNULL(out_key_part) || OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(ret));
-  } else if (OB_FAIL(ObJsonExprHelper::get_json_val(const_param, exec_ctx,  false, &allocator_, j_base))) {
-    LOG_WARN("fail to get json val", K(ret));
+  } else if (const_param.is_unknown()) {
+    if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+      LOG_WARN("failed set normal key", K(ret));
+    }
+  } else if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(const_param, exec_ctx, false, &allocator_, j_base))) {
+    LOG_WARN("fail to get json val", K(ret), K(const_param));
   } else if (OB_ISNULL(j_base)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("fail to get json base", K(ret));
   } else if (j_base->is_json_scalar(j_base->json_type())) {
-    // if is scalar, equal to member of
-    if (OB_FAIL(get_member_of_keyparts(const_param, out_key_part, dtc_params,
-                                       exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime()))) {
+    int64_t cur_datetime = exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime();
+    ObObj cast_obj = const_param;
+    if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx,
+        j_base, out_key_part->pos_.column_type_, cast_obj))) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+        LOG_WARN("failed set normal key", K(ret));
+      } else if (OB_NOT_NULL(query_range_ctx_)) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+      }
+    } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, dtc_params, cur_datetime))) {
       LOG_WARN("fail to get member of keyparts", K(ret));
     }
   } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
@@ -4263,7 +4288,11 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
     }
   } else {
     // must be object, can't extract query range
-    GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+      LOG_WARN("failed set normal key", K(ret));
+    } else if (OB_NOT_NULL(query_range_ctx_)) {
+      query_range_ctx_->cur_expr_is_precise_ = false;
+    }
   }
   return ret;
 }
@@ -4276,14 +4305,34 @@ int ObQueryRange::get_simple_domain_keyparts(const common::ObObj &const_param, c
   int ret = OB_SUCCESS;
   switch(op_type) {
     case ObDomainOpType::T_JSON_MEMBER_OF: {
-      if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_physical_plan_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(exec_ctx));
-      } else if (OB_FAIL(get_member_of_keyparts(const_param, out_key_part, dtc_params,
-                                         exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime()))) {
-        LOG_WARN("fail to get member of keyparts.", K(op_type), K(ret));
-      } else if (OB_NOT_NULL(query_range_ctx_) && !(out_key_part->is_always_false() || out_key_part->is_always_true())) {
-        query_range_ctx_->cur_expr_is_precise_ = true;
+      ObIJsonBase* j_base = nullptr;
+      ObObj cast_obj = const_param;
+      ObExprResType& col_type = out_key_part->pos_.column_type_;
+      if (const_param.is_unknown()) {
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
+      } else {
+        if (ob_is_json(const_param.get_type()) ||
+            ob_is_datetime_tc(col_type.get_type()) ||
+            ob_is_date_tc(col_type.get_type()) ||
+            ob_is_time_tc(col_type.get_type())) {
+          if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(const_param, exec_ctx, false, &allocator_, j_base))) {
+            LOG_WARN("failed cast to json scalar.", K(ret), K(const_param));
+          } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx,
+              j_base, out_key_part->pos_.column_type_, cast_obj))) {
+            LOG_WARN("failed cast to sql scalar.", K(ret), K(const_param));
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+          if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+            LOG_WARN("failed set normal key", K(ret));
+          }
+        } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, dtc_params,
+          exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime()))) {
+          LOG_WARN("fail to get member of keyparts.", K(op_type), K(ret));
+        }
       }
       break;
     }
