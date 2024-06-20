@@ -1581,8 +1581,7 @@ int ObTransformJoinElimination::check_all_column_primary_key(const ObDMLStmt *st
           LOG_WARN("unexpected null", K(ret));
         } else {
           // Only replace exprs with bin sort foreign keys
-          all_primary_key = !ob_is_string_type(res_type->get_type()) ||
-                            ObCharset::is_bin_sort(res_type->get_collation_type());
+          all_primary_key = !ob_is_string_type(res_type->get_type());
         }
       }
     }
