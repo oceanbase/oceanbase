@@ -185,7 +185,7 @@ OB_INLINE int ObMultipleMerge::update_and_report_tablet_stat()
   int ret = OB_SUCCESS;
   EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
   if (NULL != access_ctx_->table_scan_stat_) {
-    access_ctx_->table_scan_stat_->access_row_cnt_ += row_stat_.filt_del_count_;
+    access_ctx_->table_scan_stat_->access_row_cnt_ += access_ctx_->table_store_stat_.logical_read_cnt_;
     access_ctx_->table_scan_stat_->rowkey_prefix_ = access_ctx_->table_store_stat_.rowkey_prefix_;
     access_ctx_->table_scan_stat_->bf_filter_cnt_ += access_ctx_->table_store_stat_.bf_filter_cnt_;
     access_ctx_->table_scan_stat_->bf_access_cnt_ += access_ctx_->table_store_stat_.bf_access_cnt_;
