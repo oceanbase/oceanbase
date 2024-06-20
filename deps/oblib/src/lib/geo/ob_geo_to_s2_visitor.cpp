@@ -63,6 +63,7 @@ int ObWkbToS2Visitor::MakeS2Point(T_IBIN *geo, S2Cell *&res)
       LOG_WARN("failed to alloc s2cell", K(ret));
     } else {
       res = p;
+      bounder_.AddPoint(S2Point(latlng));
     }
   }
   return ret;
@@ -129,6 +130,7 @@ int ObWkbToS2Visitor::MakeProjS2Point(T_IBIN *geo, S2Cell *&res)
         LOG_WARN("failed to alloc s2cell", K(ret));
       } else {
         res = p;
+        bounder_.AddPoint(point);
       }
     }
   }
@@ -365,8 +367,6 @@ int ObWkbToS2Visitor::visit(ObIWkbGeogPoint *geo)
     LOG_WARN("failed to make s2 point", K(ret));
   } else if (OB_FAIL(vector_emplace_back<S2Cell>(s2v_, res))) {
     LOG_WARN("failed to add s2 cell", K(ret));
-  } else if (OB_FAIL(get_s2_cell_union())) {
-    LOG_WARN("failed to get s2 union", K(ret));
   }
   return ret;
 }
@@ -380,8 +380,6 @@ int ObWkbToS2Visitor::visit(ObIWkbGeomPoint *geo)
       LOG_WARN("failed to make s2 point", K(ret));
     } else if (OB_FAIL(vector_emplace_back<S2Cell>(s2v_, cell))) {
       LOG_WARN("failed to add s2 cell", K(ret));
-    } else if (OB_FAIL(get_s2_cell_union())) {
-      LOG_WARN("failed to get s2 union", K(ret));
     }
   }
   return ret;
@@ -400,9 +398,6 @@ int ObWkbToS2Visitor::visit(ObIWkbGeogLineString *geo)
     LOG_WARN("failed to add s2 cell", K(ret));
   } else {
     mbr_ = mbr_.is_empty() ? polyline->GetRectBound() : mbr_.Union(polyline->GetRectBound());
-    if (OB_FAIL(get_s2_cell_union())) {
-      LOG_WARN("failed to get s2 union", K(ret));
-    }
   }
   return ret;
 }
@@ -416,8 +411,6 @@ int ObWkbToS2Visitor::visit(ObIWkbGeomLineString *geo)
       LOG_WARN("failed to make s2 poly line", K(ret));
     } else if (OB_FAIL(vector_emplace_back<S2Polyline>(s2v_, line))) {
       LOG_WARN("failed to add s2 cell", K(ret));
-    } else if (OB_FAIL(get_s2_cell_union())) {
-      LOG_WARN("failed to get s2 union", K(ret));
     }
   }
   return ret;
@@ -437,9 +430,6 @@ int ObWkbToS2Visitor::visit(ObIWkbGeogPolygon *geo)
     LOG_WARN("failed to add s2 polygon", K(ret));
   } else {
     mbr_ = mbr_.is_empty() ? polygon->GetRectBound() : mbr_.Union(polygon->GetRectBound());
-    if (OB_FAIL(get_s2_cell_union())) {
-      LOG_WARN("failed to get s2 union", K(ret));
-    }
   }
 
   return ret;
@@ -458,8 +448,6 @@ int ObWkbToS2Visitor::visit(ObIWkbGeomPolygon *geo)
       LOG_WARN("failed to make s2 poly", K(ret), K(geo->length()));
     } else if (OB_FAIL(vector_emplace_back<S2Polygon>(s2v_, poly))) {
       LOG_WARN("failed to add s2 polygon", K(ret));
-    } else if (OB_FAIL(get_s2_cell_union())) {
-      LOG_WARN("failed to get s2 union", K(ret));
     }
   }
   return ret;
