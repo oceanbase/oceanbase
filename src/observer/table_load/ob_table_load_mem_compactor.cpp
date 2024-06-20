@@ -161,8 +161,8 @@ private:
 class ObTableLoadMemCompactor::FinishTaskCallback : public ObITableLoadTaskCallback
 {
 public:
-  FinishTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadMemCompactor *compactor)
-    : ctx_(ctx), compactor_(compactor)
+  FinishTaskCallback(ObTableLoadTableCtx *ctx)
+    : ctx_(ctx)
   {
     ctx_->inc_ref_count();
   }
@@ -174,7 +174,6 @@ public:
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(ret_code)) {
-      compactor_->set_has_error();
       ctx_->store_ctx_->set_status_error(ret);
     }
     ctx_->free_task(task);
@@ -182,7 +181,6 @@ public:
   }
 private:
   ObTableLoadTableCtx *const ctx_;
-  ObTableLoadMemCompactor *const compactor_;
 };
 
 class ObTableLoadMemCompactor::MemDumpTaskProcessor : public ObITableLoadTaskProcessor
@@ -467,7 +465,7 @@ int ObTableLoadMemCompactor::start_finish()
     LOG_WARN("fail to set compactor task processor", KR(ret));
   }
   // 3. 设置callback
-  else if (OB_FAIL(task->set_callback<FinishTaskCallback>(ctx, this))) {
+  else if (OB_FAIL(task->set_callback<FinishTaskCallback>(ctx))) {
     LOG_WARN("fail to set compactor task callback", KR(ret));
   }
   // 4. 把task放入调度器
