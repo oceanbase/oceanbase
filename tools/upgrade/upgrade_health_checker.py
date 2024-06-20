@@ -16,7 +16,7 @@ class UpgradeParams:
 class PasswordMaskingFormatter(logging.Formatter):
   def format(self, record):
     s = super(PasswordMaskingFormatter, self).format(record)
-    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+    return re.sub(r'password="(?:[^"\\]|\\.)*"', 'password="******"', s)
 
 #### --------------start : my_error.py --------------
 class MyError(Exception):
@@ -263,11 +263,8 @@ def get_opt_zone():
 
 #### --------------start :  do_upgrade_pre.py--------------
 def config_logging_module(log_filenamme):
-  logging.basicConfig(level=logging.INFO,\
-      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
-      datefmt='%Y-%m-%d %H:%M:%S',\
-      filename=log_filenamme,\
-      filemode='w')
+  logger = logging.getLogger('')
+  logger.setLevel(logging.INFO)
   # 定义日志打印格式
   formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
   #######################################
