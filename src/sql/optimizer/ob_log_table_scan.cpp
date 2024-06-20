@@ -2635,6 +2635,7 @@ int ObLogTableScan::generate_filter_monotonicity()
         Monotonicity right_mono = Monotonicity::NONE_MONO;
         bool left_dummy_bool = true;
         bool right_dummy_bool = true;
+        bool is_left_func_expr = true;
         ObPCConstParamInfo left_const_param_info;
         ObPCConstParamInfo right_const_param_info;
         ObRawFilterMonotonicity *filter_mono = NULL;
@@ -2670,6 +2671,7 @@ int ObLogTableScan::generate_filter_monotonicity()
           } else if (Monotonicity::ASC == right_mono || Monotonicity::DESC == right_mono) {
             func_expr = filter_expr->get_param_expr(1);
             mono = right_mono;
+            is_left_func_expr = false;
           } else {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got unknow monotonicity type", K(ret), K(right_mono));
@@ -2692,29 +2694,41 @@ int ObLogTableScan::generate_filter_monotonicity()
             filter_mono->filter_expr_ = filter_expr;
             filter_mono->col_expr_ = static_cast<ObColumnRefRawExpr*>(col_exprs.at(0));
             if (T_OP_EQ != filter_expr->get_expr_type()) {
-              /* asc && f(x) > const --> mon_asc
-               * asc && f(x) < const --> mon_desc
-               * desc && f(x) > const --> mon_desc
-               * desc && f(x) < const --> mon_asc
+              /* asc  && f(x) > const  --> mon_asc
+               * asc  && const < f(x)  --> mon_asc
+               * asc  && f(x) < const  --> mon_desc
+               * asc  && const > f(x)  --> mon_desc
+               *
+               * desc && f(x) > const  --> mon_desc
+               * desc && const < f(x)  --> mon_desc
+               * desc && f(x) < const  --> mon_asc
+               * desc && const > f(x)  --> mon_asc
               */
               if (Monotonicity::ASC == mono) {
-                if (T_OP_GT == filter_expr->get_expr_type() ||
-                    T_OP_GE == filter_expr->get_expr_type()) {
+                if ((is_left_func_expr && (T_OP_GT == filter_expr->get_expr_type() ||
+                                           T_OP_GE == filter_expr->get_expr_type())) ||
+                    (!is_left_func_expr && (T_OP_LT == filter_expr->get_expr_type() ||
+                                            T_OP_LE == filter_expr->get_expr_type()))) {
                   filter_mono->mono_ = PushdownFilterMonotonicity::MON_ASC;
                 } else {
                   filter_mono->mono_ = PushdownFilterMonotonicity::MON_DESC;
                 }
               } else {
-                if (T_OP_GT == filter_expr->get_expr_type() ||
-                    T_OP_GE == filter_expr->get_expr_type()) {
+                if ((is_left_func_expr && (T_OP_GT == filter_expr->get_expr_type() ||
+                                           T_OP_GE == filter_expr->get_expr_type())) ||
+                    (!is_left_func_expr && (T_OP_LT == filter_expr->get_expr_type() ||
+                                            T_OP_LE == filter_expr->get_expr_type()))) {
                   filter_mono->mono_ = PushdownFilterMonotonicity::MON_DESC;
                 } else {
                   filter_mono->mono_ = PushdownFilterMonotonicity::MON_ASC;
                 }
               }
             } else {
-              /* asc && f(x) = const --> mon_eq_asc + f(x) > const + f(x) < const
+              /* asc  && f(x) = const --> mon_eq_asc  + f(x) > const + f(x) < const
                * desc && f(x) = const --> mon_eq_desc + f(x) > const + f(x) < const
+               *
+               * asc  && const = f(x) --> mon_eq_asc  + f(x) > const + f(x) < const
+               * desc && const = f(x) --> mon_eq_desc + f(x) > const + f(x) < const
               */
               ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
               ObIAllocator &allocator = get_plan()->get_allocator();
