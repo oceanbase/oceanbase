@@ -323,6 +323,11 @@ int ObResourcePlanManager::flush_directive_to_cgroup_fs(ObPlanDirectiveSet &dire
           if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_quota(
                   d.tenant_id_, tenant_cpu_quota, OB_INVALID_GROUP_ID, BACKGROUND_CGROUP))) {
             LOG_WARN("fail get cpu quota", K(d), K(ret));
+          } else if (-1 == tenant_cpu_quota &&
+                     OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_quota(
+                         OB_INVALID_TENANT_ID, tenant_cpu_quota, OB_INVALID_GROUP_ID, BACKGROUND_CGROUP))) {
+            // tenant cgoup quota is -1, and need get background cpu quota
+            LOG_WARN("fail get cpu quota", K(d), K(ret));
           } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(d.tenant_id_,
                          -1 == tenant_cpu_quota ? -1 : tenant_cpu_quota * d.utilization_limit_ / 100,
                          d.group_id_,

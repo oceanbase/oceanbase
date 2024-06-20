@@ -195,7 +195,7 @@ public:
   public:
     DirProcessor() = default;
     ~DirProcessor() = default;
-    virtual int handle_dir(const char *group_path) = 0;
+    virtual int handle_dir(const char *group_path, bool is_top_dir=false) = 0;
   };
 
 private:
