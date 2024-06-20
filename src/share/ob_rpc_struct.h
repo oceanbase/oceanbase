@@ -7769,6 +7769,8 @@ private:
   uint64_t tenant_id_;
   share::ObAllTenantInfo tenant_info_;
   int64_t ora_rowscn_;
+  uint64_t finish_data_version_;
+  share::SCN data_version_barrier_scn_;
 };
 
 struct ObUpdateTenantInfoCacheRes

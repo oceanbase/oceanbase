@@ -6958,7 +6958,8 @@ int ObRefreshTenantInfoRes::assign(const ObRefreshTenantInfoRes &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObUpdateTenantInfoCacheArg, tenant_id_, tenant_info_, ora_rowscn_);
+OB_SERIALIZE_MEMBER(ObUpdateTenantInfoCacheArg, tenant_id_, tenant_info_, ora_rowscn_,
+                    finish_data_version_, data_version_barrier_scn_);
 
 bool ObUpdateTenantInfoCacheArg::is_valid() const
 {
