@@ -1767,6 +1767,9 @@ int ListCommandOperator::do_rem(const ObString &key, int64_t count, const ObStri
   if (OB_FAIL(do_list_expire_if_needed(key, list_meta))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to do list expire if needed", K(ret), K(key));
+    } else {
+      have_redis_err_ = true;
+      fmt_redis_err_msg_ = ObString::make_string(ObRedisUtil::FMT_ZERO);
     }
   } else if (OB_FAIL(build_rem_querys(key, count, value, list_meta, query))) {
     LOG_WARN("fail to build range query", K(ret), K(key), K(count), K(value), K(list_meta));

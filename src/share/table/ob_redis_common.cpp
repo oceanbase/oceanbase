@@ -22,6 +22,8 @@ namespace oceanbase
 namespace table
 {
 const ObString ObRedisUtil::FMT_OK = "+OK\r\n";
+const ObString ObRedisUtil::FMT_SYNTAX_ERR = "-ERR syntax error\r\n";
+const ObString ObRedisUtil::FMT_FLOAT_ERR = "-ERR value is not a valid float\r\n";
 const char *ObRedisUtil::REDIS_CRLF = "\r\n";
 const char *ObRedisUtil::NULL_BULK_STRING = "$-1\r\n";
 const char *ObRedisUtil::FMT_MINUS_ONE = ":-1\r\n";

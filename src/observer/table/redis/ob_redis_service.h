@@ -156,6 +156,7 @@ class ObRedisService
 public:
   static int execute(ObRedisCtx &ctx);
 private:
+  static int cover_to_redis_err(ObRedisCtx &ctx, int ob_ret);
   static int start_trans(ObRedisCtx &redis_ctx, bool need_snapshot);
   static int end_trans(ObRedisCtx &redis_ctx, bool need_snapshot, bool is_rollback);
   DISALLOW_COPY_AND_ASSIGN(ObRedisService);

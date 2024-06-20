@@ -190,6 +190,28 @@ int ObRedisService::execute(ObRedisCtx &ctx)
       ret = COVER_SUCC(tmp_ret);
     }
   }
+  ret = cover_to_redis_err(ctx, ret);
+
+  return ret;
+}
+
+int ObRedisService::cover_to_redis_err(ObRedisCtx &ctx, int ob_ret)
+{
+  int ret = ob_ret;
+  switch (ret) {
+    case OB_ERR_INVALID_INPUT_ARGUMENT:
+    case OB_INVALID_ARGUMENT_NUM:
+    case OB_KV_REDIS_PARSE_ERROR:
+      ret = OB_SUCCESS;
+      ctx.response_.set_fmt_res(ObRedisUtil::FMT_SYNTAX_ERR);
+      break;
+    case OB_DATA_OUT_OF_RANGE:
+      ret = OB_SUCCESS;
+      ctx.response_.set_fmt_res(ObRedisUtil::FMT_FLOAT_ERR);
+      break;
+    default:
+      break;
+  }
 
   return ret;
 }

@@ -45,6 +45,8 @@ public:
   static const int CRLF_LEN = 2;    // "\r\n"
 
   static const ObString FMT_OK;
+  static const ObString FMT_SYNTAX_ERR;
+  static const ObString FMT_FLOAT_ERR;
   static const char *const FMT_EMPTY_ARRAY;
   static const char *const FMT_ZERO;
 public:
