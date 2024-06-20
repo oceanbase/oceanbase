@@ -443,11 +443,16 @@ int ObLogInstance::init_logger_()
       }
     }
 
+    #ifndef ENABLE_SANITY
+      const char *extra_flags = "";
+    #else
+      const char *extra_flags = "|Sanity";
+    #endif
     _LOG_INFO("====================libobcdc start====================");
     _LOG_INFO("libobcdc %s %s", PACKAGE_VERSION, RELEASEID);
     _LOG_INFO("BUILD_VERSION: %s", build_version());
     _LOG_INFO("BUILD_TIME: %s %s", build_date(), build_time());
-    _LOG_INFO("BUILD_FLAGS: %s", build_flags());
+    _LOG_INFO("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
     _LOG_INFO("Copyright (c) 2022 Ant Group Co., Ltd.");
     _LOG_INFO("======================================================");
     _LOG_INFO("\n");
@@ -460,10 +465,15 @@ int ObLogInstance::init_logger_()
 
 void ObLogInstance::print_version()
 {
+  #ifndef ENABLE_SANITY
+    const char *extra_flags = "";
+  #else
+    const char *extra_flags = "|Sanity";
+  #endif
   MPRINT("libobcdc %s %s", PACKAGE_VERSION, RELEASEID);
   MPRINT("REVISION: %s", build_version());
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
-  MPRINT("BUILD_FLAGS: %s\n", build_flags());
+  MPRINT("BUILD_FLAGS: %s%s\n", build_flags(), extra_flags);
   MPRINT("Copyright (c) 2022 Ant Group Co., Ltd.");
   MPRINT();
 }
