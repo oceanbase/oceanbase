@@ -353,15 +353,6 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
         LOG_WARN("fail to get tablet id by rowkey", K(ret), K(entity_->get_rowkey()));
       }
     }
-  } else if (!is_scan_) {
-    // check_if_tablet_exists will do in function 'init_scan' when op_type is scan
-    if (OB_FAIL(simple_table_schema_->check_if_tablet_exists(arg_tablet_id, is_tablet_exists))) {
-      LOG_WARN("fail to check if tablet exists");
-    } else if (!is_tablet_exists) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("tablet id not exist, need to refresh schema info",
-                K(ret), K(arg_tablet_id));
-    }
   }
 
   if (OB_FAIL(ret)) {
@@ -912,17 +903,6 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
           LOG_WARN("fail to get index column ids", K(ret), K(index_info));
         }
       }
-    }
-  }
-
-  if (OB_SUCC(ret) && !is_index_scan_) {
-    bool is_tablet_exists = true;
-    if (OB_FAIL(simple_table_schema_->check_if_tablet_exists(index_tablet_id_, is_tablet_exists))) {
-      LOG_WARN("fail to check if tablet exists");
-    } else if (!is_tablet_exists) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_WARN("tablet id not exist, need to refresh schema info",
-                K(ret), K(index_tablet_id_));
     }
   }
 
