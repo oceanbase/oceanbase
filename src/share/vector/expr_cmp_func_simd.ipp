@@ -243,11 +243,11 @@ template <VecValueTypeClass vec_tc, int val_size, ObCmpOp cmp_op>
 static int simd_eval_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                             const EvalBound &bound)
 {
-  using mask_type = typename __simd_cmp<vec_tc, val_size, cmp_op>::ret_type;
   constexpr const VecValueTypeClass calc_tc =
     (vec_tc == VEC_TC_FLOAT || vec_tc == VEC_TC_DOUBLE) ?
       vec_tc :
       (std::is_signed<RTCType<vec_tc>>::value ? VEC_TC_INTEGER : VEC_TC_UINTEGER);
+  using mask_type = typename __simd_cmp<calc_tc, val_size, cmp_op>::ret_type;
 #define DO_SIMD_CMP(off)                                                                           \
   do {                                                                                             \
     mask_type res_mask = __simd_cmp<calc_tc, val_size, cmp_op>()(left_data + offset + off * 64,    \
