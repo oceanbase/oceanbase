@@ -1037,7 +1037,7 @@ int ObHashGroupByVecOp::inner_get_next_batch(const int64_t max_row_cnt)
   // check all_row_active_
   if (OB_SUCC(ret) && brs_.size_ > 0) {
     bool is_all_false = brs_.skip_->is_all_false(brs_.size_);
-    if (is_all_false != brs_.all_rows_active_) {
+    if (brs_.all_rows_active_ && !is_all_false) {
       ob_abort();
     }
   }
