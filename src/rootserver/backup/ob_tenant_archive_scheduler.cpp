@@ -524,6 +524,9 @@ int ObArchiveHandler::check_can_do_archive(bool &can) const
     LOG_WARN("failed to get schema guard", K(ret), K_(tenant_id));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
     LOG_WARN("failed to get tenant info", K(ret), K_(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    can = false;
+    LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), K_(tenant_id));
   } else if (tenant_schema->is_normal()) {
     can = true;
   } else if (tenant_schema->is_creating()) {
