@@ -484,7 +484,7 @@ int ObLobEraseHandler::erase_process_meta_info(
   if (piece_write_begin != result.st_ || piece_write_end - piece_write_begin != result.len_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("offset invalid", K(ret), K(piece_write_begin), K(piece_write_begin), K(result));
-  } else if (result.st_ == result.info_.char_len_) {
+  } else if (result.len_ == result.info_.char_len_) {
     del_piece = true;
     LOG_DEBUG("just delete", K(piece_write_begin), K(piece_write_end), K(piece_char_len));
   } else if (meta_iter.is_range_begin(result.info_)) {
