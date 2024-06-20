@@ -9375,6 +9375,21 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                           exec_params, call_stmt, *routine_info, udts,
                                           session->get_timezone_info(), &tmp_result), call_stmt);
     OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params, result, tmp_result));
+    for (int64_t i = 0; i < exec_params.count(); i++) {
+      if (exec_params.at(i).is_pl_extend()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(exec_params.at(i)))) {
+          LOG_WARN("destruct obj failed", K(ret), K(exec_params.at(i)));
+        }
+      }
+    }
+    if (routine_info->is_function()
+        && ob_is_extend(routine_info->get_ret_type()->get_obj_type())) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(tmp_result))) {
+        LOG_WARN("destruct obj failed", K(ret), K(tmp_result));
+      }
+    }
     if (OB_SUCC(ret) && NULL != result && !result->is_null() && result->is_ext()) {
       CK (OB_NOT_NULL(exec_ctx.get_pl_ctx()));
       OZ (exec_ctx.get_pl_ctx()->add(*result));
@@ -9414,7 +9429,6 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
       } else {
         if (ob_is_extend(param->get_param_type().get_obj_type())) {
           OZ (ObUserDefinedType::deep_copy_obj(allocator, exec_params.at(i), params.at(i), true));
-          ObUserDefinedType::destruct_obj(exec_params.at(i));
         } else if (param->get_param_type().get_obj_type() != exec_params.at(i).get_param_meta().get_type()) {
           const ObDataType &datatype = param->get_param_type();
           ObObjParam result_value;
@@ -9430,8 +9444,6 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
           OX (params.at(i).set_param_meta());
         }
       }
-    } else if ((ob_is_extend(param->get_param_type().get_obj_type()))) {
-      ObUserDefinedType::destruct_obj(exec_params.at(i));
     }
   }
   if (OB_SUCC(ret) && routine_info->is_function()) {
@@ -9443,7 +9455,6 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
       result->set_null();
     } else if (ob_is_extend(routine_info->get_ret_type()->get_obj_type())) {
       OZ (ObUserDefinedType::deep_copy_obj(allocator, tmp_result, *result, true));
-      ObUserDefinedType::destruct_obj(tmp_result);
     } else if (tmp_result.get_type() != routine_info->get_ret_type()->get_obj_type()) {
       const ObDataType *datatype = routine_info->get_ret_type();
       ObObj convert_obj;
