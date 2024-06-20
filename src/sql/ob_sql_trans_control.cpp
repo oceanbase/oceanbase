@@ -784,8 +784,7 @@ int ObSqlTransControl::can_do_plain_insert(ObSQLSessionInfo *session,
   } else if (plan->get_need_serial_exec()
       || ObSQLUtils::is_nested_sql(&exec_ctx)
       || last_query_retry_err == OB_TRANSACTION_SET_VIOLATION
-      || session->get_tx_isolation() == ObTxIsolationLevel::SERIAL
-      || session->get_tx_isolation() == ObTxIsolationLevel::RR) {
+      || session->get_tx_isolation() != ObTxIsolationLevel::RC) {
     LOG_TRACE("can't support plain insert", K(plan->get_need_serial_exec()), K(last_query_retry_err),
         K(ObSQLUtils::is_nested_sql(&exec_ctx)), K(session->get_tx_isolation()));
   } else if (plan->is_plain_insert()) {

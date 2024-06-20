@@ -209,8 +209,7 @@ int ObDASInsertOp::insert_row_with_fetch()
   transaction::ObTxReadSnapshot *snapshot = snapshot_;
   if (das_gts_opt_info_.get_specify_snapshot()) {
     transaction::ObTransService *txs = nullptr;
-    if (!(das_gts_opt_info_.isolation_level_ == transaction::ObTxIsolationLevel::RR
-        || das_gts_opt_info_.isolation_level_ == transaction::ObTxIsolationLevel::RC)) {
+    if (das_gts_opt_info_.isolation_level_ != transaction::ObTxIsolationLevel::RC) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected isolation_level", K(ret), K(das_gts_opt_info_));
     } else if (OB_ISNULL(txs = MTL_WITH_CHECK_TENANT(transaction::ObTransService*, MTL_ID()))) {
