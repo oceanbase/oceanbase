@@ -265,9 +265,7 @@ bool ObMockIterator::equals(const ObStoreRow &r1, const ObStoreRow &r2,
   int ret = OB_SUCCESS;
   bool bool_ret = false;
   STORAGE_LOG(INFO, "compare two rows", K(r1), K(r2));
-  if (r1.flag_ != r2.flag_) {
-    STORAGE_LOG(WARN, "flag not equals", K(r1), K(r2));
-  } else if (!cmp_multi_version_row_flag && (r1.flag_.is_not_exist() || r1.flag_.is_delete())) {
+  if (!cmp_multi_version_row_flag && (r1.flag_.is_not_exist() || r1.flag_.is_delete())) {
     STORAGE_LOG(DEBUG, "flag is not row exist, return true", K(r1), K(r2));
     bool_ret = true;
   } else if (cmp_multi_version_row_flag && r1.row_type_flag_.flag_ != r2.row_type_flag_.flag_) {

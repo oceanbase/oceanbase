@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/ls/ob_ls_i_life_manager.h"
+#include "share/scheduler/ob_dag_scheduler_config.h"
 
 
 namespace oceanbase
@@ -81,6 +82,7 @@ public:
       const ObMigrationStatus &cur_status,
       bool &allow_gc);
   // Check the migration status. The LS in the XXX_FAIL state is considered to be an abandoned LS, which can be judged to be directly GC when restarting
+  static bool need_online(const ObMigrationStatus &cur_status);
   static bool check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status);
   static bool check_can_migrate_out(const ObMigrationStatus &cur_status);
   static int check_can_change_status(
@@ -92,6 +94,7 @@ public:
       const ObMigrationStatus &cur_status,
       const bool is_in_member_list,
       const bool is_ls_deleted,
+      const bool is_tenant_dropped,
       ObMigrationStatus &fail_status);
   static int check_migration_in_final_state(
       const ObMigrationStatus &status,
@@ -272,6 +275,9 @@ struct ObMigrationUtils
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       int64_t &rebuild_seq);
+  static int get_dag_priority(
+      const ObMigrationOpType::TYPE &type,
+      share::ObDagPrio::ObDagPrioEnum &prio);
 };
 
 struct ObCopyTableKeyInfo final

@@ -25,6 +25,8 @@ ob_set_subtarget(ob_logservice archiveservice
 
 ob_set_subtarget(ob_logservice cdcservice
   cdcservice/ob_cdc_fetcher.cpp
+  cdcservice/ob_cdc_raw_log_req.cpp
+  cdcservice/ob_cdc_req_struct.cpp
   cdcservice/ob_cdc_req.cpp
   cdcservice/ob_cdc_rpc_processor.cpp
   cdcservice/ob_cdc_rpc_proxy.cpp
@@ -54,6 +56,7 @@ ob_set_subtarget(ob_logservice common
   ob_log_monitor.cpp
   ob_log_external_storage_handler.cpp
   ob_log_external_storage_io_task.cpp
+  ob_locality_adapter.cpp
 )
 
 ob_set_subtarget(ob_logservice common_mixed
@@ -108,9 +111,11 @@ ob_set_subtarget(ob_logservice palf
   palf/log_group_buffer.cpp
   palf/log_group_entry.cpp
   palf/log_group_entry_header.cpp
+  palf/log_shared_queue_thread.cpp
   palf/log_io_task.cpp
   palf/log_io_task_cb_thread_pool.cpp
   palf/log_io_task_cb_utils.cpp
+  palf/log_shared_task.cpp
   palf/log_io_worker.cpp
   palf/log_iterator_storage.cpp
   palf/log_learner.cpp
@@ -186,6 +191,7 @@ ob_set_subtarget(ob_logservice restoreservice
   restoreservice/ob_log_restore_archive_driver.cpp
   restoreservice/ob_restore_log_function.cpp
   restoreservice/ob_remote_log_writer.cpp
+  restoreservice/ob_remote_log_raw_reader.cpp
 )
 
 ob_set_subtarget(ob_logservice data_dictionary
@@ -232,3 +238,4 @@ ob_set_subtarget(ob_logservice common_util
 
 ob_server_add_target(ob_logservice)
 add_subdirectory(libobcdc)
+add_subdirectory(logminer)

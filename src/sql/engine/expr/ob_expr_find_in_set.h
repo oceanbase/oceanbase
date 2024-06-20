@@ -35,6 +35,8 @@ public:
     return true;
   }
   static int calc_find_in_set_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
 	 DISALLOW_COPY_AND_ASSIGN(ObExprFindInSet);
 };

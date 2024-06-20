@@ -34,7 +34,8 @@ static constexpr int64_t DEFAULT_IO_WAIT_TIME_MS = 5000L; // 5s
 static constexpr int64_t MAX_IO_WAIT_TIME_MS = 300L * 1000L; // 5min
 static constexpr int64_t GROUP_START_NUM = 8L;
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_US = 5000L * 1000L; // 5s
-static constexpr int64_t MAX_DETECT_READ_TIMES = 10L;
+static constexpr int64_t MAX_DETECT_READ_WARN_TIMES = 10L;
+static constexpr int64_t MAX_DETECT_READ_ERROR_TIMES = 100L;
 enum class ObIOMode : uint8_t
 {
   READ = 0,
@@ -46,29 +47,52 @@ const char *get_io_mode_string(const ObIOMode mode);
 ObIOMode get_io_mode_enum(const char *mode_string);
 
 enum ObIOModule {
-  SLOG_IO = 20000,
-  CALIBRATION_IO = 20001,
-  DETECT_IO = 20002,
-  DIRECT_LOAD_IO = 20003,
-  SHARED_BLOCK_RW_IO = 20004,
-  SSTABLE_WHOLE_SCANNER_IO = 20005,
-  INSPECT_BAD_BLOCK_IO = 20006,
-  SSTABLE_INDEX_BUILDER_IO = 20007,
-  BACKUP_READER_IO = 20008,
-  BLOOM_FILTER_IO = 20009,
-  SHARED_MACRO_BLOCK_MGR_IO = 20010,
-  INDEX_BLOCK_TREE_CURSOR_IO = 20011,
-  MICRO_BLOCK_CACHE_IO = 20012,
-  ROOT_BLOCK_IO = 20013,
-  TMP_PAGE_CACHE_IO = 20014,
-  INDEX_BLOCK_MICRO_ITER_IO = 20015,
-  HA_COPY_MACRO_BLOCK_IO = 20016,
-  LINKED_MACRO_BLOCK_IO = 20017,
-  HA_MACRO_BLOCK_WRITER_IO = 20018,
-  TMP_TENANT_MEM_BLOCK_IO = 20019,
-  SSTABLE_MACRO_BLOCK_WRITE_IO = 20020,
-  MAX_IO = 20021
+  SYS_RESOURCE_GROUP_START_ID = 0,
+  SLOG_IO = SYS_RESOURCE_GROUP_START_ID,
+  CALIBRATION_IO,
+  DETECT_IO,
+  DIRECT_LOAD_IO,
+  SHARED_BLOCK_RW_IO,
+  SSTABLE_WHOLE_SCANNER_IO,
+  INSPECT_BAD_BLOCK_IO,
+  SSTABLE_INDEX_BUILDER_IO,
+  BACKUP_READER_IO,
+  BLOOM_FILTER_IO,
+  SHARED_MACRO_BLOCK_MGR_IO,
+  INDEX_BLOCK_TREE_CURSOR_IO,
+  MICRO_BLOCK_CACHE_IO,
+  ROOT_BLOCK_IO,
+  TMP_PAGE_CACHE_IO,
+  INDEX_BLOCK_MICRO_ITER_IO,
+  HA_COPY_MACRO_BLOCK_IO,
+  LINKED_MACRO_BLOCK_IO,
+  HA_MACRO_BLOCK_WRITER_IO,
+  TMP_TENANT_MEM_BLOCK_IO,
+  SSTABLE_MACRO_BLOCK_WRITE_IO,
+  SYS_RESOURCE_GROUP_END_ID
 };
+
+const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
+const int64_t SYS_RESOURCE_GROUP_CNT = SYS_RESOURCE_GROUP_END_ID - SYS_RESOURCE_GROUP_START_ID;
+const uint64_t USER_RESOURCE_OTHER_GROUP_ID = 0;
+const uint64_t OB_INVALID_GROUP_ID = UINT64_MAX;
+static constexpr char BACKGROUND_CGROUP[] = "background";
+
+OB_INLINE bool is_valid_group(const uint64_t group_id)
+{
+  return group_id >= USER_RESOURCE_OTHER_GROUP_ID && group_id != OB_INVALID_GROUP_ID;
+}
+
+OB_INLINE bool is_user_group(const uint64_t group_id)
+{
+  return group_id >= USER_RESOURCE_GROUP_START_ID && group_id != OB_INVALID_GROUP_ID;
+}
+
+OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
+{
+  //other group or user group
+  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_user_group(group_id);
+}
 
 const char *get_io_sys_group_name(ObIOModule module);
 struct ObIOFlag final
@@ -76,15 +100,23 @@ struct ObIOFlag final
 public:
   ObIOFlag();
   ~ObIOFlag();
+  ObIOFlag &operator=(const ObIOFlag &other)
+  {
+    this->flag_ = other.flag_;
+    this->group_id_ = other.group_id_;
+    this->sys_module_id_ = other.sys_module_id_;
+    return *this;
+  }
   void reset();
   bool is_valid() const;
   void set_mode(ObIOMode mode);
   ObIOMode get_mode() const;
-  void set_group_id(ObIOModule module);
-  void set_group_id(int64_t group_id);
+  void set_resource_group_id(const uint64_t group_id);
   void set_wait_event(int64_t wait_event_id);
-  int64_t get_group_id() const;
-  ObIOModule get_io_module() const;
+  uint64_t get_resource_group_id() const;
+  void set_sys_module_id(const uint64_t sys_module_id);
+  uint64_t get_sys_module_id() const;
+  bool is_sys_module() const;
   int64_t get_wait_event() const;
   void set_read();
   bool is_read() const;
@@ -103,14 +135,12 @@ public:
                K(group_id_), K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(reserved_), K(is_detect_), K(is_time_detect_));
 private:
   static constexpr int64_t IO_MODE_BIT = 4; // read, write, append
-  static constexpr int64_t IO_GROUP_ID_BIT = 16; // for consumer group in resource manager
   static constexpr int64_t IO_WAIT_EVENT_BIT = 32; // for performance monitor
   static constexpr int64_t IO_SYNC_FLAG_BIT = 1; // indicate if the caller is waiting io finished
   static constexpr int64_t IO_DETECT_FLAG_BIT = 1; // notify a retry task
   static constexpr int64_t IO_UNLIMITED_FLAG_BIT = 1; // indicate if the io is unlimited
   static constexpr int64_t IO_TIME_DETECT_FLAG_BIT = 1; // indicate if the io is unlimited
   static constexpr int64_t IO_RESERVED_BIT = 64 - IO_MODE_BIT
-                                                - IO_GROUP_ID_BIT
                                                 - IO_WAIT_EVENT_BIT
                                                 - IO_SYNC_FLAG_BIT
                                                 - IO_UNLIMITED_FLAG_BIT
@@ -121,7 +151,6 @@ private:
     int64_t flag_;
     struct {
       int64_t mode_ : IO_MODE_BIT;
-      int64_t group_id_ : IO_GROUP_ID_BIT;
       int64_t wait_event_id_ : IO_WAIT_EVENT_BIT;
       bool is_sync_ : IO_SYNC_FLAG_BIT;
       bool is_unlimited_ : IO_UNLIMITED_FLAG_BIT;
@@ -130,6 +159,8 @@ private:
       int64_t reserved_ : IO_RESERVED_BIT;
     };
   };
+  uint64_t group_id_;
+  uint64_t sys_module_id_;
 };
 
 template <typename T>
@@ -276,7 +307,9 @@ public:
   void finish(const ObIORetCode &ret_code, ObIORequest *req = nullptr);
   void calc_io_offset_and_size(int64_t &size, int32_t &offset);
   ObIOMode get_mode() const;
-  int64_t get_group_id() const;
+  uint64_t get_resource_group_id() const;
+  uint64_t get_sys_module_id() const;
+  bool is_sys_module() const;
   int64_t get_data_size() const;
   uint64_t get_io_usage_index();
   void inc_ref(const char *msg = nullptr);
@@ -288,7 +321,7 @@ public:
 
   TO_STRING_KV(K(is_inited_), K(is_finished_), K(is_canceled_), K(has_estimated_), K(complete_size_), K(offset_), K(size_),
                K(timeout_us_), K(result_ref_cnt_), K(out_ref_cnt_), K(flag_), K(ret_code_), K(tenant_io_mgr_),
-               KP(user_data_buf_), KP(buf_), KP(io_callback_), K(begin_ts_), K(end_ts_));
+               KP(user_data_buf_), KP(buf_), KP(io_callback_), K(begin_ts_), K(end_ts_), K_(time_log));
   DISALLOW_COPY_AND_ASSIGN(ObIOResult);
 
 private:
@@ -316,8 +349,10 @@ private:
   char *user_data_buf_; //actual data buf without cb, allocated by thpe calling layer
   ObIOCallback *io_callback_;
   ObIOFlag flag_;
-  ObIORetCode ret_code_;
   ObThreadCond cond_;
+public:
+  ObIOTimeLog time_log_;
+  ObIORetCode ret_code_;
 };
 
 class ObIORequest : public common::ObDLinkBase<ObIORequest>
@@ -336,7 +371,9 @@ public:
   bool is_canceled();
   int64_t timeout_ts() const;
   int64_t get_data_size() const;
-  int64_t get_group_id() const;
+  uint64_t get_resource_group_id() const;
+  uint64_t get_sys_module_id() const;
+  bool is_sys_module() const;
   uint64_t get_io_usage_index();
   char *calc_io_buf(); //calc the aligned io_buf of raw_buf_, which interact with the operating system
   const ObIOFlag &get_flag() const;
@@ -353,7 +390,7 @@ public:
   void dec_ref(const char *msg = nullptr);
 
   TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_),
-               K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K(time_log_), KPC(io_result_));
+               K(trace_id_), K(retry_count_), K(tenant_io_mgr_), KPC(io_result_));
 private:
   friend class ObIOResult;
   friend class ObIOSender;
@@ -380,7 +417,6 @@ private:
   uint64_t tenant_id_;
   ObRefHolder<ObTenantIOManager> tenant_io_mgr_;
   ObIOFd fd_;
-  ObIOTimeLog time_log_;
   ObCurTraceId::TraceId trace_id_;
 };
 

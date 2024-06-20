@@ -40,10 +40,6 @@ public:
   int get_sample_iter(ObMemtableRowSampleIterator *&sample_iter,
                       ObQueryRowIterator *&main_iter,
                       ObMultipleScanMerge *scan_merge);
-  int get_sample_iter(ObRowSampleIterator *&sample_iter,
-                      ObQueryRowIterator *&main_iter,
-                      ObMultipleScanMerge *scan_merge);
-
   int get_sample_iter(ObBlockSampleIterator *&sample_iter,
                       ObQueryRowIterator *&main_iter,
                       ObMultipleScanMerge *scan_merge);
@@ -52,7 +48,7 @@ private:
   // if need retire to row sample, sample_memtable_ranges must not be null
   int can_retire_to_memtable_row_sample_(bool &retire, ObIArray<blocksstable::ObDatumRange> &sample_ranges);
 
-  int get_memtable_sample_ranges_(const ObIArray<ObITable *> &memtables,
+  int get_memtable_sample_ranges_(const ObIArray<memtable::ObMemtable *> &memtables,
                                   ObIArray<blocksstable::ObDatumRange> &sample_ranges);
 
 private:

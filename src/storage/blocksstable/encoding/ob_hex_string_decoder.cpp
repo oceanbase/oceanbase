@@ -238,6 +238,117 @@ int ObHexStringDecoder::batch_decode(
   return ret;
 }
 
+int ObHexStringDecoder::decode_vector(
+    const ObColumnDecoderCtx &decoder_ctx,
+    const ObIRowIndex* row_index,
+    ObVectorDecodeCtx &vector_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret));
+  } else {
+    switch (vector_ctx.get_format()) {
+    case VEC_DISCRETE: {
+      ret = inner_decode_vector<ObDiscreteFormat>(decoder_ctx, row_index, vector_ctx);
+      break;
+    }
+    case VEC_CONTINUOUS: {
+      ret = inner_decode_vector<ObContinuousFormat>(decoder_ctx, row_index, vector_ctx);
+      break;
+    }
+    case VEC_UNIFORM: {
+      ret = inner_decode_vector<ObUniformFormat<false>>(decoder_ctx, row_index, vector_ctx);
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected vector format", K(ret), K(vector_ctx));
+    }
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to decode hex packing data to vector", K(ret), K(decoder_ctx), K(vector_ctx));
+    }
+  }
+  return ret;
+}
+
+
+template <typename VectorType>
+int ObHexStringDecoder::inner_decode_vector(
+    const ObColumnDecoderCtx &decoder_ctx,
+    const ObIRowIndex* row_index,
+    ObVectorDecodeCtx &vector_ctx) const
+{
+  int ret = OB_SUCCESS;
+  const unsigned char *col_data = reinterpret_cast<const unsigned char *>(header_)
+      + decoder_ctx.col_header_->length_;
+  const unsigned char *hex_char_map = header_->hex_char_array_;
+  unsigned char *string_buf = nullptr;
+  const uint32_t max_string_size = header_->max_string_size_;
+  VectorType *vector = static_cast<VectorType *>(vector_ctx.get_vector());
+  if (OB_ISNULL(string_buf = static_cast<unsigned char *>(decoder_ctx.allocator_->alloc(
+      max_string_size * vector_ctx.row_cap_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Failed to allocate hex unpack memory", K(ret), KPC_(header), K(vector_ctx));
+  } else if (decoder_ctx.is_fix_length()) {
+    int64_t data_offset = 0;
+    const sql::ObBitVector *null_bitmap = nullptr;
+    if (decoder_ctx.has_extend_value()) {
+      null_bitmap = sql::to_bit_vector(col_data);
+      data_offset = decoder_ctx.micro_block_header_->row_count_
+          * decoder_ctx.micro_block_header_->extend_value_bit_;
+      data_offset = (data_offset + CHAR_BIT - 1) / CHAR_BIT;
+    }
+    for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
+      const int64_t row_id = vector_ctx.row_ids_[i];
+      const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
+      if (decoder_ctx.has_extend_value() && null_bitmap->contain(row_id)) {
+        vector->set_null(curr_vec_offset);
+      } else {
+        const unsigned char *cell_data = reinterpret_cast<const unsigned char *>(
+              col_data + data_offset + row_id * header_->length_);
+        ObHexStringUnpacker unpacker(hex_char_map, cell_data);
+        int64_t buf_offset = i * max_string_size;
+        unpacker.unpack(string_buf + buf_offset, max_string_size);
+        vector->set_payload_shallow(curr_vec_offset, string_buf + buf_offset, max_string_size);
+      }
+    }
+  } else {
+    bool has_null = false;
+    if (OB_FAIL(batch_locate_var_len_row(decoder_ctx, row_index, vector_ctx, has_null))) {
+      LOG_WARN("Failed to batch locate var len row", K(ret), K(decoder_ctx), K(vector_ctx));
+    } else if (has_null) {
+      ret = ObIColumnDecoder::batch_locate_cell_data<ObHexStringHeader, true>(decoder_ctx, *header_,
+          vector_ctx.ptr_arr_, vector_ctx.len_arr_, vector_ctx.row_ids_, vector_ctx.row_cap_);
+    } else {
+      ret = ObIColumnDecoder::batch_locate_cell_data<ObHexStringHeader, false>(decoder_ctx, *header_,
+          vector_ctx.ptr_arr_, vector_ctx.len_arr_, vector_ctx.row_ids_, vector_ctx.row_cap_);
+    }
+
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to locate cell datas", K(ret));
+    } else {
+      for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
+        const char *cell_data = vector_ctx.ptr_arr_[i];
+        const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
+        if (nullptr == cell_data) {
+          vector->set_null(curr_vec_offset);
+        } else {
+          const ObVarHexCellHeader *cell_header = reinterpret_cast<const ObVarHexCellHeader *>(cell_data);
+          const unsigned char *packed_string = reinterpret_cast<const unsigned char *>(cell_data + sizeof(*cell_header));
+          const uint32_t unpack_size = (vector_ctx.len_arr_[i] - sizeof(*cell_header)) * 2 - cell_header->odd_;
+          const int64_t buf_offset = i * max_string_size;
+          ObHexStringUnpacker unpacker(hex_char_map, packed_string);
+          unpacker.unpack(string_buf + buf_offset, unpack_size);
+          vector->set_payload_shallow(curr_vec_offset, string_buf + buf_offset, unpack_size);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObHexStringDecoder::pushdown_operator(
     const sql::ObPushdownFilterExecutor *parent,
     const ObColumnDecoderCtx &col_ctx,

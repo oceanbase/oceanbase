@@ -92,9 +92,9 @@ int ObDupTableLSTsSyncMgr::validate_replay_ts(const common::ObAddr &dst,
     }
   }
 
-  if (replay_all_redo && OB_SUCC(ret)) {
-    DUP_TABLE_LOG(INFO, "replay all dup table redo", K(ls_id_), K(tx_id), K(dst), K(tmp_ts_info),
-                  K(target_replay_scn), K(replay_all_redo), K(max_read_version));
+  if (!replay_all_redo) {
+    DUP_TABLE_LOG(INFO, "the dst follower has not replay all redo", K(ls_id_), K(tx_id), K(dst),
+                  K(tmp_ts_info), K(target_replay_scn), K(replay_all_redo), K(max_read_version));
   }
 
   return ret;
@@ -355,13 +355,23 @@ int ObDupTableLSTsSyncMgr::get_local_ts_info(DupTableTsInfo &ts_info)
 int ObDupTableLSTsSyncMgr::get_cache_ts_info(const common::ObAddr &addr, DupTableTsInfo &ts_info)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
-  SpinRLockGuard guard(ts_sync_lock_);
+  {
+    SpinRLockGuard guard(ts_sync_lock_);
 
-  if (OB_FAIL(get_ts_info_cache_(addr, ts_info))) {
-    DUP_TABLE_LOG(WARN, "get ts info cache failed", K(ret));
+    if (OB_FAIL(get_ts_info_cache_(addr, ts_info))) {
+      DUP_TABLE_LOG(WARN, "get ts info cache failed", K(ret));
+    }
+
+    DUP_TABLE_LOG(DEBUG, "get ts info cache", K(ret), K(ret), K(ts_info));
   }
-  DUP_TABLE_LOG(DEBUG, "get ts info cache", K(ret), K(ret), K(ts_info));
+
+  if (OB_HASH_NOT_EXIST == ret) {
+    if (OB_TMP_FAIL(request_ts_info(addr))) {
+      DUP_TABLE_LOG(WARN, "request ts info failed", K(tmp_ret), K(ts_info));
+    }
+  }
   return ret;
 }
 

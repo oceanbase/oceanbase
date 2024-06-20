@@ -50,7 +50,9 @@ ObScanner::ObScanner(const char *label /*= ObModIds::OB_NEW_SCANNER*/,
       implicit_cursors_(inner_allocator_),
       datum_store_(label),
       rcode_(),
-      fb_info_()
+      fb_info_(),
+      memstore_read_row_count_(0),
+      ssstore_read_row_count_(0)
 {
   UNUSED(allocator);
 }
@@ -80,7 +82,9 @@ ObScanner::ObScanner(ObIAllocator &allocator,
       implicit_cursors_(allocator),
       datum_store_(label, &allocator),
       rcode_(),
-      fb_info_()
+      fb_info_(),
+      memstore_read_row_count_(0),
+      ssstore_read_row_count_(0)
 {
 }
 
@@ -118,6 +122,8 @@ void ObScanner::reuse()
   is_result_accurate_ = true;
   trans_result_.reset();
   fb_info_.reset();
+  memstore_read_row_count_ = 0;
+  ssstore_read_row_count_ = 0;
 }
 
 int ObScanner::init(int64_t mem_size_limit /*= DEFAULT_MAX_SERIALIZE_SIZE*/)
@@ -163,6 +169,8 @@ void ObScanner::reset()
   is_result_accurate_ = true;
   trans_result_.reset();
   fb_info_.reset();
+  memstore_read_row_count_ = 0;
+  ssstore_read_row_count_ = 0;
 }
 
 int ObScanner::add_row(const ObNewRow &row)
@@ -258,6 +266,8 @@ int ObScanner::assign(const ObScanner &other)
   STRNCPY(rcode_.msg_, other.rcode_.msg_, common::MAX_SQL_ERR_MSG_LENGTH - 1);
   rcode_.rcode_ = other.rcode_.rcode_;
   OZ(fb_info_.assign(other.fb_info_));
+  memstore_read_row_count_ = other.memstore_read_row_count_;
+  ssstore_read_row_count_ = other.ssstore_read_row_count_;
   return ret;
 }
 
@@ -375,7 +385,9 @@ OB_DEF_SERIALIZE(ObScanner)
               rcode_.warnings_,
               tenant_id_,
               datum_store_,
-              fb_info_);
+              fb_info_,
+              memstore_read_row_count_,
+              ssstore_read_row_count_);
   return ret;
 }
 
@@ -403,7 +415,9 @@ OB_DEF_SERIALIZE_SIZE(ObScanner)
               rcode_.warnings_,
               tenant_id_,
               datum_store_,
-              fb_info_);
+              fb_info_,
+              memstore_read_row_count_,
+              ssstore_read_row_count_);
   return len;
 }
 
@@ -447,7 +461,10 @@ OB_DEF_DESERIALIZE(ObScanner)
       LOG_WARN("fail to write string", K(ret));
     }
   }
-  OB_UNIS_DECODE(fb_info_);
+  LST_DO_CODE(OB_UNIS_DECODE,
+              fb_info_,
+              memstore_read_row_count_,
+              ssstore_read_row_count_);
   return ret;
 }
 

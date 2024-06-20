@@ -23,6 +23,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
+#include "sql/ob_sql.h"
 
 namespace oceanbase
 {
@@ -219,7 +220,7 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "table_schema should not be NULL", K(ret));
     } else {
-      bool is_normal_view = table_schema->is_view_table()&& !table_schema->is_materialized_view();
+      bool is_normal_view = table_schema->is_view_table()&& !table_schema->is_materialized_view() && (table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_NORMAL || table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
       //  不显示索引表
       if (table_schema->is_aux_table()
          || table_schema->is_tmp_table()
@@ -235,7 +236,14 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       }
       // for system view, its column info depend on hard code, so its valid by default, but do not have column meta
       // status default value is valid, old version also work whether what status it read because its column count = 0
-      bool view_is_invalid = (0 == table_schema->get_object_status() || 0 == table_schema->get_column_count());
+      bool view_is_invalid = (0 == table_schema->get_object_status()
+                              || 0 == table_schema->get_column_count()
+                              || (table_schema->is_sys_view()
+                                  && table_schema->get_schema_version() <= GCTX.start_time_
+                                  && (nullptr == GCTX.sql_engine_
+                                      || OB_HASH_NOT_EXIST == GCTX.sql_engine_->get_dep_info_queue()
+                                      .read_consistent_sys_view_from_set(table_schema->get_tenant_id(),
+                                                                  table_schema->get_table_id()))));
       if (OB_FAIL(ret)) {
       } else if (is_normal_view && view_is_invalid) {
         mem_context_->reset_remain_one_page();
@@ -317,7 +325,6 @@ int ObInfoSchemaColumnsTable::iterate_column_schema_array(
     // do nothing
   }
   while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema)) && !has_more_) {
-    ++logical_index;
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "column_schema is NULL", K(ret));
@@ -326,6 +333,7 @@ int ObInfoSchemaColumnsTable::iterate_column_schema_array(
       if (column_schema->is_hidden()) {
         continue;
       }
+      ++logical_index;
       // use const_column_iterator, if it's index table
       // so should use the physical position
       if (table_schema.is_index_table()) {
@@ -725,7 +733,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
         case COLUMN_TYPE: {
             int64_t pos = 0;
             const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-            const uint64_t sub_type = column_schema->is_xmltype() ?
+            const uint64_t sub_type = column_schema->is_extend() ?
                                       column_schema->get_sub_data_type() : static_cast<uint64_t>(column_schema->get_geo_type());
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;
@@ -805,8 +813,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             int64_t buf_len = 200;
             int64_t pos = 0;
             ObSessionPrivInfo session_priv;
-            session_->get_session_priv_info(session_priv);
-            if (OB_UNLIKELY(!session_priv.is_valid())) {
+            if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
+              SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+            } else if (OB_UNLIKELY(!session_priv.is_valid())) {
               ret = OB_INVALID_ARGUMENT;
               SERVER_LOG(WARN, "session priv is invalid", "tenant_id", session_priv.tenant_id_,
                          "user_id", session_priv.user_id_, K(ret));
@@ -942,11 +951,11 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
         K(ret),
         K(cur_row_.count_),
         K(col_count));
-  } else if (OB_FAIL(ObTableColumns::deduce_column_attributes(is_oracle_mode, select_stmt,
+  } else if (OB_FAIL(ObTableColumns::deduce_column_attributes(is_oracle_mode, *table_schema, select_stmt,
                                                               select_item, schema_guard_,
                                                               session_, column_type_str_,
                                                               column_type_str_len_,
-                                                              column_attributes))) {
+                                                              column_attributes, false, *allocator_))) {
     SERVER_LOG(WARN, "failed to deduce column attributes",
              K(select_item), K(ret));
   } else {
@@ -1058,9 +1067,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             break;
           }
         case IS_NULLABLE: {
-            ObString nullable_val = ObString::make_string(
-                column_attributes.null_ ? "YES" : "NO");
-            cells[cell_idx].set_varchar(nullable_val);
+            cells[cell_idx].set_varchar(column_attributes.null_);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                    ObCharset::get_default_charset()));
             break;
@@ -1202,8 +1209,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             int64_t buf_len = 200;
             int64_t pos = 0;
             ObSessionPrivInfo session_priv;
-            session_->get_session_priv_info(session_priv);
-            if (OB_UNLIKELY(!session_priv.is_valid())) {
+            if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
+              SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+            } else if (OB_UNLIKELY(!session_priv.is_valid())) {
               ret = OB_INVALID_ARGUMENT;
               SERVER_LOG(WARN, "session priv is invalid", "tenant_id", session_priv.tenant_id_,
                          "user_id", session_priv.user_id_, K(ret));
@@ -1269,6 +1277,7 @@ inline int ObInfoSchemaColumnsTable::init_mem_context()
     if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));
     }
   }

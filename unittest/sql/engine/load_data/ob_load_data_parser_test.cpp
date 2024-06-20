@@ -97,7 +97,7 @@ TEST_F(TestParser, csv_parser)
       file_name = f_meta.file_name;
     }
 
-    ObFileReader reader;
+    oceanbase::common::ObFileReader reader;
     ASSERT_EQ(OB_SUCCESS, reader.open(file_name.c_str(), false));
     int64_t file_size = get_file_size(file_name.c_str());
     int64_t total_read_bytes = 0;
@@ -169,7 +169,7 @@ TEST_F(TestParser, general_parser)
       file_name = f_meta.file_name;
     }
 
-    ObFileReader reader;
+    oceanbase::common::ObFileReader reader;
     ASSERT_EQ(OB_SUCCESS, reader.open(file_name.c_str(), false));
     int64_t file_size = get_file_size(file_name.c_str());
     int64_t total_read_bytes = 0;
@@ -252,7 +252,7 @@ TEST_F(TestParser, general_parser_escape)
     file_name = f_meta.file_name;
   }
 
-  ObFileReader reader;
+  oceanbase::common::ObFileReader reader;
   ASSERT_EQ(OB_SUCCESS, reader.open(file_name.c_str(), false));
   int64_t file_size = get_file_size(file_name.c_str());
   int64_t total_read_bytes = 0;

@@ -81,6 +81,11 @@ void TestRawExprResolver::resolve(const char* expr, const char *&json_expr)
   ctx.is_extract_param_type_ = false;
   ObSQLSessionInfo session;
   ctx.session_info_ = &session;
+
+  EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
+  EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));
+  EXPECT_TRUE(OB_SUCCESS == session.load_default_sys_variable(false, true));
+
   ObRawExpr *raw_expr = NULL;
   OBSERVER.init_version();
   OK(ObRawExprUtils::make_raw_expr_from_str(expr_str, strlen(expr_str), ctx, raw_expr, columns,
@@ -95,6 +100,7 @@ void TestRawExprResolver::resolve(const char* expr, const char *&json_expr)
 
 TEST_F(TestRawExprResolver, all)
 {
+  set_compat_mode(Worker::CompatMode::MYSQL);
   static const char* test_file = "./expr/test_raw_expr_resolver.test";
   static const char* tmp_file = "./expr/test_raw_expr_resolver.tmp";
   static const char* result_file = "./expr/test_raw_expr_resolver.result";

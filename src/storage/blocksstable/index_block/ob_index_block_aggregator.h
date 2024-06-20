@@ -99,6 +99,35 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObColMinAggregator);
 };
 
+class ObColSumAggregator : public ObIColAggregator
+{
+typedef int (ObColSumAggregator::*ObColSumAggEvalFuncCType)(const common::ObDatum &datum);
+public:
+  ObColSumAggregator() : eval_func_(nullptr) {}
+  virtual ~ObColSumAggregator() {}
+  int init(const ObColDesc &col_desc, ObStorageDatum &result) override;
+  void reset() override { new (this) ObColSumAggregator(); }
+  void reuse() override;
+  int eval(const ObStorageDatum &datum, const bool is_data) override;
+  int get_result(const ObStorageDatum *&result) override;
+private:
+  // eval
+  int choose_eval_func(const bool is_data);
+  int inner_eval_number(const number::ObNumber &nmb);
+  int eval_int_number(const common::ObDatum &datum);
+  int eval_uint_number(const common::ObDatum &datum);
+  int eval_decimal_int_number(const common::ObDatum &datum);
+  int eval_number(const common::ObDatum &datum);
+  int eval_float(const common::ObDatum &datum);
+  int eval_double(const common::ObDatum &datum);
+
+  // eval float
+
+private:
+  ObColSumAggEvalFuncCType eval_func_;
+  DISALLOW_COPY_AND_ASSIGN(ObColSumAggregator);
+};
+
 class ObSkipIndexAggregator final
 {
 public:

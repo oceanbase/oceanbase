@@ -106,7 +106,8 @@ ObSimpleClusterTestBase::~ObSimpleClusterTestBase()
 
 void ObSimpleClusterTestBase::SetUp()
 {
-  SERVER_LOG(INFO, "SetUp");
+  auto case_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  SERVER_LOG(INFO, "SetUp>>>>>>>>>>>>>>", K(case_name));
   int ret = OB_SUCCESS;
   if (!is_started_) {
     if (OB_FAIL(start())) {
@@ -126,7 +127,8 @@ void ObSimpleClusterTestBase::SetUp()
 
 void ObSimpleClusterTestBase::TearDown()
 {
-
+  auto case_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  SERVER_LOG(INFO, "TearDown>>>>>>>>>>>>>>", K(case_name));
 }
 
 void ObSimpleClusterTestBase::TearDownTestCase()
@@ -192,7 +194,8 @@ int ObSimpleClusterTestBase::close()
 int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
                                            const char *memory_size,
                                            const char *log_disk_size,
-                                           const bool oracle_mode)
+                                           const bool oracle_mode,
+                                           int64_t tenant_cpu)
 {
   SERVER_LOG(INFO, "create tenant start");
   int32_t log_level;
@@ -228,8 +231,8 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
   {
     ObSqlString sql;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu 2, memory_size '%s', log_disk_size='%s';",
-                                      UNIT_BASE, tenant_name, memory_size, log_disk_size))) {
+    } else if (OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu %ld, memory_size '%s', log_disk_size='%s';",
+                                      UNIT_BASE, tenant_name, tenant_cpu, memory_size, log_disk_size))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
@@ -327,6 +330,75 @@ int ObSimpleClusterTestBase::check_tenant_exist(bool &bool_ret, const char *tena
           SERVER_LOG(WARN, "get_tenant_id", K(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObSimpleClusterTestBase::batch_create_table(
+    const uint64_t tenant_id,
+    ObMySQLProxy &sql_proxy,
+    const int64_t TOTAL_NUM,
+    ObIArray<ObTabletLSPair> &tablet_ls_pairs)
+{
+  int ret = OB_SUCCESS;
+  tablet_ls_pairs.reset();
+  ObSqlString sql;
+  // batch create table
+  int64_t affected_rows = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < TOTAL_NUM; ++i) {
+    sql.reset();
+    if (OB_FAIL(sql.assign_fmt("create table t%ld(c1 int)", i))) {
+    } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
+    }
+  }
+  // batch get table_id
+  sql.reset();
+  if (OB_FAIL(sql.assign_fmt("select TABLET_ID, LS_ID from oceanbase.DBA_OB_TABLE_LOCATIONS where table_name in ("))) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < TOTAL_NUM; ++i) {
+      if (OB_FAIL(sql.append_fmt("%s't%ld'", 0 == i ? "" : ",", i))) {}
+    }
+    if (FAILEDx(sql.append_fmt(") order by TABLET_ID"))) {};
+  }
+  SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+    if (OB_FAIL(tablet_ls_pairs.reserve(TOTAL_NUM))) {
+    } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(sql_proxy.read(result, sql.ptr()))) {
+    } else if (OB_ISNULL(result.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      sqlclient::ObMySQLResult &res = *result.get_result();
+      uint64_t tablet_id = ObTabletID::INVALID_TABLET_ID;
+      int64_t ls_id = ObLSID::INVALID_LS_ID;
+      while(OB_SUCC(ret) && OB_SUCC(res.next())) {
+        EXTRACT_INT_FIELD_MYSQL(res, "TABLET_ID", tablet_id, uint64_t);
+        EXTRACT_INT_FIELD_MYSQL(res, "LS_ID", ls_id, int64_t);
+        if (OB_FAIL(tablet_ls_pairs.push_back(ObTabletLSPair(tablet_id, ls_id)))) {}
+      }
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        SERVER_LOG(WARN, "fail to generate data", K(sql));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSimpleClusterTestBase::batch_drop_table(
+    const uint64_t tenant_id,
+    ObMySQLProxy &sql_proxy,
+    const int64_t TOTAL_NUM)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < TOTAL_NUM; ++i) {
+    sql.reset();
+    if (OB_FAIL(sql.assign_fmt("drop table t%ld", i))) {
+    } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
     }
   }
   return ret;

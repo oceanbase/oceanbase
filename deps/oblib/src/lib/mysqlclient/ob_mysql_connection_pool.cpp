@@ -459,10 +459,12 @@ int ObMySQLConnectionPool::acquire(const uint64_t tenant_id, ObMySQLConnection *
     }
   }
   if (OB_FAIL(ret)) {
+    // do nothing
     connection = NULL;
   }
 
   if (OB_ISNULL(connection)) {
+    //overwrite ret
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to acquire connection",
              K(this), K(tenant_id), K(server_count), K(busy_conn_count_), K(ret));
@@ -678,8 +680,10 @@ void ObMySQLConnectionPool::runTimerTask()
       // - remove invalid server connection pool
       // - close long idle connection
       // - renew tenant_server_conn_pool_map
-      if (OB_FAIL(purge_connection_pool())) {
-        LOG_ERROR("fail to update mysql connection pool", K(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(purge_connection_pool())) {
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+        LOG_ERROR("fail to update mysql connection pool", K(ret), K(tmp_ret));
       }
     }
 
@@ -688,9 +692,9 @@ void ObMySQLConnectionPool::runTimerTask()
     if (MySQLConnectionPoolType::TENANT_POOL == pool_type_ && OB_FAIL(renew_tenant_server_pool_map())) {
       LOG_ERROR("renew_tenant_server_pool_map failed", K(ret));
     }
-
-    if (OB_FAIL(server_provider_->end_refresh())) {
-      LOG_WARN("server_provider_ end_refresh failed", K(ret), K(this));
+    if (OB_TMP_FAIL(server_provider_->end_refresh())) {
+      ret = OB_FAIL(ret) ? ret : tmp_ret;
+      LOG_WARN("server_provider_ end_refresh failed", K(ret), K(tmp_ret), K(this));
     }
     // end LOCK BLOCK
     if (count > 0) {
@@ -933,10 +937,9 @@ int ObMySQLConnectionPool::renew_tenant_server_pool_map()
         LOG_WARN("renew_tenant_server_pool_ failed", K(ret), K(tenant_id), K(tenant_idx), K(tenant_array));
       }
     } // end for tenant_array
-
-    if (OB_FAIL(purge_tenant_server_pool_map_(tenant_array))) {
-      LOG_WARN("purge_tenant_server_pool_map_ failed, skip this error", K(ret), K(tenant_array));
-      ret = OB_SUCCESS;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(purge_tenant_server_pool_map_(tenant_array))) {
+      LOG_WARN("purge_tenant_server_pool_map_ failed, skip this error", K(ret), K(tmp_ret), K(tenant_array));
     } else {
       LOG_TRACE("renew tenant_server_conn_pool_map succ");
     }

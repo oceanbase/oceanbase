@@ -1075,9 +1075,9 @@
 
   # bugfix : 
   --error 3732
-  select st_intersects(x'e6100000010100000000000000008056403333333333836640',ST_GeomFromText('point(10 20)',4326));
+  select st_intersects(cast(x'e6100000010100000000000000008056403333333333836640' as point),ST_GeomFromText('point(10 20)',4326));
   --error 3731
-  select st_intersects(ST_GeomFromText('point(10 20)',4326),x'e6100000010100000033333333338366C000000000008056C0');
+  select st_intersects(ST_GeomFromText('point(10 20)',4326), cast(x'e6100000010100000033333333338366C000000000008056C0' as point));
 
   # bugfix : 
   create table gis_polygon(pol geometry not null srid 4326, SPATIAL INDEX(pol));
@@ -1089,3 +1089,14 @@
   select st_astext(pol) from gis_polygon where st_intersects(st_geomfromtext(' POLYGON((0 0,0 0.000000001,0.000000001 0.000000001,0.000000001 0,0 0))' ,4326), pol);
   select st_astext(pol) from gis_polygon ignore index(pol) where st_intersects(pol, st_geomfromtext(' POLYGON((0 0,0 0.000000001,0.000000001 0.000000001,0.000000001 0,0 0))' ,4326));
   drop table gis_polygon;
+
+  SELECT ST_INTERSECTS(ST_GEOMFROMTEXT('POLYGON((1 1,1 10,10 10,10 1, 1 1))'), 
+       ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((0 0,0 20,20 20,20 0, 0 0)))'));
+  SELECT ST_INTERSECTS(ST_GEOMFROMTEXT('LINESTRING(1 1, 10 10)'), 
+       ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((0 0,0 20,20 20,20 0, 0 0)))'));
+  SELECT ST_INTERSECTS(ST_GEOMFROMTEXT('LINESTRING(1 1, 10 10)'), 
+       ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(5 5))'));
+  SELECT ST_INTERSECTS(ST_GEOMFROMTEXT('POINT(10 10)'), 
+       ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((0 0,0 20,20 20,20 0, 0 0)))'));
+  
+select st_intersects(ST_GeomFromText('LINESTRING(0 0 0, 10 10 10, 20 25 30, 50 60 -60)',26918),ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(POINT(10 10 10), POINT(30 30 -30), LINESTRING(15 15 -15, 20 20 30),MULTIPOLYGON(((-1 -1 -1,10 10 0,-10 -20 20,0 -10 0,-1 -1 -1)))))',26918));

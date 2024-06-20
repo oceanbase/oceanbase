@@ -145,10 +145,9 @@ void TestDataBlockWriter::SetUp()
   table_data_desc_.extra_buf_size_ = (2LL << 20);
   table_data_desc_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   table_data_desc_.is_heap_table_ = false;
-  table_data_desc_.mem_chunk_size_ = (64LL << 20);
   table_data_desc_.max_mem_chunk_count_ = 128;
   table_data_desc_.merge_count_per_round_ = 64;
-  table_data_desc_.heap_table_mem_chunk_size_ = (64LL << 20);
+  table_data_desc_.session_count_ = 2;
   file_mgr_ = OB_NEWx(ObDirectLoadTmpFileManager, (&allocator_));
   ASSERT_TRUE(nullptr != file_mgr_);
   ret = file_mgr_->init(table_schema_.get_tenant_id());
@@ -169,10 +168,14 @@ void TestDataBlockWriter::SetUp()
   ret = ObTmpFileManager::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  static ObTenantBase tenant_ctx(1);
+  static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
   ObTenantIOManager *io_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
+  EXPECT_EQ(OB_SUCCESS, io_service->start());
+  tenant_ctx.set(io_service);
+  ObTenantEnv::set_tenant(&tenant_ctx);
 }
 
 void TestDataBlockWriter::TearDown()

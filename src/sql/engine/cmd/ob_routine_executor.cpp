@@ -48,6 +48,7 @@ int ObCreateRoutineExecutor::execute(ObExecContext &ctx, ObCreateRoutineStmt &st
   } else {
     crt_routine_arg.ddl_stmt_str_ = first_stmt;
   }
+
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -218,7 +219,8 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                                                           ctx.get_allocator(),
                                                           NULL,
                                                           stmt.get_dblink_routine_info(),
-                                                          params))) {
+                                                          params,
+                                                          NULL))) {
         LOG_WARN("failed to execute dblink pl", K(ret), KP(stmt.get_dblink_routine_info()));
 #endif
       }

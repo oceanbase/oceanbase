@@ -432,10 +432,13 @@ int ObTableUpdateOp::check_update_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_update_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table update affected row is not match with index table",
+        LOG_ERROR_RET(OB_ERR_DEFENSIVE_CHECK, "Fatal Error!!! data table update affected row is not match with index table",
                   K(ret), K(primary_write_rows), K(index_write_rows),
                   KPC(primary_upd_ctdef), K(primary_upd_rtdef),
                   KPC(index_upd_ctdef), K(index_upd_rtdef));
+        LOG_DBA_ERROR_V2(OB_SQL_UPDATE_AFFECTED_ROW_FAIL, ret, "Attention!!!", "data table update affected row is not match with index table"
+                  ", primary_write_rows is: ", primary_write_rows,
+                  ", index_write_rows: ", index_write_rows);
       }
     }
     if (OB_SUCC(ret) && !primary_upd_ctdef->dupd_ctdef_.is_ignore_) {
@@ -443,9 +446,12 @@ int ObTableUpdateOp::check_update_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_update_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table update affected row is not match with found rows",
+        LOG_ERROR_RET(OB_ERR_DEFENSIVE_CHECK, "Fatal Error!!! data table update affected row is not match with found rows",
                   K(ret), K(primary_write_rows), K(primary_upd_rtdef.found_rows_),
                   KPC(primary_upd_ctdef), K(primary_upd_rtdef));
+        LOG_DBA_ERROR_V2(OB_SQL_UPDATE_AFFECTED_ROW_FAIL, ret, "Attention!!!", "data table update affected row is not match with found rows",
+                  ", primary_write_rows is: ", primary_write_rows,
+                  ", primary_found_rows is: ", primary_upd_rtdef.found_rows_);
       }
     }
   }

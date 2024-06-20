@@ -106,6 +106,10 @@ void ObLogLSFetchMgr::destroy()
   LOG_INFO("destroy LS fetch mgr succ");
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(LOG_FETCHER_ALLOC_LS_CTX_ADD_INFO_FAIL);
+ERRSIM_POINT_DEF(LOG_FETCHER_ALLOC_LS_CTX_FAIL);
+#endif
 int ObLogLSFetchMgr::add_ls(
     const logservice::TenantLSID &tls_id,
     const ObLogFetcherStartParameters &start_parameters,
@@ -138,6 +142,11 @@ int ObLogLSFetchMgr::add_ls(
     LOG_ERROR("init_tls_info_ failed", KR(ret), K(tls_id), K(tls_id_str));
   }
   // alloc a part trans resolver
+#ifdef ERRSIM
+  else if (OB_FAIL(LOG_FETCHER_ALLOC_LS_CTX_ADD_INFO_FAIL)) {
+    LOG_ERROR("ERRSIM: failed to alloc ls_ctx_add_info", K(tls_id));
+  }
+#endif
   else if (OB_FAIL(ls_ctx_add_info_factory_->alloc(tls_id_str, ls_ctx_add_info))) {
     LOG_ERROR("alloc ObILogFetcherLSCtxAddInfo fail", KR(ret), K(tls_id_str));
   } else if (OB_ISNULL(ls_ctx_add_info)) {
@@ -147,6 +156,11 @@ int ObLogLSFetchMgr::add_ls(
     LOG_ERROR("init part trans resolver fail", KR(ret), K(tls_id), K(start_tstamp_ns));
   }
   // alloc a LSFetchCtx
+#ifdef ERRSIM
+  else if (OB_FAIL(LOG_FETCHER_ALLOC_LS_CTX_FAIL)) {
+    LOG_ERROR("ERRSIM: failed to alloc ls_fetch_ctx", K(tls_id));
+  }
+#endif
   else if (OB_FAIL(ls_ctx_factory_->alloc(ctx))) {
     LOG_ERROR("alloc LSFetchCtx fail", KR(ret));
   } else if (OB_ISNULL(ctx)) {
@@ -290,7 +304,11 @@ int ObLogLSFetchMgr::remove_ls(const logservice::TenantLSID &tls_id)
 
     // remove node from map first to guarantee the correctness of the concurrent operation on the map
     if (OB_FAIL(ctx_map_.erase(tls_id, fetch_ctx))) {
-      LOG_ERROR("erase LSFetchCtx from map fail", KR(ret), K(tls_id));
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("erase LSFetchCtx from map fail", KR(ret), K(tls_id));
+      } else {
+        LOG_WARN("erase LSFetchCtx from map fail, ctx not exist", K(tls_id));
+      }
     } else if (OB_ISNULL(fetch_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("LSFetchCtx is NULL, unexcepted error", KR(ret), K(tls_id), K(fetch_ctx));
@@ -407,7 +425,11 @@ bool ObLogLSFetchMgr::CtxLSProgressCond::operator() (const logservice::TenantLSI
     LSFetchInfoForPrint ls_fetch_info;
 
     if (OB_FAIL(ls_fetch_info.init(*ctx))) {
-      LOG_ERROR("init ls_fetch_info fail", KR(ret), K(tls_id), KPC(ctx));
+      if (OB_LS_NOT_EXIST != ret) {
+        LOG_ERROR("init ls_fetch_info fail", KR(ret), K(tls_id), KPC(ctx));
+      } else {
+        ret = OB_SUCCESS;
+      }
     } else if (OB_FAIL(ls_fetch_info_array_.push_back(ls_fetch_info))) {
       LOG_ERROR("part_progress_array_ push back fail", KR(ret), K(tls_id), KPC(ctx), K(ctx_cnt_));
     } else {

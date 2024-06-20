@@ -1669,7 +1669,8 @@ int ObNewTableTabletAllocator::alloc_ls_for_duplicate_table_(
       } else if (OB_TMP_FAIL(ls_status_operator.get_duplicate_ls_status_info(
                              tenant_id,
                              *GCTX.sql_proxy_,
-                             duplicate_ls_status_info))) {
+                             duplicate_ls_status_info,
+                             share::OBCG_DEFAULT/*group_id*/))) {
         if (OB_ENTRY_NOT_EXIST == tmp_ret) {
           LOG_INFO("duplicate log stream not exist, should create one duplicate log stream");
           tmp_ret = OB_SUCCESS;
@@ -1683,6 +1684,10 @@ int ObNewTableTabletAllocator::alloc_ls_for_duplicate_table_(
             LOG_WARN("failed to init arg", KR(ret), K(tenant_id));
           } else if (OB_TMP_FAIL(GCTX.srv_rpc_proxy_->to(leader).timeout(timeout).notify_create_duplicate_ls(arg, result))) {
             LOG_WARN("failed to create tenant duplicate ls", KR(tmp_ret), K(tenant_id), K(leader), K(arg), K(timeout));
+            if (OB_CONFLICT_WITH_CLONE == tmp_ret) {
+              ret = tmp_ret;
+              LOG_WARN("tenant is in clone procedure, can not create new log stream for now", KR(ret), K(tenant_id), K(arg));
+            }
           }
         } else {
           LOG_WARN("fail to get duplicate log stream from table", KR(tmp_ret), K(tenant_id));

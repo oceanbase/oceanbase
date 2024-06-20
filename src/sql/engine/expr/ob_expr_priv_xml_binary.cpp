@@ -14,11 +14,9 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_priv_xml_binary.h"
 #include "ob_expr_lob_utils.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "lib/xml/ob_xml_util.h"
 #include "sql/engine/ob_exec_context.h"
-#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -70,7 +68,6 @@ int ObExprPrivXmlBinary::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-#ifdef OB_BUILD_ORACLE_XML
 int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -134,12 +131,11 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null xml document.", K(ret));
       } else {
-        xml_root = static_cast<ObIMulModeBase *>(xml_doc);
         ObString res_string;
         if (!xml_doc->get_encoding().empty() || xml_doc->get_encoding_flag()) {
           xml_doc->set_encoding(ObXmlUtil::get_charset_name(ObCollationType::CS_TYPE_UTF8MB4_BIN));
         }
-        if (OB_FAIL(xml_root->get_raw_binary(res_string, &tmp_allocator))) {
+        if (OB_FAIL(xml_doc->get_raw_binary(res_string, &tmp_allocator))) {
           LOG_WARN("failed to get xml binary", K(ret), K(xml_plain_text));
         } else {
           ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &res);
@@ -155,14 +151,28 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
     } else { // must be xmlsql type
       // Todo: xml schema validation
       ObMulModeNodeType type = M_NULL;
-      if (OB_FAIL(ObXmlUtil::xml_bin_type(xml_plain_text, type))) {
-      } else if (type == M_UNPARESED_DOC) {
+      ObXmlBin extend(mem_ctx);
+      int64_t size = 0;
+      if (OB_FAIL(ObXmlUtil::xml_bin_header_info(xml_plain_text, type, size))) {
+      } else if (type == M_UNPARESED_DOC || (size < xml_plain_text.length() && type == M_DOCUMENT)) {
         ObString res_string;
         if (OB_FAIL(common::ObMulModeFactory::get_xml_base(mem_ctx, xml_plain_text,
                                                             ObNodeMemType::BINARY_TYPE,
                                                             ObNodeMemType::BINARY_TYPE,
                                                             xml_root))) {
           LOG_WARN("get xml base failed", K(ret));
+        } else if (OB_ISNULL(xml_root)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("xml_root is null", K(ret));
+        } else if (xml_root->check_extend()) {
+          ObXmlBin* bin = static_cast<ObXmlBin*>(xml_root);
+          if (OB_FAIL(bin->merge_extend(extend))) {
+            LOG_WARN("fail to merge extend", K(ret));
+          } else {
+            xml_root = &extend;
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(xml_root->get_raw_binary(res_string, mem_ctx->allocator_))) {
           LOG_WARN("get raw binary failed", K(ret));
         } else {
@@ -186,7 +196,6 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
 
   return ret;
 }
-#endif
 
 int ObExprPrivXmlBinary::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {

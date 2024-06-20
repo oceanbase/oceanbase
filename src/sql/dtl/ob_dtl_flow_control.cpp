@@ -146,7 +146,7 @@ int ObDtlFlowControl::unregister_all_channel()
   ObDtlChannel* ch = nullptr;
   // 这里不能同时pop出来，否则clean recv list时，根据ch去clean
   for (int i = 0; i < chans_.count(); ++i) {
-    if (OB_ISNULL(ch = chans_.at(i))) {
+    if (nullptr == (ch = chans_.at(i))) {
       LOG_WARN("failed to unregister channel", K(ret));
     } else if (OB_FAIL(ch->clean_recv_list())) {
       LOG_WARN("failed to clean channel", K(ret));
@@ -154,6 +154,7 @@ int ObDtlFlowControl::unregister_all_channel()
   }
   for (int64_t i = chans_.count() - 1; 0 <= i; --i) {
     if (OB_FAIL(chans_.pop_back(ch))) {
+      // overwrite ret
       LOG_WARN("failed to unregister channel", K(ret));
     }
   }

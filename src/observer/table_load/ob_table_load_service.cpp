@@ -32,6 +32,7 @@ namespace observer
 using namespace common;
 using namespace lib;
 using namespace share::schema;
+using namespace storage;
 using namespace table;
 using namespace omt;
 
@@ -60,16 +61,12 @@ void ObTableLoadService::ObCheckTenantTask::runTimerTask()
     LOG_WARN("ObTableLoadService::ObCheckTenantTask not init", KR(ret), KP(this));
   } else {
     LOG_DEBUG("table load check tenant", K(tenant_id_));
-    ObTenant *tenant = nullptr;
-    if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id_, tenant))) {
-      LOG_WARN("fail to get tenant", KR(ret), K(tenant_id_));
-    } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
-                           tenant->get_unit_status())) {
-      LOG_DEBUG("tenant unit status not normal, clear", K(tenant_id_), KPC(tenant));
+    if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check_tenant", KR(ret));
       // abort all client task
       service_.abort_all_client_task();
       // fail all current tasks
-      service_.fail_all_ctx(OB_ERR_UNEXPECTED_UNIT_STATUS);
+      service_.fail_all_ctx(ret);
     }
   }
 }
@@ -101,6 +98,7 @@ void ObTableLoadService::ObHeartBeatTask::runTimerTask()
     LOG_DEBUG("table load heart beat", K(tenant_id_));
     ObTableLoadManager &manager = service_.get_manager();
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager.get_all_table_ctx(table_ctx_array))) {
       LOG_WARN("fail to get all table ctx", KR(ret), K(tenant_id_));
     }
@@ -146,17 +144,48 @@ void ObTableLoadService::ObGCTask::runTimerTask()
     LOG_DEBUG("table load start gc", K(tenant_id_));
     ObTableLoadManager &manager = service_.get_manager();
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager.get_all_table_ctx(table_ctx_array))) {
       LOG_WARN("fail to get all  table ctx", KR(ret), K(tenant_id_));
     }
     for (int64_t i = 0; i < table_ctx_array.count(); ++i) {
       ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
-      if (gc_heart_beat_expired_ctx(table_ctx)) {
+      if (gc_mark_delete(table_ctx)) {
+      } else if (gc_heart_beat_expired_ctx(table_ctx)) {
       } else if (gc_table_not_exist_ctx(table_ctx)) {
       }
       manager.put_table_ctx(table_ctx);
     }
   }
+}
+
+bool ObTableLoadService::ObGCTask::gc_mark_delete(ObTableLoadTableCtx *table_ctx)
+{
+  int ret = OB_SUCCESS;
+  bool is_removed = false;
+  if (OB_ISNULL(table_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table ctx is null", KR(ret));
+    is_removed = true;
+  } else {
+    const uint64_t table_id = table_ctx->param_.table_id_;
+    const int64_t task_id = table_ctx->ddl_param_.task_id_;
+    const uint64_t dest_table_id = table_ctx->ddl_param_.dest_table_id_;
+    // check if table ctx is removed
+    if (table_ctx->is_dirty()) {
+      LOG_DEBUG("table load ctx is dirty", K(tenant_id_), K(table_id), K(task_id), K(dest_table_id),
+                "ref_count", table_ctx->get_ref_count());
+      is_removed = true;
+    }
+    // check is mark delete
+    else if (table_ctx->is_mark_delete()) {
+      if (table_ctx->is_stopped() && OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
+        LOG_WARN("fail to remove table ctx", KR(ret), K(tenant_id_), K(table_id), K(task_id), K(dest_table_id));
+      }
+      is_removed = true; // skip other gc
+    }
+  }
+  return is_removed;
 }
 
 bool ObTableLoadService::ObGCTask::gc_heart_beat_expired_ctx(ObTableLoadTableCtx *table_ctx)
@@ -169,22 +198,27 @@ bool ObTableLoadService::ObGCTask::gc_heart_beat_expired_ctx(ObTableLoadTableCtx
     is_removed = true;
   } else {
     const uint64_t table_id = table_ctx->param_.table_id_;
-    const uint64_t hidden_table_id = table_ctx->ddl_param_.dest_table_id_;
+    const int64_t task_id = table_ctx->ddl_param_.task_id_;
+    const uint64_t dest_table_id = table_ctx->ddl_param_.dest_table_id_;
     // check if table ctx is removed
     if (table_ctx->is_dirty()) {
-      LOG_DEBUG("table load ctx is dirty", K(tenant_id_), K(table_id), "ref_count",
-                table_ctx->get_ref_count());
+      LOG_DEBUG("table load ctx is dirty", K(tenant_id_), K(table_id), K(task_id), K(dest_table_id),
+                "ref_count", table_ctx->get_ref_count());
       is_removed = true;
     }
-    // check if heart beat expired
-    else if (nullptr != table_ctx->store_ctx_ && table_ctx->store_ctx_->enable_heart_beat_check()) {
+    // check if heart beat expired, ignore coordinator
+    else if (nullptr == table_ctx->coordinator_ctx_ &&
+             nullptr != table_ctx->store_ctx_ &&
+             table_ctx->store_ctx_->enable_heart_beat_check()) {
       if (OB_UNLIKELY(
             table_ctx->store_ctx_->check_heart_beat_expired(HEART_BEEAT_EXPIRED_TIME_US))) {
-        LOG_INFO("store heart beat expired, abort", K(tenant_id_), K(table_id), K(hidden_table_id));
+        FLOG_INFO("store heart beat expired, abort", K(tenant_id_), K(table_id), K(task_id), K(dest_table_id));
         bool is_stopped = false;
         ObTableLoadStore::abort_ctx(table_ctx, is_stopped);
-        // 先不移除, 防止心跳超时后, 网络恢复, 控制节点查不到table_ctx, 直接认为已经停止
-        // 如果网络一直不恢复, 也可以通过table不存在来gc此table_ctx
+        table_ctx->mark_delete();
+        if (is_stopped && OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
+          LOG_WARN("fail to remove table ctx", KR(ret), K(tenant_id_), K(table_id), K(task_id), K(dest_table_id));
+        }
         is_removed = true; // skip other gc
       }
     }
@@ -220,7 +254,7 @@ bool ObTableLoadService::ObGCTask::gc_table_not_exist_ctx(ObTableLoadTableCtx *t
       const ObTableSchema *table_schema = nullptr;
       if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id_, hidden_table_id, schema_guard,
                                                       table_schema))) {
-        if (OB_UNLIKELY(OB_TABLE_NOT_EXIST != ret)) {
+        if (OB_UNLIKELY(OB_TABLE_NOT_EXIST != ret && OB_TENANT_NOT_EXIST != ret)) {
           LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(hidden_table_id));
         } else {
           LOG_INFO("hidden table not exist, gc table load ctx", K(tenant_id_), K(table_id),
@@ -267,6 +301,7 @@ void ObTableLoadService::ObReleaseTask::runTimerTask()
   } else {
     LOG_DEBUG("table load start release", K(tenant_id_));
     ObArray<ObTableLoadTableCtx *> releasable_table_ctx_array;
+    releasable_table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(service_.manager_.get_releasable_table_ctx_list(releasable_table_ctx_array))) {
       LOG_WARN("fail to get releasable table ctx list", KR(ret), K(tenant_id_));
     }
@@ -308,6 +343,7 @@ void ObTableLoadService::ObClientTaskAutoAbortTask::runTimerTask()
   } else {
     LOG_DEBUG("table load auto abort client task", K(tenant_id_));
     ObArray<ObTableLoadClientTask *> client_task_array;
+    client_task_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(service_.get_client_service().get_all_client_task(client_task_array))) {
       LOG_WARN("fail to get all client task", KR(ret));
     } else {
@@ -315,9 +351,7 @@ void ObTableLoadService::ObClientTaskAutoAbortTask::runTimerTask()
         ObTableLoadClientTask *client_task = client_task_array.at(i);
         if (OB_UNLIKELY(ObTableLoadClientStatus::ERROR == client_task->get_status() ||
                         client_task->get_exec_ctx()->check_status() != OB_SUCCESS)) {
-          if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
-            LOG_WARN("fail to abort client task", KR(ret), KPC(client_task));
-          }
+          client_task->abort();
         }
         ObTableLoadClientService::revert_task(client_task);
       }
@@ -372,6 +406,9 @@ int ObTableLoadService::mtl_init(ObTableLoadService *&service)
   return ret;
 }
 
+
+
+
 int ObTableLoadService::check_tenant()
 {
   int ret = OB_SUCCESS;
@@ -379,15 +416,24 @@ int ObTableLoadService::check_tenant()
   ObTenant *tenant = nullptr;
   if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
     LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
+  } else if (tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_MARK_DELETING
+    || tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER
+    || tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
+    ret = OB_EAGAIN;
+    LOG_WARN("unit is migrate out, should retry direct load", KR(ret), K(tenant->get_unit_status()));
   } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
-                         tenant->get_unit_status())) {
+                         tenant->get_unit_status() && ObUnitInfoGetter::ObUnitStatus::UNIT_MIGRATE_OUT != tenant->get_unit_status())) {
     ret = OB_ERR_UNEXPECTED_UNIT_STATUS;
     LOG_WARN("unit status not normal", KR(ret), K(tenant->get_unit_status()));
   }
   return ret;
 }
 
-int ObTableLoadService::check_support_direct_load(uint64_t table_id)
+int ObTableLoadService::check_support_direct_load(
+    const uint64_t table_id,
+    const ObDirectLoadMethod::Type method,
+    const ObDirectLoadInsertMode::Type insert_mode,
+    const storage::ObDirectLoadMode::Type load_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -397,23 +443,93 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
     const uint64_t tenant_id = MTL_ID();
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
-    bool trigger_enabled = false;
-    bool has_udt_column = false;
     if (OB_FAIL(
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else {
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode);
     }
-    // check if it is an oracle temporary table
-    else if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support oracle temporary table");
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
+                                                  uint64_t table_id,
+                                                  const ObDirectLoadMethod::Type method,
+                                                  const ObDirectLoadInsertMode::Type insert_mode,
+                                                  const storage::ObDirectLoadMode::Type load_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_id));
+  } else {
+    const uint64_t tenant_id = MTL_ID();
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table schema is null", KR(ret));
+    } else {
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode);
     }
-    // check if it is a view
-    else if (table_schema->is_view_table()) {
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
+                                                  const ObTableSchema *table_schema,
+                                                  const ObDirectLoadMethod::Type method,
+                                                  const ObDirectLoadInsertMode::Type insert_mode,
+                                                  const storage::ObDirectLoadMode::Type load_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == table_schema ||
+                  !ObDirectLoadMethod::is_type_valid(method) ||
+                  !ObDirectLoadInsertMode::is_type_valid(insert_mode))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(method), K(insert_mode));
+  } else {
+    const uint64_t tenant_id = MTL_ID();
+    bool trigger_enabled = false;
+    bool has_udt_column = false;
+    bool has_fts_index = false;
+    bool has_multivalue_index = false;
+    bool has_invisible_column = false;
+    bool has_unused_column = false;
+    // check if it is a user table
+    if (!table_schema->is_user_table()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support view table", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support view table");
+      if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
+        LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support oracle temporary table");
+      } else if (table_schema->is_view_table()) {
+        LOG_WARN("direct-load does not support view table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support view table");
+      } else if (table_schema->is_mlog_table()) {
+        LOG_WARN("direct-load does not support materialized view log table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support materialized view log table");
+      } else {
+        LOG_WARN("direct-load does not support non-user table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support non-user table");
+      }
+    }
+    // check if exists full-text search index
+    else if (OB_FAIL(table_schema->check_has_fts_index(schema_guard, has_fts_index))) {
+      LOG_WARN("fail to check has full-text search index", K(ret));
+    } else if (has_fts_index) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has full-text search index", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has full-text search index");
+    }
+    // check if exists multi-value index
+    else if (OB_FAIL(table_schema->check_has_multivalue_index(schema_guard, has_multivalue_index))) {
+      LOG_WARN("fail to check has multivalue index", K(ret));
+    } else if (has_multivalue_index) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has multi-value index", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has multi-value index");
     }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {
@@ -436,6 +552,63 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has udt column", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has udt column");
+    }
+    // check has invisible column
+    else if (OB_FAIL(ObTableLoadSchema::check_has_invisible_column(table_schema, has_invisible_column))) {
+      LOG_WARN("fail to check has invisible column", KR(ret));
+    } else if (has_invisible_column) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has invisible column", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has invisible column");
+    }
+    // check has unused column
+    else if (OB_FAIL(ObTableLoadSchema::check_has_unused_column(table_schema, has_unused_column))) {
+      LOG_WARN("fail to check has unused column", KR(ret));
+    } else if (has_unused_column) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has unused column", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has unused column");
+    }
+    // check if table has mlog
+    else if (table_schema->has_mlog_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with materialized view log");
+    } else if (ObDirectLoadMethod::is_incremental(method)) { // incremental direct-load
+      uint64_t compat_version = 0;
+      if (OB_UNLIKELY(ObDirectLoadInsertMode::INC_REPLACE != insert_mode)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("using incremental direct-load without inc_replace is not supported", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "using incremental direct-load without inc_replace is not supported");
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (compat_version < DATA_VERSION_4_3_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("version lower than 4.3.1.0 does not support incremental direct-load", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.1.0 does not support incremental direct-load");
+      } else if (table_schema->get_index_tid_count() > 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("incremental direct-load does not support table with indexes", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with indexes");
+      } else if (table_schema->get_foreign_key_infos().count() > 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with foreign keys");
+      }
+    } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
+      if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
+      } else if (ObDirectLoadMode::is_insert_overwrite(load_mode)) {
+        uint64_t compat_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+          LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+        } else if (compat_version < DATA_VERSION_4_3_2_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("version lower than 4.3.2.0 does not support insert overwrite", KR(ret));
+          FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.2.0 does not support insert overwrite");
+        }
+      }
     }
   }
   return ret;
@@ -479,8 +652,25 @@ int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
   } else {
-    ObTableLoadUniqueKey key(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
-    ret = service->get_manager().remove_table_ctx(key, table_ctx);
+    common::ObAddr leader;
+    ObDirectLoadResourceReleaseArg release_arg;
+    release_arg.tenant_id_ = MTL_ID();
+    release_arg.task_key_ = ObTableLoadUniqueKey(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
+    bool is_sort = (table_ctx->param_.exe_mode_ == ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT ||
+                    table_ctx->param_.exe_mode_ == ObTableLoadExeMode::MEM_COMPACT);
+    if (OB_FAIL(service->get_manager().remove_table_ctx(release_arg.task_key_, table_ctx))) {
+      LOG_WARN("fail to remove_table_ctx", KR(ret), K(release_arg.task_key_));
+    } else if (table_ctx->is_assigned_memory() &&
+               OB_FAIL(service->assigned_memory_manager_.recycle_memory(is_sort, table_ctx->param_.avail_memory_))) {
+      LOG_WARN("fail to recycle_memory", KR(ret), K(release_arg.task_key_));
+    } else if (table_ctx->is_assigned_resource()) {
+      if (OB_FAIL(service->assigned_task_manager_.delete_assigned_task(release_arg.task_key_))) {
+        LOG_WARN("fail to delete_assigned_task", KR(ret), K(release_arg.task_key_));
+      } else if (OB_FAIL(ObTableLoadResourceService::release_resource(release_arg))) {
+        LOG_WARN("fail to release resource", KR(ret));
+        ret = OB_SUCCESS;   // 允许失败，资源管理模块可以回收
+      }
+    }
   }
   return ret;
 }
@@ -543,6 +733,10 @@ int ObTableLoadService::init(uint64_t tenant_id)
     LOG_WARN("ObTableLoadService init twice", KR(ret), KP(this));
   } else if (OB_FAIL(manager_.init())) {
     LOG_WARN("fail to init table ctx manager", KR(ret));
+  } else if (OB_FAIL(assigned_memory_manager_.init())) {
+    LOG_WARN("fail to init assigned memory manager", KR(ret));
+  } else if (OB_FAIL(assigned_task_manager_.init())) {
+    LOG_WARN("fail to init assigned task manager", KR(ret));
   } else if (OB_FAIL(client_service_.init())) {
     LOG_WARN("fail to init client service", KR(ret));
   } else if (OB_FAIL(check_tenant_task_.init(tenant_id))) {
@@ -616,14 +810,13 @@ void ObTableLoadService::abort_all_client_task()
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadClientTask *> client_task_array;
+  client_task_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(client_service_.get_all_client_task(client_task_array))) {
     LOG_WARN("fail to get all client task", KR(ret));
   } else {
     for (int i = 0; i < client_task_array.count(); ++i) {
       ObTableLoadClientTask *client_task = client_task_array.at(i);
-      if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
-        LOG_WARN("fail to abort client task", KR(ret), KPC(client_task));
-      }
+      client_task->abort();
       ObTableLoadClientService::revert_task(client_task);
     }
   }
@@ -633,6 +826,7 @@ void ObTableLoadService::fail_all_ctx(int error_code)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadTableCtx *> table_ctx_array;
+  table_ctx_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(manager_.get_all_table_ctx(table_ctx_array))) {
     LOG_WARN("fail to get all table ctx list", KR(ret));
   } else {
@@ -664,6 +858,7 @@ void ObTableLoadService::release_all_ctx()
     abort_all_client_task();
     fail_all_ctx(OB_ERR_UNEXPECTED_UNIT_STATUS);
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager_.get_inactive_table_ctx_list(table_ctx_array))) {
       LOG_WARN("fail to get inactive table ctx list", KR(ret), K(tenant_id));
     } else {
@@ -700,6 +895,7 @@ void ObTableLoadService::release_all_ctx()
       LOG_INFO("[DIRECT LOAD DIRTY LIST]", "count", manager_.get_dirty_list_count());
     }
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager_.get_releasable_table_ctx_list(table_ctx_array))) {
       LOG_WARN("fail to get releasable table ctx list", KR(ret));
     }
@@ -718,6 +914,105 @@ void ObTableLoadService::release_all_ctx()
       ob_usleep(1 * 1000 * 1000);
     }
   }
+}
+
+int ObTableLoadService::get_memory_limit(int64_t &memory_limit)
+{
+  int ret = OB_SUCCESS;
+  ObObj value;
+  int64_t pctg = 0;
+  int64_t tenant_id = MTL_ID();
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVarSchema *var_schema = NULL;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null");
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE, var_schema))) {
+    LOG_WARN("get tenant system variable failed", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(var_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("var_schema is null");
+  } else if (OB_FAIL(var_schema->get_value(NULL, NULL, value))) {
+    LOG_WARN("get value from var_schema failed", K(ret), K(*var_schema));
+  } else if (OB_FAIL(value.get_int(pctg))) {
+    LOG_WARN("get int from value failed", K(ret), K(value));
+  } else {
+    memory_limit = lib::get_tenant_memory_limit(tenant_id) * pctg / 100;
+  }
+  return ret;
+}
+
+int ObTableLoadService::add_assigned_task(ObDirectLoadResourceApplyArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->assigned_task_manager_.add_assigned_task(arg);
+  }
+  return ret;
+}
+
+int ObTableLoadService::assign_memory(bool is_sort, int64_t assign_memory)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->assigned_memory_manager_.assign_memory(is_sort, assign_memory);
+  }
+  return ret;
+}
+
+int ObTableLoadService::recycle_memory(bool is_sort, int64_t assign_memory)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->assigned_memory_manager_.recycle_memory(is_sort, assign_memory);
+  }
+
+  return ret;
+}
+
+int ObTableLoadService::get_sort_memory(int64_t &sort_memory)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->assigned_memory_manager_.get_sort_memory(sort_memory);
+  }
+  return ret;
+}
+
+int ObTableLoadService::refresh_and_check_resource(ObDirectLoadResourceCheckArg &arg, ObDirectLoadResourceOpRes &res)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    res.avail_memory_ = service->assigned_memory_manager_.get_avail_memory();
+    if (!arg.first_check_ && OB_FAIL(service->assigned_memory_manager_.refresh_avail_memory(arg.avail_memory_))) {
+      LOG_WARN("fail to refresh_avail_memory", KR(ret));
+    } else if (OB_FAIL(service->assigned_task_manager_.get_assigned_tasks(res.assigned_array_))) {
+      LOG_WARN("fail to get_assigned_tasks", KR(ret));
+    }
+  }
+  return ret;
 }
 
 } // namespace observer

@@ -135,8 +135,8 @@ int ObLeaseStateMgr::register_self()
     }
 
     LOG_INFO("start_heartbeat anyway");
-    // ignore ret overwrite
     if (OB_FAIL(start_heartbeat())) {
+      // overwrite ret
       LOG_ERROR("start_heartbeat failed", K(ret));
     }
   }
@@ -288,6 +288,7 @@ int ObLeaseStateMgr::renew_lease()
     }
     const bool repeat = false;
     if (OB_FAIL(hb_timer_.schedule(hb_, DELAY_TIME, repeat))) {
+      // overwrite ret
       LOG_WARN("schedule failed", LITERAL_K(DELAY_TIME), K(repeat), K(ret));
     }
   }
@@ -359,6 +360,7 @@ int ObLeaseStateMgr::do_renew_lease()
   ObLeaseResponse lease_response;
   ObAddr rs_addr;
   NG_TRACE(do_renew_lease_begin);
+  DEBUG_SYNC(BEFORE_SEND_HB);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));

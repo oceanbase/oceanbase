@@ -23,11 +23,17 @@ namespace sql
 class ObRawExprDeduceType: public ObRawExprVisitor
 {
 public:
-  ObRawExprDeduceType(const ObSQLSessionInfo *my_session)
+  ObRawExprDeduceType(const ObSQLSessionInfo *my_session,
+                      bool solidify_session_vars,
+                      const ObLocalSessionVar *local_vars,
+                      int64_t local_vars_id)
     : ObRawExprVisitor(),
       my_session_(my_session),
       alloc_(),
-      expr_factory_(NULL)
+      expr_factory_(NULL),
+      my_local_vars_(local_vars),
+      local_vars_id_(local_vars_id),
+      solidify_session_vars_(solidify_session_vars)
   {}
   virtual ~ObRawExprDeduceType()
   {
@@ -55,6 +61,7 @@ public:
   virtual int visit(ObPseudoColumnRawExpr &expr);
   virtual int visit(ObUDFRawExpr &expr);
   virtual int visit(ObPlQueryRefRawExpr &expr);
+  virtual int visit(ObMatchFunRawExpr &expr);
 
   int add_implicit_cast(ObOpRawExpr &parent, const ObCastMode &cast_mode);
   int add_implicit_cast(ObCaseOpRawExpr &parent, const ObCastMode &cast_mode);
@@ -100,7 +107,7 @@ private:
 
   int set_agg_group_concat_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
   int set_json_agg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type, bool &need_add_cast);
-
+  int set_asmvt_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
   int set_agg_json_array_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
 
   int set_agg_min_max_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type,
@@ -146,6 +153,11 @@ private:
   const sql::ObSQLSessionInfo *my_session_;
   common::ObArenaAllocator alloc_;
   ObRawExprFactory *expr_factory_;
+  //deduce with current session vars if solidify_session_vars_ is true,
+  //otherwise deduce with my_local_vars_ if my_local_vars_ is not null
+  const ObLocalSessionVar *my_local_vars_;
+  int64_t local_vars_id_;
+  bool solidify_session_vars_;
   // data members
 };
 

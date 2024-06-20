@@ -117,7 +117,7 @@ int ObMPStmtFetch::before_process()
               pos += len;
             } else {
               ret = OB_ERR_FETCH_OUT_SEQUENCE;
-              LOG_ERROR("cursor not found", K(cursor_id_), K(ret));
+              LOG_WARN("cursor not found", K(cursor_id_), K(ret));
             }
             if (session != NULL) {
               revert_session(session);
@@ -151,6 +151,7 @@ int ObMPStmtFetch::set_session_active(ObSQLSessionInfo &session) const
     session.set_query_start_time(get_receive_timestamp());
     session.set_mysql_cmd(obmysql::COM_STMT_FETCH);
     session.update_last_active_time();
+    session.set_is_request_end(false);
   }
   return ret;
 }
@@ -167,7 +168,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
   ObPLCursorInfo *cursor = session.get_cursor(cursor_id_);
   if (OB_ISNULL(cursor)) {
     ret = OB_ERR_FETCH_OUT_SEQUENCE;
-    LOG_ERROR("cursor not found", K(cursor_id_), K(ret));
+    LOG_WARN("cursor not found", K(cursor_id_), K(ret));
     //如果发生fetch过程中找不到cursor的情况，无论什么原因立刻断连接，由应用程序进行容错
     //disconnect();
   } else {
@@ -322,6 +323,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
         int64_t cur = 0;
         const ColumnsFieldArray *fields = NULL;
         ObArenaAllocator allocator(ObModIds::OB_SQL_EXECUTOR);
+        ObSchemaGetterGuard schema_guard;
         SMART_VAR(ObExecContext, tmp_exec_ctx, allocator) {
           if (cursor.is_streaming()) {
             CK (OB_NOT_NULL(cursor.get_cursor_handler()));
@@ -353,7 +355,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("get unexpect streaming result set.", K(ret), K(cursor.get_id()));
               }
-              if (OB_OCI_DEFAULT != offset_type_ || OB_OCI_FETCH_NEXT != offset_type_) {
+              if (OB_OCI_DEFAULT != offset_type_ && OB_OCI_FETCH_NEXT != offset_type_) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("streaming result set not support this offset type.", K(ret), 
                                                                                K(cursor.get_id()), 
@@ -459,12 +461,16 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
               }
             }
           }
-          if (OB_SUCC(ret) && !need_fetch && NULL != row) {
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(), schema_guard))) {
+            LOG_WARN("get tenant schema guard failed ", K(ret), K(session.get_effective_tenant_id()));
+          } else if (!need_fetch && NULL != row) {
             if (has_long_data()) {
               OZ (response_row(session, *(const_cast<common::ObNewRow*>(row)), 
-                               fields, column_flag_, cursor_id_, true, cursor.is_packed()));
+                               fields, column_flag_, cursor_id_, true, cursor.is_packed(), &schema_guard));
             } else {
-              OZ (response_row(session, *(const_cast<common::ObNewRow*>(row)), fields, cursor.is_packed()));
+              OZ (response_row(session, *(const_cast<common::ObNewRow*>(row)), fields, cursor.is_packed(), NULL, &schema_guard));
             }
             if (OB_FAIL(ret)) {
               LOG_WARN("response row fail.", K(ret));
@@ -489,9 +495,9 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
             cursor.set_current_position(cur);
             if (has_long_data()) {
               OZ (response_row(session, row, fields, column_flag_, cursor_id_,
-                                0 == row_num ? true : false, cursor.is_packed()));
+                                0 == row_num ? true : false, cursor.is_packed(), &schema_guard));
             } else {
-              OZ (response_row(session, row, fields, cursor.is_packed()));
+              OZ (response_row(session, row, fields, cursor.is_packed(), exec_ctx, &schema_guard));
             }
             if (OB_SUCC(ret)) {
               ++row_num;
@@ -507,7 +513,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
           if (OB_ITER_END == ret || OB_READ_NOTHING == ret) {
             ret = OB_SUCCESS;
             // need_fetch 为 true 并且 得到了 OB_ITER_END 错误码，说明正常找到了最后一行，要设置last_row
-            if (need_fetch) {
+            if (need_fetch || !cursor.is_scrollable()) {
               last_row = true;
             }
           }
@@ -521,6 +527,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
         const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
         uint16_t warning_count = 0;
         if (OB_ISNULL(warnings_buf)) {
+          // ignore ret
           LOG_WARN("can not get thread warnings buffer");
         } else {
           warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
@@ -610,11 +617,8 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session,
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
   setup_wb(session);
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
-  const bool enable_trace_log = lib::is_trace_log_enabled();
-  if (enable_trace_log) {
-    //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
-    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-  }
+  //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
+  ObThreadLogLevelUtils::init(session.get_log_id_level_map());
   // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,
   // observer will force refresh schema if local_schema_version < last_schema_version;
   if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
@@ -629,9 +633,7 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session,
       ret = do_process(session, need_response_error);
     }
   }
-  if (enable_trace_log) {
-    ObThreadLogLevelUtils::clear();
-  }
+  ObThreadLogLevelUtils::clear();
   const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
   if (debug_sync_timeout > 0) {
     // ignore thread local debug sync actions to session actions failed
@@ -687,6 +689,7 @@ int ObMPStmtFetch::process()
     THIS_WORKER.set_session(sess);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
+    session.init_use_rich_format();
     session.get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
@@ -695,6 +698,8 @@ int ObMPStmtFetch::process()
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(cursor_id), K(ret));
+    } else if (OB_FAIL(process_kill_client_session(session))) {
+      LOG_WARN("client session has been killed", K(ret));
     } else if (OB_UNLIKELY(session.is_zombie())) {
       //session has been killed some moment ago
       ret = OB_ERR_SESSION_INTERRUPTED;
@@ -777,11 +782,12 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
                                 char *column_map,
                                 int32_t stmt_id,
                                 bool first_time,
-                                bool is_packed)
+                                bool is_packed,
+                                ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   common::ObNewRow row;
-  ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(true));
+  ObPieceCache *piece_cache = session.get_piece_cache(true);
   if (OB_ISNULL(piece_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("piece cache is null.", K(ret), K(stmt_id));
@@ -875,7 +881,7 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(response_row(session, row, fields, is_packed))) {
+  } else if (OB_FAIL(response_row(session, row, fields, is_packed, NULL, schema_guard))) {
     LOG_WARN("response row fail.", K(ret), K(stmt_id));
   } else {
     LOG_DEBUG("response row success.", K(stmt_id));

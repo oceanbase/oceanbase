@@ -31,7 +31,6 @@ public:
   virtual void runTimerTask();
 private:
   IPalfEnvImpl *palf_env_impl_;
-  int64_t warn_time_;
   int tg_id_;
   bool is_inited_;
 };

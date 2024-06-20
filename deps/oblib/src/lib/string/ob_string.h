@@ -371,6 +371,18 @@ public:
     return match;
   }
 
+  inline bool suffix_match(const char *str) const
+  {
+    bool match = false;
+    if (OB_NOT_NULL(str)) {
+      const int64_t len = strlen(str);
+      if (len <= data_length_ && 0 == MEMCMP(str, ptr_ + data_length_ - len, len)) {
+        match = true;
+      }
+    }
+    return match;
+  }
+
   inline bool prefix_match(const char *str) const
   {
     obstr_size_t len = 0;

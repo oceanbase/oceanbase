@@ -30,6 +30,8 @@ namespace sql
 class ObExecContext;
 class ObSQLSessionInfo;
 class ObSqlExpression;
+class ObBasicSessionInfo;
+class ObSessionVariable;
 }
 
 namespace share
@@ -57,6 +59,7 @@ struct ObPackageStateVersion;
 class ObPLPackageState;
 class ObPLCondition;
 class ObPLCursor;
+class ObPLCacheCtx;
 
 struct ObSysPackageFile {
   const char *package_name;
@@ -161,6 +164,8 @@ public:
   int check_version(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                     const ObPackageStateVersion &state_version, bool &match);
 
+  static int notify_package_variable_deserialize(sql::ObBasicSessionInfo *session, const ObString &name, const sql::ObSessionVariable &value);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLPackageManager);
 
@@ -181,6 +186,12 @@ private:
                              int64_t package_id,
                              const ObPackageStateVersion &state_version,
                              ObPLPackageState *&package_state);
+
+  int update_special_package_status(const ObPLResolveCtx &resolve_ctx,
+                                    uint64_t package_id,
+                                    const ObPLVar &var,
+                                    const ObObj &old_val,
+                                    const ObObj &new_val);
 };
 } //end namespace pl
 } //end namespace oceanbase

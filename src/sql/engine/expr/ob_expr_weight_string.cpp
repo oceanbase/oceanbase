@@ -31,7 +31,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprWeightString::ObExprWeightString(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_WEIGHT_STRING, N_WEIGHT_STRING, MORE_THAN_ZERO, NOT_VALID_FOR_GENERATED_COL)
+    : ObStringExprOperator(alloc, T_FUN_SYS_WEIGHT_STRING, N_WEIGHT_STRING, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL)
 {
 }
 ObExprWeightString::~ObExprWeightString()
@@ -43,9 +43,10 @@ int ObExprWeightString::calc_result_typeN(ObExprResType &type,
                                           ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  UNUSED(param_num);
+  CK (5 == param_num);
   CK (OB_NOT_NULL(type_ctx.get_session()));
-  if (NOT_ROW_DIMENSION != row_dimension_ || ObMaxType == types_stack[0].get_type()) {
+  if (OB_FAIL(ret)) {
+  } else if (NOT_ROW_DIMENSION != row_dimension_ || ObMaxType == types_stack[0].get_type()) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
   } else {
     uint64_t max_length = OB_MAX_VARBINARY_LENGTH; // The maximum length of the result of WEIGHT_STRING()
@@ -70,25 +71,28 @@ int ObExprWeightString::calc_result_typeN(ObExprResType &type,
     }
     ObCollationType collation_type = types_stack[0].get_collation_type();
     const ObCharsetInfo *cs = ObCharset::get_charset(collation_type); 
-    if (types_stack[0].get_type() == ObDateTimeType ||
-        types_stack[0].get_type() == ObTimestampType || 
-        types_stack[0].get_type() == ObDateType ||
-        types_stack[0].get_type() == ObTimeType ) {
-      // For types such as date, time, etc., the max_lenght is the length of the type entered
-      max_length = types_stack[0].get_length();
-    } else if (result_length > 0) {
-      max_length = result_length;
-    } else if (as_binary) {
-      // In the case of as_binary, the max_length with nweight as the output result
-      max_length = nweight; 
-    } else {
-      // If the input is others, use cs->mbmaxlen to calculate the max_length
-      max_length = cs->mbmaxlen * MAX(nweight, types_stack[0].get_length()*cs->mbmaxlen);
+    CK (OB_NOT_NULL(cs));
+    if (OB_SUCC(ret)) {
+      if (types_stack[0].get_type() == ObDateTimeType ||
+          types_stack[0].get_type() == ObTimestampType ||
+          types_stack[0].get_type() == ObDateType ||
+          types_stack[0].get_type() == ObTimeType ) {
+        // For types such as date, time, etc., the max_lenght is the length of the type entered
+        max_length = types_stack[0].get_length();
+      } else if (result_length > 0) {
+        max_length = result_length;
+      } else if (as_binary) {
+        // In the case of as_binary, the max_length with nweight as the output result
+        max_length = nweight;
+      } else {
+        // If the input is others, use cs->mbmaxlen to calculate the max_length
+        max_length = cs->mbmaxlen * MAX(nweight, types_stack[0].get_length()*cs->mbmaxlen);
+      }
+      type.set_varchar();
+      type.set_collation_type(CS_TYPE_BINARY);
+      type.set_collation_level(coll_level);
+      type.set_length(max_length);
     }
-    type.set_varchar();
-    type.set_collation_type(CS_TYPE_BINARY);
-    type.set_collation_level(coll_level);
-    type.set_length(max_length);
   }
   return ret;
 }
@@ -101,7 +105,11 @@ int ObExprWeightString::eval_weight_string(const ObExpr &expr, ObEvalCtx &ctx, O
   ObDatum *nweights_arg = NULL;
   ObDatum *flags_arg = NULL;
   ObDatum *as_binary_arg = NULL;
-  if (OB_FAIL(expr.args_[0]->eval(ctx, arg)) ||
+  if (OB_ISNULL(expr.args_[0]) || OB_ISNULL(expr.args_[1]) || OB_ISNULL(expr.args_[2]) ||
+      OB_ISNULL(expr.args_[3]) || OB_ISNULL(expr.args_[4])) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, arg)) ||
       OB_FAIL(expr.args_[1]->eval(ctx, result_length_arg)) ||
       OB_FAIL(expr.args_[2]->eval(ctx, nweights_arg)) ||
       OB_FAIL(expr.args_[3]->eval(ctx, flags_arg)) ||
@@ -137,64 +145,70 @@ int ObExprWeightString::eval_weight_string(const ObExpr &expr, ObEvalCtx &ctx, O
         } else {
           LOG_WARN("Failed to get max allow packet size", K(ret));
         }
-      }
-      // Get the character set and collation information of the input string
-      ObCollationType collation_type = CS_TYPE_INVALID;
-      if (as_binary) {
-        collation_type  = CS_TYPE_BINARY;
       } else {
-        collation_type = expr.args_[0]->datum_meta_.cs_type_;
-      }
-      const ObCharsetInfo *cs = ObCharset::get_charset(collation_type);
-      flags = ob_strxfrm_flag_normalize(flags, cs->levels_for_order);
-      // calc the length of result
-      size_t frm_length = 0;
-      size_t tmp_length = 0;
-      if (result_length > 0) {
-        tmp_length = result_length;
-      } else {
-        tmp_length = cs->coll->strnxfrmlen(cs, cs->mbmaxlen*MAX(str.length() , nweights));
-      }
-      if (tmp_length >= max_allowed_packet) {
-        // The return result exceeds the maximum limit and returns NULL.
-        res_datum.set_null();
-      } else {
-        int used_nweights = nweights;
-        size_t input_length = str.length();
-        if (used_nweights) {
-          //truncate input string
-          input_length = std::min(input_length, cs->cset->charpos(cs, str.ptr(), str.ptr() + str.length(), nweights));
+
+
+        // Get the character set and collation information of the input string
+        ObCollationType collation_type = CS_TYPE_INVALID;
+        if (as_binary) {
+          collation_type  = CS_TYPE_BINARY;
         } else {
-          //calc char length
-          used_nweights = cs->cset->numchars(cs, str.ptr(), str.ptr() + str.length());
+          collation_type = expr.args_[0]->datum_meta_.cs_type_;
         }
-        bool is_valid_unicode_tmp = 1;
-        char *out_buf = expr.get_str_res_mem(ctx, tmp_length);
-        // For the case where the input is an empty string but the nweight is not 0,
-        // the weight_string function will call strnxfrm() to padding the result
-        // eg:
-        // mysql> select HEX(WEIGHT_STRING('' as char(3)));
-        // +-----------------------------------+
-        // | HEX(WEIGHT_STRING('' as char(3))) |
-        // +-----------------------------------+
-        // | 002000200020                      |
-        // +-----------------------------------+
-        // However, the strnxfrm requires that the input cannot be a null ptr,
-        // so an empty string is set as the input.
-        const char* tmp_empty_str = "";
-        if (OB_ISNULL(out_buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc output buf",K(ret));
-        } else {
-          frm_length = cs->coll->strnxfrm(cs,
-                                        reinterpret_cast<uchar *>(out_buf),
-                                        tmp_length,
-                                        used_nweights,
-                                        str.ptr() != NULL? reinterpret_cast<const uchar *>(str.ptr()) : reinterpret_cast<const uchar *>(tmp_empty_str),
-                                        input_length,
-                                        flags,
-                                        &is_valid_unicode_tmp);
-          res_datum.set_string(out_buf,frm_length);
+        const ObCharsetInfo *cs = ObCharset::get_charset(collation_type);
+        CK (OB_NOT_NULL(cs));
+        if (OB_SUCC(ret)) {
+          flags = ob_strxfrm_flag_normalize(flags, cs->levels_for_order);
+          // calc the length of result
+          size_t frm_length = 0;
+          size_t tmp_length = 0;
+          if (result_length > 0) {
+            tmp_length = result_length;
+          } else {
+            tmp_length = cs->coll->strnxfrmlen(cs, cs->mbmaxlen*MAX(str.length() , nweights));
+          }
+          if (tmp_length >= max_allowed_packet) {
+            // The return result exceeds the maximum limit and returns NULL.
+            res_datum.set_null();
+          } else {
+            int used_nweights = nweights;
+            size_t input_length = str.length();
+            if (used_nweights) {
+              //truncate input string
+              input_length = std::min(input_length, cs->cset->charpos(cs, str.ptr(), str.ptr() + str.length(), nweights));
+            } else {
+              //calc char length
+              used_nweights = cs->cset->numchars(cs, str.ptr(), str.ptr() + str.length());
+            }
+            bool is_valid_unicode_tmp = 1;
+            char *out_buf = expr.get_str_res_mem(ctx, tmp_length);
+            // For the case where the input is an empty string but the nweight is not 0,
+            // the weight_string function will call strnxfrm() to padding the result
+            // eg:
+            // mysql> select HEX(WEIGHT_STRING('' as char(3)));
+            // +-----------------------------------+
+            // | HEX(WEIGHT_STRING('' as char(3))) |
+            // +-----------------------------------+
+            // | 002000200020                      |
+            // +-----------------------------------+
+            // However, the strnxfrm requires that the input cannot be a null ptr,
+            // so an empty string is set as the input.
+            const char* tmp_empty_str = "";
+            if (OB_ISNULL(out_buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to alloc output buf",K(ret));
+            } else {
+              frm_length = cs->coll->strnxfrm(cs,
+                                            reinterpret_cast<uchar *>(out_buf),
+                                            tmp_length,
+                                            used_nweights,
+                                            str.ptr() != NULL? reinterpret_cast<const uchar *>(str.ptr()) : reinterpret_cast<const uchar *>(tmp_empty_str),
+                                            input_length,
+                                            flags,
+                                            &is_valid_unicode_tmp);
+              res_datum.set_string(out_buf,frm_length);
+            }
+          }
         }
       }
     }

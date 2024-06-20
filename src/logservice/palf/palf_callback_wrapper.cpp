@@ -39,7 +39,7 @@ void PalfFSCbWrapper::del_cb_impl(PalfFSCbNode *cb_impl)
   (void)list_.remove(cb_impl);
 }
 
-int PalfFSCbWrapper::update_end_lsn(int64_t id, const LSN &end_lsn, const int64_t proposal_id)
+int PalfFSCbWrapper::update_end_lsn(int64_t id, const LSN &end_lsn, const share::SCN &end_scn, const int64_t proposal_id)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(true == list_.is_empty())) {
@@ -52,8 +52,8 @@ int PalfFSCbWrapper::update_end_lsn(int64_t id, const LSN &end_lsn, const int64_
       if (NULL == cb) {
         ret = OB_ERR_UNEXPECTED;
         PALF_LOG(ERROR, "PalfFSCb is NULL, unexpect error", KPC(node));
-      } else if (OB_SUCCESS != (tmp_ret = cb->update_end_lsn(id, end_lsn, proposal_id))) {
-        PALF_LOG(ERROR, "update_end_lsn failed", K(tmp_ret), K(id), K(end_lsn), K(proposal_id), KPC(node));
+      } else if (OB_SUCCESS != (tmp_ret = cb->update_end_lsn(id, end_lsn, end_scn, proposal_id))) {
+        PALF_LOG(ERROR, "update_end_lsn failed", K(tmp_ret), K(id), K(end_lsn), K(end_scn), K(proposal_id), KPC(node));
       }
     }
   }
@@ -175,7 +175,9 @@ LogPlugins::LogPlugins()
     palf_monitor_lock_(),
     palf_monitor_(NULL),
     palflite_monitor_lock_(),
-    palflite_monitor_(NULL) { }
+    palflite_monitor_(NULL),
+    locality_cb_lock_(),
+    locality_cb_(NULL) { }
 
 LogPlugins::~LogPlugins()
 {
@@ -195,6 +197,10 @@ void LogPlugins::destroy()
   {
     common::RWLock::WLockGuard guard(palflite_monitor_lock_);
     palflite_monitor_ = NULL;
+  }
+  {
+    common::RWLock::WLockGuard guard(locality_cb_lock_);
+    locality_cb_ = NULL;
   }
 }
 
@@ -284,6 +290,36 @@ int LogPlugins::del_plugin(PalfLiteMonitorCb *plugin)
   if (OB_NOT_NULL(palflite_monitor_)) {
     PALF_LOG(INFO, "del_plugin success", KP_(palflite_monitor));
     palflite_monitor_ = NULL;
+  }
+  return ret;
+}
+
+template<>
+int LogPlugins::add_plugin(PalfLocalityInfoCb *plugin)
+{
+  int ret = OB_SUCCESS;
+  common::RWLock::WLockGuard guard(locality_cb_lock_);
+  if (OB_ISNULL(plugin)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "Palf plugin is NULL", KP(plugin));
+  } else if (OB_NOT_NULL(locality_cb_)) {
+    ret = OB_OP_NOT_ALLOW;
+    PALF_LOG(INFO, "Palf plugin is not NULL", KP(plugin), KP_(locality_cb));
+  } else {
+    locality_cb_ = plugin;
+    PALF_LOG(INFO, "add_plugin success", KP(plugin));
+  }
+  return ret;
+}
+
+template<>
+int LogPlugins::del_plugin(PalfLocalityInfoCb *plugin)
+{
+  int ret = OB_SUCCESS;
+  common::RWLock::WLockGuard guard(locality_cb_lock_);
+  if (OB_NOT_NULL(locality_cb_)) {
+    PALF_LOG(INFO, "del_plugin success", KP_(locality_cb));
+    locality_cb_ = NULL;
   }
   return ret;
 }

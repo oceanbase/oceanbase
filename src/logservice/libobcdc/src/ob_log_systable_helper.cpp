@@ -20,7 +20,7 @@
 #include "common/ob_role.h"                                     // LEADER
 
 #include "share/inner_table/ob_inner_table_schema_constants.h"  // OB_***_TNAME
-#include "share/schema/ob_schema_struct.h"                      // TenantStatus
+#include "share/schema/ob_schema_struct.h"                      // TenantStatus, ObTenantStatus
 #include "ob_log_instance.h"                                    // TCTX
 #include "ob_log_config.h"                                      // ObLogConfig, TCONF
 #include "ob_log_utils.h"
@@ -55,14 +55,13 @@ int QueryClusterIdStrategy::build_sql_statement(char *sql_buf,
 {
   int ret = OB_SUCCESS;
   pos = 0;
-  const char *query_sql = "SELECT DISTINCT VALUE FROM GV$OB_PARAMETERS WHERE NAME = 'cluster_id'";
 
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     LOG_ERROR("invalid argument", K(sql_buf), K(mul_statement_buf_len));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-          "%s", query_sql))) {
-    LOG_ERROR("build sql fail", KR(ret), K(pos), K(query_sql), "buf_size", mul_statement_buf_len, K(sql_buf));
+          "SELECT DISTINCT VALUE FROM %s WHERE NAME = 'cluster_id'", OB_GV_OB_PARAMETERS_TNAME))) {
+    LOG_ERROR("build sql fail", KR(ret), K(pos), "buf_size", mul_statement_buf_len, KCSTRING(sql_buf));
   } else {
     // succ
   }
@@ -78,18 +77,18 @@ int QueryObserverVersionStrategy::build_sql_statement(char *sql_buf,
   int ret = OB_SUCCESS;
   pos = 0;
   const char *query_sql = nullptr;
-  if (TCTX.is_tenant_sync_mode()) {
-    query_sql = "SELECT DISTINCT VALUE FROM GV$OB_PARAMETERS WHERE NAME = 'min_observer_version'";
-  } else {
-    query_sql = "SELECT DISTINCT VALUE FROM __ALL_VIRTUAL_SYS_PARAMETER_STAT WHERE NAME = 'MIN_OBSERVER_VERSION'";
-  }
 
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
-    LOG_ERROR("invalid argument", K(sql_buf), K(mul_statement_buf_len));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(sql_buf), K(mul_statement_buf_len));
+  } else if (TCTX.is_tenant_sync_mode()) {
+    if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
+        "SELECT DISTINCT VALUE FROM %s WHERE NAME = 'min_observer_version'", OB_GV_OB_PARAMETERS_TNAME))) {
+      LOG_ERROR("build sql failed", KR(ret), K(pos), "buf_size", mul_statement_buf_len, KCSTRING(sql_buf));
+    }
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-          "%s", query_sql))) {
-    LOG_ERROR("build sql fail", KR(ret), K(pos), K(query_sql), "buf_size", mul_statement_buf_len, K(sql_buf));
+          "SELECT DISTINCT VALUE FROM %s WHERE NAME = 'MIN_OBSERVER_VERSION'", OB_ALL_VIRTUAL_SYS_PARAMETER_STAT_TNAME))) {
+    LOG_ERROR("build sql fail", KR(ret), K(pos), "buf_size", mul_statement_buf_len, KCSTRING(sql_buf));
   } else {
     // succ
   }
@@ -107,8 +106,6 @@ int QueryTimeZoneInfoVersionStrategy::build_sql_statement(char *sql_buf,
   const char *query_sql = NULL;
   const bool tenant_sync_mode = TCTX.is_tenant_sync_mode();
 
-  query_sql = "SELECT VALUE FROM __ALL_VIRTUAL_SYS_STAT WHERE NAME = 'CURRENT_TIMEZONE_VERSION' AND TENANT_ID = ";
-
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     LOG_ERROR("invalid argument", K(sql_buf), K(mul_statement_buf_len));
     ret = OB_INVALID_ARGUMENT;
@@ -116,8 +113,8 @@ int QueryTimeZoneInfoVersionStrategy::build_sql_statement(char *sql_buf,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("not support fetch timezone_version in tenant_sync_mode", KR(ret));
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-      "%s %lu", query_sql, tenant_id_))) {
-    LOG_ERROR("build sql fail", KR(ret), K(pos), K(query_sql), "buf_size", mul_statement_buf_len, K(sql_buf), K_(tenant_id));
+      "SELECT VALUE FROM %s WHERE NAME = 'CURRENT_TIMEZONE_VERSION' AND TENANT_ID = %lu", OB_ALL_VIRTUAL_SYS_STAT_TNAME, tenant_id_))) {
+    LOG_ERROR("build sql fail", KR(ret), K(pos), "buf_size", mul_statement_buf_len, KCSTRING(sql_buf), K_(tenant_id));
   }
 
   return ret;
@@ -130,20 +127,13 @@ int QueryTenantLSInfoStrategy::build_sql_statement(char *sql_buf,
 {
   int ret = OB_SUCCESS;
   pos = 0;
-  const char *query_sql = NULL;
-  query_sql = "SELECT LS_ID FROM CDB_OB_LS WHERE LS_ID != 1 AND TENANT_ID = ";
 
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(sql_buf), K(mul_statement_buf_len));
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-          "%s", query_sql))) {
-    LOG_ERROR("build sql fail", KR(ret), K(pos), K(query_sql), "buf_size", mul_statement_buf_len, K(sql_buf));
-  } else {
-    if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos, "%lu;", tenant_id_))) {
-      LOG_ERROR("build tenant_id sql fail", KR(ret), K(pos), K(query_sql),
-          "buf_size", mul_statement_buf_len, K(sql_buf), K(tenant_id_));
-    }
+          "SELECT LS_ID FROM %s WHERE LS_ID != 1 AND TENANT_ID = %lu", OB_CDB_OB_LS_TNAME, tenant_id_))) {
+    LOG_ERROR("build sql fail", KR(ret), K(pos), "buf_size", mul_statement_buf_len, KCSTRING(sql_buf));
   }
 
   return ret;
@@ -195,6 +185,7 @@ int QueryAllTenantStrategy::build_sql_statement(
         "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s", OB_DBA_OB_ACCESS_POINT_TNAME))) {
       LOG_ERROR("build_sql_statement failed for query all_tenant_info in tenant_sync_mode", KR(ret), K(pos), KCSTRING(sql_buf));
     }
+    // should not filter tenant by status because schema_service may launch sql to all tenant
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
       "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s WHERE TENANT_TYPE != 'META'", OB_DBA_OB_TENANTS_TNAME))) {
     LOG_ERROR("build_sql_statement failed for query all_tenant_info", KR(ret), K(pos), KCSTRING(sql_buf));

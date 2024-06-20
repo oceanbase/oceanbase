@@ -1,0 +1,5 @@
+#create database opt;
+#use opt;
+create table t1(c1 int, c2 int);
+create table t2(c1 int, c2 int);
+create table t3(c1 int, c2 int, c3 double, c4 char(20), c5 varchar(40));

@@ -27,7 +27,7 @@
 #include "observer/ob_server_struct.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 namespace oceanbase
 {
 namespace sql
@@ -66,6 +66,8 @@ void ObTransformerCtx::reset()
   used_trans_hints_.reset();
   groupby_pushdown_stmts_.reset();
   is_spm_outline_ = false;
+  push_down_filters_.reset();
+  iteration_level_ = 0;
 }
 
 int ObTransformerCtx::add_src_hash_val(const ObString &src_str)
@@ -84,7 +86,8 @@ int ObTransformerCtx::add_src_hash_val(uint64_t trans_type)
   int ret = OB_SUCCESS;
   const char *str = NULL;
   if (OB_ISNULL(str = get_trans_type_string(trans_type))) {
-    LOG_WARN("failed to convert trans type to src value", K(ret));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to convert trans type to src value", K(ret), K(trans_type));
   } else {
     uint32_t hash_val = src_hash_val_.empty() ? 0 : src_hash_val_.at(src_hash_val_.count() - 1);
     hash_val = fnv_hash2(str, strlen(str), hash_val);
@@ -132,6 +135,9 @@ const char* ObTransformerCtx::get_trans_type_string(uint64_t trans_type)
     TRANS_TYPE_TO_STR(SIMPLIFY_WINFUNC)
     TRANS_TYPE_TO_STR(SELECT_EXPR_PULLUP)
     TRANS_TYPE_TO_STR(PROCESS_DBLINK)
+    TRANS_TYPE_TO_STR(DECORRELATE)
+    TRANS_TYPE_TO_STR(CONDITIONAL_AGGR_COALESCE)
+    TRANS_TYPE_TO_STR(MV_REWRITE)
     default:  return NULL;
   }
 }
@@ -305,19 +311,27 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     trans_happened = true;
   } else if (ctx_->is_set_stmt_oversize_) {
     LOG_TRACE("not accept transform because large set stmt", K(ctx_->is_set_stmt_oversize_));
-  } else if (OB_FAIL(evaluate_cost(parent_stmts, trans_stmt, true,
-                                   trans_stmt_cost, is_expected, check_ctx))) {
-    LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
-  } else if ((!check_original_plan && stmt_cost_ >= 0) || !is_expected) {
-    trans_happened = is_expected && trans_stmt_cost < stmt_cost_;
-  } else if (OB_FAIL(evaluate_cost(parent_stmts, stmt, false,
-                                   stmt_cost_, is_original_expected,
-                                   check_original_plan ? check_ctx : NULL))) {
-    LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
-  } else if (!is_original_expected) {
-    trans_happened = is_original_expected;
+  } else if (ctx_->in_accept_transform_) {
+    LOG_TRACE("not accept transform because already in one accepct transform", K(ctx_->in_accept_transform_));
   } else {
-    trans_happened = trans_stmt_cost < stmt_cost_;
+    ctx_->in_accept_transform_ = true;
+    if (OB_FAIL(evaluate_cost(parent_stmts, trans_stmt, true, trans_stmt_cost, is_expected,
+                              check_ctx))) {
+      LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
+    } else if ((!check_original_plan && stmt_cost_ >= 0) || !is_expected) {
+      trans_happened = is_expected && trans_stmt_cost < stmt_cost_;
+    } else if (OB_FAIL(evaluate_cost(parent_stmts, stmt, false, stmt_cost_, is_original_expected,
+                                     check_original_plan ? check_ctx : NULL))) {
+      LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
+    } else if (!is_original_expected) {
+      trans_happened = is_original_expected;
+    } else {
+      trans_happened = trans_stmt_cost < stmt_cost_;
+    }
+    if (stmt->get_query_ctx()->get_injected_random_status()) {
+      trans_happened = true;
+    }
+    ctx_->in_accept_transform_ = false;
   }
   RESUME_OPT_TRACE;
 
@@ -329,7 +343,7 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     OPT_TRACE("is expected plan:", is_expected);
     OPT_TRACE("is expected original plan:", is_original_expected);
     LOG_TRACE("reject transform because the cost is increased or the query plan is unexpected",
-                     K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
+              K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
   } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, trans_stmt, tmp1, tmp2))) {
     LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (force_accept) {
@@ -690,7 +704,8 @@ bool ObTransformRule::is_normal_disabled_transform(const ObDMLStmt &stmt)
 {
   return (stmt.is_hierarchical_query() && transform_method_ != TransMethod::ROOT_ONLY) ||
          stmt.is_insert_all_stmt() ||
-         stmt.is_values_table_query();
+         (stmt.is_values_table_query() && NULL != stmt.get_query_ctx() &&
+          !ObTransformUtils::is_enable_values_table_rewrite(stmt.get_query_ctx()->optimizer_features_enable_version_));
 }
 
 int ObTransformRule::need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
@@ -904,8 +919,12 @@ int ObTryTransHelper::fill_helper(const ObQueryCtx *query_ctx)
   if (OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null query context", K(ret), K(query_ctx));
-  } else if (OB_FAIL(query_ctx->query_hint_.get_qb_name_counts(query_ctx->stmt_count_, qb_name_counts_))) {
-    LOG_WARN("failed to get qb name counts", K(ret));
+  } else if (OB_FAIL(query_ctx->query_hint_.get_qb_name_info(query_ctx->stmt_count_,
+                                                             qb_name_counts_,
+                                                             qb_name_sel_start_id_,
+                                                             qb_name_set_start_id_,
+                                                             qb_name_other_start_id_))) {
+    LOG_WARN("failed to get qb name info", K(ret));
   } else {
     available_tb_id_ = query_ctx->available_tb_id_;
     subquery_count_ = query_ctx->subquery_count_;
@@ -920,9 +939,17 @@ int ObTryTransHelper::recover(ObQueryCtx *query_ctx)
   if (OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null query context", K(ret), K(query_ctx));
-  } else if (OB_FAIL(query_ctx->query_hint_.recover_qb_names(qb_name_counts_, query_ctx->stmt_count_))) {
-    LOG_WARN("failed to revover qb names", K(ret));
+  } else if (OB_FAIL(query_ctx->query_hint_.recover_qb_name_info(qb_name_counts_,
+                                                                 query_ctx->stmt_count_,
+                                                                 qb_name_sel_start_id_,
+                                                                 qb_name_set_start_id_,
+                                                                 qb_name_other_start_id_))) {
+    LOG_WARN("failed to revover qb name info", K(ret));
+  } else if (NULL != unique_key_provider_
+             && OB_FAIL(unique_key_provider_->recover_useless_unique_for_temp_table())) {
+    LOG_WARN("failed to recover useless unique for temp table", K(ret));
   } else {
+    unique_key_provider_ = NULL;
     query_ctx->available_tb_id_ = available_tb_id_;
     query_ctx->subquery_count_ = subquery_count_;
     query_ctx->temp_table_count_ = temp_table_count_;

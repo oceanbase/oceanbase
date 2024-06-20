@@ -24,6 +24,7 @@
 #include "share/ob_tenant_role.h"//ObTenantRole
 #ifdef OB_BUILD_DBLINK
 #include "lib/oracleclient/ob_oci_environment.h"
+#include "lib/mysqlclient/ob_dblink_error_trans.h"
 #endif
 #include "lib/mysqlclient/ob_tenant_oci_envs.h"
 namespace oceanbase
@@ -73,6 +74,7 @@ class ObTenantMdsService;
   class ObAccessService;
   class ObTenantFreezer;
   class ObTenantMetaMemMgr;
+  class ObTenantFTPluginMgr;
   class ObStorageLogger;
   class ObTenantCheckpointSlogHandler;
   class ObTenantFreezeInfoMgr;
@@ -84,14 +86,18 @@ class ObTenantMdsService;
   namespace checkpoint {
     class ObCheckPointService;
     class ObTabletGCService;
+    class ObCheckpointDiagnoseMgr;
   }
   class ObLobManager;
   class ObTransferService;
   class ObRebuildService;
   class ObTableScanIterator;
+  class ObTenantSnapshotService;
   class ObTenantCGReadInfoMgr;
+  class ObTenantDirectLoadMgr;
   class ObEmptyReadBucket;
   class ObTabletMemtableMgrPool;
+  class ObGlobalIteratorPool;
 } // namespace storage
 namespace transaction {
   class ObTenantWeakReadService; // 租户弱一致性读服务
@@ -170,12 +176,17 @@ namespace rootserver
   class ObArbitrationService;
   class ObHeartbeatService;
   class ObStandbySchemaRefreshTrigger;
+  class ObTenantSnapshotScheduler;
+  class ObCloneScheduler;
+  class ObMViewMaintenanceService;
 }
 namespace observer
 {
   class ObTenantMetaChecker;
   class QueueThread;
   class ObTableLoadService;
+  class ObTableLoadResourceService;
+  class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
 }
 
@@ -191,6 +202,7 @@ namespace observer
 }
 namespace storage {
   class MockTenantModuleEnv;
+  class ObStorageHADiagMgr;
 }
 
 namespace share
@@ -203,6 +215,9 @@ class ObGlobalAutoIncService;
 class ObDagWarningHistoryManager;
 class ObTenantErrsimModuleMgr;
 class ObTenantErrsimEventMgr;
+class ObSharedMemAllocMgr;
+class ObIndexUsageInfoMgr;
+class ObResourceLimitCalculator;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -235,13 +250,16 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
   MTL_LIST(                                          \
       blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
+      oceanbase::sql::ObTenantSQLSessionMgr*,        \
       storage::ObTenantMetaMemMgr*,                  \
+      storage::ObTenantFTPluginMgr*,                 \
       ObPartTransCtxObjPool*,                        \
       ObTableScanIteratorObjPool*,                   \
       common::ObTenantIOManager*,                    \
       storage::mds::ObTenantMdsService*,             \
       storage::ObStorageLogger*,                     \
       blocksstable::ObSharedMacroBlockMgr*,          \
+      share::ObSharedMemAllocMgr*,                   \
       transaction::ObTransService*,                  \
       logservice::coordinator::ObLeaderCoordinator*, \
       logservice::coordinator::ObFailureDetector*,   \
@@ -293,12 +311,12 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       sql::ObPlanCache*,                             \
       oceanbase::common::ObDetectManager*,           \
       sql::dtl::ObTenantDfc*,                        \
-      sql::dtl::ObDTLIntermResultManager*,           \
       omt::ObPxPools*,                               \
       lib::Worker::CompatMode,                       \
       obmysql::ObMySQLRequestManager*,               \
       transaction::ObTenantWeakReadService*,         \
       sql::ObTenantSqlMemoryManager*,                \
+      sql::dtl::ObDTLIntermResultManager*,           \
       sql::ObPlanMonitorNodeList*,                   \
       sql::ObDataAccessService*,                     \
       sql::ObDASIDService*,                          \
@@ -321,6 +339,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       datadict::ObDataDictService*,                  \
       ArbMTLMember                                   \
       observer::ObTableLoadService*,                 \
+      observer::ObTableLoadResourceService*,         \
       concurrency_control::ObMultiVersionGarbageCollector*, \
       sql::ObUDRMgr*,                        \
       sql::ObFLTSpanMgr*,                            \
@@ -331,13 +350,23 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObEmptyReadBucket*,                  \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
-      oceanbase::sql::ObTenantSQLSessionMgr*,       \
+      storage::ObTenantDirectLoadMgr*,              \
       oceanbase::common::ObOptStatMonitorManager*,  \
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \
       table::ObTTLService*,                         \
       table::ObTableApiSessPoolMgr*,                \
-      storage::ObTabletMemtableMgrPool*             \
+      rootserver::ObTenantSnapshotScheduler*,       \
+      storage::ObTenantSnapshotService*,            \
+      rootserver::ObCloneScheduler*,                \
+      share::ObIndexUsageInfoMgr*,                  \
+      storage::ObTabletMemtableMgrPool*,            \
+      rootserver::ObMViewMaintenanceService*,       \
+      share::ObResourceLimitCalculator*,            \
+      storage::checkpoint::ObCheckpointDiagnoseMgr*, \
+      storage::ObStorageHADiagMgr*,                  \
+      common::sqlclient::ObTenantDblinkKeeper*,      \
+      storage::ObGlobalIteratorPool*                 \
   )
 
 
@@ -351,6 +380,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_TENANT_ROLE_CACHE_IS_INVALID() share::ObTenantEnv::get_tenant()->is_invalid_tenant()
 // 租户是否处于恢复中
 #define MTL_TENANT_ROLE_CACHE_IS_RESTORE() share::ObTenantEnv::get_tenant()->is_restore_tenant()
+// 租户是否处于克隆中
+#define MTL_TENANT_ROLE_CACHE_IS_CLONE() share::ObTenantEnv::get_tenant()->is_clone_tenant()
 // 更新租户role
 #define MTL_SET_TENANT_ROLE_CACHE(tenant_role) share::ObTenantEnv::get_tenant()->set_tenant_role(tenant_role)
 // 获取租户role
@@ -372,8 +403,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_MEM_SIZE() share::ObTenantEnv::get_tenant()->unit_memory_size()
 
 // 注意MTL_BIND调用需要在租户创建之前，否则会导致租户创建时无法调用到绑定的函数。
-#define MTL_BIND(INIT, DESTROY) \
-  share::ObTenantBase::mtl_bind_func(nullptr, INIT, nullptr, nullptr, nullptr, DESTROY);
 #define MTL_BIND2(NEW, INIT, START, STOP, WAIT, DESTROY) \
   share::ObTenantBase::mtl_bind_func(NEW, INIT, START, STOP, WAIT, DESTROY);
 
@@ -551,6 +580,11 @@ public:
   bool is_restore_tenant()
   {
     return share::is_restore_tenant(ATOMIC_LOAD(&tenant_role_value_));
+  }
+
+  bool is_clone_tenant()
+  {
+    return share::is_clone_tenant(ATOMIC_LOAD(&tenant_role_value_));
   }
 
   bool is_invalid_tenant()

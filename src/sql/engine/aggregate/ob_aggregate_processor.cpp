@@ -31,13 +31,13 @@
 #include "sql/engine/basic/ob_material_op_impl.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
-#ifdef OB_BUILD_ORACLE_XML
+#include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_tree.h"
 #include "lib/xml/ob_xml_parser.h"
+#include "lib/xml/ob_binary_aggregate.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "lib/alloc/malloc_hook.h"
-#endif
 #include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl.h"
 
@@ -203,6 +203,55 @@ int64_t ObAggrInfo::to_string(char *buf, const int64_t buf_len) const
        );
   J_OBJ_END();
   return pos;
+}
+
+int ObAggrInfo::assign(const ObAggrInfo &rhs)
+{
+  int ret = OB_SUCCESS;
+  set_allocator(rhs.alloc_);
+  expr_ = rhs.expr_;
+  real_aggr_type_ = rhs.real_aggr_type_;
+  has_distinct_ = rhs.has_distinct_;
+  is_implicit_first_aggr_ = rhs.is_implicit_first_aggr_;
+  has_order_by_ = rhs.has_order_by_;
+
+  group_concat_param_count_ = rhs.group_concat_param_count_;
+
+  separator_expr_ = rhs.separator_expr_;
+  window_size_param_expr_ = rhs.window_size_param_expr_;
+  item_size_param_expr_ = rhs.item_size_param_expr_;
+  is_need_deserialize_row_ = rhs.is_need_deserialize_row_;
+  pl_agg_udf_type_id_ = rhs.pl_agg_udf_type_id_;
+
+  pl_result_type_ = rhs.pl_result_type_;
+  dll_udf_ = rhs.dll_udf_;
+  bucket_num_param_expr_ = rhs.bucket_num_param_expr_;
+  rollup_idx_ = rhs.rollup_idx_;
+
+  format_json_ = rhs.format_json_;
+  strict_json_ = rhs.strict_json_;
+  absent_on_null_ = rhs.absent_on_null_;
+  returning_type_ = rhs.returning_type_;
+  with_unique_keys_ = rhs.with_unique_keys_;
+  max_disuse_param_expr_ = rhs.max_disuse_param_expr_;
+  if (OB_FAIL(param_exprs_.assign(rhs.param_exprs_))) {
+    LOG_WARN("fail to assign param exprs", K(ret));
+  } else if (OB_FAIL(distinct_collations_.assign(rhs.distinct_collations_))) {
+    LOG_WARN("fail to assign distinct_collations_", K(ret));
+  } else if (OB_FAIL(distinct_cmp_funcs_.assign(rhs.distinct_cmp_funcs_))) {
+    LOG_WARN("fail to assign distinct_cmp_funcs_", K(ret));
+  } else if (OB_FAIL(sort_collations_.assign(rhs.sort_collations_))) {
+    LOG_WARN("fail to assign sort_collations_", K(ret));
+  } else if (OB_FAIL(sort_cmp_funcs_.assign(rhs.sort_cmp_funcs_))) {
+    LOG_WARN("fail to assign sort_cmp_funcs_", K(ret));
+  } else if (OB_FAIL(pl_agg_udf_params_type_.assign(rhs.pl_agg_udf_params_type_))) {
+    LOG_WARN("fail to assign pl_agg_udf_params_type_", K(ret));
+  } else if (OB_FAIL(grouping_idxs_.assign(rhs.grouping_idxs_))) {
+    LOG_WARN("fail to assign grouping_idxs_", K(ret));
+  } else if (OB_FAIL(group_idxs_.assign(rhs.group_idxs_))) {
+    LOG_WARN("fail to assign group_idxs_", K(ret));
+  }
+  return ret;
 }
 
 ObAggregateProcessor::AggrCell::~AggrCell()
@@ -587,7 +636,7 @@ void ObAggregateProcessor::HybridHistExtraResult::reuse()
 
 int ObAggregateProcessor::HybridHistExtraResult::init(const uint64_t tenant_id,
     const ObAggrInfo &aggr_info, ObEvalCtx &eval_ctx, const bool need_rewind,
-    ObIOEventObserver *io_event_observer, ObSqlWorkAreaProfile &profile,
+    ObIOEventObserver *io_event_observer,
     ObMonitorNode &op_monitor_info)
 {
   int ret = OB_SUCCESS;
@@ -621,7 +670,7 @@ int ObAggregateProcessor::HybridHistExtraResult::init(const uint64_t tenant_id,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fall to alloc buff", "size", sizeof(ObMaterialOpImpl));
     } else {
-      new (mat_op_) ObMaterialOpImpl(op_monitor_info, profile);
+      new (mat_op_) ObMaterialOpImpl(op_monitor_info);
       if (OB_FAIL(mat_op_->init(tenant_id,
                                 &eval_ctx,
                                 &eval_ctx.exec_ctx_,
@@ -844,7 +893,6 @@ ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
       removal_info_(),
       support_fast_single_row_agg_(false),
       op_eval_infos_(nullptr),
-      profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       op_monitor_info_(op_monitor_info),
       need_advance_collect_(false)
 {
@@ -1105,7 +1153,7 @@ int ObAggregateProcessor::inner_process(
     } else if (aggr_info.is_implicit_first_aggr()) {
       if (!aggr_cell.get_is_evaluated()) {
         ObDatum *result = NULL;
-        if (aggr_info.expr_->eval(eval_ctx_, result)) {
+        if (OB_FAIL(aggr_info.expr_->eval(eval_ctx_, result))) {
           LOG_WARN("eval failed", K(ret));
         } else if (OB_FAIL(clone_aggr_cell(aggr_cell, *result))) {
           LOG_WARN("failed to clone non_aggr cell", K(ret));
@@ -1617,7 +1665,8 @@ int ObAggregateProcessor::process_distinct_batch(
     LOG_WARN("distinct set is NULL", K(ret));
   } else {
     // In non-rollup group_id must be 0
-    if (group_id > 0) {
+    if (group_id > 0 && group_id > start_partial_rollup_idx_ &&
+              group_id <= end_partial_rollup_idx_) {
       // Group id greater than zero in sort based group by must be rollup,
       // distinct set is sorted and iterated in rollup_process(), rewind here.
       if (OB_FAIL(extra_info->unique_sort_op_->rewind())) {
@@ -1742,7 +1791,8 @@ int ObAggregateProcessor::collect_for_empty_set()
         case T_FUN_COUNT_SUM:
         case T_FUN_APPROX_COUNT_DISTINCT:
         case T_FUN_KEEP_COUNT:
-        case T_FUN_GROUP_PERCENT_RANK: {
+        case T_FUN_GROUP_PERCENT_RANK:
+        case T_FUN_SUM_OPNSIZE: {
           ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx_);
           aggr_info.expr_->set_evaluated_projected(eval_ctx_);
           if (lib::is_mysql_mode()) {
@@ -1931,6 +1981,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         case T_FUN_JSON_OBJECTAGG:
         case T_FUN_ORA_JSON_OBJECTAGG:
         case T_FUN_ORA_XMLAGG:
+        case T_FUN_SYS_ST_ASMVT:
         {
           void *tmp_buf = NULL;
           set_need_advance_collect();
@@ -1942,13 +1993,16 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             GroupConcatExtraResult *result = new (tmp_buf) GroupConcatExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
             const bool need_rewind = (in_window_func_ || group_id > 0);
-            if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+            if (-1 == dir_id_) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("dir id is not init", K(ret), K(aggr_info.get_expr_type()));
+            } else if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
                                      aggr_info,
                                      eval_ctx_,
                                      need_rewind, dir_id_,
                                      io_event_observer_))) {
               LOG_WARN("init GroupConcatExtraResult failed", K(ret));
-            } else if (aggr_info.separator_expr_ != NULL) {
+            } else if (aggr_info.separator_expr_ != NULL && aggr_info.separator_expr_->is_const_expr()) {
               ObDatum *separator_result = NULL;
               if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
                 ret = OB_ERR_UNEXPECTED;
@@ -1990,7 +2044,208 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
                                      eval_ctx_,
                                      need_rewind,
                                      io_event_observer_,
-                                     profile_,
+                                     op_monitor_info_))) {
+              LOG_WARN("init hybrid hist extra result failed");
+            }
+          }
+          break;
+        }
+        case T_FUN_TOP_FRE_HIST: {
+          void *tmp_buf = NULL;
+          set_need_advance_collect();
+          aggr_cell.set_need_advance_collect();
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(TopKFreHistExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else {
+            TopKFreHistExtraResult *result = new (tmp_buf) TopKFreHistExtraResult(aggr_alloc_, op_monitor_info_);
+            aggr_cell.set_extra(result);
+          }
+          break;
+        }
+
+        case T_FUN_AGG_UDF: {
+          CK(NULL != aggr_info.dll_udf_);
+          DllUdfExtra *extra = NULL;
+          if (OB_SUCC(ret)) {
+            void *tmp_buf = NULL;
+            if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(DllUdfExtra)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("allocate memory failed", K(ret));
+            } else {
+              DllUdfExtra *extra = new (tmp_buf) DllUdfExtra(aggr_alloc_, op_monitor_info_);
+              aggr_cell.set_extra(extra);
+              OZ(ObUdfUtil::init_udf_args(aggr_alloc_,
+                                        aggr_info.dll_udf_->udf_attributes_,
+                                        aggr_info.dll_udf_->udf_attributes_types_,
+                                        extra->udf_ctx_.udf_args_));
+              OZ(aggr_info.dll_udf_->udf_func_.process_init_func(extra->udf_ctx_));
+              if (OB_SUCC(ret)) { // set func after udf ctx inited
+                extra->udf_fun_ = &aggr_info.dll_udf_->udf_func_;
+              }
+              OZ(extra->udf_fun_->process_clear_func(extra->udf_ctx_));
+            }
+          }
+          break;
+        }
+        default:
+          break;
+      }
+
+      if (OB_SUCC(ret) && aggr_info.has_distinct_) {
+        set_need_advance_collect();
+        aggr_cell.set_need_advance_collect();
+        if (NULL == aggr_cell.get_extra()) {
+          void *tmp_buf = NULL;
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(ExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else {
+            ExtraResult *result = new (tmp_buf) ExtraResult(aggr_alloc_, op_monitor_info_);
+            aggr_cell.set_extra(result);
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          // In window function, get result will be called more than once, rewind is needed.
+          //
+          // The distinct set will iterate twice with rollup, for rollup processing and aggregation,
+          // rewind is needed for the second iteration.
+          //
+          // Rollup is supported and only supported in sort based group by with multi-groups,
+          // only groups with group id greater than zero need to rewind.
+          // The groupid of hash groupby also is greater then 0, then need rewind ???
+          const bool need_rewind = (in_window_func_ || group_id > 0);
+          if (OB_FAIL(aggr_cell.get_extra()->init_distinct_set(
+              eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+              aggr_info,
+              eval_ctx_,
+              need_rewind,
+              io_event_observer_))) {
+            LOG_WARN("init_distinct_set failed", K(ret));
+          }
+        }
+      }
+    }//end of for
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::fill_group_row(GroupRow *new_group_row,
+                                         const int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t alloc_size = GROUP_CELL_SIZE * aggr_infos_.count();
+  if (alloc_size > 0 && 0 == cur_batch_group_idx_ % BATCH_GROUP_SIZE) {
+    if (OB_ISNULL(cur_batch_group_buf_ = (char *)aggr_alloc_.alloc(
+                alloc_size * BATCH_GROUP_SIZE))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc stored row failed", K(alloc_size), K(group_id), K(ret));
+    } else {
+      // The memset is not needed here because the object will be constructed by NEW.
+      // But we memset first then NEW got a better performance because of better CPU cache locality.
+      MEMSET(cur_batch_group_buf_, 0, alloc_size * BATCH_GROUP_SIZE);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    AggrCell *aggr_cells = new (cur_batch_group_buf_)AggrCell[aggr_infos_.count()];
+    new_group_row->n_cells_ = aggr_infos_.count();
+    new_group_row->aggr_cells_ = aggr_cells;
+
+    cur_batch_group_buf_ += alloc_size;
+    ++cur_batch_group_idx_;
+    cur_batch_group_idx_ %= BATCH_GROUP_SIZE;
+  }
+
+  if (OB_SUCC(ret) && has_extra_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_infos_.count(); ++i) {
+      const ObAggrInfo &aggr_info = aggr_infos_.at(i);
+      AggrCell &aggr_cell = new_group_row->aggr_cells_[i];
+      switch (aggr_info.get_expr_type()) {
+        case T_FUN_GROUP_CONCAT:
+        case T_FUN_GROUP_RANK:
+        case T_FUN_GROUP_DENSE_RANK:
+        case T_FUN_GROUP_PERCENT_RANK:
+        case T_FUN_GROUP_CUME_DIST:
+        case T_FUN_MEDIAN:
+        case T_FUN_GROUP_PERCENTILE_CONT:
+        case T_FUN_GROUP_PERCENTILE_DISC:
+        case T_FUN_KEEP_MAX:
+        case T_FUN_KEEP_MIN:
+        case T_FUN_KEEP_SUM:
+        case T_FUN_KEEP_COUNT:
+        case T_FUN_KEEP_WM_CONCAT:
+        case T_FUN_WM_CONCAT:
+        case T_FUN_PL_AGG_UDF:
+        case T_FUN_JSON_ARRAYAGG:
+        case T_FUN_ORA_JSON_ARRAYAGG:
+        case T_FUN_JSON_OBJECTAGG:
+        case T_FUN_ORA_JSON_OBJECTAGG:
+        case T_FUN_ORA_XMLAGG:
+        case T_FUN_SYS_ST_ASMVT:
+        {
+          void *tmp_buf = NULL;
+          set_need_advance_collect();
+          aggr_cell.set_need_advance_collect();
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(GroupConcatExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else {
+            GroupConcatExtraResult *result = new (tmp_buf) GroupConcatExtraResult(aggr_alloc_, op_monitor_info_);
+            aggr_cell.set_extra(result);
+            const bool need_rewind = (in_window_func_ || group_id > 0);
+            if (-1 == dir_id_) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("dir id is not init", K(ret), K(aggr_info.get_expr_type()));
+            } else if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+                                     aggr_info,
+                                     eval_ctx_,
+                                     need_rewind, dir_id_,
+                                     io_event_observer_))) {
+              LOG_WARN("init GroupConcatExtraResult failed", K(ret));
+            } else if (aggr_info.separator_expr_ != NULL && aggr_info.separator_expr_->is_const_expr()) {
+              ObDatum *separator_result = NULL;
+              if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
+              } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+                LOG_WARN("eval failed", K(ret));
+              } else {
+                int64_t pos = sizeof(ObDatum);
+                int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+                char *buf = (char*)aggr_alloc_.alloc(len);
+                if (OB_ISNULL(buf)) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("fall to alloc buff", K(len), K(ret));
+                } else {
+                  ObDatum **separator_datum = const_cast<ObDatum**>(&result->get_separator_datum());
+                  *separator_datum = new (buf) ObDatum;
+                  if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+                    LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+                  } else {
+                    LOG_DEBUG("succ to calc separator", K(ret), KP(*separator_datum));
+                  }
+                }
+              }
+            }
+          }
+          break;
+        }
+        case T_FUN_HYBRID_HIST: {
+          void *tmp_buf = NULL;
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(HybridHistExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", "size", sizeof(HybridHistExtraResult));
+          } else {
+            HybridHistExtraResult *result = new (tmp_buf) HybridHistExtraResult(aggr_alloc_, op_monitor_info_);
+            aggr_cell.set_extra(result);
+            const bool need_rewind = (in_window_func_ || group_id > 0);
+            if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+                                     aggr_info,
+                                     eval_ctx_,
+                                     need_rewind,
+                                     io_event_observer_,
                                      op_monitor_info_))) {
               LOG_WARN("init hybrid hist extra result failed");
             }
@@ -2100,6 +2355,23 @@ int ObAggregateProcessor::init_one_group(const int64_t group_id,
   return ret;
 }
 
+int ObAggregateProcessor::add_one_group(const int64_t group_id,
+                                        GroupRow *new_group_row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(new_group_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid row", K(ret));
+  } else if (OB_FAIL(fill_group_row(new_group_row, group_id))) {
+    LOG_WARN("failed to generate group row", K(ret));
+  } else if (OB_FAIL(group_rows_.push_back(new_group_row))) {
+    LOG_WARN("push_back failed", K(group_id), K(new_group_row), K(ret));
+  } else {
+    LOG_DEBUG("succ init group_row", K(group_id), K(ret), K(group_rows_.count()));
+  }
+  return ret;
+}
+
 int ObAggregateProcessor::rollup_process(
   const int64_t group_id,
   const int64_t rollup_group_id,
@@ -2120,7 +2392,7 @@ int ObAggregateProcessor::rollup_process(
   } else if (OB_ISNULL(group_row) || OB_ISNULL(rollup_row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("group_row is null", KP(group_row), KP(rollup_row), K(ret));
-  } else if (OB_FAIL(rollup_base_process(group_row, rollup_row, diff_expr, group_id))) {
+  } else if (OB_FAIL(rollup_base_process(group_row, rollup_row, diff_expr, group_id, max_group_cnt))) {
     LOG_WARN("failed to rollup process", K(ret));
   }
   LOG_DEBUG("debug rollup process", K(group_id), K(rollup_group_id), K(max_group_cnt));
@@ -2346,6 +2618,7 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       GroupConcatExtraResult *aggr_extra = NULL;
       GroupConcatExtraResult *rollup_extra = NULL;
@@ -2368,6 +2641,63 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
               LOG_WARN("get_bool_mark failed", K(ret));
             } else if (OB_FAIL(rollup_extra->set_bool_mark(i, is_bool))) {
               LOG_WARN("set_bool_mark failed", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret) && aggr_info.separator_expr_ != NULL && !aggr_info.separator_expr_->is_const_expr()) {
+          ObDatum *separator_result = NULL;
+          aggr_info.separator_expr_->clear_evaluated_flag(eval_ctx_);
+          if (aggr_extra->get_separator_datum() == NULL ||
+              aggr_extra->get_separator_datum()->is_null()) {
+            //do nothing
+          } else if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("param sexprs not be null", K(ret), KPC(aggr_info.separator_expr_),
+                                                 K(aggr_info.separator_expr_->obj_meta_));
+          } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+            LOG_WARN("eval failed", K(ret));
+          } else if (separator_result->is_null()) {
+            aggr_extra->get_separator_datum() = NULL;
+            rollup_extra->get_separator_datum() = NULL;
+          } else {
+            int64_t pos = sizeof(ObDatum);
+            int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+            int cmp_ret = 0;
+            //need update origin aggr separator expr
+            if (OB_FAIL(aggr_info.separator_expr_->basic_funcs_->null_first_cmp_(*separator_result,
+                                                                                 *aggr_extra->get_separator_datum(),
+                                                                                 cmp_ret))) {
+              LOG_WARN("compare failed", K(ret));
+            } else if (0 != cmp_ret) {
+              char *buf = (char*)aggr_alloc_.alloc(len);
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fall to alloc buff", K(len), K(ret));
+              } else {
+                ObDatum **separator_datum = const_cast<ObDatum**>(&aggr_extra->get_separator_datum());
+                *separator_datum = new (buf) ObDatum;
+                if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+                  LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+                } else {
+                  LOG_TRACE("succ to calc separator", K(ret), KPC(*separator_datum));
+                }
+              }
+            }
+            //update rollup extra separator expr
+            if (OB_SUCC(ret) && max_group_cnt != INT64_MIN && cur_rollup_group_idx - max_group_cnt > 1) {
+              char *buf = (char*)aggr_alloc_.alloc(len);
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fall to alloc buff", K(len), K(ret));
+              } else {
+                ObDatum **separator_datum = const_cast<ObDatum**>(&rollup_extra->get_separator_datum());
+                *separator_datum = new (buf) ObDatum;
+                if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+                  LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+                } else {
+                  LOG_TRACE("succ to calc separator", K(ret), KPC(*separator_datum));
+                }
+              }
             }
           }
         }
@@ -2413,6 +2743,12 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("rollup contain bit_xor still not supported", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain bit_xor");
+      break;
+    }
+    case T_FUN_SUM_OPNSIZE: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rollup contain sum_opnsize still not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain sum_opnsize");
       break;
     }
     default:
@@ -2562,6 +2898,7 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -2592,6 +2929,39 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
                   if (OB_FAIL(extra->set_bool_mark(i, is_bool))){
                     LOG_WARN("fail to set_bool_mark", K(ret));
                   }
+                }
+              }
+            }
+          }
+          if (OB_SUCC(ret) && aggr_info.separator_expr_ != NULL && !aggr_info.separator_expr_->is_const_expr()) {
+            ObDatum *separator_result = NULL;
+            if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("param sexprs not be null", K(ret), KPC(aggr_info.separator_expr_),
+                                                   K(aggr_info.separator_expr_->obj_meta_));
+            } else if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
+            } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+              LOG_WARN("eval failed", K(ret));
+            } else {
+              int64_t pos = sizeof(ObDatum);
+              int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+              char *buf = (char*)aggr_alloc_.alloc(len);
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fall to alloc buff", K(len), K(ret));
+              } else {
+                if (extra->get_separator_datum() != NULL) {//free above ptr.
+                  aggr_alloc_.free(extra->get_separator_datum());
+                  extra->get_separator_datum() = NULL;
+                }
+                ObDatum **separator_datum = const_cast<ObDatum**>(&extra->get_separator_datum());
+                *separator_datum = new (buf) ObDatum;
+                if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+                  LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+                } else {
+                  LOG_TRACE("succ to calc separator", K(ret), KPC(*separator_datum));
                 }
               }
             }
@@ -2639,16 +3009,28 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         } else if (OB_FAIL(extra->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
           LOG_WARN("failed to process row", K(ret));
         }
-      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                         const_cast<ObDatum &>(stored_row.cells()[0])))) {
-        LOG_WARN("failed to shadow truncate string for hist", K(ret));
       } else {
-        ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
-        uint64_t datum_value = 0;
-        if (OB_FAIL(hash_func(stored_row.cells()[0], datum_value, datum_value))) {
-          LOG_WARN("fail to do hash", K(ret));
-        } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, stored_row.cells()[0]))) {
-          LOG_WARN("failed to process row", K(ret));
+        common::ObArenaAllocator tmp_alloctor("CalcTopkHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        const ObObjMeta obj_meta = aggr_info.param_exprs_.at(0)->obj_meta_;
+        ObDatum new_prev_datum;
+        if (!obj_meta.is_lob_storage() &&
+            OB_FAIL(shadow_truncate_string_for_hist(obj_meta, const_cast<ObDatum &>(stored_row.cells()[0])))) {
+          LOG_WARN("failed to shadow truncate string for hist", K(ret));
+        } else if (obj_meta.is_lob_storage() &&
+                   OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                              obj_meta,
+                                                                              stored_row.cells()[0],
+                                                                              new_prev_datum))) {
+          LOG_WARN("failed to build prefix str datum for lob", K(ret));
+        } else {
+          const ObDatum &datum = obj_meta.is_lob_storage() ? new_prev_datum : stored_row.cells()[0];
+          ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
+          uint64_t datum_value = 0;
+          if (OB_FAIL(hash_func(datum, datum_value, datum_value))) {
+            LOG_WARN("fail to do hash", K(ret));
+          } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, datum))) {
+            LOG_WARN("failed to process row", K(ret));
+          }
         }
       }
       break;
@@ -2678,6 +3060,23 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         aggr_cell.set_tiny_num_uint(init_val);
       }
       aggr_cell.set_tiny_num_used();
+      break;
+    }
+    case T_FUN_SUM_OPNSIZE: {
+      int64_t size = 0;
+      if (OB_UNLIKELY(stored_row.cnt_ != 1) ||
+          OB_ISNULL(param_exprs) ||
+          OB_UNLIKELY(param_exprs->count() != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("curr_row_results count is not 1", K(stored_row), K(ret));
+      } else if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(param_exprs->at(0),
+                                                                 &stored_row.cells()[0],
+                                                                 size))) {
+        LOG_WARN("failed to calc sys op opnsize", K(ret));
+      } else {
+        aggr_cell.set_tiny_num_int(size);
+        aggr_cell.set_tiny_num_used();
+      }
       break;
     }
     default:
@@ -2813,6 +3212,7 @@ int ObAggregateProcessor::process_aggr_batch_result(
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       GroupConcatExtraResult *extra_info = NULL;
       if (OB_ISNULL(extra_info = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -2895,6 +3295,30 @@ int ObAggregateProcessor::process_aggr_batch_result(
     case T_FUN_SYS_BIT_XOR: {
       ObDatumVector aggr_input_datums = param_exprs->at(0)->locate_expr_datumvector(eval_ctx_);
       ret = bitwise_calc_batch(aggr_input_datums, aggr_cell, aggr_fun, selector);
+      break;
+    }
+    case T_FUN_SUM_OPNSIZE: {
+      if (OB_ISNULL(param_exprs) ||
+          OB_UNLIKELY(param_exprs->count() != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("curr_row_results count is not 1", K(ret), KPC(param_exprs));
+      } else {
+        ObDatumVector aggr_input_datums = param_exprs->at(0)->locate_expr_datumvector(eval_ctx_);
+        for (uint16_t it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
+          uint64_t nth_row = selector.get_batch_index(it);
+          int64_t size = 0;
+          if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(param_exprs->at(0),
+                                                              aggr_input_datums.at(nth_row),
+                                                              size))) {
+            LOG_WARN("failed to calc sys op opnsize", K(ret));
+          } else {
+            int64_t origin_size = aggr_cell.get_tiny_num_int();
+            int64_t new_size = origin_size + size;
+            aggr_cell.set_tiny_num_int(new_size);
+            aggr_cell.set_tiny_num_used();
+          }
+        }
+      }
       break;
     }
     default:
@@ -3051,6 +3475,7 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -3098,16 +3523,28 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
         } else if (OB_FAIL(extra->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
           LOG_WARN("failed to process row", K(ret));
         }
-      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                         const_cast<ObDatum &>(stored_row.cells()[0])))) {
-        LOG_WARN("failed to shadow truncate string for hist", K(ret));
       } else {
-        ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
-        uint64_t datum_value = 0;
-        if (OB_FAIL(hash_func(stored_row.cells()[0], datum_value, datum_value))) {
-          LOG_WARN("fail to do hash", K(ret));
-        } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, stored_row.cells()[0]))) {
-          LOG_WARN("failed to process row", K(ret));
+        common::ObArenaAllocator tmp_alloctor("CalcTopkHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        const ObObjMeta obj_meta = aggr_info.param_exprs_.at(0)->obj_meta_;
+        ObDatum new_prev_datum;
+        if (!obj_meta.is_lob_storage() &&
+            OB_FAIL(shadow_truncate_string_for_hist(obj_meta, const_cast<ObDatum &>(stored_row.cells()[0])))) {
+          LOG_WARN("failed to shadow truncate string for hist", K(ret));
+        } else if (obj_meta.is_lob_storage() &&
+                   OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                              obj_meta,
+                                                                              stored_row.cells()[0],
+                                                                              new_prev_datum))) {
+          LOG_WARN("failed to build prefix str datum for lob", K(ret));
+        } else {
+          const ObDatum &datum = obj_meta.is_lob_storage() ? new_prev_datum : stored_row.cells()[0];
+          ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
+          uint64_t datum_value = 0;
+          if (OB_FAIL(hash_func(datum, datum_value, datum_value))) {
+            LOG_WARN("fail to do hash", K(ret));
+          } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, datum))) {
+            LOG_WARN("failed to process row", K(ret));
+          }
         }
       }
       break;
@@ -3141,6 +3578,25 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
           res_uint = left_uint ^ right_uint;
         }
         aggr_cell.set_tiny_num_uint(res_uint);
+        aggr_cell.set_tiny_num_used();
+      }
+      break;
+    }
+    case T_FUN_SUM_OPNSIZE: {
+      int64_t size = 0;
+      if (OB_UNLIKELY(stored_row.cnt_ != 1) ||
+          OB_ISNULL(param_exprs) ||
+          OB_UNLIKELY(param_exprs->count() != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("curr_row_results count is not 1", K(stored_row), K(ret));
+      } else if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(param_exprs->at(0),
+                                                                 &stored_row.cells()[0],
+                                                                 size))) {
+        LOG_WARN("failed to calc sys op opnsize", K(ret));
+      } else {
+        int64_t origin_size = aggr_cell.get_tiny_num_int();
+        int64_t new_size = origin_size + size;
+        aggr_cell.set_tiny_num_int(new_size);
         aggr_cell.set_tiny_num_used();
       }
       break;
@@ -3411,6 +3867,14 @@ int ObAggregateProcessor::collect_aggr_result(
       break;
     }
 
+    case T_FUN_SYS_ST_ASMVT: {
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_asmvt_result(aggr_info, extra, result))) {
+        LOG_WARN("failed to get asmvt result", K(ret));
+      } else {
+      }
+      break;
+    }
     case T_FUN_GROUP_CONCAT: {
       GroupConcatExtraResult *extra = NULL;
       ObString sep_str;
@@ -3451,8 +3915,26 @@ int ObAggregateProcessor::collect_aggr_result(
       } else {
         if (aggr_info.separator_expr_ != NULL) {
           if (OB_ISNULL(extra->get_separator_datum())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("seperator is nullptr", K(ret));
+            if (OB_UNLIKELY(aggr_info.separator_expr_->is_const_expr())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("seperator is nullptr", K(ret));
+            } else if (cur_group_id == max_group_cnt) {//last rollup
+              ObDatum *separator_result = NULL;
+              if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("param sexprs not be null", K(ret), KPC(aggr_info.separator_expr_),
+                                                     K(aggr_info.separator_expr_->obj_meta_));
+              } else if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
+              } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+                LOG_WARN("eval failed", K(ret));
+              } else {
+                sep_str = separator_result->get_string();
+              }
+            } else {
+              sep_str = ObString::make_empty_string();
+            }
           } else {
             sep_str = extra->get_separator_datum()->get_string();
           }
@@ -3980,6 +4462,24 @@ int ObAggregateProcessor::collect_aggr_result(
     case T_FUN_SYS_BIT_OR:
     case T_FUN_SYS_BIT_XOR: {
       result.set_uint(aggr_cell.get_tiny_num_uint());
+      break;
+    }
+    case T_FUN_SUM_OPNSIZE: {
+      int64_t size = aggr_cell.get_tiny_num_int();
+      if (size > 0) {
+        if (lib::is_mysql_mode()) {
+          result.set_int(size);
+        } else {
+          char local_buff[ObNumber::MAX_BYTE_LEN];
+          ObDataBuffer local_alloc(local_buff, ObNumber::MAX_BYTE_LEN);
+          ObNumber result_num;
+          if (OB_FAIL(result_num.from(size, local_alloc))) {
+            LOG_WARN("failed to convert to number", K(ret));
+          } else {
+            result.set_number(result_num);
+          }
+        }
+      }
       break;
     }
     default:
@@ -4716,9 +5216,11 @@ int ObAggregateProcessor::sub_calc(
   return ret;
 }
 
+template <typename T>
 int ObAggregateProcessor::init_group_extra_aggr_info(
   AggrCell &aggr_cell,
-  const ObAggrInfo &aggr_info
+  const ObAggrInfo &aggr_info,
+  const T &selector
 )
 {
   int ret = OB_SUCCESS;
@@ -4730,26 +5232,53 @@ int ObAggregateProcessor::init_group_extra_aggr_info(
     extra->reuse_self();
     if (aggr_info.separator_expr_ != NULL) {
       ObDatum *separator_result = NULL;
-      if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
-      } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
-        LOG_WARN("eval failed", K(ret));
-      } else {
-        // prepare阶段解析分隔符，如果到collect阶段，则seperate_expr已经是下一组的值，导致结果错误
-        int64_t pos = sizeof(ObDatum);
-        int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
-        char *buf = (char*)aggr_alloc_.alloc(len);
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fall to alloc buff", K(len), K(ret));
+      if (aggr_info.separator_expr_->is_const_expr()) {
+        if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
+        } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+          LOG_WARN("eval failed", K(ret));
         } else {
-          ObDatum **separator_datum = const_cast<ObDatum**>(&extra->separator_datum_);
-          *separator_datum = new (buf) ObDatum;
-          if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
-            LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+          // prepare阶段解析分隔符，如果到collect阶段，则seperate_expr已经是下一组的值，导致结果错误
+          int64_t pos = sizeof(ObDatum);
+          int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+          char *buf = (char*)aggr_alloc_.alloc(len);
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fall to alloc buff", K(len), K(ret));
           } else {
-            LOG_DEBUG("succ to calc separator", K(ret), KP(*separator_datum));
+            ObDatum **separator_datum = const_cast<ObDatum**>(&extra->separator_datum_);
+            *separator_datum = new (buf) ObDatum;
+            if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+              LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+            } else {
+              LOG_DEBUG("succ to calc separator", K(ret), KP(*separator_datum));
+            }
+          }
+        }
+      } else if (!aggr_info.separator_expr_->is_const_expr()) {
+        if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type() ||
+                        selector.begin() >= selector.end())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param sexprs not be null", K(ret), KPC(aggr_info.separator_expr_),
+                                               K(aggr_info.separator_expr_->obj_meta_));
+        } else {
+          uint16_t batch_idx = selector.get_batch_index(selector.begin());
+          ObDatum *separator_result = &(aggr_info.separator_expr_->locate_expr_datum(eval_ctx_, batch_idx));
+          int64_t pos = sizeof(ObDatum);
+          int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+          char *buf = (char*)aggr_alloc_.alloc(len);
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fall to alloc buff", K(len), K(ret));
+          } else {
+            ObDatum **separator_datum = const_cast<ObDatum**>(&extra->get_separator_datum());
+            *separator_datum = new (buf) ObDatum;
+            if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+              LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+            } else {
+              LOG_TRACE("succ to calc separator", K(ret), KPC(*separator_datum));
+            }
           }
         }
       }
@@ -4877,6 +5406,8 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
     uint64_t nth_row = selector.get_batch_index(it);
     ObDatum *datum = arg_datums.at(nth_row);
     int32_t origin_str_len = 0;
+    common::ObArenaAllocator tmp_alloctor("BatchTopkHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObDatum new_prev_datum;
     if (datum->is_null()) {
       continue;
     }
@@ -4887,9 +5418,17 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
       } else if (OB_FAIL(extra_info->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
         LOG_WARN("failed to process row", K(ret));
       }
-    } else if (OB_FAIL(shadow_truncate_string_for_hist(obj_meta, *datum, &origin_str_len))) {
+    } else if (!obj_meta.is_lob_storage() &&
+               OB_FAIL(shadow_truncate_string_for_hist(obj_meta, *datum, &origin_str_len))) {
       LOG_WARN("failed to shadow truncate string for hist", K(ret));
+    } else if (obj_meta.is_lob_storage() &&
+               OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                          obj_meta,
+                                                                          *datum,
+                                                                          new_prev_datum))) {
+      LOG_WARN("failed to build prefix str datum for lob", K(ret));
     } else {
+      datum = obj_meta.is_lob_storage() ? &new_prev_datum : datum;
       ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
       uint64_t datum_value = 0;
       if (OB_FAIL(hash_func(*datum, datum_value, datum_value))) {
@@ -4922,7 +5461,7 @@ int ObAggregateProcessor::group_extra_aggr_calc_batch(
 {
   int ret = OB_SUCCESS;
   if (!aggr_cell.get_is_evaluated()) {
-    if (OB_FAIL(init_group_extra_aggr_info(aggr_cell, aggr_info))) {
+    if (OB_FAIL(init_group_extra_aggr_info(aggr_cell, aggr_info, selector))) {
       LOG_WARN("failed to init group extra aggr info", K(ret));
     } else {
       aggr_cell.set_is_evaluated(true);
@@ -4982,7 +5521,7 @@ int ObAggregateProcessor::approx_count_calc_batch(
         has_null_cell = true;
       }
       OB_ASSERT(NULL != expr->basic_funcs_);
-      ObExprHashFuncType hash_func = expr->basic_funcs_->default_hash_;
+      ObExprHashFuncType hash_func = expr->basic_funcs_->murmur_hash_;
       if (OB_FAIL(hash_func(*arg_datums.at(nth_row), hash_value, hash_value))) {
         LOG_WARN("fail to do hash", K(ret));
       }
@@ -5525,6 +6064,20 @@ int ObAggregateProcessor::llc_init(AggrCell &aggr_cell)
   return ret;
 }
 
+int ObAggregateProcessor::llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  llc_map_size = get_llc_size();
+  OB_ASSERT(llc_map_size > 0);
+  if (OB_ISNULL(llc_map = static_cast<char *> (alloc.alloc(llc_map_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc llc map", K(ret), K(llc_map_size));
+  } else {
+    MEMSET(llc_map, 0, llc_map_size);
+  }
+  return ret;
+}
+
 int ObAggregateProcessor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
@@ -5556,7 +6109,7 @@ int ObAggregateProcessor::llc_calc_hash_value(const ObChunkDatumStore::StoredRow
       has_null_cell = true;
     } else {
       OB_ASSERT(NULL != expr.basic_funcs_);
-      ObExprHashFuncType hash_func = expr.basic_funcs_->default_hash_;
+      ObExprHashFuncType hash_func = expr.basic_funcs_->murmur_hash_;
       if (OB_FAIL(hash_func(datum, hash_value, hash_value))) {
         LOG_WARN("failed to do hash", K(ret));
       }
@@ -5978,17 +6531,25 @@ int ObAggregateProcessor::init_topk_fre_histogram_item(
   } else {
     ObDatum *window_size_result = NULL;
     ObDatum *item_size_result = NULL;
+    ObDatum *max_disuse_cnt_result = NULL;
     int64_t window_size = 0;
     int64_t item_size = 0;
+    int64_t max_disuse_cnt = 0;
     if (OB_UNLIKELY(!aggr_info.window_size_param_expr_->obj_meta_.is_numeric_type() ||
-                    !aggr_info.item_size_param_expr_->obj_meta_.is_numeric_type())) {
+                    !aggr_info.item_size_param_expr_->obj_meta_.is_numeric_type() ||
+                    (aggr_info.max_disuse_param_expr_ != NULL &&
+                     !aggr_info.max_disuse_param_expr_->obj_meta_.is_numeric_type()))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("expr node is null", K(ret), KPC(aggr_info.window_size_param_expr_),
-                                    KPC(aggr_info.item_size_param_expr_));
+                                    KPC(aggr_info.item_size_param_expr_),
+                                    KPC(aggr_info.max_disuse_param_expr_));
     } else if (OB_FAIL(aggr_info.window_size_param_expr_->eval(eval_ctx_, window_size_result)) ||
-               OB_FAIL(aggr_info.item_size_param_expr_->eval(eval_ctx_, item_size_result))) {
+               OB_FAIL(aggr_info.item_size_param_expr_->eval(eval_ctx_, item_size_result)) ||
+               (aggr_info.max_disuse_param_expr_ != NULL &&
+                OB_FAIL(aggr_info.max_disuse_param_expr_->eval(eval_ctx_, max_disuse_cnt_result)))) {
       LOG_WARN("eval failed", K(ret));
-    } else if (OB_ISNULL(window_size_result) || OB_ISNULL(item_size_result)) {
+    } else if (OB_ISNULL(window_size_result) ||
+               OB_ISNULL(item_size_result)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(window_size_result), K(item_size_result));
     } else if (OB_FAIL(ObExprUtil::get_int_param_val(
@@ -5996,13 +6557,20 @@ int ObAggregateProcessor::init_topk_fre_histogram_item(
                  window_size))
                || OB_FAIL(ObExprUtil::get_int_param_val(
                  item_size_result, aggr_info.item_size_param_expr_->obj_meta_.is_decimal_int(),
-                 item_size))) {
+                 item_size))
+               || (aggr_info.max_disuse_param_expr_ != NULL && OB_FAIL(ObExprUtil::get_int_param_val(
+                 max_disuse_cnt_result, aggr_info.max_disuse_param_expr_->obj_meta_.is_decimal_int(),
+                 max_disuse_cnt)))) {
       LOG_WARN("failed to get int param val", K(*window_size_result), K(window_size),
-                                              K(*item_size_result), K(item_size), K(ret));
+                                              K(*item_size_result), K(item_size),
+                                              KPC(max_disuse_cnt_result), K(max_disuse_cnt), K(ret));
     } else {
       topk_fre_hist->set_window_size(window_size);
       topk_fre_hist->set_item_size(item_size);
       topk_fre_hist->set_is_topk_hist_need_des_row(aggr_info.is_need_deserialize_row_);
+      topk_fre_hist->set_max_disuse_cnt(max_disuse_cnt);
+      LOG_TRACE("succeed to init topk fre histogram item", K(window_size), K(item_size),
+                                          K(aggr_info.is_need_deserialize_row_), K(max_disuse_cnt));
     }
   }
   return ret;
@@ -6228,6 +6796,7 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
     int64_t repeat_count = 0;
     const ObChunkDatumStore::StoredRow *stored_row = NULL;
     const ObChunkDatumStore::StoredRow *mat_stored_row = NULL;
+    const ObObjMeta &obj_meta = aggr_info.param_exprs_.at(0)->obj_meta_;
     // get null count
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row_from_sort(stored_row))) {
       if (OB_ISNULL(stored_row) || OB_UNLIKELY(stored_row->cnt_ != 1)) {
@@ -6235,8 +6804,7 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
         LOG_WARN("get unexpected null", K(ret), K(stored_row));
       } else if (stored_row->cells()[0].is_null()) {
         ++ null_count;
-      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                         const_cast<ObDatum &>(stored_row->cells()[0])))) {
+      } else if (OB_FAIL(shadow_truncate_string_for_hist(obj_meta, const_cast<ObDatum &>(stored_row->cells()[0])))) {
         LOG_WARN("failed to shadow truncate string for hist", K(ret));
       } else if (OB_FAIL(prev_row.save_store_row(*stored_row))) {
         LOG_WARN("failed to deep copy limit last rows", K(ret));
@@ -6254,11 +6822,14 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
       if (OB_ISNULL(stored_row) || OB_UNLIKELY(stored_row->cnt_ != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(stored_row));
-      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                         const_cast<ObDatum &>(stored_row->cells()[0])))) {
+      } else if (OB_FAIL(shadow_truncate_string_for_hist(obj_meta, const_cast<ObDatum &>(stored_row->cells()[0])))) {
         LOG_WARN("failed to shadow truncate string for hist", K(ret));
-      } else if (OB_FAIL(check_rows_equal(prev_row, *stored_row, aggr_info, is_equal))) {
+      } else if (!obj_meta.is_lob_storage() &&
+                 OB_FAIL(check_rows_equal(prev_row, *stored_row, aggr_info, is_equal))) {
         LOG_WARN("failed to is order by item equal with prev row", K(ret));
+      } else if (obj_meta.is_lob_storage() &&
+                 OB_FAIL(check_rows_prefix_str_equal_for_hybrid_hist(prev_row, *stored_row, aggr_info, obj_meta, is_equal))) {
+        LOG_WARN("failed to check rows prefix str equal for hybrid hist", K(ret));
       } else if (is_equal) {
         ++ repeat_count;
       } else if (OB_ISNULL(prev_row.store_row_)) {
@@ -6332,17 +6903,19 @@ int ObAggregateProcessor::shadow_truncate_string_for_hist(const ObObjMeta obj_me
 {
   int ret = OB_SUCCESS;
   if (ObColumnStatParam::is_valid_opt_col_type(obj_meta.get_type()) && obj_meta.is_string_type() && !datum.is_null()) {
-    const ObString &str = datum.get_string();
-    int64_t truncated_str_len = ObDbmsStatsUtils::get_truncated_str_len(str, obj_meta.get_collation_type());
-    if (OB_UNLIKELY(truncated_str_len < 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(obj_meta), K(datum), K(truncated_str_len));
-    } else {
-      datum.set_string(str.ptr(), static_cast<uint32_t>(truncated_str_len));
-      if (origin_str_len != NULL && static_cast<int32_t>(truncated_str_len) < str.length()) {
-        *origin_str_len = str.length();
+    if (!obj_meta.is_lob_storage()) {
+      const ObString &str = datum.get_string();
+      int64_t truncated_str_len = ObDbmsStatsUtils::get_truncated_str_len(str, obj_meta.get_collation_type());
+      if (OB_UNLIKELY(truncated_str_len < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(obj_meta), K(datum), K(truncated_str_len));
+      } else {
+        datum.set_string(str.ptr(), static_cast<uint32_t>(truncated_str_len));
+        if (origin_str_len != NULL && static_cast<int32_t>(truncated_str_len) < str.length()) {
+          *origin_str_len = str.length();
+        }
+        LOG_TRACE("Succeed to shadow truncate string for hist", K(datum));
       }
-      LOG_TRACE("Succeed to shadow truncate string for hist", K(datum));
     }
   }
   return ret;
@@ -6388,6 +6961,10 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc_back(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc_arr(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObStringBuffer value(&res_alloc_arr);
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -6398,15 +6975,15 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
   } else {
     const ObChunkDatumStore::StoredRow *storted_row = NULL;
-    ObJsonArray json_array(&tmp_alloc);
     bool is_bool = false;
     if (OB_FAIL(extra->get_bool_mark(0, is_bool))) {
       LOG_WARN("get_bool info failed, may not distinguish between bool and int", K(ret));
     }
 
     // get type
-    ObObj *tmp_obj = NULL;
+    ObBinAggSerializer bin_agg(&res_alloc, AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_ARRAY), false, &res_alloc_back, &res_alloc_arr);
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
+      ObObj *tmp_obj = NULL;
       if (OB_ISNULL(storted_row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(storted_row));
@@ -6427,15 +7004,20 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
           ObIJsonBase *json_val = NULL;
           ObDatum converted_datum;
           converted_datum.set_datum(storted_row->cells()[0]);
+          bool has_lob_header = tmp_obj->has_lob_header();
           // convert string charset if needed
           if (ob_is_string_type(val_type) 
               && (ObCharset::charset_type_by_coll(cs_type) != CHARSET_UTF8MB4)) {
             ObString origin_str = converted_datum.get_string();
             ObString converted_str;
-            if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type, converted_str, 
+            if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&tmp_alloc,
+              val_type, cs_type, tmp_obj->has_lob_header(), origin_str))) {
+              LOG_WARN("fail to get real data.", K(ret), K(origin_str));
+            } else if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type, converted_str,
                                                              CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
               LOG_WARN("convert string collation failed", K(ret), K(cs_type), K(origin_str.length()));
             } else {
+              has_lob_header = false;
               converted_datum.set_string(converted_str);
               cs_type = CS_TYPE_UTF8MB4_BIN;
             }
@@ -6451,13 +7033,16 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
             } else {
               ObJsonBoolean *bool_node = (ObJsonBoolean*)new(json_node_buf)ObJsonBoolean(converted_datum.get_bool());
               json_val = bool_node;
+              if (OB_FAIL(ObJsonBaseFactory::transform(&tmp_alloc, json_val, ObJsonInType::JSON_BIN, json_val))) {
+                LOG_WARN("fail to transform to tree", K(ret));
+              }
             }
           } else if (ObJsonExprHelper::is_convertible_to_json(val_type)) {
             if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(converted_datum, val_type,
                                                                           &tmp_alloc, cs_type,
-                                                                          json_val, false,
-                                                                          tmp_obj->has_lob_header(),
-                                                                          true))) {
+                                                                          json_val, ObConv2JsonParam(true,
+                                                                          has_lob_header,
+                                                                          true)))) {
               LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
             }
           } else {
@@ -6465,18 +7050,25 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
                                                                     &tmp_alloc, scale,
                                                                     eval_ctx_.exec_ctx_.get_my_session()->get_timezone_info(),
                                                                     eval_ctx_.exec_ctx_.get_my_session(),
-                                                                    json_val, false))) {
+                                                                    json_val, true))) {
               LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
             }
           }
 
+          ObString key;
+          ObJsonBin *jb_node = nullptr;
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(json_array.array_append(json_val))) {
-            LOG_WARN("failed: json array append json value", K(ret));
-          } else if (json_array.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
+          } else if (OB_ISNULL(jb_node = static_cast<ObJsonBin*>(json_val))) {
+            ret = OB_ERR_UNDEFINED;
+            LOG_WARN("get binary null", K(ret));
+          } else if (OB_FAIL(bin_agg.append_key_and_value(key, value, jb_node))) {
+            LOG_WARN("failed to append key and value", K(ret));
+          } else if (bin_agg.get_approximate_length() > OB_MAX_PACKET_LENGTH * 2) {
             ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-            LOG_WARN("result of json_arrayagg is too long", K(ret), K(json_array.get_serialize_size()),
-                                                            K(OB_MAX_PACKET_LENGTH));
+            LOG_WARN("result of json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
+                                                              K(OB_MAX_PACKET_LENGTH));
+          } else {
+            tmp_alloc.reset();
           }
         }
       }
@@ -6485,16 +7077,15 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
       LOG_WARN("fail to get next row", K(ret));
     } else {
       ret = OB_SUCCESS;
-      ObString str;
-      // output res
-      if (OB_FAIL(json_array.get_raw_binary(str, &aggr_alloc_))) {
-        LOG_WARN("get result binary failed", K(ret));
+      if (OB_FAIL(bin_agg.serialize())) {
+        LOG_WARN("failed to serialize bin agg.", K(ret));
       } else {
+        ObStringBuffer *buff = bin_agg.get_buffer();
         ObTextStringDatumResult text_result(ObJsonType, aggr_info.expr_->obj_meta_.has_lob_header(), &concat_result);
-        if (OB_FAIL(text_result.init(str.length(), &aggr_alloc_))) {
+        if (OB_FAIL(text_result.init(buff->length(), &aggr_alloc_))) {
           LOG_WARN("init lob result failed");
-        } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
-          LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
+        } else if (OB_FAIL(text_result.append(buff->ptr(), buff->length()))) {
+          LOG_WARN("failed to append realdata", K(ret), K(buff), K(text_result));
         } else {
           text_result.set_result();
         }
@@ -6510,6 +7101,10 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc_back(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc_arr(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObStringBuffer value(&res_alloc_arr);
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -6527,7 +7122,7 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
     bool is_format_json = aggr_info.format_json_;
     bool is_absent_on_null = !aggr_info.absent_on_null_;
     bool is_strict = aggr_info.strict_json_;
-    ObJsonArray json_array(&tmp_alloc);
+    ObBinAggSerializer bin_agg(&res_alloc, AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_ARRAY), false, &res_alloc_back, &res_alloc_arr);
 
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
       if (OB_ISNULL(storted_row) || storted_row->cnt_ < 1) {
@@ -6539,19 +7134,26 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
         ObScale scale = data_meta.get_scale();
         ObCollationType cs_type = data_meta.get_collation_type();
         ObIJsonBase *json_val = nullptr;
+        ObJsonBin *jb_node = nullptr;
+        ObString key;
 
         if (OB_FAIL(ObJsonExprHelper::oracle_datum2_json_val(&datum, data_meta, &tmp_alloc,
-            eval_ctx_.exec_ctx_.get_my_session(), json_val, false, is_format_json, is_strict, false))) {
+            eval_ctx_.exec_ctx_.get_my_session(), json_val, false, is_format_json, is_strict, true))) {
           LOG_WARN("failed to eval json val node.", K(ret), K(is_format_json), K(is_strict), K(data_meta));
         } else if (is_absent_on_null
                    && (val_type == ObNullType || json_val->json_type() == ObJsonNodeType::J_NULL)) {
           // do nothing , continue
-        } else if (OB_FAIL(json_array.append(static_cast<ObJsonNode*>(json_val)))) {
-          LOG_WARN("failed to append array node", K(ret), K(json_array.element_count()));
-        } else if (json_array.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
+        } else if (OB_ISNULL(jb_node = static_cast<ObJsonBin*>(json_val))) {
+          ret = OB_ERR_UNDEFINED;
+          LOG_WARN("get binary null", K(ret));
+        } else if (OB_FAIL(bin_agg.append_key_and_value(key, value, jb_node))) {
+          LOG_WARN("failed to append key and value", K(ret));
+        } else if (bin_agg.get_approximate_length() > OB_MAX_PACKET_LENGTH * 2) {
           ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-          LOG_WARN("result of json_arrayagg is too long", K(ret),
-            K(json_array.get_serialize_size()),  K(OB_MAX_PACKET_LENGTH));
+          LOG_WARN("result of json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
+                                                            K(OB_MAX_PACKET_LENGTH));
+        } else {
+          tmp_alloc.reset();
         }
       }
     } //end of while
@@ -6573,14 +7175,21 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
         rsp_len = (ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length();
       }
 
-      int64_t result_likely_size = json_array.get_serialize_size();
-
       ObJsonBuffer string_buffer(&tmp_alloc);
-
-      if (ob_is_string_type(rsp_type) || ob_is_raw(rsp_type)) {
-        if (OB_FAIL(string_buffer.reserve(result_likely_size))) {
-          LOG_WARN("fail to reserve string.", K(ret), K(result_likely_size));
-        } else if (OB_FAIL(json_array.print(string_buffer, true, false))) {
+      if (OB_FAIL(bin_agg.serialize()))  {
+        LOG_WARN("failed to serialize bin agg.", K(ret));
+      } else if (ob_is_string_type(rsp_type) || ob_is_raw(rsp_type)) {
+        ObIJsonBase *j_base = NULL;
+        ObStringBuffer *buff = bin_agg.get_buffer();
+        if (OB_FAIL(string_buffer.reserve(buff->length()))) {
+          LOG_WARN("fail to reserve string.", K(ret), K(buff->length()));
+        } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_alloc,
+                                                      buff->string(),
+                                                      ObJsonInType::JSON_BIN,
+                                                      ObJsonInType::JSON_BIN,
+                                                      j_base))) {
+          LOG_WARN("fail to get real data.", K(ret), K(buff));
+        } else if (OB_FAIL(j_base->print(string_buffer, true, false))) {
           LOG_WARN("failed: get json string text", K(ret));
         } else if (rsp_type == ObVarcharType && string_buffer.length() > rsp_len) {
           char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
@@ -6594,10 +7203,8 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
           LOG_WARN("fail to pack res result.", K(ret));
         }
       } else if (ob_is_json(rsp_type)) {
-        ObString raw_binary_str;
-        if (OB_FAIL(json_array.get_raw_binary(raw_binary_str, &tmp_alloc))) {
-          LOG_WARN("get result binary failed", K(ret));
-        } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, raw_binary_str, &aggr_alloc_))) {
+        ObStringBuffer *buff = bin_agg.get_buffer();
+        if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, buff->string(), &aggr_alloc_))) {
           LOG_WARN("fail to pack res result.", K(ret));
         }
       } else {
@@ -6616,6 +7223,10 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
   int ret = OB_SUCCESS;
   const int col_num = 2;
   common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc_back(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc_arr(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObStringBuffer value(&res_alloc_arr);
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -6626,12 +7237,12 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
   } else {
     const ObChunkDatumStore::StoredRow *storted_row = NULL;
-    ObJsonObject json_object(&tmp_alloc);
     ObObj tmp_obj[col_num];
     bool is_bool = false;
     if (OB_FAIL(extra->get_bool_mark(1, is_bool))) {
       LOG_WARN("get_bool info failed, may not distinguish between bool and int", K(ret));
     }
+    ObBinAggSerializer bin_agg(&res_alloc, AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_OBJECT), false, &res_alloc_back, &res_alloc_arr);
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
       if (OB_ISNULL(storted_row)) {
         ret = OB_ERR_UNEXPECTED;
@@ -6690,12 +7301,19 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
             && (ObCharset::charset_type_by_coll(cs_type1) != CHARSET_UTF8MB4)) {
               ObString origin_str = converted_datum.get_string();
               ObString converted_str;
-              if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type1, converted_str, 
+              if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&tmp_alloc,
+                                                                          val_type1,
+                                                                          cs_type1,
+                                                                          tmp_obj->has_lob_header(),
+                                                                          origin_str))) {
+                LOG_WARN("fail to get real data.", K(ret), K(origin_str));
+              } else if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type1, converted_str,
                                                               CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
                 LOG_WARN("convert string collation failed", K(ret), K(cs_type1), K(origin_str.length()));
               } else {
                 converted_datum.set_string(converted_str);
                 cs_type1 = CS_TYPE_UTF8MB4_BIN;
+                has_lob_header1 = false;
               }
             }
 
@@ -6708,12 +7326,15 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
               } else {
                 ObJsonBoolean *bool_node = (ObJsonBoolean*)new(json_node_buf)ObJsonBoolean(storted_row->cells()[1].get_bool());
                 json_val = bool_node;
+                if (OB_FAIL(ObJsonBaseFactory::transform(&tmp_alloc, json_val, ObJsonInType::JSON_BIN, json_val))) {
+                  LOG_WARN("fail to transform to tree", K(ret));
+                }
               }
             } else if (ObJsonExprHelper::is_convertible_to_json(val_type1)) {
               if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(converted_datum, val_type1,
                                                                             &tmp_alloc, cs_type1,
-                                                                            json_val, false,
-                                                                            has_lob_header1, true))) {
+                                                                            json_val, ObConv2JsonParam(true,
+                                                                            has_lob_header1, true)))) {
                 LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type1));
               }
             } else {
@@ -6721,19 +7342,27 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
                                                                       &tmp_alloc, scale1,
                                                                       eval_ctx_.exec_ctx_.get_my_session()->get_timezone_info(),
                                                                       eval_ctx_.exec_ctx_.get_my_session(),
-                                                                      json_val, false))) {
+                                                                      json_val, true))) {
                 LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type1));
               }
             }
 
+            ObJsonBin *jb_node = nullptr;
+
             if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(json_object.add(key_data, static_cast<ObJsonNode*>(json_val), false, true, false))) {
-              LOG_WARN("failed: json object add json value", K(ret));
-            } else if (json_object.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
+            } else if (OB_ISNULL(jb_node = static_cast<ObJsonBin *>(json_val))) {
+              ret = OB_ERR_UNDEFINED;
+              LOG_WARN("get binary null", K(ret));
+            } else if (OB_FAIL(bin_agg.append_key_and_value(key_data, value, jb_node))) {
+              LOG_WARN("failed to append key and value", K(ret), K(key_data));
+            } else if (bin_agg.get_approximate_length() > OB_MAX_PACKET_LENGTH * 2) {
               ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-              LOG_WARN("result of json_objectagg is too long", K(ret), K(json_object.get_serialize_size()),
+              LOG_WARN("result of json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
                                                                 K(OB_MAX_PACKET_LENGTH));
+            } else {
+              tmp_alloc.reset();
             }
+
           }
         }
       }
@@ -6745,18 +7374,17 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
       LOG_WARN("fail to get next row", K(ret));
     } else {
       ret = OB_SUCCESS;
-      ObString str;
-      json_object.stable_sort();
-      json_object.unique();
+      bin_agg.set_sort_and_unique();
       // output res
-      if (OB_FAIL(json_object.get_raw_binary(str, &aggr_alloc_))) {
-        LOG_WARN("get result binary failed", K(ret));
+      if (OB_FAIL(bin_agg.serialize())) {
+        LOG_WARN("failed to serialize bin agg.", K(ret));
       } else {
+        ObStringBuffer *buff = bin_agg.get_buffer();
         ObTextStringDatumResult text_result(ObJsonType, aggr_info.expr_->obj_meta_.has_lob_header(), &concat_result);
-        if (OB_FAIL(text_result.init(str.length(), &aggr_alloc_))) {
+        if (OB_FAIL(text_result.init(buff->length(), &aggr_alloc_))) {
           LOG_WARN("init lob result failed");
-        } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
-          LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
+        } else if (OB_FAIL(text_result.append(buff->ptr(), buff->length()))) {
+          LOG_WARN("failed to append realdata", K(ret), K(buff), K(text_result));
         } else {
           text_result.set_result();
         }
@@ -6771,7 +7399,7 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
                                                 ObDatum &concat_result)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
   ObString result;
   common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObXmlDocument *content = NULL;
@@ -6811,6 +7439,7 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
     int64_t buf_len = 0;
     bool deal_special = false;
     int64_t add_time = 0;
+    ObBinAggSerializer bin_agg(xml_mem_ctx->allocator_, ObBinAggType::AGG_XML, static_cast<uint8_t>(M_CONTENT), true);
 
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(stored_row))) {
       if (OB_ISNULL(stored_row)) {
@@ -6916,7 +7545,8 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
               }
             }
           }
-        } else {
+        } else if (row_count == 1 && node_type ==  ObMulModeNodeType::M_DOCUMENT) {
+          deal_special = true;
           if (OB_FAIL(deep_copy_ob_string(tmp_alloc, cell_string, dup_str))) {
             LOG_WARN("fail copy string", K(ret), K(cell_string.length()));
           } else if (OB_FAIL(common::ObMulModeFactory::get_xml_base(xml_mem_ctx, dup_str,
@@ -6947,10 +7577,41 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
             }
           }
 
+          ObString res_str;
+          if (OB_SUCC(ret) && OB_FAIL(ObXMLExprHelper::pack_xml_res(*aggr_info.expr_, eval_ctx_, concat_result, content, xml_mem_ctx,
+                                                      M_DOCUMENT, res_str))) {
+            LOG_WARN("pack document failed", K(ret));
+          }
+        } else {
+          ObXmlBin *bin = nullptr;
           add_time++;
-          if (OB_SUCC(ret) && content->get_serialize_size() > OB_MAX_PACKET_LENGTH) {
+          ObXmlBin extend(xml_mem_ctx);
+          ObIMulModeBase *input_base = nullptr;
+          if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, cell_string,
+                                                            ObNodeMemType::BINARY_TYPE,
+                                                            ObNodeMemType::BINARY_TYPE,
+                                                            input_base))) {
+            LOG_WARN("fail to get xml base", K(ret), K(dup_str));
+          } else if (OB_ISNULL(bin = static_cast<ObXmlBin*>(input_base))) {
+            ret =  OB_ERR_UNEXPECTED;
+            LOG_WARN("get bin null", K(ret));
+          } else if (bin->check_extend()) {
+            if (OB_FAIL(bin->merge_extend(extend))) {
+              LOG_WARN("fail to merge", K(ret));
+            } else {
+              bin = &extend;
+            }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(bin_agg.append_key_and_value(bin))) {
+            LOG_WARN("append binary failed", K(ret));
+          } else if (bin_agg.get_approximate_length() > OB_MAX_PACKET_LENGTH * 2) {
             ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-            LOG_WARN("result of xmlagg is too long", K(ret), K(add_time), K(content->get_serialize_size()), K(OB_MAX_PACKET_LENGTH));
+            LOG_WARN("result of json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
+                                                            K(OB_MAX_PACKET_LENGTH));
+          } else if (!is_unparsed) {
+            is_unparsed = bin->get_unparse();
           }
         }
       } // end if
@@ -6960,18 +7621,16 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
     } else {
       ret = OB_SUCCESS;
       if (!deal_special) {
-        ObString res_str;
-        ObMulModeNodeType target_type = M_MAX_TYPE;
-        if (node_type == M_DOCUMENT && row_count == 1) {
-          target_type = M_DOCUMENT;
-        } else if (is_unparsed) {
-          target_type = M_UNPARSED;
+        bin_agg.set_header_type(is_unparsed ? M_UNPARSED : M_CONTENT);
+        if (OB_FAIL(bin_agg.serialize())) {
+          LOG_WARN("fail to serialize aggregate binary", K(ret));
+        } else if (bin_agg.get_buffer()->length() > OB_MAX_PACKET_LENGTH) {
+          ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
+          LOG_WARN("result of xmlagg is too long", K(ret), K(add_time), K(content->get_serialize_size()), K(OB_MAX_PACKET_LENGTH));
+        } else if (OB_FAIL(ObXMLExprHelper::pack_binary_res(*aggr_info.expr_, eval_ctx_, bin_agg.get_buffer()->string(), blob_locator))) {
+          LOG_WARN("pack binary res failed", K(ret));
         } else {
-          target_type = M_CONTENT;
-        }
-        if (OB_FAIL(ObXMLExprHelper::pack_xml_res(*aggr_info.expr_, eval_ctx_, concat_result, content, xml_mem_ctx,
-                                                target_type, res_str))) {
-          LOG_WARN("pack document failed", K(ret));
+          concat_result.set_string(blob_locator.ptr(), blob_locator.length());
         }
       }
     }
@@ -7002,6 +7661,10 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc_back(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator res_alloc_arr(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObStringBuffer value(&res_alloc_arr);
 
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -7024,7 +7687,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
     bool is_strict = aggr_info.strict_json_;
     bool is_with_unique_keys = aggr_info.with_unique_keys_;
 
-    ObJsonObject j_obj(&tmp_alloc);
+    ObBinAggSerializer bin_agg(&res_alloc, AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_OBJECT), false, &res_alloc_back, &res_alloc_arr);
 
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
       if (OB_ISNULL(storted_row) || storted_row->cnt_ < 2) {
@@ -7068,16 +7731,25 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
           } else if (!need_key_string_convert && OB_FAIL(deep_copy_ob_string(tmp_alloc, key_string, key_string))) {
             LOG_WARN("fail to deep copy string.", K(ret), K(key_string));
           } else if (OB_FAIL(ObJsonExprHelper::oracle_datum2_json_val(&datum_value, meta_value, &tmp_alloc,
-              eval_ctx_.exec_ctx_.get_my_session(), json_val, false, is_format_json, is_strict, false))) {
+              eval_ctx_.exec_ctx_.get_my_session(), json_val, false, is_format_json, is_strict, true))) {
             LOG_WARN("failed to eval json val node.", K(ret), K(is_format_json), K(is_strict), K(meta_value));
           } else if (is_absent_on_null && json_val->json_type() == ObJsonNodeType::J_NULL) {
             // do nothing , continue
-          } else if (OB_FAIL(j_obj.add(key_string, static_cast<ObJsonNode*>(json_val), false, true, false))) {
-            LOG_WARN("failed to append array node", K(ret), K(j_obj.element_count()));
-          } else if (j_obj.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
-            ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-            LOG_WARN("result of json_objectagg is too long", K(ret),
-              K(j_obj.get_serialize_size()),  K(OB_MAX_PACKET_LENGTH));
+          } else {
+            ObJsonBin *jb_node = nullptr;
+            if (OB_ISNULL(jb_node = static_cast<ObJsonBin *>(json_val))) {
+              ret = OB_ERR_UNDEFINED;
+              LOG_WARN("get binary null", K(ret));
+            } else if (OB_FAIL(bin_agg.append_key_and_value(key_string, value, jb_node))) {
+              LOG_WARN("failed to append key and value", K(ret), K(key_string));
+            } else if (bin_agg.get_approximate_length() > OB_MAX_PACKET_LENGTH * 2) {
+              ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
+              LOG_WARN("result of json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
+                                                                K(OB_MAX_PACKET_LENGTH));
+            } else {
+              tmp_alloc.reset();
+            }
+
           }
         }
       }
@@ -7094,7 +7766,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
       ObObjType rsp_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
       ObCollationType rsp_cs_type = static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]);
       int32_t rsp_len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
-      int64_t result_likely_size = j_obj.get_serialize_size();
+      //int64_t result_likely_size = j_obj.get_serialize_size();
 
       if (!parse_node.value_) {
         is_default_type = true;
@@ -7104,23 +7776,31 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
       }
 
       ObJsonBuffer string_buffer(&tmp_alloc);
+      ObStringBuffer *buff = nullptr;
 
-      uint64_t unsorted_count = j_obj.element_count();
 
       if (is_strict || (ob_is_json(rsp_type) && !is_default_type) || is_with_unique_keys) {
-        j_obj.stable_sort();
-        j_obj.unique();
+        bin_agg.set_sort_and_unique();
       }
-      uint64_t sorted_count = j_obj.element_count();
 
-      if ((is_with_unique_keys || ob_is_json(rsp_type) || is_strict)
-          && (unsorted_count > sorted_count)) {
+      if (OB_FAIL(bin_agg.serialize())) {
+        LOG_WARN("failed to serialize bin agg.", K(ret));
+      } else if ((is_with_unique_keys || ob_is_json(rsp_type) || is_strict)
+                  && (bin_agg.get_key_info_count() > bin_agg.get_last_count())) {
         ret = OB_ERR_DUPLICATE_KEY;
         LOG_WARN("duplicate key", K(ret));
+      } else if (OB_FALSE_IT(buff = bin_agg.get_buffer())) {
       } else if (ob_is_string_type(rsp_type) || ob_is_raw(rsp_type)) {
-        if (OB_FAIL(string_buffer.reserve(result_likely_size))) {
-          LOG_WARN("fail to reserve string.", K(ret), K(result_likely_size));
-        } else if (OB_FAIL(j_obj.print(string_buffer, true, false))) {
+        ObIJsonBase *j_base = NULL;
+        if (OB_FAIL(string_buffer.reserve(buff->length()))) {
+          LOG_WARN("fail to reserve string.", K(ret), K(buff->length()));
+        } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_alloc,
+                                                      buff->string(),
+                                                      ObJsonInType::JSON_BIN,
+                                                      ObJsonInType::JSON_BIN,
+                                                      j_base))) {
+          LOG_WARN("fail to get real data.", K(ret), K(buff));
+        } else if (OB_FAIL(j_base->print(string_buffer, true, false))) {
           LOG_WARN("failed: get json string text", K(ret));
         } else if (rsp_type == ObVarcharType && string_buffer.length() > rsp_len) {
           char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
@@ -7134,10 +7814,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
           LOG_WARN("fail to pack res result.", K(ret));
         }
       } else if (ob_is_json(rsp_type)) {
-        ObString raw_binary_str;
-        if (OB_FAIL(j_obj.get_raw_binary(raw_binary_str, &tmp_alloc))) {
-          LOG_WARN("get result binary failed", K(ret));
-        } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, raw_binary_str, &aggr_alloc_))) {
+        if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, buff->string(), &aggr_alloc_))) {
           LOG_WARN("fail to pack res result.", K(ret));
         }
       } else {
@@ -7456,6 +8133,276 @@ int ObAggregateProcessor::fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const i
   return ret;
 }
 
+int ObAggregateProcessor::get_asmvt_result(const ObAggrInfo &aggr_info,
+                                           GroupConcatExtraResult *&extra,
+                                           ObDatum &concat_result)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unpexcted null", K(ret), K(extra));
+  } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
+    // Group concat row may be iterated in rollup_process(), rewind here.
+    LOG_WARN("rewind failed", KPC(extra), K(ret));
+  } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
+    LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else {
+    const ObChunkDatumStore::StoredRow *storted_row = NULL;
+    bool inited_tmp_obj = false;
+    ObObj *tmp_obj = NULL;
+    mvt_agg_result mvt_res(tmp_alloc);
+    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
+      if (OB_ISNULL(storted_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(storted_row));
+      } else {
+        common::ObArenaAllocator single_row_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        // get obj
+        if (!inited_tmp_obj
+            && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(sizeof(ObObj) * (storted_row->cnt_))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(ret), K(tmp_obj));
+        } else if (!inited_tmp_obj && FALSE_IT(inited_tmp_obj = true)) {
+        } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
+          LOG_WARN("failed to convert datum to obj", K(ret));
+        } else if (!mvt_res.is_inited()
+                   && OB_FAIL(init_asmvt_result(tmp_alloc, aggr_info, tmp_obj, storted_row->cnt_, mvt_res))) {
+          LOG_WARN("failed to init asmvt result", K(ret));
+        } else if (FALSE_IT(mvt_res.set_tmp_allocator(&single_row_alloc))) {
+        } else if (OB_FAIL(mvt_res.generate_feature(tmp_obj, storted_row->cnt_))) {
+          LOG_WARN("failed to generate mvt feature", K(ret));
+        }
+      }
+    }//end of while
+
+    if (ret != OB_ITER_END && ret != OB_SUCCESS) {
+      LOG_WARN("fail to get next row", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      ObString mvt_str;
+      if (OB_FAIL(mvt_res.mvt_pack(mvt_str))) {
+        LOG_WARN("fail to pack mvt result", K(ret));
+      } else {
+        ObString blob_locator;
+        ObExprStrResAlloc expr_res_alloc(*aggr_info.expr_, eval_ctx_);
+        ObTextStringResult blob_res(ObLongTextType, true, &expr_res_alloc);
+        int64_t total_length = mvt_str.length();
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(blob_res.init(total_length))) {
+          LOG_WARN("failed to init blob res", K(ret), K(mvt_str), K(total_length));
+        } else if (OB_FAIL(blob_res.append(mvt_str))) {
+          LOG_WARN("failed to append xml binary data", K(ret), K(mvt_str));
+        } else {
+          blob_res.get_result_buffer(blob_locator);
+          concat_result.set_string(blob_locator.ptr(), blob_locator.length());
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
+                                            const ObAggrInfo &aggr_info,
+                                            const ObObj *tmp_obj,
+                                            uint32_t obj_cnt,
+                                            mvt_agg_result &mvt_res)
+{
+  int ret = OB_SUCCESS;
+  uint32_t column_cnt = 0;
+  bool is_param_done = false;
+  int param_cnt = 0;
+  mvt_res.inited_ = true;
+  // try get first geom column and column number
+  for (uint32_t i = 0; i < aggr_info.param_exprs_.count() && OB_SUCC(ret); i++) {
+    if (i == 0) {
+      param_cnt = tmp_obj[i].get_int();
+      mvt_res.column_offset_ = param_cnt + 1;
+    }
+    ObExpr *expr = aggr_info.param_exprs_.at(i);
+    if (i >= mvt_res.column_offset_ && expr->type_ == T_REF_COLUMN) {
+      ObString key_name;
+      is_param_done = true;
+      column_cnt++;
+      if (i + 1 >= obj_cnt) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid param", K(ret), K(i), K(obj_cnt));
+      } else if (expr->obj_meta_.is_geometry() && mvt_res.geom_idx_ == UINT32_MAX) {
+        if (mvt_res.geom_name_.empty()) {
+          mvt_res.geom_idx_ = i;
+          if (OB_FAIL(ob_write_string(allocator, tmp_obj[i + 1].get_string(), mvt_res.geom_name_))) {
+            // geo_name
+            LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+          }
+        } else if (mvt_res.geom_name_.case_compare(tmp_obj[i + 1].get_string()) == 0) {
+          mvt_res.geom_idx_ = i;
+        } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i + 1].get_string(), key_name, true))) {
+          LOG_WARN("write string failed", K(ret), K(tmp_obj[i + 1].get_string()));
+        } else if (OB_FAIL(mvt_res.keys_.push_back(key_name))) {
+          LOG_WARN("failed to push back col name to keys", K(ret), K(i), K(tmp_obj[i + 1].get_string()));
+        }
+      } else if (!mvt_res.feature_id_name_.empty() && mvt_res.feat_id_idx_ == UINT32_MAX
+                && mvt_res.feature_id_name_.case_compare(tmp_obj[i + 1].get_string()) == 0
+                && ob_is_numeric_type(expr->obj_meta_.get_type())) {
+        // feature id column name won't add to keys
+        mvt_res.feat_id_idx_ = i;
+      } else if (!expr->obj_meta_.is_json() // json type will be expanded
+                && !expr->obj_meta_.is_enum_or_set()
+                && OB_FAIL(ob_write_string(allocator, tmp_obj[i + 1].get_string(), key_name, true))) {
+        LOG_WARN("write string failed", K(ret), K(tmp_obj[i + 1].get_string()));
+      } else if (!expr->obj_meta_.is_json() && !expr->obj_meta_.is_enum_or_set() && OB_FAIL(mvt_res.keys_.push_back(key_name))) {
+        LOG_WARN("failed to push back col name to keys", K(ret), K(i), K(tmp_obj[i + 1].get_string()));
+      }
+    } else if (!is_param_done) {
+      ObObjType type = tmp_obj[i].get_type();
+      ObString content;
+      if (ob_is_null(type)) {
+        // do nothing, use default value
+      } else if (i == 1) {
+        // layer name
+        if (!ob_is_string_tc(type) && !ob_is_large_text(type) && !ob_is_geometry_tc(type)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid type for layer name", K(ret), K(type));
+        } else if (ob_is_geometry_tc(type)) {
+          ObObj geo_hex;
+          ObObj obj;
+          ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, ObCharset::get_system_collation());
+          if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, tmp_obj[i], obj))) {
+            LOG_WARN("failed to cast number to double type", K(ret));
+          } else if (OB_FAIL(ObHexUtils::hex(ObString(obj.get_string().length(), obj.get_string().ptr()), cast_ctx, geo_hex))) {
+            LOG_WARN("failed to cast to hex", K(ret), K(content));
+          } else if (OB_FAIL(ob_write_string(allocator, geo_hex.get_string(), mvt_res.lay_name_, true))) {
+            LOG_WARN("write string failed", K(ret), K(content));
+          }
+        } else if (OB_FAIL(tmp_obj[i].get_string(content))) {
+          LOG_WARN("get lay name string failed", K(ret));
+        } else if (mvt_agg_result::is_upper_char_exist(content)) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("column name can't be upper case", K(ret), K(type));
+        } else if (OB_FAIL(ob_write_string(allocator, content, mvt_res.lay_name_, true))) {
+          LOG_WARN("write string failed", K(ret), K(content));
+        }
+      } else if (i == 2) {
+        // extent
+        ObObj obj;
+        const ObObj *extent_res = &tmp_obj[i];
+        if (!ob_is_int_tc(type) && !ob_is_uint_tc(type)) {
+          if (expr->is_static_const_) {
+            ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, ObCharset::get_system_collation());
+            if (OB_FAIL(ObObjCaster::to_type(ObInt32Type, cast_ctx, tmp_obj[i], obj))) {
+              LOG_WARN("failed to cast number to double type", K(ret));
+            } else {
+              extent_res = &obj;
+            }
+          } else {
+            ret = OB_ERR_INVALID_TYPE_FOR_OP;
+            LOG_WARN("invalid type for extent", K(ret), K(type));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (extent_res->get_int() == 0
+                   || extent_res->is_overflow_integer(ObInt32Type)) {
+          ret = OB_ERR_INVALID_INPUT_VALUE;
+          LOG_WARN("invalid extent value", K(ret), K(extent_res->get_int()));
+        } else {
+          mvt_res.extent_ = extent_res->get_int();
+        }
+      } else if (i == 3) {
+        // geo_name
+        if (!ob_is_string_tc(type)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid type for geom name", K(ret), K(type));
+        } else if (tmp_obj[i].get_string().empty()) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("invalid column name", K(ret), K(type));
+        } else if (mvt_agg_result::is_upper_char_exist(tmp_obj[i].get_string())) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("column name can't be upper case", K(ret), K(type));
+        } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.geom_name_))) {
+          LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+        }
+      } else if (i == 4) {
+        // feature id name
+        if (!ob_is_string_tc(type)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid type for layer name", K(ret), K(type));
+        } else if (mvt_agg_result::is_upper_char_exist(tmp_obj[i].get_string())) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("column name can't be upper case", K(ret), K(type));
+        } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.feature_id_name_))) {
+          LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+        } else if (mvt_res.feature_id_name_.empty()) {
+          ret = OB_WRONG_COLUMN_NAME;
+          LOG_WARN("input an empty feature id name", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!mvt_res.feature_id_name_.empty() && mvt_res.feat_id_idx_ == UINT32_MAX) {
+      // can't find feature id column
+      ret = OB_ERR_IDENTITY_COLUMN_MUST_BE_NUMERIC_TYPE;
+      LOG_WARN("invalid column type", K(ret));
+    } else {
+      mvt_res.column_cnt_ = column_cnt;
+      if (OB_FAIL(mvt_res.init_layer())) {
+        LOG_WARN("failed to init layer", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::check_rows_prefix_str_equal_for_hybrid_hist(const ObChunkDatumStore::LastStoredRow &prev_row,
+                                                                      const ObChunkDatumStore::StoredRow &cur_row,
+                                                                      const ObAggrInfo &aggr_info,
+                                                                      const ObObjMeta &obj_meta,
+                                                                      bool &is_equal)
+{
+  int ret = OB_SUCCESS;
+  is_equal = false;
+  if (OB_ISNULL(prev_row.store_row_) ||
+      OB_UNLIKELY(!obj_meta.is_lob_storage() ||
+                  prev_row.store_row_->cnt_ != cur_row.cnt_ ||
+                  aggr_info.sort_collations_.count() != cur_row.cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(prev_row.store_row_), K(obj_meta),
+                                     K(cur_row.cnt_), K(aggr_info.sort_collations_.count()));
+  } else {
+    is_equal = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_equal && i < aggr_info.sort_collations_.count(); ++i) {
+      uint32_t index = aggr_info.sort_collations_.at(i).field_idx_;
+      common::ObArenaAllocator tmp_alloctor("CalcHybridHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      ObDatum new_prev_datum;
+      ObDatum new_cur_datum;
+      if (OB_UNLIKELY(index >= prev_row.store_row_->cnt_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid argument", K(ret), K(index), K(prev_row.store_row_->cnt_));
+      } else if (OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                            obj_meta,
+                                                                            prev_row.store_row_->cells()[index],
+                                                                            new_prev_datum)) ||
+                 OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                            obj_meta,
+                                                                            cur_row.cells()[index],
+                                                                            new_cur_datum))) {
+        LOG_WARN("failed to build prefix str datum for lob", K(ret));
+      } else {
+        int cmp_ret = 0;
+        if (OB_FAIL(aggr_info.sort_cmp_funcs_.at(i).cmp_func_(new_prev_datum,
+                                                              new_cur_datum,
+                                                              cmp_ret))) {
+          LOG_WARN("failed to cmp", K(ret), K(index));
+        } else {
+          is_equal = 0 == cmp_ret;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 ObAggregateProcessor::ObDecIntAggOpFunc ObAggregateProcessor::DEC_INT_OP_FUNCS[DECIMAL_INT_MAX][3][3];
 ObAggregateProcessor::ObDecIntAggOpFunc ObAggregateProcessor::DEC_INT_MERGE_FUNCS[DECIMAL_INT_MAX][3];
 ObAggregateProcessor::ObDecIntAggOpBatchFunc ObAggregateProcessor::DEC_INT_ADD_BATCH_FUNCS[DECIMAL_INT_MAX][3][2][2];
@@ -7741,7 +8688,7 @@ struct ObDecIntSumBatchOpFunc<ObNumber, CALC_T, ARG_T, SELECTOR>
         number::ObNumber right_nmb;
         if (OB_FAIL(wide::to_number(accum, scale, tmp_alloc, right_nmb))) {
           LOG_WARN("fail to cast decimal int to number", K(ret));
-        } else if (processor->clone_number_cell(right_nmb, aggr_cell)) {
+        } else if (OB_FAIL(processor->clone_number_cell(right_nmb, aggr_cell))) {
           LOG_WARN("fail to clone number", K(ret));
         }
       } else {

@@ -269,6 +269,10 @@ const char *get_mutator_type_str(MutatorType mutator_type)
     type_str = "MUTATOR_TABLE_LOCK";
     break;
   }
+  case MutatorType::MUTATOR_ROW_EXT_INFO: {
+    type_str = "MUTATOR_ROW_EXT_INFO";
+    break;
+  }
   default: {
     type_str = "UNKNOWN_MUTATOR_TYPE";
     break;
@@ -700,7 +704,7 @@ int ObMemtableMutatorRow::deserialize(const char *buf, const int64_t buf_len, in
 
 ObMutatorTableLock::ObMutatorTableLock():
     lock_id_(),
-    owner_id_(0),
+    owner_id_(ObTableLockOwnerID::default_owner()),
     mode_(NO_LOCK),
     lock_type_(ObTableLockOpType::UNKNOWN_TYPE),
     create_timestamp_(0),
@@ -737,7 +741,7 @@ void ObMutatorTableLock::reset()
 {
   ObMutator::reset();
   lock_id_.reset();
-  owner_id_ = 0;
+  owner_id_.set_default();
   mode_ = NO_LOCK;
   lock_type_ = ObTableLockOpType::UNKNOWN_TYPE;
   create_timestamp_ = 0;
@@ -1085,6 +1089,74 @@ int ObMutatorWriter::append_table_lock_kv(
   return ret;
 }
 
+int ObMutatorWriter::append_ext_info_log_kv(
+    const int64_t table_version,
+    const RedoDataNode &redo,
+    const bool is_big_row)
+{
+  int ret = OB_SUCCESS;
+  uint64_t table_id = 0;
+  ObStoreRowkey rowkey;
+  const ObMemtableKey *mtk = &redo.key_;
+  bool is_with_head = true;
+  if (OB_ISNULL(mtk)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid_argument", K(ret), K(mtk));
+  } else if (OB_FAIL(mtk->decode(rowkey))) {
+    TRANS_LOG(WARN, "mtk decode fail", "ret", ret);
+  } else if (OB_INVALID_ID == table_id || table_version < 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    // dummy encrypt param, ext info log is not encrypted
+    const transaction::ObTxEncryptMeta *encrypt_meta = nullptr;
+    transaction::ObCLogEncryptInfo encrypt_info;
+    MutatorType mutator_type = MutatorType::MUTATOR_ROW_EXT_INFO;
+    ObMutatorRowHeader row_header;
+    row_header.mutator_type_ = mutator_type;
+    row_header.tablet_id_ = redo.tablet_id_;
+    ObMemtableMutatorRow row(table_id,
+                             rowkey,
+                             table_version,
+                             redo.new_row_,
+                             redo.old_row_,
+                             redo.dml_flag_,
+                             redo.modify_count_,
+                             redo.acc_checksum_,
+                             redo.version_,
+                             redo.flag_,
+                             redo.seq_no_,
+                             redo.column_cnt_);
+    int64_t tmp_pos = buf_.get_position();
+    int64_t row_capacity = row_capacity_;
+    if (OB_ISNULL(buf_.get_data())) {
+      ret = OB_NOT_INIT;
+      TRANS_LOG(WARN, "not init", K(ret));
+    } else if (OB_FAIL(row_header.serialize(buf_.get_data(), row_capacity, tmp_pos))) {
+      if (ret == OB_ALLOCATE_MEMORY_FAILED) {
+        //do nothing
+      } else {
+        ret = OB_BUF_NOT_ENOUGH;
+      }
+    } else if (OB_FAIL(row.serialize(buf_.get_data(), row_capacity, tmp_pos,
+                                     encrypt_meta, encrypt_info, is_big_row))) {
+      if (ret == OB_ALLOCATE_MEMORY_FAILED) {
+        //do nothing
+      } else {
+        ret = OB_BUF_NOT_ENOUGH;
+      }
+    } else if (OB_FAIL(meta_.inc_row_count())) {
+      TRANS_LOG(WARN, "meta inc_row_count failed", K(ret));
+    } else {
+      buf_.get_position() = tmp_pos;
+      row_capacity_ = row_capacity;
+    }
+  }
+  if (OB_SUCCESS != ret && OB_BUF_NOT_ENOUGH != ret) {
+    TRANS_LOG(WARN, "append_kv fail", K(ret), K(buf_), K(meta_));
+  }
+  return ret;
+}
+
 int ObMutatorWriter::serialize(const uint8_t row_flag, int64_t &res_len,
                                transaction::ObCLogEncryptInfo &encrypt_info)
 {
@@ -1201,6 +1273,7 @@ void ObMemtableMutatorIterator::reset()
   row_header_.reset();
   row_.reset();
   table_lock_.reset();
+  row_seq_no_.reset();
 }
 
 int ObMemtableMutatorIterator::deserialize(const char *buf, const int64_t data_len, int64_t &pos,
@@ -1260,6 +1333,8 @@ int ObMemtableMutatorIterator::iterate_next_row(ObEncryptRowBuf &decrypt_buf,
               encrypt_info, unused_need_extract_encrypt_meta, encrypt_meta,
               unused_encrypt_stat_map, ObTransRowFlag::is_big_row(meta_.get_flags())))) {
         TRANS_LOG(WARN, "deserialize mutator row fail", K(ret));
+      } else {
+        row_seq_no_ = row_.seq_no_;
       }
       break;
     }
@@ -1268,6 +1343,22 @@ int ObMemtableMutatorIterator::iterate_next_row(ObEncryptRowBuf &decrypt_buf,
       if (OB_FAIL(
               table_lock_.deserialize(buf_.get_data(), buf_.get_limit(), buf_.get_position()))) {
         TRANS_LOG(WARN, "deserialize table lock fail", K(ret));
+      } else {
+        row_seq_no_ = table_lock_.seq_no_;
+      }
+      break;
+    }
+    case MutatorType::MUTATOR_ROW_EXT_INFO: {
+      TRANS_LOG(DEBUG, "deserialize row ext info");
+      row_.reset();
+      const bool unused_need_extract_encrypt_meta = false;
+      ObCLogEncryptStatMap unused_encrypt_stat_map;
+      ObEncryptMeta encrypt_meta;
+      if (OB_FAIL(row_.deserialize(
+              buf_.get_data(), buf_.get_limit(), buf_.get_position(), decrypt_buf,
+              encrypt_info, unused_need_extract_encrypt_meta, encrypt_meta,
+              unused_encrypt_stat_map, ObTransRowFlag::is_big_row(meta_.get_flags())))) {
+        TRANS_LOG(WARN, "deserialize mutator row fail", K(ret));
       }
       break;
     }
@@ -1290,7 +1381,6 @@ const ObMutatorRowHeader &ObMemtableMutatorIterator::get_row_head() { return row
 const ObMemtableMutatorRow &ObMemtableMutatorIterator::get_mutator_row() { return row_; }
 
 const ObMutatorTableLock &ObMemtableMutatorIterator::get_table_lock_row() { return table_lock_; }
-
 
 }//namespace memtable
 }//namespace oceanbase

@@ -17,6 +17,9 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_base.h"
+#include "ob_json_param_type.h"
+#include "ob_expr_json_utils.h"
+#include "ob_expr_json_func_helper.h"
 
 using namespace oceanbase::common;
 
@@ -24,6 +27,10 @@ namespace oceanbase
 {
 namespace sql
 {
+
+/* process ascii */
+const static uint8_t OB_JSON_ON_ASCII_IMPLICIT    = 0;
+const static uint8_t OB_JSON_ON_ASCII_USE         = 1;
 
 class 
 ObExprJsonValue : public ObFuncExprOperator
@@ -38,51 +45,24 @@ public:
                                 const override;
   static int eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  static int cast_to_res(common::ObIAllocator *allocator,
-                         const ObExpr &expr,
-                         ObEvalCtx &ctx,
-                         ObIJsonBase *j_base,
-                         uint8_t error_type,
-                         ObDatum *error_val,
-                         common::ObAccuracy &accuracy,
-                         ObObjType dst_type,
-                         common::ObCollationType in_coll_type,
-                         common::ObCollationType dst_coll_type,
-                         ObDatum &res,
-                         ObVector<uint8_t> &mismatch_val,
-                         ObVector<uint8_t> &mismatch_type,
-                         uint8_t &is_type_cast,
-                         uint8_t ascii_type,
-                         uint8_t is_truncate);
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
-                      ObExpr &rt_expr) const override;
-  virtual common::ObCastMode get_cast_mode() const { return CM_ERROR_ON_SCALE_OVER;}
-private:
+
+  static int calc_input_type(ObExprResType& types_stack, bool &is_json_input);
+
+  static int deal_item_method_in_seek(ObIJsonBase*& in,
+                                      bool &is_null_result,
+                                      ObJsonPath *j_path,
+                                      ObIAllocator *allocator,
+                                      uint8_t &is_type_mismatch);
+
   /* code for cast accuracy check */
   template<typename Obj>
   static int check_default_val_accuracy(const ObAccuracy &accuracy,
                                         const ObObjType &type,
                                         const Obj *obj);
-  static int get_accuracy_internal(
-      ObEvalCtx& ctx,
-      common::ObAccuracy &accuracy,
-      ObObjType &dest_type,
-      const int64_t value,
-      const ObLengthSemantics &length_semantics);
-  static int get_accuracy(const ObExpr &expr,
-                          ObEvalCtx& ctx,
-                          common::ObAccuracy &accuracy,
-                          ObObjType &dest_type,
-                          bool &is_cover_by_error);
-  static int number_range_check(const common::ObAccuracy &accuracy,
-                                ObIAllocator *allocator,
-                                number::ObNumber &val,
-                                bool strict = false);
-  static int datetime_scale_check(const common::ObAccuracy &accuracy,
-                                  int64_t &value,
-                                  bool strict = false);
-  static int time_scale_check(const common::ObAccuracy &accuracy, int64_t &value,
-                              bool strict = false);
+
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
+private:
   /* cast wrapper to dst type with accuracy check*/
   static int get_cast_ret(int ret);
   static int cast_to_int(ObIJsonBase *j_base, ObObjType dst_type, int64_t &val);
@@ -90,6 +70,8 @@ private:
   static int cast_to_datetime(ObIJsonBase *j_base,
                               common::ObIAllocator *allocator,
                               const ObBasicSessionInfo *session,
+                              ObEvalCtx &ctx,
+                              const ObExpr *expr,
                               common::ObAccuracy &accuracy,
                               int64_t &val,
                               uint8_t &is_type_cast);
@@ -99,6 +81,8 @@ private:
                                   ObAccuracy &accuracy);
   static int cast_to_otimstamp(ObIJsonBase *j_base,
                                const ObBasicSessionInfo *session,
+                               ObEvalCtx &ctx,
+                               const ObExpr *expr,
                                common::ObAccuracy &accuracy,
                                ObObjType dst_type,
                                ObOTimestampData &out_val,
@@ -128,23 +112,31 @@ private:
   static int cast_to_bit(ObIJsonBase *j_base, uint64_t &val);
   static int cast_to_json(common::ObIAllocator *allocator, ObIJsonBase *j_base,
                           ObString &val, uint8_t &is_type_cast);
-  template<typename Obj>
+
+  static int get_empty_or_error_type(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      uint8_t index,
+                                      bool &is_cover_by_error,
+                                      const ObAccuracy &accuracy,
+                                      uint8_t &type,
+                                      ObObjType dst_type);
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  virtual bool need_rt_ctx() const override { return true; }
+  virtual common::ObCastMode get_cast_mode() const { return CM_ERROR_ON_SCALE_OVER;}
+  static int calc_empty_error_type(ObExprResType* types_stack, uint8_t pos, ObExprResType &dst_type, ObExprTypeCtx& type_ctx);
+
+private:
   static bool try_set_error_val(const ObExpr &expr,
                                 ObEvalCtx &ctx,
-                                Obj &res, int &ret, uint8_t &error_type,
-                                Obj *&error_val, ObVector<uint8_t> &mismatch_val,
-                                ObVector<uint8_t> &mismatch_type,
-                                uint8_t &is_type_cast,
-                                const ObAccuracy &accuracy, ObObjType dst_type);
-  static int error_convert(int ret_old);
-  static int doc_do_seek(ObJsonBaseVector &hits, bool &is_null_result,
-                         ObDatum *json_datum, ObJsonPath *j_path,
-                         ObIJsonBase *j_base, const ObExpr &expr,
-                         ObEvalCtx &ctx, bool &is_cover_by_error,
-                         const ObAccuracy &accuracy, ObObjType dst_type,
-                         ObDatum *&return_val, ObDatum *error_datum,
-                         uint8_t error_type, ObDatum *empty_datum,
-                         uint8_t &empty_type, ObObjType &default_val_type, uint8_t &is_type_cast);
+                                ObDatum &res, int &ret,
+                                ObJsonExprParam* json_param,
+                                uint8_t &is_type_mismatch);
+  static int doc_do_seek(ObJsonSeekResult &hits, bool &is_null_result, ObJsonExprParam* json_param,
+                         ObIJsonBase *j_base, const ObExpr &expr, ObEvalCtx &ctx, bool &is_cover_by_error,
+                         ObDatum *&return_val,
+                         uint8_t &is_type_mismatch);
+
   // new sql engine
   static inline void set_val(ObDatum &res, ObDatum *val)
   { res.set_datum(*val); }
@@ -152,71 +144,23 @@ private:
   // old sql engine
   static inline void set_val(ObObj &res, ObObj *val)
   { res = *val; }
-
-  /* process ascii */
-  const static uint8_t OB_JSON_ON_ASCII_IMPLICIT    = 0;
-  const static uint8_t OB_JSON_ON_ASCII_USE         = 1;
-
-  /* process empty or error */
-  const static uint8_t OB_JSON_ON_RESPONSE_ERROR    = 0;
-  const static uint8_t OB_JSON_ON_RESPONSE_NULL     = 1;
-  const static uint8_t OB_JSON_ON_RESPONSE_DEFAULT  = 2;
-  const static uint8_t OB_JSON_ON_RESPONSE_IMPLICIT = 3;
-
-  /* process on mismatch { error : 0, null : 1, ignore : 2 }*/
-  const static uint8_t OB_JSON_ON_MISMATCH_ERROR    = 0;
-  const static uint8_t OB_JSON_ON_MISMATCH_NULL     = 1;
-  const static uint8_t OB_JSON_ON_MISMATCH_IGNORE   = 2;
-  const static uint8_t OB_JSON_ON_MISMATCH_IMPLICIT = 3;
-
-
-  /* process mismatch type { MISSING : 4 (1), EXTRA : 5 (2), TYPE : 6 (4), EMPTY : 7 (0)} make diff with mismatch type  */
-  const static uint8_t OB_JSON_TYPE_MISSING_DATA    = 4;
-  const static uint8_t OB_JSON_TYPE_EXTRA_DATA      = 5;
-  const static uint8_t OB_JSON_TYPE_TYPE_ERROR      = 6;
-  const static uint8_t OB_JSON_TYPE_IMPLICIT        = 7;
-  const static uint8_t OB_JSON_TYPE_DOT             = 8;
-
-  const static uint8_t json_doc_id      = 0;
-  const static uint8_t json_path_id     = 1;
-  const static uint8_t ret_type_id      = 2;
-  const static uint8_t opt_truncate_id  = 3;
-  const static uint8_t opt_ascii_id     = 4;
-  const static uint8_t empty_type_id    = 5;
-  const static uint8_t empty_val_id     = 6;
-  const static uint8_t empty_val_pre_id = 7;
-  const static uint8_t error_type_id    = 8;
-  const static uint8_t error_val_id     = 9;
-  const static uint8_t error_val_pre_id = 10;
-  const static uint8_t opt_mismatch_id  = 11;
-
-  static int get_on_empty_or_error(const ObExpr &expr,
-                                   ObEvalCtx &ctx,
-                                   uint8_t index,
-                                   bool &is_cover_by_error,
-                                   const ObAccuracy &accuracy,
-                                   uint8 &type,
-                                   ObDatum **default_value,
-                                   ObObjType dst_type,
-                                   ObObjType &default_val_type);
-  static int get_on_ascii(const ObExpr &expr,
-                          ObEvalCtx &ctx,
-                          uint8_t index,
-                          bool &is_cover_by_error,
-                          uint8 &type);
+  static int get_default_value(ObExpr *expr,
+                                  ObEvalCtx &ctx,
+                                  const ObAccuracy &accuracy,
+                                  ObDatum **default_value);
+  static int get_default_empty_error_value(const ObExpr &expr,
+                                            ObJsonExprParam* json_param,
+                                            ObEvalCtx &ctx);
 
   static int get_on_mismatch(const ObExpr &expr,
                              ObEvalCtx &ctx,
                              uint8_t index,
                              bool &is_cover_by_error,
                              const ObAccuracy &accuracy,
-                             ObVector<uint8_t> &val,
-                             ObVector<uint8_t> &type);
+                             ObIArray<int8_t> &val,
+                             ObIArray<int8_t> &type);
   /* code from ob_expr_cast for cal_result_type */
-  const static int32_t OB_LITERAL_MAX_INT_LEN = 21;
-  int get_cast_type(const ObExprResType param_type2,
-                    ObExprResType &dst_type,
-                    ObExprTypeCtx &type_ctx) const;
+  int get_cast_type(const ObExprResType param_type2, ObExprResType &dst_type) const;
   int set_dest_type(ObExprResType &type1, ObExprResType &type, ObExprResType &dst_type, ObExprTypeCtx &type_ctx) const;
   int get_cast_string_len(ObExprResType &type1,
                           ObExprResType &type2,
@@ -230,6 +174,38 @@ private:
                          int32_t &res_len,
                          int16_t &length_semantics,
                          common::ObCollationType conn) const;
+  static int check_default_value(ObExprResType* types_stack, int8_t pos, ObExprResType &dst_type);
+  static int get_clause_param_value(const ObExpr &expr, ObEvalCtx &ctx,
+                            ObJsonExprParam* json_param,
+                            bool &is_cover_by_error);
+public:
+  static int extract_plan_cache_param(const ObExprJsonQueryParamInfo *info, ObJsonExprParam& json_param);
+  static int check_param_valid(const ObExpr &expr, ObJsonExprParam* json_param,
+                                ObJsonPath *j_path, bool &is_cover_by_error);
+  static int init_ctx_var(const ObExpr &expr, ObJsonParamCacheCtx* param_ctx);
+  static void get_mismatch_option(ObIArray<int8_t> &mismatch_val,
+                                ObIArray<int8_t> &mismatch_type,
+                                bool &is_null_res,
+                                bool &set_default_val);
+
+  static void get_error_option(int8_t error_type,
+                    bool &is_null, bool &has_default_val);
+  static int get_empty_option(ObDatum *&empty_res,
+                              bool &is_cover_by_error,
+                              int8_t empty_type,
+                              ObDatum *empty_datum,
+                              bool &is_null_result);
+  static int set_result(const ObExpr &expr,
+                        ObJsonExprParam* json_param,
+                        ObEvalCtx &ctx,
+                        bool &is_null_result,
+                        bool &is_cover_by_error,
+                        uint8_t &is_type_mismatch,
+                        ObDatum &res,
+                        ObDatum *return_val,
+                        ObIAllocator *allocator,
+                        ObJsonSeekResult &hits);
+
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonValue);
 };

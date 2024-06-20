@@ -14,6 +14,7 @@
 
 #include "ob_log_sequencer1.h"
 
+#include <math.h>
 #include "lib/string/ob_string.h"       // ObString
 #include "lib/atomic/ob_atomic.h"
 #include "lib/thread/ob_thread_name.h"
@@ -228,7 +229,10 @@ int ObLogSequencer::push(PartTransTask *part_trans_task, volatile bool &stop_fla
       hash_value = ATOMIC_FAA(&round_value_, 1);
     }
     void *push_task = static_cast<void *>(part_trans_task);
-    RETRY_FUNC(stop_flag, *(static_cast<ObMQThread *>(this)), push, push_task, hash_value, DATA_OP_TIMEOUT);
+
+    if (is_global_heartbeat || OB_SUCC(wait_until_ready_queue_not_busy_(stop_flag))) {
+      RETRY_FUNC(stop_flag, *(static_cast<ObMQThread *>(this)), push, push_task, hash_value, DATA_OP_TIMEOUT);
+    }
 
     if (OB_SUCC(ret)) {
       (void)ATOMIC_AAF(&queue_part_trans_task_count_, 1);
@@ -807,20 +811,19 @@ int ObLogSequencer::push_task_into_committer_(PartTransTask *task,
   return ret;
 }
 
-int ObLogSequencer::handle_participants_ready_trans_(const bool is_dml_trans,
+int ObLogSequencer::handle_participants_ready_trans_(
+    const bool is_dml_trans,
     TransCtx *trans_ctx,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-
-  stop_flag = stop_flag;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
 
   if (OB_ISNULL(trans_ctx)) {
     LOG_ERROR("invalid argument", K(trans_ctx));
     ret = OB_INVALID_ARGUMENT;
   } else {
     // Avoiding TransCtx recycling
-    uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObLogTenantGuard guard;
     ObLogTenant *tenant = NULL;
 
@@ -839,23 +842,67 @@ int ObLogSequencer::handle_participants_ready_trans_(const bool is_dml_trans,
         }
       }
     }
+  }
 
-    if (OB_SUCC(ret)) {
-      TrxSortElem &trx_sort_elem = trans_ctx->get_trx_sort_elem();
-      {
-        ObByteLockGuard guard(trans_queue_lock_);
-        ready_trans_queue_.push(trx_sort_elem);
-      }
-      // signal push_ready_trans_to_seq_queue_
-      ready_queue_cond_.signal();
-
-      _DSTAT("[TRANS_QUEUE] TENANT_ID=%lu TRANS_ID=%s QUEUE_SIZE=(%lu/%ld) IS_DML=%d",
-          tenant_id,
-          to_cstring(trx_sort_elem),
-          ready_trans_queue_.size(),
-          seq_trans_queue_.get_curr_total(),
-          is_dml_trans);
+  if (OB_SUCC(ret)) {
+    TrxSortElem &trx_sort_elem = trans_ctx->get_trx_sort_elem();
+    {
+      ObByteLockGuard guard(trans_queue_lock_);
+      ready_trans_queue_.push(trx_sort_elem);
     }
+    // signal push_ready_trans_to_seq_queue_
+    ready_queue_cond_.signal();
+
+    _DSTAT("[TRANS_QUEUE] TENANT_ID=%lu TRANS_ID=%s QUEUE_SIZE=(%lu/%ld) IS_DML=%d",
+        tenant_id,
+        to_cstring(trx_sort_elem),
+        ready_trans_queue_.size(),
+        seq_trans_queue_.get_curr_total(),
+        is_dml_trans);
+  }
+
+  return ret;
+}
+
+int ObLogSequencer::wait_until_ready_queue_not_busy_(volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  const int64_t seq_trans_queue_cap = seq_trans_queue_.capacity();
+  const int64_t seq_trans_threshold = seq_trans_queue_cap * TCONF.pause_redo_dispatch_task_count_threshold / 100;
+  bool ready_queue_busy = true;
+  const int64_t start_ts = get_timestamp();
+  const int64_t base_sleep_us_if_busy = 100;
+
+  while (ready_queue_busy && !stop_flag) {
+    // ready_queue_busy = true if: seq_trans_queue is not empty and memory hold touch warn threshold
+    const int64_t mem_hold = lib::get_memory_hold();
+    const int64_t mem_limit = TCONF.memory_limit;
+    const double mem_warn_threshold = mem_limit * TCONF.memory_usage_warn_threshold / 100.0;
+    const int64_t seq_trans_cnt = seq_trans_queue_.get_curr_total();
+
+    if (mem_hold < mem_warn_threshold) {
+      ready_queue_busy = (seq_trans_cnt >= seq_trans_queue_cap);
+    } else if (mem_hold < mem_limit) {
+      ready_queue_busy = seq_trans_cnt > seq_trans_threshold;
+    } else {
+      // should not disaptch if exist trans not handled
+      ready_queue_busy = seq_trans_cnt > 0;
+    }
+
+    if (ready_queue_busy) {
+      if (REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_SEQ_INFO_INTERVAL)) {
+        LOG_INFO("[FLOW_CONTROL][PAUSE_DISPATCH_TO_SEQUENCER]",
+            K(mem_hold),
+            "sequencer_queue_size", queue_part_trans_task_count_,
+            "ready_queue_size", ready_trans_queue_.size(),
+            K(seq_trans_cnt));
+      }
+      ob_usleep(100);
+    }
+  }
+
+  if (stop_flag) {
+    ret = OB_IN_STOP_STATE;
   }
 
   return ret;
@@ -983,6 +1030,16 @@ int ObLogSequencer::handle_multi_data_source_info_(
           } else {
             LOG_DEBUG("CDC_DELETE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
           }
+        } else if (tablet_change_info.is_exchange_tablet_op()) {
+          if (OB_FAIL(wait_until_parser_done_("exchange_tablet_op", stop_flag))) {
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("wait_until_parser_done_ failed", KR(ret), KPC(part_trans_task));
+            }
+          } else if (OB_FAIL(part_mgr.apply_exchange_tablet_change(tablet_change_info))) {
+            LOG_ERROR("apply_exchange_tablet_change failed", KR(ret), K(tablet_change_info), K(tenant), KPC(part_trans_task));
+          } else {
+            LOG_INFO("CDC_EXCHANGE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
+          }
         }
       }
     }
@@ -1019,22 +1076,54 @@ int ObLogSequencer::handle_multi_data_source_info_(
           } // wait_until_formatter_done_
         }
       }
-
+      bool need_new_schema = false;
       if (OB_SUCC(ret)) {
         if (OB_ISNULL(ddl_processor)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("expect valid ddl_processor", KR(ret));
-        } else if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, stop_flag))) {
+        } else if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, false, stop_flag))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("handle_ddl_trans for data_dict mode failed", KR(ret), K(tenant), KPC(part_trans_task));
           }
-        } else if (part_trans_task->get_multi_data_source_info().is_ddl_trans()
-            && OB_FAIL(handle_ddl_multi_data_source_info_(*part_trans_task, tenant, trans_ctx))) {
-          LOG_ERROR("handle_ddl_multi_data_source_info_ failed", KR(ret), KPC(part_trans_task), K(trans_ctx),
-              K(stop_flag));
+        } else if (OB_FAIL(need_acquire_new_schema_(*part_trans_task, need_new_schema))) {
+          LOG_ERROR("execute need_acquire_new_schema_ failed", KR(ret), KPC(part_trans_task));
+        } else if (need_new_schema) {
+          if (part_trans_task->get_multi_data_source_info().is_ddl_trans()
+              && OB_FAIL(handle_ddl_multi_data_source_info_(*part_trans_task, tenant, trans_ctx))) {
+            LOG_ERROR("handle_ddl_multi_data_source_info_ failed", KR(ret), KPC(part_trans_task), K(trans_ctx),
+                K(stop_flag));
+          } else if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, true, stop_flag))) {
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("handle_ddl_trans_update_tic for data_dict mode failed", KR(ret), K(tenant), KPC(part_trans_task));
+            }
+          } else {
+            LOG_DEBUG("handle_ddl_trans and mds for data_dict mode done", KPC(part_trans_task));
+          }
         } else {
-          LOG_DEBUG("handle_ddl_trans and mds for data_dict mode done", KPC(part_trans_task));
+          if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, true, stop_flag))) {
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("handle_ddl_trans_update_tic for data_dict mode failed", KR(ret), K(tenant), KPC(part_trans_task));
+            }
+          } else if (part_trans_task->get_multi_data_source_info().is_ddl_trans()
+              && OB_FAIL(handle_ddl_multi_data_source_info_(*part_trans_task, tenant, trans_ctx))) {
+            LOG_ERROR("handle_ddl_multi_data_source_info_ failed", KR(ret), KPC(part_trans_task), K(trans_ctx),
+                K(stop_flag));
+          } else {
+            LOG_DEBUG("handle_ddl_trans and mds for data_dict mode done", KPC(part_trans_task));
+          }
         }
+      }
+    }
+
+    if (OB_SUCC(ret) && part_trans_task->is_sys_ls_part_trans() && part_trans_task->need_update_table_id_cache()) {
+      if (OB_FAIL(wait_until_parser_done_("update_table_id_cache_op", stop_flag))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("wait_until_parser_done_ failed", KR(ret), KPC(part_trans_task));
+        }
+      } else if (OB_FAIL(update_table_id_cache_(part_mgr, part_trans_task))) {
+        LOG_ERROR("update table_id_cache failed", KR(ret), KPC(part_trans_task));
+      } else {
+        LOG_INFO("update table_id_cache success", KPC(part_trans_task));
       }
     }
 
@@ -1282,6 +1371,85 @@ int ObLogSequencer::do_trans_stat_(const uint64_t tenant_id,
     trans_stat_mgr_->do_rps_stat_before_filter(total_stmt_cnt);
     if (OB_FAIL(trans_stat_mgr_->do_tenant_tps_rps_stat(tenant_id, total_stmt_cnt))) {
       LOG_ERROR("do tenant rps stat before filter", KR(ret), K(tenant_id), K(total_stmt_cnt));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogSequencer::need_acquire_new_schema_(const PartTransTask &task, bool &need_new_schema)
+{
+  int ret = OB_SUCCESS;
+  need_new_schema = false;
+  if (OB_UNLIKELY(! task.is_ddl_trans())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid ddl task which is not DDL trans", KR(ret), K(task));
+  } else {
+    IStmtTask *stmt_task = task.get_stmt_list().head_;
+    while (NULL != stmt_task && OB_SUCCESS == ret) {
+      DdlStmtTask *ddl_stmt = dynamic_cast<DdlStmtTask *>(stmt_task);
+      if (OB_UNLIKELY(! stmt_task->is_ddl_stmt()) || OB_ISNULL(ddl_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid DDL statement", KR(ret), KPC(stmt_task), K(ddl_stmt));
+      } else if (OB_DDL_CREATE_TABLE == ddl_stmt->get_operation_type()
+          || OB_DDL_ALTER_TABLE == ddl_stmt->get_operation_type()
+          || OB_DDL_TABLE_RENAME == ddl_stmt->get_operation_type()) {
+        need_new_schema = true;
+        break;
+      } else {
+        stmt_task = stmt_task->get_next();
+      }
+    }
+  }
+  LOG_DEBUG("ddl task needs schema info", KR(ret), K(task), K(need_new_schema));
+  return ret;
+}
+
+int ObLogSequencer::update_table_id_cache_(IObLogPartMgr &part_mgr, const PartTransTask *task)
+{
+  int ret = OB_SUCCESS;
+  ObArray<TICUpdateInfo> tic_update_infos;
+  task->get_tic_update_info(tic_update_infos);
+  for (int i = 0;  OB_SUCC(ret) && i < tic_update_infos.count(); i++) {
+    const TICUpdateInfo tic_update_info = tic_update_infos[i];
+    TICUpdateInfo::TICUpdateReason update_reason = tic_update_info.reason_;
+    switch (update_reason) {
+      case TICUpdateInfo::TICUpdateReason::DROP_TABLE:
+      case TICUpdateInfo::TICUpdateReason::RENAME_TABLE_REMOVE: {
+        const uint64_t table_id = tic_update_info.table_id_;
+        const uint64_t database_id = tic_update_info.database_id_;
+        if (OB_FAIL(part_mgr.delete_table_id_from_cache(table_id))) {
+          LOG_ERROR("[Sequencer] delete table_id from cache failed", KR(ret), K(tic_update_info));
+        } else {
+          ISTAT("delete table_id from cache success", K(tic_update_info));
+        }
+        break;
+      }
+      case TICUpdateInfo::TICUpdateReason::CREATE_TABLE:
+      case TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD: {
+        const uint64_t table_id = tic_update_info.table_id_;
+        const uint64_t database_id = tic_update_info.database_id_;
+        if (OB_FAIL(part_mgr.insert_table_id_into_cache(table_id, database_id))) {
+          LOG_ERROR("[Sequencer] insert table_id into cache failed", KR(ret), K(tic_update_info));
+        } else {
+          ISTAT("insert table_id into cache success", K(tic_update_info));
+        }
+        break;
+      }
+      case TICUpdateInfo::TICUpdateReason::DROP_DATABASE: {
+        const uint64_t database_id = tic_update_info.database_id_;
+        if (OB_FAIL(part_mgr.delete_db_from_cache(database_id))) {
+          LOG_ERROR("[Sequencer] delete db from cache failed", KR(ret), K(tic_update_info));
+        } else {
+          ISTAT("delete db from cache success", K(tic_update_info));
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("[Sequencer] invalid tic update reason", KR(ret), K(tic_update_info));
+        break;
+      }
     }
   }
 

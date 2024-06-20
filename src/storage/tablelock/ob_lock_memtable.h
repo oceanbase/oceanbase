@@ -41,7 +41,7 @@ namespace tablelock
 struct ObLockParam;
 
 class ObLockMemtable
-  : public memtable::ObIMemtable,
+  : public ObIMemtable,
     public storage::checkpoint::ObCommonCheckpoint
 {
 public:
@@ -121,12 +121,12 @@ public:
   virtual bool can_be_minor_merged() override;
 
   int on_memtable_flushed() override;
-  bool is_frozen_memtable() const override;
-  bool is_active_memtable() const override;
+  bool is_frozen_memtable() override;
+  bool is_active_memtable() override;
 
   // =========== INHERITED FROM ObCommonCheckPoint ==========
   virtual share::SCN get_rec_scn();
-  virtual int flush(share::SCN recycle_scn, bool need_freeze = true);
+  virtual int flush(share::SCN recycle_scn, int64_t trace_id, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const;
 
@@ -134,6 +134,7 @@ public:
 
   // ====================== REPLAY LOCK ======================
   virtual int replay_row(storage::ObStoreCtx &ctx,
+                         const share::SCN &scn,
                          memtable::ObMemtableMutatorIterator *mmi);
   // replay lock to lock map and trans part ctx.
   // used by the replay process of multi data source.
@@ -167,6 +168,8 @@ public:
 
   void set_flushed_scn(const share::SCN &flushed_scn) { flushed_scn_ = flushed_scn; }
 
+  void enable_check_tablet_status(const bool need_check) { ATOMIC_STORE(&need_check_tablet_status_, need_check); }
+
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(snapshot_version), K_(ls_id));
 private:
   enum ObLockStep {
@@ -195,9 +198,13 @@ private:
                               const ObTableLockMode &lock_mode,
                               const ObTransID &conflict_tx_id,
                               ObFunction<int(bool &need_wait)> &recheck_f);
-  int register_into_deadlock_detector_(const ObStoreCtx &ctx,
+  int register_into_deadlock_detector_(const storage::ObStoreCtx &ctx,
                                        const ObTableLockOp &lock_op);
   int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);
+
+  int check_tablet_write_allow_(const ObTableLockOp &lock_op);
+  int get_lock_wait_expire_ts_(const int64_t lock_wait_start_ts);
+  int check_and_set_tx_lock_timeout_(const memtable::ObMvccAccessCtx &acc_ctx);
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
@@ -217,6 +224,8 @@ private:
   share::SCN pre_rec_scn_;
   share::SCN max_committed_scn_;
   bool is_frozen_;
+  // for tablet transfer enable check tablet status
+  bool need_check_tablet_status_;
 
   storage::ObFreezer *freezer_;
   RWLock flush_lock_;        // lock before change ts

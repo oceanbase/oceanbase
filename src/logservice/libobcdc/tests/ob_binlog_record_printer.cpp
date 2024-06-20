@@ -386,7 +386,7 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
           ROW_PRINTF(ptr, size, pos, ri, "unique_id:[%.*s](%d)", unique_id.length(), unique_id.ptr(), unique_id.length());
         }
       }
-    } else if ((EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type) && ! only_print_dml_tx_checksum) {
+    } else if ((EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type || EPUT == record_type) && ! only_print_dml_tx_checksum) {
       ri++;
       ITableMeta *table_meta = br->getTableMeta();
       int64_t column_count = table_meta ? table_meta->getColCount() : -1;
@@ -548,10 +548,18 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   bool is_generate_dep_column = col_meta ? col_meta->isDependent() : false;
   bool is_lob = is_lob_type(ctype);
   bool is_json = is_json_type(ctype);
+  bool is_string = is_string_type(ctype);
   ObArenaAllocator str_allocator;
   ObStringBuffer enum_set_values_str(&str_allocator);
   bool is_geometry = is_geometry_type(ctype);
   bool is_xml = is_xml_type(ctype);
+  bool is_diff = (index < new_cols_count) && new_cols[index].m_diff_val;
+  constexpr int64_t string_print_md5_threshold = 4L << 10;
+  const bool is_type_for_md5_printing = is_lob || is_json || is_geometry || is_xml ||
+    (is_string && col_data_length >= string_print_md5_threshold);
+  // TODO 止尘 patch the code
+  // bool is_json_diff = br->isJsonDiffColVal(cname);
+  bool is_json_diff = false;
 
   int64_t column_index = index + 1;
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_name:%s", column_index, cname);
@@ -560,6 +568,15 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_signed:%s", column_index, is_signed);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_encoding:%s", column_index, encoding);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_not_null:%s", column_index, is_not_null);
+  if (is_diff) {
+    if (is_json) {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] is_json_diff:true", column_index);
+    } else {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] unkonwn_diff", column_index);
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unkonwn_diff", K(ret), K(index), K(column_index), K(ctype));
+    }
+  }
   if (enable_print_detail) {
     if (is_hidden_row_key_column) {
       ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_hidden_rowkey:%d", column_index, is_hidden_row_key_column);
@@ -611,13 +628,20 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
 
   // FIXME: does not check the value of the field until the length of the default value can be obtained
   //  ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_default_value:%s", column_index, default_val);
-
+  LOG_DEBUG("output column", K(index), K(new_cols_count), K(old_cols_count));
   if (OB_SUCC(ret)) {
     if (index < new_cols_count) {
+      VALUE_ORIGIN newValueOrigin = new_cols[index].m_origin;
+      const bool is_new_value_origin_redo = (VALUE_ORIGIN::REDO == newValueOrigin);
       const char *new_col_value = new_cols[index].buf;
       size_t new_col_value_len = new_cols[index].buf_used_size;
 
-      if ((is_lob || is_json || is_geometry || is_xml) && enable_print_lob_md5) {
+      if (! is_new_value_origin_redo) {
+         ROW_PRINTF(ptr, size, pos, ri, "C[%ld] column_value_new_origin: %s",
+             column_index, newValueOrigin == 2 ? "PADDING" : "BACK_QUERY");
+      }
+
+      if (is_type_for_md5_printing && enable_print_lob_md5) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_new_md5:[%s](%ld)",
             column_index, calc_md5_cstr(new_col_value, new_col_value_len), new_col_value_len);
       } else {
@@ -638,8 +662,15 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
     }
 
     if (OB_SUCCESS == ret && index < old_cols_count) {
+      VALUE_ORIGIN oldValueOrigin = old_cols[index].m_origin;
+      const bool is_old_value_origin_redo = (VALUE_ORIGIN::REDO == oldValueOrigin);
       const char *old_col_value = old_cols[index].buf;
       size_t old_col_value_len = old_cols[index].buf_used_size;
+
+      if (! is_old_value_origin_redo) {
+        ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_old_origin: %s",
+            column_index, oldValueOrigin == 2 ? "PADDING" : "BACK_QUERY");
+      }
 
       if (EMySQLFieldType::MYSQL_TYPE_BIT == ctype) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_old_hex:", column_index);
@@ -648,7 +679,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
         if (OB_SUCCESS == ret && OB_FAIL(print_hex(old_col_value, old_col_value_len, ptr, size, pos))) {
           LOG_ERROR("print_hex fail", K(ret));
         }
-      } else if ((is_lob || is_json || is_geometry || is_xml) && enable_print_lob_md5) {
+      } else if (is_type_for_md5_printing && enable_print_lob_md5) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_old_md5:[%s](%ld)",
             column_index, calc_md5_cstr(old_col_value, old_col_value_len), old_col_value_len);
       } else {
@@ -884,7 +915,7 @@ void ObBinlogRecordPrinter::do_br_statistic_(IBinlogRecord &br)
     } else if (EDDL == record_type) {
       total_tx_count_++;
       total_br_count_++;
-    } else if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type) {
+    } else if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type || EPUT == record_type) {
       dml_tx_br_count_++;
       total_br_count_++;
       binlogBuf *new_cols = br.newCols((unsigned int &)new_cols_count);

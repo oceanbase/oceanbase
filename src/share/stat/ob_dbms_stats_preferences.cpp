@@ -101,9 +101,7 @@ int ObDbmsStatsPreferences::get_prefs(ObExecContext &ctx,
     } else if (got_result) {
       /*do nothing*/
     } else {
-      ret = OB_ERR_DBMS_STATS_PL;
-      LOG_WARN("Invalid input values for pname", K(ret), K(opt_name));
-      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid input values for pname");
+      result.set_null();
     }
     LOG_TRACE("Succeed to get prefs", K(ret), K(get_user_sql), K(get_global_sql), K(result));
   }
@@ -328,7 +326,7 @@ int ObDbmsStatsPreferences::get_sys_default_stat_options(ObExecContext &ctx,
   } else if (OB_FAIL(get_no_acquired_prefs(stat_prefs, no_acquired_prefs))) {
     LOG_WARN("failed to get no acquired prefs", K(ret));
   } else if (no_acquired_prefs.empty()) {//have got all expected sys prefs from user prefs sys table
-    LOG_TRACE("succeed to get sys default stat options", K(stat_prefs), K(param));
+    LOG_TRACE("succeed to get sys default stat options", K(param));
   } else {//try get sys prefs from global prefs sys table
     raw_sql.reset();
     sname_list.reset();
@@ -548,6 +546,22 @@ int ObDbmsStatsPreferences::gen_init_global_prefs_sql(ObSqlString &raw_sql,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
                                        K(prefs.get_stat_pref_default_value()));
+    } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s'),",
+                                            prefs.get_stat_pref_name(),
+                                            null_str,
+                                            time_str,
+                                            prefs.get_stat_pref_default_value()))) {
+      LOG_WARN("failed to append", K(ret));
+    } else {
+      ++ total_rows;
+    }
+  }
+  if (OB_SUCC(ret)) {//init block_sample
+    ObBlockSamplePrefs prefs;
+    if (OB_ISNULL(prefs.get_stat_pref_name()) || OB_ISNULL(prefs.get_stat_pref_default_value())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
+                                       K(prefs.get_stat_pref_default_value()));
     } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s');",
                                             prefs.get_stat_pref_name(),
                                             null_str,
@@ -631,7 +645,7 @@ int ObDbmsStatsPreferences::do_get_sys_perfs(ObExecContext &ctx,
           LOG_WARN("failed to get result", K(ret));
         } else {
           ret = OB_SUCCESS;
-          LOG_TRACE("Succeed to do get sys perfs", K(raw_sql), K(need_acquired_prefs));
+          LOG_TRACE("Succeed to do get sys perfs", K(raw_sql), K(param));
         }
       }
       int tmp_ret = OB_SUCCESS;
@@ -787,6 +801,7 @@ int ObCascadePrefs::check_pref_value_validity(ObTableStatParam *param/*default n
 int ObDegreePrefs::check_pref_value_validity(ObTableStatParam *param/*default null*/)
 {
   int ret = OB_SUCCESS;
+  int64_t degree = 1;
   if (!pvalue_.empty()) {
     ObObj src_obj;
     ObObj dest_obj;
@@ -796,19 +811,20 @@ int ObDegreePrefs::check_pref_value_validity(ObTableStatParam *param/*default nu
     number::ObNumber num_degree;
     if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, src_obj, dest_obj))) {
       LOG_WARN("failed to type", K(ret), K(src_obj));
-    } else if (OB_ISNULL(param)) {
     } else if (OB_FAIL(dest_obj.get_number(num_degree))) {
       LOG_WARN("failed to get degree", K(ret));
-    } else if (OB_FAIL(num_degree.extract_valid_int64_with_trunc(param->degree_))) {
+    } else if (OB_FAIL(num_degree.extract_valid_int64_with_trunc(degree))) {
       LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_degree));
     } else {/*do noting*/}
-    if (OB_FAIL(ret)) {
-      ret = OB_ERR_DBMS_STATS_PL;
-      LOG_WARN("Illegal degree", K(ret), K(pvalue_));
-      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal degree");
+  }
+  if (OB_SUCC(ret)) {
+    if (param != NULL) {
+      param->degree_ = degree;
     }
-  } else if (param != NULL) {
-    param->degree_ = 1;
+  } else {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("Illegal degree", K(ret), K(pvalue_));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal degree");
   }
   return ret;
 }
@@ -1065,6 +1081,25 @@ int ObEstimateBlockPrefs::check_pref_value_validity(ObTableStatParam *param/*def
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Illegal value for ESTIMATE_BLOCK", K(ret), K(pvalue_));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Illegal value for ESTIMATE_BLOCK: must be {TRUE, FALSE}");
+  }
+  return ret;
+}
+
+int ObBlockSamplePrefs::check_pref_value_validity(ObTableStatParam *param/*default null*/)
+{
+  int ret = OB_SUCCESS;
+  if (pvalue_.empty() || 0 == pvalue_.case_compare("FALSE")) {
+    if (param != NULL) {
+      param->sample_info_.set_is_block_sample(false);
+    }
+  } else if (0 == pvalue_.case_compare("TRUE")) {
+    if (param != NULL) {
+      param->sample_info_.set_is_block_sample(true);
+    }
+  } else {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("Illegal value for BLOCK_SAMPLE", K(ret), K(pvalue_));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Illegal value for BLOCK_SAMPLE: must be {TRUE, FALSE}");
   }
   return ret;
 }

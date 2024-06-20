@@ -27,6 +27,7 @@
 #include "share/ls/ob_ls_operator.h"
 #include "share/scn.h"
 #include "share/ob_debug_sync.h"
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
 
 using namespace oceanbase;
 using namespace rootserver;
@@ -458,6 +459,7 @@ int ObArchiveHandler::close_archive_mode()
 {
   int ret = OB_SUCCESS;
   ObArchiveMode archive_mode;
+  bool has_tenant_snapshot = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant archive scheduler not init", K(ret));
@@ -470,6 +472,13 @@ int ObArchiveHandler::close_archive_mode()
     ret = OB_ALREADY_IN_NOARCHIVE_MODE;
     LOG_USER_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE);
     LOG_WARN("already in noarchive mode", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_has_snapshot(*sql_proxy_,
+                                        tenant_id_, has_tenant_snapshot))) {
+    LOG_WARN("failed to check whether tenant has snapshot", K(ret));
+  } else if (has_tenant_snapshot) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not close log archive while tenant snapshots exist", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant snapshots exist, close log archive");
   } else if (OB_FAIL(archive_table_op_.close_archive_mode(*sql_proxy_))) {
     LOG_WARN("failed to close archive mode", K(ret), K_(tenant_id));
   } else {
@@ -589,10 +598,18 @@ int ObArchiveHandler::disable_archive(const int64_t dest_no)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObTenantArchiveRoundAttr new_round_attr;
+  bool has_tenant_snapshot = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant archive scheduler not init", K(ret));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_has_snapshot(*sql_proxy_,
+                                        tenant_id_, has_tenant_snapshot))) {
+    LOG_WARN("failed to check whether tenant has snapshot", K(ret));
+  } else if (has_tenant_snapshot) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not disable archive while tenant snapshots exist", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant snapshots exist, disable log archive");
   } else if (OB_FAIL(round_handler_.disable_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to disable archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
@@ -746,6 +763,7 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
   ObDestRoundCheckpointer checkpointer;
   SCN max_checkpoint_scn = SCN::min_scn();
   bool can = false;
+  bool allow_force_stop = false;
   if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(round_info.start_scn_, round_info.base_piece_id_, round_info.piece_switch_interval_, round_info.checkpoint_scn_, since_piece_id))) {
     LOG_WARN("failed to calc since piece id", K(ret), K(round_info));
   } else if (OB_FAIL(archive_table_op_.get_dest_round_summary(*sql_proxy_, round_info.dest_id_, round_info.round_id_, since_piece_id, summary))) {
@@ -759,6 +777,9 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
     LOG_WARN("tenant can not do archive", K(ret), K_(tenant_id));
   } else if (OB_FAIL(checkpointer.init(&round_handler_, piece_generated_cb, round_checkpoint_cb, max_checkpoint_scn))) {
     LOG_WARN("failed to init checkpointer", K(ret), K(round_info));
+  } else if (round_info.state_.is_stopping() && OB_FAIL(check_allow_force_stop_(round_info, allow_force_stop))) {
+    LOG_WARN("failed to check allow force stop", K(ret), K(round_info));
+  } else if (allow_force_stop && OB_FALSE_IT(checkpointer.set_allow_force_stop())) {
   } else if (OB_FAIL(checkpointer.checkpoint(round_info, summary))) {
     LOG_WARN("failed to do checkpoint.", K(ret), K(round_info), K(summary));
   }
@@ -815,6 +836,26 @@ int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, SCN &max
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBackupUtils::get_backup_scn(tenant_id_, max_checkpoint_scn))) {
     LOG_WARN("failed to get max checkpoint scn.", K(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+
+int ObArchiveHandler::check_allow_force_stop_(const ObTenantArchiveRoundAttr &round, bool &allow_force_stop) const
+{
+  int ret = OB_SUCCESS;
+  int64_t stopping_ts = 0;
+  const int64_t current_ts = ObTimeUtility::current_time();
+#ifdef ERRSIM
+  const int64_t force_stop_threshold = GCONF.errsim_allow_force_archive_threshold;;
+#else
+  const int64_t force_stop_threshold = ALLOW_FORCE_STOP_THRESHOLD;
+#endif
+  allow_force_stop = false;
+  if (OB_FAIL(archive_table_op_.get_round_stopping_ts(*sql_proxy_, round.key_.dest_no_, stopping_ts))) {
+    LOG_WARN("failed to get round stopping ts.", K(ret), K(round));
+  } else {
+    allow_force_stop = force_stop_threshold <= (current_ts - stopping_ts);
   }
   return ret;
 }

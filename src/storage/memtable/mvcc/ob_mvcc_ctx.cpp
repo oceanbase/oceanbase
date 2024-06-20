@@ -18,6 +18,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable_util.h"
 #include "storage/tablelock/ob_table_lock_callback.h"
+#include "storage/lob/ob_ext_info_callback.h"
 #include "storage/ls/ob_freezer.h"
 namespace oceanbase
 {
@@ -44,11 +45,6 @@ bool ObIMvccCtx::is_prepared() const
   return (prepare_version >= SCN::min_scn() && SCN::max_scn() != prepare_version);
 }
 
-int ObIMvccCtx::inc_pending_log_size(const int64_t size)
-{
-  return trans_mgr_.inc_pending_log_size(size);
-}
-
 int ObIMvccCtx::register_row_commit_cb(
     const ObMemtableKey *key,
     ObMvccRow *value,
@@ -57,7 +53,8 @@ int ObIMvccCtx::register_row_commit_cb(
     const ObRowData *old_row,
     ObMemtable *memtable,
     const transaction::ObTxSEQ seq_no,
-    const int64_t column_cnt)
+    const int64_t column_cnt,
+    const bool is_non_unique_local_index)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = false;
@@ -76,14 +73,16 @@ int ObIMvccCtx::register_row_commit_cb(
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
   } else {
     //统计当前trans_node占用的内存大小
-    add_trans_mem_total_size(data_size);
+    // not used now, is hotspot in pdml, so comment out
+    // add_trans_mem_total_size(data_size);
     cb->set(key,
             node,
             data_size,
             old_row,
             is_replay,
             seq_no,
-            column_cnt);
+            column_cnt,
+            is_non_unique_local_index);
     cb->set_is_link();
 
     if (OB_FAIL(append_callback(cb))) {
@@ -91,7 +90,7 @@ int ObIMvccCtx::register_row_commit_cb(
     }
 
     if (OB_FAIL(ret)) {
-      callback_free(cb);
+      free_mvcc_row_callback(cb);
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
   }
@@ -111,7 +110,6 @@ int ObIMvccCtx::register_row_replay_cb(
   int ret = OB_SUCCESS;
   const bool is_replay = true;
   ObMvccRowCallback *cb = NULL;
-  common::ObTimeGuard timeguard("ObIMvccCtx::register_row_replay_cb", 5 * 1000);
   if (OB_ISNULL(key) || OB_ISNULL(value) || OB_ISNULL(node)
       || data_size <= 0 || OB_ISNULL(memtable)) {
     ret = OB_INVALID_ARGUMENT;
@@ -119,7 +117,6 @@ int ObIMvccCtx::register_row_replay_cb(
   } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
-  } else if (FALSE_IT(timeguard.click("alloc_row_callback"))) {
   } else {
     cb->set(key,
             node,
@@ -127,12 +124,12 @@ int ObIMvccCtx::register_row_replay_cb(
             NULL,
             is_replay,
             seq_no,
-            column_cnt);
+            column_cnt,
+            false/*is_non_unique_local_index_cb, not setted correctly now, fix later*/);
     {
       ObRowLatchGuard guard(value->latch_);
       cb->link_trans_node();
     }
-    timeguard.click("link_trans_node");
 
     cb->set_scn(scn);
     if (OB_FAIL(append_callback(cb))) {
@@ -142,11 +139,9 @@ int ObIMvccCtx::register_row_replay_cb(
       }
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
-    timeguard.click("append_callback");
 
     if (OB_FAIL(ret)) {
-      callback_free(cb);
-      timeguard.click("callback_free");
+      free_mvcc_row_callback(cb);
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
   }
@@ -156,20 +151,24 @@ int ObIMvccCtx::register_row_replay_cb(
 int ObIMvccCtx::register_table_lock_cb_(
     ObLockMemtable *memtable,
     ObMemCtxLockOpLinkNode *lock_op,
-    ObOBJLockCallback *&cb)
+    ObOBJLockCallback *&cb,
+    const share::SCN replay_scn)
 {
   int ret = OB_SUCCESS;
   static ObFakeStoreRowKey tablelock_fake_rowkey("tbl", 3);
   const ObStoreRowkey &rowkey = tablelock_fake_rowkey.get_rowkey();
   ObMemtableKey mt_key;
   cb = nullptr;
-  if (OB_ISNULL(cb = alloc_table_lock_callback(*this, memtable))) {
+  if (OB_ISNULL(cb = create_table_lock_callback(*this, memtable))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
   } else if (OB_FAIL(mt_key.encode(&rowkey))) {
     TRANS_LOG(WARN, "encode memtable key failed", K(ret));
   } else {
     cb->set(mt_key, lock_op);
+    if (replay_scn.is_valid()) {
+      cb->set_scn(replay_scn);
+    }
     if (OB_FAIL(append_callback(cb))) {
       TRANS_LOG(WARN, "append table lock callback failed", K(ret), K(*cb));
     } else {
@@ -215,11 +214,10 @@ int ObIMvccCtx::register_table_lock_replay_cb(
     TRANS_LOG(WARN, "invalid argument", K(ret), K(memtable), K(lock_op));
   } else if (OB_FAIL(register_table_lock_cb_(memtable,
                                              lock_op,
-                                             cb))) {
+                                             cb,
+                                             scn))) {
     TRANS_LOG(WARN, "register tablelock callback failed", K(ret), KPC(lock_op));
   } else {
-    cb->set_scn(scn);
-    update_max_submitted_seq_no(cb->get_seq_no());
     TRANS_LOG(DEBUG, "replay register table lock callback", K(*cb));
   }
   return ret;
@@ -230,7 +228,7 @@ ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObIMvccCtx &ctx, ObMvccRow &va
   int ret = OB_SUCCESS;
   void *cb_buffer = NULL;
   ObMvccRowCallback *cb = NULL;
-  if (NULL == (cb_buffer = callback_alloc(sizeof(*cb)))) {
+  if (NULL == (cb_buffer = alloc_mvcc_row_callback())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
   } else if (NULL == (cb = new(cb_buffer) ObMvccRowCallback(ctx, value, memtable))) {
@@ -245,7 +243,7 @@ ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObMvccRowCallback &cb, ObMemta
   int ret = OB_SUCCESS;
   void *cb_buffer = NULL;
   ObMvccRowCallback *new_cb = NULL;
-  if (NULL == (cb_buffer = callback_alloc(sizeof(*new_cb)))) {
+  if (NULL == (cb_buffer = alloc_mvcc_row_callback())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
   } else if (NULL == (new_cb = new(cb_buffer) ObMvccRowCallback(cb, memtable))) {
@@ -255,10 +253,6 @@ ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObMvccRowCallback &cb, ObMemta
   return new_cb;
 }
 
-int ObIMvccCtx::append_callback(ObITransCallback *cb)
-{
-  return trans_mgr_.append(cb);
-}
 
 void ObIMvccCtx::check_row_callback_registration_between_stmt_()
 {
@@ -269,6 +263,23 @@ void ObIMvccCtx::check_row_callback_registration_between_stmt_()
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "register commit not match expection", K(*trans_ctx));
   }
 }
+
+int ObIMvccCtx::register_ext_info_commit_cb(
+    const int64_t timeout,
+    const blocksstable::ObDmlFlag dml_flag,
+    transaction::ObTxDesc *tx_desc,
+    transaction::ObTxSEQ &parent_seq_no,
+    ObObj &index_data,
+    ObObj &ext_info_data)
+{
+  int ret = OB_SUCCESS;
+  storage::ObExtInfoCbRegister cb_register;
+  if (OB_FAIL(cb_register.register_cb(this, timeout, dml_flag, tx_desc, parent_seq_no, index_data, ext_info_data))) {
+    TRANS_LOG(ERROR, "register ext info callback failed", K(ret), K(cb_register), K(*this));
+  }
+  return ret;
+}
+
 }
 }
 
@@ -280,15 +291,31 @@ ObMvccWriteGuard::~ObMvccWriteGuard()
 {
   if (NULL != ctx_) {
     int ret = OB_SUCCESS;
-    auto tx_ctx = ctx_->get_trans_ctx();
+    transaction::ObPartTransCtx *tx_ctx = ctx_->get_trans_ctx();
     ctx_->write_done();
-    if (OB_NOT_NULL(memtable_)) {
+
+    if (OB_NOT_NULL(memtable_)
+        // Case1: The memtable is frozen, therefore we must submit the logs
+        // (forcely), otherwise, the data written concurrently may not be
+        // scanned by the background freezing worker, leading to missed data
+        // submissions.
+        && (memtable_->is_frozen_memtable()
+        // Case2: The data writes are guaranteed not to rollback and are not in
+        // the middle of write(such as the main table write of the insert
+        // ignore), allowing us to trigger immediate logging. (Especially, it
+        // should be noted that allowing immediate logging at any time could
+        // lead to the bad case that lots of rollback logs will be generated in
+        // insert ignore scenarios.)
+            || (write_ret_
+                && OB_SUCCESS == *write_ret_
+                && try_flush_redo_))) {
       bool is_freeze = memtable_->is_frozen_memtable();
-      if (OB_FAIL(tx_ctx->submit_redo_log(is_freeze))) {
+      ret = tx_ctx->submit_redo_after_write(is_freeze/*force*/, write_seq_no_);
+      if (OB_FAIL(ret)) {
         if (REACH_TIME_INTERVAL(100 * 1000)) {
           TRANS_LOG(WARN, "failed to submit log if neccesary", K(ret), K(is_freeze), KPC(tx_ctx));
         }
-        if (is_freeze) {
+        if (is_freeze && OB_BLOCK_FROZEN != ret) {
           memtable_->get_freezer()->set_need_resubmit_log(true);
         }
       }
@@ -299,7 +326,7 @@ ObMvccWriteGuard::~ObMvccWriteGuard()
 int ObMvccWriteGuard::write_auth(storage::ObStoreCtx &store_ctx)
 {
   int ret = common::OB_SUCCESS;
-  auto mem_ctx = store_ctx.mvcc_acc_ctx_.mem_ctx_;
+  ObMemtableCtx *mem_ctx = store_ctx.mvcc_acc_ctx_.mem_ctx_;
   if (!store_ctx.mvcc_acc_ctx_.is_write()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "store_ctx was not prepared for write", K(ret), K(store_ctx));
@@ -308,6 +335,10 @@ int ObMvccWriteGuard::write_auth(storage::ObStoreCtx &store_ctx)
               K(exclusive_), K(store_ctx), KPC(mem_ctx));
   } else {
     ctx_ = mem_ctx;
+    write_seq_no_ = store_ctx.mvcc_acc_ctx_.tx_scn_;
+    try_flush_redo_ = !(store_ctx.mvcc_acc_ctx_.write_flag_.is_skip_flush_redo()
+                        // for lob column write, delay flush redo to its main tablet's write
+                        || store_ctx.mvcc_acc_ctx_.write_flag_.is_lob_aux());
   }
   return ret;
 }

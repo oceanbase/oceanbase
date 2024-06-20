@@ -100,7 +100,9 @@ public:
        last_set_sql_mode_cstr_buf_size_(0),
        last_set_client_charset_cstr_(NULL),
        last_set_connection_charset_cstr_(NULL),
-       last_set_results_charset_cstr_(NULL)
+       last_set_results_charset_cstr_(NULL),
+       next_conn_(NULL),
+       check_priv_(false)
   {}
   virtual ~ObISQLConnection() {
     allocator_.reset();
@@ -109,6 +111,7 @@ public:
     last_set_client_charset_cstr_ = NULL;
     last_set_connection_charset_cstr_ = NULL;
     last_set_results_charset_cstr_ = NULL;
+    next_conn_ = NULL;
   }
 
   // sql execute interface
@@ -131,7 +134,8 @@ public:
                         ObString &sql,
                         const share::schema::ObRoutineInfo &routine_info,
                         const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                        const ObTimeZoneInfo *tz_info) = 0;
+                        const ObTimeZoneInfo *tz_info,
+                        ObObj *result) = 0;
   virtual int prepare(const char *sql) {
     UNUSED(sql);
     return OB_NOT_SUPPORTED;
@@ -239,11 +243,13 @@ public:
     }
     if (param_ctx.set_client_charset_cstr_ != last_set_client_charset_cstr_ ||
         param_ctx.set_connection_charset_cstr_ != last_set_connection_charset_cstr_ ||
-        param_ctx.set_results_charset_cstr_ != last_set_results_charset_cstr_) {
+        param_ctx.set_results_charset_cstr_ != last_set_results_charset_cstr_ ||
+        param_ctx.set_transaction_isolation_cstr_ != last_set_transaction_isolation_cstr_) {
       is_inited = false;
       last_set_client_charset_cstr_ = param_ctx.set_client_charset_cstr_;
       last_set_connection_charset_cstr_ = param_ctx.set_connection_charset_cstr_;
       last_set_results_charset_cstr_ = param_ctx.set_results_charset_cstr_;
+      last_set_transaction_isolation_cstr_ = param_ctx.set_transaction_isolation_cstr_;
     }
     return ret;
   }
@@ -254,6 +260,14 @@ public:
   void set_usable(bool flag) { usable_ = flag; }
   bool usable() { return usable_; }
   virtual int ping() { return OB_SUCCESS; }
+  void dblink_rlock() { dblink_lock_.rlock()->lock(); }
+  void dblink_unrlock() { dblink_lock_.rlock()->unlock(); }
+  void dblink_wlock() { dblink_lock_.wlock()->lock(); }
+  void dblink_unwlock() { dblink_lock_.wlock()->unlock(); }
+  ObISQLConnection *get_next_conn() { return next_conn_; }
+  void set_next_conn(ObISQLConnection *conn) { next_conn_ = conn; }
+  void set_check_priv(bool on) { check_priv_ = on; }
+  bool is_check_priv() { return check_priv_; }
 protected:
   bool oracle_mode_;
   bool is_inited_; // for oracle dblink, we have to init remote env with some sql
@@ -268,7 +282,11 @@ protected:
   const char *last_set_client_charset_cstr_;
   const char *last_set_connection_charset_cstr_;
   const char *last_set_results_charset_cstr_;
+  const char *last_set_transaction_isolation_cstr_;
   common::ObArenaAllocator allocator_;
+  obsys::ObRWLock dblink_lock_;
+  ObISQLConnection *next_conn_; // used in dblink_conn_map_
+  bool check_priv_;
 };
 
 } // end namespace sqlclient

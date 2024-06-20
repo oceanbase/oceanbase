@@ -133,8 +133,10 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
       OB_ASSERT(PARTITION_LEVEL_ZERO == calc_part_info->part_level_);
       rt_expr.eval_func_ = ObExprCalcPartitionBase::calc_no_partition_location;
     } else if (1 == param_cnt) {
+      OB_ASSERT(1 == rt_expr.arg_cnt_);
       OB_ASSERT(PARTITION_LEVEL_ONE == calc_part_info->part_level_);
       rt_expr.eval_func_ = ObExprCalcPartitionBase::calc_partition_level_one;
+      rt_expr.eval_vector_func_ = ObExprCalcPartitionBase::calc_partition_level_one_vector;
     } else if (2 == param_cnt) {
       OB_ASSERT(PARTITION_LEVEL_TWO == calc_part_info->part_level_);
       rt_expr.eval_func_ = ObExprCalcPartitionBase::calc_partition_level_two;
@@ -143,7 +145,6 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
       LOG_WARN("invalid param cnt", K(ret), K(param_cnt));
     }
   }
-
   return ret;
 }
 
@@ -225,9 +226,7 @@ int ObExprCalcPartitionBase::calc_partition_level_one(const ObExpr &expr,
                                                       ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  OB_ASSERT(1 == expr.arg_cnt_);
   CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
-  CK (OB_NOT_NULL(calc_part_info));
   ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
   ObObjectID partition_id = OB_INVALID_ID;
   OZ (calc_partition_id(*expr.args_[0],
@@ -244,6 +243,187 @@ int ObExprCalcPartitionBase::calc_partition_level_one(const ObExpr &expr,
     } else if (CALC_PARTITION_TABLET_ID == calc_part_info->calc_id_type_) {
       if (OB_FAIL(concat_part_and_tablet_id(expr, ctx, res_datum, partition_id, tablet_id.id()))) {
         LOG_WARN("fail to concat partition id and tablet id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprCalcPartitionBase::calc_partition_level_one_vector(const ObExpr &expr,
+                                                             ObEvalCtx &ctx,
+                                                             const ObBitVector &skip,
+                                                             const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  CalcPartitionBaseInfo *calc_part_info = reinterpret_cast<CalcPartitionBaseInfo *>(expr.extra_info_);
+  ObPartitionLevel part_level = PARTITION_LEVEL_ONE;
+  ObPartitionFuncType part_type = calc_part_info->part_type_;
+  ObDASTabletMapper tablet_mapper;
+  const ObExpr *part_expr = expr.args_[0];
+  const bool is_oracle_mode = NULL != ctx.exec_ctx_.get_my_session() &&
+                            ORACLE_MODE == ctx.exec_ctx_.get_my_session()->get_compatibility_mode();
+  if (OB_FAIL(ctx.exec_ctx_.get_das_ctx().get_das_tablet_mapper(calc_part_info->ref_table_id_,
+                                                                tablet_mapper,
+                                                                &calc_part_info->related_table_ids_))) {
+    LOG_WARN("get das tablet mapper failed", K(ret), K(calc_part_info));
+  } else if (T_OP_ROW == part_expr->type_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->arg_cnt_; i++) {
+      if (OB_FAIL(part_expr->args_[i]->eval_vector(ctx, skip, bound))) {
+        LOG_WARN("fail to eval child of part expr", K(ret), K(i), KPC(part_expr));
+      }
+    }
+    ObNewRow row;
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &allocator = alloc_guard.get_allocator();
+    ObSEArray<ObIVector *, 8> part_child_vecs;
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(row.cells_ = static_cast<ObObj *>(
+                allocator.alloc(sizeof(ObObj) * part_expr->arg_cnt_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      row.count_ = part_expr->arg_cnt_;
+      row.projector_size_ = 0;
+      row.projector_ = NULL;
+    }
+    for (int64_t i = 0; i < part_expr->arg_cnt_ && OB_SUCC(ret); i++) {
+      ObIVector *vec = part_expr->args_[i]->get_vector(ctx);
+      if (OB_FAIL(part_child_vecs.push_back(vec))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+    ObIVector *res_vec = expr.get_vector(ctx);
+    res_vec->reset_has_null();
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    for (int64_t row_idx = bound.start(); row_idx < bound.end() && OB_SUCC(ret); row_idx++) {
+      if (skip.contain(row_idx) || eval_flags.at(row_idx)) {
+        continue;
+      }
+      ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
+      ObObjectID partition_id = OB_INVALID_ID;
+      for (int64_t i = 0; i < part_expr->arg_cnt_ && OB_SUCC(ret); i++) {
+        new (&row.cells_[i]) ObObj();
+        ObIVector *vec = part_child_vecs.at(i);
+        bool is_null = vec->is_null(row_idx);
+        const char *payload = NULL;
+        ObLength len = 0;
+        vec->get_payload(row_idx, payload, len);
+        ObDatum datum(payload, len, is_null);
+        if (OB_FAIL(datum.to_obj(row.cells_[i], part_expr->args_[i]->obj_meta_,
+                    part_expr->args_[i]->obj_datum_map_))) {
+          LOG_WARN("to obj failed", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(part_level, OB_INVALID_ID, row,
+                                                                tablet_id, partition_id))) {
+        LOG_WARN("Failed to get part id", K(ret), K(row));
+      } else if (OB_INVALID_ID == partition_id && PARTITION_LEVEL_ONE == part_level
+                 && is_oracle_mode
+                 && OB_FAIL(add_interval_part(ctx.exec_ctx_, *calc_part_info, allocator, row))) {
+        LOG_WARN("add interval part failed", K(ret), KPC(calc_part_info), K(row));
+      } else {
+        res_vec->unset_null(row_idx);
+        eval_flags.set(row_idx);
+        if (CALC_TABLET_ID == calc_part_info->calc_id_type_) {
+          res_vec->set_int(row_idx, tablet_id.id());
+        } else if (CALC_PARTITION_ID == calc_part_info->calc_id_type_) {
+          res_vec->set_int(row_idx, partition_id);
+        } else if (CALC_PARTITION_TABLET_ID == calc_part_info->calc_id_type_) {
+          char *payload = const_cast<char *>(res_vec->get_payload(row_idx));
+          payload[0] = partition_id;
+          payload[1] = tablet_id.id();
+          res_vec->set_payload_shallow(row_idx, payload, sizeof(uint64_t) * 2);
+        }
+      }
+    }
+  } else {
+    if (OB_FAIL(part_expr->eval_vector(ctx, skip, bound))) {
+      LOG_WARN("calc part expr failed", K(ret));
+    } else {
+      ObIVector *vec = part_expr->get_vector(ctx);
+      ObIVector *res_vec = expr.get_vector(ctx);
+      res_vec->reset_has_null();
+      ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+      const bool is_oracle_mode = NULL != ctx.exec_ctx_.get_my_session() &&
+                            ORACLE_MODE == ctx.exec_ctx_.get_my_session()->get_compatibility_mode();
+      for (int64_t row_idx = bound.start(); row_idx < bound.end() && OB_SUCC(ret); row_idx++) {
+        if (skip.contain(row_idx) || eval_flags.at(row_idx)) {
+          continue;
+        }
+        ObObj func_value;
+        ObObj result;
+        const char *payload = NULL;
+        ObLength len = 0;
+        vec->get_payload(row_idx, payload, len);
+        ObDatum datum(payload, len, vec->is_null(row_idx));
+        if (OB_FAIL(datum.to_obj(func_value,
+                                 part_expr->obj_meta_,
+                                 part_expr->obj_datum_map_))) {
+          LOG_WARN("convert datum to obj failed", K(ret));
+        } else {
+          result = func_value;
+          if (PARTITION_FUNC_TYPE_HASH == part_type) {
+            if (is_oracle_mode) {
+              // do nothing
+            } else if (OB_FAIL(ObExprFuncPartHash::calc_value_for_mysql(func_value, result,
+                        func_value.get_type()))) {
+              LOG_WARN("Failed to calc hash value mysql mode", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ObSEArray<ObTabletID, 1> tablet_ids;
+            ObSEArray<ObObjectID, 1> partition_ids;
+            //这里也可以统一使用上面的ObNewRow接口, 并把calc_value_for_mysql
+            // 用datum实现下,  暂时和以前的方式保持一致
+            ObRowkey rowkey(const_cast<ObObj*>(&result), 1);
+            ObNewRange range;
+            if (OB_FAIL(range.build_range(calc_part_info->ref_table_id_, rowkey))) {
+              LOG_WARN("Failed to build range", K(ret));
+            } else if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(
+                                              part_level,
+                                              OB_INVALID_ID,
+                                              range,
+                                              tablet_ids,
+                                              partition_ids))) {
+              LOG_WARN("Failed to get part id", K(ret));
+            } else if (partition_ids.count() != 0 && partition_ids.count() != 1) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid partition cnt", K(ret), K(part_expr), K(partition_ids), K(range), K(rowkey));
+            } else {
+              if (0 == partition_ids.count() &&
+                  PARTITION_LEVEL_ONE == part_level &&
+                  is_oracle_mode) {
+                ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+                ObIAllocator &allocator = alloc_guard.get_allocator();
+                ObNewRow row(const_cast<ObObj*>(&result), 1);
+                OZ (add_interval_part(ctx.exec_ctx_, *calc_part_info, allocator, row));
+              }
+              ObTabletID tablet_id(ObTabletID::INVALID_TABLET_ID);
+              ObObjectID partition_id = OB_INVALID_ID;
+              if (OB_SUCC(ret) && 1 == partition_ids.count()) {
+                partition_id = partition_ids.at(0);
+                if (1 == tablet_ids.count()) {
+                  tablet_id = tablet_ids.at(0);
+                }
+              }
+              if (OB_SUCC(ret)) {
+                res_vec->unset_null(row_idx);
+                eval_flags.set(row_idx);
+                if (CALC_TABLET_ID == calc_part_info->calc_id_type_) {
+                  res_vec->set_int(row_idx, tablet_id.id());
+                } else if (CALC_PARTITION_ID == calc_part_info->calc_id_type_) {
+                  res_vec->set_int(row_idx, partition_id);
+                } else if (CALC_PARTITION_TABLET_ID == calc_part_info->calc_id_type_) {
+                  char *payload = const_cast<char *>(res_vec->get_payload(row_idx));
+                  payload[0] = partition_id;
+                  payload[1] = tablet_id.id();
+                  res_vec->set_payload_shallow(row_idx, payload, sizeof(uint64_t) * 2);
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -19,9 +19,11 @@
 
 #include "lib/oblog/ob_log.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/ob_compatibility_control.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -71,7 +73,7 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
       OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, params, LS_BYTE));
     } else {
       if (types_array[0].is_lob()) {
-        type.set_type(types_array[0].get_type());
+        type.set_type(ObLongTextType);
       } else {
         type.set_varchar();
         type.set_length_semantics(type_ctx.get_session()->get_actual_nls_length_semantics());
@@ -92,6 +94,7 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
     ObLength from_len = 0;
     ObLength to_len = 0;
     int64_t result_len = 0;
+    int64_t max_len = 0;
     if (lib::is_oracle_mode()) {
       result_len = types_array[0].get_calc_length();
       if (param_num == 2 || types_array[2].is_null()) {
@@ -113,8 +116,13 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
         type.set_length(ori_len);
       } else {
         result_len = ori_len / from_len * to_len + ori_len % from_len;
-        if (result_len < 0 || result_len > OB_MAX_VARCHAR_LENGTH) {
-          result_len = OB_MAX_VARCHAR_LENGTH;
+        if (type.is_lob()) {
+          max_len = ObAccuracy::DDL_DEFAULT_ACCURACY[type.get_type()].get_length();
+        } else {
+          max_len = OB_MAX_VARCHAR_LENGTH;
+        }
+        if (result_len < 0 || result_len > max_len) {
+          result_len = max_len;
         }
         type.set_length(result_len);
       }
@@ -128,7 +136,8 @@ int ObExprReplace::replace(ObString &ret_str,
                            const ObString &text,
                            const ObString &from,
                            const ObString &to,
-                           ObExprStringBuf &string_buf)
+                           ObExprStringBuf &string_buf,
+                           const int64_t max_len)
 {
   int ret = OB_SUCCESS;
   ObString dst_str;
@@ -169,10 +178,10 @@ int ObExprReplace::replace(ObString &ret_str,
       ret_str.reset();
     } else if (locations.count() == 0) {
       ret_str = text;
-    } else if (OB_UNLIKELY((OB_MAX_VARCHAR_LENGTH - text.length()) / locations.count() < (to.length() - from.length()))) {
+    } else if (OB_UNLIKELY((max_len - text.length()) / locations.count() < (to.length() - from.length()))) {
       ret = OB_ERR_VARCHAR_TOO_LONG;
-      LOG_ERROR("Result of replace() was larger than OB_MAX_VARCHAR_LENGTH.",
-           K(text.length()), K(to.length()), K(from.length()), K(OB_MAX_VARCHAR_LENGTH), K(ret));
+      LOG_ERROR("Result of replace() was larger than max_len.",
+           K(text.length()), K(to.length()), K(from.length()), K(max_len), K(locations.count()), K(ret));
       ret_str.reset();
     } else if (OB_UNLIKELY((tot_length = text.length() + (to.length() - from.length()) * locations.count()) <= 0)) {
         // tot_length equals to 0 indicates that length_to is zero and "to" is empty string
@@ -227,7 +236,30 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
   } else if (text->is_null()
              || (is_mysql && from->is_null())
              || (is_mysql && NULL != to && to->is_null())) {
-    expr_datum.set_null();
+    if (is_mysql && !from->is_null() && 0 == from->len_) {
+      ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+      const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      uint64_t compat_version = 0;
+      ObCompatType compat_type = COMPAT_MYSQL57;
+      bool is_enable = false;
+      if (OB_ISNULL(session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is null", K(ret));
+      } else if (OB_FAIL(helper.get_compat_version(compat_version))) {
+        LOG_WARN("failed to get compat version", K(ret));
+      } else if (OB_FAIL(ObCompatControl::check_feature_enable(compat_version,
+                                              ObCompatFeatureType::FUNC_REPLACE_NULL, is_enable))) {
+        LOG_WARN("failed to check feature enable", K(ret));
+      } else if (OB_FAIL(session->get_compatibility_control(compat_type))) {
+        LOG_WARN("failed to get compat type", K(ret));
+      } else if (is_enable && COMPAT_MYSQL57 == compat_type) {
+        expr_datum.set_datum(*text);
+      } else {
+        expr_datum.set_null();
+      }
+    } else {
+      expr_datum.set_null();
+    }
   } else if (is_clob && (0 == text->len_)) {
     expr_datum.set_datum(*text);
   } else if (!is_lob_res) { // non text tc inputs
@@ -267,13 +299,23 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
       LOG_WARN("failed to get string data", K(ret), K(expr.args_[2]->datum_meta_));
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(replace(res, expr.datum_meta_.cs_type_, text_data, from_data, to_data, temp_allocator))) {
+      int64_t max_len = ObAccuracy::DDL_DEFAULT_ACCURACY[expr.datum_meta_.get_type()].get_length();
+      if (OB_FAIL(replace(res, expr.datum_meta_.cs_type_, text_data, from_data,
+                          to_data, temp_allocator, max_len))) {
         LOG_WARN("do replace for lob resutl failed", K(ret), K(expr.datum_meta_.type_));
       } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(expr, ctx, expr_datum, res))) {
         LOG_WARN("set lob result failed", K(ret));
       }
     }
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprReplace, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(2);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_OB_COMPATIBILITY_VERSION);
   return ret;
 }
 

@@ -586,12 +586,12 @@ int ObAllVirtualProxySchema::init_data()
       bool is_oracle_mode = false;
       if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
         LOG_WARN("fail to check oracle mode", KR(ret), KPC(table_schema));
-      } else if (OB_FAIL(get_view_decoded_schema_(
-                                                  tenant_id,
+      } else if (OB_FAIL(get_view_decoded_schema_(tenant_id,
                                                   tenant_name,
                                                   view_definition,
                                                   is_oracle_mode,
-                                                  new_table_schema))) {
+                                                  new_table_schema,
+                                                  database_name))) {
         LOG_WARN("get_view_decoded_schema failed", KR(ret));
       } else if (OB_NOT_NULL(new_table_schema)) {
         table_schema = new_table_schema;
@@ -639,7 +639,8 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
     const common::ObString &tenant_name,
     const common::ObString &view_definition,
     const bool is_oracle_mode,
-    const ObTableSchema *&new_table_schema)
+    const ObTableSchema *&new_table_schema,
+    const common::ObString &database_name)
 {
   int ret = OB_SUCCESS;
   SMART_VAR(sql::ObSQLSessionInfo, empty_session) {
@@ -657,13 +658,24 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
                                          lib::Worker::CompatMode::MYSQL;
       empty_session.set_compatibility_mode(static_cast<ObCompatibilityMode>(compat_mode));
       empty_session.set_sql_mode(ob_compatibility_mode_to_sql_mode(static_cast<ObCompatibilityMode>(compat_mode)));
+      if (is_oracle_mode) {
+        uint64_t database_id = OB_INVALID_ID;
+        if (OB_FAIL(schema_guard_.get_database_id(tenant_id, database_name, database_id))) {
+          LOG_WARN("failed to get database id", K(ret));
+        } else if (OB_FAIL(empty_session.set_default_database(database_name))) {
+          LOG_WARN("failed to set default database name", K(ret));
+        } else {
+          empty_session.set_database_id(database_id);
+        }
+      }
       ParseResult parse_result;
       sql::ObParser parser(*allocator_, empty_session.get_sql_mode());
       sql::ObSchemaChecker schema_checker;
       lib::CompatModeGuard tmp_guard(compat_mode);
       //FIXME: Resolve view definition directly may failed when sys views are involved.
       //       Select sql is needed here like int ObTableColumns::resolve_view_definition().
-      if (OB_FAIL(parser.parse(view_definition, parse_result))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(parser.parse(view_definition, parse_result))) {
         LOG_WARN("parse view definition failed", KR(ret), K(view_definition));
       } else if (OB_FAIL(schema_checker.init(schema_guard_))) {
         LOG_WARN("fail to init schema checker", KR(ret));

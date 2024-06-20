@@ -1,0 +1,23 @@
+# The IP can only be configured during the initial startup.
+# By default, the IP is set to the output of hostname -i unless specified otherwise.
+# To modify the observer IP after startup, you must uninstall OceanBase and remove the data directory.
+# Afterward, you can reinstall and launch OceanBase with the new IP address.
+# For instance, to set the observer IP to 127.0.0.1, you would use the line:
+# ip=127.0.0.1
+mysql_port=2881
+rpc_port=2882
+obshell_port=2886
+root_pwd=""
+redo_dir=/var/lib/oceanbase/redo
+data_dir=/var/lib/oceanbase/data
+datafile_size=2G
+datafile_next=2G
+datafile_maxsize=20G
+cpu_count=16
+memory_limit=6G
+system_memory=1G
+log_disk_size=13G
+enable_syslog_wf=false
+enable_syslog_recycle=true
+max_syslog_file_count=4
+__min_full_resource_pool_memory=1073741824

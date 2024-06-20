@@ -46,6 +46,9 @@ ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
     enable_heart_beat_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  idx_array_.set_tenant_id(MTL_ID());
+  commited_trans_ctx_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadCoordinatorCtx::~ObTableLoadCoordinatorCtx()
@@ -91,7 +94,7 @@ int ObTableLoadCoordinatorCtx::init_partition_location()
   return ret;
 }
 
-int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
+int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
                                     ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
@@ -99,21 +102,22 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadCoordinatorCtx init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(
-               idx_array.count() != ctx_->param_.column_count_ || nullptr == exec_ctx ||
+               column_ids.count() != ctx_->param_.column_count_ || nullptr == exec_ctx ||
                !exec_ctx->is_valid() ||
                (ctx_->param_.online_opt_stat_gather_ && nullptr == exec_ctx->get_exec_ctx()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(idx_array.count()), KPC(exec_ctx));
+    LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(column_ids), KPC(exec_ctx));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
                K(ctx_->ddl_param_.dest_table_id_));
     }
-    // init idx array
-    else if (OB_FAIL(idx_array_.assign(idx_array))) {
-      LOG_WARN("failed to assign idx array", KR(ret), K(idx_array));
-    } else if (OB_FAIL(init_partition_location())) {
+    // init column idxs
+    else if (OB_FAIL(init_column_idxs(column_ids))) {
+      LOG_WARN("fail to init column idxs", KR(ret), K(column_ids));
+    }
+    // init partition_location_
+    else if (OB_FAIL(init_partition_location())) {
       LOG_WARN("fail to init partition location", KR(ret));
     }
     // init partition_calc_
@@ -139,13 +143,6 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     else if (OB_FAIL(segment_ctx_map_.init("TLD_SegCtxMap", ctx_->param_.tenant_id_))) {
       LOG_WARN("fail to init segment ctx map", KR(ret));
     }
-    // init task_scheduler_
-    else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
-                                                 ctx_->param_.session_count_,
-                                                 ctx_->param_.table_id_, "Coordinator"))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
-    }
     // init error_row_handler_
     else if (OB_ISNULL(error_row_handler_ =
                          OB_NEWx(ObTableLoadErrorRowHandler, (&allocator_)))) {
@@ -154,17 +151,9 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     } else if (OB_FAIL(error_row_handler_->init(ctx_->param_, result_info_, ctx_->job_stat_))) {
       LOG_WARN("fail to init error row handler", KR(ret));
     }
-    // init session_ctx_array_
-    else if (OB_FAIL(init_session_ctx_array())) {
-      LOG_WARN("fail to init session ctx array", KR(ret));
-    }
     // init sequence_cache_ and sequence_schema_
     else if (ctx_->schema_.has_identity_column_ && OB_FAIL(init_sequence())) {
       LOG_WARN("fail to init sequence", KR(ret));
-    } else if (OB_FAIL(task_scheduler_->init())) {
-      LOG_WARN("fail to init task scheduler", KR(ret));
-    } else if (OB_FAIL(task_scheduler_->start())) {
-      LOG_WARN("fail to start task scheduler", KR(ret));
     }
     if (OB_SUCC(ret)) {
       exec_ctx_ = exec_ctx;
@@ -211,7 +200,7 @@ void ObTableLoadCoordinatorCtx::destroy()
     ctx_->free_trans_ctx(trans_ctx);
   }
   if (nullptr != session_ctx_array_) {
-    for (int64_t i = 0; i < ctx_->param_.session_count_; ++i) {
+    for (int64_t i = 0; i < ctx_->param_.write_session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->~SessionContext();
     }
@@ -247,7 +236,7 @@ int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)
     // advance status
     else {
       status_ = status;
-      table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
       LOG_INFO("LOAD DATA COORDINATOR advance status", K(status));
     }
   }
@@ -267,7 +256,7 @@ int ObTableLoadCoordinatorCtx::set_status_error(int error_code)
     } else {
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
-      table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
       LOG_INFO("LOAD DATA COORDINATOR status error", KR(error_code));
     }
   }
@@ -282,7 +271,7 @@ int ObTableLoadCoordinatorCtx::set_status_abort()
     LOG_INFO("LOAD DATA COORDINATOR already abort");
   } else {
     status_ = ObTableLoadStatusType::ABORT;
-    table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+    table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
     LOG_INFO("LOAD DATA COORDINATOR status abort");
   }
   return ret;
@@ -291,14 +280,21 @@ int ObTableLoadCoordinatorCtx::set_status_abort()
 int ObTableLoadCoordinatorCtx::check_status(ObTableLoadStatusType status) const
 {
   int ret = OB_SUCCESS;
-  obsys::ObRLockGuard guard(status_lock_);
-  if (OB_UNLIKELY(status != status_)) {
-    if (ObTableLoadStatusType::ERROR == status_) {
-      ret = error_code_;
-    } else if (ObTableLoadStatusType::ABORT == status_) {
-      ret = OB_CANCELED;
-    } else {
-      ret = OB_STATE_NOT_MATCH;
+  {
+    obsys::ObRLockGuard guard(status_lock_);
+    if (OB_UNLIKELY(status != status_)) {
+      if (ObTableLoadStatusType::ERROR == status_) {
+        ret = error_code_;
+      } else if (ObTableLoadStatusType::ABORT == status_) {
+        ret = OB_CANCELED;
+      } else {
+        ret = OB_STATE_NOT_MATCH;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(exec_ctx_->check_status())) {
+      LOG_WARN("fail to check status", KR(ret));
     }
   }
   return ret;
@@ -334,7 +330,7 @@ int ObTableLoadCoordinatorCtx::alloc_trans(const ObTableLoadSegmentID &segment_i
   trans = nullptr;
   const uint64_t trans_gid = ATOMIC_AAF(&last_trans_gid_, 1);
   const int32_t default_session_id =
-    (ATOMIC_FAA(&next_session_id_, 1) % ctx_->param_.session_count_) + 1;
+    (ATOMIC_FAA(&next_session_id_, 1) % ctx_->param_.write_session_count_) + 1;
   ObTableLoadTransId trans_id(segment_id, trans_gid);
   ObTableLoadTransCtx *trans_ctx = nullptr;
   // 分配trans_ctx
@@ -355,6 +351,34 @@ int ObTableLoadCoordinatorCtx::alloc_trans(const ObTableLoadSegmentID &segment_i
       trans_allocator_.free(trans);
       trans = nullptr;
     }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::init_column_idxs(const ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  idx_array_.reset();
+  const ObIArray<ObColDesc> &column_descs = ctx_->schema_.column_descs_;
+  bool found_column = true;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_LIKELY(found_column) && i < column_descs.count(); ++i) {
+    const ObColDesc &col_desc = column_descs.at(i);
+    found_column = (ctx_->schema_.is_heap_table_ && i == 0); // skip hidden pk in heap table
+    // 在源数据的列数组中找到对应的列
+    for (int64_t j = 0; OB_SUCC(ret) && OB_LIKELY(!found_column) && j < column_ids.count(); ++j) {
+      const uint64_t column_id = column_ids.at(j);
+      if (col_desc.col_id_ == column_id) {
+        found_column = true;
+        if (OB_FAIL(idx_array_.push_back(j))) {
+          LOG_WARN("fail to push back column idx", KR(ret), K(idx_array_), K(i), K(col_desc), K(j),
+                   K(column_ids));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(!found_column)) {
+    ret = OB_SCHEMA_NOT_UPTODATE;
+    LOG_WARN("column not found", KR(ret), K(idx_array_), K(column_descs), K(column_ids));
   }
   return ret;
 }
@@ -478,14 +502,14 @@ int ObTableLoadCoordinatorCtx::init_session_ctx_array()
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   AutoincParam autoinc_param;
-  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.session_count_))) {
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.write_session_count_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(generate_autoinc_params(autoinc_param))) {
     LOG_WARN("fail to init auto increment param", KR(ret));
   } else {
-    session_ctx_array_ = new (buf) SessionContext[ctx_->param_.session_count_];
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.session_count_; ++i) {
+    session_ctx_array_ = new (buf) SessionContext[ctx_->param_.write_session_count_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.write_session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->autoinc_param_ = autoinc_param;
     }
@@ -776,6 +800,30 @@ int ObTableLoadCoordinatorCtx::check_exist_committed_trans(bool &is_exist) const
     obsys::ObRLockGuard guard(rwlock_);
     is_exist = !commited_trans_ctx_array_.empty();
   }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::init_complete()
+{
+  int ret = OB_SUCCESS;
+  // init task_scheduler_
+  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler,
+                                          (&allocator_),
+                                          ctx_->param_.write_session_count_,
+                                          ctx_->param_.table_id_,
+                                          "Coordinator"))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
+  }
+  // init session_ctx_array_
+  else if (OB_FAIL(init_session_ctx_array())) {
+    LOG_WARN("fail to init session ctx array", KR(ret));
+  } else if (OB_FAIL(task_scheduler_->init())) {
+    LOG_WARN("fail to init task scheduler", KR(ret));
+  } else if (OB_FAIL(task_scheduler_->start())) {
+    LOG_WARN("fail to start task scheduler", KR(ret));
+  }
+
   return ret;
 }
 

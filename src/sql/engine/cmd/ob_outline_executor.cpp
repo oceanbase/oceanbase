@@ -108,19 +108,12 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
                                                  has_questionmark_in_outline_sql))) {
     LOG_WARN("fail to get outline key", "outline_sql", outline_sql, K(ret));
   } else if (FALSE_IT(max_concurrent = query_hint->get_global_hint().max_concurrent_)) {
-  } else if (OB_UNLIKELY(has_questionmark_in_outline_sql && max_concurrent < 0)) {
+  } else if (OB_UNLIKELY(has_questionmark_in_outline_sql && query_hint->has_hint_exclude_concurrent())) {
     ret = OB_INVALID_OUTLINE;
     LOG_USER_ERROR(OB_INVALID_OUTLINE, "sql text should have no ? when there is no concurrent limit");
     LOG_WARN("outline should have no ? when there is no concurrent limit",
              K(outline_sql), K(ret));
-  } else if (OB_UNLIKELY(max_concurrent > ObGlobalHint::UNSET_MAX_CONCURRENT
-                         && query_hint->has_hint_exclude_concurrent())) {
-    ret = OB_INVALID_OUTLINE;
-    LOG_USER_ERROR(OB_INVALID_OUTLINE, "outline and sql concurrent limit can not be mixed");
-    LOG_WARN("outline and sql concurrent limit can not be mixed",
-             "outline_sql_text", outline_info.get_sql_text_str(), K(ret));
-  } else if (ObGlobalHint::UNSET_MAX_CONCURRENT == max_concurrent
-             && OB_FAIL(get_outline(ctx, outline_stmt, outline))) {
+  } else if (OB_FAIL(get_outline(ctx, outline_stmt, outline))) {
     LOG_WARN("fail to get outline", K(ret));
   } else {
     //to check whether ok

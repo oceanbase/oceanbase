@@ -29,6 +29,11 @@ using namespace common::sqlclient;
 namespace transaction
 {
 // generate a xid with new gtrid
+// xid content:
+//  gtrid:
+//    base_version: "$tenant_id.$trans_id.$timestamp"
+//    using_ipv4: "$tenant_id.$trans_id.$timestamp,$ipv4"
+//  bqual: "10000"
 // @param[out] new_xid
 int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
 {
@@ -37,19 +42,16 @@ int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
   static const ObString BQUAL_STRING = ObString("10000");
   // gtrid
   int64_t txid_value = tx_id.get_id();
-  static const char *DBLINK_STR = "DBLINK.";
-  static const int DBLINK_STR_LENGTH = 7;
-  char txid_str[ObXATransID::MAX_GTRID_LENGTH];
-  memset(txid_str, 0, ObXATransID::MAX_GTRID_LENGTH);
-  int txid_str_length = sprintf(txid_str, "%ld", txid_value);
-  if (ObXATransID::MAX_GTRID_LENGTH < txid_str_length + DBLINK_STR_LENGTH) {
+  uint64_t tenant_id = MTL_ID();
+  char gtrid_base_str[ObXATransID::MAX_GTRID_LENGTH] = {0};
+  int64_t timestamp = ObTimeUtility::current_time() / 1000000; // second level
+  const char *gtrid_base_format = "%llu.%lld.%lld";
+  int base_len = snprintf(gtrid_base_str, ObXATransID::MAX_GTRID_LENGTH, gtrid_base_format,
+                          tenant_id, txid_value, timestamp);
+  if (ObXATransID::MAX_GTRID_LENGTH <= base_len || 0 > base_len) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(txid_str_length));
+    TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(base_len));
   } else {
-    char gtrid_str[ObXATransID::MAX_GTRID_LENGTH];
-    memset(gtrid_str, 0, ObXATransID::MAX_GTRID_LENGTH);
-    strncpy(gtrid_str, DBLINK_STR, DBLINK_STR_LENGTH);
-    strncpy(gtrid_str + DBLINK_STR_LENGTH, txid_str, txid_str_length);
     ObString gtrid_string;
     if (GCONF.self_addr_.using_ipv4()) {
       char ip_port[MAX_IP_PORT_LENGTH];
@@ -57,17 +59,20 @@ int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
       memset(ip_port, 0, MAX_IP_PORT_LENGTH);
       if (OB_FAIL(GCONF.self_addr_.addr_to_buffer(ip_port, MAX_IP_PORT_LENGTH, ip_str_length))) {
         TRANS_LOG(WARN, "convert server to string failed", K(ret), K(tx_id));
-      } else if (ObXATransID::MAX_GTRID_LENGTH < 1 + ip_str_length + txid_str_length + DBLINK_STR_LENGTH) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(tx_id), K(txid_str_length), K(ip_port), K(ip_str_length));
       } else {
-        const char *comma = ",";
-        strncpy(gtrid_str + DBLINK_STR_LENGTH + txid_str_length, comma, 1);
-        strncpy(gtrid_str + DBLINK_STR_LENGTH + txid_str_length + 1, ip_port, ip_str_length);
-        gtrid_string = ObString(DBLINK_STR_LENGTH + txid_str_length + 1 + ip_str_length, gtrid_str);
+        const char *gtrid_full_format = "%s,%s";
+        char gtrid_full_str[ObXATransID::MAX_GTRID_LENGTH] = {0};
+        int full_len = snprintf(gtrid_full_str, ObXATransID::MAX_GTRID_LENGTH, gtrid_full_format,
+                                gtrid_base_str, ip_port);
+        if (ObXATransID::MAX_GTRID_LENGTH <= full_len || 0 > full_len) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(full_len));
+        } else {
+          gtrid_string = ObString(full_len, gtrid_full_str);
+        }
       }
     } else {
-      gtrid_string = ObString(DBLINK_STR_LENGTH + txid_str_length, gtrid_str);
+      gtrid_string = ObString(base_len, gtrid_base_str);
     }
     if (OB_SUCC(ret)) {
       ret = new_xid.set(gtrid_string, BQUAL_STRING, DBLINK_FORMAT_ID);
@@ -130,10 +135,10 @@ int ObXAService::xa_start_for_tm_promotion(const int64_t flags,
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start for dblink promotion failed", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_failure_dblink_promotion();
+    // xa_statistics_.inc_failure_dblink_promotion();
   } else {
     TRANS_LOG(INFO, "xa start for dblink promtion", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_success_dblink_promotion();
+    // xa_statistics_.inc_success_dblink_promotion();
   }
 
   return ret;
@@ -239,7 +244,8 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
                                  const uint32_t session_id,
                                  const ObTxParam &tx_param,
                                  ObTxDesc *&tx_desc,
-                                 ObXATransID &xid)
+                                 ObXATransID &xid,
+                                 const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
 
@@ -253,7 +259,7 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
     TRANS_LOG(WARN, "invalid flags for xa start", K(ret), K(xid), K(flags));
   } else {
     if (ObXAFlag::is_tmnoflags(flags, ObXAReqType::XA_START)) {
-      if (OB_FAIL(xa_start_for_tm_(flags, timeout_seconds, session_id, tx_param, tx_desc, xid))) {
+      if (OB_FAIL(xa_start_for_tm_(flags, timeout_seconds, session_id, tx_param, tx_desc, xid, data_version))) {
         TRANS_LOG(WARN, "xa start promotion failed", K(ret), K(flags), K(xid));
       }
     } else {
@@ -264,10 +270,10 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start for dblink failed", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_failure_dblink();
+    // xa_statistics_.inc_failure_dblink();
   } else {
     TRANS_LOG(INFO, "xa start for dblink", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_success_dblink();
+    // xa_statistics_.inc_success_dblink();
   }
 
   return ret;
@@ -278,7 +284,8 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
                                   const uint32_t session_id,
                                   const ObTxParam &tx_param,
                                   ObTxDesc *&tx_desc,
-                                  ObXATransID &xid)
+                                  ObXATransID &xid,
+                                  const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -301,7 +308,7 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
     }
     // the first xa start for xa trans with this xid
     // therefore tx_desc should be allocated
-    if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id))) {
+    if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id, data_version))) {
       TRANS_LOG(WARN, "fail acquire trans", K(ret), K(tx_param));
     } else if (OB_FAIL(MTL(ObTransService *)->start_tx(*tx_desc, tx_param))) {
       TRANS_LOG(WARN, "fail start trans", K(ret), KPC(tx_desc));
@@ -448,7 +455,7 @@ int ObXAService::xa_start_for_dblink_client(const DblinkDriverProto dblink_type,
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected xa context", K(ret), K(xid), K(tx_id));
-    } else if (OB_FAIL(xa_ctx->get_dblink_client(dblink_type, dblink_conn, client))) {
+    } else if (OB_FAIL(xa_ctx->get_dblink_client(dblink_type, dblink_conn, &dblink_statistics_, client))) {
       TRANS_LOG(WARN, "fail to preapre xa start for dblink client", K(ret), K(xid), K(tx_id));
     } else if (NULL == client) {
       ret = OB_ERR_UNEXPECTED;

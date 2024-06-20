@@ -28,6 +28,7 @@
 #include "storage/tx/ob_tx_log.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "storage/memtable/ob_redo_log_generator.h"
+#include "storage/tx/ob_tx_data_op.h"
 
 namespace oceanbase
 {
@@ -69,18 +70,20 @@ protected:
   palf::LSN lsn_;
   int64_t submit_ts_;
 };
-
+typedef common::ObSEArray<memtable::ObCallbackScope, 1> ObCallbackScopeArray;
 class ObTxLogCb : public ObTxBaseLogCb,
                   public common::ObDLinkBase<ObTxLogCb>
 {
 public:
-  ObTxLogCb() { reset(); }
+  ObTxLogCb() : extra_cb_(nullptr), need_free_extra_cb_(false), tx_op_array_(nullptr),
+  undo_node_(nullptr) { reset(); }
   ~ObTxLogCb() { destroy(); }
   int init(const share::ObLSID &key,
            const ObTransID &trans_id,
            ObTransCtx *ctx,
            const bool is_dynamic);
   void reset();
+  void reset_tx_op_array();
   void reuse();
   void destroy() { reset(); }
   ObTxLogType get_last_log_type() const;
@@ -93,11 +96,20 @@ public:
       tx_data_guard_.init(tx_data);
     }
   }
+  void reset_undo_node();
+  storage::ObUndoStatusNode *&get_undo_node() { return undo_node_; }
+  void set_undo_action(const ObUndoAction &undo_action) {
+    undo_action_ = undo_action;
+  }
+  ObUndoAction &get_undo_action() { return undo_action_; }
+  ObTxOpArray *&get_tx_op_array() { return tx_op_array_; }
   ObTxData* get_tx_data() { return tx_data_guard_.tx_data(); }
-  void set_callbacks(const memtable::ObCallbackScope &callbacks) { callbacks_ = callbacks; }
-  memtable::ObCallbackScope& get_callbacks() { return callbacks_; }
-  void set_callbacked() { is_callbacked_ = true; }
-  bool is_callbacked() const { return is_callbacked_; }
+  ObTxDataGuard &get_tx_data_guard() { return tx_data_guard_; }
+  int set_callbacks(const ObCallbackScopeArray &callbacks) { return callbacks_.assign(callbacks); }
+  ObCallbackScopeArray& get_callbacks() { return callbacks_; }
+  int reserve_callbacks(int cnt) { return callbacks_.reserve(cnt); }
+  void set_callbacked() { ATOMIC_STORE(&is_callbacked_, true); }
+  bool is_callbacked() const { return ATOMIC_LOAD(&is_callbacked_); }
   bool is_dynamic() const { return is_dynamic_; }
   ObTxCbArgArray &get_cb_arg_array() { return cb_arg_array_; }
   const ObTxCbArgArray &get_cb_arg_array() const { return cb_arg_array_; }
@@ -108,6 +120,18 @@ public:
   int64_t get_execute_hint() { return trans_id_.hash(); }
   ObTxMDSRange &get_mds_range() { return mds_range_; }
 
+  void set_ddl_log_type(const ObTxDirectLoadIncLog::DirectLoadIncLogType ddl_log_type)
+  {
+    ddl_log_type_ = ddl_log_type;
+  }
+  ObTxDirectLoadIncLog::DirectLoadIncLogType get_ddl_log_type() { return ddl_log_type_; }
+  void set_ddl_batch_key(const storage::ObDDLIncLogBasic &batch_key) { dli_batch_key_ = batch_key; }
+  const storage::ObDDLIncLogBasic &get_batch_key() { return dli_batch_key_; }
+
+  void set_extra_cb(logservice::AppendCb *extra_cb) { extra_cb_ = extra_cb; }
+  logservice::AppendCb *get_extra_cb() { return extra_cb_; }
+  void set_need_free_extra_cb() { need_free_extra_cb_ = true; }
+  bool need_free_extra_cb() { return need_free_extra_cb_; }
   void set_first_part_scn(const share::SCN &first_part_scn) { first_part_scn_ = first_part_scn; }
   share::SCN get_first_part_scn() const { return first_part_scn_; }
 
@@ -126,7 +150,10 @@ public:
                        K(is_dynamic_),
                        K(mds_range_),
                        K(cb_arg_array_),
-                       K(first_part_scn_));
+                       K(first_part_scn_),
+                       KP(extra_cb_),
+                       K(need_free_extra_cb_),
+                       K(callbacks_.count()));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTxLogCb);
 private:
@@ -135,12 +162,19 @@ private:
   ObTransID trans_id_;
   ObTransCtx *ctx_;
   ObTxDataGuard tx_data_guard_;
-  memtable::ObCallbackScope callbacks_;
+  ObCallbackScopeArray callbacks_;
   bool is_callbacked_;
   bool is_dynamic_;
   ObTxMDSRange mds_range_;
   ObTxCbArgArray cb_arg_array_;
   share::SCN first_part_scn_;
+  ObTxDirectLoadIncLog::DirectLoadIncLogType ddl_log_type_;
+  storage::ObDDLIncLogBasic dli_batch_key_;
+  logservice::AppendCb * extra_cb_;
+  bool need_free_extra_cb_;
+  ObUndoAction undo_action_;
+  storage::ObTxOpArray *tx_op_array_;
+  storage::ObUndoStatusNode *undo_node_;
   //bool is_callbacking_;
 };
 

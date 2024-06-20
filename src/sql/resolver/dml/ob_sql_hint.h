@@ -94,7 +94,7 @@ struct ObQueryHint {
                               const ObIArray<uint32_t> &src_hash_val,
                               int64_t *sub_num = NULL);
 
-  int generate_orig_stmt_qb_name(ObIAllocator &allocator);
+  int generate_orig_stmt_qb_name(ObIAllocator &allocator, int64_t inited_stmt_count);
   int generate_qb_name_for_stmt(ObIAllocator &allocator,
                                 const ObDMLStmt &stmt,
                                 const ObString &src_qb_name,
@@ -112,7 +112,17 @@ struct ObQueryHint {
   int append_id_to_stmt_name(char *buf, int64_t buf_len, int64_t &pos, int64_t &id_start);
   int get_qb_name(int64_t stmt_id, ObString &qb_name) const;
   int get_qb_name_counts(const int64_t stmt_count, ObIArray<int64_t> &qb_name_counts) const;
-  int recover_qb_names(const ObIArray<int64_t> &qb_name_counts, int64_t &stmt_count);
+  int get_qb_name_info(const int64_t stmt_count,
+                       ObIArray<int64_t> &qb_name_counts,
+                       int64_t &sel_start_id,
+                       int64_t &set_start_id,
+                       int64_t &other_start_id) const;
+  int recover_qb_name_counts(const ObIArray<int64_t> &qb_name_counts, int64_t &stmt_count);
+  int recover_qb_name_info(const ObIArray<int64_t> &qb_name_counts,
+                           int64_t &stmt_count,
+                           int64_t sel_start_id,
+                           int64_t set_start_id,
+                           int64_t other_start_id);
   int fill_tables(const TableItem &table, ObIArray<ObTableInHint> &hint_tables) const;
   bool is_valid_outline_transform(int64_t trans_list_loc, const ObHint *cur_hint) const;
   const ObHint *get_outline_trans_hint(int64_t pos) const
@@ -172,6 +182,9 @@ struct ObQueryHint {
   ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> used_trans_hints_;
   ObSEArray<QbNames, 8, common::ModulePageAllocator, true> stmt_id_map_;	//	stmt id -> qb name list, position is stmt id
   hash::ObHashMap<ObString, int64_t> qb_name_map_;	// qb name -> stmt id
+  int64_t sel_start_id_;
+  int64_t set_start_id_;
+  int64_t other_start_id_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryHint);
@@ -218,8 +231,6 @@ struct ObStmtHint
   int merge_stmt_hint(const ObStmtHint &other, ObHintMergePolicy policy = HINT_DOMINATED_EQUAL);
   int merge_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
   int merge_normal_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
-  int reset_explicit_trans_hint(ObItemType hint_type);
-  int get_max_table_parallel(const ObDMLStmt &stmt, int64_t &max_table_parallel) const;
 
 
   bool has_enable_hint(ObItemType hint_type) const;
@@ -305,6 +316,7 @@ struct LogTableHint
                            const ObQueryHint &query_hint,
                            const ObJoinFilterHint &hint);
   int allowed_skip_scan(const uint64_t index_id, bool &allowed) const;
+  int get_index_prefix(const uint64_t index_id, int64_t &index_prefix) const;
 
   TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
                K_(parallel_hint), K_(use_das_hint),
@@ -423,6 +435,7 @@ struct ObLogPlanHint
                                     const bool basic_table_only,
                                     LogTableHint *&log_table_hint);
   int check_status() const;
+  bool is_spm_evolution() const;
   const LogTableHint* get_log_table_hint(uint64_t table_id) const;
   const LogTableHint* get_index_hint(uint64_t table_id) const;
   int64_t get_parallel(uint64_t table_id) const;
@@ -458,6 +471,14 @@ struct ObLogPlanHint
                            bool &force_use_merge,
                            bool &force_part_sort,
                            bool &force_normal_sort) const;
+  int get_valid_pq_subquery_hint(const ObIArray<ObString> &sub_qb_names,
+                                    const ObPQSubqueryHint *&explicit_hint,
+                                    const ObPQSubqueryHint *&implicit_hint) const;
+  int get_index_prefix(const uint64_t table_id,
+                                          const uint64_t index_id,
+                                          int64_t &index_prefix) const;
+  DistAlgo get_valid_pq_subquery_dist_algo(const ObIArray<ObString> &sub_qb_names,
+                                           const bool implicit_allowed) const;
 
   bool use_late_material() const { return has_enable_hint(T_USE_LATE_MATERIALIZATION); }
   bool no_use_late_material() const { return has_disable_hint(T_USE_LATE_MATERIALIZATION); }
@@ -476,7 +497,7 @@ struct ObLogPlanHint
 
   TO_STRING_KV(K_(is_outline_data), K_(join_order),
                K_(table_hints), K_(join_hints),
-               K_(normal_hints));
+               K_(normal_hints), K_(enable_index_prefix));
 
   bool is_outline_data_;
 #ifdef OB_BUILD_SPM
@@ -486,6 +507,7 @@ struct ObLogPlanHint
   common::ObSEArray<LogTableHint, 4, common::ModulePageAllocator, true> table_hints_;
   common::ObSEArray<LogJoinHint, 8, common::ModulePageAllocator, true> join_hints_;
   common::ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> normal_hints_;
+  bool enable_index_prefix_;
 };
 
 }

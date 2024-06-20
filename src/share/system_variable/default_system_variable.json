@@ -1,0 +1,77 @@
+[
+  {
+    "scenario": "express_oltp",
+    "comment": "for workloads like trade, payment core system, internet high throughput application, etc. no restrictions like foreign key, no stored procedure, no long transaction, no large transaction, no complex join, no complex subquery",
+    "variables": {
+      "tenant": [
+      ]
+    }
+  },
+  {
+    "scenario": "complex_oltp",
+    "comment": "for workloads like bank, insurance system. they often have complex join, complex correlated subquery, batch jobs written in PL, have both long and large transactions. Sometimes use parallel execution for short running queries",
+    "variables": {
+      "tenant": [
+      ]
+    }
+  },
+  {
+    "scenario": "olap",
+    "comment": "for real-time data warehouse analytics scenarios.",
+    "variables": {
+      "tenant": [
+        {
+          "name": "ob_query_timeout",
+          "value": 604800000000,
+          "comment":"query timeout for AP is 7 days"
+        },
+        {
+          "name": "ob_trx_timeout",
+          "value": 604800000000,
+          "comment":"transaction timeout for AP is 7 days"
+        },
+        {
+          "name": "parallel_min_scan_time_threshold",
+          "value": 10,
+          "comment":"10ms. enable best parallel performance for query which require 100ms+ only"
+        },
+        {
+          "name": "ob_sql_work_area_percentage",
+          "value": 30,
+          "comment":"larger sql work area can save spill cost"
+        },
+        {
+          "name": "parallel_degree_policy",
+          "value": "AUTO",
+          "comment": "auto dop is enabled by default for OLAP"
+        },
+        {
+          "name": "collation_server",
+          "value": "utf8mb4_bin",
+          "comment": "use binary collation can achieve 20% performance gain compared with other collations"
+        },
+        {
+          "name": "collation_connection",
+          "value": "utf8mb4_bin",
+          "comment": "use binary collation can achieve 20% performance gain compared with other collations"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "kv",
+    "comment": "for key-value workloads and hbase-like wide-column workloads, which commonly experience very high throughput and are sensitive to latency",
+    "variables": {
+      "tenant": [
+      ]
+    }
+  },
+  {
+    "scenario": "htap",
+    "comment": "for mixed OLAP and OLTP workload. Typically utilized for obtaining instant insights from active operational data, fraud detection, and personalized recommendations",
+    "variables": {
+      "tenant": [
+      ]
+    }
+  }
+]

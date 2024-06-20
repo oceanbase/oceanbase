@@ -43,6 +43,7 @@ public:
   uint64_t tenant_id_;
   char *buf_;
   common::ObIOFlag io_desc_;
+  bool disable_page_cache_;
 };
 
 class ObTmpFileIOHandle final
@@ -97,6 +98,7 @@ public:
   ~ObTmpFileIOHandle();
   OB_INLINE char *get_buffer() { return buf_; }
   OB_INLINE int64_t get_data_size() { return size_; }
+  OB_INLINE bool is_disable_page_cache() const { return disable_page_cache_; }
   int prepare_read(
       const int64_t read_size,
       const int64_t read_offset,
@@ -104,7 +106,8 @@ public:
       char *read_buf,
       int64_t fd,
       int64_t dir_id,
-      uint64_t tenant_id);
+      uint64_t tenant_id,
+      const bool disable_page_cache);
   int prepare_write(
       char *write_buf,
       const int64_t write_size,
@@ -160,6 +163,7 @@ private:
   bool is_read_;
   bool has_wait_;
   bool is_finished_;
+  bool disable_page_cache_;
   int ret_code_;
   int64_t expect_read_size_;
   int64_t last_read_offset_; // only for more than 8MB read.
@@ -180,6 +184,8 @@ public:
   int write(const ObTmpFileIOInfo &io_info, int64_t &size, char *&buf);
   void reset();
   OB_INLINE bool is_closed() const { return ATOMIC_LOAD(&is_closed_); }
+  OB_INLINE bool is_truncated() const { return ATOMIC_LOAD(&is_truncated_); }
+  void set_truncated() { ATOMIC_STORE(&is_truncated_, true); }
   bool is_valid();
   bool close(bool force = false);
   bool close(uint8_t &free_page_start_id, uint8_t &free_page_nums, bool force = false);
@@ -216,6 +222,7 @@ private:
   ObTmpFile *owner_;
   int64_t block_id_;
   common::SpinRWLock lock_;
+  bool is_truncated_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileExtent);
 };
 
@@ -265,6 +272,9 @@ public:
   int aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &handle);
   int write(const ObTmpFileIOInfo &io_info);
   int seek(const int64_t offset, const int whence);
+
+  // the data before the offset is released
+  int truncate(const int64_t offset);
   int clear();
   int64_t get_dir_id() const;
   uint64_t get_tenant_id() const;
@@ -283,6 +293,7 @@ public:
   TO_STRING_KV(K_(file_meta), K_(is_big), K_(tenant_id), K_(is_inited));
 
 private:
+  static int fill_zero(char *buf, const int64_t size);
   int write_file_extent(const ObTmpFileIOInfo &io_info, ObTmpFileExtent *file_extent,
       int64_t &size, char *&buf);
   int aio_read_without_lock(
@@ -313,6 +324,12 @@ private:
   common::SpinRWLock lock_;
   common::ObIAllocator *allocator_;
   ObTmpFileMeta file_meta_;
+
+  // content before read_guard_ is truncated, which means the space is released. read before read_guard_ will only return 0;
+  int64_t read_guard_;
+
+  // to optimize truncated speed, record the last_truncated_extent_id, so that we do not need to binary search the extent id every time we truncated.
+  int64_t next_truncated_extent_id_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTmpFile);
 };
@@ -357,6 +374,7 @@ public:
   // NOTE:
   //   remove file and all of block in this file, after not used file, should be called in case
   //   of block leak.
+  int truncate(const int64_t fd, const int64_t offset);
   int remove(const int64_t fd);
   int remove_tenant_file(const uint64_t tenant_id);
 

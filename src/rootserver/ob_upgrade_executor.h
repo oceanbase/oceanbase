@@ -52,6 +52,7 @@ public:
   int init(share::schema::ObMultiVersionSchemaService &schema_service,
            rootserver::ObRootInspection &root_inspection,
            common::ObMySQLProxy &sql_proxy,
+           common::ObOracleSqlProxy &oracle_sql_proxy,
            obrpc::ObSrvRpcProxy &rpc_proxy,
            obrpc::ObCommonRpcProxy &common_proxy);
 
@@ -118,6 +119,7 @@ private:
   bool execute_;
   common::SpinRWLock rwlock_;
   common::ObMySQLProxy *sql_proxy_;
+  common::ObOracleSqlProxy *oralce_sql_proxy_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   obrpc::ObCommonRpcProxy *common_rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

@@ -25,6 +25,9 @@
 #include "storage/tx/ob_dup_table_dump.h"
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_garbage_collector.h"
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+#include "logservice/ob_log_compression.h"
+#endif
 #include "logservice/data_dictionary/ob_data_dict_iterator.h"     // ObDataDictIterator
 #include "share/scn.h"
 
@@ -45,9 +48,11 @@ ObAdminParserLogEntry::ObAdminParserLogEntry(const LogEntry &entry,
                                              const char *block_name,
                                              const LSN lsn,
                                              const ObAdminMutatorStringArg &str_arg)
-    : buf_(entry.get_data_buf()), buf_len_(entry.get_data_len()), pos_(0),
-      scn_val_(entry.get_scn().get_val_for_logservice()), lsn_(lsn), str_arg_()
+    : scn_val_(entry.get_scn().get_val_for_logservice()), entry_(entry), lsn_(lsn), str_arg_()
 {
+  buf_ = entry.get_data_buf();
+  buf_len_ = entry.get_data_len();
+  pos_ = 0;
   memset(block_name_, '\0', OB_MAX_FILE_NAME_LENGTH);
   memcpy(block_name_, block_name, OB_MAX_FILE_NAME_LENGTH);
   str_arg_ = str_arg;
@@ -62,6 +67,8 @@ int ObAdminParserLogEntry::parse()
   ObLogBaseHeader header;
   if (OB_FAIL(get_entry_header_(header))) {
     LOG_WARN("get_entry_header failed", K(ret));
+  } else if (OB_FAIL(prepare_log_buf_(header))) {
+    LOG_WARN("failed to prepare_log_buf", K(ret), K(header));
   } else if (OB_FAIL(parse_different_entry_type_(header))){
     LOG_WARN("parse_different_entry_type_ failed", K(ret), K(header));
   } else {
@@ -78,20 +85,25 @@ int ObAdminParserLogEntry::get_entry_header_(ObLogBaseHeader &header)
     LOG_WARN("deserialize ObLogBaseHeader failed", K(ret), K(pos_), K(buf_len_));
   } else {
     str_arg_.log_stat_->log_base_header_size_ +=  (pos_ - tmp_pos);
-    LOG_TRACE("get_entry_header success", K(header), K(pos_));
+    if (str_arg_.flag_ == LogFormatFlag::NO_FORMAT
+        && str_arg_.flag_ != LogFormatFlag::STAT_FORMAT ) {
+      fprintf(stdout, ", BASE_HEADER:%s", to_cstring(header));
+    }
+    LOG_INFO("get_entry_header success", K(header), K(pos_), K(entry_));
   }
   return ret;
 }
 
-int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block)
+int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block, const logservice::ObLogBaseHeader &base_header)
 {
   int ret = OB_SUCCESS;
 
   str_arg_.log_stat_->total_tx_log_count_++;
   TxID tx_id;
-  ObTxLogBlockHeader tx_block_header;
-  if (OB_FAIL(tx_log_block.init_with_header(buf_, buf_len_, tx_id, tx_block_header))) {
+  ObTxLogBlockHeader &tx_block_header = tx_log_block.get_header();
+  if (OB_FAIL(tx_log_block.init_for_replay(buf_, buf_len_))) {
     LOG_WARN("ObTxLogBlock init failed", K(ret));
+  } else if (FALSE_IT(tx_id = tx_block_header.get_tx_id().get_id())) {
   } else if (str_arg_.filter_.is_tx_id_valid() && tx_id != str_arg_.filter_.get_tx_id()) {
     //just skip this
     LOG_TRACE("skip with tx_id", K(str_arg_), K(tx_id), K(block_name_), K(lsn_));
@@ -120,6 +132,20 @@ int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block)
         str_arg_.writer_ptr_->dump_key(block_name_);
         str_arg_.writer_ptr_->dump_key("LSN");
         str_arg_.writer_ptr_->dump_int64((int64_t)(lsn_.val_));
+        str_arg_.writer_ptr_->dump_key("ReplayHint");
+        str_arg_.writer_ptr_->dump_int64(base_header.get_replay_hint());
+        str_arg_.writer_ptr_->dump_key("ReplayBarrier");
+        bool pre_b = base_header.need_pre_replay_barrier();
+        bool post_b = base_header.need_post_replay_barrier();
+        if (pre_b && post_b) {
+          str_arg_.writer_ptr_->dump_string("STRICT");
+        } else if (pre_b) {
+          str_arg_.writer_ptr_->dump_string("PRE");
+        } else if (post_b) {
+          str_arg_.writer_ptr_->dump_string("POST");
+        } else {
+          str_arg_.writer_ptr_->dump_string("NONE");
+        }
       }
       str_arg_.writer_ptr_->dump_key("TxID");
       str_arg_.writer_ptr_->dump_int64(tx_id);
@@ -610,13 +636,13 @@ int ObAdminParserLogEntry::parse_different_entry_type_(const logservice::ObLogBa
     if (oceanbase::logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE == header.get_log_type()) {
       //TX_FORMAT only cares trans_log
       ObTxLogBlock log_block;
-      ret = parse_trans_service_log_(log_block);
+      ret = parse_trans_service_log_(log_block, header);
     }
   } else {
     switch (header.get_log_type()) {
       case oceanbase::logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE: {
         ObTxLogBlock log_block;
-        ret = parse_trans_service_log_(log_block);
+        ret = parse_trans_service_log_(log_block, header);
         break;
       }
       case oceanbase::logservice::ObLogBaseType::STORAGE_SCHEMA_LOG_BASE_TYPE: {
@@ -731,5 +757,31 @@ int ObAdminParserLogEntry::parse_trans_redo_log_(ObTxLogBlock &tx_log_block,
   return ret;
 }
 
+int ObAdminParserLogEntry::prepare_log_buf_(ObLogBaseHeader &header)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  if (header.is_compressed()) {
+    LogCompressedPayloadHeader com_header;
+    int64_t decompressed_len = 0;
+    const int64_t header_len = pos_;
+    int64_t local_pos = 0;
+    if (OB_FAIL(logservice::decompress(buf_ + pos_, buf_len_ - pos_, str_arg_.decompress_buf_ + header_len,
+                                       str_arg_.decompress_buf_len_- header_len, decompressed_len))) {
+      LOG_ERROR("failed to decompress", K(header), K(entry_));
+    } else if (OB_FAIL(header.serialize(str_arg_.decompress_buf_, header_len, local_pos))){
+      LOG_ERROR("failed to serialize", K(header));
+    } else if (OB_UNLIKELY(header_len != local_pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("succ to decompress", K(header), K(local_pos), K(header_len));
+    } else {
+      LOG_INFO("succ to decompress", K(header), K(entry_));
+      buf_ = str_arg_.decompress_buf_;
+      buf_len_ = decompressed_len + local_pos;
+    }
+  }
+#endif
+  return ret;
+}
 }//end of namespace tools
 }//end of namespace oceanbase

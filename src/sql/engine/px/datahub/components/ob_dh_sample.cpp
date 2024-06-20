@@ -103,6 +103,11 @@ OB_DEF_DESERIALIZE(ObDynamicSamplePieceMsg)
           } else if (OB_FAIL(row_stores_.push_back(tmp_store))) {
             LOG_WARN("push back datum store failed", K(ret), K(i));
           }
+          if (OB_FAIL(ret) && nullptr != tmp_store) {
+            tmp_store->~ObChunkDatumStore();
+            // The corresponding memory does not need to be manually released;
+            // it will be automatically freed upon the destruction of arena_.
+          }
         }
       }
     }

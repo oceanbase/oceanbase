@@ -559,6 +559,7 @@ struct ObPlanStat
   uint64_t  db_id_;
   common::ObString constructed_sql_;
   common::ObString sql_id_;
+  common::ObString format_sql_id_;
   ObEvolutionStat evolution_stat_; //baseline相关统计信息
   //******** for spm end ******
   // ***** for acs
@@ -660,6 +661,7 @@ struct ObPlanStat
       db_id_(common::OB_INVALID_ID),
       constructed_sql_(),
       sql_id_(),
+      format_sql_id_(),
       is_bind_sensitive_(false),
       is_bind_aware_(false),
       plan_sel_info_str_len_(0),
@@ -859,6 +861,11 @@ struct ObPlanStat
     }
   }
 
+  inline bool is_updated() const
+  {
+    return last_active_time_ != 0;
+  }
+
   /* XXX: support printing maxium 30 class members.
    * if you want to print more members, remove some first
    */
@@ -946,9 +953,19 @@ struct ObPhyLocationGetter
 {
 public:
   // used for getting plan
+  // In this interface, we first process the table locations that were marked select_leader, the tablet
+  // locations of them will be added to das_ctx directly, without the need to construct candi_table_locs.
+  // For the remaining table locations that are not marked select_leader, continue to use the previous
+  // logic where a candi_table_loc is generated for each table location. These candi_table_locs will be
+  // added to das_ctx by @build_candi_table_locs().
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                const ObPlanCacheCtx &pc_ctx,
-                               ObIArray<ObCandiTableLoc> &phy_location_infos,
+                               ObIArray<ObCandiTableLoc> &phy_location_infos);
+
+  // used for matching plan
+  static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
+                               const ObPlanCacheCtx &pc_ctx,
+                               ObIArray<ObCandiTableLoc> &candi_table_locs,
                                bool &need_check_on_same_server);
 
   // used for adding plan
@@ -959,6 +976,9 @@ public:
   static int build_table_locs(ObDASCtx &das_ctx,
                               const common::ObIArray<ObTableLocation> &table_locations,
                               const common::ObIArray<ObCandiTableLoc> &candi_table_locs);
+  static int build_candi_table_locs(ObDASCtx &das_ctx,
+                                    const common::ObIArray<ObTableLocation> &table_locations,
+                                    const common::ObIArray<ObCandiTableLoc> &candi_table_locs);
   static int build_related_tablet_info(const ObTableLocation &table_location,
                                        ObExecContext &exec_ctx,
                                        DASRelatedTabletMap *&related_map);
@@ -1004,6 +1024,7 @@ public:
     px_join_skew_minfreq_(30),
     min_cluster_version_(0),
     is_enable_px_fast_reclaim_(false),
+    enable_spf_batch_rescan_(false),
     enable_var_assign_use_das_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
@@ -1046,6 +1067,7 @@ public:
   int8_t px_join_skew_minfreq_;
   uint64_t min_cluster_version_;
   bool is_enable_px_fast_reclaim_;
+  bool enable_spf_batch_rescan_;
   bool enable_var_assign_use_das_;
 
 private:

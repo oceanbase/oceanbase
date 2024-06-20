@@ -1056,9 +1056,9 @@ int ObShardingInfo::is_sharding_equal(const ObShardingInfo *left_sharding,
     is_equal = false;
   } else if (left_sharding->get_location_type() != right_sharding->get_location_type()) {
     is_equal = false;
-  } else if (left_sharding->is_match_all() || left_sharding->is_local()) {
-    is_equal = true;
-  } else if (left_sharding->is_remote()) {
+  } else if (left_sharding->get_can_reselect_replica() != right_sharding->get_can_reselect_replica()) {
+    is_equal = false;
+  } else if (left_sharding->is_remote() || left_sharding->get_can_reselect_replica()) {
     ObSEArray<common::ObAddr, 2> left_servers;
     ObSEArray<common::ObAddr, 2> right_servers;
     if (OB_FAIL(get_serverlist_from_sharding(*left_sharding, left_servers))) {
@@ -1070,6 +1070,8 @@ int ObShardingInfo::is_sharding_equal(const ObShardingInfo *left_sharding,
                                                       is_equal))) {
       LOG_WARN("failed to check equal server list", K(ret));
     } else { /*do nothing*/ }
+  } else if (left_sharding->is_match_all() || left_sharding->is_local()) {
+    is_equal = true;
   } else if (!ObOptimizerUtil::same_exprs(left_sharding->get_partition_keys(),
                                           right_sharding->get_partition_keys(),
                                           equal_sets) ||

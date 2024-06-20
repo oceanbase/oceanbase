@@ -22,9 +22,16 @@
 } while(0);
 
 namespace oceanbase {
-namespace common
+namespace common {
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
 {
-void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
+  data_version = DATA_CURRENT_VERSION;
+  return OB_SUCCESS;
+}
+}
+namespace share
+{
+void* ObMemstoreAllocator::alloc(AllocHandle& handle, int64_t size, const int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
   int64_t align_size = upper_align(size, sizeof(int64_t));
@@ -71,7 +78,25 @@ int ObTxDescGuard::release() {
   return ret;
 }
 
-
+ObString ObTxNode::get_identifer_str() const
+{
+  struct ID {
+    ObAddr addr;
+    int64_t ls_id;
+    DECLARE_TO_STRING {
+      int64_t pos = 0;
+      int32_t pos0 = 0;
+      addr.addr_to_buffer(buf, buf_len, pos0);
+      pos += pos0;
+      BUF_PRINTF("_%ld", ls_id);
+      return pos;
+    }
+  } identifer = {
+    .addr = addr_,
+    .ls_id = ls_id_.id()
+  };
+  return ObString(to_cstring(&identifer));
+}
 ObTxNode::ObTxNode(const int64_t ls_id,
                    const ObAddr &addr,
                    MsgBus &msg_bus) :
@@ -79,10 +104,10 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   addr_(addr),
   ls_id_(ls_id),
   tenant_id_(1001),
-  tenant_(tenant_id_),
+  tenant_(tenant_id_, 10, *GCTX.cgroup_ctrl_),
   fake_part_trans_ctx_pool_(1001, false, false, 4),
   memtable_(NULL),
-  msg_consumer_(ObString("TxNode"),
+  msg_consumer_(get_identifer_str(),
                 &msg_queue_,
                 std::bind(&ObTxNode::handle_msg_,
                           this, std::placeholders::_1)),
@@ -95,17 +120,21 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   addr.to_string(name_buf_, sizeof(name_buf_));
   msg_consumer_.set_name(name_);
   role_ = Leader;
+  tenant_.enable_tenant_ctx_check_ = false;
   tenant_.set(&fake_tenant_freezer_);
   tenant_.set(&fake_part_trans_ctx_pool_);
+  fake_shared_mem_alloc_mgr_.init();
+  tenant_.set(&fake_shared_mem_alloc_mgr_);
+  tenant_.start();
   ObTenantEnv::set_tenant(&tenant_);
   ObTableHandleV2 lock_memtable_handle;
   lock_memtable_handle.set_table(&lock_memtable_, &t3m_, ObITable::LOCK_MEMTABLE);
-  fake_lock_table_.is_inited_ = true;
-  fake_lock_table_.parent_ = &fake_ls_;
   lock_memtable_.key_.table_type_ = ObITable::LOCK_MEMTABLE;
   fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.t3m_ = &t3m_;
-  fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.table_type_ = ObITable::TableType::LOCK_MEMTABLE;
   fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.add_memtable_(lock_memtable_handle);
+  fake_lock_table_.is_inited_ = true;
+  fake_lock_table_.parent_ = &fake_ls_;
+  fake_lock_table_.lock_mt_mgr_ = &(fake_ls_.ls_tablet_svr_.lock_memtable_mgr_);
   fake_tenant_freezer_.is_inited_ = true;
   fake_tenant_freezer_.tenant_info_.is_loaded_ = true;
   fake_tenant_freezer_.tenant_info_.mem_memstore_limit_ = INT64_MAX;
@@ -123,6 +152,10 @@ ObTxNode::ObTxNode(const int64_t ls_id,
                &schema_service_,
                &server_tracer_));
   tenant_.set(&txs_);
+  OZ(fake_opt_stat_mgr_.init(tenant_id_));
+  tenant_.set(&fake_opt_stat_mgr_);
+  OZ(fake_lock_wait_mgr_.init());
+  tenant_.set(&fake_lock_wait_mgr_);
   OZ (create_memtable_(100000, memtable_));
   {
     ObColDesc col_desc;
@@ -152,6 +185,7 @@ int ObTxNode::start() {
     fake_tx_log_adapter_ = new ObFakeTxLogAdapter();
     OZ(fake_tx_log_adapter_->start());
   }
+  get_ts_mgr_().reset();
   OZ(msg_consumer_.start());
   OZ(txs_.start());
   OZ(create_ls_(ls_id_));
@@ -229,11 +263,31 @@ void ObTxNode::dump_msg_queue_()
   int ret = OB_SUCCESS;
   MsgPack *msg = NULL;
   int i = 0;
-  while(OB_NOT_NULL((msg = (MsgPack*)msg_queue_.pop()))) {
+  while(OB_SUCC(msg_queue_.pop((ObLink*&)msg))) {
     ++i;
     MsgInfo msg_info;
     OZ (get_msg_info(msg, msg_info));
     TRANS_LOG(INFO,"[dump_msg]", K(i), K(msg_info), K(ret), KPC(this));
+  }
+}
+
+void ObTxNode::wait_all_msg_consumed()
+{
+  while (msg_queue_.size() > 0 || !msg_consumer_.is_idle()) {
+    if (REACH_TIME_INTERVAL(200_ms)) {
+      TRANS_LOG(INFO, "wait msg_queue to be empty", K(msg_queue_.size()), KPC(this));
+    }
+    usleep(5_ms);
+  }
+}
+
+void ObTxNode::wait_tx_log_synced()
+{
+  while(fake_tx_log_adapter_->get_inflight_cnt() > 0) {
+    if (REACH_TIME_INTERVAL(200_ms)) {
+      TRANS_LOG(INFO, "wait tx log synced...", K(fake_tx_log_adapter_->get_inflight_cnt()), KPC(this));
+    }
+    usleep(5_ms);
   }
 }
 
@@ -243,6 +297,12 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
   ObTenantEnv::set_tenant(&tenant_);
   OZ(txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_));
   fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_ = nullptr;
+  bool is_tx_clean = false;
+  int retry_cnt = 0;
+  do {
+    usleep(2000);
+    txs_.block_tx(ls_id_, is_tx_clean);
+  } while(!is_tx_clean && ++retry_cnt < 1000);
   OX(txs_.stop());
   OZ(txs_.wait_());
   if (role_ == Leader && fake_tx_log_adapter_) {
@@ -336,7 +396,7 @@ int ObTxNode::recv_msg(const ObAddr &sender, ObString &m)
   TRANS_LOG(INFO, "recv_msg", K(sender), "msg_ptr", OB_P(m.ptr()), KPC(this));
   int ret = OB_SUCCESS;
   auto pkt = new MsgPack(sender, m);
-  msg_queue_.push(pkt);
+  OZ(msg_queue_.push(pkt));
   msg_consumer_.wakeup();
   return ret;
 }
@@ -346,7 +406,7 @@ int ObTxNode::sync_recv_msg(const ObAddr &sender, ObString &m, ObString &resp)
   TRANS_LOG(INFO, "sync_recv_msg", K(sender), "msg_ptr", OB_P(m.ptr()), KPC(this));
   int ret = OB_SUCCESS;
   auto pkt = new MsgPack(sender, m, true);
-  msg_queue_.push(pkt);
+  OZ(msg_queue_.push(pkt));
   msg_consumer_.wakeup();
   pkt->cond_.wait(pkt->cond_.get_key(), 500000);
   if (pkt->resp_ready_) {
@@ -492,7 +552,7 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
   OZ(txs_.get_read_store_ctx(snapshot, false, 5000ll * 1000, read_store_ctx));
   // HACK, refine: mock LS's each member in some way
   read_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
-  read_store_ctx.mvcc_acc_ctx_.abs_lock_timeout_ = ObTimeUtility::current_time() + 5000ll * 1000;
+  read_store_ctx.mvcc_acc_ctx_.abs_lock_timeout_ts_ = ObTimeUtility::current_time() + 5000ll * 1000;
   blocksstable::ObDatumRow row;
   {
     ObTableIterParam iter_param;
@@ -561,7 +621,7 @@ int ObTxNode::atomic_write(ObTxDesc &tx, const int64_t key, const int64_t value,
   }
   return ret;
 }
-int ObTxNode::write(ObTxDesc &tx, const int64_t key, const int64_t value)
+int ObTxNode::write(ObTxDesc &tx, const int64_t key, const int64_t value, const int16_t branch)
 {
   int ret = OB_SUCCESS;
   ObTxReadSnapshot snapshot;
@@ -569,13 +629,14 @@ int ObTxNode::write(ObTxDesc &tx, const int64_t key, const int64_t value)
                        tx.isolation_,
                        ts_after_ms(50),
                        snapshot));
-  OZ(write(tx, snapshot, key, value));
+  OZ(write(tx, snapshot, key, value, branch));
   return ret;
 }
 int ObTxNode::write(ObTxDesc &tx,
                     const ObTxReadSnapshot &snapshot,
                     const int64_t key,
-                    const int64_t value)
+                    const int64_t value,
+                    const int16_t branch)
 {
   TRANS_LOG(INFO, "write", K(key), K(value), K(snapshot), K(tx), KPC(this));
   int ret = OB_SUCCESS;
@@ -589,6 +650,7 @@ int ObTxNode::write(ObTxDesc &tx,
   write_store_ctx.ls_ = &mock_ls_;
   write_store_ctx.ls_id_ = ls_id_;
   write_store_ctx.table_iter_ = iter;
+  write_store_ctx.branch_ = branch;
   concurrent_control::ObWriteFlag write_flag;
   OZ(txs_.get_write_store_ctx(tx,
                               snapshot,
@@ -625,7 +687,7 @@ int ObTxNode::write(ObTxDesc &tx,
   param.read_info_ = &read_info;
 
   context.init(query_flag, write_store_ctx, allocator, trans_version_range);
-  OZ(memtable_->set(param, context, columns_, row, encrypt_meta));
+  OZ(memtable_->set(param, context, columns_, row, encrypt_meta, false));
   OZ(txs_.revert_store_ctx(write_store_ctx));
   delete iter;
   return ret;
@@ -663,7 +725,7 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
   read_info.init(allocator, 2, 1, false, columns_, nullptr/*storage_cols_index*/);
   ObStoreRow row;
   ObObj cols[2] = {ObObj(key), ObObj(value)};
-  row.flag_ = blocksstable::ObDmlFlag::DF_INSERT;
+  row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
   row.row_val_.cells_ = cols;
   row.row_val_.count_ = 2;
 
@@ -686,7 +748,7 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
 
   OZ(context.init(query_flag, write_store_ctx, allocator, trans_version_range));
 
-  OZ(memtable_->set(param, context, columns_, row, encrypt_meta));
+  OZ(memtable_->set(param, context, columns_, row, encrypt_meta, false));
 
   return ret;
 }
@@ -709,20 +771,28 @@ int ObTxNode::replay(const void *buffer,
                      const int64_t ts_ns)
 {
   ObTenantEnv::set_tenant(&tenant_);
-
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header;
   int64_t tmp_pos = 0;
   const char *log_buf = static_cast<const char *>(buffer);
-
   if (OB_FAIL(base_header.deserialize(log_buf, nbytes, tmp_pos))) {
     LOG_WARN("log base header deserialize error", K(ret));
-  } else if (OB_FAIL(ObFakeTxReplayExecutor::execute(&mock_ls_, mock_ls_.get_tx_svr(), log_buf, nbytes,
-                                                     tmp_pos, lsn, ts_ns, base_header.get_replay_hint(),
-                                                     ls_id_, tenant_id_, memtable_))) {
-    LOG_WARN("replay tx log error", K(ret), K(lsn), K(ts_ns));
   } else {
-    LOG_INFO("replay tx log succ", K(ret), K(lsn), K(ts_ns));
+    share::SCN log_scn;
+    log_scn.convert_for_tx(ts_ns);
+    ObFakeTxReplayExecutor executor(&mock_ls_,
+                                    ls_id_,
+                                    tenant_id_,
+                                    mock_ls_.get_tx_svr(),
+                                    lsn,
+                                    log_scn,
+                                    base_header);
+    executor.set_memtable(memtable_);
+    if (OB_FAIL(executor.execute(log_buf, nbytes, tmp_pos))) {
+      LOG_WARN("replay tx log error", K(ret), K(lsn), K(ts_ns));
+    } else {
+      LOG_INFO("replay tx log succ", K(ret), K(lsn), K(ts_ns));
+    }
   }
   return ret;
 }

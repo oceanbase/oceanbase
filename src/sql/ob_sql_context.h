@@ -17,6 +17,7 @@
 #include "lib/net/ob_addr.h"
 #include "lib/hash/ob_placement_hashset.h"
 #include "lib/container/ob_2d_array.h"
+#include "lib/random/ob_random.h"
 #include "sql/optimizer/ob_table_partition_info.h"
 #include "sql/monitor/ob_exec_stat.h"
 #include "lib/hash_func/murmur_hash.h"
@@ -388,6 +389,8 @@ public:
   int get_table_schema(uint64_t table_id,
                        const share::schema::ObTableSchema *&table_schema,
                        bool is_link = false) const;
+  int get_database_schema(const uint64_t database_id,
+                          const ObDatabaseSchema *&database_schema);
   int get_column_schema(uint64_t table_id, const common::ObString &column_name,
                         const share::schema::ObColumnSchemaV2 *&column_schema,
                         bool is_link = false) const;
@@ -402,6 +405,7 @@ public:
                                bool with_global_index = true,
                                bool with_domain_index = true,
                                bool with_spatial_index = true);
+  int get_table_mlog_schema(const uint64_t table_id, const ObTableSchema *&mlog_schema);
   int get_link_table_schema(uint64_t table_id,
                             const share::schema::ObTableSchema *&table_schema) const;
   int get_link_column_schema(uint64_t table_id, const common::ObString &column_name,
@@ -491,8 +495,12 @@ public:
     }
     return reroute_info_;
   }
-  share::ObFeedbackRerouteInfo *get_reroute_info() {
+  share::ObFeedbackRerouteInfo *get_reroute_info() const {
     return reroute_info_;
+  }
+  void set_reroute_info(share::ObFeedbackRerouteInfo &reroute_info)
+  {
+    reroute_info_->assign(reroute_info);
   }
 
   bool is_batch_params_execute() const
@@ -551,6 +559,7 @@ public:
   // release dynamic allocated memory
   //
   void clear();
+
 public:
   ObMultiStmtItem multi_stmt_item_;
   ObSQLSessionInfo *session_info_;
@@ -608,6 +617,7 @@ public:
   common::ObIArray<ObExprConstraint> *all_expr_constraints_;
   common::ObIArray<ObPCPrivInfo> *all_priv_constraints_;
   bool need_match_all_params_; //only used for matching plans
+  common::ObIArray<ObLocalSessionVar> *all_local_session_vars_; //store the old values of session vars which have changed after creating generated columns
   bool is_ddl_from_primary_;//备集群从主库同步过来需要处理的ddl sql语句
   const sql::ObStmt *cur_stmt_;
   const ObPhysicalPlan *cur_plan_;
@@ -682,7 +692,10 @@ public:
       res_map_rule_id_(common::OB_INVALID_ID),
       res_map_rule_param_idx_(common::OB_INVALID_INDEX),
       root_stmt_(NULL),
-      udf_has_select_stmt_(false)
+      optimizer_features_enable_version_(0),
+      udf_flag_(0),
+      has_dblink_(false),
+      injected_random_status_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -726,7 +739,8 @@ public:
     res_map_rule_id_ = common::OB_INVALID_ID;
     res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
     root_stmt_ = NULL;
-    udf_has_select_stmt_ = false;
+    udf_flag_ = 0;
+    optimizer_features_enable_version_ = 0;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -752,8 +766,16 @@ public:
   void set_is_prepare_stmt(bool is_prepare) { is_prepare_stmt_ = is_prepare; }
   bool has_nested_sql() const { return has_nested_sql_; }
   void set_has_nested_sql(bool has_nested_sql) { has_nested_sql_ = has_nested_sql; }
+  bool has_dblink() const { return has_dblink_; }
+  void set_has_dblink(bool v) { has_dblink_ = v; }
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
+  int add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx);
+  bool get_injected_random_status() const { return injected_random_status_; }
+  void set_injected_random_status(bool injected_random_status) { injected_random_status_ = injected_random_status; }
+  void set_random_plan_seed(uint64_t seed) {rand_gen_.seed(seed);}
+
+
 
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
@@ -784,6 +806,7 @@ public:
   common::ObDList<ObPreCalcExprConstraint> all_pre_calc_constraints_;
   common::ObSArray<ObExprConstraint, common::ModulePageAllocator, true> all_expr_constraints_;
   common::ObSArray<ObPCPrivInfo, common::ModulePageAllocator, true> all_priv_constraints_;
+  common::ObSArray<ObLocalSessionVar, common::ModulePageAllocator, true> all_local_session_vars_;
   common::ObSArray<ObUserVarIdentRawExpr *, common::ModulePageAllocator, true> all_user_variable_;
   common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> calculable_expr_results_;
   bool need_match_all_params_; //only used for matching plans
@@ -807,7 +830,20 @@ public:
   uint64_t res_map_rule_id_;
   int64_t res_map_rule_param_idx_;
   ObDMLStmt *root_stmt_;
-  bool udf_has_select_stmt_; // udf has select stmt, not contain other dml stmt
+  uint64_t optimizer_features_enable_version_;
+  union {
+    int8_t udf_flag_;
+    struct {
+      int8_t has_pl_udf_ : 1; // used to mark sql contain pl udf
+      int8_t udf_has_select_stmt_ : 1; // udf has select stmt, not contain other dml stmt
+      int8_t udf_has_dml_stmt_ : 1; // udf has dml stmt
+      int8_t has_dblink_udf_ : 1; // udf is dblink udf
+      int8_t reserved_:4;
+    };
+  };
+  bool has_dblink_;
+  bool injected_random_status_;
+  ObRandom rand_gen_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

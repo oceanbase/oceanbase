@@ -36,6 +36,7 @@ public:
   static int calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int calc_date_format_invalid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateFormat);
@@ -53,27 +54,18 @@ inline int ObExprDateFormat::calc_result_type2(ObExprResType &type,
   UNUSED(date);
   UNUSED(format);
   int ret = common::OB_SUCCESS;
-//  common::ObCollationType collation_connection = common::CS_TYPE_INVALID;
   type.set_varchar();
   type.set_collation_type(type_ctx.get_coll_type());
   type.set_collation_level(common::CS_LEVEL_COERCIBLE);
   type.set_length(DATETIME_MAX_LENGTH);
 
-  date.set_calc_collation_type(type.get_collation_type());
-  format.set_calc_collation_type(type.get_collation_type());
-
-  if (OB_SUCC(ret)) {
-    //for enum or set obj, we need calc type
-    if (ob_is_enum_or_set_type(date.get_type())) {
-      date.set_calc_type(common::ObVarcharType);
-    } else if (ob_is_double_tc(date.get_type()) || ob_is_float_tc(date.get_type())) {
-      date.set_calc_type(common::ObNumberType);
-    }
-    if (ob_is_enum_or_set_type(format.get_type())) {
-      format.set_calc_type(common::ObVarcharType);
-    }
+  //for enum or set obj, we need calc type
+  if (ob_is_enum_or_set_type(date.get_type()) || ob_is_string_type(date.get_type())) {
+    date.set_calc_type_default_varchar();
+  } else if (ob_is_double_tc(date.get_type()) || ob_is_float_tc(date.get_type())) {
+    date.set_calc_type(common::ObNumberType);
   }
-
+  format.set_calc_type_default_varchar();
   return ret;
 }
 

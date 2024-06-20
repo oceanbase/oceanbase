@@ -436,6 +436,7 @@ int ObJsonNode::get_key(uint64_t index, common::ObString &key_out) const
 int ObJsonNode::get_array_element(uint64_t index, ObIJsonBase *&value) const
 {
   INIT_SUCC(ret);
+  value = NULL;
 
   if (OB_FAIL(check_valid_array_op(index))) {
     LOG_WARN("invalid json array operation", K(ret), K(index));
@@ -450,6 +451,7 @@ int ObJsonNode::get_array_element(uint64_t index, ObIJsonBase *&value) const
 int ObJsonNode::get_object_value(uint64_t index, ObIJsonBase *&value) const
 {
   INIT_SUCC(ret);
+  value = NULL;
 
   if (OB_FAIL(check_valid_object_op(index))) {
     LOG_WARN("invalid json object operation", K(ret), K(index));
@@ -464,9 +466,31 @@ int ObJsonNode::get_object_value(uint64_t index, ObIJsonBase *&value) const
   return ret;
 }
 
+int ObJsonNode::get_object_value(uint64_t index, ObString &key, ObIJsonBase *&value) const
+{
+  INIT_SUCC(ret);
+  value = NULL;
+
+  if (OB_FAIL(check_valid_object_op(index))) {
+    LOG_WARN("invalid json object operation", K(ret), K(index));
+  } else {
+    const ObJsonObject *j_obj = static_cast<const ObJsonObject *>(this);
+    ObJsonNode* node  = nullptr;
+    if (OB_FAIL(j_obj->get_value_by_idx(index, key, node))) {
+      LOG_WARN("fail to find value by index", K(ret), K(index));
+    } else if (OB_ISNULL(value = node)) { // maybe not found.
+      ret = OB_SEARCH_NOT_FOUND;
+      LOG_WARN("not found value by index", K(ret), K(index));
+    }
+  }
+
+  return ret;
+}
+
 int ObJsonNode::get_object_value(const ObString &key, ObIJsonBase *&value) const
 {
   INIT_SUCC(ret);
+  value = NULL;
 
   if (json_type() != ObJsonNodeType::J_OBJECT) { // check json node type
     ret = OB_INVALID_ARGUMENT;
@@ -555,7 +579,8 @@ ObJsonNode *ObJsonObject::clone(ObIAllocator* allocator, bool is_deep_copy) cons
     for (uint64_t i = 0; i < len && OB_SUCC(ret); i++) {
       if (is_deep_copy) {
         char* str_buf = NULL;
-        if (OB_ISNULL(str_buf = static_cast<char*>(allocator->alloc(object_array_[i].get_key().length())))) {
+        bool is_key_empty = object_array_[i].get_key().length() == 0;
+        if (!is_key_empty && OB_ISNULL(str_buf = static_cast<char*>(allocator->alloc(object_array_[i].get_key().length())))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret), K(object_array_[i].get_key().length()));
         } else {
@@ -621,6 +646,31 @@ ObJsonNode *ObJsonObject::get_value(uint64_t index) const
   return j_node;
 }
 
+int ObJsonObject::get_key_by_idx(uint64_t index, ObString& key) const
+{
+  INIT_SUCC(ret);
+  if (index < object_array_.size()) {
+    key = object_array_[index].get_key();
+  } else {
+    ret = OB_OUT_OF_ELEMENT;
+    LOG_WARN("fail to get json node", K(ret), K(index));
+  }
+  return ret;
+}
+
+int ObJsonObject::get_value_by_idx(uint64_t index, ObString& key, ObJsonNode*& value) const
+{
+  INIT_SUCC(ret);
+  if (index < object_array_.size()) {
+    value = object_array_[index].get_value();
+    key = object_array_[index].get_key();
+  } else {
+    ret = OB_OUT_OF_ELEMENT;
+    LOG_WARN("fail to get json node", K(ret), K(index));
+  }
+  return ret;
+}
+
 int ObJsonObject::remove(const common::ObString &key)
 {
   INIT_SUCC(ret);
@@ -669,7 +719,7 @@ int ObJsonObject::replace(const ObJsonNode *old_node, ObJsonNode *new_node)
 
 // When constructing a JSON tree, if two keys have the same value, 
 // the latter one will overwrite the former one
-int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_unique_key, bool is_lazy_sort, bool need_overwrite)
+int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_unique_key, bool is_lazy_sort, bool need_overwrite, bool is_schema)
 {
   INIT_SUCC(ret);
 
@@ -680,7 +730,19 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_
     value->set_parent(this);
     ObJsonObjectPair pair(key, value);
 
-    if (need_overwrite) {
+    if (is_schema) {
+      // if is schema, keep the first value, don't raise error or overwrite
+      ObJsonKeyCompare cmp;
+      ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
+                                                              object_array_.end(), pair, cmp);
+      if (low_iter != object_array_.end() && low_iter->get_key() == key) { // Found and covered
+        // do nothing
+      } else if (OB_FAIL(object_array_.push_back(pair))) {
+        LOG_WARN("failed to store in object array.", K(ret));
+      } else {
+        sort();
+      }
+    } else if (need_overwrite) {
       ObJsonKeyCompare cmp;
       ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                               object_array_.end(), pair, cmp);
@@ -696,12 +758,10 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value, bool with_
       } else if (!is_lazy_sort) {
         sort();
       }
-    } else {
-      if (OB_FAIL(object_array_.push_back(pair))) {
-        LOG_WARN("failed to store in object array.", K(ret));
-      } else if (!is_lazy_sort) {
-        sort();
-      }
+    } else if (OB_FAIL(object_array_.push_back(pair))) {  // if don't check unique key, push directly
+      LOG_WARN("failed to store in object array.", K(ret));
+    } else if (!is_lazy_sort) {
+      sort();
     }
     set_serialize_delta_size(value->get_serialize_size());
   }

@@ -46,6 +46,7 @@ protected:
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
   virtual int before_response(int error_code) override;
+  virtual bool is_kv_processor() override { return true; }
 
 private:
   int init_tb_ctx();
@@ -68,7 +69,7 @@ private:
       SERVER_LOG(WARN, "fail to process op", K(ret));
     }
 
-    result_.set_errno(ret);
+    result_.set_err(ret);
     table::ObTableApiUtil::replace_ret_code(ret);
     int tmp_ret = ret;
     if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
@@ -79,6 +80,26 @@ private:
     return ret;
   }
   int process_get();
+  int process_insert()
+  {
+    int ret = OB_SUCCESS;
+    if (!tb_ctx_.is_ttl_table()) {
+      ret = process_dml_op<table::TABLE_API_EXEC_INSERT>();
+    } else {
+      ret = process_dml_op<table::TABLE_API_EXEC_TTL>();
+    }
+    return ret;
+  }
+  int process_insert_up()
+  {
+    int ret = OB_SUCCESS;
+    if (!tb_ctx_.is_ttl_table()) {
+      ret = process_dml_op<table::TABLE_API_EXEC_INSERT_UP>();
+    } else {
+      ret = process_dml_op<table::TABLE_API_EXEC_TTL>();
+    }
+    return ret;
+  }
 private:
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;

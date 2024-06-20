@@ -249,6 +249,7 @@ inline int databuff_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos
 namespace pl
 {
 class ObPLBlockNS;
+class ObPLPackageGuard;
 }
 
 namespace sql
@@ -264,6 +265,7 @@ const int64_t FAST_ARRAY_COUNT = OB_DEFAULT_SE_ARRAY_COUNT;
 typedef common::ObFastArray<int64_t, FAST_ARRAY_COUNT> IntFastArray;
 typedef common::ObFastArray<uint64_t, FAST_ARRAY_COUNT> UIntFastArray;
 typedef common::ObFastArray<ObRawExpr *, FAST_ARRAY_COUNT> RawExprFastArray;
+typedef common::ObTuple<ObRawExpr*, ObConstRawExpr*, int64_t> ExternalParamInfo;
 
 struct ExternalParams{
   ExternalParams() : by_name_(false), params_( ){}
@@ -277,18 +279,35 @@ public:
     by_name_ = other.by_name_;
     return params_.assign(other.params_);
   }
-  std::pair<ObRawExpr*, ObConstRawExpr*> &at(int64_t i)
+  ExternalParamInfo &at(int64_t i)
   {
     return params_.at(i);
   }
-  int push_back(const std::pair<ObRawExpr*, ObConstRawExpr*> &param)
+  int push_back(const ExternalParamInfo &param)
   {
     return params_.push_back(param);
   }
 
 public:
   bool by_name_;
-  common::ObSEArray<std::pair<ObRawExpr*, ObConstRawExpr*>, 8> params_;
+  common::ObSEArray<ExternalParamInfo, 8> params_;
+};
+
+struct ObStarExpansionInfo{
+  ObStarExpansionInfo()
+      :start_pos_(0),
+       end_pos_(0),
+       column_name_list_()
+  {}
+
+  ~ObStarExpansionInfo() {}
+
+public:
+  int64_t start_pos_;
+  int64_t end_pos_;
+  common::ObArray<ObString> column_name_list_;
+
+  TO_STRING_KV(K_(start_pos), K_(end_pos), K_(column_name_list));
 };
 
 struct ObResolverParams
@@ -314,6 +333,7 @@ struct ObResolverParams
        is_from_show_resolver_(false),
        is_restore_(false),
        is_from_create_view_(false),
+       is_from_create_mview_(false),
        is_from_create_table_(false),
        is_prepare_protocol_(false),
        is_pre_execute_(false),
@@ -336,11 +356,8 @@ struct ObResolverParams
        new_cte_tid_(common::OB_MIN_CTE_TABLE_ID + 1),
        new_gen_wid_(1),
        is_resolve_table_function_expr_(false),
-       has_cte_param_list_(false),
-       has_recursive_word_(false),
        tg_timing_event_(-1),
        is_column_ref_(true),
-       table_ids_(),
        hidden_column_scope_(T_NONE_SCOPE),
        outline_parse_result_(NULL),
        is_execute_call_stmt_(false),
@@ -348,7 +365,12 @@ struct ObResolverParams
        need_check_col_dup_(true),
        is_specified_col_name_(false),
        is_in_sys_view_(false),
-       is_expanding_view_(false)
+       is_expanding_view_(false),
+       is_resolve_lateral_derived_table_(false),
+       package_guard_(NULL),
+       star_expansion_infos_(),
+       is_for_rt_mv_(false),
+       is_resolve_fake_cte_table_(false)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -376,6 +398,7 @@ public:
   //查询建表、创建视图不能包含临时表;
   //前者是实现起来问题, 后者是兼容MySQL;
   bool is_from_create_view_;
+  bool is_from_create_mview_;
   bool is_from_create_table_;
   bool is_prepare_protocol_;
   bool is_pre_execute_;
@@ -403,11 +426,8 @@ private:
   friend class ObStmtResolver;
 public:
   bool is_resolve_table_function_expr_;  // used to mark resolve table function expr.
-  bool has_cte_param_list_;
-  bool has_recursive_word_;
   int64_t tg_timing_event_;      // mysql mode, trigger的触发时机和类型
   bool is_column_ref_;                   // used to mark normal column ref
-  common::hash::ObPlacementHashSet<uint64_t, common::OB_MAX_TABLE_NUM_PER_STMT, true> table_ids_;
   ObStmtScope hidden_column_scope_; // record scope for first hidden column which need check hidden_column_visable in opt_param hint
   ParseResult *outline_parse_result_;
   bool is_execute_call_stmt_;
@@ -416,6 +436,11 @@ public:
   bool is_specified_col_name_;//mark if specify the column name in create view or create table as..
   bool is_in_sys_view_;
   bool is_expanding_view_;
+  bool is_resolve_lateral_derived_table_; // used to mark resolve lateral derived table.
+  pl::ObPLPackageGuard *package_guard_;
+  common::ObArray<ObStarExpansionInfo> star_expansion_infos_;
+  bool is_for_rt_mv_; // call resolve in transformation for expanding inline real-time materialized view
+  bool is_resolve_fake_cte_table_;
 };
 } // end namespace sql
 } // end namespace oceanbase

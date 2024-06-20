@@ -172,6 +172,7 @@ public:
   virtual int64_t get_param_start_idx() const { return 0; }
   virtual const common::ObString &get_routine_name() const = 0;
   virtual uint64_t get_dblink_id() const { return OB_INVALID_ID; }
+  virtual uint64_t get_routine_id() const = 0;
 
   TO_STRING_EMPTY();
 };
@@ -428,7 +429,7 @@ public:
   OB_INLINE uint64_t get_object_id() const { return routine_id_; }
   OB_INLINE ObObjectType get_object_type() const
   { return ObRoutineType::ROUTINE_PROCEDURE_TYPE == get_routine_type() ?
-           ObObjectType::PROCEDURE : ObRoutineType::ROUTINE_FUNCTION_TYPE ?
+           ObObjectType::PROCEDURE : ObRoutineType::ROUTINE_FUNCTION_TYPE == get_routine_type() ?
            ObObjectType::FUNCTION : ObObjectType::INVALID; }
   OB_INLINE const common::ObString &get_routine_name() const { return routine_name_; }
   OB_INLINE int64_t get_overload() const { return overload_; }
@@ -505,6 +506,18 @@ public:
     flag_ |= SP_FLAG_CONTAINS_SQL;
   }
 
+  OB_INLINE void reset_analyze_flag()
+  {
+    flag_ &= ~(uint64_t)SP_FLAG_NO_SQL;
+    flag_ &= ~(uint64_t)SP_FLAG_READS_SQL_DATA;
+    flag_ &= ~(uint64_t)SP_FLAG_MODIFIES_SQL_DATA;
+    flag_ &= ~(uint64_t)SP_FLAG_CONTAINS_SQL;
+    flag_ &= ~(uint64_t)SP_FLAG_WPS;
+    flag_ &= ~(uint64_t)SP_FLAG_RPS;
+    flag_ &= ~(uint64_t)SP_FLAG_HAS_SEQUENCE;
+    flag_ &= ~(uint64_t)SP_FLAG_HAS_OUT_PARAM;
+    flag_ &= ~(uint64_t)SP_FLAG_EXTERNAL_STATE;
+  }
 
   OB_INLINE bool is_wps() const { return SP_FLAG_WPS == (flag_ & SP_FLAG_WPS); }
   OB_INLINE bool is_rps() const { return SP_FLAG_RPS == (flag_ & SP_FLAG_RPS); }
@@ -578,6 +591,10 @@ public:
   }
   virtual bool is_udt_static_routine() const {
     return is_udt_routine() && SP_FLAG_STATIC == (flag_ & SP_FLAG_STATIC);
+  }
+
+  OB_INLINE bool is_dblink_routine() const {
+    return dblink_id_ != OB_INVALID_ID;
   }
 
   TO_STRING_KV(K_(tenant_id),

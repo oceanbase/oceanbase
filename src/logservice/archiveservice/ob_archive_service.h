@@ -107,6 +107,12 @@ public:
   ///////////// RPC process functions /////////////////
   void wakeup();
 
+  // Flush all logs to all archive destinations, in this interface a flush all flag is set and the flush action will be done in background.
+  // The flush flag is a temporary state on the ls, so only ls in archive progress in this server will be affected.
+  //
+  // New ls after the function call and ls migrated to other servers are immune.
+  void flush_all();
+
   int iterate_ls(const std::function<int(const ObLSArchiveTask&)> &func);
 
 private:

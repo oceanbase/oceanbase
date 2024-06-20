@@ -13,10 +13,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_xml_attributes.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h" // may need json for kv pairs
-#ifdef OB_BUILD_ORACLE_XML
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#endif
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -82,7 +81,6 @@ int ObExprXmlAttributes::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-#ifdef OB_BUILD_ORACLE_XML
 int ObExprXmlAttributes::eval_xml_attributes(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
@@ -133,7 +131,7 @@ int ObExprXmlAttributes::eval_xml_attributes(const ObExpr &expr, ObEvalCtx &ctx,
     // set result(json bin)
     if (OB_SUCC(ret)) {
       ObString raw_bin;
-      if (OB_FAIL(j_base->get_raw_binary(raw_bin, &tmp_allocator))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &tmp_allocator))) {
         LOG_WARN("failed: get json raw binary", K(ret));
       } else {
         uint64_t length = raw_bin.length();
@@ -150,7 +148,6 @@ int ObExprXmlAttributes::eval_xml_attributes(const ObExpr &expr, ObEvalCtx &ctx,
   }
   return ret;
 }
-#endif
 
 int ObExprXmlAttributes::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {

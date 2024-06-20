@@ -25,7 +25,6 @@
 #include "storage/blocksstable/ob_macro_block_marker.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/ob_partition_meta.h"
-#include "storage/ob_partition_component_factory.h"
 #include "storage/ob_partition_storage.h"
 #include "storage/ob_base_storage.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -225,7 +224,6 @@ private:
   storage::ObSSStore ssstore_;
   memtable::ObMemtable memtable_;
   blocksstable::ObSSTable *sstable_;
-  storage::ObPartitionComponentFactory cp_fty_;
   blocksstable::ObPartitionMeta meta_;
   storage::ObPartitionStorage *storage_;
   ObRestoreSchema *restore_schema_;

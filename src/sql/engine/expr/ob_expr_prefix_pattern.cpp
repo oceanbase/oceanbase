@@ -78,6 +78,7 @@ int ObExprPrefixPattern::eval_prefix_pattern(const ObExpr &expr, ObEvalCtx &ctx,
       prefix_len = len_param->get_int();
     }
   }
+  bool is_result_batch_ascii = false;
   if (OB_FAIL(ret)) {
   } else if (is_valid && OB_FAIL(calc_prefix_pattern(pattern->get_string(),
                                             expr.args_[0]->datum_meta_.cs_type_,
@@ -89,9 +90,11 @@ int ObExprPrefixPattern::eval_prefix_pattern(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("fail to calc prefix pattern", K(ret));
   } else if (!is_valid) {
     expr_datum.set_null();
-  } else if (OB_FAIL(ObExprSubstr::substr(result_str, pattern->get_string(), 1, result_len,
-                                          expr.args_[0]->datum_meta_.cs_type_,
-                                          storage::can_do_ascii_optimize(expr.args_[0]->datum_meta_.cs_type_)))) {
+  } else if (OB_FAIL(ObExprSubstr::substr(
+               result_str, pattern->get_string(), 1, result_len,
+               expr.args_[0]->datum_meta_.cs_type_,
+               storage::can_do_ascii_optimize(expr.args_[0]->datum_meta_.cs_type_), false,
+               is_result_batch_ascii))) {
     LOG_WARN("get substr failed", K(ret));
   } else if (OB_UNLIKELY(result_str.length() <= 0) && lib::is_oracle_mode()) {
     expr_datum.set_null();
@@ -177,63 +180,21 @@ int ObExprPrefixPattern::calc_result_type3(ObExprResType &type,
                                           ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (lib::is_oracle_mode()) {
-    auto str_params = make_const_carray(&type1);
-    int64_t mbmaxlen = 0;
-    type2.set_calc_type(ObNumberType);
-    type2.set_calc_scale(NUMBER_SCALE_UNKNOWN_YET);
-    type3.set_calc_type(ObVarcharType);
-    type3.set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
-    type3.set_calc_collation_level(CS_LEVEL_IMPLICIT);
-    if(OB_FAIL(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(),
-                                                str_params,
-                                                type,
-                                                PREFER_VAR_LEN_CHAR))) {
-      LOG_WARN("fail to aggregate string type and charset for result", K(ret));
-    } else if (OB_FAIL(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, str_params))) {
-       LOG_WARN("fail to deduce calc type and charset for params", K(ret));
-    } else {
-      if (type.is_varchar_or_char() && LS_BYTE == type.get_length_semantics()) {
-        if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(type.get_collation_type(), mbmaxlen))) {
-          SQL_RESV_LOG(WARN, "fail to get mbmaxlen", K(ret), K(type));
-        } else {
-          type.set_length(static_cast<ObLength>(type1.get_calc_length() * mbmaxlen));
-        }
-      } else {
-        type.set_length(type1.get_calc_length());
-      }
-    }
+  if ((!ob_is_string_type(type1.get_type()) && !type1.is_null())
+      || (!ob_is_string_type(type3.get_type()) && !type3.is_null())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid param type", K(ret), K(type1), K(type2), K(type3));
   } else {
-    const int32_t mbmaxlen = 4;
-    if (ObTextType == type1.get_type()
-        || ObMediumTextType == type1.get_type()
-        || ObLongTextType == type1.get_type()) {
-      type.set_type(ObLongTextType);
-      type.set_length(OB_MAX_LONGTEXT_LENGTH / mbmaxlen);
-    } else if (ObTinyTextType == type1.get_type()) {
-      type.set_type(ObTextType);
-      type.set_length(OB_MAX_TEXT_LENGTH / mbmaxlen);
+    type1.set_calc_meta(type1.get_obj_meta());
+    type2.set_calc_meta(type2.get_obj_meta());
+    type3.set_calc_meta(type3.get_obj_meta());
+    type.set_meta(type1.get_obj_meta());
+    type.set_accuracy(type1.get_accuracy());
+    if (lib::is_oracle_mode()) {
+      type2.set_calc_type(ObNumberType);
+      type2.set_calc_scale(NUMBER_SCALE_UNKNOWN_YET);
     } else {
-      type.set_varchar();
-      type.set_length(static_cast<ObLength>(type1.get_length()));
-    }
-    OZ(aggregate_charsets_for_string_result(type, &type1, 1, type_ctx.get_coll_type()));
-    if (OB_SUCC(ret)) {
-      if ((type1.is_text() || type1.is_blob())) {
-        // do nothing
-      } else {
-        type1.set_calc_type(ObVarcharType);
-      }
-      type1.set_calc_collation_level(type.get_calc_collation_level());
-      type1.set_calc_collation_type(type.get_collation_type());
-    }
-    type2.set_calc_type(ObIntType);
-    type3.set_calc_type(ObVarcharType);
-    type3.set_calc_collation_type(type3.get_collation_type());
-    type3.set_calc_collation_level(type3.get_collation_level());
-    if (OB_SUCC(ret) && type.is_varchar()) {
-      // Set cast mode for integer parameters, truncate string to integer.
-      type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
+      type2.set_calc_type(ObIntType);
     }
   }
   return ret;

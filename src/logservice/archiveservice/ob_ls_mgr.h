@@ -68,6 +68,7 @@ public:
 public:
   int iterate_ls(const std::function<int (const ObLSArchiveTask &)> &func);
   template <typename Fn> int foreach_ls(Fn &fn) { return ls_map_.for_each(fn);  }
+  void flush_all();
 public:
   int init(const uint64_t tenant_id,
       ObLogService *log_service,
@@ -105,6 +106,7 @@ private:
 private:
   class CheckDeleteFunctor;
   class ClearArchiveTaskFunctor;
+  class FlushAllFunctor;
 private:
   bool                  inited_;
   uint64_t              tenant_id_;

@@ -124,7 +124,7 @@ int ObExprSTDistanceSphere::eval_st_distance_sphere(const ObExpr &expr,
       true, N_ST_DISTANCE_SPHERE))) {
     LOG_WARN("fail to get srs1 item", K(ret), K(wkb1_copy));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_allocator, wkb1_copy,
-      g1, srs1, N_ST_DISTANCE_SPHERE))) {
+      g1, srs1, N_ST_DISTANCE_SPHERE, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
     LOG_WARN("fail to create geo1", K(ret), K(wkb1_copy));
   } else if (OB_FAIL(ob_write_string(tmp_allocator, wkb2, wkb2_copy))) {
     LOG_WARN("fail to copy wkb2", K(ret), K(wkb2));
@@ -132,7 +132,7 @@ int ObExprSTDistanceSphere::eval_st_distance_sphere(const ObExpr &expr,
       true, N_ST_DISTANCE_SPHERE))) {
     LOG_WARN("fail to get srs2 item", K(ret), K(wkb2_copy));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_allocator, wkb2_copy,
-      g2, srs2, N_ST_DISTANCE_SPHERE))) {
+      g2, srs2, N_ST_DISTANCE_SPHERE, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
     LOG_WARN("fail to create geo2", K(ret), K(wkb2_copy));
   } else {
     srid1 = OB_ISNULL(srs1) ? 0:srs1->get_srid();

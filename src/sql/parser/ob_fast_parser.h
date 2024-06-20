@@ -87,6 +87,10 @@ struct ObRawSql {
 	{
 		return search_end_ || cur_pos_ > raw_sql_len_ - 1;
 	}
+	inline bool is_search_end(const int64_t pos)
+	{
+		return search_end_ || pos > raw_sql_len_ - 1;
+	}
 	inline char peek()
 	{
 		if (cur_pos_ >= raw_sql_len_ - 1) {
@@ -377,6 +381,7 @@ protected:
 		return is_valid_char(ch) && USER_VAR_CHAR[static_cast<uint8_t>(ch)];
 	}
 	void reset_parser_node(ParseNode *node);
+	int64_t notascii_gb_char(const int64_t pos);
 	//{U}
 	int64_t is_latin1_char(const int64_t pos);
 	// ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}
@@ -435,6 +440,11 @@ protected:
 	{
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x40 && static_cast<uint8_t>(ch) <= 0xfe;
+	}
+	inline bool notascii(char ch)
+	{
+		return 	is_valid_char(ch) &&
+				(static_cast<uint8_t>(ch) >= 0x80 && static_cast<uint8_t>(ch) <= 0xFF);
 	}
     inline bool is_latin1(char ch)
 	{
@@ -608,6 +618,12 @@ protected:
 	bool skip_space(ObRawSql &raw_sql);
 
 protected:
+  enum FoundInsertTokenStatus
+  {
+    NOT_FOUND_INSERT_TOKEN,
+    FOUND_INSERT_TOKEN_ONCE, // find one insert token
+    INVALID_TOKEN_STATUS,  // find insert token more than one time
+  };
 	ObRawSql raw_sql_;
 	char *no_param_sql_;
 	int64_t no_param_sql_len_;
@@ -629,7 +645,7 @@ protected:
 	common::ObIAllocator &allocator_;
 	common::ObCharsetType charset_type_;
 	const ObCharsetInfo *charset_info_;
-	bool get_insert_;
+	FoundInsertTokenStatus found_insert_status_;
 	int64_t values_token_pos_;
 	ParseNextTokenFunc parse_next_token_func_;
 	ProcessIdfFunc process_idf_func_;
@@ -670,6 +686,7 @@ private:
 	int process_string(const char quote);
 	int process_zero_identifier();
 	int process_identifier_begin_with_n();
+	int process_identifier_begin_with_backslash();
 private:
 	ObSEArray<ObValuesTokenPos, 4> values_tokens_;
 	DISALLOW_COPY_AND_ASSIGN(ObFastParserMysql);
@@ -700,11 +717,6 @@ private:
 	 */
 	int process_string(const bool in_q_quote);
 	int process_identifier_begin_with_n();
-	char *parse_strndup_with_trim_space_for_new_line(const char *str,
-                                                     size_t nbyte,
-													 char *buf,
-													 int *connection_collation,
-												     int64_t *new_len);
 
 private:
 	DISALLOW_COPY_AND_ASSIGN(ObFastParserOracle);

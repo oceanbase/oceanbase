@@ -16,6 +16,7 @@
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/ob_optimizer_trace_impl.h"
+#include "sql/ob_sql_context.h"
 namespace oceanbase
 {
 namespace common
@@ -36,6 +37,7 @@ class ObStmtFactory;
 class ObPhysicalPlan;
 class ObCodeGeneratorImpl;
 class ObLogPlan;
+class StmtUniqueKeyProvider;
 
 struct ObTransformerCtx
 {
@@ -66,7 +68,10 @@ struct ObTransformerCtx
     outline_trans_hints_(),
     used_trans_hints_(),
     groupby_pushdown_stmts_(),
-    is_spm_outline_(false)
+    is_spm_outline_(false),
+    push_down_filters_(),
+    in_accept_transform_(false),
+    iteration_level_(0)
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -126,6 +131,9 @@ struct ObTransformerCtx
   ObSEArray<uint64_t, 4> groupby_pushdown_stmts_;
   /* end used for hint and outline below */
   bool is_spm_outline_;
+  ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
+  bool in_accept_transform_;
+  uint64_t iteration_level_;
 };
 
 enum TransMethod
@@ -171,6 +179,9 @@ enum TRANSFORM_TYPE {
   COUNT_TO_EXISTS               ,
   SELECT_EXPR_PULLUP            ,
   PROCESS_DBLINK                ,
+  DECORRELATE                   ,
+  CONDITIONAL_AGGR_COALESCE     ,
+  MV_REWRITE                    ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -190,7 +201,14 @@ struct ObParentDMLStmt
 // use to keep view name/stmt id/qb name stable after copy stmt and try transform
 struct ObTryTransHelper
 {
-  ObTryTransHelper() : available_tb_id_(0), subquery_count_(0), temp_table_count_(0)
+  ObTryTransHelper() :
+    available_tb_id_(0),
+    subquery_count_(0),
+    temp_table_count_(0),
+    qb_name_sel_start_id_(0),
+    qb_name_set_start_id_(0),
+    qb_name_other_start_id_(0),
+    unique_key_provider_(NULL)
   {}
 
   int fill_helper(const ObQueryCtx *query_ctx);
@@ -200,7 +218,11 @@ struct ObTryTransHelper
   uint64_t available_tb_id_;
   int64_t subquery_count_;
   int64_t temp_table_count_;
+  int64_t qb_name_sel_start_id_;
+  int64_t qb_name_set_start_id_;
+  int64_t qb_name_other_start_id_;
   ObSEArray<int64_t, 4, common::ModulePageAllocator, true> qb_name_counts_;
+  StmtUniqueKeyProvider *unique_key_provider_;
 };
 
 // record context param values or array/list size
@@ -256,14 +278,17 @@ public:
       (1L << JOIN_LIMIT_PUSHDOWN) |
       (1L << CONST_PROPAGATE) |
       (1L << LEFT_JOIN_TO_ANTI) |
-      (1L << COUNT_TO_EXISTS);
+      (1L << COUNT_TO_EXISTS) |
+      (1L << CONDITIONAL_AGGR_COALESCE) |
+      (1L << SEMI_TO_INNER);
   static const uint64_t ALL_COST_BASED_RULES =
       (1L << OR_EXPANSION) |
       (1L << WIN_MAGIC) |
       (1L << GROUPBY_PUSHDOWN) |
       (1L << GROUPBY_PULLUP) |
       (1L << SUBQUERY_COALESCE) |
-      (1L << SEMI_TO_INNER);
+      (1L << SEMI_TO_INNER) |
+      (1L << MV_REWRITE);
 
   ObTransformRule(ObTransformerCtx *ctx,
                   TransMethod transform_method,

@@ -462,7 +462,9 @@ int ObErrorInfo::delete_error(const IObErrorInfo *info)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = nullptr;
-  if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+  if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+    // do nothing
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
     if (OB_FAIL(collect_error_info(info, NULL, true))) {

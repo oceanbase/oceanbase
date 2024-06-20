@@ -20,12 +20,14 @@
 #include "storage/ob_storage_util.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/blocksstable/ob_micro_block_header.h"
+#include "storage/blocksstable/encoding/ob_icolumn_decoder.h"
 #include "ob_column_encoding_struct.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+class ObAggCell;
 class ObGroupByCell;
 }
 namespace blocksstable
@@ -58,6 +60,15 @@ public:
     UNUSEDx(ctx, row_ids, row_cap, datums);
     return common::OB_NOT_SUPPORTED;
   }
+
+  virtual int decode_vector(
+      const ObColumnCSDecoderCtx &ctx,
+      ObVectorDecodeCtx &vector_ctx) const
+  {
+    UNUSEDx(ctx, vector_ctx);
+    return common::OB_NOT_SUPPORTED;
+  }
+
   virtual int pushdown_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnCSDecoderCtx &col_ctx,
@@ -77,6 +88,16 @@ public:
       bool &filter_applied) const
   {
     UNUSEDx(parent, col_ctx, filter, pd_filter_info, result_bitmap, filter_applied);
+    return common::OB_NOT_SUPPORTED;
+  }
+
+  virtual int get_aggregate_result(
+      const ObColumnCSDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      storage::ObAggCell &agg_cell) const
+  {
+    UNUSEDx(ctx, row_ids, row_cap, agg_cell);
     return common::OB_NOT_SUPPORTED;
   }
 

@@ -41,6 +41,7 @@ int IndexDMLInfo::deep_copy(ObIRawExprCopier &expr_copier, const IndexDMLInfo &o
   is_primary_index_ = other.is_primary_index_;
   is_update_unique_key_ = other.is_update_unique_key_;
   is_update_part_key_ = other.is_update_part_key_;
+  is_update_primary_key_ = other.is_update_primary_key_;
   assignments_.reset();
   if (OB_FAIL(expr_copier.copy(other.column_exprs_, column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
@@ -83,6 +84,7 @@ int IndexDMLInfo::assign_basic(const IndexDMLInfo &other)
   is_primary_index_ = other.is_primary_index_;
   is_update_unique_key_ = other.is_update_unique_key_;
   is_update_part_key_ = other.is_update_part_key_;
+  is_update_primary_key_ = other.is_update_primary_key_;
   trans_info_expr_ = other.trans_info_expr_;
   if (OB_FAIL(column_exprs_.assign(other.column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
@@ -305,6 +307,7 @@ ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
     need_barrier_(false),
     is_first_dml_op_(false),
     table_location_uncertain_(false),
+    is_pdml_update_split_(false),
     pdml_partition_id_expr_(NULL),
     pdml_is_returning_(false),
     err_log_define_(),
@@ -1358,7 +1361,7 @@ int ObLogDelUpd::generate_fk_lookup_part_id_expr(IndexDMLInfo &index_dml_info)
         } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_guard, fk_info.parent_column_ids_, scan_index_tid))) {
           LOG_WARN("failed to get index tid used to build scan das task for foreign key checks", K(ret));
         } else if (OB_INVALID_ID == scan_index_tid) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_CANNOT_ADD_FOREIGN;
           LOG_WARN("get invalid table id to build das scan task for foreign key checks", K(ret));
         } else {
           ObRawExpr* fk_look_up_part_id_expr = nullptr;
@@ -1664,5 +1667,13 @@ int ObLogDelUpd::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
       LOG_WARN("failed to check is new row expr", K(ret));
     }
   }
+  return ret;
+}
+
+int ObLogDelUpd::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = false;
+  inherit_child_ordering_index = -1;
   return ret;
 }

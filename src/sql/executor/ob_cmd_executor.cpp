@@ -28,6 +28,8 @@
 #include "sql/resolver/ddl/ob_drop_table_stmt.h"
 #include "sql/resolver/ddl/ob_drop_index_stmt.h"
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
+#include "sql/resolver/ddl/ob_create_mlog_stmt.h"
+#include "sql/resolver/ddl/ob_drop_mlog_stmt.h"
 #include "sql/resolver/ddl/ob_alter_database_stmt.h"
 #include "sql/resolver/ddl/ob_drop_database_stmt.h"
 #include "sql/resolver/ddl/ob_create_database_stmt.h"
@@ -63,6 +65,7 @@
 #include "sql/resolver/dcl/ob_create_role_stmt.h"
 #include "sql/resolver/dcl/ob_drop_role_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
+#include "sql/resolver/dcl/ob_alter_user_proxy_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_stmt.h"
 #include "sql/resolver/tcl/ob_start_trans_stmt.h"
 #include "sql/resolver/tcl/ob_end_trans_stmt.h"
@@ -77,6 +80,7 @@
 #include "sql/resolver/cmd/ob_clear_balance_task_stmt.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 #include "sql/resolver/cmd/ob_anonymous_block_stmt.h"
+#include "sql/resolver/cmd/ob_mock_stmt.h"
 #include "sql/resolver/prepare/ob_prepare_stmt.h"
 #include "sql/resolver/prepare/ob_execute_stmt.h"
 #include "sql/resolver/prepare/ob_deallocate_stmt.h"
@@ -113,6 +117,7 @@
 #include "sql/engine/cmd/ob_variable_set_executor.h"
 #include "sql/engine/cmd/ob_table_executor.h"
 #include "sql/engine/cmd/ob_index_executor.h"
+#include "sql/engine/cmd/ob_mlog_executor.h"
 #include "sql/engine/cmd/ob_resource_executor.h"
 #include "sql/engine/cmd/ob_kill_executor.h"
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
@@ -133,6 +138,7 @@
 #include "sql/engine/cmd/ob_profile_cmd_executor.h"
 #include "sql/engine/cmd/ob_get_diagnostics_executor.h"
 #include "sql/engine/cmd/ob_lock_table_executor.h"
+#include "sql/engine/cmd/ob_mock_executor.h"
 #include "sql/engine/prepare/ob_prepare_executor.h"
 #include "sql/engine/prepare/ob_execute_executor.h"
 #include "sql/engine/prepare/ob_deallocate_executor.h"
@@ -142,6 +148,10 @@
 #include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
 #include "sql/engine/cmd/ob_context_executor.h"
+#include "sql/resolver/cmd/ob_tenant_snapshot_stmt.h"
+#include "sql/engine/cmd/ob_tenant_snapshot_executor.h"
+#include "sql/resolver/cmd/ob_tenant_clone_stmt.h"
+#include "sql/engine/cmd/ob_clone_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
@@ -388,6 +398,14 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObDropIndexStmt, ObDropIndexExecutor);
         break;
       }
+      case stmt::T_CREATE_MLOG: {
+        DEFINE_EXECUTE_CMD(ObCreateMLogStmt, ObCreateMLogExecutor);
+        break;
+      }
+      case stmt::T_DROP_MLOG: {
+        DEFINE_EXECUTE_CMD(ObDropMLogStmt, ObDropMLogExecutor);
+        break;
+      }
       case stmt::T_ALTER_VIEW: {
         break;
       }
@@ -458,6 +476,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObAlterUserProfileStmt, ObAlterUserProfileExecutor);
         break;
       }
+      case stmt::T_ALTER_USER_PROXY: {
+        DEFINE_EXECUTE_CMD(ObAlterUserProxyStmt, ObAlterUserProxyExecutor);
+        break;
+      }
       case stmt::T_ALTER_USER_PRIMARY_ZONE: {
         DEFINE_EXECUTE_CMD(ObAlterUserPrimaryZoneStmt, ObAlterUserPrimaryZoneExecutor);
         break;
@@ -496,10 +518,15 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         break;
       }
       case stmt::T_EXECUTE: {
-        // ps文本模式应该要返回结果，不能定义为cmd
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ps text shoudle be handled as normal query, not cmd", K(ret));
-        // DEFINE_EXECUTE_CMD(ObExecuteStmt, ObExecuteExecutor);
+        // only call procedure run this logic, text ps mode execute call procedure,
+        // if procedure has out param, it should return result to argument
+        ObExecuteStmt &stmt = *(static_cast<ObExecuteStmt*>(&cmd));
+        if (stmt::T_CALL_PROCEDURE != stmt.get_prepare_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ps text shoudle be handled as normal query, not cmd", K(ret));
+        } else {
+          DEFINE_EXECUTE_CMD(ObExecuteStmt, ObExecuteExecutor);
+        }
         break;
       }
       case stmt::T_DEALLOCATE: {
@@ -541,6 +568,12 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_FLUSH_DAG_WARNINGS: {
         DEFINE_EXECUTE_CMD(ObFlushDagWarningsStmt, ObFlushDagWarningsExecutor);
+        break;
+      }
+      case stmt::T_REPAIR_TABLE:
+      case stmt::T_CHECKSUM_TABLE:
+      case stmt::T_FLUSH_PRIVILEGES: {
+        DEFINE_EXECUTE_CMD(ObMockStmt, ObMockExecutor);
         break;
       }
       case stmt::T_SWITCH_REPLICA_ROLE: {
@@ -1005,8 +1038,28 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObTableTTLStmt, ObTableTTLExecutor);
         break;
       }
+      case stmt::T_CREATE_TENANT_SNAPSHOT: {
+        DEFINE_EXECUTE_CMD(ObCreateTenantSnapshotStmt, ObCreateTenantSnapshotExecutor);
+        break;
+      }
+      case stmt::T_DROP_TENANT_SNAPSHOT: {
+        DEFINE_EXECUTE_CMD(ObDropTenantSnapshotStmt, ObDropTenantSnapshotExecutor);
+        break;
+      }
+      case stmt::T_CLONE_TENANT: {
+        DEFINE_EXECUTE_CMD(ObCloneTenantStmt, ObCloneTenantExecutor);
+        break;
+      }
       case stmt::T_ALTER_SYSTEM_RESET_PARAMETER: {
         DEFINE_EXECUTE_CMD(ObResetConfigStmt, ObResetConfigExecutor);
+        break;
+      }
+      case stmt::T_CANCEL_CLONE: {
+        DEFINE_EXECUTE_CMD(ObCancelCloneStmt, ObCancelCloneExecutor);
+        break;
+       }
+      case stmt::T_TRANSFER_PARTITION: {
+        DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:
@@ -1031,7 +1084,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
                      "cmd_type", cmd.get_cmd_type(),
                      "sql_text", ObHexEscapeSqlStr(ctx.get_sql_ctx()->is_sensitive_ ?
                                                    ObString(OB_MASKED_STR) : sql_text),
-                     "return_code", ret);
+                     "return_code", ret,
+                     "tenant_id", MTL_ID());
   }
 
   if (is_ddl_or_dcl_stmt) {
@@ -1063,6 +1117,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       LOG_WARN("failed to get schema guard", K(ret));
     }
     if (OB_FAIL(tmp_ret)) {
+      // overwrite ret
       ret = tmp_ret;
     }
   }

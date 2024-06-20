@@ -104,13 +104,15 @@ int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls
   transaction::ObPartTransCtx *tx_ctx = NULL;
   bool tx_ctx_existed = true;
   common::ObAddr scheduler;
+  // since 4.3 cluster_version in ctx_info
+  uint64_t cluster_version = ctx_info.cluster_version_;
   transaction::ObTxCreateArg arg(true,  /* for_replay */
-                                 false,
+                                 PartCtxSource::RECOVER,
                                  MTL_ID(),
                                  ctx_info.tx_id_,
                                  ctx_info.ls_id_,
                                  ctx_info.cluster_id_,     /* cluster_id */
-                                 GET_MIN_CLUSTER_VERSION(),
+                                 cluster_version,
                                  0, /*session_id*/
                                  scheduler,
                                  INT64_MAX,
@@ -213,7 +215,7 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
     transaction::ObPartTransCtx *tx_ctx = NULL;
     int64_t pos = 0;
     bool tx_ctx_existed = true;
-
+    ctx_info_.set_compatible_version(curr_meta.get_version());
     if (OB_FAIL(ctx_info_.deserialize(deserialize_buf, deserialize_buf_length, pos, tx_data_table))) {
       STORAGE_LOG(WARN, "failed to deserialize status_info", K(ret), K_(ctx_info));
     } else if (FALSE_IT(ctx_info_.exec_info_.mrege_buffer_ctx_array_to_multi_data_source())) {
@@ -260,6 +262,7 @@ int ObTxCtxTable::acquire_ref_(const ObLSID& ls_id)
 
   if (NULL == ls_tx_ctx_mgr_) {
     if (OB_ISNULL(txs = MTL(ObTransService*))) {
+      ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "trans_service get fail", K(ret));
     } else if (OB_FAIL(txs->get_tx_ctx_mgr().get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr_))) {
       TRANS_LOG(ERROR, "get ls tx ctx mgr with ref failed", KP(txs));
@@ -281,6 +284,7 @@ int ObTxCtxTable::release_ref_()
 
   if (NULL != ls_tx_ctx_mgr_) {
     if (OB_ISNULL(txs = MTL(ObTransService*))) {
+      ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "trans_service get fail", K(ret));
     } else if (OB_FAIL(txs->get_tx_ctx_mgr().revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr_))) {
       TRANS_LOG(ERROR, "revert ls tx ctx mgr with ref failed", KP(txs));

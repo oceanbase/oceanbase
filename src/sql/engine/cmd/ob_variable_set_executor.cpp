@@ -31,11 +31,12 @@
 #include "sql/code_generator/ob_column_index_provider.h"
 #include "sql/ob_sql_trans_control.h"
 #include "sql/ob_end_trans_callback.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "lib/timezone/ob_oracle_format_models.h"
 #include "observer/ob_server.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
-
+#include "sql/engine/cmd/ob_set_names_executor.h"
+#include "sql/privilege_check/ob_privilege_check.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -73,6 +74,16 @@ ObVariableSetExecutor::~ObVariableSetExecutor()
 {
 }
 
+int ObVariableSetExecutor::do_set_names(ObExecContext &ctx, ObSetNamesStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSetNamesExecutor executor;
+  if (OB_FAIL(executor.execute(ctx, stmt))) {
+    LOG_WARN("fail to set names", K(ret));
+  }
+  return ret;
+}
+
 int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -104,7 +115,7 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
       if (OB_ISNULL(expr_ctx.exec_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("expr_ctx.exec_ctx_ is NULL", K(ret));
-      } else if (password_ctx.init(stmt.get_actual_tenant_id())) {
+      } else if (OB_FAIL(password_ctx.init(stmt.get_actual_tenant_id()))) {
         LOG_WARN("fail to init password ctx", K(ret));
       } else {
         expr_ctx.exec_ctx_->set_sql_proxy(sql_proxy);
@@ -114,6 +125,10 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
         ObVariableSetStmt::VariableSetNode &node = tmp_node;
         if (OB_FAIL(stmt.get_variable_node(i, node))) {
           LOG_WARN("fail to get variable node", K(i), K(ret));
+        } else if (OB_NOT_NULL(node.set_names_stmt_)) {
+          if (OB_FAIL(do_set_names(ctx, *node.set_names_stmt_))) {
+            LOG_WARN("fail to set names", K(ret));
+          }
         } else {
           ObObj value_obj;
           ObBasicSysVar *sys_var = NULL;
@@ -451,7 +466,14 @@ int ObVariableSetExecutor::execute_subquery_expr(ObExecContext &ctx,
     ObObj tmp_value;
     SMART_VAR(ObISQLClient::ReadResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(conn->execute_read(tenant_id, subquery_expr.ptr(), res))) {
+      bool need_check = false;
+      if (OB_FAIL(session_info->check_feature_enable(ObCompatFeatureType::MYSQL_SET_VAR_PRIV_ENHANCE, need_check))) {
+        LOG_WARN("failed to check feature enable", K(ret));
+      } else if (need_check) {
+        conn->set_check_priv(true);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(conn->execute_read(tenant_id, subquery_expr.ptr(), res))) {
         LOG_WARN("failed to execute sql", K(ret), K(subquery_expr));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -696,6 +718,10 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
     } else if (set_var.var_name_ ==  OB_SV_OPTIMIZER_FEATURES_ENABLE) {
       if (OB_FAIL(ObBasicSessionInfo::check_optimizer_features_enable_valid(val))) {
         LOG_WARN("fail check optimizer_features_enable valid", K(val), K(ret));
+      }
+    } else if (set_var.var_name_ ==  OB_SV_PRIVILEGE_FEATURES_ENABLE) {
+      if (OB_FAIL(ObBasicSessionInfo::check_optimizer_features_enable_valid(val))) {
+        LOG_WARN("fail check privilege_features_enable valid", K(val), K(ret));
       }
     }
 

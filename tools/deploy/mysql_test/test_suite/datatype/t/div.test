@@ -3,6 +3,8 @@
 #### description: test
 --disable_warnings
 drop table if exists div_sb;
+--disable_warnings
+drop table if exists table1000_key_pk_parts_2;
 create table div_sb(c1 int,c2 int(255) zerofill,c3 bigint,c4 bigint unsigned,c5 bigint(255) zerofill,c6 decimal,c7 decimal(35, 15),c8 decimal(35, 7) zerofill,c9 varchar(123) collate utf8mb4_general_ci,c10 date,c11 datetime(5),c12 timestamp(5),c13 year(4),c14 char(24),c15 binary(24),c16 varchar(123) collate utf8mb4_bin);
 set @tmp_sql_mode = @@sql_mode;
 set @@sql_mode = '';
@@ -1701,3 +1703,22 @@ select (18446744073709551615 div -9223372036854775808) from div_sb;
 select (18446744073709551615 div 9223372036854775807) from div_sb;
 select (18446744073709551615 div 18446744073709551615) from div_sb;
 drop table div_sb;
+
+CREATE TABLE `table1000_key_pk_parts_2` (
+  `col_bigint` bigint(20) DEFAULT NULL,
+  `col_timestamp` timestamp NULL DEFAULT NULL,
+  `col_decimal_20_0` decimal(20,0) DEFAULT NULL,
+  `col_varchar_20` varchar(20) DEFAULT NULL,
+  `col_double` double DEFAULT NULL,
+  `pk` int(11) DEFAULT NULL,
+  KEY `in_expr_idx22` (`col_timestamp`) BLOCK_SIZE 16384 LOCAL
+) partition by key(pk) (partition `p0`, partition `p1`);
+
+INSERT INTO `table1000_key_pk_parts_2` VALUES (NULL,NULL,NULL,'g',0,0),(-28,NULL,-15,'deymectqhjvkffumhd',0,NULL),(NULL,'2005-12-10 12:25:37',0,'o',0,7),(-94,NULL,24,'p',-85,0),(-17364,'2000-09-09 14:51:21',0,'b',0,-28),(NULL,NULL,-18404,'english',0,-85),(6109695844481499136,'2005-01-24 20:03:07',-8330,'xodeymec',0,0),(-115,'2001-11-06 06:51:25',NULL,'q',0,-96),(0,'2000-02-10 08:39:54',-1781,'',-11995,0),(-681169443639787520,'2007-02-07 01:00:10',27309,'english',0,54),(NULL,NULL,-62,'english',3,NULL),(7,'2000-05-06 14:11:51',26954,'english',109,-378667008),(4,'2007-10-08 20:32:29',0,NULL,10456,1967783936),(0,NULL,0,'',0,0);
+
+explain SELECT count(*) FROM   table1000_key_pk_parts_2 WHERE  col_double > ALL (VALUES ROW((SELECT Floor(-360448000 / 1458241536) FROM dual)));
+SELECT count(*) FROM   table1000_key_pk_parts_2 WHERE  col_double > ALL (VALUES ROW((SELECT Floor(-360448000 / 1458241536) FROM dual)));
+explain SELECT count(*) FROM   table1000_key_pk_parts_2 WHERE  col_double > Floor(-360448000 / 1458241536);
+SELECT count(*) FROM   table1000_key_pk_parts_2 WHERE  col_double > Floor(-360448000 / 1458241536);
+
+drop table table1000_key_pk_parts_2;

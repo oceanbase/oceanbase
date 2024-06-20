@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_filter_operator.h"
 #include "ob_htable_utils.h"
+#include "ob_htable_filters.h"
 #include "lib/json/ob_json.h"
 #include "share/ob_errno.h"
 #include "share/table/ob_ttl_util.h"
@@ -470,7 +471,7 @@ int ObHTableScanMatcher::match_column(const ObHTableCell &cell, ObHTableMatchCod
           // in reverse scan order, functions which is filter cell and merge filter return code are completed at add_same_kq_to_res function
           if (ObQueryFlag::Reverse != column_tracker_->get_scan_order()){
             if (NULL != hfilter_) {
-              hfilter::Filter::ReturnCode filter_rc;
+              hfilter::Filter::ReturnCode filter_rc = hfilter::Filter::ReturnCode::INCLUDE;
               if (OB_FAIL(hfilter_->filter_cell(cell, filter_rc))) {
                 LOG_WARN("failed to filter cell", K(ret));
               } else {
@@ -622,6 +623,7 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       max_result_size_(query.get_max_result_size()),
       batch_size_(query.get_batch()),
       time_to_live_(0),
+      max_version_(0),
       curr_cell_(),
       allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       column_tracker_(NULL),
@@ -698,7 +700,7 @@ int ObHTableRowIterator::add_same_kq_to_res(ObIArray<ObNewRow> &same_kq_cells, O
     if (OB_SUCC(ret)) {
       ObHTableMatchCode match_code = ObHTableMatchCode::INCLUDE;
       if (NULL != hfilter_ && ObHTableMatchCode::INCLUDE == match_code) {
-        hfilter::Filter::ReturnCode filter_rc;
+        hfilter::Filter::ReturnCode filter_rc = hfilter::Filter::ReturnCode::INCLUDE;
         if (OB_FAIL(hfilter_->filter_cell(tmp_cell, filter_rc))) {
           LOG_WARN("failed to filter cell", K(ret));
         } else {
@@ -736,6 +738,7 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
   ObHTableMatchCode match_code = ObHTableMatchCode::DONE_SCAN;  // initialize
   if (ObQueryFlag::Reverse == scan_order_ && (-1 != limit_per_row_per_cf_ || 0 != offset_per_row_per_cf_)) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set limit_per_row_per_cf_ and offset_per_row_per_cf_ in reverse scan");
     LOG_WARN("server don't support set limit_per_row_per_cf_ and offset_per_row_per_cf_ in reverse scan yet",
               K(ret), K(scan_order_), K(limit_per_row_per_cf_), K(offset_per_row_per_cf_));
   }

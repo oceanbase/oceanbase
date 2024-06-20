@@ -11,8 +11,18 @@
  */
 
 #ifdef LATCH_DEF
-// NOTICE: No need to add wait event when adding latch
-// NOTICE: do not reuse latch id or rename latch!
+/**
+ * LATCH_DEF(def, id, name, policy, max_spin_cnt, max_yield_cnt, enable)
+ * @param def Name of this latch
+ * @param id Identifier of an latch ATTENTION: please add id placeholder on master.
+ * @param name Name for this latch. Display on virtual table v$event_name
+ * @param policy LATCH_READ_PREFER and LATCH_FIFO
+ * @param max_spin_cnt for mutex, spin several times to try to get lock before actually perform an mutex lock.
+ * @param max_yield_cnt times of call to sched_yield() instead of perform an mutex lock.
+ * @param enable Indicate whether this latch is enabled. Marked it false it you merely need it as an placeholder.
+ * NOTICE: No need to add wait event when adding latch
+ * NOTICE: do not reuse latch id or rename latch!
+*/
 LATCH_DEF(LATCH_WAIT_QUEUE_LOCK, 0, "latch wait queue lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DEFAULT_SPIN_LOCK, 1, "default spin lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DEFAULT_SPIN_RWLOCK, 2, "default spin rwlock", LATCH_FIFO, 2000, 0, true)
@@ -307,7 +317,6 @@ LATCH_DEF(DAS_ASYNC_RPC_LOCK, 290, "das wait remote response lock", LATCH_FIFO, 
 LATCH_DEF(CLOG_CKPT_RWLOCK, 291, "clog checkpoint rwlock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(REWRITE_RULE_ITEM_LOCK, 292, "rewrite rule item lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(TENANT_MGR_TENANT_BUCKET_LOCK, 290, "tenant mgr tenant bucket lock", LATCH_READ_PREFER, INT64_MAX, 0, false)
 LATCH_DEF(SRS_LOCK, 293, "srs lock", LATCH_READ_PREFER, 2000, 0, false)
 LATCH_DEF(DDL_EXECUTE_LOCK, 294, "ddl execute lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TENANT_IO_CONFIG_LOCK, 295, "tenant io config lock", LATCH_FIFO, 2000, 0, true)
@@ -341,16 +350,27 @@ LATCH_DEF(ZONE_STORAGE_INFO_RW_LOCK, 319, "zone storage infos rw lock", LATCH_RE
 LATCH_DEF(DEVICE_MANIFEST_RW_LOCK, 320, "device manifest rw lock", LATCH_READ_PREFER, 2000, 0, false)
 LATCH_DEF(MANIFEST_TASK_LOCK, 321, "manifest task lock", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(OB_DEVICE_CREDENTIAL_MGR_LOCK, 322, "device credential mgr rw lock", LATCH_READ_PREFER, 2000, 0, false)
-LATCH_DEF(TIERED_BLOCK_MANAGER_LOCK, 323, "tiered block manager lock", LATCH_FIFO, INT64_MAX, 0, false)
+LATCH_DEF(DISK_SPACE_MANAGER_LOCK, 323, "share storage disk space manager lock", LATCH_FIFO, INT64_MAX, 0, false)
 LATCH_DEF(TIERED_SUPER_BLOCK_LOCK, 324, "tiered super block lock", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(TSLOG_PROCESSING_MUTEX, 325, "tslog processing mutex", LATCH_FIFO, INT64_MAX, 0, false)
 LATCH_DEF(TSLOG_CKPT_LOCK, 326, "tslog checkpoint lock", LATCH_FIFO, INT64_MAX, 0, false)
-LATCH_DEF(TIERED_TENANT_BLOCK_LOCK, 327, "tiered tenant block lock", LATCH_FIFO, INT64_MAX, 0, false)
+LATCH_DEF(FILE_MANAGER_LOCK, 327, "ile manager lock", LATCH_FIFO, INT64_MAX, 0, false)
 
-LATCH_DEF(TRANS_EXEC_LOCK, 328, "trans exec latch", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(TRANS_FLUSH_REDO_LOCK, 329, "trans flush redo latch", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TRANS_ACCESS_LOCK, 328, "trans read/write access latch", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TRANS_FLUSH_REDO_LOCK, 329, "trans flush redo log latch", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 330, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TENANT_DIRECT_LOAD_MGR_LOCK, 330, "tenant direct load manager lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLET_DIRECT_LOAD_MGR_LOCK, 331, "tablet direct load manager lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DIRECT_LOAD_SLICE_WRITER_LOCK, 332, "direct load slice writer lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(COLUMN_STORE_DDL_RESCAN_LOCK, 333, "column store ddl rescan lock", LATCH_FIFO, INT64_MAX, 0, true)
+LATCH_DEF(TABLET_DIRECT_LOAD_MGR_SCHEMA_LOCK, 334, "tablet direct load manager schema lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(SQL_AUDIT, 335, "sql audit release second level queue lock", LATCH_FIFO, 2000, 0, true)
+
+LATCH_DEF(S2_PHY_BLOCK_LOCK, 336, "s2 phy block lock", LATCH_FIFO, INT64_MAX, 0, false)
+LATCH_DEF(S2_MEM_BLOCK_LOCK, 337, "s2 mem block lock", LATCH_FIFO, INT64_MAX, 0, false)
+LATCH_DEF(TENANT_MGR_TENANT_BUCKET_LOCK, 338, "tenant mgr tenant bucket lock", LATCH_READ_PREFER, INT64_MAX, 0, false)
+
+LATCH_DEF(LATCH_END, 339, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

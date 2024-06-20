@@ -26,9 +26,11 @@ enum ObMergeType
   MINI_MERGE = 3,  // mini merge, only flush memtable
   MAJOR_MERGE = 4,
   MEDIUM_MERGE = 5,
-  DDL_KV_MERGE = 6,
+  DDL_KV_MERGE = 6, // only use for ddl dag
   BACKFILL_TX_MERGE = 7,
-  MDS_TABLE_MERGE = 8,
+  MDS_MINI_MERGE = 8,
+  // add new merge type here
+  // fix merge_type_to_str & ObPartitionMergePolicy::get_merge_tables
   MERGE_TYPE_MAX
 };
 
@@ -86,7 +88,7 @@ inline bool is_backfill_tx_merge(const ObMergeType &merge_type)
 }
 inline bool is_mds_table_merge(const ObMergeType &merge_type)
 {
-  return MDS_TABLE_MERGE == merge_type;
+  return MDS_MINI_MERGE == merge_type;
 }
 
 enum ObMergeLevel : uint8_t
@@ -101,6 +103,9 @@ inline bool is_valid_merge_level(const ObMergeLevel &merge_level)
   return merge_level >= MACRO_BLOCK_MERGE_LEVEL && merge_level < MERGE_LEVEL_MAX;
 }
 const char *merge_level_to_str(const ObMergeLevel &merge_level);
+
+// open or close FTS index checksum verify
+#define VERIFY_FTS_CHECKSUM true
 
 } // namespace storage
 } // namespace oceanbase

@@ -23,6 +23,7 @@
 #include "lib/lock/ob_latch.h"
 #include "lib/net/ob_net_util.h"
 #include "lib/oblog/ob_base_log_buffer.h"
+#include "lib/oblog/ob_log_compressor.h"
 #include "lib/ob_running_mode.h"
 #include "lib/profile/ob_active_resource_list.h"
 #include "lib/profile/ob_profile_log.h"
@@ -33,6 +34,8 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/task/ob_timer_monitor.h"
 #include "lib/thread/thread_mgr.h"
+#include "lib/compress/ob_compressor_pool.h"
+#include "lib/compress/zlib_lite/ob_zlib_lite_compressor.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_rpc_extra_payload.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
@@ -41,7 +44,6 @@
 #include "observer/mysql/ob_query_retry_ctrl.h"
 #include "rpc/obrpc/ob_rpc_handler.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
-#include "share/allocator/ob_memstore_allocator_mgr.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "share/cache/ob_cache_name_define.h"
 #include "share/interrupt/ob_global_interrupt_call.h"
@@ -87,7 +89,6 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/ob_file_system_router.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
@@ -104,12 +105,15 @@
 #include "logservice/palf/election/interface/election.h"
 #include "share/ob_ddl_sim_point.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
+#include "storage/fts/ob_fts_plugin_mgr.h"
 #include "observer/ob_server_utils.h"
 #include "observer/table_load/ob_table_load_partition_calc.h"
 #include "observer/virtual_table/ob_mds_event_buffer.h"
-#include "observer/ob_server_startup_task_handler.h"
+#include "observer/ob_startup_accel_task_handler.h"
 #include "share/detect/ob_detect_manager.h"
 #include "observer/table/ttl/ob_table_ttl_task.h"
+#include "storage/high_availability/ob_storage_ha_diagnose_service.h"
+#include "logservice/palf/log_cache.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/palf_env_lite_mgr.h"
 #include "logservice/arbserver/ob_arb_srv_network_frame.h"
@@ -119,9 +123,8 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_libxml2_sax_handler.h"
-#endif
+#include "ob_check_params.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -174,7 +177,6 @@ ObServer::ObServer()
     lst_operator_(), tablet_operator_(),
     server_tracer_(),
     location_service_(),
-    partition_cfy_(),
     bandwidth_throttle_(),
     sys_bkgd_net_percentage_(0),
     ethernet_speed_(0),
@@ -197,6 +199,7 @@ ObServer::ObServer()
     refresh_active_time_task_(),
     refresh_network_speed_task_(),
     refresh_cpu_frequency_task_(),
+    refresh_io_calibration_task_(),
     schema_status_proxy_(sql_proxy_),
     is_log_dir_empty_(false),
     conn_res_mgr_(),
@@ -256,6 +259,7 @@ int ObServer::parse_mode()
 int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 {
   FLOG_INFO("[OBSERVER_NOTICE] start to init observer");
+  DBA_STEP_RESET(server_start);
   int ret = OB_SUCCESS;
   opts_ = opts;
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
@@ -264,7 +268,16 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   if (OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
   }
+  // set alert log level earlier
+  OB_LOGGER.set_alert_log_level(config_.alert_log_level);
+  LOG_DBA_INFO_V2(OB_SERVER_INIT_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer init begin.");
 
+  //check os params
+  if (OB_SUCC(ret) && OB_FAIL(check_os_params(GCONF.strict_check_os_params))) {
+    LOG_ERROR("check OS params failed", K(GCONF.strict_check_os_params));
+  }
   // set large page param
   ObLargePageHelper::set_param(config_.use_large_pages);
 
@@ -274,6 +287,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     if (FAILEDx(OB_LOGGER.init(log_cfg, true))) {
       LOG_ERROR("async log init error.", KR(ret));
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
+    } else if (OB_FAIL(OB_LOG_COMPRESSOR.init())) {
+      LOG_ERROR("log compressor init error.", KR(ret));
+    } else if (OB_FAIL(OB_LOGGER.set_log_compressor(&OB_LOG_COMPRESSOR))) {
+      LOG_ERROR("set log compressor error.", KR(ret));
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(init_pre_setting())) {
@@ -292,6 +309,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     if (FAILEDx(OB_LOGGER.init(log_cfg, false))) {
       LOG_ERROR("async log init error.", KR(ret));
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
+    } else if (OB_FAIL(OB_LOG_COMPRESSOR.init())) {
+      LOG_ERROR("log compressor init error.", KR(ret));
+    } else if (OB_FAIL(OB_LOGGER.set_log_compressor(&OB_LOG_COMPRESSOR))) {
+      LOG_ERROR("set log compressor error.", KR(ret));
     } else if (OB_FAIL(init_tz_info_mgr())) {
       LOG_ERROR("init tz_info_mgr failed", KR(ret));
     } else if (OB_FAIL(ObSqlTaskFactory::get_instance().init())) {
@@ -348,6 +369,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init network failed", KR(ret));
     } else if (OB_FAIL(init_interrupt())) {
       LOG_ERROR("init interrupt failed", KR(ret));
+    } else if (OB_FAIL(init_zlib_lite_compressor())) {
+      LOG_ERROR("init zlib lite compressor failed", KR(ret));
     } else if (OB_FAIL(rs_mgr_.init(&srv_rpc_proxy_, &config_, &sql_proxy_))) {
       LOG_ERROR("init rs_mgr_ failed", KR(ret));
     } else if (OB_FAIL(server_tracer_.init(rs_rpc_proxy_, sql_proxy_))) {
@@ -388,10 +411,14 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init bandwidth_throttle failed", KR(ret));
     } else if (OB_FAIL(ObClockGenerator::init())) {
       LOG_ERROR("init create clock generator failed", KR(ret));
+    } else if (OB_FAIL(ObTenantFTPluginMgr::register_plugins())) {
+      LOG_ERROR("init fulltext plugins failed", K(ret));
     } else if (OB_FAIL(init_storage())) {
       LOG_ERROR("init storage failed", KR(ret));
     } else if (OB_FAIL(init_tx_data_cache())) {
       LOG_ERROR("init tx data cache failed", KR(ret));
+    } else if (OB_FAIL(init_log_kv_cache())) {
+      LOG_ERROR("init log kv cache failed", KR(ret));
     } else if (OB_FAIL(locality_manager_.init(self_addr_,
                                               &sql_proxy_))) {
       LOG_ERROR("init locality manager failed", KR(ret));
@@ -403,19 +430,17 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init bl_service_ failed", KR(ret));
     } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
       LOG_ERROR("init device manager failed", KR(ret));
-    } else if (OB_FAIL(ObMemstoreAllocatorMgr::get_instance().init())) {
-      LOG_ERROR("init ObMemstoreAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(ObTenantMutilAllocatorMgr::get_instance().init())) {
       LOG_ERROR("init ObTenantMutilAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().init())) {
       LOG_ERROR("init external table file manager failed", KR(ret));
     } else if (OB_FAIL(SLOGGERMGR.init(storage_env_.log_spec_.log_dir_,
-        storage_env_.log_spec_.max_log_file_size_, storage_env_.slog_file_spec_,
-        true/*need_reserved*/))) {
+        storage_env_.sstable_dir_, storage_env_.log_spec_.max_log_file_size_,
+        storage_env_.slog_file_spec_))) {
       LOG_ERROR("init ObStorageLoggerManager failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));
-    } else if (OB_FAIL(SERVER_STARTUP_TASK_HANDLER.init())) {
+    } else if (OB_FAIL(startup_accel_handler_.init(SERVER_ACCEL))) {
       LOG_ERROR("init server startup task handler failed", KR(ret));
     } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance().init())) {
       LOG_ERROR("init server checkpoint slog handler failed", KR(ret));
@@ -437,6 +462,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init refresh network speed task failed", KR(ret));
     } else if (OB_FAIL(init_refresh_cpu_frequency())) {
       LOG_ERROR("init refresh cpu frequency failed", KR(ret));
+    } else if (OB_FAIL(init_refresh_io_calibration())) {
+      LOG_ERROR("init refresh io calibration failed", KR(ret));
     } else if (OB_FAIL(ObOptStatManager::get_instance().init(
                          &sql_proxy_, &config_))) {
       LOG_ERROR("init opt stat manager failed", KR(ret));
@@ -481,12 +508,12 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init server blacklist failed", KR(ret));
     } else if (OB_FAIL(ObLongopsMgr::get_instance().init())) {
       LOG_WARN("init longops mgr fail", KR(ret));
+    } else if (OB_FAIL(ObDDLRedoLock::get_instance().init())) {
+      LOG_WARN("init ddl redo lock failed", K(ret));
 #ifdef ERRSIM
     } else if (OB_FAIL(ObDDLSimPointMgr::get_instance().init())) {
       LOG_WARN("init ddl sim point mgr fail", KR(ret));
 #endif
-    } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().init())) {
-      LOG_WARN("init DDL redo log writer failed", KR(ret));
     }
 #ifdef OB_BUILD_ARBITRATION
     else if (OB_FAIL(arb_gcs_.init(GCTX.self_addr(),
@@ -499,6 +526,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_WARN("init ObDetectManagerThread failed", KR(ret));
     } else if (OB_FAIL(wr_service_.init())) {
       LOG_WARN("failed to init wr service", K(ret));
+    } else if (OB_FAIL(ObStorageHADiagService::instance().init(GCTX.sql_proxy_))) {
+      LOG_WARN("init storage ha diagnose service failed", K(ret));
     } else {
       GDS.set_rpc_proxy(&rs_rpc_proxy_);
     }
@@ -508,10 +537,16 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     set_stop();
     destroy();
     LOG_ERROR("[OBSERVER_NOTICE] fail to init observer", KR(ret));
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "msg", "observer init() has failure", KR(ret));
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_INIT_FAIL, ret,
+                        DBA_STEP_INC_INFO(server_start),
+                        "observer init fail. "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
   } else {
     FLOG_INFO("[OBSERVER_NOTICE] success to init observer", "cluster_id", obrpc::ObRpcNetHandler::CLUSTER_ID,
         "lib::g_runtime_enabled", lib::g_runtime_enabled);
+    LOG_DBA_INFO_V2(OB_SERVER_INIT_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "observer init success.");
   }
   return ret;
 }
@@ -543,6 +578,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy OB_LOGGER");
     OB_LOGGER.destroy();
     FLOG_INFO("OB_LOGGER destroyed");
+
+    FLOG_INFO("begin to destroy OB_LOG_COMPRESSOR");
+    OB_LOG_COMPRESSOR.destroy();
+    FLOG_INFO("OB_LOG_COMPRESSOR destroyed");
 
     FLOG_INFO("begin to destroy task controller");
     ObTaskController::get().destroy();
@@ -626,10 +665,6 @@ void ObServer::destroy()
     TG_DESTROY(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer destroyed");
 
-    FLOG_INFO("begin to destroy memory dump timer");
-    TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
-    FLOG_INFO("memory dump timer destroyed");
-
     FLOG_INFO("begin to destroy redef heart beat task");
     TG_DESTROY(lib::TGDefIDs::RedefHeartBeatTask);
     FLOG_INFO("redef heart beat task destroyed");
@@ -654,11 +689,9 @@ void ObServer::destroy()
     sql_engine_.destroy();
     FLOG_INFO("sql engine destroyed");
 
-#ifdef OB_BUILD_ORACLE_XML
     FLOG_INFO("begin to destroy xml ctx");
     ObLibXml2SaxHandler::destroy();
     FLOG_INFO("xml ctx destroyed");
-#endif
 
     FLOG_INFO("begin to destroy pl engine");
     pl_engine_.destory();
@@ -683,6 +716,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy tx data kv cache");
     OB_TX_DATA_KV_CACHE.destroy();
     FLOG_INFO("tx data kv cache destroyed");
+
+    FLOG_INFO("begin to destroy log kv cache");
+    OB_LOG_KV_CACHE.destroy();
+    FLOG_INFO("log kv cache destroyed");
 
     FLOG_INFO("begin to destroy location service");
     location_service_.destroy();
@@ -732,6 +769,10 @@ void ObServer::destroy()
     multi_tenant_.destroy();
     FLOG_INFO("wait destroy multi tenant success");
 
+    FLOG_INFO("begin to unregister fulltext plugins");
+    ObTenantFTPluginMgr::unregister_plugins();
+    FLOG_INFO("fulltext plugins unregistered");
+
     FLOG_INFO("begin to destroy query retry ctrl");
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
@@ -745,7 +786,7 @@ void ObServer::destroy()
     FLOG_INFO("ob server block mgr destroyed");
 
     FLOG_INFO("begin to destroy server startup task handler");
-    SERVER_STARTUP_TASK_HANDLER.destroy();
+    startup_accel_handler_.destroy();
     FLOG_INFO("server startup task handler destroyed");
 
     FLOG_INFO("begin to destroy backup index cache");
@@ -763,6 +804,9 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy global election report timer");
     palf::election::GLOBAL_REPORT_TIMER.destroy();
     FLOG_INFO("global election report timer destroyed");
+
+    ObStorageHADiagService::instance().destroy();
+    FLOG_INFO("storage ha diagnose destroy");
 
     FLOG_INFO("begin to destroy virtual tenant manager");
     ObVirtualTenantManager::get_instance().destroy();
@@ -793,6 +837,8 @@ void ObServer::destroy()
     wr_service_.destroy();
     FLOG_INFO("WR service destroyed");
 
+    deinit_zlib_lite_compressor();
+
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
   }
@@ -818,6 +864,9 @@ int ObServer::start()
   gctx_.status_ = SS_STARTING;
   // begin to start a observer
   FLOG_INFO("[OBSERVER_NOTICE] start observer begin");
+  LOG_DBA_INFO_V2(OB_SERVER_START_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer start begin.");
 
   if (is_arbitration_mode()) {
 #ifdef OB_BUILD_ARBITRATION
@@ -833,11 +882,14 @@ int ObServer::start()
     }
 #endif
   } else {
+    LOG_DBA_INFO_V2(OB_SERVER_INSTANCE_START_BEGIN,
+                    DBA_STEP_INC_INFO(server_start),
+                    "observer instance start begin.");
     if (OB_FAIL(start_sig_worker_and_handle())) {
       LOG_ERROR("fail to start signal worker", KR(ret));
     }
 
-    if (FAILEDx(SERVER_STARTUP_TASK_HANDLER.start())) {
+    if (FAILEDx(startup_accel_handler_.start())) {
       LOG_ERROR("fail to start server startup task handler", KR(ret));
     } else {
       FLOG_INFO("success to start server startup task handler");
@@ -873,6 +925,12 @@ int ObServer::start()
       LOG_ERROR("fail to start multi tenant", KR(ret));
     } else {
       FLOG_INFO("success to start multi tenant");
+    }
+
+    if (FAILEDx(wr_service_.start())) {
+      LOG_ERROR("failed to start wr service", K(ret));
+    } else {
+      LOG_INFO("success to start wr service");
     }
 
     if (FAILEDx(ObServerCheckpointSlogHandler::get_instance().start())) {
@@ -912,12 +970,6 @@ int ObServer::start()
       FLOG_INFO("success to start root service monitor");
     }
 
-    if (FAILEDx(wr_service_.start())) {
-      LOG_ERROR("failed to start wr service", K(ret));
-    } else {
-      LOG_INFO("success to start wr service");
-    }
-
     if (FAILEDx(ob_service_.start())) {
       LOG_ERROR("fail to start oceanbase service", KR(ret));
     } else {
@@ -954,6 +1006,12 @@ int ObServer::start()
       FLOG_INFO("success to start imc tasks");
     }
 #endif
+
+    if (FAILEDx(ObStorageHADiagService::instance().start())) {
+      LOG_ERROR("fail to start storage ha diagnose service", KR(ret));
+    } else {
+      FLOG_INFO("success to start storage ha diagnose service");
+    }
 
     if (FAILEDx(unix_domain_listener_.start())) {
       LOG_ERROR("fail to start unix domain listener", KR(ret));
@@ -996,12 +1054,20 @@ int ObServer::start()
 
     if (OB_SUCC(ret)) {
       FLOG_INFO("[OBSERVER_NOTICE] server instance start succeed");
+      LOG_DBA_INFO_V2(OB_SERVER_INSTANCE_START_SUCCESS,
+                      DBA_STEP_INC_INFO(server_start),
+                      "observer instance start success.");
       prepare_stop_ = false;
       stop_ = false;
       has_stopped_ = false;
+    } else {
+      LOG_DBA_ERROR_V2(OB_SERVER_INSTANCE_START_FAIL, ret,
+                       DBA_STEP_INC_INFO(server_start),
+                       "observer instance start fail. "
+                       "you may find solutions in previous error logs or seek help from official technicians.");
     }
     // this handler is only used to process tasks during startup. so it can be destroied here.
-    SERVER_STARTUP_TASK_HANDLER.destroy();
+    startup_accel_handler_.destroy();
 
     // refresh server configure
     //
@@ -1013,37 +1079,26 @@ int ObServer::start()
       FLOG_INFO("success to refresh server configure");
     }
 
-    bool synced = false;
-    while (OB_SUCC(ret) && !stop_ && !synced) {
-      synced = multi_tenant_.has_synced();
-      if (!synced) {
-        SLEEP(1);
-      }
-    }
-    FLOG_INFO("check if multi tenant synced", KR(ret), K(stop_), K(synced));
-
-    bool schema_ready = false;
-    while (OB_SUCC(ret) && !stop_ && !schema_ready) {
-      schema_ready = schema_service_.is_sys_full_schema();
-      if (!schema_ready) {
-        SLEEP(1);
-      }
-    }
-    FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready));
-
-    bool timezone_usable = false;
-    if (FAILEDx(tenant_timezone_mgr_.start())) {
-      LOG_ERROR("fail to start tenant timezone mgr", KR(ret));
+    // check if multi tenant synced
+    if (FAILEDx(check_if_multi_tenant_synced())) {
+      LOG_ERROR("fail to check if multi tenant synced", KR(ret));
     } else {
-      FLOG_INFO("success to start tenant timezone mgr");
+      FLOG_INFO("success to check if multi tenant synced");
     }
-    while (OB_SUCC(ret) && !stop_ && !timezone_usable) {
-      timezone_usable = tenant_timezone_mgr_.is_usable();
-      if (!timezone_usable) {
-        SLEEP(1);
-      }
+
+    // check if schema ready
+    if (FAILEDx(check_if_schema_ready())) {
+      LOG_ERROR("fail to check if schema ready", KR(ret));
+    } else {
+      FLOG_INFO("success to check if schema ready");
     }
-    FLOG_INFO("check if timezone usable", KR(ret), K(stop_), K(timezone_usable));
+
+    // check if timezone usable
+    if (FAILEDx(check_if_timezone_usable())) {
+      LOG_ERROR("fail to check if timezone usable", KR(ret));
+    } else {
+      FLOG_INFO("success to check if timezone usable");
+    }
 
     // check log replay and user tenant schema refresh status
     if (OB_SUCC(ret)) {
@@ -1080,16 +1135,25 @@ int ObServer::start()
 
   if (OB_FAIL(ret)) {
     LOG_ERROR("failure occurs, try to set stop and wait", KR(ret));
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "msg", "observer start() has failure", KR(ret));
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_START_FAIL, ret,
+                        DBA_STEP_INC_INFO(server_start),
+                        "observer start fail, the stop status is ", stop_, ". "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
     set_stop();
     wait();
   } else if (!stop_) {
     GCTX.status_ = SS_SERVING;
     GCTX.start_service_time_ = ObTimeUtility::current_time();
     FLOG_INFO("[OBSERVER_NOTICE] observer start service", "start_service_time", GCTX.start_service_time_);
+    LOG_DBA_INFO_V2(OB_SERVER_START_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "observer start success.");
   } else {
     FLOG_INFO("[OBSERVER_NOTICE] observer is set to stop", KR(ret), K_(stop));
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "msg", "observer start process is interrupted", KR(ret), K_(stop));
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_START_FAIL, ret,
+                        DBA_STEP_INC_INFO(server_start),
+                        "observer start fail, the stop status is ", stop_, ". "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
   }
 
   return ret;
@@ -1118,6 +1182,78 @@ int ObServer::try_update_hidden_sys()
   return ret;
 }
 
+int ObServer::check_if_multi_tenant_synced()
+{
+  int ret = OB_SUCCESS;
+  bool synced = false;
+  LOG_DBA_INFO_V2(OB_SERVER_WAIT_MULTI_TENANT_SYNCED_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "wait multi tenant synced begin.");
+  while (OB_SUCC(ret) && !stop_ && !synced) {
+    synced = multi_tenant_.has_synced();
+    if (!synced) {
+      SLEEP(1);
+    }
+  }
+  FLOG_INFO("check if multi tenant synced", KR(ret), K(stop_), K(synced));
+  if (!stop_ && synced) {
+    LOG_DBA_INFO_V2(OB_SERVER_WAIT_MULTI_TENANT_SYNCED_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "wait multi tenant synced success.");
+  } else {
+    LOG_DBA_ERROR_V2(OB_SERVER_WAIT_MULTI_TENANT_SYNCED_FAIL, ret,
+                     DBA_STEP_INC_INFO(server_start),
+                     "wait multi tenant synced fail, server stop status is ", stop_, ". "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  }
+  return ret;
+}
+
+int ObServer::check_if_schema_ready()
+{
+  int ret = OB_SUCCESS;
+  bool schema_ready = false;
+  LOG_DBA_INFO_V2(OB_SERVER_WAIT_SCHEMA_READY_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "wait schema ready begin.");
+  while (OB_SUCC(ret) && !stop_ && !schema_ready) {
+    schema_ready = schema_service_.is_sys_full_schema();
+    if (!schema_ready) {
+      SLEEP(1);
+    }
+  }
+  FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready));
+  if (!stop_ && schema_ready) {
+    LOG_DBA_INFO_V2(OB_SERVER_WAIT_SCHEMA_READY_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "wait schema ready success.");
+  } else {
+    LOG_DBA_ERROR_V2(OB_SERVER_WAIT_SCHEMA_READY_FAIL, ret,
+                     DBA_STEP_INC_INFO(server_start),
+                     "wait schema ready fail, server stop status is ", stop_, ". "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  }
+  return ret;
+}
+
+int ObServer::check_if_timezone_usable()
+{
+  int ret = OB_SUCCESS;
+  bool timezone_usable = false;
+  if (FAILEDx(tenant_timezone_mgr_.start())) {
+    LOG_ERROR("fail to start tenant timezone mgr", KR(ret));
+  } else {
+    FLOG_INFO("success to start tenant timezone mgr");
+  }
+  while (OB_SUCC(ret) && !stop_ && !timezone_usable) {
+    timezone_usable = tenant_timezone_mgr_.is_usable();
+    if (!timezone_usable) {
+      SLEEP(1);
+    }
+  }
+  FLOG_INFO("check if timezone usable", KR(ret), K(stop_), K(timezone_usable));
+  return ret;
+}
 void ObServer::prepare_stop()
 {
   prepare_stop_ = true;
@@ -1148,10 +1284,15 @@ int ObServer::stop()
   int ret = OB_SUCCESS;
   int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer begin");
+  LOG_DBA_INFO_V2(OB_SERVER_STOP_BEGIN, "observer stop begin.");
 
   FLOG_INFO("begin to stop OB_LOGGER");
   OB_LOGGER.stop();
   FLOG_INFO("stop OB_LOGGER success");
+
+  FLOG_INFO("begin to stop OB_LOG_COMPRESSOR");
+  OB_LOG_COMPRESSOR.stop();
+  FLOG_INFO("stop OB_LOG_COMPRESSOR success");
 
   FLOG_INFO("begin to stop task controller");
   ObTaskController::get().stop();
@@ -1290,10 +1431,6 @@ int ObServer::stop()
     TG_STOP(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer stopped");
 
-    FLOG_INFO("begin to stop memory dump timer");
-    TG_STOP(lib::TGDefIDs::MemDumpTimer);
-    FLOG_INFO("memory dump timer stopped");
-
     FLOG_INFO("begin to stop ctas clean up timer");
     TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
     FLOG_INFO("ctas clean up timer stopped");
@@ -1362,7 +1499,7 @@ int ObServer::stop()
     FLOG_INFO("server checkpoint slog handler stopped");
 
     FLOG_INFO("begin to stop server startup task handler");
-    SERVER_STARTUP_TASK_HANDLER.stop();
+    startup_accel_handler_.stop();
     FLOG_INFO("server startup task handler stopped");
 
     // It will wait for all requests done.
@@ -1401,6 +1538,10 @@ int ObServer::stop()
     } else {
       FLOG_INFO("rpc network shutdowned");
     }
+
+    FLOG_INFO("begin to stop storage ha diagnose service");
+    ObStorageHADiagService::instance().stop();
+    FLOG_INFO("storage ha diagnose service stopped");
 
     FLOG_INFO("begin to shutdown high priority rpc");
     if (OB_FAIL(net_frame_.high_prio_rpc_shutdown())) {
@@ -1457,7 +1598,10 @@ int ObServer::stop()
   has_stopped_ = true;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer end", KR(ret));
   if (OB_SUCCESS != fail_ret) {
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer stop() has failure", KR(fail_ret));
+    LOG_DBA_ERROR_V2(OB_SERVER_STOP_FAIL, fail_ret, "observer stop fail. "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_SERVER_STOP_SUCCESS, "observer stop success.");
   }
 
   return ret;
@@ -1468,6 +1612,7 @@ int ObServer::wait()
   int ret = OB_SUCCESS;
   int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] wait observer begin");
+  LOG_DBA_INFO_V2(OB_SERVER_WAIT_BEGIN, "observer process wait begin.");
   // wait for stop flag
 
   FLOG_INFO("begin to wait observer setted to stop");
@@ -1498,6 +1643,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait OB_LOGGER");
     OB_LOGGER.wait();
     FLOG_INFO("wait OB_LOGGER success");
+
+    FLOG_INFO("begin to wait OB_LOG_COMPRESSOR");
+    OB_LOG_COMPRESSOR.wait();
+    FLOG_INFO("wait OB_LOG_COMPRESSOR success");
 
     FLOG_INFO("begin to wait task controller");
     ObTaskController::get().wait();
@@ -1583,10 +1732,6 @@ int ObServer::wait()
     FLOG_INFO("begin to wait ctas clean up timer");
     TG_WAIT(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("wait ctas clean up timer success");
-
-    FLOG_INFO("begin to wait memory dump timer");
-    TG_WAIT(lib::TGDefIDs::MemDumpTimer);
-    FLOG_INFO("wait memory dump timer success");
 
     FLOG_INFO("begin to wait root service");
     root_service_.wait();
@@ -1687,7 +1832,7 @@ int ObServer::wait()
     FLOG_INFO("wait server checkpoint slog handler success");
 
     FLOG_INFO("begin to wait server startup task handler");
-    SERVER_STARTUP_TASK_HANDLER.wait();
+    startup_accel_handler_.wait();
     FLOG_INFO("wait server startup task handler success");
 
     FLOG_INFO("begin to wait global election report timer");
@@ -1715,10 +1860,17 @@ int ObServer::wait()
     ObClockGenerator::get_instance().wait();
     FLOG_INFO("wait clock generator success");
 
+    FLOG_INFO("begin to wait storage ha diagnose");
+    ObStorageHADiagService::instance().wait();
+    FLOG_INFO("wait storage ha diagnose success");
+
     gctx_.status_ = SS_STOPPED;
     FLOG_INFO("[OBSERVER_NOTICE] wait observer end", KR(ret));
     if (OB_SUCCESS != fail_ret) {
-      LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer wait() has failure", KR(fail_ret));
+      LOG_DBA_ERROR_V2(OB_SERVER_WAIT_FAIL, fail_ret, "observer process wait fail. "
+                       "you may find solutions in previous error logs or seek help from official technicians.");
+    } else {
+      LOG_DBA_INFO_V2(OB_SERVER_WAIT_SUCCESS, "observer process wait succcess.");
     }
   }
 
@@ -1746,7 +1898,47 @@ int ObServer::init_config()
   if (OB_FILE_NOT_EXIST == (ret = config_mgr_.load_config())) {
     has_config_file = false;
     ret = OB_SUCCESS;
+  } else if (OB_FAIL(ret)) {
+    LOG_ERROR("load config from file failed", KR(ret));
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(init_opts_config(has_config_file))) {
+    LOG_ERROR("init opts config failed", KR(ret));
+  } else {
+    config_.print();
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(init_local_ip_and_devname())) {
+    LOG_ERROR("init local_ip and devname failed", KR(ret));
+  } else if (!is_arbitration_mode() && OB_FAIL(config_.strict_check_special())) {
+    LOG_ERROR("some config setting is not valid", KR(ret));
+  } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
+    LOG_ERROR("reload memory config failed", KR(ret));
+  } else if (!is_arbitration_mode() && OB_FAIL(set_running_mode())) {
+    LOG_ERROR("set running mode failed", KR(ret));
+  } else if (OB_FAIL(init_self_addr())) {
+    LOG_ERROR("init self_addr failed", KR(ret));
+  } else if (is_arbitration_mode()) {
+    // arbitration mode, dump config params to file directly
+    if (OB_FAIL(config_mgr_.dump2file())) {
+      LOG_ERROR("config_mgr_ dump2file failed", KR(ret));
+    } else {
+      LOG_INFO("config_mgr_ dump2file success", KR(ret));
+    }
+  } else if (OB_FAIL(init_config_module())) {
+    LOG_ERROR("init config module failed", KR(ret));
+  } else {
+    lib::g_runtime_enabled = true;
+  }
+
+  return ret;
+}
+
+int ObServer::init_opts_config(bool has_config_file)
+{
+  int ret = OB_SUCCESS;
 
   if (opts_.rpc_port_) {
     config_.rpc_port = opts_.rpc_port_;
@@ -1767,7 +1959,7 @@ int ObServer::init_config()
     config_.devname.set_value(opts_.devname_);
     config_.devname.set_version(start_time_);
   } else {
-    if (!has_config_file && 0 == strlen(config_.local_ip)) {
+    if (!has_config_file) {
       const char *devname = get_default_if();
       if (devname && '\0' != devname[0]) {
         LOG_INFO("guess interface name", K(devname));
@@ -1837,24 +2029,35 @@ int ObServer::init_config()
     config_.use_ipv6.set_version(start_time_);
   }
 
-  config_.print();
+  return ret;
+}
+
+int ObServer::init_local_ip_and_devname()
+{
+  int ret = OB_SUCCESS;
 
   // local_ip is a critical parameter, if it is set, then verify it; otherwise, set it via devname.
   if (strlen(config_.local_ip) > 0) {
     char if_name[MAX_IFNAME_LENGTH] = { '\0' };
-    if (0 != obsys::ObNetUtil::get_ifname_by_addr(config_.local_ip, if_name, sizeof(if_name))) {
-      // if it is incorrect, then ObServer should not be started.
-      ret = OB_ERR_OBSERVER_START;
-      LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "local_ip is not a valid IP for this machine, local_ip", config_.local_ip.get_value());
-    } else {
-      if (0 != strcmp(config_.devname, if_name)) {
-        // this is done to ensure the consistency of local_ip and devname.
-        LOG_DBA_WARN(OB_ITEM_NOT_MATCH, "the devname has been rewritten, and the new value comes from local_ip, old value",
-                    config_.devname.get_value(), "new value", if_name, "local_ip", config_.local_ip.get_value());
-      }
-      // unconditionally call set_value to ensure that devname is written to the configuration file.
+    bool has_found = false;
+    if (OB_SUCCESS != obsys::ObNetUtil::get_ifname_by_addr(config_.local_ip, if_name, sizeof(if_name), has_found)) {
+      // if it is incorrect, then ObServer start but log a error.
+      LOG_DBA_WARN_V2(OB_SERVER_GET_IFNAME_FAIL, OB_ERR_OBSERVER_START,
+                        "get ifname by local_ip failed. ",
+                        "local_ip is ", config_.local_ip.get_value(),
+                        ". [suggestion] Verify if your local IP address is a virtual one.");
+    } else if (false == has_found) {
+      LOG_DBA_ERROR_V2(OB_SERVER_SET_LOCAL_IP_FAIL, OB_ERR_OBSERVER_START,
+                        "local_ip set failed, please check your local_ip. ",
+                        "local_ip is ", config_.local_ip.get_value(),
+                        ". [suggestion] Verify if your local IP is right. ");
+    } else if (0 != strcmp(config_.devname, if_name)) {
       config_.devname.set_value(if_name);
       config_.devname.set_version(start_time_);
+      // this is done to ensure the consistency of local_ip and devname.
+      LOG_DBA_WARN_V2(OB_SERVER_DEVICE_NAME_MISMATCH, OB_ITEM_NOT_MATCH,
+          "the devname has been rewritten, and the new value comes from local_ip, old value: ",
+          config_.devname.get_value(), " new value: ", if_name, " local_ip: ", config_.local_ip.get_value());
     }
   } else {
     if (config_.use_ipv6) {
@@ -1884,35 +2087,38 @@ int ObServer::init_config()
     }
   }
 
-  if (OB_FAIL(ret)) {
-    // nop
-  } else if (!is_arbitration_mode() && OB_FAIL(config_.strict_check_special())) {
-    LOG_ERROR("some config setting is not valid", KR(ret));
-  } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
-    LOG_ERROR("reload memory config failed", KR(ret));
-  } else if (!is_arbitration_mode() && OB_FAIL(set_running_mode())) {
-    LOG_ERROR("set running mode failed", KR(ret));
+  return ret;
+}
+
+int ObServer::init_self_addr()
+{
+  int ret = OB_SUCCESS;
+
+  int32_t local_port = static_cast<int32_t>(config_.rpc_port);
+  if (strlen(config_.local_ip) > 0) {
+    self_addr_.set_ip_addr(config_.local_ip, local_port);
   } else {
-    int32_t local_port = static_cast<int32_t>(config_.rpc_port);
-    if (strlen(config_.local_ip) > 0) {
-      self_addr_.set_ip_addr(config_.local_ip, local_port);
-    } else {
-      if (config_.use_ipv6) {
+    if (config_.use_ipv6) {
       char ipv6[MAX_IP_ADDR_LENGTH] = { '\0' };
-      obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6));
-      self_addr_.set_ip_addr(ipv6, local_port);
+      if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6)))) {
+        LOG_ERROR("get ipv6 address by devname failed", "devname",
+            config_.devname.get_value(), KR(ret));
       } else {
-        uint32_t ipv4_net = 0;
-        if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname, ipv4_net))) {
-          LOG_ERROR("get ipv4 address by devname failed", "devname",
-              config_.devname.get_value(), KR(ret));
-        } else {
-          int32_t ipv4 = ntohl(ipv4_net);
-          self_addr_.set_ipv4_addr(ipv4, local_port);
-        }
+        self_addr_.set_ip_addr(ipv6, local_port);
+      }
+    } else {
+      uint32_t ipv4_net = 0;
+      if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname, ipv4_net))) {
+        LOG_ERROR("get ipv4 address by devname failed", "devname",
+            config_.devname.get_value(), KR(ret));
+      } else {
+        int32_t ipv4 = ntohl(ipv4_net);
+        self_addr_.set_ipv4_addr(ipv4, local_port);
       }
     }
+  }
 
+  if (OB_SUCC(ret)) {
     const char *syslog_file_info = ObServerUtils::build_syslog_file_info(self_addr_);
     OB_LOGGER.set_new_file_info(syslog_file_info);
     LOG_INFO("Build basic information for each syslog file", "info", syslog_file_info);
@@ -1921,50 +2127,44 @@ int ObServer::init_config()
     obrpc::ObRpcProxy::myaddr_ = self_addr_;
     LOG_INFO("my addr", K_(self_addr));
     config_.self_addr_ = self_addr_;
-
-
-    if (is_arbitration_mode()) {
-      // arbitration mode, dump config params to file directly
-      if (OB_FAIL(config_mgr_.dump2file())) {
-        LOG_ERROR("config_mgr_ dump2file failed", KR(ret));
-      } else {
-        LOG_INFO("config_mgr_ dump2file success", KR(ret));
-      }
-    } else {
-      omt::UpdateTenantConfigCb update_tenant_config_cb =
-        [&](uint64_t tenant_id)-> void
-      {
-        multi_tenant_.update_tenant_config(tenant_id);
-      };
-      // initialize configure module
-      if (!self_addr_.is_valid()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("local address isn't valid", K(self_addr_), KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
-        LOG_ERROR("init timer fail", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::FreezeTimer))) {
-        LOG_ERROR("init freeze timer fail", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::SqlMemTimer))) {
-        LOG_ERROR("init sql memory manger timer fail", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerTracerTimer))) {
-        LOG_ERROR("fail to init server trace timer", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::CTASCleanUpTimer))) {
-        LOG_ERROR("fail to init ctas clean up timer", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
-        LOG_ERROR("fail to init memory dump timer", KR(ret));
-      } else if (OB_FAIL(config_mgr_.base_init())) {
-        LOG_ERROR("config_mgr_ base_init failed", KR(ret));
-      } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {
-        LOG_ERROR("config_mgr_ init failed", K_(self_addr), KR(ret));
-      } else if (OB_FAIL(tenant_config_mgr_.init(sql_proxy_, self_addr_,
-                         &config_mgr_, update_tenant_config_cb))) {
-        LOG_ERROR("tenant_config_mgr_ init failed", K_(self_addr), KR(ret));
-      } else if (OB_FAIL(tenant_config_mgr_.add_config_to_existing_tenant(opts_.optstr_))) {
-        LOG_ERROR("tenant_config_mgr_ add_config_to_existing_tenant failed", KR(ret));
-      }
-    }
   }
-  lib::g_runtime_enabled = true;
+
+  return ret;
+}
+
+int ObServer::init_config_module()
+{
+  int ret = OB_SUCCESS;
+
+  omt::UpdateTenantConfigCb update_tenant_config_cb =
+    [&](uint64_t tenant_id)-> void
+  {
+    multi_tenant_.update_tenant_config(tenant_id);
+  };
+  // initialize configure module
+  if (!self_addr_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("local address isn't valid", K(self_addr_), KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
+    LOG_ERROR("init timer fail", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::FreezeTimer))) {
+    LOG_ERROR("init freeze timer fail", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::SqlMemTimer))) {
+    LOG_ERROR("init sql memory manger timer fail", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerTracerTimer))) {
+    LOG_ERROR("fail to init server trace timer", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::CTASCleanUpTimer))) {
+    LOG_ERROR("fail to init ctas clean up timer", KR(ret));
+  } else if (OB_FAIL(config_mgr_.base_init())) {
+    LOG_ERROR("config_mgr_ base_init failed", KR(ret));
+  } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {
+    LOG_ERROR("config_mgr_ init failed", K_(self_addr), KR(ret));
+  } else if (OB_FAIL(tenant_config_mgr_.init(sql_proxy_, self_addr_,
+                      &config_mgr_, update_tenant_config_cb))) {
+    LOG_ERROR("tenant_config_mgr_ init failed", K_(self_addr), KR(ret));
+  } else if (OB_FAIL(tenant_config_mgr_.add_config_to_existing_tenant(opts_.optstr_))) {
+    LOG_ERROR("tenant_config_mgr_ add_config_to_existing_tenant failed", KR(ret));
+  }
 
   return ret;
 }
@@ -1996,6 +2196,7 @@ int ObServer::init_pre_setting()
   reset_mem_leak_checker_label(GCONF.leak_mod_to_check.str());
   ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
                                       GCONF._min_malloc_sample_interval);
+  enable_memleak_light_backtrace(GCONF._enable_memleak_light_backtrace);
 
   // oblog configuration
   if (OB_SUCC(ret)) {
@@ -2003,13 +2204,21 @@ int ObServer::init_pre_setting()
     const bool record_old_log_file = config_.enable_syslog_recycle;
     const bool log_warn = config_.enable_syslog_wf;
     const bool enable_async_syslog = config_.enable_async_syslog;
+    const int64_t max_disk_size = config_.syslog_disk_size;
+    const int64_t min_uncompressed_count = config_.syslog_file_uncompressed_count;
+    const char *compress_func_ptr = config_.syslog_compress_func.str();
     OB_LOGGER.set_max_file_index(max_log_cnt);
     OB_LOGGER.set_record_old_log_file(record_old_log_file);
     LOG_INFO("Whether record old log file", K(record_old_log_file));
     OB_LOGGER.set_log_warn(log_warn);
     LOG_INFO("Whether log warn", K(log_warn));
     OB_LOGGER.set_enable_async_log(enable_async_syslog);
-    LOG_INFO("init log config", K(record_old_log_file), K(log_warn), K(enable_async_syslog));
+    OB_LOG_COMPRESSOR.set_max_disk_size(max_disk_size);
+    LOG_INFO("Whether compress syslog file", K(compress_func_ptr));
+    OB_LOG_COMPRESSOR.set_compress_func(compress_func_ptr);
+    OB_LOG_COMPRESSOR.set_min_uncompressed_count(min_uncompressed_count);
+    LOG_INFO("init log config", K(record_old_log_file), K(log_warn), K(enable_async_syslog),
+             K(max_disk_size), K(compress_func_ptr), K(min_uncompressed_count));
     if (0 == max_log_cnt) {
       LOG_INFO("won't recycle log file");
     } else {
@@ -2057,6 +2266,9 @@ int ObServer::init_pre_setting()
     const int64_t stack_size = std::max(1L << 19, static_cast<int64_t>(GCONF.stack_size));
     LOG_INFO("set stack_size", K(stack_size));
     global_thread_stack_size = stack_size - SIG_STACK_SIZE - ACHUNK_PRESERVE_SIZE;
+  }
+  if (OB_SUCC(ret) && GCONF.use_ipv6) {
+    enable_use_ipv6();
   }
   return ret;
 }
@@ -2116,7 +2328,6 @@ int ObServer::init_io()
       }
       io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
       const int64_t max_io_depth = 256;
-      ObTenantIOConfig server_tenant_io_config = ObTenantIOConfig::default_instance();
       if (OB_FAIL(ObIOManager::get_instance().set_io_config(io_config))) {
         LOG_ERROR("config io manager fail, ", KR(ret));
       } else {
@@ -2152,7 +2363,7 @@ int ObServer::init_io()
         int64_t data_disk_percentage = 0;
         int64_t log_disk_percentage = 0;
 
-        if (OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
+        if (OB_SUCC(ret) && OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
           LOG_ERROR("log block mgr init failed", KR(ret));
         } else if (OB_FAIL(ObServerUtils::cal_all_part_disk_size(config_.datafile_size,
                                                   config_.log_disk_size,
@@ -2194,9 +2405,6 @@ int ObServer::init_io()
                                                                             io_config.disk_io_thread_count_ / 2,
                                                                             max_io_depth))) {
             LOG_ERROR("add device channel failed", KR(ret));
-          } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID,
-                                                                               server_tenant_io_config))) {
-            LOG_ERROR("add server tenant io manager failed", KR(ret));
           }
         }
       }
@@ -2229,6 +2437,39 @@ int ObServer::init_interrupt()
     LOG_ERROR("fail init interrupt mgr", KR(ret));
   }
   return ret;
+}
+
+int ObServer::init_zlib_lite_compressor()
+{
+  int ret = OB_SUCCESS;
+  ObCompressor *compressor = nullptr;
+  ZLIB_LITE::ObZlibLiteCompressor *zlib_lite_compressor = nullptr;
+  ret = ObCompressorPool::get_instance().get_compressor(ZLIB_LITE_COMPRESSOR, compressor);
+  if (OB_FAIL(ret) || OB_ISNULL(compressor)) {
+    LOG_ERROR("failed to get zlib lite compressor");
+  } else if (FALSE_IT(zlib_lite_compressor = static_cast<ZLIB_LITE::ObZlibLiteCompressor *>(compressor))) {
+  } else if (OB_FAIL(zlib_lite_compressor->init(0))) { // 0 means preserve 0 qpl job
+    LOG_ERROR("failed to init zlib lite compressor", K(ret));
+  } else {
+    const char *zlib_lite_compress_method = zlib_lite_compressor->compression_method();
+    LOG_INFO("zlib lite compressor init success", KCSTRING(zlib_lite_compress_method));
+  }
+  return ret;
+}
+
+void ObServer::deinit_zlib_lite_compressor()
+{
+  int ret = OB_SUCCESS;
+  ObCompressor *compressor = nullptr;
+  ZLIB_LITE::ObZlibLiteCompressor *zlib_lite_compressor = nullptr;
+  ret = ObCompressorPool::get_instance().get_compressor(ZLIB_LITE_COMPRESSOR, compressor);
+  if (OB_FAIL(ret) || OB_ISNULL(compressor)) {
+    LOG_ERROR("failed to get zlib lite compressor");
+  } else if (FALSE_IT(zlib_lite_compressor = static_cast<ZLIB_LITE::ObZlibLiteCompressor *>(compressor))) {
+  } else {
+    zlib_lite_compressor->deinit();
+  }
+  LOG_INFO("zlib lite compressor deinit done");
 }
 
 int ObServer::init_loaddata_global_stat()
@@ -2439,11 +2680,9 @@ int ObServer::init_sql()
     }
   }
 
-#ifdef OB_BUILD_ORACLE_XML
   if (OB_SUCC(ret)) {
     ObLibXml2SaxHandler::init();
   }
-#endif
 
   if (OB_SUCC(ret)) {
     LOG_INFO("init sql done");
@@ -2555,6 +2794,7 @@ int ObServer::init_global_context()
 #endif
   (void)gctx_.set_upgrade_stage(obrpc::OB_UPGRADE_STAGE_INVALID);
   gctx_.wr_service_ = &wr_service_;
+  gctx_.startup_accel_handler_ = &startup_accel_handler_;
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
   gctx_.server_id_ = config_.observer_id;
@@ -2672,12 +2912,6 @@ int ObServer::init_storage()
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObSSTableInsertManager::get_instance().init())) {
-      LOG_WARN("init direct insert sstable manager failed", KR(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDDLCtrlSpeedHandle::get_instance().init())) {
       LOG_WARN("fail to init ObDDLCtrlSpeedHandle", KR(ret));
     }
@@ -2690,6 +2924,15 @@ int ObServer::init_tx_data_cache()
   int ret = OB_SUCCESS;
   if (OB_FAIL(OB_TX_DATA_KV_CACHE.init("tx_data_kv_cache", 2 /* cache priority */))) {
     LOG_WARN("init OB_TX_DATA_KV_CACHE failed", KR(ret));
+  }
+  return ret;
+}
+
+int ObServer::init_log_kv_cache()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(OB_LOG_KV_CACHE.init(palf::OB_LOG_KV_CACHE_NAME, 1, palf::LOG_CACHE_MEMORY_LIMIT))) {
+    LOG_WARN("init OB_LOG_KV_CACHE failed", KR(ret));
   }
   return ret;
 }
@@ -2927,6 +3170,9 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
   bool is_dropped = false;
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  LOG_DBA_INFO_V2(OB_SERVER_CHECK_USER_TENANT_SCHEMA_REFRESHED_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer check user tenant schema refreshed begin.");
 
   for (int64_t i = 0; i < tenant_ids.count()
                       && ObTimeUtility::current_time() < expire_time; ++i) {
@@ -2964,10 +3210,16 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
       }
     }
   }
+  LOG_DBA_INFO_V2(OB_SERVER_CHECK_USER_TENANT_SCHEMA_REFRESHED_FINISH,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer check user tenant schema refreshed finish.");
 }
 
 void ObServer::check_log_replay_over(const ObIArray<uint64_t> &tenant_ids, const int64_t expire_time)
 {
+  LOG_DBA_INFO_V2(OB_SERVER_CHECK_LOG_REPLAY_OVER_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer check log replay over begin.");
   for (int64_t i = 0; i < tenant_ids.count()
                       && ObTimeUtility::current_time() < expire_time; ++i) {
     SCN min_version;
@@ -2991,6 +3243,9 @@ void ObServer::check_log_replay_over(const ObIArray<uint64_t> &tenant_ids, const
       }
     }
   }
+  LOG_DBA_INFO_V2(OB_SERVER_CHECK_LOG_REPLAY_OVER_FINISH,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer check log replay over finish.");
 }
 
 ObServer::ObCTASCleanUpTask::ObCTASCleanUpTask()
@@ -3308,6 +3563,62 @@ int ObServer::refresh_network_speed()
   return ret;
 }
 
+ObServer::ObRefreshIOCalibrationTimeTask::ObRefreshIOCalibrationTimeTask()
+: obs_(nullptr), tg_id_(-1), is_inited_(false)
+{}
+
+int ObServer::ObRefreshIOCalibrationTimeTask::init(ObServer *obs, int tg_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask has already been inited", KR(ret));
+  } else if (OB_ISNULL(obs)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask init with null ptr", KR(ret), K(obs));
+  } else {
+    obs_ = obs;
+    tg_id_ = tg_id;
+    is_inited_ = true;
+    if (OB_FAIL(TG_SCHEDULE(tg_id_, *this, REFRESH_INTERVAL, true /*schedule repeatly*/))) {
+      LOG_ERROR("fail to schedule task ObRefreshIOCalibrationTimeTask", KR(ret));
+    }
+  }
+  return ret;
+}
+
+void ObServer::ObRefreshIOCalibrationTimeTask::destroy()
+{
+  is_inited_ = false;
+  tg_id_ = -1;
+  obs_ = nullptr;
+}
+
+void ObServer::ObRefreshIOCalibrationTimeTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask has not been inited", KR(ret));
+  } else if (OB_ISNULL(obs_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask task got null ptr", KR(ret));
+  } else if (OB_FAIL(obs_->refresh_io_calibration())) {
+    LOG_WARN("ObRefreshIOCalibrationTimeTask task failed", KR(ret));
+  } else {
+    TG_CANCEL(tg_id_, *this);
+  }
+}
+
+int ObServer::refresh_io_calibration()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIOCalibration::get_instance().read_from_table())) {
+    LOG_WARN("fail to refresh io calibration from table", KR(ret));
+  }
+  return ret;
+}
+
 int ObServer::init_refresh_active_time_task()
 {
   int ret = OB_SUCCESS;
@@ -3358,6 +3669,15 @@ int ObServer::init_refresh_cpu_frequency()
   int ret = OB_SUCCESS;
   if (OB_FAIL(refresh_cpu_frequency_task_.init(this, lib::TGDefIDs::ServerGTimer))) {
     LOG_ERROR("fail to init refresh cpu frequency task", KR(ret));
+  }
+  return ret;
+}
+
+int ObServer::init_refresh_io_calibration()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(refresh_io_calibration_task_.init(this, lib::TGDefIDs::ServerGTimer))) {
+    LOG_ERROR("fail to init refresh io calibration task", KR(ret));
   }
   return ret;
 }
@@ -3614,6 +3934,10 @@ int ObServer::stop_server_in_arb_mode()
     OB_LOGGER.stop();
     FLOG_INFO("stop OB_LOGGER success");
 
+    FLOG_INFO("begin to stop OB_LOG_COMPRESSOR");
+    OB_LOG_COMPRESSOR.stop();
+    FLOG_INFO("stop OB_LOG_COMPRESSOR success");
+
     FLOG_INFO("begin to stop task controller");
     ObTaskController::get().stop();
     FLOG_INFO("stop task controller success");
@@ -3649,6 +3973,10 @@ int ObServer::wait_server_in_arb_mode()
   FLOG_INFO("begin to wait OB_LOGGER");
   OB_LOGGER.wait();
   FLOG_INFO("wait OB_LOGGER success");
+
+  FLOG_INFO("begin to wait OB_LOG_COMPRESSOR");
+  OB_LOG_COMPRESSOR.wait();
+  FLOG_INFO("wait OB_LOG_COMPRESSOR success");
 
   FLOG_INFO("begin to wait task controller");
   ObTaskController::get().wait();
@@ -3687,6 +4015,7 @@ int ObServer::destroy_server_in_arb_mode()
 {
   int ret = OB_SUCCESS;
   OB_LOGGER.destroy();
+  OB_LOG_COMPRESSOR.destroy();
   ObTaskController::get().destroy();
   sig_worker_->destroy();
   signal_handle_->destroy();

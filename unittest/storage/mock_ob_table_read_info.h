@@ -9,6 +9,10 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
+#ifndef OCEANBASE_STORAGE_MOCK_OB_TABLE_READ_INFO_H_
+#define OCEANBASE_STORAGE_MOCK_OB_TABLE_READ_INFO_H_
+
 #include <gtest/gtest.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -77,3 +81,5 @@ int MockObTableReadInfo::init(common::ObIAllocator &allocator,
 
 }
 }
+
+#endif

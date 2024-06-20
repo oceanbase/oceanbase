@@ -288,6 +288,41 @@ int ObTabletToLSTableOperator::batch_update(
   }
   return ret;
 }
+int ObTabletToLSTableOperator::update_table_to_tablet_id_mapping(common::ObISQLClient &sql_proxy,
+                                                                 const uint64_t tenant_id,
+                                                                 const uint64_t table_id,
+                                                                 const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tablet_id), K(tablet_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret));
+  } else if (data_version < DATA_VERSION_4_3_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("update table id and tablet id mapping when data_version is less than 4.3.1.0 is not supported", K(ret), K(table_id), K(tablet_id));
+  } else {
+    ObSqlString sql;
+    ObDMLSqlSplicer dml_splicer;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(dml_splicer.add_pk_column("tablet_id", tablet_id.id()))
+       || OB_FAIL(dml_splicer.add_column("table_id", table_id))) {
+      LOG_WARN("fail to add column", K(ret), K(tablet_id), K(table_id));
+    } else if (OB_FAIL(dml_splicer.splice_update_sql(OB_ALL_TABLET_TO_LS_TNAME, sql))) {
+      LOG_WARN("fail to splice batch insert update sql", K(ret), K(sql));
+    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to write sql", K(ret), K(sql), K(affected_rows));
+    } else if(!is_single_row(affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expect one row", K(ret), K(sql), K(affected_rows));
+    } else {
+      LOG_TRACE("update tablet_to_ls success", K(tenant_id), K(affected_rows));
+    }
+  }
+  return ret;
+}
 
 int ObTabletToLSTableOperator::inner_batch_update_by_sql_(
     common::ObISQLClient &sql_proxy,

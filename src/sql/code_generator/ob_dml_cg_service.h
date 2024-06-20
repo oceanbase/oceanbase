@@ -115,13 +115,106 @@ private:
   int generate_updated_column_ids(const ObLogDelUpd &log_op,
                                   const ObAssignments &assigns,
                                   const common::ObIArray<uint64_t> &column_ids,
+                                  const ObDASDMLBaseCtDef &das_ctdef,
                                   common::ObIArray<uint64_t> &updated_column_ids);
   int convert_dml_column_info(common::ObTableID index_tid,
                               bool only_rowkey,
                               ObDASDMLBaseCtDef &das_dml_info);
+
+  int generate_minimal_upd_old_row_cid(ObLogDelUpd &op,
+                                       ObTableID index_tid,
+                                       ObDASUpdCtDef &das_upd_ctdef,
+                                       const IndexDMLInfo &index_dml_info,
+                                       bool is_primary_index,
+                                       bool &need_all_columns,
+                                       ObIArray<uint64_t> &minimal_column_ids);
+
+
+  int append_upd_old_row_cid(ObLogicalOperator &op,
+                             ObSchemaGetterGuard *schema_guard,
+                             const ObTableSchema *table_schema,
+                             bool is_primary_index,
+                             ObDASUpdCtDef &das_upd_ctdef,
+                             const IndexDMLInfo &index_dml_info,
+                             ObIArray<uint64_t> &minimal_column_ids);
+
+  int check_upd_need_all_columns(ObLogDelUpd &op,
+                                 ObSchemaGetterGuard *schema_guard,
+                                 const ObTableSchema *table_schema,
+                                 const IndexDMLInfo &index_dml_info,
+                                 bool is_primary_index,
+                                 bool &need_all_columns);
+
+  int is_table_has_unique_key(ObSchemaGetterGuard *schema_guard,
+                              const ObTableSchema *table_schema,
+                              bool &is_has_uk);
+
+  int append_upd_assignment_column_id(const ObTableSchema *table_schema,
+                                      ObDASUpdCtDef &das_upd_ctdef,
+                                      ObIArray<uint64_t> &minimal_column_ids);
+
+  int append_udt_hidden_col_id(ObLogicalOperator &op,
+                               const ObTableSchema *table_schema,
+                               const IndexDMLInfo &index_dml_info,
+                               ObIArray<uint64_t> &minimal_column_ids);
+
+  int check_has_upd_rowkey(ObLogicalOperator &op,
+                           const ObTableSchema *table_schema,
+                           const IndexDMLInfo &index_dml_info,
+                           bool &upd_rowkey);
+
+  int append_udt_hidden_column_id(const ObTableSchema *table_schema,
+                                  const uint64_t column_id,
+                                  const uint64_t udt_set_id,
+                                  ObIArray<uint64_t> &minimal_column_ids);
+
+  int check_unique_key_is_updated(ObSchemaGetterGuard *schema_guard,
+                                  const ObTableSchema *table_schema,
+                                  const IndexDMLInfo &index_dml_info,
+                                  bool &is_updated);
+
+  int append_time_type_column_id(const ObTableSchema *table_schema,
+                                 ObIArray<uint64_t> &minimal_column_ids);
+
+  int append_lob_type_column_id(const ObTableSchema *table_schema,
+                                ObIArray<uint64_t> &minimal_column_ids);
+
+  int heap_table_has_not_null_uk(ObSchemaGetterGuard *schema_guard,
+                                 const ObTableSchema *table_schema,
+                                 bool &need_all_columns);
+
+  int generate_minimal_delete_old_row_cid(ObLogDelUpd &op,
+                                          ObTableID index_tid,
+                                          bool is_primary_index,
+                                          ObDASDelCtDef &das_del_ctdef,
+                                          ObIArray<uint64_t> &minimal_column_ids);
+
+  int check_del_need_all_columns(ObLogDelUpd &op,
+                                 ObSchemaGetterGuard *schema_guard,
+                                 const ObTableSchema *table_schema,
+                                 bool &need_all_columns);
+
+  int append_all_uk_column_id(ObSchemaGetterGuard *schema_guard,
+                              const ObTableSchema *table_schema,
+                              ObIArray<uint64_t> &minimal_column_ids);
+
+  int append_all_pk_column_id(ObSchemaGetterGuard *schema_guard,
+                              const ObTableSchema *table_schema,
+                              ObIArray<uint64_t> &minimal_column_ids);
+
+  int append_shadow_pk_dependent_cid(const ObTableSchema *table_schema,
+                                     ObIArray<uint64_t> &minimal_column_ids);
+
+  int append_heap_table_part_id(const ObTableSchema *table_schema,
+                                ObIArray<uint64_t> &minimal_column_ids);
+
+  int append_heap_table_part_key_dependcy_column(const ObTableSchema *table_schema,
+                                                 ObIArray<uint64_t> &minimal_column_ids);
+
   template<typename OldExprType, typename NewExprType>
   int generate_das_projector(const common::ObIArray<uint64_t> &dml_column_ids,
                              const common::ObIArray<uint64_t> &storage_column_ids,
+                             const common::ObIArray<uint64_t> &written_column_ids,
                              const common::ObIArray<OldExprType*> &old_row,
                              const common::ObIArray<NewExprType*> &new_row,
                              const common::ObIArray<ObRawExpr*> &full_row,
@@ -133,6 +226,12 @@ private:
                             uint32_t proj_idx,
                             ObDASDMLBaseCtDef &das_ctdef,
                             IntFixedArray &row_projector);
+  int fill_multivalue_extra_info_on_table_param(
+                            share::schema::ObSchemaGetterGuard *guard,
+                            const ObTableSchema *index_schema,
+                            uint64_t tenant_id,
+                            ObDASDMLBaseCtDef &das_dml_ctdef);
+
   int get_column_ref_base_cid(const ObLogicalOperator &op, const ObColumnRefRawExpr *col, uint64_t &base_cid);
   int get_table_schema_version(const ObLogicalOperator &op, uint64_t table_id, int64_t &schema_version);
   int generate_das_dml_ctdef(ObLogDelUpd &op,

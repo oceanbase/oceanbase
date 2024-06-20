@@ -19,13 +19,16 @@
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
+#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
+#include "observer/table_load/ob_table_load_service.h"
+#include "observer/table_load/ob_table_load_assigned_memory_manager.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+class ObDirectLoadTransParam;
 class ObDirectLoadInsertTableContext;
-class ObDirectLoadFastHeapTableContext;
 class ObDirectLoadTmpFileManager;
 }  // namespace storage
 namespace share
@@ -128,12 +131,14 @@ public:
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTrans *&trans);
-  int get_wa_memory_limit(int64_t &wa_mem_limit);
   int init_session_ctx_array();
+  int init_trans_param(ObDirectLoadTransParam &trans_param);
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
 public:
   int commit_autoinc_value();
+  int get_next_insert_tablet_ctx(ObTabletID &tablet_id);
+  void handle_open_insert_tablet_ctx_finish(bool &is_finish);
 public:
   ObTableLoadTableCtx * const ctx_;
   common::ObArenaAllocator allocator_;
@@ -144,9 +149,10 @@ public:
   ObITableLoadTaskScheduler *task_scheduler_;
   ObTableLoadMerger *merger_;
   storage::ObDirectLoadInsertTableContext *insert_table_ctx_;
+  int64_t next_tablet_idx_;
+  int64_t opened_insert_tablet_count_;
   bool is_multiple_mode_;
   bool is_fast_heap_table_;
-  storage::ObDirectLoadFastHeapTableContext *fast_heap_table_ctx_;
   storage::ObDirectLoadTmpFileManager *tmp_file_mgr_;
   ObTableLoadErrorRowHandler *error_row_handler_;
   share::schema::ObSequenceSchema sequence_schema_;
@@ -189,7 +195,7 @@ private:
   TransMap trans_map_;
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;
-  common::ObSEArray<ObTableLoadTransStore *, 64> committed_trans_store_array_;
+  common::ObArray<ObTableLoadTransStore *> committed_trans_store_array_;
   uint64_t last_heart_beat_ts_;
   bool enable_heart_beat_check_;
   bool is_inited_;

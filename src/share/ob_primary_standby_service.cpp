@@ -26,6 +26,7 @@
 #include "share/schema/ob_multi_version_schema_service.h" // for GSCHEMASERVICE
 #include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
+//#include "share/resource_manager/ob_group_list.h"//group id
 #include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
 #include "observer/ob_inner_sql_connection.h"//ObInnerSQLConnection
 #include "storage/tx/ob_trans_service.h" //ObTransService
@@ -109,7 +110,7 @@ int ObPrimaryStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Tenant COMPATIBLE is below 4.1.0.0, switch tenant is not supported", KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.1.0.0, switch tenant is");
-  } else if (OB_FAIL(get_tenant_status_(switch_tenant_id, tenant_status))) {
+  } else if (OB_FAIL(get_tenant_status(switch_tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(switch_tenant_id));
   } else if (is_tenant_normal(tenant_status)) {
     switch (arg.get_op_type()) {
@@ -174,7 +175,7 @@ int ObPrimaryStandbyService::failover_to_primary(const uint64_t tenant_id,
     LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
   } else if (tenant_info.is_primary() && tenant_info.is_normal_status()) {
     LOG_INFO("already is primary tenant, no need switch", K(tenant_info));
-  } else if (OB_FAIL(get_tenant_status_(tenant_id, tenant_status))) {
+  } else if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
   } else if (is_tenant_normal(tenant_status)) {
     ObTenantRoleTransitionService role_transition_service(tenant_id, sql_proxy_, GCTX.srv_rpc_proxy_, switch_optype);
@@ -268,7 +269,7 @@ int ObPrimaryStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg
   return ret;
 }
 
-int ObPrimaryStandbyService::get_tenant_status_(
+int ObPrimaryStandbyService::get_tenant_status(
     const uint64_t tenant_id,
     ObTenantStatus &status)
 {
@@ -313,7 +314,7 @@ int ObPrimaryStandbyService::get_tenant_status_(
 
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to get result", KR(ret), K(tenant_id), K(sql));
-        } else if (OB_FAIL(get_tenant_status(tenant_status_str, status))) {
+        } else if (OB_FAIL(schema::get_tenant_status(tenant_status_str, status))) {
           LOG_WARN("fail to get tenant status", KR(ret), K(tenant_status_str), K(tenant_id), K(sql));
         }
       }
@@ -348,7 +349,7 @@ int ObPrimaryStandbyService::do_recover_tenant(
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(get_tenant_status_(tenant_id, tenant_status))) {
+  } else if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
@@ -447,7 +448,7 @@ int ObPrimaryStandbyService::switch_to_standby(
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
-  const int32_t group_id = 0;
+  const int32_t group_id = share::OBCG_DBA_COMMAND;
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
@@ -575,8 +576,8 @@ int ObPrimaryStandbyService::update_tenant_status_before_sw_to_standby_(
     } else if (cur_switchover_epoch != tenant_info.get_switchover_epoch()) {
       ret = OB_NEED_RETRY;
       LOG_WARN("tenant not expect switchover epoch", KR(ret), K(tenant_info), K(cur_switchover_epoch));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
-                  tenant_id, &trans, cur_switchover_epoch,
+    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role_in_trans(
+                  tenant_id, trans, cur_switchover_epoch,
                   PRIMARY_TENANT_ROLE, cur_switchover_status,
                   share::PREP_SWITCHING_TO_STANDBY_SWITCHOVER_STATUS, new_switchover_ts))) {
       LOG_WARN("failed to update tenant role", KR(ret), K(tenant_id), K(cur_switchover_epoch), K(tenant_info));

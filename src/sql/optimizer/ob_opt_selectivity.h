@@ -51,6 +51,13 @@ struct ColumnItem;
 struct RangeExprs;
 struct ObExprSelPair;
 
+enum class FilterDependencyType
+{
+  INDEPENDENT,
+  MUTEX_OR,
+  EXPONENTIAL_BACKOFF,
+};
+
 class OptSelectivityCtx
 {
  public:
@@ -64,11 +71,11 @@ class OptSelectivityCtx
     right_rel_ids_(NULL),
     row_count_1_(-1.0),
     row_count_2_(-1.0),
-    current_rows_(-1.0)
+    current_rows_(-1.0),
+    dependency_type_(FilterDependencyType::INDEPENDENT)
   { }
 
-  ObOptimizerContext &get_opt_ctx() { return opt_ctx_; }
-  const ObOptimizerContext &get_opt_ctx() const { return opt_ctx_; }
+  ObOptimizerContext &get_opt_ctx() const { return const_cast<ObOptimizerContext &>(opt_ctx_); }
   const ObDMLStmt *get_stmt() const { return stmt_; }
   const ObLogPlan *get_plan() const { return plan_; }
   
@@ -104,16 +111,26 @@ class OptSelectivityCtx
   
   double get_current_rows() const { return current_rows_; }
   void set_current_rows(const double current_rows) { current_rows_ = current_rows; }
+  FilterDependencyType get_dependency_type() const { return dependency_type_; }
+  void set_dependency_type(FilterDependencyType type) { dependency_type_ = type; }
 
-  void init_op_ctx(const EqualSets *equal_sets, const double current_rows)
+  uint64_t get_compat_version() const {
+    return OB_ISNULL(opt_ctx_.get_query_ctx()) ? 0 :
+           opt_ctx_.get_query_ctx()->optimizer_features_enable_version_;
+  }
+
+  void init_op_ctx(const EqualSets *equal_sets, const double current_rows,
+                   FilterDependencyType dependency_type = FilterDependencyType::INDEPENDENT)
   {
     equal_sets_ = equal_sets;
     current_rows_ = current_rows;
+    dependency_type_ = dependency_type;
   }
   void init_row_count(const double row_count1, const double row_count2)
   {
     row_count_1_ = row_count1;
     row_count_2_ = row_count2;
+    dependency_type_ = FilterDependencyType::INDEPENDENT;
   }
 
   void init_join_ctx(const ObJoinType join_type, const ObRelIds *left_rel_ids,
@@ -127,12 +144,13 @@ class OptSelectivityCtx
     row_count_2_ = rc2;
     current_rows_ = -1.0;
     equal_sets_ = equal_sets;
+    dependency_type_ = FilterDependencyType::INDEPENDENT;
   }
 
   void clear_equal_sets() { equal_sets_ = NULL; }
 
   TO_STRING_KV(KP_(stmt), KP_(equal_sets), K_(join_type), KP_(left_rel_ids), KP_(right_rel_ids),
-               K_(row_count_1), K_(row_count_2), K_(current_rows));
+               K_(row_count_1), K_(row_count_2), K_(current_rows), K_(dependency_type));
 
  private:
   ObOptimizerContext &opt_ctx_;
@@ -153,6 +171,7 @@ class OptSelectivityCtx
   double row_count_1_;
   double row_count_2_;
   double current_rows_;
+  FilterDependencyType dependency_type_;
 };
 
 class OptColumnMeta
@@ -207,6 +226,11 @@ public:
   void set_cg_skip_rate(const double skip_rate) { cg_skip_rate_ = skip_rate; }
 
 
+  void set_default_meta(double rows)
+  {
+    ndv_ = std::min(rows, std::max(100.0, rows / 100.0));
+    num_null_ = rows * EST_DEF_COL_NULL_RATIO;
+  }
 
   TO_STRING_KV(K_(column_id), K_(ndv), K_(num_null), K_(avg_len), K_(hist_scale),
                K_(min_val), K_(max_val) , K_(min_max_inited), K_(cg_macro_blk_cnt),
@@ -244,13 +268,18 @@ public:
     rows_(0),
     stat_type_(OptTableStatType::DEFAULT_TABLE_STAT),
     last_analyzed_(0),
+    stat_locked_(false),
     all_used_parts_(),
     all_used_tablets_(),
     pk_ids_(),
     column_metas_(),
     ds_level_(ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING),
     all_used_global_parts_(),
-    scale_ratio_(1.0)
+    scale_ratio_(1.0),
+    distinct_rows_(0.0),
+    table_partition_info_(NULL),
+    base_meta_info_(NULL),
+    real_rows_(-1.0)
   {}
   int assign(const OptTableMeta &other);
 
@@ -266,7 +295,9 @@ public:
            common::ObIArray<uint64_t> &column_ids,
            ObIArray<int64_t> &all_used_global_parts,
            const double scale_ratio,
-           const OptSelectivityCtx &ctx);
+           const OptSelectivityCtx &ctx,
+           const ObTablePartitionInfo *table_partition_info,
+           const ObTableMetaInfo *base_meta_info);
 
   // int update_stat(const double rows, const bool can_reduce, const bool can_enlarge);
 
@@ -306,12 +337,25 @@ public:
   bool use_opt_global_stat() const { return stat_type_ == OptTableStatType::OPT_TABLE_GLOBAL_STAT; }
   bool use_ds_stat() const { return stat_type_ == OptTableStatType::DS_TABLE_STAT; }
   void set_use_ds_stat() { stat_type_ = OptTableStatType::DS_TABLE_STAT; }
+  bool is_stat_locked() const { return stat_locked_; }
+  void set_stat_locked(bool locked) { stat_locked_ = locked; }
+  double get_distinct_rows() const { return distinct_rows_; }
+  void set_distinct_rows(double rows) { distinct_rows_ = rows; }
+  void set_ndv_for_all_column(double ndv);
 
   share::schema::ObTableType get_table_type() const { return table_type_; }
 
+  // The ratio of the increase in the number of rows in the system table compared to the number of rows in the statistics.
+  int get_increase_rows_ratio(ObOptimizerContext &ctx, double &increase_rows_ratio) const;
+  void clear_base_table_info() {
+    table_partition_info_ = NULL;
+    base_meta_info_ = NULL;
+    real_rows_ = -1.0;
+  }
+
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(table_type), K_(rows), K_(stat_type), K_(ds_level),
                K_(all_used_parts), K_(all_used_tablets), K_(pk_ids), K_(column_metas),
-               K_(all_used_global_parts), K_(scale_ratio));
+               K_(all_used_global_parts), K_(scale_ratio), K_(stat_locked), K_(distinct_rows), K_(real_rows));
 private:
   uint64_t table_id_;
   uint64_t ref_table_id_;
@@ -319,6 +363,7 @@ private:
   double rows_;
   OptTableStatType stat_type_;
   int64_t last_analyzed_;
+  bool stat_locked_;
 
   int64_t micro_block_count_;
 
@@ -329,6 +374,14 @@ private:
   int64_t ds_level_;//dynamic sampling level
   ObSEArray<int64_t, 64, common::ModulePageAllocator, true> all_used_global_parts_;
   double scale_ratio_;
+
+  // only valid for child stmt meta of set distinct stmt
+  double distinct_rows_;
+
+  // only for base table
+  const ObTablePartitionInfo *table_partition_info_;
+  const ObTableMetaInfo *base_meta_info_;
+  double real_rows_;
 };
 
 struct OptSelectivityDSParam {
@@ -360,9 +413,12 @@ public:
                                const OptTableStatType stat_type,
                                ObIArray<int64_t> &all_used_global_parts,
                                const double scale_ratio,
-                               int64_t last_analyzed);
+                               int64_t last_analyzed,
+                               bool is_stat_locked,
+                               const ObTablePartitionInfo *table_partition_info,
+                               const ObTableMetaInfo *base_meta_info);
 
-  int add_set_child_stmt_meta_info(const ObDMLStmt *parent_stmt,
+  int add_set_child_stmt_meta_info(const ObSelectStmt *parent_stmt,
                                    const ObSelectStmt *child_stmt,
                                    const uint64_t table_id,
                                    const OptTableMetas &child_table_metas,
@@ -375,13 +431,19 @@ public:
                                    const OptTableMetas &child_table_metas,
                                    const OptSelectivityCtx &child_ctx,
                                    const double child_rows);
-
+  int add_values_table_meta_info(const ObDMLStmt *stmt,
+                                 const uint64_t table_id,
+                                 const OptSelectivityCtx &ctx,
+                                 ObValuesTableDef *table_def);
   int get_set_stmt_output_statistics(const ObSelectStmt &stmt,
                                      const OptTableMetas &child_table_metas,
                                      const int64_t idx,
                                      double &ndv,
                                      double &num_null,
                                      double &avg_len);
+  int get_set_stmt_output_ndv(const ObSelectStmt &stmt,
+                              const OptTableMetas &child_table_metas,
+                              double &ndv);
 
   common::ObIArray<OptTableMeta>& get_table_metas() { return table_metas_; }
   const OptTableMeta* get_table_meta_by_table_id(const uint64_t table_id) const;
@@ -402,7 +464,11 @@ struct OptSelInfo
     selectivity_(1.0),
     equal_count_(0),
     range_selectivity_(1.0),
-    has_range_exprs_(false) {}
+    has_range_exprs_(false)
+  {
+    min_.set_min_value();
+    max_.set_max_value();
+  }
 
   TO_STRING_KV(K_(column_id), K_(selectivity), K_(equal_count),
                K_(range_selectivity), K_(has_range_exprs));
@@ -412,29 +478,11 @@ struct OptSelInfo
   uint64_t equal_count_;
   double range_selectivity_;
   bool has_range_exprs_;
+  ObObj min_;
+  ObObj max_;
 };
 
-struct ObEstColRangeInfo
-{
-  ObEstColRangeInfo(double min,
-                    double max,
-                    const common::ObObj *startobj,
-                    const common::ObObj *endobj,
-                    double distinct,
-                    bool discrete,
-                    common::ObBorderFlag border_flag)
-      : min_(min), max_(max), startobj_(startobj), endobj_(endobj),
-        distinct_(distinct), discrete_(discrete), border_flag_(border_flag)
-  { }
-  double min_;
-  double max_;
-  const common::ObObj *startobj_;
-  const common::ObObj *endobj_;
-  double distinct_;
-  bool discrete_;
-  common::ObBorderFlag border_flag_;
-};
-
+class ObSelEstimator;
 
 class ObOptSelectivity
 {
@@ -487,152 +535,11 @@ public:
   static inline double revise_between_0_1(double num)
   { return num < 0 ? 0 : (num > 1 ? 1 : num); }
 
-private:
-  static int check_qual_later_calculation(const OptTableMetas &table_metas,
-                                          const OptSelectivityCtx &ctx,
-                                          ObRawExpr &qual,
-                                          ObIArray<ObExprSelPair> &all_pred_sel,
-                                          ObIArray<ObRawExpr *> &join_conditions,
-                                          ObIArray<RangeExprs> &range_conditions,
-                                          bool &need_skip);
-  
-  static int is_simple_join_condition(ObRawExpr &qual,
-                                      const ObRelIds *left_rel_ids,
-                                      const ObRelIds *right_rel_ids,
-                                      bool &is_valid,
-                                      ObIArray<ObRawExpr *> &join_conditions);
-
-  /**
-   * calculate const or calculable expr selectivity.
-   * e.g. `1`, `1 = 1`, `1 + 1`, `1 = 0`
-   * if expr is always true, selectivity = 1.0
-   * if expr is always false, selectivity = 0.0
-   * if expr can't get actual value, like exec_param, selectivity = 0.5
-   */
-  static int get_const_sel(const OptSelectivityCtx &ctx,
-                           const ObRawExpr &qual,
-                           double &selectivity);
-
-  /**
-   * calculate column expr selectivity.
-   * e.g. `c1`, `t1.c1`
-   * selectity = 1.0 - sel(t1.c1 = 0) - sel(t1.c1 is NULL)
-   */
-  static int get_column_sel(const OptTableMetas &table_metas,
-                            const OptSelectivityCtx &ctx,
-                            const ObRawExpr &qual,
-                            double &selectivity);
-
-  //1. var = | <=> const, get_simple_predicate_sel
-  //2. func(var) = | <=> const,
-  //       only simple op(+,-,*,/), get_simple_predicate_sel,
-  //       mod(cnt_var, mod_num),  distinct_sel * mod_num
-  //       else sqrt(distinct_sel)
-  //3. cnt(var) = |<=> cnt(var) get_cntcol_eq_cntcol_sel
-  static int get_equal_sel(const OptTableMetas &table_metas,
-                           const OptSelectivityCtx &ctx,
-                           const ObRawExpr &qual,
-                           double &selectivity);
-  
-  static int get_equal_sel(const OptTableMetas &table_metas,
-                           const OptSelectivityCtx &ctx,
-                           const ObRawExpr &left_expr,
-                           const ObRawExpr &right_expr,
-                           const bool null_safe,
-                           double &selectivity);
-
-
-  //  Get simple predicate selectivity
-   //  (col) | (col +-* num) = const, sel = distinct_sel
-   //  (col) | (col +-* num) = null, sel = 0
-   //  (col) | (col +-* num) <=> const, sel = distinct_sel
-   //  (col) | (col +-* num) <=> null, sel = null_sel
-   //  multi_col | func(col) =|<=> null, sel DEFAULT_EQ_SEL 0.005
-   // @param partition_id only used in base table
-  /**
-   * calculate equal predicate with format `contain_column_expr = not_contain_column_expr` by ndv
-   * e.g. `c1 = 1`, `c1 + 1 = 2`, `c1 + c2 = 10`
-   * if contain_column_expr contain not monotonic operator or has more than one column, 
-   *    selectivity = DEFAULT_EQ_SEL
-   * if contain_column_expr contain only one column and contain only monotonic operator,
-   *    selectivity = 1 / ndv
-   */
-  static int get_simple_equal_sel(const OptTableMetas &table_metas,
-                                  const OptSelectivityCtx &ctx,
-                                  const ObRawExpr &cnt_col_expr,
-                                  const ObRawExpr *calculable_expr,
-                                  const bool null_safe,
-                                  double &selectivity);
-
-  static int get_cntcol_op_cntcol_sel(const OptTableMetas &table_metas,
-                                      const OptSelectivityCtx &ctx,
-                                      const ObRawExpr &input_left_expr,
-                                      const ObRawExpr &input_right_expr,
-                                      ObItemType op_type,
-                                      double &selectivity);
-
-  static int get_equal_sel(const OptTableMetas &table_metas,
-                           const OptSelectivityCtx &ctx,
-                           ObIArray<ObRawExpr *> &quals,
-                           double &selectivity);
-
-  static int extract_join_exprs(ObIArray<ObRawExpr *> &quals,
-                                const ObRelIds &left_rel_ids,
-                                const ObRelIds &right_rel_ids,
-                                ObIArray<ObRawExpr *> &left_exprs,
-                                ObIArray<ObRawExpr *> &right_exprs,
-                                ObIArray<bool> &null_safes);
-
-  static int get_cntcols_eq_cntcols_sel(const OptTableMetas &table_metas,
-                                        const OptSelectivityCtx &ctx,
-                                        const ObIArray<ObRawExpr *> &left_exprs,
-                                        const ObIArray<ObRawExpr *> &right_exprs,
-                                        const ObIArray<bool> &null_safes,
-                                        double &selectivity);
-
-  /**
-   * calculate [not] in predicate selectivity
-   * e.g. `c1 in (1, 2, 3)`, `1 in (c1, c2, c3)`
-   * The most commonly format `column in (const1, const2, const3)`
-   *    selectivity = sum(selectivity(column = const_i))
-   * otherwise, `var in (var1, var2, var3)
-   *    selectivity = sum(selectivity(var = var_i))
-   * not_in_selectivity = 1.0 - in_selectivity
-   */
-  static int get_in_sel(const OptTableMetas &table_metas,
-                        const OptSelectivityCtx &ctx,
-                        const ObRawExpr &qual,
-                        double &selectivity);
-
-  // get var is[not] NULL\true\false selectivity
-  // for var is column:
-  //   var is NULL: selectivity = null_sel(get_var_basic_sel)
-  //   var is true: selectivity = 1 - distinct_sel(var = 0) - null_sel
-  //   var is false: selectivity = distinct_sel(var = 0)
-  // others:
-  //   DEFAULT_SEL
-  // for var is not NULL\true\false: selectivity = 1.0 - is_sel
-  /**
-   * calculate is [not] predicate selectivity
-   * e.g. `c1 is null`， `c1 is ture`(mysql only)
-   */
-  static int get_is_sel(const OptTableMetas &table_metas,
-                        const OptSelectivityCtx &ctx,
-                        const ObRawExpr &qual,
-                        double &selectivity);
-
-  //col RANGE_CMP const, column_range_sel
-  //func(col) RANGE_CMP const, DEFAULT_INEQ_SEL
-  //col1 RANGE_CMP col2, DEFAULT_INEQ_SEL
-  static int get_range_cmp_sel(const OptTableMetas &table_metas,
-                               const OptSelectivityCtx &ctx,
-                               const ObRawExpr &qual,
-                               double &selectivity);
-
   static int get_column_range_sel(const OptTableMetas &table_metas,
                                   const OptSelectivityCtx &ctx,
                                   const ObColumnRefRawExpr &col_expr,
                                   const ObRawExpr &qual,
+                                  const bool need_out_of_bounds,
                                   double &selectivity);
 
   //param:As some expr, query range can't calc range, then range will be (min, max).
@@ -642,7 +549,14 @@ private:
                                   const OptSelectivityCtx &ctx,
                                   const ObColumnRefRawExpr &col_expr,
                                   const ObIArray<ObRawExpr* > &quals,
+                                  const bool need_out_of_bounds,
                                   double &selectivity);
+
+  static int get_column_range_min_max(const OptSelectivityCtx &ctx,
+                                      const ObColumnRefRawExpr *col_expr,
+                                      const ObIArray<ObRawExpr* > &quals,
+                                      ObObj &obj_min,
+                                      ObObj &obj_max);
 
   static int calc_column_range_selectivity(const OptTableMetas &table_metas,
                                            const OptSelectivityCtx &ctx,
@@ -672,91 +586,19 @@ private:
                                  bool include_start,
                                  bool include_end);
 
-  /**
-   * calculate like predicate selectivity.
-   * e.g. `c1 like 'xx%'`, `c1 like '%xx'`
-   * c1 like 'xx%', use query range selectivity
-   * c1 like '%xx', use DEFAULT_INEQ_SEL 1.0 / 3.0
-   */
-  static int get_like_sel(const OptTableMetas &table_metas,
-                          const OptSelectivityCtx &ctx,
-                          const ObRawExpr &qual,
-                          double &selectivity,
-                          bool &can_calc_sel);
+  static int refine_out_of_bounds_sel(const OptTableMetas &table_metas,
+                                      const OptSelectivityCtx &ctx,
+                                      const ObColumnRefRawExpr &col_expr,
+                                      const ObQueryRangeArray &ranges,
+                                      const ObObj &min_val,
+                                      const ObObj &max_val,
+                                      double &selectivity);
 
-  //c1 between $val1 and $val2     -> equal with [$val2 - $val1] range sel
-  //c1 not between $val1 and $val2 -> equal with (min, $val1) or ($val2, max) range sel
-  static int get_btw_sel(const OptTableMetas &table_metas,
-                         const OptSelectivityCtx &ctx,
-                         const ObRawExpr &qual,
-                         double &selectivity);
-
-  // not c1 in (a,b); not c1 > 100...
-  // not op.
-  // if can calculate null_sel, sel = 1.0 - null_sel - op_sel
-  // else sel = 1.0 - op_sel
-  static int get_not_sel(const OptTableMetas &table_metas,
-                         const OptSelectivityCtx &ctx,
-                         const ObRawExpr &qual,
-                         double &selectivity,
-                         common::ObIArray<ObExprSelPair> &all_predicate_sel);
-
-  // col or (col +-* 2) != 1, 1.0 - distinct_sel - null_sel
-  // col or (col +-* 2) != NULL -> 0.0
-  // otherwise DEFAULT_SEL;
-  static int get_ne_sel(const OptTableMetas &table_metas,
-                        const OptSelectivityCtx &ctx,
-                        const ObRawExpr &qual,
-                        double &selectivity);
-
-  static int get_ne_sel(const OptTableMetas &table_metas,
-                        const OptSelectivityCtx &ctx,
-                        const ObRawExpr &l_expr,
-                        const ObRawExpr &r_expr,
-                        double &selectivity);
-
-  static int get_agg_sel(const OptTableMetas &table_metas,
-                         const OptSelectivityCtx &ctx,
-                         const ObRawExpr &qual,
-                         double &selectivity);
-
-  static int get_agg_sel_with_minmax(const OptTableMetas &table_metas,
-                                     const OptSelectivityCtx &ctx,
-                                     const ObRawExpr &aggr_expr,
-                                     const ObRawExpr *const_expr1,
-                                     const ObRawExpr *const_expr2,
-                                     const ObItemType type,
-                                     double &selectivity,
-                                     const double rows_per_group);
-
-  static double get_agg_eq_sel(const ObObj &maxobj,
-                               const ObObj &minobj,
-                               const ObObj &constobj,
-                               const double distinct_sel,
-                               const double rows_per_group,
-                               const bool is_eq,
-                               const bool is_sum);
-
-  static double get_agg_range_sel(const ObObj &maxobj,
-                                  const ObObj &minobj,
-                                  const ObObj &constobj,
-                                  const double rows_per_group,
-                                  const ObItemType type,
-                                  const bool is_sum);
-
-  static double get_agg_btw_sel(const ObObj &maxobj,
-                                const ObObj &minobj,
-                                const ObObj &constobj1,
-                                const ObObj &constobj2,
-                                const double rows_per_group,
-                                const ObItemType type,
-                                const bool is_sum);  
-
-  static int is_valid_agg_qual(const ObRawExpr &qual,
-                               bool &is_valid,
-                               const ObRawExpr *&aggr_expr,
-                               const ObRawExpr *&const_expr1,
-                               const ObRawExpr *&const_expr2);
+  static int get_single_range_out_of_bounds_sel(const ObObj &min_val,
+                                                const ObObj &max_val,
+                                                const ObObj &start_val,
+                                                const ObObj &end_val,
+                                                double &selectivity);
 
   static int check_column_in_current_level_stmt(const ObDMLStmt *stmt,
                                                 const ObRawExpr &expr);
@@ -836,23 +678,27 @@ private:
                                 const double sample_size_scale,
                                 double &density);
 
-  static int get_range_sel_by_histogram(const common::ObHistogram &histogram,
+  static int get_range_sel_by_histogram(const OptSelectivityCtx &ctx,
+                                        const common::ObHistogram &histogram,
                                         const ObQueryRangeArray &ranges,
                                         bool no_whole_range,
                                         const double sample_size_scale,
                                         double &selectivity);
 
-  static int get_less_pred_sel(const ObHistogram &histogram,
+  static int get_less_pred_sel(const OptSelectivityCtx &ctx,
+                               const ObHistogram &histogram,
                                const ObObj &maxv,
                                const bool inclusive,
                                double &density);
 
-  static int get_greater_pred_sel(const ObHistogram &histogram,
+  static int get_greater_pred_sel(const OptSelectivityCtx &ctx,
+                                  const ObHistogram &histogram,
                                   const ObObj &minv,
                                   const bool inclusive,
                                   double &density);
 
-  static int get_range_pred_sel(const ObHistogram &histogram,
+  static int get_range_pred_sel(const OptSelectivityCtx &ctx,
+                                const ObHistogram &histogram,
                                 const ObObj &minv,
                                 const bool min_inclusive,
                                 const ObObj &maxv,
@@ -895,12 +741,6 @@ private:
                                       double &ndv);
 
   /**
-  * 判断多列连接是否只涉及到两个表
-  */
-  static int is_valid_multi_join(ObIArray<ObRawExpr *> &quals,
-                                 bool &is_valid);
-
-  /**
    * 检查一组expr是否包含所在表的主键
    */
   static int is_columns_contain_pkey(const OptTableMetas &table_metas,
@@ -921,7 +761,8 @@ private:
                                 ObIArray<uint64_t> &col_ids,
                                 uint64_t &table_id);
 
-  static int classify_quals(const ObIArray<ObRawExpr*> &quals,
+  static int classify_quals(const OptSelectivityCtx &ctx,
+                            const ObIArray<ObRawExpr*> &quals,
                             ObIArray<ObExprSelPair> &all_predicate_sel,
                             ObIArray<OptSelInfo> &column_sel_infos);
 
@@ -977,9 +818,40 @@ private:
   //                                  const ObIArray<ObRawExpr*> &predicates,
   //                                  ObOptDSJoinParam &ds_join_param);
 
+  static double get_filters_selectivity(ObIArray<double> &selectivities, FilterDependencyType type);
+
+  static int get_column_min_max(ObRawExpr *expr, OptSelInfo &sel_info);
+
+  static int calculate_special_ndv(const OptTableMetas &table_meta,
+                                  const ObRawExpr* expr,
+                                  const OptSelectivityCtx &ctx,
+                                  double &special_ndv,
+                                  const double origin_rows);
+  static int calculate_expr_ndv(const ObIArray<ObRawExpr*>& exprs,
+                                ObIArray<double>& expr_ndv,
+                                const OptTableMetas &table_metas,
+                                const OptSelectivityCtx &ctx,
+                                const double origin_rows);
+  static bool is_special_expr(const ObRawExpr &expr);
+  static int classify_exprs(const ObIArray<ObRawExpr*>& exprs,
+                            ObIArray<ObRawExpr*>& column_exprs,
+                            ObIArray<ObRawExpr*>& special_exprs,
+                            const OptTableMetas &table_metas,
+                            const OptSelectivityCtx &ctx);
+  static int classify_exprs(ObRawExpr* expr,
+                            ObIArray<ObRawExpr*>& column_exprs,
+                            ObIArray<ObRawExpr*>& special_exprs,
+                            const OptTableMetas &table_metas,
+                            const OptSelectivityCtx &ctx);
+
+  static int remove_ignorable_func_for_est_sel(const ObRawExpr *&expr);
+  static int remove_ignorable_func_for_est_sel(ObRawExpr *&expr);
+  static double get_set_stmt_output_count(double count1, double count2, ObSelectStmt::SetOperator set_type);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptSelectivity);
 };
+
 }
 }
 

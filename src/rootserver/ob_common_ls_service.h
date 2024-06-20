@@ -23,6 +23,10 @@
 #include "lib/thread/thread_mgr_interface.h"          // TGRunnable
 #include "lib/lock/ob_thread_cond.h"//ObThreadCond
 #include "rootserver/ob_tenant_thread_helper.h"//ObTenantThreadHelper
+#include "src/share/restore/ob_log_restore_source.h" //ObLogRestoreSourceItem
+#include "src/share/backup/ob_log_restore_struct.h" //ObRestoreSourceServiceAttr
+#include "share/restore/ob_log_restore_source_mgr.h" //ObLogRestoreSourceMgr
+#include "share/ob_log_restore_proxy.h"  // ObLogRestoreProxyUtil
 
 
 namespace oceanbase
@@ -63,7 +67,7 @@ class ObCommonLSService : public ObTenantThreadHelper,
                            public logservice::ObIReplaySubHandler
 {
 public:
-  ObCommonLSService():inited_(false), tenant_id_(OB_INVALID_TENANT_ID) {}
+  ObCommonLSService():inited_(false), tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL), restore_proxy_(), primary_is_avaliable_(true) {}
   virtual ~ObCommonLSService() {}
   int init();
   void destroy();
@@ -89,20 +93,29 @@ private:
   int try_create_ls_(const share::schema::ObTenantSchema &tenant_schema);
   //ls group maybe has more than one unit group, need fix
   int try_modify_ls_unit_group_(const share::schema::ObTenantSchema &tenant_schema);
+  void try_update_primary_ip_list();
+  bool need_update_ip_list_(share::ObLogRestoreSourceItem &item);
+  int get_restore_source_value_(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value);
+  int do_update_restore_source_(ObRestoreSourceServiceAttr &old_attr, ObLogRestoreSourceMgr &restore_source_mgr);
+  int update_source_inner_table_(char *buf, const int64_t buf_size, ObMySQLTransaction &trans, const ObLogRestoreSourceItem &item);
+
 public:
   //restore_service need create init ls too
   static int do_create_user_ls(const share::schema::ObTenantSchema &tenant_schema,
                    const share::ObLSStatusInfo &info,
                    const SCN &create_scn,
                    bool create_with_palf,
-                   const palf::PalfBaseInfo &palf_base_info);
+                   const palf::PalfBaseInfo &palf_base_info,
+                   const uint64_t source_tenant_id);
   static int update_tenant_info(const uint64_t tenant_id,
                                 const share::ObTenantSwitchoverStatus &staus,
                                 ObMySQLProxy *proxy);
 private:
   bool inited_;
   uint64_t tenant_id_;
-
+  common::ObMySQLProxy *proxy_;
+  ObLogRestoreProxyUtil restore_proxy_;
+  bool primary_is_avaliable_;
 };
 }
 }

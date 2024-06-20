@@ -108,9 +108,9 @@ int ObGTSTaskQueue::foreach_task(const MonotonicTs srr,
             TRANS_LOG(WARN, "unknown gts task type", KR(ret), K_(task_type));
           }
           if (OB_EAGAIN == ret) {
-            // rewrite ret
-            ret = OB_SUCCESS;
-            if (OB_FAIL(queue_.push(task))) {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_SUCCESS != (tmp_ret = queue_.push(task))) {
+              ret = tmp_ret;
               TRANS_LOG(ERROR, "push gts task failed", KR(ret), KP(task));
             } else {
               TRANS_LOG(DEBUG, "push back gts task", KP(task));
@@ -153,15 +153,16 @@ int ObGTSTaskQueue::push(ObTsCbTask *task)
   return ret;
 }
 
-int ObGTSTaskQueue::gts_callback_interrupted(const int errcode)
+int ObGTSTaskQueue::gts_callback_interrupted(const int errcode, const share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
-    int64_t last_tenant_id = OB_INVALID_TENANT_ID;
-    MAKE_TENANT_SWITCH_SCOPE_GUARD(ts_guard);
     int64_t count = queue_.size();
+    int64_t again_count = 0;
+    int64_t error_count = 0;
+    TRANS_LOG(INFO, "interrupt gts callback start", K(count), K(errcode), K(ls_id));
     while (OB_SUCC(ret) && count > 0) {
       common::ObLink *data = NULL;
       (void)queue_.pop(data);
@@ -171,31 +172,34 @@ int ObGTSTaskQueue::gts_callback_interrupted(const int errcode)
         break;
       } else {
         const uint64_t tenant_id = task->get_tenant_id();
-        if (tenant_id != last_tenant_id) {
-          if (OB_FAIL(ts_guard.switch_to(tenant_id))) {
-            TRANS_LOG(ERROR, "switch tenant failed", K(ret), K(tenant_id));
-          } else {
-            last_tenant_id = tenant_id;
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(task->gts_callback_interrupted(errcode))) {
+        MTL_SWITCH(tenant_id) {
+          if (OB_FAIL(task->gts_callback_interrupted(errcode, ls_id))) {
             if (OB_EAGAIN != ret) {
-              TRANS_LOG(WARN, "gts callback interrupted fail", KR(ret), KP(task));
+              error_count++;
+              // in this case, need restart the observer
+              TRANS_LOG(ERROR, "gts callback interrupted fail", KR(ret), KP(task));
             } else {
+              again_count++;
+              // case 1, errcode is OB_LS_OFFLINE and ls_id is not equal to ls_id in part ctx
+              // case 2, errcode is OB_LS_OFFLINE and task is an object of ObTsSyncGetTsCbTask
+              // return OB_EAGAIN
               if (OB_FAIL(queue_.push(task))) {
+                // since task is not null, this failure is impossible
                 TRANS_LOG(ERROR, "push gts task failed", KR(ret), KP(task));
               } else {
                 TRANS_LOG(DEBUG, "push back gts task", KP(task));
-                break;
               }
             }
           } else {
             TRANS_LOG(DEBUG, "gts callback interrupted success", KP(task));
           }
+        } else {
+          error_count++;
+          TRANS_LOG(ERROR, "switch tenant failed", KR(ret), K(errcode), K(ls_id));
         }
       }
     }
+    TRANS_LOG(INFO, "interrupt gts callback end", K(again_count), K(error_count));
   }
   return ret;
 }

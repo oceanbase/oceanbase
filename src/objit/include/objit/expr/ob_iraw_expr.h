@@ -50,6 +50,7 @@ public:
     EXPR_SET_OP,
     EXPR_EXEC_PARAM,
     EXPR_PL_QUERY_REF,
+    EXPR_MATCH_AGAINST,
   };
 
   typedef ObExprVisitor Visitor;
@@ -105,6 +106,7 @@ public:
   inline bool is_win_func_expr() const { return EXPR_WINDOW == expr_class_; }
   inline bool is_pseudo_column_expr() const { return EXPR_PSEUDO_COLUMN == expr_class_; }
   inline bool is_alias_ref_expr() const { return EXPR_ALIAS_REF == expr_class_; }
+  inline bool is_match_against_expr() const { return EXPR_MATCH_AGAINST == expr_class_; }
   inline bool is_terminal_expr() const { return is_var_expr()
                                                 || is_op_pseudo_column_expr()
                                                 || is_const_or_param_expr()

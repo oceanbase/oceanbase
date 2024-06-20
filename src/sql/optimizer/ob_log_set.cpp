@@ -218,15 +218,34 @@ int ObLogSet::compute_fd_item_set()
   } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
     LOG_WARN("failed to push back fd item", K(ret));
   } else if ((ObSelectStmt::INTERSECT == set_op_ || ObSelectStmt::EXCEPT == set_op_) &&
-            OB_FAIL(append(*fd_item_set, left_child->get_fd_item_set()))) {
+            OB_FAIL(append_child_fd_item_set(*fd_item_set, left_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (ObSelectStmt::INTERSECT == set_op_ &&
-            OB_FAIL(append(*fd_item_set, right_child->get_fd_item_set()))) {
+            OB_FAIL(append_child_fd_item_set(*fd_item_set, right_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
     LOG_WARN("falied to deduce fd item set", K(ret));
   } else {
     set_fd_item_set(fd_item_set);
+  }
+  return ret;
+}
+
+// just ignore table fd item now
+// todo: adjust log set fd, convert child fd set to currnet level stmt
+int ObLogSet::append_child_fd_item_set(ObFdItemSet &all_fd_item_set, const ObFdItemSet &child_fd_item_set)
+{
+  int ret = OB_SUCCESS;
+  ObFdItem *fd_item = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_fd_item_set.count(); ++i) {
+    if (OB_ISNULL(fd_item = child_fd_item_set.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (fd_item->is_table_fd_item()) {
+      /* do nothing */
+    } else if (OB_FAIL(all_fd_item_set.push_back(fd_item))) {
+      LOG_WARN("failed to push back fd item", K(ret));
+    }
   }
   return ret;
 }
@@ -421,30 +440,52 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
   const double need_row_count = (is_recursive_union() || !is_set_distinct())
                                 && param.need_row_count_ >= 0 && param.need_row_count_ < card_
                                 ? param.need_row_count_ : -1;
+  bool need_scale_ndv = (need_row_count == -1);
   double cur_child_card = 0.0;
   double cur_child_cost = 0.0;
+  if (OB_UNLIKELY(is_set_distinct() && get_num_of_child() != child_ndv_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child ndv count", K(child_ndv_));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
     const ObLogicalOperator *child = get_child(i);
     cur_param.reset();
+    double origin_child_card = 0;
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("set operator i-th child is null", K(ret), K(i));
     } else if (OB_FAIL(cur_param.assign(param))) {
       LOG_WARN("failed to assign param", K(ret));
-    } else if (OB_FALSE_IT(cur_param.need_row_count_ = need_row_count)) {
+    } else {
+      cur_param.need_row_count_ = need_row_count;
+      origin_child_card = child->get_card();
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_child(i)->re_est_cost(cur_param, cur_child_card, cur_child_cost))) {
       LOG_WARN("failed to re-est child cost", K(ret), K(i));
     } else if (OB_FAIL(cost_infos.push_back(ObBasicCostInfo(cur_child_card, cur_child_cost,
                                                             child->get_width())))) {
       LOG_WARN("push back child's cost info failed", K(ret));
-    } else if (ObSelectStmt::UNION == get_set_op()) {
-      card += cur_child_card;
+    } else if (ObSelectStmt::UNION == get_set_op() && !is_set_distinct()) {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : ObSelectStmt::UNION;
+      if (0 == i) {
+        card = cur_child_card;
+      } else {
+        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_card, set_type);
+      }
       child_cost += cur_child_cost;
-    } else if (ObSelectStmt::INTERSECT == get_set_op()) {
-      card = (0 == i || cur_child_card < card) ? cur_child_card : card;
-      child_cost += cur_child_cost;
-    } else if (ObSelectStmt::EXCEPT == get_set_op()) {
-      card = 0 == i ? cur_child_card : card;
+    } else {
+      double cur_child_ndv = child_ndv_.at(i);
+      if (need_scale_ndv) {
+        cur_child_ndv = std::min(
+            cur_child_ndv,
+            ObOptSelectivity::scale_distinct(cur_child_card, origin_child_card, cur_child_ndv));
+      }
+      if (0 == i) {
+        card = cur_child_ndv;
+      } else {
+        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_ndv, get_set_op());
+      }
       child_cost += cur_child_cost;
     }
   }
@@ -525,7 +566,9 @@ int ObLogSet::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   } else if (is_recursive_union_ && get_stmt()->is_select_stmt()) {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(get_stmt());
     // 伪列的产生，search/cycle的伪列都要求在recursive union算子产生
-    if (OB_FAIL(append(all_exprs, select_stmt->get_cte_exprs()))) {
+    if (NULL != identify_seq_expr_ && OB_FAIL(all_exprs.push_back(identify_seq_expr_))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else if (OB_FAIL(append(all_exprs, select_stmt->get_cte_exprs()))) {
       LOG_WARN("fail to add cte exprs", K(ret));
     } else { /*do nothing*/ }
   } else { /*do nothing*/ }
@@ -828,10 +871,7 @@ int ObLogSet::construct_pq_set_hint(ObPQSetHint &hint)
 int ObLogSet::compute_op_parallel_and_server_info()
 {
   int ret = OB_SUCCESS;
-  bool is_partition_wise = DistAlgo::DIST_PARTITION_WISE == get_distributed_algo()
-                           || DistAlgo::DIST_EXT_PARTITION_WISE == get_distributed_algo()
-                           || DistAlgo::DIST_SET_PARTITION_WISE == get_distributed_algo();
-  if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info(is_partition_wise))) {
+  if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info())) {
     LOG_WARN("failed to compute multi child parallel and server info", K(ret), K(get_distributed_algo()));
   }
   return ret;
@@ -846,6 +886,45 @@ int ObLogSet::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
     LOG_WARN("failed to get set exprs", K(ret));
   } else {
     is_fixed = ObOptimizerUtil::find_item(set_exprs, expr);
+  }
+  return ret;
+}
+
+int ObLogSet::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = 0.0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+    const ObLogicalOperator *child = get_child(i);
+    if (ObSelectStmt::UNION == get_set_op() && !is_set_distinct()) {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : ObSelectStmt::UNION;
+      if (0 == i) {
+        card = child->get_card();
+      } else {
+        card = ObOptSelectivity::get_set_stmt_output_count(card, child->get_card(), set_type);
+      }
+    } else if (0 == i) {
+      card = child_ndv_.at(i);
+    } else {
+      card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), get_set_op());
+    }
+  }
+  return ret;
+}
+
+int ObLogSet::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_SET == get_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  } else if (!is_set_distinct()) {
+    used = false;
+  }
+  if (is_recursive_union()) {
+    inherit_child_ordering_index = -1;
   }
   return ret;
 }

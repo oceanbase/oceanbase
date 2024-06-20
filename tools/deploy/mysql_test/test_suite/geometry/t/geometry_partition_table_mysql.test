@@ -6,14 +6,14 @@
 --source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
 
   --disable_warnings
-  DROP TABLE IF EXISTS t1;
+  DROP TABLE IF EXISTS partition_t1;
   --enable_warnings
-  create table t1(c1 int primary key, g geometry not null srid 0) partition by hash(c1) partitions 2;
-  create spatial index idx on t1 (g) local;
-  insert into t1 (c1, g) values (0, st_geomfromtext('point(1 1)'));
-  explain select /*+index(t1 idx)*/ st_astext(g) from t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
-  select /*+index(t1 idx)*/ st_astext(g) from t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
-  drop table t1;
+  create table partition_t1(c1 int primary key, g geometry not null srid 0) partition by hash(c1) partitions 2;
+  create spatial index idx on partition_t1 (g) local;
+  insert into partition_t1 (c1, g) values (0, st_geomfromtext('point(1 1)'));
+  explain select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+  select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+  drop table partition_t1;
 
   --disable_warnings
   DROP TABLE IF EXISTS t1;

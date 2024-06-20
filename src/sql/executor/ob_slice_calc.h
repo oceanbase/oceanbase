@@ -59,7 +59,24 @@ public:
   static const int64_t DEFAULT_CHANNEL_CNT = 64;
   static const int64_t DEFAULT_CHANNEL_IDX_TO_DROP_ROW = -2;
   typedef common::ObSEArray<int64_t, DEFAULT_CHANNEL_CNT> SliceIdxArray;
-
+  enum SliceCalcType {
+    ALL_TO_ONE,//ObAllToOneSliceIdxCalc
+    SM_REPART_RANDOM,//ObSlaveMapPkeyRandomIdxCalc
+    SM_REPART_HASH,//ObSlaveMapPkeyHashIdxCalc
+    SM_REPART_RANGE,//ObSlaveMapPkeyRangeIdxCalc
+    AFFINITY_REPART,//ObAffinitizedRepartSliceIdxCalc
+    NULL_AWARE_AFFINITY_REPART,//ObNullAwareAffinitizedRepartSliceIdxCalc
+    SM_BROADCAST,//ObSlaveMapBcastIdxCalc
+    BC2HOST,//ObBc2HostSliceIdCalc
+    RANDOM,//ObRandomSliceIdCalc
+    BROADCAST,//ObBroadcastSliceIdCalc
+    RANGE,//ObRangeSliceIdCalc
+    HASH,//ObHashSliceIdCalc
+    NULL_AWARE_HASH,//ObNullAwareHashSliceIdCalc
+    HYBRID_HASH_BROADCAST,//ObHybridHashBroadcastSliceIdCalc
+    HYBRID_HASH_RANDOM,//ObHybridHashRandomSliceIdCalc
+    WF_HYBRID,//ObWfHybridDistSliceIdCalc
+  };
   explicit ObSliceIdxCalc(common::ObIAllocator &allocator,
                           ObNullDistributeMethod::Type null_row_dist_method)
       : support_vectorized_calc_(false),
@@ -71,9 +88,18 @@ public:
       null_row_dist_method_(null_row_dist_method)
   {}
   virtual ~ObSliceIdxCalc() = default;
-
-  virtual int get_slice_indexes(
-    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array);
+  template <ObSliceIdxCalc::SliceCalcType CALC_TYPE, bool USE_VEC>
+  int get_slice_indexes(
+    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array,
+    ObBitVector *skip = NULL);
+  template <ObSliceIdxCalc::SliceCalcType CALC_TYPE, bool USE_VEC>
+  int get_slice_idx_batch(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                                ObBitVector &skip, const int64_t batch_size,
+                                int64_t *&indexes);
+  // calculate a group of indexes for one row.
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(
+    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
   // 获取前一次调用 get_slice_indexes 时传入的 row 对应的目标 partition
   // 本接口目前仅用于 ObRepartSliceIdxCalc 和 ObAffinitizedRepartSliceIdxCalc
   // 计算出的 tablet_id 用于告诉目标算子当前处理的行属于哪个分区
@@ -84,30 +110,25 @@ public:
   virtual void set_calc_hash_keys(int64_t n_keys) { UNUSED(n_keys); }
   // Calculate slice index vector for batch rows.
   // The function is called only support_vectorized_calc() is true.
-  virtual int get_slice_idx_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+  // This interface is for vectorization 1.0 which is row-oriented.
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
                                 ObBitVector &skip, const int64_t batch_size,
                                 int64_t *&indexes)
   {
     UNUSEDx(exprs, eval_ctx, skip, batch_size, indexes);
     return common::OB_NOT_SUPPORTED;
   }
-
-
 protected:
-  virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx)
-  {
-    UNUSED(exprs);
-    UNUSED(eval_ctx);
-    UNUSED(slice_idx);
-    return common::OB_NOT_IMPLEMENT;;
-  }
-
+  // used when calculate index id for single row. To make count of slice_idx_array = 1
+  int setup_slice_index(SliceIdxArray &slice_idx_array);
+  // used in vectorized execution, allocate memory to initialize slice_indexes_.
   int setup_slice_indexes(ObEvalCtx &ctx);
   int setup_tablet_ids(ObEvalCtx &ctx);
   // used for null aware anti join
+  template <bool USE_VEC>
   int calc_for_null_aware(const ObExpr &expr, const int64_t task_cnt, ObEvalCtx &eval_ctx,
-                          SliceIdxArray &slice_idx_array, bool &processed);
-
+                          SliceIdxArray &slice_idx_array, bool &processed, ObBitVector *skip);
   bool support_vectorized_calc_;
   common::ObIAllocator &alloc_;
   ObShuffleService shuffle_service_;
@@ -137,16 +158,17 @@ public:
     support_vectorized_calc_ = true;
   }
   virtual ~ObAllToOneSliceIdxCalc() = default;
-  virtual int get_slice_idx(
-    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx);
-
-  int get_slice_idx_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
                         ObBitVector &skip, const int64_t batch_size,
-                        int64_t *&indexes) override;
+                        int64_t *&indexes);
 protected:
 };
 
-class ObRepartSliceIdxCalc : virtual public ObSliceIdxCalc
+class ObRepartSliceIdxCalc : public ObSliceIdxCalc
 {
 public:
   ObRepartSliceIdxCalc(
@@ -216,17 +238,18 @@ public:
 
   virtual ~ObRepartSliceIdxCalc() {}
 
-  virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs,
-                            ObEvalCtx &eval_ctx,
-                            int64_t &slice_idx) override;
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
 
-  virtual int get_slice_idx_vec(const ObIArray<ObExpr*> &, ObEvalCtx &eval_ctx,
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &, ObEvalCtx &eval_ctx,
                                 ObBitVector &skip, const int64_t batch_size,
                                 int64_t *&indexes);
-
-  virtual int get_tablet_id(ObEvalCtx &eval_ctx, int64_t &tablet_id);
-
-  virtual int get_tablet_ids(ObEvalCtx &eval_ctx, ObBitVector &skip,
+  template <bool USE_VEC>
+  int get_tablet_id(ObEvalCtx &eval_ctx, int64_t &tablet_id, ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int get_tablet_ids(ObEvalCtx &eval_ctx, ObBitVector &skip,
                                 const int64_t batch_size, int64_t *&tablet_ids);
   virtual int get_previous_row_tablet_id(ObObj &tablet_id) override;
 
@@ -289,8 +312,7 @@ protected:
       ObNullDistributeMethod::Type null_row_dist_method,
       const ObPxPartChInfo &part_ch_info,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObRepartSliceIdxCalc(exec_ctx,
+      : ObRepartSliceIdxCalc(exec_ctx,
                              table_schema,
                              repart_func,
                              repart_sub_func,
@@ -309,8 +331,7 @@ protected:
       ObNullDistributeMethod::Type null_row_dist_method,
       const ObPxPartChInfo &part_ch_info,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObRepartSliceIdxCalc(exec_ctx,
+      : ObRepartSliceIdxCalc(exec_ctx,
                              table_schema,
                              calc_part_id_expr,
                              unmatch_row_dist_method,
@@ -339,10 +360,10 @@ protected:
   PartId2TaskIdxArrayMap part_to_task_array_map_;
 };
 
-class ObRepartRandomSliceIdxCalc : public ObSlaveMapRepartIdxCalcBase
+class ObSlaveMapPkeyRandomIdxCalc : public ObSlaveMapRepartIdxCalcBase
 {
 public:
-  ObRepartRandomSliceIdxCalc(
+  ObSlaveMapPkeyRandomIdxCalc(
       ObExecContext &exec_ctx,
       const share::schema::ObTableSchema &table_schema,
       const ObSqlExpression *repart_func,
@@ -353,8 +374,7 @@ public:
       ObNullDistributeMethod::Type null_row_dist_method,
       ObPxPartChInfo &part_ch_info,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObSlaveMapRepartIdxCalcBase(
+      : ObSlaveMapRepartIdxCalcBase(
                              exec_ctx,
                              table_schema,
                              repart_func,
@@ -365,8 +385,10 @@ public:
                              null_row_dist_method,
                              part_ch_info,
                              repart_type)
-  {}
-  ObRepartRandomSliceIdxCalc(
+  {
+    support_vectorized_calc_ = true;
+  }
+  ObSlaveMapPkeyRandomIdxCalc(
       ObExecContext &exec_ctx,
       const share::schema::ObTableSchema &table_schema,
       ObExpr *calc_part_id_expr,
@@ -374,8 +396,7 @@ public:
       ObNullDistributeMethod::Type null_row_dist_method,
       const ObPxPartChInfo &part_ch_info,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObSlaveMapRepartIdxCalcBase(
+      : ObSlaveMapRepartIdxCalcBase(
                              exec_ctx,
                              table_schema,
                              calc_part_id_expr,
@@ -383,13 +404,19 @@ public:
                              null_row_dist_method,
                              part_ch_info,
                              repart_type)
-  {}
+  {
+    support_vectorized_calc_ = true;
+  }
 
-  ~ObRepartRandomSliceIdxCalc() = default;
+  ~ObSlaveMapPkeyRandomIdxCalc() = default;
 
-  virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs,
-                            ObEvalCtx &eval_ctx,
-                            int64_t &slice_idx) override;
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &, ObEvalCtx &eval_ctx,
+                              ObBitVector &skip, const int64_t batch_size,
+                              int64_t *&indexes);
   virtual int init(uint64_t tenant_id) override;
   virtual int destroy() override;
 private:
@@ -411,8 +438,7 @@ public:
       int64_t task_count,
       ObPxPartChInfo &part_ch_info,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObRepartSliceIdxCalc(exec_ctx,
+      : ObRepartSliceIdxCalc(exec_ctx,
                              table_schema,
                              repart_func,
                              repart_sub_func,
@@ -423,7 +449,9 @@ public:
                              part_ch_info,
                              repart_type),
                              task_count_(task_count)
-  {}
+  {
+    support_vectorized_calc_ = true;
+  }
 
   ObAffinitizedRepartSliceIdxCalc(
       ObExecContext &exec_ctx,
@@ -436,8 +464,7 @@ public:
       ObRepartitionType repart_type,
       const ObIArray<ObExpr*> *hash_dist_exprs,
       const ObIArray<ObHashFunc> *hash_funcs)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObRepartSliceIdxCalc(exec_ctx,
+      : ObRepartSliceIdxCalc(exec_ctx,
                              table_schema,
                              calc_part_id_expr,
                              unmatch_row_dist_method,
@@ -447,16 +474,19 @@ public:
                              task_count_(task_count),
                              hash_dist_exprs_(hash_dist_exprs),
                              hash_funcs_(hash_funcs)
-  {}
+  {
+    support_vectorized_calc_ = true;
+  }
 
   ~ObAffinitizedRepartSliceIdxCalc() = default;
 
-  virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs,
-                            ObEvalCtx &eval_ctx,
-                            int64_t &slice_idx) override;
-  virtual int get_slice_idx_vec(const ObIArray<ObExpr*> &, ObEvalCtx &eval_ctx,
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &, ObEvalCtx &eval_ctx,
                               ObBitVector &skip, const int64_t batch_size,
-                              int64_t *&indexes) override;
+                              int64_t *&indexes);
 protected:
   const int64_t task_count_;
   //const common::ObIArray<ObHashColumn> *hash_dist_columns_;
@@ -465,7 +495,7 @@ protected:
   const ObIArray<ObHashFunc> *hash_funcs_;
 };
 
-class ObSlaveMapBcastIdxCalc : virtual public ObRepartSliceIdxCalc
+class ObSlaveMapBcastIdxCalc : public ObRepartSliceIdxCalc
 {
 public:
   ObSlaveMapBcastIdxCalc(
@@ -480,8 +510,7 @@ public:
       int64_t task_count,
       const ObPxPartChInfo &part_ch_info,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObRepartSliceIdxCalc(exec_ctx,
+      : ObRepartSliceIdxCalc(exec_ctx,
                              table_schema,
                              repart_func,
                              repart_sub_func,
@@ -502,8 +531,7 @@ public:
       int64_t task_count,
       const ObPxPartChInfo &part_ch_info,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObRepartSliceIdxCalc(exec_ctx,
+      : ObRepartSliceIdxCalc(exec_ctx,
                              table_schema,
                              calc_part_id_expr,
                              unmatch_row_dist_method,
@@ -514,8 +542,9 @@ public:
   {}
   ~ObSlaveMapBcastIdxCalc() = default;
 
-  virtual int get_slice_indexes(const ObIArray<ObExpr*> &exprs,
-                                ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array) override;
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
 protected:
   const int64_t task_count_;
 };
@@ -543,8 +572,13 @@ public:
   {
   }
 
-  virtual int get_slice_indexes(
-    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array);
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                    ObBitVector &skip, const int64_t batch_size,
+                    int64_t *&indexes);
 private:
   const ChannelIdxArray &channel_idx_;
   const HostIdxArray &host_idx_;
@@ -555,11 +589,17 @@ class ObRandomSliceIdCalc : public ObSliceIdxCalc
 public:
   ObRandomSliceIdCalc(common::ObIAllocator &alloc, const uint64_t slice_cnt)
       : ObSliceIdxCalc(alloc, ObNullDistributeMethod::NONE), idx_(0), slice_cnt_(slice_cnt)
-  {}
+  {
+    support_vectorized_calc_ = true;
+  }
 
-  virtual int get_slice_idx(
-      const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx) override;
-
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                    ObBitVector &skip, const int64_t batch_size,
+                    int64_t *&indexes);
 private:
   uint64_t idx_;
   uint64_t slice_cnt_;
@@ -574,13 +614,14 @@ public:
       : ObMultiSliceIdxCalc(alloc, null_row_dist_method), slice_cnt_(slice_cnt)
   {}
 
-  virtual int get_slice_indexes(
-    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array);
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
 private:
   uint64_t slice_cnt_;
 };
 
-class ObRangeSliceIdCalc : virtual public ObSliceIdxCalc
+class ObRangeSliceIdCalc : public ObSliceIdxCalc
 {
    struct Compare
   {
@@ -615,12 +656,17 @@ public:
     support_vectorized_calc_ = true;
   }
 
-  int get_slice_idx(const ObIArray<ObExpr*> &exprs,
-                    ObEvalCtx &eval_ctx,
-                    int64_t &slice_idx) override;
-  int get_slice_idx_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
                     ObBitVector &skip, const int64_t batch_size,
-                    int64_t *&indexes) override;
+                    int64_t *&indexes);
+  template <bool USE_VEC>
+  int get_slice_idx_batch_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                    ObBitVector &skip, const int64_t batch_size,
+                    int64_t *&indexes);
   int64 task_cnt_;
   const ObPxTabletRange *range_;
   const ObIArray<ObExpr*> *dist_exprs_;
@@ -628,7 +674,7 @@ public:
   const ObSortCollations &sort_collations_;
 };
 
-class ObHashSliceIdCalc : virtual public ObSliceIdxCalc
+class ObHashSliceIdCalc : public ObSliceIdxCalc
 {
 public:
   ObHashSliceIdCalc(ObIAllocator &alloc,
@@ -640,13 +686,9 @@ public:
       : ObSliceIdxCalc(alloc, null_row_dist_method), expr_ctx_(&expr_ctx),
         hash_dist_columns_(&hash_dist_columns), dist_exprs_(&dist_exprs), task_cnt_(task_cnt),
         round_robin_idx_(0), obj_casted_(false), hash_dist_exprs_(NULL), hash_funcs_(NULL),
-        n_keys_(0)
+        n_keys_(0), null_dist_value_exist_(true)
   {
-    if (ObNullDistributeMethod::NONE != null_row_dist_method) {
-      support_vectorized_calc_ = false;
-    } else {
-      support_vectorized_calc_ = true;
-    }
+    support_vectorized_calc_ = ObNullDistributeMethod::NONE == null_row_dist_method;
   }
 
   ObHashSliceIdCalc(ObIAllocator &alloc,
@@ -657,26 +699,27 @@ public:
       : ObSliceIdxCalc(alloc, null_row_dist_method), expr_ctx_(NULL),
         hash_dist_columns_(NULL), dist_exprs_(NULL), task_cnt_(task_cnt), round_robin_idx_(0),
         obj_casted_(false), hash_dist_exprs_(dist_exprs), hash_funcs_(hash_funcs),
-        n_keys_(dist_exprs->count())
+        n_keys_(dist_exprs->count()), null_dist_value_exist_(true)
   {
-    if (ObNullDistributeMethod::NONE != null_row_dist_method) {
-      support_vectorized_calc_ = false;
-    } else {
-      support_vectorized_calc_ = true;
-    }
+    support_vectorized_calc_ = ObNullDistributeMethod::NONE == null_row_dist_method;
   }
-
-  int calc_hash_value(ObEvalCtx &eval_ctx, uint64_t &hash_val);
-  int calc_slice_idx(ObEvalCtx &eval_ctx, int64_t slice_size, int64_t &slice_idx);
-  virtual int get_slice_idx(const ObIArray<ObExpr*> &row,
-                    ObEvalCtx &eval_ctx,
-                    int64_t &slice_idx) override;
-
+  template <bool USE_VEC>
+  int calc_hash_value(ObEvalCtx &eval_ctx, uint64_t &hash_val, ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int calc_slice_idx(ObEvalCtx &eval_ctx, int64_t slice_size, int64_t &slice_idx,
+                     ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
   virtual void set_calc_hash_keys(int64_t n_keys) { n_keys_ = n_keys; }
-  virtual int get_slice_idx_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
                         ObBitVector &skip, const int64_t batch_size,
-                        int64_t *&indexes) override;
-
+                        int64_t *&indexes);
+  template <bool USE_VEC>
+  int get_slice_idx_batch_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                                  ObBitVector &skip, const int64_t batch_size,
+                                  int64_t *&indexes);
   common::ObExprCtx *expr_ctx_;
   const common::ObIArray<ObHashColumn> *hash_dist_columns_;
   const common::ObIArray<ObSqlExpression *> *dist_exprs_;
@@ -692,6 +735,7 @@ public:
   const ObIArray<ObExpr*> *hash_dist_exprs_;
   const ObIArray<ObHashFunc> *hash_funcs_;
   int64_t n_keys_;
+  bool null_dist_value_exist_;
 };
 
 class ObHybridHashSliceIdCalcBase
@@ -724,6 +768,7 @@ public:
         use_hash_lookup_ = true;
       }
     }
+    //support_vectorized_calc_ = true;
   }
   ~ObHybridHashSliceIdCalcBase()
   {
@@ -732,7 +777,8 @@ public:
     }
   }
 protected:
-  int check_if_popular_value(ObEvalCtx &eval_ctx, bool &is_popular);
+  template <bool USE_VEC>
+  int check_if_popular_value(ObEvalCtx &eval_ctx, bool &is_popular, ObBitVector *skip);
   ObHashSliceIdCalc hash_calc_;
   const common::ObIArray<uint64_t> *popular_values_hash_;
   common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> popular_values_map_;
@@ -754,8 +800,9 @@ public:
         ObMultiSliceIdxCalc(alloc, null_row_dist_method),
         broadcast_calc_(alloc, slice_cnt, null_row_dist_method)
   {}
-  virtual int get_slice_indexes(
-    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array);
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
 private:
   ObBroadcastSliceIdCalc broadcast_calc_;
 };
@@ -774,13 +821,19 @@ public:
       : ObHybridHashSliceIdCalcBase(alloc, slice_cnt, null_row_dist_method, dist_exprs, hash_funcs, popular_values_hash),
         ObSliceIdxCalc(alloc, null_row_dist_method),
         random_calc_(alloc, slice_cnt)
-  {}
-  virtual int get_slice_idx(
-      const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx) override;
+  {
+    support_vectorized_calc_ = true;
+  }
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                                  ObBitVector &skip, const int64_t batch_size,
+                                  int64_t *&indexes);
 private:
   ObRandomSliceIdCalc random_calc_;
 };
-
 
 
 class ObSlaveMapPkeyRangeIdxCalc : public ObSlaveMapRepartIdxCalcBase
@@ -797,8 +850,7 @@ public:
       const ObIArray<ObSortCmpFunc> *sort_cmp_funs,
       const ObIArray<ObSortFieldCollation> *sort_collations,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObSlaveMapRepartIdxCalcBase(exec_ctx,
+      : ObSlaveMapRepartIdxCalcBase(exec_ctx,
                                     table_schema,
                                     calc_part_id_expr,
                                     unmatch_row_dist_method,
@@ -812,10 +864,9 @@ public:
   virtual ~ObSlaveMapPkeyRangeIdxCalc();
   virtual int init(uint64_t tenant_id = OB_SERVER_TENANT_ID) override;
   virtual int destroy() override;
-  virtual int get_slice_idx(
-      const common::ObIArray<ObExpr*> &exprs,
-      ObEvalCtx &eval_ctx,
-      int64_t &slice_idx) override;
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
 private:
   struct PartitionRangeChannelInfo
   {
@@ -859,7 +910,7 @@ private:
   Compare sort_cmp_;
 };
 
-class ObSlaveMapPkeyHashIdxCalc : public ObSlaveMapRepartIdxCalcBase, public ObHashSliceIdCalc
+class ObSlaveMapPkeyHashIdxCalc : public ObSlaveMapRepartIdxCalcBase
 {
 public:
   ObSlaveMapPkeyHashIdxCalc(
@@ -877,8 +928,7 @@ public:
       const common::ObIArray<ObHashColumn> &hash_dist_columns,
       const common::ObIArray<ObSqlExpression *> &dist_exprs,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObSlaveMapRepartIdxCalcBase(
+      : ObSlaveMapRepartIdxCalcBase(
                              exec_ctx,
                              table_schema,
                              repart_func,
@@ -889,17 +939,16 @@ public:
                              null_row_dist_method,
                              part_ch_info,
                              repart_type),
-       ObHashSliceIdCalc(exec_ctx.get_allocator(),
+       affi_hash_map_(),
+       hash_calc_(exec_ctx.get_allocator(),
                          expr_ctx,
                          null_row_dist_method,
                          hash_dist_columns,
                          dist_exprs,
-                         task_count),
-       affi_hash_map_()
+                         task_count)
 
   {
-    ObHashSliceIdCalc::support_vectorized_calc_ = false;
-    ObSlaveMapRepartIdxCalcBase::support_vectorized_calc_ = false;
+    support_vectorized_calc_ = false;
   }
   ObSlaveMapPkeyHashIdxCalc(
       ObExecContext &exec_ctx,
@@ -912,23 +961,21 @@ public:
       const ExprFixedArray &dist_exprs,
       const common::ObHashFuncs &dist_hash_funcs,
       ObRepartitionType repart_type)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), null_row_dist_method),
-        ObSlaveMapRepartIdxCalcBase(exec_ctx,
+      : ObSlaveMapRepartIdxCalcBase(exec_ctx,
                                       table_schema,
                                       calc_part_id_expr,
                                       unmatch_row_dist_method,
                                       null_row_dist_method,
                                       part_ch_info,
                                       repart_type),
-          ObHashSliceIdCalc(exec_ctx.get_allocator(),
+          affi_hash_map_(),
+          hash_calc_(exec_ctx.get_allocator(),
                             task_count,
                             null_row_dist_method,
                             &dist_exprs,
-                            &dist_hash_funcs),
-          affi_hash_map_()
+                            &dist_hash_funcs)
   {
-    ObHashSliceIdCalc::support_vectorized_calc_ = false;
-    ObSlaveMapRepartIdxCalcBase::support_vectorized_calc_ = false;
+    support_vectorized_calc_ = false;
   }
   ~ObSlaveMapPkeyHashIdxCalc() = default;
 
@@ -936,14 +983,14 @@ public:
   int destroy() override;
 
   // for static engine
-  virtual int get_slice_idx(
-    const ObIArray<ObExpr*> &exprs,
-    ObEvalCtx &eval_ctx,
-    int64_t &slice_idx) override;
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
 
-  virtual int get_slice_idx_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+  template <bool USE_VEC>
+  int get_slice_idx_batch_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
                                 ObBitVector &skip, const int64_t batch_size,
-                                int64_t *&indexes) override
+                                int64_t *&indexes)
   {
     UNUSEDx(exprs, eval_ctx, skip, batch_size, indexes);
     return common::OB_NOT_SUPPORTED;
@@ -954,6 +1001,7 @@ private:
   int build_affi_hash_map(hash::ObHashMap<int64_t, ObPxPartChMapItem> &affi_hash_map);
 private:
   hash::ObHashMap<int64_t, ObPxPartChMapItem> affi_hash_map_;
+  ObHashSliceIdCalc hash_calc_;
 };
 
 class ObWfHybridDistSliceIdCalc : public ObSliceIdxCalc
@@ -977,19 +1025,9 @@ public:
   {
     support_vectorized_calc_ = false;
   }
-  virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx)
-  {
-    UNUSED(exprs);
-    UNUSED(eval_ctx);
-    UNUSED(slice_idx);
-    return common::OB_NOT_IMPLEMENT;
-  }
-  virtual int get_slice_idx_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
-                                ObBitVector &skip, const int64_t batch_size,
-                                int64_t *&indexes) override;
-  virtual int get_slice_indexes(const ObIArray<ObExpr*> &exprs,
-                                ObEvalCtx &eval_ctx,
-                                SliceIdxArray &slice_idx_array);
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
   virtual void set_calc_hash_keys(int64_t n_keys)
   {
     hash_slice_id_calc_.set_calc_hash_keys(n_keys);
@@ -1012,24 +1050,15 @@ public:
                              const int64_t task_cnt,
                              const ObIArray<ObExpr*> *dist_exprs,
                              const ObIArray<ObHashFunc> *hash_funcs)
-      : ObSliceIdxCalc(alloc, ObNullDistributeMethod::NONE),
-        ObHashSliceIdCalc(alloc, task_cnt, ObNullDistributeMethod::NONE, dist_exprs, hash_funcs)
+      : ObHashSliceIdCalc(alloc, task_cnt, ObNullDistributeMethod::NONE, dist_exprs, hash_funcs)
   {
     support_vectorized_calc_ = false;
   }
 
-  virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx)
-  {
-    UNUSED(exprs);
-    UNUSED(eval_ctx);
-    UNUSED(slice_idx);
-    return common::OB_NOT_IMPLEMENT;;
-  }
-
-  virtual int get_slice_indexes(
-    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array);
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
 };
-
 
 class ObNullAwareAffinitizedRepartSliceIdxCalc : public ObAffinitizedRepartSliceIdxCalc
 {
@@ -1046,8 +1075,7 @@ public:
       ObPxPartChInfo &part_ch_info,
       ObRepartitionType repart_type,
       const ObIArray<ObExpr*> *repartition_exprs)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), ObNullDistributeMethod::NONE),
-        ObAffinitizedRepartSliceIdxCalc(exec_ctx,
+      : ObAffinitizedRepartSliceIdxCalc(exec_ctx,
                                         table_schema,
                                         repart_func,
                                         repart_sub_func,
@@ -1074,8 +1102,7 @@ public:
       const ObIArray<ObExpr*> *hash_dist_exprs,
       const ObIArray<ObHashFunc> *hash_funcs,
       const ObIArray<ObExpr*> *repartition_exprs)
-      : ObSliceIdxCalc(exec_ctx.get_allocator(), ObNullDistributeMethod::NONE),
-        ObAffinitizedRepartSliceIdxCalc(exec_ctx,
+      : ObAffinitizedRepartSliceIdxCalc(exec_ctx,
                                        table_schema,
                                        calc_part_id_expr,
                                        task_count,
@@ -1092,6 +1119,9 @@ public:
 
   ~ObNullAwareAffinitizedRepartSliceIdxCalc() = default;
   virtual int init(uint64_t tenant_id) override;
+  template <bool USE_VEC>
+  int get_slice_indexes_inner(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                              SliceIdxArray &slice_idx_array, ObBitVector *skip = NULL);
   virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx)
   {
     UNUSED(exprs);
@@ -1099,11 +1129,10 @@ public:
     UNUSED(slice_idx);
     return common::OB_NOT_IMPLEMENT;;
   }
-  virtual int get_slice_indexes(
-    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array);
 private:
   const ObIArray<ObExpr*> *repartition_exprs_;
 };
+
 
 }
 }

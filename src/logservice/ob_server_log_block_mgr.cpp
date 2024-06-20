@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX CLOG
 #include "ob_server_log_block_mgr.h"
 #include <fcntl.h>                              // IO operation
 #include <type_traits>                          // decltype
@@ -33,6 +34,9 @@
 #include "share/ob_errno.h"                     // errno
 #include "logservice/ob_log_service.h"          // ObLogService
 #include "logservice/palf/log_io_utils.h"       // renameat_with_retry
+
+#define BYTE_TO_MB(byte) (byte+1024*1024-1)/1024/1024
+
 namespace oceanbase
 {
 using namespace palf;
@@ -196,19 +200,30 @@ int ObServerLogBlockMgr::resize_(const int64_t new_size_byte)
                                                            : SHRINKING_STATUS))) {
   } else if (aligned_new_size_byte < min_log_disk_size_for_all_tenants_) {
     ret = OB_NOT_SUPPORTED;
-    LOG_DBA_ERROR(OB_NOT_SUPPORTED,
-                  "possible reason",
-                  "new log_disk_size is not enough to hold all tenants, please check the configuration about log disk",
-                  "new log disk size(MB)", (new_size_byte+1024*1024-1)/1024/1024,
-                  "min log disk size(MB)", (min_log_disk_size_for_all_tenants_+1024*1024-1)/1024/1024);
-  } else if (OB_FAIL(
-                 do_resize_(old_log_pool_meta, resize_block_cnt, new_log_pool_meta))) {
+    LOG_DBA_ERROR_V2(OB_LOG_NEW_DISK_SIZE_NOT_ENOUGH, ret,
+                     "new log_disk_size(", BYTE_TO_MB(new_size_byte), "MB) is not enough to hold all tenants. ",
+                     "[suggestion] set log_disk_size greater than ", BYTE_TO_MB(min_log_disk_size_for_all_tenants_), "MB.");
+  } else if (OB_FAIL(do_resize_(old_log_pool_meta, resize_block_cnt, new_log_pool_meta))) {
     if (OB_ALLOCATE_DISK_SPACE_FAILED == ret) {
       ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-      LOG_DBA_ERROR(OB_ALLOCATE_DISK_SPACE_FAILED,
-                    "possible reason",
-                    "may be diskspace is not enough, please check the configuration about log disk",
-                    "new log disk size(MB)", (new_size_byte+1024*1024-1)/1024/1024);
+      // available disk space = free space in disk + current allocated space
+      int64_t free_disk_space = 0;
+      if (OB_UNLIKELY(OB_SUCCESS != get_free_disk_space(free_disk_space))) {
+        LOG_DBA_ERROR_V2(OB_LOG_ALLOCATE_DISK_SPACE_FAIL, ret,
+                         "maybe available disk space(can't get automatically) is not enough to satisfy new log_disk_size(",
+                         BYTE_TO_MB(new_size_byte), "MB). "
+                         "[suggestion] set log_disk_size less than available disk space(= old log_disk_size + free disk size) "
+                         "or link the clog path({data_dir}/clog) to another disk which has more than ",
+                         BYTE_TO_MB(new_size_byte), "MB free space.");
+      } else {
+        int64_t available_size_byte =  free_disk_space + curr_total_size;
+        LOG_DBA_ERROR_V2(OB_LOG_ALLOCATE_DISK_SPACE_FAIL, ret,
+                         "maybe available disk size(", BYTE_TO_MB(available_size_byte), "MB) "
+                         "is not enough to satisfy new log_disk_size(", BYTE_TO_MB(new_size_byte), "MB). "
+                         "[suggestion] set log_disk_size less than ", BYTE_TO_MB(available_size_byte), "MB "
+                         "or link the clog path({data_dir}/clog) to another disk which has more than ",
+                         BYTE_TO_MB(new_size_byte), "MB free space.");
+      }
     } else {
       CLOG_LOG(ERROR, "do_resize_ failed", K(ret), KPC(this), K(old_log_pool_meta),
                K(new_log_pool_meta));
@@ -1126,8 +1141,10 @@ int ObServerLogBlockMgr::allocate_block_at_tmp_dir_(const FileDesc &dir_fd,
     CLOG_LOG(ERROR, "::fallocate failed", K(ret), KPC(this), K(dir_fd), K(block_id),
              K(errno));
   } else {
-    CLOG_LOG(INFO, "allocate_block_at_ success", K(ret), KPC(this), K(dir_fd),
-             K(block_id));
+    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+      CLOG_LOG(INFO, "allocate_block_at_ success", K(ret), KPC(this), K(dir_fd),
+               K(block_id));
+    }
   }
   if (-1 != fd && -1 == ::close(fd)) {
     int tmp_ret = convert_sys_errno();
@@ -1169,8 +1186,10 @@ int ObServerLogBlockMgr::free_block_at_(const FileDesc &src_dir_fd,
     CLOG_LOG(ERROR, "unlinkat_until_success_i failed", K(ret), KPC(this), K(src_dir_fd),
              K(src_block_id));
   } else {
-    CLOG_LOG(INFO, "free_block_at_ success", K(ret), KPC(this), K(src_dir_fd),
-             K(src_block_id));
+    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+      CLOG_LOG(INFO, "free_block_at_ success", K(ret), KPC(this), K(src_dir_fd),
+               K(src_block_id));
+    }
   }
   return ret;
 }
@@ -1218,8 +1237,8 @@ int ObServerLogBlockMgr::get_has_allocated_blocks_cnt_in_(
   int ret = OB_SUCCESS;
   DIR *dir = NULL;
   struct dirent *entry = NULL;
-  std::regex pattern_log(".*/tenant_[1-9]\\d*/[1-9]\\d*/log");
-  std::regex pattern_meta(".*/tenant_[1-9]\\d*/[1-9]\\d*/meta");
+  std::regex pattern_tenant(".*/tenant_[1-9]\\d*");
+  std::regex pattern_log_pool(".*/log_pool/*");
   if (NULL == (dir = opendir(log_disk_path))) {
     ret = OB_ERR_SYS;
     CLOG_LOG(WARN, "opendir failed", K(log_disk_path));
@@ -1238,23 +1257,19 @@ int ObServerLogBlockMgr::get_has_allocated_blocks_cnt_in_(
       } else if (OB_FAIL(FileDirectoryUtils::is_directory(current_file_path, is_dir))) {
         CLOG_LOG(WARN, "is_directory failed", K(ret), K(entry->d_name));
       } else if (false == is_dir) {
-      } else if (true == std::regex_match(current_file_path, pattern_log)
-                 || true == std::regex_match(current_file_path, pattern_meta)) {
-        GetBlockCountFunctor functor(current_file_path);
-        if (OB_FAIL(palf::scan_dir(current_file_path, functor))) {
-          LOG_DBA_ERROR(OB_ERR_UNEXPECTED, "Attention!!!", "There are several files in the log directory that are not generated by "
-                        "OceanBase. Please confirm whether manual deletion is required",
-                        "log directory", current_file_path);
-        } else {
-          has_allocated_block_cnt += functor.get_block_count();
-          CLOG_LOG(INFO, "get_has_allocated_blocks_cnt_in_ success", K(ret),
-                   K(current_file_path), "block_cnt", functor.get_block_count());
-        }
-      } else if (OB_FAIL(get_has_allocated_blocks_cnt_in_(current_file_path,
-                                                          has_allocated_block_cnt))) {
-        CLOG_LOG(WARN, "get_has_allocated_blocks_cnt_in_ failed", K(ret),
-                 K(current_file_path), K(has_allocated_block_cnt));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_DBA_ERROR_V2(OB_LOG_EXTERNAL_FILE_EXIST, ret, "Attention!!!", "There are several files in the log directory that are not generated by "
+                         "OceanBase.", "[suggestion] Please confirm whether manual deletion is required",
+                         ", unexpected file path is ", current_file_path);
+      } else if (true == std::regex_match(current_file_path, pattern_tenant)) {
+        ret = scan_tenant_dir_(current_file_path, has_allocated_block_cnt);
+      } else if (true == std::regex_match(current_file_path, pattern_log_pool)) {
+        CLOG_LOG(INFO, "ignore log_pool path", K(current_file_path), KPC(this));
       } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_DBA_ERROR_V2(OB_LOG_EXTERNAL_FILE_EXIST, ret, "Attention!!!", "There are several files in the log directory that are not generated by "
+                         "OceanBase.", "[suggestion] Please confirm whether manual deletion is required",
+                         ", unexpected directory is ", current_file_path);
       }
     }
   }
@@ -1306,6 +1321,20 @@ int ObServerLogBlockMgr::remove_tmp_file_or_directory_for_tenant_(const char *lo
   }
   if (NULL != dir) {
     closedir(dir);
+  }
+  return ret;
+}
+
+int ObServerLogBlockMgr::get_free_disk_space(int64_t &free_disk_space)
+{
+  int ret = OB_SUCCESS;
+  free_disk_space = 0;
+  struct statvfs file_system;
+  if (statvfs(log_pool_path_, &file_system) == -1) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("fail to get disk stat", K(ret), K(strerror(errno)), K(log_pool_path_));
+  } else {
+    free_disk_space = file_system.f_bsize * file_system.f_bavail;
   }
   return ret;
 }
@@ -1551,6 +1580,142 @@ DEFINE_GET_SERIALIZE_SIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
   size += log_pool_meta_.get_serialize_size();
   size += serialization::encoded_length_i64(sizeof(checksum_));
   return size;
+}
+
+int ObServerLogBlockMgr::force_update_tenant_log_disk(const uint64_t tenant_id,
+                                                      const int64_t new_log_disk_size)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    int64_t unused_size = 0;
+    int64_t old_log_disk_size = 0;
+    int64_t allowed_new_log_disk_size = 0;
+    ObLogService *log_service = MTL(ObLogService*);
+    if (NULL == log_service) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "unexpected error, ObLogService is nullptr", KR(ret), KP(log_service));
+    } else if (OB_FAIL(log_service->get_palf_stable_disk_usage(unused_size, old_log_disk_size))) {
+      CLOG_LOG(ERROR, "get_palf_stable_disk_usage failed", KR(ret), KP(log_service));
+    } else if (OB_FAIL(update_tenant(old_log_disk_size, new_log_disk_size, allowed_new_log_disk_size, log_service))) {
+      CLOG_LOG(WARN, "update_tenant failed", KR(ret), KP(log_service));
+    } else if (allowed_new_log_disk_size != new_log_disk_size) {
+      ret = OB_STATE_NOT_MATCH;
+      CLOG_LOG(WARN, "can not force update tenant log disk, force_update_tenant_log_disk failed", KR(ret), KP(log_service), K(new_log_disk_size),
+               K(allowed_new_log_disk_size), K(old_log_disk_size));
+    } else {
+    }
+    CLOG_LOG(INFO, "force_update_tenant_log_disk finished", KR(ret), KP(log_service), K(new_log_disk_size),
+             K(allowed_new_log_disk_size), K(old_log_disk_size));
+  } else {
+    CLOG_LOG(WARN, "force_update_tenant_log_disk failed, no such tenant", KR(ret),  K(tenant_id), K(new_log_disk_size));
+  }
+  return ret;
+}
+
+// the prefix is tenant_xxx
+int ObServerLogBlockMgr::scan_tenant_dir_(const char *tenant_dir,
+                                          int64_t &has_allocated_block_cnt)
+{
+  int ret = OB_SUCCESS;
+  DIR *dir = NULL;
+  std::regex pattern_log_stream(".*/tenant_[1-9]\\d*/[1-9]\\d*");
+  std::regex pattern_tmp_dir(".*/tenant_[1-9]\\d*/tmp_dir");
+  struct dirent *entry = NULL;
+  if (NULL == (dir = opendir(tenant_dir))) {
+    ret = OB_ERR_SYS;
+    CLOG_LOG(WARN, "opendir failed", K(tenant_dir));
+  } else {
+    char current_file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    while ((entry = readdir(dir)) != NULL && OB_SUCC(ret)) {
+      bool is_dir = false;
+      MEMSET(current_file_path, '\0', OB_MAX_FILE_NAME_LENGTH);
+      if (0 == strcmp(entry->d_name, ".") || 0 == strcmp(entry->d_name, "..")) {
+        // do nothing
+      } else if (0 >= snprintf(current_file_path, OB_MAX_FILE_NAME_LENGTH, "%s/%s",
+                               tenant_dir, entry->d_name)) {
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(WARN, "snprintf failed", K(ret), K(current_file_path), K(tenant_dir),
+                K(entry->d_name));
+      } else if (OB_FAIL(FileDirectoryUtils::is_directory(current_file_path, is_dir))) {
+        CLOG_LOG(WARN, "is_directory failed", K(ret), K(entry->d_name));
+      } else if (false == is_dir) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_DBA_ERROR_V2(OB_LOG_EXTERNAL_FILE_EXIST, ret, "Attention!!!", "There are several files in the log directory that are not generated by "
+                         "OceanBase.", "[suggestion] Please confirm whether manual deletion is required",
+                         ", unexpected file is ", current_file_path);
+      } else if (true == std::regex_match(current_file_path, pattern_log_stream)) {
+        ret = scan_ls_dir_(current_file_path, has_allocated_block_cnt);
+      } else if (true == std::regex_match(current_file_path, pattern_tmp_dir)) {
+        CLOG_LOG(INFO, "ignore tmp_dir", K(current_file_path), K(has_allocated_block_cnt), KPC(this));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_DBA_ERROR_V2(OB_LOG_EXTERNAL_FILE_EXIST, ret, "Attention!!!", "There are several files in the log directory that are not generated by "
+                         "OceanBase.", "[suggestion] Please confirm whether manual deletion is required",
+                         ", unexpected directory is ", current_file_path);
+      }
+    }
+  }
+  if (NULL != dir) {
+    closedir(dir);
+  }
+  return ret;
+}
+
+// the prefix of ls_dir tenant_xxx/xxxx
+int ObServerLogBlockMgr::scan_ls_dir_(const char *ls_dir,
+                                      int64_t &has_allocated_block_cnt)
+{
+  int ret = OB_SUCCESS;
+  DIR *dir = NULL;
+  std::regex pattern_log(".*/tenant_[1-9]\\d*/[1-9]\\d*/log");
+  std::regex pattern_meta(".*/tenant_[1-9]\\d*/[1-9]\\d*/meta");
+  struct dirent *entry = NULL;
+  if (NULL == (dir = opendir(ls_dir))) {
+    ret = OB_ERR_SYS;
+    CLOG_LOG(WARN, "opendir failed", K(ls_dir));
+  } else {
+    char current_file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    while ((entry = readdir(dir)) != NULL && OB_SUCC(ret)) {
+      bool is_dir = false;
+      MEMSET(current_file_path, '\0', OB_MAX_FILE_NAME_LENGTH);
+      if (0 == strcmp(entry->d_name, ".") || 0 == strcmp(entry->d_name, "..")) {
+        // do nothing
+      } else if (0 >= snprintf(current_file_path, OB_MAX_FILE_NAME_LENGTH, "%s/%s",
+                               ls_dir, entry->d_name)) {
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(WARN, "snprintf failed", K(ret), K(current_file_path), K(ls_dir),
+                K(entry->d_name));
+      } else if (OB_FAIL(FileDirectoryUtils::is_directory(current_file_path, is_dir))) {
+        CLOG_LOG(WARN, "is_directory failed", K(ret), K(entry->d_name));
+      } else if (false == is_dir) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_DBA_ERROR_V2(OB_LOG_EXTERNAL_FILE_EXIST, ret, "Attention!!!", "There are several files in the log directory that are not generated by "
+                         "OceanBase.", "[suggestion] Please confirm whether manual deletion is required",
+                         ", unexpected file is ", current_file_path);
+      } else if (true == std::regex_match(current_file_path, pattern_log)
+                 || true == std::regex_match(current_file_path, pattern_meta)) {
+        GetBlockCountFunctor functor(current_file_path);
+        if (OB_FAIL(palf::scan_dir(current_file_path, functor))) {
+          LOG_DBA_ERROR_V2(OB_LOG_EXTERNAL_FILE_EXIST, ret, "Attention!!!", "There are several files in the log directory that are not generated by "
+                           "OceanBase.", "[suggestion] Please confirm whether manual deletion is required",
+                           ", unexpected directory is ", current_file_path);
+        } else {
+          has_allocated_block_cnt += functor.get_block_count();
+          CLOG_LOG(INFO, "get_has_allocated_blocks_cnt_in_ success", K(ret),
+                   K(current_file_path), "block_cnt", functor.get_block_count());
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_DBA_ERROR_V2(OB_LOG_EXTERNAL_FILE_EXIST, ret, "Attention!!!", "There are several files in the log directory that are not generated by "
+                         "OceanBase.", "[suggestion] Please confirm whether manual deletion is required",
+                         ", unexpected directory is ", current_file_path);
+      }
+    }
+  }
+  if (NULL != dir) {
+    closedir(dir);
+  }
+  return ret;
 }
 } // namespace logservice
 } // namespace oceanbase

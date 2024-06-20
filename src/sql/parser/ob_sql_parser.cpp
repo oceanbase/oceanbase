@@ -73,6 +73,7 @@ int ObSQLParser::parse_and_gen_sqlid(void *malloc_pool,
     parse_result->is_dynamic_sql_ = false;
     parse_result->is_batched_multi_enabled_split_ = false;
     parse_result->may_bool_value_ = false;
+    parse_result->is_external_table_ = false;
 
     int64_t new_length = str_len + 1;
     char *buf = (char *)parse_malloc(new_length, parse_result->malloc_pool_);

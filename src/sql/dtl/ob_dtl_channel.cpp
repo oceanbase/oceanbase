@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace sql {
 namespace dtl {
 
-ObDtlChannel::ObDtlChannel(uint64_t id, const common::ObAddr &peer)
+ObDtlChannel::ObDtlChannel(uint64_t id, const common::ObAddr &peer, DtlChannelType type)
     : cond_(),
       pins_(0),
       id_(id),
@@ -49,6 +49,7 @@ ObDtlChannel::ObDtlChannel(uint64_t id, const common::ObAddr &peer)
       owner_mod_(DTLChannelOwner::INVALID_OWNER),
       thread_id_(0),
       enable_channel_sync_(false),
+      channel_type_(type),
       prev_link_(nullptr),
       next_link_(nullptr)
 {

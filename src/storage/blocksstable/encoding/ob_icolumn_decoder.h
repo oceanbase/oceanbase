@@ -23,6 +23,10 @@
 #include "ob_encoding_util.h"
 #include "ob_row_index.h"
 #include "storage/blocksstable/ob_micro_block_header.h"
+#include "src/share/vector/ob_uniform_vector.h"
+#include "src/share/vector/ob_continuous_vector.h"
+#include "src/share/vector/ob_discrete_vector.h"
+#include "src/share/vector/ob_fixed_length_vector.h"
 
 namespace oceanbase
 {
@@ -90,6 +94,46 @@ public:
   bool cache_attributes_[ObColumnHeader::MAX_ATTRIBUTE];
 };
 
+struct ObVectorDecodeCtx
+{
+  explicit ObVectorDecodeCtx(
+      const char **ptr_arr,
+      uint32_t *len_arr,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      const int64_t vec_offset,
+      sql::VectorHeader &vec_header)
+    : ptr_arr_(ptr_arr), len_arr_(len_arr), row_ids_(row_ids), row_cap_(row_cap),
+      vec_offset_(vec_offset), vec_header_(vec_header) {}
+
+  bool is_valid() const
+  {
+    return nullptr != ptr_arr_ && nullptr != len_arr_ && row_cap_ > 0 && vec_offset_ >= 0;
+  }
+
+  void reset_tmp_arr()
+  {
+    if (nullptr != ptr_arr_) {
+      MEMSET(ptr_arr_, 0, sizeof(const char *) * row_cap_);
+    }
+    if (nullptr != len_arr_) {
+      MEMSET(len_arr_, 0, sizeof(uint32_t) * row_cap_);
+    }
+  }
+
+  VectorFormat get_format() const { return vec_header_.get_format(); }
+  ObIVector *get_vector() { return vec_header_.get_vector(); }
+
+  TO_STRING_KV(KP_(ptr_arr), KP_(len_arr), KP_(row_ids), K_(row_cap), K_(vec_offset));
+
+  const char **ptr_arr_; // tmp mem buf as pointer array
+  uint32_t *len_arr_; // tmp mem buf as 4-byte array
+  const int64_t *row_ids_; // projection row-ids
+  const int64_t row_cap_; // batch size / array size
+  const int64_t vec_offset_; // vector start projection offset
+  sql::VectorHeader &vec_header_; // result
+};
+
 class ObIColumnDecoder
 {
 public:
@@ -101,6 +145,13 @@ public:
 
   virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
      const ObBitStream &bs, const char *data, const int64_t len) const = 0;
+
+  virtual int decode(const ObColumnDecoderCtx &ctx, const ObBitStream &bs, const char *data, const int64_t len,
+                     sql::VectorHeader &vec_header, const int64_t vec_idx) const
+  {
+    UNUSEDx(ctx, bs, data, len, vec_header, vec_idx);
+    return OB_NOT_SUPPORTED;
+  }
 
   virtual ObColumnHeader::Type get_type() const = 0;
 
@@ -129,6 +180,20 @@ public:
       common::ObDatum *datums) const
   {
     UNUSEDx(ctx, row_index, row_ids, cell_datas, row_cap, datums);
+    return common::OB_NOT_SUPPORTED;
+  }
+
+  /*
+   * row_ids: index array of projected rows, null means all rows from idx_offset needed to be projected
+   * row_cap: count of projected rows
+   * vec_offset: start projection offset of vector header
+   */
+  virtual int decode_vector(
+      const ObColumnDecoderCtx &decoder_ctx,
+      const ObIRowIndex *row_index,
+      ObVectorDecodeCtx &vector_ctx) const
+  {
+    UNUSEDx(decoder_ctx, row_index, vector_ctx);
     return common::OB_NOT_SUPPORTED;
   }
 
@@ -200,6 +265,20 @@ public:
       const int64_t row_cap,
       common::ObDatum *datums) const;
 
+  virtual int set_null_vector_from_fixed_column(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      const int64_t vec_offset,
+      const unsigned char *col_data,
+      ObIVector &vector) const;
+
+  int batch_locate_var_len_row(
+      const ObColumnDecoderCtx &ctx,
+      const ObIRowIndex* row_index,
+      ObVectorDecodeCtx &vector_ctx,
+      bool &has_null) const;
+
   virtual int get_null_count(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex *row_index,
@@ -252,6 +331,16 @@ protected:
     const char *meta_data_,
     int64_t &null_count) const;
 
+
+  template <typename Header, bool HAS_NULL>
+  static int batch_locate_cell_data(
+      const ObColumnDecoderCtx &ctx,
+      const Header &header,
+      const char **data_arr,
+      uint32_t *len_arr,
+      const int64_t *row_ids,
+      const int64_t row_cap);
+
   template <typename T>
   inline void update_pointer(T *&ptr, const char *old_block, const char *cur_block)
   {
@@ -261,7 +350,30 @@ protected:
 
 class ObSpanColumnDecoder : public ObIColumnDecoder
 {
-public:
+protected:
+  int decode_exception_vector(
+      const ObColumnDecoderCtx &decoder_ctx,
+      const int64_t ref,
+      const char *exc_buf,
+      const int64_t exc_buf_len,
+      const int64_t vec_offset,
+      sql::VectorHeader &vec_header) const;
+
+  template <typename ValueType, ObEncodingDecodeMetodType DECODE_TYPE>
+  int inner_decode_exception_vector(
+      const ObColumnDecoderCtx &decoder_ctx,
+      const int64_t ref,
+      const char *exc_buf,
+      const int64_t exc_buf_len,
+      const int64_t vec_offset,
+      sql::VectorHeader &vec_header) const;
+
+  int decode_refed_range(
+      const ObColumnDecoderCtx &decoder_ctx,
+      const ObIRowIndex *row_index,
+      const int64_t ref_start_idx,
+      const int64_t ref_end_idx,
+      ObVectorDecodeCtx &raw_vector_ctx) const;
 };
 
 // decoder for column not exist in schema
@@ -321,6 +433,72 @@ OB_INLINE int ObIColumnDecoder::batch_locate_row_data(
       row_ids, row_cap, col_ctx.has_extend_value(),
       row_datas, datums))) {
     STORAGE_LOG(WARN, "Failed to batch get row data offset from row index", K(ret));
+  }
+  return ret;
+}
+
+template <typename Header, bool HAS_NULL>
+int ObIColumnDecoder::batch_locate_cell_data(
+    const ObColumnDecoderCtx &ctx,
+    const Header &header,
+    const char **data_arr,
+    uint32_t *len_arr,
+    const int64_t *row_ids,
+    const int64_t row_cap)
+{
+  // for var-length data, nullptr == data_arr[row_id] represent for this row is null
+  int ret = common::OB_SUCCESS;
+  if (OB_ISNULL(data_arr) || OB_ISNULL(len_arr) || OB_ISNULL(row_ids)) {
+    ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(row_ids), KP(data_arr), KP(len_arr));
+  } else if (ctx.is_fix_length()) {
+    for (int64_t i = 0; i < row_cap; ++i) {
+      data_arr[i] += header.offset_;
+      len_arr[i] = header.length_;
+    }
+  } else if (1 == ctx.micro_block_header_->var_column_count_) {
+    for (int64_t i = 0; i < row_cap; ++i) {
+      if (!HAS_NULL || nullptr != data_arr[i]) {
+        data_arr[i] += header.offset_;
+        len_arr[i] -= header.offset_;
+      }
+    }
+  } else {
+    ObIntegerArrayGenerator gen;
+    if (ctx.col_header_->is_last_var_field()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
+        if (!HAS_NULL || nullptr != data_arr[i]) {
+          const uint8_t col_idx_byte = *(data_arr[i] + header.offset_);
+          const char *var_data = data_arr[i] + header.offset_ + sizeof(uint8_t);
+          if (OB_FAIL(gen.init(var_data - col_idx_byte, col_idx_byte))) {
+            STORAGE_LOG(WARN, "init integer array generator failed", K(ret), K(header));
+          } else {
+            var_data += (ctx.micro_block_header_->var_column_count_ - 1) * col_idx_byte;
+            const int64_t offset = 0 == header.length_ ? 0 : gen.get_array().at(header.length_);
+            const int64_t datum_offset_in_row = offset + (var_data - data_arr[i]);
+            // datum_offset_in_row is ensured to be included in range of int32
+            len_arr[i] = len_arr[i] - static_cast<const int32_t>(datum_offset_in_row);
+            data_arr[i] = var_data + offset;
+          }
+        }
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
+        if (!HAS_NULL || nullptr != data_arr[i]) {
+          const int8_t col_idx_byte = *(data_arr[i] + header.offset_);
+          const char *var_data = data_arr[i] + header.offset_ + sizeof(uint8_t);
+          if (OB_FAIL(gen.init(var_data - col_idx_byte, col_idx_byte))) {
+            STORAGE_LOG(WARN, "init integer array generator failed", K(ret), K(header));
+          } else {
+            var_data += (ctx.micro_block_header_->var_column_count_ - 1) * col_idx_byte;
+            // 0 if header.length_ == 0
+            const int64_t offset = 0 == header.length_ ? 0 : gen.get_array().at(header.length_);
+            len_arr[i] = gen.get_array().at(header.length_ + 1) - offset;
+            data_arr[i] = var_data + offset;
+          }
+        }
+      }
+    }
   }
   return ret;
 }

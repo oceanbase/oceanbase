@@ -65,6 +65,7 @@ public:
   virtual int inner_close() override;
   int do_transmit();
 private:
+  template <ObSliceIdxCalc::SliceCalcType CALC_TYPE>
   int do_repart_transmit(ObRepartSliceIdxCalc &repart_slice_calc);
 private:
   virtual int build_ds_piece_msg(int64_t expected_range_count,

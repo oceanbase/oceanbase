@@ -83,23 +83,14 @@ int ObLockMemtableMgr::init(
     ls_id_ = ls_id;
     freezer_ = freezer;
     t3m_ = t3m;
-    table_type_ = ObITable::TableType::LOCK_MEMTABLE;
     is_inited_ = true;
     LOG_INFO("lock memtable mgr init successfully", K(ls_id), K(tablet_id), K(this));
   }
   return ret;
 }
 
-int ObLockMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
-                                       const int64_t schema_version,
-                                       const SCN newest_clog_checkpoint_scn,
-                                       const bool for_replay)
+int ObLockMemtableMgr::create_memtable(const CreateMemtableArg &arg)
 {
-  UNUSED(clog_checkpoint_scn);
-  UNUSED(schema_version);
-  UNUSED(newest_clog_checkpoint_scn);
-  UNUSED(for_replay);
-
   int ret = OB_SUCCESS;
   ObTableHandleV2 handle;
   ObITable::TableKey table_key;
@@ -124,6 +115,7 @@ int ObLockMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table is nullptr", K(ret));
   } else if (OB_ISNULL(memtable = static_cast<ObLockMemtable *>(table))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("this is not lock memtable", K(ret), KPC(table));
   } else if (OB_FAIL(memtable->init(table_key, ls_id_, freezer_))) {
     LOG_WARN("memtable init fail.", K(ret));
@@ -198,7 +190,7 @@ int ObLockMemtableMgr::unregister_from_common_checkpoint_(const ObLockMemtable *
   return ret;
 }
 
-int ObLockMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
+int ObLockMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
                                               const bool force)
 {
   int ret = OB_SUCCESS;

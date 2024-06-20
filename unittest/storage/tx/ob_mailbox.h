@@ -13,13 +13,15 @@
 #ifndef OCEANBASE_UNITTEST_STORAGE_TX_OB_MAILBOX
 #define OCEANBASE_UNITTEST_STORAGE_TX_OB_MAILBOX
 
+#include <cstring>
 #include <deque>
 #include <map>
-
+#include <set>
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
 #include "storage/tx/ob_committer_define.h"
+#include "storage/tx/ob_tx_msg.h"
 
 namespace oceanbase
 {
@@ -79,6 +81,26 @@ public:
     std::memcpy((void*)mail_, (void*)(other.mail_), size_);
     return *this;
   }
+  /* ObMail operator=(const ObMail& other) */
+  /*   { */
+  /*     if (NULL != mail_) { */
+  /*       std::free(mail_); */
+  /*     } */
+
+  /*     from_ = other.from_; */
+  /*     to_ = other.to_; */
+  /*     size_ = other.size_; */
+  /*     mail_ = (MailType*)std::malloc(size_); */
+  /*     std::memcpy((void*)mail_, (void*)(other.mail_), size_); */
+  /*     return *this; */
+  /*   } */
+  bool operator<(const ObMail& other) const
+  {
+    return from_ < other.from_
+      || to_ < other.to_
+      || size_ < other.size_
+    || (size_ == other.size_ && memcmp((void*)mail_, (void*)other.mail_, size_) < 0);
+  }
   /* ObMail& operator=(const ObMail &other) */
   /* { */
   /*   from_ = other.from_; */
@@ -117,6 +139,7 @@ public:
   {
     mailbox_.clear();
   }
+  bool empty() { return mailbox_.empty(); }
   int init(int64_t addr,
            ObMailBoxMgr<MailType> *mailbox_mgr,
            ObMailHandler<MailType> *ctx);
@@ -136,6 +159,7 @@ class ObMailBoxMgr
 public:
   int64_t counter_ = 0;
   std::map<int64_t, ObMailBox<MailType>*> mgr_;
+  std::set<ObMail<MailType>> cache_msg_;
   int register_mailbox(int64_t &addr,
                        ObMailBox<MailType> &mailbox,
                        ObMailHandler<MailType> *ctx);
@@ -143,6 +167,7 @@ public:
            const int64_t receive);
   int send_to_head(const ObMail<MailType>& mail,
                    const int64_t receive);
+  bool random_dup_and_send();
   void reset();
 };
 
@@ -269,6 +294,7 @@ void ObMailBoxMgr<MailType>::reset()
 {
   counter_ = 0;
   mgr_.clear();
+  cache_msg_.clear();
   TRANS_LOG(INFO, "reset mailbox",K(this));
 }
 
@@ -279,6 +305,7 @@ int ObMailBoxMgr<MailType>::send(const ObMail<MailType>& mail,
   int ret = OB_SUCCESS;
 
   if (mgr_.count(mail.to_) != 0) {
+    cache_msg_.insert(mail);
     mgr_[receiver]->mailbox_.push_back(mail);
     TRANS_LOG(INFO, "send mailbox success", K(ret), K(mail),
               K(*mgr_[receiver]));
@@ -294,12 +321,44 @@ int ObMailBoxMgr<MailType>::send_to_head(const ObMail<MailType>& mail,
   int ret = OB_SUCCESS;
 
   if (mgr_.count(mail.to_) != 0) {
+    cache_msg_.insert(mail);
     mgr_[receiver]->mailbox_.push_front(mail);
     TRANS_LOG(INFO, "send to mailbox front success", K(ret), K(mail),
               K(*mgr_[receiver]));
   }
 
   return ret;
+}
+
+template <typename MailType>
+bool ObMailBoxMgr<MailType>::random_dup_and_send()
+{
+  int64_t idx = ObRandom::rand(0, cache_msg_.size() - 1);
+
+  if (idx >= 0 && cache_msg_.size() >= 0) {
+    int i = 0;
+    bool found = false;
+    ObMail<MailType> mail;
+    for (auto iter = cache_msg_.begin();
+         iter != cache_msg_.end();
+         iter++) {
+      if (idx == i) {
+        mail = *iter;
+        found = true;
+        break;
+      }
+      i++;
+    }
+    if (!found) {
+      ob_abort();
+    }
+    mgr_[mail.to_]->mailbox_.push_front(mail);
+    TRANS_LOG(INFO, "random_dup_and_send success", K(idx), K(cache_msg_.size()),
+              K(mail));
+    return true;
+  } else {
+    return false;
+  }
 }
 
 } // namespace transaction

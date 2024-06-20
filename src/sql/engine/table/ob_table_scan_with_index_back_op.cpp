@@ -40,7 +40,7 @@ int ObTableScanWithIndexBackOp::inner_open()
   if (OB_ISNULL(op_kit = ctx_.get_operator_kit(MY_SPEC.get_index_scan_tree_id()))
               || OB_ISNULL(op_kit->op_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get ObOperator from exec ctx failed", K(MY_SPEC.get_index_scan_tree_id()));
+    LOG_WARN("get ObOperater from exec ctx failed", K(MY_SPEC.get_index_scan_tree_id()));
   } else if (FALSE_IT(index_scan_tree_ = op_kit->op_)) {
   } else if (OB_FAIL(prepare_scan_param())) {
     if (OB_ITER_END != ret) {
@@ -280,6 +280,7 @@ int ObTableScanWithIndexBackOp::inner_close()
   }
   tmp_ret = ret;
   if (OB_FAIL(ObTableScanOp::inner_close())) {
+    // overwrite ret
     LOG_WARN("inner close ooerator failed", K(ret));
   }
   ret = (OB_SUCCESS == ret) ? tmp_ret : ret;

@@ -14,10 +14,14 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
+#include "storage/tx/ob_tx_data_op.h"
+
+using namespace oceanbase::share;
+using namespace oceanbase::transaction;
 
 namespace oceanbase
 {
-
 namespace storage
 {
 
@@ -45,13 +49,16 @@ int ObUndoStatusList::serialize(char *buf, const int64_t buf_len, int64_t &pos) 
 int ObUndoStatusList::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  ObArray<ObUndoStatusNode *> node_arr;
-  node_arr.reset();
+  ObSEArray<ObUndoStatusNode *, 32> node_arr;
+  node_arr.reuse();
   ObUndoStatusNode *node = head_;
   // generate undo status node stack
   while (OB_NOT_NULL(node)) {
-    node_arr.push_back(node);
-    node = node->next_;
+    if (OB_FAIL(node_arr.push_back(node))) {
+      STORAGE_LOG(WARN, "push back undo status node failed", KR(ret), K(node_arr.count()));
+    } else {
+      node = node->next_;
+    }
   }
 
   LST_DO_CODE(OB_UNIS_ENCODE, undo_node_cnt_);
@@ -69,7 +76,7 @@ int ObUndoStatusList::serialize_(char *buf, const int64_t buf_len, int64_t &pos)
 int ObUndoStatusList::deserialize(const char *buf,
                                   const int64_t data_len,
                                   int64_t &pos,
-                                  ObSliceAlloc &slice_allocator)
+                                  ObTenantTxDataAllocator &tx_data_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t version = 0;
@@ -92,7 +99,7 @@ int ObUndoStatusList::deserialize(const char *buf,
   } else {
     int64_t original_pos = pos;
     pos = 0;
-    if (OB_FAIL(deserialize_(buf + original_pos, undo_status_list_len, pos, slice_allocator))) {
+    if (OB_FAIL(deserialize_(buf + original_pos, undo_status_list_len, pos, tx_data_allocator))) {
       STORAGE_LOG(WARN, "deserialize_ fail", "slen", undo_status_list_len, K(pos), K(ret));
     }
     pos += original_pos;
@@ -104,7 +111,7 @@ int ObUndoStatusList::deserialize(const char *buf,
 int ObUndoStatusList::deserialize_(const char *buf,
                                    const int64_t data_len,
                                    int64_t &pos,
-                                   ObSliceAlloc &slice_allocator)
+                                   ObTenantTxDataAllocator &tx_data_allocator)
 {
   int ret = OB_SUCCESS;
   ObUndoStatusNode *cur_node = nullptr;
@@ -115,11 +122,7 @@ int ObUndoStatusList::deserialize_(const char *buf,
     // allcate new undo status node if needed
     if (OB_ISNULL(cur_node) || cur_node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
       void *undo_node_buf = nullptr;
-#ifdef OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
-      if (OB_ISNULL(undo_node_buf = slice_allocator.alloc(true /*record_alloc_lbt*/))) {
-#else
-      if (OB_ISNULL(undo_node_buf = slice_allocator.alloc())) {
-#endif
+      if (OB_ISNULL(undo_node_buf = tx_data_allocator.alloc(false/* enable_throttle */))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "allocate memory when deserialize ObTxData failed.", KR(ret));
       } else {
@@ -267,6 +270,7 @@ const char* ObTxCommitData::get_state_string(int32_t state)
 int ObTxData::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
+  int64_t pos_tmp = 0;
   const int64_t len = get_serialize_size_();
 
   if (OB_UNLIKELY(OB_ISNULL(buf) || buf_len <= 0 || pos > buf_len)) {
@@ -277,8 +281,9 @@ int ObTxData::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
                 K(pos));
   } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, len))) {
     STORAGE_LOG(WARN, "encode length of ObTxData failed.", KR(ret), KP(buf), K(buf_len), K(pos));
-  } else if (OB_FAIL(serialize_(buf, buf_len, pos))) {
-    STORAGE_LOG(WARN, "serialize_ of ObTxData failed.", KR(ret), KP(buf), K(buf_len), K(pos));
+  } else if (FALSE_IT(pos_tmp = pos)) {
+  } else if (OB_FAIL(serialize_(buf, pos + len, pos))) {
+    STORAGE_LOG(WARN, "serialize_ of ObTxData failed.", KR(ret), KP(buf), K(buf_len), K(pos), K(pos_tmp));
   }
   return ret;
 }
@@ -298,10 +303,28 @@ int ObTxData::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
     STORAGE_LOG(WARN, "serialize start_scn fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(end_scn_.serialize(buf, buf_len, pos))) {
     STORAGE_LOG(WARN, "serialize end_scn fail.", KR(ret), K(pos), K(buf_len));
-  } else if (OB_FAIL(undo_status_list_.serialize(buf, buf_len, pos))) {
-    STORAGE_LOG(WARN, "serialize undo_status_list fail.", KR(ret), K(pos), K(buf_len));
   }
-
+  uint64_t data_version = 0;
+  if (FAILEDx(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    STORAGE_LOG(WARN, "fail to get data version", KR(ret));
+  } else if (data_version < DATA_VERSION_4_3_2_0) {
+    if (op_guard_.is_valid()) {
+      if (OB_FAIL(op_guard_->get_undo_status_list().serialize(buf, buf_len, pos))) {
+        STORAGE_LOG(WARN, "serialize undo_status_list fail.", KR(ret), K(pos), K(buf_len));
+      }
+    } else {
+      ObUndoStatusList dummy_undo;
+      if (OB_FAIL(dummy_undo.serialize(buf, buf_len, pos))) {
+        STORAGE_LOG(WARN, "serialize undo_status_list fail.", KR(ret), K(pos), K(buf_len));
+      }
+    }
+  } else if (op_guard_.is_valid()) {
+    if (OB_FAIL(op_guard_->get_undo_status_list().serialize(buf, buf_len, pos))) {
+      STORAGE_LOG(WARN, "serialize undo_status_list fail.", KR(ret), K(pos), K(buf_len));
+    } else if (OB_FAIL(op_guard_->get_tx_op_list().serialize(buf, buf_len, pos))) {
+      STORAGE_LOG(WARN, "serialize tx_op_list fail.", KR(ret), K(pos), K(buf_len));
+    }
+  }
   return ret;
 }
 
@@ -324,24 +347,44 @@ int64_t ObTxData::get_serialize_size_() const
   len += commit_version_.get_serialize_size();
   len += start_scn_.get_serialize_size();
   len += end_scn_.get_serialize_size();
-  len += undo_status_list_.get_serialize_size();
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    STORAGE_LOG(ERROR, "get data_version failed", KR(ret));
+  }
+  if (data_version < DATA_VERSION_4_3_2_0) {
+    if (op_guard_.is_valid()) {
+      len += op_guard_->get_undo_status_list().get_serialize_size();
+    } else {
+      ObUndoStatusList dummy_undo;
+      len += dummy_undo.get_serialize_size();
+    }
+  } else if (op_guard_.is_valid()) {
+    len += op_guard_->get_undo_status_list().get_serialize_size();
+    len += op_guard_->get_tx_op_list().get_serialize_size();
+  }
   return len;
 }
 
-int64_t ObTxData::size() const
+int64_t ObTxData::size_need_cache() const
 {
-  int64_t len = (TX_DATA_SLICE_SIZE * (1LL + undo_status_list_.undo_node_cnt_));
+  int64_t len = TX_DATA_SLICE_SIZE;
+  if (op_guard_.is_valid()) {
+    len += TX_DATA_SLICE_SIZE; // tx_op
+    len += TX_DATA_SLICE_SIZE * op_guard_->get_undo_status_list().undo_node_cnt_;
+  }
   return len;
 }
 
 int ObTxData::deserialize(const char *buf,
                           const int64_t data_len,
                           int64_t &pos,
-                          ObSliceAlloc &slice_allocator)
+                          ObTenantTxDataAllocator &slice_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t version = 0;
   int64_t len = 0;
+  int64_t pos_tmp = 0;
 
   if (OB_UNLIKELY(nullptr == buf || data_len <= 0 || pos > data_len)) {
     ret = OB_INVALID_ARGUMENT;
@@ -356,8 +399,9 @@ int ObTxData::deserialize(const char *buf,
   } else if (OB_UNLIKELY(pos + len > data_len)) {
     ret = OB_INVALID_SIZE;
     STORAGE_LOG(WARN, "length from deserialize is invalid.", KR(ret), K(pos), K(len), K(data_len));
-  } else if (OB_FAIL(deserialize_(buf, data_len, pos, slice_allocator))) {
-    STORAGE_LOG(WARN, "deserialize tx data failed.", KR(ret));
+  } else if (FALSE_IT(pos_tmp = pos)) {
+  } else if (OB_FAIL(deserialize_(buf, pos + len, pos, slice_allocator))) {
+    STORAGE_LOG(WARN, "deserialize tx data failed.", KR(ret), K(buf), K(pos), K(len), K(pos_tmp), K(data_len));
   }
 
   return ret;
@@ -366,7 +410,7 @@ int ObTxData::deserialize(const char *buf,
 int ObTxData::deserialize_(const char *buf,
                            const int64_t data_len,
                            int64_t &pos,
-                           ObSliceAlloc &slice_allocator)
+                           ObTenantTxDataAllocator &tx_data_allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -380,25 +424,32 @@ int ObTxData::deserialize_(const char *buf,
     STORAGE_LOG(WARN, "deserialize start_scn fail.", KR(ret), K(pos), K(data_len));
   } else if (OB_FAIL(end_scn_.deserialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize end_scn fail.", KR(ret), K(pos), K(data_len));
-  } else if (OB_FAIL(undo_status_list_.deserialize(buf, data_len, pos, slice_allocator))) {
-    STORAGE_LOG(WARN, "deserialize undo_status_list fail.", KR(ret), K(pos), K(data_len));
   }
-
+  if (OB_SUCC(ret) && pos < data_len) {
+    if (OB_FAIL(init_tx_op())) {
+      STORAGE_LOG(WARN, "init tx op fail", KR(ret));
+    } else if (OB_FAIL(op_guard_->get_undo_status_list().deserialize(buf, data_len, pos, tx_data_allocator))) {
+      STORAGE_LOG(WARN, "deserialize undo_status_list fail.", KR(ret), K(pos), K(data_len));
+    } else if (pos < data_len && OB_FAIL(op_guard_->get_tx_op_list().deserialize(buf, data_len, pos,
+            MTL(ObSharedMemAllocMgr*)->tx_data_op_allocator()))) {
+      STORAGE_LOG(WARN, "deserialize tx_op_list fail.", KR(ret), K(pos), K(data_len));
+    }
+  }
   return ret;
 }
 
 void ObTxData::reset()
 {
-  if (OB_NOT_NULL(slice_allocator_) || ref_cnt_ != 0) {
+  if (OB_NOT_NULL(tx_data_allocator_) || ref_cnt_ != 0) {
     int ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "this tx data should not be reset", KR(ret), KP(this), KP(slice_allocator_), K(ref_cnt_));
+    STORAGE_LOG(WARN, "this tx data should not be reset", KR(ret), KP(this), KP(tx_data_allocator_), K(ref_cnt_));
     // TODO : @gengli remove ob_abort
     ob_abort();
   }
   ObTxCommitData::reset();
-  slice_allocator_ = nullptr;
+  op_guard_.reset();
+  tx_data_allocator_ = nullptr;
   ref_cnt_ = 0;
-  undo_status_list_.reset();
 }
 
 ObTxData::ObTxData(const ObTxData &rhs)
@@ -413,7 +464,9 @@ ObTxData &ObTxData::operator=(const ObTxData &rhs)
   commit_version_ = rhs.commit_version_;
   start_scn_ = rhs.start_scn_;
   end_scn_ = rhs.end_scn_;
-  undo_status_list_ = rhs.undo_status_list_;
+  if (rhs.op_guard_.is_valid()) {
+    op_guard_.init(rhs.op_guard_.ptr());
+  }
   return *this;
 }
 
@@ -424,7 +477,7 @@ ObTxData &ObTxData::operator=(const ObTxCommitData &rhs)
   commit_version_ = rhs.commit_version_;
   start_scn_ = rhs.start_scn_;
   end_scn_ = rhs.end_scn_;
-  undo_status_list_.reset();
+  op_guard_.reset();
   return *this;
 }
 
@@ -441,9 +494,6 @@ bool ObTxData::is_valid_in_tx_data_table() const
     if (!end_scn_.is_valid()) {
       bool_ret = false;
       STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "tx data end log ts is invalid", KPC(this));
-    } else if (OB_ISNULL(undo_status_list_.head_)) {
-      bool_ret = false;
-      STORAGE_LOG_RET(ERROR, OB_INVALID_ERROR, "tx data undo status list is invalid", KPC(this));
     } else {
       bool_ret = true;
     }
@@ -468,51 +518,87 @@ bool ObTxData::is_valid_in_tx_data_table() const
   return bool_ret;
 }
 
-int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &new_undo_action, ObUndoStatusNode *undo_node)
+int ObTxData::reserve_undo(ObTxTable *tx_table)
 {
-  // STORAGE_LOG(DEBUG, "do add_undo_action");
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(undo_status_list_.lock_);
   ObTxDataTable *tx_data_table = nullptr;
-  ObUndoStatusNode *node = undo_status_list_.head_;
   if (OB_ISNULL(tx_table)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "tx table is nullptr.", KR(ret));
   } else if (OB_ISNULL(tx_data_table = tx_table->get_tx_data_table())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "tx data table in tx table is nullptr.", KR(ret));
+  } else if (!op_guard_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tx data op is nullptr", KR(ret));
   } else {
-    merge_undo_actions_(tx_data_table, node, new_undo_action);
-    // generate new node if current node cannot be inserted
+    SpinWLockGuard lock_guard(op_guard_->get_lock());
+    SpinWLockGuard guard(op_guard_->get_undo_status_list().lock_);
+    ObUndoStatusNode *node = op_guard_->get_undo_status_list().head_;
     if (OB_ISNULL(node) || node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
       ObUndoStatusNode *new_node = nullptr;
-      if (OB_NOT_NULL(undo_node)) {
-        new_node = undo_node;
-        undo_node = NULL;
-      } else if (OB_FAIL(tx_data_table->alloc_undo_status_node(new_node))) {
+      if (OB_FAIL(tx_data_table->alloc_undo_status_node(new_node))) {
         STORAGE_LOG(WARN, "alloc_undo_status_node() fail", KR(ret));
-      }
-
-      if (OB_SUCC(ret)) {
-        new_node->next_ = node;
-        undo_status_list_.head_ = new_node;
-        node = new_node;
-        undo_status_list_.undo_node_cnt_++;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_NOT_NULL(node)) {
-        node->undo_actions_[node->size_++] = new_undo_action;
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(ERROR, "node is unexpected nullptr", KR(ret), KPC(this));
+        new_node->next_ = node;
+        op_guard_->get_undo_status_list().head_ = new_node;
+        op_guard_->get_undo_status_list().undo_node_cnt_++;
       }
     }
   }
+  return ret;
+}
 
-  if (OB_NOT_NULL(undo_node)) {
-    tx_data_table->free_undo_status_node(undo_node);
+int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &new_undo_action, ObUndoStatusNode *&undo_node)
+{
+  // STORAGE_LOG(DEBUG, "do add_undo_action");
+  int ret = OB_SUCCESS;
+  ObTxDataTable *tx_data_table = nullptr;
+  if (OB_ISNULL(tx_table)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "tx table is nullptr.", KR(ret));
+  } else if (OB_ISNULL(tx_data_table = tx_table->get_tx_data_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tx data table in tx table is nullptr.", KR(ret));
+  } else if (!op_guard_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tx data op is nullptr", KR(ret));
+  } else {
+    SpinWLockGuard lock_guard(op_guard_->get_lock());
+    SpinWLockGuard guard(op_guard_->get_undo_status_list().lock_);
+    ObUndoStatusNode *node = op_guard_->get_undo_status_list().head_;
+    if (OB_FAIL(merge_undo_actions_(tx_data_table, node, new_undo_action))) {
+      STORAGE_LOG(WARN, "merge undo actions fail.", KR(ret), K(new_undo_action));
+    } else if (!new_undo_action.is_valid()) {
+      // if new_undo_action is merged, it will be set to invalid and skip insert
+    } else {
+      // generate new node if current node cannot be inserted
+      if (OB_ISNULL(node) || node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
+        ObUndoStatusNode *new_node = nullptr;
+        if (OB_NOT_NULL(undo_node)) {
+          new_node = undo_node;
+          undo_node = NULL;
+        } else if (OB_FAIL(tx_data_table->alloc_undo_status_node(new_node))) {
+          STORAGE_LOG(WARN, "alloc_undo_status_node() fail", KR(ret));
+        }
+
+        if (OB_SUCC(ret)) {
+          new_node->next_ = node;
+          op_guard_->get_undo_status_list().head_ = new_node;
+          node = new_node;
+          op_guard_->get_undo_status_list().undo_node_cnt_++;
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_NOT_NULL(node)) {
+          node->undo_actions_[node->size_++] = new_undo_action;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(ERROR, "node is unexpected nullptr", KR(ret), KPC(this));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -524,10 +610,12 @@ int ObTxData::merge_undo_actions_(ObTxDataTable *tx_data_table,
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret) && OB_NOT_NULL(node)) {
     for (int i = node->size_ - 1; i >= 0; i--) {
-      if (new_undo_action.is_contain(node->undo_actions_[i])
-          || node->undo_actions_[i].is_contain(new_undo_action)) {
-        new_undo_action.merge(node->undo_actions_[i]);
-        node->size_--;
+      if (new_undo_action.is_contain(node->undo_actions_[i])) {
+        node->size_--; // pop merged
+      } else if (node->undo_actions_[i].is_contain(new_undo_action)) {
+        // new undo is merged, reset it
+        new_undo_action.reset();
+        break;
       } else {
         break;
       }
@@ -538,15 +626,15 @@ int ObTxData::merge_undo_actions_(ObTxDataTable *tx_data_table,
       // all undo actions in this node are merged, free it
       // STORAGE_LOG(DEBUG, "current node is empty, now free it");
       ObUndoStatusNode *node_to_free = node;
-      undo_status_list_.head_ = node->next_;
-      node = undo_status_list_.head_;
+      op_guard_->get_undo_status_list().head_ = node->next_;
+      node = op_guard_->get_undo_status_list().head_;
       tx_data_table->free_undo_status_node(node_to_free);
-      if (undo_status_list_.undo_node_cnt_ <= 0) {
+      if (op_guard_->get_undo_status_list().undo_node_cnt_ <= 0) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "invalid undo node count int undo status list.", KR(ret),
-                    K(undo_status_list_));
+                    K(op_guard_->get_undo_status_list()));
       } else {
-        undo_status_list_.undo_node_cnt_--;
+        op_guard_->get_undo_status_list().undo_node_cnt_--;
       }
     } else {
       // merge undo actions done
@@ -556,7 +644,6 @@ int ObTxData::merge_undo_actions_(ObTxDataTable *tx_data_table,
 
   return ret;
 }
-  
 
 bool ObTxData::equals_(ObTxData &rhs)
 {
@@ -576,12 +663,15 @@ bool ObTxData::equals_(ObTxData &rhs)
   } else if (end_scn_ != rhs.end_scn_) {
     bool_ret = false;
     STORAGE_LOG(INFO, "end_scn is not equal.");
-  } else if (undo_status_list_.undo_node_cnt_ != rhs.undo_status_list_.undo_node_cnt_) {
-    bool_ret = false;
-    STORAGE_LOG(INFO, "undo_node_cnt is not equal.");
   } else {
-    ObUndoStatusNode *l_node = undo_status_list_.head_;
-    ObUndoStatusNode *r_node = rhs.undo_status_list_.head_;
+    ObUndoStatusNode *l_node = NULL;
+    if (op_guard_.is_valid()) {
+      l_node = op_guard_->get_undo_status_list().head_;
+    }
+    ObUndoStatusNode *r_node = NULL;
+    if (rhs.op_guard_.is_valid()) {
+      r_node = rhs.op_guard_->get_undo_status_list().head_;
+    }
 
     while ((nullptr != l_node) && (nullptr != r_node)) {
       if (l_node->size_ != r_node->size_) {
@@ -628,7 +718,9 @@ void ObTxData::print_to_stderr(const ObTxData &tx_data)
           to_cstring(tx_data.commit_version_),
           get_state_string(tx_data.state_));
 
-  tx_data.undo_status_list_.dump_2_text(stderr);
+  if (tx_data.op_guard_.is_valid()) {
+    tx_data.op_guard_->get_undo_status_list().dump_2_text(stderr);
+  }
 }
 
 void ObTxData::dump_2_text(FILE *fd) const
@@ -646,7 +738,9 @@ void ObTxData::dump_2_text(FILE *fd) const
           to_cstring(commit_version_),
           get_state_string(state_));
 
-  undo_status_list_.dump_2_text(fd);
+  if (op_guard_.is_valid()) {
+    op_guard_->get_undo_status_list().dump_2_text(fd);
+  }
 
   fprintf(fd, "\n}\n");
 }
@@ -661,7 +755,7 @@ DEF_TO_STRING(ObTxData)
        K_(commit_version),
        K_(start_scn),
        K_(end_scn),
-       K_(undo_status_list));
+       K_(op_guard));
   J_OBJ_END();
   return pos;
 }
@@ -675,7 +769,65 @@ DEF_TO_STRING(ObUndoStatusNode)
   return pos;
 }
 
+int ObTxData::init_tx_op()
+{
+  int ret = OB_SUCCESS;
+  void *ptr = nullptr;
+  if (!op_guard_.is_valid()) {
+    if (OB_ISNULL(tx_data_allocator_)) {
+      tx_data_allocator_ = &MTL(ObSharedMemAllocMgr*)->tx_data_allocator();
+    }
+    if (OB_ISNULL(op_allocator_)) {
+      op_allocator_ = &MTL(ObSharedMemAllocMgr*)->tx_data_op_allocator();
+    }
+    if (OB_ISNULL(ptr = tx_data_allocator_->alloc())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "allocate memory from slice_allocator fail.", KR(ret), KP(this));
+    } else {
+      ObTxDataOp *tx_data_op = new (ptr) ObTxDataOp(tx_data_allocator_, op_allocator_);
+      op_guard_.init(tx_data_op);
+    }
+  }
+  return ret;
+}
+
+int ObTxData::check_tx_op_exist(share::SCN op_scn, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (op_guard_.is_valid()) {
+    ObTxOpVector &tx_op_list = op_guard_->get_tx_op_list();
+    if (tx_op_list.get_count() > 0 && op_scn <= tx_op_list.at(tx_op_list.get_count() - 1)->get_op_scn()) {
+      exist = true;
+    }
+  }
+  return ret;
+}
+
+int ObTxDataOpGuard::init(ObTxDataOp *tx_data_op)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_ISNULL(tx_data_op)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "init ObTxDataOpGuard with invalid arguments", KR(ret));
+  } else if (tx_data_op->inc_ref() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "unexpected ref cnt on tx data op", KR(ret), KP(tx_data_op), KPC(tx_data_op));
+    ob_abort();
+  } else {
+    tx_data_op_ = tx_data_op;
+  }
+  return ret;
+}
+
+void ObTxDataOpGuard::reset()
+{
+  if (OB_NOT_NULL(tx_data_op_)) {
+    tx_data_op_->dec_ref();
+    tx_data_op_ = nullptr;
+  }
+}
 
 }  // namespace storage
-
 }  // namespace oceanbase

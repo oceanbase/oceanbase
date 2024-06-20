@@ -18,6 +18,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_time_utility2.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
@@ -97,6 +98,9 @@ int ObExprToSeconds::calc_toseconds(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
   int ret = OB_SUCCESS;
   ObDatum *param_datum = NULL;
   const ObSQLSessionInfo *session = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
+  const common::ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -104,19 +108,25 @@ int ObExprToSeconds::calc_toseconds(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
     LOG_WARN("eval param value failed");
   } else if (OB_UNLIKELY(param_datum->is_null())) {
     expr_datum.set_null();
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
   } else {
     ObTime ot;
     ObDateSqlMode date_sql_mode;
-    date_sql_mode.init(session->get_sql_mode());
+    date_sql_mode.init(sql_mode);
     if (OB_FAIL(ob_datum_to_ob_time_with_date(*param_datum, expr.args_[0]->datum_meta_.type_,
                                               expr.args_[0]->datum_meta_.scale_,
-                                              get_timezone_info(session), ot,
+                                              tz_info, ot,
                                               get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
                                               date_sql_mode,
                                               expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret));
       uint64_t cast_mode = 0;
-      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                        session->is_ignore_stmt(),
+                                        sql_mode, cast_mode);
       if (CM_IS_WARN_ON_FAIL(cast_mode)) {
         ret = OB_SUCCESS;
         expr_datum.set_null();
@@ -131,6 +141,19 @@ int ObExprToSeconds::calc_toseconds(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
         expr_datum.set_int(seconds);
       }
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprToSeconds, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(2);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
+  } else {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
   }
   return ret;
 }
@@ -165,6 +188,8 @@ int ObExprSecToTime::calc_sectotime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
   int ret = OB_SUCCESS;
   ObDatum *param_datum = NULL;
   const ObSQLSessionInfo *session = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -172,6 +197,8 @@ int ObExprSecToTime::calc_sectotime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
     LOG_WARN("eval param value failed");
   } else if (OB_UNLIKELY(param_datum->is_null())) {
     expr_datum.set_null();
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
   } else {
     number::ObNumber num_usec;
     number::ObNumber num_sec;
@@ -196,7 +223,9 @@ int ObExprSecToTime::calc_sectotime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
       }
       if (OB_FAIL(ObTimeConverter::time_overflow_trunc(int_usec))) {
         uint64_t cast_mode = 0;
-        ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+        ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                          session->is_ignore_stmt(),
+                                          sql_mode, cast_mode);
         if (CM_IS_WARN_ON_FAIL(cast_mode)) {
           ret = OB_SUCCESS;
           expr_datum.set_null();
@@ -211,6 +240,15 @@ int ObExprSecToTime::calc_sectotime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
       }
       expr_datum.set_time(int_usec);
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprSecToTime, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
   }
   return ret;
 }
@@ -486,11 +524,14 @@ int ObExprSubAddtime::subaddtime_common(const ObExpr &expr,
                                   bool &null_res,
                                   ObDatum *&date_arg,
                                   ObDatum *&time_arg,
-                                  int64_t &time_val)
+                                  int64_t &time_val,
+                                  const common::ObTimeZoneInfo *tz_info,
+                                  ObSQLMode sql_mode)
 {
   int ret = OB_SUCCESS;
   null_res = false;
   const ObSQLSessionInfo *session = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -507,13 +548,15 @@ int ObExprSubAddtime::subaddtime_common(const ObExpr &expr,
       time_val = time_arg->get_time();
     } else if (OB_FAIL(ob_datum_to_ob_time_without_date(
                  *time_arg, expr.args_[1]->datum_meta_.type_, expr.args_[1]->datum_meta_.scale_,
-                 get_timezone_info(ctx.exec_ctx_.get_my_session()), ot2,
+                 tz_info, ot2,
                  expr.args_[1]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the second param failed", K(ret));
       expr_datum.set_null();
       null_res = true;
       uint64_t cast_mode = 0;
-      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                      session->is_ignore_stmt(),
+                                      sql_mode, cast_mode);
       if (CM_IS_WARN_ON_FAIL(cast_mode)) {
         ret = OB_SUCCESS;
       }
@@ -533,12 +576,17 @@ int ObExprSubAddtime::subaddtime_datetime(const ObExpr &expr, ObEvalCtx &ctx, Ob
   int64_t t_val2 = 0;
   bool null_res = false;
   const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObSolidifiedVarsGetter helper(expr, ctx, session);
   const ObTimeZoneInfo *tz_info = NULL;
-  if (OB_FAIL(subaddtime_common(expr, ctx, expr_datum, null_res, date_arg, time_arg, t_val2))) {
+  ObSQLMode sql_mode = 0;
+  if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get time zone failed", K(ret));
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("failed to get time zone info", K(ret));
+  } else if (OB_FAIL(subaddtime_common(expr, ctx, expr_datum, null_res, date_arg, time_arg, t_val2, tz_info, sql_mode))) {
     LOG_WARN("calc subaddtime failed", K(ret));
-  } else if (OB_ISNULL(tz_info = get_timezone_info(session))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("timezone info of session is null", K(ret));
   } else if (!null_res) {
     int64_t offset = ObTimestampType == expr.args_[0]->datum_meta_.type_
                                         ? tz_info->get_offset() : 0;
@@ -562,12 +610,15 @@ int ObExprSubAddtime::subaddtime_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObD
   int64_t t_val2 = 0;
   bool null_res = false;
   const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObSolidifiedVarsGetter helper(expr, ctx, session);
   const ObTimeZoneInfo *tz_info = NULL;
-  if (OB_FAIL(subaddtime_common(expr, ctx, expr_datum, null_res, date_arg, time_arg, t_val2))) {
+  ObSQLMode sql_mode = 0;
+  if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get time zone failed", K(ret));
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(subaddtime_common(expr, ctx, expr_datum, null_res, date_arg, time_arg, t_val2, tz_info, sql_mode))) {
     LOG_WARN("calc subaddtime failed", K(ret));
-  } else if (OB_ISNULL(tz_info = get_timezone_info(session))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("timezone info of session is null", K(ret));
   } else if (!null_res) {
     ObTime ot1(DT_TYPE_TIME);
     if (OB_FAIL(ob_datum_to_ob_time_without_date(*date_arg, expr.args_[0]->datum_meta_.type_,
@@ -617,12 +668,25 @@ int ObExprSubAddtime::subaddtime_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObD
     }
     if (OB_FAIL(ret) && OB_ALLOCATE_MEMORY_FAILED != ret) {
       uint64_t cast_mode = 0;
-      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                      session->is_ignore_stmt(),
+                                      sql_mode, cast_mode);
       if (CM_IS_WARN_ON_FAIL(cast_mode) ) {
         ret = OB_SUCCESS;
         expr_datum.set_null();
       }
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprSubAddtime, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(3);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
   }
   return ret;
 }

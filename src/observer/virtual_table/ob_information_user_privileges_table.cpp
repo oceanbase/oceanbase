@@ -41,7 +41,7 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_INDEX_SHIFT] = "INDEX";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_VIEW_SHIFT] = "CREATE VIEW";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_SHOW_VIEW_SHIFT] = "SHOW VIEW";
-  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_SHOW_DB_SHIFT] = "SHOW DB";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_SHOW_DB_SHIFT] = "SHOW DATABASES";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_SUPER_SHIFT] = "SUPER";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_PROCESS_SHIFT] = "PROCESS";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_SYNONYM_SHIFT] = "CREATE SYNONYM";
@@ -60,6 +60,18 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "DROP DATABASE LINK";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_DATABASE_LINK_SHIFT] =
                                                    "CREATE DATABASE LINK";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_EXECUTE_SHIFT] =
+                                                   "EXECUTE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_ALTER_ROUTINE_SHIFT] =
+                                                   "ALTER ROUTINE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_ROUTINE_SHIFT] =
+                                                   "CREATE ROUTINE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_TABLESPACE_SHIFT] =
+                                                   "CREATE TABLESPACE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_SHUTDOWN_SHIFT] =
+                                                   "SHUTDOWN";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_RELOAD_SHIFT] =
+                                                   "RELOAD";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()
@@ -154,6 +166,7 @@ int ObInfoSchemaUserPrivilegesTable::get_user_infos(const uint64_t tenant_id,
       } else {
         const share::schema::ObUserInfo *user_info = NULL;
         if (OB_ISNULL(user_info = schema_guard_->get_user_info(tenant_id_, user_id))) {
+          // ignore ret
           SERVER_LOG(WARN, "Get user infos with tenant user id error", K(ret), K_(tenant_id));
         } else if (OB_FAIL(user_infos.push_back(user_info))) {
           SERVER_LOG(WARN, "Failed to add user info", K(ret));

@@ -30,7 +30,13 @@
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "sql/engine/expr/ob_pl_expr_subquery.h"
 #include "sql/engine/expr/ob_expr_cast.h"
+#include "sql/engine/expr/ob_expr_sql_udt_construct.h"
+#include "sql/engine/expr/ob_expr_priv_attribute_access.h"
 #include "sql/engine/expr/ob_expr_lrpad.h"
+#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
+#include "sql/engine/expr/ob_expr_json_schema_valid.h"
+#include "sql/engine/expr/ob_expr_json_schema_validation_report.h"
+#include "sql/engine/expr/ob_expr_json_utils.h"
 
 namespace oceanbase
 {
@@ -99,8 +105,15 @@ void ObExprExtraInfoFactory::register_expr_extra_infos()
   REG_EXTRA_INFO(T_FUN_SYS_GREATEST, ObExprOperator::DatumCastExtraInfo);
   REG_EXTRA_INFO(T_FUN_SYS_NULLIF, ObExprOperator::DatumCastExtraInfo);
   REG_EXTRA_INFO(T_FUN_SYS_CAST, ObExprCast::CastMultisetExtraInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT, ObExprUdtConstructInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS, ObExprUdtAttrAccessInfo);
   REG_EXTRA_INFO(T_FUN_SYS_LPAD, ObExprOracleLRpadInfo);
   REG_EXTRA_INFO(T_FUN_SYS_RPAD, ObExprOracleLRpadInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_LAST_REFRESH_SCN, ObExprLastRefreshScn::LastRefreshScnExtraInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_JSON_SCHEMA_VALID, ObExprJsonSchemaValidInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_JSON_SCHEMA_VALIDATION_REPORT, ObExprJsonSchemaValidInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_JSON_VALUE, ObExprJsonQueryParamInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_JSON_QUERY, ObExprJsonQueryParamInfo);
 }
 
 } // end namespace sql

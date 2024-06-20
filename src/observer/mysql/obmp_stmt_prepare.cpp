@@ -179,7 +179,9 @@ int ObMPStmtPrepare::process()
     lib::CompatModeGuard g(sess->get_compatibility_mode() == ORACLE_MODE ?
                              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
+    SQL_INFO_GUARD(ctx_.cur_sql_, ObString(ctx_.sql_id_));
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
+    session.init_use_rich_format();
     session.get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
@@ -192,6 +194,8 @@ int ObMPStmtPrepare::process()
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(sql), K(ret));
+    } else if (OB_FAIL(process_kill_client_session(session))) {
+      LOG_WARN("client session has been killed", K(ret));
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
@@ -294,10 +298,7 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var faield.", K(ret), K(multi_stmt_item));
   } else {
-    const bool enable_trace_log = lib::is_trace_log_enabled();
-    if (enable_trace_log) {
-      ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-    }
+    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
                                          session.get_effective_tenant_id()))) {
       LOG_WARN("failed to check_and_refresh_schema", K(ret));
@@ -309,9 +310,12 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
       ctx_.is_prepare_stage_ = true;
       need_response_error = false;
       do {
+        // reset `ret` explicitly before local retry
+        ret = OB_SUCCESS;
         share::schema::ObSchemaGetterGuard schema_guard;
         retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
-        if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
                     session.get_effective_tenant_id(), schema_guard))) {
           LOG_WARN("get schema guard failed", K(ret));
         } else if (OB_FAIL(schema_guard.get_schema_version(
@@ -338,9 +342,7 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
                   "retry_times", retry_ctrl_.get_retry_times(), K(multi_stmt_item));
       }
     }
-    if (enable_trace_log) {
-      ObThreadLogLevelUtils::clear();
-    }
+    ObThreadLogLevelUtils::clear();
   }
 
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
@@ -472,6 +474,7 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
                                                       async_resp_used))) {
             ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
             if (OB_ISNULL(plan_ctx)) {
+              // ignore ret
               LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
             } else {
               LOG_WARN("execute query fail", K(ret), "timeout_timestamp",

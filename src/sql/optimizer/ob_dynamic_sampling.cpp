@@ -492,6 +492,7 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   ObSqlString raw_sql_str;
   ObSqlString sample_str;
   ObSqlString basic_hint_str;
+  ObSqlString table_str;
   bool is_no_backslash_escapes = false;
   int64_t nested_count = -1;
   sql::ObSQLSessionInfo::StmtSavedValue *session_value = NULL;
@@ -499,10 +500,12 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   ObSQLSessionInfo *session_info = ctx_->get_session_info();
   bool need_restore_session = false;
   transaction::ObTxDesc *tx_desc = NULL;
-  if (OB_FAIL(add_block_sample_info(sample_block_ratio_, seed_, sample_str))) {
+  if (!is_big_table_ && OB_FAIL(add_block_sample_info(sample_block_ratio_, seed_, sample_str))) {
     LOG_WARN("failed to add block sample info", K(ret));
-  } else if (OB_FAIL(add_basic_hint_info(basic_hint_str, max_ds_timeout, degree))) {
+  } else if (OB_FAIL(add_basic_hint_info(basic_hint_str, max_ds_timeout, is_big_table_ ? 1 : degree))) {
     LOG_WARN("failed to add basic hint info", K(ret));
+  } else if (OB_FAIL(add_table_clause(table_str))) {
+    LOG_WARN("failed to add table clause", K(ret));
   } else if (OB_FAIL(pack(raw_sql_str))) {
     LOG_WARN("failed to pack dynamic sampling", K(ret));
   } else if (OB_FAIL(prepare_and_store_session(session_info, session_value,
@@ -528,6 +531,9 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
       throw_ds_error = true;//here we must throw error, because the session may be unavailable.
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("failed to restore session", K(tmp_ret));
+    }
+    if (OB_NOT_NULL(session_value)) {
+      session_value->reset();
     }
   }
   LOG_TRACE("go to dynamic sample one time", K(sample_block_ratio_), K(ret),
@@ -602,24 +608,14 @@ int ObDynamicSampling::pack(ObSqlString &raw_sql_str)
   if (OB_FAIL(gen_select_filed(select_fields))) {
     LOG_WARN("failed to generate select filed", K(ret));
   } else if (OB_FAIL(raw_sql_str.append_fmt(lib::is_oracle_mode() ?
-                                            "SELECT %.*s %.*s FROM \"%.*s\".\"%.*s\" %.*s %.*s %s%.*s%s %s %.*s" :
-                                            "SELECT %.*s %.*s FROM `%.*s`.`%.*s` %.*s %.*s %s%.*s%s %s %.*s" ,
+                                            "SELECT %.*s %.*s FROM %.*s %s %.*s" :
+                                            "SELECT %.*s %.*s FROM %.*s %s %.*s" ,
                                             basic_hints_.length(),
                                             basic_hints_.ptr(),
                                             static_cast<int32_t>(select_fields.length()),
                                             select_fields.ptr(),
-                                            db_name_.length(),
-                                            db_name_.ptr(),
-                                            table_name_.length(),
-                                            table_name_.ptr(),
-                                            partition_list_.length(),
-                                            partition_list_.ptr(),
-                                            sample_block_.length(),
-                                            sample_block_.ptr(),
-                                            alias_name_.empty() ? " " : (lib::is_oracle_mode() ? "\"" : "`"),
-                                            alias_name_.length(),
-                                            alias_name_.ptr(),
-                                            alias_name_.empty() ? " " : (lib::is_oracle_mode() ? "\"" : "`"),
+                                            table_clause_.length(),
+                                            table_clause_.ptr(),
                                             where_conditions_.empty() ? " " : "WHERE",
                                             where_conditions_.length(),
                                             where_conditions_.ptr()))) {
@@ -779,37 +775,48 @@ int ObDynamicSampling::calc_table_sample_block_ratio(const ObDSTableParam &param
   if (param.is_virtual_table_) {
     sample_block_ratio_ = 100.0;
     seed_ = param.degree_ > 1 ? 0 : 1;
-  } else if (OB_UNLIKELY((sample_micro_cnt = get_dynamic_sampling_micro_block_num(param)) < 1)) {
+  } else if (OB_UNLIKELY((sample_micro_cnt = get_dynamic_sampling_micro_block_num(param)) < 1 ||
+                         (micro_block_num_ > 0 && memtable_row_count_ + sstable_row_count_ <= 0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
   } else if (OB_FAIL(estimate_table_block_count_and_row_count(param))) {
     LOG_WARN("failed to estimate table block count and row count", K(ret));
   } else {
-    //1.retire to memtable sample
-    if (sstable_row_count_ < memtable_row_count_) {
-      double sample_row_cnt = MAGIC_MAX_AUTO_SAMPLE_SIZE * (1.0 * sample_micro_cnt / OB_DS_BASIC_SAMPLE_MICRO_CNT);
-      if (memtable_row_count_ < sample_row_cnt) {
-        sample_block_ratio_ = 100.0;
-      } else {
-        sample_block_ratio_ = 100.0 * sample_row_cnt / memtable_row_count_;
-      }
-    } else {
-    //2.use the block sample
-      if (sample_micro_cnt >= micro_block_num_) {
-        sample_block_ratio_ = 100.0;
-      } else {
-        sample_block_ratio_ = 100.0 * sample_micro_cnt / micro_block_num_;
-      }
-    }
-    //3.try adjust sample block ratio according to the degree
-    if (param.degree_ > 1 && sample_block_ratio_ < 100.0) {//adjust sample ratio according to the degree.
-      sample_block_ratio_ = sample_block_ratio_ * param.degree_;
+    int64_t max_allowed_multiple = sample_micro_cnt > OB_DS_BASIC_SAMPLE_MICRO_CNT ? sample_micro_cnt / OB_DS_BASIC_SAMPLE_MICRO_CNT : 1;
+    if (micro_block_num_ > OB_DS_MAX_BASIC_SAMPLE_MICRO_CNT * max_allowed_multiple &&
+        MAGIC_MAX_AUTO_SAMPLE_SIZE * max_allowed_multiple < memtable_row_count_ + sstable_row_count_) {
+      is_big_table_ = true;
+      sample_big_table_rown_cnt_ = MAGIC_MAX_AUTO_SAMPLE_SIZE * max_allowed_multiple;
+      sample_block_ratio_ = 100.0 * sample_big_table_rown_cnt_ / (memtable_row_count_ + sstable_row_count_);
       sample_block_ratio_ = sample_block_ratio_ < 100.0 ? sample_block_ratio_ : 100.0;
+    } else {
+      //1.retire to memtable sample
+      if (sstable_row_count_ < memtable_row_count_) {
+        double sample_row_cnt = MAGIC_MAX_AUTO_SAMPLE_SIZE * (1.0 * sample_micro_cnt / OB_DS_BASIC_SAMPLE_MICRO_CNT);
+        if (memtable_row_count_ < sample_row_cnt) {
+          sample_block_ratio_ = 100.0;
+        } else {
+          sample_block_ratio_ = 100.0 * sample_row_cnt / (memtable_row_count_ + sstable_row_count_);
+        }
+      } else {
+      //2.use the block sample
+        if (sample_micro_cnt >= micro_block_num_) {
+          sample_block_ratio_ = 100.0;
+        } else {
+          sample_block_ratio_ = 100.0 * sample_micro_cnt / micro_block_num_;
+        }
+      }
+      //3.try adjust sample block ratio according to the degree
+      if (param.degree_ > 1 && sample_block_ratio_ < 100.0) {//adjust sample ratio according to the degree.
+        sample_block_ratio_ = sample_block_ratio_ * param.degree_;
+        sample_block_ratio_ = sample_block_ratio_ < 100.0 ? sample_block_ratio_ : 100.0;
+      }
+      sample_block_ratio_ = sample_block_ratio_ < 0.000001 ? 0.000001 : sample_block_ratio_;
+      //4.adjust the seed.
+      seed_ = (param.degree_ > 1 || param.partition_infos_.count() > 1) ? 0 : 1;
     }
-    //4.adjust the seed.
-    seed_ = (param.degree_ > 1 || param.partition_infos_.count() > 1) ? 0 : 1;
   }
-  LOG_TRACE("succeed to calc table sample block ratio", K(param), K(seed_), K(sample_micro_cnt),
+  LOG_TRACE("succeed to calc table sample block ratio", K(param), K(seed_), K(sample_micro_cnt), K(is_big_table_),
                                                         K(sample_block_ratio_), K(micro_block_num_),
                                                         K(sstable_row_count_), K(memtable_row_count_));
   return ret;
@@ -1229,10 +1236,53 @@ bool ObDynamicSampling::all_ds_col_stats_are_gathered(const ObDSTableParam &para
   return res;
 }
 
+int ObDynamicSampling::add_table_clause(ObSqlString &table_str)
+{
+  int ret = OB_SUCCESS;
+  int64_t big_table_row = 100000;
+  if (OB_UNLIKELY(is_big_table_ && sample_big_table_rown_cnt_ < MAGIC_MAX_AUTO_SAMPLE_SIZE)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(sample_big_table_rown_cnt_), K(is_big_table_));
+  } else if (is_big_table_ && OB_FAIL(table_str.append_fmt(lib::is_oracle_mode() ? "(SELECT * FROM \"%.*s\".\"%.*s\" %.*s %.*s FETCH NEXT %ld ROWS ONLY) %s%.*s%s" :
+                                                                                   "(SELECT * FROM `%.*s`.`%.*s` %.*s %.*s LIMIT %ld) %s%.*s%s" ,
+                                                           db_name_.length(),
+                                                           db_name_.ptr(),
+                                                           table_name_.length(),
+                                                           table_name_.ptr(),
+                                                           partition_list_.length(),
+                                                           partition_list_.ptr(),
+                                                           sample_block_.length(),
+                                                           sample_block_.ptr(),
+                                                           sample_big_table_rown_cnt_,
+                                                           alias_name_.empty() ? " " : (lib::is_oracle_mode() ? "\"" : "`"),
+                                                           alias_name_.length(),
+                                                           alias_name_.ptr(),
+                                                           alias_name_.empty() ? " " : (lib::is_oracle_mode() ? "\"" : "`")))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (!is_big_table_ && OB_FAIL(table_str.append_fmt(lib::is_oracle_mode() ? "\"%.*s\".\"%.*s\" %.*s %.*s %s%.*s%s" :
+                                                                                      "`%.*s`.`%.*s` %.*s %.*s %s%.*s%s" ,
+                                                            db_name_.length(),
+                                                            db_name_.ptr(),
+                                                            table_name_.length(),
+                                                            table_name_.ptr(),
+                                                            partition_list_.length(),
+                                                            partition_list_.ptr(),
+                                                            sample_block_.length(),
+                                                            sample_block_.ptr(),
+                                                            alias_name_.empty() ? " " : (lib::is_oracle_mode() ? "\"" : "`"),
+                                                            alias_name_.length(),
+                                                            alias_name_.ptr(),
+                                                            alias_name_.empty() ? " " : (lib::is_oracle_mode() ? "\"" : "`")))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    table_clause_ = table_str.string();
+  }
+  return ret;
+}
+
 int ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(const ObSQLSessionInfo *session_info,
                                                              const ObTableDynamicSamplingHint *table_ds_hint,
                                                              const int64_t global_ds_level,
-                                                             bool has_opt_stat,
                                                              int64_t &ds_level,
                                                              int64_t &sample_block_cnt,
                                                              bool &specify_ds)
@@ -1258,7 +1308,7 @@ int ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(const ObSQLSessionI
     LOG_WARN("get unexpected null", K(ret), K(session_info));
   } else if (session_info->is_user_session() && OB_FAIL(session_info->get_opt_dynamic_sampling(session_ds_level))) {
     LOG_WARN("failed to get opt dynamic sampling level", K(ret));
-  } else if (session_ds_level == ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING && !has_opt_stat) {
+  } else if (session_ds_level == ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING) {
     ds_level = session_ds_level;
   }
   LOG_TRACE("get valid dynamic sampling level", KPC(table_ds_hint), K(global_ds_level), K(specify_ds),
@@ -1269,7 +1319,6 @@ int ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(const ObSQLSessionI
 int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
                                                const ObLogPlan *log_plan,
                                                const OptTableMeta *table_meta,
-                                               bool ignore_opt_stat,
                                                ObDSTableParam &ds_table_param,
                                                bool &specify_ds)
 {
@@ -1282,16 +1331,15 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
       OB_ISNULL(table_item = log_plan->get_stmt()->get_table_item_by_id(table_meta->get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(log_plan), KPC(table_meta), KPC(table_item));
-  } else if (!log_plan->get_stmt()->is_select_stmt() || ctx.use_default_stat()) {
-    //do nothing
-  } else if (is_virtual_table(table_meta->get_ref_table_id()) && !is_ds_virtual_table(table_meta->get_ref_table_id())) {
-    //do nothing
-  } else if (table_meta->get_table_type() == EXTERNAL_TABLE) {
-    //do nothing TODO [EXTERNAL TABLE]
+  } else if (OB_UNLIKELY(!log_plan->get_stmt()->is_select_stmt()) ||
+             OB_UNLIKELY(ctx.use_default_stat()) ||
+             OB_UNLIKELY(is_virtual_table(table_meta->get_ref_table_id()) && !is_ds_virtual_table(table_meta->get_ref_table_id())) ||
+             OB_UNLIKELY(table_meta->get_table_type() == EXTERNAL_TABLE)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected param", K(ret), K(log_plan), KPC(table_meta), KPC(table_item));
   } else if (OB_FAIL(get_valid_dynamic_sampling_level(ctx.get_session_info(),
                                                       log_plan->get_log_plan_hint().get_dynamic_sampling_hint(table_meta->get_table_id()),
                                                       ctx.get_global_hint().get_dynamic_sampling(),
-                                                      ignore_opt_stat ? false : table_meta->use_opt_stat(),
                                                       ds_level,
                                                       sample_block_cnt,
                                                       specify_ds))) {
@@ -1311,18 +1359,20 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
                                            table_meta->get_ref_table_id(),
                                            ds_table_param.degree_))) {
       LOG_WARN("failed to get ds table degree", K(ret));
-    } else {
+    } else if ((ds_table_param.max_ds_timeout_ = get_dynamic_sampling_max_timeout(ctx)) > 0) {
       ds_table_param.tenant_id_ = ctx.get_session_info()->get_effective_tenant_id();
       ds_table_param.table_id_ = table_meta->get_ref_table_id();
       ds_table_param.ds_level_ = ds_level;
       ds_table_param.sample_block_cnt_ = sample_block_cnt;
-      ds_table_param.max_ds_timeout_ = get_dynamic_sampling_max_timeout(ctx);
       ds_table_param.is_virtual_table_ = is_virtual_table(table_meta->get_ref_table_id()) &&
                                     !share::is_oracle_mapping_real_virtual_table(table_meta->get_ref_table_id());
       ds_table_param.db_name_ = table_item->database_name_;
       ds_table_param.table_name_ = table_item->table_name_;
       ds_table_param.alias_name_ = table_item->alias_name_;
     }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid ds level", K(ret), K(ds_level));
   }
   return ret;
 }
@@ -1358,11 +1408,13 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
              filter->has_flag(CNT_DYNAMIC_USER_VARIABLE) ||
              filter->has_flag(CNT_PL_UDF) ||
              filter->has_flag(CNT_SO_UDF) ||
+             filter->has_flag(CNT_MATCH_EXPR) ||
              filter->get_expr_type() == T_FUN_SET_TO_STR ||
              filter->get_expr_type() == T_FUN_ENUM_TO_STR ||
              filter->get_expr_type() == T_OP_GET_PACKAGE_VAR ||
              (filter->get_expr_type() >= T_FUN_SYS_IS_JSON &&
-              filter->get_expr_type() <= T_FUN_SYS_TREAT)) {
+              filter->get_expr_type() <= T_FUN_SYS_TREAT) ||
+             filter->get_expr_type() == T_FUN_GET_TEMP_TABLE_SESSID) {
     no_use = true;
   } else if (filter->get_expr_type() == T_FUN_SYS_LNNVL) {
     const ObRawExpr *real_expr = NULL;
@@ -1377,6 +1429,15 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
                real_expr->get_expr_type() == T_OP_BOOL) {
       no_use = true;
     } else {/*do nothing*/}
+  } else if (filter->is_column_ref_expr()) {
+    //Dynamic Sampling of columns with LOB-related types is prohibited, as projecting such type columns is particularly slow.
+    //bug:
+    if (!ObColumnStatParam::is_valid_opt_col_type(filter->get_data_type())) {
+      no_use = true;
+    } else if (ob_obj_type_class(filter->get_data_type()) == ColumnTypeClass::ObTextTC &&
+               filter->get_data_type() != ObTinyTextType) {
+      no_use = true;
+    }
   } else {/*do nothing*/}
   if (OB_SUCC(ret) && !no_use) {
     ++ total_expr_cnt;
@@ -1416,6 +1477,7 @@ int ObDynamicSamplingUtils::get_ds_table_part_info(ObOptimizerContext &ctx,
              (is_virtual_table(ref_table_id) && !share::is_oracle_mapping_real_virtual_table(ref_table_id))) {
     /*do nothing*/
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      ctx.get_allocator(),
                                                       tmp_part_infos,
                                                       tmp_subpart_infos,
                                                       tmp_part_ids,
@@ -1512,13 +1574,15 @@ const ObDSResultItem *ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemT
 
 int64_t ObDynamicSamplingUtils::get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx)
 {
-  int64_t max_ds_timeout = THIS_WORKER.get_timeout_remain();
-  max_ds_timeout = max_ds_timeout / 10;//default ds time can't exceed 10% of current sql remain timeout
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_session_info()->get_effective_tenant_id()));
-  if (tenant_config.is_valid()) {
-    int64_t ds_maximum_time = tenant_config->_optimizer_ads_time_limit * 1000000;
-    if (max_ds_timeout > ds_maximum_time) {//can't exceed the max ds timeout for single table
-      max_ds_timeout = ds_maximum_time;
+  int64_t max_ds_timeout = 0;
+  if (THIS_WORKER.get_timeout_remain() / 10 >= OB_DS_MIN_QUERY_TIMEOUT) {
+    max_ds_timeout = THIS_WORKER.get_timeout_remain() / 10;//default ds time can't exceed 10% of current sql remain timeout
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_session_info()->get_effective_tenant_id()));
+    if (tenant_config.is_valid()) {
+      int64_t ds_maximum_time = tenant_config->_optimizer_ads_time_limit * 1000000;
+      if (max_ds_timeout > ds_maximum_time) {//can't exceed the max ds timeout for single table
+        max_ds_timeout = ds_maximum_time;
+      }
     }
   }
   return max_ds_timeout;

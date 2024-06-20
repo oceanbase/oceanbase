@@ -47,7 +47,14 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 2UL, 1UL, 1UL),  // 4.2.1.1
   CALC_VERSION(4UL, 2UL, 1UL, 2UL),  // 4.2.1.2
   CALC_VERSION(4UL, 2UL, 2UL, 0UL),  // 4.2.2.0
-  CALC_VERSION(4UL, 3UL, 0UL, 0UL)   // 4.3.0.0
+  CALC_VERSION(4UL, 2UL, 2UL, 1UL),  // 4.2.2.1
+  CALC_VERSION(4UL, 2UL, 3UL, 0UL),  // 4.2.3.0
+  CALC_VERSION(4UL, 2UL, 3UL, 1UL),  // 4.2.3.1
+  CALC_VERSION(4UL, 2UL, 4UL, 0UL),  // 4.2.4.0
+  CALC_VERSION(4UL, 3UL, 0UL, 0UL),  // 4.3.0.0
+  CALC_VERSION(4UL, 3UL, 0UL, 1UL),  // 4.3.0.1
+  CALC_VERSION(4UL, 3UL, 1UL, 0UL),  // 4.3.1.0
+  CALC_VERSION(4UL, 3UL, 2UL, 0UL),  // 4.3.2.0
 };
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
@@ -70,7 +77,14 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_1_1, DATA_VERSION_4_2_1_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_1_2, DATA_VERSION_4_2_1_2)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_2_0, DATA_VERSION_4_2_2_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_2_1, MOCK_DATA_VERSION_4_2_2_1)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_3_0, MOCK_DATA_VERSION_4_2_3_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_3_1, MOCK_DATA_VERSION_4_2_3_1)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_4_0, MOCK_DATA_VERSION_4_2_4_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_0, DATA_VERSION_4_3_0_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_1, DATA_VERSION_4_3_0_1)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_1_0, DATA_VERSION_4_3_1_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_2_0, DATA_VERSION_4_3_2_0)
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
       ret = OB_INVALID_ARGUMENT;
@@ -89,6 +103,13 @@ bool ObUpgradeChecker::check_data_version_exist(
     bret = (version == UPGRADE_PATH[i]);
   }
   return bret;
+}
+
+// TODO: should correspond to upgrade YML file.
+//       For now, just consider the valid upgrade path for 4.x .
+bool ObUpgradeChecker::check_data_version_valid_for_backup(const uint64_t data_version)
+{
+  return DATA_VERSION_4_3_0_0 <= data_version;
 }
 
 //FIXME:(yanmu.ztl) cluster version should be discrete.
@@ -582,6 +603,7 @@ ObUpgradeProcesserSet::~ObUpgradeProcesserSet()
 int ObUpgradeProcesserSet::init(
     ObBaseUpgradeProcessor::UpgradeMode mode,
     common::ObMySQLProxy &sql_proxy,
+    common::ObOracleSqlProxy &oracle_sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     obrpc::ObCommonRpcProxy &common_proxy,
     share::schema::ObMultiVersionSchemaService &schema_service,
@@ -603,7 +625,7 @@ int ObUpgradeProcesserSet::init(
       } else if (OB_ISNULL(processor = new(buf)ObUpgradeFor##MAJOR##MINOR##MAJOR_PATCH##MINOR_PATCH##Processor)) { \
         ret = OB_NOT_INIT; \
         LOG_WARN("fail to new upgrade processor", KR(ret)); \
-      } else if (OB_FAIL(processor->init(version, mode, sql_proxy, rpc_proxy, common_proxy, \
+      } else if (OB_FAIL(processor->init(version, mode, sql_proxy, oracle_sql_proxy, rpc_proxy, common_proxy, \
                                          schema_service, check_server_provider))) { \
         LOG_WARN("fail to init processor", KR(ret), K(version)); \
       } else if (OB_FAIL(processor_list_.push_back(processor))) { \
@@ -632,7 +654,14 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 2, 1, 1);
     INIT_PROCESSOR_BY_VERSION(4, 2, 1, 2);
     INIT_PROCESSOR_BY_VERSION(4, 2, 2, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 2, 1);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 3, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 3, 1);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 4, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 3, 0, 1);
+    INIT_PROCESSOR_BY_VERSION(4, 3, 1, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 3, 2, 0);
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
   }
@@ -790,6 +819,7 @@ int ObBaseUpgradeProcessor::init(
     int64_t data_version,
     UpgradeMode mode,
     common::ObMySQLProxy &sql_proxy,
+    common::ObOracleSqlProxy &oracle_sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     obrpc::ObCommonRpcProxy &common_proxy,
     share::schema::ObMultiVersionSchemaService &schema_service,
@@ -803,6 +833,7 @@ int ObBaseUpgradeProcessor::init(
     mode_ = mode;
     data_version_ = data_version;
     sql_proxy_ = &sql_proxy;
+    oracle_sql_proxy_ = &oracle_sql_proxy;
     rpc_proxy_ = &rpc_proxy;
     common_proxy_ = &common_proxy;
     schema_service_ = &schema_service;
@@ -1147,6 +1178,188 @@ int ObUpgradeFor4200Processor::post_upgrade_for_heartbeat_and_server_zone_op_ser
 
 /* =========== 4200 upgrade processor end ============= */
 
+int ObUpgradeFor4211Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_dbms_scheduler())) {
+    LOG_WARN("post for upgrade dbms scheduler failed", K(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4211Processor::post_upgrade_for_dbms_scheduler()
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  bool is_tenant_standby = false;
+  if (sql_proxy_ == NULL) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id_, is_tenant_standby))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+  } else if (is_tenant_standby) {
+    LOG_INFO("tenant is standby, ignore", K(tenant_id_));
+  } else {
+    OZ (sql.append_fmt(
+                    "insert ignore into %s "
+                    "(tenant_id,job_name,job,lowner,powner,cowner,next_date,`interval#`,flag) "
+                    "select tenant_id, job_name,0,lowner,powner,cowner,next_date,`interval#`,flag from %s where job != 0",
+                    OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                    OB_ALL_TENANT_SCHEDULER_JOB_TNAME)); // if has new colomn, use default value
+    OZ (sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows));
+    LOG_INFO("insert job_id=0 rows finished for dbms_scheduler old jobs", K(ret), K(tenant_id_), K(affected_rows));
+  }
+
+  return ret;
+}
+/* =========== 4211 upgrade processor end ============= */
+
+int ObUpgradeFor4310Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_create_replication_role_in_oracle())) {
+    LOG_WARN("fail to create standby replication role in oracle", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4310Processor::post_upgrade_for_create_replication_role_in_oracle()
+{
+  int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  bool is_standby = false;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(oracle_sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP_(sql_proxy), KP_(schema_service), K_(tenant_id));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("meta and sys tenant no need to update replicate role", K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id_, is_standby))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K_(tenant_id));
+  } else if (is_standby) {
+    LOG_INFO("standby tenant no need to update replicate role", K_(tenant_id));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id_, compat_mode))) {
+    LOG_WARN("failed to get tenant compat mode", KR(ret), K_(tenant_id));
+  } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+    ObSchemaGetterGuard schema_guard;
+    ObSqlString role_sql;
+    ObSqlString sys_priv_sql;
+    int64_t affected_rows = 0;
+    bool is_user_exist = false;
+    // check and create standby replication role
+    if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get tenant schema guard", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(schema_guard.check_user_exist(tenant_id_, OB_ORA_STANDBY_REPLICATION_ROLE_ID, is_user_exist))) {
+      LOG_WARN("fail to check user exist", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(schema_guard.reset())) {
+      LOG_WARN("fail to reset schema guard", KR(ret));
+    } else if (!is_user_exist) {
+      if (OB_FAIL(role_sql.assign_fmt("CREATE ROLE %s", OB_ORA_STANDBY_REPLICATION_ROLE_NAME))) {
+        LOG_WARN("fail to assign create role sql", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, role_sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to write create role sql", KR(ret), K(role_sql), K_(tenant_id));
+      }
+    } else {
+      LOG_INFO("standy replication role already exist");
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sys_priv_sql.assign_fmt("GRANT CREATE SESSION TO %s", OB_ORA_STANDBY_REPLICATION_ROLE_NAME))) {
+        LOG_WARN("fail to assign sql", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, sys_priv_sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to write sql", KR(ret), K(sys_priv_sql), K_(tenant_id));
+      }
+    }
+#define GRANT_OBJ_PRIVS_TO_USER(PRIV, DB_NAME, TABLE_NAME, USER_NAME)                                                       \
+    if (OB_SUCC(ret)) {                                                                                                     \
+      ObSqlString tab_priv_sql;                                                                                             \
+      if (OB_FAIL(tab_priv_sql.assign_fmt("GRANT %s on %s.%s to %s", PRIV, DB_NAME, TABLE_NAME, USER_NAME))) {              \
+        LOG_WARN("fail to assign sql", KR(ret));                                                                            \
+      } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, tab_priv_sql.ptr(), affected_rows))) {                        \
+        LOG_WARN("fail to write sql", KR(ret), K(tab_priv_sql));                                                            \
+      }                                                                                                                     \
+    }
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_TENANTS_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_ACCESS_POINT_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_LS_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_LS_HISTORY_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_GV_OB_PARAMETERS_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_GV_OB_LOG_STAT_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_GV_OB_UNITS_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+#undef GRANT_OBJ_PRIVS_TO_USER
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[UPGRADE] upgrade user tenant create replication role failed", KR(ret), K_(tenant_id));
+    } else {
+      LOG_INFO("[UPGRADE] upgrade user tenant create replication role success", K_(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObUpgradeFor4320Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_reset_compat_version())) {
+    LOG_WARN("fail to reset compat version", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4320Processor::post_upgrade_for_reset_compat_version()
+{
+  int ret = OB_SUCCESS;
+  int64_t start = ObTimeUtility::current_time();
+  if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("meta and sys tenant no need to reset system variable", K_(tenant_id));
+  } else if (OB_FAIL(try_reset_version(tenant_id_, OB_SV_COMPATIBILITY_VERSION))) {
+    LOG_WARN("failed to try reset ob_compatibility_version", K(ret));
+  } else if (OB_FAIL(try_reset_version(tenant_id_, OB_SV_SECURITY_VERSION))) {
+    LOG_WARN("failed to try reset ob_security_version", K(ret));
+  }
+  LOG_INFO("[UPGRADE] finish reset compat version", K(ret), K(tenant_id_),
+           "cost", ObTimeUtility::current_time() - start);
+  return ret;
+}
+
+int ObUpgradeFor4320Processor::try_reset_version(const uint64_t tenant_id, const char *var_name)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVarSchema *var_schema = NULL;
+  ObObj val_obj;
+  uint64_t version = 0;
+  if (OB_ISNULL(schema_service_) || OB_ISNULL(sql_proxy_) || OB_ISNULL(var_name)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id_, var_name, var_schema))) {
+    LOG_WARN("failed to get system variable", K(ret));
+  } else if (OB_ISNULL(var_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("var_schema is null", K(ret));
+  } else if (OB_FAIL(var_schema->get_value(NULL, NULL, val_obj))) {
+    LOG_WARN("failed to get value from var_schema", K(ret), KPC(var_schema));
+  } else if (OB_FAIL(val_obj.get_uint64(version))) {
+    LOG_WARN("fail to get uint", K(val_obj), K(ret));
+  } else if (CLUSTER_VERSION_4_2_1_0 != version) {
+    ObSqlString set_sql;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(set_sql.assign_fmt("set global %s = %ld", var_name, CLUSTER_VERSION_4_2_1_0))) {
+      LOG_WARN("failed to assign sql", K(ret));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, set_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to write sql", K(ret), K(set_sql));
+    }
+  }
+  return ret;
+}
+/* =========== 4310 upgrade processor end ============= */
 
 /* =========== special upgrade processor end   ============= */
 } // end share

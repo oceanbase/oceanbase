@@ -128,8 +128,6 @@ int ObAdminExecutor::prepare_io()
   } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(THE_IO_DEVICE,
       async_io_thread_count, sync_io_thread_count, max_io_depth))) {
     LOG_WARN("add device channel failed", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, tenant_io_config))) {
-    LOG_WARN("add server tenant io manager failed", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     LOG_WARN("fail to start io manager", K(ret));
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, storage_env_.default_block_size_))) {
@@ -158,7 +156,7 @@ int ObAdminExecutor::init_slogger_mgr()
 
   if (OB_FAIL(databuff_printf(slog_dir_, OB_MAX_FILE_NAME_LENGTH, "%s/slog/", data_dir_))) {
     LOG_WARN("failed to gen slog dir", K(ret));
-  } else if (OB_FAIL(SLOGGERMGR.init(slog_dir_, MAX_FILE_SIZE, storage_env_.slog_file_spec_))) {
+  } else if (OB_FAIL(SLOGGERMGR.init(slog_dir_, sstable_dir_, MAX_FILE_SIZE, storage_env_.slog_file_spec_))) {
     STORAGE_LOG(WARN, "fail to init SLOGGERMGR", K(ret));
   }
 

@@ -63,6 +63,8 @@ protected:
     int64_t sub_part_id_;
     int64_t sub_part_idx_;
     PartitionType partition_type_;
+
+    common::ObString external_location_;
     TO_STRING_KV(K_(tenant_id),
                  K_(table_id),
                  K_(tablet_id),
@@ -78,7 +80,8 @@ protected:
                  K_(sub_part_num),
                  K_(sub_part_id),
                  K_(sub_part_idx),
-                 K_(partition_type));
+                 K_(partition_type),
+                 K_(external_location));
   };
   virtual int extract_part_info(PartInfo &part_info) = 0;
   virtual int convert_to_dml(const PartInfo &part_info, ObDMLSqlSplicer &dml) = 0;
@@ -419,7 +422,7 @@ public:
         schema_version_(schema_version),
         sql_client_(sql_client) {}
   virtual ~ObRenameIncPartHelper() {}
-  int rename_partition_info();
+  int rename_partition_info(const bool update_part_idx);
 private:
   const ObPartitionSchema *ori_table_;
   const ObPartitionSchema *inc_table_;

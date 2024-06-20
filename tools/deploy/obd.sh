@@ -8,6 +8,7 @@ OBD_LOCAL_VERSION_PATH="$DEPLOY_PATH"/.obd/version
 shopt -s expand_aliases
 source $DEPLOY_PATH/activate_obd.sh
 tag="latest"
+export TELEMETRY_REPORTER="dev"
 
 current_path=$(pwd)
 if [[ "$current_path" != "$BASE_DIR/tools/deploy" ]]
@@ -74,7 +75,7 @@ function variables_prepare {
 function copy_sh {
   if [[ -f copy.sh ]]
   then
-  sh copy.sh $BUILD_PATH
+  bash copy.sh $BUILD_PATH
   else
   echo 'can not find copy.sh'
   fi

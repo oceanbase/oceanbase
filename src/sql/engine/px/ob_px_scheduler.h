@@ -21,7 +21,6 @@
 #include "sql/engine/px/ob_px_dtl_proc.h"
 #include "sql/engine/px/ob_px_coord_msg_proc.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
-#include "sql/dtl/ob_dtl_local_first_buffer_manager.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/datahub/ob_dh_msg_ctx.h"
 #include "sql/engine/px/datahub/components/ob_dh_rollup_key.h"
@@ -244,12 +243,16 @@ public:
   int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt);
   void clean_dtl_interm_result(ObExecContext &ctx);
   // end DATAHUB msg processing
+  void log_warn_sqc_fail(int ret, const ObPxFinishSqcResultMsg &pkt, ObPxSqcMeta *sqc);
 private:
   int do_cleanup_dfo(ObDfo &dfo);
   int fast_dispatch_sqc(ObExecContext &exec_ctx,
                         ObDfo &dfo,
                         ObArray<ObPxSqcMeta *> &sqcs);
   int wait_for_dfo_finish(ObDfoMgr &dfo_mgr);
+
+  int process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinishSqcResultMsg &pkt,
+                             ObPxSqcMeta *sqc, ObDfo *edge);
 
 private:
   ObPxCoordInfo &coord_info_;

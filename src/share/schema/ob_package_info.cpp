@@ -21,11 +21,12 @@ namespace share
 {
 namespace schema
 {
-ObPackageInfo &ObPackageInfo::operator =(const ObPackageInfo &package_info)
+
+int ObPackageInfo::assign(const ObPackageInfo &package_info)
 {
+  int ret = OB_SUCCESS;
   if (this != &package_info) {
     reset();
-    int &ret = error_ret_;
     set_tenant_id(package_info.get_tenant_id());
     database_id_ = package_info.database_id_;
     owner_id_ = package_info.owner_id_;
@@ -48,15 +49,8 @@ ObPackageInfo &ObPackageInfo::operator =(const ObPackageInfo &package_info)
     }else {
       // do nothing
     }
+    this->error_ret_ = ret;
   }
-  return *this;
-}
-
-int ObPackageInfo::assign(const ObPackageInfo &other)
-{
-  int ret = OB_SUCCESS;
-  this->operator=(other);
-  ret = this->error_ret_;
   return ret;
 }
 

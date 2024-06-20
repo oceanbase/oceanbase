@@ -212,18 +212,59 @@ private:
   int64_t row_version_;
 };
 
+enum class ObExistFlag : uint8_t
+{
+  EXIST        = 0,
+  UNKNOWN      = 1,
+  NOT_EXIST    = 2,
+};
+
+static ObExistFlag extract_exist_flag_from_dml_flag(const blocksstable::ObDmlFlag dml_flag)
+{
+  ObExistFlag exist_flag = ObExistFlag::UNKNOWN;
+  switch (dml_flag) {
+  case blocksstable::ObDmlFlag::DF_NOT_EXIST:
+    exist_flag = ObExistFlag::UNKNOWN;
+    break;
+  case blocksstable::ObDmlFlag::DF_LOCK:
+    exist_flag = ObExistFlag::EXIST;
+    break;
+  case blocksstable::ObDmlFlag::DF_UPDATE:
+  case blocksstable::ObDmlFlag::DF_INSERT:
+    exist_flag = ObExistFlag::EXIST;
+    break;
+  case blocksstable::ObDmlFlag::DF_DELETE:
+    exist_flag = ObExistFlag::NOT_EXIST;
+    break;
+  default:
+    ob_abort();
+    break;
+  }
+  return exist_flag;
+}
+
 struct ObStoreRowLockState
 {
 public:
   ObStoreRowLockState()
     : is_locked_(false),
-      trans_version_(share::SCN::min_scn()),
-      lock_trans_id_(),
-      lock_data_sequence_(),
-      lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
-      is_delayed_cleanout_(false),
-      mvcc_row_(nullptr),
-      trans_scn_(share::SCN::max_scn()) {}
+    trans_version_(share::SCN::min_scn()),
+    lock_trans_id_(),
+    lock_data_sequence_(),
+    lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
+    is_delayed_cleanout_(false),
+    exist_flag_(ObExistFlag::UNKNOWN),
+    mvcc_row_(NULL),
+    trans_scn_(share::SCN::max_scn()) {}
+  inline bool row_exist_decided() const
+  {
+    return ObExistFlag::EXIST == exist_flag_
+      || ObExistFlag::NOT_EXIST == exist_flag_;
+  }
+  inline bool row_exist() const
+  {
+    return ObExistFlag::EXIST == exist_flag_;
+  }
   inline bool is_lock_decided() const
   {
     return is_locked_ || !trans_version_.is_min();
@@ -239,6 +280,7 @@ public:
                K_(lock_data_sequence),
                K_(lock_dml_flag),
                K_(is_delayed_cleanout),
+               K_(exist_flag),
                KP_(mvcc_row),
                K_(trans_scn));
 
@@ -248,8 +290,18 @@ public:
   transaction::ObTxSEQ lock_data_sequence_;
   blocksstable::ObDmlFlag lock_dml_flag_;
   bool is_delayed_cleanout_;
+  ObExistFlag exist_flag_;
   memtable::ObMvccRow *mvcc_row_;
   share::SCN trans_scn_; // sstable takes end_scn, memtable takes scn_ of ObMvccTransNode
+};
+
+struct ObSSTableRowState {
+  enum ObSSTableRowStateEnum {
+    UNKNOWN_STATE = 0,
+    NOT_EXIST,
+    IN_ROW_CACHE,
+    IN_BLOCK
+  };
 };
 
 struct ObStoreRow
@@ -325,10 +377,6 @@ public:
       const blocksstable::ObDatumRow &row,
       const ObITableReadInfo &read_info);
 };
-
-#define STORE_ITER_ROW_IN_GAP 1
-#define STORE_ITER_ROW_BIG_GAP_HINT 2
-#define STORE_ITER_ROW_PARTIAL 8
 
 template <typename AllocatorT>
 int malloc_store_row(
@@ -416,6 +464,7 @@ struct ObStoreCtx
   bool is_replay() const { return mvcc_acc_ctx_.is_replay(); }
   bool is_read_store_ctx() const { return is_read_store_ctx_; }
   int init_for_read(const share::ObLSID &ls_id,
+                    const common::ObTabletID tablet_id,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
                     const share::SCN &snapshot_version);
@@ -423,27 +472,28 @@ struct ObStoreCtx
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
                     const share::SCN &snapshot_version);
+  bool is_uncommitted_data_rollbacked() const;
   void force_print_trace_log();
   TO_STRING_KV(KP(this),
                K_(ls_id),
                KP_(ls),
+               K_(branch),
                K_(timeout),
                K_(tablet_id),
                KP_(table_iter),
                K_(table_version),
                K_(mvcc_acc_ctx),
                K_(tablet_stat),
-               K_(replay_log_scn),
                K_(is_read_store_ctx));
   share::ObLSID ls_id_;
   storage::ObLS *ls_;                              // for performance opt
+  int16_t branch_;                                 // parallel write id
   common::ObTabletID tablet_id_;
   mutable ObTableStoreIterator *table_iter_;
   int64_t table_version_;                          // used to update memtable's max_schema_version
   int64_t timeout_;
   memtable::ObMvccAccessCtx mvcc_acc_ctx_;         // all txn relative context
   storage::ObTabletStat tablet_stat_;              // used for collecting query statistics
-  share::SCN replay_log_scn_;                         // used in replay pass log_ts
   bool is_read_store_ctx_;
 };
 

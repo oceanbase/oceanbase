@@ -344,6 +344,7 @@ int ObExprFormat::calc_format_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         LOG_WARN("fail to build format str", K(ret));
       } else if (!ob_is_text_tc(expr.datum_meta_.type_)) {
         if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, str.length()))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("fail to allocate memory", K(buf_len), K(ret));
         } else {
           MEMCPY(res_buf, str.ptr(), str.length());

@@ -22,6 +22,7 @@ namespace oceanbase
 namespace blocksstable
 {
 struct ObSSTableColumnMeta;
+class ObStorageDatum;
 }
 
 namespace storage
@@ -65,6 +66,7 @@ public:
   void reset();
   void destroy(ObIAllocator &allocator);
   bool is_valid() const;
+  int construct_column_param(share::schema::ObColumnParam &column_param) const;
   inline common::ColumnType get_data_type() const { return meta_type_.get_type(); }
   inline bool is_generated_column() const { return is_generated_column_; }
   inline const common::ObObj &get_orig_default_value()  const { return orig_default_value_; }
@@ -72,6 +74,7 @@ public:
 
   int legacy_deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int legacy_serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t legacy_serialize_len() const;
 
   TO_STRING_KV(K_(meta_type), K_(is_column_stored_in_sstable), K_(is_rowkey_column),
       K_(is_generated_column), K_(orig_default_value));
@@ -135,9 +138,10 @@ public:
   OB_INLINE bool is_rowkey_column_group() const { return type_ == share::schema::ROWKEY_COLUMN_GROUP; }
   OB_INLINE bool is_single_column_group() const { return type_ == share::schema::SINGLE_COLUMN_GROUP; }
   OB_INLINE bool has_multi_version_column() const { return is_all_column_group() || is_rowkey_column_group(); }
+  OB_INLINE bool is_inited() const { return row_store_type_ != MAX_ROW_STORE; };
 
-  TO_STRING_KV(K_(version), K_(type), K_(compressor_type), K_(row_store_type), K_(block_size),
-      K_(column_cnt), "column_idxs", ObArrayWrap<uint16_t>(column_idxs_, column_cnt_));
+  TO_STRING_KV(K_(version), K_(type), K_(compressor_type), K_(row_store_type), K_(block_size), K_(schema_column_cnt), K_(rowkey_column_cnt),
+      K_(schema_rowkey_column_cnt), K_(column_cnt), "column_idxs", ObArrayWrap<uint16_t>(column_idxs_, column_cnt_));
 public:
   static const int64_t COLUMN_GRUOP_SCHEMA_VERSION = 1;
   uint8_t version_;
@@ -211,9 +215,11 @@ public:
   virtual inline bool is_index_table() const override { return share::schema::is_index_table(table_type_); }
   virtual inline bool is_storage_index_table() const override
   {
-    return share::schema::is_index_table(table_type_) || is_materialized_view();
+    return share::schema::is_index_table(table_type_);
   }
   inline bool is_materialized_view() const { return share::schema::ObTableSchema::is_materialized_view(table_type_); }
+  inline bool is_mlog_table() const { return share::schema::ObTableSchema::is_mlog_table(table_type_); }
+  inline bool is_fts_index() const { return share::schema::is_fts_index(index_type_); }
   virtual inline bool is_global_index_table() const override { return share::schema::ObSimpleTableSchemaV2::is_global_index_table(index_type_); }
   virtual inline int64_t get_block_size() const override { return block_size_; }
 
@@ -243,9 +249,16 @@ public:
   virtual int init_column_meta_array(
       common::ObIArray<blocksstable::ObSSTableColumnMeta> &meta_array) const override;
   int get_orig_default_row(const common::ObIArray<share::schema::ObColDesc> &column_ids,
-                                          blocksstable::ObDatumRow &default_row) const;
+                           bool need_trim,
+                           blocksstable::ObDatumRow &default_row) const;
   const ObStorageColumnSchema *get_column_schema(const int64_t column_id) const;
-
+  int mock_row_store_cg(ObStorageColumnGroupSchema &mocked_row_store_cg) const;
+  int get_base_rowkey_column_group_index(int32_t &cg_idx) const;
+  // This function only get cg idx for actually stored column
+  int get_column_group_index(
+      const uint64_t &column_id,
+      const int32_t &column_idx,
+      int32_t &cg_idx) const;
   // Use this comparison function to determine which schema has been updated later
   // true: input_schema is newer
   // false: current schema is newer
@@ -267,6 +280,8 @@ public:
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
       "skip_index_cnt", skip_idx_attr_array_.count(), K_(skip_idx_attr_array),
       "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group));
+public:
+  static void trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
 private:
   void copy_from(const share::schema::ObMergeSchema &input_schema);
   int deep_copy_str(const ObString &src, ObString &dest);
@@ -290,10 +305,11 @@ private:
   int deserialize_rowkey_column_array(const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_column_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_column_group_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int64_t get_column_array_serialize_length(const common::ObIArray<ObStorageColumnSchema> &array) const;
   int deserialize_skip_idx_attr_array(const char *buf, const int64_t data_len, int64_t &pos);
-  int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type);
+  int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type) const;
   template <typename T>
-  int64_t get_column_array_serialize_length(const common::ObIArray<T> &array) const;
+  int64_t get_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>
   bool check_column_array_valid(const common::ObIArray<T> &array) const;
 
@@ -413,7 +429,7 @@ int ObStorageSchema::serialize_schema_array(
 }
 
 template <typename T>
-int64_t ObStorageSchema::get_column_array_serialize_length(const common::ObIArray<T> &array) const
+int64_t ObStorageSchema::get_array_serialize_length(const common::ObIArray<T> &array) const
 {
   int64_t len = 0;
   len += serialization::encoded_length_vi64(array.count());

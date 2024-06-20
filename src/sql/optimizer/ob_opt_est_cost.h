@@ -38,6 +38,7 @@ public:
 
   static int cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                            double &cost,
+                           double &filter_selectivity,
                            common::ObIArray<ObExprSelPair> &all_predicate_sel,
                            const ObOptimizerContext &opt_ctx);
 
@@ -241,6 +242,13 @@ public:
                                            double &count);
 
   static double get_estimate_width_from_type(const ObExprResType &type);
+  static double calc_pred_cost_per_row(const ObRawExpr *expr,
+                                      double card,
+                                      double &cost,
+                                      const ObOptimizerContext &opt_ctx);
+  static double cost_values_table(double rows,
+                                  ObIArray<ObRawExpr*> &filters,
+                                  const ObOptimizerContext &opt_ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptEstCost);
 };

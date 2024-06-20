@@ -14,15 +14,17 @@
 
 #include "lib/alloc/memory_dump.h"
 #include <setjmp.h>
-#include "lib/alloc/ob_free_log_printer.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/rc/context.h"
 #include "lib/utility/utility.h"
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/container/ob_vector.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "common/ob_clock_generator.h"
+#include "common/ob_smart_var.h"
 
 namespace oceanbase
 {
@@ -205,6 +207,45 @@ int ObMemoryDump::push(void *task)
   return ret;
 }
 
+int ObMemoryDump::generate_mod_stat_task(ObMemoryCheckContext *memory_check_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObMemoryDumpTask *task = alloc_task();
+  if (OB_ISNULL(task)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc task failed");
+  } else {
+    task->type_ = STAT_LABEL;
+    task->memory_check_ctx_ = memory_check_ctx;
+    COMMON_LOG(INFO, "task info", K(*task));
+    if (OB_FAIL(push(task))) {
+      LOG_WARN("push task failed", K(ret));
+      free_task(task);
+    }
+  }
+  return ret;
+}
+
+int ObMemoryDump::check_sql_memory_leak()
+{
+  int ret = OB_SUCCESS;
+  ObMemoryCheckContext memory_check_ctx;
+  ObThreadCond &cond = memory_check_ctx.cond_;
+  if (OB_FAIL(cond.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+    LOG_WARN("thread cond init failed", K(ret));
+  } else if (OB_FAIL(generate_mod_stat_task(&memory_check_ctx))) {
+    LOG_WARN("generate mod stat task", K(ret));
+  } else {
+    ObThreadCondGuard guard(cond);
+    if (OB_FAIL(cond.wait())) {
+      LOG_WARN("thread condition wait failed", K(ret));
+    } else {
+      ret = memory_check_ctx.ret_;
+    }
+  }
+  return ret;
+}
+
 int ObMemoryDump::load_malloc_sample_map(ObMallocSampleMap &malloc_sample_map)
 {
   int ret = OB_SUCCESS;
@@ -216,6 +257,57 @@ int ObMemoryDump::load_malloc_sample_map(ObMallocSampleMap &malloc_sample_map)
     }
   }
   return ret;
+}
+
+void ObMemoryDump::print_malloc_sample_info()
+{
+  int ret = OB_SUCCESS;
+  typedef ObSortedVector<ObMallocSamplePair*> MallocSamplePairVector;
+  ObLatchRGuard guard(iter_lock_, ObLatchIds::MEM_DUMP_ITER_LOCK);
+  ObMallocSampleMap &map = r_stat_->malloc_sample_map_;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "MallocSampleInf", ObCtxIds::DEFAULT_CTX_ID, lib::OB_HIGH_ALLOC);
+  MallocSamplePairVector vector(map.size(), nullptr, attr);
+  for (ObMallocSampleIter it = map.begin(); OB_SUCC(ret) && it != map.end(); ++it) {
+    MallocSamplePairVector::iterator pos;
+    ret = vector.insert(&(*it), pos, ObMallocSamplePairCmp());
+  }
+  int64_t log_pos = 0;
+  int64_t tenant_id = OB_SERVER_TENANT_ID;
+  int64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID;
+  const char *label = "";
+  int64_t bt_cnt = 0;
+  const int64_t MAX_LABEL_BT_CNT = 5;
+  for (MallocSamplePairVector::iterator it = vector.begin(); OB_SUCC(ret) && it != vector.end(); ++it) {
+    if ((*it)->first.tenant_id_ != tenant_id || (*it)->first.ctx_id_ != ctx_id) {
+      if (log_pos > 0) {
+        _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
+              tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
+        log_pos = 0;
+      }
+      tenant_id = (*it)->first.tenant_id_;
+      ctx_id = (*it)->first.ctx_id_;
+      label = (*it)->first.label_;
+      bt_cnt = 0;
+    } else if (0 != STRCMP(label, (*it)->first.label_)) {
+      label = (*it)->first.label_;
+      bt_cnt = 0;
+    }
+    if (bt_cnt++ < MAX_LABEL_BT_CNT) {
+      char bt[MAX_BACKTRACE_LENGTH];
+      parray(bt, sizeof(bt), (int64_t*)(*it)->first.bt_, AOBJECT_BACKTRACE_COUNT);
+      ret = databuff_printf(log_buf_, LOG_BUF_LEN, log_pos, "[MEMORY][BT] mod=%15s, alloc_bytes=% '15ld, alloc_count=% '15ld, bt=%s\n",
+            label, (*it)->second.alloc_bytes_, (*it)->second.alloc_count_, bt);
+      if (OB_SUCC(ret) && log_pos > LOG_BUF_LEN / 2) {
+        _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
+            tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
+        log_pos = 0;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && log_pos > 0) {
+    _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
+        tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
+  }
 }
 
 void ObMemoryDump::run1()
@@ -231,19 +323,10 @@ void ObMemoryDump::run1()
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       int64_t current_ts = common::ObClockGenerator::getClock();
       if (current_ts - last_dump_ts > STAT_LABEL_INTERVAL) {
-        auto *task = alloc_task();
-        if (OB_ISNULL(task)) {
-          LOG_WARN("alloc task failed");
-        } else {
-          task->type_ = STAT_LABEL;
-          if (OB_FAIL(push(task))){
-            LOG_WARN("push task failed", K(ret));
-            free_task(task);
-          }
-        }
+        generate_mod_stat_task();
         last_dump_ts = current_ts;
       } else {
-        ob_usleep(current_ts - last_dump_ts);
+        ob_usleep(1000);
       }
     }
   }
@@ -401,12 +484,11 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
     LabelItem *litem = nullptr;
     auto key = std::make_pair(*(uint64_t*)object->label_, *((uint64_t*)object->label_ + 1));
     LabelInfoItem *linfoitem = lmap.get(key);
-    int64_t bt_size = object->on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0;
     if (NULL != linfoitem) {
       // exist
       litem = linfoitem->litem_;
       litem->hold_ += hold;
-      litem->used_ += (object->alloc_bytes_ - bt_size);
+      litem->used_ += object->alloc_bytes_;
       litem->count_++;
       if (chunk != linfoitem->chunk_) {
         litem->chunk_cnt_ += 1;
@@ -426,10 +508,11 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
         litem->str_[sizeof(litem->str_) - 1] = '\0';
         litem->str_len_ = strlen(litem->str_);
         litem->hold_ = hold;
-        litem->used_ = (object->alloc_bytes_ - bt_size);
+        litem->used_ = object->alloc_bytes_;
         litem->count_ = 1;
         litem->block_cnt_ = 1;
         litem->chunk_cnt_ = 1;
+        ObSignalHandlerGuard guard(ob_signal_handler);
         ret = lmap.set_refactored(key, LabelInfoItem(litem, chunk, block));
       }
     }
@@ -442,19 +525,20 @@ int malloc_sample_stat(uint64_t tenant_id, uint64_t ctx_id,
 {
   int ret = OB_SUCCESS;
   if (object->in_use_ && object->on_malloc_sample_) {
-    int64_t offset = object->alloc_bytes_ - AOBJECT_BACKTRACE_SIZE;
     ObMallocSampleKey key;
     key.tenant_id_ = tenant_id;
     key.ctx_id_ = ctx_id;
-    MEMCPY((char*)key.bt_, &object->data_[offset], AOBJECT_BACKTRACE_SIZE);
+    MEMCPY((char*)key.bt_, object->bt(), AOBJECT_BACKTRACE_SIZE);
     STRNCPY(key.label_, object->label_, sizeof(key.label_));
     key.label_[sizeof(key.label_) - 1] = '\0';
     ObMallocSampleValue *item = malloc_sample_map.get(key);
     if (NULL != item) {
       item->alloc_count_ += 1;
-      item->alloc_bytes_ += offset;
+      item->alloc_bytes_ += object->alloc_bytes_;
     } else {
-      ret = malloc_sample_map.set_refactored(key, ObMallocSampleValue(1, offset));
+      ObMallocSampleValue value(1, object->alloc_bytes_);
+      ObSignalHandlerGuard guard(ob_signal_handler);
+      ret = malloc_sample_map.set_refactored(key, value);
     }
   }
   return ret;
@@ -485,14 +569,20 @@ void ObMemoryDump::handle(void *task)
                                   "tenant_id", "ctx_id", "chunk_cnt", "label_cnt",
                                   "segv_cnt");
     const int64_t start_ts = ObTimeUtility::current_time();
+    static bool has_memory_leak = false;
+    // sql memory leak can diagnose the memleak of object whose mem_version belongs to [min_check_version, max_check_version).
+    uint32_t min_check_version;
+    uint32_t max_check_version;
+    ObMemoryCheckContext *memory_check_ctx = m_task->memory_check_ctx_;
+    ObSqlMemoryLeakChecker::get_instance().update_check_range(NULL == memory_check_ctx || !memory_check_ctx->is_sql_memory_leak(),
+                                                              min_check_version, max_check_version);
+    ObMallocAllocator *ma = ObMallocAllocator::get_instance();
     for (int tenant_idx = 0; tenant_idx < tenant_cnt; tenant_idx++) {
       uint64_t tenant_id = tenant_ids_[tenant_idx];
       for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
-        auto ta =
-          ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+        ObTenantCtxAllocatorGuard ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
         if (nullptr == ta) {
-          ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
-                                                                                      ctx_id);
+          ta = ma->get_tenant_ctx_allocator_unrecycled(tenant_id, ctx_id);
         }
         if (nullptr == ta) {
           continue;
@@ -517,27 +607,27 @@ void ObMemoryDump::handle(void *task)
                     UNUSEDx(chunk, block);
                     return OB_SUCCESS;
                   },
-                  [tenant_id, ctx_id, &lmap, w_stat, &item_used]
+                  [tenant_id, ctx_id, &lmap, w_stat, &item_used, min_check_version, max_check_version]
                   (AChunk *chunk, ABlock *block, AObject *object) {
                     int ret = OB_SUCCESS;
                     if (object->in_use_) {
-                      bool expect = AOBJECT_TAIL_MAGIC_CODE ==
-                        reinterpret_cast<uint64_t&>(object->data_[object->alloc_bytes_]);
-                      if (!expect && object->is_valid() && object->in_use_
-                          && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-                        ObLabel label = object->label();
-                        char *ptr = object->data_;
-                        int32_t length = object->alloc_bytes_;
-                        LOG_INFO("tail magic maybe broken!!!", K(tenant_id), KP(ptr),
-                                  K(length), K(label));
+                     if (OB_FAIL(label_stat(chunk, block, object, lmap, w_stat->up2date_items_,
+                                           ARRAYSIZEOF(w_stat->up2date_items_), item_used))) {
+                        // do-nothing
+                      } else if (OB_FAIL(malloc_sample_stat(tenant_id, ctx_id, object,
+                                                            w_stat->malloc_sample_map_))) {
+                        // do-nothing
+                      } else if (!object->ignore_version_ &&
+                                 object->version_ >= min_check_version &&
+                                 object->version_ < max_check_version) {
+                        has_memory_leak = true;
+                        char bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+                        if (object->on_malloc_sample_) {
+                          parray(bt, sizeof(bt), (int64_t*)object->bt(), AOBJECT_BACKTRACE_COUNT);
+                        }
+                        allow_next_syslog();
+                        LOG_WARN("SQL_MEMORY_LEAK", KP(object), K(tenant_id), K(ctx_id), K(object->version_), K(object->label_), K(bt));
                       }
-                    }
-                    ret = label_stat(chunk, block, object, lmap,
-                                      w_stat->up2date_items_, ARRAYSIZEOF(w_stat->up2date_items_),
-                                      item_used);
-                    if (OB_SUCC(ret)) {
-                      ret = malloc_sample_stat(tenant_id, ctx_id,
-                                               object, w_stat->malloc_sample_map_);
                     }
                     return ret;
                   });
@@ -593,7 +683,27 @@ void ObMemoryDump::handle(void *task)
       ObLatchWGuard guard(iter_lock_, common::ObLatchIds::MEM_DUMP_ITER_LOCK);
       std::swap(r_stat_, w_stat_);
     }
-    ObFreeLogPrinter::get_instance().disable_free_log();
+    if (NULL != memory_check_ctx) {
+      if (memory_check_ctx->is_sql_memory_leak() && has_memory_leak) {
+        memory_check_ctx->ret_ = OB_ERR_UNEXPECTED;
+        has_memory_leak = false;
+        LOG_WARN("there has sql memory leak");
+      }
+      if (OB_FAIL(memory_check_ctx->cond_.signal())) {
+        LOG_WARN("failed to signal condition", K(ret));
+      }
+      memory_check_ctx = NULL;
+    }
+
+    for (int tenant_idx = 0; tenant_idx < tenant_cnt; tenant_idx++) {
+      uint64_t tenant_id = tenant_ids_[tenant_idx];
+      ma->print_tenant_memory_usage(tenant_id);
+      ma->print_tenant_ctx_memory_usage(tenant_id);
+    }
+
+#ifdef FATAL_ERROR_HANG
+    print_malloc_sample_info();
+#endif
   } else {
     int fd = -1;
     if (-1 == (fd = ::open(LOG_FILE,

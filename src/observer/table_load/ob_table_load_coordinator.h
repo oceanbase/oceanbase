@@ -18,6 +18,10 @@
 #include "share/table/ob_table_load_define.h"
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "share/table/ob_table_load_row_array.h"
+#include "observer/table_load/resource/ob_table_load_resource_rpc_struct.h"
+#include "observer/table_load/resource/ob_table_load_resource_rpc_proxy.h"
+#include "observer/table_load/resource/ob_table_load_resource_service.h"
+#include "observer/table_load/ob_table_load_assigned_memory_manager.h"
 
 namespace oceanbase
 {
@@ -30,13 +34,18 @@ class ObTableLoadCoordinatorTrans;
 
 class ObTableLoadCoordinator
 {
-  static const int64_t WAIT_INTERVAL_US = 1LL * 1000 * 1000; // 1s
+  static const int64_t WAIT_INTERVAL_US = 3 * 1000 * 1000; // 3s
   static const int64_t DEFAULT_TIMEOUT_US = 10LL * 1000 * 1000; // 10s
   static const int64_t HEART_BEAT_RPC_TIMEOUT_US = 1LL * 1000 * 1000; // 1s
+  // 申请和释放资源失败等待间隔时间
+  static const int64_t RESOURCE_OP_WAIT_INTERVAL_US = 5 * 1000LL * 1000LL; // 5s
+  static const int64_t SSTABLE_BUFFER_SIZE = 20 * 1024LL;;  // 20KB
+  static const int64_t MACROBLOCK_BUFFER_SIZE = 10 * 1024LL * 1024LL;  // 10MB
 public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);
   static bool is_ctx_inited(ObTableLoadTableCtx *ctx);
-  static int init_ctx(ObTableLoadTableCtx *ctx, const common::ObIArray<int64_t> &idx_array,
+  static int init_ctx(ObTableLoadTableCtx *ctx,
+                      const common::ObIArray<uint64_t> &column_ids,
                       ObTableLoadExecCtx *exec_ctx);
   static void abort_ctx(ObTableLoadTableCtx *ctx);
   int init();
@@ -44,25 +53,28 @@ public:
 private:
   static int abort_active_trans(ObTableLoadTableCtx *ctx);
   static int abort_peers_ctx(ObTableLoadTableCtx *ctx);
-  static int abort_redef_table(ObTableLoadTableCtx *ctx);
 
 // table load ctrl interface
 public:
   int begin();
   int finish();
   int commit(table::ObTableLoadResultInfo &result_info);
-  int px_commit_data();
-  int px_commit_ddl();
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
   int heart_beat();
 private:
-  int pre_begin_peers();
+  int gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg);
+  int pre_begin_peers(ObDirectLoadResourceApplyArg &apply_arg);
   int confirm_begin_peers();
+private:
+  int add_check_begin_result_task();
+  int check_peers_begin_result(bool &is_finish);
+  class CheckBeginResultTaskProcessor;
+  class CheckBeginResultTaskCallback;
+public:
   int pre_merge_peers();
   int start_merge_peers();
-  int commit_peers();
-  int commit_redef_table();
-  int drive_sql_stat(sql::ObExecContext *ctx);
+  int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);
+  int write_sql_stat(table::ObTableLoadSqlStatistics &sql_statistics);
   int heart_beat_peer();
 private:
   int add_check_merge_result_task();

@@ -26,33 +26,74 @@ class ObTransService;
 struct ObTxCommitCallback
 {
 public:
-  ObTxCommitCallback() { reset(); }
+  ObTxCommitCallback() :
+    enable_(false),
+    inited_(false),
+    linked_(false),
+    callback_count_(0),
+    txs_(NULL),
+    tx_ctx_(NULL),
+    tx_id_(),
+    ret_(OB_ERR_UNEXPECTED),
+    commit_version_(),
+    link_next_(NULL)
+  {}
   ~ObTxCommitCallback() { reset(); }
-  int init(ObTransService* txs, const ObTransID tx_id, const int ret, const share::SCN commit_version)
+  int init(ObTransService* txs, const ObTransID tx_id, const int cb_ret, const share::SCN commit_version)
   {
-    txs_ = txs;
-    tx_id_ = tx_id;
-    ret_ = ret;
-    commit_version_ = commit_version;
-    inited_ = true;
-    return OB_SUCCESS;
+    int ret = OB_SUCCESS;
+    if (inited_) {
+      ret = OB_INIT_TWICE;
+    } else {
+      txs_ = txs;
+      tx_id_ = tx_id;
+      ret_ = cb_ret;
+      commit_version_ = commit_version;
+      inited_ = true;
+    }
+    return ret;
   }
+  int link(ObTransCtx *tx_ctx, ObTxCommitCallback *link_next);
   bool is_inited() { return inited_; }
   void disable() { enable_ = false; }
   void enable() { enable_ = true; }
   bool is_enabled() { return enable_; }
+  int get_cb_ret() const { return ret_; }
+  ObTxCommitCallback *get_link_next() const { return link_next_; }
   void reset();
   void destroy() { reset(); }
   int callback();
-  TO_STRING_KV(K_(inited), K_(enable), KP_(txs), K_(tx_id), K_(ret), K_(commit_version), K_(callback_count));
+  ObTxCommitCallback &operator=(const ObTxCommitCallback &right)
+  {
+    enable_ = right.enable_;
+    inited_ = right.inited_;
+    callback_count_ = right.callback_count_;
+    txs_ = right.txs_;
+    tx_id_ = right.tx_id_;
+    ret_ = right.ret_;
+    return *this;
+  }
+  TO_STRING_KV(K_(inited),
+               K_(enable),
+               K_(linked),
+               KP_(txs),
+               KP_(tx_ctx),
+               K_(tx_id),
+               K_(ret),
+               K_(commit_version),
+               K_(callback_count),
+               KP_(link_next));
 public:
   bool enable_;
   bool inited_;
+  bool linked_;
   int64_t callback_count_;
   ObTransService* txs_;
+  ObTransCtx *tx_ctx_;
   ObTransID tx_id_;
   int ret_;
   share::SCN commit_version_;
+  ObTxCommitCallback *link_next_;
 };
 
 class ObTxCommitCallbackTask : public ObTransTask

@@ -91,7 +91,7 @@ void ObIWkbGeomPoint::y(double d)
 bool ObIWkbGeomPolygon::is_empty_inner() const
 {
   const ObWkbGeomPolygon* poly = reinterpret_cast<const ObWkbGeomPolygon*>(val());
-  return (poly->exterior_ring().size() == 0) && (poly->inner_rings().size() == 0);
+  return (poly->exterior_ring().size(static_cast<ObGeoWkbByteOrder>(poly->get_bo())) == 0) && (poly->inner_rings().size() == 0);
 }
 
 int ObIWkbGeomCollection::get_sub(uint32_t idx, ObGeometry*& geo) const
@@ -189,7 +189,7 @@ bool ObIWkbGeogPolygon::is_empty_inner() const
   const ObWkbGeogPolygon* poly = reinterpret_cast<const ObWkbGeogPolygon*>(val());
   bool bret = true;
   if (OB_NOT_NULL(poly)) {
-    bret = (poly->exterior_ring().size() == 0) && (poly->inner_rings().size() == 0);
+    bret = (poly->exterior_ring().size(static_cast<ObGeoWkbByteOrder>(poly->get_bo())) == 0) && (poly->inner_rings().size() == 0);
   }
   return bret;
 }
@@ -290,7 +290,7 @@ int ObIWkbGeogCollection::do_visit(ObIGeoVisitor &visitor)
       ObWkbGeogCollection::iterator iter = collection->begin();
       uint64_t total_len = data_.length();
       uint64_t pos = WKB_COMMON_WKB_HEADER_LEN;
-      for ( ; iter != collection->end() && OB_SUCC(ret) && !visitor.is_end(this); iter++) {
+      for ( ; iter != collection->end() && OB_SUCC(ret) && !visitor.is_end(this); ++iter) {
         typename ObWkbGeogCollection::const_pointer sub_ptr = iter.operator->();
          if (pos + WKB_GEO_TYPE_SIZE + WKB_GEO_BO_SIZE > total_len) {
           ret = OB_INVALID_ARGUMENT;
@@ -455,7 +455,7 @@ int ObIWkbGeomCollection::do_visit(ObIGeoVisitor &visitor)
       ObWkbGeomCollection::iterator iter = collection->begin();
       uint64_t total_len = data_.length();
       uint64_t pos = WKB_COMMON_WKB_HEADER_LEN;
-      for ( ; iter != collection->end() && OB_SUCC(ret) && !visitor.is_end(this); iter++) {
+      for ( ; iter != collection->end() && OB_SUCC(ret) && !visitor.is_end(this); ++iter) {
         typename ObWkbGeomCollection::const_pointer sub_ptr = iter.operator->();
         if (pos + WKB_GEO_TYPE_SIZE + WKB_GEO_BO_SIZE > total_len) {
           ret = OB_INVALID_ARGUMENT;

@@ -162,6 +162,11 @@ struct ObDatumDesc {
   bool is_ext() const { return flag_ == FlagType::EXT; }
   void set_outrow() { null_ = 0; flag_ = FlagType::OUTROW; }
   bool is_outrow() const { return flag_ == FlagType::OUTROW; }
+
+  void set_flag(const FlagType &flag_type) { flag_ = flag_type; }
+  void set_has_lob_header() { flag_ = FlagType::HAS_LOB_HEADER; }
+  bool has_lob_header() const { return flag_ == FlagType::HAS_LOB_HEADER; }
+  void set_flag_none() { flag_ = FlagType::NONE; }
 } __attribute__ ((packed)) ;
 
 // Datum structure, multiple inheritance from ObDatumPtr and ObDatumDesc makes
@@ -175,6 +180,11 @@ public:
   const ObDatumDesc &desc() const { return *this; };
 
   ObDatum() : ObDatumPtr(), ObDatumDesc() {}
+  ObDatum(const char *ptr, uint32_t len, bool null) {
+    ptr_ = ptr;
+    len_ = len;
+    null_ = null;
+  }
 
   inline void reset() { new (this) ObDatum(); }
   static bool binary_equal(const ObDatum &r, const ObDatum &l)
@@ -262,6 +272,7 @@ public:
     return res;
   }
   inline const ObString get_string() const { return ObString(len_, ptr_); }
+  inline const ObString get_json() const { return get_string(); }
   inline int get_enumset_inner(ObEnumSetInnerValue &inner_value) const
   {
     int64_t pos = 0;
@@ -852,7 +863,8 @@ inline int ObDatum::from_obj(const ObObj &obj)
       case ObLobType:
       case ObJsonType:
       case ObGeometryType:
-      case ObUserDefinedSQLType: {
+      case ObUserDefinedSQLType:
+      case ObCollectionSQLType: {
         obj2datum<OBJ_DATUM_STRING>(obj);
         break;
       }
@@ -881,13 +893,15 @@ inline int ObDatum::from_obj(const ObObj &obj)
       case ObBitType:
       case ObEnumType:
       case ObSetType:
-      case ObIntervalYMType: {
+      case ObIntervalYMType:
+      case ObMySQLDateTimeType: {
         obj2datum<OBJ_DATUM_8BYTE_DATA>(obj);
         break;
       }
       case ObFloatType:
       case ObUFloatType:
-      case ObDateType: {
+      case ObDateType:
+      case ObMySQLDateType: {
         obj2datum<OBJ_DATUM_4BYTE_DATA>(obj);
         break;
       }
@@ -997,7 +1011,8 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       case ObLobType:
       case ObJsonType:
       case ObGeometryType:
-      case ObUserDefinedSQLType: {
+      case ObUserDefinedSQLType:
+      case ObCollectionSQLType: {
         datum2obj<OBJ_DATUM_STRING>(obj);
         break;
       }
@@ -1026,13 +1041,15 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       case ObBitType:
       case ObEnumType:
       case ObSetType:
-      case ObIntervalYMType: {
+      case ObIntervalYMType:
+      case ObMySQLDateTimeType: {
         datum2obj<OBJ_DATUM_8BYTE_DATA>(obj);
         break;
       }
       case ObFloatType:
       case ObUFloatType:
-      case ObDateType: {
+      case ObDateType:
+      case ObMySQLDateType: {
         datum2obj<OBJ_DATUM_4BYTE_DATA>(obj);
         break;
       }

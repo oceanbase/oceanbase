@@ -229,7 +229,8 @@ public:
       const share::ObTenantSwitchoverStatus &working_sw_status,
       ObTenantLSInfo& tenant_ls_info,
       common::ObMySQLTransaction &trans,
-      const share::ObLSFlag &ls_flag);
+      const share::ObLSFlag &ls_flag,
+      const uint64_t source_tenant_id);
   static int balance_ls_group(
       const bool need_execute_balance,
       ObTenantLSInfo& tenant_ls_info,
@@ -273,6 +274,20 @@ private:
       const uint64_t ls_group_id,
       ObUnitGroupInfo &src_info,
       ObUnitGroupInfo &dest_info);
+  static int construct_unit_group_id_and_primary_zone_for_clone_tenant_(
+      const share::ObLSID &ls_id,
+      const uint64_t source_tenant_id,
+      const uint64_t tenant_id,
+      uint64_t &unit_group_id,
+      ObZone &primary_zone);
+
+  static int construct_unit_group_id_and_primary_zone_(
+      const share::ObLSID &ls_id,
+      const uint64_t ls_group_id,
+      const share::ObLSFlag &ls_flag,
+      ObTenantLSInfo &tenant_ls_info,
+      uint64_t &unit_group_id,
+      ObZone &primary_zone);
   static int get_ls_all_replica_readable_scn_(const uint64_t tenant_id,
       const share::ObLSID &src_ls,
       share::SCN &readable_scn);

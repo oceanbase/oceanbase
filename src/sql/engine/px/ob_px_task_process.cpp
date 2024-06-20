@@ -28,6 +28,7 @@
 #include "sql/engine/px/exchange/ob_px_transmit_op.h"
 #include "sql/engine/px/exchange/ob_px_receive_op.h"
 #include "sql/engine/basic/ob_temp_table_insert_op.h"
+#include "sql/engine/basic/ob_temp_table_insert_vec_op.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/engine/join/ob_hash_join_op.h"
 #include "sql/engine/window_function/ob_window_function_op.h"
@@ -35,6 +36,8 @@
 #include "sql/engine/pdml/static/ob_px_multi_part_insert_op.h"
 #include "sql/engine/join/ob_join_filter_op.h"
 #include "sql/engine/px/ob_granule_pump.h"
+#include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
+#include "sql/engine/basic/ob_select_into_op.h"
 #include "observer/mysql/obmp_base.h"
 #include "lib/alloc/ob_malloc_callback.h"
 
@@ -137,13 +140,16 @@ int ObPxTaskProcess::process()
   ObSQLSessionInfo *session = (NULL == arg_.exec_ctx_
                                ? NULL
                                : arg_.exec_ctx_->get_my_session());
-  if (OB_ISNULL(session)) {
+  ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
+  if (OB_ISNULL(session)  || OB_ISNULL(sqc_handler)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("session is NULL", K(ret));
+    LOG_WARN("session or sqc_handler is NULL", K(ret));
   } else if (OB_FAIL(session->store_query_string(ObString::make_string("PX DFO EXECUTING")))) {
     LOG_WARN("store query string to session failed", K(ret));
   } else {
     // 设置诊断功能环境
+    ObPxRpcInitSqcArgs &arg = arg_.sqc_handler_->get_sqc_init_arg();
+    SQL_INFO_GUARD(arg.sqc_.get_monitoring_info().cur_sql_, session->get_cur_sql_id());
     const bool enable_perf_event = lib::is_diagnose_info_enabled();
     const bool enable_sql_audit =
         GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
@@ -163,6 +169,7 @@ int ObPxTaskProcess::process()
     arg_.exec_ctx_->set_sqc_handler(arg_.sqc_handler_);
     arg_.exec_ctx_->set_px_task_id(arg_.task_.get_task_id());
     arg_.exec_ctx_->set_px_sqc_id(arg_.task_.get_sqc_id());
+    arg_.exec_ctx_->set_branch_id(arg_.task_.get_branch_id());
     ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
 
@@ -195,8 +202,19 @@ int ObPxTaskProcess::process()
     }
 
     if (enable_sql_audit) {
+      if (OB_ISNULL(arg_.sqc_task_ptr_)){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the sqc task ptr is null", K(ret));
+      } else {
+        arg_.sqc_task_ptr_->set_memstore_read_row_count(exec_record.get_memstore_read_row_count());
+        arg_.sqc_task_ptr_->set_ssstore_read_row_count(exec_record.get_ssstore_read_row_count());
+      }
+    }
+
+    if (enable_sql_audit) {
       ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
       if ( OB_ISNULL(phy_plan)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(ret), K(phy_plan));
       } else {
         audit_record.try_cnt_++;
@@ -224,6 +242,8 @@ int ObPxTaskProcess::process()
         audit_record.is_hit_plan_cache_ = true;
         audit_record.is_multi_stmt_ = false;
         audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
+        audit_record.total_memstore_read_row_count_ = exec_record.get_memstore_read_row_count();
+        audit_record.total_ssstore_read_row_count_ = exec_record.get_ssstore_read_row_count();
       }
     }
     ObSQLUtils::handle_audit_record(false, EXECUTE_DIST, *session);
@@ -320,6 +340,10 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
         LOG_WARN("failed to apply error code", K(ret), K(tmp_ret));
       }
+      if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_,
+                                              OB_GOT_SIGNAL_ABORTING))) {
+        LOG_WARN("interrupt_tasks failed", K(tmp_ret));
+      }
     }
     if (OB_SUCCESS != (close_ret = root->close())) {
       LOG_WARN("fail close dfo op", K(ret), K(close_ret));
@@ -330,6 +354,7 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_INTERRUPT_QC_FAILED)
 int ObPxTaskProcess::do_process()
 {
   LOG_TRACE("[CMD] run task", "task", arg_.task_);
@@ -481,7 +506,12 @@ int ObPxTaskProcess::do_process()
                && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
       // 忽略虚拟表错误
     } else {
-      (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret, arg_.exec_ctx_);
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS == ERRSIM_INTERRUPT_QC_FAILED) {
+        if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_qc(arg_.task_, ret, arg_.exec_ctx_))) {
+          LOG_WARN("interrupt_qc failed", K(tmp_ret));
+        }
+      }
     }
   }
 
@@ -678,6 +708,23 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
       input->sqc_id_ = sqc_id_;
       input->dfo_id_ = dfo_id_;
     }
+  } else if (PHY_VEC_TEMP_TABLE_INSERT == op.type_) {
+    ObOperatorKit *kit = ctx.get_operator_kit(op.id_);
+    if (OB_ISNULL(kit) || OB_ISNULL(kit->op_) || OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else if (PHY_VEC_TEMP_TABLE_INSERT != kit->spec_->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("is not temp table insert operator", K(ret),
+               "spec", kit->spec_);
+    } else {
+      ObTempTableInsertVecOp *insert_op = static_cast<ObTempTableInsertVecOp*>(kit->op_);
+      insert_op->set_px_task(task_);
+      ObTempTableInsertVecOpInput *input = static_cast<ObTempTableInsertVecOpInput *>(kit->input_);
+      input->qc_id_ = NULL == task_ ? OB_INVALID_ID : task_->qc_id_;
+      input->sqc_id_ = sqc_id_;
+      input->dfo_id_ = dfo_id_;
+    }
   } else if (PHY_HASH_JOIN == op.type_) {
     if (OB_ISNULL(kit->input_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -691,6 +738,35 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
       } else if (hj_spec.is_shared_ht_) {
         input->set_task_id(task_id_);
         LOG_TRACE("debug pre apply info", K(task_id_), K(op.id_));
+      }
+    }
+  } else if (PHY_VEC_HASH_JOIN == op.type_) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObHashJoinVecSpec &hj_spec = static_cast<ObHashJoinVecSpec&>(op);
+      ObHashJoinVecInput *input = static_cast<ObHashJoinVecInput*>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else if (hj_spec.is_shared_ht_) {
+        input->set_task_id(task_id_);
+        LOG_TRACE("debug pre apply info", K(task_id_), K(op.id_));
+      }
+    }
+  } else if (PHY_SELECT_INTO == op.type_) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObSelectIntoOpInput *input = static_cast<ObSelectIntoOpInput*>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else {
+        input->set_task_id(task_id_);
+        input->set_sqc_id(sqc_id_);
       }
     }
   }
@@ -746,6 +822,23 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
     } else {
       ObHashJoinSpec &hj_spec = static_cast<ObHashJoinSpec&>(op);
       ObHashJoinInput *input = static_cast<ObHashJoinInput*>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else if (hj_spec.is_shared_ht_ && OB_SUCCESS != ret_) {
+        input->set_error_code(ret_);
+        LOG_TRACE("debug post apply info", K(ret_));
+      } else {
+        LOG_TRACE("debug post apply info", K(ret_));
+      }
+    }
+  } else if (PHY_VEC_HASH_JOIN == op.type_) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObHashJoinVecSpec &hj_spec = static_cast<ObHashJoinVecSpec&>(op);
+      ObHashJoinVecInput *input = static_cast<ObHashJoinVecInput*>(kit->input_);
       if (OB_ISNULL(input)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));

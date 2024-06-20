@@ -216,6 +216,9 @@ int ObBaseLogWriter::append_log(ObIBaseLogItem &log_item, const uint64_t timeout
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_STDERR("The ObBaseLogWriter has not been inited.\n");
+  } else if (has_stopped_) {
+    ret = OB_NOT_RUNNING;
+    LOG_STDERR("The ObBaseLogWriter is not running.\n");
   } else {
     int64_t abs_time = ObTimeUtility::current_time() + timeout_us;
     while (OB_SUCC(ret)) {

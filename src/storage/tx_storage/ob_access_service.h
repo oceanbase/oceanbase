@@ -39,6 +39,30 @@ struct ObDMLBaseParam;
 class ObLSService;
 class ObStoreCtx;
 
+class ObStoreCtxGuard
+{
+public:
+  ObStoreCtxGuard() : is_inited_(false), init_ts_(0)
+  {
+  }
+  ~ObStoreCtxGuard()
+  {
+    reset();
+  }
+  int init(const share::ObLSID &ls_id);
+  void reset();
+  ObStoreCtx &get_store_ctx() { return ctx_; }
+  ObLSHandle &get_ls_handle() { return handle_; }
+private:
+  bool is_inited_;
+  ObStoreCtx ctx_;
+  share::ObLSID ls_id_;
+  ObLSHandle handle_;
+  int64_t init_ts_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObStoreCtxGuard);
+};
+
 class ObAccessService : public common::ObITabletScan
 {
 public:
@@ -49,28 +73,6 @@ public:
 
   void destroy();
   void stop();
-public:
-  class ObStoreCtxGuard
-  {
-  public:
-    ObStoreCtxGuard() : is_inited_(false), init_ts_(0)
-    {
-    }
-    ~ObStoreCtxGuard()
-    {
-      reset();
-    }
-    int init(const share::ObLSID &ls_id);
-    void reset();
-    ObStoreCtx &get_store_ctx() { return ctx_; }
-    ObLSHandle &get_ls_handle() { return handle_; }
-  private:
-    bool is_inited_;
-    ObStoreCtx ctx_;
-    share::ObLSID ls_id_;
-    ObLSHandle handle_;
-    int64_t init_ts_;
-  };
 public:
   // pre_check_lock
   // @param [in] ls_id, this check op will be processed at which logstream.
@@ -119,6 +121,14 @@ public:
       const int64_t expected_task_count,
       common::ObIAllocator &allocator,
       common::ObArrayArray<ObStoreRange> &multi_range_split_array) override;
+  int get_write_store_ctx_guard(
+      const share::ObLSID &ls_id,
+      const int64_t timeout,
+      transaction::ObTxDesc &tx_desc,
+      const transaction::ObTxReadSnapshot &snapshot,
+      const int16_t branch_id,
+      ObStoreCtxGuard &ctx_guard,
+      const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL());
 
   // DML interface
   int delete_rows(
@@ -202,12 +212,15 @@ public:
       common::ObIArray<int64_t> &cg_micro_cnt_arr) const;
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
-
+  int check_data_disk_full_(
+      const share::ObLSID &ls_id,
+      bool &is_full);
   int get_write_store_ctx_guard_(
       const share::ObLSID &ls_id,
       const int64_t timeout,
       transaction::ObTxDesc &tx_desc,
       const transaction::ObTxReadSnapshot &snapshot,
+      const int16_t branch_id,
       const concurrent_control::ObWriteFlag write_flag,
       ObStoreCtxGuard &ctx_guard,
       const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL());
@@ -224,14 +237,10 @@ protected:
       const common::ObTabletID &tablet_id,
       const ObStoreAccessType access_type,
       const ObDMLBaseParam &dml_param,
+      const int64_t lock_wait_timeout_ts,
       transaction::ObTxDesc &tx_desc,
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
-  int audit_tablet_opt_dml_stat(
-      const ObDMLBaseParam &dml_param,
-      const common::ObTabletID &tablet_id,
-      const common::ObOptDmlStatType dml_stat_type,
-      const int64_t affected_rows);
   int get_source_ls_tx_table_guard_(
       const ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
@@ -242,6 +251,11 @@ protected:
       const share::SCN &snapshot,
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
+  static OB_INLINE int64_t get_lock_wait_timeout_(const int64_t abs_lock_timeout, const int64_t stmt_timeout)
+  {
+    return (abs_lock_timeout < 0 ? stmt_timeout : (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
+  }
+
 private:
   bool is_inited_;
   uint64_t tenant_id_;

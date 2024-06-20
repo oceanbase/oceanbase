@@ -158,7 +158,7 @@ bool ObPsStmtItem::check_erase_inc_ref_count()
   return need_erase;
 }
 
-void ObPsStmtItem::dec_ref_count_check_erase()
+void ObPsStmtItem::dec_ref_count()
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("ps item dec ref count", K(*this));
@@ -606,9 +606,8 @@ bool ObPsStmtInfo::check_erase_inc_ref_count()
   return need_erase;
 }
 
-bool ObPsStmtInfo::dec_ref_count_check_erase()
+void ObPsStmtInfo::dec_ref_count()
 {
-  bool need_erase = false;
   LOG_TRACE("ps info dec ref count", K(*this));
   int64_t ref_count = ATOMIC_SAF(&ref_count_, 1);
   if (ref_count > 0) {
@@ -617,12 +616,11 @@ bool ObPsStmtInfo::dec_ref_count_check_erase()
     }
     LOG_TRACE("ps info dec ref count", K(ref_count), K(*this));
   } else if (0 == ref_count) {
-    need_erase = true;
-    LOG_INFO("free ps info", K(ref_count), K(*this), K(need_erase));
+    LOG_INFO("free ps info", K(ref_count), K(*this));
   } else if (ref_count < 0) {
     BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "ObPsStmtInfo %p ref count < 0, ref_count = %ld", this, ref_count);
   }
-  return need_erase;
+  return;
 }
 
 int64_t ObPsStmtInfo::to_string(char *buf, const int64_t buf_len) const

@@ -23,11 +23,11 @@
 #include <fcntl.h>
 #include "lib/coro/co_var.h"
 #include "lib/signal/ob_signal_struct.h"
-#include "lib/signal/safe_snprintf.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_defer.h"
 #include "lib/ob_abort.h"
+#include "util/easy_string.h"
 
 namespace oceanbase
 {
@@ -83,7 +83,7 @@ private:
       buf[pos] = '\0';                                              \
       static TLOCAL(ByteBuf<256>, log_buf);                         \
       int64_t tid = static_cast<int64_t>(syscall(__NR_gettid));     \
-      ssize_t log_len = safe_snprintf(log_buf, sizeof(log_buf), DFMT(fmt), buf, #log_level, \
+      ssize_t log_len = lnprintf(log_buf, sizeof(log_buf), DFMT(fmt), buf, #log_level, \
                                  __FUNCTION__, __FILENAME__, __LINE__,    \
                                  tid, get_tl_trace_id().value(), ##args); \
       log_buf[sizeof(log_buf) - 1] = '\n';                          \
@@ -133,7 +133,13 @@ void safe_current_datetime_str_v2(char *buf, int64_t len, int64_t &pos);
 
 int wait_readable(int fd, int64_t timeout);
 
+int64_t safe_parray(char *buf, int64_t len, int64_t *array, int size);
+
 } // namespace common
 } // namespace oceanbase
+
+extern "C" {
+  int64_t safe_parray_c(char *buf, int64_t len, int64_t *array, int size);
+}
 
 #endif // OCEANBASE_SIGNAL_UTILS_H_

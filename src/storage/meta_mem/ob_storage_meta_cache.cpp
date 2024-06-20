@@ -758,7 +758,7 @@ int ObStorageMetaCache::batch_get_meta_and_bypass_cache(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(meta_types), K(keys));
   } else {
-    // TODO: @zhuixin implement batch read in shared block reader.
+    // TODO: implement batch read in shared block reader.
     for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
       const ObStorageMetaValue::MetaType &meta_type = meta_types.at(i);
       const ObStorageMetaKey &key = keys.at(i);

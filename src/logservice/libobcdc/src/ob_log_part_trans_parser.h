@@ -34,9 +34,13 @@ public:
   enum { DATA_OP_TIMEOUT = 200 * 1000 };
 
 public:
-  virtual int parse(PartTransTask &task, volatile bool &stop_flag) = 0;
+  // is_build_baseline: in data_dict refresh mode and build baseline stage, we need ddl parser
+  // to parse ddl stmt and delete dropped table
+  virtual int parse(PartTransTask &task, const bool is_build_baseline, volatile bool &stop_flag) = 0;
 
   virtual int parse(ObLogEntryTask &task, volatile bool &stop_flag) = 0;
+
+  virtual void print_stat_info() = 0;
 };
 
 
@@ -53,7 +57,7 @@ public:
   virtual ~ObLogPartTransParser();
 
 public:
-  virtual int parse(PartTransTask &task, volatile bool &stop_flag);
+  virtual int parse(PartTransTask &task, const bool is_build_baseline, volatile bool &stop_flag);
   virtual int parse(ObLogEntryTask &task, volatile bool &stop_flag);
 
 public:
@@ -62,20 +66,30 @@ public:
       IObLogMetaManager *meta_manager,
       const int64_t cluster_id);
   void destroy();
+  void print_stat_info();
 
 private:
   int check_row_need_rollback_(
       const PartTransTask &part_trans_task,
       const MutatorRow &row,
       bool &need_rollback);
-  int parse_ddl_redo_log_(PartTransTask &task, volatile bool &stop_flag);
+  int parse_ddl_redo_log_(PartTransTask &task, const bool is_build_baseline, volatile bool &stop_flag);
   int parse_stmts_(
+      ObLogTenant *tenant,
+      const RedoLogMetaNode &redo_log_node,
+      const bool is_build_baseline,
+      ObLogEntryTask &redo_log_entry_task,
+      PartTransTask &task,
+      uint64_t &row_index,
+      volatile bool &stop_flag);
+  int parse_direct_load_inc_stmts_(
       ObLogTenant *tenant,
       const RedoLogMetaNode &redo_log_node,
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &task,
       uint64_t &row_index,
       volatile bool &stop_flag);
+
   // try parse mutator_header to get mutator type(support if ob_version >= 320)
   // and move forward cur_pos to skip header if header is supported
   //
@@ -117,6 +131,7 @@ private:
   int parse_ddl_stmts_(
       const uint64_t row_index,
       const ObLogAllDdlOperationSchemaInfo &all_ddl_operation_table_schema,
+      const bool is_build_baseline,
       MutatorRow &row,
       PartTransTask &task,
       volatile bool &stop_flag);
@@ -131,34 +146,88 @@ private:
       MutatorRow &row,
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &part_trans_task);
-  const transaction::ObTxSEQ &get_row_seq_(PartTransTask &task, MutatorRow &row) const;
-  int alloc_mutator_row_(
+  const transaction::ObTxSEQ get_row_seq_(PartTransTask &task, MutatorRow &row) const;
+  int alloc_memtable_mutator_row_(
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
-      MutatorRow *&row);
-  void free_mutator_row_(
+      MemtableMutatorRow *&row);
+  void free_memtable_mutator_row_(
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
-      MutatorRow *&row);
-  int parse_mutator_row_(
+      MemtableMutatorRow *&row);
+  int parse_memtable_mutator_row_(
+      ObLogTenant *tenant,
+      const ObTabletID &tablet_id,
+      const char *redo_data,
+      const int64_t redo_data_len,
+      const bool is_build_baseline,
+      int64_t &pos,
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MemtableMutatorRow *&row,
+      ObCDCTableInfo &table_info,
+      bool &is_ignored);
+  int alloc_macroblock_mutator_row_(
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      const blocksstable::ObDatumRow *datum_row,
+      const common::ObStoreRowkey *row_key,
+      transaction::ObTxSEQ &seq_no,
+      blocksstable::ObDmlRowFlag &dml_flag,
+      MacroBlockMutatorRow *&row);
+  void free_macroblock_mutator_row_(
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MacroBlockMutatorRow *&row);
+  int parse_macroblock_mutator_row_(
+      ObLogTenant *tenant,
+      const ObTabletID &tablet_id,
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MacroBlockMutatorRow *&row,
+      ObCDCTableInfo &table_info,
+      bool &is_ignored);
+  int check_row_need_ignore_(
+      const bool is_build_baseline,
+      ObLogTenant *tenant,
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MutatorRow &row,
+      const ObTabletID &tablet_id,
+      ObCDCTableInfo &table_info,
+      bool &is_ignored);
+  int handle_mutator_ext_info_log_(
       ObLogTenant *tenant,
       const ObTabletID &tablet_id,
       const char *redo_data,
       const int64_t redo_data_len,
       int64_t &pos,
       PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task);
+  int parse_ext_info_log_mutator_row_(
+      ObLogTenant *tenant,
+      const char *redo_data,
+      const int64_t redo_data_len,
+      int64_t &pos,
+      PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
-      MutatorRow *&row,
-      ObCDCTableInfo &table_info,
+      MemtableMutatorRow *&row,
       bool &is_ignored);
+
 private:
   bool              inited_;
   IObLogBRPool      *br_pool_;
   IObLogMetaManager *meta_manager_;
+  ObLogAllDdlOperationSchemaInfo all_ddl_operation_table_schema_info_;
 
   // The cluster ID of this cluster
   // Set as the unique ID of the DDL
   int64_t           cluster_id_;
+
+  // Stat for White Black List
+  int64_t           total_log_size_;
+  int64_t           remaining_log_size_;
+  int64_t           last_stat_time_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogPartTransParser);

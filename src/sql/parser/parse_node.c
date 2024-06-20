@@ -806,3 +806,22 @@ bool nodename_equal(const ParseNode *node, const char *pattern, int64_t pat_len)
   }
   return result;
 }
+
+extern bool nodename_is_sdo_geometry_type(const ParseNode *node)
+{
+  bool result = true;
+  if (NULL == node || NULL == node->str_value_) {
+    result = false;
+  } else if (nodename_equal(node, "SDO_GEOMETRY", strlen("SDO_GEOMETRY"))) {
+    result = true;
+  } else if (nodename_equal(node, "SDO_POINT_TYPE", strlen("SDO_POINT_TYPE"))) {
+    result = true;
+  } else if (nodename_equal(node, "SDO_ORDINATE_ARRAY", strlen("SDO_ORDINATE_ARRAY"))) {
+    result = true;
+  } else if (nodename_equal(node, "SDO_ELEM_INFO_ARRAY", strlen("SDO_ELEM_INFO_ARRAY"))) {
+    result = true;
+  } else {
+    result = false;
+  }
+  return result;
+}

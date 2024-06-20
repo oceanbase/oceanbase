@@ -36,8 +36,6 @@ int MockObAccessService::insert_rows(
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
-  ObStoreCtxGuard ctx_guard;
-  ObLSHandle handle;
   ObTabletHandle tablet_handle;
 
   if (OB_UNLIKELY(!ls_id.is_valid())
@@ -56,13 +54,14 @@ int MockObAccessService::insert_rows(
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
                                           dml_param,
+                                          dml_param.timeout_,
                                           tx_desc,
                                           tablet_handle,
-                                          ctx_guard))) {
+                                          *dml_param.store_ctx_guard_))) {
     LOG_WARN("fail to check query allowed", K(ret), K(ls_id), K(tablet_id));
   } else {
     ret = tablet_service_->insert_rows(tablet_handle,
-                                       ctx_guard.get_store_ctx(),
+                                       dml_param.store_ctx_guard_->get_store_ctx(),
                                        dml_param,
                                        column_ids,
                                        row_iter,

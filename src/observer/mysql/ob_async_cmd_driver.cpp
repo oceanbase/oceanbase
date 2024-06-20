@@ -91,6 +91,12 @@ int ObAsyncCmdDriver::response_result(ObMySQLResultSet &result)
     if (OB_UNLIKELY(!result.is_async_end_trans_submitted())) {
       ObOKPParam ok_param;
       ok_param.affected_rows_ = 0;
+      // The commit asynchronous callback logic needs
+      // to trigger the update logic of affected row first.
+      if (session_.is_session_sync_support()) {
+        session_.set_affected_rows_is_changed(ok_param.affected_rows_);
+      }
+      session_.set_affected_rows(ok_param.affected_rows_);
       ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
       ok_param.has_more_result_ = result.has_more_result();
       if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {

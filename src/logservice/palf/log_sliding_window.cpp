@@ -134,6 +134,7 @@ LogSlidingWindow::LogSlidingWindow()
     accum_group_log_size_(0),
     last_record_group_log_id_(FIRST_VALID_LOG_ID - 1),
     freeze_mode_(FEEDBACK_FREEZE_MODE),
+    has_pending_handle_submit_task_(false),
     is_inited_(false)
 {}
 
@@ -884,7 +885,7 @@ int LogSlidingWindow::try_push_log_to_children_(const int64_t curr_proposal_id,
   common::GlobalLearnerList degraded_learner_list;
   const bool need_presend_log = (state_mgr_->is_leader_active()) ? true : false;
   const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size());
-  if (OB_FAIL(mm_->get_children_list(children_list))) {
+  if (OB_FAIL(mm_->get_log_sync_children_list(children_list))) {
     PALF_LOG(WARN, "get_children_list failed", K(ret), K_(palf_id));
   } else if (children_list.is_valid()
       && OB_FAIL(log_engine_->submit_push_log_req(children_list, PUSH_LOG, curr_proposal_id,
@@ -900,12 +901,43 @@ int LogSlidingWindow::try_push_log_to_children_(const int64_t curr_proposal_id,
   return ret;
 }
 
+int LogSlidingWindow::try_handle_next_submit_log()
+{
+  int ret = OB_SUCCESS;
+  // Set has_pending_handle_submit_task_ to false forcedly.
+  (void) ATOMIC_STORE(&has_pending_handle_submit_task_, false);
+  bool unused_bool = false;
+  ret = handle_next_submit_log_(unused_bool);
+  return ret;
+}
+
+bool LogSlidingWindow::is_handle_thread_lease_expired(const int64_t thread_lease_begin_ts) const
+{
+  // The thread lease time for handle_next_submit_log_ is 50ms.
+  static const int64_t THREAD_LEASE_US = 50 * 1000L;
+  bool bool_ret = false;
+  if (OB_INVALID_TIMESTAMP != thread_lease_begin_ts
+      && ObTimeUtility::current_time() - thread_lease_begin_ts > THREAD_LEASE_US) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
 int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
 {
   int ret = OB_SUCCESS;
+  common::ObTimeGuard time_guard("handle_next_submit_log", 100 * 1000);
   if (submit_log_handling_lease_.acquire()) {
+    // record handle_thread_lease_begin_ts with current time
+    const int64_t thread_lease_begin_ts = ObTimeUtility::current_time();
+    bool is_lease_expired = false;
+    bool need_submit_async_task = false;
     do {
-      while (OB_SUCC(ret)) {
+      // If it revoke fails when thread lease expired, this thread need submit an async task.
+      if (is_lease_expired) {
+        need_submit_async_task = true;
+      }
+      while (OB_SUCC(ret) && !is_lease_expired) {
         LSN last_submit_lsn;
         LSN last_submit_end_lsn;
         int64_t last_submit_log_id = OB_INVALID_LOG_ID;
@@ -1095,8 +1127,32 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
           PALF_LOG(TRACE, "handle one submit log", K(ret), K_(palf_id), K_(self), K(tmp_log_id), K(is_committed_lsn_updated),
               K(is_need_submit), K(is_submitted));
         }
+        is_lease_expired = is_handle_thread_lease_expired(thread_lease_begin_ts);
       }
     } while (!submit_log_handling_lease_.revoke());
+
+    // Try push handle_submit_task into queue when lease revoke failed(lease expired).
+    if (OB_SUCC(ret) && need_submit_async_task) {
+      // This CAS is used to control only one task can be submitted into queue at any time.
+      if (ATOMIC_BCAS(&has_pending_handle_submit_task_, false, true)) {
+        // push task into queue until success
+        int tmp_ret = OB_SUCCESS;
+        while (OB_TMP_FAIL(log_engine_->submit_handle_submit_task())) {
+          if (REACH_TIME_INTERVAL(100 * 1000)) {
+            PALF_LOG(WARN, "submit_handle_submit_task failed", K(tmp_ret), K_(palf_id), K_(self));
+          }
+          if (OB_IN_STOP_STATE == tmp_ret) {
+            // The thread pool has been stopped, no need retry.
+            break;
+          } else {
+            // sleep 100us when submit task failed
+            ob_usleep(100);
+          }
+        }
+      } else {
+        // no need push task into queue
+      }
+    }
   }
   return ret;
 }
@@ -1444,10 +1500,18 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
       // follower need send ack to leader
       const ObAddr &leader = (state_mgr_->get_leader().is_valid())? \
           state_mgr_->get_leader(): state_mgr_->get_broadcast_leader();
+      LogConfigVersion config_version;
+      (void) mm_->get_config_version(config_version);
       // flush op for different role
+      // migrating replicas do not send responses for reducing its impact on the leader
       if (!leader.is_valid()) {
         PALF_LOG(TRACE, "current leader is invalid, cannot send ack", K(ret), K_(palf_id), K_(self),
             K(flush_cb_ctx), K(log_end_lsn), K(leader));
+      } else if (OB_UNLIKELY(config_version.is_initial_version())) {
+        if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+          PALF_LOG(INFO, "migrating replicas do not send responses", K(ret), K_(palf_id), K_(self),
+              K(log_end_lsn), K(leader));
+        }
       } else if (OB_FAIL(submit_push_log_resp_(leader, flush_cb_ctx.curr_proposal_id_, log_end_lsn))) {
         PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(leader), K(flush_cb_ctx));
       } else {}
@@ -2165,12 +2229,13 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       // Verifying accum_checksum firstly.
       if (OB_FAIL(checksum_.verify_accum_checksum(log_task_header.data_checksum_,
                                                   log_task_header.accum_checksum_))) {
-        PALF_LOG(ERROR, "verify_accum_checksum failed", K(ret), KPC(this), K(log_id), KPC(log_task));
+        PALF_LOG(ERROR, "verify_accum_checksum failed", KR(ret), KPC(this), K(log_id), KPC(log_task));
+        LOG_DBA_ERROR_V2(OB_LOG_CHECKSUM_MISMATCH, ret, "verify_accum_checksum failed");
       } else {
         // Call fs_cb.
         int tmp_ret = OB_SUCCESS;
         const int64_t fs_cb_begin_ts = ObTimeUtility::current_time();
-        if (OB_SUCCESS != (tmp_ret = palf_fs_cb_->update_end_lsn(palf_id_, log_end_lsn, log_proposal_id))) {
+        if (OB_SUCCESS != (tmp_ret = palf_fs_cb_->update_end_lsn(palf_id_, log_end_lsn, log_max_scn, log_proposal_id))) {
           if (OB_EAGAIN == tmp_ret) {
             if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
               PALF_LOG(WARN, "update_end_lsn eagain", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
@@ -3443,6 +3508,7 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
         // get log_task success
       }
       if (OB_SUCC(ret)) {
+        log_task->lock();
         SCN min_scn;
         if (log_task->is_valid()) {
           if (lsn != log_task->get_begin_lsn()
@@ -3466,7 +3532,6 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
           PALF_LOG(WARN, "try_update_max_lsn_ failed", K(ret), K_(palf_id), K_(self), K(lsn), K(group_entry_header));
         } else {
           // prev_log_proposal_id match or not exist, receive this log
-          log_task->lock();
           if (log_task->is_valid()) {
             // log_task可能被其他线程并发收取了,预期内容与本线程一致.
             if (group_entry_header.get_log_proposal_id() != log_task->get_proposal_id()) {
@@ -3483,11 +3548,11 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
             (void) log_task->set_freezed();
             log_task->set_freeze_ts(ObTimeUtility::current_time());
           }
-          log_task->unlock();
 
           PALF_LOG(TRACE, "submit_group_log", K(ret), K_(palf_id), K_(self), K(group_entry_header),
               K(log_id), KPC(log_task));
         }
+        log_task->unlock();
       }
     }
   }

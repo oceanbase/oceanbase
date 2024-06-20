@@ -144,7 +144,7 @@ struct ObLightSharedPtr// RAII used
     if (!is_valid()) {
       ret = OB_INVALID_DATA;
     } else {
-      int64_t start_sync_time = ObClockGenerator::getCurrentTime();
+      int64_t start_sync_time = ObClockGenerator::getClock();
       int64_t loop_times = 0;
       int64_t ref_cnt;
       while (1 != (ref_cnt = ctrl_ptr_->get_ref())) {

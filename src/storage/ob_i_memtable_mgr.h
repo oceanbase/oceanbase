@@ -17,7 +17,7 @@
 #include "lib/lock/ob_qsync_lock.h"
 #include "ob_tablet_id.h"
 #include "storage/ob_i_table.h"
-#include "storage/memtable/ob_multi_source_data.h"
+// #include "storage/memtable/ob_multi_source_data.h"
 
 namespace oceanbase
 {
@@ -27,12 +27,12 @@ class ObLogHandler;
 }
 namespace memtable
 {
-class ObIMemtable;
 class ObIMultiSourceDataUnit;
 }
 
 namespace storage
 {
+class ObIMemtable;
 class ObFreezer;
 
 using ObTableHdlArray = common::ObIArray<ObTableHandleV2>;
@@ -191,6 +191,31 @@ private:
   DISALLOW_COPY_AND_ASSIGN(MemMgrWLockGuard);
 };
 
+struct CreateMemtableArg {
+  int64_t schema_version_;
+  share::SCN clog_checkpoint_scn_;
+  share::SCN new_clog_checkpoint_scn_;
+  bool for_replay_;
+  bool for_inc_direct_load_;
+
+  CreateMemtableArg(const int64_t schema_version,
+                    const share::SCN clog_checkpoint_scn,
+                    const share::SCN new_clog_checkpoint_scn,
+                    const bool for_replay,
+                    const bool for_inc_direct_load)
+      : schema_version_(schema_version),
+        clog_checkpoint_scn_(clog_checkpoint_scn),
+        new_clog_checkpoint_scn_(new_clog_checkpoint_scn),
+        for_replay_(for_replay),
+        for_inc_direct_load_(for_inc_direct_load) {}
+
+  TO_STRING_KV(K(schema_version_),
+               K(clog_checkpoint_scn_),
+               K(new_clog_checkpoint_scn_),
+               K(for_replay_),
+               K(for_inc_direct_load_));
+};
+
 class ObIMemtableMgr
 {
 public:
@@ -199,7 +224,6 @@ public:
       ref_cnt_(0),
       tablet_id_(),
       freezer_(nullptr),
-      table_type_(ObITable::TableType::MAX_TABLE_TYPE),
       memtable_head_(0),
       memtable_tail_(0),
       t3m_(nullptr),
@@ -224,17 +248,8 @@ public:
       ObFreezer *freezer,
       ObTenantMetaMemMgr *t3m);
 
-  virtual int create_memtable(const share::SCN clog_checkpoint_scn,
-                              const int64_t schema_version,
-                              const share::SCN newest_clog_checkpoint_scn,
-                              const bool for_replay = false)
-  {
-    UNUSED(clog_checkpoint_scn);
-    UNUSED(schema_version);
-    UNUSED(newest_clog_checkpoint_scn);
-    UNUSED(for_replay);
-    return OB_NOT_SUPPORTED;
-  }
+  virtual void destroy() = 0;
+  virtual int create_memtable(const CreateMemtableArg &arg) = 0;
 
   virtual int get_active_memtable(ObTableHandleV2 &handle) const;
 
@@ -242,11 +257,9 @@ public:
 
   virtual int get_all_memtables(ObTableHdlArray &handle);
 
-  virtual void destroy() = 0;
+  virtual int get_boundary_memtable(ObTableHandleV2 &handle) { return OB_NOT_SUPPORTED; }
 
-  virtual int get_boundary_memtable(ObTableHandleV2 &handle) { return OB_SUCCESS; }
-
-  virtual int get_memtable_for_replay(share::SCN replay_scn, ObTableHandleV2 &handle)
+  virtual int get_memtable_for_replay(const share::SCN &replay_scn, ObTableHandleV2 &handle)
   {
     return OB_SUCCESS;
   }
@@ -290,12 +303,13 @@ public:
   }
   virtual int reset_storage_recorder() { return common::OB_SUCCESS; }
   virtual int set_frozen_for_all_memtables() { return common::OB_SUCCESS; }
-  virtual int set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle) { return OB_NOT_SUPPORTED; }
-  virtual int get_last_frozen_memtable(ObTableHandleV2 &handle) const { return OB_NOT_SUPPORTED; }
+  virtual int set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle, const int64_t trace_id = checkpoint::INVALID_TRACE_ID) { return OB_NOT_SUPPORTED; }
+  virtual int get_last_frozen_memtable(ObTableHandleV2 &handle) { return OB_NOT_SUPPORTED; }
+  virtual int get_direct_load_memtables_for_write(ObTableHdlArray &handles) { return OB_NOT_SUPPORTED; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   static int64_t get_memtable_idx(const int64_t pos) { return pos & (MAX_MEMSTORE_CNT - 1); }
-  virtual int release_head_memtable_(memtable::ObIMemtable *memtable, const bool force = false) = 0;
+  virtual int release_head_memtable_(ObIMemtable *memtable, const bool force = false) = 0;
   int add_memtable_(ObTableHandleV2 &memtable);
   int get_ith_memtable(const int64_t pos, ObTableHandleV2 &handle) const;
   int64_t get_memtable_count_() const { return memtable_tail_ - memtable_head_; }
@@ -315,11 +329,10 @@ protected:
   common::ObTabletID tablet_id_;
   // FIXME : whether freeze_handler on base class or not ?
   ObFreezer *freezer_;
-  ObITable::TableType table_type_;
   int64_t memtable_head_;
   int64_t memtable_tail_;
   ObTenantMetaMemMgr *t3m_;
-  memtable::ObIMemtable *tables_[MAX_MEMSTORE_CNT];
+  ObIMemtable *tables_[MAX_MEMSTORE_CNT];
   mutable MemtableMgrLock lock_;
 };
 

@@ -158,6 +158,8 @@ int ObLSRecoveryStatHandler::get_all_replica_min_readable_scn(share::SCN &readab
       }
     }
     //TODO maybe need consider readable scn in inner table
+    ObLSID ls_id = ls_->get_ls_id();
+    LOG_INFO("all ls readable scn", K(ls_id), K(readable_scn), K(replicas_scn_));
   }
   if (FAILEDx(get_latest_palf_stat_(palf_stat_second))) {
     LOG_WARN("get latest palf_stat failed", KR(ret), KPC_(ls));
@@ -351,6 +353,8 @@ int ObLSRecoveryStatHandler::try_reload_and_fix_config_version_(const palf::LogC
   share::SCN readable_scn;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
   uint64_t tenant_data_version = 0;
+  ObLSRecoveryStatOperator op;
+  ObLSID ls_id;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret));
   } else if (OB_UNLIKELY(!current_version.is_valid())) {
@@ -359,9 +363,14 @@ int ObLSRecoveryStatHandler::try_reload_and_fix_config_version_(const palf::LogC
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
+  } else if (FALSE_IT(ls_id = ls_->get_ls_id())) {
+    //can not be there
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(meta_tenant_id, tenant_data_version))) {
     LOG_WARN("failed to get min data version", KR(ret), K(tenant_id_), K(meta_tenant_id));
-  } else if (tenant_data_version < DATA_VERSION_4_3_0_0) {
+  } else if (tenant_data_version < MOCK_DATA_VERSION_4_2_4_0) {
+    //内部表config_version的汇报最开始是在4300版本上提交的
+    //后面patch到424版本上，由于是在4300分支的第一个版本号提交
+    //所以版本号判断直接小于等于424即可
     need_update = false;
     LOG_INFO("not ready to load and update config version", KR(ret), K(tenant_data_version));
   } else {
@@ -369,23 +378,21 @@ int ObLSRecoveryStatHandler::try_reload_and_fix_config_version_(const palf::LogC
     if (current_version != config_version_in_inner_) {
       need_update = true;
       FLOG_INFO("config version not match, need update",
-                K(config_version_in_inner_), K(current_version), "ls_id",
-                ls_->get_ls_id());
+          K(config_version_in_inner_), K(current_version), K(ls_id));
     }
   }
   if (OB_SUCC(ret) && need_update) {
-    ObLSRecoveryStatOperator op;
-    ObLSID ls_id = ls_->get_ls_id();
     if (OB_FAIL(op.update_ls_config_version(tenant_id_, ls_id, current_version,
     *GCTX.sql_proxy_, readable_scn))) {
       LOG_WARN("failed to update ls config version", KR(ret), K(tenant_id_), K(ls_id), K(current_version));
       //set invalid config version
       SpinWLockGuard guard(lock_);
       config_version_in_inner_.reset();
+    } else {
+      SpinWLockGuard guard(lock_);
+      readable_scn_in_inner_ = readable_scn;
+      config_version_in_inner_ = current_version;
     }
-    SpinWLockGuard guard(lock_);
-    readable_scn_in_inner_ = readable_scn;
-    config_version_in_inner_ = current_version;
   }
   return ret;
 }
@@ -480,20 +487,26 @@ int ObLSRecoveryStatHandler::gather_replica_readable_scn()
     LOG_WARN("config version change", KR(ret), K(palf_stat_second), K(palf_stat_first));
   } else {
     SpinWLockGuard guard(lock_);
+    ObLSID ls_id = ls_->get_ls_id();
     config_version_ = palf_stat_second.config_version_;
     replicas_scn_.reset();
     if (OB_FAIL(replicas_scn_.assign(replicas_scn))) {
       LOG_WARN("failed to replicas scn", KR(ret), K(replicas_scn));
     }
-    const int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;
-    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
-      LOG_INFO("ls readable scn in memory", KR(ret), K(replicas_scn_));
+    const int64_t PRINT_INTERVAL = 1 * 1000 * 1000L;
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_INTERVAL)) {
+      LOG_INFO("ls readable scn in memory", KR(ret), K(ls_id), K(replicas_scn_));
     } else {
-      LOG_TRACE("ls readable scn in memory", KR(ret), K(replicas_scn_));
+      LOG_TRACE("ls readable scn in memory", KR(ret), K(ls_id), K(replicas_scn_));
     }
   }
-  if (FAILEDx(try_reload_and_fix_config_version_(palf_stat_second.config_version_))) {
-    LOG_WARN("failed to try reload and fix config version", KR(ret), K(palf_stat_second));
+  if (is_strong_leader(palf_stat_second.role_)) {
+    //优先把正确的config_version更新到内部表和内存中
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(try_reload_and_fix_config_version_(palf_stat_second.config_version_))) {
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+      LOG_WARN("failed to try reload and fix config version", KR(tmp_ret), KR(ret), K(palf_stat_second));
+    }
   }
   return ret;
 }
@@ -546,10 +559,10 @@ int ObLSRecoveryStatHandler::do_get_each_replica_readable_scn_(
           K(proxy.get_results()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
-      if (OB_FAIL(return_code_array.at(i))) {
-        LOG_WARN("send rpc is failed", KR(ret), K(i), K(return_code_array));
+      if (OB_TMP_FAIL(return_code_array.at(i))) {
+        LOG_WARN("send rpc is failed", KR(tmp_ret), K(i), K(return_code_array));
       } else {
-        const auto *result = proxy.get_results().at(i);
+        const ObGetLSReplayedScnRes *result = proxy.get_results().at(i);
         if (OB_ISNULL(result)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("result is null", KR(ret), K(i), K(return_code_array));

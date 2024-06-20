@@ -24,60 +24,6 @@ namespace oceanbase
 namespace sql
 {
 
-int ObTextStringDatumResult::init(int64_t res_len, ObIAllocator *allocator)
-{
-  int ret = OB_SUCCESS;
-  if (is_init_) {
-    LOG_WARN("Lob: textstring result init already", K(ret), K(*this));
-  } else if (OB_ISNULL(allocator) && (OB_ISNULL(expr_) || OB_ISNULL(ctx_))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Lob: invalid arguments", K(ret), KP(expr_), KP(ctx_), KP(allocator));
-  } else if((OB_ISNULL(res_datum_))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Lob: invalid arguments", K(ret), K(type_), KPC(res_datum_));
-  } else if (OB_FAIL(ObTextStringResult::calc_buffer_len(res_len))) {
-    LOG_WARN("Lob: calc buffer len failed", K(ret), K(type_), K(res_len));
-  } else if (buff_len_ == 0) {
-    OB_ASSERT(has_lob_header_ == false); // empty result without header
-  } else {
-    buffer_ = OB_ISNULL(allocator)
-              ? expr_->get_str_res_mem(*ctx_, buff_len_) : (char *)allocator->alloc(buff_len_);
-    if (OB_ISNULL(buffer_)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("Lob: alloc buffer failed", K(ret), KP(expr_), KP(allocator), K(buff_len_));
-    } else if (OB_FAIL(fill_temp_lob_header(res_len))) {
-      LOG_WARN("Lob: fill_temp_lob_header failed", K(ret), K(type_));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    is_init_ = true;
-  }
-  return ret;
-}
-
-int ObTextStringDatumResult::init_with_batch_idx(int64_t res_len, int64_t batch_idx)
-{
-  int ret = OB_SUCCESS;
-  if((OB_ISNULL(expr_) || OB_ISNULL(ctx_) || OB_ISNULL(res_datum_))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Lob: invalid arguments", K(ret), K(type_), KP(expr_), KP(ctx_), KP(res_datum_));
-  } else if (OB_FAIL(ObTextStringResult::calc_buffer_len(res_len))) {
-    LOG_WARN("Lob: calc buffer len failed", K(ret), K(type_), KP(expr_), KP(ctx_), KP(res_datum_));
-  } else {
-    buffer_ = expr_->get_str_res_mem(*ctx_, buff_len_, batch_idx);
-    if (OB_FAIL(fill_temp_lob_header(res_len))) {
-      LOG_WARN("Lob: fill_temp_lob_header failed", K(ret), K(type_));
-    }
-  }
-  return ret;
-}
-
-void ObTextStringDatumResult::set_result()
-{
-  res_datum_->set_string(buffer_, pos_);
-}
-
-
 int ObTextStringObObjResult::init(int64_t res_len, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
@@ -116,6 +62,66 @@ void ObTextStringObObjResult::set_result()
     // Notice: should not be null or nop
     res_obj_->set_has_lob_header();
   }
+}
+
+int ObTextStringHelper::build_text_iter(
+    ObTextStringIter &text_iter,
+    ObExecContext *exec_ctx,
+    const sql::ObBasicSessionInfo *session,
+    ObIAllocator *res_allocator,
+    ObIAllocator *tmp_allocator)
+{
+  int ret = OB_SUCCESS;
+  ObLobAccessCtx *lob_access_ctx = nullptr;
+  if (OB_NOT_NULL(exec_ctx) && OB_FAIL(exec_ctx->get_lob_access_ctx(lob_access_ctx))) {
+    LOG_WARN("get_lob_access_ctx fail", K(ret));
+  } else if (OB_FAIL(text_iter.init(0/*buffer_len*/, session, res_allocator, tmp_allocator, lob_access_ctx))) {
+    LOG_WARN("init lob str iter fail", K(ret), K(text_iter));
+  }
+  return ret;
+}
+
+int ObTextStringHelper::read_real_string_data(
+    ObIAllocator *allocator,
+    ObObjType type,
+    ObCollationType cs_type,
+    bool has_lob_header,
+    ObString &str,
+    sql::ObExecContext *exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (is_lob_storage(type)) {
+    ObTextStringIter str_iter(type, cs_type, str, has_lob_header);
+    if (OB_FAIL(build_text_iter(str_iter, exec_ctx, nullptr/*session*/, allocator))) {
+      LOG_WARN("Lob: init lob str iter failed ", K(ret), K(str_iter));
+    } else if (OB_FAIL(str_iter.get_full_data(str))) {
+      COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
+    }
+  }
+  return ret;
+}
+
+int ObTextStringHelper::read_real_string_data(
+    ObIAllocator *allocator,
+    const common::ObObj &obj,
+    ObString &str,
+    sql::ObExecContext *exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObObjMeta& meta = obj.get_meta();
+  str = obj.get_string();
+  if (meta.is_null()) {
+    str.reset();
+  } else if (OB_FAIL(read_real_string_data(
+      allocator,
+      meta.get_type(),
+      meta.get_collation_type(),
+      obj.has_lob_header(),
+      str,
+      exec_ctx))) {
+    COMMON_LOG(WARN, "read_real_string_data fail", K(ret));
+  }
+  return ret;
 }
 
 int ob_adjust_lob_datum(const ObObj &origin_obj,

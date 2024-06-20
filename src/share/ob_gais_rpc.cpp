@@ -45,6 +45,32 @@ OB_SERIALIZE_MEMBER(ObGAISNextValRpcResult, start_inclusive_, end_inclusive_, sy
 
 OB_SERIALIZE_MEMBER(ObGAISCurrValRpcResult, sequence_value_, sync_value_);
 
+OB_DEF_SERIALIZE(ObGAISNextSequenceValRpcResult)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(nextval_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObGAISNextSequenceValRpcResult)
+{
+  int ret = OB_SUCCESS;
+  share::ObSequenceValue nextval;
+  OB_UNIS_DECODE(nextval);
+  // deep copy is needed to ensure that the memory of nextval_ will not be reclaimed
+  if (OB_SUCC(ret) && OB_FAIL(nextval_.assign(nextval))) {
+    LOG_WARN("fail to assign nextval", K(ret));
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObGAISNextSequenceValRpcResult)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(nextval_);
+  return len;
+}
+
 int ObGAISNextValRpcResult::init(const uint64_t start_inclusive, const uint64_t end_inclusive,
                                  const uint64_t sync_value)
 {
@@ -114,6 +140,46 @@ int ObGAISClearAutoIncCacheP::process()
   return ret;
 }
 
+int ObGAISBroadcastAutoIncCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  ObGlobalAutoIncService *gais = nullptr;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  if (OB_ISNULL(gais = MTL(ObGlobalAutoIncService *))) {
+    // ignore if tenant service not in this server
+  } else if (OB_FAIL(gais->receive_global_autoinc_cache(arg_))) {
+    LOG_WARN("handle clear autoinc cache request failed", K(ret));
+  }
+  return ret;
+}
+
+int ObGAISNextSequenceP::process()
+{
+  int ret = OB_SUCCESS;
+  ObGlobalAutoIncService *gais = nullptr;
+  const uint64_t tenant_id = arg_.schema_.get_tenant_id();
+  if (tenant_id != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant is not match", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(gais = MTL(ObGlobalAutoIncService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("global sequence service is null", K(ret));
+  } else {
+    if (OB_FAIL(gais->handle_next_sequence_request(arg_, result_))) {
+      LOG_WARN("handle next sequence request failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObGAISNextSequenceValRpcResult::init(const share::ObSequenceValue nextval)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(nextval_.assign(nextval))) {
+    LOG_WARN("fail to assign nextval", K(ret));
+  }
+  return ret;
+}
 } // obrpc
 
 namespace share
@@ -285,6 +351,77 @@ int ObGAISRequestRpc::clear_autoinc_cache(const ObAddr &server, const ObGAISAuto
     LOG_WARN("post gais request failed", KR(ret), K(server), K(msg));
   } else {
     LOG_TRACE("clear autoinc cache success", K(server), K(msg));
+  }
+  return ret;
+}
+
+int ObGAISRequestRpc::broadcast_global_autoinc_cache(const ObGAISBroadcastAutoIncCacheReq &msg)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("gais request rpc not inited", KR(ret));
+  } else if (!msg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(msg));
+  } else {
+    ObZone null_zone;
+    ObSEArray<ObAddr, 8> server_list;
+    if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
+      LOG_WARN("fail to get alive server", K(ret));
+    } else {
+      const uint64_t tenant_id = msg.tenant_id_;
+      const static int64_t BROADCAST_OP_TIMEOUT = 1000 * 1000; // 1s
+      for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); i++) {
+        ObAddr &dest = server_list.at(i);
+        if (dest == self_) {
+          // ignore broadcast to self
+        } else if (OB_FAIL(rpc_proxy_->to(dest).by(tenant_id).timeout(BROADCAST_OP_TIMEOUT)
+                                               .broadcast_autoinc_cache(msg, NULL))) {
+          LOG_WARN("fail to broadcast autoinc cache to server", K(ret), K(msg), K(dest));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_DEBUG("broadcast autoinc cache success", K(dest), K(msg));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObGAISRequestRpc::next_sequence_val(const common::ObAddr &server,
+                       const ObGAISNextSequenceValReq &msg,
+                       ObGAISNextSequenceValRpcResult &rpc_result)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t timeout = THIS_WORKER.get_timeout_remain();
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("gais request rpc not inited", KR(ret));
+  } else if (!server.is_valid() || !msg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server), K(msg));
+  } else if (server == self_) {
+    // Use local calls instead of rpc
+    ObGlobalAutoIncService *gais = nullptr;
+    const uint64_t tenant_id = msg.schema_.get_tenant_id();
+    MTL_SWITCH(tenant_id) {
+      if (OB_ISNULL(gais = MTL(ObGlobalAutoIncService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("global autoinc service is null", K(ret));
+      } else if (OB_FAIL(gais->handle_next_sequence_request(msg, rpc_result))) {
+        LOG_WARN("post local gais require autoinc request failed", KR(ret), K(server), K(msg));
+      } else {
+        LOG_TRACE("post local require autoinc request success", K(msg), K(rpc_result));
+      }
+    }
+  } else if (OB_UNLIKELY(OB_ISNULL(rpc_proxy_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc proxy is null", K(ret));
+  }else if (OB_FAIL(rpc_proxy_->to(server).by(msg.schema_.get_tenant_id()).timeout(timeout).next_sequence_val(msg, rpc_result))) {
+    LOG_WARN("post require autoinc request failed", KR(ret), K(server), K(msg));
+  } else {
+    LOG_TRACE("post remote require autoinc request success", K(server), K(msg), K(rpc_result));
   }
   return ret;
 }

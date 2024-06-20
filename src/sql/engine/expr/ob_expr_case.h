@@ -26,7 +26,7 @@ namespace sql
 class ObExprCase : public ObExprOperator
 {
 public:
-  explicit  ObExprCase(common::ObIAllocator &alloc);
+  explicit ObExprCase(common::ObIAllocator &alloc);
   virtual ~ObExprCase();
 
   virtual int calc_result_typeN(ObExprResType &type,
@@ -42,6 +42,11 @@ public:
                              ObEvalCtx &ctx,
                              const ObBitVector &skip,
                              const int64_t batch_size);
+  static int eval_case_vector(const ObExpr &expr,
+                             ObEvalCtx &ctx,
+                             const ObBitVector &skip,
+                             const EvalBound &bound);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCase);

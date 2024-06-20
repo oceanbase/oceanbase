@@ -1038,7 +1038,7 @@ OB_DEF_SERIALIZE_SIZE(ObUDTTypeInfo)
       len += coll_info_->get_serialize_size();
     }
   }
-  for (int64_t i = 0; i < attr_cnt; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < attr_cnt; ++i) {
     const ObUDTTypeAttr* local_attr = type_attrs_.at(i);
     if (OB_ISNULL(local_attr)) {
       ret = OB_ERR_UNEXPECTED;

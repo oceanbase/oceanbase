@@ -178,6 +178,9 @@ int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, SCN
       ret = OB_EAGAIN;
       ARCHIVE_LOG(WARN, "ls archive progress not match with tenant, need retry",
           K(key), K(is_madatory), K(info));
+    } else if (info.state_.is_interrupted()) {
+      ignore = true;
+      ARCHIVE_LOG(WARN, "ls archive progress is interrupted, skip it", K(id), K(info));
     } else {
       lsn = palf::LSN(info.lsn_);
       scn = info.checkpoint_scn_;

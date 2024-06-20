@@ -223,9 +223,10 @@ public:
   static const int64_t MEDIUM_COMPAT_VERSION_V2 = 2; // for add last_medium_snapshot_
   static const int64_t MEDIUM_COMPAT_VERSION_V3 = 3; // for stanby tenant, not throw medium info
   static const int64_t MEDIUM_COMPAT_VERSION_V4 = 4; // after this version, use is_schema_changed on medium info
+  static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V4;
 private:
   static const int32_t SCS_ONE_BIT = 1;
-  static const int32_t SCS_RESERVED_BITS = 32;
+  static const int32_t SCS_RESERVED_BITS = 27;
 
 public:
   union {
@@ -237,6 +238,8 @@ public:
       uint64_t medium_merge_reason_             : 8;
       uint64_t is_schema_changed_               : SCS_ONE_BIT;
       uint64_t tenant_id_                       : 16; // record tenant_id of ls primary_leader, just for throw medium
+      uint64_t co_major_merge_type_             : 4;
+      uint64_t is_skip_tenant_major_            : SCS_ONE_BIT;
       uint64_t reserved_                        : SCS_RESERVED_BITS;
     };
   };

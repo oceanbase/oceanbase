@@ -20,6 +20,7 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObShardingInfo;
 
 /* 缓存query range的信息 */
 class QueryRangeInfo {
@@ -138,10 +139,14 @@ public:
     is_index_back_(false),
     is_index_global_(false),
     is_geo_index_(false),
+    is_fulltext_index_(false),
+    is_multivalue_index_(false),
     range_info_(),
     ordering_info_(),
     interesting_order_info_(OrderingFlag::NOT_MATCH),
-    interesting_order_prefix_count_(0) {
+    interesting_order_prefix_count_(0),
+    partition_info_(NULL),
+    sharding_info_(NULL) {
   }
   virtual ~IndexInfoEntry() {}
   QueryRangeInfo &get_range_info() { return range_info_; }
@@ -169,8 +174,16 @@ public:
   void set_is_index_global(const bool is_index_global) { is_index_global_ = is_index_global; }
   bool is_index_geo() const { return is_geo_index_; }
   void set_is_index_geo(const bool is_index_geo) { is_geo_index_ = is_index_geo; }
+  bool is_fulltext_index() const { return is_fulltext_index_; }
+  void set_is_fulltext_index(const bool is_fulltext_index) { is_fulltext_index_ = is_fulltext_index; }
+  void set_partition_info(ObTablePartitionInfo *partition_info) { partition_info_ = partition_info; }
+  ObTablePartitionInfo *get_partition_info() const { return partition_info_; }
+  void set_sharding_info(ObShardingInfo *sharding_info) { sharding_info_ = sharding_info; }
+  ObShardingInfo *get_sharding_info() const { return sharding_info_; }
+  bool is_multivalue_index() const { return is_multivalue_index_; }
+  void set_is_multivalue_index(const bool is_multivalue_index) { is_multivalue_index_ = is_multivalue_index; }
   TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global),
-               K_(range_info), K_(ordering_info), K_(interesting_order_info),
+               K_(is_fulltext_index), K_(is_multivalue_index), K_(range_info), K_(ordering_info), K_(interesting_order_info),
                K_(interesting_order_prefix_count));
 private:
   uint64_t index_id_;
@@ -178,12 +191,16 @@ private:
   bool is_index_back_;
   bool is_index_global_;
   bool is_geo_index_;
+  bool is_fulltext_index_;
+  bool is_multivalue_index_;
   QueryRangeInfo range_info_;
   OrderingInfo ordering_info_;
   int64_t interesting_order_info_;  // 记录索引的序在stmt中的哪些地方用到 e.g. join, group by, order by
   // 索引序在stmt中使用到的最大前缀数
   // idx1(a,b,c), idx2(a,b),  对于order by a,b 两个索引使用到的最大前缀都是2
   int64_t interesting_order_prefix_count_;
+  ObTablePartitionInfo *partition_info_;
+  ObShardingInfo *sharding_info_;
   DISALLOW_COPY_AND_ASSIGN(IndexInfoEntry);
 };
 

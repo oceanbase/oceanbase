@@ -44,6 +44,7 @@ protected:
   virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
+  virtual bool is_kv_processor() override { return true; }
 
 private:
   typedef std::pair<common::ObString, int32_t> ColumnIdx;
@@ -106,6 +107,26 @@ private:
       }
     }
 
+    return ret;
+  }
+  int process_insert(const table::ObITableEntity &new_entity, int64_t &affected_rows)
+  {
+    int ret = OB_SUCCESS;
+    if (!tb_ctx_.is_ttl_table()) {
+      ret = process_dml_op<table::TABLE_API_EXEC_INSERT>(new_entity, affected_rows);
+    } else {
+      ret = process_dml_op<table::TABLE_API_EXEC_TTL>(new_entity, affected_rows);
+    }
+    return ret;
+  }
+  int process_insert_up(const table::ObITableEntity &new_entity, int64_t &affected_rows)
+  {
+    int ret = OB_SUCCESS;
+    if (!tb_ctx_.is_ttl_table()) {
+      ret = process_dml_op<table::TABLE_API_EXEC_INSERT_UP>(new_entity, affected_rows);
+    } else {
+      ret = process_dml_op<table::TABLE_API_EXEC_TTL>(new_entity, affected_rows);
+    }
     return ret;
   }
 private:

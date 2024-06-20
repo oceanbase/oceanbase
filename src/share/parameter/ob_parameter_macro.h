@@ -57,14 +57,14 @@ access_specifier:                                                               
     }                                                                          \
     TO_STRING_KV(K_(value_str))                                                \
   protected:                                                                   \
-    const char *value_default_str_ =  def;                                     \
-    const char *get_default_ptr() const override                               \
+    const char *value_default_ptr() const override                             \
     {                                                                          \
       return value_default_str_;                                               \
     }                                                                          \
+    static constexpr const char* value_default_str_ = def;                     \
   } name;
 
-#define _DEF_PARAMETER_RANGE_EASY(access_specifier, param, scope, name, def, args...)      \
+#define _DEF_PARAMETER_RANGE_EASY(access_specifier, param, scope, name, def, args...)           \
 access_specifier:                                                                          \
   class ObConfig ## param ## Item ## _ ## name                                 \
       : public common::ObConfig ## param ## Item                               \
@@ -80,11 +80,11 @@ access_specifier:                                                               
       return *this;                                                            \
     }                                                                          \
   protected:                                                                   \
-    const char *value_default_str_ =  def;                                     \
-    const char *get_default_ptr() const override                               \
+    const char *value_default_ptr() const override                             \
     {                                                                          \
       return value_default_str_;                                               \
     }                                                                          \
+    static constexpr const char* value_default_str_ = def;                     \
   } name;
 
 #define _DEF_PARAMETER_CHECKER_EASY(access_specifier, param, scope, name, def, checker, args...) \
@@ -106,13 +106,12 @@ access_specifier:                                                               
       return *this;                                                            \
     }                                                                          \
   protected:                                                                   \
-    const char *value_default_str_ =  def;                                     \
-    const char *get_default_ptr() const override                               \
+    const char *value_default_ptr() const override                             \
     {                                                                          \
       return value_default_str_;                                               \
     }                                                                          \
+    static constexpr const char* value_default_str_ = def;                     \
   } name;
-
 #define _DEF_PARAMETER_PARSER_EASY(access_specifier, param, scope, name, def, parser, args...)   \
 access_specifier:                                                                          \
   class ObConfig ## param ## Item ## _ ## name                                 \
@@ -122,13 +121,13 @@ access_specifier:                                                               
     ObConfig ## param ## Item ## _ ## name()                                   \
         : common::ObConfig ## param ## Item(                                   \
             local_container(), scope, #name, def, 							               \
-			new (std::nothrow) parser(), args) {}                                    \
-   protected:                                                                  \
-    const char *value_default_str_ =  def;                                     \
-    const char *get_default_ptr() const override                               \
+            new (std::nothrow) parser(), args) {}                                    \
+  protected:                                                                   \
+    const char *value_default_ptr() const override                             \
     {                                                                          \
       return value_default_str_;                                               \
     }                                                                          \
+    static constexpr const char* value_default_str_ = def;                     \
   } name;
 
 ////////////////////////////////////////////////////////////////////////////////

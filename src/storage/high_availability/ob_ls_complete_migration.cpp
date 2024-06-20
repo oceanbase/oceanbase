@@ -177,6 +177,7 @@ int ObLSCompleteMigrationDagNet::start_running_for_migration_()
   int tmp_ret = OB_SUCCESS;
   ObInitialCompleteMigrationDag *initial_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -185,8 +186,10 @@ int ObLSCompleteMigrationDagNet::start_running_for_migration_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_dag))) {
-    LOG_WARN("failed to alloc initial dag ", K(ret));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_.arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
+  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_dag))) {
+    LOG_WARN("failed to alloc initial dag ", K(ret), K(prio));
   } else if (OB_FAIL(initial_dag->init(this))) {
     LOG_WARN("failed to init initial dag", K(ret));
   } else if (OB_FAIL(add_dag_into_dag_net(*initial_dag))) {
@@ -253,8 +256,9 @@ int ObLSCompleteMigrationDagNet::fill_comment(char *buf, const int64_t buf_len) 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls complete migration dag net do not init ", K(ret));
-  } else if (OB_FAIL(ctx_.task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
-    LOG_WARN("failed to trace task id to string", K(ret), K(ctx_));
+  } else if (OB_UNLIKELY(0 > ctx_.task_id_.to_string(task_id_str, MAX_TRACE_ID_LENGTH))) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("failed to get trace id string", K(ret), K(ctx_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
           "ObLSCompleteMigrationDagNet: tenant_id=%s, ls_id=%s, migration_type=%d, trace_id=%s",
           to_cstring(ctx_.tenant_id_), to_cstring(ctx_.arg_.ls_id_), ctx_.arg_.type_, task_id_str))) {
@@ -326,9 +330,10 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
     ObMigrationStatus &new_migration_status)
 {
   int ret = OB_SUCCESS;
-  bool is_valid_member = false;
-  bool is_ls_deleted = true;
+  bool is_valid_member = true;
+  bool is_ls_deleted = false;
   new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  bool is_tenant_dropped = false;
   if (!ObMigrationStatusHelper::is_valid(current_migration_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("current migration status is invalid", K(ret), K(current_migration_status));
@@ -337,13 +342,24 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
       && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != current_migration_status) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration status is unexpected", K(ret), K(current_migration_status), K(ctx_));
-  } else if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ls.get_ls_id(), is_valid_member))) {
-    LOG_WARN("failed to check self is valid member", K(ret), K(ctx_));
-  } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls.get_ls_id(), is_ls_deleted))) {
-    LOG_WARN("failed to get ls status from inner table", K(ret), K(ls));
-  } else if (OB_FAIL(ObMigrationStatusHelper::trans_rebuild_fail_status(
-      current_migration_status, is_valid_member, is_ls_deleted, new_migration_status))) {
-    LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ls.get_ls_id(), is_valid_member))) {
+      is_valid_member = true; // reset value if fail
+      LOG_WARN("failed to check self is valid member", K(ret), K(tmp_ret), K(ctx_));
+    }
+    if (OB_TMP_FAIL(ObStorageHAUtils::check_ls_deleted(ls.get_ls_id(), is_ls_deleted))) {
+      is_ls_deleted = false; // reset value if fail
+      LOG_WARN("failed to get ls status from inner table", K(ret), K(tmp_ret), K(ls));
+    }
+    if (OB_TMP_FAIL(check_tenant_is_dropped_(is_tenant_dropped))) {
+      is_tenant_dropped = false;
+      LOG_WARN("failed to check tenant is droppping or dropped", K(ret), K(tmp_ret), K(ctx_));
+    }
+    if (FAILEDx(ObMigrationStatusHelper::trans_rebuild_fail_status(
+        current_migration_status, is_valid_member, is_ls_deleted, is_tenant_dropped, new_migration_status))) {
+      LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
+    }
   }
   return ret;
 }
@@ -355,8 +371,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   static const int64_t UPDATE_MIGRATION_STATUS_INTERVAL_MS = 100 * 1000; //100ms
   ObTenantDagScheduler *scheduler = nullptr;
   int32_t result = OB_SUCCESS;
-  share::ObTenantBase *tenant_base = MTL_CTX();
-  omt::ObTenant *tenant = nullptr;
+  bool is_tenant_deleted = false;
 
   DEBUG_SYNC(BEFORE_COMPLETE_MIGRATION_UPDATE_STATUS);
 
@@ -369,10 +384,6 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_ISNULL(tenant_base)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
-  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
   } else {
     while (!is_finish) {
       ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
@@ -396,10 +407,6 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       } else if (scheduler->has_set_stop()) {
         ret = OB_SERVER_IS_STOPPING;
         LOG_WARN("tenant dag scheduler has set stop, stop migration dag net", K(ret), K(ctx_));
-        break;
-      } else if (tenant->has_stopped()) {
-        ret = OB_TENANT_HAS_BEEN_DROPPED;
-        LOG_WARN("tenant has been stopped, stop migration dag net", K(ret), K(ctx_));
         break;
       } else {
         bool in_final_state = false;
@@ -515,6 +522,28 @@ int ObLSCompleteMigrationDagNet::report_ls_meta_table_(ObLS *ls)
       //overwrite ret
       LOG_WARN("failed to submit ls update task", K(ret), K(ctx_));
     }
+  }
+  return ret;
+}
+
+int ObLSCompleteMigrationDagNet::check_tenant_is_dropped_(
+    bool &is_tenant_dropped)
+{
+  int ret = OB_SUCCESS;
+  schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+  schema::ObSchemaGetterGuard guard;
+  is_tenant_dropped = false;
+  const ObTenantSchema *tenant_schema = nullptr;
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "schema_service is nullptr", KR(ret));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(ctx_));
+  } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(ctx_.tenant_id_, is_tenant_dropped))) {
+    LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(ctx_));
+  } else if (is_tenant_dropped) {
+    LOG_INFO("tenant is already dropped", K(ctx_), K(is_tenant_dropped));
   }
   return ret;
 }
@@ -638,8 +667,9 @@ int ObInitialCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len
     LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
   } else if (FALSE_IT(self_ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObInitialCompleteMigrationDag: ls_id = %s, migration_type = %s",
-         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_)))) {
+         "ObInitialCompleteMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+         ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
   }
   return ret;
@@ -773,6 +803,7 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
   ObFinishCompleteMigrationDag *finish_complete_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   ObInitialCompleteMigrationDag *initial_complete_migration_dag = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -783,10 +814,12 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
   } else if (OB_ISNULL(initial_complete_migration_dag = static_cast<ObInitialCompleteMigrationDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial complete migration dag should not be NULL", K(ret), KP(initial_complete_migration_dag));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(start_complete_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, start_complete_dag))) {
       LOG_WARN("failed to alloc start complete migration dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag(finish_complete_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, finish_complete_dag))) {
       LOG_WARN("failed to alloc finish complete migration dag", K(ret));
     } else if (OB_FAIL(start_complete_dag->init(dag_net_))) {
       LOG_WARN("failed to init start complete migration dag", K(ret));
@@ -867,8 +900,9 @@ int ObStartCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) 
     LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
   } else if (FALSE_IT(self_ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObStartPrepareMigrationDag: ls_id = %s, migration_type = %s",
-         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_)))) {
+         "ObStartPrepareMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+         ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
   }
   return ret;
@@ -1434,6 +1468,8 @@ int ObStartCompleteMigrationTask::change_member_list_()
     const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     LOG_INFO("succeed change member list", "cost", cost_ts, "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_);
   }
+
+  DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
   return ret;
 }
 
@@ -1955,7 +1991,9 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
         if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("ls wait replay to max minor sstable end log ts, retry next loop", "arg", ctx_->arg_,
               "wait_replay_start_ts", wait_replay_start_ts,
-              "current_ts", current_ts);
+              "current_ts", current_ts,
+              "max_minor_end_scn", max_minor_end_scn_,
+              "current_replay_scn", current_replay_scn);
         }
 
         if (current_ts - wait_replay_start_ts < timeout) {
@@ -2065,8 +2103,9 @@ int ObFinishCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len)
     LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
   } else if (FALSE_IT(self_ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObFinishCompleteMigrationDag: ls_id = %s, migration_type = %s",
-         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_)))) {
+         "ObFinishCompleteMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+         ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
   }
   return ret;
@@ -2193,6 +2232,7 @@ int ObFinishCompleteMigrationTask::generate_prepare_initial_dag_()
   ObInitialCompleteMigrationDag *initial_complete_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   ObFinishCompleteMigrationDag *finish_complete_migration_dag = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2203,8 +2243,10 @@ int ObFinishCompleteMigrationTask::generate_prepare_initial_dag_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_complete_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_complete_dag))) {
       LOG_WARN("failed to alloc initial complete migration dag ", K(ret));
     } else if (OB_FAIL(initial_complete_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial complete migration dag", K(ret));

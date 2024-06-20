@@ -317,7 +317,8 @@ ObBackupDataBaseTask::ObBackupDataBaseTask()
     backup_user_ls_scn_(),
     end_scn_(),
     backup_path_(),
-    backup_status_()
+    backup_status_(),
+    is_only_calc_stat_(false)
 {
 }
 
@@ -340,6 +341,7 @@ int ObBackupDataBaseTask::deep_copy(const ObBackupDataBaseTask &that)
     backup_user_ls_scn_ = that.backup_user_ls_scn_;
     end_scn_ = that.end_scn_;
     backup_status_.status_ = that.backup_status_.status_;
+    is_only_calc_stat_ = that.is_only_calc_stat_;
   }
   return ret;
 }
@@ -377,7 +379,7 @@ int ObBackupDataBaseTask::build(const share::ObBackupJobAttr &job_attr, const sh
   int ret = OB_SUCCESS;
   ObBackupScheduleTaskKey key;
   if (!job_attr.is_valid() || !ls_attr.is_valid()) {
-    ret = OB_SUCCESS;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(job_attr), K(ls_attr));
   } else if (OB_FAIL(key.init(ls_attr.tenant_id_, job_attr.job_id_, ls_attr.task_id_, ls_attr.ls_id_.id(), BackupJobType::BACKUP_DATA_JOB))) {
     LOG_WARN("failed to init backup schedule task key", K(ret), K(job_attr), K(ls_attr));
@@ -422,7 +424,8 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
+      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid()
+          && replica.get_restore_status().is_none()
           && ObReplicaTypeCheck::is_full_replica(replica.get_replica_type()) // TODO(zeyong) 4.3 allow R replica backup later
           && !check_replica_in_black_server_(replica, black_servers)) { 
         ObBackupServer server;
@@ -434,7 +437,8 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
     }
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
+      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid()
+          && replica.get_restore_status().is_none()
           && (replica_array.count() == 1 || !check_replica_in_black_server_(replica, black_servers))) {
         // if only has one replica. no use black server.
         ObBackupServer server;
@@ -571,7 +575,7 @@ int ObBackupComplLogTask::build(const share::ObBackupJobAttr &job_attr, const sh
   ObBackupScheduleTaskKey key;
   share::SCN start_replay_scn;
   if (!job_attr.is_valid() || !ls_attr.is_valid()) {
-    ret = OB_SUCCESS;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(job_attr), K(ls_attr));
   } else if (OB_FAIL(key.init(ls_attr.tenant_id_, job_attr.job_id_, ls_attr.task_id_, ls_attr.ls_id_.id(), BackupJobType::BACKUP_DATA_JOB))) {
     LOG_WARN("failed to init backup schedule task key", K(ret), K(job_attr), K(ls_attr));
@@ -590,6 +594,7 @@ int ObBackupComplLogTask::build(const share::ObBackupJobAttr &job_attr, const sh
     backup_status_.status_ = set_task_attr.status_.status_;
     turn_id_ = ls_attr.turn_id_;
     retry_id_ = ls_attr.retry_id_;
+    is_only_calc_stat_ = ObBackupStatus::BEFORE_BACKUP_LOG == set_task_attr.status_.status_;
     if (OB_FAIL(backup_path_.assign(job_attr.backup_path_))) {
       LOG_WARN("failed to assign backup dest", K(ret), "backup dest", job_attr.backup_path_);
     } else if (OB_FAIL(set_optional_servers_(ls_attr.black_servers_))) {
@@ -615,6 +620,7 @@ int ObBackupComplLogTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   arg.start_scn_ = start_scn_;
   arg.end_scn_ = end_scn_;
   arg.backup_type_ = backup_type_.type_;
+  arg.is_only_calc_stat_ = is_only_calc_stat_;
   if (OB_FAIL(arg.backup_path_.assign(backup_path_))) {
     LOG_WARN("failed to assign backup dest", K(ret), K(backup_path_));
   } else if (OB_FAIL(rpc_proxy.to(get_dst()).backup_completing_log(arg))) {
@@ -966,6 +972,42 @@ int ObBackupDataLSMetaTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   } else {
     LOG_INFO("start to backup meta", K(arg));
   }
+  return ret;
+}
+
+int ObBackupDataLSMetaFinishTask::clone(void *input_ptr, ObBackupScheduleTask *&out_task) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(input_ptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(input_ptr));
+  } else {
+    ObBackupDataLSMetaFinishTask *my_task = new (input_ptr) ObBackupDataLSMetaFinishTask();
+    if (OB_ISNULL(my_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("taks is nullptr", K(ret));
+    } else if (OB_FAIL(my_task->ObBackupDataBaseTask::deep_copy(*this))) {
+      LOG_WARN("fail to deep copy base task", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      out_task = my_task;
+    } else if (OB_NOT_NULL(my_task)) {
+      my_task->~ObBackupDataLSMetaFinishTask();
+      my_task = nullptr;
+    }
+  }
+  return ret;
+}
+
+int64_t ObBackupDataLSMetaFinishTask::get_deep_copy_size() const
+{
+  return sizeof(ObBackupDataLSMetaFinishTask);
+}
+
+int ObBackupDataLSMetaFinishTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(rpc_proxy);
   return ret;
 }
 

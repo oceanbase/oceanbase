@@ -559,7 +559,8 @@ void ObRatelimitMgr::calculate_s2r_max_bw(ObRegionBwStat *region_bw_stat)
   if (IS_NOT_INIT) {
     OB_LOG(ERROR, "ObRatelimitMgr not inited.");
   } else if (OB_ISNULL(region_bw_stat)) {
-    OB_LOG(ERROR, "invalid argument", KP(region_bw_stat));
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(ERROR, "invalid argument", KP(region_bw_stat), K(ret));
   } else if (OB_FAIL(net_->get_easy_region_latest_bw(region_bw_stat->region_.ptr(),
                                     &(region_bw_stat->local_server_cur_bw_),
                                     &(region_bw_stat->local_server_max_bw_)))) {

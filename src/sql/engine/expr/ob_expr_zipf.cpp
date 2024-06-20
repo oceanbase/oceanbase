@@ -93,6 +93,8 @@ int ObExprZipf::calc_result_type3(ObExprResType &result_type,
   size.set_calc_type(ObIntType);
   rand_expr.set_calc_type(ObIntType);
   result_type.set_int();
+  ObAccuracy default_acc = ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][ObIntType];
+  result_type.set_accuracy(default_acc);
 	return ret;
 }
 

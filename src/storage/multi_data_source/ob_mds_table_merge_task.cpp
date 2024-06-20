@@ -33,7 +33,7 @@ namespace storage
 namespace mds
 {
 ObMdsTableMergeTask::ObMdsTableMergeTask()
-  : ObITask(ObITaskType::TASK_TYPE_MDS_TABLE_MERGE),
+  : ObITask(ObITaskType::TASK_TYPE_MDS_MINI_MERGE),
     is_inited_(false),
     mds_merge_dag_(nullptr)
 {
@@ -48,7 +48,7 @@ int ObMdsTableMergeTask::init()
   } else if (OB_ISNULL(dag_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("dag must not be null", K(ret));
-  } else if (OB_UNLIKELY(ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_TABLE_MERGE != dag_->get_type())) {
+  } else if (OB_UNLIKELY(ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINI_MERGE != dag_->get_type())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC_(dag));
   } else {
@@ -91,6 +91,12 @@ int ObMdsTableMergeTask::process()
     ctx.static_param_.start_time_ = common::ObTimeUtility::fast_current_time();
     const share::ObLSID &ls_id = ctx.get_ls_id();
     const common::ObTabletID &tablet_id = ctx.get_tablet_id();
+#ifdef ERRSIM
+    if (GCONF.errsim_test_tablet_id.get_value() > 0 && tablet_id.id() == GCONF.errsim_test_tablet_id.get_value()) {
+      LOG_INFO("test tablet mds dump start", K(ret), K(tablet_id));
+      DEBUG_SYNC(BEFORE_DDL_LOB_META_TABLET_MDS_DUMP);
+    }
+#endif
     const share::SCN &flush_scn = mds_merge_dag_->get_flush_scn();
     ctx.static_param_.scn_range_.end_scn_ = flush_scn;
     ctx.static_param_.version_range_.snapshot_version_ = flush_scn.get_val_for_tx();

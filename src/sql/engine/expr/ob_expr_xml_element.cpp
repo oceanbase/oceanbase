@@ -14,10 +14,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_xml_element.h"
 #include "sql/engine/ob_exec_context.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -82,11 +80,10 @@ int ObExprXmlElement::calc_result_typeN(ObExprResType& type,
           } else if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
             types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
-        } else if (ObUserDefinedSQLType == types_stack[i].get_type()) { // xmltype
-          types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+        } else if (ObUserDefinedSQLType == types_stack[i].get_type()) {
+          // xmltype, do noting
         } else if (ObExtendType == types_stack[i].get_type()) {
           types_stack[i].set_calc_type(ObUserDefinedSQLType);
-          types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         } else {
           types_stack[i].set_calc_type(ObVarcharType);
           types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
@@ -100,7 +97,6 @@ int ObExprXmlElement::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-#ifdef OB_BUILD_ORACLE_XML
 int ObExprXmlElement::eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
@@ -179,7 +175,7 @@ int ObExprXmlElement::eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       if (val_type == ObUserDefinedSQLType) { // xmltype
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                               ObObjType::ObLongTextType,
-                                                              xml_arg->datum_meta_.cs_type_,
+                                                              ObCollationType::CS_TYPE_BINARY,
                                                               true, xml_value_data))) {
           LOG_WARN("fail to get real data.", K(ret), K(xml_value_data));
         // } else if (OB_FAIL(ObXMLExprHelper::check_xml_document_unparsed(mem_ctx, xml_value_data, validity))) {
@@ -190,7 +186,9 @@ int ObExprXmlElement::eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         } else {
           ObObj temp_value;
           temp_value.set_string(ObUserDefinedSQLType, xml_value_data);
-          value_vec.push_back(temp_value);
+          if (OB_FAIL(value_vec.push_back(temp_value))) {
+            LOG_WARN("failed to push back temp value.", K(ret), K(temp_value));
+          }
         }
       } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
                                                               xml_arg->datum_meta_,
@@ -321,8 +319,8 @@ int ObExprXmlElement::construct_value_array(ObIAllocator &allocator, const ObStr
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      res_value.push_back(temp_value);
+    if (OB_SUCC(ret) && OB_FAIL(res_value.push_back(temp_value))) {
+      LOG_WARN("failed to push back value.", K(ret), K(temp_value));
     }
   }
   return ret;
@@ -436,7 +434,7 @@ int ObExprXmlElement::construct_element(ObMulModeMemCtx* mem_ctx,
     LOG_WARN("element node is NULL", K(ret));
   } else if (OB_FAIL(element->init())) {
     LOG_WARN("element init failed", K(ret));
-  } else if (FALSE_IT(element->set_key(name))) {
+  } else if (FALSE_IT(element->set_xml_key(name))) {
   } else if (OB_FAIL(element->alter_member_sort_policy(false))) {
     LOG_WARN("fail to sort child element", K(ret));
   } else if (OB_FAIL(construct_attribute(mem_ctx, attr, element))) {
@@ -452,7 +450,6 @@ int ObExprXmlElement::construct_element(ObMulModeMemCtx* mem_ctx,
   }
   return ret;
 }
-#endif
 
 int ObExprXmlElement::cg_expr(ObExprCGCtx &expr_cg_ctx,
                               const ObRawExpr &raw_expr,

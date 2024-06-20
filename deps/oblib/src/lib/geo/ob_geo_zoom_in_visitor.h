@@ -31,6 +31,8 @@ public:
   int visit(ObGeometry *geo) override { UNUSED(geo); return OB_SUCCESS; }
   int visit(ObGeographPoint *geo);
   int visit(ObIWkbGeogPoint *geo);
+  int visit(ObCartesianPoint *geo);
+  int visit(ObIWkbGeomPoint *geo);
 private:
   template<typename T_Point>
   int zoom_in_point(T_Point *geo);

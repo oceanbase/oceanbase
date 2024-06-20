@@ -19,6 +19,7 @@
 #include "storage/lob/ob_lob_util.h"
 #include "storage/tx/ob_trans_define_v4.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/lob/ob_lob_manager.h"
 
 namespace oceanbase
 {
@@ -66,7 +67,8 @@ ObTextStringIter::~ObTextStringIter()
 int ObTextStringIter::init(uint32_t buffer_len,
                            const sql::ObBasicSessionInfo *session,
                            ObIAllocator *res_allocator,
-                           ObIAllocator *tmp_allocator)
+                           ObIAllocator *tmp_allocator,
+                           ObLobAccessCtx *lob_access_ctx)
 {
   int ret = OB_SUCCESS;
   if (is_init_) {
@@ -88,7 +90,7 @@ int ObTextStringIter::init(uint32_t buffer_len,
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN,"Lob: invalid lob", K(ret));
     } else if (FALSE_IT(is_outrow_ = !locator.has_inrow_data())) {
-    } else if (!is_outrow_) { // inrow lob always get full data, no need ctx_
+    } else if (!is_outrow_ && !locator.is_delta_temp_lob()) { // inrow lob always get full data, no need ctx_
     } else if (OB_ISNULL(res_allocator)) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "Lob: iter with null allocator", K(ret));
@@ -101,6 +103,7 @@ int ObTextStringIter::init(uint32_t buffer_len,
       } else {
         ctx_ = new (ctx_buffer) ObLobTextIterCtx(locator, session, res_allocator, buffer_len);
         ctx_ ->init();
+        ctx_->lob_access_ctx_ = lob_access_ctx;
       }
     }
   }
@@ -118,65 +121,46 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
 {
   int ret = OB_SUCCESS;
   int64_t query_timeout = 0;
-  ObMemLobTxInfo *tx_info = NULL;
-  ObMemLobLocationInfo *location_info = NULL;
-  ObLobCommon *disk_loc = NULL;
-  ObString disk_loc_str;
+  int64_t timeout_ts = 0;
+  storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
 
   if (OB_ISNULL(lob_iter_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Lob: invalid lob iter ctx.", K(ret));
+  } else if (OB_ISNULL(allocator = (allocator == nullptr ? lob_iter_ctx->alloc_: allocator))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Lob: allocator is null", K(ret), KP(allocator), KP(lob_iter_ctx->alloc_));
   } else if (!lob_iter_ctx->locator_.is_persist_lob()) {
     ret = OB_NOT_IMPLEMENT;
     COMMON_LOG(WARN, "Lob: outrow temp lob is not supported", K(ret), K(lob_iter_ctx->locator_));
-  } else if (OB_FAIL(lob_iter_ctx->locator_.get_disk_locator(disk_loc_str))) {
-    COMMON_LOG(WARN, "Lob: get disk locator failed.", K(ret));
-  } else if (FALSE_IT(disk_loc = reinterpret_cast<ObLobCommon *>(disk_loc_str.ptr()))){
-  } else if (OB_ISNULL(disk_loc) || disk_loc->is_init_ == false) {
+  } else if (lob_iter_ctx->locator_.is_delta_temp_lob()) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Lob: invalid disk_locator.", K(ret), KP(disk_loc));
-  } else {
-    if (OB_ISNULL(lob_iter_ctx->session_)) {
-      query_timeout = ObTimeUtility::current_time() + 60 * USECS_PER_SEC;
-    } else if (OB_FAIL(lob_iter_ctx->session_->get_query_timeout(query_timeout))) {
-      COMMON_LOG(WARN, "Lob: get_query_timeout failed.", K(ret), K(*lob_iter_ctx));
-    }
+    COMMON_LOG(WARN, "Lob: is delta lob", K(ret), K(lob_iter_ctx->locator_));
+  } else if (OB_ISNULL(lob_iter_ctx->session_)) {
+    query_timeout = ObTimeUtility::current_time() + 60 * USECS_PER_SEC;
+  } else if (OB_FAIL(lob_iter_ctx->session_->get_query_timeout(query_timeout))) {
+    COMMON_LOG(WARN, "Lob: get_query_timeout failed.", K(ret), K(*lob_iter_ctx));
+  }
+
+  if (OB_SUCC(ret)) {
+    timeout_ts = (lob_iter_ctx->session_ == NULL)
+                    ? query_timeout
+                    : (lob_iter_ctx->session_->get_query_start_time() + query_timeout);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(lob_iter_ctx->locator_.get_tx_info(tx_info))) {
-  } else if (OB_FAIL(lob_iter_ctx->locator_.get_location_info(location_info))) {
-  } else {
-    param.tx_desc_ = NULL;
-    param.snapshot_.core_.tx_id_ = tx_info->snapshot_tx_id_;
-    param.snapshot_.core_.version_.convert_for_tx(tx_info->snapshot_version_);
-    param.snapshot_.core_.scn_ = transaction::ObTxSEQ::cast_from_int(tx_info->snapshot_seq_);
-    param.snapshot_.valid_= true;
-    param.snapshot_.source_ = transaction::ObTxReadSnapshot::SRC::LS;
-    param.snapshot_.snapshot_lsid_ = share::ObLSID(location_info->ls_id_);
-
-    param.ls_id_ = share::ObLSID(location_info->ls_id_);
-    param.sql_mode_ = (lob_iter_ctx->session_ == NULL) ? SMO_DEFAULT : lob_iter_ctx->session_->get_sql_mode();
-
-    param.tablet_id_ = ObTabletID(location_info->tablet_id_);
-    if (allocator == nullptr) {
-      allocator = lob_iter_ctx->alloc_;
-    }
-    param.allocator_ = allocator;
-    int64_t disk_loc_handle_size = disk_loc_str.length();
-    param.lob_common_ = disk_loc;
-    param.handle_size_ = disk_loc_handle_size;
-    param.byte_size_ = param.lob_common_->get_byte_size(param.handle_size_);
-    param.coll_type_ = cs_type;
-    if (!lob_iter_ctx->locator_.is_lob_disk_locator()) {
-      param.lob_locator_ = &lob_iter_ctx->locator_;
-    }
-    param.timeout_ = (lob_iter_ctx->session_ == NULL)
-                      ? query_timeout
-                      : (lob_iter_ctx->session_->get_query_start_time() + query_timeout);
-    param.scan_backward_ = false;
-    param.offset_ = 0; // use 0 offset when reading full lob data
-    param.len_ = 0;
+  } else if (OB_FAIL(lob_mngr->build_lob_param(param, *allocator, cs_type,
+                  0, UINT64_MAX, timeout_ts, lob_iter_ctx->locator_))) {
+    LOG_WARN("build_lob_param fail", K(ret), K(*lob_iter_ctx));
+  } else if (! param.snapshot_.core_.tx_id_.is_valid()) {
+    // if tx_id is valid, means read may be in a tx
+    // lob can not set read_latest flag
+    // so reuse lob aux table iterator only if tx_id is invalid
+    // for exmaple
+    //   insert into t values (1,'v0');
+    //   insert ignore into t values (1,'v11'), (1,'v222') on duplicate key update c1 = md5(c1);
+    // second read shoud get "v11" not "v0"
+    param.access_ctx_ = lob_iter_ctx->lob_access_ctx_;
   }
 
   return ret;
@@ -229,6 +213,81 @@ int ObTextStringIter::get_outrow_lob_full_data(ObIAllocator *allocator /*nullptr
             ctx_->content_byte_len_ = output_data.length();
             // Notice: content_len_ (char len) is not updated!
             COMMON_LOG(DEBUG,"Lob: read output for obstring iter.", K(output_data));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTextStringIter::get_delta_lob_full_data(ObLobLocatorV2& lob_locator, ObIAllocator *allocator, ObString &data_str)
+{
+  int ret = OB_SUCCESS;
+  ObLobCommon *lob_common = nullptr;
+  ObLobDiffHeader *diff_header = nullptr;
+  if (! ob_is_json(type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "only json support", K(ret), K(type_));
+  } else if (OB_FAIL(lob_locator.get_disk_locator(lob_common))) {
+    COMMON_LOG(WARN, "get disk locator failed.", K(ret), K(lob_locator));
+  } else if (! lob_common->in_row_) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "Unsupport out row delta tmp lob locator", K(ret), KPC(lob_common));
+  } else if (OB_ISNULL(diff_header = reinterpret_cast<ObLobDiffHeader*>(lob_common->buffer_))) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "diff_header is null", K(ret), KPC(lob_common));
+  } else {
+    char *buf = diff_header->data_;
+    int64_t data_len = diff_header->persist_loc_size_;
+    int64_t pos = 0;
+    ObLobPartialData partial_data;
+    if (OB_FAIL(partial_data.init())) {
+      COMMON_LOG(WARN, "map create fail", K(ret));
+    } else if (OB_FAIL(partial_data.deserialize(buf, data_len, pos))) {
+      COMMON_LOG(WARN, "deserialize partial data fail", K(ret), K(data_len), K(pos));
+    } else {
+      storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
+      storage::ObLobAccessParam param;
+      ctx_->locator_ = partial_data.locator_;
+      if (OB_FAIL(init_lob_access_param(param, ctx_, cs_type_, allocator))) {
+        COMMON_LOG(WARN, "init_lob_access_param fail", K(ret));
+      } else if (!param.ls_id_.is_valid() || !param.tablet_id_.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        COMMON_LOG(WARN, "Lob: invalid param.", K(ret), K(param));
+      } else if ((param.len_ = param.byte_size_) <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN,"Lob: calc byte size is negative.", K(ret), K(param));
+      } else if (param.byte_size_ > OB_MAX_LONGTEXT_LENGTH) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN,"Lob: unable to read full data over 512M lob.", K(ret), K(param));
+      } else if (partial_data.data_length_ > OB_MAX_LONGTEXT_LENGTH) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN,"Lob: unable to read full data over 512M lob.", K(ret), K(param), K(partial_data));
+      } else {
+        ctx_->total_byte_len_ = partial_data.data_length_;
+        ctx_->buff_byte_len_ = static_cast<uint32_t>(partial_data.data_length_);
+        ctx_->buff_ = static_cast<char *>(ctx_->alloc_->alloc(ctx_->buff_byte_len_));
+        ObString output_data;
+        if (OB_ISNULL(ctx_->buff_)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          COMMON_LOG(WARN,"Lob: failed to alloc output buffer",
+              K(ret), KP(ctx_->buff_), K(ctx_->buff_byte_len_));
+        } else {
+          output_data.assign_buffer(ctx_->buff_, ctx_->buff_byte_len_);
+          if (OB_FAIL(lob_mngr->query(param, output_data))) {
+            COMMON_LOG(WARN,"Lob: falied to query lob tablets.", K(ret), K(param));
+          } else {
+            output_data.set_length(static_cast<int32_t>(partial_data.data_length_));
+            for(int32_t i = 0; OB_SUCC(ret) && i < partial_data.index_.count(); ++i) {
+              ObLobChunkIndex &idx =  partial_data.index_[i];
+              if (1 == idx.is_modified_ || 1 == idx.is_add_) {
+                ObLobChunkData &chunk_data = partial_data.data_[idx.data_idx_];
+                MEMCPY(output_data.ptr() + idx.offset_, chunk_data.data_.ptr() + idx.pos_, idx.byte_len_);
+              }
+            }
+            ctx_->content_byte_len_ = output_data.length();
+            data_str = output_data;
           }
         }
       }
@@ -303,6 +362,7 @@ int ObTextStringIter::get_current_block(ObString &str)
 int ObTextStringIter::get_full_data(ObString &data_str)
 {
   int ret = OB_SUCCESS;
+  ObLobLocatorV2 loc(datum_str_, has_lob_header_);
   if (!is_init_ || state_ != TEXTSTRING_ITER_INIT) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Lob: iter state error", K(ret), K(is_init_), K(state_));
@@ -311,8 +371,11 @@ int ObTextStringIter::get_full_data(ObString &data_str)
     COMMON_LOG(DEBUG, "Lob: iter with null input", K(ret), K(*this));
   } else if (!is_lob_ || !has_lob_header_) { // string types or 4.0 compatiable text
     data_str.assign_ptr(datum_str_.ptr(), datum_str_.length());
+  } else if (loc.is_delta_temp_lob()) {
+    if (OB_FAIL(get_delta_lob_full_data(loc, tmp_alloc_, data_str))) {
+      COMMON_LOG(WARN, "get_delta_lob_full_data fail", K(ret), K(loc));
+    }
   } else if (!is_outrow_) { // inrow lob
-    ObLobLocatorV2 loc(datum_str_, has_lob_header_);
     if (OB_FAIL(loc.get_inrow_data(data_str))) {
       COMMON_LOG(WARN, "Lob: get lob inrow data failed", K(ret));
     }
@@ -342,7 +405,17 @@ int ObTextStringIter::get_inrow_or_outrow_prefix_data(ObString &data_str, uint32
     data_str.assign(NULL, 0);
     COMMON_LOG(DEBUG, "Lob: iter with null input", K(ret), K(*this));
   } else if (!is_lob_ || !has_lob_header_) { // string types
-    data_str.assign_ptr(datum_str_.ptr(), datum_str_.length());
+    if (prefix_char_len == DEAFULT_LOB_PREFIX_CHAR_LEN) {
+      data_str.assign_ptr(datum_str_.ptr(), datum_str_.length());
+    } else {
+      int64_t mb_len = ObCharset::strlen_char(cs_type_, datum_str_.ptr(), datum_str_.length());
+      if (mb_len <= prefix_char_len) {
+        data_str.assign_ptr(datum_str_.ptr(), datum_str_.length());
+      } else {
+        int64_t truncated_str_len = ObCharset::charpos(cs_type_, datum_str_.ptr(), datum_str_.length(), prefix_char_len);
+        data_str.assign_ptr(datum_str_.ptr(), truncated_str_len);
+      }
+    }
   } else if (!is_outrow_) { // inrow lob
     ObLobLocatorV2 loc(datum_str_, has_lob_header_);
     if (OB_FAIL(loc.get_inrow_data(data_str))) {
@@ -549,6 +622,14 @@ int ObTextStringIter::get_next_block_inner(ObString &str)
         COMMON_LOG(WARN,"Lob: falied to get first block.", K(ret));
       }
     } else {
+      // if put backward, we should compact buffer remain and move reserved part closed to the reading value
+      if (output_data.remain() > 0 && ctx_->is_backward_ && ctx_->reserved_byte_len_ > 0) {
+        // from :[0, output_data.length_][output_data.length_, output_data.buffer_size_][reserved_part]
+        // to   :[0, output_data.length_][reserved_part]
+        MEMMOVE(output_data.ptr() + output_data.length(),
+                output_data.ptr() + output_data.length() + output_data.remain(),
+                ctx_->reserved_byte_len_);
+      }
       ctx_->content_byte_len_ = ctx_->reserved_byte_len_ + output_data.length();
       // ToDo: @gehao get directly from lob mngr ?
       uint32 cur_out_len = static_cast<uint32_t>(ObCharset::strlen_char(cs_type_,
@@ -558,7 +639,7 @@ int ObTextStringIter::get_next_block_inner(ObString &str)
       ctx_->last_accessed_byte_len_ = ctx_->accessed_byte_len_;
       ctx_->last_accessed_len_ = ctx_->accessed_len_;
       ctx_->accessed_byte_len_ += output_data.length();
-      ctx_->accessed_len_ += cur_out_len;\
+      ctx_->accessed_len_ += cur_out_len;
       ctx_->iter_count_++;
       str.assign_ptr(ctx_->buff_, ctx_->content_byte_len_);
     }
@@ -647,7 +728,7 @@ void ObTextStringIter::set_reserved_byte_len(uint32_t reserved_byte_len)
 
 void ObTextStringIter::reset_reserve_len()
 {
-  if (is_valid_for_config()) {
+  if (is_valid_for_config(TEXTSTRING_ITER_NEXT)) {
     ctx_->reserved_byte_len_ = 0;
     ctx_->reserved_len_ = 0;
   }
@@ -1041,6 +1122,61 @@ int ObTextStringResult::calc_buffer_len(int64_t res_len)
   return ret;
 }
 
+int ObTextStringResult::calc_inrow_templob_len(uint32 inrow_data_len, int64_t &templob_len)
+{
+  int ret = OB_SUCCESS;
+  if (inrow_data_len < OB_MAX_LONGTEXT_LENGTH - MAX_TMP_LOB_HEADER_LEN) {
+    bool has_extern = lib::is_oracle_mode();
+    ObMemLobExternFlags extern_flags(has_extern);
+    inrow_data_len += sizeof(ObLobCommon);
+    templob_len = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, inrow_data_len, false);
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Lob: not support length bigger than 512M", K(ret), K(inrow_data_len));
+  }
+  return ret;
+}
+
+int64_t ObTextStringResult::calc_inrow_templob_locator_len()
+{
+  ObMemLobExternFlags extern_flags(lib::is_oracle_mode());
+  return static_cast<int64_t>(ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, 0, false));
+}
+
+int ObTextStringResult::fill_inrow_templob_header(const int64_t inrow_data_len, char *buf, int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf) || (buf_len == 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Lob: try to fill inrow templob header with empty buffer",
+             K(ret), K(inrow_data_len), K(buf), K(buf_len));
+  } else if (inrow_data_len <= OB_MAX_LONGTEXT_LENGTH - MAX_TMP_LOB_HEADER_LEN) {
+    ObLobLocatorV2 locator(buf, static_cast<uint32_t>(buf_len), true);
+    // temp lob in oracle mode not need extern neither, for it does not have rowkey
+    // However we mock extern failed in case of return it to old client
+    ObMemLobExternFlags extern_flags(lib::is_oracle_mode());
+    ObString rowkey_str;
+    ObString empty_str;
+    ObLobCommon lob_common;
+    if (OB_FAIL(locator.fill(TEMP_FULL_LOB,
+                             extern_flags,
+                             rowkey_str,
+                             &lob_common,
+                             static_cast<uint32_t>(inrow_data_len + sizeof(ObLobCommon)),
+                             0,
+                             false))) {
+      LOG_WARN("Lob: fill temp lob locator failed", K(ret), K(inrow_data_len), K(buf), K(buf_len));
+    } else if (OB_FAIL((locator.set_payload_data(&lob_common, empty_str)))) {
+      LOG_WARN("Lob: set temp lob locator payload failed", K(ret), K(inrow_data_len), K(buf), K(buf_len));
+    }
+  } else { // oversized
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Lob: not support length bigger than 512M", K(ret), K(inrow_data_len), K(buf), K(buf_len));
+  }
+  return ret;
+}
+
 int ObTextStringResult::fill_temp_lob_header(const int64_t res_len)
 {
   int ret = OB_SUCCESS;
@@ -1266,6 +1402,113 @@ int ObTextStringResult::ob_convert_datum_temporay_lob(ObDatum &datum,
       new_tmp_lob.get_result_buffer(result);
       datum.set_string(result);
     }
+  }
+  return ret;
+}
+
+int64_t ObDeltaLob::get_serialize_size() const
+{
+  int64_t size = 0;
+  // header size
+  size += get_header_serialize_size();
+  // updated lob size
+  size += get_partial_data_serialize_size();
+  // lob diff size
+  size += get_lob_diff_serialize_size();
+  return size;
+}
+
+int64_t ObDeltaLob::get_header_serialize_size() const
+{
+  int64_t size = 0;
+  // ObMemLobCommon
+  size += sizeof(ObMemLobCommon);
+  // ObLobCommon;
+  size += sizeof(ObLobCommon);
+  // ObLobDiffHeader
+  size += sizeof(ObLobDiffHeader);
+  return size;
+}
+
+int ObDeltaLob::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
+{
+  int ret = OB_SUCCESS;
+  ObLobDiffHeader *diff_header = nullptr;
+  if (OB_FAIL(serialize_header(buf, buf_len, pos, diff_header))) {
+    LOG_WARN("serialize_header fail", KR(ret), K(buf_len), K(pos), KP(buf));
+  } else if (OB_FAIL(serialize_partial_data(buf, buf_len, pos))) {
+    LOG_WARN("serialize_partial_data fail", KR(ret), K(buf_len), K(pos), KP(buf));
+  } else if (OB_FAIL(serialize_lob_diffs(buf, buf_len, diff_header))) {
+    LOG_WARN("serialize_lob_diffs fail", KR(ret), K(buf_len), K(pos), KP(buf));
+  }
+  return ret;
+}
+
+int ObDeltaLob::serialize_header(char* buf, const int64_t buf_len, int64_t& pos, ObLobDiffHeader *&diff_header) const
+{
+  int ret = OB_SUCCESS;
+  int64_t size = get_header_serialize_size();
+  if (pos + size > buf_len) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("buffer not enough", KR(ret), K(pos), K(size), K(buf_len), KP(buf));
+  } else {
+    ObMemLobCommon *mem_common = new (buf + pos) ObMemLobCommon(ObMemLobType::TEMP_DELTA_LOB, false);
+    ObLobCommon *lob_common = new (mem_common->data_) ObLobCommon();
+    diff_header = new (lob_common->buffer_) ObLobDiffHeader();
+    diff_header->diff_cnt_ = get_lob_diff_cnt();
+    diff_header->persist_loc_size_ = static_cast<uint32_t>(get_partial_data_serialize_size());
+    pos += size;
+  }
+  return ret;
+}
+
+int ObDeltaLob::deserialize(const ObLobLocatorV2 &lob_locator)
+{
+  int ret = OB_SUCCESS;
+  ObLobCommon *lob_common = nullptr;
+  ObLobDiffHeader *diff_header = nullptr;
+  if (! lob_locator.is_delta_temp_lob()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input not delta tmp lob", KR(ret), K(lob_locator));
+  } else if (OB_FAIL(lob_locator.get_disk_locator(lob_common))) {
+    LOG_WARN("get disk locator failed.", K(ret), K(lob_locator));
+  } else if (OB_ISNULL(diff_header = reinterpret_cast<ObLobDiffHeader*>(lob_common->buffer_))){
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(deserialize_partial_data(diff_header))) {
+    LOG_WARN("deserialize_partial_data fail", KR(ret), K(lob_locator), KPC(diff_header));
+  } else if (OB_FAIL(deserialize_lob_diffs(lob_locator.ptr_, lob_locator.size_, diff_header))) {
+    LOG_WARN("deserialize_lob_diffs fail", KR(ret), K(lob_locator), KPC(diff_header));
+  }
+  return ret;
+}
+
+int ObDeltaLob::has_diff(const ObLobLocatorV2 &locator, int64_t &res)
+{
+  int ret = OB_SUCCESS;
+  bool bres = false;
+  if (OB_FAIL(has_diff(locator, bres))) {
+    LOG_WARN("fail", KR(ret), K(locator));
+  } else {
+    res = bres;
+  }
+  return ret;
+}
+
+int ObDeltaLob::has_diff(const ObLobLocatorV2 &locator, bool &res)
+{
+  int ret = OB_SUCCESS;
+  ObLobCommon *lob_common = nullptr;
+  if (! locator.is_delta_temp_lob()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not delta lob", K(ret), K(locator));
+  } else if (OB_FAIL(locator.get_disk_locator(lob_common))) {
+    LOG_WARN("get disk locator failed.", KR(ret), K(locator));
+  } else if (! lob_common->in_row_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unsupport out row delta tmp lob locator", KR(ret), KPC(lob_common), K(locator));
+  } else {
+    ObLobDiffHeader *diff_header = reinterpret_cast<ObLobDiffHeader*>(lob_common->buffer_);
+    res = diff_header->diff_cnt_ > 0;
   }
   return ret;
 }

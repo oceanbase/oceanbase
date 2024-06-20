@@ -95,6 +95,11 @@ int ObSubPlanScanOp::inner_get_next_row()
 
 int ObSubPlanScanOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
+  return MY_SPEC.use_rich_format_ ? next_vector(max_row_cnt) : next_batch(max_row_cnt);
+}
+
+int ObSubPlanScanOp::next_batch(const int64_t max_row_cnt)
+{
   int ret = OB_SUCCESS;
   clear_evaluated_flag();
   const ObBatchRows *child_brs = nullptr;
@@ -134,6 +139,61 @@ int ObSubPlanScanOp::inner_get_next_batch(const int64_t max_row_cnt)
       }
     }
   }
+  return ret;
+}
+
+int ObSubPlanScanOp::next_vector(const int64_t max_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("subplan scan next vector");
+  clear_evaluated_flag();
+  const ObBatchRows *child_brs = nullptr;
+  if (OB_FAIL(child_->get_next_batch(max_row_cnt, child_brs))) {
+    LOG_WARN("get child next batch failed", K(ret));
+  } else if (child_brs->end_ && 0 == child_brs->size_) {
+    brs_.copy(child_brs);
+  } else {
+    brs_.copy(child_brs);
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.projector_.count(); i += 2) {
+      ObExpr *from = MY_SPEC.projector_[i];
+      ObExpr *to = MY_SPEC.projector_[i + 1];
+      if (OB_FAIL(from->eval_vector(eval_ctx_, brs_))) {
+        LOG_WARN("eval batch failed", K(ret));
+      } else {
+        VectorHeader &from_vec_header = from->get_vector_header(eval_ctx_);
+        VectorHeader &to_vec_header = to->get_vector_header(eval_ctx_);
+        if (from_vec_header.format_ == VEC_UNIFORM_CONST) {
+          ObDatum *from_datum =
+            static_cast<ObUniformBase *>(from->get_vector(eval_ctx_))->get_datums();
+          OZ(to->init_vector(eval_ctx_, VEC_UNIFORM, brs_.size_));
+          ObUniformBase *to_vec = static_cast<ObUniformBase *>(to->get_vector(eval_ctx_));
+          ObDatum *to_datums = to_vec->get_datums();
+          for (int64_t j = 0; j < brs_.size_ && OB_SUCC(ret); j++) {
+            to_datums[j] = *from_datum;
+          }
+        } else if (from_vec_header.format_ == VEC_UNIFORM) {
+          ObUniformBase *uni_vec = static_cast<ObUniformBase *>(from->get_vector(eval_ctx_));
+          ObDatum *src = uni_vec->get_datums();
+          ObDatum *dst = to->locate_batch_datums(eval_ctx_);
+          if (src != dst) {
+            MEMCPY(dst, src, brs_.size_ * sizeof(ObDatum));
+          }
+          OZ(to->init_vector(eval_ctx_, VEC_UNIFORM, brs_.size_));
+        } else {
+          to_vec_header = from_vec_header;
+        }
+        // init eval info
+        if (OB_SUCC(ret)) {
+          const ObEvalInfo &from_info = from->get_eval_info(eval_ctx_);
+          ObEvalInfo &to_info = to->get_eval_info(eval_ctx_);
+          to_info = from_info;
+          to_info.projected_ = true;
+          to_info.cnt_ = brs_.size_;
+        }
+      }
+    } // for end
+  }
+
   return ret;
 }
 

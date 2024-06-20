@@ -45,7 +45,8 @@ enum DmlStmtScope {
   SCOPE_INSERT_DESC,
   SCOPE_INSERT_VECTOR,
   SCOPE_RETURNING,
-  SCOPE_DICT_FIELDS // 16
+  SCOPE_DICT_FIELDS,
+  SCOPE_QUALIFY_FILTER
 };
 
 class ObStmtExprVisitor
@@ -233,6 +234,15 @@ public:
 
   int do_formalize_exec_param(ObRawExpr *&expr, bool &is_happened);
 
+};
+
+class ObStmtExprChecker : public ObStmtExprVisitor
+{
+public:
+  ObStmtExprChecker() {}
+  virtual int do_visit(ObRawExpr *&expr) override;
+  int check_expr(const ObRawExpr *expr) const;
+  int check_const_flag(const ObRawExpr *expr) const;
 };
 
 }

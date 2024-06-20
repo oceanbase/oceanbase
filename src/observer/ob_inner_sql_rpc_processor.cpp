@@ -173,7 +173,7 @@ int ObInnerSqlRpcP::process_read(
           if (OB_SUCC(ret)) {
             if (need_flush) { // last row is not be used
               if (OB_FAIL(obrpc::ObRpcProcessor< obrpc::ObInnerSQLRpcProxy::ObRpc<
-                  obrpc::OB_INNER_SQL_SYNC_TRANSMIT> >::flush(THIS_WORKER.get_timeout_remain()))) {
+                  obrpc::OB_INNER_SQL_SYNC_TRANSMIT> >::flush(THIS_WORKER.get_timeout_remain(), &arg_.get_ctrl_svr()))) {
                 LOG_WARN("fail to flush", K(ret));
               } else {
                 LOG_DEBUG("flush scanner successfully", K(scanner), K(scanner.get_found_rows()));
@@ -340,6 +340,7 @@ int ObInnerSqlRpcP::process()
         LOG_WARN("tenant schema is null", K(ret));
       } else {
         tmp_session->set_current_trace_id(ObCurTraceId::get_trace_id());
+        tmp_session->init_use_rich_format();
         tmp_session->switch_tenant_with_name(transmit_arg.get_tenant_id(), tenant_schema->get_tenant_name_str());
         ObString sql_stmt(sql_str.ptr());
         if (OB_FAIL(tmp_session->set_session_active(

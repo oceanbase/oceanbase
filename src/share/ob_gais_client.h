@@ -25,12 +25,12 @@ namespace share
 class ObGAISClient
 {
 public:
-  ObGAISClient() : is_inited_(false), self_(), gais_request_rpc_(nullptr), gais_cache_leader_(),
-  cache_leader_mutex_(common::ObLatchIds::AUTO_INCREMENT_LEADER_LOCK) { }
+  ObGAISClient() : is_inited_(false), self_(), gais_request_rpc_(nullptr), gais_cache_leader_map_()
+  { }
   ~ObGAISClient() { }
   int init(const common::ObAddr &self, share::ObGAISRequestRpc *gais_request_rpc);
   void reset();
-  TO_STRING_KV(K_(self), K_(gais_cache_leader));
+  TO_STRING_KV(K_(self), "map_size", gais_cache_leader_map_.size());
 
 public:
   int get_value(const AutoincKey &key,
@@ -52,25 +52,22 @@ public:
                                  const uint64_t max_value,
                                  const uint64_t local_sync_value,
                                  const int64_t &autoinc_version,
+                                 const int64_t cache_size,
                                  uint64_t &global_sync_value);
   int local_sync_with_global_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &global_sync_value);
   int clear_global_autoinc_cache(const AutoincKey &key);
 
+  int get_sequence_next_value(const schema::ObSequenceSchema &schema, ObSequenceValue &nextval);
+
 private:
   int get_leader_(const uint64_t tenant_id, common::ObAddr &leader);
   int refresh_location_(const uint64_t tenant_id);
-  inline void reset_cache_leader_()
-  {
-    lib::ObMutexGuard guard(cache_leader_mutex_);
-    gais_cache_leader_.reset();
-  }
 
 private:
   bool is_inited_;
   common::ObAddr self_;
   share::ObGAISRequestRpc *gais_request_rpc_;
-  common::ObAddr gais_cache_leader_;
-  lib::ObMutex cache_leader_mutex_;
+  common::hash::ObHashMap<uint64_t, common::ObAddr> gais_cache_leader_map_;
 };
 
 } // share

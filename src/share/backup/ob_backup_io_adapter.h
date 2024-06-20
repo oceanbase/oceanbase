@@ -29,19 +29,35 @@ public:
   explicit ObBackupIoAdapter() {}
   virtual ~ObBackupIoAdapter() {}
   int is_exist(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &exist);
+  //TODO (@shifangdan.sfd): refine repeated logics between normal interfaces and adaptive ones
+  int adaptively_is_exist(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &exist);
   int get_file_length(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, int64_t &file_length);
+  int adaptively_get_file_length(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, int64_t &file_length);
   int del_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
+  int adaptively_del_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
+  int del_unmerged_parts(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
   int mkdir(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
   int mk_parent_dir(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info);
   int write_single_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, const char *buf, const int64_t size);
   int read_single_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, char *buf,const int64_t buf_size,
       int64_t &read_size);
+  int adaptively_read_single_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, char *buf,const int64_t buf_size,
+      int64_t &read_size);
   int read_single_text_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, char *buf, const int64_t buf_size);
+  int adaptively_read_single_text_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, char *buf, const int64_t buf_size);
   int list_files(
       const common::ObString &dir_path,
       const share::ObBackupStorageInfo *storage_info,
       common::ObBaseDirEntryOperator &op);
+  int adaptively_list_files(
+      const common::ObString &dir_path,
+      const share::ObBackupStorageInfo *storage_info,
+      common::ObBaseDirEntryOperator &op);
   int read_part_file(
+      const common::ObString &uri, const share::ObBackupStorageInfo *storage_info,
+      char *buf, const int64_t buf_size, const int64_t offset,
+      int64_t &read_size);
+  int adaptively_read_part_file(
       const common::ObString &uri, const share::ObBackupStorageInfo *storage_info,
       char *buf, const int64_t buf_size, const int64_t offset,
       int64_t &read_size);
@@ -108,20 +124,6 @@ public:
 private:
   common::ObIArray <common::ObString>& name_array_;
   common::ObIAllocator& allocator_;
-};
-
-class ObFullPathArrayOp : public ObBaseDirEntryOperator
-{
-public:
-  ObFullPathArrayOp(common::ObIArray <common::ObString> &name_array, common::ObString &path,
-                              common::ObIAllocator &array_allocator)
-    : name_array_(name_array), path_(path), allocator_(array_allocator) {}
-  ~ObFullPathArrayOp() {}
-  int func(const dirent *entry) ;
-private:
-  common::ObIArray <common::ObString> &name_array_;
-  common::ObString &path_;
-  common::ObIAllocator &allocator_;
 };
 
 class ObDirPrefixEntryNameFilter : public ObBaseDirEntryOperator

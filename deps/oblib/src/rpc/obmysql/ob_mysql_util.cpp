@@ -25,10 +25,8 @@
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/geo/ob_geo_bin.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_bin.h"
-#endif
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -1083,7 +1081,6 @@ int ObMySQLUtil::urowid_cell_str(char *buf, const int64_t len, const ObURowIDDat
 int ObMySQLUtil::sql_utd_cell_str(uint64_t tenant_id, char *buf, const int64_t len, const ObString &val, int64_t &pos)
 {
   INIT_SUCC(ret);
-#ifdef OB_BUILD_ORACLE_XML
   lib::ObMemAttr mem_attr(tenant_id, "XMLModule");
   lib::ObMallocHookAttrGuard malloc_guard(mem_attr);
   ObArenaAllocator allocator(mem_attr);
@@ -1120,9 +1117,6 @@ int ObMySQLUtil::sql_utd_cell_str(uint64_t tenant_id, char *buf, const int64_t l
       ret = OB_SIZE_OVERFLOW;
     }
   }
-#else
-  ret = OB_NOT_SUPPORTED;
-#endif
   return ret;
 }
 
@@ -1134,6 +1128,7 @@ int ObMySQLUtil::json_cell_str(uint64_t tenant_id, char *buf, const int64_t len,
   ObJsonBin j_bin(val.ptr(), val.length(), &allocator);
   ObIJsonBase *j_base = &j_bin;
   ObJsonBuffer jbuf(&allocator);
+  static_cast<ObJsonBin*>(j_base)->set_seek_flag(true);
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid input args", K(ret), KP(buf));

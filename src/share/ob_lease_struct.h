@@ -83,9 +83,11 @@ public:
 
   int64_t log_disk_total_;              // 日志盘总容量
   int64_t report_log_disk_assigned_;    // 日志盘已分配大小：server所有unit log_disk_size总和
+  int64_t log_disk_in_use_;             // not used, only as placeholder
 
   int64_t disk_total_;                  // 数据盘总容量大小
   int64_t disk_in_use_;                 // 数据盘已使用大小
+  int64_t report_data_disk_assigned_;   // not used, only as placeholder
 
 
   ObServerResourceInfo();

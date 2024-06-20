@@ -17,6 +17,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/timezone/ob_time_convert.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -59,7 +60,7 @@ int ObExprFromTz::calc_result_type2(ObExprResType &type,
 
 int ObExprFromTz::eval_from_tz_val(const ObOTimestampData &in_ts_val,
                                    const ObString &tz_str,
-                                   ObSQLSessionInfo &my_session,
+                                   const common::ObTimeZoneInfo *tz_info,
                                    ObOTimestampData &out_ts_val)
 {
   int ret = OB_SUCCESS;
@@ -88,7 +89,7 @@ int ObExprFromTz::eval_from_tz_val(const ObOTimestampData &in_ts_val,
     ob_time.tz_name_[trimed_tz_str.length()] = '\0';
     ob_time.is_tz_name_valid_ = true;
 
-    ObTimeConvertCtx cvrt_ctx(TZ_INFO(&my_session), true);
+    ObTimeConvertCtx cvrt_ctx(tz_info, true);
     if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampNanoType, out_ts_val,
                                                        NULL, ob_time))) {
       LOG_WARN("failed to convert otimestamp_to_ob_time", K(ret));
@@ -124,10 +125,13 @@ int ObExprFromTz::eval_from_tz(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     ObOTimestampData ts_val = ts->get_otimestamp_tiny();
     const ObString &tz_str = tz->get_string();
     ObOTimestampData res_val;
+    ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+    const common::ObTimeZoneInfo *tz_info = NULL;
     CK(OB_NOT_NULL(ctx.exec_ctx_.get_my_session()));
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(eval_from_tz_val(ts_val, tz_str,
-                          *ctx.exec_ctx_.get_my_session(), res_val))) {
+    } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+      LOG_WARN("get tz info failed", K(ret));
+    } else if (OB_FAIL(eval_from_tz_val(ts_val, tz_str, tz_info, res_val))) {
       LOG_WARN("eval_fromtz_val failed", K(ret), K(ts_val), K(tz_str));
     } else {
       res.set_otimestamp_tz(res_val);
@@ -150,6 +154,13 @@ int ObExprFromTz::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
      ObNullType == expr.args_[1]->datum_meta_.type_);
   CK(ObTimestampTZType == expr.datum_meta_.type_);
   OX(expr.eval_func_ = eval_from_tz);
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprFromTz, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
   return ret;
 }
 

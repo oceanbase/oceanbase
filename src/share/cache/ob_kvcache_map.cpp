@@ -211,11 +211,6 @@ int ObKVCacheMap::put(
           if (NULL == iter) {
             // put new node
             (void) ATOMIC_AAF(&inst.status_.kv_cnt_, 1);
-          } else {
-            // overwrite
-            (void) ATOMIC_SAF(&iter->mb_handle_->kv_cnt_, 1);
-            (void) ATOMIC_SAF(&iter->mb_handle_->get_cnt_, iter->get_cnt_);
-
           }
           (void) ATOMIC_AAF(&mb_handle->kv_cnt_, 1);
           (void) ATOMIC_AAF(&mb_handle->get_cnt_, 1);
@@ -273,8 +268,8 @@ int ObKVCacheMap::get(
       iter = bucket_ptr;
       bool is_equal = false;
       while (NULL != iter && OB_SUCC(ret)) {
-        if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
-          if (hash_code == iter->hash_code_) {
+        if (hash_code == iter->hash_code_) {
+          if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
             if (OB_FAIL(key.equal(*iter->key_, is_equal))) {
               COMMON_LOG(WARN, "Failed to check kvcache key equal", K(ret));
             } else if (is_equal) {
@@ -290,43 +285,37 @@ int ObKVCacheMap::get(
 
               break;
             }
+            store_->de_handle_ref(iter->mb_handle_);
           }
-          store_->de_handle_ref(iter->mb_handle_);
         }
         iter = iter->next_;
       }
 
+      int tmp_ret = OB_SUCCESS;
       if (OB_FAIL(ret)) {
       } else if (NULL == iter) {
         ret = OB_ENTRY_NOT_EXIST;
+      } else if (OB_UNLIKELY(mb_handle_kv_cnt < 0)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(ERROR, "unexpected kv cnt", K(tmp_ret), K(mb_handle_kv_cnt), KPC(iter->mb_handle_));
       } else {
         if (LRU == mb_policy && need_modify_cache(iter_get_cnt, mb_get_cnt, mb_handle_kv_cnt)) {
-          int tmp_ret = OB_SUCCESS;
           ObBucketWLockGuard guard(bucket_lock_, bucket_pos);
           if (OB_TMP_FAIL(guard.get_ret())) {
             COMMON_LOG(WARN, "Fail to write lock bucket, ", K(tmp_ret), K(bucket_pos));
           } else {
+            Node *curr = get_bucket_node(bucket_pos);
+            bucket_ptr = curr;
             prev = NULL;
-            iter = bucket_ptr;
-            bool is_equal = false;
-            while (NULL != iter && OB_LIKELY(OB_SUCCESS == tmp_ret)) {
-              if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
-                if (hash_code == iter->hash_code_) {
-                  if (OB_TMP_FAIL(key.equal(*iter->key_, is_equal))) {
-                    COMMON_LOG(WARN, "Failed to check kvcache key equal", K(tmp_ret));
-                  } else if (is_equal) {
-                    ObKVMemBlockHandle *old_handle = iter->mb_handle_;
-                    if (OB_TMP_FAIL(internal_data_move(hazard_guard, prev, iter, bucket_ptr))) {
-                      COMMON_LOG(WARN, "Fail to move node to LFU block, ", K(tmp_ret));
-                    }
-                    store_->de_handle_ref(old_handle);
-                    break;
-                  }
+            while (nullptr != curr) {
+              if (curr == iter) {
+                if (OB_TMP_FAIL(internal_data_move(hazard_guard, prev, iter, bucket_ptr))) {
+                  COMMON_LOG(WARN, "Fail to move node to LFU block, ", K(tmp_ret));
                 }
-                store_->de_handle_ref(iter->mb_handle_);
+                break;
               }
-              prev = iter;
-              iter = iter->next_;
+              prev = curr;
+              curr = curr->next_;
             }
           }
         }
@@ -678,17 +667,24 @@ int ObKVCacheMap::replace_fragment_node(int64_t &start_pos, int64_t &replace_nod
         if (OB_FAIL(guard.get_ret())) {
           COMMON_LOG(WARN, "Fail to write lock bucket", K(ret), K(i));
         } else {
+          const int64_t start = common::ObClockGenerator::getClock();
           Node *&bucket_ptr = get_bucket_node(i);
           prev = NULL;
           iter = bucket_ptr;
+          int64_t node_count = 0;
           while (NULL != iter) {
             if (iter->inst_->node_allocator_.is_fragment(iter)) {
               internal_map_replace(hazard_guard, prev, iter, bucket_ptr);
-              ++replace_node_count;
+              ++node_count;
             }
             prev = iter;
             iter = iter->next_;
+            if (common::ObClockGenerator::getClock() - start >= 1 * 1000 * 1000) {
+                  COMMON_LOG(INFO, "replace map node cost too much time", K(node_count), K(replace_node_count), K(replace_start_pos), K(i));
+              break;
+            }
           }
+          replace_node_count += node_count;
         }
       }
     }  // hazard version guard

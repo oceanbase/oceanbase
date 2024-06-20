@@ -37,7 +37,7 @@ public:
     if (used_after_alloc > limit_) {
       ATOMIC_AAF(&hold_, -size);
       if (REACH_TIME_INTERVAL(1000 * 1000)) {
-        _OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "block alloc over limit, limit=%ld alloc_size=%ld", limit_, size);
+        _OB_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "block alloc over limit, limit=%ld alloc_size=%ld", limit_, size);
       }
     } else if (NULL == (ret = (void*)ob_malloc(size, attr))) {
       ATOMIC_AAF(&hold_, -size);

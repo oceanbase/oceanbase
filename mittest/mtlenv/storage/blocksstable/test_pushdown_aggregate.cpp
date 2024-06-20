@@ -191,7 +191,7 @@ void TestPushdownAggregate::prepare_access_param(const bool is_reverse_scan, ObI
   access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_group_by_ = true;
-  access_param_.iter_param_.pd_storage_flag_.use_iter_pool_ = true;
+  access_param_.iter_param_.pd_storage_flag_.use_stmt_iter_pool_ = true;
   access_param_.iter_param_.pd_storage_flag_.use_column_store_ = false;
   read_info_.reset();
   ASSERT_EQ(OB_SUCCESS, read_info_.init(allocator_,
@@ -349,7 +349,7 @@ TEST_F(TestPushdownAggregate, test_init_group_by_cell)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
 
   ObIArray<ObAggCell*> &agg_cell = group_by_cell.get_agg_cells();
   ASSERT_EQ(4, group_by_cell.get_agg_cells().count());
@@ -423,7 +423,7 @@ TEST_F(TestPushdownAggregate, test_decide_use_group_by1)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
 
   int64_t row_count = 100;
   int64_t distinct_count = 10;
@@ -508,7 +508,7 @@ TEST_F(TestPushdownAggregate, test_decide_use_group_by2)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
 
   int64_t row_count = 1000;
   int64_t distinct_count = 10;
@@ -539,6 +539,13 @@ TEST_F(TestPushdownAggregate, test_decide_use_group_by2)
   ASSERT_TRUE(use_group_by);
   ASSERT_TRUE(nullptr != group_by_cell.distinct_projector_buf_);
   ASSERT_TRUE(nullptr != group_by_cell.tmp_group_by_datum_buf_);
+
+  group_by_cell.set_row_capacity(eval_ctx_.batch_size_ - 1);
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.decide_use_group_by(row_count, row_count, distinct_count, &bitmap, use_group_by));
+  ASSERT_FALSE(use_group_by);
+  group_by_cell.set_row_capacity(eval_ctx_.batch_size_);
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.decide_use_group_by(row_count, row_count, distinct_count, &bitmap, use_group_by));
+  ASSERT_TRUE(use_group_by);
 }
 
 TEST_F(TestPushdownAggregate, test_eval_batch)
@@ -590,7 +597,7 @@ TEST_F(TestPushdownAggregate, test_eval_batch)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
 
   const int64_t distinct_cnt = 2;
@@ -696,7 +703,7 @@ TEST_F(TestPushdownAggregate, test_eval_batch_with_null)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
 
   const int64_t distinct_cnt = 2;
@@ -806,7 +813,7 @@ TEST_F(TestPushdownAggregate, test_copy_output_rows)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
 
   ObDatum *col_datums = output_exprs_.at(1)->locate_batch_datums(eval_ctx_);

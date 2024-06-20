@@ -110,13 +110,6 @@ bool ObLSLocationUpdateTask::compare_without_version(
   return (*this == other);
 }
 
-int ObLSLocationUpdateTask::assign_when_equal(
-    const ObLSLocationUpdateTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
-}
-
 int ObTabletLSUpdateTask::init(
     const uint64_t tenant_id,
     const ObTabletID &tablet_id,
@@ -187,13 +180,6 @@ bool ObTabletLSUpdateTask::compare_without_version(
   return (*this == other);
 }
 
-int ObTabletLSUpdateTask::assign_when_equal(
-    const ObTabletLSUpdateTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
-}
-
 ObLSLocationTimerTask::ObLSLocationTimerTask(
     ObLSLocationService &ls_loc_service)
     : ls_loc_service_(ls_loc_service)
@@ -206,8 +192,8 @@ void ObLSLocationTimerTask::runTimerTask()
   if (OB_FAIL(ls_loc_service_.renew_all_ls_locations())) {
     LOG_WARN("fail to renew_all_ls_locations", KR(ret));
   }
-  // ignore ret
   if (OB_FAIL(ls_loc_service_.schedule_ls_timer_task())) {
+    // overwrite ret
     LOG_WARN("fail to schedule ls location timer task", KR(ret));
   }
 }
@@ -224,8 +210,8 @@ void ObLSLocationByRpcTimerTask::runTimerTask()
   if (OB_FAIL(ls_loc_service_.renew_all_ls_locations_by_rpc())) {
     LOG_WARN("fail to renew_all_ls_location by rpc", KR(ret));
   }
-  // ignore ret
   if (OB_FAIL(ls_loc_service_.schedule_ls_by_rpc_timer_task())) {
+    // overwrite ret
     LOG_WARN("fail to schedule ls location by rpc timer task", KR(ret));
   }
 }
@@ -242,8 +228,8 @@ void ObDumpLSLocationCacheTimerTask::runTimerTask()
   if (OB_FAIL(ls_loc_service_.dump_cache())) {
     LOG_WARN("fail to dump ls location cache", KR(ret));
   }
-  // ignore ret
   if (OB_FAIL(ls_loc_service_.schedule_dump_cache_timer_task())) {
+    // overwrite ret
     LOG_WARN("fail to schedule dump ls location cache timer task", KR(ret));
   }
 }
@@ -316,13 +302,6 @@ bool ObVTableLocUpdateTask::compare_without_version(
     const ObVTableLocUpdateTask &other) const
 {
   return (*this == other);
-}
-
-int ObVTableLocUpdateTask::assign_when_equal(
-    const ObVTableLocUpdateTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
 }
 
 ObClearTabletLSCacheTimerTask::ObClearTabletLSCacheTimerTask(
@@ -425,13 +404,6 @@ bool ObTabletLocationBroadcastTask::compare_without_version
     (const ObTabletLocationBroadcastTask &other) const
 {
   return (*this == other);
-}
-
-int ObTabletLocationBroadcastTask::assign_when_equal(
-    const ObTabletLocationBroadcastTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
 }
 
 OB_SERIALIZE_MEMBER(ObTabletLocationBroadcastTask,

@@ -64,7 +64,7 @@ class DoNothingOP : public ObITxDataCheckFunctor
 {
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) {
     UNUSED(tx_cc_ctx);
-    cout << "read tx data:" << tx_data.tx_id_.get_id() << ", undo cnt:" << tx_data.undo_status_list_.undo_node_cnt_ << endl;
+    cout << "read tx data:" << tx_data.tx_id_.get_id() << ", undo cnt:" << tx_data.op_guard_->get_undo_status_list().undo_node_cnt_ << endl;
     STORAGE_LOG_RET(INFO, 0, "read tx data", K(tx_data.tx_id_), K(lbt()));
     return OB_SUCCESS;
   }

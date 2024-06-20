@@ -27,18 +27,23 @@ template <class PalfIteratorStorage, class LogEntryType>
 class PalfIterator
 {
 public:
-  PalfIterator() : iterator_storage_(), iterator_impl_(), need_print_error_(true), is_inited_(false) {}
+  PalfIterator()
+      : iterator_storage_(), iterator_impl_(), need_print_error_(true),
+        is_inited_(false), io_ctx_(LogIOUser::DEFAULT), last_print_time_(0) {}
+  PalfIterator(const int64_t palf_id, const LogIOUser io_user = LogIOUser::DEFAULT)
+      :iterator_storage_(), iterator_impl_(), need_print_error_(true),
+        is_inited_(false), io_ctx_(palf_id, io_user), last_print_time_(0) {}
   ~PalfIterator() {destroy();}
-
   int init(const LSN &start_offset,
            const GetFileEndLSN &get_file_end_lsn,
-           ILogStorage *log_storage)
+           ILogStorage *log_storage,
+           const bool allow_filling_cache = true)
   {
     int ret = OB_SUCCESS;
     auto get_mode_version = []() { return PALF_INITIAL_PROPOSAL_ID; };
     if (IS_INIT) {
       ret = OB_INIT_TWICE;
-    } else if (OB_FAIL(do_init_(start_offset, get_file_end_lsn, get_mode_version, log_storage))) {
+    } else if (OB_FAIL(do_init_(start_offset, get_file_end_lsn, get_mode_version, log_storage, allow_filling_cache))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
       PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
@@ -46,16 +51,16 @@ public:
     }
     return ret;
   }
-
   int init(const LSN &start_offset,
            const GetFileEndLSN &get_file_end_lsn,
            const GetModeVersion &get_mode_version,
-           ILogStorage *log_storage)
+           ILogStorage *log_storage,
+           const bool allow_filling_cache = true)
   {
     int ret = OB_SUCCESS;
     if (IS_INIT) {
       ret = OB_INIT_TWICE;
-    } else if (OB_FAIL(do_init_(start_offset, get_file_end_lsn, get_mode_version, log_storage))) {
+    } else if (OB_FAIL(do_init_(start_offset, get_file_end_lsn, get_mode_version, log_storage, allow_filling_cache))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
       PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
@@ -81,6 +86,7 @@ public:
       is_inited_ = false;
       iterator_impl_.destroy();
       iterator_storage_.destroy();
+      io_ctx_.destroy();
     }
   }
 
@@ -155,11 +161,14 @@ public:
     int ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
-    } else if (OB_FAIL(iterator_impl_.next(replayable_point_scn, next_min_scn, iterate_end_by_replayable_point))
+    } else if (OB_FAIL(iterator_impl_.next(replayable_point_scn, next_min_scn, iterate_end_by_replayable_point, io_ctx_))
         && OB_ITER_END != ret) {
       PALF_LOG(WARN, "PalfIterator next failed", K(ret), KPC(this));
       print_error_log(ret);
     } else {
+      if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_print_time_)) {
+        PALF_LOG(INFO, "[PALF STAT ITERATOR INFO]", K(io_ctx_));
+      }
       PALF_LOG(TRACE, "PalfIterator next success", K(iterator_impl_), K(ret), KPC(this),
                K(replayable_point_scn), K(next_min_scn), K(iterate_end_by_replayable_point));
     }
@@ -229,7 +238,7 @@ public:
   }
   bool check_is_the_last_entry()
   {
-    return iterator_impl_.check_is_the_last_entry();
+    return iterator_impl_.check_is_the_last_entry(io_ctx_);
   }
   LSN get_curr_read_lsn() const
   {
@@ -238,20 +247,38 @@ public:
   void print_error_log(int ret) const
   {
     if (need_print_error_ && (OB_INVALID_DATA == ret || OB_CHECKSUM_ERROR == ret)) {
-      PALF_LOG_RET(ERROR, ret, "invalid data or checksum error!!!", KPC(this));
+      PALF_LOG(ERROR, "invalid data or checksum mismatch", KR(ret), KPC(this));
+      LOG_DBA_ERROR_V2(OB_LOG_CHECKSUM_MISMATCH, ret, "invalid data or checksum mismatch");
     }
   }
   void set_need_print_error(const bool need_print_error)
   {
     need_print_error_ = need_print_error;
   }
-  TO_STRING_KV(K_(iterator_impl));
+  void enable_fill_cache()
+  {
+    io_ctx_.set_allow_filling_cache(true);
+  }
+  void disable_fill_cache()
+  {
+    io_ctx_.set_allow_filling_cache(false);
+  }
+  void set_palf_id(const int64_t palf_id)
+  {
+    io_ctx_.set_palf_id(palf_id);
+  }
+  void set_type(const LogIOUser user_type)
+  {
+    io_ctx_.set_user_type(user_type);
+  }
+  TO_STRING_KV(K_(iterator_impl), K_(io_ctx));
 
 private:
   int do_init_(const LSN &start_offset,
                const GetFileEndLSN &get_file_end_lsn,
                const GetModeVersion &get_mode_version,
-               ILogStorage *log_storage)
+               ILogStorage *log_storage,
+               const bool allow_filling_cache)
   {
     int ret = OB_SUCCESS;
     if (IS_INIT) {
@@ -264,6 +291,8 @@ private:
     } else if (OB_FAIL(iterator_impl_.init(get_mode_version, &iterator_storage_))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
+      io_ctx_.set_allow_filling_cache(allow_filling_cache);
+      io_ctx_.set_start_lsn(start_offset);
       PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
       is_inited_ = true;
     }
@@ -313,6 +342,8 @@ private:
   LogIteratorImpl<LogEntryType> iterator_impl_;
   bool need_print_error_;
   bool is_inited_;
+  LogIOContext io_ctx_;
+  int64_t last_print_time_;
 };
 
 typedef PalfIterator<MemoryIteratorStorage, LogEntry> MemPalfBufferIterator;

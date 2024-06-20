@@ -154,6 +154,8 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
           const bool only_persist = 0 != times && !ObTabletGCHandler::is_tablet_gc_trigger(tablet_persist_trigger);
           obsys::ObRLockGuard lock(tablet_gc_handler->wait_lock_);
           bool need_retry = false;
+          // add temporary flag for not support persist uncommited mds data.
+          bool no_need_wait_persist = false;
           SCN decided_scn;
           ObFreezer *freezer = ls->get_freezer();
           common::ObTabletIDArray unpersist_tablet_ids;
@@ -177,7 +179,8 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
           }
           // 2. get gc tablet and get unpersist_tablet_ids
           else if (OB_FAIL(tablet_gc_handler->get_unpersist_tablet_ids(deleted_tablets,
-                  immediately_deleted_tablets, unpersist_tablet_ids, only_persist, need_retry, decided_scn))) {
+                  immediately_deleted_tablets, unpersist_tablet_ids, decided_scn,
+                  only_persist, need_retry, no_need_wait_persist))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to get_unpersist_tablet_ids", KPC(ls), KR(ret));
           }
@@ -187,23 +190,32 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
             need_retry = true;
             STORAGE_LOG(WARN, "failed to gc tablet", KR(ret));
           }
-          // 4. flush unpersit_tablet_ids
-          else if (OB_FAIL(tablet_gc_handler->flush_unpersist_tablet_ids(unpersist_tablet_ids, decided_scn))) {
+          // 4. freeze unpersit_tablet_ids
+          else if (OB_FAIL(tablet_gc_handler->freeze_unpersist_tablet_ids(unpersist_tablet_ids, decided_scn))) {
             need_retry = true;
-            STORAGE_LOG(WARN, "failed to flush_unpersist_tablet_ids", KPC(ls), KR(ret), K(unpersist_tablet_ids));
+            STORAGE_LOG(WARN, "fail to freeze unpersist tablet", KR(ret), KPC(tablet_gc_handler->ls_), K(unpersist_tablet_ids));
           }
-          // 5. update tablet_change_checkpoint in log meta
+          // 5. wait unpersit_tablet_ids
+          else if (no_need_wait_persist) {
+            // temporariily skip for not support persist uncommited mds data.
+            ob_usleep(ObTabletGCHandler::FLUSH_CHECK_INTERVAL);
+          } else if(OB_FAIL(tablet_gc_handler->wait_unpersist_tablet_ids_flushed(unpersist_tablet_ids, decided_scn))) {
+            need_retry = true;
+            STORAGE_LOG(WARN, "fail to wait unpersist tablet ids flushed", KR(ret), KPC(tablet_gc_handler->ls_), K(unpersist_tablet_ids));
+
+          }
+          // 6. update tablet_change_checkpoint in log meta
           else if (decided_scn > ls->get_tablet_change_checkpoint_scn()
                   && OB_FAIL(tablet_gc_handler->set_tablet_change_checkpoint_scn(decided_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set_tablet_change_checkpoint_scn", KPC(ls), KR(ret), K(decided_scn));
           }
-          // 6. set ls transfer scn
+          // 7. set ls transfer scn
           else if (!only_persist && OB_FAIL(tablet_gc_handler->set_ls_transfer_scn(deleted_tablets))) {
             need_retry = true;
             STORAGE_LOG(WARN, "failed to set ls transfer scn", KPC(ls), KR(ret), K(decided_scn));
           }
-          // 7. check and gc deleted_tablets
+          // 8. check and gc deleted_tablets
           else if (!only_persist && !deleted_tablets.empty()
                    && OB_FAIL(tablet_gc_handler->gc_tablets(deleted_tablets))) {
             need_retry = true;
@@ -294,13 +306,15 @@ uint8_t ObTabletGCHandler::get_tablet_persist_trigger_and_reset()
 int ObTabletGCHandler::disable_gc()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(gc_lock_.lock(GC_LOCK_TIMEOUT))) {
+  if (OB_FAIL(gc_rwlock_.rdlock(GC_LOCK_TIMEOUT))) {
     ret = OB_TABLET_GC_LOCK_CONFLICT;
-    LOG_WARN("try lock failed, please retry later", K(ret));
+    LOG_WARN("try lock failed, please retry later", KPC(ls_), K(ret));
   } else if (check_stop()) {
-    gc_lock_.unlock();
+    gc_rwlock_.rdunlock();
     ret = OB_NOT_RUNNING;
     LOG_WARN("gc handler has already been offline", K(ret));
+  } else {
+    FLOG_INFO("disable tablet gc success", KPC(ls_), K(lbt()));
   }
 
   return ret;
@@ -308,22 +322,23 @@ int ObTabletGCHandler::disable_gc()
 
 void ObTabletGCHandler::enable_gc()
 {
-  gc_lock_.unlock();
+  gc_rwlock_.rdunlock();
+  FLOG_INFO("enable tablet gc success", KPC(ls_), K(lbt()));
 }
 
 int ObTabletGCHandler::set_tablet_change_checkpoint_scn(const share::SCN &scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(gc_lock_.lock(GC_LOCK_TIMEOUT))) {
+  if (OB_FAIL(gc_rwlock_.wrlock(GC_LOCK_TIMEOUT))) {
     ret = OB_TABLET_GC_LOCK_CONFLICT;
-    LOG_WARN("try lock failed, please retry later", K(ret));
+    LOG_WARN("try lock failed, please retry later", KPC(ls_), K(ret));
   } else {
     if (OB_FAIL(ls_->set_tablet_change_checkpoint_scn(scn))) {
       LOG_WARN("fail to set tablet_change_checkpoint_scn", K(ret), K(scn));
     } else {
       // do nothing
     }
-    gc_lock_.unlock();
+    gc_rwlock_.wrunlock();
   }
   return ret;
 }
@@ -344,9 +359,10 @@ bool ObTabletGCHandler::is_tablet_gc_trigger_and_reset()
 
 int ObTabletGCHandler::check_tablet_need_persist_(
     ObTabletHandle &tablet_handle,
+    const SCN &decided_scn,
     bool &need_persist,
     bool &need_retry,
-    const SCN &decided_scn)
+    bool &no_need_wait_persist)
 {
   int ret = OB_SUCCESS;
   need_persist = false;
@@ -360,6 +376,7 @@ int ObTabletGCHandler::check_tablet_need_persist_(
     LOG_WARN("failed to get is locked", KR(ret), KPC(tablet));
   } else if (is_locked) {
     LOG_INFO("tablet_status is changing", KR(ret), KPC(tablet));
+    no_need_wait_persist = true;
     need_retry = true;
   }
 
@@ -440,9 +457,10 @@ int ObTabletGCHandler::check_tablet_need_gc_(
 int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObIArray<ObTabletHandle> &deleted_tablets,
                                                 common::ObIArray<ObTabletHandle> &immediately_deleted_tablets,
                                                 common::ObTabletIDArray &unpersist_tablet_ids,
+                                                const SCN &decided_scn,
                                                 const bool only_persist,
                                                 bool &need_retry,
-                                                const SCN &decided_scn)
+                                                bool &no_need_wait_persist)
 {
   int ret = OB_SUCCESS;
   ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
@@ -494,7 +512,8 @@ int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObIArray<ObTabletHandle>
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(check_tablet_need_persist_(tablet_handle, need_persist, need_retry, decided_scn))) {
+      } else if (OB_FAIL(check_tablet_need_persist_(tablet_handle, decided_scn, need_persist,
+              need_retry, no_need_wait_persist))) {
         STORAGE_LOG(WARN, "failed to check_tablet_need_persist_", KR(ret), KPC(tablet));
       } else if (!need_persist) {
       } else if (OB_FAIL(unpersist_tablet_ids.push_back(tablet->get_tablet_meta().tablet_id_))) {
@@ -724,12 +743,12 @@ int ObTabletGCHandler::offline()
   if (!is_finish()) {
     ret = OB_EAGAIN;
     STORAGE_LOG(INFO, "tablet gc handler not finish, retry", KR(ret), KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
-  } else if (OB_FAIL(gc_lock_.lock(GC_LOCK_TIMEOUT))) {
-    // make sure 'gc_lock_' is not using.
+  } else if (OB_FAIL(gc_rwlock_.wrlock(GC_LOCK_TIMEOUT))) {
+    // make sure 'gc_rwlock_' is not using.
     ret = OB_TABLET_GC_LOCK_CONFLICT;
-    LOG_WARN("tablet gc handler not finish, retry", K(ret));
+    LOG_WARN("tablet gc handler not finish, retry", KPC(ls_), K(ret));
   } else {
-    gc_lock_.unlock();
+    gc_rwlock_.wrunlock();
     STORAGE_LOG(INFO, "tablet gc handler offline", KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
   }
   return ret;

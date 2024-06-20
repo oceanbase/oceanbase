@@ -99,7 +99,7 @@ int ObSqlPlan::store_sql_plan(ObLogPlan* log_plan, ObPhysicalPlan* phy_plan)
     LOG_WARN("failed to get sql plan infos", K(ret));
   } else if (OB_FAIL(compress_plan.compress_logical_plan(allocator_, sql_plan_infos))) {
     LOG_WARN("failed to compress logical plan", K(ret));
-  } else if (phy_plan->set_logical_plan(compress_plan)) {
+  } else if (OB_FAIL(phy_plan->set_logical_plan(compress_plan))) {
     LOG_WARN("failed to set logical plan", K(ret));
   }
   if (OB_FAIL(ret)) {
@@ -132,6 +132,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
     LOG_WARN("failed to get sql plan infos", K(ret));
   }
   allocate_mem_failed |= OB_ALLOCATE_MEMORY_FAILED == ret;
+  // overwrite ret
   if (OB_FAIL(format_sql_plan(sql_plan_infos,
                               type,
                               option,
@@ -140,6 +141,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
   }
   allocate_mem_failed |= OB_ALLOCATE_MEMORY_FAILED == ret;
   if (OB_FAIL(plan_text_to_strings(out_plan_text, plan_strs))) {
+    // overwrite ret
     LOG_WARN("failed to convert plan text to strings", K(ret));
   } else if (OB_FAIL(inner_store_sql_plan_for_explain(ctx,
                                                       plan_table,
@@ -278,15 +280,17 @@ int ObSqlPlan::construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outl
 {
   int ret = OB_SUCCESS;
   ObDelUpdLogPlan *del_upd_plan = NULL;
-  outline_global_hint.opt_features_version_ = ObGlobalHint::CURRENT_OUTLINE_ENABLE_VERSION;
   outline_global_hint.pdml_option_ = ObPDMLOption::NOT_SPECIFIED;
-  if (OB_SUCC(ret) && NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan))
-      && del_upd_plan->use_pdml()) {
-    outline_global_hint.pdml_option_ = ObPDMLOption::ENABLE;
-  }
-
-  if (OB_SUCC(ret)) {
-    outline_global_hint.parallel_ = ObGlobalHint::UNSET_PARALLEL;
+  outline_global_hint.parallel_ = ObGlobalHint::UNSET_PARALLEL;
+  const ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(query_ctx = plan.get_optimizer_context().get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(query_ctx));
+  } else {
+    outline_global_hint.opt_features_version_ = query_ctx->optimizer_features_enable_version_;
+    if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan)) && del_upd_plan->use_pdml()) {
+      outline_global_hint.pdml_option_ = ObPDMLOption::ENABLE;
+    }
     if (plan.get_optimizer_context().is_use_auto_dop()) {
       outline_global_hint.merge_parallel_hint(ObGlobalHint::SET_ENABLE_AUTO_DOP);
     } else if (plan.get_optimizer_context().get_max_parallel() > ObGlobalHint::DEFAULT_PARALLEL) {
@@ -475,6 +479,9 @@ int ObSqlPlan::inner_store_sql_plan_for_explain(ObExecContext *ctx,
       if (OB_SUCCESS == ret) {
         ret = end_ret;
       }
+    }
+    if (OB_NOT_NULL(saved_session)) {
+      saved_session->reset();
     }
   }
   return ret;

@@ -83,6 +83,7 @@ public:
   inline int set_nls_formats(const common::ObString &nls_date_format,
                              const common::ObString &nls_timestamp_format,
                              const common::ObString &nls_timestamp_tz_format);
+  int fill_session_vars(const ObBasicSessionInfo &session);
   inline const common::ObTimeZoneInfoWrap &get_tz_info_wrap()
   { return alter_table_arg_.tz_info_wrap_; }
   void set_tenant_id(const uint64_t tenant_id)
@@ -97,6 +98,7 @@ public:
   { return alter_table_arg_.has_rename_action(); }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return alter_table_arg_; }
   common::ObSArray<obrpc::ObCreateIndexArg*> &get_index_arg_list() { return index_arg_list_; }
+  void set_fts_arg_allocator(common::ObIAllocator *fts_arg_allocator) { fts_arg_allocator_ = fts_arg_allocator; }
   common::ObSArray<obrpc::ObCreateForeignKeyArg> &get_foreign_key_arg_list()
     { return alter_table_arg_.foreign_key_arg_list_; }
   const common::ObSArray<obrpc::ObCreateForeignKeyArg> &get_read_only_foreign_key_arg_list() const
@@ -110,17 +112,21 @@ public:
   obrpc::ObAlterTriggerArg &get_tg_arg() { return tg_arg_; }
   const ObTableSchema &get_alter_table_schema() const { return alter_table_arg_.alter_table_schema_; }
   ObTableSchema &get_alter_table_schema() { return alter_table_arg_.alter_table_schema_; }
+  obrpc::ObExchangePartitionArg &get_exchange_partition_arg() { return exchange_partition_arg_;}
+  int set_exchange_partition_arg(const obrpc::ObExchangePartitionArg &exchange_partition_arg);
 private:
   obrpc::ObAlterTableArg alter_table_arg_;
   bool is_comment_table_;
   bool is_alter_system_;
   common::ObSArray<obrpc::ObCreateIndexArg*> index_arg_list_;
+  common::ObIAllocator *fts_arg_allocator_;
   bool is_alter_triggers_;
   obrpc::ObAlterTriggerArg tg_arg_;
   ObRawExpr *interval_expr_;
   ObRawExpr *transition_expr_;
   uint64_t alter_table_action_count_;
   int64_t alter_external_table_type_;
+  obrpc::ObExchangePartitionArg exchange_partition_arg_;
 };
 
 inline int ObAlterTableStmt::set_tz_info_wrap(const common::ObTimeZoneInfoWrap &tz_info_wrap)

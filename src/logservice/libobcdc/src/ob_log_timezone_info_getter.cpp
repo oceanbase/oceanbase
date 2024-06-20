@@ -34,8 +34,8 @@ int ObCDCTenantTimeZoneInfo::init(const uint64_t tenant_id)
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("oblog_tz_info already inited", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(OB_FAIL(
-      tz_info_map_.init(ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_HASH_BUCKET_TIME_ZONE_INFO_MAP))))) {
+  } else if (OB_FAIL(
+      tz_info_map_.init(ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_HASH_BUCKET_TIME_ZONE_INFO_MAP)))) {
     // must use OB_SERVER_TENANT_ID cause alloc memory require user tenant should has its own ObMallocAllocator
     LOG_ERROR("init tz_info_map_ failed", KR(ret), K(tenant_id));
   } else {

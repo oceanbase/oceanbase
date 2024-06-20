@@ -39,6 +39,7 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                 ObExpr &rt_expr) const override;
   static int eval_decode(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 public:
   inline void set_cond_all_same_meta(bool all_same_meta);
   inline void set_val_all_same_meta(bool all_same_meta);

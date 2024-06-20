@@ -128,6 +128,9 @@ public:
 
   int get_max_no_limit_lsn(const ArchiveWorkStation &station, LSN &lsn);
 
+  // support flush all logs to archvie dest
+  int update_no_limit_lsn(const palf::LSN &lsn);
+
   int mark_error(const ArchiveKey &key);
 
   int print_self();
@@ -175,6 +178,7 @@ private:
     void get_send_task_count(int64_t &count);
     void get_archive_send_arg(ObArchiveSendDestArg &arg);
     void get_max_no_limit_lsn(LSN &lsn);
+    void update_no_limit_lsn(const palf::LSN &lsn);
     void mark_error();
     void print_tasks_();
     int64_t to_string(char *buf, const int64_t buf_len) const;

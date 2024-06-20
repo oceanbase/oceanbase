@@ -81,7 +81,8 @@ int ObBloomFilterMacroBlockReader::read_macro_block(const MacroBlockId &macro_id
     ObMacroBlockReadInfo macro_read_info;
     macro_read_info.macro_block_id_ = macro_id;
     macro_read_info.io_desc_.set_wait_event(is_sys_read_ ? ObWaitEventIds::DB_FILE_COMPACT_READ : ObWaitEventIds::DB_FILE_DATA_READ);
-    macro_read_info.io_desc_.set_group_id(ObIOModule::BLOOM_FILTER_IO);
+    macro_read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    macro_read_info.io_desc_.set_sys_module_id(ObIOModule::BLOOM_FILTER_IO);
     macro_read_info.offset_ = 0;
     macro_read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
     if (OB_ISNULL(io_buf_) && OB_ISNULL(io_buf_ =

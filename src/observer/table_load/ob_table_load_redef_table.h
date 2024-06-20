@@ -13,6 +13,7 @@
 #pragma once
 
 #include "share/table/ob_table_load_define.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
@@ -29,7 +30,7 @@ struct ObTableLoadRedefTableStartArg
 public:
   ObTableLoadRedefTableStartArg()
     : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID), parallelism_(0),
-      is_load_data_(false)
+      is_load_data_(false), is_insert_overwrite_(false)
   {
   }
   ~ObTableLoadRedefTableStartArg() = default;
@@ -39,25 +40,27 @@ public:
     table_id_ = common::OB_INVALID_ID;
     parallelism_ = 0;
     is_load_data_ = false;
+    is_insert_overwrite_ = false;
   }
   bool is_valid() const
   {
     return common::OB_INVALID_ID != tenant_id_ && common::OB_INVALID_ID != table_id_ &&
            0 != parallelism_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallelism), K_(is_load_data));
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallelism), K_(is_load_data), K_(is_insert_overwrite));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
   uint64_t parallelism_;
   bool is_load_data_;
+  bool is_insert_overwrite_;
 };
 
 struct ObTableLoadRedefTableStartRes
 {
 public:
   ObTableLoadRedefTableStartRes()
-    : dest_table_id_(common::OB_INVALID_ID), task_id_(0), schema_version_(0), snapshot_version_(0)
+    : dest_table_id_(common::OB_INVALID_ID), task_id_(0), schema_version_(0), snapshot_version_(0), data_format_version_(0)
   {
   }
   ~ObTableLoadRedefTableStartRes() = default;
@@ -67,13 +70,15 @@ public:
     task_id_ = 0;
     schema_version_ = 0;
     snapshot_version_ = 0;
+    data_format_version_ = 0;
   }
-  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(snapshot_version));
+  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(snapshot_version), K_(data_format_version));
 public:
   uint64_t dest_table_id_;
   int64_t task_id_;
   int64_t schema_version_;
   int64_t snapshot_version_;
+  uint64_t data_format_version_;
 };
 
 struct ObTableLoadRedefTableFinishArg

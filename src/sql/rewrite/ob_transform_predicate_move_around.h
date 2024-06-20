@@ -14,6 +14,7 @@
 #define OB_TRANSFORM_PREDICATE_MOVE_AROUND_H
 
 #include "sql/rewrite/ob_transform_rule.h"
+#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
 
@@ -156,6 +157,9 @@ private:
   int pushdown_predicates(ObDMLStmt *stmt,
                           ObIArray<ObRawExpr *> &predicates);
 
+  int pushdown_into_tables_skip_current_level_stmt(ObDMLStmt &stmt);
+  int pushdown_into_joined_table_skip_current_level_stmt(TableItem *table_item);
+
   /**
    * @brief pushdown_into_set_stmt
    * 下推谓词到set stmt的左右子查询中
@@ -276,6 +280,9 @@ private:
   int pushdown_through_winfunc(ObSelectStmt &stmt,
                                ObIArray<ObRawExpr *> &predicates,
                                ObIArray<ObRawExpr *> &down_preds);
+  int pushdown_into_qualify_filter(ObIArray<ObRawExpr *> &predicates,
+                                   ObSelectStmt &sel_stmt,
+                                   bool &is_happened);
 
   int pushdown_through_groupby(ObSelectStmt &stmt,
                                ObIArray<ObRawExpr *> &output_predicates);
@@ -374,6 +381,8 @@ private:
 
   int append_condition_array(ObIArray<ObRawExprCondition *> &conditions, int count, ObRawExprCondition *value);
 
+  int gather_basic_qualify_filter(ObSelectStmt &stmt, ObIArray<ObRawExpr*> &preds);
+  int filter_lateral_correlated_preds(TableItem &table_item, ObIArray<ObRawExpr*> &preds);
 private:
   typedef ObSEArray<ObRawExpr *, 4> PullupPreds;
   ObArenaAllocator allocator_;

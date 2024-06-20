@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_column_schema.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/utility/ob_fast_convert.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/ob_cluster_version.h"
@@ -105,23 +106,15 @@ ObColumnSchemaV2::ObColumnSchemaV2(ObIAllocator *allocator)
   reset();
 }
 
-ObColumnSchemaV2::ObColumnSchemaV2(const ObColumnSchemaV2 &src_schema)
-    : ObSchema(),
-    local_session_vars_(get_allocator())
-
-{
-  reset();
-  *this = src_schema;
-}
-
 ObColumnSchemaV2::~ObColumnSchemaV2()
 {
 }
 
-ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schema)
+int ObColumnSchemaV2::assign(const ObColumnSchemaV2 &src_schema)
 {
+  int ret = OB_SUCCESS;
   if (this != &src_schema) {
-    reset();
+    ObColumnSchemaV2::reset();
     error_ret_ = src_schema.error_ret_;
     tenant_id_ = src_schema.tenant_id_;
     table_id_ = src_schema.table_id_;
@@ -151,7 +144,6 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
     skip_index_attr_ = src_schema.skip_index_attr_;
     lob_chunk_size_ = src_schema.lob_chunk_size_;
 
-    int ret = OB_SUCCESS;
     if (OB_FAIL(deep_copy_obj(src_schema.orig_default_value_, orig_default_value_))) {
       LOG_WARN("Fail to deepy copy orig_default_value, ", K(ret));
     } else if (OB_FAIL(deep_copy_obj(src_schema.cur_default_value_, cur_default_value_))) {
@@ -181,13 +173,7 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
     }
     LOG_DEBUG("operator =", K(src_schema), K(*this));
   }
-  return *this;
-}
-
-int ObColumnSchemaV2::assign(const ObColumnSchemaV2 &other)
-{
-  *this = other;
-  return error_ret_;
+  return ret;
 }
 
 bool ObColumnSchemaV2::operator==(const ObColumnSchemaV2 &r) const
@@ -798,6 +784,30 @@ int ObColumnSchemaV2::set_geo_type(const int32_t type_val)
     }
   }
 
+  return ret;
+}
+int ObColumnSchemaV2::get_each_column_group_name(ObString &cg_name) const {
+  int ret = OB_SUCCESS;
+  /* to avoid column_name_str not end with \0, write cg_name using ObString::write*/
+  char tmp_cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH] = {'\0'};
+  int32_t write_len = snprintf(tmp_cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%.*s_%.*s",
+                               static_cast<int>(sizeof(OB_COLUMN_GROUP_NAME_PREFIX)),
+                               OB_COLUMN_GROUP_NAME_PREFIX, column_name_.length(), column_name_.ptr());
+  if (write_len < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to format column group_name", K(ret), K(write_len));
+  } else if (write_len > OB_MAX_COLUMN_GROUP_NAME_LENGTH) {
+    ret = OB_ERR_TOO_LONG_IDENT;
+    LOG_WARN("too long column name to format column group name", K(ret), KPC(this), K(write_len));
+    LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, column_name_.length(), column_name_.ptr());
+  }
+
+  if (OB_SUCC(ret)) {
+    if (cg_name.write(tmp_cg_name, write_len) != write_len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to write column group name to str", K(ret), K(cg_name), K(write_len));
+    }
+  }
   return ret;
 }
 

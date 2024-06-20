@@ -18,7 +18,6 @@ ob_define(ENABLE_MEMORY_DIAGNOSIS OFF)
 ob_define(ENABLE_OBJ_LEAK_CHECK OFF)
 ob_define(ENABLE_FATAL_ERROR_HANG ON)
 ob_define(ENABLE_SMART_VAR_CHECK OFF)
-ob_define(ENABLE_SERIALIZATION_CHECK OFF)
 ob_define(ENABLE_COMPILE_DLL_MODE OFF)
 ob_define(OB_CMAKE_RULES_CHECK ON)
 ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
@@ -41,6 +40,8 @@ ob_define(OB_ENABLE_UNITY ON)
 
 ob_define(OB_BUILD_OPENSOURCE ON)
 
+ob_define(OB_DISABLE_LSE OFF)
+
 
 if(WITH_COVERAGE)
   # -ftest-coverage to generate .gcno file
@@ -56,15 +57,25 @@ endif()
 ob_define(AUTO_FDO_OPT "")
 if(ENABLE_AUTO_FDO)
   # file name pattern [observer.prof.{current_timestamp ms}]
-  set(AUTO_FDO_OPT "-fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof.1693473964865")
+  set(AUTO_FDO_OPT "-finline-functions -fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof.1702984872675")
 endif()
 
 ob_define(THIN_LTO_OPT "")
 ob_define(THIN_LTO_CONCURRENCY_LINK "")
 
 if(ENABLE_THIN_LTO)
-  set(THIN_LTO_OPT "-flto=thin -fwhole-program-vtables")
-  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=${LTO_JOBS},--lto-whole-program-visibility")
+  set(THIN_LTO_OPT "-flto=thin")
+  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=${LTO_JOBS}")
+endif()
+
+set(HOTFUNC_OPT "")
+if(ENABLE_HOTFUNC)
+  set(HOTFUNC_OPT "-Wl,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
+endif()
+
+set(BOLT_OPT "")
+if(ENABLE_BOLT)
+  set(BOLT_OPT "-Wl,--emit-relocs")
 endif()
 
 set(ob_close_modules_static_name "")
@@ -89,11 +100,13 @@ if(OB_BUILD_CLOSE_MODULES)
   # oralce
   ob_define(OB_BUILD_ORACLE_PARSER ON)
   ob_define(OB_BUILD_ORACLE_PL ON)
-  ob_define(OB_BUILD_ORACLE_XML ON)
   # dblink
   ob_define(OB_BUILD_DBLINK ON)
   # 仲裁功能
   ob_define(OB_BUILD_ARBITRATION ON)
+
+  # 日志存储压缩
+  ob_define(OB_BUILD_LOG_STORAGE_COMPRESS ON)
 
   # 默认使用BABASSL
   ob_define(OB_USE_BABASSL ON)
@@ -132,12 +145,12 @@ if(OB_BUILD_ORACLE_PL)
   add_definitions(-DOB_BUILD_ORACLE_PL)
 endif()
 
-if(OB_BUILD_ORACLE_XML)
-  add_definitions(-DOB_BUILD_ORACLE_XML)
-endif()
-
 if(OB_BUILD_ARBITRATION)
   add_definitions(-DOB_BUILD_ARBITRATION)
+endif()
+
+if(OB_BUILD_LOG_STORAGE_COMPRESS)
+  add_definitions(-DOB_BUILD_LOG_STORAGE_COMPRESS)
 endif()
 
 if(OB_BUILD_DBLINK)
@@ -198,12 +211,12 @@ if (OB_USE_CLANG)
   if (OB_USE_LLD)
     set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld")
     set(REORDER_COMP_OPT "-ffunction-sections -fdebug-info-for-profiling")
-    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
+    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1 ${HOTFUNC_OPT}")
     set(OB_LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
   endif()
   set(CMAKE_CXX_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG} -std=gnu++11")
   set(CMAKE_C_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG}")
-  set(CMAKE_CXX_LINK_FLAGS "${LD_OPT} ${THIN_LTO_CONCURRENCY_LINK} --gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT}")
+  set(CMAKE_CXX_LINK_FLAGS "${LD_OPT} ${THIN_LTO_CONCURRENCY_LINK} --gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} ${BOLT_OPT}")
   set(CMAKE_SHARED_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack ${THIN_LTO_CONCURRENCY_LINK} ${REORDER_LINK_OPT}")
   set(CMAKE_EXE_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack -pie ${THIN_LTO_CONCURRENCY_LINK} ${REORDER_LINK_OPT} ${CMAKE_COVERAGE_EXE_LINKER_OPTIONS}")
 else() # not clang, use gcc
@@ -230,7 +243,7 @@ else()
   if (OB_USE_LLD)
     set(LD_OPT "-B${CMAKE_SOURCE_DIR}/rpm/.compile")
     set(REORDER_COMP_OPT "-ffunction-sections")
-    set(REORDER_LINK_OPT "-Wl,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
+    set(REORDER_LINK_OPT "${HOTFUNC_OPT}")
   endif()
   set(CMAKE_CXX_FLAGS "${LD_OPT} -fdiagnostics-color ${REORDER_COMP_OPT}")
   set(CMAKE_C_FLAGS "${LD_OPT} -fdiagnostics-color ${REORDER_COMP_OPT}")
@@ -273,7 +286,13 @@ if( ${ARCHITECTURE} STREQUAL "x86_64" )
     set(ARCH_LDFLAGS "")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/12.2/client64")
 else()
-    set(MARCH_CFLAGS "-march=armv8-a+crc" )
+    if (${OB_DISABLE_LSE})
+      message(STATUS "build with no-lse")
+      set(MARCH_CFLAGS "-march=armv8-a+crc")
+    else()
+      message(STATUS "build with lse")
+      set(MARCH_CFLAGS "-march=armv8-a+crc+lse")
+    endif()
     set(MTUNE_CFLAGS "-mtune=generic" )
     set(ARCH_LDFLAGS "-l:libatomic.a")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/19.10/client64")

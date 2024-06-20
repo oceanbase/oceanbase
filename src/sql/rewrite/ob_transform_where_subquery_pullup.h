@@ -15,6 +15,7 @@
 
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/rewrite/ob_union_find.h"
 
 namespace oceanbase
 {
@@ -123,6 +124,17 @@ struct SingleSetParam {
                  K_(need_add_limit_constraint));
   };
 
+  struct SemiInfoSplitHelper {
+    SemiInfoSplitHelper() : can_split_(false)
+    {}
+
+    bool can_split_;
+    ObSEArray<ObSEArray<TableItem*, 4>, 4> connected_tables_;
+
+    TO_STRING_KV(K_(can_split),
+                 K_(connected_tables));
+  };
+
   int transform_anyall_query(ObDMLStmt *stmt,
                              ObIArray<ObSelectStmt*> &unnest_stmts,
                              bool &trans_happened);
@@ -224,9 +236,9 @@ struct SingleSetParam {
   int make_null_test(ObDMLStmt *stmt, ObRawExpr *in_expr, ObRawExpr *&out_expr);
 
   int generate_semi_info(ObDMLStmt* stmt,
-                         ObRawExpr* expr,
                          TableItem *right_table,
                          ObIArray<ObRawExpr*> &semi_conditions,
+                         ObJoinType join_type,
                          SemiInfo *&semi_info);
   int fill_semi_left_table_ids(ObDMLStmt *stmt,
                                SemiInfo *info);
@@ -243,6 +255,11 @@ struct SingleSetParam {
   int check_hint_allowed_unnest(const ObDMLStmt &stmt,
                                 const ObSelectStmt &subquery,
                                 bool &allowed);
+  int check_can_split(ObSelectStmt *subquery,
+                      ObIArray<ObRawExpr*> &semi_conditions,
+                      ObJoinType join_type,
+                      SemiInfoSplitHelper &helper);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObWhereSubQueryPullup);
 };

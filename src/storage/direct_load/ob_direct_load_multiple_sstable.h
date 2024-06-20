@@ -51,10 +51,11 @@ public:
   ObDirectLoadMultipleSSTableCreateParam();
   ~ObDirectLoadMultipleSSTableCreateParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(rowkey_column_num), K_(column_count), K_(index_block_size), K_(data_block_size),
+  TO_STRING_KV(K_(tablet_id), K_(rowkey_column_num), K_(column_count), K_(index_block_size), K_(data_block_size),
                K_(index_block_count), K_(data_block_count), K_(row_count), K_(max_data_block_size),
                K_(start_key), K_(end_key), K_(fragments));
 public:
+  common::ObTabletID tablet_id_;
   int64_t rowkey_column_num_;
   int64_t column_count_;
   int64_t index_block_size_;
@@ -100,6 +101,7 @@ public:
   const common::ObTabletID &get_tablet_id() const override { return tablet_id_; }
   int64_t get_row_count() const override { return meta_.row_count_; }
   bool is_valid() const override { return is_inited_; }
+  void release_data() override;
   int copy(const ObDirectLoadMultipleSSTable &other);
   bool is_empty() const { return 0 == meta_.row_count_; }
   const ObDirectLoadMultipleSSTableMeta &get_meta() const { return meta_; }
@@ -129,7 +131,7 @@ public:
   TO_STRING_KV(K_(meta), K_(start_key), K_(end_key), K_(fragments));
 private:
   common::ObArenaAllocator allocator_;
-  common::ObTabletID tablet_id_; // invalid
+  common::ObTabletID tablet_id_; // invalid in multiple mode
   ObDirectLoadMultipleSSTableMeta meta_;
   ObDirectLoadMultipleDatumRowkey start_key_;
   ObDirectLoadMultipleDatumRowkey end_key_;

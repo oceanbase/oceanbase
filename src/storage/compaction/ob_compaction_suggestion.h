@@ -184,7 +184,7 @@ struct ObCompactionDagStatus final
 
   DECLARE_TO_STRING;
 
-  // max COMPACTION mode dag is DAG_TYPE_MDS_TABLE_MERGE, which is 9
+  // max COMPACTION mode dag is DAG_TYPE_MDS_MINI_MERGE, which is 9
   static const int64_t COMPACTION_DAG_MAX = 10;
   // max COMPACTION prio DAG_PRIO_COMPACTION_LOW = 4
   static const int64_t COMPACTION_PRIORITY_MAX = 5;

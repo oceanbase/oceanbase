@@ -15,6 +15,7 @@
 
 #include "sql/resolver/cmd/ob_cmd_stmt.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
+#include "sql/resolver/dml/ob_hint.h"
 #include "share/backup/ob_backup_struct.h"
 namespace oceanbase
 {
@@ -181,15 +182,13 @@ public:
     BATCH_SIZE,
     QUERY_TIMEOUT,
     APPEND,
-    ENABLE_DIRECT,
-    NEED_SORT,
-    ERROR_ROWS,
     GATHER_OPTIMIZER_STATISTICS,
     NO_GATHER_OPTIMIZER_STATISTICS,
     TOTAL_INT_ITEM
   };
   enum StringHintItem {
     LOG_LEVEL,
+    BATCH_BUFFER_SIZE,
     TOTAL_STRING_ITEM
   };
   void reset()
@@ -198,19 +197,23 @@ public:
     for (int64_t i = 0; i < TOTAL_STRING_ITEM; ++i) {
       string_values_[i].reset();
     }
+    direct_load_hint_.reset();
   }
   int set_value(IntHintItem item, int64_t value);
   int get_value(IntHintItem item, int64_t &value) const;
   int set_value(StringHintItem item, const ObString &value);
   int get_value(StringHintItem item, ObString &value) const;
+  ObDirectLoadHint &get_direct_load_hint() { return direct_load_hint_; }
+  const ObDirectLoadHint &get_direct_load_hint() const { return direct_load_hint_; }
   TO_STRING_KV("Int Hint Item",
                common::ObArrayWrap<int64_t>(integer_values_, TOTAL_INT_ITEM),
                "String Hint Item",
-               common::ObArrayWrap<ObString>(string_values_, TOTAL_STRING_ITEM));
+               common::ObArrayWrap<ObString>(string_values_, TOTAL_STRING_ITEM),
+               K_(direct_load_hint));
 private:
   int64_t integer_values_[TOTAL_INT_ITEM];
   ObString string_values_[TOTAL_STRING_ITEM];
-
+  ObDirectLoadHint direct_load_hint_;
 };
 
 class ObLoadDataStmt : public ObCMDStmt

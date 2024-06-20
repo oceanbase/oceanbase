@@ -71,6 +71,7 @@ void ObTableHandleV2::reset()
       }
       table_ = nullptr;
       t3m_ = nullptr;
+      table_type_ = ObITable::TableType::MAX_TABLE_TYPE;
     }
   }
 }
@@ -120,9 +121,9 @@ public:
 
   bool ready_for_flush() { return ready_for_flush_; }
 
-  bool is_frozen_checkpoint() const { return true; }
+  bool is_frozen_checkpoint() { return true; }
 
-  bool is_active_checkpoint() const { return false; }
+  bool is_active_checkpoint() { return false; }
 
   void set_ready_for_flush(bool ready) { ready_for_flush_ = ready; }
 
@@ -151,7 +152,7 @@ public:
     return rec_scn_;
   }
 
-  int flush(share::SCN recycle_scn, bool need_freeze = true) override {
+  int flush(share::SCN recycle_scn, const int64_t trace_id, bool need_freeze) override {
     share::SCN tmp;
     tmp.val_ = rec_scn_.val_ + 20;
     rec_scn_ = tmp;
@@ -300,7 +301,7 @@ TEST_F(TestCheckpointExecutor, calculate_checkpoint)
   ASSERT_EQ(true, tmp == memtable1.get_rec_scn());
 
   handle.reset();
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 TEST_F(TestCheckpointExecutor, timer_verify_rec_scn_stable)
@@ -329,7 +330,7 @@ TEST_F(TestCheckpointExecutor, timer_verify_rec_scn_stable)
   ASSERT_EQ(3, data_checkpoint->active_list_.checkpoint_list_.get_size());
 
   handle.reset();
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 }

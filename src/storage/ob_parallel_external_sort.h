@@ -1633,7 +1633,9 @@ int ObMemorySortRound<T, Compare>::get_next_item(const T *&item)
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "error unexpected, iter must not be null", K(ret), KP(iter_));
     } else if (OB_FAIL(iter_->get_next_item(item))) {
-      STORAGE_LOG(WARN, "fail to get next item", K(ret));
+      if (ret != OB_ITER_END) {
+        STORAGE_LOG(WARN, "fail to get next item", K(ret));
+      }
     }
   }
   return ret;

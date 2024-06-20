@@ -98,7 +98,7 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
     if (OB_FAIL(ObExternalTableUtils::convert_external_table_empty_range(
                                                               external_table_files.at(0).file_url_,
                                                               external_table_files.at(0).file_id_,
-                                                              tsc->get_ref_table_id(),
+                                                              0,
                                                               allocator,
                                                               new_range))) {
       LOG_WARN("failed to convert external table empty range", K(ret));
@@ -115,7 +115,7 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
         if (OB_FAIL(ObExternalTableUtils::convert_external_table_new_range(
                                                               external_table_files.at(j).file_url_,
                                                               external_table_files.at(j).file_id_,
-                                                              tsc->get_ref_table_id(),
+                                                              external_table_files.at(j).part_id_,
                                                               ranges.at(i),
                                                               allocator,
                                                               new_range,

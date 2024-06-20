@@ -24,9 +24,10 @@
 #include "share/ob_occam_timer.h"
 #include "share/scn.h"
 #include "fetch_log_engine.h"
-#include "log_loop_thread.h"
 #include "log_define.h"
+#include "log_shared_queue_thread.h"
 #include "log_io_task_cb_thread_pool.h"
+#include "log_loop_thread.h"
 #include "log_rpc.h"
 #include "palf_options.h"
 #include "palf_handle_impl.h"
@@ -202,6 +203,8 @@ public:
   // should be removed in version 4.2.0.0
   virtual int update_replayable_point(const SCN &replayable_scn) = 0;
   virtual int get_throttling_options(PalfThrottleOptions &option) = 0;
+  virtual void period_calc_disk_usage() = 0;
+  virtual int get_options(PalfOptions &options) = 0;
   VIRTUAL_TO_STRING_KV("IPalfEnvImpl", "Dummy");
 
 };
@@ -272,6 +275,7 @@ public:
   int64_t get_tenant_id() override final;
   int update_replayable_point(const SCN &replayable_scn) override final;
   int get_throttling_options(PalfThrottleOptions &option);
+  void period_calc_disk_usage() override final;
   INHERIT_TO_STRING_KV("IPalfEnvImpl", IPalfEnvImpl, K_(self), K_(log_dir), K_(disk_options_wrapper),
       KPC(log_alloc_mgr_));
   // =================== disk space management ==================
@@ -353,7 +357,7 @@ private:
                                  LogIOWorkerConfig &config);
 
   int check_can_update_log_disk_options_(const PalfDiskOptions &disk_options);
-
+  int remove_directory_while_exist_(const char *log_dir);
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
@@ -366,12 +370,14 @@ private:
   LogIOTaskCbThreadPool cb_thread_pool_;
   common::ObOccamTimer election_timer_;
   LogIOWorkerWrapper log_io_worker_wrapper_;
+  LogSharedQueueTh log_shared_queue_th_;
   BlockGCTimerTask block_gc_timer_task_;
   LogUpdater log_updater_;
   PalfMonitorCb *monitor_;
 
   PalfDiskOptionsWrapper disk_options_wrapper_;
-  int64_t disk_not_enough_print_interval_;
+  int64_t disk_not_enough_print_interval_in_gc_thread_;
+  int64_t disk_not_enough_print_interval_in_loop_thread_;
 
   char log_dir_[common::MAX_PATH_SIZE];
   char tmp_log_dir_[common::MAX_PATH_SIZE];
@@ -383,6 +389,7 @@ private:
   // last_palf_epoch_ is used to assign increasing epoch for each palf instance.
   int64_t last_palf_epoch_;
   int64_t rebuild_replica_log_lag_threshold_;//for rebuild test
+  bool enable_log_cache_;
 
   LogIOWorkerConfig log_io_worker_config_;
   bool diskspace_enough_;

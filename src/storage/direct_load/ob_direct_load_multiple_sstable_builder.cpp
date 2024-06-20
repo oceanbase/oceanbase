@@ -99,6 +99,8 @@ ObDirectLoadMultipleSSTableBuilder::ObDirectLoadMultipleSSTableBuilder()
     is_closed_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  last_rowkey_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleSSTableBuilder::~ObDirectLoadMultipleSSTableBuilder()
@@ -116,8 +118,6 @@ int ObDirectLoadMultipleSSTableBuilder::init(const ObDirectLoadMultipleSSTableBu
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
-    allocator_.set_tenant_id(MTL_ID());
-    last_rowkey_allocator_.set_tenant_id(MTL_ID());
     int64_t dir_id = -1;
     if (OB_FAIL(param_.file_mgr_->alloc_dir(dir_id))) {
       LOG_WARN("fail to alloc dir", KR(ret));
@@ -270,6 +270,7 @@ int ObDirectLoadMultipleSSTableBuilder::get_tables(
     fragment.data_file_size_ = data_block_writer_.get_file_size();
     fragment.row_count_ = row_count_;
     fragment.max_data_block_size_ = data_block_writer_.get_max_block_size();
+    create_param.tablet_id_ = param_.tablet_id_;
     create_param.rowkey_column_num_ = param_.table_data_desc_.rowkey_column_num_;
     create_param.column_count_ = param_.table_data_desc_.column_count_;
     create_param.index_block_size_ = param_.table_data_desc_.sstable_index_block_size_;

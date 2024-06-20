@@ -72,7 +72,9 @@ int ObTabletCreateDeleteHelper::get_tablet(
     ObTabletHandle &handle,
     const int64_t timeout_us)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+#ifdef ENABLE_DEBUG_LOG
+  ObTimeGuard tg("ObTabletCreateDeleteHelper::get_tablet", 10000);
+#endif
   int ret = OB_SUCCESS;
   static const int64_t SLEEP_TIME_US = 10;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -578,7 +580,7 @@ int ObTabletCreateDeleteHelper::create_empty_co_sstable(
 
       if (OB_FAIL(build_create_cs_sstable_param(storage_schema, tablet_id, snapshot_version, idx, has_all_cg, cs_param))) {
         LOG_WARN("failed to build table cs param for column store", K(ret), K(tablet_id), K(cg_schema));
-      } else if (FALSE_IT(cs_param.is_empty_co_table_ = true)) {
+      } else if (FALSE_IT(cs_param.is_co_table_without_cgs_ = true)) {
       } else if (OB_FAIL(create_sstable<ObCOSSTableV2>(cs_param, allocator, co_handle))) {
         LOG_WARN("failed to create all cg sstable", K(ret), K(cs_param));
       } else if (OB_FAIL(co_handle.get_sstable(sstable))) {
@@ -626,22 +628,6 @@ bool ObTabletCreateDeleteHelper::is_pure_hidden_tablets(const ObCreateTabletInfo
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
   const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && info.is_create_bind_hidden_tablets_;
-}
-
-int ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
-    const ObCreateTabletSchema &create_table_schema,
-    bool &need_create_sstable)
-{
-  int ret = OB_SUCCESS;
-  need_create_sstable = false;
-  if (OB_UNLIKELY(!create_table_schema.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(create_table_schema));
-  } else {
-    need_create_sstable = !(create_table_schema.is_user_hidden_table()
-        || (create_table_schema.is_index_table() && !create_table_schema.can_read_index()));
-  }
-  return ret;
 }
 
 int ObTabletCreateDeleteHelper::build_create_sstable_param(

@@ -45,6 +45,7 @@ public:
       const logservice::TenantLSID &tls_id,
       const logfetcher::ObLogFetcherStartParameters &start_parameters,
       const bool is_loading_data_dict_baseline_data,
+      const bool enable_direct_load_inc,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest_str) = 0;
 
@@ -104,6 +105,7 @@ public:
       const logservice::TenantLSID &tls_id,
       const logfetcher::ObLogFetcherStartParameters &start_parameters,
       const bool is_loading_data_dict_baseline_data,
+      const bool enable_direct_load_inc,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest_str);
   virtual int recycle_ls(const logservice::TenantLSID &tls_id);

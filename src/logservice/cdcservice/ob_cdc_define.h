@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LOGSERVICE_OB_CDC_DEFINE_
 #define OCEANBASE_LOGSERVICE_OB_CDC_DEFINE_
 
+#include <cstdint>
 namespace oceanbase
 {
 namespace cdc

@@ -87,8 +87,8 @@ void TestSSTableRowGetter::test_one_rowkey(const int64_t seed)
   ObDatumRowkey query_rowkey;
   query_rowkey.assign(query_row.storage_datums_, TEST_ROWKEY_COLUMN_CNT);
   STORAGE_LOG(INFO, "Query rowkey", K(query_row));
-  ASSERT_EQ(OB_SUCCESS, getter.inner_open(iter_param_, context_, &sstable_, &query_rowkey));
-  ASSERT_EQ(OB_SUCCESS, kv_getter.inner_open(iter_param_, context_, &ddl_kv_, &query_rowkey));
+  ASSERT_EQ(OB_SUCCESS, getter.init(iter_param_, context_, &sstable_, &query_rowkey));
+  ASSERT_EQ(OB_SUCCESS, kv_getter.init(iter_param_, context_, &ddl_kv_, &query_rowkey));
 
   const ObDatumRow *prow = nullptr;
   const ObDatumRow *kv_prow = nullptr;
@@ -113,7 +113,13 @@ TEST_F(TestSSTableRowGetter, get)
   //left border rowkey
   test_one_rowkey(0);
 
-  // right border rowkey
+  //end_key of left border
+  test_one_rowkey(15933);
+
+  //first_key of right border
+  test_one_rowkey(64760);
+
+  // end_key of right border
   test_one_rowkey(row_cnt_ - 1);
 
   // mid border rowkey

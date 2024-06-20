@@ -36,6 +36,7 @@ public:
     part_ids_(),
     is_update_unique_key_(false),
     is_update_part_key_(false),
+    is_update_primary_key_(false),
     distinct_algo_(T_DISTINCT_NONE),
     lookup_part_id_expr_(NULL),
     old_part_id_expr_(NULL),
@@ -65,6 +66,7 @@ public:
     part_ids_.reset();
     is_update_unique_key_ = false;
     is_update_part_key_ = false;
+    is_update_primary_key_ = false;
     distinct_algo_ = T_DISTINCT_NONE;
     lookup_part_id_expr_ = NULL;
     old_part_id_expr_ = NULL;
@@ -156,6 +158,7 @@ public:
   common::ObSEArray<ObObjectID, 1, common::ModulePageAllocator, true> part_ids_;
   bool is_update_unique_key_;
   bool is_update_part_key_;
+  bool is_update_primary_key_;
   DistinctType distinct_algo_;
   ObRawExpr *lookup_part_id_expr_; // for replace and insert_up conflict scene
   ObRawExpr *old_part_id_expr_;
@@ -188,6 +191,7 @@ public:
                K_(ck_cst_exprs),
                K_(is_update_unique_key),
                K_(is_update_part_key),
+               K_(is_update_primary_key),
                K_(distinct_algo),
                K_(related_index_ids));
 };
@@ -332,6 +336,7 @@ public:
         ObRawExprReplacer &replacer,
         const ObIArray<IndexDMLInfo *> &index_dml_infos);
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
+  virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;
   virtual int generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs) = 0;

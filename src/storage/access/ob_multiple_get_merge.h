@@ -57,6 +57,7 @@ public:
   int open(const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys);
   virtual void reset() override;
   virtual void reuse() override;
+  virtual void reclaim() override;
   virtual int is_range_valid() const override;
 protected:
   virtual int prepare() override;
@@ -65,11 +66,6 @@ protected:
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
   virtual void collect_merge_stat(ObTableStoreStat &stat) const override;
 private:
-  void reset_with_fuse_row_cache();
-private:
-  static const int64_t MAX_PREFETCH_CNT = 300;
-  static const int64_t MAX_MULTI_GET_FUSE_ROW_CACHE_GET_COUNT = 100;
-  static const int64_t MAX_MULTI_GET_FUSE_ROW_CACHE_PUT_COUNT;
   const common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;
   common::ObSEArray<blocksstable::ObDatumRowkey, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> cow_rowkeys_;
   int64_t get_row_range_idx_;

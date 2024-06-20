@@ -229,6 +229,11 @@ public:
 
   // Retrieve the last digit of reserve_field_
   bool is_stored() const { return reserve_field_ & 0x01; }
+
+  // Retrieve the third digit of reserve_field_
+  bool is_direct_load_inc_log() const { return reserve_field_ & 0x04; }
+  // Set teh third digit of reserve_field_ to 1
+  void set_direct_load_inc_log() { reserve_field_ |= 0x04; }
   int set_data_info(char *data, int64_t data_len);
   bool is_readed() const { return ATOMIC_LOAD(&is_readed_); }
   void set_readed() { ATOMIC_SET(&is_readed_, true); }
@@ -267,6 +272,7 @@ private:
   // An 8 bit reserved field:
   // The lowest bit represents the data is stored
   // The second low bit represents the data is parsed when contain rollback to savepoint
+  // The third low bit represents the log is direct load inc log
   int8_t   reserve_field_;           // reserved field
 };
 

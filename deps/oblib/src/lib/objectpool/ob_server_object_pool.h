@@ -35,6 +35,7 @@
 #include <lib/utility/utility.h>
 #include <lib/cpu/ob_cpu_topology.h>
 #include "lib/ob_running_mode.h"
+#include "lib/lock/ob_small_spin_lock.h"
 
 #define PTR_META2OBJ(x) reinterpret_cast<T*>(reinterpret_cast<char*>(x) + sizeof(Meta));
 #define PTR_OBJ2META(y) reinterpret_cast<Meta*>(reinterpret_cast<char*>(y) - sizeof(Meta));
@@ -46,7 +47,7 @@ namespace common
 
 struct ObPoolArenaHead
 {
-  ObLatch lock;  // Lock, 4 Bytes
+  common::ObByteLock lock;  // Lock, 4 Bytes
   int32_t borrow_cnt; // Number of calls
   int32_t return_cnt; // Number of calls
   int32_t miss_cnt; // Number of direct allocations
@@ -61,7 +62,6 @@ struct ObPoolArenaHead
   void *next; // Point to the first free object
   TO_STRING_KV(
       KP(this),
-      K(lock),
       K(borrow_cnt),
       K(return_cnt),
       K(miss_cnt),
@@ -72,7 +72,7 @@ struct ObPoolArenaHead
       K(last_miss_return_ts),
       KP(next));
   void reset() {
-    new (&lock) ObLatch();
+    new (&lock) common::ObByteLock();
     borrow_cnt = 0;
     return_cnt = 0;
     miss_cnt = 0;
@@ -202,19 +202,11 @@ public:
       int64_t itid = get_itid();
       int64_t aid = itid % arena_num_;
       ObPoolArenaHead &arena = arena_[aid];
-      int64_t cur_ts = ObClockGenerator::getClock();
       { // Enter the critical area of the arena, the timestamp is obtained outside the lock, and minimize the length of the critical area
-        ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
+        ObSmallSpinLockGuard<common::ObByteLock> lock_guard(arena.lock);
         cmeta = static_cast<Meta*>(arena.next);
         if (NULL != cmeta) {
           arena.next = static_cast<void*>(cmeta->next);
-          arena.borrow_cnt++;
-          arena.free_num--;
-          arena.all_using_cnt++;
-          arena.last_borrow_ts = cur_ts;
-        } else {
-          arena.miss_cnt++;
-          arena.last_miss_ts = cur_ts;
         }
       }
       if (NULL != cmeta) {
@@ -233,9 +225,10 @@ public:
           cmeta->magic = 0xFEDCFEDC01230123;
           ctx = PTR_META2OBJ(p);
           new (ctx) T();
-          ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
-          arena.all_using_cnt++;
         }
+      }
+      if (NULL != ctx) {
+        ATOMIC_INC(&arena.all_using_cnt);
       }
     }
     return ctx;
@@ -252,27 +245,17 @@ public:
       if (aid >= 0) {
         x->reset();
         ObPoolArenaHead &arena = arena_[aid];
-        int64_t cur_ts = ObClockGenerator::getClock();
         { // Enter the critical area of the arena, the timestamp is obtained outside the lock, and minimize the length of the critical area
-          ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
+          ObSmallSpinLockGuard<common::ObByteLock> lock_guard(arena.lock);
           cmeta->next = static_cast<Meta*>(arena.next);
           arena.next = static_cast<void*>(cmeta);
-          arena.return_cnt++;
-          arena.free_num++;
-          arena.all_using_cnt--;
-          arena.last_return_ts = cur_ts;
+          ATOMIC_DEC(&arena.all_using_cnt);
         }
       } else {
         x->~T();
         ob_free(cmeta);
         ObPoolArenaHead &arena = arena_[-(aid + 1)];
-        int64_t cur_ts = ObClockGenerator::getClock();
-        { // Enter the critical area of the arena, the timestamp is obtained outside the lock, and minimize the length of the critical area
-          ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
-          arena.miss_return_cnt++;
-          arena.all_using_cnt--;
-          arena.last_miss_return_ts = cur_ts;
-        }
+        ATOMIC_DEC(&arena.all_using_cnt);
       }
     }
   }
@@ -329,18 +312,6 @@ public:
         ObPoolArenaHead &arena = arena_[i];
         arena.reset();
         arena.next = static_cast<void*>(pmeta);
-        arena.free_num = static_cast<int16_t>(cnt_per_arena_);
-      }
-      if (regist_) {
-        // Register to the global list, display and print the log in the virtual table
-        if (OB_FAIL(ObServerObjectPoolRegistry::add(typeid(T).name(), arena_, arena_num_))) {
-          COMMON_LOG(WARN, "add to pool registry failed, can't be monitored", K(ret), K(typeid(T).name()), KP(this), K(this));
-        } else {
-          COMMON_LOG(INFO, "register server object pool finish",
-                     "tpye_name", typeid(T).name(),
-                     "type_size", sizeof(T),
-                     KP(this), K(this));
-        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -354,15 +325,14 @@ public:
       bool has_unfree = false;
       for (int64_t i = 0; !has_unfree && i < arena_num_; ++i) {
         ObPoolArenaHead &arena = arena_[i];
-        ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
-        has_unfree = arena.all_using_cnt > 0;
+        has_unfree = ATOMIC_LOAD(&arena.all_using_cnt) > 0;
       }
       if (!has_unfree) {
         for (int64_t i = 0; i < arena_num_; ++i) {
           Meta *meta = NULL;
           {
             ObPoolArenaHead &arena = arena_[i];
-            ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
+            ObSmallSpinLockGuard<common::ObByteLock> lock_guard(arena.lock);
             meta = static_cast<Meta*>(arena.next);
             arena.next = NULL;
           }

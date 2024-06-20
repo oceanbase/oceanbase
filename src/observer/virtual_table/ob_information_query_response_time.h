@@ -59,7 +59,8 @@ private:
     SVR_PORT,
     QUERY_RESPPONSE_TIME,
     COUNT,
-    TOTAL
+    TOTAL,
+    SQL_TYPE
   };
   common::ObAddr* addr_;
   common::ObString ipstr_;

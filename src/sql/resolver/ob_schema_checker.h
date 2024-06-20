@@ -108,21 +108,24 @@ public:
   int check_table_or_index_exists(const uint64_t tenant_id,
                                   const uint64_t database_id,
                                   const common::ObString &table_name,
-                                  const bool is_hidden,
+                                  const bool with_hidden_flag,
+                                  const bool is_built_in_index,
                                   bool &is_exist);
   int check_table_exists(const uint64_t tenant_id,
                          const uint64_t database_id,
                          const common::ObString &table_name,
                          const bool is_index,
-                         const bool is_hidden,
-                         bool &is_exist);
+                         const bool with_hidden_flag,
+                         bool &is_exist,
+                         const bool is_built_in_index = false);
   //int check_table_exists(uint64_t table_id, bool &is_exist) const;
   int check_table_exists(const uint64_t tenant_id,
                         const common::ObString &database_name,
                         const common::ObString &table_name,
                         const bool is_index_table,
-                        const bool is_hidden,
-                        bool &is_exist);
+                        const bool with_hidden_flag,
+                        bool &is_exist,
+                        const bool is_built_in_index = false);
 
   // mock_fk_parent_table begin
   int get_mock_fk_parent_table_with_name(
@@ -187,8 +190,9 @@ public:
                        const common::ObString &table_name,
                        const bool is_index_table,
                        const bool cte_table_fisrt,
-                       const bool is_hidden,
-                       const share::schema::ObTableSchema *&table_schema);
+                       const bool with_hidden_flag,
+                       const share::schema::ObTableSchema *&table_schema,
+                       const bool is_built_in_index = false);
   int get_table_schema(const uint64_t tenant_id, const uint64_t table_id, const share::schema::ObTableSchema *&table_schema, bool is_link = false) const;
   int get_link_table_schema(const uint64_t dblink_id,
                             const common::ObString &database_name,
@@ -225,7 +229,7 @@ public:
   //                      bool &is_rowkey_column) const;
   //int check_is_index_table(uint64_t table_id, bool &is_index_table) const;
   int get_can_read_index_array(const uint64_t tenant_id, uint64_t table_id, uint64_t *index_tid_array, int64_t &size, bool with_mv) const;
-  int get_can_write_index_array(const uint64_t tenant_id, uint64_t table_id, uint64_t *index_tid_array, int64_t &size, bool only_global = false) const;
+  int get_can_write_index_array(const uint64_t tenant_id, uint64_t table_id, uint64_t *index_tid_array, int64_t &size, bool only_global = false, bool with_mlog = false) const;
   // tenant
   int get_tenant_id(const common::ObString &tenant_name, uint64_t &teannt_id);
   int get_tenant_info(const uint64_t &tenant_id, const share::schema::ObTenantSchema *&tenant_schema);
@@ -424,7 +428,8 @@ public:
   int check_exist_same_name_object_with_synonym(const uint64_t tenant_id,
                                                 uint64_t database_id,
                                                 const common::ObString &object_name,
-                                                bool &exist);
+                                                bool &exist,
+                                                bool &is_private_syn);
   int get_object_type(const uint64_t tenant_id,
                       const common::ObString &database_name,
                       const common::ObString &table_name,
@@ -489,9 +494,9 @@ public:
                                const uint64_t obj_id,
                                const uint64_t obj_type,
                                const share::ObRawObjPrivArray &table_priv_array,
-                               const ObSEArray<uint64_t, 4> &ins_col_ids,
-                               const ObSEArray<uint64_t, 4> &upd_col_ids,
-                               const ObSEArray<uint64_t, 4> &ref_col_ids,
+                               const ObIArray<uint64_t> &ins_col_ids,
+                               const ObIArray<uint64_t> &upd_col_ids,
+                               const ObIArray<uint64_t> &ref_col_ids,
                                uint64_t &grantor_id_out,
                                const ObIArray<uint64_t> &role_id_array);
   int check_ora_grant_sys_priv(const uint64_t tenant_id,
@@ -502,10 +507,16 @@ public:
                                 const uint64_t user_id,
                                 const ObSEArray<uint64_t, 4> &role_granted_id_array,
                                 const ObIArray<uint64_t> &role_id_array);
+  int check_mysql_grant_role_priv(const ObSqlCtx &sql_ctx,
+                                  const common::ObIArray<uint64_t> &granting_role_ids);
+  int check_mysql_revoke_role_priv(const ObSqlCtx &sql_ctx,
+                                   const common::ObIArray<uint64_t> &granting_role_ids);
+  int check_set_default_role_priv(const ObSqlCtx &sql_ctx);
   int set_lbca_op();
   bool is_lbca_op();
 
   static bool is_ora_priv_check(); 
+  static bool enable_mysql_pl_priv_check(int64_t tenant_id, share::schema::ObSchemaGetterGuard &schema_guard);
 
   // dblink.
   int get_dblink_id(uint64_t tenant_id, const common::ObString &dblink_name, uint64_t &dblink_id);
@@ -519,9 +530,22 @@ public:
   int get_directory_id(const uint64_t tenant_id,
                        const common::ObString &directory_name,
                        uint64_t &directory_id);
+int flatten_udt_attributes(const uint64_t tenant_id,
+                           const uint64_t udt_id,
+                           ObIAllocator &allocator,
+                           ObString &qualified_name,
+                           int64_t &schema_version,
+                           ObIArray<ObString> &udt_qualified_names);
+  int get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id, uint64_t &attr_pos);
+
 
   int remove_tmp_cte_schemas(const ObString& cte_table_name);
 private:
+
+int construct_udt_qualified_name(const share::schema::ObUDTTypeInfo &udt_info, ObIAllocator &allocator,
+                                 const uint64_t tenant_id,
+                                 ObString &qualified_name,
+                                 ObIArray<ObString> &udt_qualified_names);
   int get_link_table_schema_inner(uint64_t table_id,
                              const share::schema::ObTableSchema *&table_schema) const;
   int get_table_schema_inner(const uint64_t tenant_id, uint64_t table_id,

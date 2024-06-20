@@ -49,16 +49,19 @@ private:
 private:
 // The automatic adjustment values of some parameters in adaptive mode correspond to memory_limit
 //
-// | memory_limit                      | 2G    | 4G    | 8G    | 16G   | 32G   | 128G  |
-// | --------------------------------- | ----- | ----- | ----- | ----- | ----- | ----- |
-// | factor                            | 11    | 12    | 13    | 14    | 15    | 17    |
-// | auto_queue_length                 | 256   | 512   | 1024  | 2048  | 4096  | 16384 |
-// | br_queue_length                   | 8192  | 16384 | 32768 | 65536 | 10W   | 10W   |
-// | part_trans_task_prealloc_count    | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
-// | auto_part_trans_task_upper_bound  | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
-// | redo_dispatcher_memory_limit      | 32M   | 64M   | 128M  | 256M  | 512M  | 2G    |
-// | extra_redo_dispatch_memory_size   | 1K    | 8M    | 32M   | 96M   | 256M  | 1.5G  |
-// | redo_dispatch_exceed_ratio        | 1     | 1     | 1     | 2     | 4     | 16    |
+// | memory_limit                                  | 2G    | 4G    | 8G    | 16G   | 32G   | 128G  |
+// | --------------------------------------------- | ----- | ----- | ----- | ----- | ----- | ----- |
+// | factor                                        | 11    | 12    | 13    | 14    | 15    | 17    |
+// | auto_queue_length                             | 256   | 512   | 1024  | 2048  | 4096  | 16384 |
+// | br_queue_length                               | 8192  | 16384 | 32768 | 65536 | 10W   | 10W   |
+// | part_trans_task_prealloc_count                | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
+// | auto_part_trans_task_upper_bound              | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
+// | redo_dispatcher_memory_limit                  | 32M   | 64M   | 128M  | 256M  | 512M  | 2G    |
+// | extra_redo_dispatch_memory_size               | 1K    | 8M    | 32M   | 96M   | 256M  | 1.5G  |
+// | redo_dispatch_exceed_ratio                    | 1     | 1     | 1     | 2     | 4     | 16    |
+// | max_chunk_cache_size                          | 512M  | 1G    | 4G    | 4G    | 4G    | 4G    |
+// | direct_load_inc_thread_num                    | 1     | 1     | 1     | 2     | 3     | 5     |
+// | direct_load_inc_queue_backlog_lowest_tolerance| 4096  | 8192  | 16384 | 32768 | 65536 | 131072|
   int64_t factor_;
 DEFINE_FIELD_WITH_GETTER(int64_t, br_queue_length);
 
@@ -86,6 +89,13 @@ DEFINE_FIELD_WITH_GETTER(int64_t, part_trans_task_reusable_count_upper_bound);
 DEFINE_FIELD_WITH_GETTER(int64_t, ready_to_seq_task_upper_bound);
 DEFINE_FIELD_WITH_GETTER(int64_t, storager_task_count_upper_bound);
 DEFINE_FIELD_WITH_GETTER(int64_t, storager_mem_percentage);
+
+// chunk_mgr cache
+DEFINE_FIELD_WITH_GETTER(int64_t, max_chunk_cache_size);
+
+// flow control for direct load inc
+DEFINE_FIELD_WITH_GETTER(int64_t, direct_load_inc_thread_num);
+DEFINE_FIELD_WITH_GETTER(int64_t, direct_load_inc_queue_backlog_lowest_tolerance);
 // FIELD DEFINE END //
 
 DISABLE_COPY_ASSIGN(ObCDCAutoConfigMgr);

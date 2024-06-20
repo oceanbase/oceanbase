@@ -24,6 +24,7 @@
 #include "log_io_task.h"                                // LogIOTask
 #include "log_io_worker.h"                              // LogIOWorker
 #include "log_reader_utils.h"                           // ReadBuf
+#include "log_shared_task.h"                            // LogSharedTask
 #include "log_writer_utils.h"                           // LogWriteBuf
 #include "lsn.h"                                        // LSN
 #include "log_meta_entry.h"                             // LogMetaEntry
@@ -39,10 +40,12 @@ namespace palf
 
 // ===================== LogEngine start =======================
 LogEngine::LogEngine() :
-    block_gc_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
+    min_block_info_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     min_block_max_scn_(),
     min_block_id_(LOG_INVALID_BLOCK_ID),
     base_lsn_for_block_gc_(PALF_INITIAL_LSN_VAL),
+    min_block_min_scn_(),
+    min_block_info_cache_version_(0),
     log_meta_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     log_meta_(),
     log_meta_storage_(),
@@ -50,6 +53,7 @@ LogEngine::LogEngine() :
     log_net_service_(),
     alloc_mgr_(NULL),
     log_io_worker_(NULL),
+    log_shared_queue_th_(NULL),
     plugins_(NULL),
     palf_id_(INVALID_PALF_ID),
     palf_epoch_(-1),
@@ -86,9 +90,10 @@ int LogEngine::init(const int64_t palf_id,
                     const LogMeta &log_meta,
                     ObILogAllocator *alloc_mgr,
                     ILogBlockPool *log_block_pool,
-                    LogHotCache *hot_cache,
+                    LogCache *log_cache,
                     LogRpc *log_rpc,
                     LogIOWorker *log_io_worker,
+                    LogSharedQueueTh *log_shared_queue_th,
                     LogPlugins *plugins,
                     const int64_t palf_epoch,
                     const int64_t log_storage_block_size,
@@ -106,7 +111,8 @@ int LogEngine::init(const int64_t palf_id,
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "LogEngine has inited!!!", K(ret), K(palf_id));
   } else if (false == is_valid_palf_id(palf_id) || OB_ISNULL(base_dir) || OB_ISNULL(alloc_mgr)
-             || OB_ISNULL(log_rpc) || OB_ISNULL(log_io_worker) || OB_ISNULL(plugins)) {
+             || OB_ISNULL(log_rpc) || OB_ISNULL(log_io_worker)
+             || OB_ISNULL(plugins)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR,
              "Invalid argument!!!",
@@ -114,9 +120,10 @@ int LogEngine::init(const int64_t palf_id,
              K(palf_id),
              K(base_dir),
              K(log_meta),
-             K(hot_cache),
+             K(log_cache),
              K(alloc_mgr),
              K(log_io_worker),
+             K(log_shared_queue_th),
              K(plugins));
     // NB: Nowday, LSN is strongly dependent on physical block,
   } else if (OB_FAIL(log_meta_storage_.init(base_dir,
@@ -129,7 +136,7 @@ int LogEngine::init(const int64_t palf_id,
                                             log_meta_storage_update_manifest_cb,
                                             log_block_pool,
                                             plugins,
-                                            NULL /*set hot_cache to NULL for meta storage*/))) {
+                                            NULL /*set log_cache to NULL for meta storage*/))) {
     PALF_LOG(ERROR, "LogMetaStorage init failed", K(ret), K(palf_id), K(base_dir));
   } else if(0 != log_storage_block_size
       && OB_FAIL(log_storage_.init(base_dir,
@@ -142,7 +149,7 @@ int LogEngine::init(const int64_t palf_id,
                                    log_storage_update_manifest_cb,
                                    log_block_pool,
                                    plugins,
-                                   hot_cache))) {
+                                   log_cache))) {
     PALF_LOG(ERROR, "LogStorage init failed!!!", K(ret), K(palf_id), K(base_dir), K(log_meta));
   } else if (OB_FAIL(log_net_service_.init(palf_id, log_rpc))) {
     PALF_LOG(ERROR, "LogNetService init failed", K(ret), K(palf_id));
@@ -153,6 +160,7 @@ int LogEngine::init(const int64_t palf_id,
     log_meta_ = log_meta;
     alloc_mgr_ = alloc_mgr;
     log_io_worker_ = log_io_worker;
+    log_shared_queue_th_ = log_shared_queue_th;
     plugins_ = plugins;
     palf_epoch_ = palf_epoch;
     base_lsn_for_block_gc_ = log_meta.get_log_snapshot_meta().base_lsn_;
@@ -172,6 +180,7 @@ void LogEngine::destroy()
     is_inited_ = false;
     palf_id_ = INVALID_PALF_ID;
     log_io_worker_ = NULL;
+    log_shared_queue_th_ = NULL;
     alloc_mgr_ = NULL;
     log_net_service_.destroy();
     log_meta_storage_.destroy();
@@ -180,6 +189,8 @@ void LogEngine::destroy()
     base_lsn_for_block_gc_.reset();
     min_block_id_ = LOG_INVALID_BLOCK_ID;
     min_block_max_scn_.reset();
+    min_block_min_scn_.reset();
+    min_block_info_cache_version_ = 0;
     last_purge_throttling_ts_ = OB_INVALID_TIMESTAMP;
   }
 }
@@ -188,9 +199,10 @@ int LogEngine::load(const int64_t palf_id,
                     const char *base_dir,
                     common::ObILogAllocator *alloc_mgr,
                     ILogBlockPool *log_block_pool,
-                    LogHotCache *hot_cache,
+                    LogCache *log_cache,
                     LogRpc *log_rpc,
                     LogIOWorker *log_io_worker,
+                    LogSharedQueueTh *log_shared_queue_th,
                     LogPlugins *plugins,
                     LogGroupEntryHeader &entry_header,
                     const int64_t palf_epoch,
@@ -228,7 +240,7 @@ int LogEngine::load(const int64_t palf_id,
   } else if (false == is_valid_palf_id(palf_id) || OB_ISNULL(base_dir)
       || OB_ISNULL(alloc_mgr) || OB_ISNULL(log_rpc) || OB_ISNULL(log_io_worker)) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(base_dir), K(hot_cache), K(alloc_mgr),
+    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(base_dir), K(log_cache), K(alloc_mgr),
              K(log_io_worker));
   } else if (OB_FAIL(log_meta_storage_.load(base_dir,
                                             "meta",
@@ -240,7 +252,7 @@ int LogEngine::load(const int64_t palf_id,
                                             log_meta_storage_update_manifest_cb,
                                             log_block_pool,
                                             plugins,
-                                            NULL, /*set hot_cache to NULL for meta storage*/
+                                            NULL, /*set log_cache to NULL for meta storage*/
                                             unused_meta_entry_header,
                                             last_meta_entry_start_lsn))) {
     PALF_LOG(ERROR, "LogMetaStorage load failed", K(ret), K(palf_id));
@@ -253,7 +265,7 @@ int LogEngine::load(const int64_t palf_id,
                                           log_storage_block_size, LOG_DIO_ALIGN_SIZE,
                                           LOG_DIO_ALIGNED_BUF_SIZE_REDO,
                                           log_storage_update_manifest_cb, log_block_pool, plugins,
-                                          hot_cache, entry_header, last_group_entry_header_lsn)))) {
+                                          log_cache, entry_header, last_group_entry_header_lsn)))) {
     PALF_LOG(ERROR, "LogStorage load failed", K(ret), K(palf_id), K(base_dir));
   } else if (FALSE_IT(guard.click("load log_storage"))
              || (0 != log_storage_block_size
@@ -270,6 +282,7 @@ int LogEngine::load(const int64_t palf_id,
     palf_epoch_ = palf_epoch;
     alloc_mgr_ = alloc_mgr;
     log_io_worker_ = log_io_worker;
+    log_shared_queue_th_ = log_shared_queue_th;
     base_lsn_for_block_gc_ = log_meta_.get_log_snapshot_meta().base_lsn_;
     is_inited_ = true;
     PALF_LOG(INFO,
@@ -333,6 +346,36 @@ int LogEngine::submit_flush_log_task(const FlushLogCbCtx &flush_log_cb_ctx,
   if (OB_FAIL(ret) && OB_NOT_NULL(flush_log_task)) {
     alloc_mgr_->free_log_io_flush_log_task(flush_log_task);
     flush_log_task = NULL;
+  }
+  return ret;
+}
+
+int LogEngine::submit_handle_submit_task()
+{
+  int ret = OB_SUCCESS;
+  LogHandleSubmitTask *handle_submit_task = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogEngine not inited", K(ret), KPC(this));
+  } else if (OB_ISNULL(log_shared_queue_th_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "log_shared_queue_th_ is NULL", K(ret), KPC(this));
+  } else if (OB_FAIL(generate_handle_submit_task_(handle_submit_task))) {
+    PALF_LOG(ERROR, "generate_flush_log_task failed", K(ret), KPC(this));
+  } else if (OB_FAIL(log_shared_queue_th_->push_task(handle_submit_task))) {
+    if (OB_IN_STOP_STATE == ret) {
+      if (REACH_TIME_INTERVAL(100 * 1000)) {
+        PALF_LOG(WARN, "push task failed", K(ret), KPC(this), KPC(handle_submit_task));
+      }
+    } else {
+      PALF_LOG(ERROR, "push task failed", K(ret), KPC(this), KPC(handle_submit_task));
+    }
+  } else {
+    PALF_LOG(TRACE, "log_shared_queue_th_->push_task success", K(ret), KPC(this));
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(handle_submit_task)) {
+    alloc_mgr_->free_log_handle_submit_task(handle_submit_task);
+    handle_submit_task = NULL;
   }
   return ret;
 }
@@ -554,6 +597,38 @@ int LogEngine::submit_purge_throttling_task(const PurgeThrottlingType purge_type
   return ret;
 }
 
+int LogEngine::submit_fill_cache_task(const LSN &lsn, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  LogFillCacheTask *fill_cache_task = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogEngine is not inited!!!", K(ret), KPC(this));
+  } else if (OB_ISNULL(log_shared_queue_th_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "log_shared_queue_th_ is NULL", K(ret), KPC(this));
+  } else if (OB_FAIL(generate_fill_cache_task_(lsn, size, fill_cache_task))) {
+    PALF_LOG(WARN, "generate fill cache task failed", K(ret), K(lsn), K(size));
+  } else if (OB_FAIL(log_shared_queue_th_->push_task(fill_cache_task))) {
+    if (OB_IN_STOP_STATE == ret) {
+      if (REACH_TIME_INTERVAL(100 * 1000)) {
+        PALF_LOG(WARN, "push task failed", K(ret), KPC(this), KPC(fill_cache_task));
+      }
+    } else {
+      PALF_LOG(ERROR, "push task failed", K(ret), KPC(this), KPC(fill_cache_task));
+    }
+  } else {
+    PALF_LOG(TRACE, "log_shared_queue_th_->push_task success", K(ret), KPC(this));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(fill_cache_task)) {
+    alloc_mgr_->free_log_fill_cache_task(fill_cache_task);
+    fill_cache_task = NULL;
+  }
+
+  return ret;
+}
+
 // ====================== LogStorage start =====================
 int LogEngine::append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &scn)
 {
@@ -593,16 +668,17 @@ int LogEngine::read_log(const LSN &lsn,
                         int64_t &out_read_size)
 {
   int ret = OB_SUCCESS;
+  LogIOContext io_ctx(LogIOUser::DEFAULT);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret), K_(palf_id), K_(is_inited));
   } else if (false == lsn.is_valid() || 0 >= in_read_size || false == read_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K_(palf_id), K_(is_inited), K(lsn), K(in_read_size), K(read_buf));
-  } else if (OB_FAIL(log_storage_.pread(lsn, in_read_size, read_buf, out_read_size))) {
+  } else if (OB_FAIL(log_storage_.pread(lsn, in_read_size, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(ERROR, "LogEngine read_log failed", K(ret), K(lsn), K(in_read_size), K(read_buf));
   } else {
-    PALF_LOG(TRACE, "LogEngine read_log success", K(ret), K(lsn), K(read_buf), K(out_read_size));
+    PALF_LOG(TRACE, "LogEngine read_log success", K(ret), K(lsn), K(read_buf), K(out_read_size), K(io_ctx));
   }
   return ret;
 }
@@ -614,8 +690,11 @@ int LogEngine::read_group_entry_header(const LSN &lsn, LogGroupEntryHeader &log_
   const int64_t in_read_size = MAX_LOG_HEADER_SIZE;
   ReadBufGuard read_buf_guard("LogEngine", in_read_size);
   ReadBuf &read_buf = read_buf_guard.read_buf_;
+  LogIOContext io_ctx(LogIOUser::DEFAULT);
+  io_ctx.set_allow_filling_cache(false);
   int64_t out_read_size = 0;
   int64_t pos = 0;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (false == lsn.is_valid()) {
@@ -623,7 +702,7 @@ int LogEngine::read_group_entry_header(const LSN &lsn, LogGroupEntryHeader &log_
   } else if (!read_buf.is_valid()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "allocate memory failed", KPC(this), K(lsn));
-  } else if (OB_FAIL(log_storage_.pread_without_block_header(lsn, in_read_size, read_buf, out_read_size))) {
+  } else if (OB_FAIL(log_storage_.pread(lsn, in_read_size, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "LogStorage pread failed", K(ret));
   } else if (OB_FAIL(log_group_entry_header.deserialize(read_buf.buf_, in_read_size, pos))) {
     PALF_LOG(WARN,
@@ -659,6 +738,7 @@ int LogEngine::truncate(const LSN &lsn)
   } else if (OB_FAIL(log_storage_.truncate(lsn))) {
     PALF_LOG(ERROR, "LogStorage truncate failed", K(ret), K(lsn));
   } else {
+    (void)reset_min_block_info_();
     PALF_LOG(INFO, "truncate success", K(lsn));
   }
   return ret;
@@ -676,7 +756,9 @@ int LogEngine::truncate_prefix_blocks(const LSN &lsn)
   } else if (OB_FAIL(log_storage_.truncate_prefix_blocks(lsn))) {
     PALF_LOG(WARN, "truncate_prefix_blocks failed", K(ret), K_(palf_id), K_(is_inited), K(lsn));
   } else {
-    PALF_LOG(INFO, "truncate_prefix_blocks success", K(ret), K_(palf_id), K_(is_inited), K(lsn)); }
+    (void)reset_min_block_info_();
+    PALF_LOG(INFO, "truncate_prefix_blocks success", KPC(this), K(lsn));
+  }
   return ret;
 }
 
@@ -697,6 +779,7 @@ int LogEngine::end_flashback(const LSN &start_lsn_of_block)
   if (OB_FAIL(log_storage_.end_flashback(start_lsn_of_block))) {
     PALF_LOG(ERROR, "LogStorege end_flashback failed", K(ret), KPC(this), K(start_lsn_of_block));
   } else {
+    (void)reset_min_block_info_();
     PALF_LOG(INFO, "LogEngine end_flashback success", KPC(this), K(start_lsn_of_block));
   }
   return ret;
@@ -718,21 +801,42 @@ int LogEngine::delete_block(const block_id_t &block_id)
   } else if (false == is_valid_block_id(block_id)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K_(palf_id), K_(is_inited), K(block_id));
-  } else if (OB_FAIL(log_storage_.delete_block(block_id)) && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
-    PALF_LOG(ERROR, "LogStorage delete block failed, unexpected error", K(ret), K(block_id));
-  } else if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
-    PALF_LOG(INFO, "file not exist, may be concurrently delete by others module", K(ret), K(block_id));
-    ret = OB_SUCCESS;
+  } else if (OB_FAIL(log_storage_.delete_block(block_id))) {
+    PALF_LOG(WARN, "LogStorage delete block failed", K(ret), K(block_id));
   } else {
     PALF_LOG(INFO, "delete success", K(block_id), K_(palf_id), K_(is_inited));
   }
 
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCC(ret) && OB_SUCCESS != (tmp_ret = get_block_min_scn(next_block_id + 1, next_block_max_scn))) {
-    PALF_LOG(WARN, "get the max ts of next block failed", K(tmp_ret), K(next_block_id));
+  // the block whose names with 'block_id' may be concurrently delete by rebuild,
+  // in this way, we don't need update min block info.
+  if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
+    PALF_LOG(INFO, "file not exist, may be concurrently delete by others module", K(ret), K(block_id));
+    ret = OB_SUCCESS;
+  } else if (OB_SUCC(ret)) {
+    int64_t min_block_info_cache_version = -1;
+    {
+      ObSpinLockGuard guard(min_block_info_lock_);
+      min_block_info_cache_version = min_block_info_cache_version_;
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = get_block_min_scn(next_block_id + 1, next_block_max_scn))) {
+      PALF_LOG(WARN, "get the max ts of next block failed", K(tmp_ret), K(next_block_id));
+      reset_min_block_info_();
+    } else {
+      // assume there are four blocks on disk, | 10 | 11 | 12 | 13 |, only when min using block id(i.e. cacluate by snapshot)
+      // is greater than or equal to 12, we can delete blocks whose names is smaller than or equal to 10.
+      //
+      // assume the block to be deleted is 10(i.e. min_block_id is 10), next_block_id is 11, next_block_id + 1 is 12.
+      // because the block whose names with 'next_block_id + 1' may be truncated or flashback, double check
+      // min_block_info_cache_version is important, otherwise, the cache of min block info
+      // (i.e. min_block_min_scn_, min_block_max_scn_) is incorrect, consider following case:
+      // T1 timestamp, thread A call delete_block, and get_block_min_scn successfully(e.g. next_block_id + 1 is 12);
+      // T2 timestamp, thread B call truncate or flashback, the content of block whose names with 12 is overwriten;
+      // T3 timestamp, thread A call set_min_block_info_for_gc_, and the min_block_info(i.e. min_block_max_scn_, min_block_min_scn_)
+      // will reset to incorrect scn.
+      set_min_block_info_for_gc_(min_block_info_cache_version, next_block_id, next_block_max_scn);
+    }
   }
-  // If 'delete_block' or 'get_block_min_scn' failed, need reset 'min_block_scn_' to be invalid.
-  reset_min_block_info_guarded_by_lock_(next_block_id, next_block_max_scn);
   return ret;
 }
 
@@ -751,47 +855,86 @@ int LogEngine::get_block_id_range(block_id_t &min_block_id, block_id_t &max_bloc
 int LogEngine::get_min_block_info_for_gc(block_id_t &block_id, SCN &max_scn)
 {
   int ret = OB_SUCCESS;
-  block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
+  block_id_t min_block_id_cache = LOG_INVALID_BLOCK_ID;
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
+  block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
   SCN min_block_max_scn;
+  int64_t min_block_info_cache_version = -1;
 
   do {
-    ObSpinLockGuard guard(block_gc_lock_);
-    min_block_id = min_block_id_;
+    ObSpinLockGuard guard(min_block_info_lock_);
+    min_block_id_cache = min_block_id_;
     min_block_max_scn = min_block_max_scn_;
+    min_block_info_cache_version = min_block_info_cache_version_;
   } while (0);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogEngine is not inited", K(ret), KPC(this));
-  } else if (min_block_max_scn.is_valid()) {
-    block_id = min_block_id;
-    max_scn = min_block_max_scn;
   } else if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))) {
     PALF_LOG(WARN, "get_block_id_range failed", K(ret));
+    // only use cache value when the min_block_id_cache is same as min_block_id get from LogBlockMgr
+  } else if (min_block_id_cache == min_block_id && min_block_max_scn.is_valid()) {
+    block_id = min_block_id;
+    max_scn = min_block_max_scn;
     // NB: used next block min_block_ts as the max_scn of current block
   } else if (OB_FAIL(get_block_min_scn(min_block_id+1, min_block_max_scn))) {
     PALF_LOG(TRACE, "get_block_min_scn failed", K(ret));
   } else {
-    reset_min_block_info_guarded_by_lock_(min_block_id, min_block_max_scn);
+    // after the first call, 'min_block_max_scn_' is always valid.(except after rebuild, flashback or truncate)
+    // it's important to get 'min_block_info_cache_version' before 'get_block_min_scn', otherwise, the cache of
+    // min block info(i.e. min_block_max_scn_, min_block_min_scn_) is incorrect, consider following case:
+    // T1 timestamp, thread A call get_min_block_info_for_gc, and get_block_min_scn successfully(e.g. min_block_id is 10);
+    // T2 timestamp, thread B call truncate or flashback, the content of block whose names with 11 is overwriten;
+    // T3 timestamp, thread A call set_min_block_info_for_gc_, and the min_block_info(i.e. min_block_max_scn_, min_block_min_scn_)
+    // will reset to incorrect scn.
+    set_min_block_info_for_gc_(min_block_info_cache_version, min_block_id, min_block_max_scn);
     block_id = min_block_id;
     max_scn = min_block_max_scn;
   }
   return ret;
 }
 
-int LogEngine::get_min_block_info(block_id_t &min_block_id, SCN &min_block_scn) const
+int LogEngine::get_min_block_info(block_id_t &block_id, SCN &min_scn)
 {
   int ret = OB_SUCCESS;
-  block_id_t max_block_id;
+  block_id_t min_block_id_cache = LOG_INVALID_BLOCK_ID;
+  block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
+  block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
+  SCN min_block_min_scn;
+  int64_t min_block_info_cache_version = -1;
+
+  do {
+    ObSpinLockGuard guard(min_block_info_lock_);
+    min_block_id_cache = min_block_id_;
+    min_block_min_scn = min_block_min_scn_;
+    min_block_info_cache_version = min_block_info_cache_version_;
+  } while (0);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogEngine is not inited", K(ret), KPC(this));
   } else if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))) {
-    PALF_LOG(WARN, "get_block_id_range failed", K(ret), KPC(this));
-  } else if (OB_FAIL(get_block_min_scn(min_block_id, min_block_scn))) {
-    PALF_LOG(WARN, "get_block_min_scn failed", K(ret), KPC(this));
+    PALF_LOG(TRACE, "get_block_id_range failed", K(ret));
+    // only use cache value when the min_block_id_cache is same as min_block_id get from LogBlockMgr
+  } else if (min_block_id_cache == min_block_id && min_block_min_scn.is_valid()) {
+    block_id = min_block_id;
+    min_scn = min_block_min_scn;
+  } else if (OB_FAIL(get_block_min_scn(min_block_id, min_block_min_scn))) {
+    PALF_LOG(TRACE, "get_block_min_scn failed", K(ret));
   } else {
+    // after the first call, 'min_block_min_scn_' is always valid.(except after rebuild, flashback or truncate)
+    // it's important to get 'min_block_info_cache_version' before 'get_block_min_scn', otherwise, the cache of
+    // min block info(i.e. min_block_min_scn_) is incorrect, consider following case:
+    //
+    // T1 timestamp, thread A call get_min_block_info, and get_block_min_scn successfully(e.g. min_block_id is 10);
+    // T2 timestamp, thread B call truncate for flashback, the content of block whose names with 10 is overwriten;
+    // T3 timestamp, thread A call set_min_block_info_, and the min_block_info(i.e. min_block_min_scn_) will reset
+    // to incorrect scn.
+    set_min_block_info_(min_block_info_cache_version, min_block_id, min_block_min_scn);
+    block_id = min_block_id;
+    min_scn = min_block_min_scn;
+    PALF_LOG(TRACE, "get_min_block_info read disk success.", K(block_id), K(min_scn));
   }
   return ret;
 }
@@ -835,6 +978,43 @@ int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte,
     unrecyclable_disk_space = log_storage_.get_end_lsn() - get_base_lsn_used_for_block_gc() + unrecyclable_meta_size;
     PALF_LOG(TRACE, "get_total_used_disk_space", K(meta_storage_used), K(log_storage_used), K(total_used_size_byte));
   }
+  return ret;
+}
+
+int LogEngine::fill_cache_when_slide(const LSN &begin_lsn, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogEngine is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(log_storage_.fill_cache_when_slide(begin_lsn, size))) {
+    PALF_LOG(WARN, "fill_cache_when_slide failed", K(ret), K(begin_lsn), K(size));
+  }
+
+  return ret;
+}
+
+int LogEngine::raw_read(const LSN &lsn,
+                        const int64_t in_read_size,
+                        const bool need_read_block_header,
+                        ReadBuf &read_buf,
+                        int64_t &out_read_size)
+{
+  int ret = OB_SUCCESS;
+  LogIOContext io_ctx(LogIOUser::DEFAULT);
+  // TODO modify @zjf225077
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret), K_(palf_id), K_(is_inited));
+  } else if (false == lsn.is_valid() || 0 >= in_read_size || false == read_buf.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K_(palf_id), K_(is_inited), K(lsn), K(in_read_size), K(read_buf));
+  } else if (need_read_block_header) {
+    ret = log_storage_.pread_with_block_header(lsn, in_read_size, read_buf, out_read_size, io_ctx);
+  } else if (!need_read_block_header) {
+    ret = log_storage_.pread(lsn, in_read_size, read_buf, out_read_size, io_ctx);
+  } else {}
   return ret;
 }
 
@@ -1262,12 +1442,13 @@ int LogEngine::construct_log_meta_(const LSN &lsn, block_id_t &expected_next_blo
   ReadBufGuard guard("LogEngine", buf_len);
   ReadBuf &read_buf = guard.read_buf_;
   LogMetaEntry meta_entry;
+  LogIOContext io_ctx(LogIOUser::RESTART);
   if (false == lsn.is_valid()) {
     PALF_LOG(INFO, "there is no meta entry, maybe create palf failed", K(ret), K_(palf_id), K_(is_inited));
   } else if (!read_buf.is_valid()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "allocate memory failed", KPC(this), K(lsn));
-  } else if (OB_FAIL(log_meta_storage_.pread(lsn, buf_len, read_buf, out_read_size))) {
+  } else if (OB_FAIL(log_meta_storage_.pread(lsn, buf_len, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "ObLogMetaStorage pread failed", K(ret), K_(palf_id), K_(is_inited));
     // NB: when lsn is invalid, means there is no data on disk.
   } else if (OB_FAIL(meta_entry.deserialize(read_buf.buf_, buf_len, pos))) {
@@ -1308,6 +1489,22 @@ int LogEngine::generate_flush_log_task_(const FlushLogCbCtx &flush_log_cb_ctx,
   if (OB_FAIL(ret) && NULL != flush_log_task) {
     alloc_mgr_->free_log_io_flush_log_task(flush_log_task);
     flush_log_task = NULL;
+  }
+  return ret;
+}
+
+int LogEngine::generate_handle_submit_task_(LogHandleSubmitTask *&handle_submit_task)
+{
+  int ret = OB_SUCCESS;
+  handle_submit_task = NULL;
+  if (NULL == (handle_submit_task = alloc_mgr_->alloc_log_handle_submit_task(palf_id_, palf_epoch_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(ERROR, "alloc_log_handle_submit_task failed", K(ret));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(handle_submit_task)) {
+    alloc_mgr_->free_log_handle_submit_task(handle_submit_task);
+    handle_submit_task = NULL;
   }
   return ret;
 }
@@ -1435,6 +1632,31 @@ int LogEngine::generate_purge_throttling_task_(const PurgeThrottlingCbCtx &purge
     purge_task = NULL;
   }
   return ret;
+}
+
+int LogEngine::generate_fill_cache_task_(const LSN &lsn,
+                                         const int64_t size,
+                                         LogFillCacheTask *&fill_cache_task)
+{
+  int ret = OB_SUCCESS;
+  fill_cache_task = NULL;
+
+  if (!lsn.is_valid() || 0 >= size) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(lsn), K(size));
+  } else if (NULL == (fill_cache_task = alloc_mgr_->alloc_log_fill_cache_task(palf_id_, palf_epoch_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "alloc LogFillCacheTask failed", K(ret), K(palf_id_), K(palf_epoch_), K(lsn), K(size));
+  } else if (OB_FAIL(fill_cache_task->init(lsn, size))) {
+    PALF_LOG(WARN, "LogFillCacheTask init failed", K(ret), K(lsn), K(size));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(fill_cache_task)) {
+    alloc_mgr_->free_log_fill_cache_task(fill_cache_task);
+    fill_cache_task = NULL;
+  }
+  return ret;
+
 }
 
 int LogEngine::serialize_log_meta_(const LogMeta& log_meta, char *buf, int64_t buf_len)
@@ -1610,11 +1832,44 @@ bool LogEngine::check_last_block_whether_is_integrity_(const block_id_t expected
          || expected_next_block_id <= max_block_id;
 }
 
-void LogEngine::reset_min_block_info_guarded_by_lock_(const block_id_t min_block_id, const SCN &min_block_max_scn)
+void LogEngine::set_min_block_info_(const int64_t min_block_info_cache_version,
+                                    const block_id_t min_block_id,
+                                    const SCN &min_block_min_scn)
 {
-  ObSpinLockGuard guard(block_gc_lock_);
-  min_block_id_ = min_block_id;
-  min_block_max_scn_ = min_block_max_scn;
+  ObSpinLockGuard guard(min_block_info_lock_);
+  if (min_block_info_cache_version_ == min_block_info_cache_version) {
+    min_block_id_ = min_block_id;
+    min_block_min_scn_ = min_block_min_scn;
+  }
+}
+
+void LogEngine::set_min_block_info_for_gc_(const int64_t min_block_info_cache_version,
+                                           const block_id_t min_block_id,
+                                           const SCN &min_block_max_scn)
+{
+  ObSpinLockGuard guard(min_block_info_lock_);
+  if (min_block_info_cache_version_ == min_block_info_cache_version) {
+    // defense code:
+    // only update min_block_min_scn_ to min_block_max_scn_ when min_block_id is same as min_block_id_ + 1
+    if (!is_valid_block_id(min_block_id_)
+        || (min_block_id == min_block_id_ + 1 && min_block_max_scn_.is_valid())) {
+      min_block_min_scn_ = min_block_max_scn_;
+    } else {
+      min_block_min_scn_.reset();
+    }
+    min_block_id_ = min_block_id;
+    min_block_max_scn_ = min_block_max_scn;
+    PALF_LOG(TRACE, "set_min_block_info_for_gc_ success.", K(min_block_id), K(min_block_max_scn));
+  }
+}
+
+void LogEngine::reset_min_block_info_()
+{
+  ObSpinLockGuard guard(min_block_info_lock_);
+  min_block_id_ = LOG_INVALID_BLOCK_ID;
+  min_block_min_scn_.reset();
+  min_block_max_scn_.reset();
+  min_block_info_cache_version_++;
 }
 
 LogNetService& LogEngine::get_net_service()

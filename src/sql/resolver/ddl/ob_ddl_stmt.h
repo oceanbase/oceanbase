@@ -15,6 +15,7 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ob_stmt.h"
 #include "sql/resolver/ob_cmd.h"
+#include "share/ob_rpc_struct.h"
 namespace oceanbase
 {
 namespace sql
@@ -49,6 +50,7 @@ protected:
   ObArenaAllocator allocator_;
 private:
   int64_t parallelism_;
+
   DISALLOW_COPY_AND_ASSIGN(ObDDLStmt);
 };
 }  // namespace sql

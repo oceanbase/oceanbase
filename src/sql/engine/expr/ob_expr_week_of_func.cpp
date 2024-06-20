@@ -19,6 +19,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
@@ -63,6 +64,9 @@ int ObExprWeekOfYear::calc_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
   ObTime ot;
   ObDateSqlMode date_sql_mode;
   const ObSQLSessionInfo *session = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
+  const common::ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -70,16 +74,23 @@ int ObExprWeekOfYear::calc_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
     LOG_WARN("eval param value failed");
   } else if (OB_UNLIKELY(param_datum->is_null())) {
     expr_datum.set_null();
-  } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
+  } else if (FALSE_IT(date_sql_mode.init(sql_mode))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
                  *param_datum, expr.args_[0]->datum_meta_.type_,
                  expr.args_[0]->datum_meta_.scale_,
-                 get_timezone_info(session),
+                 tz_info,
                  ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), date_sql_mode,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
     uint64_t cast_mode = 0;
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                      session->is_ignore_stmt(),
+                                      sql_mode,
+                                      cast_mode);
     if (CM_IS_WARN_ON_FAIL(cast_mode)) {
       ret = OB_SUCCESS;
     }
@@ -98,6 +109,14 @@ int ObExprWeekOfYear::is_valid_for_generated_column(const ObRawExpr*expr, const 
   if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
     LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprWeekOfYear, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(2);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
   return ret;
 }
 
@@ -136,6 +155,9 @@ int ObExprWeekDay::calc_weekday(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
   ObTime ot;
   ObDateSqlMode date_sql_mode;
   const ObSQLSessionInfo *session = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
+  const common::ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -143,16 +165,23 @@ int ObExprWeekDay::calc_weekday(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
     LOG_WARN("eval param value failed");
   } else if (OB_UNLIKELY(param_datum->is_null())) {
     expr_datum.set_null();
-  } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
+  } else if (FALSE_IT(date_sql_mode.init(sql_mode))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
                  *param_datum, expr.args_[0]->datum_meta_.type_,
                  expr.args_[0]->datum_meta_.scale_,
-                 get_timezone_info(session),
+                 tz_info,
                  ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), date_sql_mode,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
     uint64_t cast_mode = 0;
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                      session->is_ignore_stmt(),
+                                      sql_mode,
+                                      cast_mode);
     if (CM_IS_WARN_ON_FAIL(cast_mode)) {
       ret = OB_SUCCESS;
     }
@@ -171,6 +200,14 @@ int ObExprWeekDay::is_valid_for_generated_column(const ObRawExpr*expr, const com
   if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
     LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprWeekDay, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(2);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
   return ret;
 }
 
@@ -304,6 +341,9 @@ int ObExprYearWeek::calc_yearweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   ObTime ot;
   ObDateSqlMode date_sql_mode;
   const ObSQLSessionInfo *session = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
+  const common::ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -311,16 +351,22 @@ int ObExprYearWeek::calc_yearweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
     LOG_WARN("eval param value failed");
   } else if (OB_UNLIKELY(param_datum->is_null())) {
     expr_datum.set_null();
-  } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
+  } else if (FALSE_IT(date_sql_mode.init(sql_mode))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
                      *param_datum, expr.args_[0]->datum_meta_.type_,
                      expr.args_[0]->datum_meta_.scale_,
-                     get_timezone_info(session),
+                     tz_info,
                      ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
                      date_sql_mode, expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
     uint64_t cast_mode = 0;
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                      session->is_ignore_stmt(),
+                                      sql_mode, cast_mode);
     if (CM_IS_WARN_ON_FAIL(cast_mode)) {
       ret = OB_SUCCESS;
     }
@@ -349,6 +395,14 @@ int ObExprYearWeek::is_valid_for_generated_column(const ObRawExpr*expr, const co
   if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
     LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprYearWeek, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(2);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
   return ret;
 }
 
@@ -422,6 +476,9 @@ int ObExprWeek::calc_week(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
   ObTime ot;
   ObDateSqlMode date_sql_mode;
   const ObSQLSessionInfo *session = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
+  const common::ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -429,16 +486,23 @@ int ObExprWeek::calc_week(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
     LOG_WARN("eval param value failed");
   } else if (OB_UNLIKELY(param_datum->is_null())) {
     expr_datum.set_null();
-  } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
+  } else if (FALSE_IT(date_sql_mode.init(sql_mode))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
                  *param_datum, expr.args_[0]->datum_meta_.type_,
                  expr.args_[0]->datum_meta_.scale_,
-                 get_timezone_info(session),
+                 tz_info,
                  ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), date_sql_mode,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
     uint64_t cast_mode = 0;
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                      session->is_ignore_stmt(),
+                                      sql_mode,
+                                      cast_mode);
     if (CM_IS_WARN_ON_FAIL(cast_mode)) {
       LOG_WARN("cast to ob time failed", K(ret));
       LOG_USER_WARN(OB_ERR_CAST_VARCHAR_TO_TIME);
@@ -473,6 +537,14 @@ int ObExprWeek::is_valid_for_generated_column(const ObRawExpr*expr, const common
   if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
     LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprWeek, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(2);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
   return ret;
 }
 

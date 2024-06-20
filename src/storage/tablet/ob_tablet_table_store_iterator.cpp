@@ -286,8 +286,8 @@ int ObTableStoreIterator::add_tables(
       } else if (sstable_array[i]->is_co_sstable() && unpack_co_table) {
         ObCOSSTableV2 *co_table = static_cast<ObCOSSTableV2 *>(sstable_array[i]);
         ObSSTableMetaHandle meta_handle;
-        if (co_table->is_empty_co_table()) {
-          // empty co table, no need to call this func recursively
+        if (co_table->is_cgs_empty_co_table()) {
+          // all_cg only co table, no need to call this func recursively
         } else if (OB_FAIL(co_table->get_meta(meta_handle))) {
           LOG_WARN("failed to get co meta handle", K(ret), KPC(co_table));
         } else {
@@ -414,7 +414,7 @@ int ObTableStoreIterator::set_retire_check()
     if (OB_UNLIKELY(!table_ptr.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected invalid table handle", K(ret), K(table_ptr), K(*this));
-    } else if (table_ptr.table_->is_data_memtable()) {
+    } else if (table_ptr.table_->is_memtable()) {
       first_memtable = table_ptr.table_;
     } else {
       break;
@@ -422,7 +422,7 @@ int ObTableStoreIterator::set_retire_check()
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(first_memtable)) {
-    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(first_memtable);
+    ObITabletMemtable *memtable = static_cast<ObITabletMemtable *>(first_memtable);
     memstore_retired_ = &memtable->get_read_barrier();
   }
   return ret;

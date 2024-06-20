@@ -309,8 +309,8 @@ public:
         COMMON_LOG_RET(WARN, err_code_map(hash_ret), "inc ref error", K(node->uref_), K(lbt()));
       } else {
         value = (Value*)node->hash_val_;
-        if (node->uref_ - RefHandle::BORN_REF > 1000) {
-          COMMON_LOG_RET(WARN, OB_SUCCESS, "uref leak check", K(node->uref_), K(lbt()));
+        if (node->uref_ - RefHandle::BORN_REF >= 100000 && (node->uref_ - RefHandle::BORN_REF) % 10000 == 0) {
+          COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "uref leak check", K(node->uref_), K(lbt()));
         }
       }
     }
@@ -385,6 +385,8 @@ public:
     RemoveIf<Function> remove_if(*this, fn);
     return map(remove_if);
   }
+
+  const AllocHandle& get_alloc_handle() const { return alloc_handle_; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLinkHashMap);

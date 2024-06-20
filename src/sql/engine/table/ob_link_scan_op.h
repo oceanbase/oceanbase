@@ -52,6 +52,7 @@ public:
 private:
   virtual void reset_dblink() override;
   void reset_result();
+  void reset_oci_connection();
   int init_conn_snapshot(bool &new_snapshot);
   int free_snapshot();
   bool need_tx(const ObSQLSessionInfo *my_session) const;
@@ -63,7 +64,6 @@ private:
   bool iter_end_;
   common::ObArenaAllocator row_allocator_;
   int64_t iterated_rows_;
-  ObSQLSessionInfo *tm_session_;
   common::sqlclient::ObISQLConnection *tm_rm_connection_;
   ObReverseLink *reverse_link_;
   sql::DblinkGetConnType conn_type_;

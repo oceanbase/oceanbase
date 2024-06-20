@@ -1615,7 +1615,10 @@
   "enum_set_values": [
   ],
   "dblink_name":"",
-  "dblink_id":-1
+  "dblink_id":-1,
+  "local_session_var": { },
+  "local_session_var_id":-1,
+  "mview_id":-1
 }
 [10] utc_timestamp()
 {
@@ -1653,7 +1656,10 @@
   "enum_set_values": [
   ],
   "dblink_name":"",
-  "dblink_id":-1
+  "dblink_id":-1,
+  "local_session_var": { },
+  "local_session_var_id":-1,
+  "mview_id":-1
 }
 [11] floor(3.14)
 {
@@ -1720,7 +1726,10 @@
   "enum_set_values": [
   ],
   "dblink_name":"",
-  "dblink_id":-1
+  "dblink_id":-1,
+  "local_session_var": { },
+  "local_session_var_id":-1,
+  "mview_id":-1
 }
 [12] count(*)
 {
@@ -1763,7 +1772,7 @@
     "dl":"",
     "type":0
   },
-  "is_nested_aggr":false,
+  "expr_in_inner_stmt":false,
   "pl_agg_udf_expr":null
 }
 [13] max(c1)
@@ -1856,7 +1865,7 @@
     "dl":"",
     "type":0
   },
-  "is_nested_aggr":false,
+  "expr_in_inner_stmt":false,
   "pl_agg_udf_expr":null
 }
 [14] c1 in (select t1 from table1)
@@ -2396,7 +2405,10 @@
   "enum_set_values": [
   ],
   "dblink_name":"",
-  "dblink_id":-1
+  "dblink_id":-1,
+  "local_session_var": { },
+  "local_session_var_id":-1,
+  "mview_id":-1
 }
 [19] @a
 {
@@ -2467,7 +2479,10 @@
   "enum_set_values": [
   ],
   "dblink_name":"",
-  "dblink_id":-1
+  "dblink_id":-1,
+  "local_session_var": { },
+  "local_session_var_id":-1,
+  "mview_id":-1
 }
 [20] c1
 {
@@ -5034,7 +5049,10 @@
               "enum_set_values": [
               ],
               "dblink_name":"",
-              "dblink_id":-1
+              "dblink_id":-1,
+              "local_session_var": { },
+              "local_session_var_id":-1,
+              "mview_id":-1
             },
              {
               "item_type":"T_INT",
@@ -5070,7 +5088,10 @@
           "enum_set_values": [
           ],
           "dblink_name":"",
-          "dblink_id":-1
+          "dblink_id":-1,
+          "local_session_var": { },
+          "local_session_var_id":-1,
+          "mview_id":-1
         },
          {
           "item_type":"T_INT",
@@ -5106,7 +5127,10 @@
       "enum_set_values": [
       ],
       "dblink_name":"",
-      "dblink_id":-1
+      "dblink_id":-1,
+      "local_session_var": { },
+      "local_session_var_id":-1,
+      "mview_id":-1
     },
      {
       "item_type":"T_INT",
@@ -5142,7 +5166,10 @@
   "enum_set_values": [
   ],
   "dblink_name":"",
-  "dblink_id":-1
+  "dblink_id":-1,
+  "local_session_var": { },
+  "local_session_var_id":-1,
+  "mview_id":-1
 }
 [34] X not like Y
 {

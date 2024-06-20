@@ -2615,12 +2615,12 @@ TEST_F(TestXmlParser, test_cons_mem_usage)
 
   ObString emelent1= "emelent1";
   ObString emelent2= "emelent2";
-  element1->set_key(emelent1);
-  element2->set_key(emelent2);
+  element1->set_xml_key(emelent1);
+  element2->set_xml_key(emelent2);
 
   ObString atr1= "sttr1_name";
   ObString atr_value1= "sttr1_value";
-  attr1->set_key(atr1);
+  attr1->set_xml_key(atr1);
   attr1->set_value(atr_value1);
 
   element1->add_element(text1);

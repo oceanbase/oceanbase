@@ -9,43 +9,35 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+extern bool straddr_to_addr_c(const char *ip_str, bool *is_ipv6, void *ip);
+extern void sockaddr_to_addr_c(struct sockaddr_storage *sock_addr, bool *is_ipv6, void *ip, int *port);
+extern char *sockaddr_to_str_c(struct sockaddr_storage *sock_addr, char *buf, int len);
+extern struct sockaddr_storage* make_unix_sockaddr_c(bool is_ipv6, void *ip, int port, struct sockaddr_storage *sock_addr);
 
 const char* addr_str(format_t* f, addr_t addr) {
-  char buf[18];
-  return format_sf(f, "%s:%hu",
-                          inet_ntop(AF_INET, (struct in_addr*)(&addr.ip), buf, sizeof(buf)), addr.port);
-}
-
-addr_t addr_build(const char* ip, int port) {
-  addr_t addr;
-  return *addr_init(&addr, ip, port);
+  char buf[INET6_ADDRSTRLEN + 6];
+  struct sockaddr_storage sock_addr;
+  return format_sf(f, "%s", sockaddr_to_str_c(make_sockaddr(&sock_addr, addr), buf, sizeof(buf)));
 }
 
 addr_t* addr_init(addr_t* addr, const char* ip, int port) {
-  *addr = (addr_t){inet_addr(ip), (uint16_t)port, 0};
-  return addr;
-}
-
-addr_t* addr_set(addr_t* addr, uint32_t ip, uint16_t port, uint16_t id) {
-  addr->ip = ip;
+  memset(addr, 0, sizeof(*addr));
+  straddr_to_addr_c(ip, &addr->is_ipv6, &addr->ip);
   addr->port = port;
-  addr->tid = id;
   return addr;
 }
 
 void addr_reset(addr_t* addr)
 {
-  addr_set(addr, 0, 0, 0);
+  memset(addr, 0, sizeof(*addr));
 }
 
 addr_t get_remote_addr(int fd) {
   addr_t addr;
-  struct sockaddr_in sa;
-  socklen_t sa_len = sizeof(sa);
-  if (0 == getpeername(fd, (struct sockaddr*)&sa, &sa_len)) {
-    int ip = sa.sin_addr.s_addr;
-    int port = (int)ntohs(sa.sin_port);
-    addr_set(&addr, ip, (uint16_t)port, 0);
+  struct sockaddr_storage sock_addr;
+  socklen_t addr_len = sizeof(sock_addr);
+  if (0 == getpeername(fd, (struct sockaddr*)&sock_addr, &addr_len)) {
+    sockaddr_to_addr_c(&sock_addr, &addr.is_ipv6, &addr.ip, (int*)&addr.port);
   } else {
     addr_reset(&addr);
   }
@@ -54,27 +46,28 @@ addr_t get_remote_addr(int fd) {
 
 addr_t get_local_addr(int fd) {
   addr_t addr;
-  struct sockaddr_in sa;
-  socklen_t sa_len = sizeof(sa);
-  if (0 == getsockname(fd, (struct sockaddr*)&sa, &sa_len)) {
-    int ip = sa.sin_addr.s_addr;
-    int port = (int)ntohs(sa.sin_port);
-    addr_set(&addr, ip, (uint16_t)port, 0);
+  struct sockaddr_storage sock_addr;
+  socklen_t addr_len = sizeof(sock_addr);
+  if (0 == getpeername(fd, (struct sockaddr*)&sock_addr, &addr_len)) {
+    sockaddr_to_addr_c(&sock_addr, &addr.is_ipv6, &addr.ip, (int*)&addr.port);
   } else {
     addr_reset(&addr);
   }
   return addr;
 }
 
-static struct sockaddr_in* rk_make_unix_sockaddr(struct sockaddr_in *sin, in_addr_t ip, int port) {
-  if (NULL != sin) {
-    sin->sin_port = (uint16_t)htons((uint16_t)port);
-    sin->sin_addr.s_addr = ip;
-    sin->sin_family = AF_INET;
-  }
-  return sin;
+static struct sockaddr_storage* rk_make_unix_sockaddr(struct sockaddr_storage *sock_addr, addr_t addr) {
+  make_unix_sockaddr_c(addr.is_ipv6, &addr.ip, addr.port, sock_addr);
+  return sock_addr;
 }
 
-struct sockaddr_in* make_sockaddr(struct sockaddr_in* sin, addr_t addr) {
-  return rk_make_unix_sockaddr(sin, addr.ip, addr.port);
+struct sockaddr_storage* make_sockaddr(struct sockaddr_storage* sock_addr, addr_t addr) {
+  return rk_make_unix_sockaddr(sock_addr, addr);
+}
+
+addr_t *sockaddr_to_addr(struct sockaddr_storage *sock_addr, addr_t *addr)
+{
+  memset(addr, 0, sizeof(*addr));
+  sockaddr_to_addr_c(sock_addr, &addr->is_ipv6, &addr->ip, (int*)&addr->port);
+  return addr;
 }

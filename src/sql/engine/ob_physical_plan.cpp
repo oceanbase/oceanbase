@@ -33,6 +33,7 @@
 #include "share/ob_truncated_string.h"
 #include "sql/spm/ob_spm_evolution_plan.h"
 #include "sql/engine/ob_exec_feedback_info.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 
 namespace oceanbase
 {
@@ -83,6 +84,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     contain_oracle_session_level_temporary_table_(false),
     gtt_session_scope_ids_(allocator_),
     gtt_trans_scope_ids_(allocator_),
+    immediate_refresh_external_table_ids_(allocator_),
     concurrent_num_(0),
     max_concurrent_num_(ObMaxConcurrentParam::UNLIMITED),
     table_locations_(allocator_),
@@ -97,8 +99,6 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     stat_(),
     op_stats_(),
     need_drive_dml_query_(false),
-    tx_id_(-1),
-    tm_sessid_(-1),
     var_init_exprs_(allocator_),
     is_returning_(false),
     is_late_materialized_(false),
@@ -133,7 +133,15 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     append_table_id_(0),
     logical_plan_(),
     is_enable_px_fast_reclaim_(false),
-    subschema_ctx_(allocator_)
+    use_rich_format_(false),
+    subschema_ctx_(allocator_),
+    disable_auto_memory_mgr_(false),
+    all_local_session_vars_(&allocator_),
+    udf_has_dml_stmt_(false),
+    mview_ids_(&allocator_),
+    enable_inc_direct_load_(false),
+    enable_replace_(false),
+    insert_overwrite_(false)
 {
 }
 
@@ -185,6 +193,7 @@ void ObPhysicalPlan::reset()
   contain_oracle_session_level_temporary_table_ = false;
   gtt_session_scope_ids_.reset();
   gtt_trans_scope_ids_.reset();
+  immediate_refresh_external_table_ids_.reset();
   concurrent_num_ = 0;
   max_concurrent_num_ = ObMaxConcurrentParam::UNLIMITED;
   is_update_uniq_index_ = false;
@@ -219,18 +228,21 @@ void ObPhysicalPlan::reset()
   is_packed_ = false;
   has_instead_of_trigger_ = false;
   enable_append_ = false;
+  use_rich_format_ = false;
   append_table_id_ = 0;
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
-  tx_id_ = -1;
-  tm_sessid_ = -1;
-  var_init_exprs_.reset();
   need_record_plan_info_ = false;
   logical_plan_.reset();
   is_enable_px_fast_reclaim_ = false;
   subschema_ctx_.reset();
+  all_local_session_vars_.reset();
+  udf_has_dml_stmt_ = false;
+  mview_ids_.reset();
+  enable_inc_direct_load_ = false;
+  enable_replace_ = false;
+  insert_overwrite_ = false;
 }
-
 void ObPhysicalPlan::destroy()
 {
 #ifndef NDEBUG
@@ -257,6 +269,7 @@ int ObPhysicalPlan::copy_common_info(ObPhysicalPlan &src)
   //copy plan_id/hint/privs
   object_id_ = src.object_id_;
   min_cluster_version_ = src.min_cluster_version_;
+  disable_auto_memory_mgr_ = src.disable_auto_memory_mgr_;
   if (OB_FAIL(set_phy_plan_hint(src.get_phy_plan_hint()))) {
     LOG_WARN("Failed to copy query hint", K(ret));
   } else if (OB_FAIL(set_stmt_need_privs(src.get_stmt_need_privs()))) {
@@ -464,7 +477,6 @@ int ObPhysicalPlan::init_operator_stats()
 
 void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
                                       const bool is_first,
-                                      const bool is_evolution,
                                       const ObIArray<ObTableRowCount> *table_row_count_list)
 {
   const int64_t current_time = ObClockGenerator::getClock();
@@ -472,7 +484,8 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
   if (record.is_timeout()) {
     ATOMIC_INC(&(stat_.timeout_count_));
     ATOMIC_AAF(&(stat_.total_process_time_), record.get_process_time());
-  } else if (!GCONF.enable_perf_event) { // short route
+  }
+  if (!GCONF.enable_perf_event) { // short route
     ATOMIC_AAF(&(stat_.elapsed_time_), record.get_elapsed_time());
     ATOMIC_AAF(&(stat_.cpu_time_), record.get_elapsed_time() - record.exec_record_.wait_time_end_
                                    - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
@@ -481,6 +494,15 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
       ATOMIC_STORE(&(stat_.hit_count_), 0);
     } else {
       ATOMIC_INC(&(stat_.hit_count_));
+    }
+    if (ATOMIC_LOAD(&stat_.is_evolution_)) { //for spm
+      ATOMIC_INC(&(stat_.evolution_stat_.executions_));
+      // ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
+      //            record.get_elapsed_time() - record.exec_record_.wait_time_end_
+      //            - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+      ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
+      ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
+      ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
     }
   } else { // long route stat begin
     execute_count = ATOMIC_AAF(&stat_.execute_times_, 1);
@@ -692,7 +714,9 @@ int ObPhysicalPlan::inc_concurrent_num()
   } else {
     while(OB_SUCC(ret) && false == is_succ) {
       concurrent_num = ATOMIC_LOAD(&concurrent_num_);
-      if (concurrent_num >= max_concurrent_num_) {
+      if (0 == max_concurrent_num_) {
+        ret = OB_REACH_MAX_CONCURRENT_NUM;
+      } else if (concurrent_num >= max_concurrent_num_) {
         ret = OB_REACH_MAX_CONCURRENT_NUM;
       } else {
         new_num = concurrent_num + 1;
@@ -782,7 +806,16 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_enable_px_fast_reclaim_,
                     gtt_session_scope_ids_,
                     gtt_trans_scope_ids_,
-                    subschema_ctx_);
+                    subschema_ctx_,
+                    use_rich_format_,
+                    disable_auto_memory_mgr_,
+                    udf_has_dml_stmt_,
+                    stat_.format_sql_id_,
+                    mview_ids_,
+                    enable_inc_direct_load_,
+                    enable_replace_,
+                    immediate_refresh_external_table_ids_,
+                    insert_overwrite_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -1011,6 +1044,10 @@ int ObPhysicalPlan::alloc_op_spec(const ObPhyOperatorType type,
     op->id_ = tmp_op_id;
     op->plan_ = this;
     op->max_batch_size_ = (ObOperatorFactory::is_vectorized(type)) ? batch_size_ : 0;
+    op->use_rich_format_ = use_rich_format_
+                           && op->is_vectorized()
+                           && ObOperatorFactory::support_rich_format(type);
+    LOG_TRACE("alloc op spec", K(use_rich_format_), K(*op));
   }
   return ret;
 }
@@ -1107,7 +1144,7 @@ void ObPhysicalPlan::calc_whether_need_trans()
     }
   }
   // mysql允许select udf中有dml，需要保证select 整体原子性
-  if (!bool_ret && contain_pl_udf_or_trigger() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
+  if (!bool_ret && contain_pl_udf_or_trigger() && udf_has_dml_stmt() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
     bool_ret = true;
   }
   is_need_trans_ = bool_ret;
@@ -1163,11 +1200,9 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "session is null", K(ret));
   } else  {
-    stat_.plan_id_ = get_plan_id();
     stat_.plan_hash_value_ = get_signature();
     stat_.gen_time_ = ObTimeUtility::current_time();
     stat_.schema_version_ = get_tenant_schema_version();
-    stat_.last_active_time_ = stat_.gen_time_;
     stat_.hit_count_ = 0;
     stat_.mem_used_ = get_mem_size();
     stat_.slow_count_ = 0;
@@ -1196,7 +1231,8 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     stat_.outline_id_ = get_outline_state().outline_version_.object_id_;
     // Truncate the raw sql to avoid the plan memory being too large due to the long raw sql
     ObTruncatedString trunc_raw_sql(pc_ctx.raw_sql_, OB_MAX_SQL_LENGTH);
-    if (OB_FAIL(pc_ctx.get_not_param_info_str(get_allocator(), stat_.sp_info_str_))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(pc_ctx.get_not_param_info_str(get_allocator(), stat_.sp_info_str_))) {
       SQL_PC_LOG(WARN, "fail to get special param info string", K(ret));
     } else if (OB_FAIL(ob_write_string(get_allocator(),
                                        pc_ctx.fp_result_.pc_key_.sys_vars_str_,
@@ -1224,6 +1260,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
                     get_allocator().alloc(get_access_table_num() * sizeof(ObTableRowCount))))) {
         // @banliu.zyd: 这块内存存放计划涉及的表的行数，用于统计信息已经过期的计划的淘汰，分配失败时
         //              不报错，走原来不淘汰计划的逻辑
+        // ignore ret
         LOG_WARN("allocate memory for table row count list failed", K(get_access_table_num()));
       } else {
         for (int64_t i = 0; i < get_access_table_num(); ++i) {
@@ -1264,6 +1301,11 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
         pos += 1;
         stat_.plan_tmp_tbl_name_str_len_ = static_cast<int32_t>(pos);
       }
+    }
+    if (OB_SUCC(ret)) {
+      // Update last_active_time_ last, because last_active_time_ is used to
+      // indicate whether the cache stat has been updated.
+      stat_.last_active_time_ = stat_.gen_time_;
     }
   }
   return ret;
@@ -1333,6 +1375,32 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
       LOG_WARN("failed to compress logical plan", K(ret));
     } else if (OB_FAIL(set_logical_plan(new_logical_plan))) {
       LOG_WARN("failed to set logical plan", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalPlan::set_all_local_session_vars(ObIArray<ObLocalSessionVar> *all_local_session_vars)
+{
+  int ret = OB_SUCCESS;
+  if (!all_local_session_vars_.empty()) {
+    all_local_session_vars_.reset();
+  }
+  if (OB_ISNULL(all_local_session_vars)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(all_local_session_vars));
+  } else if (OB_FAIL(all_local_session_vars_.reserve(all_local_session_vars->count()))) {
+    LOG_WARN("reserve for local_session_vars failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_local_session_vars->count(); ++i) {
+      if (OB_FAIL(all_local_session_vars_.push_back(ObLocalSessionVar()))) {
+        LOG_WARN("push back local session var failed", K(ret));
+      } else {
+        all_local_session_vars_.at(i).set_allocator(&allocator_);
+        if (OB_FAIL(all_local_session_vars_.at(i).deep_copy(all_local_session_vars->at(i)))) {
+          LOG_WARN("deep copy local session vars failed", K(ret));
+        }
+      }
     }
   }
   return ret;

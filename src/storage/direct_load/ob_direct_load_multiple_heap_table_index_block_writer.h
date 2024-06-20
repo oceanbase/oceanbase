@@ -21,7 +21,8 @@ namespace storage
 
 class ObDirectLoadMultipleHeapTableIndexBlockWriter
   : public ObDirectLoadDataBlockWriter<ObDirectLoadMultipleHeapTableIndexBlock::Header,
-                                       ObDirectLoadMultipleHeapTableIndexBlock::Entry>
+                                       ObDirectLoadMultipleHeapTableIndexBlock::Entry,
+                                       true/*align*/>
 {
 public:
   ObDirectLoadMultipleHeapTableIndexBlockWriter();

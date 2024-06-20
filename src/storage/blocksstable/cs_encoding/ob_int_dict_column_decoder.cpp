@@ -14,6 +14,9 @@
 
 #include "ob_int_dict_column_decoder.h"
 #include "ob_integer_stream_decoder.h"
+#include "ob_integer_stream_vector_decoder.h"
+#include "ob_cs_vector_decoding_util.h"
+#include "storage/access/ob_pushdown_aggregate.h"
 
 namespace oceanbase
 {
@@ -46,7 +49,47 @@ int ObIntDictColumnDecoder::decode(
           *dict_ctx.int_ctx_, nullptr/*ref_data*/, nullptr/*row_ids*/, 1, &datum);
     }
   }
+  return ret;
+}
 
+int ObIntDictColumnDecoder::decode_and_aggregate(
+    const ObColumnCSDecoderCtx &ctx,
+    const int64_t row_id,
+    ObStorageDatum &datum,
+    storage::ObAggCell &agg_cell) const
+{
+  int ret = OB_SUCCESS;
+  const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;
+  const uint64_t distinct_cnt = dict_ctx.dict_meta_->distinct_val_cnt_;
+  if (OB_UNLIKELY(0 == distinct_cnt)) {
+    datum.set_null();  // empty dict, all datum is null
+  } else {
+    if (dict_ctx.dict_meta_->is_const_encoding_ref()) {
+      GET_CONST_ENCODING_REF(dict_ctx.ref_ctx_->meta_.width_, dict_ctx.ref_data_, row_id, datum.pack_);
+    } else {
+      GET_REF_FROM_REF_ARRAY(dict_ctx.ref_ctx_->meta_.width_, dict_ctx.ref_data_, row_id, datum.pack_);
+    }
+    ObBitmap &bitmap = agg_cell.get_bitmap();
+    if (datum.pack_ == distinct_cnt) {
+      datum.set_null();
+    } else if (bitmap.test(datum.pack_)) {
+      // has been evaluated.
+    } else if (OB_FAIL(bitmap.set(datum.pack_))) {
+      LOG_WARN("Failed to set bitmap", KR(ret), K(datum.pack_));
+    } else {
+      ConvertUnitToDatumFunc convert_func = convert_uint_to_datum_funcs
+          [dict_ctx.int_ctx_->meta_.width_]               /*val_store_width_V*/
+          [ObRefStoreWidthV::REF_IN_DATUMS]               /*ref_store_width_V*/
+          [get_width_tag_map()[dict_ctx.datum_len_]]      /*datum_width_V*/
+          [ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL] /*null has been processed, so here set HAS_NO_NULL*/
+          [dict_ctx.int_ctx_->meta_.is_decimal_int()];
+      convert_func(dict_ctx, dict_ctx.int_data_,
+          *dict_ctx.int_ctx_, nullptr/*ref_data*/, nullptr/*row_ids*/, 1, &datum);
+      if (!datum.is_null() && OB_FAIL(agg_cell.eval(datum))) {
+        LOG_WARN("Failed to eval agg cell", KR(ret), K(datum), K(agg_cell));
+      }
+    }
+  }
   return ret;
 }
 
@@ -106,6 +149,50 @@ int ObIntDictColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx, const 
     }
   }
 
+  return ret;
+}
+
+int ObIntDictColumnDecoder::decode_vector(
+    const ObColumnCSDecoderCtx &ctx,
+    ObVectorDecodeCtx &vector_ctx) const
+{
+  int ret = OB_SUCCESS;
+  const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;
+  if (OB_UNLIKELY(0 == dict_ctx.dict_meta_->distinct_val_cnt_)) { // empty dict, all datum is null
+    if (OB_FAIL(ObCSVectorDecodingUtil::decode_all_null_vector(
+         vector_ctx.row_ids_, vector_ctx.row_cap_, vector_ctx.vec_header_, vector_ctx.vec_offset_))) {
+      LOG_WARN("fail to decode_all_null_vector", K(ret));
+    }
+  } else {
+     const char *ref_arr = nullptr;
+     ObVecDecodeRefWidth ref_width = ObVecDecodeRefWidth::VDRW_MAX;
+
+    if (dict_ctx.dict_meta_->is_const_encoding_ref()) {
+      uint32_t *temp_ref_arr = vector_ctx.len_arr_;
+      ref_arr =  (char*)temp_ref_arr;
+      ref_width = ObVecDecodeRefWidth::VDRW_TEMP_UINT32_REF;
+      const uint64_t width_size = dict_ctx.ref_ctx_->meta_.get_uint_width_size();
+      ObConstEncodingRefDesc ref_desc(dict_ctx.ref_data_, width_size);
+      int64_t unused_null_cnt = 0;
+      if (0 == ref_desc.exception_cnt_) {
+        for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
+          temp_ref_arr[i] = ref_desc.const_ref_;
+        }
+      } else if (OB_FAIL(extract_ref_and_null_count_(ref_desc, dict_ctx.dict_meta_->distinct_val_cnt_,
+          vector_ctx.row_ids_, vector_ctx.row_cap_, nullptr, unused_null_cnt, temp_ref_arr))) {
+        LOG_WARN("fail to extract_ref_and_null_count_", K(ret), K(dict_ctx));
+      }
+    } else {  // not const encoding ref
+      ref_arr = dict_ctx.ref_data_;
+      ref_width = static_cast<ObVecDecodeRefWidth>(dict_ctx.ref_ctx_->meta_.get_width_tag());
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObIntegerStreamVecDecoder::decode_vector(
+          dict_ctx, dict_ctx.int_data_, *dict_ctx.int_ctx_, ref_arr, ref_width, vector_ctx))) {
+        LOG_WARN("fail to decode_vector", K(ret), K(dict_ctx), K(vector_ctx));
+      }
+    }
+  }
   return ret;
 }
 

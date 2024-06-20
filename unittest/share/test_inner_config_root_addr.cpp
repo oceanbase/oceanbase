@@ -58,11 +58,11 @@ TEST_F(TestInnerConfigRootAddr, fetch)
 
   config_.rootservice_list.set_value("0.0.0.0");
   ASSERT_NE(OB_SUCCESS, ic_.fetch(rs_list, readonly_rs_list));
-  config_.rootservice_list.set_value("10.125.224.12:888");
+  config_.rootservice_list.set_value("127.127.0.12:888");
   ASSERT_EQ(OB_SUCCESS, ic_.fetch(rs_list, readonly_rs_list));
-  config_.rootservice_list.set_value("10.125.224.12:888:");
+  config_.rootservice_list.set_value("127.127.0.12:888:");
   ASSERT_EQ(OB_SUCCESS, ic_.fetch(rs_list, readonly_rs_list));
-  config_.rootservice_list.set_value("10.125.224.12:888:999");
+  config_.rootservice_list.set_value("127.127.0.12:888:999");
   ASSERT_EQ(OB_SUCCESS, ic_.fetch(rs_list, readonly_rs_list));
 
   config_.rootservice_list.set_value("127.0.0.1:555:666;127.0.0.2:777:888");

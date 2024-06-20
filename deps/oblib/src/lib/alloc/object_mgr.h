@@ -36,20 +36,22 @@ class SubObjectMgr : public IBlockMgr
 {
   friend class ObTenantCtxAllocator;
 public:
-  SubObjectMgr(const bool for_logger, const int64_t tenant_id, const int64_t ctx_id,
-               const uint32_t ablock_size, const bool enable_dirty_list,
+  SubObjectMgr(ObTenantCtxAllocator &ta,
+               const bool enable_no_log,
+               const uint32_t ablock_size,
+               const bool enable_dirty_list,
                IBlockMgr *blk_mgr);
   virtual ~SubObjectMgr() {}
-  OB_INLINE void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator)
-  {
-    bs_.set_tenant_ctx_allocator(allocator);
-  }
   OB_INLINE void lock() { locker_.lock(); }
   OB_INLINE void unlock() { locker_.unlock(); }
   OB_INLINE bool trylock() { return locker_.trylock(); }
   OB_INLINE AObject *alloc_object(uint64_t size, const ObMemAttr &attr)
   {
     return os_.alloc_object(size, attr);
+  }
+  OB_INLINE AObject *realloc_object(AObject *obj,  const uint64_t size, const ObMemAttr &attr)
+  {
+    return os_.realloc_object(obj, size, attr);
   }
   void free_object(AObject *object);
   OB_INLINE ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override
@@ -65,11 +67,12 @@ public:
   {
     return bs_.check_has_unfree();
   }
-  OB_INLINE bool check_has_unfree(char *first_label)
+  OB_INLINE bool check_has_unfree(char *first_label, char *first_bt)
   {
-    return os_.check_has_unfree(first_label);
+    return os_.check_has_unfree(first_label, first_bt);
   }
 private:
+  ObTenantCtxAllocator &ta_;
 #ifndef ENABLE_SANITY
   lib::ObMutex mutex_;
 #else
@@ -85,6 +88,7 @@ private:
 class ObjectMgr final : public IBlockMgr
 {
   static const int N = 32;
+  friend class SubObjectMgr;
 public:
   struct Stat
   {
@@ -95,8 +99,11 @@ public:
     int64_t last_wash_ts_;
   };
 public:
-  ObjectMgr(ObTenantCtxAllocator &allocator, uint64_t tenant_id, uint64_t ctx_id,
-            uint32_t ablock_size, int parallel, bool enable_dirty_list,
+  ObjectMgr(ObTenantCtxAllocator &ta,
+            bool enable_no_log,
+            uint32_t ablock_size,
+            int parallel,
+            bool enable_dirty_list,
             IBlockMgr *blk_mgr);
   ~ObjectMgr();
   void reset();
@@ -113,13 +120,14 @@ public:
   int64_t sync_wash(int64_t wash_size) override;
   Stat get_stat();
   bool check_has_unfree();
-  bool check_has_unfree(char *first_label);
+  bool check_has_unfree(char *first_label, char *first_bt);
 private:
   SubObjectMgr *create_sub_mgr();
   void destroy_sub_mgr(SubObjectMgr *sub_mgr);
 
 public:
   ObTenantCtxAllocator &ta_;
+  bool enable_no_log_;
   uint32_t ablock_size_;
   int parallel_;
   bool enable_dirty_list_;

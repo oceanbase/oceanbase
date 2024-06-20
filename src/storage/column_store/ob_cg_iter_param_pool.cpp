@@ -75,6 +75,7 @@ int ObCGIterParamPool::get_iter_param(
         LOG_WARN("Unexpected null iter param", K(ret));
       } else if (tmp_param->can_be_reused(cg_idx, exprs, is_aggregate)) {
         iter_param = tmp_param;
+        iter_param->tablet_handle_ = row_param.tablet_handle_;
         break;
       }
     }
@@ -199,6 +200,7 @@ int ObCGIterParamPool::fill_virtual_cg_iter_param(
     cg_param.output_exprs_ = output_exprs;
     cg_param.op_ = row_param.op_;
     cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
+    cg_param.tablet_handle_ = row_param.tablet_handle_;
   }
   if (OB_FAIL(ret) && nullptr != output_exprs) {
     output_exprs->reset();
@@ -214,8 +216,7 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
                                                  ObTableIterParam &cg_param)
 {
   int ret = OB_SUCCESS;
-  ObColumnParam *col_param = nullptr;
-  ObSEArray<ObColDesc, 1> cg_col_descs;
+  int64_t cg_pos = -1;
 
   if (OB_UNLIKELY(!row_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -226,54 +227,62 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
     const common::ObIArray<ObColumnParam *> *column_params = read_info->get_columns();
     const common::ObIArray<int32_t> *access_cgs = read_info->get_cg_idxs();
 
-    if (OB_ISNULL(access_cgs) || OB_ISNULL((column_params))) {
+    if (OB_UNLIKELY(nullptr == access_cgs || nullptr == column_params)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected null cg indexs", K(ret), KPC(read_info));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < access_cgs->count(); i++) {
       if (cg_idx == access_cgs->at(i)) {
-        col_param = column_params->at(i);
-        if (OB_FAIL(cg_col_descs.push_back(col_descs.at(i)))) {
-          LOG_WARN("Fail to push_back cg_col_descs", K(ret), K(i), K(col_descs));
-        } else {
-          break;
-        }
+        cg_pos = i;
+        break;
       }
-    } // end of for
-  }
+    }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_cg_read_info(cg_col_descs.at(0), col_param, row_param.tablet_id_, cg_param.cg_read_info_handle_))) {
-    STORAGE_LOG(WARN, "Fail to get cg read info",  K(ret), K(cg_idx), K(row_param));
-  } else if (OB_UNLIKELY(!cg_param.cg_read_info_handle_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpect null cg read info", K(ret), KPC(cg_param.cg_read_info_handle_.get_read_info()));
-  } else {
-    cg_param.table_id_ = row_param.table_id_;
-    cg_param.tablet_id_ = row_param.tablet_id_;
-    cg_param.cg_idx_ = cg_idx;
-    cg_param.read_info_ = cg_param.cg_read_info_handle_.get_read_info();
-    cg_param.cg_col_param_ = col_param;
-    cg_param.out_cols_project_ = out_cols_project;
-    cg_param.agg_cols_project_ = nullptr;
-    cg_param.pushdown_filter_ = nullptr;
-    cg_param.op_ = row_param.op_;
-    cg_param.sstable_index_filter_ = nullptr;
-    cg_param.output_exprs_ = exprs;
-    cg_param.aggregate_exprs_ = nullptr;
-    cg_param.output_sel_mask_ = nullptr;
-    cg_param.is_multi_version_minor_merge_ = row_param.is_multi_version_minor_merge_;
-    cg_param.need_scn_ = row_param.need_scn_;
-    cg_param.is_same_schema_column_ = row_param.need_scn_;
-    cg_param.vectorized_enabled_ = row_param.vectorized_enabled_;
-    cg_param.has_virtual_columns_ = row_param.has_virtual_columns_;
-    cg_param.has_lob_column_out_ = cg_col_descs.at(0).col_type_.is_lob_storage();
-    cg_param.is_for_foreign_check_ = row_param.is_for_foreign_check_;
-    cg_param.limit_prefetch_ = row_param.limit_prefetch_;
-    //cg_param.ss_rowkey_prefix_cnt_ = 0;
-    cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(0 > cg_pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected cg_pos or read info", K(ret), K(cg_pos), K(cg_idx), KPC(access_cgs));
+    } else {
+      cg_param.table_id_ = row_param.table_id_;
+      cg_param.tablet_id_ = row_param.tablet_id_;
+      cg_param.cg_idx_ = cg_idx;
+      cg_param.tablet_handle_ = row_param.tablet_handle_;
+      cg_param.cg_col_param_ = column_params->at(cg_pos);
+      cg_param.out_cols_project_ = out_cols_project;
+      cg_param.agg_cols_project_ = nullptr;
+      cg_param.pushdown_filter_ = nullptr;
+      cg_param.op_ = row_param.op_;
+      cg_param.sstable_index_filter_ = nullptr;
+      cg_param.output_exprs_ = exprs;
+      cg_param.aggregate_exprs_ = nullptr;
+      cg_param.output_sel_mask_ = nullptr;
+      cg_param.is_multi_version_minor_merge_ = row_param.is_multi_version_minor_merge_;
+      cg_param.need_scn_ = row_param.need_scn_;
+      cg_param.is_same_schema_column_ = row_param.need_scn_;
+      cg_param.vectorized_enabled_ = row_param.vectorized_enabled_;
+      cg_param.has_virtual_columns_ = row_param.has_virtual_columns_;
+      cg_param.has_lob_column_out_ = col_descs.at(cg_pos).col_type_.is_lob_storage();
+      cg_param.is_for_foreign_check_ = row_param.is_for_foreign_check_;
+      cg_param.limit_prefetch_ = row_param.limit_prefetch_;
+      //cg_param.ss_rowkey_prefix_cnt_ = 0;
+      cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
+      if (nullptr != row_param.cg_read_infos_) {
+        if (OB_UNLIKELY(nullptr == row_param.cg_read_infos_->at(cg_pos))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null cg read info", K(ret), K(cg_pos), K(row_param));
+        } else {
+          cg_param.read_info_ = row_param.cg_read_infos_->at(cg_pos);
+        }
+      } else if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_cg_read_info(col_descs.at(cg_pos), column_params->at(cg_pos), row_param.tablet_id_, cg_param.cg_read_info_handle_))) {
+        LOG_WARN("Fail to get cg read info",  K(ret), K(cg_idx), K(row_param));
+      } else if (OB_UNLIKELY(!cg_param.cg_read_info_handle_.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpect null cg read info", K(ret), KPC(cg_param.cg_read_info_handle_.get_read_info()));
+      } else {
+        cg_param.read_info_ = cg_param.cg_read_info_handle_.get_read_info();
+      }
+    }
   }
-
   return ret;
 }
 

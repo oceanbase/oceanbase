@@ -15,6 +15,7 @@
 
 #include "ob_expr_json_insert.h"
 #include "ob_expr_json_func_helper.h"
+#include "share/ob_json_access_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -120,7 +121,7 @@ int ObExprJsonInsert::eval_json_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       } else if (j_path->path_node_cnt() == 0) {
         // do nothing
       } else {
-        ObJsonBaseVector hit;
+        ObJsonSeekResult hit;
         // if target exists continue, don't replace
         if (OB_FAIL(j_base->seek(*j_path, j_path->path_node_cnt(), true, true, hit))) {
           LOG_WARN("failed: json seek.", K(j_path_text), K(ret));
@@ -136,7 +137,7 @@ int ObExprJsonInsert::eval_json_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDat
             ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
             LOG_WARN("failed: get_json_val.", K(ret));
           } else {
-            ObIJsonBase *j_pos_node = *hit.last();
+            ObIJsonBase *j_pos_node = hit.last();
             ObJsonPathBasicNode *path_last = j_path->last_path_node();
             if (path_last->get_node_type() == JPN_ARRAY_CELL) {
               if (j_pos_node->json_type() == ObJsonNodeType::J_ARRAY) {
@@ -185,7 +186,7 @@ int ObExprJsonInsert::eval_json_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObString raw_bin;
     if (is_null) {
       res.set_null();
-    } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
+    } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
       LOG_WARN("fail to pack json result", K(ret));

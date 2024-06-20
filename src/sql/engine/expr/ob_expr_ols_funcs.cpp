@@ -1296,7 +1296,7 @@ int ObExprOLSSessionLabel::eval_label(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
       } else if (OB_FAIL(session->replace_new_session_label(policy_id, session_label))) {
         LOG_WARN("fail to replace new session label", K(ret));
       }
-      LOG_DEBUG("load default session label", K(ret));
+      LOG_DEBUG("load default session label", K(ret), K(session_label));
     }
   }
 
@@ -1592,7 +1592,7 @@ int ObExprOLSLabelCheck::eval_label_check(const ObExpr &expr, ObEvalCtx &ctx, Ob
                                                                        ols_label_schema))) {
         LOG_WARN("get label schema failed", K(ret));
       } else if (OB_FAIL(LABEL_SCHEMA_CHECKER.validate(ols_label_schema))) {
-        LOG_WARN("label schema not exist", K(ret));
+        LOG_WARN("label schema not exist", K(ret), K(label_tag_value), K(tenant_id));
       } else if (ols_label_schema->get_flag() != 1) {
         ret = OB_ERR_POLICY_WITH_CHECK_OPTION_VIOLATION;
         LOG_WARN("data label is false for write dml", K(ret));
@@ -1652,7 +1652,7 @@ int ObExprOLSLabelToChar::calc_result_type1(ObExprResType &type,
   type1.set_calc_type(ObIntType);
 
   type.set_varchar();
-  type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
+  type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
 
   return ret;
 }
@@ -1786,9 +1786,9 @@ int ObExprOLSCharToLabel::eval_char_to_label(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("schema guard is NULL", K(ret));
   } else if (OB_FAIL(expr.eval_param_value(ctx, param1, param2))) {
     LOG_WARN("failed to eval params", K(ret));
-  } else if (param1->to_obj(obj1, expr.args_[0]->obj_meta_)) {
+  } else if (OB_FAIL(param1->to_obj(obj1, expr.args_[0]->obj_meta_))) {
     LOG_WARN("failed to convert to obj", K(ret));
-  } else if (param2->to_obj(obj2, expr.args_[1]->obj_meta_)) {
+  } else if (OB_FAIL(param2->to_obj(obj2, expr.args_[1]->obj_meta_))) {
     LOG_WARN("failed to convert to obj", K(ret));
   } else {
     tenant_id = session->get_effective_tenant_id();

@@ -80,6 +80,7 @@
 #include "observer/virtual_table/ob_all_virtual_engine_table.h"
 #include "observer/virtual_table/ob_all_virtual_files_table.h"
 #include "observer/virtual_table/ob_all_virtual_ls_info.h"
+#include "observer/virtual_table/ob_all_virtual_ls_snapshot.h"
 #include "observer/virtual_table/ob_all_plan_cache_stat.h"
 #include "observer/virtual_table/ob_plan_cache_plan_explain.h"
 #include "observer/virtual_table/ob_all_virtual_ps_stat.h"
@@ -211,10 +212,25 @@
 #include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
 #include "observer/virtual_table/ob_all_virtual_ls_log_restore_status.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_buffer_info.h"
+#include "observer/virtual_table/ob_all_virtual_cgroup_config.h"
 #include "observer/virtual_table/ob_virtual_flt_config.h"
-
+#include "observer/virtual_table/ob_all_virtual_tenant_snapshot_ls_replica.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_snapshot_ls_replica_history.h"
+#include "observer/virtual_table/ob_all_virtual_activity_metrics.h"
+#include "observer/virtual_table/ob_all_virtual_checkpoint_diagnose_info.h"
+#include "observer/virtual_table/ob_all_virtual_checkpoint_diagnose_memtable_info.h"
+#include "observer/virtual_table/ob_all_virtual_storage_ha_error_diagnose.h"
+#include "observer/virtual_table/ob_all_virtual_storage_ha_perf_diagnose.h"
+#include "observer/virtual_table/ob_tenant_show_restore_preview.h"
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_resource_limit.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_resource_limit_detail.h"
+#include "observer/virtual_table/ob_all_virtual_tracepoint_info.h"
+#include "observer/virtual_table/ob_all_virtual_nic_info.h"
+#include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
+#include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
+#include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
 
 namespace oceanbase
 {
@@ -733,6 +749,40 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_TID: {
+            const bool meta_record_in_sys = false;
+            ObAllVirtualTenantSnapshotLSReplica *all_vtsnap_ls_replica = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTenantSnapshotLSReplica, all_vtsnap_ls_replica))) {
+              SERVER_LOG(ERROR, "ObAllVirtualTenantSnapshotLSReplica construct failed", K(ret));
+            } else if (OB_FAIL(all_vtsnap_ls_replica->init(
+                    OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_TID, meta_record_in_sys, index_schema, params))) {
+              SERVER_LOG(WARN, "ObAllVirtualTenantSnapshotLSReplica init failed", KR(ret));
+              all_vtsnap_ls_replica->~ObAllVirtualTenantSnapshotLSReplica();
+              allocator.free(all_vtsnap_ls_replica);
+              all_vtsnap_ls_replica = NULL;
+            } else {
+              all_vtsnap_ls_replica->set_allocator(&allocator);
+              vt_iter = static_cast<ObAllVirtualTenantSnapshotLSReplica *>(all_vtsnap_ls_replica);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TID: {
+            const bool meta_record_in_sys = false;
+            ObAllVirtualTenantSnapshotLSReplicaHistory *vtsnap_ls_replica_history = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTenantSnapshotLSReplicaHistory, vtsnap_ls_replica_history))) {
+              SERVER_LOG(ERROR, "ObAllVirtualTenantSnapshotLSReplicaHistory construct failed", K(ret));
+            } else if (OB_FAIL(vtsnap_ls_replica_history->init(
+                    OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TID, meta_record_in_sys, index_schema, params))) {
+              SERVER_LOG(WARN, "ObAllVirtualTenantSnapshotLSReplicaHistory init failed", KR(ret));
+              vtsnap_ls_replica_history->~ObAllVirtualTenantSnapshotLSReplicaHistory();
+              allocator.free(vtsnap_ls_replica_history);
+              vtsnap_ls_replica_history = NULL;
+            } else {
+              vtsnap_ls_replica_history->set_allocator(&allocator);
+              vt_iter = static_cast<ObAllVirtualTenantSnapshotLSReplicaHistory *>(vtsnap_ls_replica_history);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_LS_INFO_TID: {
             ObAllVirtualLSInfo *all_virtual_ls_info = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualLSInfo, all_virtual_ls_info))) {
@@ -740,6 +790,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               all_virtual_ls_info->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_ls_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_LS_SNAPSHOT_TID: {
+            ObAllVirtualLSSnapshot *all_virtual_ls_snap = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualLSSnapshot, all_virtual_ls_snap))) {
+              SERVER_LOG(ERROR, "ObAllVirtualLSSnapshot construct failed", K(ret));
+            } else {
+              all_virtual_ls_snap->set_addr(addr_);
+              all_virtual_ls_snap->set_allocator(&allocator);
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_ls_snap);
             }
             break;
           }
@@ -1097,15 +1158,22 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
           {
             ObTableColumns *table_columns = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObTableColumns, table_columns))) {
-              vt_iter = static_cast<ObVirtualTableIterator *>(table_columns);
+              if (OB_FAIL(table_columns->init(real_tenant_id))) {
+                SERVER_LOG(WARN, "fail to init tenant_virtual_table_column", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(table_columns);
+              }
             }
             break;
           }
           case OB_TENANT_VIRTUAL_TABLE_INDEX_TID: {
             ObTableIndex *table_index = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObTableIndex, table_index))) {
-              table_index->set_tenant_id(real_tenant_id);
-              vt_iter = static_cast<ObVirtualTableIterator *>(table_index);
+              if (OB_FAIL(table_index->init(real_tenant_id))) {
+                SERVER_LOG(WARN, "fail to init tenant_virtual_table_index", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(table_index);
+              }
             }
             break;
           }
@@ -1174,8 +1242,11 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObShowGrants, show_grants))) {
               show_grants->set_tenant_id(real_tenant_id);
               show_grants->set_user_id(session->get_user_id());
-              session->get_session_priv_info(show_grants->get_session_priv());
-              vt_iter = static_cast<ObVirtualTableIterator *>(show_grants);
+              if (OB_FAIL(session->get_session_priv_info(show_grants->get_session_priv()))) {
+                SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(show_grants);
+              }
             }
             break;
           }
@@ -2457,6 +2528,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_TRACEPOINT_INFO_TID: {
+            ObAllTracepointInfo *tp_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllTracepointInfo, tp_info))) {
+              SERVER_LOG(ERROR, "failed to init ObAllTracepointInfo", K(ret));
+            } else {
+              tp_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(tp_info);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_DTL_INTERM_RESULT_MONITOR_TID: {
             ObAllDtlIntermResultMonitor *dtl_interm_result_monitor = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllDtlIntermResultMonitor, dtl_interm_result_monitor))) {
@@ -2546,6 +2627,131 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualKvConnection, kv_connection))) {
               kv_connection->set_connection_mgr(&table::ObTableConnectionMgr::get_instance());
               vt_iter = static_cast<ObVirtualTableIterator *>(kv_connection);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CGROUP_CONFIG_TID: {
+            ObAllVirtualCgroupConfig *all_virtual_cgroup_config = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualCgroupConfig, all_virtual_cgroup_config))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_cgroup_config);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_TID: {
+            ObResourceLimitTable *all_virtual_resource_limit = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObResourceLimitTable,
+                                          all_virtual_resource_limit))) {
+              vt_iter = static_cast<ObResourceLimitTable *>(all_virtual_resource_limit);
+              if (OB_FAIL(all_virtual_resource_limit->set_addr(addr_)))
+              {
+                LOG_WARN("set addr failed", K(ret), K(addr_));
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TID: {
+            ObResourceLimitDetailTable *all_virtual_resource_limit_detail = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObResourceLimitDetailTable,
+                                          all_virtual_resource_limit_detail))) {
+              vt_iter = static_cast<ObResourceLimitDetailTable *>(all_virtual_resource_limit_detail);
+              if (OB_FAIL(all_virtual_resource_limit_detail->set_addr(addr_)))
+              {
+                LOG_WARN("set addr failed", K(ret), K(addr_));
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_DATA_ACTIVITY_METRICS_TID: {
+            ObAllVirtualActivityMetric *all_virtual_activity_metrics = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualActivityMetric, all_virtual_activity_metrics))) {
+              SERVER_LOG(ERROR, "ObAllVirtualActivityMetric construct failed", K(ret));
+            } else {
+              all_virtual_activity_metrics->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_activity_metrics);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID: {
+            ObAllVirtualCheckpointDiagnoseInfo *checkpoint_diagnose_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualCheckpointDiagnoseInfo, checkpoint_diagnose_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualCheckpointDiagnoseInfo construct fail", K(ret));
+            } else {
+              checkpoint_diagnose_info->set_addr(addr_);
+              vt_iter = static_cast<ObAllVirtualCheckpointDiagnoseInfo*>(checkpoint_diagnose_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID: {
+            ObAllVirtualCheckpointDiagnoseMemtableInfo *checkpoint_diagnose_memtable_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualCheckpointDiagnoseMemtableInfo, checkpoint_diagnose_memtable_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualCheckpointDiagnoseMemtableInfo construct fail", K(ret));
+            } else {
+              checkpoint_diagnose_memtable_info->set_addr(addr_);
+              vt_iter = static_cast<ObAllVirtualCheckpointDiagnoseMemtableInfo*>(checkpoint_diagnose_memtable_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID: {
+            ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo *checkpoint_diagnose_checkpoint_unit_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo, checkpoint_diagnose_checkpoint_unit_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo construct fail", K(ret));
+            } else {
+              checkpoint_diagnose_checkpoint_unit_info->set_addr(addr_);
+              vt_iter = static_cast<ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo*>(checkpoint_diagnose_checkpoint_unit_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_NIC_INFO_TID: {
+            ObAllVirtualNicInfo *nic_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualNicInfo, nic_info))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualNicInfo", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(nic_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_STORAGE_HA_ERROR_DIAGNOSE_TID: {
+            ObAllVirtualStorageHAErrorDiagnose *storage_ha_error_diagnose = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualStorageHAErrorDiagnose, storage_ha_error_diagnose))) {
+              SERVER_LOG(ERROR, "ObAllVirtualStorageHAErrorDiagnose construct failed", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(storage_ha_error_diagnose);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_STORAGE_HA_PERF_DIAGNOSE_TID: {
+            ObAllVirtualStorageHAPerfDiagnose *storage_ha_perf_diagnose = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualStorageHAPerfDiagnose, storage_ha_perf_diagnose))) {
+              SERVER_LOG(ERROR, "ObAllVirtualStorageHAPerfDiagnose construct failed", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(storage_ha_perf_diagnose);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TID: {
+            ObSysVarDefaultValue *sys_var_default_value = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObSysVarDefaultValue, sys_var_default_value))) {
+              SERVER_LOG(ERROR, "fail to new", K(ret), K(pure_tid));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(sys_var_default_value);
+            }
+            break;
+          }
+          case OB_ENABLED_ROLES_TID:
+          {
+            ObInfoSchemaEnableRolesTable *enable_roles = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaEnableRolesTable, enable_roles))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(enable_roles);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_COMPATIBILITY_CONTROL_TID: {
+            ObVirtualCompatibilityConflictControl *compatibility_control = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualCompatibilityConflictControl, compatibility_control))) {
+              SERVER_LOG(ERROR, "ObVirtualCompatibilityConflictControl construct fail", K(ret));
+            } else {
+              compatibility_control->set_allocator(&allocator);
+              vt_iter = static_cast<ObVirtualTableIterator *>(compatibility_control);
             }
             break;
           }

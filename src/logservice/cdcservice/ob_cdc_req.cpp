@@ -22,7 +22,6 @@ namespace obrpc
  * Request start LSN by start timestamp.
  *
  */
-OB_SERIALIZE_MEMBER(ObCdcRpcId, client_pid_, client_addr_);
 
 void ObCdcReqStartLSNByTsReq::LocateParam::reset()
 {
@@ -340,6 +339,7 @@ void ObCdcLSFetchLogReq::reset()
   progress_ = OB_INVALID_TIMESTAMP;
   flag_ = 0;
   tenant_id_ = OB_INVALID_TENANT_ID;
+  compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
 }
 
 ObCdcLSFetchLogReq& ObCdcLSFetchLogReq::operator=(const ObCdcLSFetchLogReq &other)
@@ -353,7 +353,7 @@ ObCdcLSFetchLogReq& ObCdcLSFetchLogReq::operator=(const ObCdcLSFetchLogReq &othe
   progress_ = other.progress_;
   flag_ = other.flag_;
   tenant_id_ = other.tenant_id_;
-
+  compressor_type_ = other.compressor_type_;
   return *this;
 }
 
@@ -367,7 +367,8 @@ bool ObCdcLSFetchLogReq::operator==(const ObCdcLSFetchLogReq &that) const
     && client_id_ == that.client_id_
     && progress_ == that.progress_
     && flag_ == that.flag_
-    && tenant_id_ == that.tenant_id_;
+    && tenant_id_ == that.tenant_id_
+    && compressor_type_ == that.compressor_type_;
 }
 
 bool ObCdcLSFetchLogReq::operator!=(const ObCdcLSFetchLogReq &that) const
@@ -470,7 +471,7 @@ void ObCdcLSFetchLogResp::reset()
   err_ = common::OB_NOT_INIT;
   debug_err_ = common::OB_NOT_INIT;
   ls_id_.reset();
-  feedback_type_ = INVALID_FEEDBACK;
+  feedback_type_ = FeedbackType::INVALID_FEEDBACK;
   fetch_status_.reset();
   next_req_lsn_.reset();
   log_num_ = 0;
@@ -486,7 +487,7 @@ void ObCdcLSFetchLogResp::reset()
  */
 OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq::MissLogParam, miss_lsn_);
 OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq, rpc_ver_, ls_id_, miss_log_array_,
-                    client_pid_, client_id_, flag_, compressor_type_, tenant_id_);
+                    client_pid_, client_id_, flag_, compressor_type_, tenant_id_, progress_);
 
 void ObCdcLSFetchMissLogReq::reset()
 {
@@ -497,6 +498,8 @@ void ObCdcLSFetchMissLogReq::reset()
   client_id_.reset();
   flag_ = 0;
   tenant_id_ = OB_INVALID_TENANT_ID;
+  compressor_type_ = common::ObCompressorType::INVALID_COMPRESSOR;
+  progress_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObCdcLSFetchMissLogReq::append_miss_log(const MissLogParam &param)

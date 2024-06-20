@@ -347,7 +347,8 @@ int ObVirtualTableIterator::convert_output_row(ObNewRow *&cur_row)
       const ObColumnSchemaV2 *col_schema = cols_schema_.at(i);
       if (cur_row->get_cell(i).is_null()
           || (cur_row->get_cell(i).is_string_type() && 0 == cur_row->get_cell(i).get_data_length())
-          || ob_is_empty_lob(cur_row->get_cell(i))) {
+          || ob_is_empty_lob(cur_row->get_cell(i))
+          || (cur_row->get_cell(i).is_timestamp() && cur_row->get_cell(i).get_timestamp() <= 0)) {
         convert_row_.cells_[i].set_null();
       } else if (OB_FAIL(ObObjCaster::to_type(col_schema->get_data_type(),
                                               col_schema->get_collation_type(),
@@ -368,7 +369,13 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
   int ret = OB_SUCCESS;
   ObNewRow *cur_row = NULL;
   row_calc_buf_.reuse();
-  if (OB_FAIL(inner_get_next_row(cur_row))) {
+  const int64_t abs_timeout_ts = get_scan_param()->timeout_;
+  if (ObClockGenerator::getClock() > abs_timeout_ts) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("iterate virtual table row timeout", KR(ret), KTIME(abs_timeout_ts));
+  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("iterate virtual table row failed", KR(ret), KTIME(abs_timeout_ts));
+  } else if (OB_FAIL(inner_get_next_row(cur_row))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to inner get next row", K(ret), KPC(scan_param_));
     }
@@ -537,7 +544,7 @@ int ObVirtualTableIterator::check_priv(const ObString &level_str,
   int ret = OB_SUCCESS;
   share::schema::ObSessionPrivInfo session_priv;
   CK (OB_NOT_NULL(session_) && OB_NOT_NULL(schema_guard_));
-  OX (session_->get_session_priv_info(session_priv));
+  OZ (session_->get_session_priv_info(session_priv));
   // bool allow_show = true;
   if (OB_SUCC(ret)) {
     //tenant_id in table is static casted to int64_t,

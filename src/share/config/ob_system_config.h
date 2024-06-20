@@ -47,7 +47,7 @@ public:
   int read_int64(const ObSystemConfigKey &key, int64_t &value, const int64_t &def) const;
   int read_int(const ObSystemConfigKey &key, int64_t &value, const int64_t &def) const;
   int read_str(const ObSystemConfigKey &key, char buf[], int64_t len, const char *def) const;
-  int read_config(const ObSystemConfigKey &key, ObConfigItem &item) const;
+  int read_config(const uint64_t tenant_id, const ObSystemConfigKey &key, ObConfigItem &item) const;
   int64_t to_string(char *buf, const int64_t len) const;
   int reload(FILE *fp);
   int dump2file(const char *path) const;

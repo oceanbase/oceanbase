@@ -878,6 +878,7 @@ uint64_t ObCharset::hash(ObCollationType collation_type,
 
     ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
     if (OB_ISNULL(cs->coll)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error. invalid argument(s)", K(cs), K(cs->coll), K(lbt()));
     } else {
       seed = 0xc6a4a7935bd1e995;
@@ -1105,11 +1106,13 @@ size_t ObCharset::max_bytes_charpos(const ObCollationType collation_type,
   size_t ret = 0;
   if (OB_UNLIKELY(collation_type <= CS_TYPE_INVALID ||
                   collation_type >= CS_TYPE_MAX) ||
-                  OB_ISNULL(ObCharset::charset_arr[collation_type])) {
+      OB_ISNULL(ObCharset::charset_arr[collation_type])) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error. invalid argument(s)", K(collation_type), K(lbt()));
   } else {
     ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
     if (OB_ISNULL(cs->cset)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error. invalid argument(s)", K(cs), K(cs->cset), K(lbt()));
     } else {
       size_t char_len_tmp = 0;
@@ -1128,11 +1131,13 @@ bool ObCharset::wildcmp(ObCollationType collation_type,
   bool ret = false;
   if (OB_UNLIKELY(collation_type <= CS_TYPE_INVALID ||
                   collation_type >= CS_TYPE_MAX) ||
-                  OB_ISNULL(ObCharset::charset_arr[collation_type])) {
+      OB_ISNULL(ObCharset::charset_arr[collation_type])) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error. invalid argument(s)", K(collation_type), K(lbt()));
   } else {
     ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
     if (OB_ISNULL(cs->coll)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error. invalid argument(s)", K(cs), K(cs->coll), K(lbt()));
     } else {
       int tmp = cs->coll->wildcmp(cs, str.ptr(), str.ptr() + str.length(),
@@ -1346,7 +1351,9 @@ int ObCharset::wc_mb(ObCollationType collation_type, int32_t wc, char *buff, int
     } else {
       int tmp = cs->cset->wc_mb(cs, wc, reinterpret_cast<unsigned char*>(buff),
                                 reinterpret_cast<unsigned char*>(buff + buff_len));
-      if (tmp <= 0) {
+      if (tmp <= OB_CS_TOOSMALL) {
+        ret = OB_SIZE_OVERFLOW;
+      } else if (tmp <= 0) {
         ret = OB_ERR_INCORRECT_STRING_VALUE;
       } else {
         ret = OB_SUCCESS;
@@ -2087,6 +2094,21 @@ bool ObCharset::is_bin_sort(ObCollationType collation_type)
   return ret;
 }
 
+bool ObCharset::is_ci_collate(ObCollationType collation_type)
+{
+  bool ret = false;
+  if (OB_UNLIKELY(collation_type <= CS_TYPE_INVALID ||
+                  collation_type >= CS_TYPE_MAX) ||
+                  OB_ISNULL(ObCharset::charset_arr[collation_type])) {
+    LOG_WARN("unexpected error. invalid argument(s)",
+              K(ret), K(collation_type), K(lbt()));
+  } else {
+    ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
+    ret = (0 != (cs->state & OB_CS_CI));
+  }
+  return ret;
+}
+
 ObCharsetType ObCharset::default_charset_type_ = CHARSET_UTF8MB4;
 ObCollationType ObCharset::default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
 
@@ -2483,10 +2505,20 @@ int ObCharset::tolower(const ObCollationType collation_type,
                        ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  const ObCharsetInfo *cs_info = NULL;
-  if (OB_ISNULL(cs_info = get_charset(collation_type))) {
+  if (OB_FAIL(tolower(get_charset(collation_type), src, dst, allocator))) {
+    LOG_WARN("fail to casedown string", K(ret), K(collation_type), K(src));
+  }
+  return ret;
+}
+
+int ObCharset::tolower(const ObCharsetInfo *cs_info,
+                       const ObString &src, ObString &dst,
+                       ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cs_info)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid collation type", K(ret), K(collation_type));
+    LOG_WARN("invalid collation type", K(ret), KP(cs_info));
   } else {
     int casemulti = cs_info->casedn_multiply;
     if (1 == casemulti) {
@@ -3052,6 +3084,20 @@ bool ObCharset::is_cs_unicode(ObCollationType collation_type)
     is_cs_unicode = !!(cs->state & OB_CS_UNICODE);
   }
   return is_cs_unicode;
+}
+
+int ObCharset::get_replace_character(ObCollationType collation_type, int32_t &replaced_char_unicode)
+{
+  int ret = OB_SUCCESS;
+  if (is_cs_unicode(collation_type)) {
+    replaced_char_unicode = OB_CS_REPLACEMENT_CHARACTER;
+  } else if (!is_cs_nonascii(collation_type)) {
+    replaced_char_unicode = '?';
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected collation type", K(ret));
+  }
+  return ret;
 }
 
 bool ObCharset::is_cjk_charset(ObCollationType collation_type)

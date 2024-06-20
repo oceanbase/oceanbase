@@ -23,8 +23,8 @@ class SrsDataImporter:
         self.tenant=args.tenant
         self.old_result_cnt = [0, 0]
         self.new_result_cnt = [0, 0]
-        self.print_srs_sql = False;
-        print "host:{0} port:{1} pwd:{2} file:{3}".format(self.host, self.port, self.pwd, self.file_name)
+        self.print_srs_sql = False
+        print("host:{0} port:{1} pwd:{2} file:{3}".format(self.host, self.port, self.pwd, self.file_name))
 
     def generate_sql(self):
         self.sql_list = []
@@ -40,44 +40,44 @@ class SrsDataImporter:
             print(err)
             exit("ERROR: failed to connect host")
         self.cur = self.conn.cursor(buffered=True)
-        print "INFO: sucess to connect server {0}:{1}".format(self.host, self.port)
+        print("INFO: sucess to connect server {0}:{1}".format(self.host, self.port))
         try:
             sql = "select value from oceanbase.__all_sys_parameter where name = 'enable_upgrade_mode';"
             self.cur.execute(sql)
-            print "INFO: execute sql -- {0}".format(sql)
+            print("INFO: execute sql -- {0}".format(sql))
             result = self.cur.fetchall()
             if 1 == len(result) and 1 == result[0][0]:
                 self.upgrade_mode = True
             else:
                 self.upgrade_mode = False
                 sql = "select tenant_id from oceanbase.__all_tenant where tenant_name = '{0}';".format(str(self.tenant))
-                print "INFO: execute sql -- {0}".format(sql)
+                print("INFO: execute sql -- {0}".format(sql))
                 self.cur.execute(sql)
                 result = self.cur.fetchall()
                 if 1 == len(result):
-                    print "tenant_id = {0}".format(str(result[0][0]))
+                    print("tenant_id = {0}".format(str(result[0][0])))
                     self.tenant_id = result[0][0]
                 else:
-                    print "multiple tenants with the same name, tenant_name: '{0}'".format(self.tenant)
+                    print("multiple tenants with the same name, tenant_name: '{0}'".format(self.tenant))
             if False == self.upgrade_mode and self.tenant_id != 1:
                 sql = "commit"
                 self.cur.execute(sql)
-                sql = "alter system change tenant " + str(self.tenant)
-                print "INFO: execute sql -- {0}".format(sql)
+                sql = "alter system change tenant '{0}'".format(str(self.tenant))
+                print("INFO: execute sql -- {0}".format(sql))
                 self.cur.execute(sql)
         except mysql.connector.Error as err:
             print("ERROR: " + sql)
-            print(err);
+            print(err)
             exit("ERROR: failed to import srs data")
     def execute_sql(self):
         try:
             for sql in self.sql_list:
                 if self.print_srs_sql == True:
-                    print "INFO: execute sql -- {0}".format(sql)
+                    print("INFO: execute sql -- {0}".format(sql))
                 self.cur.execute(sql)
         except mysql.connector.Error as err:
             print("ERROR: " + sql)
-            print(err);
+            print(err)
             self.conn.rollback()
             print("ERROR: failed to import srs data")
         else:
@@ -89,9 +89,9 @@ class SrsDataImporter:
             self.cur.execute("select count(*) from {0}".format(table_name))
             result = self.cur.fetchone()
             self.old_result_cnt[idx] = result[0]
-            print "INFO: {0} old result rows -- {1}".format(table_name, self.old_result_cnt[idx])
+            print("INFO: {0} old result rows -- {1}".format(table_name, self.old_result_cnt[idx]))
         except mysql.connector.Error as err:
-            print(err);
+            print(err)
             exit("ERROR: failed to import srs data")
 
     def prepare_execute(self):
@@ -101,8 +101,8 @@ class SrsDataImporter:
         self.cur.execute("select count(*) from {0}".format(table_name))
         result = self.cur.fetchone()
         self.new_result_cnt[idx] = result[0]
-        print "INFO: {0} old result rows -- {1}".format(table_name, self.old_result_cnt[idx])
-        print "INFO: {0} new result rows -- {1}".format(table_name, self.new_result_cnt[idx])
+        print("INFO: {0} old result rows -- {1}".format(table_name, self.old_result_cnt[idx]))
+        print("INFO: {0} new result rows -- {1}".format(table_name, self.new_result_cnt[idx]))
 
     def check_result(self):
         self.execute_check_sql("oceanbase.__all_spatial_reference_systems", 0)

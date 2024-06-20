@@ -26,6 +26,7 @@
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "common/object/ob_object.h"
 //#include "lib/timezone/ob_timezone_util.h"
+#include "lib/locale/ob_locale_type.h"
 
 #define STRING_WITH_LEN(X) (X), ((sizeof(X) - 1))
 
@@ -1801,6 +1802,9 @@ int ObTimeConverter::int_to_ob_time_without_date(int64_t time_second, ObTime &ob
   } else {
     parts[DT_HOUR] = TIME_MAX_HOUR + 1;
   }
+  if (OB_SUCC(ret)) {
+    adjust_ob_time(ob_time);
+  }
   UNUSED(mode);
   return ret;
 }
@@ -1989,6 +1993,7 @@ int ObTimeConverter::str_to_ob_time_with_date(const ObString &str, ObTime &ob_ti
       LOG_WARN("datetime is invalid or out of range",
                K(ret), K(str), K(ob_time), K(date_sql_mode), KCSTRING(lbt()));
     } else {
+      adjust_ob_time(ob_time);
       ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
     }
     if (NULL != scale) {
@@ -2151,16 +2156,10 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
         }
         if (OB_SUCC(ret) && OB_FAIL(validate_time(ob_time))) {
           LOG_WARN("time value is invalid or out of range", K(ret), K(str));
-        } else {
-          // '2:59:59.9999999' ---> '03:00:00.000000'
-          const int64_t *part_max = DT_PART_BASE;
-          for (int i = DATETIME_PART_CNT - 1; OB_SUCC(ret) && i > DATE_PART_CNT; i--) {
-            if (ob_time.parts_[i] == part_max[i]) {
-              ob_time.parts_[i] = 0;
-              ob_time.parts_[i - 1]++;
-            }
-          }
         }
+      }
+      if (OB_SUCC(ret)) {
+        adjust_ob_time(ob_time);
       }
     }
   }
@@ -3133,6 +3132,26 @@ int ObTimeConverter::data_fmt_s(char *buffer, int64_t buf_len, int64_t &pos, con
     }
   }
   return ret;
+}
+
+void ObTimeConverter::adjust_ob_time(ObTime &ob_time)
+{
+  // '2:59:59.9999995' ---> '03:00:00.000000'
+  for (int i = DATETIME_PART_CNT - 1; i > DT_MDAY; i--) {
+    if (ob_time.parts_[i] == DT_PART_BASE[i]) {
+      ob_time.parts_[i] -= DT_PART_BASE[i];
+      ob_time.parts_[i - 1]++;
+    }
+  }
+  int32_t days = DAYS_PER_MON[IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])][ob_time.parts_[DT_MON]];
+  if (ob_time.parts_[DT_MDAY] > days) {
+    ob_time.parts_[DT_MDAY] -= days;
+    ob_time.parts_[DT_MON]++;
+  }
+  if (ob_time.parts_[DT_MON] > 12) {
+    ob_time.parts_[DT_MON] -= 12;
+    ob_time.parts_[DT_YEAR]++;
+  }
 }
 
 /**
@@ -4744,7 +4763,8 @@ int ObTimeConverter::deduce_max_len_from_oracle_dfm(const ObString &format,
 }
 
 int ObTimeConverter::ob_time_to_str_format(const ObTime &ob_time, const ObString &format,
-                                           char *buf, int64_t buf_len, int64_t &pos, bool &res_null)
+                                           char *buf, int64_t buf_len, int64_t &pos, bool &res_null,
+                                           const ObString &locale_name)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(format.ptr()) || OB_ISNULL(buf) || OB_UNLIKELY(format.length() <= 0 || buf_len <= 0)) {
@@ -4758,6 +4778,19 @@ int ObTimeConverter::ob_time_to_str_format(const ObTime &ob_time, const ObString
     int32_t week_monday = -1;
     int32_t delta_sunday = -2;
     int32_t delta_monday = -2;
+    //used for am/pm conversation in order to avoid if-else tests.
+
+    OB_LOCALE *ob_cur_locale = ob_locale_by_name(locale_name);
+    OB_LOCALE_TYPE *locale_type_day = ob_cur_locale->day_names_;
+    OB_LOCALE_TYPE *locale_type_ab_day = ob_cur_locale->ab_day_names_;
+    OB_LOCALE_TYPE *locale_type_mon = ob_cur_locale->month_names_;
+    OB_LOCALE_TYPE *locale_type_ab_mon = ob_cur_locale->ab_month_names_;
+
+    const char ** locale_daynames = locale_type_day->type_names_;
+    const char ** locale_ab_daynames = locale_type_ab_day->type_names_;
+    const char ** locale_monthnames = locale_type_mon->type_names_;
+    const char ** locale_ab_monthnames = locale_type_ab_mon->type_names_;
+
     //used for am/pm conversation in order to avoid if-else tests.
     const int hour_converter[24] = {12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
                                     12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
@@ -4792,8 +4825,11 @@ int ObTimeConverter::ob_time_to_str_format(const ObTime &ob_time, const ObString
           case 'M': { //Month name (January..December)
             if (OB_UNLIKELY(0 == parts[DT_MON])) {
               res_null = true;
+            } else if (lib::is_mysql_mode()) {
+              ret = data_fmt_s(buf, buf_len, pos, locale_monthnames[parts[DT_MON]-1]);
+            } else {
+              ret = data_fmt_s(buf, buf_len, pos, MON_NAMES[parts[DT_MON]].ptr_);
             }
-            ret = data_fmt_s(buf, buf_len, pos, MON_NAMES[parts[DT_MON]].ptr_);
             break;
           }
           case 'm': { //Month, numeric (00..12)
@@ -4811,15 +4847,21 @@ int ObTimeConverter::ob_time_to_str_format(const ObTime &ob_time, const ObString
           case 'a': { //Abbreviated weekday name (Sun..Sat)
             if (OB_UNLIKELY(0 == parts[DT_WDAY])) {
               res_null = true;
+            } else if (lib::is_mysql_mode()) {
+              ret = data_fmt_s(buf, buf_len, pos, locale_ab_daynames[parts[DT_WDAY]-1]);
+            } else {
+              ret = data_fmt_s(buf, buf_len, pos, WDAY_ABBR_NAMES[parts[DT_WDAY]].ptr_);
             }
-            ret = data_fmt_s(buf, buf_len, pos, WDAY_ABBR_NAMES[parts[DT_WDAY]].ptr_);
             break;
           }
           case 'b': { //Abbreviated month name (Jan..Dec)
             if (OB_UNLIKELY(0 == parts[DT_MON])) {
               res_null = true;
+            } else if (lib::is_mysql_mode()) {
+              ret = data_fmt_s(buf, buf_len, pos, locale_ab_monthnames[parts[DT_MON]-1]);
+            } else {
+              ret = data_fmt_s(buf, buf_len, pos, MON_ABBR_NAMES[parts[DT_MON]].ptr_);
             }
-            ret = data_fmt_s(buf, buf_len, pos, MON_ABBR_NAMES[parts[DT_MON]].ptr_);
             break;
           }
           case 'c': { //Month, numeric (0..12)
@@ -4903,8 +4945,11 @@ int ObTimeConverter::ob_time_to_str_format(const ObTime &ob_time, const ObString
           case 'W': { //Weekday name (Sunday..Saturday)
             if (OB_UNLIKELY(0 == parts[DT_WDAY])) {
               res_null = true;
+            } else if (lib::is_mysql_mode()) {
+              ret = data_fmt_s(buf, buf_len, pos, locale_daynames[parts[DT_WDAY]-1]);
+            } else {
+              ret = data_fmt_s(buf, buf_len, pos, WDAY_NAMES[parts[DT_WDAY]].ptr_);
             }
-            ret = data_fmt_s(buf, buf_len, pos, WDAY_NAMES[parts[DT_WDAY]].ptr_);
             break;
           }
           case 'w': { //Day of the week (0=Sunday..6=Saturday)

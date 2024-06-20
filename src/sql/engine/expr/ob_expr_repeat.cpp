@@ -65,11 +65,10 @@ int ObExprRepeat::calc_result_type2(ObExprResType &type,
     } else if (count.is_literal() && !count.is_null()) {
       const ObObj &obj = count.get_param();
       ObArenaAllocator alloc(ObModIds::OB_SQL_RES_TYPE);
-      const ObDataTypeCastParams dtc_params =
-            ObBasicSessionInfo::create_dtc_params(type_ctx.get_session());
+      const ObDataTypeCastParams dtc_params = type_ctx.get_dtc_params();
       int64_t cur_time = 0;
       ObCastMode cast_mode = CM_NONE;
-      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(type_ctx.get_session(), cast_mode))) {
+      if (FALSE_IT(ObSQLUtils::get_default_cast_mode(type_ctx.get_sql_mode(), cast_mode))) {
         LOG_WARN("failed to get default cast mode", K(ret));
       } else {
         cast_mode |= CM_WARN_ON_FAIL;
@@ -321,6 +320,17 @@ int ObExprRepeat::eval_repeat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
         expr_datum.set_string(output);
       }
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprRepeat, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(3);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
   }
   return ret;
 }

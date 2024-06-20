@@ -49,7 +49,7 @@ namespace sql
 //DBID:[10] '1492669708'
 //SESSIONID:[10] '4294967295'
 //USERHOST:[23] 'OceanBase224012.sqa.bja'
-//CLIENT ADDRESS:[56] '(ADDRESS=(PROTOCOL=tcp)(HOST=10.125.224.12)(PORT=53119))'
+//CLIENT ADDRESS:[56] '(ADDRESS=(PROTOCOL=tcp)(HOST=127.0.0.1)(PORT=53119))'
 //ACTION NUMBER:[3] '100'
 class ObSecurityAuditData : public common::ObBasebLogPrint
 {

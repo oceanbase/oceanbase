@@ -195,7 +195,6 @@ int ObTableServiceClientEnv::init_schema_service()
     // refresh Schema
     share::schema::ObSchemaService::g_ignore_column_retrieve_error_ = true;
     share::schema::ObSchemaService::g_liboblog_mode_ = true;
-    share::schema::ObMultiVersionSchemaService::g_skip_resolve_materialized_view_definition_ = true;
     ObSEArray<uint64_t, 1> tenant_ids;
     // init GCTX
     bool check_bootstrap = false;
@@ -959,8 +958,7 @@ int ObTableServiceClientImpl::get_tablet_location(const ObString &table_name, co
                                        0, ObReplicaType::REPLICA_TYPE_FULL, ObReplicaProperty(),
                                        role_status, 1))) {
       LOG_WARN("fail to init tablet replication location", K(ret));
-    }
-    if (OB_FAIL(tablet_location.add_replica_location(fake_leader_loc))) {
+    } else if (OB_FAIL(tablet_location.add_replica_location(fake_leader_loc))) {
       LOG_WARN("failed to push back", K(ret));
     } else {
       tablet_location.set_tenant_id(tenant_id_);

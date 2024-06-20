@@ -119,9 +119,7 @@ int ObTTLTaskScheduler::reload_tenant_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl tenant task mgr not init", KR(ret));
-  } else if (!ObTTLUtil::check_can_process_tenant_tasks(tenant_id_)) {
-    // do nothing
-  } else if (need_reload_) {
+  } else if (ATOMIC_BCAS(&need_reload_, true, false)) {
     lib::ObMutexGuard guard(mutex_);
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObTTLStatusField table_id_field;
@@ -150,7 +148,7 @@ int ObTTLTaskScheduler::reload_tenant_task()
                                                    *sql_proxy_, filters, ttl_task_arr))) {
         LOG_WARN("fail to read ttl tasks status", KR(ret));
       } else if (ttl_task_arr.empty()) {
-        // do nothing
+        tenant_task_.reset();
       } else if (ttl_task_arr.size() == 1) {
         ObTTLStatus &task = ttl_task_arr.at(0);
         tenant_task_.ttl_status_ = task;
@@ -162,8 +160,11 @@ int ObTTLTaskScheduler::reload_tenant_task()
     }
 
     if (OB_SUCC(ret)) {
-      set_need_reload(false);
       FLOG_INFO("reload tenant task", K_(tenant_task));
+    } else {
+      ret = OB_EAGAIN;
+      ATOMIC_STORE(&need_reload_, true);
+      LOG_WARN("fail to reload tenant task", KR(ret), K_(tenant_task));
     }
   }
   return ret;
@@ -188,12 +189,7 @@ int ObTTLTaskScheduler::calc_next_task_state(ObTTLTaskType user_cmd_type,
                                              ObTTLTaskStatus &next_state)
 {
   int ret = OB_SUCCESS;
-  if (curr_state == ObTTLTaskStatus::OB_RS_TTL_TASK_MOVE) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("fail to modify ttl tasks status, the state is not mismatch, moving now",
-      KR(ret), K(curr_state), K(user_cmd_type));
-    LOG_USER_WARN(OB_NOT_SUPPORTED, "Change the current TTL task state(Move) to the destination state");
-  } else if (curr_state == ObTTLTaskStatus::OB_RS_TTL_TASK_SUSPEND &&
+  if (curr_state == ObTTLTaskStatus::OB_RS_TTL_TASK_SUSPEND &&
       user_cmd_type == ObTTLTaskType::OB_TTL_RESUME) {
     next_state = ObTTLTaskStatus::OB_RS_TTL_TASK_CREATE;
   } else if (curr_state == ObTTLTaskStatus::OB_RS_TTL_TASK_CREATE &&
@@ -203,10 +199,11 @@ int ObTTLTaskScheduler::calc_next_task_state(ObTTLTaskType user_cmd_type,
       user_cmd_type == ObTTLTaskType::OB_TTL_CANCEL) {
     next_state = ObTTLTaskStatus::OB_RS_TTL_TASK_CANCEL;
   } else {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("fail to modify ttl tasks status, the state is mismatch. Maybe previous tasks is running",
-      KR(ret), K(curr_state), K(user_cmd_type));
-    LOG_USER_WARN(OB_NOT_SUPPORTED, "Change the current TTL task state to the destination state");
+    ret = OB_TTL_CMD_NOT_ALLOWED;
+    const char *status_cstr = ObTTLUtil::get_ttl_tenant_status_cstr(curr_state);
+    LOG_USER_ERROR(OB_TTL_CMD_NOT_ALLOWED, status_cstr);
+    LOG_WARN("ttl command is not allowed in current tenant ttl status",
+      KR(ret), K(curr_state), K(user_cmd_type), K_(tenant_id));
   }
   return ret;
 }
@@ -219,8 +216,9 @@ int ObTTLTaskScheduler::add_ttl_task(ObTTLTaskType task_type)
     ret = OB_NOT_INIT;
     LOG_WARN("ttl tenant task mgr not init", KR(ret));
   } else if (!ObTTLUtil::check_can_process_tenant_tasks(tenant_id_)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("cann't process ttl task, maybe tenant is restoring", K_(tenant_id), KR(ret));
+    ret = OB_TTL_TENANT_IS_RESTORE;
+    LOG_USER_ERROR(OB_TTL_TENANT_IS_RESTORE);
+    LOG_WARN("cannot execute ttl task during tenant is restoring", K_(tenant_id), KR(ret));
   } else if (OB_FAIL(reload_tenant_task())) {
     LOG_WARN("fail to reload tenant task", KR(ret));
   } else {
@@ -248,9 +246,10 @@ int ObTTLTaskScheduler::add_ttl_task(ObTTLTaskType task_type)
     } else {
       // not task or task finished already, only accept trigger command
       if (task_type != ObTTLTaskType::OB_TTL_TRIGGER) {
-        ret = OB_STATE_NOT_MATCH;
-        LOG_WARN("not ttl task currently, only trigger command is supported", KR(ret), K(task_type));
-        LOG_USER_WARN(OB_NOT_SUPPORTED, "trigger TTL task when TTL task is executing");
+        ret = OB_TTL_NO_TASK_RUNNING;
+        LOG_USER_ERROR(OB_TTL_NO_TASK_RUNNING);
+        LOG_WARN("not ttl task running currently, only trigger command is supported",
+          KR(ret), K(task_type), K(curr_state));
       } else if (OB_FAIL(add_ttl_task_internal(TRIGGER_TYPE::USER_TRIGGER))) {
         LOG_WARN("fail to add ttl task", KR(ret), K_(tenant_id));
       }
@@ -265,13 +264,14 @@ int ObTTLTaskScheduler::add_ttl_task_internal(TRIGGER_TYPE trigger_type)
 {
   int ret = OB_SUCCESS;
   bool is_active_time = false;
-  bool enable_ttl = is_enable_ttl();
+  bool enable_ttl = ObTTLUtil::is_enable_ttl(tenant_id_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl tenant task mgr not init", KR(ret));
-  } else if (!is_enable_ttl()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("ttl is not enable currently", KR(ret));
+  } else if (!enable_ttl) {
+    ret = OB_TTL_NOT_ENABLE;
+    LOG_USER_ERROR(OB_TTL_NOT_ENABLE);
+    LOG_WARN("ttl is not enable currently", KR(ret), K_(tenant_id));
   } else if (!tenant_task_.is_finished_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("there is ttl task executing already", KR(ret));
@@ -384,23 +384,23 @@ int ObTTLTaskScheduler::in_active_time(bool& is_active_time)
   return ret;
 }
 
-bool ObTTLTaskScheduler::is_enable_ttl()
-{
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-  return tenant_config.is_valid() && tenant_config->enable_kv_ttl;
-}
-
 int ObTTLTaskScheduler::try_add_periodic_task()
 {
   int ret = OB_SUCCESS;
   TRIGGER_TYPE trigger_type = TRIGGER_TYPE::PERIODIC_TRIGGER;
   bool is_active_time = false;
+  bool enable_ttl = ObTTLUtil::is_enable_ttl(tenant_id_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl tenant task mgr not init", KR(ret));
   } else if (!ObTTLUtil::check_can_process_tenant_tasks(tenant_id_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("cann't process ttl task, maybe tenant is restoring", K_(tenant_id), KR(ret));
+  } else if (need_skip_run()) {
+    ret = OB_EAGAIN;
+    FLOG_INFO("exit timer task once cuz leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
+  } else if (!enable_ttl) {
+    // do nothing
   } else if (OB_FAIL(in_active_time(is_active_time))) {
     LOG_WARN("fail to check is in active time", KR(ret));
   } else if (is_active_time) {
@@ -425,7 +425,7 @@ int ObTTLTaskScheduler::check_all_tablet_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl tenant task mgr not init", KR(ret));
-  } else if (tenant_task_.ttl_status_.status_ == OB_TTL_TASK_INVALID) {
+  } else if (tenant_task_.ttl_status_.status_ == OB_TTL_TASK_INVALID || tenant_task_.ttl_status_.status_ == OB_RS_TTL_TASK_SUSPEND) {
     // do nothing
   } else if (!ObTTLUtil::check_can_process_tenant_tasks(tenant_id_)) {
     // do nothing
@@ -434,7 +434,13 @@ int ObTTLTaskScheduler::check_all_tablet_task()
   } else if (need_move) {
     {
       lib::ObMutexGuard guard(mutex_);
-      if (ObTTLTaskStatus::OB_RS_TTL_TASK_MOVE != tenant_task_.ttl_status_.status_) {
+      if (need_skip_run()) {
+        ret = OB_EAGAIN;
+        FLOG_INFO("exit timer task once cuz leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
+      } else if (ObTTLTaskStatus::OB_RS_TTL_TASK_SUSPEND == tenant_task_.ttl_status_.status_) {
+        ret = OB_EAGAIN;
+        LOG_WARN("task status changed during check task need move", KR(ret));
+      } else if (ObTTLTaskStatus::OB_RS_TTL_TASK_MOVE != tenant_task_.ttl_status_.status_) {
         tenant_task_.ttl_status_.status_ = static_cast<uint64_t>(ObTTLTaskStatus::OB_RS_TTL_TASK_MOVE);
         ObMySQLTransaction trans;
         if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
@@ -533,12 +539,14 @@ void ObTTLTaskScheduler::reset_local_tenant_task()
 
 void ObTTLTaskScheduler::resume()
 {
-  is_paused_ = false;
+ ATOMIC_STORE(&is_leader_, true);
+ ATOMIC_STORE(&need_do_for_switch_, true);
 }
 
 void ObTTLTaskScheduler::pause()
 {
-  is_paused_ = true;
+  ATOMIC_STORE(&is_leader_, false);
+  ATOMIC_STORE(&need_do_for_switch_, true);
 }
 
 int ObTenantTTLManager::init(const uint64_t tenant_id, ObMySQLProxy &sql_proxy)
@@ -605,15 +613,24 @@ void ObTenantTTLManager::destroy()
 
 void ObTTLTaskScheduler::runTimerTask()
 {
+  DEBUG_SYNC(BEFORE_TTL_SCHEDULER_RUN);
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
+
   if (!ObKVFeatureModeUitl::is_ttl_enable()) {
     // do nothing
     LOG_DEBUG("ttl is disable");
   } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl task mgr not init", KR(ret));
-  } else if (is_paused_) {
+  } else if (!ObTTLUtil::check_can_process_tenant_tasks(tenant_id_)) {
+    // do nothing
+  } else if (ATOMIC_BCAS(&need_do_for_switch_, true, false)) {
+    // need skip this round for waiting follower finish executing task
+    if (is_leader_) {
+      FLOG_INFO("need wait for switch leader, skip schedule once", K_(need_do_for_switch));
+    }
+  } else if (!is_leader_) {
     // timer paused, do nothing
   } else if (OB_FAIL(reload_tenant_task())) {
     LOG_WARN("fail to process tenant task", KR(ret), K_(tenant_id));
@@ -630,11 +647,16 @@ int ObTenantTTLManager::handle_user_ttl(const obrpc::ObTTLRequestArg& arg)
 {
   int ret = OB_SUCCESS;
   ObTTLTaskType user_ttl_req_type = static_cast<ObTTLTaskType>(arg.cmd_code_);
+  bool enable_ttl = ObTTLUtil::is_enable_ttl(tenant_id_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (tenant_id_ == OB_SYS_TENANT_ID) {
     // do nothing
+  } else if (!enable_ttl) {
+    ret = OB_TTL_NOT_ENABLE;
+    LOG_USER_ERROR(OB_TTL_NOT_ENABLE);
+    LOG_WARN("ttl is not enable currently", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(task_scheduler_.add_ttl_task(static_cast<ObTTLTaskType>(arg.cmd_code_)))) {
     LOG_WARN("fail to add ttl task", KR(ret), K_(tenant_id), K(user_ttl_req_type));
   }
@@ -649,7 +671,10 @@ int ObTTLTaskScheduler::move_all_task_to_history_table()
   int64_t one_move_rows = TBALET_CHECK_BATCH_SIZE;
   while (OB_SUCC(ret) && one_move_rows == TBALET_CHECK_BATCH_SIZE) {
     ObMySQLTransaction trans;
-    if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
+    if (need_skip_run()) {
+      ret = OB_EAGAIN;
+      FLOG_INFO("exit timer task once cuz leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
+    } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
       LOG_WARN("fail start transaction", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(ObTTLUtil::move_task_to_history_table(tenant_id_, tenant_task_.ttl_status_.task_id_,
                                                              trans, TBALET_CHECK_BATCH_SIZE, one_move_rows))) {
@@ -667,7 +692,10 @@ int ObTTLTaskScheduler::move_all_task_to_history_table()
 
   if (OB_SUCC(ret)) {
     ObMySQLTransaction trans;
-    if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
+    if (need_skip_run()) {
+      ret = OB_EAGAIN;
+      FLOG_INFO("exit timer task once cuz leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
+    } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
       LOG_WARN("fail start transaction", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(update_task_status(tenant_task_.ttl_status_.task_id_, OB_TTL_TASK_FINISH, trans))) {
       LOG_WARN("fail to update task status", KR(ret));
@@ -691,7 +719,8 @@ void ObTenantTTLManager::resume()
 {
   clear_ttl_history_task_.resume();
   task_scheduler_.resume();
-  task_scheduler_.set_need_reload(true);}
+  task_scheduler_.set_need_reload(true);
+}
 
 void ObTenantTTLManager::pause()
 {
@@ -703,16 +732,18 @@ int ObTTLTaskScheduler::check_task_need_move(bool &need_move)
 {
   int ret = OB_SUCCESS;
   need_move = false;
-  if (OB_RS_TTL_TASK_MOVE == tenant_task_.ttl_status_.status_) {
+  if (OB_RS_TTL_TASK_MOVE == tenant_task_.ttl_status_.status_ || OB_RS_TTL_TASK_CANCEL == tenant_task_.ttl_status_.status_) {
+    // cancel will also need move all tasks into history table now
     need_move = true;
-  } else if (OB_FAIL(check_all_tabelt_finished(need_move))) {
+  } else if (OB_FAIL(check_all_tablet_finished(need_move))) {
     LOG_WARN("fail to check all tablet task finished", KR(ret));
   }
   return ret;
 }
 
-int ObTTLTaskScheduler::check_all_tabelt_finished(bool &all_finished)
+int ObTTLTaskScheduler::check_all_tablet_finished(bool &all_finished)
 {
+  DEBUG_SYNC(BEFORE_CHECK_TTL_TASK_FINISH);
   int ret = OB_SUCCESS;
   all_finished = true;
   ObSEArray<uint64_t, DEFAULT_TABLE_ARRAY_SIZE> table_id_array;

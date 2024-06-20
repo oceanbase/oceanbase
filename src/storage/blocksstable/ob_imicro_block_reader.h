@@ -52,8 +52,9 @@ struct ObMicroIndexInfo;
   do {                                                                      \
     if (nullptr != ptr) {                                                   \
       ptr->~T();                                                            \
-      if (OB_LIKELY(nullptr != ctx && nullptr != ctx->stmt_allocator_)) {   \
-        ctx->stmt_allocator_->free(ptr);                                    \
+      if (OB_LIKELY(nullptr != ctx &&                                       \
+          nullptr != ctx->get_long_life_allocator())) {                     \
+        ctx->get_long_life_allocator()->free(ptr);                          \
       }                                                                     \
       ptr = nullptr;                                                        \
     }                                                                       \
@@ -103,6 +104,7 @@ struct ObMicroBlockData
     DATA_BLOCK,
     INDEX_BLOCK,
     DDL_BLOCK_TREE,
+    DDL_MERGE_INDEX_BLOCK,
     MAX_TYPE
   };
 public:
@@ -131,7 +133,7 @@ public:
   int64_t &get_extra_size() { return extra_size_; }
 
   int64_t total_size() const { return size_ + extra_size_; }
-  bool is_index_block() const { return INDEX_BLOCK == type_ || DDL_BLOCK_TREE == type_;}
+  bool is_index_block() const { return INDEX_BLOCK == type_ || DDL_BLOCK_TREE == type_ || DDL_MERGE_INDEX_BLOCK == type_;}
 
   void reset() { *this = ObMicroBlockData(); }
   OB_INLINE const ObMicroBlockHeader *get_micro_header() const
@@ -295,9 +297,10 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       const bool contains_null,
+      const share::schema::ObColumnParam *col_param,
       int64_t &count)
   {
-    UNUSEDx(col_id, row_ids, row_cap, contains_null, count);
+    UNUSEDx(col_id, row_ids, row_cap, contains_null, col_param, count);
     return OB_NOT_SUPPORTED;
   }
   virtual int64_t get_column_count() const = 0;
@@ -309,17 +312,22 @@ public:
                  int64_t &row_idx,
                  bool &equal) = 0;
   virtual int get_column_datum(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
+      const share::schema::ObColumnParam &col_param,
       const int32_t col_offset,
       const int64_t row_index,
       ObStorageDatum &datum)
   {
-    UNUSEDx(col_offset, row_index, datum);
+    UNUSEDx(iter_param, context, col_param, col_offset, row_index, datum);
     return OB_NOT_SUPPORTED;
   }
   // for scalar group by pushdown
   virtual int get_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t col_offset,
-      const share::schema::ObColumnParam *col_param,
+      const share::schema::ObColumnParam &col_param,
       const int64_t *row_ids,
       const int64_t row_cap,
       storage::ObAggDatumBuf &datum_buf,
@@ -381,9 +389,9 @@ public:
       int32_t &compare_result) = 0;
   static int filter_white_filter(
       const sql::ObWhiteFilterExecutor &filter,
-      const common::ObObjMeta &obj_meta,
       const common::ObDatum &datum,
       bool &filtered);
+  virtual bool has_lob_out_row() const = 0;
 
 protected:
   virtual int find_bound(const ObDatumRange &range,

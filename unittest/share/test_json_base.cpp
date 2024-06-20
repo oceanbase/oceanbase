@@ -9,11 +9,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#define USING_LOG_PREFIX SHARE
 #include <gtest/gtest.h>
 #define private public
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_bin.h"
+#include "lib/json_type/ob_json_diff.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/timezone/ob_timezone_info.h"
@@ -45,6 +46,27 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestJsonBase);
 };
+
+static int init_update_ctx(ObIAllocator &allocator, ObJsonBin *bin)
+{
+  INIT_SUCC(ret);
+  ObJsonBinUpdateCtx *update_ctx = nullptr;
+  ObLobInRowUpdateCursor *cursor = nullptr;
+  if (OB_ISNULL(update_ctx = OB_NEWx(ObJsonBinUpdateCtx, &allocator, &allocator))) {
+    LOG_WARN("alloc update_ctx fail", K(ret));
+  } else if (OB_ISNULL(cursor = OB_NEWx(ObLobInRowUpdateCursor, &allocator, &allocator))) {
+    LOG_WARN("alloc cursor fail", K(ret));
+  } else if (OB_FAIL(cursor->init(bin->get_cursor()))) {
+    LOG_WARN("init cursor fail", K(ret));
+  } else {
+    update_ctx->set_lob_cursor(cursor);
+    bin->get_cursor()->reset();
+    bin->set_cursor(cursor);
+    bin->get_ctx()->update_ctx_ = update_ctx;
+    bin->get_ctx()->is_update_ctx_alloc_ = true;
+  }
+  return ret;
+}
 
 // json text 比较
 //
@@ -886,10 +908,11 @@ TEST_F(TestJsonBase, test_get_allocator)
 
 TEST_F(TestJsonBase, test_seek)
 {
+  set_compat_mode(lib::Worker::CompatMode::MYSQL);
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   // 1. seek_not_exist_member
@@ -1098,12 +1121,12 @@ TEST_F(TestJsonBase, test_seek)
   }
   ObString raw_str;
   ASSERT_EQ(OB_SUCCESS, jb_res->get_raw_binary(raw_str, &allocator));
-  ASSERT_EQ(27, raw_str.length());
+  ASSERT_EQ(8 + 27, raw_str.length());
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, jb_res,
       ObJsonInType::JSON_BIN, j_bin));
   raw_str.reset();
   ASSERT_EQ(OB_SUCCESS, j_bin->get_raw_binary(raw_str, &allocator));
-  ASSERT_EQ(27, raw_str.length());
+  ASSERT_EQ(8 + 27, raw_str.length());
 
   // 10. seek test3(bin->seek->print)
   common::ObString j_text10("{\"some_key\": true}");
@@ -1117,7 +1140,7 @@ TEST_F(TestJsonBase, test_seek)
   ASSERT_EQ(hit.size(), 1);
   raw_str.reset();
   ASSERT_EQ(OB_SUCCESS, hit[0]->get_raw_binary(raw_str, &allocator));
-  ObJsonBin j_bin_tmp(raw_str.ptr(), raw_str.length());
+  ObJsonBin j_bin_tmp(raw_str.ptr(), raw_str.length(), &allocator);
   ObIJsonBase *j_base = &j_bin_tmp;
   j_buf.reset();
   ASSERT_EQ(OB_SUCCESS, j_bin_tmp.reset_iter());
@@ -1131,7 +1154,7 @@ TEST_F(TestJsonBase, test_oracle_seek)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   // 1. seek_not_exist_member
@@ -1510,7 +1533,7 @@ TEST_F(TestJsonBase, test_seek_str_cmp)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   common::ObString var_name("sql");
@@ -1606,7 +1629,7 @@ TEST_F(TestJsonBase, test_seek_func)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   // 11. seek_type
@@ -1869,7 +1892,7 @@ TEST_F(TestJsonBase, test_seek_bad_filter)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
   INIT_SUCC(ret);
 /*
@@ -1942,7 +1965,7 @@ TEST_F(TestJsonBase, test_seek_filter)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   /*
@@ -3345,7 +3368,7 @@ TEST_F(TestJsonBase, test_get_raw_binary)
   // 2. test json bin
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_arr_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
-  ASSERT_EQ(OB_SUCCESS, j_bin->get_raw_binary(str));
+  ASSERT_EQ(OB_SUCCESS, j_bin->get_raw_binary(str, &allocator));
 }
 
 TEST_F(TestJsonBase, test_get_key)
@@ -3446,13 +3469,13 @@ TEST_F(TestJsonBase, test_get_used_size)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_obj_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree));
   ASSERT_EQ(OB_SUCCESS, j_tree->get_used_size(use_size));
-  ASSERT_EQ(50, use_size);
+  ASSERT_EQ(50 + 8 /*sizeof(ObJsonBinDocHeader)*/, use_size);
 
   // 2. test json bin
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_obj_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
   ASSERT_EQ(OB_SUCCESS, j_bin->get_used_size(use_size));
-  ASSERT_EQ(50, use_size);
+  ASSERT_EQ(50 + 8 /*sizeof(ObJsonBinDocHeader)*/, use_size);
 }
 
 TEST_F(TestJsonBase, test_get_free_space)
@@ -3474,9 +3497,14 @@ TEST_F(TestJsonBase, test_get_free_space)
   // 2. test json bin
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_obj_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
+
+  ObJsonBin *bin = static_cast<ObJsonBin *>(j_bin);
+  ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin));
+  ObJsonBinUpdateCtx &update_ctx = *bin->get_update_ctx();
+
   ASSERT_EQ(OB_SUCCESS, j_bin->object_remove(key));
   ASSERT_EQ(OB_SUCCESS, j_bin->get_free_space(free_space));
-  ASSERT_EQ(4, free_space);
+  ASSERT_EQ(6, free_space);
 }
 
 TEST_F(TestJsonBase, test_array_append)
@@ -3505,6 +3533,11 @@ TEST_F(TestJsonBase, test_array_append)
   ObIJsonBase *j_bin_val = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_uint1,
       ObJsonInType::JSON_BIN, j_bin_val));
+
+  ObJsonBin *bin = static_cast<ObJsonBin *>(j_bin);
+  ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin));
+  ObJsonBinUpdateCtx &update_ctx = *bin->get_update_ctx();
+
   ASSERT_EQ(OB_SUCCESS, j_bin->array_append(j_bin_val));
   j_buf.reset();
   ASSERT_EQ(OB_SUCCESS, j_bin->print(j_buf, false));
@@ -3537,6 +3570,11 @@ TEST_F(TestJsonBase, test_array_insert)
   ObIJsonBase *j_bin_val = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_uint1,
       ObJsonInType::JSON_BIN, j_bin_val));
+
+  ObJsonBin *bin = static_cast<ObJsonBin *>(j_bin);
+  ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin));
+  ObJsonBinUpdateCtx &update_ctx = *bin->get_update_ctx();
+
   ASSERT_EQ(OB_SUCCESS, j_bin->array_insert(2, j_bin_val));
   j_buf.reset();
   ASSERT_EQ(OB_SUCCESS, j_bin->print(j_buf, false));
@@ -3564,6 +3602,9 @@ TEST_F(TestJsonBase, test_array_remove)
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree,
       ObJsonInType::JSON_BIN, j_bin));
+  ObJsonBin *bin = static_cast<ObJsonBin *>(j_bin);
+  ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin));
+  ObJsonBinUpdateCtx &update_ctx = *bin->get_update_ctx();
   ASSERT_EQ(OB_SUCCESS, j_bin->array_remove(3));
   ASSERT_EQ(3, j_bin->element_count());
   j_buf.reset();
@@ -3600,11 +3641,15 @@ TEST_F(TestJsonBase, test_object_add)
   ObIJsonBase *j_bin_val2 = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_uint2,
       ObJsonInType::JSON_BIN, j_bin_val2));
+
+  ObJsonBin *bin = static_cast<ObJsonBin *>(j_bin);
+  ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin));
+  ObJsonBinUpdateCtx &update_ctx = *bin->get_update_ctx();
+
   ASSERT_EQ(OB_SUCCESS, j_bin->object_add(key2, j_bin_val2));
   j_buf.reset();
   ASSERT_EQ(OB_SUCCESS, j_bin->print(j_buf, false));
-  ASSERT_EQ(0, strncmp("{\"os\": \"Mac\", \"key1\": 1, \"name\": \"Safari\", \"key2\": 2}",
-      j_buf.ptr(), j_buf.length()));
+  ASSERT_EQ("{\"os\": \"Mac\", \"key1\": 1, \"key2\": 2, \"name\": \"Safari\"}", std::string(j_buf.ptr(), j_buf.length()));
 }
 
 TEST_F(TestJsonBase, test_object_remove)
@@ -3629,6 +3674,9 @@ TEST_F(TestJsonBase, test_object_remove)
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree,
       ObJsonInType::JSON_BIN, j_bin));
+  ObJsonBin *bin = static_cast<ObJsonBin *>(j_bin);
+  ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin));
+  ObJsonBinUpdateCtx &update_ctx = *bin->get_update_ctx();
   common::ObString key1("os");
   ASSERT_EQ(OB_SUCCESS, j_bin->object_remove(key1));
   j_buf.reset();
@@ -3672,19 +3720,29 @@ TEST_F(TestJsonBase, test_replace)
   j_tree = &j_arr;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree,
       ObJsonInType::JSON_BIN, j_bin));
+  ObJsonBin *bin2 = static_cast<ObJsonBin *>(j_bin);
+  ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin2));
+  bin2->set_seek_flag(false);
+  ObJsonBinUpdateCtx &update_ctx2 = *bin2->get_update_ctx();
   ASSERT_EQ(OB_SUCCESS, j_bin->get_array_element(0, jb_bin_old_ptr));
   ObIJsonBase *j_bin_new_ptr = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_uint0,
       ObJsonInType::JSON_BIN, j_bin_new_ptr));
+  ObJsonBin *bin = static_cast<ObJsonBin *>(j_bin);
+  bin->set_seek_flag(false);
   ASSERT_EQ(OB_SUCCESS, j_bin->replace(jb_bin_old_ptr, j_bin_new_ptr));
   j_buf.reset();
   ASSERT_EQ(OB_SUCCESS, j_bin->print(j_buf, false));
-  ASSERT_EQ(0, strncmp("[0]", j_buf.ptr(), j_buf.length()));
+  ASSERT_EQ("[0]", std::string(j_buf.ptr(), j_buf.length()));
 
   // object
   j_tree = &j_obj;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree,
       ObJsonInType::JSON_BIN, j_bin));
+  bin = static_cast<ObJsonBin *>(j_bin);
+  bin->set_seek_flag(false);
+  ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin));
+  ObJsonBinUpdateCtx &update_ctx = *bin->get_update_ctx();
   ASSERT_EQ(OB_SUCCESS, j_bin->get_object_value(key0, jb_bin_old_ptr));
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_val0,
       ObJsonInType::JSON_BIN, j_bin_new_ptr));
@@ -4509,6 +4567,8 @@ TEST_F(TestJsonBase, test_to_bit)
 
 int main(int argc, char** argv)
 {
+  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   // system("rm -f test_json_base.log");
   // OB_LOGGER.set_file_name("test_json_base.log");

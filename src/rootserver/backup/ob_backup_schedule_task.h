@@ -291,6 +291,7 @@ protected:
   share::SCN end_scn_;
   share::ObBackupPathString backup_path_;
   share::ObBackupStatus backup_status_;
+  bool is_only_calc_stat_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataBaseTask);
 };
@@ -348,6 +349,18 @@ public:
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSMetaTask);
+};
+
+class ObBackupDataLSMetaFinishTask final : public ObBackupDataLSTask
+{
+public:
+  ObBackupDataLSMetaFinishTask() {}
+  virtual ~ObBackupDataLSMetaFinishTask() {}
+  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int64_t get_deep_copy_size() const override;
+  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSMetaFinishTask);
 };
 
 class ObBackupCleanLSTask : public ObBackupScheduleTask

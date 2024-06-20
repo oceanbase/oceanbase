@@ -18,6 +18,7 @@
 #include "sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/resolver/dml/ob_del_upd_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -30,9 +31,11 @@ int ObDefaultValueUtils::generate_insert_value(const ColumnItem *column,
 {
   int ret = OB_SUCCESS;
   ObDMLDefaultOp op = OB_INVALID_DEFAULT_OP;
-  if (OB_ISNULL(column)) {
+  if (OB_ISNULL(column) || OB_ISNULL(params_) ||
+      OB_ISNULL(params_->expr_factory_) ||
+      OB_ISNULL(params_->session_info_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(column));
+    LOG_WARN("invalid argument", K(column), K(params_), K(params_->expr_factory_), K(params_->session_info_));
   } else if (OB_FAIL(get_default_type_for_insert(column, op))) {
     LOG_WARN("fail to check column default value", K(column), K(ret));
   } else if (has_instead_of_trigger
@@ -370,11 +373,21 @@ int ObDefaultValueUtils::build_default_expr_strict(const ColumnItem *column, ObR
   } else if (NULL != column->default_value_expr_) {
     if (OB_FAIL(build_expr_default_expr(column, const_cast<ColumnItem *>(column)->default_value_expr_, expr))) {
       LOG_WARN("fail to build expr_default expr", K(ret));
+    } else {
+      ObDelUpdResolver* del_upd_resolver = dynamic_cast<ObDelUpdResolver *>(resolver_);
+      if (OB_ISNULL(del_upd_resolver)) {
+        // do nothing
+      } else if (OB_FAIL(del_upd_resolver->recursive_search_sequence_expr(expr))) {
+        LOG_WARN("fail to search sequence expr", K(ret));
+      }
     }
   } else if (column->base_cid_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
     if (OB_FAIL(resolver_->build_heap_table_hidden_pk_expr(expr, column->get_expr()))) {
       LOG_WARN("failed to build next_val expr", K(ret), KPC(column->get_expr()));
     }
+  } else if (OB_ISNULL(column->get_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, column expr is nullptr", K(ret), KPC(column));
   } else if (column->is_auto_increment()) {
     if (OB_FAIL(resolver_->build_autoinc_nextval_expr(expr,
                                                       column->base_tid_,
@@ -471,6 +484,7 @@ int ObDefaultValueUtils::build_expr_default_expr(const ColumnItem *column,
 {
   int ret = OB_SUCCESS;
   ObRawExpr *temp_expr = NULL;
+  ObRawExpr *seq_expr = nullptr;
   if (OB_ISNULL(column)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguemnt", K(column));
@@ -481,6 +495,11 @@ int ObDefaultValueUtils::build_expr_default_expr(const ColumnItem *column,
                                                 input_expr,
                                                 temp_expr))) {
     LOG_WARN("failed to copy expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_invalid_sequence_expr(temp_expr, seq_expr))) {
+    LOG_WARN("fail to get invalid sequence expr", K(ret));
+  } else if (nullptr != seq_expr) {
+    ret = OB_ERR_SEQ_NOT_EXIST;
+    LOG_WARN("sequence not exist", K(ret));
   } else {
     const_expr = temp_expr;
   }
@@ -585,6 +604,7 @@ int ObDefaultValueUtils::get_default_type_for_default_function_static(
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(column_schema));
   } else if (column_schema->is_autoincrement()) {
     op = OB_NOT_STRICT_DEFAULT_OP;

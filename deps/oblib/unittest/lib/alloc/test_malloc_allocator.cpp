@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "lib/alloc/ob_malloc_allocator.h"
+#include "lib/allocator/ob_malloc.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -58,6 +59,17 @@ TEST(TestMallocAllocator, idle)
 
   ASSERT_EQ(OB_SUCCESS, malloc_allocator->set_tenant_ctx_idle(tenant_id, ctx_id,
                                                               OB_MALLOC_BIG_BLOCK_SIZE));
+}
+
+TEST(TestMallocAllocator, ob_malloc_align)
+{
+  void *ptr = ob_malloc_align(1, 4, "test");
+  ASSERT_TRUE(ptr != NULL);
+  ASSERT_EQ(0, (int64_t)ptr % 16);
+
+  ptr = ob_malloc_align(4096, 4, "test");
+  ASSERT_TRUE(ptr != NULL);
+  ASSERT_EQ(0, (int64_t)ptr % 4096);
 }
 
 int main(int argc, char *argv[])

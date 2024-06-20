@@ -8,7 +8,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 
 ##增加新的语法，支持ignore
 --disable_warnings
-drop table if exists t1,t2, test, t_ignore;
+drop table if exists t1,t2, test, t_ignore, t3;
 --enable_warnings
 CREATE TABLE t1(a BIGINT primary key);
 
@@ -185,3 +185,9 @@ CREATE TABLE t_ignore (`c1` bigint(20) NOT NULL AUTO_INCREMENT, `c2` varchar(50)
 INSERT IGNORE INTO t_ignore (c1) value (1);
 SELECT * FROM t_ignore;
 DROP TABLE t_ignore;
+
+create TABLE t3 ( str varchar(255) character set utf8mb4 not null, key str (str(2)) );
+--error 1048
+INSERT ignore INTO t3 VALUES (NULL);
+select /*+ opt_param('hidden_column_visible', 'true') index('str')*/__pk_increment, __substr2_16 from t3;
+drop table t3;

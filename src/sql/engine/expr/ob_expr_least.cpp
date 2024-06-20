@@ -159,7 +159,12 @@ int ObExprLeastGreatest::calc_result_typeN_oracle(ObExprResType &type,
             item_length = OB_MAX_TIMESTAMP_TZ_LENGTH;
             break;
           }
-          case ObUserDefinedSQLTC: {
+          case ObUserDefinedSQLTC:
+          case ObGeometryTC: {
+            item_length = types[i].get_length();
+            break;
+          }
+          case ObCollectionSQLTC: {
             item_length = types[i].get_length();
             break;
           }
@@ -194,6 +199,10 @@ int ObExprLeastGreatest::calc_result_typeN_oracle(ObExprResType &type,
     }
   }
 
+  if (OB_SUCC(ret) && ob_is_geometry(type.get_type())) {
+    ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+    LOG_WARN("Incorrect cmp type with geometry arguments", K(ret));
+  }
 //老执行引擎在类型推导时不为参数设置calc_type, 在执行期再对参数进行cast。
 //新执行引擎需要在类型推导阶段为参数设置好calc_type, 在执行期不再显式执行cast。
   if (OB_SUCC(ret)
@@ -273,7 +282,6 @@ int ObExprLeastGreatest::cg_expr(ObExprCGCtx &op_cg_ctx,
                                  const ObRawExpr &raw_expr,
                                  ObExpr &rt_expr) const
 {
-  UNUSED(raw_expr);
   int ret = OB_SUCCESS;
   const uint32_t param_num = rt_expr.arg_cnt_;
   bool is_oracle_mode = lib::is_oracle_mode();
@@ -317,16 +325,21 @@ int ObExprLeastGreatest::cg_expr(ObExprCGCtx &op_cg_ctx,
       ObCastMode cm = CM_NONE;
       if (!is_oracle_mode && !cmp_meta.is_null()) {
         DatumCastExtraInfo *info = OB_NEWx(DatumCastExtraInfo, op_cg_ctx.allocator_, *(op_cg_ctx.allocator_), type_);
+        ObSQLMode sql_mode = op_cg_ctx.session_->get_sql_mode();
         if (OB_ISNULL(info)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc memory failed", K(ret));
-        } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
-                                                             op_cg_ctx.session_, cm))) {
-          LOG_WARN("get default cast mode failed", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(&raw_expr.get_local_session_var(),
+                                                                          sql_mode))) {
+          LOG_WARN("try get local sql mode failed", K(ret));
         } else if (CS_TYPE_INVALID == cmp_meta.get_collation_type()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("compare cs type is invalid", K(ret), K(cmp_meta));
         } else {
+          ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
+                                            op_cg_ctx.session_->get_stmt_type(),
+                                            op_cg_ctx.session_->is_ignore_stmt(),
+                                            sql_mode, cm);
           info->cmp_meta_.type_ = cmp_meta.get_type();
           info->cmp_meta_.cs_type_ = cmp_meta.get_collation_type();
           info->cmp_meta_.scale_ = cmp_meta.get_scale();
@@ -547,12 +560,23 @@ int ObExprLeastGreatest::calc_oracle(const ObExpr &expr, ObEvalCtx &ctx,
       }
     }
     ObDatum *res_datum = nullptr;
-    if (OB_FAIL(expr.args_[res_idx]->eval(ctx, res_datum))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(expr.args_[res_idx]->eval(ctx, res_datum))) {
       LOG_WARN("eval param value failed", K(ret), K(res_idx));
     } else {
       ObDatum &dst_datum = static_cast<ObDatum &>(expr_datum);
       dst_datum = *res_datum;
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprLeastGreatest, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(2);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   }
   return ret;
 }
@@ -576,7 +600,6 @@ int ObExprLeast::calc_least(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
   }
   return ret;
 }
-
 
 }
 }

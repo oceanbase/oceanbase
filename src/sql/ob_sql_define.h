@@ -120,7 +120,10 @@ enum JtColType {
   COL_TYPE_QUERY, // 3
   COL_TYPE_VALUE, // 4
   NESTED_COL_TYPE, // 5
-  COL_TYPE_QUERY_JSON_COL = 6,
+  COL_TYPE_QUERY_JSON_COL, // 6
+  COL_TYPE_VAL_EXTRACT_XML, // 7
+  COL_TYPE_XMLTYPE_XML, // 8
+  COL_TYPE_ORDINALITY_XML = 9,
 };
 
 enum ObNameTypeClass
@@ -132,7 +135,10 @@ enum ObNameTypeClass
 
 enum ObMatchAgainstMode {
   NATURAL_LANGUAGE_MODE = 0,
-  BOOLEAN_MODE = 1
+  NATURAL_LANGUAGE_MODE_WITH_QUERY_EXPANSION = 1,
+  BOOLEAN_MODE = 2,
+  WITH_QUERY_EXPANSION = 3,
+  MAX_MATCH_AGAINST_MODE = 4,
 };
 
 #define IS_JOIN(type) \
@@ -169,8 +175,6 @@ enum ObMatchAgainstMode {
    (join_type) == RIGHT_ANTI_JOIN)
 
 #define IS_OUTER_OR_CONNECT_BY_JOIN(join_type) (IS_OUTER_JOIN(join_type) || CONNECT_BY_JOIN == join_type)
-
-#define IS_DUMMY_PHY_OPERATOR(op_type) ((op_type == PHY_MONITORING_DUMP))
 
 #define IS_LEFT_STYLE_JOIN(join_type) \
   ((join_type) == LEFT_SEMI_JOIN || \
@@ -280,6 +284,8 @@ enum ObRepartitionScope
   OB_REPARTITION_BOTH_SIDE,
 };
 
+// enum ObPLCacheObjectType start wich OB_PHY_PLAN_UNCERTAIN value.
+// if it need add enum value to ObPhyPlanType, need skip ObPLCacheObjectType max value.
 enum ObPhyPlanType
 {
   OB_PHY_PLAN_UNINITIALIZED = 0,
@@ -647,6 +653,89 @@ ObTMSegmentArray<T, max_block_size, BlockAllocatorT, auto_free,
           BlockPointerArrayT>(alloc)
 {
   this->set_tenant_id(MTL_ID());
+}
+
+inline const ObString &ob_match_against_mode_str(const ObMatchAgainstMode mode)
+{
+  static const ObString ma_mode_str[] =
+  {
+    "NATURAL LANGUAGE MODE",
+    "NATURAL LANGUAGE MODE WITH QUERY EXPANSION",
+    "BOOLEAN MODE",
+    "WITH QUERY EXPANSION",
+    "UNKNOWN MATCH MODE"
+  };
+
+  if (OB_LIKELY(mode >= ObMatchAgainstMode::NATURAL_LANGUAGE_MODE)
+      && OB_LIKELY(mode < ObMatchAgainstMode::MAX_MATCH_AGAINST_MODE)) {
+    return ma_mode_str[mode];
+  } else {
+    return ma_mode_str[ObMatchAgainstMode::MAX_MATCH_AGAINST_MODE];
+  }
+}
+
+static bool is_fixed_length(ObObjType type) {
+  bool is_fixed = true;
+  ObObjTypeClass tc = ob_obj_type_class(type);
+  OB_ASSERT(tc >= ObNullTC && tc < ObMaxTC);
+  if (ObNumberTC == tc
+      || ObExtendTC == tc
+      || ObTextTC == tc
+      || ObStringTC == tc
+      || ObEnumSetInnerTC == tc
+      || ObRawTC == tc
+      || ObRowIDTC == tc
+      || ObLobTC == tc
+      || ObJsonTC == tc
+      || ObGeometryTC == tc
+      || ObUserDefinedSQLTC == tc
+      || ObDecimalIntTC == tc) {
+    is_fixed = false;
+  }
+  return is_fixed;
+}
+
+static int16_t get_type_fixed_length(ObObjType type) {
+  int16_t len = 0;
+  ObObjTypeClass tc = ob_obj_type_class(type);
+  OB_ASSERT(tc >= ObNullTC && tc < ObMaxTC);
+  switch (tc)
+  {
+    case ObUIntTC:
+    case ObIntTC:
+    case ObDoubleTC:
+    case ObDateTimeTC:
+    case ObTimeTC:
+    case ObBitTC:
+    case ObEnumSetTC:
+    {
+      len = 8;
+      break;
+    }
+    case ObDateTC:
+    case ObFloatTC:
+    {
+      len = 4;
+      break;
+    }
+    case ObYearTC:
+    {
+      len = 1;
+      break;
+    }
+    case ObOTimestampTC: {
+      len = (type == ObTimestampTZType) ? 12 : 10;
+      break;
+    }
+    case ObIntervalTC:
+    {
+      len = (type == ObIntervalYMType) ? 8 : 12;
+      break;
+    }
+    default:
+      break;
+  }
+  return len;
 }
 
 }  // namespace sql

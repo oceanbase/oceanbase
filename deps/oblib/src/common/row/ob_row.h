@@ -95,7 +95,7 @@ public:
         real_idx = projector_[index];
       }
     }
-    if (real_idx >= count_) {
+    if (OB_UNLIKELY(real_idx >= count_)) {
       COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "real_idx is invalid", K_(count), K(real_idx));
     }
     return cells_[real_idx];

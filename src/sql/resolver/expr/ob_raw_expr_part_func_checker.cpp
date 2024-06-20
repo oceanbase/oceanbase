@@ -143,6 +143,14 @@ int ObRawExprPartFuncChecker::visit(ObAggFunRawExpr &expr)
   return ret;
 }
 
+int ObRawExprPartFuncChecker::visit(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
+  LOG_WARN("invalid partition function", K(ret),
+           "item_type", expr.get_expr_type());
+  return ret;
+}
+
 int ObRawExprPartFuncChecker::visit(ObSysFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;

@@ -83,6 +83,24 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
   OB_UNIS_ENCODE(session_id_);
   OB_UNIS_ENCODE(plan_id_);
   OB_UNIS_ENCODE(plan_hash_);
+  //Serializing the reference relationship between ctdefs and rtdefs.
+  for (int i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+    OB_UNIS_ENCODE(ctdef->children_cnt_);
+    for (int j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
+      const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
+      OB_UNIS_ENCODE(child_ctdef);
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < rtdefs_.count(); ++i) {
+    ObDASBaseRtDef *rtdef = rtdefs_.at(i);
+    OB_UNIS_ENCODE(rtdef->ctdef_);
+    OB_UNIS_ENCODE(rtdef->children_cnt_);
+    for (int j = 0; OB_SUCC(ret) && j < rtdef->children_cnt_; ++j) {
+      ObDASBaseRtDef *child_rtdef = rtdef->children_[j];
+      OB_UNIS_ENCODE(child_rtdef);
+    }
+  }
   return ret;
 }
 
@@ -131,6 +149,16 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
       // }
       // EVENT_INC(ACTIVE_SESSIONS);
     }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(des_exec_ctx->get_my_session()->set_session_state(QUERY_ACTIVE))) {
+      LOG_WARN("set session state failed", K(ret));
+    } else if (OB_FAIL(des_exec_ctx->get_my_session()->store_query_string(
+        ObString::make_string("DAS REMOTE SCHEDULING")))) {
+      LOG_WARN("store query string failed", K(ret));
+    } else {
+      des_exec_ctx->get_my_session()->set_mysql_cmd(obmysql::COM_QUERY);
+    }
   }
   OZ(exec_ctx_->create_physical_plan_ctx());
   if (OB_SUCC(ret) && has_expr_) {
@@ -177,6 +205,42 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   OB_UNIS_DECODE(session_id_);
   OB_UNIS_DECODE(plan_id_);
   OB_UNIS_DECODE(plan_hash_);
+  //rebuilding the reference relationship between ctdefs and rtdefs after deserialization.
+  for (int i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+    ObDASBaseCtDef *ctdef = const_cast<ObDASBaseCtDef*>(ctdefs_.at(i));
+    OB_UNIS_DECODE(ctdef->children_cnt_);
+    if (OB_SUCC(ret) && ctdef->children_cnt_ > 0) {
+      if (OB_ISNULL(ctdef->children_ = OB_NEW_ARRAY(ObDASBaseCtDef*, &exec_ctx_->get_allocator(), ctdef->children_cnt_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate ctdef children_ failed", K(ret), K(ctdef->children_cnt_));
+      }
+    }
+    for (int j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
+      const ObDASBaseCtDef *child_ctdef = nullptr;
+      OB_UNIS_DECODE(child_ctdef);
+      if (OB_SUCC(ret)) {
+        ctdef->children_[j] = const_cast<ObDASBaseCtDef*>(child_ctdef);
+      }
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < rtdefs_.count(); ++i) {
+    ObDASBaseRtDef *rtdef = rtdefs_.at(i);
+    OB_UNIS_DECODE(rtdef->ctdef_);
+    OB_UNIS_DECODE(rtdef->children_cnt_);
+    if (OB_SUCC(ret) && rtdef->children_cnt_ > 0) {
+      if (OB_ISNULL(rtdef->children_ = OB_NEW_ARRAY(ObDASBaseRtDef*, &exec_ctx_->get_allocator(), rtdef->children_cnt_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate rtdef children_ failed", K(ret), K(rtdef->children_cnt_));
+      }
+    }
+    for (int j = 0; OB_SUCC(ret) && j < rtdef->children_cnt_; ++j) {
+      ObDASBaseRtDef *child_rtdef = nullptr;
+      OB_UNIS_DECODE(child_rtdef);
+      if (OB_SUCC(ret)) {
+        rtdef->children_[j] = child_rtdef;
+      }
+    }
+  }
   return ret;
 }
 
@@ -216,6 +280,24 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
   OB_UNIS_ADD_LEN(session_id_);
   OB_UNIS_ADD_LEN(plan_id_);
   OB_UNIS_ADD_LEN(plan_hash_);
+  //Serializing the reference relationship between ctdefs and rtdefs.
+  for (int i = 0; i < ctdefs_.count(); ++i) {
+    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+    OB_UNIS_ADD_LEN(ctdef->children_cnt_);
+    for (int j = 0; j < ctdef->children_cnt_; ++j) {
+      const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
+      OB_UNIS_ADD_LEN(child_ctdef);
+    }
+  }
+  for (int i = 0; i < rtdefs_.count(); ++i) {
+    ObDASBaseRtDef *rtdef = rtdefs_.at(i);
+    OB_UNIS_ADD_LEN(rtdef->ctdef_);
+    OB_UNIS_ADD_LEN(rtdef->children_cnt_);
+    for (int j = 0; j < rtdef->children_cnt_; ++j) {
+      ObDASBaseRtDef *child_rtdef = rtdef->children_[j];
+      OB_UNIS_ADD_LEN(child_rtdef);
+    }
+  }
   return len;
 }
 
@@ -277,7 +359,76 @@ OB_SERIALIZE_MEMBER(ObIDASTaskOp,
                     ls_id_,
                     related_ctdefs_,
                     related_rtdefs_,
-                    related_tablet_ids_);
+                    related_tablet_ids_,
+                    attach_ctdef_,
+                    attach_rtdef_,
+                    das_gts_opt_info_);
+
+OB_DEF_SERIALIZE(ObDASGTSOptInfo)
+{
+  int ret = OB_SUCCESS;
+  bool serialize_specify_snapshot = specify_snapshot_ == nullptr ? false : true;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              use_specify_snapshot_,
+              isolation_level_,
+              serialize_specify_snapshot);
+  if (serialize_specify_snapshot) {
+    OB_UNIS_ENCODE(*specify_snapshot_);
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDASGTSOptInfo)
+{
+  int ret = OB_SUCCESS;
+  bool serialize_specify_snapshot = false;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              use_specify_snapshot_,
+              isolation_level_,
+              serialize_specify_snapshot);
+  if (serialize_specify_snapshot) {
+    if (OB_FAIL(init(isolation_level_))) {
+      LOG_WARN("fail to init gts_opt_info", K(ret));
+    } else {
+      OB_UNIS_DECODE(*specify_snapshot_);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDASGTSOptInfo)
+{
+  int64_t len = 0;
+  bool serialize_specify_snapshot = specify_snapshot_ == nullptr ? false : true;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              use_specify_snapshot_,
+              isolation_level_,
+              serialize_specify_snapshot);
+  if (serialize_specify_snapshot) {
+    OB_UNIS_ADD_LEN(*specify_snapshot_);
+  }
+  return len;
+}
+
+int ObDASGTSOptInfo::init(transaction::ObTxIsolationLevel isolation_level)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  void *buf2 = nullptr;
+  if (OB_ISNULL(buf = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
+  } else if (OB_ISNULL(buf2 = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
+  } else {
+    use_specify_snapshot_ = true;
+    isolation_level_ = isolation_level;
+    specify_snapshot_ = new(buf) ObTxReadSnapshot();
+    response_snapshot_ = new(buf2) ObTxReadSnapshot();
+  }
+  return ret;
+}
 
 ObDASTaskArg::ObDASTaskArg()
   : timeout_ts_(0),
@@ -534,13 +685,24 @@ int ObDASDataEraseReq::init(const uint64_t tenant_id, const int64_t task_id)
 
 OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
                     datum_store_,
-                    tenant_id_, task_id_, has_more_);
+                    tenant_id_, task_id_, has_more_,
+                    enable_rich_format_, vec_row_store_,
+                    io_read_bytes_,
+                    ssstore_read_bytes_,
+                    ssstore_read_row_cnt_,
+                    memstore_read_row_cnt_);
 
 ObDASDataFetchRes::ObDASDataFetchRes()
         : datum_store_("DASDataFetch"),
           tenant_id_(0),
           task_id_(0),
-          has_more_(false)
+          has_more_(false),
+          enable_rich_format_(false),
+          vec_row_store_(),
+          io_read_bytes_(0),
+          ssstore_read_bytes_(0),
+          ssstore_read_row_cnt_(0),
+          memstore_read_row_cnt_(0)
 {
 }
 
@@ -586,7 +748,12 @@ int DASOpResultIter::get_next_rows(int64_t &count, int64_t capacity)
         //otherwise, get_next_row in the local das task maybe touch a wild datum ptr
         reset_wild_datums_ptr();
       }
-      ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
+      LOG_DEBUG("das get next rows", K(enable_rich_format_), K(scan_op->is_local_task()), KP(scan_op));
+      if (OB_FAIL(scan_op->get_output_result_iter()->get_next_rows(count, capacity))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get rows", K(ret));
+        }
+      }
       if (!scan_op->is_local_task()) {
         //remote task will change datum ptr, need to mark this flag
         //in order to let the next local task reset datum ptr before get_next_rows

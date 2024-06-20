@@ -128,7 +128,10 @@ public:
                            const uint64_t table_id,
                            char *buf,
                            const int64_t &buf_len,
-                           int64_t &pos) const;
+                           int64_t &pos,
+                           const ObTimeZoneInfo *tz_info,
+                           bool agent_mode,
+                           ObSQLMode sql_mode) const;
 
   int print_database_definiton(const uint64_t tenant_id,
                                const uint64_t database_id,
@@ -179,14 +182,12 @@ public:
                                          int64_t& pos) const;
   int print_index_column(const ObTableSchema &table_schema,
                          const ObColumnSchemaV2 &column,
-                         common::ObIArray<common::ObString> &ctxcat_cols,
                          bool is_last,
                          char *buf,
                          int64_t buf_len,
                          int64_t &pos) const;
   int print_fulltext_index_column(const ObTableSchema &table_schema,
                                   const ObColumnSchemaV2 &column,
-                                  common::ObIArray<common::ObString> &ctxcat_cols,
                                   bool is_last,
                                   char *buf,
                                   int64_t buf_len,
@@ -268,7 +269,8 @@ public:
                                     bool print_sub_part_element,
                                     bool agent_mode = false,
                                     bool tablegroup_def = false,
-                                    const common::ObTimeZoneInfo *tz_info = NULL) const;
+                                    const common::ObTimeZoneInfo *tz_info = NULL,
+                                    bool is_external_table = false) const;
   int print_range_partition_elements(const ObPartitionSchema *&schema,
                                char* buf,
                                const int64_t& buf_len,
@@ -483,6 +485,16 @@ public:
                             int64_t& pos,
                             bool is_oracle_mode,
                             const ObString &sql) const;
+
+  int print_column_lob_params(const ObColumnSchemaV2 &column_schema,
+                             char* buf,
+                             const int64_t& buf_len,
+                             int64_t& pos) const;
+  int print_table_definition_lob_params(const ObTableSchema &table_schema,
+                                        char* buf,
+                                        const int64_t& buf_len,
+                                        int64_t& pos) const;
+
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)
   {

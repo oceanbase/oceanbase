@@ -67,6 +67,7 @@ public:
   void destroy();
   void run1() final;
   void wakeup();
+  void fast_sleep();
   void stop();
   void wait();
   int start();
@@ -107,6 +108,7 @@ private:
   ObLSService *ls_service_;
   common::SpinRWLock map_lock_;
   LSRebuildCtxMap rebuild_ctx_map_;
+  int64_t fast_sleep_cnt_;
   DISALLOW_COPY_AND_ASSIGN(ObRebuildService);
 };
 
@@ -123,6 +125,7 @@ public:
 
 private:
   void wakeup_();
+  void fast_sleep_();
   int do_with_init_status_(const ObLSRebuildInfo &rebuild_info);
   int do_with_doing_status_(const ObLSRebuildInfo &rebuild_info);
   int do_with_cleanup_status_(const ObLSRebuildInfo &rebuild_info);
@@ -131,11 +134,6 @@ private:
       const ObLSRebuildInfo &curr_rebuild_info,
       const int32_t result);
   int generate_rebuild_task_();
-  int get_ls_info_(
-      const int64_t cluster_id,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      share::ObLSInfo &ls_info);
 
 private:
   bool is_inited_;

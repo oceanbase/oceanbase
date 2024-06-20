@@ -208,6 +208,22 @@ public:
   INHERIT_TO_STRING_KV("ObExternArchiveDesc", ObExternArchiveDesc, K_(piece));
 };
 
+struct ObSinglePieceDescComparator
+{
+  bool operator()(const ObSinglePieceDesc &lhs, const share::ObSinglePieceDesc &rhs) const
+  {
+    ObPieceKey lhs_key;
+    ObPieceKey rhs_key;
+    lhs_key.dest_id_ = lhs.piece_.key_.dest_id_;
+    lhs_key.round_id_ = lhs.piece_.key_.round_id_;
+    lhs_key.piece_id_ = lhs.piece_.key_.piece_id_;
+    rhs_key.dest_id_ = rhs.piece_.key_.dest_id_;
+    rhs_key.round_id_ = rhs.piece_.key_.round_id_;
+    rhs_key.piece_id_ = rhs.piece_.key_.piece_id_;
+    return lhs_key < rhs_key;
+  }
+};
+
 
 // Define checkpoint file content.
 struct ObPieceCheckpointDesc final : public ObExternArchiveDesc
@@ -325,6 +341,7 @@ class ObArchiveStore : public ObBackupStore
 {
 public:
   ObArchiveStore();
+  void reset();
 
   // oss://archive/rounds/round_d[dest_id]r[round_id]_start.obarc
   int is_round_start_file_exist(const int64_t dest_id, const int64_t round_id, bool &is_exist) const;
@@ -356,15 +373,17 @@ public:
   int is_single_piece_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const;
   int read_single_piece(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, ObSinglePieceDesc &desc) const;
   int write_single_piece(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObSinglePieceDesc &desc) const;
-
+  // oss://[user_specified_path]/single_piece_info.obarc, FOR ADD RESTORE SOURCE ONLY
+  int read_single_piece(ObSinglePieceDesc &desc);
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info.[file_id].obarc
   int is_piece_checkpoint_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t file_id, bool &is_exist) const;
   int read_piece_checkpoint(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t file_id, ObPieceCheckpointDesc &desc) const;
   int write_piece_checkpoint(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t file_id, const ObPieceCheckpointDesc &desc) const;
-
+  // oss://[user_specified_path]/checkpoint/checkpoint_info.0.obarc
+  int read_piece_checkpoint(ObPieceCheckpointDesc &desc) const;
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000.obarc
   int is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
-      const SCN &end_scn, bool &is_exist) const;
+    const SCN &end_scn, bool &is_exist) const;
   int read_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn, const SCN &end_scn, ObPieceInnerPlaceholderDesc &desc) const;
   int write_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const SCN &start_scn, const SCN &end_scn, const ObPieceInnerPlaceholderDesc &desc) const;
 
@@ -373,6 +392,9 @@ public:
       const ObLSID &ls_id, bool &is_exist) const;
   int read_single_ls_info(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObSingleLSInfoDesc &desc) const;
   int write_single_ls_info(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, const ObSingleLSInfoDesc &desc) const;
+
+  // oss://[user_specified_path]/[s_id].file_info.obarc
+  int read_single_ls_info(const ObLSID &ls_id, ObSingleLSInfoDesc &desc) const;
 
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/file_info.obarc
   int is_piece_info_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const;
@@ -383,7 +405,10 @@ public:
   int is_tenant_archive_piece_infos_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const;
   int read_tenant_archive_piece_infos(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, ObTenantArchivePieceInfosDesc &desc) const;
   int write_tenant_archive_piece_infos(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObTenantArchivePieceInfosDesc &desc) const;
-
+  // oss://[user_specified_path]/tenant_archive_piece_infos.obarc
+  int read_tenant_archive_piece_infos(ObTenantArchivePieceInfosDesc &desc) const;
+  // oss://<random_dir>/tenant_archive_piece_infos.obarc, FOR ADD RESTORE SOURCE ONLY
+  int is_tenant_archive_piece_infos_file_exist(bool &is_exist) const;
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/[ls_id]/[file_id]
   int is_archive_log_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, const int64_t file_id, bool &is_exist) const;
 
@@ -403,6 +428,9 @@ public:
       bool &is_empty_piece, ObSinglePieceDesc &single_piece);
   int get_whole_piece_info(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, 
       bool &is_empty_piece, ObExternPieceWholeInfo &whole_piece_info);
+  // independent of piece dir name, ONLY FOR ADD RESTORE SOURCE
+  int get_single_piece_info(bool &is_empty_piece, ObSinglePieceDesc &single_piece);
+  int get_whole_piece_info(bool &is_empty_piece, ObExternPieceWholeInfo &whole_piece_info);
 
   // Get pieces needed in the specific interval indicated by 'start_scn' and 'end_scn'.
   // Return OB_ENTRY_NOT_EXIST if cannot find enough pieces.

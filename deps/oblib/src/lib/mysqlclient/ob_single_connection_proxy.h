@@ -61,7 +61,7 @@ protected:
   int get_errno() const { return errno_; }
 public:
   bool check_inner_stat() const;
-private:
+protected:
   int errno_;
   int64_t statement_count_;
   sqlclient::ObISQLConnection *conn_;

@@ -11,8 +11,12 @@
  */
 
 #include <lib/ob_abort.h>
+#include <stdio.h>
+#include "lib/ob_define.h"
+#include "lib/utility/ob_backtrace.h"
 
 void ob_abort (void) __THROW
 {
+  fprintf(stderr, "OB_ABORT, tid: %ld, lbt: %s\n", GETTID(), oceanbase::common::lbt());
   abort();
 }

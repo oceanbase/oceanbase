@@ -24,6 +24,7 @@
 #include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/ob_mysql_result_set.h"
 #include "sql/session/ob_sess_info_verify.h"
+#include "observer/mysql/ob_feedback_proxy_utils.h"
 
 namespace oceanbase
 {
@@ -66,6 +67,7 @@ int64_t ObOKPParam::to_string(char *buf, const int64_t buf_len) const
 ObMPPacketSender::ObMPPacketSender()
     : req_(NULL),
       seq_(0),
+      read_handle_(NULL),
       comp_context_(),
       proto20_context_(),
       ez_buf_(NULL),
@@ -85,6 +87,8 @@ ObMPPacketSender::~ObMPPacketSender()
 
 void ObMPPacketSender::reset()
 {
+  (void)release_read_handle();
+
   req_ = NULL;
   seq_ = 0;
   comp_context_.reset();
@@ -107,15 +111,16 @@ int ObMPPacketSender::init(rpc::ObRequest *req)
     bool is_conn_valid = true;
     bool req_has_wokenup = false;
     int64_t receive_ts = req->get_receive_timestamp();
-    ret = do_init(req, pkt_seq + 1, is_conn_valid, req_has_wokenup, receive_ts);
+    ret = do_init(req, pkt_seq + 1, pkt_seq + 1, is_conn_valid, req_has_wokenup, receive_ts);
   }
   return ret;
 }
 
-int ObMPPacketSender::clone_from(ObMPPacketSender& that)
+int ObMPPacketSender::clone_from(ObMPPacketSender& that, int64_t com_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(do_init(that.req_, that.seq_, that.conn_valid_, that.req_has_wokenup_, that.query_receive_ts_))) {
+  if (OB_FAIL(do_init(that.req_, that.seq_, that.comp_context_.seq_ + com_offset,
+                      that.conn_valid_, that.req_has_wokenup_, that.query_receive_ts_))) {
     SERVER_LOG(ERROR, "clone packet sender fail", K(ret));
   } else {
     comp_context_.is_checksum_off_ = that.comp_context_.is_checksum_off_;
@@ -126,6 +131,7 @@ int ObMPPacketSender::clone_from(ObMPPacketSender& that)
 
 int ObMPPacketSender::do_init(rpc::ObRequest *req,
                            uint8_t packet_seq,
+                           uint8_t comp_seq,
                            bool conn_status,
                            bool req_has_wokenup,
                            int64_t query_receive_ts)
@@ -149,7 +155,7 @@ int ObMPPacketSender::do_init(rpc::ObRequest *req,
     // init comp_context
     comp_context_.reset();
     comp_context_.type_ = conn->get_compress_type();
-    comp_context_.seq_ = seq_;
+    comp_context_.seq_ = comp_seq;
     comp_context_.sessid_ = sessid_;
     comp_context_.conn_ = conn;
 
@@ -158,7 +164,7 @@ int ObMPPacketSender::do_init(rpc::ObRequest *req,
     if (is_proto20_supported) {
       proto20_context_.reset();
       proto20_context_.is_proto20_used_ = is_proto20_supported;
-      proto20_context_.comp_seq_ = seq_;
+      proto20_context_.comp_seq_ = comp_seq;
       proto20_context_.request_id_ = conn->proto20_pkt_context_.proto20_last_request_id_;
       proto20_context_.proto20_seq_ = static_cast<uint8_t>(conn->proto20_pkt_context_.proto20_last_pkt_seq_ + 1);
       proto20_context_.header_len_ = OB20_PROTOCOL_HEADER_LENGTH + OB_MYSQL_COMPRESSED_HEADER_SIZE;
@@ -190,6 +196,52 @@ int ObMPPacketSender::alloc_ezbuf()
       init_easy_buf(ez_buf_, reinterpret_cast<char*>(ez_buf_ + 1),
                     ez_req, OB_MULTI_RESPONSE_BUF_SIZE);
     }
+  }
+  return ret;
+}
+
+int ObMPPacketSender::read_packet(obmysql::ObICSMemPool &mem_pool, obmysql::ObMySQLPacket *&mysql_pkt)
+{
+  int ret = OB_SUCCESS;
+  mysql_pkt = NULL;
+
+  if (OB_ISNULL(read_handle_)) {
+    ret = init_read_handle();
+  }
+
+  if (OB_SUCC(ret)) {
+    rpc::ObPacket *pkt = NULL;
+    ret = SQL_REQ_OP.read_packet(req_, mem_pool, read_handle_, pkt);
+    if (pkt != NULL) {
+      mysql_pkt = static_cast<obmysql::ObMySQLPacket *>(pkt);
+      const uint8_t seq = mysql_pkt->get_seq();
+      seq_ = seq + 1;
+
+      if (comp_context_.use_compress()) {
+        comp_context_.seq_ = comp_context_.conn_->compressed_pkt_context_.last_pkt_seq_ + 1;
+      }
+
+      if (proto20_context_.is_proto20_used_) {
+        ObSMConnection *conn = get_conn();
+        if (OB_NOT_NULL(conn)) {
+          proto20_context_.comp_seq_ = seq_;
+          proto20_context_.request_id_ = conn->proto20_pkt_context_.proto20_last_request_id_;
+          proto20_context_.proto20_seq_ = static_cast<uint8_t>(conn->proto20_pkt_context_.proto20_last_pkt_seq_ + 1);
+          proto20_context_.is_new_extra_info_ = conn->proxy_cap_flags_.is_new_extra_info_support();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMPPacketSender::release_packet(obmysql::ObMySQLPacket* pkt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(read_handle_)) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = SQL_REQ_OP.release_packet(req_, read_handle_, static_cast<rpc::ObPacket*>(pkt));
   }
   return ret;
 }
@@ -264,6 +316,17 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
     }
   }
 
+  // ObProxy only handles extra_info in EOF or OK packet, so we
+  // only feedback proxy_info when respond EOF or OK pacekt here
+  if (OB_FAIL(ret)) {
+  } else if (proto20_context_.is_proto20_used_ && conn_->proxy_cap_flags_.is_feedback_proxy_info_support()
+             && (pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_EOF
+                 || pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_OKP)
+             && OB_FAIL(ObFeedbackProxyUtils::append_feedback_proxy_info(
+               session->get_extra_info_alloc(), &extra_info_ecds_, *session))) {
+    LOG_WARN("failed to add feedback_proxy_info", K(ret));
+  }
+
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(ObSessInfoVerify::sess_veri_control(pkt, session))) {
     // do nothing.
@@ -319,6 +382,7 @@ int ObMPPacketSender::send_error_packet(int err,
   if (OB_SUCCESS == err || (OB_ERR_PROXY_REROUTE == err && OB_ISNULL(extra_err_info))) {
     // @BUG work around
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("error code is incorrect", K(err));
   } else if (!conn_valid_ || OB_ISNULL(conn_)) {
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection already disconnected", K(ret), KP(conn_));
@@ -810,6 +874,7 @@ int ObMPPacketSender::send_eof_packet(const ObSQLSessionInfo &session,
   uint16_t warning_count = 0;
   bool ac = true;
   if (OB_ISNULL(warnings_buf)) {
+    // ignore ret
     LOG_WARN("can not get thread warnings buffer");
   } else {
     warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
@@ -854,6 +919,20 @@ int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
   }
   __builtin_prefetch(&conn_->pkt_rec_wrapper_.pkt_rec_[conn_->pkt_rec_wrapper_.cur_pkt_pos_
                                               % ObPacketRecordWrapper::REC_BUF_SIZE]);
+
+  if (OB_UNLIKELY(pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_FILENAME)) {
+    proto20_context_.is_filename_packet_ = true;
+
+    if (comp_context_.use_compress() && comp_context_.is_proxy_compress_based()) {
+      // The compression protocol between in observer and obproxy requires that the sequence id should use
+      // last packet's sequence id if there is the last response packet to obproxy. And PKT_FILENAME is
+      // the "last packet" reponse to obproxy this time.
+      // `seq_` means observer will not send more response and client can resolve the response packets now.
+      // NOTE: This action is not compatible with MySQL protocol
+      comp_context_.seq_--;
+    }
+  }
+
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_UNLIKELY(!conn_valid_)) {
@@ -946,9 +1025,13 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
         LOG_ERROR("fail to fill ob20 protocol header and tailer", K(ret));
       } else {
       }
+
+      // `filename packet` is used in load local protocol.
+      // We use the field to indicate if we should set `is last packet flag`
+      proto20_context_.is_filename_packet_ = false;
     }
 
-    int64_t buf_sz = ez_buf_->last - ez_buf_->pos;
+    //int64_t buf_sz = ez_buf_->last - ez_buf_->pos;
     if (OB_SUCCESS != ret) {
     } else if (ObRequest::TRANSPORT_PROTO_EASY == nio_protocol_) {
       ObFlushBufferParam flush_param(*ez_buf_, *req_->get_ez_req(), comp_context_,
@@ -994,6 +1077,7 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
         // after flush, set pos to 0
         proto20_context_.curr_proto20_packet_start_pos_ = 0;
       }
+      /*
       ObSQLSessionInfo *sess = nullptr;
       if (OB_FAIL(get_session(sess))) {
         LOG_WARN("fail to get session info", K(ret));
@@ -1004,7 +1088,7 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
       }
       if (OB_NOT_NULL(sess)) {
         GCTX.session_mgr_->revert_session(sess);
-      }
+      }*/
     }
   }
   if (is_last) {
@@ -1105,6 +1189,7 @@ int ObMPPacketSender::update_transmission_checksum_flag(const ObSQLSessionInfo &
 void ObMPPacketSender::finish_sql_request()
 {
   if (conn_valid_ && !req_has_wokenup_) {
+    (void)release_read_handle();
     SQL_REQ_OP.finish_sql_request(req_);
     req_has_wokenup_ = true;
     ez_buf_ = NULL;
@@ -1141,6 +1226,28 @@ bool ObMPPacketSender::has_pl()
 int64_t ObMPPacketSender::TRY_EZ_BUF_SIZES[] = {64*1024, 128*1024, 2*1024*1024 - 1024, 4*1024*1024 - 1024,
                                                 64*1024*1024 - 1024, 128*1024*1024, 512*1024*1024, 1024*1024*1024};
 
+int ObMPPacketSender::init_read_handle()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(read_handle_)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    ret = SQL_REQ_OP.create_read_handle(req_, read_handle_);
+    LOG_DEBUG("create read handle", KP(req_), KP_(read_handle));
+  }
+  return ret;
+}
+
+int ObMPPacketSender::release_read_handle()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(read_handle_)) {
+    LOG_DEBUG("release read handle", KP(req_), KP_(read_handle));
+    ret = SQL_REQ_OP.release_read_handle(req_, read_handle_);
+    read_handle_ = NULL;
+  }
+  return ret;
+}
 
 }; // end namespace observer
 }; // end namespace oceanbase

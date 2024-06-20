@@ -25,6 +25,8 @@
 #include "pl/ob_pl_allocator.h"
 #include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_resolver.h"
+#include "sql/engine/expr/vector_cast/vector_cast.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -195,28 +197,35 @@ int ObExprCast::get_cast_string_len(ObExprResType &type1,
     ObCollationType cast_coll_type = (CS_TYPE_INVALID != type2.get_collation_type())
         ? type2.get_collation_type()
         : conn;
-    const ObDataTypeCastParams dtc_params =
-          ObBasicSessionInfo::create_dtc_params(type_ctx.get_session());
-    ObCastCtx cast_ctx(&oballocator,
-                       &dtc_params,
-                       0,
-                       cast_mode,
-                       cast_coll_type);
-    ObString val_str;
-    EXPR_GET_VARCHAR_V2(val, val_str);
-    //这里设置的len为字符个数
-    if (OB_SUCC(ret) && NULL != val_str.ptr()) {
-      int32_t len_byte = val_str.length();
-      res_len = len_byte;
-      length_semantics = LS_CHAR;
-      if (NULL != val_str.ptr()) {
-        int32_t trunc_len_byte = static_cast<int32_t>(ObCharset::strlen_byte_no_sp(cast_coll_type,
-            val_str.ptr(), len_byte));
-        res_len = static_cast<int32_t>(ObCharset::strlen_char(cast_coll_type,
-            val_str.ptr(), trunc_len_byte));
-      }
-      if (type1.is_numeric_type() && !type1.is_integer_type()) {
-        res_len += 1;
+    ObDataTypeCastParams dtc_params;
+    ObTimeZoneInfoWrap tz_wrap;
+    bool is_valid = false;
+    ObRawExpr *raw_expr = NULL;
+    if (OB_ISNULL(raw_expr = type_ctx.get_raw_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      ObCastCtx cast_ctx(&oballocator,
+                        &type_ctx.get_dtc_params(),
+                        0,
+                        cast_mode,
+                        cast_coll_type);
+      ObString val_str;
+      EXPR_GET_VARCHAR_V2(val, val_str);
+      //这里设置的len为字符个数
+      if (OB_SUCC(ret) && NULL != val_str.ptr()) {
+        int32_t len_byte = val_str.length();
+        res_len = len_byte;
+        length_semantics = LS_CHAR;
+        if (NULL != val_str.ptr()) {
+          int32_t trunc_len_byte = static_cast<int32_t>(ObCharset::strlen_byte_no_sp(cast_coll_type,
+              val_str.ptr(), len_byte));
+          res_len = static_cast<int32_t>(ObCharset::strlen_char(cast_coll_type,
+              val_str.ptr(), trunc_len_byte));
+        }
+        if (type1.is_numeric_type() && !type1.is_integer_type()) {
+          res_len += 1;
+        }
       }
     }
   }
@@ -228,6 +237,7 @@ int ObExprCast::get_cast_string_len(ObExprResType &type1,
 int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
                               const ObExprResType &dst_type,
                               const ObSQLSessionInfo &session,
+                              ObSQLMode sql_mode,
                               const ObRawExpr &cast_raw_expr,
                               ObCastMode &cast_mode) const
 {
@@ -235,16 +245,22 @@ int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
   cast_mode = CM_NONE;
   const bool is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr.get_extra());
   const int32_t result_flag = src_type.get_result_flag();
-  if (OB_FAIL(ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
-                                                &session, cast_mode))) {
-    LOG_WARN("get_default_cast_mode failed", K(ret));
-  } else {
-    const ObObjTypeClass dst_tc = ob_obj_type_class(dst_type.get_type());
-    const ObObjTypeClass src_tc = ob_obj_type_class(src_type.get_type());
-    if (ObDateTimeTC == dst_tc || ObDateTC == dst_tc || ObTimeTC == dst_tc) {
-      cast_mode |= CM_NULL_ON_WARN;
-    } else if (ob_is_int_uint(src_tc, dst_tc)) {
-      cast_mode |= CM_NO_RANGE_CHECK;
+  const ObObjTypeClass dst_tc = ob_obj_type_class(dst_type.get_type());
+  const ObObjTypeClass src_tc = ob_obj_type_class(src_type.get_type());
+  ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
+                                    session.get_stmt_type(),
+                                    session.is_ignore_stmt(),
+                                    sql_mode, cast_mode);
+  if (ObDateTimeTC == dst_tc || ObDateTC == dst_tc || ObTimeTC == dst_tc) {
+    cast_mode |= CM_NULL_ON_WARN;
+  } else if (ob_is_int_uint(src_tc, dst_tc)) {
+    cast_mode |= CM_NO_RANGE_CHECK;
+  }
+  if (!is_oracle_mode() && CM_IS_EXPLICIT_CAST(cast_mode)) {
+    // CM_STRING_INTEGER_TRUNC is only for string to int cast in mysql mode
+    if (ob_is_string_type(src_type.get_type()) &&
+        (ob_is_int_tc(dst_type.get_type()) || ob_is_uint_tc(dst_type.get_type()))) {
+      cast_mode |= CM_STRING_INTEGER_TRUNC;
     }
     if (!is_oracle_mode() && CM_IS_EXPLICIT_CAST(cast_mode)) {
       // CM_STRING_INTEGER_TRUNC is only for string to int cast in mysql mode
@@ -332,13 +348,19 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   } else if (OB_FAIL(get_cast_type(enable_decimalint,
                                    type2, cast_raw_expr->get_extra(), dst_type))) {
     LOG_WARN("get cast dest type failed", K(ret));
-  } else if (OB_FAIL(adjust_udt_cast_type(type1, dst_type))) {
+  } else if (OB_FAIL(adjust_udt_cast_type(type1, dst_type, type_ctx))) {
      LOG_WARN("adjust udt cast sub type failed", K(ret));
   } else if (OB_UNLIKELY(!cast_supported(type1.get_type(), type1.get_collation_type(),
                                         dst_type.get_type(), dst_type.get_collation_type()))) {
     if (session->is_varparams_sql_prepare()) {
       type.set_null();
       LOG_TRACE("ps prepare phase ignores type deduce error");
+    } else if (const_cast<ObSQLSessionInfo *>(session)->is_pl_prepare_stage()
+               && dst_type.is_geometry()
+               && lib::is_oracle_mode()) {
+      // oracle gis ignore ignore type deduce error in pl prepare
+      type.set_geometry();
+      LOG_TRACE("pl prepare phase ignores type deduce error");
     } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("transition does not support", "src", ob_obj_type_str(type1.get_type()),
@@ -393,7 +415,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
         type.set_precision(float_precision);
         type.set_scale(float_scale);
       }
-    } else if (dst_type.is_user_defined_sql_type()) {
+    } else if (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type()) {
       type.set_type(dst_type.get_type());
       type.set_subschema_id(dst_type.get_subschema_id());
     } else {
@@ -423,7 +445,13 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
             : (OB_NOT_NULL(type_ctx.get_session())
                 ? type_ctx.get_session()->get_actual_nls_length_semantics()
                 : LS_BYTE));
-        if (len > 0) { // cast(1 as char(10))
+        if (len < 0 && !is_called_in_sql() && lib::is_oracle_mode()) {
+          if (dst_type.is_char() || dst_type.is_nchar()) {
+            type.set_full_length(OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE, length_semantics);
+          } else if (dst_type.is_nvarchar2() || dst_type.is_varchar()) {
+            type.set_full_length(OB_MAX_ORACLE_VARCHAR_LENGTH, length_semantics);
+          }
+        } else if (len > 0) { // cast(1 as char(10))
           type.set_full_length(len, length_semantics);
         } else if (OB_FAIL(get_cast_string_len(type1, dst_type, type_ctx, len, length_semantics,
                                                collation_connection,
@@ -440,7 +468,9 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           type.set_collation_type(ob_is_nstring_type(dst_type.get_type()) ?
                                   collation_nation : collation_connection);
         }
-      } else if (ob_is_extend(dst_type.get_type())) {
+      } else if (ob_is_extend(dst_type.get_type())
+                 || dst_type.is_user_defined_sql_type()
+                 || dst_type.is_collection_sql_type()) {
         type.set_udt_id(type2.get_udt_id());
       } else {
         type.set_length(length);
@@ -493,7 +523,9 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   }
   if (OB_SUCC(ret)) {
     ObCastMode explicit_cast_cm = CM_NONE;
-    if (OB_FAIL(get_explicit_cast_cm(type1, dst_type, *session, *cast_raw_expr,
+    if (OB_FAIL(get_explicit_cast_cm(type1, dst_type, *session,
+                                     type_ctx.get_sql_mode(),
+                                     *cast_raw_expr,
                                      explicit_cast_cm))) {
       LOG_WARN("set cast mode failed", K(ret));
     } else if (CM_IS_EXPLICIT_CAST(explicit_cast_cm)) {
@@ -616,18 +648,15 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
       }
     } else if (ob_is_raw(obj_type)) {
       dst_type.set_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
-    } else if (ob_is_extend(obj_type)) {
+    } else if (ob_is_extend(obj_type)
+               || ob_is_user_defined_sql_type(obj_type)
+               || ob_is_collection_sql_type(obj_type)) {
       dst_type.set_udt_id(param_type2.get_udt_id());
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else if (ob_is_geometry(obj_type)) {
-      if (lib::is_mysql_mode()) {
-        dst_type.set_collation_type(CS_TYPE_BINARY);
-        dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support cast to geometry in oracle mode", K(ret));
-      }
+      dst_type.set_collation_type(CS_TYPE_BINARY);
+      dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
     } else if (ob_is_interval_tc(obj_type)) {
       if (CM_IS_EXPLICIT_CAST(cast_mode) &&
           ((ObIntervalYMType != obj_type && !ObIntervalScaleUtil::scale_check(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX])) ||
@@ -671,36 +700,140 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
   return ret;
 }
 
-int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type, ObExprResType &dst_type) const
+int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
+                                     ObExprResType &dst_type,
+                                     ObExprTypeCtx &type_ctx) const
 {
+  // set subschema id in this function for cast
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+  ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
   if (src_type.is_ext()) {
-    if (dst_type.is_user_defined_sql_type()) {
-      if (src_type.get_udt_id() == T_OBJ_XML) {
-        dst_type.set_sql_udt(ObXMLSqlType);
-      } else {
+    if (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type()) {
+      // phy_plan_ctx_ may not exist during deduce,
+      // save subschema mapping on sql_ctx_ before phy_plan ready?
+      const uint64_t udt_type_id = src_type.get_udt_id();
+      uint16_t subschema_id = ObMaxSystemUDTSqlType;
+
+      if (udt_type_id == T_OBJ_XML) {
+        subschema_id = 0;
+      } else if (OB_ISNULL(exec_ctx)) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("need ctx to get subschema mapping",
+                 K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
+      } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_type_id, subschema_id))) {
+        LOG_WARN("failed to get subshcema_meta_info",
+                 K(ret), K(src_type), K(dst_type), K(udt_type_id));
+      } else if (dst_type.get_udt_id() != src_type.get_udt_id()) {
+        // not xmltype, udt id must setted in both pl types and sql types
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("udt id mismarch", K(ret), K(src_type), K(dst_type),
+                 K(dst_type.get_udt_id()), K(src_type.get_udt_id()));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (subschema_id == ObMaxSystemUDTSqlType) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("cast unsupported pl udt type to sql udt type", K(ret), K(src_type), K(dst_type));
+        LOG_WARN("cast unsupported pl udt type to sql udt type",
+                 K(ret), K(src_type), K(dst_type), K(udt_type_id));
+      } else {
+        dst_type.set_subschema_id(subschema_id);
+        dst_type.set_udt_id(udt_type_id);
       }
     } else if (dst_type.is_character_type() && !is_called_in_sql()) {
       ret = OB_ERR_EXPRESSION_WRONG_TYPE;
       LOG_WARN("PLS-00382: expression is of wrong type", K(ret), K(src_type), K(dst_type));
+    } else if (dst_type.is_ext()) {
+      // disallow PL sdo_geometry cast
+      uint64_t src_udt_id = src_type.get_udt_id();
+      uint64_t dst_udt_id = dst_type.get_udt_id();
+      if (ObGeometryTypeCastUtil::is_sdo_geometry_udt(src_udt_id)
+                && ObGeometryTypeCastUtil::is_sdo_geometry_udt(dst_udt_id)) {
+        if (!ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(src_udt_id, dst_udt_id)) {
+          ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+          LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
+              K(src_udt_id), K(dst_udt_id));
+        }
+      }
     }
-  } else if (src_type.is_user_defined_sql_type()) {
+  } else if (src_type.is_user_defined_sql_type() || src_type.is_collection_sql_type()) {
+    const uint16_t subschema_id = src_type.get_subschema_id(); // do not need subschema id ?
+    uint64_t udt_id = 0;
+    uint64_t src_udt_id = src_type.get_udt_id();
+    uint64_t dst_udt_id = dst_type.get_udt_id();
     if (dst_type.is_ext()) {
-      if (src_type.is_xml_sql_type()) {
-        dst_type.set_udt_id(T_OBJ_XML);
-      } else {
+      ObSqlUDTMeta udt_meta;
+      if (subschema_id == ObXMLSqlType) {
+        udt_id = T_OBJ_XML;
+      } else if (OB_ISNULL(exec_ctx)) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("need ctx to get subschema mapping",
+                 K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
+      } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+        LOG_WARN("Failed to get subshcema_meta_info",
+                  K(ret), K(src_type), K(dst_type), K(udt_meta.udt_id_));
+      } else if (udt_meta.udt_id_ == T_OBJ_NOT_SUPPORTED) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("cast unsupported sql udt type to pl udt type", K(ret), K(src_type), K(dst_type));
+        LOG_WARN("cast unsupported sql udt type to pl udt type",
+                  K(ret), K(src_type), K(dst_type), K(subschema_id));
+      } else if (ObGeometryTypeCastUtil::is_sdo_geometry_udt(src_udt_id)
+                && ObGeometryTypeCastUtil::is_sdo_geometry_udt(dst_udt_id)) {
+        uint16_t dst_subschema_id = ObInvalidSqlType;
+        if (!ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(src_udt_id, dst_udt_id)) {
+          ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+          LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
+              K(src_udt_id), K(dst_udt_id));
+        } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(dst_udt_id, dst_subschema_id))) {
+          LOG_WARN("unsupported udt id", K(ret), K(dst_subschema_id));
+        } else {
+          dst_type.set_type(ObUserDefinedSQLType);
+          dst_type.set_subschema_id(dst_subschema_id);
+          udt_id = dst_udt_id;
+        }
+      } else if (dst_udt_id != src_udt_id) {
+        // not xmltype or sdo_geometry, udt id must setted in both pl types and sql types
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
+                 K(dst_udt_id), K(src_udt_id));
+      } else {
+        udt_id = udt_meta.udt_id_;
+      }
+
+      if (OB_SUCC(ret)) {
+        dst_type.set_udt_id(udt_id);
       }
     } else if (dst_type.is_user_defined_sql_type()) {
-      dst_type.set_subschema_id(ObXMLSqlType);
+      dst_type.set_subschema_id(subschema_id);
+      LOG_INFO("cast from sql udt to sql udt", K(src_type), K(dst_type), K(lbt()));
     }
-  } else if (src_type.is_null() || src_type.is_character_type()) {
-    // null or chararcter type can cast to xmltype (other udt types are not supported yet)
-    if (dst_type.get_type() == ObUserDefinedSQLType) {
-      dst_type.set_sql_udt(ObXMLSqlType);
+  } else if ((src_type.is_null() || src_type.is_character_type())
+             && (dst_type.get_type() == ObUserDefinedSQLType
+                 || dst_type.get_type() == ObCollectionSQLType)) {
+    const uint64_t udt_type_id = dst_type.get_udt_id();
+    uint16_t subschema_id = ObMaxSystemUDTSqlType;
+
+    if (!ObObjUDTUtil::ob_is_supported_sql_udt(dst_type.get_udt_id())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported udt type for sql udt", K(ret), K(src_type), K(dst_type),
+               K(dst_type.get_udt_id()), K(src_type.get_udt_id()));
+    } else if (udt_type_id == T_OBJ_XML) {
+      subschema_id = 0;
+    } else if (OB_ISNULL(exec_ctx)) {
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("need ctx to get subschema mapping",
+                K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
+    } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_type_id, subschema_id))) {
+      LOG_WARN("failed to get subshcema_meta_info",
+                K(ret), K(src_type), K(dst_type), K(udt_type_id));
+    } else { /* do nothing */ }
+
+    if (OB_FAIL(ret)) {
+    } else if (subschema_id == ObMaxSystemUDTSqlType) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cast unsupported pl udt type to sql udt type",
+                K(ret), K(src_type), K(dst_type), K(udt_type_id));
+    } else {
+      dst_type.set_subschema_id(subschema_id);
     }
   }
   return ret;
@@ -927,8 +1060,7 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
             int64_t init_size = OB_INVALID_SIZE;
             if (OB_FAIL(collection_type->get_element_type().newx(*coll->get_allocator(), ns, ptr))) {
               LOG_WARN("failed to new element", K(ret));
-            } else if (OB_FAIL(collection_type->get_element_type().get_size(*ns,
-                                                                            pl::PL_TYPE_INIT_SIZE,
+            } else if (OB_FAIL(collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE,
                                                                             init_size))) {
               LOG_WARN("failed to get size", K(ret));
             } else {
@@ -1138,6 +1270,7 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
     rt_expr.is_called_in_sql_ = is_called_in_sql();
     if (OB_SUCC(ret)) {
+      bool just_eval_arg = false;
       const ObRawExpr *src_raw_expr = raw_expr.get_param_expr(0);
       if (OB_ISNULL(src_raw_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1159,10 +1292,20 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
         OB_ASSERT(rt_expr.eval_func_ != nullptr);
         OB_ASSERT(rt_expr.eval_batch_func_ != nullptr);
       } else {
-        if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type,
-                    out_type, out_cs_type, cast_mode, *(op_cg_ctx.allocator_), rt_expr))) {
+        if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type, out_type, out_cs_type,
+                                                      cast_mode, *(op_cg_ctx.allocator_),
+                                                      just_eval_arg, rt_expr))) {
           LOG_WARN("choose_cast_func failed", K(ret));
         }
+      }
+      if (OB_SUCC(ret)) {
+        int tmp_ret = OB_E(EventTable::EN_ENABLE_VECTOR_CAST) OB_SUCCESS;
+        rt_expr.eval_vector_func_ =
+          tmp_ret == OB_SUCCESS ?
+            VectorCasterUtil::get_vector_cast(rt_expr.args_[0]->get_vec_value_tc(),
+                                              rt_expr.get_vec_value_tc(), just_eval_arg,
+                                              rt_expr.eval_func_, cast_mode) :
+            nullptr;
       }
     }
     if (OB_SUCC(ret)) {
@@ -1214,19 +1357,46 @@ int ObExprCast::is_valid_for_generated_column(const ObRawExpr*expr, const common
   } else {
     ObObjType src = exprs.at(0)->get_result_type().get_type();
     ObObjType dst = expr->get_result_type().get_type();
-    is_valid = true;
-    if (is_oracle_mode()) {
-      if ((ob_is_oracle_temporal_type(src) && ob_is_string_type(dst))
-          || (ob_is_oracle_temporal_type(dst) && ob_is_string_type(src))) {
-        is_valid = false;
-      } else if ((ob_is_timestamp_tz(dst) || ob_is_timestamp_ltz(dst))
-                 && (ob_is_timestamp_nano(src) || ob_is_datetime(src))) {
-        is_valid = false;
-      }
-    } else if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
+    if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
       is_valid = false;
-    } else if (ObTimestampType == src && ObTimestampType != dst) {
-      is_valid = false;
+    } else {
+      is_valid = true;
+    }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprCast, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(raw_expr) || OB_ISNULL(raw_expr->get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else {
+    ObObjType src = raw_expr->get_param_expr(0)->get_result_type().get_type();
+    ObObjType dst = raw_expr->get_result_type().get_type();
+    if (is_mysql_mode()) {
+      SET_LOCAL_SYSVAR_CAPACITY(3);
+      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
+    } else {
+      SET_LOCAL_SYSVAR_CAPACITY(5);
+    }
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
+    if (ob_is_datetime_tc(src)
+        || ob_is_datetime_tc(dst)
+        || ob_is_otimestampe_tc(src)
+        || ob_is_otimestampe_tc(dst)) {
+      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
+    }
+    if (is_oracle_mode()
+        && (ob_is_string_type(src)
+            || ob_is_string_type(dst))
+        && (ob_is_temporal_type(src)
+            || ob_is_otimestamp_type(src)
+            || ob_is_temporal_type(dst)
+            || ob_is_otimestamp_type(dst))) {
+      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_DATE_FORMAT);
+      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_FORMAT);
+      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT);
     }
   }
   return ret;

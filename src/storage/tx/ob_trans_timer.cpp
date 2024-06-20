@@ -150,15 +150,18 @@ void ObTxTimeoutTask::runTimerTask()
   if (!is_inited_) {
     TRANS_LOG(WARN, "ObTxTimeoutTask not inited", KPC(this));
   } else if (OB_ISNULL(tx_desc_)) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "ctx is null, unexpected error", KPC(this));
   } else if (OB_ISNULL(txs_)) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "txs_ is null, unexpected error", KPC(this));
   } else {
     // NOTE: save tx_desc_/txs_ is required
     // because the handle_tx_commit_timeout may cause tx terminate
     // its execution and release all resource include current object
     // it is unsafe to use any member field after call handle func.
-    auto txs = txs_; auto tx_desc = tx_desc_;
+    ObTransService *txs = txs_;
+    ObTxDesc *tx_desc = tx_desc_;
     DEFER({ txs->release_tx_ref(*tx_desc); });
     if (tx_desc_->is_xa_trans() && tx_desc_->is_sub2pc()) {
       if (OB_FAIL(txs_->handle_timeout_for_xa(*tx_desc_, delay_))) {

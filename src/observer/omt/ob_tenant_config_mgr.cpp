@@ -226,19 +226,19 @@ int ObTenantConfigMgr::refresh_tenants(const ObIArray<uint64_t> &tenants)
       }
     }
   }
-
+  int tmp_ret = OB_SUCCESS;
   // 加 config
   for (int i = 0; i < new_tenants.count(); ++i) {
-    if (OB_FAIL(add_tenant_config(new_tenants.at(i)))) {
-      LOG_WARN("fail add tenant config", K(i), K(new_tenants.at(i)), K(ret));
+    if (OB_TMP_FAIL(add_tenant_config(new_tenants.at(i)))) {
+      LOG_WARN("fail add tenant config", K(i), K(new_tenants.at(i)), K(ret), K(tmp_ret));
     } else {
       LOG_INFO("add created tenant config succ", K(i), K(new_tenants.at(i)));
     }
   }
   // 删 config
   for (int i = 0; i < del_tenants.count(); ++i) {
-    if (OB_FAIL(del_tenant_config(del_tenants.at(i)))) {
-      LOG_WARN("fail del tenant config, will try later", K(i), K(del_tenants.at(i)), K(ret));
+    if (OB_TMP_FAIL(del_tenant_config(del_tenants.at(i)))) {
+      LOG_WARN("fail del tenant config, will try later", K(i), K(del_tenants.at(i)), K(ret), K(tmp_ret));
     } else {
       LOG_INFO("del dropped tenant config succ.", K(i), K(del_tenants.at(i)));
     }
@@ -322,6 +322,11 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
   } else if (!config->is_ref_clear()) {
     ret = OB_EAGAIN;
     LOG_INFO("something hold config ref, try delete later...");
+  } else if (OB_ISNULL(GCTX.omt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("omt is null", KR(ret));
+  } else if (GCTX.omt_->has_tenant(tenant_id)) {
+    LOG_WARN("local tenant resource still exist, try to delete tenant config later", K(tenant_id));
   } else {
     config->set_deleting();
     if (OB_FAIL(wait(config->get_update_task()))) {

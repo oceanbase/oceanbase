@@ -49,6 +49,7 @@ public:
 
   virtual int resolve(const ParseNode &parse_tree) = 0;
   inline ObStmt *get_basic_stmt() { return stmt_; }
+  inline void set_basic_stmt(ObStmt *stmt) { stmt_ = stmt; }
   int resolve_table_relation_factor(const ParseNode *node, uint64_t tenant_id, uint64_t &database_id,
                                     common::ObString &table_name, common::ObString &synonym_name, common::ObString &db_name);
   int resolve_table_relation_factor(const ParseNode *node, uint64_t &database_id,
@@ -113,8 +114,10 @@ public:
     int ret = common::OB_SUCCESS;
     T *stmt = NULL;
     if (OB_ISNULL(params_.stmt_factory_)) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(ERROR, "stmt_factory_ is null, not be init");
     } else if (OB_ISNULL(params_.stmt_factory_->get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "query ctx is null", K(ret));
     } else if (OB_FAIL(params_.stmt_factory_->create_stmt(stmt))) {
       SQL_RESV_LOG(WARN, "create stmt failed", K(ret));
@@ -148,7 +151,7 @@ public:
                         const bool get_hidden = false,
                         bool is_link = false);
 
-  int check_table_id_exists(uint64_t table_id, bool &is_exist);
+  int check_table_name_equal(const ObString &name1, const ObString &name2, bool &equal);
 
 protected:
   int normalize_table_or_database_names(common::ObString &name);

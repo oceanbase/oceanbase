@@ -429,7 +429,7 @@ inline static void scale_up_with_types(const ObDecimalInt *decint, unsigned scal
 
 template <typename in_type, typename out_type>
 inline static void scale_down_with_types(const ObDecimalInt *decint, unsigned scale,
-                                         ObDecimalIntBuilder &res)
+                                         ObDecimalIntBuilder &res, bool &truncated)
 {
   static_assert(wide::IsIntegral<out_type>::value, "");
   static_assert(wide::IsIntegral<in_type>::value, "");
@@ -440,6 +440,7 @@ inline static void scale_down_with_types(const ObDecimalInt *decint, unsigned sc
   out_type remain = val % sf;
   val = val / sf;
   if (remain >= (sf >> 1)) { val = val + 1; }
+  truncated = (remain != 0);
   if (is_neg) { val = -val; }
   res.from(val);
 }
@@ -497,9 +498,13 @@ static int decimalint_fast_cast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
                                              res_val);
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
     } else {
+      bool truncated = false;
       scale_down_with_types<in_type, out_type>(child_res->get_decimal_int(), in_scale - out_scale,
-                                               res_val);
+                                               res_val, truncated);
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+      if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) & truncated) {
+        log_user_warning_truncated(ctx.exec_ctx_.get_user_logging_ctx());
+      }
     }
   }
   if (is_explicit && !res_datum.is_null() && OB_SUCC(ret)) {
@@ -727,7 +732,7 @@ DEF_BATCH_CAST_FUNC(ObIntTC, ObDecimalIntTC)
         } else if (CM_IS_EXPLICIT_CAST(expr.extra_) || CM_IS_COLUMN_CONVERT(expr.extra_)) {
           DISPATCH_INOUT_WIDTH_TASK(in_width, out_width, DO_EXPLICIT_CAST);
         } else {
-          OB_ASSERT(out_width >= in_width);
+          OB_ASSERT(out_width >= in_width || (in_prec > 0 && in_prec <= out_prec));
           DISPATCH_INOUT_WIDTH_TASK(in_width, out_width, DO_IMPLICIT_CAST);
         }
       } else {
@@ -782,7 +787,7 @@ DEF_BATCH_CAST_FUNC(ObUIntTC, ObDecimalIntTC)
         } else if (CM_IS_EXPLICIT_CAST(expr.extra_) || CM_IS_COLUMN_CONVERT(expr.extra_)) {
           DISPATCH_WIDTH_TASK(out_width, EXPLICIT_CAST_UINT);
         } else {
-          OB_ASSERT(out_width >= in_width);
+          OB_ASSERT(out_width >= in_width || (in_prec > 0 && in_prec <= out_prec));
           DISPATCH_WIDTH_TASK(out_width, IMPLICIT_CAST_UINT);
         }
       } else {
@@ -1225,10 +1230,10 @@ int eval_questionmark_decint2nmb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   int ret = OB_SUCCESS;
   // child is questionmark, do not need evaluation.
   const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
-  QuestionmarkDynEvalInfo dyn_info(expr.extra_);
+  ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
   ObNumStackOnceAlloc tmp_alloc;
   number::ObNumber out_nmb;
-  if (OB_FAIL(wide::to_number(child.get_decimal_int(), child.get_int_bytes(), dyn_info.in_scale_,
+  if (OB_FAIL(wide::to_number(child.get_decimal_int(), child.get_int_bytes(), in_scale,
                               tmp_alloc, out_nmb))) {
     LOG_WARN("to_number failed", K(ret));
   } else {
@@ -1266,8 +1271,7 @@ static int _eval_questionmark_decint2decint(const ObExpr &expr, ObEvalCtx &ctx, 
   int ret = OB_SUCCESS;
   ObScale out_scale = expr.datum_meta_.scale_;
   ObPrecision out_prec = expr.datum_meta_.precision_;
-  QuestionmarkDynEvalInfo dyn_info(expr.extra_);
-  ObScale in_scale = dyn_info.in_scale_;
+  ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
   ObDecimalIntBuilder res_val;
   const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
   if (OB_FAIL(ObDatumCast::common_scale_decimalint(child.get_decimal_int(), child.get_int_bytes(),

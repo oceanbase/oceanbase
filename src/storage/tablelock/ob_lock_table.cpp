@@ -221,16 +221,25 @@ int ObLockTable::get_table_schema_(
 int ObLockTable::init(ObLS *parent)
 {
   int ret = OB_SUCCESS;
+  storage::ObMemtableMgrHandle memtable_mgr_handle;
+
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLockTable init twice.", K(ret));
   } else if (OB_ISNULL(parent)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(parent));
+  } else if (OB_FAIL(parent->get_tablet_svr()->get_lock_memtable_mgr(memtable_mgr_handle))) {
+    LOG_WARN("get_lock_memtable_mgr failed", K(ret));
+  } else if (OB_ISNULL(lock_mt_mgr_ = static_cast<ObLockMemtableMgr*>(memtable_mgr_handle.get_memtable_mgr()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lock memtable mgr pointer", KR(ret), KPC(parent_));
   } else {
     parent_ = parent;
     is_inited_ = true;
   }
+
+  FLOG_INFO("finish init lock table", K(ret), KP(lock_mt_mgr_), KPC(lock_mt_mgr_), KP(parent_), KPC(parent_));
   return ret;
 }
 
@@ -243,34 +252,33 @@ int ObLockTable::prepare_for_safe_destroy()
 void ObLockTable::destroy()
 {
   parent_ = nullptr;
+  lock_mt_mgr_ = nullptr;
+  lock_memtable_handle_.reset();
   is_inited_ = false;
 }
 
 int ObLockTable::offline()
 {
   int ret = OB_SUCCESS;
-  ObTabletHandle handle;
-  ObTablet *tablet;
-  ObLSTabletService *ls_tablet_svr = nullptr;
-  LOG_INFO("lock table offline", K(parent_->get_ls_id()));
-
-  if (OB_ISNULL(ls_tablet_svr = parent_->get_tablet_svr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_INFO("get ls tablet svr failed", K(ret));
-  } else if (OB_FAIL(ls_tablet_svr->get_tablet(LS_LOCK_TABLET,
-                                               handle))) {
-    LOG_WARN("get tablet failed", K(ret));
-    if (OB_TABLET_NOT_EXIST == ret) {
-      // a ls that of migrate does not have lock tablet
-      ret = OB_SUCCESS;
-    }
-  } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(tablet->release_memtables())) {
-    LOG_WARN("failed to release lock memtables", K(ret), K(parent_->get_ls_id()));
-  } else {
-    // do nothing
+  if (OB_NOT_NULL(parent_)) {
+    LOG_INFO("lock table offline", K(parent_->get_ls_id()));
   }
 
+  // release all lock memtables before clean cache
+  if (OB_NOT_NULL(lock_mt_mgr_)) {
+    if (OB_FAIL(lock_mt_mgr_->release_memtables())) {
+      if (OB_NOT_INIT == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("modify ret code to success because lock memtable mgr is not init and do not need offline.");
+      } else {
+        LOG_WARN("release all memtable in lock memtable mgr failed", KR(ret), KPC(lock_mt_mgr_));
+      }
+    }
+  }
+
+  // reset lock memtable handle
+  TCWLockGuard guard(rw_lock_);
+  lock_memtable_handle_.reset();
   return ret;
 }
 
@@ -281,7 +289,9 @@ int ObLockTable::online()
   ObTablet *tablet;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObLSTabletService *ls_tablet_svr = nullptr;
-  LOG_INFO("online lock table", K(parent_->get_ls_id()));
+  if (OB_NOT_NULL(parent_)) {
+    LOG_INFO("online lock table", K(parent_->get_ls_id()));
+  }
 
   if (OB_ISNULL(ls_tablet_svr = parent_->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -290,7 +300,8 @@ int ObLockTable::online()
                                                handle))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_LOCK_TABLET, 0 /* schema_version */))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
+                 LS_LOCK_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
@@ -324,9 +335,12 @@ int ObLockTable::create_tablet(const lib::Worker::CompatMode compat_mode, const 
   ObMemtableMgrHandle memtable_mgr_handle;
   ObArenaAllocator arena_allocator;
   ObCreateTabletSchema create_tablet_schema;
+  uint64_t tenant_data_version = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLockTable not inited", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get data version failed", K(ret));
   } else if (OB_FAIL(get_table_schema_(tenant_id, table_schema))) {
     LOG_WARN("get lock table schema failed", K(ret));
   } else if (OB_FAIL(create_tablet_schema.init(arena_allocator, table_schema, compat_mode,
@@ -355,8 +369,12 @@ int ObLockTable::remove_tablet()
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = parent_->get_ls_id();
-  if (OB_FAIL(parent_->remove_ls_inner_tablet(ls_id, LS_LOCK_TABLET))) {
+  if (IS_NOT_INIT) {
+    LOG_WARN("lock table does not inited, remove do nothing");
+  } else if (OB_FAIL(parent_->remove_ls_inner_tablet(ls_id, LS_LOCK_TABLET))) {
     LOG_WARN("failed to remove ls inner tablet", K(ret), K(ls_id), K(LS_LOCK_TABLET));
+    ob_usleep(1000 * 1000);
+    ob_abort();
   }
   return ret;
 }
@@ -377,7 +395,8 @@ int ObLockTable::load_lock()
                                                handle))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_LOCK_TABLET, 0 /* schema_version */))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
+                 LS_LOCK_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
@@ -404,22 +423,33 @@ int ObLockTable::load_lock()
 int ObLockTable::get_lock_memtable(ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = nullptr;
-  ObMemtableMgrHandle memtable_mgr_handle;
-  handle.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObLockTable not inited", K(ret));
-  } else if (OB_FAIL(parent_->get_tablet_svr()->
-                     get_lock_memtable_mgr(memtable_mgr_handle))) {
-    LOG_WARN("get_lock_memtable_mgr failed", K(ret));
-  } else if (OB_ISNULL(memtable_mgr = memtable_mgr_handle.get_memtable_mgr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get_memtable_mgr from memtable mgr handle failed", K(ret));
-  } else if (OB_FAIL(memtable_mgr->get_active_memtable(handle))) {
-    LOG_WARN("get_active_memtable from memtable handle failed", K(ret));
+    LOG_WARN("lock table is not inited", KR(ret));
   } else {
-    // do nothing
+    while (OB_SUCC(ret)) {
+      {
+        // most case : acquire read lock to copy assigne lock_memtable_handle
+        TCRLockGuard guard(rw_lock_);
+        if (lock_memtable_handle_.is_valid()) {
+          handle = lock_memtable_handle_;
+          break;
+        }
+      }
+
+      {
+        // acquire write lock to get active lock memtable from lock memtable mgr
+        TCWLockGuard guard(rw_lock_);
+        if (OB_ISNULL(lock_mt_mgr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("lock memtable mgr is unexpected nullptr", KR(ret), K(is_inited_), KPC(parent_), KPC(lock_mt_mgr_));
+        } else if (OB_FAIL(lock_mt_mgr_->get_active_memtable(lock_memtable_handle_))) {
+          LOG_WARN("get active lock memtable failed", KR(ret), K(is_inited_), KPC(parent_), KPC(lock_mt_mgr_));
+        } else {
+          // loop and get memtable handle
+        }
+      }
+    }
   }
   return ret;
 }
@@ -511,8 +541,10 @@ int ObLockTable::lock(
     const ObLockParam &param)
 {
   int ret = OB_SUCCESS;
-  ObTableHandleV2 handle;
   ObLockMemtable *memtable = nullptr;
+  ObTransID tx_id = ctx.mvcc_acc_ctx_.get_tx_id();
+  TCRLockGuard guard(rw_lock_);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLockTable not inited", K(ret));
@@ -520,20 +552,21 @@ int ObLockTable::lock(
              OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ctx), K(param));
-  } else if (OB_UNLIKELY(!ctx.mvcc_acc_ctx_.get_tx_id().is_valid())) {
+  } else if (OB_UNLIKELY(!tx_id.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid argument", K(ret), K(ctx), K(param), K(ctx.mvcc_acc_ctx_));
     ob_abort();
-  } else if (OB_FAIL(get_lock_memtable(handle))) {
+  } else if (OB_FAIL(ctx.mvcc_acc_ctx_.mem_ctx_->get_lock_mem_ctx().get_lock_memtable(memtable))) {
     LOG_WARN("get lock memtable failed", K(ret));
-  } else if (OB_FAIL(handle.get_lock_memtable(memtable))) {
-    LOG_ERROR("get lock memtable from lock handle failed", K(ret));
+  } else if (OB_ISNULL(memtable)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("lock memtable is null", K(ret), K(ctx));
   } else {
     const int64_t lock_timestamp = ObTimeUtility::current_time();
     ObTableLockOp lock_op(param.lock_id_,
                           param.lock_mode_,
                           param.owner_id_,
-                          ctx.mvcc_acc_ctx_.get_tx_id(),
+                          tx_id,
                           param.op_type_,
                           LOCK_OP_DOING,
                           ctx.mvcc_acc_ctx_.tx_scn_,
@@ -723,11 +756,33 @@ int ObLockTable::switch_to_leader()
 
   if (OB_FAIL(ret)) {
     if (OB_ISNULL(parent_)) {
+      // ignore ret
       LOG_WARN("parent ls of ObLockTable is null", K(ret));
     } else {
       LOG_WARN("collect obj lock garbage when switch to leader failed", K(ret),
                K(parent_->get_ls_id()));
     }
+  }
+  return ret;
+}
+
+int ObLockTable::enable_check_tablet_status(const bool need_check)
+{
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  ObLockMemtable *lock_memtable = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockTable is not inited", K(ret));
+  } else if (OB_FAIL(get_lock_memtable(handle))) {
+    LOG_WARN("get lock memtable failed", K(ret));
+    // to disable check just skip when no active memtable
+    if (!need_check && OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(handle.get_lock_memtable(lock_memtable))) {
+    LOG_WARN("get lock memtable from lock handle failed", K(ret));
+  } else if (FALSE_IT(lock_memtable->enable_check_tablet_status(need_check))) {
   }
   return ret;
 }

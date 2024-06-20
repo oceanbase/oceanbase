@@ -69,17 +69,18 @@ void ObStoreCtx::reset()
 {
   ls_id_.reset();
   ls_ = nullptr;
+  branch_ = 0;
   tablet_id_.reset();
   table_iter_ = nullptr;
   table_version_ = INT64_MAX;
-  timeout_ = -1;
+  timeout_ = 0;
   mvcc_acc_ctx_.reset();
   tablet_stat_.reset();
-  replay_log_scn_.set_max();
   is_read_store_ctx_ = false;
 }
 
 int ObStoreCtx::init_for_read(const ObLSID &ls_id,
+                              const common::ObTabletID tablet_id,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
                               const SCN &snapshot_version)
@@ -90,6 +91,7 @@ int ObStoreCtx::init_for_read(const ObLSID &ls_id,
   if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     STORAGE_LOG(WARN, "get_ls from ls service fail.", K(ret), K(*ls_svr));
   } else {
+    tablet_id_ = tablet_id;
     ret = init_for_read(ls_handle, timeout, tx_lock_timeout, snapshot_version);
   }
   return ret;
@@ -129,6 +131,15 @@ void ObStoreCtx::force_print_trace_log()
   }
 }
 
+bool ObStoreCtx::is_uncommitted_data_rollbacked() const
+{
+  bool bret = false;
+  if (NULL != mvcc_acc_ctx_.tx_ctx_) {
+    bret = mvcc_acc_ctx_.tx_ctx_->is_data_rollbacked();
+  }
+  return bret;
+}
+
 void ObStoreRowLockState::reset()
 {
   is_locked_ = false;
@@ -137,6 +148,7 @@ void ObStoreRowLockState::reset()
   lock_data_sequence_.reset();
   lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   is_delayed_cleanout_ = false;
+  exist_flag_ = ObExistFlag::UNKNOWN;
   mvcc_row_ = NULL;
   trans_scn_ = SCN::max_scn();
 }

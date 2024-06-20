@@ -16,6 +16,7 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/engine/expr/ob_datum_cast.h"
 
 namespace oceanbase
 {
@@ -52,9 +53,9 @@ void ObKeyPart::reset_key()
     like_keypart_->escape_.reset();
   } else if (is_in_key()) {
     in_keypart_->reset();
-  } else if (is_geo_key()) {
-    geo_keypart_->wkb_.reset();
-    geo_keypart_->distance_.reset();
+  } else if (is_domain_key()) {
+    domain_keypart_->const_param_.reset();
+    domain_keypart_->extra_param_.reset();
   }
 }
 
@@ -273,8 +274,8 @@ bool ObKeyPart::is_question_mark() const
     bret = normal_keypart_->start_.is_unknown() || normal_keypart_->end_.is_unknown();
   } else if (is_in_key()) {
     bret = in_keypart_->contain_questionmark_;
-  } else if (is_geo_key()) {
-    bret = geo_keypart_->wkb_.is_unknown();
+  } else if (is_domain_key()) {
+    bret = domain_keypart_->const_param_.is_unknown();
   }
   return bret;
 }
@@ -721,15 +722,15 @@ int ObKeyPart::deep_node_copy(const ObKeyPart &other)
       in_keypart_->is_strict_in_ = other.in_keypart_->is_strict_in_;
       in_keypart_->contain_questionmark_ = other.in_keypart_->contain_questionmark_;
     }
-  } else if (other.is_geo_key()) {
-    if (OB_FAIL(create_geo_key())) {
+  } else if (other.is_domain_key()) {
+    if (OB_FAIL(create_domain_key())) {
       LOG_WARN("create geo key failed", K(ret));
-    } else if (OB_FAIL(ob_write_obj(allocator_, other.geo_keypart_->wkb_, geo_keypart_->wkb_))) {
+    } else if (OB_FAIL(ob_write_obj(allocator_, other.domain_keypart_->const_param_, domain_keypart_->const_param_))) {
       LOG_WARN("deep copy geo wkb failed", K(ret));
-    } else if (OB_FAIL(ob_write_obj(allocator_, other.geo_keypart_->distance_, geo_keypart_->distance_))) {
+    } else if (OB_FAIL(ob_write_obj(allocator_, other.domain_keypart_->extra_param_, domain_keypart_->extra_param_))) {
       LOG_WARN("deep copy geo distance failed", K(ret));
     } else {
-      geo_keypart_->geo_type_ = other.geo_keypart_->geo_type_;
+      domain_keypart_->domain_op_ = other.domain_keypart_->domain_op_;
     }
   }
   return ret;
@@ -753,8 +754,8 @@ int ObKeyPart::shallow_node_copy(const ObKeyPart &other)
   } else if (other.is_in_key()) {
     in_keypart_ = other.in_keypart_;
     key_type_ = other.key_type_;
-  } else if (other.is_geo_key()) {
-    geo_keypart_ = other.geo_keypart_;
+  } else if (other.is_domain_key()) {
+    domain_keypart_ = other.domain_keypart_;
     key_type_ = other.key_type_;
   }
   return ret;
@@ -1101,10 +1102,10 @@ OB_DEF_SERIALIZE(ObKeyPart)
           }
         }
       }
-    } else if (is_geo_key()) {
-      OB_UNIS_ENCODE(geo_keypart_->wkb_);
-      OB_UNIS_ENCODE(geo_keypart_->geo_type_);
-      OB_UNIS_ENCODE(geo_keypart_->distance_);
+    } else if (is_domain_key()) {
+      OB_UNIS_ENCODE(domain_keypart_->const_param_);
+      OB_UNIS_ENCODE(domain_keypart_->domain_op_);
+      OB_UNIS_ENCODE(domain_keypart_->extra_param_);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected key type", K_(key_type));
@@ -1178,13 +1179,13 @@ OB_DEF_DESERIALIZE(ObKeyPart)
           }
         }
       }
-    } else if (T_GEO_KEY == key_type_) {
-      if (OB_FAIL(create_geo_key())) {
-        LOG_WARN("create geo key failed", K(ret));
+    } else if (T_DOMAIN_KEY == key_type_) {
+      if (OB_FAIL(create_domain_key())) {
+        LOG_WARN("create domain key failed", K(ret));
       }
-      OB_UNIS_DECODE(geo_keypart_->wkb_);
-      OB_UNIS_DECODE(geo_keypart_->geo_type_);
-      OB_UNIS_DECODE(geo_keypart_->distance_);
+      OB_UNIS_DECODE(domain_keypart_->const_param_);
+      OB_UNIS_DECODE(domain_keypart_->domain_op_);
+      OB_UNIS_DECODE(domain_keypart_->extra_param_);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected key type", K_(key_type));
@@ -1234,10 +1235,10 @@ OB_DEF_SERIALIZE_SIZE(ObKeyPart)
         }
       }
     }
-  } else if (is_geo_key()) {
-    OB_UNIS_ADD_LEN(geo_keypart_->wkb_);
-    OB_UNIS_ADD_LEN(geo_keypart_->geo_type_);
-    OB_UNIS_ADD_LEN(geo_keypart_->distance_);
+  } else if (is_domain_key()) {
+    OB_UNIS_ADD_LEN(domain_keypart_->const_param_);
+    OB_UNIS_ADD_LEN(domain_keypart_->domain_op_);
+    OB_UNIS_ADD_LEN(domain_keypart_->extra_param_);
   }
   OB_UNIS_ADD_LEN(null_safe_);
   OB_UNIS_ADD_LEN(rowid_column_idx_);
@@ -1436,7 +1437,8 @@ int ObKeyPart::remove_in_params_vals(const ObIArray<int64_t> &val_idx)
   return ret;
 }
 
-int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool contain_row, bool &is_bound_modified)
+int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
+                               bool contain_row, bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   int64_t start_cmp = 0;
@@ -1444,11 +1446,11 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool cont
   if (OB_UNLIKELY(!is_normal_key())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keypart isn't normal key", K_(key_type));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, pos_,
-                                               normal_keypart_->start_, start_cmp))) {
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
+                                               normal_keypart_->start_, start_cmp, common::CO_LE, true))) {
     LOG_WARN("failed to try cast value type", K(ret));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, pos_,
-                                               normal_keypart_->end_, end_cmp))) {
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
+                                               normal_keypart_->end_, end_cmp, common::CO_LE, false))) {
     LOG_WARN("failed to try cast value type", K(ret));
   } else {
     if (start_cmp < 0) {
@@ -1478,8 +1480,9 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool cont
   return ret;
 }
 
-int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
-                              const ObKeyPartPos &pos, ObObj &value, int64_t &cmp)
+int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
+                              ObIAllocator &alloc, const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
+                              common::ObCmpOp cmp_op /* CO_EQ */, bool left_border /*true*/)
 {
   int ret = OB_SUCCESS;
   if (!value.is_min_value() && !value.is_max_value() && !value.is_unknown()
@@ -1487,10 +1490,19 @@ int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocat
           || value.is_decimal_int())) {
     const ObObj *dest_val = NULL;
     ObCollationType collation_type = pos.column_type_.get_collation_type();
-    ObCastCtx cast_ctx(&alloc, &dtc_params, CM_WARN_ON_FAIL, collation_type);
+    ObCastCtx cast_ctx(&alloc, &dtc_params, cur_datetime, CM_WARN_ON_FAIL, collation_type);
     ObAccuracy acc(pos.column_type_.get_accuracy());
     if (pos.column_type_.is_decimal_int()) {
       cast_ctx.res_accuracy_ = &acc;
+      int32_t out_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(acc.get_precision());
+      int32_t in_bytes = value.get_int_bytes();
+      ObScale out_scale = acc.get_scale();
+      ObScale in_scale = value.get_scale();
+      if ((value.is_decimal_int()
+            && ObDatumCast::need_scale_decimalint(in_scale, in_bytes, out_scale, out_bytes))
+          || !value.is_decimal_int()) {
+        cast_ctx.cast_mode_ = ObRelationalExprOperator::get_const_cast_mode(cmp_op, !left_border);
+      }
     }
     ObObj &tmp_start = value;
     ObExpectType expect_type;
@@ -1579,16 +1591,16 @@ int ObKeyPart::create_not_in_key()
   return ret;
 }
 
-int ObKeyPart::create_geo_key()
+int ObKeyPart::create_domain_key()
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
-  if (OB_UNLIKELY(NULL == (ptr = allocator_.alloc(sizeof(ObGeoKeyPart))))) {
+  if (OB_UNLIKELY(NULL == (ptr = allocator_.alloc(sizeof(ObDomainKeyPart))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc memory failed");
   } else {
-    key_type_ = T_GEO_KEY;
-    geo_keypart_ = new(ptr) ObGeoKeyPart();
+    key_type_ = T_DOMAIN_KEY;
+    domain_keypart_ = new(ptr) ObDomainKeyPart();
   }
   return ret;
 }
@@ -1656,11 +1668,11 @@ DEF_TO_STRING(ObKeyPart)
          N_OFFSETS, in_keypart_->offsets_,
          N_MISSING_OFFSETS, in_keypart_->missing_offsets_,
          N_IN_PARAMS, in_keypart_->in_params_);
-  } else if (is_geo_key()) {
+  } else if (is_domain_key()) {
     J_COMMA();
-    J_KV("wkb_", geo_keypart_->wkb_,
-         "geo_type_", geo_keypart_->geo_type_,
-         "distance_", geo_keypart_->distance_);
+    J_KV("const_param_", domain_keypart_->const_param_,
+         "domain_type_", domain_keypart_->domain_op_,
+         "extra_param_", domain_keypart_->extra_param_);
   }
   J_OBJ_END();
   return pos;

@@ -796,6 +796,9 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
     RECYCLE_FIRST_SCHEMA(RECYCLE_ONLY, tablet, OB_ALL_TABLET_TO_TABLE_HISTORY_TNAME, tablet_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    RECYCLE_SECOND_SCHEMA(column_group, OB_ALL_COLUMN_GROUP_HISTORY_TNAME, table_id, column_group_id);
+    RECYCLE_SECOND_SCHEMA(column_group_mapping, OB_ALL_COLUMN_GROUP_MAPPING_HISTORY_TNAME, table_id, column_group_id);
+    ret = OB_SUCCESS; // overwrite ret
     // ----------------------------- database ----------------------------------------
     RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, database, OB_ALL_DATABASE_HISTORY_TNAME,
                          database_id);
@@ -806,10 +809,12 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
     // tablegroup's partition will be recycled as table's partition
     ret = OB_SUCCESS; // overwrite ret
 
-    // ----------------------------- user/role ---------------------------------------
+    // ----------------------------- user/role/proxy ---------------------------------------
     RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, user, OB_ALL_USER_HISTORY_TNAME, user_id);
     // TODO: should be tested
     //RECYCLE_SECOND_SCHEMA(role_grantee, OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_TNAME, grantee_id, role_id);
+    RECYCLE_SECOND_SCHEMA(proxy, OB_ALL_USER_PROXY_INFO_HISTORY_TNAME, client_user_id, proxy_user_id);
+    RECYCLE_THIRD_SCHEMA(proxy_role, OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TNAME, client_user_id, proxy_user_id, role_id);
     ret = OB_SUCCESS; // overwrite ret
 
     // ---------------------------- outline ------------------------------------------
@@ -917,6 +922,11 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                          rls_group_id);
     RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, rls_context, OB_ALL_RLS_CONTEXT_HISTORY_TNAME,
                          rls_context_id);
+    ret = OB_SUCCESS; // overwrite ret
+
+    // --------------------------- column priv ---------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, column_priv, OB_ALL_COLUMN_PRIVILEGE_HISTORY_TNAME,
+                         priv_id);
     ret = OB_SUCCESS; // overwrite ret
 
 #undef RECYCLE_FIRST_SCHEMA

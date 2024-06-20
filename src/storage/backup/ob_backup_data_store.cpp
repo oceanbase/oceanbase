@@ -77,6 +77,20 @@ bool ObBackupDeletedTabletToLSDesc::is_valid() const
 }
 
 /*
+ *------------------------------ObBackupResourcePool----------------------------------------
+ */
+int ObBackupResourcePool::assign(const ObBackupResourcePool &that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(resource_pool_.assign(that.resource_pool_))) {
+    LOG_WARN("failed to assign resource pool", K(ret));
+  } else if (OB_FAIL(unit_config_.assign(that.unit_config_))) {
+    LOG_WARN("failed to assign unit config", K(ret));
+  }
+  return ret;
+}
+
+/*
  *------------------------------ObExternTenantLocalityInfo----------------------------
  */
 OB_SERIALIZE_MEMBER(ObExternTenantLocalityInfoDesc, tenant_id_, backup_set_id_, cluster_id_, compat_mode_,
@@ -99,6 +113,8 @@ int ObExternTenantLocalityInfoDesc::assign(const ObExternTenantLocalityInfoDesc 
   int ret = OB_SUCCESS;
   if (OB_FAIL(sys_time_zone_wrap_.deep_copy(that.sys_time_zone_wrap_))) {
     LOG_WARN("failed to deep copy", K(ret));
+  } else if (OB_FAIL(resource_pool_infos_.assign(that.resource_pool_infos_))) {
+    LOG_WARN("failed to assign resource pool infos", K(ret));
   } else {
     tenant_id_ = that.tenant_id_;
     backup_set_id_ = that.backup_set_id_;
@@ -166,6 +182,46 @@ bool ObBackupLSMetaInfosDesc::is_valid() const
   return !ls_meta_packages_.empty();
 }
 
+/*
+ *-----------------------------ObBackupPartialTableListDesc-----------------------
+ */
+
+OB_SERIALIZE_MEMBER(ObBackupPartialTableListDesc, items_);
+
+bool ObBackupPartialTableListDesc::is_valid() const
+{
+  return count() > 0;
+}
+
+void ObBackupPartialTableListDesc::reset()
+{
+  items_.reset();
+}
+
+int64_t ObBackupPartialTableListDesc::to_string(char *buf, int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0 || !is_valid()) {
+    // do nothing
+  } else {
+    J_OBJ_START();
+    int64_t total = count();
+    J_KV("start_item", items_.at(0), "end_item", items_.at(count() - 1), K(total));
+    J_OBJ_END();
+  }
+  return pos;
+}
+
+/*
+ *-----------------------------ObBackupTableListMetaInfoDesc-----------------------
+ */
+
+OB_SERIALIZE_MEMBER(ObBackupTableListMetaInfoDesc, scn_, count_, batch_size_, partial_metas_);
+
+bool ObBackupTableListMetaInfoDesc::is_valid() const
+{
+  return scn_.is_valid() && count_ >= 0 && batch_size_ > 0;
+}
 
 int ObBackupSetFilter::get_backup_set_array(ObIArray<share::ObBackupSetDesc> &backup_set_array) const
 {
@@ -293,6 +349,14 @@ int ObBackupDataStore::init(
     backup_desc_ = backup_desc;
   }
   return ret;
+}
+
+void ObBackupDataStore::reset()
+{
+  ObBackupStore::reset();
+  backup_desc_.reset();
+  backup_set_dest_.reset();
+
 }
 
 int ObBackupDataStore::write_ls_attr(const int64_t turn_id, const ObBackupDataLSAttrDesc &ls_info)
@@ -700,6 +764,26 @@ int ObBackupDataStore::read_backup_set_info(ObExternBackupSetInfoDesc &backup_se
   return ret;
 }
 
+int ObBackupDataStore::is_backup_set_info_file_exist(bool &is_exist) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_set_info_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get tenant ls attr info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(util.is_exist(full_path.str(), storage_info, is_exist))) {
+    LOG_WARN("failed to check backup set info file exist.", K(ret), K(full_path), K(storage_info));
+  }
+  return ret;
+}
+
 int ObBackupDataStore::write_root_key_info(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -928,6 +1012,45 @@ int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap 
             LOG_WARN("failed to deep copy time zone wrap", K(ret), K(locality_info));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDataStore::get_single_backup_set_sys_time_zone_wrap(common::ObTimeZoneInfoWrap & time_zone_wrap)
+{
+  int ret = OB_SUCCESS;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else {
+    HEAP_VARS_2((storage::ObExternTenantLocalityInfoDesc, locality_info),
+                  (storage::ObExternBackupSetInfoDesc, backup_set_info)) {
+      if (OB_FAIL(read_tenant_locality_info(locality_info))) {
+        LOG_WARN("fail to read backup set info", K(ret), K_(backup_set_dest));
+      } else if (OB_FAIL(read_backup_set_info(backup_set_info))) {
+        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+          LOG_WARN("backup set info not exist", K(ret), K_(backup_set_dest));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to read backup set info", K(ret), K_(backup_set_dest));
+        }
+      } else if (backup_set_info.backup_set_file_.tenant_compatible_ < DATA_VERSION_4_2_0_0) {
+        const char *time_zone = "+08:00";
+        int32_t offset = 0;
+        int ret_more = OB_SUCCESS;
+        bool is_oracle_mode = locality_info.compat_mode_ == lib::Worker::CompatMode::ORACLE;
+        if (OB_FAIL(ObTimeConverter::str_to_offset(time_zone,
+                                                    offset,
+                                                    ret_more,
+                                                    is_oracle_mode))) {
+          LOG_WARN("invalid time zone offset", K(ret), K(time_zone), K(offset), K(is_oracle_mode));
+        } else {
+          time_zone_wrap.set_tz_info_offset(offset);
+        }
+      } else if (OB_FAIL(time_zone_wrap.deep_copy(locality_info.sys_time_zone_wrap_))) {
+        LOG_WARN("failed to deep copy time zone wrap", K(ret), K(locality_info));
       }
     }
   }
@@ -1250,6 +1373,84 @@ int ObBackupDataStore::read_deleted_tablet_info_v_4_1_x(
         break;
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_single_table_list_part_file(const share::SCN &scn, const int64_t part_no, const ObBackupPartialTableListDesc &table_list)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scn is not valid", K(ret), K(scn));
+  } else if (OB_FAIL(ObBackupPathUtil::get_table_list_part_file_path(backup_set_dest_, scn, part_no, path))) {
+    LOG_WARN("fail to get table list part file path", K(ret), K_(backup_set_dest), K(scn), K(part_no));
+  } else if (OB_FAIL(write_single_file(path.get_obstr(), table_list))) {
+    LOG_WARN("fail to write single file", K(ret));
+  }
+
+  return ret;
+}
+
+int ObBackupDataStore::write_table_list_meta_info(const share::SCN &scn, const ObBackupTableListMetaInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scn is not valid", K(ret), K(scn));
+  } else if (!desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table list meta desc is not valid", K(ret), K(desc));
+  } else if (OB_FAIL( ObBackupPathUtil::get_table_list_meta_path(backup_set_dest_, scn, path))) {
+    LOG_WARN("fail to get table list meta path", K(ret), K(scn));
+  } else if (OB_FAIL(write_single_file(path.get_obstr(), desc))) {
+    LOG_WARN("fail to write single file", K(ret), K(desc));
+  }
+
+  return ret;
+}
+
+int ObBackupDataStore::read_table_list_file(const char *file_name, ObBackupPartialTableListDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  char path_str[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_table_list_dir_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get table list dir path", K(ret), K_(backup_set_dest));
+  } else if (OB_FAIL(databuff_printf(path_str, OB_MAX_BACKUP_PATH_LENGTH, "%s/%s", path.get_ptr(), file_name))) {
+    LOG_WARN("fail to databuff printf", K(ret), K(path), K(file_name));
+  } else if (OB_FAIL(read_single_file(path_str, desc))) {
+    LOG_WARN("fail to read single file", K(ret), K(path_str));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::is_table_list_meta_exist(const share::SCN &scn, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath full_path;
+  ObBackupIoAdapter util;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_table_list_meta_path(backup_set_dest_, scn, full_path))) {
+    LOG_WARN("failed to get format file path", K(ret));
+  } else if (OB_FAIL(util.is_exist(full_path.get_obstr(), storage_info, is_exist))) {
+    LOG_WARN("failed to check format file exist.", K(ret), K(full_path));
   }
   return ret;
 }

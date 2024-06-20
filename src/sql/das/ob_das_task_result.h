@@ -50,12 +50,18 @@ public:
   bool is_reading_; //正在读取中间结果，TCB处于ping状态，不能退出
   bool is_exiting_; //is_exiting_ = true表示该TCB正在退出，持有的结果已经失效，不能再访问
   bool is_vectorized_;
+  bool enable_rich_format_;
   int64_t read_rows_;
   int64_t max_batch_size_;
   const ObChunkDatumStore::StoredRow *stored_row_;
   const ObChunkDatumStore::StoredRow **stored_row_arr_;
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator result_iter_;
+  const ObCompactRow *vec_stored_row_;
+  const ObCompactRow **vec_stored_row_arr_;
+  ObTempRowStore vec_row_store_;
+  ObTempRowStore::Iterator vec_result_iter_;
+
 private:
   common::ObSpinLock tcb_lock_; //用于控制资源资源释放的时序，保证并发访问的安全
 };
@@ -138,10 +144,19 @@ public:
                        ObDASScanOp &scan_op);
   int erase_task_result(int64_t task_id);
   //从中间结果管理器中获取一个block大小的结果，默认为2M大小
-  int iterator_task_result(int64_t task_id,
-                           ObChunkDatumStore &datum_store,
-                           bool &has_more);
+  int iterator_task_result(ObDASDataFetchRes &res);
   int remove_expired_results();
+private:
+int save_task_result_by_vector(int64_t &read_rows,
+                               const ExprFixedArray *output_exprs,
+                               ObEvalCtx *eval_ctx,
+                               ObDASTCB *tcb,
+                               ObDASScanOp &scan_op,
+                               common::ObNewRowIterator &result,
+                               const ObDASScanRtDef *scan_rtdef);
+int fetch_result_by_normal(ObDASTCB *tcb, ObDASDataFetchRes &res, bool &has_more);
+int fetch_result_by_vector(ObDASTCB *tcb, ObDASDataFetchRes &res, bool &has_more);
+
 private:
   DASTCBMap tcb_map_;
   ObDASTaskResultGC gc_;

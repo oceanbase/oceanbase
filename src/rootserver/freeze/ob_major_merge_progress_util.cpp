@@ -28,6 +28,7 @@ ObTableCompactionInfo &ObTableCompactionInfo::operator=(const ObTableCompactionI
   tablet_cnt_ = other.tablet_cnt_;
   status_ = other.status_;
   unfinish_index_cnt_ = other.unfinish_index_cnt_;
+  need_check_fts_ = other.need_check_fts_;
   return *this;
 }
 
@@ -55,7 +56,8 @@ ObTableCompactionInfo::ObTableCompactionInfo()
   : table_id_(OB_INVALID_ID),
     tablet_cnt_(0),
     unfinish_index_cnt_(INVALID_INDEX_CNT),
-    status_(Status::INITIAL)
+    status_(Status::INITIAL),
+    need_check_fts_(false)
 {
 }
 /**
@@ -67,47 +69,16 @@ int64_t ObMergeProgress::to_string(char *buf, const int64_t buf_len) const
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    const bool merge_finish = is_merge_finished();
-    if (merge_finish) {
-      J_KV(K(merge_finish), K_(total_table_cnt));
+    if (merge_finish_) {
+      J_KV(K_(merge_finish), K_(total_table_cnt));
     } else {
-      J_KV(KP(this), K(merge_finish), K_(unmerged_tablet_cnt), K_(merged_tablet_cnt), K_(total_table_cnt));
+      J_KV(KP(this), K_(merge_finish), K_(unmerged_tablet_cnt), K_(merged_tablet_cnt), K_(total_table_cnt));
       for (int64_t i = 0; i < RECORD_TABLE_TYPE_CNT; ++i) {
         J_COMMA();
         J_KV(ObTableCompactionInfo::TableStatusStr[i], table_cnt_[i]);
       }
     }
     J_OBJ_END();
-  }
-  return pos;
-}
-/**
- * -------------------------------------------------------------------ObRSCompactionTimeGuard-------------------------------------------------------------------
- */
-const char *ObRSCompactionTimeGuard::CompactionEventStr[] = {
-    "PREPARE_UNFINISH_TABLE_IDS",
-    "GET_TABLET_LS_PAIRS",
-    "GET_TABLET_META_TABLE",
-    "CKM_VERIFICATION"
-};
-
-const char *ObRSCompactionTimeGuard::get_comp_event_str(enum CompactionEvent event)
-{
-  STATIC_ASSERT(static_cast<int64_t>(COMPACTION_EVENT_MAX) == ARRAYSIZEOF(CompactionEventStr), "events str len is mismatch");
-  const char *str = "";
-  if (event >= COMPACTION_EVENT_MAX || event < PREPARE_UNFINISH_TABLE_IDS) {
-    str = "invalid_type";
-  } else {
-    str = CompactionEventStr[event];
-  }
-  return str;
-}
-
-int64_t ObRSCompactionTimeGuard::to_string(char *buf, const int64_t buf_len) const
-{
-  int64_t pos = 0;
-  for (int64_t idx = 0; idx < idx_; ++idx) {
-    fmt_ts_to_meaningful_str(buf, buf_len, pos, get_comp_event_str((CompactionEvent)line_array_[idx]), click_poinsts_[idx]);
   }
   return pos;
 }

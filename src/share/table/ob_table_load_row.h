@@ -152,11 +152,20 @@ template<class T>
 int ObTableLoadRow<T>::project(const ObIArray<int64_t> &idx_projector, ObTableLoadRow<T> &projected_row) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(projected_row.init(count_, allocator_handle_))) {
+  if (OB_UNLIKELY(idx_projector.count() != count_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected count", KR(ret), K(idx_projector), K(count_));
+  } else if (OB_FAIL(projected_row.init(count_, allocator_handle_))) {
     OB_LOG(WARN, "failed to alloate cells", KR(ret), K(projected_row.count_));
   } else {
     for (int64_t j = 0; j < count_; ++j) {
-      projected_row.cells_[j] = cells_[idx_projector.at(j)];
+      const int64_t idx = idx_projector.at(j);
+      if (OB_UNLIKELY(idx < 0 || idx >= count_)) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "unexpected idx", KR(ret), K(j), K(idx), K(idx_projector));
+      } else {
+        projected_row.cells_[j] = cells_[idx];
+      }
     }
     projected_row.seq_no_ = seq_no_;
   }

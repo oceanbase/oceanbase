@@ -230,7 +230,7 @@ int ObPxMSCoordOp::setup_readers()
     } else {
       reader_cnt_ = task_channels_.count();
       for (int64_t i = 0; i < reader_cnt_; i++) {
-        new (&readers_[i]) ObReceiveRowReader();
+        new (&readers_[i]) ObReceiveRowReader(get_spec().id_);
       }
     }
   }
@@ -441,7 +441,8 @@ int ObPxMSCoordOp::inner_get_next_row()
   } else if (OB_UNLIKELY(OB_SUCCESS != ret)) {
     int ret_terminate = terminate_running_dfos(coord_info_.dfo_mgr_);
     LOG_WARN("QC get error code", K(ret), K(ret_terminate));
-    if (OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == ret
+    if ((OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == ret
+        || OB_GOT_SIGNAL_ABORTING == ret)
         && OB_SUCCESS != ret_terminate) {
       ret = ret_terminate;
     }

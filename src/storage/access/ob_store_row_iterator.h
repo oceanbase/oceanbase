@@ -64,22 +64,20 @@ public:
   ObStoreRowIterator() :
       type_(IteratorReserved),
       is_sstable_iter_(false),
-      block_row_store_(nullptr)
+      is_reclaimed_(false),
+      block_row_store_(nullptr),
+      long_life_allocator_(nullptr)
   {};
   virtual ~ObStoreRowIterator();
   virtual void reuse();
   virtual void reset();
+  // used for global query iterator pool, prepare for returning to pool
+  virtual void reclaim();
   virtual int init(
       const ObTableIterParam &param,
       ObTableAccessContext &context,
       ObITable *table,
       const void *query_range);
-  virtual int get_next_row_ext(const blocksstable::ObDatumRow *&row, uint8_t& flag) {
-    int ret = get_next_row(row);
-    flag = get_iter_flag();
-    return ret;
-  }
-  virtual uint8_t get_iter_flag() { return 0; }
   virtual bool is_sstable_iter() const { return is_sstable_iter_; }
   virtual int refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey)
   {
@@ -121,8 +119,9 @@ public:
         IteratorCOScan == iter_type ||
         IteratorCOMultiScan == iter_type;
   }
+  OB_INLINE bool is_reclaimed() const { return is_reclaimed_; }
 
-  VIRTUAL_TO_STRING_KV(K_(type), K_(is_sstable_iter), KP_(block_row_store));
+  VIRTUAL_TO_STRING_KV(K_(type), K_(is_sstable_iter), K_(is_reclaimed), KP_(block_row_store), KP_(long_life_allocator));
 
 protected:
   virtual int inner_open(
@@ -148,18 +147,22 @@ protected:
 protected:
   int type_;
   bool is_sstable_iter_;
+  bool is_reclaimed_;
   ObBlockRowStore *block_row_store_;
+  ObIAllocator *long_life_allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStoreRowIterator);
 };
 
+// do not change the value of the enum
 enum ObQRIterType
 {
-  T_INVALID_ITER_TYPE,
+  T_INVALID_ITER_TYPE = -1,
   T_SINGLE_GET,
   T_MULTI_GET,
   T_SINGLE_SCAN,
   T_MULTI_SCAN,
+  T_MAX_ITER_TYPE,
 };
 
 class ObQueryRowIterator : public ObIStoreRowIterator
@@ -178,6 +181,11 @@ public:
     return get_next_row(const_cast<blocksstable::ObDatumRow *&>(row));
   }
   virtual void reset() = 0;
+  // used for global query iterator pool, prepare for returning to pool
+  virtual void reclaim()
+  {
+    OB_ASSERT_MSG(false, "ObQueryRowIterator dose not impl reclaim");
+  }
   // Iterate row interface for vectorized engine.
   virtual int get_next_rows(int64_t &count, int64_t capacity)
   {
@@ -200,6 +208,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(type));
 public:
   ObQRIterType get_type() const { return type_; }
+  bool is_scan() const { return type_ == T_SINGLE_SCAN || type_ == T_MULTI_SCAN; }
 protected:
   ObQRIterType type_;
 
@@ -213,6 +222,7 @@ struct TableTypedIters
   TableTypedIters(const std::type_info& info, const uint32_t cg_idx, common::ObIAllocator &alloc);
   ~TableTypedIters();
   void reset();
+  void reclaim();
   bool is_type(const std::type_info &type, const uint32_t cg_idx)
   {
     return nullptr != type_info_ && *type_info_ == type && cg_idx == cg_idx_;
@@ -239,6 +249,7 @@ public:
   ObStoreRowIterPool(common::ObIAllocator &alloc);
   ~ObStoreRowIterPool();
   void reset();
+  void reclaim();
   int get_iter(const std::type_info &type, T *&iter, const uint32_t cg_idx = OB_CS_INVALID_CG_IDX);
   void return_iter(T *iter);
   void return_cg_iter(T *iter, uint32_t cg_idx);
@@ -278,6 +289,17 @@ void TableTypedIters<T>::reset()
 }
 
 template<typename T>
+void TableTypedIters<T>::reclaim()
+{
+  T *iter = nullptr;
+  for (int64_t j = 0; j < iters_.count(); ++j) {
+    if (OB_NOT_NULL(iter = iters_.at(j)) && !iter->is_reclaimed()) {
+      iter->reclaim();
+    }
+  }
+}
+
+template<typename T>
 ObStoreRowIterPool<T>::ObStoreRowIterPool(common::ObIAllocator &alloc)
   : allocator_(alloc),
     table_iters_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_)
@@ -293,7 +315,6 @@ ObStoreRowIterPool<T>::~ObStoreRowIterPool()
 template<typename T>
 void ObStoreRowIterPool<T>::reset()
 {
-  int ret = OB_SUCCESS;
   T *iter = nullptr;
   for (int64_t i = 0; i < table_iters_array_.count(); ++i) {
     TableTypedIters<T> *typed_iters = table_iters_array_.at(i);
@@ -306,6 +327,17 @@ void ObStoreRowIterPool<T>::reset()
 }
 
 template<typename T>
+void ObStoreRowIterPool<T>::reclaim()
+{
+  for (int64_t i = 0; i < table_iters_array_.count(); ++i) {
+    TableTypedIters<T> *typed_iters = table_iters_array_.at(i);
+    if (OB_NOT_NULL(typed_iters)) {
+      typed_iters->reclaim();
+    }
+  }
+}
+
+template<typename T>
 void ObStoreRowIterPool<T>::return_iter(T *iter)
 {
   inner_return_iter(iter, OB_CS_INVALID_CG_IDX);
@@ -314,6 +346,7 @@ void ObStoreRowIterPool<T>::return_iter(T *iter)
 template<typename T>
 void ObStoreRowIterPool<T>::return_cg_iter(T *iter, uint32_t cg_idx)
 {
+  iter->reuse();
   inner_return_iter(iter, cg_idx);
 }
 
@@ -325,7 +358,6 @@ void ObStoreRowIterPool<T>::inner_return_iter(T *iter, const uint32_t cg_idx)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter is null", K(ret), K(iter));
   } else {
-    iter->reuse();
     TableTypedIters<T> *typed_iters = nullptr;
     for (int64_t i = 0; i < table_iters_array_.count(); ++i) {
       if (OB_NOT_NULL(table_iters_array_.at(i)) && table_iters_array_.at(i)->is_type(typeid(*iter), cg_idx)) {
@@ -381,14 +413,14 @@ int ObStoreRowIterPool<T>::get_iter(const std::type_info &type, T *&iter, const 
 
 #define ALLOCATE_TABLE_STORE_ROW_IETRATOR(ctx, class, ptr)                                     \
 do {                                                                                           \
-  if (NULL != ctx.iter_pool_) {                                                                \
-    if (OB_FAIL(ctx.iter_pool_->get_iter(typeid(class), ptr))) {                               \
+  if (NULL != ctx.get_stmt_iter_pool()) {                                                      \
+    if (OB_FAIL(ctx.get_stmt_iter_pool()->get_iter(typeid(class), ptr))) {                     \
       STORAGE_LOG(WARN, "Failed to get iter from pool", K(ret), K(ctx));                       \
     }                                                                                          \
   }                                                                                            \
   void *buf = NULL;                                                                            \
   if (OB_SUCC(ret) && NULL == ptr) {                                                           \
-    if (NULL == (buf = ctx.stmt_allocator_->alloc(sizeof(class)))) {                           \
+    if (NULL == (buf = ctx.get_long_life_allocator()->alloc(sizeof(class)))) {                 \
       ret = OB_ALLOCATE_MEMORY_FAILED;                                                         \
       STORAGE_LOG(WARN, "Fail to allocate memory", K(ret));                                    \
     } else {                                                                                   \
@@ -400,7 +432,7 @@ do {                                                                            
 #define FREE_TABLE_STORE_ROW_IETRATOR(ctx, ptr)                                                \
 do {                                                                                           \
   if (NULL != ptr) {                                                                           \
-    ctx.stmt_allocator_->free(ptr);                                                            \
+    ctx.get_long_life_allocator()->free(ptr);                                                  \
   }                                                                                            \
  } while(0)
 
@@ -413,7 +445,7 @@ do {                                                                            
   }                                                                                            \
   void *buf = NULL;                                                                            \
   if (OB_SUCC(ret) && NULL == ptr) {                                                           \
-    if (NULL == (buf = ctx.stmt_allocator_->alloc(sizeof(class)))) {                           \
+    if (NULL == (buf = ctx.get_long_life_allocator()->alloc(sizeof(class)))) {                 \
       ret = OB_ALLOCATE_MEMORY_FAILED;                                                         \
       STORAGE_LOG(WARN, "Fail to allocate memory", K(ret));                                    \
     } else {                                                                                   \
@@ -421,6 +453,17 @@ do {                                                                            
     }                                                                                          \
   }                                                                                            \
 } while(0)
+
+#define FREE_ITER_FROM_ALLOCATOR(alloc, ptr, T)                                               \
+  do {                                                                                        \
+    if (nullptr != ptr) {                                                                     \
+      ptr->~T();                                                                              \
+      if (OB_LIKELY(nullptr != alloc)) {                                                      \
+        alloc->free(ptr);                                                                     \
+      }                                                                                       \
+      ptr = nullptr;                                                                          \
+    }                                                                                         \
+  } while (0)
 
 #define FREE_TABLE_STORE_CG_IETRATOR(ctx, ptr) FREE_TABLE_STORE_ROW_IETRATOR(ctx, ptr)
 

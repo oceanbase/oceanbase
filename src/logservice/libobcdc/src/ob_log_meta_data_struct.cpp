@@ -115,7 +115,8 @@ int ObDictTenantInfo::alloc_dict_db_meta(datadict::ObDictDatabaseMeta *&dict_db_
     ret = OB_NOT_INIT;
     LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
   } else if (OB_ISNULL(dict_db_meta = static_cast<datadict::ObDictDatabaseMeta *>(
-          cfifo_allocator_.alloc(sizeof(datadict::ObDictDatabaseMeta))))) {
+      cfifo_allocator_.alloc(sizeof(datadict::ObDictDatabaseMeta))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate dict_db_meta failed", KR(ret), K(dict_db_meta));
   } else {
     new (dict_db_meta) datadict::ObDictDatabaseMeta(&arena_allocator_);
@@ -252,7 +253,8 @@ int ObDictTenantInfo::alloc_dict_table_meta(datadict::ObDictTableMeta *&dict_tab
     ret = OB_NOT_INIT;
     LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
   } else if (OB_ISNULL(dict_table_meta = static_cast<datadict::ObDictTableMeta *>(
-          cfifo_allocator_.alloc(sizeof(datadict::ObDictTableMeta))))) {
+      cfifo_allocator_.alloc(sizeof(datadict::ObDictTableMeta))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate dict_table_meta failed", KR(ret), K(dict_table_meta));
   } else {
     new (dict_table_meta) datadict::ObDictTableMeta(&arena_allocator_);
@@ -332,6 +334,36 @@ int ObDictTenantInfo::replace_dict_table_meta(
   // TODO remove
   LOG_INFO("replace_dict_table_meta", KR(ret), K(new_dict_table_meta), K(a));
 
+  return ret;
+}
+
+int ObDictTenantInfo::remove_table_meta(const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
+  } else {
+    MetaDataKey meta_data_key(table_id);
+    datadict::ObDictTableMeta *old_table_meta = nullptr;
+    if (OB_FAIL(get_table_meta(table_id, old_table_meta))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("tenant_info get_table_meta failed", KR(ret), K(table_id), K(old_table_meta));
+      } else {
+        // Does not exist locally, insert directly
+        ret = OB_SUCCESS;
+      }
+    } else {
+      // Exist locally, free it
+      if (OB_FAIL(free_dict_table_meta(old_table_meta))) {
+        LOG_ERROR("free_dict_table_meta failed", KR(ret), K(table_id));
+      } else if (OB_FAIL(table_map_.erase(meta_data_key))) {
+        LOG_ERROR("db_map_ erase failed", KR(ret), K(meta_data_key));
+      } else {
+        LOG_INFO("remove_table_meta success", K(table_id));
+      }
+    }
+  }
   return ret;
 }
 

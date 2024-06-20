@@ -14,8 +14,6 @@
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -130,6 +128,7 @@ int ObMaintainObjDepInfoTask::check_and_build_dep_info_arg(
 share::ObAsyncTask *ObMaintainObjDepInfoTask::deep_copy(char *buf, const int64_t buf_size) const
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObAsyncTask *task = nullptr;
   const int64_t need_size = get_deep_copy_size();
   if (OB_ISNULL(buf)) {
@@ -199,6 +198,8 @@ int ObMaintainDepInfoTaskQueue::init(const int64_t thread_cnt, const int64_t que
     LOG_WARN("failed to init base queue", K(ret));
   } else if (OB_FAIL(view_info_set_.create(INIT_BKT_SIZE, attr, attr))) {
     LOG_WARN("failed to init view set", K(ret));
+  } else if (OB_FAIL(sys_view_consistent_.create(INIT_BKT_SIZE, attr, attr))) {
+    LOG_WARN("failed to init sys view set", K(ret));
   }
   return ret;
 }
@@ -219,7 +220,12 @@ void ObMaintainDepInfoTaskQueue::run2()
           LOG_WARN("queue size not match", K(queue_.size()), K(view_info_set_.size()));
           view_info_set_.clear();
         }
-        LOG_INFO("[ASYNC TASK QUEUE]", "queue_size", queue_.size());
+        if (sys_view_consistent_.size() >= MAX_SYS_VIEW_SIZE) {
+          // ignore ret
+          LOG_WARN("sys_view_consistent size too much", K(sys_view_consistent_.size()));
+          sys_view_consistent_.clear();
+        }
+        LOG_INFO("[ASYNC TASK QUEUE]", K(queue_.size()), K(sys_view_consistent_.size()));
       }
       if (last_execute_time_ > 0
          && static_cast<int64_t>(GCONF._ob_obj_dep_maint_task_interval) > 0) {

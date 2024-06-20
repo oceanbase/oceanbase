@@ -77,6 +77,8 @@ private:
   int resolve_param_type(const ParseNode *type_node, const common::ObString &param_name,
                          ObSQLSessionInfo &session_info, share::schema::ObRoutineParam &routine_param);
   int resolve_clause_list(const ParseNode *clause_list, share::schema::ObRoutineInfo &func_info);
+  int collect_ref_obj_info(int64_t ref_obj_id, int64_t ref_timestamp,
+                           ObDependencyTableType dependent_type);
   int set_routine_param(const ObIArray<pl::ObObjAccessIdx> &access_idxs,
                         share::schema::ObRoutineParam &routine_param);
   int resolve_aggregate_body(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);

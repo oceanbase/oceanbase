@@ -99,15 +99,14 @@ public:
     return ret;
   }
 
-  int get_ns_value(ObStack<ObIMulModeBase*>& stk, ObString &ns_value)
+  int get_ns_value(ObStack<ObIMulModeBase*>& stk, ObString &ns_value, ObIMulModeBase* extend)
   {
     return 0;
   }
 
-  int get_ns_value(const ObString& prefix, ObString& ns_value) {
+  int get_ns_value(const ObString& prefix, ObString& ns_value, int& ans_idx) {
     return 0;
   }
-
   bool is_equal_node(const ObIMulModeBase* other) {
     return false;
   }
@@ -115,6 +114,9 @@ public:
   bool is_node_before(const ObIMulModeBase* other) {
     return false;
   }
+
+  virtual bool check_extend() { return false; }
+  virtual bool check_if_defined_ns() { return false; }
 
   int get_value(ObString& value, int64_t index = -1)  override
   {
@@ -139,6 +141,10 @@ public:
 
   virtual int64_t attribute_size() { return 0; }
   virtual int64_t attribute_count() { return 0; }
+  virtual uint16_t get_encoding_flag() {return 0;};
+  virtual uint16_t has_xml_decl() {return 0;};
+  virtual uint16_t is_unparse() {return 0;};
+  virtual ObIMulModeBase* get_attribute_handle() {return nullptr;}
   ObString get_version() { return ObString(); }
   ObString get_prefix() { return ObString(); }
   ObString get_encoding() { return ObString(); }
@@ -878,21 +884,21 @@ TEST_F(TestXmlTreeBase, reader)
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
 
   ObXmlElement sub1_1(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1_1.set_key(sub_key1);
+  sub1_1.set_xml_key(sub_key1);
   sub1_1.set_prefix(sub_value1);
 
   ObXmlElement sub1_2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1_2.set_key(sub_key2);
+  sub1_2.set_xml_key(sub_key2);
   sub1_2.set_prefix(sub_value2);
 
   ObXmlElement sub1_3(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1_3.set_key(sub_key3);
+  sub1_3.set_xml_key(sub_key3);
   sub1_3.set_prefix(sub_value3);
 
 
 
   ObXmlElement sub1(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1.set_key(key1);
+  sub1.set_xml_key(key1);
   sub1.set_prefix(value1);
 
   // sub children
@@ -903,32 +909,32 @@ TEST_F(TestXmlTreeBase, reader)
 
 
   ObXmlElement sub2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub2.set_key(key2);
+  sub2.set_xml_key(key2);
   sub2.set_prefix(value2);
 
   ObXmlElement sub3_1(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub3_1.set_key(key3);
+  sub3_1.set_xml_key(key3);
   sub3_1.set_prefix(value3_1);
 
   ObXmlElement sub3_2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub3_2.set_key(key3);
+  sub3_2.set_xml_key(key3);
   sub3_2.set_prefix(value3_2);
 
   ObXmlElement sub3(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub3.set_key(key3);
+  sub3.set_xml_key(key3);
   sub3.set_prefix(value3);
 
   ObXmlElement sub4(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub4.set_key(key4);
+  sub4.set_xml_key(key4);
   sub4.set_prefix(value4);
 
   ObXmlElement sub5(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub5.set_key(key5);
+  sub5.set_xml_key(key5);
   sub5.set_prefix(value5);
 
 
   ObXmlElement element(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub5.set_key(element_key);
+  sub5.set_xml_key(element_key);
   sub5.set_prefix(element_value);
 
   ASSERT_EQ(element.add_element(&sub1), OB_SUCCESS);
@@ -1098,22 +1104,22 @@ TEST_F(TestXmlTreeBase, lazy_sort)
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
 
   ObXmlElement sub1_1(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1_1.set_key(sub_key1);
+  sub1_1.set_xml_key(sub_key1);
   sub1_1.set_prefix(sub_value1);
 
   ObXmlElement sub1_2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1_2.set_key(sub_key2);
+  sub1_2.set_xml_key(sub_key2);
   sub1_2.set_prefix(sub_value2);
 
   ObXmlElement sub1_3(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub1_3.set_key(sub_key3);
+  sub1_3.set_xml_key(sub_key3);
   sub1_3.set_prefix(sub_value3);
 
 
 
   ObXmlElement sub1(ObMulModeNodeType::M_DOCUMENT, ctx);
   sub1.alter_member_sort_policy(false);
-  sub1.set_key(key1);
+  sub1.set_xml_key(key1);
   sub1.set_prefix(value1);
 
   // sub children
@@ -1129,33 +1135,33 @@ TEST_F(TestXmlTreeBase, lazy_sort)
 
 
   ObXmlElement sub2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub2.set_key(key2);
+  sub2.set_xml_key(key2);
   sub2.set_prefix(value2);
 
   ObXmlElement sub3_1(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub3_1.set_key(key3);
+  sub3_1.set_xml_key(key3);
   sub3_1.set_prefix(value3_1);
 
   ObXmlElement sub3_2(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub3_2.set_key(key3);
+  sub3_2.set_xml_key(key3);
   sub3_2.set_prefix(value3_2);
 
   ObXmlElement sub3(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub3.set_key(key3);
+  sub3.set_xml_key(key3);
   sub3.set_prefix(value3);
 
   ObXmlElement sub4(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub4.set_key(key4);
+  sub4.set_xml_key(key4);
   sub4.set_prefix(value4);
 
   ObXmlElement sub5(ObMulModeNodeType::M_DOCUMENT, ctx);
-  sub5.set_key(key5);
+  sub5.set_xml_key(key5);
   sub5.set_prefix(value5);
 
 
   ObXmlElement element(ObMulModeNodeType::M_DOCUMENT, ctx);
   element.alter_member_sort_policy(false);
-  sub5.set_key(element_key);
+  sub5.set_xml_key(element_key);
   sub5.set_prefix(element_value);
 
   ASSERT_EQ(element.add_element(&sub5), OB_SUCCESS);

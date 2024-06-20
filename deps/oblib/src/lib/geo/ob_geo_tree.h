@@ -172,6 +172,7 @@ public:
   iterator end() { return vec_.end(); }
   const_iterator end() const { return const_iterator(&*(const_cast<common::ObArray<T, ModulePageAllocator, true> *>(&vec_))->end()); }
   // ObArray<T, ModulePageAllocator, true>& get_vec_() const { return vec_; }
+  int remove(int64_t idx) { return vec_.remove(idx); }
 
 private:
   common::ObArray<T, ModulePageAllocator, true> vec_;
@@ -849,6 +850,7 @@ public:
   const_iterator begin() const { return lines_.begin(); }
   iterator end() { return lines_.end(); }
   const_iterator end() const { return lines_.end(); }
+  int remove(int64_t idx) { return lines_.remove(idx); }
   TO_STRING_KV("type", "ObCartesianMultilinestring",
                "size", size());
 
@@ -1086,6 +1088,8 @@ public:
   ObCartesianBox() = default;
   ObCartesianBox(ObWkbGeomInnerPoint &min_point, ObWkbGeomInnerPoint &max_point)
       : min_p_(min_point), max_p_(max_point) {}
+  ObCartesianBox(double min_x, double min_y, double max_x, double max_y);
+  void set_box(double min_x, double min_y, double max_x, double max_y);
   ObGeoCRS coordinate_system() const {
     return ObGeoCRS::Cartesian;
   }
@@ -1149,6 +1153,7 @@ public:
   typedef ObCartesianMultipolygon sub_mp_type;
   typedef ObCartesianMultipoint sub_mpt_type;
   typedef ObCartesianMultilinestring sub_ml_type;
+  typedef ObCartesianPoint sub_pt_type;
 
 public:
   ObCartesianGeometrycollection(uint32_t srid, ObIAllocator &allocator)
@@ -1160,7 +1165,7 @@ public:
     : ObGeometrycollection(),
       mode_arena_(DEFAULT_PAGE_SIZE_GEO, page_allocator_),
       geoms_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
-  ~ObCartesianGeometrycollection() {}
+  ~ObCartesianGeometrycollection() { geoms_.clear(); }
   ObGeoCRS crs() const override { return ObGeoCRS::Cartesian; }
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
@@ -1210,6 +1215,7 @@ public:
   typedef ObGeographMultipolygon sub_mp_type;
   typedef ObGeographMultipoint sub_mpt_type;
   typedef ObGeographMultilinestring sub_ml_type;
+  typedef ObGeographPoint sub_pt_type;
 
 public:
   ObGeographGeometrycollection(uint32_t srid, ObIAllocator &allocator)
@@ -1221,7 +1227,7 @@ public:
     : ObGeometrycollection(),
       mode_arena_(DEFAULT_PAGE_SIZE_GEO, page_allocator_),
       geoms_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
-  ~ObGeographGeometrycollection() {}
+  ~ObGeographGeometrycollection() { geoms_.clear(); }
   ObGeoCRS crs() const override { return ObGeoCRS::Geographic; }
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);

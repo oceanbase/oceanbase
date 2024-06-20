@@ -10,13 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX OBLOG_FORMATTER
 
 #include "ob_cdc_lob_data_merger.h"
 #include "ob_cdc_lob_aux_meta_storager.h"    // ObCDCLobAuxMetaStorager
 #include "ob_log_instance.h"                 // TCTX
 #include "ob_log_formatter.h"                // IObLogFormatter
 #include "ob_log_trace_id.h"                 // ObLogTraceIdGuard
+#include "storage/lob/ob_ext_info_callback.h"       // ObExtInfoLog
 
 using namespace oceanbase::common;
 
@@ -211,35 +212,31 @@ int ObCDCLobDataMerger::push_lob_column_(
   } else {
     LOG_DEBUG("push_lob_column_", K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
     const bool is_empty_sql = (ObLobDataOutRowCtx::OpType::EMPTY_SQL == lob_data_out_row_ctx->op_);
+    bool is_update_outrow_lob_from_empty_to_empty = false;
     const auto seq_no_st = transaction::ObTxSEQ::cast_from_int(lob_data_out_row_ctx->seq_no_st_);
     const uint32_t seq_no_cnt = lob_data_out_row_ctx->seq_no_cnt_;
     const uint32_t del_seq_no_cnt = lob_data_out_row_ctx->del_seq_no_cnt_;
+    const uint32_t insert_seq_no_cnt = seq_no_cnt - del_seq_no_cnt;
     LobColumnFragmentCtxList new_lob_col_fra_ctx_list;
     LobColumnFragmentCtxList old_lob_col_fra_ctx_list;
 
     if (is_empty_sql) {
       // do nothing
     } else if (lob_data_get_ctx.is_insert()) {
-      if (OB_FAIL(lob_data_get_ctx.new_lob_col_ctx_.init(seq_no_cnt, allocator))) {
+      if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_update_outrow_lob_from_empty_to_empty))) {
+        LOG_ERROR("check_empty_outrow_lob_col_ failed", K(lob_data_get_ctx), K(seq_no_cnt), K(del_seq_no_cnt), K(is_update_outrow_lob_from_empty_to_empty));
+      } else if (OB_FAIL(lob_data_get_ctx.new_lob_col_ctx_.init(insert_seq_no_cnt, allocator))) {
         LOG_ERROR("lob_data_get_ctx new_lob_col_ctx_ init failed", KR(ret), K(seq_no_cnt),
             K(lob_data_get_ctx));
-      } else if (OB_FAIL(get_lob_col_fra_ctx_list_(true/*is_new_col*/, seq_no_st, seq_no_cnt, allocator,
-              lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
-        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(seq_no_cnt),
-            K(new_lob_col_fra_ctx_list));
+      } else if (OB_FAIL(get_lob_col_fra_ctx_list_(true/*is_new_col*/, seq_no_st + del_seq_no_cnt, insert_seq_no_cnt,
+          allocator, lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
+        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(seq_no_cnt), K(del_seq_no_cnt),
+            K(insert_seq_no_cnt), K(new_lob_col_fra_ctx_list));
       }
     } else if (lob_data_get_ctx.is_update()) {
-      const int64_t insert_seq_no_cnt = seq_no_cnt - del_seq_no_cnt;
-      // NOTICE:
-      // 1. Update LOB column data from in_row to out_row, the del_seq_no_cnt is 0
-      // 2. Update LOB column data from out_row to empty string, the insert_seq_no_cnt is 0
-      //
-      // 3. Currently, LOB column data is stored in out_row in these cases:
-      // 3.1  Length of column data is larger than 4K
-      // 3.2. Length of column data is less than 4K(even if column data is empty string),
-      //      but was larger than 4K(stored out_row) and not update to NULL until this trans.
-
-      if (OB_FAIL(lob_data_get_ctx.old_lob_col_ctx_.init(del_seq_no_cnt, allocator))) {
+      if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_update_outrow_lob_from_empty_to_empty))) {
+        LOG_ERROR("check_empty_outrow_lob_col_ failed", K(lob_data_get_ctx), K(seq_no_cnt), K(del_seq_no_cnt), K(is_update_outrow_lob_from_empty_to_empty));
+      } else if (OB_FAIL(lob_data_get_ctx.old_lob_col_ctx_.init(del_seq_no_cnt, allocator))) {
         LOG_ERROR("lob_data_get_ctx old_lob_col_ctx_ init failed", KR(ret), K(del_seq_no_cnt),
             K(lob_data_get_ctx));
       } else if (OB_FAIL(get_lob_col_fra_ctx_list_(false/*is_new_col*/, seq_no_st, del_seq_no_cnt,
@@ -251,8 +248,8 @@ int ObCDCLobDataMerger::push_lob_column_(
             K(lob_data_get_ctx));
       } else if (OB_FAIL(get_lob_col_fra_ctx_list_(true/*is_new_col*/, seq_no_st + del_seq_no_cnt, insert_seq_no_cnt,
               allocator, lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
-        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(del_seq_no_cnt),
-            K(new_lob_col_fra_ctx_list));
+        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(seq_no_cnt), K(del_seq_no_cnt),
+            K(insert_seq_no_cnt), K(new_lob_col_fra_ctx_list));
       }
     } else if (lob_data_get_ctx.is_delete()) {
       ret = OB_ERR_UNEXPECTED;
@@ -260,15 +257,16 @@ int ObCDCLobDataMerger::push_lob_column_(
     }
 
     if (OB_SUCC(ret)) {
+      const bool try_push_formatter_directly = is_empty_sql || is_update_outrow_lob_from_empty_to_empty;
       bool is_all_lob_col_handle_done = false;
 
-      if (is_empty_sql) {
+      if (try_push_formatter_directly) {
         lob_data_out_row_ctx_list.inc_lob_col_count(is_all_lob_col_handle_done);
 
         if (is_all_lob_col_handle_done) {
           if (OB_FAIL(try_to_push_task_into_formatter_(lob_data_out_row_ctx_list, stop_flag))) {
             if (OB_IN_STOP_STATE != ret) {
-              LOG_ERROR("try_to_push_task_into_formatter_ failed", KR(ret));
+              LOG_ERROR("try_to_push_task_into_formatter_ failed", KR(ret), K(is_empty_sql), K(is_update_outrow_lob_from_empty_to_empty));
             }
           }
         }
@@ -285,6 +283,46 @@ int ObCDCLobDataMerger::push_lob_column_(
           }
         }
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObCDCLobDataMerger::check_empty_outrow_lob_col_(
+    ObLobDataGetCtx &lob_data_get_ctx,
+    uint32_t seq_no_cnt,
+    uint32_t del_seq_no_cnt,
+    bool &is_update_outrow_lob_from_empty_to_empty)
+{
+  int ret = OB_SUCCESS;
+  const int64_t insert_seq_no_cnt = seq_no_cnt - del_seq_no_cnt;
+  const bool is_empty_lob = lob_data_get_ctx.is_insert() ? insert_seq_no_cnt == 0 : (insert_seq_no_cnt == 0 && del_seq_no_cnt == 0);
+  // NOTICE:
+  // 1. Update LOB column data from in_row to out_row, the del_seq_no_cnt is 0
+  // 2. Update LOB column data from out_row to empty string, the insert_seq_no_cnt is 0
+  //
+  // 3. Currently, LOB column data is stored in out_row in these cases:
+  // 3.1  Length of column data is larger than 4K
+  // 3.2. Length of column data is less than 4K(even if column data is empty string),
+  //      but was larger than 4K(stored out_row) and not update to NULL until this trans.
+
+  if (is_empty_lob) {
+    // empty out_row update to empty out_row
+    // Under normal circumstances, this scenario should not occur;
+    // Abnormaly circumstances in OBServer version less than 4.2.1 BP2 and 4.1.0 BP4, please refer case t/libobcdc/lob_empty_outrow_udpate.test
+    const uint64_t cluster_version = TCTX.global_info_.get_min_cluster_version();
+    const bool skip_ob_version_exist_known_issues = (cluster_version == 0) // can't get cluster_version, may in direct mode
+        || (cluster_version < CLUSTER_VERSION_4_2_1_2) // ob version less than 4213 and 4102 has known issues will result in this scenario.
+        || (cluster_version <= CLUSTER_VERSION_4_1_0_2);
+    const bool can_ignore_empty_outrow_update = (1 == TCONF.skip_empty_outrow_lob_update) || skip_ob_version_exist_known_issues;
+
+    if (can_ignore_empty_outrow_update) {
+      is_update_outrow_lob_from_empty_to_empty = true;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_ERROR("[FATAL] [OUTROW_LOB] unexpected update outrow lob from empty to empty, config skip_empty_outrow_lob_update = 1 if necessary",
+          KR(ret), K(can_ignore_empty_outrow_update), K(cluster_version));
     }
   }
 
@@ -387,10 +425,10 @@ int ObCDCLobDataMerger::handle_task_(
       const int64_t commit_version = part_trans_task.get_trans_commit_version();
       const uint64_t tenant_id = lob_data_out_row_ctx_list->get_tenant_id();
       const transaction::ObTransID &trans_id = lob_data_out_row_ctx_list->get_trans_id();
-      const uint64_t aux_lob_meta_tid = lob_data_out_row_ctx_list->get_aux_lob_meta_table_id();
-      const ObLobId &lob_id = new_lob_data->id_;
+      const uint64_t table_id = lob_data_out_row_ctx_list->get_table_id_of_lob_aux_meta_key(lob_data_get_ctx);
+      const ObLobId lob_id = lob_data_get_ctx.get_lob_id();
       const uint32_t idx = task.idx_;
-      LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, aux_lob_meta_tid, lob_id, task.seq_no_);
+      LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, table_id, lob_id, task.seq_no_);
       const char *lob_data_ptr = nullptr;
       int64_t lob_data_len = 0;
       ObIAllocator &allocator = lob_data_out_row_ctx_list->get_allocator();
@@ -400,18 +438,18 @@ int ObCDCLobDataMerger::handle_task_(
           lob_data_ptr, lob_data_len);
 
       if (OB_SUCC(ret)) {
-        LOG_DEBUG("lob_aux_meta_storager get succ", K(lob_aux_meta_key), K(lob_data_len), K(task));
+        LOG_DEBUG("lob_aux_meta_storager get succ", K(lob_aux_meta_key), K(lob_data_len), K(task), K(lob_data_get_ctx), KPC(lob_data_out_row_ctx_list));
         fragment_cb_array[idx]->assign_ptr(lob_data_ptr, lob_data_len);
         uint32_t col_ref_cnt = lob_data_get_ctx.dec_col_ref_cnt(is_new_col);
 
         if (0 == col_ref_cnt) {
-          if (OB_FAIL(handle_when_all_lob_col_fragment_progress_done_(
+          if (OB_FAIL(handle_when_outrow_log_fragment_progress_done_(
                   task, lob_data_get_ctx, *lob_data_out_row_ctx_list, stop_flag))) {
-            LOG_ERROR("handle_when_all_lob_col_fragment_progress_done_ failed", KR(ret));
+            LOG_ERROR("handle_when_outrow_log_fragment_progress_done_ failed", KR(ret));
           }
         }
       } else if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("lob_aux_meta_storager get failed", KR(ret), K(lob_aux_meta_key));
+        LOG_ERROR("lob_aux_meta_storager get failed", KR(ret), K(lob_aux_meta_key), K(lob_data_get_ctx), KPC(lob_data_out_row_ctx_list));
       }
     }
   }
@@ -423,39 +461,82 @@ int ObCDCLobDataMerger::handle_task_(
   return ret;
 }
 
-int ObCDCLobDataMerger::handle_when_all_lob_col_fragment_progress_done_(
+int ObCDCLobDataMerger::handle_when_outrow_log_fragment_progress_done_(
     LobColumnFragmentCtx &task,
     ObLobDataGetCtx &lob_data_get_ctx,
     ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ObString src_data;
+  ObString output_data;
+  const bool is_new_col = task.is_new_col_;
+  if (OB_FAIL(merge_fragments_(task, lob_data_get_ctx, lob_data_out_row_ctx_list, src_data))) {
+    LOG_ERROR("merge_fragments_ fail", KR(ret), K(task), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
+  } else {
+    ObLobDataGetTaskType task_type = lob_data_get_ctx.get_type();
+    LOG_DEBUG("handle", K(task_type), K(task), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list), K(src_data));
+    switch (task_type) {
+      case ObLobDataGetTaskType::FULL_LOB:
+        output_data = src_data;
+        break;
+      case ObLobDataGetTaskType::EXT_INFO_LOG:
+        if (OB_FAIL(handle_ext_info_log_(lob_data_get_ctx, lob_data_out_row_ctx_list, src_data, output_data))) {
+          LOG_ERROR("handle ext info log fail", KR(ret), K(task_type), K(task), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
+        }
+        break;
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid task type", KR(ret), K(task_type), K(task), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
+        break;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(lob_data_get_ctx.set_col_value(is_new_col, output_data.ptr(), output_data.length()))) {
+      LOG_ERROR("lob_data_get_ctx set_col_value failed", KR(ret), K(src_data), K(output_data));
+    } else if (OB_FAIL(after_fragment_progress_done_(lob_data_get_ctx, lob_data_out_row_ctx_list, stop_flag))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("after_fragment_progress_done_ failed", KR(ret), K(task), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCDCLobDataMerger::merge_fragments_(
+    LobColumnFragmentCtx &task,
+    ObLobDataGetCtx &lob_data_get_ctx,
+    ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
+    ObString &data)
+{
+  int ret = OB_SUCCESS;
   const ObLobData *lob_data = nullptr;
   const ObLobDataOutRowCtx *lob_data_out_row_ctx = nullptr;
   const bool is_new_col = task.is_new_col_;
   ObString **fragment_cb_array= lob_data_get_ctx.get_fragment_cb_array(is_new_col);
+  uint64_t data_len = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObCDCLobDataMerger has not been initialized", KR(ret));
   } else if (OB_ISNULL(lob_data = lob_data_get_ctx.get_lob_data(is_new_col))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("new_lob_data is nullptr", KR(ret), K(task));
+    LOG_ERROR("lob_data is nullptr", KR(ret), K(is_new_col), K(lob_data_get_ctx), K(task), K(lob_data_out_row_ctx_list));
   } else if (OB_FAIL(lob_data_get_ctx.get_lob_out_row_ctx(lob_data_out_row_ctx))) {
-    LOG_ERROR("lob_data_get_ctx get_lob_out_row_ctx failed", KR(ret), K(lob_data_get_ctx));
+    LOG_ERROR("lob_data_get_ctx get_lob_out_row_ctx failed", KR(ret), K(lob_data_get_ctx), K(task), K(lob_data_out_row_ctx_list));
+  } else if (OB_FAIL(lob_data_get_ctx.get_data_length(is_new_col, data_len))) {
+    LOG_ERROR("lob_data_get_ctx get_data_length failed", KR(ret), K(is_new_col), K(lob_data_get_ctx), K(task), K(lob_data_out_row_ctx_list));
   } else {
-    LOG_DEBUG("lob_aux_meta_storager handle last fragment", K(task), K(lob_data_get_ctx));
+    LOG_DEBUG("lob_aux_meta_storager handle last fragment", K(data_len), K(task), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
     const bool is_new_col = task.is_new_col_;
     const uint32_t seq_no_cnt = task.ref_cnt_;
-    const uint64_t lob_total_len = lob_data->byte_size_;
     char *buf = nullptr;
 
-    if (OB_UNLIKELY(0 >= lob_total_len)) {
+    if (OB_UNLIKELY(0 >= data_len)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("lob_data_len is 0, there should be no outrow lob_col_value", K(task), K(lob_data));
-    } else if (OB_ISNULL(buf = static_cast<char *>(lob_data_out_row_ctx_list.get_allocator().alloc(sizeof(char) * (lob_total_len + 1))))) {
+      LOG_ERROR("lob_data_len is 0, there should be no outrow lob_col_value", K(task), K(data_len), K(lob_data));
+    } else if (OB_ISNULL(buf = static_cast<char *>(lob_data_out_row_ctx_list.get_allocator().alloc(sizeof(char) * (data_len + 1))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("buf is nullptr", KR(ret), K(is_new_col), K(task), K(lob_data));
+      LOG_ERROR("buf is nullptr", KR(ret), K(is_new_col), K(task), K(lob_data), K(data_len));
     } else {
       uint64_t pos = 0;
       bool is_lob_col_value_handle_done = false;
@@ -466,9 +547,9 @@ int ObCDCLobDataMerger::handle_when_all_lob_col_fragment_progress_done_(
         const int64_t len = str_ptr->length();
         const char *ptr = str_ptr->ptr();
 
-        if (pos + len > lob_total_len) {
+        if (pos + len > data_len) {
           ret = OB_BUF_NOT_ENOUGH;
-          LOG_ERROR("buf not enough, not expected", KR(ret), K(pos), K(len), K(lob_total_len));
+          LOG_ERROR("buf not enough, not expected", KR(ret), K(pos), K(len), K(data_len));
         } else {
           MEMCPY(buf + pos, ptr, len);
           pos += len;
@@ -477,40 +558,34 @@ int ObCDCLobDataMerger::handle_when_all_lob_col_fragment_progress_done_(
 
       if (OB_SUCC(ret)) {
         buf[pos] = '\0';
-
-        if (OB_FAIL(lob_data_get_ctx.set_col_value(is_new_col, buf, pos))) {
-          LOG_ERROR("lob_data_get_ctx set_col_value failed", KR(ret), K(pos));
-        } else {
-          lob_data_get_ctx.inc_lob_col_value_count(is_lob_col_value_handle_done);
-
-          if (is_lob_col_value_handle_done) {
-            lob_data_out_row_ctx_list.inc_lob_col_count(is_all_lob_col_handle_done);
-          }
-
-          // TODO debug remove
-          /*
-          int64_t buf_len = strlen(buf);
-          int char_len = sizeof(char_len);
-          LOG_INFO("handle_when_all_lob_col_fragment_progress_done_", "md5", calc_md5_cstr(buf, pos),
-              K(buf_len), K(pos),
-              K(char_len), K(lob_total_len));
-          */
-          // remove
-
-          if (is_all_lob_col_handle_done) {
-            if (OB_FAIL(try_to_push_task_into_formatter_(lob_data_out_row_ctx_list, stop_flag))) {
-              if (OB_IN_STOP_STATE != ret) {
-                LOG_ERROR("try_to_push_task_into_formatter_ failed", KR(ret));
-              }
-            }
-          }
-        }
+        data.assign_ptr(buf, pos);
       }
-
-      LOG_DEBUG("handle_when_all_lob_col_fragment_progress_done_", K(is_lob_col_value_handle_done), K(is_all_lob_col_handle_done), K(seq_no_cnt), K(pos));
     }
   }
 
+  return ret;
+}
+
+int ObCDCLobDataMerger::after_fragment_progress_done_(
+    ObLobDataGetCtx &lob_data_get_ctx,
+    ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  bool is_lob_col_value_handle_done = false;
+  bool is_all_lob_col_handle_done = false;
+  lob_data_get_ctx.inc_lob_col_value_count(is_lob_col_value_handle_done);
+  if (is_lob_col_value_handle_done) {
+    lob_data_out_row_ctx_list.inc_lob_col_count(is_all_lob_col_handle_done);
+  }
+  LOG_DEBUG("after_fragment_progress_done_", K(is_lob_col_value_handle_done), K(is_all_lob_col_handle_done), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
+  if (is_all_lob_col_handle_done) {
+    if (OB_FAIL(try_to_push_task_into_formatter_(lob_data_out_row_ctx_list, stop_flag))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("try_to_push_task_into_formatter_ failed", KR(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -557,6 +632,55 @@ void ObCDCLobDataMerger::print_task_count_()
       _LOG_INFO("[STAT] [LobDataMerger] [%ld/%ld] TASK_COUNT=%ld", idx, total_thread_num, task_count);
     }
   }
+}
+
+int ObCDCLobDataMerger::handle_ext_info_log_(
+    ObLobDataGetCtx &lob_data_get_ctx,
+    ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
+    const ObString &src_data,
+    ObString &output_data)
+{
+  int ret = OB_SUCCESS;
+  storage::ObExtInfoLogHeader ext_info_log_header;
+  int64_t pos = 0;
+  ObIAllocator &allocator = lob_data_out_row_ctx_list.get_allocator();
+
+  if (src_data.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("buf is empty", KR(ret), K(src_data));
+  } else if (OB_FAIL(ext_info_log_header.deserialize(src_data.ptr(), src_data.length(), pos))) {
+    LOG_ERROR("deserialize ext info log header fail", KR(ret), K(lob_data_get_ctx), K(src_data));
+  } else {
+    storage::ObExtInfoLogType type = ext_info_log_header.get_type();
+    LOG_DEBUG("handle ext info log", K(ext_info_log_header), K(pos), K(src_data), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
+    switch (type) {
+    case storage::OB_JSON_DIFF_EXT_INFO_LOG:
+      if (OB_FAIL(handle_json_diff_ext_info_log_(allocator, src_data.ptr(), src_data.length(), pos, output_data))) {
+        LOG_ERROR("handle_json_diff_ext_info_log_ fail", KR(ret), K(src_data), K(ext_info_log_header), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
+      }
+      break;
+    default:
+      ret = OB_NOT_SUPPORTED;
+      LOG_ERROR("unsupport ext info log type", KR(ret), K(type), K(ext_info_log_header), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObCDCLobDataMerger::handle_json_diff_ext_info_log_(
+    ObIAllocator &allocator,
+    const char *buf, uint64_t len, int64_t pos,
+    ObString &output_data)
+{
+  int ret = OB_SUCCESS;
+  storage::ObJsonDiffLog json_diff_log;
+  if (OB_FAIL(json_diff_log.deserialize(buf, len, pos))) {
+    LOG_ERROR("deserialize json diff log fail", KR(ret), K(len), K(pos));
+  } else if (OB_FAIL(json_diff_log.to_string(allocator, output_data))) {
+    LOG_ERROR("json diff log to_string failed", KR(ret), K(len), K(pos));
+  }
+  return ret;
 }
 
 } // namespace libobcdc

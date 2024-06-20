@@ -8,6 +8,9 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #include "storage/blocksstable/ob_data_store_desc.h"
+#include "storage/blocksstable/ob_block_manager.h"
+#include "storage/blocksstable/ob_sstable_meta.h"
+#include "share/schema/ob_column_schema.h"
 
 namespace oceanbase
 {
@@ -49,7 +52,7 @@ bool ObStaticDataStoreDesc::is_valid() const
 
 void ObStaticDataStoreDesc::reset()
 {
-  merge_type_ = INVALID_MERGE_TYPE;
+  merge_type_ = compaction::INVALID_MERGE_TYPE;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   ls_id_.reset();
   tablet_id_.reset();
@@ -158,9 +161,9 @@ int ObStaticDataStoreDesc::init(
           STORAGE_LOG(WARN, "fail to get data version", K(ret));
         } else {
           major_working_cluster_version_ = compat_version;
+          STORAGE_LOG(INFO, "success to set major working cluster version", K(ret), "merge_type", merge_type_to_str(merge_type),
+            K(cluster_version), K(major_working_cluster_version_));
         }
-        STORAGE_LOG(INFO, "success to set major working cluster version", K(ret), "merge_type", merge_type_to_str(merge_type),
-          K(cluster_version), K(major_working_cluster_version_));
       } else if (compressor_type_ != ObCompressorType::NONE_COMPRESSOR) {
         // for mini/minor, use default compressor
         compressor_type_ = DEFAULT_MINOR_COMPRESSOR_TYPE;
@@ -250,8 +253,9 @@ int ObColDataStoreDesc::init(
     is_row_store_ = true;
     table_cg_idx_ = table_cg_idx;
     schema_rowkey_col_cnt_ = merge_schema.get_rowkey_column_num();
-    rowkey_column_count_ = schema_rowkey_col_cnt_ + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    full_stored_col_cnt_ += ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    rowkey_column_count_ =
+      schema_rowkey_col_cnt_ + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    full_stored_col_cnt_ += storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     row_column_count_ = full_stored_col_cnt_;
     if (!merge_schema.is_column_info_simplified()) {
       if (OB_FAIL(col_desc_array_.init(row_column_count_))) {
@@ -310,7 +314,7 @@ int ObColDataStoreDesc::get_compat_mode_from_schema(
 
 int ObColDataStoreDesc::add_col_desc_from_cg_schema(
   const share::schema::ObMergeSchema &merge_schema,
-  const ObStorageColumnGroupSchema &cg_schema)
+  const storage::ObStorageColumnGroupSchema &cg_schema)
 {
   int ret = OB_SUCCESS;
   const int64_t column_cnt = cg_schema.column_cnt_;
@@ -318,7 +322,7 @@ int ObColDataStoreDesc::add_col_desc_from_cg_schema(
   if (OB_FAIL(col_desc_array_.init(column_cnt))) {
     STORAGE_LOG(WARN, "Failed to reserve column desc array", K(ret));
   } else if (merge_schema.is_column_info_simplified()) {
-    if (merge_schema.get_mulit_version_rowkey_column_ids(multi_version_column_desc_array)) {
+    if (OB_FAIL(merge_schema.get_mulit_version_rowkey_column_ids(multi_version_column_desc_array))) {
       STORAGE_LOG(WARN, "failed to get rowkey column ids", K(ret), K(column_cnt), K(cg_schema), K(merge_schema));
     }
   } else if (OB_FAIL(merge_schema.get_multi_version_column_descs(multi_version_column_desc_array))) {
@@ -342,7 +346,7 @@ int ObColDataStoreDesc::add_col_desc_from_cg_schema(
 
 int ObColDataStoreDesc::init(const bool is_major,
                              const ObMergeSchema &merge_schema,
-                             const ObStorageColumnGroupSchema &cg_schema,
+                             const storage::ObStorageColumnGroupSchema &cg_schema,
                              const uint16_t table_cg_idx)
 {
   int ret = OB_SUCCESS;
@@ -508,7 +512,7 @@ int ObColDataStoreDesc::generate_skip_index_meta(
   return ret;
 }
 
-int ObColDataStoreDesc::generate_single_cg_skip_index_meta(const ObStorageColumnGroupSchema &cg_schema)
+int ObColDataStoreDesc::generate_single_cg_skip_index_meta(const storage::ObStorageColumnGroupSchema &cg_schema)
 {
   int ret = OB_SUCCESS;
 
@@ -522,7 +526,7 @@ int ObColDataStoreDesc::generate_single_cg_skip_index_meta(const ObStorageColumn
     const uint16_t column_idx = cg_schema.column_idxs_[0];
     ObSkipIndexColumnAttr single_cg_skip_idx_attr;
     single_cg_skip_idx_attr.set_min_max();
-    // single_cg_skip_idx_attr.set_sum(); // open after support sum
+    single_cg_skip_idx_attr.set_sum();
     if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
         single_cg_skip_idx_attr, 0, agg_meta_array_))) {
       STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), K(column_idx), K(cg_schema));
@@ -701,7 +705,7 @@ int ObDataStoreDesc::init(
     if (OB_FAIL(inner_init(merge_schema, row_store_type))) {
       STORAGE_LOG(WARN, "failed inner init", KR(ret), K(merge_schema));
     } else {
-      STORAGE_LOG(INFO, "success to init data desc", K(ret), KPC(this), K(merge_schema));
+      STORAGE_LOG(TRACE, "success to init data desc", K(ret), KPC(this), K(merge_schema));
     }
     if (OB_FAIL(ret)) {
       reset();
@@ -724,17 +728,6 @@ int ObDataStoreDesc::inner_init(
       micro_block_size_ = merge_schema.get_block_size();
     } else {
       micro_block_size_ = MAX(merge_schema.get_block_size(), MIN_MICRO_BLOCK_SIZE);
-    }
-
-    bool need_build_hash_index = merge_schema.get_table_type() == USER_TABLE && !is_major;
-    if (need_build_hash_index
-        && OB_FAIL(ObMicroBlockHashIndexBuilder::need_build_hash_index(
-            merge_schema, need_build_hash_index))) {
-      STORAGE_LOG(WARN, "Failed to judge whether to build hash index", K(ret));
-      need_build_hash_index_for_micro_block_ = false;
-      ret = OB_SUCCESS;
-    } else {
-      need_build_hash_index_for_micro_block_ = need_build_hash_index;
     }
   }
   return ret;
@@ -803,8 +796,6 @@ void ObDataStoreDesc::reset()
   merge_info_ = NULL;
   sstable_index_builder_ = nullptr;
   is_force_flat_store_type_ = false;
-  need_pre_warm_ = false;
-  need_build_hash_index_for_micro_block_ = false;
   micro_block_size_ = 0;
 }
 
@@ -813,8 +804,6 @@ int ObDataStoreDesc::shallow_copy(const ObDataStoreDesc &desc)
   int ret = OB_SUCCESS;
   static_desc_ = desc.static_desc_;
   col_desc_ = desc.col_desc_;
-  need_pre_warm_ = desc.need_pre_warm_;
-  need_build_hash_index_for_micro_block_ = desc.need_build_hash_index_for_micro_block_;
   micro_block_size_ = desc.micro_block_size_;
   row_store_type_ = desc.get_row_store_type();
   encoder_opt_ = desc.encoder_opt_;
@@ -950,7 +939,7 @@ int ObWholeDataStoreDesc::gen_index_store_desc(const ObDataStoreDesc &data_desc)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected invalid index store descriptor", K(ret), K(desc_), K(data_desc));
   } else {
-    STORAGE_LOG(INFO, "success to gen index desc", K(ret), K(desc_), K(data_desc));
+    STORAGE_LOG(TRACE, "success to gen index desc", K(ret), K(desc_), K(data_desc));
   }
   return ret;
 }

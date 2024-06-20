@@ -20,7 +20,7 @@ namespace sql
 
 ObAlterTableStmt::ObAlterTableStmt(common::ObIAllocator *name_pool)
     : ObTableStmt(name_pool, stmt::T_ALTER_TABLE), is_comment_table_(false), 
-      is_alter_system_(false), is_alter_triggers_(false), 
+      is_alter_system_(false), fts_arg_allocator_(nullptr), is_alter_triggers_(false),
       interval_expr_(NULL), transition_expr_(NULL), alter_table_action_count_(0),
       alter_external_table_type_(0)
 {
@@ -28,13 +28,23 @@ ObAlterTableStmt::ObAlterTableStmt(common::ObIAllocator *name_pool)
 
 ObAlterTableStmt::ObAlterTableStmt()
     : ObTableStmt(stmt::T_ALTER_TABLE), is_comment_table_(false), is_alter_system_(false),
-      is_alter_triggers_(false), interval_expr_(NULL), transition_expr_(NULL), alter_table_action_count_(0),
+      fts_arg_allocator_(nullptr), is_alter_triggers_(false), interval_expr_(NULL), transition_expr_(NULL), alter_table_action_count_(0),
       alter_external_table_type_(0)
 {
 }
 
 ObAlterTableStmt::~ObAlterTableStmt()
 {
+  for (int64_t i = 0; i < index_arg_list_.count(); ++i) {
+    obrpc::ObCreateIndexArg *index_arg = index_arg_list_.at(i);
+    if (is_fts_index(index_arg->index_type_)
+        || is_multivalue_index(index_arg->index_type_)) {
+      index_arg->~ObCreateIndexArg();
+      fts_arg_allocator_->free(index_arg);
+    }
+  }
+  index_arg_list_.reuse();
+  fts_arg_allocator_ = nullptr;
 }
 
 int ObAlterTableStmt::add_column(const share::schema::AlterColumnSchema &column_schema)
@@ -145,6 +155,28 @@ int ObAlterTableStmt::set_origin_table_name(const ObString &origin_table_name)
 void ObAlterTableStmt::set_table_id(const uint64_t table_id)
 {
   alter_table_arg_.alter_table_schema_.set_table_id(table_id);
+}
+
+int ObAlterTableStmt::fill_session_vars(const ObBasicSessionInfo &session) {
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(session.get_effective_tenant_id(), tenant_data_version))) {
+    SQL_RESV_LOG(WARN, "get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+    //do nothing
+  } else if (OB_FAIL(alter_table_arg_.local_session_var_.load_session_vars(&session))) {
+    SQL_RESV_LOG(WARN, "load local session vars failed", K(ret));
+  }
+  return ret;
+}
+
+int ObAlterTableStmt::set_exchange_partition_arg(const obrpc::ObExchangePartitionArg &exchange_partition_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(exchange_partition_arg_.assign(exchange_partition_arg))) {
+    SQL_RESV_LOG(WARN, "failed to assign", K(ret), K(exchange_partition_arg));
+  }
+  return ret;
 }
 
 } //namespace sql

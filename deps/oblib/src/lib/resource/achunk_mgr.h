@@ -117,6 +117,26 @@ public:
     }
     return chunk;
   }
+  inline AChunk *popall(int64_t &hold)
+  {
+    AChunk *chunk = NULL;
+    hold = 0;
+    if (!OB_ISNULL(header_)) {
+      ObDisableDiagnoseGuard disable_diagnose_guard;
+      if (with_mutex_) {
+        mutex_.lock();
+      }
+      DEFER(if (with_mutex_) {mutex_.unlock();});
+      if (!OB_ISNULL(header_)) {
+        chunk = header_;
+        hold = hold_;
+        hold_ = 0;
+        pops_ = pushes_;
+        header_ = NULL;
+      }
+    }
+    return chunk;
+  }
 
   inline int64_t count() const
   {
@@ -174,12 +194,26 @@ class AChunkMgr
   friend class ProtectedStackAllocator;
   friend class ObMemoryCutter;
 private:
+  struct Slot
+  {
+    Slot(int64_t max_cache_size = INT64_MAX) : maps_(0), unmaps_(0), free_list_()
+    {
+      free_list_.set_max_chunk_cache_size(max_cache_size);
+    }
+    AChunkList* operator->() { return &free_list_; }
+    int64_t maps_;
+    int64_t unmaps_;
+    AChunkList free_list_;
+  };
   static constexpr int64_t DEFAULT_LIMIT = 4L << 30;  // 4GB
   static constexpr int64_t ACHUNK_ALIGN_SIZE = INTACT_ACHUNK_SIZE;
   static constexpr int64_t NORMAL_ACHUNK_SIZE = INTACT_ACHUNK_SIZE;
-  static constexpr int64_t LARGE_ACHUNK_SIZE = INTACT_ACHUNK_SIZE << 1;
+  static constexpr int32_t MAX_ACHUNK_INDEX = 10;
+  static constexpr int32_t NORMAL_ACHUNK_INDEX = 0;
+  static constexpr int32_t MIN_LARGE_ACHUNK_INDEX = NORMAL_ACHUNK_INDEX + 1;
+  static constexpr int32_t MAX_LARGE_ACHUNK_INDEX = MAX_ACHUNK_INDEX - 1;
+  static constexpr int32_t HUGE_ACHUNK_INDEX = MAX_ACHUNK_INDEX;
 public:
-  static constexpr int64_t DEFAULT_LARGE_CHUNK_CACHE_SIZE = 128L << 20;
   static AChunkMgr &instance();
 
 public:
@@ -193,14 +227,19 @@ public:
   void free_co_chunk(AChunk *chunk);
   static OB_INLINE uint64_t aligned(const uint64_t size);
   static OB_INLINE uint64_t hold(const uint64_t size);
-  void set_max_chunk_cache_size(const int64_t max_cache_size)
-  { free_list_.set_max_chunk_cache_size(max_cache_size); }
-  void set_max_large_chunk_cache_size(const int64_t max_cache_size)
-  { large_free_list_.set_max_chunk_cache_size(max_cache_size); }
-
+  void set_max_chunk_cache_size(const int64_t max_cache_size, const bool use_large_chunk_cache = false)
+  {
+    max_chunk_cache_size_ = max_cache_size;
+    int64_t large_chunk_cache_size = use_large_chunk_cache ? INT64_MAX : 0;
+    for (int i = MIN_LARGE_ACHUNK_INDEX; i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
+      slots_[i]->set_max_chunk_cache_size(large_chunk_cache_size);
+    }
+  }
   inline static AChunk *ptr2chunk(const void *ptr);
   bool update_hold(int64_t bytes, bool high_prio);
   virtual int madvise(void *addr, size_t length, int advice);
+  void munmap(void *addr, size_t length);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
   inline void set_limit(int64_t limit);
   inline int64_t get_limit() const;
@@ -209,18 +248,10 @@ public:
   inline int64_t get_hold() const;
   inline int64_t get_total_hold() const { return ATOMIC_LOAD(&total_hold_); }
   inline int64_t get_used() const;
-  inline int64_t get_free_chunk_count() const;
-  inline int64_t get_free_chunk_pushes() const;
-  inline int64_t get_free_chunk_pops() const;
   inline int64_t get_freelist_hold() const;
-  inline int64_t get_large_freelist_hold() const;
-  inline int64_t get_maps()  { return maps_; }
-  inline int64_t get_unmaps()  { return unmaps_; }
-  inline int64_t get_large_maps()  { return large_maps_; }
-  inline int64_t get_large_unmaps()  { return large_unmaps_; }
-  inline int64_t get_huge_maps()  { return huge_maps_; }
-  inline int64_t get_huge_unmaps()  { return huge_unmaps_; }
   inline int64_t get_shadow_hold() const { return ATOMIC_LOAD(&shadow_hold_); }
+
+  int64_t sync_wash();
 
 private:
   typedef ABitSet ChunkBitMap;
@@ -231,24 +262,75 @@ private:
   // wrap for mmap
   void *low_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);
   void low_free(const void *ptr, const uint64_t size);
+  int32_t get_chunk_index(const uint64_t size)
+  {
+    return MIN(HUGE_ACHUNK_INDEX, (size - 1) / INTACT_ACHUNK_SIZE);
+  }
+  void inc_maps(const uint64_t size)
+  {
+    int32_t chunk_index = get_chunk_index(size);
+    ATOMIC_FAA(&slots_[chunk_index].maps_, 1);
+  }
+  void inc_unmaps(const uint64_t size)
+  {
+    int32_t chunk_index = get_chunk_index(size);
+    ATOMIC_FAA(&slots_[chunk_index].unmaps_, 1);
+  }
+  bool push_chunk(AChunk* chunk)
+  {
+    bool bret = true;
+    if (OB_NOT_NULL(chunk)) {
+      int64_t hold = chunk->hold();
+      int32_t chunk_index = get_chunk_index(chunk->aligned());
+      bret = slots_[chunk_index]->push(chunk);
+      if (bret) {
+        ATOMIC_FAA(&cache_hold_, hold);
+      }
+    }
+    return bret;
+  }
+  AChunk* pop_chunk_with_index(int32_t chunk_index)
+  {
+    AChunk *chunk = slots_[chunk_index]->pop();
+    if (OB_NOT_NULL(chunk)) {
+      ATOMIC_FAA(&cache_hold_, -chunk->hold());
+    }
+    return chunk;
+  }
+
+  AChunk* pop_chunk_with_size(const uint64_t size)
+  {
+    int32_t chunk_index = get_chunk_index(size);
+    return pop_chunk_with_index(chunk_index);
+  }
+
+  AChunk* popall_with_index(int32_t chunk_index, int64_t &hold)
+  {
+    return slots_[chunk_index]->popall(hold);
+  }
+
+  int64_t get_maps(int32_t chunk_index) const
+  {
+    return slots_[chunk_index].maps_;
+  }
+  int64_t get_unmaps(int32_t chunk_index) const
+  {
+    return slots_[chunk_index].unmaps_;
+  }
+  const AChunkList& get_freelist(int32_t chunk_index) const
+  {
+    return slots_[chunk_index].free_list_;
+  }
 
 protected:
-  AChunkList free_list_;
-  AChunkList large_free_list_;
-  ChunkBitMap *chunk_bitmap_;
-
   int64_t limit_;
   int64_t urgent_;
   int64_t hold_; // Including the memory occupied by free_list, limited by memory_limit
   int64_t total_hold_; // Including virtual memory, just for statifics.
-
-  int64_t maps_;
-  int64_t unmaps_;
-  int64_t large_maps_;
-  int64_t large_unmaps_;
-  int64_t huge_maps_;
-  int64_t huge_unmaps_;
+  int64_t cache_hold_;
   int64_t shadow_hold_;
+  int64_t max_chunk_cache_size_;
+  Slot slots_[MAX_ACHUNK_INDEX + 1];
 }; // end of class AChunkMgr
 
 OB_INLINE AChunk *AChunkMgr::ptr2chunk(const void *ptr)
@@ -293,34 +375,13 @@ inline int64_t AChunkMgr::get_hold() const
 
 inline int64_t AChunkMgr::get_used() const
 {
-  return hold_ - get_freelist_hold() - get_large_freelist_hold();
-}
-
-inline int64_t AChunkMgr::get_free_chunk_count() const
-{
-  return free_list_.count();
-}
-
-inline int64_t AChunkMgr::get_free_chunk_pushes() const
-{
-  return free_list_.get_pushes();
-}
-
-inline int64_t AChunkMgr::get_free_chunk_pops() const
-{
-  return free_list_.get_pops();
+  return hold_ - cache_hold_;
 }
 
 inline int64_t AChunkMgr::get_freelist_hold() const
 {
-  return free_list_.hold();
+  return cache_hold_;
 }
-
-inline int64_t AChunkMgr::get_large_freelist_hold() const
-{
-  return large_free_list_.hold();
-}
-
 } // end of namespace lib
 } // end of namespace oceanbase
 

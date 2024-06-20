@@ -16,6 +16,7 @@
 #include "lib/ob_name_def.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -227,6 +228,8 @@ static int calc(const ObExpr &expr, ObEvalCtx &ctx, bool &is_null, int64_t &res_
   ObDatum *date_datum = NULL;
   ObDatum *fmt_datum = NULL;
   const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
@@ -235,40 +238,40 @@ static int calc(const ObExpr &expr, ObEvalCtx &ctx, bool &is_null, int64_t &res_
     LOG_WARN("eval arg failed", K(ret), KP(date_datum), KP(fmt_datum), K(expr));
   } else if (date_datum->is_null() || fmt_datum->is_null()) {
     is_null = true;
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
   } else {
     const ObString &date_str = date_datum->get_string();
     const ObString &fmt_str = fmt_datum->get_string();
     ObTimeConvertCtx cvrt_ctx(TZ_INFO(session), false);
     ObDateSqlMode date_sql_mode;
-    date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(session->get_sql_mode());
-    date_sql_mode.allow_incomplete_dates_ = !is_no_zero_in_date(session->get_sql_mode());
-    if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
+    date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(sql_mode);
+    date_sql_mode.allow_incomplete_dates_ = !is_no_zero_in_date(sql_mode);
+    if (FALSE_IT(date_sql_mode.init(sql_mode))) {
     } else if (OB_FAIL(ObTimeConverter::str_to_datetime_format(date_str, fmt_str, cvrt_ctx, res_int,
                                                                NULL, date_sql_mode))) {
       int tmp_ret = ret;
       ObCastMode def_cast_mode = CM_NONE;
-      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session,
-                                                    def_cast_mode))) {
-        LOG_WARN("get_def_cast_mode failed", K(ret),
-                 "ret of str_to_datetime_format is", tmp_ret);
-      } else {
-        if (CM_IS_WARN_ON_FAIL(def_cast_mode)) {
-          if (OB_INVALID_DATE_FORMAT == tmp_ret) {
-            ret = OB_SUCCESS;
-            // if res type is not datetime, will call ObTimeConverter::datetime_to_time()
-            // or ObTimeConverter::datetime_to_date()
-            res_int = ObTimeConverter::ZERO_DATETIME;
-            print_user_warning(OB_INVALID_DATE_FORMAT, date_str);
-          } else if (OB_INVALID_DATE_VALUE == tmp_ret || OB_INVALID_ARGUMENT == tmp_ret) {
-            ret = OB_SUCCESS;
-            is_null = true;
-            print_user_warning(tmp_ret, date_str);
-          } else {
-            ret = tmp_ret;
-          }
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                        session->is_ignore_stmt(),
+                                        sql_mode,
+                                        def_cast_mode);
+      if (CM_IS_WARN_ON_FAIL(def_cast_mode)) {
+        if (OB_INVALID_DATE_FORMAT == tmp_ret) {
+          ret = OB_SUCCESS;
+          // if res type is not datetime, will call ObTimeConverter::datetime_to_time()
+          // or ObTimeConverter::datetime_to_date()
+          res_int = ObTimeConverter::ZERO_DATETIME;
+          print_user_warning(OB_INVALID_DATE_FORMAT, date_str);
+        } else if (OB_INVALID_DATE_VALUE == tmp_ret || OB_INVALID_ARGUMENT == tmp_ret) {
+          ret = OB_SUCCESS;
+          is_null = true;
+          print_user_warning(tmp_ret, date_str);
         } else {
-          ret = set_error_code(tmp_ret, date_str);
+          ret = tmp_ret;
         }
+      } else {
+        ret = set_error_code(tmp_ret, date_str);
       }
     }
   }
@@ -345,6 +348,13 @@ int ObExprStrToDate::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected res type", K(ret), K(rt_expr.datum_meta_.type_));
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprStrToDate, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
   return ret;
 }
 

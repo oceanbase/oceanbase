@@ -93,9 +93,7 @@ int ObExprPrivSTPoint::calc_result_typeN(ObExprResType& type,
       cast_mode &= ~CM_WARN_ON_FAIL; // make cast return error when fail
       cast_mode |= CM_STRING_INTEGER_TRUNC; // make cast check range when string to int
       type_ctx.set_cast_mode(cast_mode); // cast mode only do work in new sql engine cast frame.
-      type.set_type(ObGeometryType);
-      type.set_collation_level(common::CS_LEVEL_COERCIBLE);
-      type.set_collation_type(CS_TYPE_BINARY);
+      type.set_geometry();
       type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
     }
   }
@@ -225,12 +223,11 @@ int ObExprPrivSTPoint::eval_priv_st_point(const ObExpr &expr,
       double longti = x;
       longti *= srs_item->angular_unit();
       if (longti <= -M_PI || longti > M_PI) {
-        if (OB_FAIL(srs_item->from_radians_to_srs_unit(longti, out_of_range_val))) {
-          LOG_WARN("fail to convert radians to srs unit", K(ret), K(longti), K(srs_item));
-        }
         double min_long_val = 0.0;
         double max_long_val = 0.0;
-        if (OB_FAIL(srs_item->longtitude_convert_from_radians(-M_PI, min_long_val))) {
+        if (OB_FAIL(srs_item->from_radians_to_srs_unit(longti, out_of_range_val))) {
+          LOG_WARN("fail to convert radians to srs unit", K(ret), K(longti), K(srs_item));
+        } else if (OB_FAIL(srs_item->longtitude_convert_from_radians(-M_PI, min_long_val))) {
           LOG_WARN("fail to convert longitude from radians", K(ret));
         } else if (OB_FAIL(srs_item->longtitude_convert_from_radians(M_PI, max_long_val))) {
           LOG_WARN("fail to convert longitude from radians", K(ret));
@@ -243,12 +240,11 @@ int ObExprPrivSTPoint::eval_priv_st_point(const ObExpr &expr,
         double lati = y;
         lati *= srs_item->angular_unit();
         if (lati <= -M_PI_2 || lati > M_PI_2) {
-          if (OB_FAIL(srs_item->from_radians_to_srs_unit(lati, out_of_range_val))) {
-            LOG_WARN("fail to convert radians to srs unit", K(ret), K(lati), K(srs_item));
-          }
           double min_lat_val = 0.0;
           double max_lat_val = 0.0;
-          if (OB_FAIL(srs_item->latitude_convert_from_radians(-M_PI_2, min_lat_val))) {
+          if (OB_FAIL(srs_item->from_radians_to_srs_unit(lati, out_of_range_val))) {
+            LOG_WARN("fail to convert radians to srs unit", K(ret), K(lati), K(srs_item));
+          } else if (OB_FAIL(srs_item->latitude_convert_from_radians(-M_PI_2, min_lat_val))) {
             LOG_WARN("fail to convert latitude from radians", K(ret));
           } else if (OB_FAIL(srs_item->latitude_convert_from_radians(M_PI_2, max_lat_val))) {
             LOG_WARN("fail to convert latitude from radians", K(ret));

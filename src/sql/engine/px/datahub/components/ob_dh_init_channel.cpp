@@ -81,7 +81,6 @@ int ObInitChannelWholeMsg::assign(const ObInitChannelWholeMsg &other, common::Ob
   return ret;
 }
 
-bool ObInitChannelPieceMsgCtx::enable_dh_channel_sync(const bool channel_sync_enabled) { return channel_sync_enabled; }
 
 int ObInitChannelPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
 {

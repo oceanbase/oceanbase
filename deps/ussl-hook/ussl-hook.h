@@ -56,7 +56,7 @@ void ussl_wait();
 
 int ussl_setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
 int ussl_listen(int fd, int n);
-int ussl_connect(int fd, const struct sockaddr *addr, socklen_t len);
+int ussl_connect(int fd, struct sockaddr_storage *addr, socklen_t len);
 int ussl_accept(int fd, struct sockaddr *addr, socklen_t *addr_len);
 int ussl_accept4(int fd, struct sockaddr *addr, socklen_t *addr_len, int flags);
 int ussl_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
@@ -79,5 +79,4 @@ typedef struct ssl_config_item_t
 
 extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
 		                     int __maxevents, int __timeout);
-
 #endif // USSL_HOOK_USSL_HOOK_

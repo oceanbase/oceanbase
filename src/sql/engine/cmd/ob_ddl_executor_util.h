@@ -55,6 +55,7 @@ public:
   static int wait_ddl_finish(
       const uint64_t tenant_id,
       const int64_t task_id,
+      const bool ddl_need_retry_at_executor,
       ObSQLSessionInfo *session,
       obrpc::ObCommonRpcProxy *common_rpc_proxy,
       const bool is_support_cancel = true);

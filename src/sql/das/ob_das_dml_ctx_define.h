@@ -21,15 +21,21 @@
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "sql/engine/ob_operator.h"
 #include "sql/resolver/dml/ob_hint.h"
+#include "storage/fts/ob_fts_plugin_helper.h"
 namespace oceanbase
 {
+namespace storage
+{
+class ObDMLBaseParam;
+}
 namespace sql
 {
 typedef common::ObFixedArray<common::ObObjMeta, common::ObIAllocator> ObjMetaFixedArray;
 typedef common::ObFixedArray<common::ObAccuracy, common::ObIAllocator> AccuracyFixedArray;
 static const int64_t SAPTIAL_INDEX_DEFAULT_ROW_COUNT = 32; // 一个wkb生成的cellid数量（设定值）
-typedef common::ObSEArray<common::ObNewRow, SAPTIAL_INDEX_DEFAULT_ROW_COUNT> ObSpatIndexRow;
+typedef common::ObSEArray<common::ObNewRow, SAPTIAL_INDEX_DEFAULT_ROW_COUNT> ObDomainIndexRow;
 
+class ObDomainDMLIterator;
 struct ObDASDMLBaseRtDef;
 //das dml base compile info definition
 struct ObDASDMLBaseCtDef : ObDASBaseCtDef
@@ -164,14 +170,16 @@ public:
       need_fetch_conflict_(false),
       is_duplicated_(false),
       direct_insert_task_id_(0),
-      use_put_(false)
+      use_put_(false),
+      ddl_task_id_(0)
   { }
 
   INHERIT_TO_STRING_KV("ObDASBaseRtDef", ObDASDMLBaseRtDef,
                        K_(need_fetch_conflict),
                        K_(is_duplicated),
                        K_(direct_insert_task_id),
-                       K_(use_put));
+                       K_(use_put),
+                       K_(ddl_task_id));
 
   // used to check whether need to fetch_duplicate_key, will set in table_replace_op
   bool need_fetch_conflict_;
@@ -182,6 +190,7 @@ public:
   int64_t direct_insert_task_id_;
   // use put, only use in obkv for overlay writting.
   bool use_put_;
+  int64_t ddl_task_id_;
 };
 typedef DASDMLRtDefArray DASInsRtDefArray;
 
@@ -463,8 +472,7 @@ public:
       cur_row_(nullptr),
       cur_rows_(nullptr),
       main_ctdef_(das_ctdef),
-      spat_rows_(nullptr),
-      spatial_row_idx_(0)
+      domain_iter_(nullptr)
   {
     set_ctdef(das_ctdef);
     batch_size_ = MIN(write_buffer_.get_row_cnt(), DEFAULT_BATCH_SIZE);
@@ -475,27 +483,12 @@ public:
   virtual int get_next_rows(ObNewRow *&rows, int64_t &row_count);
   ObDASWriteBuffer &get_write_buffer() { return write_buffer_; }
   virtual void reset() override { }
-  int rewind(const ObDASDMLBaseCtDef *das_ctdef)
-  {
-    cur_row_ = nullptr;
-    cur_rows_ = nullptr;
-    spatial_row_idx_ = 0;
-    set_ctdef(das_ctdef);
-    return common::OB_SUCCESS;
-  }
+  int rewind(const ObDASDMLBaseCtDef *das_ctdef);
 
 private:
-  void set_ctdef(const ObDASDMLBaseCtDef *das_ctdef)
-  {
-    das_ctdef_ = das_ctdef;
-    row_projector_ = !das_ctdef_->old_row_projector_.empty() ?
-                     &das_ctdef_->old_row_projector_ :
-                     &das_ctdef_->new_row_projector_;
-  }
-  // spatial index
-  int get_next_spatial_index_row(ObNewRow *&row);
-  ObSpatIndexRow *get_spatial_index_rows() { return spat_rows_; }
-  int create_spatial_index_store();
+  void set_ctdef(const ObDASDMLBaseCtDef *das_ctdef);
+  int get_next_domain_index_row(ObNewRow *&row);
+  int get_next_domain_index_rows(ObNewRow *&rows, int64_t &row_count);
 private:
   ObDASWriteBuffer &write_buffer_;
   const ObDASDMLBaseCtDef *das_ctdef_;
@@ -505,9 +498,40 @@ private:
   common::ObNewRow *cur_row_;
   common::ObNewRow *cur_rows_;
   const ObDASDMLBaseCtDef *main_ctdef_;
-  ObSpatIndexRow *spat_rows_;
-  uint32_t spatial_row_idx_;
+  ObDomainDMLIterator *domain_iter_;
   int64_t batch_size_;
+};
+
+class ObDASMLogDMLIterator : public ObNewRowIterator
+{
+public:
+  ObDASMLogDMLIterator(
+      const ObTabletID &tablet_id,
+      const storage::ObDMLBaseParam &dml_param,
+      ObNewRowIterator *iter,
+      ObDASOpType op_type)
+    : tablet_id_(tablet_id),
+      dml_param_(dml_param),
+      row_iter_(iter),
+      op_type_(op_type),
+      is_old_row_(false)
+  {
+    if ((DAS_OP_TABLE_UPDATE == op_type_)
+        || (DAS_OP_TABLE_INSERT == op_type_)) {
+      is_old_row_ = true;
+    }
+  }
+  virtual ~ObDASMLogDMLIterator() {}
+  virtual int get_next_row(ObNewRow *&row) override;
+  virtual int get_next_row() override { return OB_NOT_IMPLEMENT; }
+  virtual void reset() override {}
+
+private:
+  const ObTabletID &tablet_id_;
+  const storage::ObDMLBaseParam &dml_param_;
+  ObNewRowIterator *row_iter_;
+  ObDASOpType op_type_;
+  bool is_old_row_;
 };
 }  // namespace sql
 }  // namespace oceanbase

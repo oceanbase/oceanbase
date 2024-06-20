@@ -8,6 +8,7 @@ connection default;
 ### test kv_attributes syntax
 --disable_warnings
 drop table if exists test_kv_attr;
+--enable_warnings
 --error 1235
 CREATE TABLE test_kv_attr(
     K varbinary(1024) NOT NULL,
@@ -17,7 +18,7 @@ CREATE TABLE test_kv_attr(
     PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"HColumnDescriptor": {"TimeToLive": 5, "MaxVersions": 2}}' partition by key(K) partitions 3;
 
---error 1210
+--error 1235
 CREATE TABLE test_kv_attr(
     K varbinary(1024) NOT NULL,
     Q varbinary(256)  NOT NULL,
@@ -44,7 +45,7 @@ CREATE TABLE test_kv_attr(
     PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"Hbase": {"TimeToLive": 5, "MaxVersions": 2, "MinVersions": 1}}' partition by key(K) partitions 3;
 
---error 1210
+--error 10508
 CREATE TABLE test_kv_attr(
     K varbinary(1024) NOT NULL,
     Q varbinary(256)  NOT NULL,
@@ -53,7 +54,7 @@ CREATE TABLE test_kv_attr(
     PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"Hbase": {"TimeToLive": 1, "MaxVersions": 0}}' partition by key(K) partitions 3;
 
---error 1210
+--error 10507
 CREATE TABLE test_kv_attr(
     K varbinary(1024) NOT NULL,
     Q varbinary(256)  NOT NULL,
@@ -71,7 +72,7 @@ CREATE TABLE test_kv_attr(
     PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"TimeSeries": {}}' partition by key(K) partitions 3;
 
---error 1210
+--error 1235
 CREATE TABLE test_kv_attr(
     K varbinary(1024) NOT NULL,
     Q varbinary(256)  NOT NULL,
@@ -90,15 +91,15 @@ CREATE TABLE test_kv_attr(
 
 --error 1235
 alter table test_kv_attr kv_attributes '{"HColumnDescriptor": {"TimeToLive": 5, "MaxVersions": 2}}';
---error 1210
+--error 1235
 alter table test_kv_attr kv_attributes '{}';
 --error 1235
 alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 5, "MaxVersions": 2, "MinVersions": 1}}';
 --error 1235
 alter table test_kv_attr kv_attributes = '{"Hbase": {"MaxVersion": 2}}';
---error 1210
+--error 10508
 alter table test_kv_attr kv_attributes = '{"Hbase": {"TimeToLive": 1, "MaxVersions": 0}}';
---error 1210
+--error 10507
 alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 0, "MaxVersions": 1}}';
 
 alter table test_kv_attr kv_attributes ='{"Hbase": {"MaxVersions": 4}}';
@@ -110,6 +111,9 @@ alter table test_kv_attr kv_attributes ='{"Hbase": {}}';
 ### test ttl syntax
 --disable_warnings
 drop table if exists test_ttl;
+--enable_warnings
+
+# test show create table
 create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 hour);
 show create table test_ttl;
 drop table test_ttl;
@@ -118,14 +122,16 @@ show create table test_ttl;
 drop table test_ttl;
 
 ## not supported data type
---error 1235
+--error 10503
 create table test_ttl(a int primary key, b varchar(1024), c varchar(1024)) TTL(c + INTERVAL 1 hour);
---error 1235
+--error 10503
 create table test_ttl(a int primary key, b varchar(1024), c date) TTL(c + INTERVAL 1 hour);
---error 1235
+--error 10503
 create table test_ttl(a int primary key, b varchar(1024), c time) TTL(c + INTERVAL 1 hour);
---error 1235
+--error 1064
 create table test_ttl(a int primary key, b varchar(1024)) TTL(now() + INTERVAL 1 hour);
+--error 10502
+create table test_ttl(a int primary key, b varchar(1024)) TTL(c + INTERVAL 1 hour);
 
 ## alter table ttl
 create table test_ttl(a int primary key, b varchar(1024), c timestamp, d datetime) TTL(c + INTERVAL 0 hour);
@@ -156,12 +162,43 @@ alter table test_ttl change column c c2 datetime;
 alter table test_ttl modify column c bigint;
 --error 1235
 alter table test_ttl modify column c datetime;
---error 1235
+--error 10502
+alter table test_ttl ttl(d + INTERVAL 1 minute);
+--error 10502
 alter table test_ttl add column d datetime, ttl(d + INTERVAL 1 minute);
 
+# remove ttl definition and add column
 alter table test_ttl remove ttl;
 show create table test_ttl;
 alter table test_ttl drop column c;
+drop table test_ttl;
+
+# test ttl definition parse
+--error 1064
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL -1 year);
+--error 1064
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c +- INTERVAL -1 year);
+--error 1064
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVA L -1 year);
+--error 1064
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL('c' + INTERVAL 1 year);
+--error 1064
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL '1' year);
+
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(         c       + INTERVAL 1 year  );
+drop table test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(         `c`       + INTERVAL 1 year  );
+alter table test_ttl TTL( c + INTERVAL 1 month  );
+alter table test_ttl TTL( c + INTERVAL 1 day  );
+alter table test_ttl TTL( c + INTERVAL 1 hour  );
+alter table test_ttl TTL( `c` + INTERVAL 1 minute  );
+alter table test_ttl TTL( `c` + INTERVAL 1 second  );
+
+# test change ttl column
+alter table test_ttl add column d datetime;
+alter table test_ttl TTL( `d` + INTERVAL 1 second  );
+show create table test_ttl;
+
 
 drop table test_kv_attr;
 drop table test_ttl;

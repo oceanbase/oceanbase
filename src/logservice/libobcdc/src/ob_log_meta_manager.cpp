@@ -248,8 +248,10 @@ int ObLogMetaManager::get_table_meta(
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("expect valid schema_getter", KR(ret));
         } else {
+          ObTimeGuard time_guard("get_table_meta", 2 * 1000 * 1000);
           RETRY_FUNC(stop_flag, *schema_getter, get_schema_guard_and_full_table_schema, tenant_id, table_id, global_schema_version, GET_SCHEMA_TIMEOUT,
-                  schema_mgr, table_schema);
+              schema_mgr, table_schema);
+          time_guard.click("get_full_table_schema");
 
           if (OB_FAIL(ret)) {
             // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
@@ -1093,6 +1095,7 @@ int ObLogMetaManager::check_column_(
   const uint64_t udt_set_id = column_schema.get_udt_set_id();
   const uint64_t sub_data_type = column_schema.get_sub_data_type();
   const bool is_heap_table = table_schema.is_heap_table();
+  const bool is_rowkey_column = column_schema.is_rowkey_column();
   const bool is_invisible_column = column_schema.is_invisible_column();
   const bool is_hidden_column = column_schema.is_hidden();
   const bool enable_output_hidden_primary_key = (0 != TCONF.enable_output_hidden_primary_key);
@@ -1101,8 +1104,13 @@ int ObLogMetaManager::check_column_(
   bool is_non_ob_user_column = (column_id < OB_APP_MIN_COLUMN_ID) || (column_id >= OB_MIN_SHADOW_COLUMN_ID);
   is_heap_table_pk_increment_column = is_heap_table  && (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id);
 
-  if (is_non_ob_user_column) {
-    is_user_column = is_heap_table_pk_increment_column && enable_output_hidden_primary_key;
+  if (is_rowkey_column) {
+    // user specified rowkey column should output;
+    // invisible rowkey column should output;
+    // hidden_pk of heap_table will output if user config enable_output_hidden_primary_key=1
+    if (is_non_ob_user_column) {
+      is_user_column = is_heap_table_pk_increment_column && enable_output_hidden_primary_key;
+    }
   } else if (is_hidden_column) {
     is_user_column = false;
   } else if (column_schema.is_invisible_column() && !enable_output_invisible_column){
@@ -1118,6 +1126,7 @@ int ObLogMetaManager::check_column_(
       K(sub_data_type),
       "column_name", column_schema.get_column_name(),
       K(is_user_column),
+      K(is_rowkey_column),
       K(is_heap_table_pk_increment_column),
       K(enable_output_hidden_primary_key),
       "is_invisible_column", column_schema.is_invisible_column(),
@@ -1187,11 +1196,11 @@ int ObLogMetaManager::set_column_meta_(
         col_meta->setDependent(true);
       }
       col_meta->setName(column_schema.get_column_name());
-      col_meta->setType(static_cast<int>(mysql_type));
       col_meta->setSigned(signed_flag);
       col_meta->setIsPK(column_schema.is_original_rowkey_column());
       col_meta->setNotNull(! column_schema.is_nullable());
 
+      set_column_type_(*col_meta, mysql_type);
       set_column_encoding_(col_type, column_schema.get_charset_type(), col_meta);
 
       if (column_schema.is_xmltype()) {
@@ -1233,6 +1242,20 @@ int ObLogMetaManager::set_column_meta_(
   }
 
   return ret;
+}
+
+// convert column type for drcmsg and oblogmsg
+void ObLogMetaManager::set_column_type_(IColMeta &col_meta, const obmysql::EMySQLFieldType &col_type)
+{
+  if (EMySQLFieldType::MYSQL_TYPE_ORA_BINARY_FLOAT == col_type) {
+    col_meta.setType(drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_FLOAT);
+  } else if (EMySQLFieldType::MYSQL_TYPE_ORA_BINARY_DOUBLE == col_type) {
+    col_meta.setType(drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_DOUBLE);
+  } else if (EMySQLFieldType::MYSQL_TYPE_ORA_XML == col_type) {
+    col_meta.setType(drcmsg_field_types::DRCMSG_TYPE_ORA_XML);
+  } else {
+    col_meta.setType(static_cast<int>(col_type));
+  }
 }
 
 template<class TABLE_SCHEMA>
@@ -1439,7 +1462,7 @@ int ObLogMetaManager::fill_primary_key_info_(
         "column_name", column_table_schema->get_column_name());
   } else if (valid_pk_num > 0 && OB_FAIL(pks.append(","))) {
     LOG_ERROR("append pks delimeter failed", KR(ret), K(valid_pk_num), K(pks));
-  } else if (pks.append(column_table_schema->get_column_name())) {
+  } else if (OB_FAIL(pks.append(column_table_schema->get_column_name()))) {
     LOG_ERROR("append column_name into pks failed", KR(ret), K(pks), KPC(column_table_schema));
   } else {
     if (OB_SUCC(ret)) {
@@ -1593,7 +1616,7 @@ int ObLogMetaManager::build_unique_keys_with_index_column_(
     const auto *column_schema = table_schema->get_column_schema(index_column_id);
 
     if (OB_ISNULL(column_schema)) {
-      if (index_column_id > OB_MIN_SHADOW_COLUMN_ID) {
+      if (is_shadow_column(index_column_id)) {
         LOG_DEBUG("ignore shadow column", K(index_column_id),
             "table_name", table_schema->get_table_name(),
             "table_id", table_schema->get_table_id(),
@@ -1709,9 +1732,12 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
     int64_t column_count = tb_schema_info.get_usr_column_count();
     LOG_TRACE("set_unique_keys_ begin", KPC(table_schema), K(index_table_count), K(tb_schema_info));
     if (column_count < 0) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("column_num is invalid", "table_name", table_schema->get_table_name(),
           "table_id", table_schema->get_table_id(), K(column_count));
-      ret = OB_ERR_UNEXPECTED;
+    } else if (0 == column_count) {
+      LOG_INFO("ignore table without usr_column", "table_id", table_schema->get_table_id(),
+          "table_name", table_schema->get_table_name(), K(column_count) );
     } else {
       if (index_table_count > 0) {
         int64_t is_uk_column_array_size = column_count * sizeof(bool);
@@ -1758,11 +1784,11 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
                   const auto *column_schema = table_schema->get_column_schema(column_id);
 
                   if (OB_ISNULL(column_schema)) {
+                    ret = OB_ERR_UNEXPECTED;
                     LOG_ERROR("get column schema fail", K(column_id), K(index), K(column_count),
                         "table_id", table_schema->get_table_id(),
                         "table_name", table_schema->get_table_name(),
                         "table_schame_version", table_schema->get_schema_version());
-                    ret = OB_ERR_UNEXPECTED;
                   } else {
                     if (is_first_uk_column) {
                       is_first_uk_column = false;

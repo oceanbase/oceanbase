@@ -109,17 +109,6 @@ int PalfHandle::get_arbitration_member(common::ObMember &arb_member) const
 }
 #endif
 
-int PalfHandle::set_region(const common::ObRegion &region)
-{
-  CHECK_VALID;
-  return palf_handle_impl_->set_region(region);
-}
-
-int PalfHandle::set_paxos_member_region_map(const common::ObArrayHashMap<common::ObAddr, common::ObRegion> &region_map)
-{
-  CHECK_VALID;
-  return palf_handle_impl_->set_paxos_member_region_map(region_map);
-}
 int PalfHandle::append(const PalfAppendOptions &opts,
                        const void *buffer,
                        const int64_t nbytes,
@@ -336,6 +325,12 @@ int PalfHandle::get_election_leader(common::ObAddr &addr) const
 {
   CHECK_VALID;
   return palf_handle_impl_->get_election_leader(addr);
+}
+
+int PalfHandle::get_parent(common::ObAddr &parent) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_parent(parent);
 }
 
 int PalfHandle::change_replica_num(const common::ObMemberList &member_list,
@@ -703,10 +698,39 @@ int PalfHandle::reset_election_priority()
   return ret;
 }
 
-int PalfHandle::revoke_leader(const int64_t proposal_id)
+int PalfHandle::advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                              const int64_t downgrade_priority_time_us,
+                                                              const char *reason)
 {
   CHECK_VALID;
-  return palf_handle_impl_->revoke_leader(proposal_id);
+  return palf_handle_impl_->advance_election_epoch_and_downgrade_priority(proposal_id,
+                                                                          downgrade_priority_time_us,
+                                                                          reason);
+}
+
+int PalfHandle::set_locality_cb(PalfLocalityInfoCb *locality_cb)
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  if (OB_ISNULL(locality_cb)) {
+    PALF_LOG(INFO, "no need set_locality_cb", KR(ret), KP(locality_cb));
+  } else if (OB_FAIL(palf_handle_impl_->set_locality_cb(locality_cb))) {
+    PALF_LOG(WARN, "set_locality_cb failed", KR(ret));
+  } else {
+  }
+  return ret;
+}
+
+int PalfHandle::reset_locality_cb()
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  if (OB_FAIL(palf_handle_impl_->reset_locality_cb())) {
+    PALF_LOG(WARN, "reset_locality_cb failed", KR(ret));
+  } else {
+    PALF_LOG(INFO, "reset_locality_cb success", KR(ret));
+  }
+  return ret;
 }
 
 int PalfHandle::stat(PalfStat &palf_stat) const
@@ -738,6 +762,15 @@ int PalfHandle::diagnose(PalfDiagnoseInfo &diagnose_info) const
 {
   CHECK_VALID;
   return palf_handle_impl_->diagnose(diagnose_info);
+}
+
+int PalfHandle::raw_read(const palf::LSN &lsn,
+                         void *buffer,
+                         const int64_t nbytes,
+                         int64_t &read_size)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->raw_read(lsn, reinterpret_cast<char*>(buffer), nbytes, read_size);
 }
 
 } // end namespace palf

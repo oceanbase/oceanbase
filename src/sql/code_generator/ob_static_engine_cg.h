@@ -59,6 +59,7 @@ class ObLogUnpivot;
 class ObUnpivotSpec;
 class ObFakeCTETableSpec;
 class ObHashJoinSpec;
+class ObHashJoinVecSpec;
 class ObNestedLoopJoinSpec;
 class ObBasicNestedLoopJoinSpec;
 class ObMergeJoinSpec;
@@ -75,6 +76,7 @@ class ObPxReceiveSpec;
 class ObPxTransmitSpec;
 class ObPxFifoReceiveSpec;
 class ObPxMSReceiveSpec;
+class ObPxMSReceiveVecSpec;
 class ObPxDistTransmitSpec;
 class ObPxDistTransmitOp;
 class ObPxRepartTransmitSpec;
@@ -83,6 +85,7 @@ class ObPxCoordSpec;
 class ObPxFifoCoordSpec;
 class ObPxOrderedCoordSpec;
 class ObPxMSCoordSpec;
+class ObPxMSCoordVecSpec;
 class ObLogSubPlanFilter;
 class ObSubPlanFilterSpec;
 class ObLogSubPlanScan;
@@ -108,8 +111,11 @@ class ObPxMultiPartDeleteSpec;
 class ObPxMultiPartInsertSpec;
 class ObPxMultiPartUpdateSpec;
 class ObTempTableAccessOpSpec;
+class ObTempTableAccessVecOpSpec;
 class ObTempTableInsertOpSpec;
+class ObTempTableInsertVecOpSpec;
 class ObTempTableTransformationOpSpec;
+class ObTempTableTransformationVecOpSpec;
 class ObErrLogSpec;
 class ObSelectIntoSpec;
 class ObFunctionTableSpec;
@@ -123,6 +129,11 @@ class ObDuplicatedKeyChecker;
 struct ObTableScanCtDef;
 struct ObDASScanCtDef;
 struct InsertAllTableInfo;
+class ObHashDistinctVecSpec;
+class ObSortVecSpec;
+class ObLogValuesTableAccess;
+class ObValuesTableAccessSpec;
+
 typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
                           1, common::ModulePageAllocator, true> RowParamMap;
@@ -183,12 +194,12 @@ public:
                                        ObLogicalOperator *op,
                                        bool is_root_job = true);
   inline static void exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
-                                         bool &found);
+                                                 const bool is_column_store_tbl, bool &found);
   inline uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
 
   // detect physical operator type from logic operator.
   static int get_phy_op_type(ObLogicalOperator &op, ObPhyOperatorType &type,
-                             const bool in_root_job);
+                             const bool in_root_job, const bool use_rich_format = false);
   //set is json constraint type is strict or relax
   const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
@@ -256,9 +267,11 @@ private:
   //////////////////////////////////////////////////////////////////////////////////
 
   int generate_spec(ObLogLimit &op, ObLimitSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogLimit &op, ObLimitVecSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogDistinct &op, ObMergeDistinctSpec &spec, const bool in_root_job);
   int generate_spec(ObLogDistinct &op, ObHashDistinctSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogDistinct &op, ObHashDistinctVecSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogSet &op, ObHashUnionSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSet &op, ObHashIntersectSpec &spec, const bool in_root_job);
@@ -275,7 +288,10 @@ private:
 
   int generate_spec(ObLogMaterial &op, ObMaterialSpec &spec, const bool in_root_job);
 
+  int generate_spec(ObLogMaterial &op, ObMaterialVecSpec &spec, const bool in_root_job);
+
   int generate_spec(ObLogSort &op, ObSortSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogSort &op, ObSortVecSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogCount &op, ObCountSpec &spec, const bool in_root_job);
 
@@ -299,8 +315,10 @@ private:
   int set_3stage_info(ObLogGroupBy &op, ObGroupBySpec &spec);
   int set_rollup_adaptive_info(ObLogGroupBy &op, ObMergeGroupBySpec &spec);
   int generate_spec(ObLogGroupBy &op, ObScalarAggregateSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogGroupBy &op, ObScalarAggregateVecSpec &spec, const bool in_root_job);
   int generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec, const bool in_root_job);
   int generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec, const bool in_root_job);
+  int generate_spec(ObLogGroupBy &op, ObHashGroupByVecSpec &spec, const bool in_root_job);
   int generate_dist_aggr_distinct_columns(ObLogGroupBy &op, ObHashGroupBySpec &spec);
   int generate_dist_aggr_group(ObLogGroupBy &op, ObGroupBySpec &spec);
 
@@ -324,6 +342,8 @@ private:
   int generate_cte_table_spec(ObLogTableScan &op, ObFakeCTETableSpec &spec);
 
   int generate_spec(ObLogJoin &op, ObHashJoinSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogJoin &op, ObHashJoinVecSpec &spec, const bool in_root_job);
+
   // generate nested loop join
   int generate_spec(ObLogJoin &op, ObNestedLoopJoinSpec &spec, const bool in_root_job);
   // generate merge join
@@ -335,6 +355,7 @@ private:
   int set_partition_range_info(ObLogTableScan &op, ObTableScanSpec &spec);
 
   int generate_spec(ObLogExprValues &op, ObExprValuesSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogValuesTableAccess &op, ObValuesTableAccessSpec &spec, const bool in_root_job);
 
   int generate_merge_with_das(ObLogMerge &op, ObTableMergeSpec &spec, const bool in_root_job);
 
@@ -372,12 +393,14 @@ private:
                            ObIArray<int64_t> &dml_tsc_op_ids, ObIArray<int64_t> &dml_tsc_ref_ids);
   int generate_spec(ObLogExchange &op, ObPxFifoReceiveSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxMSReceiveSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogExchange &op, ObPxMSReceiveVecSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxDistTransmitSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxRepartTransmitSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxReduceTransmitSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxFifoCoordSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxOrderedCoordSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxMSCoordSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogExchange &op, ObPxMSCoordVecSpec &spec, const bool in_root_job);
   int check_rollup_distributor(ObPxTransmitSpec *spec);
 
   // for remote execute
@@ -405,7 +428,12 @@ private:
 
   // online optimizer stats gathering
   int generate_spec(ObLogOptimizerStatsGathering &op, ObOptimizerStatsGatheringSpec &spec, const bool in_root_job);
+
+  int generate_spec(ObLogTempTableInsert &op, ObTempTableInsertVecOpSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogTempTableAccess &op, ObTempTableAccessVecOpSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogTempTableTransformation &op, ObTempTableTransformationVecOpSpec &spec, const bool in_root_job);
 private:
+  int disable_use_rich_format(const ObLogicalOperator &op, ObOpSpec &spec);
   int add_update_set(ObSubPlanFilterSpec &spec);
   int generate_basic_transmit_spec(
       ObLogExchange &op, ObPxTransmitSpec &spec, const bool in_root_job);
@@ -423,6 +451,11 @@ private:
   int fill_sort_funcs(
     const ObSortCollations &collations,
     ObSortFuncs &sort_funcs,
+    const ObIArray<ObExpr*> &sort_exprs);
+
+  int fill_compress_type(ObLogSort &op, ObCompressorType &compr_type);
+  int check_not_support_cmp_type(
+    const ObSortCollations &collations,
     const ObIArray<ObExpr*> &sort_exprs);
   int recursive_get_column_expr(const ObColumnRefRawExpr *&column, const TableItem &table_item);
   int fill_aggr_infos(ObLogGroupBy &op,
@@ -494,20 +527,17 @@ private:
 
   int generate_insert_all_table_info(const ObInsertAllTableInfo &insert_tbl_info,
                                      InsertAllTableInfo *&tbl_info);
-  static int find_rownum_expr(bool &support, ObLogicalOperator *op);
-  static int find_rownum_expr_recursively(bool &support,
-                                           const ObRawExpr *raw_expr);
-  inline static int find_rownum_expr(bool &support,
-                              const common::ObIArray<ObRawExpr *> &exprs);
   int map_value_param_index(const ObInsertStmt *insert_stmt, RowParamMap &row_params_map);
   int add_output_datum_check_flag(ObOpSpec &spec);
   int generate_calc_part_id_expr(const ObRawExpr &src, const ObDASTableLocMeta *loc_meta, ObExpr *&dst);
   int check_only_one_unique_key(const ObLogPlan &log_plan, const ObTableSchema* table_schema, bool& only_one_unique_key);
 
-  bool is_simple_aggr_expr(const ObItemType &expr_type) { return T_FUN_COUNT == expr_type
-                                                                 || T_FUN_SUM == expr_type
-                                                                 || T_FUN_MAX == expr_type
-                                                                 || T_FUN_MIN == expr_type; }
+  bool is_simple_aggr_expr(const ObItemType &expr_type,
+                           const bool enable_rich_format) { return T_FUN_COUNT == expr_type
+                                                                   || T_FUN_SUM == expr_type
+                                                                   || T_FUN_MAX == expr_type
+                                                                   || T_FUN_MIN == expr_type
+                                                                   || (enable_rich_format && T_FUN_COUNT_SUM == expr_type); }
   int check_fk_nested_dup_del(const uint64_t table_id,
                               const uint64_t root_table_id,
                               DASTableIdList &parent_tables,
@@ -520,6 +550,21 @@ private:
                            const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters);
 
   int check_window_functions_order(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs);
+
+  int prepare_runtime_filter_cmp_info(ObLogJoinFilter &join_filter_create, ObJoinFilterSpec &spec);
+  int append_child_output_no_dup(const bool is_store_sortkey_separately,
+                                 const ObIArray<ObExpr *> &child_output_exprs,
+                                 ObIArray<ObExpr *> &sk_exprs, ObIArray<ObExpr *> &addon_exprs);
+  int generate_encode_sort_exprs(const bool is_store_sortkey_separately, ObLogSort &op,
+                                 ObSortVecSpec &spec, ObIArray<OrderItem> &sk_keys,
+                                 ObIArray<OrderItem> &addon_keys);
+
+  int generate_sort_exprs(const bool is_store_sortkey_separately, ObLogSort &op, ObSortVecSpec &spec,
+                          ObIArray<OrderItem> &sk_keys);
+
+  int extract_all_mview_ids(const ObIArray<ObRawExpr *> &exprs);
+  int extract_all_mview_ids(const ObRawExpr *expr);
+  int check_is_insert_overwrite_stmt(const ObLogPlan *plan, bool &is_insert_overwrite);
 private:
   struct BatchExecParamCache {
     BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)
@@ -551,11 +596,12 @@ private:
   // all self_produced exprs of current operator
   ObSEArray<ObRawExpr *, 8> cur_op_self_produced_exprs_;
   //仅供递归cte使用，因为oracle的cte是不允许嵌套的，所以可以采用这种方式
-  common::ObSEArray<uint64_t, 10> fake_cte_tables_;
+  common::ObSEArray<ObOpSpec *, 10> fake_cte_specs_;
   ObDmlCgService dml_cg_service_;
   ObTscCgService tsc_cg_service_;
   uint64_t cur_cluster_version_;
   common::ObSEArray<BatchExecParamCache, 8> batch_exec_param_caches_;
+  common::ObSEArray<uint64_t, 4> mview_ids_;
 
 };
 

@@ -73,7 +73,7 @@ TEST(TestTimer, task_cancel)
   timer.cancel(task);
   ASSERT_FALSE(timer.task_exist(task));
 
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 1000, false));
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 100000, false));
   ASSERT_TRUE(timer.task_exist(task));
   ::usleep(1000000);
   ASSERT_FALSE(timer.task_exist(task));
@@ -144,7 +144,8 @@ TEST(TestTimer, task_cancel_wait)
     task.exec_time_ = 1000000;
     int64_t cur_time = ObTimeUtility::current_time();
     ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, true));
-    usleep(10000);
+    // it must sleep for enough time to ensure that the task has started running
+    usleep(50000);
     ASSERT_EQ(OB_SUCCESS, timer.cancel_task(task));
     // repeat cancel
     ASSERT_EQ(OB_SUCCESS, timer.cancel_task(task));

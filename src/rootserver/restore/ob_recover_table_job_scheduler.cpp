@@ -549,7 +549,7 @@ int ObRecoverTableJobScheduler::restore_aux_tenant_(share::ObRecoverTableJob &jo
   bool aux_tenant_restore_finish = true;
   int tmp_ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_RESTORE_AUX_TENANT);
-  if (OB_FAIL(restore_helper.init(OB_SYS_TENANT_ID))) {
+  if (OB_FAIL(restore_helper.init(OB_SYS_TENANT_ID, share::OBCG_STORAGE /*group_id*/))) {
     LOG_WARN("failed to init retore helper", K(ret));
   } else if (OB_FAIL(restore_helper.get_restore_job_history(
       *sql_proxy_, job.get_initiator_job_id(), job.get_initiator_tenant_id(), restore_history_info))) {
@@ -594,7 +594,7 @@ int ObRecoverTableJobScheduler::active_aux_tenant_(share::ObRecoverTableJob &job
   int tmp_ret = OB_SUCCESS;
   ObRestorePersistHelper restore_helper;
   ObHisRestoreJobPersistInfo restore_history_info;
-  if (OB_FAIL(restore_helper.init(OB_SYS_TENANT_ID))) {
+  if (OB_FAIL(restore_helper.init(OB_SYS_TENANT_ID, share::OBCG_STORAGE /*group_id*/))) {
     LOG_WARN("failed to init retore helper", K(ret));
   } else if (OB_FAIL(restore_helper.get_restore_job_history(
       *sql_proxy_, job.get_initiator_job_id(), job.get_initiator_tenant_id(), restore_history_info))) {
@@ -669,8 +669,14 @@ int ObRecoverTableJobScheduler::check_aux_tenant_(share::ObRecoverTableJob &job,
   schema::ObSchemaGetterGuard aux_tenant_guard;
   schema::ObSchemaGetterGuard recover_tenant_guard;
   bool is_compatible = true;
-  if (OB_FAIL(schema_service_->get_tenant_schema_guard(aux_tenant_id, aux_tenant_guard))) {
-    if (OB_TENANT_NOT_EXIST) {
+  if (!schema_service_->is_tenant_refreshed(aux_tenant_id)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("wait schema refreshed", K(ret), K(aux_tenant_id));
+  } else if (!schema_service_->is_tenant_refreshed(job.get_tenant_id())) {
+    ret = OB_EAGAIN;
+    LOG_WARN("wait schema refreshed", K(ret), K(job));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(aux_tenant_id, aux_tenant_guard))) {
+    if (OB_TENANT_NOT_EXIST == ret) {
       ObImportResult::Comment comment;
       if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
           "aux tenant %.*s has been dropped", job.get_aux_tenant_name().length(), job.get_aux_tenant_name().ptr()))) {
@@ -746,9 +752,9 @@ int ObRecoverTableJobScheduler::check_case_sensitive_compatibility(
   is_compatible = false;
   const uint64_t aux_tenant_id = aux_tenant_guard.get_tenant_id();
   const uint64_t recover_tenant_id = recover_tenant_guard.get_tenant_id();
-  if (OB_FAIL(aux_tenant_guard.get_tenant_name_case_mode(aux_tenant_id, aux_mode))) {
+  if (OB_FAIL(ObImportTableUtil::get_tenant_name_case_mode(aux_tenant_id, aux_mode))) {
     LOG_WARN("failed to get tenant name case mode", K(ret), K(aux_tenant_id));
-  } else if (OB_FAIL(recover_tenant_guard.get_tenant_name_case_mode(recover_tenant_id, recover_mode))) {
+  } else if (OB_FAIL(ObImportTableUtil::get_tenant_name_case_mode(recover_tenant_id, recover_mode))) {
     LOG_WARN("failed to get tenant name case mode", K(ret), K(recover_tenant_id));
   } else {
     is_compatible = aux_mode == recover_mode;

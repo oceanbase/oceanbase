@@ -14,6 +14,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_array.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 
@@ -56,7 +57,10 @@ int ObExprJsonArray::calc_result_typeN(ObExprResType& type,
       type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
       for (int64_t i = 0; i < param_num; i++) {
         if (ob_is_string_type(types_stack[i].get_type())) {
-          if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
+          if (types_stack[i].get_type() == ObVarcharType && types_stack[i].get_collation_type() == CS_TYPE_BINARY) {
+            types_stack[i].set_calc_type(ObHexStringType);
+            types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+          } else if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
             types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
         } else if (types_stack[i].get_type() == ObJsonType) {
@@ -211,7 +215,7 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
       ret = OB_ERR_JSON_OUT_OF_DEPTH;
       LOG_WARN("current json over depth", K(ret), K(j_arr.depth()));
     } else if (dst_type == ObJsonType) {
-      if (OB_FAIL(j_arr.get_raw_binary(res_string, &temp_allocator))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(&j_arr, res_string, &temp_allocator))) {
         LOG_WARN("failed: get json raw binary", K(ret));
       }
     } else {
@@ -270,7 +274,6 @@ int ObExprJsonArray::eval_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   for (uint32_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
     ObIJsonBase *j_val;
     if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, i, j_val))) {
-      ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
       LOG_WARN("failed: get_json_val failed", K(ret));
     } else if (OB_FAIL(j_base->array_append(j_val))) {
       LOG_WARN("failed: json array append json value", K(ret));
@@ -282,7 +285,7 @@ int ObExprJsonArray::eval_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     if (ObJsonParser::is_json_doc_over_depth(j_arr.depth())) {
       ret = OB_ERR_JSON_OUT_OF_DEPTH;
       LOG_WARN("current json over depth", K(ret), K(j_arr.depth()));
-    } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
+    } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("failed: json get binary", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
       LOG_WARN("fail to pack json result", K(ret));

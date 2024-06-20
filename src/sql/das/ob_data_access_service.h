@@ -63,6 +63,8 @@ private:
   int do_async_remote_das_task(ObDASRef &das_ref, ObDasAggregatedTasks &aggregated_tasks, ObDASTaskArg &task_arg);
   int do_sync_remote_das_task(ObDASRef &das_ref, ObDasAggregatedTasks &aggregated_tasks, ObDASTaskArg &task_arg);
   int collect_das_task_info(ObDASTaskArg &task_arg, ObDASRemoteInfo &remote_info);
+  int collect_das_task_attach_info(ObDASRemoteInfo &remote_info,
+                                   ObDASBaseRtDef *attach_rtdef);
   void calc_das_task_parallelism(const ObDASRef &das_ref, const ObDasAggregatedTasks &task_ops, int &target_parallelism);
 private:
   obrpc::ObDASRpcProxy das_rpc_proxy_;

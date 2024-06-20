@@ -21,17 +21,7 @@ def do_upgrade(conn, cur, timeout, user, pwd):
   else:
     run_upgrade_job(conn, cur, "UPGRADE_VIRTUAL_SCHEMA", timeout)
 
-  # just to make __all_virtual_upgrade_inspection avaliable
-  timeout_ts = (timeout if timeout > 0 else 600) * 1000 * 1000
-  sql = "set @@session.ob_query_timeout = {0}".format(timeout_ts)
-  logging.info(sql)
-  cur.execute(sql)
-  sql = "alter system run job 'root_inspection'"
-  logging.info(sql)
-  cur.execute(sql)
-  sql = "set @@session.ob_query_timeout = 10000000"
-  logging.info(sql)
-  cur.execute(sql)
+  run_root_inspection(cur, timeout)
 ####========******####======== actions begin ========####******========####
   upgrade_syslog_level(conn, cur)
   return
@@ -47,7 +37,6 @@ def upgrade_syslog_level(conn, cur):
     info_cnt = result[0][0]
     if info_cnt > 0:
       actions.set_parameter(cur, "syslog_level", "WDIAG")
-
   except Exception, e:
     logging.warn("upgrade syslog level failed!")
     raise e
@@ -61,6 +50,18 @@ def query(cur, sql):
 
 def get_tenant_ids(cur):
   return [_[0] for _ in query(cur, 'select tenant_id from oceanbase.__all_tenant')]
+
+def run_root_inspection(cur, timeout):
+
+  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 600)
+
+  actions.set_session_timeout(cur, query_timeout)
+
+  sql = "alter system run job 'root_inspection'"
+  logging.info(sql)
+  cur.execute(sql)
+
+  actions.set_session_timeout(cur, 10)
 
 def upgrade_across_version(cur):
   current_data_version = actions.get_current_data_version()
@@ -167,7 +168,9 @@ def check_can_run_upgrade_job(cur, job_name):
 
 def check_upgrade_job_result(cur, job_name, timeout, max_used_job_id):
   try:
-    times = (timeout if timeout > 0 else 3600) / 10
+    wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 100, 3600)
+
+    times = wait_timeout / 10
     while (times >= 0):
       sql = """select job_status, rs_svr_ip, rs_svr_port, gmt_create from oceanbase.__all_rootservice_job
                where job_type = '{0}' and job_id > {1} order by job_id desc limit 1

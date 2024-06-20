@@ -62,7 +62,9 @@ ObLogFetcher::ObLogFetcher() :
     stop_flag_(true),
     paused_(false),
     pause_time_(OB_INVALID_TIMESTAMP),
-    resume_time_(OB_INVALID_TIMESTAMP)
+    resume_time_(OB_INVALID_TIMESTAMP),
+    decompression_blk_mgr_(DECOMPRESSION_MEM_LIMIT_THRESHOLD),
+    decompression_alloc_(ObMemAttr(OB_SERVER_TENANT_ID, "decompress_buf"), common::OB_MALLOC_BIG_BLOCK_SIZE, decompression_blk_mgr_)
 {
 }
 
@@ -71,6 +73,10 @@ ObLogFetcher::~ObLogFetcher()
   destroy();
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(LOG_FETCHER_LOG_EXT_HANDLER_INIT_FAIL);
+ERRSIM_POINT_DEF(LOG_FETCHER_STREAM_WORKER_INIT_FAIL);
+#endif
 int ObLogFetcher::init(
     const LogFetcherUser &log_fetcher_user,
     const int64_t cluster_id,
@@ -99,6 +105,8 @@ int ObLogFetcher::init(
   } else {
     cfg_ = &cfg;
     // set self_tenant_id before suggest_cached_rpc_res_count
+    log_fetcher_user_ = log_fetcher_user;
+    fetching_mode_ = fetching_mode;
     self_tenant_id_ = self_tenant_id;
     // Before the LogFetcher module is initialized, the following configuration items need to be loaded
     configure(cfg);
@@ -110,7 +118,7 @@ int ObLogFetcher::init(
     }
     const common::ObRegion region(cfg.region.str());
 
-    if (is_integrated_fetching_mode(fetching_mode) && OB_FAIL(log_route_service_.init(
+    if (is_integrated_fetching_mode(fetching_mode_) && OB_FAIL(log_route_service_.init(
         proxy,
         region,
         cluster_id,
@@ -126,13 +134,18 @@ int ObLogFetcher::init(
         cfg.blacklist_history_overdue_time_min,
         cfg.blacklist_history_clear_interval_min,
         true/*is_tenant_mode*/,
-        source_tenant_id))) {
+        source_tenant_id,
+        self_tenant_id))) {
       LOG_ERROR("ObLogRouterService init failer", KR(ret), K(region), K(cluster_id), K(source_tenant_id));
     } else if (OB_FAIL(progress_controller_.init(cfg.ls_count_upper_limit))) {
       LOG_ERROR("init progress controller fail", KR(ret));
     } else if (OB_FAIL(large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024))) {
       LOG_ERROR("init large buffer pool failed", KR(ret));
-    } else if (is_direct_fetching_mode(fetching_mode) && OB_FAIL(log_ext_handler_.init())) {
+#ifdef ERRSIM
+    } else if (is_direct_fetching_mode(fetching_mode_) && OB_FAIL(LOG_FETCHER_LOG_EXT_HANDLER_INIT_FAIL)) {
+      LOG_ERROR("ERRSIM: LOG_FETCHER_LOG_EXT_HANDLER_INIT_FAIL", KR(ret));
+#endif
+    } else if (is_direct_fetching_mode(fetching_mode_) && OB_FAIL(log_ext_handler_.init())) {
       LOG_ERROR("init failed", KR(ret));
     } else if (OB_FAIL(ls_fetch_mgr_.init(
             progress_controller_,
@@ -144,16 +157,16 @@ int ObLogFetcher::init(
       LOG_ERROR("init_self_addr_ fail", KR(ret));
     } else if (OB_FAIL(rpc_.init(cluster_id, self_tenant_id, cfg.io_thread_num, cfg))) {
       LOG_ERROR("init rpc handler fail", KR(ret));
-    } else if (is_cdc(log_fetcher_user) && OB_FAIL(start_lsn_locator_.init(
+    } else if (is_cdc(log_fetcher_user_) && OB_FAIL(start_lsn_locator_.init(
             cfg.start_lsn_locator_thread_num,
             cfg.start_lsn_locator_locate_count,
-            fetching_mode,
+            fetching_mode_,
             archive_dest,
             cfg,
             rpc_, *err_handler))) {
       LOG_ERROR("init start log id locator fail", KR(ret));
     } else if (OB_FAIL(idle_pool_.init(
-            log_fetcher_user,
+            log_fetcher_user_,
             cfg.idle_pool_thread_num,
             cfg,
             static_cast<void *>(this),
@@ -166,6 +179,10 @@ int ObLogFetcher::init(
             ls_fetch_mgr_,
             *err_handler))) {
       LOG_ERROR("init dead pool fail", KR(ret));
+#ifdef ERRSIM
+    } else if (OB_FAIL(LOG_FETCHER_STREAM_WORKER_INIT_FAIL)) {
+      LOG_ERROR("ERRSIM: LOG_FETCHER_STREAM_WORKER_INIT_FAIL");
+#endif
     } else if (OB_FAIL(stream_worker_.init(cfg.stream_worker_thread_num,
             cfg.timer_task_count_upper_limit,
             static_cast<void *>(this),
@@ -184,11 +201,9 @@ int ObLogFetcher::init(
             progress_controller_,
             log_handler))) {
     } else {
-      log_fetcher_user_ = log_fetcher_user;
       cluster_id_ = cluster_id;
       source_tenant_id_ = source_tenant_id;
       is_loading_data_dict_baseline_data_ = is_loading_data_dict_baseline_data;
-      fetching_mode_ = fetching_mode;
       archive_dest_ = archive_dest;
 
       paused_ = false;
@@ -289,26 +304,24 @@ int ObLogFetcher::start()
 
 void ObLogFetcher::stop()
 {
-  if (OB_LIKELY(is_inited_)) {
-    stop_flag_ = true;
+  stop_flag_ = true;
 
-    LOG_INFO("LogFetcher stop begin");
-    stream_worker_.stop();
-    dead_pool_.stop();
-    idle_pool_.stop();
-    if (is_cdc(log_fetcher_user_)) {
-      start_lsn_locator_.stop();
-    }
-
-    if (is_integrated_fetching_mode(fetching_mode_)) {
-      log_route_service_.stop();
-    }
-    if (is_direct_fetching_mode(fetching_mode_)) {
-      log_ext_handler_.stop();
-    }
-
-    LOG_INFO("LogFetcher stop success");
+  LOG_INFO("LogFetcher stop begin");
+  stream_worker_.stop();
+  dead_pool_.stop();
+  idle_pool_.stop();
+  if (is_cdc(log_fetcher_user_)) {
+    start_lsn_locator_.stop();
   }
+
+  if (is_integrated_fetching_mode(fetching_mode_)) {
+    log_route_service_.stop();
+  }
+  if (is_direct_fetching_mode(fetching_mode_)) {
+    log_ext_handler_.stop();
+  }
+
+  LOG_INFO("LogFetcher stop success");
 }
 
 void ObLogFetcher::pause()
@@ -440,6 +453,34 @@ int ObLogFetcher::add_ls(
   } else {
     LOG_INFO("LogFetcher add ls succ", K(tls_id), K(is_loading_data_dict_baseline_data_),
         K(start_parameters));
+  }
+
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    logservice::TenantLSID failed_tls_id(source_tenant_id_, ls_id);
+    if (OB_TMP_FAIL(ls_fetch_mgr_.recycle_ls(failed_tls_id))) {
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "failed to recycle ls in failure post process", K(failed_tls_id));
+      } else {
+        LOG_INFO("tls_id is not in ls_fetch_mgr, recycle done", K(failed_tls_id));
+      }
+    }
+
+    if (OB_TMP_FAIL(fs_container_mgr_.remove_fsc(failed_tls_id))) {
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "failed ", K(failed_tls_id));
+      } else {
+        LOG_INFO("tls_id not exist in fs_container_mgr_, remove done", K(failed_tls_id));
+      }
+    }
+
+    if (OB_TMP_FAIL(ls_fetch_mgr_.remove_ls(failed_tls_id))) {
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "failed to remove ls in ls_fetch_mgr ", K(failed_tls_id));
+      } else {
+        LOG_INFO("tls_id not exist in ls_fetch_mgr_, remove done", K(failed_tls_id));
+      }
+    }
   }
 
   return ret;
@@ -858,6 +899,22 @@ void ObLogFetcher::print_fetcher_stat_()
         "global_upper_limit", NTS_TO_STR(global_upper_limit),
         "dml_progress_limit_sec", dml_progress_limit / _SEC_,
         "fetcher_delay", TVAL_TO_STR(fetcher_delay));
+  }
+}
+
+void *ObLogFetcher::alloc_decompression_buf(int64_t size)
+{
+  void *buf = NULL;
+  if (IS_INIT) {
+    buf = decompression_alloc_.alloc(size);
+  }
+  return buf;
+}
+void ObLogFetcher::free_decompression_buf(void *buf)
+{
+  if (NULL != buf) {
+    decompression_alloc_.free(buf);
+    buf = NULL;
   }
 }
 

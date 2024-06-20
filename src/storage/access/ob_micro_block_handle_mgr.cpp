@@ -90,8 +90,8 @@ int ObMicroBlockDataHandle::get_micro_block_data(
     } else {
       try_release_loaded_block();
       if (THIS_WORKER.get_timeout_remain() <= 0) {
-      // already timeout, don't retry
-      LOG_WARN("get data block data already timeout", K(ret), K(THIS_WORKER.get_timeout_remain()));
+        // already timeout, don't retry
+        LOG_INFO("get data block data already timeout", K(ret), K(THIS_WORKER.get_timeout_remain()));
       } else {
         //try sync io
         ObMicroBlockId micro_block_id;

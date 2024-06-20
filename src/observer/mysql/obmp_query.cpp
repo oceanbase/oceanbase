@@ -14,6 +14,7 @@
 
 #include "observer/mysql/obmp_query.h"
 
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/worker.h"
@@ -131,6 +132,7 @@ int ObMPQuery::process()
     ObSQLSessionInfo &session = *sess;
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
+    session.init_use_rich_format();
     int64_t val = 0;
     const bool check_throttle = !is_root_user(sess->get_user_id());
 
@@ -164,6 +166,8 @@ int ObMPQuery::process()
       if (OB_UNLIKELY(!session.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid session", K_(sql), K(ret));
+      } else if (OB_FAIL(process_kill_client_session(session))) {
+        LOG_WARN("client session has been killed", K(ret));
       } else if (OB_UNLIKELY(session.is_zombie())) {
         //session has been killed some moment ago
         ret = OB_ERR_SESSION_INTERRUPTED;
@@ -212,8 +216,6 @@ int ObMPQuery::process()
         retry_ctrl_.set_sys_global_schema_version(sys_version);
         session.partition_hit().reset();
         session.set_pl_can_retry(true);
-        ObLockWaitNode &lock_wait_node  = req_->get_lock_wait_node();
-        lock_wait_node.set_session_info(session.get_sessid());
 
         bool has_more = false;
         bool force_sync_resp = false;
@@ -273,6 +275,7 @@ int ObMPQuery::process()
                      "trans_id", session.get_tx_id(), K(session));
           } else if (queries.count() > 1
             && OB_FAIL(try_batched_multi_stmt_optimization(session,
+                                                          conn,
                                                           queries,
                                                           parse_stat,
                                                           optimization_done,
@@ -321,6 +324,7 @@ int ObMPQuery::process()
                 // 原来的值默认为true，会影响单条sql的二次路由，现在改为用 queries.count() 判断。
                 bool is_part_of_multi = queries.count() > 1 ? true : false;
                 ret = process_single_stmt(ObMultiStmtItem(is_part_of_multi, i, queries.at(i)),
+                                          conn,
                                           session,
                                           has_more,
                                           force_sync_resp,
@@ -345,6 +349,7 @@ int ObMPQuery::process()
             EVENT_INC(SQL_SINGLE_QUERY_COUNT);
             // 处理普通的Single Statement
             ret = process_single_stmt(ObMultiStmtItem(false, 0, sql_),
+                                      conn,
                                       session,
                                       has_more,
                                       force_sync_resp,
@@ -416,6 +421,7 @@ int ObMPQuery::process()
  * for details, please ref to
  */
 int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &session,
+                                                   ObSMConnection *conn,
                                                    common::ObIArray<ObString> &queries,
                                                    const ObMPParseStat &parse_stat,
                                                    bool &optimization_done,
@@ -436,6 +442,7 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
   } else if (!use_plan_cache) {
     // 不打开plan_cache开关，则优化不支持
   } else if (OB_FAIL(process_single_stmt(ObMultiStmtItem(false, 0, sql_, &queries, is_ins_multi_val_opt),
+                                         conn,
                                          session,
                                          has_more,
                                          force_sync_resp,
@@ -459,6 +466,7 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
 }
 
 int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
+                                   ObSMConnection *conn,
                                    ObSQLSessionInfo &session,
                                    bool has_more_result,
                                    bool force_sync_resp,
@@ -469,7 +477,6 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   FLTSpanGuard(mpquery_single_stmt);
   ctx_.spm_ctx_.reset();
   bool need_response_error = true;
-  const bool enable_trace_log = lib::is_trace_log_enabled();
   session.get_raw_audit_record().request_memory_used_ = 0;
   observer::ObProcessMallocCallback pmcb(0,
         session.get_raw_audit_record().request_memory_used_);
@@ -481,14 +488,12 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   session.set_curr_trans_last_stmt_end_time(0);
 
   //============================ 注意这些变量的生命周期 ================================
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
+  ObSessionStatEstGuard stat_est_guard(conn->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
-    if (enable_trace_log) {
-      //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
-      ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-    }
+    //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
+    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
     // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,
     // observer will force refresh schema if local_schema_version < last_schema_version;
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
@@ -587,8 +592,7 @@ OB_NOINLINE int ObMPQuery::process_with_tmp_context(ObSQLSessionInfo &session,
   param.set_mem_attr(MTL_ID(),
       ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
     .set_properties(lib::USE_TL_PAGE_OPTIONAL)
-    .set_page_size(!lib::is_mini_mode() ? OB_MALLOC_BIG_BLOCK_SIZE
-        : OB_MALLOC_MIDDLE_BLOCK_SIZE)
+    .set_page_size(OB_MALLOC_REQ_NORMAL_BLOCK_SIZE)
     .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
   CREATE_WITH_TEMP_CONTEXT(param) {
     ret = do_process(session,
@@ -688,7 +692,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   ObTenantCachedSchemaGuardInfo &cached_schema_info = session.get_cached_schema_guard_info();
   int64_t tenant_version = 0;
   int64_t sys_version = 0;
-  common::ObSqlInfoGuard si_guard(sql);
+  SQL_INFO_GUARD(sql, session.get_cur_sql_id());
   ObSqlFatalErrExtraInfoGuard extra_info_guard;
   extra_info_guard.set_cur_sql(sql);
   extra_info_guard.set_tenant_id(session.get_effective_tenant_id());
@@ -709,6 +713,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       LOG_ERROR("invalid sql engine", K(ret), K(gctx_));
     } else {
       session.set_current_execution_id(GCTX.sql_engine_->get_execution_id());
+      session.reset_plsql_exec_time();
       result.get_exec_context().set_need_disconnect(true);
       ctx_.schema_guard_ = schema_guard;
       retry_ctrl_.set_tenant_local_schema_version(tenant_version);
@@ -746,6 +751,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         LOG_WARN("fail to set session active", K(ret));
       } else if (OB_FAIL(gctx_.sql_engine_->stmt_query(sql, ctx_, result))) {
         exec_start_timestamp_ = ObTimeUtility::current_time();
+        session.reset_plsql_exec_time();
         if (!THIS_WORKER.need_retry()) {
           int cli_ret = OB_SUCCESS;
           retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
@@ -777,6 +783,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       } else {
         //监控项统计开始
         exec_start_timestamp_ = ObTimeUtility::current_time();
+        session.reset_plsql_exec_time();
         result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
         // 本分支内如果出错，全部会在response_result内部处理妥当
         // 无需再额外处理回复错误包
@@ -802,6 +809,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
                                            async_resp_used))) {
           ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
           if (OB_ISNULL(plan_ctx)) {
+            // ignore ret
             LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
           } else {
             if (OB_TRANSACTION_SET_VIOLATION != ret && OB_REPLICA_NOT_READABLE != ret) {
@@ -939,17 +947,22 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       audit_record.params_value_ = params_value_;
       audit_record.params_value_len_ = params_value_len_;
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
+      audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+        audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
+      }
 
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_ISNULL(plan_ctx)) {
         //do nothing
       } else {
         audit_record.consistency_level_ = plan_ctx->get_consistency_level();
+        audit_record.total_memstore_read_row_count_ = plan_ctx->get_total_memstore_read_row_count();
+        audit_record.total_ssstore_read_row_count_ = plan_ctx->get_total_ssstore_read_row_count();
       }
     }
       //update v$sql statistics
-    if ((OB_SUCC(ret) || audit_record.is_timeout())
-        && session.get_local_ob_enable_plan_cache()
+    if (session.get_local_ob_enable_plan_cache()
         && !retry_ctrl_.need_retry()) {
       ObIArray<ObTableRowCount> *table_row_count_list = NULL;
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
@@ -963,20 +976,17 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         if (!(ctx_.self_add_plan_) && ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                  false, // false mean not first update plan stat
-                                 result.get_exec_context().get_is_evolution(),
                                  table_row_count_list);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && !ctx_.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                  true,
-                                 result.get_exec_context().get_is_evolution(),
                                  table_row_count_list);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         } else if (ctx_.self_add_plan_ && ctx_.plan_cache_hit_) {
           // spm evolution plan first execute
           plan->update_plan_stat(audit_record,
                                  true,
-                                 result.get_exec_context().get_is_evolution(),
                                  table_row_count_list);
           plan->update_cache_access_stat(audit_record.table_scan_stat_);
         }
@@ -1209,7 +1219,10 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly)
     case stmt::T_SHOW_GRANTS:
     case stmt::T_SHOW_QUERY_RESPONSE_TIME:
     case stmt::T_SHOW_RECYCLEBIN:
+    case stmt::T_SHOW_PROFILE:
     case stmt::T_SHOW_SEQUENCES:
+    case stmt::T_SHOW_ENGINE:
+    case stmt::T_SHOW_OPEN_TABLES:
     case stmt::T_HELP:
     case stmt::T_USE_DATABASE:
     case stmt::T_SET_NAMES: //read only not restrict it
@@ -1268,6 +1281,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   // 通过判断 plan 是否为 null 来确定是 plan 还是 cmd
   // 针对 plan 和 cmd 分开处理，逻辑会较为清晰。
   if (OB_LIKELY(NULL != result.get_physical_plan())) {
+    ENABLE_SQL_MEMLEAK_GUARD;
     if (need_trans_cb) {
       ObAsyncPlanDriver drv(gctx_, ctx_, session, retry_ctrl_, *this);
       // NOTE: sql_end_cb必须在drv.response_result()之前初始化好

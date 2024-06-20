@@ -25,7 +25,7 @@ config:
   log_disk_size: '15G'
   memory_limit: '6G'
   system_memory: '1G'
-  cpu_count: '24'
+  cpu_count: '8'
   cache_wash_threshold: '1G'
   __min_full_resource_pool_memory: "1073741824"
   workers_per_cpu_quota: '10'

@@ -327,7 +327,7 @@ int ObDbmsInfo::define_column(int64_t col_idx, ObObjType col_type,
 {
   int ret = OB_SUCCESS;
   if (col_idx < 0 || col_idx >= fields_.count()) {
-    ret = OB_SIZE_OVERFLOW;
+    ret = OB_ERR_VARIABLE_NOT_IN_SELECT_LIST;
     LOG_WARN("define column position is invalid", K(col_idx), K(fields_), K(col_type), K(ret));
   } else if (!cast_supported(fields_.at(col_idx).type_.get_type(),
                              static_cast<common::ObCollationType>(fields_.at(col_idx).charsetnr_),
@@ -847,6 +847,7 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
     bool for_update = false;
     bool hidden_rowid = false;
     int64_t into_cnt = 0;
+    bool skip_locked = false;
     ParamStore dummy_params;
     ObSqlString sql_str;
     ObPLExecCtx pl_ctx(cursor->get_allocator(), &exec_ctx, &dummy_params,
@@ -865,6 +866,7 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
                                       for_update,
                                       hidden_rowid,
                                       into_cnt,
+                                      skip_locked,
                                       &cursor->get_field_columns()));
     if (OB_SUCC(ret)) {
       cursor->set_ps_sql(ps_sql);
@@ -1617,7 +1619,9 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
   OZ (session->get_tmp_table_size(size));
   OZ (new_cursor->prepare_spi_cursor(spi_cursor,
                                 session->get_effective_tenant_id(),
-                                size));
+                                size,
+                                false,
+                                session));
   OV (OB_NOT_NULL(spi_cursor));
 
   if OB_FAIL(ret) {
@@ -1626,7 +1630,7 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
     // 2.* fill row store
     if (cursor->is_streaming()) {
       // we can't reopen the cursor, so if fill cursor has error. we will report to client.
-      OZ (ObSPIService::fill_cursor(*(cursor->get_cursor_handler()->get_result_set()), spi_cursor));
+      OZ (ObSPIService::fill_cursor(*(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0));
     } else {
       ObSPICursor *orig_spi_cursor = cursor->get_spi_cursor();
       for (int64_t i = 0; OB_SUCC(ret) && i < orig_spi_cursor->fields_.count(); ++i) {

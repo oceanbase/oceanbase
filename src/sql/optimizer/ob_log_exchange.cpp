@@ -344,6 +344,13 @@ int ObLogExchange::print_annotation_keys(char *buf,
   return ret;
 }
 
+/* If using merge sort, then set local = False, range = False
+ * If using task sort and range order is True, then set local = False, range = False
+ * Otherwise,
+ * local,range    | inherit          | inherit          | True, False      | True, False |
+ * EXCHANGE IN    | LOCAL/REMOTE/ALL | DISTRUBUTE       | LOCAL/REMOTE/ALL | DISTRUBUTE  |
+ * EXCHANGE OUT   | LOCAL/REMOTE/ALL | LOCAL/REMOTE/ALL | DISTRUBUTE       | DISTRUBUTE  |
+*/
 int ObLogExchange::compute_op_ordering()
 {
   int ret = OB_SUCCESS;
@@ -368,6 +375,9 @@ int ObLogExchange::compute_op_ordering()
         is_local_order_ = false;
         is_range_order_ = false;
       }
+    } else if (is_task_order_) {
+      is_local_order_ = false;
+      is_range_order_ = false;
     } else if (!get_op_ordering().empty() && child->is_distributed()) {
       is_local_order_ = true;
       is_range_order_ = false;
@@ -458,8 +468,9 @@ int ObLogExchange::do_re_est_cost(EstimateCostInfo &param, double &card, double 
     double child_cost = child->get_cost();
     const int64_t parallel = param.need_parallel_;
     param.need_parallel_ = ObGlobalHint::UNSET_PARALLEL;
-    if (is_block_op()) {
-      param.need_row_count_ = -1; //reset need row count
+    //forbit limit re estimate cost
+    if (is_producer() || is_block_op()) {
+      param.need_row_count_ = -1;
     }
     if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est exchange cost", K(ret));
@@ -1032,4 +1043,71 @@ int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
              expr == partition_id_expr_ ||
              expr == random_expr_;
   return OB_SUCCESS;
+}
+
+bool ObLogExchange::support_rich_format_vectorize() const {
+  bool res = !(dist_method_ == ObPQDistributeMethod::SM_BROADCAST ||
+          dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM ||
+          dist_method_ == ObPQDistributeMethod::PARTITION_RANGE ||
+          dist_method_ == ObPQDistributeMethod::PARTITION_HASH);
+  int tmp_ret = abs(OB_E(EventTable::EN_OFS_IO_SUBMIT) OB_SUCCESS);
+  if (tmp_ret & (1 << dist_method_)) {
+    res = false;
+  }
+  // ordered: 16
+  // ms: 17
+  LOG_TRACE("[VEC2.0 PX] support_rich_format_vectorize", K(res), K(dist_method_), K(tmp_ret));
+  return res;
+}
+
+int ObLogExchange::open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_px_coord())) {
+    // do nothing.
+  } else if (OB_ISNULL(px_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("px info is null", K(ret), K(get_op_id()));
+  } else if (OB_FAIL(px_res_analyzer.recursive_walk_through_px_tree(*px_info_))) {
+    LOG_WARN("walk through px tree failed", K(ret));
+  } else if (OB_FAIL(px_res_analyzer.append_px(OPEN_PX_RESOURCE_ANALYZE_ARG, *px_info_))) {
+    LOG_WARN("append px failed", K(ret));
+  } else {
+    LOG_TRACE("[PxResAnaly] px coord open_px_resource_analyze", K(get_op_id()),
+            KPC(px_info_), K(append_map), K(cur_parallel_thread_count), K(cur_parallel_group_count),
+            K(max_parallel_thread_count), K(max_parallel_group_count));
+  }
+  return ret;
+}
+
+int ObLogExchange::close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_px_coord())) {
+    // do nothing.
+  } else if (OB_ISNULL(px_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("px info is null", K(ret));
+  } else if (OB_FAIL(px_res_analyzer.remove_px(CLOSE_PX_RESOURCE_ANALYZE_ARG, *px_info_))) {
+    LOG_WARN("remove px failed", K(ret));
+  } else {
+    if (append_map) {
+      // each operator should be open and close exactly once with append_map = true, so reset px_info_.
+      px_info_ = NULL;
+    }
+    LOG_TRACE("[PxResAnaly] px coord close_px_resource_analyze", K(get_op_id()), KPC(px_info_),
+              K(append_map), K(cur_parallel_thread_count), K(cur_parallel_group_count));
+    }
+  return ret;
+}
+
+int ObLogExchange::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (is_producer() || !is_merge_sort()) {
+    used = false;
+  }
+  return ret;
 }

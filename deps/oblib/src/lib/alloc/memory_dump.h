@@ -45,6 +45,21 @@ enum DumpType
   STAT_LABEL
 };
 
+struct ObMemoryCheckContext
+{
+  enum CheckType
+  {
+    SQL_MEMORY_LEAK,
+  };
+  ObMemoryCheckContext(CheckType type = SQL_MEMORY_LEAK)
+    : ret_(OB_SUCCESS), type_(type), cond_()
+  {}
+  bool is_sql_memory_leak() { return SQL_MEMORY_LEAK == type_; }
+  int ret_;
+  CheckType type_;
+  ObThreadCond cond_;
+};
+
 class ObMemoryDumpTask
 {
 public:
@@ -68,6 +83,9 @@ public:
         void *p_chunk_;
       };
     };
+    struct {
+      ObMemoryCheckContext *memory_check_ctx_;
+    };
   };
 };
 
@@ -78,12 +96,13 @@ struct LabelItem
     MEMSET(this, 0 , sizeof(*this));
   }
   char str_[lib::AOBJECT_LABEL_SIZE + 1];
-  int str_len_;
+  int32_t str_len_;
+
+  int32_t count_;
+  int32_t block_cnt_;
+  int32_t chunk_cnt_;
   int64_t hold_;
   int64_t used_;
-  int64_t count_;
-  int64_t block_cnt_;
-  int64_t chunk_cnt_;
   LabelItem &operator +=(const LabelItem &item)
   {
     hold_ += item.hold_;
@@ -123,7 +142,7 @@ static const int PRINT_BUF_LEN = 1L << 20;
 static const int64_t MAX_MEMORY = 1L << 40; // 1T
 static const int MAX_CHUNK_CNT = MAX_MEMORY / (2L << 20);
 static const int MAX_TENANT_CNT = OB_MAX_SERVER_TENANT_CNT;
-static const int MAX_LABEL_ITEM_CNT = 16L << 10;
+static const int MAX_LABEL_ITEM_CNT = 64L << 10;
 static const int64_t STAT_LABEL_INTERVAL = 10L * 1000L * 1000L;
 static const int64_t LOG_BUF_LEN = 64L << 10;
 
@@ -188,10 +207,14 @@ public:
     lib::ObMutexGuard guard(task_mutex_);
     avaliable_task_set_ |= (1 << pos);
   }
+  int generate_mod_stat_task(ObMemoryCheckContext *memory_check_ctx = NULL);
+  int check_sql_memory_leak();
   int load_malloc_sample_map(lib::ObMallocSampleMap& malloc_sample_map);
 private:
   void run1() override;
   void handle(void *task);
+
+  void print_malloc_sample_info();
 private:
   AChunk *find_chunk(void *ptr);
 private:

@@ -57,7 +57,7 @@ int ObExprTimeFormat::time_to_str_format(const int64_t &time_value, const ObStri
 {
   int ret = OB_SUCCESS;
   ObTime ob_time;
-  if (ObTimeConverter::time_to_ob_time(time_value, ob_time)) {
+  if (OB_FAIL(ObTimeConverter::time_to_ob_time(time_value, ob_time))) {
     LOG_WARN("time to ob time failed", K(ret), K(time_value));
   } else if (OB_ISNULL(format.ptr()) || OB_ISNULL(buf)
             || OB_UNLIKELY(format.length() <= 0 || buf_len <= 0)) {
@@ -280,6 +280,13 @@ int ObExprTimeFormat::calc_time_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       output_result.set_result();
     }
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprTimeFormat, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

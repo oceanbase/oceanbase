@@ -80,7 +80,7 @@ public:
 };
 
 typedef ObDList<ObTableLockOpLinkNode> ObTableLockOpList;
-class ObOBJLock : public ObTransHashLink<ObOBJLock>
+class ObOBJLock : public share::ObLightHashLink<ObOBJLock>
 {
 public:
   ObOBJLock(const ObLockID &lock_id);
@@ -88,7 +88,7 @@ public:
       const ObLockParam &param,
       storage::ObStoreCtx &ctx,
       const ObTableLockOp &lock_op,
-      const ObTableLockMode &lock_mode_in_same_trans,
+      const uint64_t lock_mode_cnt_in_same_trans[],
       ObMalloc &allocator,
       ObTxIDSet &conflict_tx_set);
   int unlock(
@@ -111,7 +111,7 @@ public:
       ObMalloc &allocator);
   int check_allow_lock(
       const ObTableLockOp &lock_op,
-      const ObTableLockMode &lock_mode_in_same_trans,
+      const uint64_t lock_mode_cnt_in_same_trans[],
       ObTxIDSet &conflict_tx_set,
       bool &conflict_with_dml_lock,
       ObMalloc &allocator,
@@ -143,7 +143,7 @@ private:
   void reset_(ObMalloc &allocator);
   int check_allow_lock_(
       const ObTableLockOp &lock_op,
-      const ObTableLockMode &lock_mode_in_same_trans,
+      const uint64_t lock_mode_cnt_in_same_trans[],
       ObTxIDSet &conflict_tx_set,
       bool &conflict_with_dml_lock,
       const bool include_finish_tx = true,
@@ -161,27 +161,27 @@ private:
   int fast_lock(
       const ObLockParam &param,
       const ObTableLockOp &lock_op,
-      const ObTableLockMode &lock_mode_in_same_trans,
+      const uint64_t lock_mode_cnt_in_same_trans[],
       ObMalloc &allocator,
       ObTxIDSet &conflict_tx_set);
   int slow_lock(
       const ObLockParam &param,
       const ObTableLockOp &lock_op,
-      const ObTableLockMode &lock_mode_in_same_trans,
+      const uint64_t lock_mode_cnt_in_same_trans[],
       ObMalloc &allocator,
       ObTxIDSet &conflict_tx_set);
   int try_fast_lock_(
       const ObTableLockOp &lock_op,
-      const ObTableLockMode &lock_mode_in_same_trans,
+      const uint64_t lock_mode_cnt_in_same_trans[],
       ObTxIDSet &conflict_tx_set);
   int unlock_(
       const ObTableLockOp &unlock_op,
       ObMalloc &allocator);
   int check_allow_unlock_(const ObTableLockOp &unlock_op);
   int check_op_allow_lock_(const ObTableLockOp &lock_op);
-  void get_exist_lock_mode_without_cur_trans(
-      const ObTableLockMode &lock_mode_in_same_trans,
-      ObTableLockMode &curr_mode);
+  int get_exist_lock_mode_without_curr_trans(
+      const uint64_t lock_mode_cnt_in_same_trans[],
+      ObTableLockMode &lock_mode_without_curr_trans);
   void check_need_recover_(
       const ObTableLockOp &lock_op,
       const ObTableLockOpList *op_list,
@@ -236,7 +236,6 @@ private:
       bool &is_compact,
       const bool is_force = false);
 private:
-  int get_index_by_lock_mode(ObTableLockMode mode);
   int check_op_allow_lock_from_list_(
       const ObTableLockOp &lock_op,
       const ObTableLockOpList *op_list);
@@ -259,6 +258,9 @@ private:
   {
     ATOMIC_DEC(&row_exclusive_);
   }
+  int get_exist_lock_mode_cnt_without_curr_trans_(
+      const ObTableLockMode &lock_mode,
+      const uint64_t lock_mode_cnt_in_same_trans[]);
 public:
   RWLock rwlock_;
   bool is_deleted_;
@@ -298,7 +300,7 @@ public:
 
 class ObOBJLockMap
 {
-  typedef ObTransHashMap<ObLockID, ObOBJLock, ObOBJLockAlloc, common::SpinRWLock, 1 << 10> Map;
+  typedef share::ObLightHashMap<ObLockID, ObOBJLock, ObOBJLockAlloc, common::SpinRWLock, 1 << 10> Map;
 public:
   ObOBJLockMap() :
       lock_map_(),
@@ -311,7 +313,7 @@ public:
       const ObLockParam &param,
       storage::ObStoreCtx &ctx,
       const ObTableLockOp &lock_op,
-      const ObTableLockMode &lock_mode_in_same_trans,
+      const uint64_t lock_mode_cnt_in_same_trans[],
       ObTxIDSet &conflict_tx_set);
   int unlock(
       const ObTableLockOp &lock_op,
@@ -329,7 +331,7 @@ public:
   bool is_inited() const { return is_inited_; }
   int check_allow_lock(
       const ObTableLockOp &lock_op,
-      const ObTableLockMode &lock_mode_in_same_trans,
+      const uint64_t lock_mode_cnt_in_same_trans[],
       ObTxIDSet &conflict_tx_set,
       const bool include_finish_tx = true,
       const bool only_check_dml_lock = false);

@@ -115,7 +115,7 @@ public:
   //        same as the accumulate checksum of LogGroupEntry
   //   OB_PARTIAL_LOG
   //      - this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
-  int next(const share::SCN &replayable_point_scn);
+  int next(const share::SCN &replayable_point_scn, LogIOContext &io_ctx);
 
   // param[in] replayable point scn, iterator will ensure that no log will return when the log scn is greater than
   //           'replayable_point_scn' and the log is raw write
@@ -143,7 +143,8 @@ public:
   //      - this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
   int next(const share::SCN &replayable_point_scn,
            share::SCN &next_min_scn,
-           bool &iterate_end_by_replayable_point);
+           bool &iterate_end_by_replayable_point,
+           LogIOContext &io_ctx);
   // @retval
   //  OB_SUCCESS
   //  OB_INVALID_DATA
@@ -154,7 +155,7 @@ public:
   int get_entry(ENTRY &entry, LSN &lsn, bool &is_raw_write);
 
   bool is_valid() const;
-  bool check_is_the_last_entry();
+  bool check_is_the_last_entry(LogIOContext &io_ctx);
 
   LSN get_curr_read_lsn() const;
 
@@ -174,7 +175,8 @@ private:
   //   OB_PARTIAL_LOG: this replica has not finished flashback, and iterator start lsn
   //                   is not the header of LogGroupEntry.
   int get_next_entry_(const SCN &replayable_point_scn,
-                      IterateEndInfo &info);
+                      IterateEndInfo &info,
+                      LogIOContext &io_ctx);
 
   // According to LogEntryType, deserialize different log entry
   // The log format
@@ -205,7 +207,7 @@ private:
       if (OB_FAIL(curr_entry_.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_INVALID_DATA;
       PALF_LOG(ERROR, "parse LogMetaEntry failed, unexpected error", K(ret), KPC(this));
     }
     return ret;
@@ -278,7 +280,7 @@ private:
   //   OB_SUCCESS.
   //   OB_ITER_END.
   //   OB_ERR_OUT_LOWER_BOUND
-  int read_data_from_storage_();
+  int read_data_from_storage_(LogIOContext &io_ctx);
 
   void advance_read_lsn_(const offset_t step);
   void try_clean_up_cache_();
@@ -556,7 +558,8 @@ LSN LogIteratorImpl<ENTRY>::get_curr_read_lsn() const
 // NB: for restarting, the committed offset of sliding window is invalid.
 template <class ENTRY>
 int LogIteratorImpl<ENTRY>::get_next_entry_(const SCN &replayable_point_scn,
-                                            IterateEndInfo &info)
+                                            IterateEndInfo &info,
+                                            LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   // NB: check need read next enty
@@ -586,7 +589,7 @@ int LogIteratorImpl<ENTRY>::get_next_entry_(const SCN &replayable_point_scn,
       if (OB_SUCC(parse_one_entry_(replayable_point_scn, info))) {
         curr_entry_size_ = curr_entry_.get_serialize_size();
       } else if (OB_BUF_NOT_ENOUGH == ret) {
-        if (OB_FAIL(read_data_from_storage_()) && OB_ITER_END != ret
+        if (OB_FAIL(read_data_from_storage_(io_ctx)) && OB_ITER_END != ret
             && OB_ERR_OUT_OF_LOWER_BOUND != ret) {
           PALF_LOG(WARN, "read_data_from_storage_ failed", K(ret), KPC(this));
         } else if (OB_ITER_END == ret) {
@@ -622,17 +625,18 @@ int LogIteratorImpl<ENTRY>::get_next_entry_(const SCN &replayable_point_scn,
 }
 
 template <class ENTRY>
-int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn)
+int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn, LogIOContext &io_ctx)
 {
   share::SCN next_min_scn;
   bool unused_bool = false;
-  return next(replayable_point_scn, next_min_scn, unused_bool);
+  return next(replayable_point_scn, next_min_scn, unused_bool, io_ctx);
 }
 
 template <class ENTRY>
 int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn,
                                  share::SCN &next_min_scn,
-                                 bool &iterate_end_by_replayable_point)
+                                 bool &iterate_end_by_replayable_point,
+                                 LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   next_min_scn.reset();
@@ -655,7 +659,7 @@ int LogIteratorImpl<ENTRY>::next(const share::SCN &replayable_point_scn,
   if (!replayable_point_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(replayable_point_scn), KPC(this));
-  } else if (OB_FAIL(get_next_entry_(replayable_point_scn, info))) {
+  } else if (OB_FAIL(get_next_entry_(replayable_point_scn, info, io_ctx))) {
     // NB: if the data which has been corrupted or accum_checksum_ is not match, clean cache.
     if (need_clean_cache_(ret)) {
       PALF_LOG(WARN, "read invalid data, need clean cache, maybe storage device cann't guarantee linear consistency reading",
@@ -877,7 +881,7 @@ void LogIteratorImpl<ENTRY>::advance_read_lsn_(const offset_t step)
 
 // @brief, start from `curr_read_lsn_`, check whether the entry is valid.
 template <class ENTRY>
-bool LogIteratorImpl<ENTRY>::check_is_the_last_entry()
+bool LogIteratorImpl<ENTRY>::check_is_the_last_entry(LogIOContext &io_ctx)
 {
   bool bool_ret = false;
   int ret = OB_SUCCESS;
@@ -896,7 +900,7 @@ bool LogIteratorImpl<ENTRY>::check_is_the_last_entry()
     using LogEntryHeaderType = typename ENTRY::LogEntryHeaderType;
     LogEntryHeaderType header;
     const int64_t header_size = header.get_serialize_size();
-    if (OB_FAIL(read_data_from_storage_()) && OB_ITER_END != ret) {
+    if (OB_FAIL(read_data_from_storage_(io_ctx)) && OB_ITER_END != ret) {
       PALF_LOG(ERROR, "read_data_from_storage_ failed", K(ret), KPC(this));
     } else if (OB_ITER_END == ret) {
       PALF_LOG(INFO, "has iterate end", K(ret), KPC(this));
@@ -987,12 +991,12 @@ int LogIteratorImpl<ENTRY>::get_log_entry_type_(LogEntryType &log_entry_type)
 //
 // NB: when iterate to the end of block, need switch to next block.
 template <class ENTRY>
-int LogIteratorImpl<ENTRY>::read_data_from_storage_()
+int LogIteratorImpl<ENTRY>::read_data_from_storage_(LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t out_read_size = 0;
   if (OB_FAIL(log_storage_->pread(curr_read_pos_, next_round_pread_size_, buf_,
-                                  out_read_size))
+                                  out_read_size, io_ctx))
       && OB_ERR_OUT_OF_UPPER_BOUND != ret) {
     PALF_LOG(WARN, "IteratorStorage pread failed", K(ret), KPC(this));
   } else if (OB_ERR_OUT_OF_UPPER_BOUND == ret) {

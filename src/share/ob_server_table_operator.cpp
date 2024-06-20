@@ -163,17 +163,21 @@ int ObServerInfoInTable::build_server_status(share::ObServerStatus &server_statu
   int ret = OB_SUCCESS;
   const int64_t now = ::oceanbase::common::ObTimeUtility::current_time();
   server_status.reset();
+  int64_t build_version_len = build_version_.size();
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid server info", KR(ret), KPC(this));
   } else if (OB_FAIL(server_status.zone_.assign(zone_))) {
     LOG_WARN("fail to assign zone", KR(ret), K(zone_));
+  } else if (build_version_len >= OB_SERVER_VERSION_LENGTH) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("build_version is too long", KR(ret), K(build_version_len));
   } else {
     server_status.server_ = server_;
     server_status.id_ = server_id_;
     server_status.sql_port_ = sql_port_;
     server_status.with_rootserver_ = with_rootserver_;
-    strncpy(server_status.build_version_, build_version_.ptr(), OB_SERVER_VERSION_LENGTH);
+    strncpy(server_status.build_version_, build_version_.ptr(), build_version_len);
     server_status.stop_time_ = stop_time_;
     server_status.start_service_time_ = start_service_time_;
     server_status.last_offline_time_ = last_offline_time_;
@@ -236,19 +240,21 @@ int ObServerTableOperator::init(common::ObISQLClient *proxy)
 int ObServerTableOperator::get(common::ObIArray<share::ObServerStatus> &server_statuses)
 {
   int ret = OB_SUCCESS;
+  ObZone empty_zone;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy_ is null", KR(ret), KP(proxy_));
-  } else if (OB_FAIL(get(*proxy_, server_statuses))) {
+  } else if (OB_FAIL(get(*proxy_, empty_zone, server_statuses))) {
     LOG_WARN("fail to get", KR(ret), KP(proxy_));
   }
   return ret;
 }
 int ObServerTableOperator::get(
     common::ObISQLClient &sql_proxy,
+    const ObZone &zone,
     common::ObIArray<ObServerStatus> &server_statuses)
 {
   int ret = OB_SUCCESS;
@@ -259,7 +265,9 @@ int ObServerTableOperator::get(
     LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
   } else if (OB_FAIL(sql.assign_fmt("SELECT *, time_to_usec(gmt_modified) AS last_hb_time "
       "FROM %s", OB_ALL_SERVER_TNAME))) {
-    LOG_WARN("sql assign_fmt failed", KR(ret));
+    LOG_WARN("sql assign_fmt failed", KR(ret), K(sql));
+  } else if (!zone.is_empty() && OB_FAIL(sql.append_fmt(" WHERE zone = '%s'", zone.str().ptr()))) {
+    LOG_WARN("fail to assign zone condition", KR(ret), K(sql));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObMySQLResult *result = NULL;
@@ -666,24 +674,38 @@ int ObServerTableOperator::get(
   common::ObISQLClient &sql_proxy,
   common::ObIArray<ObServerInfoInTable> &all_servers_info_in_table)
 {
+  all_servers_info_in_table.reset();
+  ObZone empty_zone;
+  const bool ONLY_ACTIVE_SERVERS = false;
+  return get_servers_info_of_zone(sql_proxy, empty_zone, ONLY_ACTIVE_SERVERS, all_servers_info_in_table);
+}
+int ObServerTableOperator::get_servers_info_of_zone(
+    common::ObISQLClient &sql_proxy,
+    const ObZone &zone,
+    const bool only_active_servers,
+    common::ObIArray<ObServerInfoInTable> &all_servers_info_in_zone)
+{
   int ret = OB_SUCCESS;
   ObArray<ObServerStatus> server_statuses;
-  ObServerInfoInTable server_info_in_table;
-  all_servers_info_in_table.reset();
-  if (OB_FAIL(get(sql_proxy, server_statuses))) {
+  all_servers_info_in_zone.reset();
+  if (OB_FAIL(get(sql_proxy, zone, server_statuses))) {
     LOG_WARN("fail to get server status", KR(ret));
   } else {
+    ObServerInfoInTable server_info;
     ARRAY_FOREACH_X(server_statuses, idx, cnt, OB_SUCC(ret)) {
-      server_info_in_table.reset();
-      if (OB_FAIL(server_info_in_table.build_server_info_in_table(server_statuses.at(idx)))) {
+      server_info.reset();
+      if (OB_FAIL(server_info.build_server_info_in_table(server_statuses.at(idx)))) {
         LOG_WARN("fail to build server info in table", KR(ret), K(server_statuses.at(idx)));
-      } else if (OB_FAIL(all_servers_info_in_table.push_back(server_info_in_table))) {
-        LOG_WARN("fail to push element into all_servers_info_in_table", KR(ret), K(server_info_in_table));
-      } else {}
+      } else if (only_active_servers && !server_info.is_active()) {
+        // do nothing
+      } else if (OB_FAIL(all_servers_info_in_zone.push_back(server_info))) {
+        LOG_WARN("fail to push element into all_servers_info_in_zone", KR(ret), K(server_info));
+      }
     }
   }
   return ret;
 }
+
 int ObServerTableOperator::get(
     common::ObISQLClient &sql_proxy,
     const common::ObAddr &server,
@@ -975,6 +997,7 @@ int ObServerTableOperator::insert_dml_builder(
   char svr_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   const char *display_status_str = NULL;
   dml.reset();
+  int64_t build_version_len = strlen(server_status.build_version_);
   if (OB_UNLIKELY(!server_status.is_valid()
       || !server_status.server_.ip_to_string(svr_ip, sizeof(svr_ip)))) {
     ret = OB_INVALID_ARGUMENT;
@@ -986,6 +1009,9 @@ int ObServerTableOperator::insert_dml_builder(
   } else if (OB_ISNULL(display_status_str)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null display status string", KR(ret), KP(display_status_str));
+  } else if (OB_UNLIKELY(build_version_len >= OB_SERVER_VERSION_LENGTH)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("build_version is too long", KR(ret), K(build_version_len));
   } else {
     if (OB_FAIL(dml.add_pk_column(K(svr_ip)))
         || OB_FAIL(dml.add_pk_column("svr_port", server_status.server_.get_port()))

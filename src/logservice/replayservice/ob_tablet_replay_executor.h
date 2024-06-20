@@ -91,6 +91,8 @@ protected:
   // @return other error codes, failed to replay.
   virtual int replay_check_restore_status_(storage::ObTabletHandle &tablet_handle);
 
+  virtual bool replay_allow_tablet_not_exist_() { return true; }
+
   // not allowed to pass ObTabletCreateDeleteMdsUserData or ObTabletBindingMdsUserData
   template <typename T,
             typename U = typename std::enable_if<

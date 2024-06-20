@@ -16,6 +16,7 @@
 #include "ob_dict_decoder.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/access/ob_pushdown_aggregate.h"
+#include "ob_vector_decode_util.h"
 #include "ob_bit_stream.h"
 
 namespace oceanbase
@@ -25,7 +26,10 @@ namespace blocksstable
 using namespace common;
 const ObColumnHeader::Type ObConstDecoder::type_;
 
-int ObConstDecoder::decode_without_dict(const ObColumnDecoderCtx &ctx, ObDatum &datum) const
+int ObConstDecoder::decode_without_dict(
+    const ObColumnDecoderCtx &ctx,
+    ObDatum &datum,
+    const bool need_deep_copy_number) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited())) {
@@ -35,7 +39,7 @@ int ObConstDecoder::decode_without_dict(const ObColumnDecoderCtx &ctx, ObDatum &
     int64_t ref = meta_header_->const_ref_;
     if (0 == ref) {
       const int64_t len = ctx.col_header_->length_ - sizeof(*meta_header_);
-      const ObObjType obj_type = ctx.obj_meta_.get_type();
+      const ObObjType obj_type = ctx.col_header_->get_store_obj_type();
       const ObObjTypeClass tc = ob_obj_type_class(obj_type);
       uint64_t integer_mask;
       if (ObIntTC == tc) {
@@ -44,7 +48,11 @@ int ObConstDecoder::decode_without_dict(const ObColumnDecoderCtx &ctx, ObDatum &
       } else {
         integer_mask = 0;
       }
-      if (OB_FAIL(load_data_to_datum(
+
+      if (ObNumberTC == tc && !need_deep_copy_number) {
+        datum.ptr_ = meta_header_->payload_;
+        datum.pack_ = static_cast<uint32_t>(len);
+      } else if (OB_FAIL(load_data_to_datum(
           obj_type,
           meta_header_->payload_,
           len,
@@ -157,6 +165,75 @@ int ObConstDecoder::batch_decode(
       datums))) {
     LOG_WARN("Failed to decode const encoding data from dict", K(ret));
   }
+  return ret;
+}
+
+int ObConstDecoder::decode_vector(
+      const ObColumnDecoderCtx &decoder_ctx,
+      const ObIRowIndex* row_index,
+      ObVectorDecodeCtx &vector_ctx) const
+{
+  int ret = OB_SUCCESS;
+  int64_t null_count = 0;
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret));
+  } else if (0 == meta_header_->count_) {
+    if (0 == meta_header_->const_ref_) {
+      ObStorageDatum const_datum;
+      const bool need_deep_copy_number = false;
+      if (OB_FAIL(decode_without_dict(decoder_ctx, const_datum, need_deep_copy_number))) {
+        LOG_WARN("Decode to datum without dict failed", K(ret), K(const_datum));
+      } else {
+        const int64_t fixed_packing_len = const_datum.len_;
+        DataConstLoactor const_locator(const_datum.ptr_, const_datum.len_);
+        if (OB_FAIL(ObVecDecodeUtils::load_byte_aligned_vector<DataConstLoactor>(
+            decoder_ctx.obj_meta_,
+            decoder_ctx.col_header_->get_store_obj_type(),
+            fixed_packing_len,
+            decoder_ctx.has_extend_value(),
+            const_locator,
+            vector_ctx.row_cap_,
+            vector_ctx.vec_offset_,
+            vector_ctx.vec_header_))) {
+          LOG_WARN("Failed to load byte aligned vector", K(ret));
+        }
+      }
+    } else if (1 == meta_header_->const_ref_) {
+      if (is_uniform_format(vector_ctx.get_format())) {
+        ObUniformBase *uniform_vector = static_cast<ObUniformBase *>(vector_ctx.get_vector());
+        for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
+          const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
+          uniform_vector->set_null(curr_vec_offset);
+        }
+      } else {
+        ObBitmapNullVectorBase *null_bm_vector = static_cast<ObBitmapNullVectorBase *>(vector_ctx.get_vector());
+        for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
+          const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
+          null_bm_vector->set_null(curr_vec_offset);
+        }
+      }
+
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected ref in const ref for batch decode", K(ret), KPC(meta_header_), K(decoder_ctx));
+    }
+  } else if (OB_FAIL(extract_ref_and_null_count(vector_ctx.row_ids_, vector_ctx.row_cap_, vector_ctx.len_arr_, null_count))) {
+    LOG_WARN("Failed to extract refs",K(ret));
+  } else if (0 != null_count) {
+    if (OB_FAIL(dict_decoder_.batch_decode_dict<true>(
+        decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(),
+        decoder_ctx.col_header_->length_ - meta_header_->offset_, vector_ctx))) {
+      LOG_WARN("Failed to decode const encoding data from dict", K(ret));
+    }
+  } else {
+    if (OB_FAIL(dict_decoder_.batch_decode_dict<false>(
+        decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(),
+        decoder_ctx.col_header_->length_ - meta_header_->offset_, vector_ctx))) {
+      LOG_WARN("Failed to decode const encoding data from dict", K(ret));
+    }
+  }
+
   return ret;
 }
 
@@ -408,12 +485,9 @@ int ObConstDecoder::const_only_operator(
             } else if (ref == 1) {
             } else {
               bool is_existed = false;
-              // Check const object in hashset or not
-              ObObj const_obj;
-              if (OB_FAIL(const_datum.to_obj(const_obj, col_ctx.obj_meta_))) {
-                LOG_WARN("convert datum to obj failed", K(ret), K(const_datum), K(col_ctx.obj_meta_));
-              } else if (OB_FAIL(filter.exist_in_obj_set(const_obj, is_existed))) {
-                LOG_WARN("Failed to check object in hashset", K(ret));
+              // Check const datum in hashset or not
+              if (OB_FAIL(filter.exist_in_datum_set(const_datum, is_existed))) {
+                LOG_WARN("Failed to check datum in hashset", K(ret));
               } else if (is_existed) {
                 if (OB_FAIL(result_bitmap.bit_not())) {
                   LOG_WARN("Failed to do bitwise not on result bitmap", K(ret));
@@ -699,11 +773,8 @@ int ObConstDecoder::in_operator(
           LOG_WARN("Failed to pad column", K(ret));
         }
       }
-      ObObj const_obj;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(const_datum.to_obj(const_obj, col_ctx.obj_meta_))) {
-          LOG_WARN("convert datum to obj failed", K(ret), K(const_datum), K(col_ctx.obj_meta_));
-        } else if (OB_FAIL(filter.exist_in_obj_set(const_obj, const_in_result_set))) {
+      } else if (OB_FAIL(filter.exist_in_datum_set(const_datum, const_in_result_set))) {
         LOG_WARN("Failed to check whether const value is in set", K(ret));
       } else if (const_in_result_set) {
         if (OB_FAIL(result_bitmap.bit_not())) {
@@ -722,16 +793,13 @@ int ObConstDecoder::in_operator(
       ref_bitset->init(ref_bitset_size);
       int64_t dict_ref = 0;
       while (OB_SUCC(ret) && trav_it != end_it) {
-        ObObj cur_obj;
         bool cur_in_result_set = false;
         if (OB_UNLIKELY((((*trav_it).is_null() || (col_ctx.obj_meta_.is_character_type()
                         && (0 == (*trav_it).len_))) && lib::is_oracle_mode())
                         || ((*trav_it).is_null() && lib::is_mysql_mode()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("There should not be null datum in dictionary", K(ret));
-        } else if (OB_FAIL((*trav_it).to_obj(cur_obj, col_ctx.obj_meta_))) {
-          LOG_WARN("convert datum to obj failed", K(ret), K((*trav_it)), K(col_ctx.obj_meta_));
-        } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, cur_in_result_set))) {
+        } else if (OB_FAIL(filter.exist_in_datum_set(*trav_it, cur_in_result_set))) {
           LOG_WARN("Failed to check wheter current value is in set", K(ret));
         } else if (!const_in_result_set == cur_in_result_set) {
           found = true;
@@ -806,10 +874,11 @@ int ObConstDecoder::set_res_with_bitset(
   return ret;
 }
 
+template<typename T>
 int ObConstDecoder::extract_ref_and_null_count(
     const int64_t *row_ids,
     const int64_t row_cap,
-    common::ObDatum *datums,
+    T len_arr,
     int64_t &null_count,
     uint32_t *ref_buf) const
 {
@@ -834,7 +903,9 @@ int ObConstDecoder::extract_ref_and_null_count(
   const int64_t dict_count = dict_decoder_.get_dict_header()->count_;
   while (trav_cnt < row_cap) {
     row_id = row_ids[trav_idx];
-    uint32_t *curr_ref = nullptr == datums ? (nullptr == ref_buf ?  &ref : &ref_buf[trav_idx]) : &datums[trav_idx].pack_;
+    // uint32_t *curr_ref = nullptr == datums ? (nullptr == ref_buf ?  &ref : &ref_buf[trav_idx]) : &datums[trav_idx].pack_;
+    // uint32_t *curr_ref = nullptr == datums ? (nullptr == ref_buf ?  &ref : &ref_buf[trav_idx]) : &len_arr[trav_idx];
+    uint32_t *curr_ref = get_len_by_type(len_arr, ref, ref_buf, trav_idx);
     if (except_table_pos == count || row_id < next_except_row_id) {
       *curr_ref = static_cast<uint32_t>(const_ref);
     } else if (row_id == next_except_row_id) {
@@ -864,6 +935,24 @@ int ObConstDecoder::extract_ref_and_null_count(
     trav_idx += step;
   }
   return ret;
+}
+
+template<>
+uint32_t *ObConstDecoder::get_len_by_type(std::nullptr_t vector, uint32_t &ref, uint32_t *ref_buf, const int64_t &trav_idx) const
+{
+  return nullptr == ref_buf ? &ref : &ref_buf[trav_idx];
+}
+
+template<>
+uint32_t *ObConstDecoder::get_len_by_type(ObDatum *vector, uint32_t &ref, uint32_t *ref_buf, const int64_t &trav_idx) const
+{
+  return &vector[trav_idx].pack_;
+}
+
+template<>
+uint32_t *ObConstDecoder::get_len_by_type(uint32_t *vector, uint32_t &ref, uint32_t *ref_buf, const int64_t &trav_idx) const
+{
+  return &vector[trav_idx];
 }
 
 int ObConstDecoder::get_distinct_count(int64_t &distinct_count) const

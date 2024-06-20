@@ -117,7 +117,6 @@ private:
   blocksstable::ObMacroBlockWriter macro_writer_;
   const ObITableReadInfo *index_read_info_;
   static const int64_t REBUILD_MACRO_BLOCK_THRESOLD = 20;
-  static const int64_t MAX_TABLE_CNT = 4097;
   static const int64_t DEFAULT_MACRO_ID_COUNT = 32;
 };
 

@@ -533,7 +533,8 @@ public:
   static int deduce_max_len_from_oracle_dfm(const ObString &format,
                                             int64_t &max_char_len);
   static int ob_time_to_str_format(const ObTime &ob_time, const ObString &format,
-                                   char *buf, int64_t buf_len, int64_t &pos, bool &res_null);
+                                   char *buf, int64_t buf_len, int64_t &pos, bool &res_null,
+                                   const ObString &locale_name);
   static int ob_time_to_datetime(ObTime &ob_time, const ObTimeConvertCtx &cvrt_ctx, int64_t &value);
   static int ob_time_to_otimestamp(ObTime &ob_time, ObOTimestampData &value);
   static int32_t ob_time_to_date(ObTime &ob_time);
@@ -580,6 +581,8 @@ public:
   static int data_fmt_nd(char *buffer, int64_t buf_len, int64_t &pos, const int64_t n, int64_t target, bool has_fm_flag = false);
   static int data_fmt_d(char *buffer, int64_t buf_len, int64_t &pos, int64_t target);
   static int data_fmt_s(char *buffer, int64_t buf_len, int64_t &pos, const char *ptr);
+  // check each part of ObTime and carry if necessary.
+  static void adjust_ob_time(ObTime &ot);
 
 public:
   // other functions.
@@ -704,7 +707,7 @@ enum ObNLSFormatEnum {
   NLS_DATE = 0,
   NLS_TIMESTAMP,
   NLS_TIMESTAMP_TZ,
-  NLS_MAX,
+  NLS_MAX, // does not support expansion due to error use in ob_rpc_struct.h
 };
 
 /**

@@ -51,7 +51,7 @@ struct ObSkipIndexColMeta
   // For data with length larger than 40 bytes(normally string), we will store the prefix as min/max
   static constexpr int64_t MAX_SKIP_INDEX_COL_LENGTH = 40;
   static constexpr int64_t SKIP_INDEX_ROW_SIZE_LIMIT = 1 << 10; // 1kb
-  static constexpr int64_t MAX_AGG_COLUMN_PER_ROW = 3; // min / max / null count
+  static constexpr int64_t MAX_AGG_COLUMN_PER_ROW = 4; // min / max / null count / sum
   static constexpr ObObjDatumMapType NULL_CNT_COL_TYPE = OBJ_DATUM_8BYTE_DATA;
   static_assert(common::OBJ_DATUM_NUMBER_RES_SIZE == MAX_SKIP_INDEX_COL_LENGTH,
       "Buffer size of ObStorageDatum and maximum size of skip index data is equal to maximum size of ObNumber");
@@ -164,6 +164,43 @@ OB_INLINE static bool is_skip_index_while_list_type(const ObObjType &obj_type)
 {
   const ObObjTypeClass tc = ob_obj_type_class(obj_type);
   return (ObIntTC <= tc && tc <= ObLobTC) || ObDecimalIntTC == tc;
+}
+
+OB_INLINE static bool can_agg_sum(const ObObjType &obj_type)
+{
+  return is_skip_index_while_list_type(obj_type) && ob_is_numeric_type(obj_type)
+      && ob_obj_type_class(obj_type) != ObObjTypeClass::ObBitTC;
+}
+
+OB_INLINE static int get_sum_store_size(const ObObjType &obj_type, uint32_t &sum_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObNullType > obj_type || ObMaxType < obj_type || !can_agg_sum(obj_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid type from sum", K(obj_type));
+  } else {
+    switch(ob_obj_type_class(obj_type)) {
+      case ObObjTypeClass::ObIntTC:
+      case ObObjTypeClass::ObUIntTC:
+      case ObObjTypeClass::ObDecimalIntTC:
+      case ObObjTypeClass::ObNumberTC:
+        sum_size = common::OBJ_DATUM_NUMBER_RES_SIZE;
+        break;
+      case ObObjTypeClass::ObFloatTC: {
+        sum_size = sizeof(float);
+        break;
+      }
+      case ObObjTypeClass::ObDoubleTC: {
+        sum_size = sizeof(double);
+        break;
+      }
+      default: {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid type from sum", K(obj_type));
+    }
+    }
+  }
+  return ret;
 }
 
 } // blocksstable

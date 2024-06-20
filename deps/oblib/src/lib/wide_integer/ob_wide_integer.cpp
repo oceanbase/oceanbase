@@ -148,7 +148,8 @@ int ObDecimalIntConstValue::init_const_values(ObIAllocator &alloc, const lib::Ob
   // init zero values
   char *zero_buf = nullptr;
   int buf_size = sizeof(int32_t) + sizeof(int64_t) + sizeof(int128_t) + sizeof(int256_t) + sizeof(int512_t);
-  if (OB_ISNULL(zero_buf = (char *)allocator.alloc(buf_size))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(zero_buf = (char *)allocator.alloc(buf_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(WARN, "allocate memory failed", K(ret));
   } else {

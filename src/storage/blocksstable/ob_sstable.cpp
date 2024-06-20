@@ -41,6 +41,8 @@ using namespace share;
 namespace blocksstable
 {
 
+const char *DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_BUF = "DO_NOT_VISIT";
+const int64_t DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_SIZE = 13;
 void ObSSTableMetaHandle::reset()
 {
   handle_.reset();
@@ -58,7 +60,6 @@ int ObSSTableMetaHandle::get_sstable_meta(const ObSSTableMeta *&sstable_meta) co
   }
   return ret;
 }
-
 
 ObSSTableMetaCache::ObSSTableMetaCache()
   : header_(0),
@@ -123,6 +124,15 @@ int ObSSTableMetaCache::init(
     contain_uncommitted_row_ = meta->contain_uncommitted_row();
   }
   return ret;
+}
+
+void ObSSTableMetaCache::set_upper_trans_version(const int64_t upper_trans_version)
+{
+  if (INT64_MAX == max_merged_trans_version_) {
+    upper_trans_version_ = upper_trans_version;
+  } else {
+    upper_trans_version_ = std::max(upper_trans_version, max_merged_trans_version_);
+  }
 }
 
 OB_DEF_SERIALIZE_SIMPLE(ObSSTableMetaCache)
@@ -571,7 +581,7 @@ int ObSSTable::exist(
       || !context.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), K(rowkey), K(param), K(context));
-  } else if (meta_->is_empty()) {
+  } else if (no_data_to_read()) {
     is_exist = false;
     has_found = false;
   } else {
@@ -634,7 +644,7 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
   } else if (OB_UNLIKELY(rows_info.tablet_id_ != key_.tablet_id_)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Tablet id not match", K(ret), K_(key), K(rows_info));
-  } else if (is_empty()) {
+  } else if (no_data_to_read()) {
     // Skip
   } else if (rows_info.all_rows_found()) {
     all_rows_found = true;
@@ -655,8 +665,15 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
   } else {
     ObStoreRowIterator *iter = nullptr;
     const ObDatumRow *store_row = nullptr;
-
-    if (OB_FAIL(build_multi_exist_iterator(rows_info, iter))) {
+    common::ObSEArray<ObDatumRowkey, ObRowsInfo::MAX_ROW_KEYS_ON_STACK> datum_rowkeys;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rows_info.rowkeys_.count(); i++) {
+      if (OB_FAIL(datum_rowkeys.push_back(rows_info.get_rowkey(i)))) {
+        LOG_WARN("Failed to push back rowkey", K(ret), K(i), K(rows_info.rowkeys_.count()));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(build_multi_exist_iterator(rows_info.exist_helper_.table_iter_param_, datum_rowkeys,
+                                                  rows_info.exist_helper_.table_access_context_, iter))) {
       LOG_WARN("Fail to build multi exist iterator", K(ret));
     }
 
@@ -862,7 +879,7 @@ int ObSSTable::check_rows_locked(
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(valid_for_reading), KP_(meta));
-  } else if (meta_->is_empty() || (is_major_sstable() && !check_exist)) {
+  } else if (no_data_to_read() || (is_major_sstable() && !check_exist)) {
   } else if (!check_exist && get_upper_trans_version() <= snapshot_version.get_val_for_tx()) {
     if (max_trans_version.get_val_for_tx() < get_upper_trans_version()) {
       if (OB_FAIL(max_trans_version.convert_for_tx(get_upper_trans_version()))) {
@@ -915,7 +932,7 @@ int ObSSTable::check_row_locked(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(key), K_(valid_for_reading), KPC_(meta));
-  } else if (is_empty()) {
+  } else if (no_data_to_read()) {
   } else if (OB_FAIL(get_last_rowkey(sstable_endkey))) {
     LOG_WARN("Fail to get SSTable endkey", K(ret), KP_(meta));
   } else if (OB_ISNULL(sstable_endkey)) {
@@ -948,19 +965,23 @@ int ObSSTable::check_row_locked(
   return ret;
 }
 
-int ObSSTable::set_upper_trans_version(const int64_t upper_trans_version)
+int ObSSTable::set_upper_trans_version(
+    common::ObArenaAllocator &allocator,
+    const int64_t upper_trans_version)
 {
   int ret = OB_SUCCESS;
-
-  const int64_t old_val = ATOMIC_LOAD(&meta_cache_.upper_trans_version_);
-  // only set once
-  if (INT64_MAX == old_val && INT64_MAX != upper_trans_version) {
-    const int64_t new_val = std::max(upper_trans_version, meta_cache_.max_merged_trans_version_);
-    ATOMIC_CAS(&meta_cache_.upper_trans_version_, old_val, new_val);
+  const int64_t old_val = meta_cache_.upper_trans_version_;
+  // make sure meta_ is loaded, otherwise make meta and shell inconsistency.
+  if (!is_loaded() && OB_FAIL(bypass_load_meta(allocator))) {
+    LOG_WARN("failed to load sstable meta", K(ret), K(key_));
+  }
+  if (OB_SUCC(ret) && is_loaded()) {
+    (void) meta_->basic_meta_.set_upper_trans_version(upper_trans_version);
+    (void) meta_cache_.set_upper_trans_version(upper_trans_version);
   }
 
-  LOG_INFO("succeed to set upper trans version", K(key_),
-      K(upper_trans_version), K(meta_cache_.upper_trans_version_));
+  LOG_INFO("finish set upper trans version", K(ret), K(key_), K_(meta),
+      K(old_val), K(upper_trans_version), K_(meta_cache));
   return ret;
 }
 
@@ -1433,6 +1454,7 @@ void ObSSTable::dec_macro_ref() const
     } else {
       while (OB_SUCC(iterator.get_next_macro_id(macro_id))) {
         if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+          // overwrite ret
           LOG_ERROR("fail to dec other block ref cnt", K(ret), K(macro_id));
         } else {
           LOG_DEBUG("barry debug decrease other ref cnt", K(macro_id), KPC(this), K(lbt()));
@@ -1440,7 +1462,8 @@ void ObSSTable::dec_macro_ref() const
       }
     }
     iterator.reset();
-    if (OB_FAIL(meta_handle.get_sstable_meta().get_macro_info().get_linked_block_iter(iterator))) { // ignore ret
+    if (OB_FAIL(meta_handle.get_sstable_meta().get_macro_info().get_linked_block_iter(iterator))) {
+      // overwrite ret
       LOG_ERROR("fail to get linked block iterator", K(ret), KPC(this));
     } else {
       while (OB_SUCC(iterator.get_next_macro_id(macro_id))) {
@@ -1659,13 +1682,20 @@ int ObSSTable::get_index_tree_root(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(is_empty())) {
+  } else if (OB_UNLIKELY(no_data_to_read())) {
     index_data.reset();
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("SSTable is empty", K(ret));
   } else if (OB_UNLIKELY(!is_loaded())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can not get index tree rot from an unloaded sstable", K(ret));
+  } else if (is_ddl_merge_empty_sstable()) {
+    // mock here, skip valid_check
+    index_data.reset();
+    index_data.type_ = ObMicroBlockData::DDL_MERGE_INDEX_BLOCK;
+    index_data.buf_ = DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_BUF;
+    index_data.size_ = DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_SIZE;
+    LOG_INFO("empty ddl merge sstable", K(index_data));
   } else if (OB_UNLIKELY(!meta_->get_root_info().get_addr().is_valid()
                       || !meta_->get_root_info().get_block_data().is_valid())) {
     ret = OB_STATE_NOT_MATCH;
@@ -1679,6 +1709,10 @@ int ObSSTable::get_index_tree_root(
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Shouldn't happen, transform has already been done in initialize,", K(ret), KPC(this));
+  }
+  if (OB_SUCC(ret) && is_ddl_merge_sstable()) {
+    index_data.type_ = ObMicroBlockData::DDL_MERGE_INDEX_BLOCK;
+    LOG_INFO("ddl merge sstable get root", K(index_data));
   }
   return ret;
 }
@@ -1712,25 +1746,28 @@ int ObSSTable::build_exist_iterator(
   return ret;
 }
 
-int ObSSTable::build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowIterator *&iter)
+int ObSSTable::build_multi_exist_iterator(
+    const ObTableIterParam &iter_param,
+    const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
+    ObTableAccessContext &access_context,
+    ObStoreRowIterator *&iter)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   ObStoreRowIterator *tmp_iter = nullptr;
-  ObTableAccessContext &context = rows_info.exist_helper_.table_access_context_;
 
   if (!contain_uncommitted_row()) {
-      ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObSSTableRowMultiExister, tmp_iter);
+    ALLOCATE_TABLE_STORE_ROW_IETRATOR(access_context, ObSSTableRowMultiExister, tmp_iter);
   } else if (is_multi_version_minor_sstable()) {
-      ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObSSTableMultiVersionRowMultiGetter, tmp_iter);
+    ALLOCATE_TABLE_STORE_ROW_IETRATOR(access_context, ObSSTableMultiVersionRowMultiGetter, tmp_iter);
   } else {
-    ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObSSTableRowMultiGetter, tmp_iter);
+    ALLOCATE_TABLE_STORE_ROW_IETRATOR(access_context, ObSSTableRowMultiGetter, tmp_iter);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tmp_iter->init(rows_info.exist_helper_.table_iter_param_,
-                                    context,
-                                    this, &rows_info.rowkeys_))) {
+  } else if (OB_FAIL(tmp_iter->init(iter_param,
+                                    access_context,
+                                    this, &rowkeys))) {
     LOG_WARN("Fail to init store row iter", K(ret));
   } else {
     iter = tmp_iter;
@@ -1738,7 +1775,7 @@ int ObSSTable::build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowItera
 
   if (OB_FAIL(ret) && OB_NOT_NULL(tmp_iter)) {
     tmp_iter->~ObStoreRowIterator();
-    FREE_TABLE_STORE_ROW_IETRATOR(context, tmp_iter);
+    FREE_TABLE_STORE_ROW_IETRATOR(access_context, tmp_iter);
     tmp_iter = nullptr;
   }
 
@@ -1796,6 +1833,9 @@ int ObSSTable::get_last_rowkey(const ObDatumRowkey *&sstable_endkey)
       } else if (OB_FAIL(block_meta_tree->get_last_rowkey(sstable_endkey))) {
         LOG_WARN("get last rowkey failed", K(ret));
       }
+    } else if (is_ddl_merge_sstable()) {
+      //todo qilu: get endkey from sstable + ddl kv after ddl_kv_mgr refactor
+      sstable_endkey = &ObDatumRowkey::MAX_ROWKEY;
     } else {
       if (OB_ISNULL(idx_data_header = reinterpret_cast<const ObIndexBlockDataHeader *>(
           root_block.get_extra_buf()))) {
@@ -1915,6 +1955,51 @@ int ObSSTable::get_meta(
       LOG_WARN("unexpected null sstable pointer", K(ret), KPC(sstable_ptr));
     } else {
       meta_handle.meta_ = sstable_ptr->meta_;
+    }
+  }
+  return ret;
+}
+
+
+int ObSSTable::bypass_load_meta(common::ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (is_loaded()) {
+    if (OB_UNLIKELY(!meta_->is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid sstable meta pointer for in-memory sstable", K(ret), KPC(this));
+    }
+  } else if (OB_UNLIKELY(!addr_.is_valid() || !addr_.is_block())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid addr for get sstable from cache", K(ret), KPC(this));
+  } else {
+    common::ObSafeArenaAllocator safe_allocator(allocator);
+    ObSSTableMetaHandle meta_handle;
+    ObStorageMetaCache &meta_cache = OB_STORE_CACHE.get_storage_meta_cache();
+    const ObStorageMetaValue *value = nullptr;
+    ObSSTable *sstable_ptr = nullptr;
+    ObStorageMetaKey meta_key(MTL_ID(), addr_);
+    ObStorageMetaValue::MetaType meta_type = is_co_sstable()
+                                           ? ObStorageMetaValue::MetaType::CO_SSTABLE
+                                           : ObStorageMetaValue::MetaType::SSTABLE;
+    if (OB_FAIL(meta_cache.bypass_get_meta(meta_type, meta_key, safe_allocator, meta_handle.handle_))) {
+      LOG_WARN("fail to bypass cache get meta", K(ret), K(meta_type), K(meta_key));
+    } else if (OB_FAIL(meta_handle.handle_.get_value(value))) {
+      LOG_WARN("fail to get value from meta handle", K(ret), KPC(this));
+    } else if (OB_ISNULL(value)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null sstable cache value", K(ret), K(value), KPC(this));
+    } else if (OB_FAIL(value->get_sstable(sstable_ptr))) {
+      LOG_WARN("fail to get sstable from meta cache value", K(ret), KPC(value), KPC(this));
+    } else if (OB_ISNULL(sstable_ptr)
+        || OB_UNLIKELY(!sstable_ptr->is_valid())
+        || OB_ISNULL(sstable_ptr->meta_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null sstable pointer", K(ret), KPC(sstable_ptr));
+    } else {
+      // move the owner of new created sstable meta in memory to this
+      meta_ = sstable_ptr->meta_;
+      sstable_ptr->meta_ = nullptr;
     }
   }
   return ret;

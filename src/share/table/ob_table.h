@@ -29,6 +29,8 @@
 #include "share/table/ob_table_ttl_common.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "common/ob_role.h"
+#include "common/row/ob_row.h"
+#include "lib/oblog/ob_warning_buffer.h"
 namespace oceanbase
 {
 namespace common
@@ -38,6 +40,11 @@ class ObNewRow;
 
 namespace table
 {
+
+#define OB_TABLE_OPTION_DEFAULT INT64_C(0)
+#define OB_TABLE_OPTION_RETURNING_ROWKEY (INT64_C(1) << 0)
+#define OB_TABLE_OPTION_USE_PUT (INT64_C(1) << 1)
+
 using common::ObString;
 using common::ObRowkey;
 using common::ObObj;
@@ -223,6 +230,7 @@ void ObTableEntityFactory<T>::free_all()
 enum class ObQueryOperationType : int {
   QUERY_START = 0,
   QUERY_NEXT = 1,
+  QUERY_END = 2,
   QUERY_MAX
 };
 
@@ -241,6 +249,10 @@ struct ObTableOperationType
     APPEND = 7,
     SCAN = 8,
     TTL = 9, // internal type for ttl executor cache key
+    CHECK_AND_INSERT_UP = 10,
+    PUT = 11,
+    TRIGGER = 12, // internal type for group commit trigger
+    REDIS = 13,
     INVALID = 15
   };
 };
@@ -339,10 +351,10 @@ class ObTableTTLOperation
 {
 public:
   ObTableTTLOperation(uint64_t tenant_id, uint64_t table_id, const ObTTLTaskParam &para,
-                      uint64_t del_row_limit, ObRowkey start_rowkey)
+                      uint64_t del_row_limit, ObRowkey start_rowkey, uint64_t hbase_cur_version)
   : tenant_id_(tenant_id), table_id_(table_id), max_version_(para.max_version_),
     time_to_live_(para.ttl_), is_htable_(para.is_htable_), del_row_limit_(del_row_limit),
-    start_rowkey_(start_rowkey)
+    start_rowkey_(start_rowkey), hbase_cur_version_(hbase_cur_version)
   {}
 
   ~ObTableTTLOperation() {}
@@ -360,6 +372,7 @@ public:
   bool is_htable_;
   uint64_t del_row_limit_;
   ObRowkey start_rowkey_;
+  uint64_t hbase_cur_version_;
 };
 
 /// common result for ObTable
@@ -374,6 +387,16 @@ public:
     msg_[0] = '\0';
   }
   ~ObTableResult() = default;
+  void set_err(int err)
+  {
+    errno_ = err;
+    if (err != common::OB_SUCCESS) {
+      common::ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+      if (OB_NOT_NULL(wb)) {
+        (void)snprintf(msg_, common::OB_MAX_ERROR_MSG_LEN, "%s", wb->get_err_msg());
+      }
+    }
+  }
   void set_errno(int err) { errno_ = err; }
   int get_errno() const { return errno_; }
   int assign(const ObTableResult &other);
@@ -405,6 +428,7 @@ public:
   int get_entity(ObITableEntity *&entity);
   ObITableEntity *get_entity() { return entity_; }
   int64_t get_affected_rows() const { return affected_rows_; }
+  int get_return_rows() { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
 
   void set_entity(ObITableEntity &entity) { entity_ = &entity; }
   void set_type(ObTableOperationType::Type op_type) { operation_type_ = op_type; }
@@ -468,21 +492,27 @@ public:
   ObIRetryPolicy* retry_policy() { return retry_policy_; }
   void set_returning_affected_rows(bool returning) { returning_affected_rows_ = returning; }
   bool returning_affected_rows() const { return returning_affected_rows_; }
-  void set_returning_rowkey(bool returning) { returning_rowkey_ = returning; }
-  bool returning_rowkey() const { return returning_rowkey_; }
+  void set_returning_rowkey(bool returning)
+  {
+    if (returning) {
+      option_flag_ |= OB_TABLE_OPTION_RETURNING_ROWKEY;
+    }
+  }
+  bool returning_rowkey() const { return option_flag_ & OB_TABLE_OPTION_RETURNING_ROWKEY; }
   void set_returning_affected_entity(bool returning) { returning_affected_entity_ = returning; }
   bool returning_affected_entity() const { return returning_affected_entity_; }
   void set_batch_operation_as_atomic(bool atomic) { batch_operation_as_atomic_ = atomic; }
   bool batch_operation_as_atomic() const { return batch_operation_as_atomic_; }
   void set_binlog_row_image_type(ObBinlogRowImageType type) { binlog_row_image_type_ = type; }
   ObBinlogRowImageType binlog_row_image_type() const { return binlog_row_image_type_; }
+  uint8_t get_option_flag() const { return option_flag_; }
 private:
   ObTableConsistencyLevel consistency_level_;
   int64_t server_timeout_us_;
   int64_t max_execution_time_us_;
   ObIRetryPolicy *retry_policy_;
   bool returning_affected_rows_;  // default: false
-  bool returning_rowkey_;         // default: false
+  uint8_t option_flag_; // default: 0
   bool returning_affected_entity_;  // default: false
   bool batch_operation_as_atomic_;  // default: false
   // int route_policy
@@ -805,7 +835,8 @@ class ObTableQueryAndMutate final
   OB_UNIS_VERSION(1);
 public:
   ObTableQueryAndMutate()
-      :return_affected_entity_(true)
+      : return_affected_entity_(true),
+        flag_(0)
   {}
   const ObTableQuery &get_query() const { return query_; }
   ObTableQuery &get_query() { return query_; }
@@ -815,14 +846,31 @@ public:
 
   void set_deserialize_allocator(common::ObIAllocator *allocator);
   void set_entity_factory(ObITableEntityFactory *entity_factory);
+
+  bool is_check_and_execute() const { return is_check_and_execute_; }
+  bool is_check_exists() const { return is_check_and_execute_ && !is_check_no_exists_; }
   uint64_t get_checksum();
 
   TO_STRING_KV(K_(query),
-               K_(mutations));
+               K_(mutations),
+               K_(return_affected_entity),
+               K_(flag),
+               K_(is_check_and_execute),
+               K_(is_check_no_exists));
 private:
   ObTableQuery query_;
   ObTableBatchOperation mutations_;
   bool return_affected_entity_;
+  union
+  {
+    uint64_t flag_;
+    struct
+    {
+      bool is_check_and_execute_ : 1;
+      bool is_check_no_exists_ : 1;
+      uint64_t reserved : 62;
+    };
+  };
 };
 
 inline void ObTableQueryAndMutate::set_deserialize_allocator(common::ObIAllocator *allocator)
@@ -867,11 +915,22 @@ public:
 private:
   static const int64_t DEFAULT_BUF_BLOCK_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE - (1024*1024LL);
   int alloc_buf_if_need(const int64_t size);
+  OB_INLINE int64_t get_lob_storage_count(const common::ObNewRow &row) const
+  {
+    int64_t count = 0;
+    for (int64_t i = 0; i < row.get_count(); ++i) {
+      if (is_lob_storage(row.get_cell(i).get_type())) {
+        count++;
+      }
+    }
+    return count;
+  }
 private:
   common::ObSEArray<ObString, 16> properties_names_;  // serialize
   int64_t row_count_;                                 // serialize
   common::ObDataBuffer buf_;                          // serialize
   common::ObArenaAllocator allocator_;
+  common::ObArenaAllocator prop_name_allocator_;
   int64_t fixed_result_size_;
   // for deserialize and read
   int64_t curr_idx_;
@@ -891,15 +950,17 @@ public:
   ObTableQueryResult affected_entity_;
 };
 
-class ObTableQuerySyncResult: public ObTableQueryResult
+class ObTableQueryAsyncResult: public ObTableQueryResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableQuerySyncResult()
+  ObTableQueryAsyncResult()
     : is_end_(false),
       query_session_id_(0)
   {}
-  virtual ~ObTableQuerySyncResult() {}
+  virtual ~ObTableQueryAsyncResult() {}
+public:
+  INHERIT_TO_STRING_KV("ObTableQueryResult", ObTableQueryResult, K_(is_end), K_(query_session_id));
 public:
   bool     is_end_;
   uint64_t  query_session_id_; // from server gen

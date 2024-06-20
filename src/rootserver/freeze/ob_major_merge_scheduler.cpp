@@ -521,13 +521,15 @@ int ObMajorMergeScheduler::handle_merge_progress(
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
-  if (progress.is_merge_finished()) {
-    LOG_INFO("merge completed", K(global_broadcast_scn), K(progress));
+  if (progress.is_merge_finished() || progress.is_merge_abnomal()) {
+    if (progress.is_merge_abnomal()) {
+      LOG_WARN("merge progress is abnomal, finish progress anyway", K(global_broadcast_scn), K(progress));
+    } else {
+      LOG_INFO("merge completed", K(global_broadcast_scn), K(progress));
+    }
     if (OB_FAIL(try_update_global_merged_scn(expected_epoch))) { // MERGE_STATUS: change to IDLE
       LOG_WARN("fail to update global_merged_scn", KR(ret), K_(tenant_id), K(expected_epoch));
     }
-  } else if (progress.is_merge_abnomal()) {
-    LOG_WARN("merge progress is abnomal", K(global_broadcast_scn), K(progress));
   } else {
     LOG_INFO("this round of traversal is completed, but there are still tablets/tables that have not been merged",
       K(ret), K(global_broadcast_scn), K(progress));
@@ -833,9 +835,23 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
                    (GCONF.enable_major_freeze) &&
                    (!tenant_config->major_freeze_duty_time.disable())) {
           if (TC_REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) {
-            LOG_ERROR("long time no major freeze, please check it", KR(ret),
-              K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
-              K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+            // standby tenant cannot launch major freeze itself, it perform major freeze according
+            // to freeze info synchronized from primary tenant. therefore, standby tenants that
+            // stop sync from primary tenant will not perform major freeze any more. do not print
+            // error log for this case. issue-id: 56800988
+            ObAllTenantInfo tenant_info;
+            if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, sql_proxy_,
+                                                               false, tenant_info))) {
+              LOG_WARN("fail to load tenant info", KR(ret), K_(tenant_id));
+            } else if (tenant_info.is_standby()
+                       && (tenant_info.get_standby_scn() >= tenant_info.get_recovery_until_scn())) {
+              LOG_INFO("standby tenant do not sync from primary tenant any more, and do not"
+                       " major freeze any more");
+            } else {
+              LOG_ERROR("long time no major freeze, please check it", KR(ret),
+                K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
+                K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
+            }
           }
         }
       }

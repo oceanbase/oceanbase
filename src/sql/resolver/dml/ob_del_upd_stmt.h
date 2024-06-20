@@ -193,20 +193,24 @@ public:
   ObInsertTableInfo() :
       ObDmlTableInfo(ObDmlTableType::INSERT_TABLE),
       is_replace_(false),
+      is_overwrite_(false),
       values_desc_(),
       values_vector_(),
       column_conv_exprs_(),
-      assignments_()
+      assignments_(),
+      column_in_values_vector_()
   {
   }
   ObInsertTableInfo(ObDmlTableType dml_type) :
       ObDmlTableInfo(dml_type),
       is_replace_(false),
+      is_overwrite_(false),
       values_desc_(),
       values_vector_(),
       column_conv_exprs_(),
       part_generated_col_dep_cols_(),
-      assignments_()
+      assignments_(),
+      column_in_values_vector_()
   {
   }
   virtual ~ObInsertTableInfo()
@@ -228,12 +232,15 @@ public:
                K_(check_constraint_exprs),
                K_(view_check_exprs),
                K_(is_replace),
+               K_(is_overwrite),
                K_(values_desc),
                K_(values_vector),
                K_(column_conv_exprs),
                K_(part_generated_col_dep_cols),
-               K_(assignments));
+               K_(assignments),
+               K_(column_in_values_vector));
   bool is_replace_;  // replace semantic for mysql
+  bool is_overwrite_;
   // 下面两个变量组合在一起描述了 INSERT 的 VALUES 结构
   // 以 INSERT INTO T1 (i, j, k) VALUES (1,2,3),(4,5,6) 为例：
   //  - values_desc_ 的大小为 3，里面保存了 i, j, k 三列的 column reference expr
@@ -248,6 +255,7 @@ public:
   // part_generated_col_dep_cols_ store c1.
   common::ObSEArray<ObColumnRefRawExpr*, 16, common::ModulePageAllocator, true> part_generated_col_dep_cols_;
   ObAssignments assignments_;
+  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> column_in_values_vector_;
 };
 
 class ObMergeTableInfo: public ObInsertTableInfo
@@ -402,7 +410,8 @@ public:
         error_log_info_(),
         has_instead_of_trigger_(false),
         ab_stmt_id_expr_(nullptr),
-        dml_source_from_join_(false)
+        dml_source_from_join_(false),
+        pdml_disabled_(false)
   { }
   virtual ~ObDelUpdStmt() { }
   int deep_copy_stmt_struct(ObIAllocator &allocator,
@@ -469,6 +478,8 @@ public:
   void set_dml_source_from_join(bool from_join) { dml_source_from_join_ = from_join; }
   inline bool dml_source_from_join() const { return dml_source_from_join_; }
   int check_dml_source_from_join();
+  bool is_pdml_disabled() const { return pdml_disabled_; }
+  void set_pdml_disabled() { pdml_disabled_ = true; }
 protected:
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_exprs_;
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_into_exprs_;
@@ -482,6 +493,7 @@ protected:
   common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> sharding_conditions_;
   ObRawExpr *ab_stmt_id_expr_; //for array binding batch execution to mark the stmt id
   bool dml_source_from_join_;
+  bool pdml_disabled_;  //  pdml is disabled after some transformation like or-expansion
 };
 }
 }

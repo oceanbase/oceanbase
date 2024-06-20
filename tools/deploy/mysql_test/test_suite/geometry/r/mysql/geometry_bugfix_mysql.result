@@ -319,7 +319,7 @@ ERROR 22023: Invalid GIS data provided to function.
 SELECT ST_CONTAINS(
 ST_GEOMFROMTEXT('MULTIPOLYGON(((0 1e+19,0 0,0 0,0 1e+19)))'),
 ST_GEOMFROMTEXT('POLYGON((0 0,0 0,0 0,0 0))'));
-ERROR 22003: coordinate value is out of range in 'st_contains'
+ERROR 22003: value is out of range
 SELECT ST_CONTAINS(
 ST_GEOMFROMTEXT('MULTIPOLYGON(((0 9.22e+18,0 0,0 0,0 9.22e+18)))'),
 ST_GEOMFROMTEXT('POLYGON((0 0,0 0,0 0,0 0))'));
@@ -336,7 +336,7 @@ ST_GEOMFROMTEXT('POLYGON((0 0,0 0,0 0,0 0))'))
 0
 create table tt1(id int,p point);
 alter table tt1 change p p polygon;
-ERROR 0A000: Change geometry type not supported
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
 desc tt1;
 Field	Type	Null	Key	Default	Extra
 id	int(11)	YES		NULL	
@@ -389,26 +389,26 @@ Query Plan
 =====================================================
 |ID|OPERATOR       |NAME      |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |TABLE FULL SCAN|tt1(idx05)|1       |299         |
+|0 |TABLE FULL SCAN|tt1(idx05)|1       |159         |
 =====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([tt1.id]), filter([ST_Intersects(tt1.ge, ST_GeomFromText('POINT(15 20)', 4236))])
       access([tt1.__pk_increment], [tt1.ge], [tt1.id]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
-      range_key([tt1.__cellid_24], [tt1.__mbr_24], [tt1.__pk_increment]), range(1240640185631322861,MIN,MIN ; 1240640185631322861,MAX,MAX), (1240640185631322860,
-      MIN,MIN ; 1240640185631322860,MAX,MAX), (1240640185631322864,MIN,MIN ; 1240640185631322864,MAX,MAX), (1240640185631322816,MIN,MIN ; 1240640185631322816,
-      MAX,MAX), (1240640185631322880,MIN,MIN ; 1240640185631322880,MAX,MAX), (1240640185631323136,MIN,MIN ; 1240640185631323136,MAX,MAX), (1240640185631322112,
-      MIN,MIN ; 1240640185631322112,MAX,MAX), (1240640185631326208,MIN,MIN ; 1240640185631326208,MAX,MAX), (1240640185631309824,MIN,MIN ; 1240640185631309824,
-      MAX,MAX), (1240640185631506432,MIN,MIN ; 1240640185631506432,MAX,MAX), (1240640185632292864,MIN,MIN ; 1240640185632292864,MAX,MAX), (1240640185633341440,
-      MIN,MIN ; 1240640185633341440,MAX,MAX), (1240640185637535744,MIN,MIN ; 1240640185637535744,MAX,MAX), (1240640185587204096,MIN,MIN ; 1240640185587204096,
-      MAX,MAX), (1240640185520095232,MIN,MIN ; 1240640185520095232,MAX,MAX), (1240640184714788864,MIN,MIN ; 1240640184714788864,MAX,MAX), (1240640185788530688,
-      MIN,MIN ; 1240640185788530688,MAX,MAX), (1240640181493563392,MIN,MIN ; 1240640181493563392,MAX,MAX), (1240640198673432576,MIN,MIN ; 1240640198673432576,
-      MAX,MAX), (1240640267392909312,MIN,MIN ; 1240640267392909312,MAX,MAX), (1240639442759188480,MIN,MIN ; 1240639442759188480,MAX,MAX), (1240640542270816256,
-      MIN,MIN ; 1240640542270816256,MAX,MAX), (1240653736410349568,MIN,MIN ; 1240653736410349568,MAX,MAX), (1240671328596393984,MIN,MIN ; 1240671328596393984,
-      MAX,MAX), (1240460222363860992,MIN,MIN ; 1240460222363860992,MAX,MAX), (1239615797433729024,MIN,MIN ; 1239615797433729024,MAX,MAX), (1238489897526886400,
-      MIN,MIN ; 1238489897526886400,MAX,MAX), (1242993497154256896,MIN,MIN ; 1242993497154256896,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
-      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+      range_key([tt1.__cellid_24], [tt1.__mbr_24], [tt1.__pk_increment]), range(1240640185631322860,MIN,MIN ; 1240640185631322860,MAX,MAX), (1240640185631322864,
+      MIN,MIN ; 1240640185631322864,MAX,MAX), (1240640185631322816,MIN,MIN ; 1240640185631322816,MAX,MAX), (1240640185631322880,MIN,MIN ; 1240640185631322880,
+      MAX,MAX), (1240640185631323136,MIN,MIN ; 1240640185631323136,MAX,MAX), (1240640185631322112,MIN,MIN ; 1240640185631322112,MAX,MAX), (1240640185631326208,
+      MIN,MIN ; 1240640185631326208,MAX,MAX), (1240640185631309824,MIN,MIN ; 1240640185631309824,MAX,MAX), (1240640185631506432,MIN,MIN ; 1240640185631506432,
+      MAX,MAX), (1240640185632292864,MIN,MIN ; 1240640185632292864,MAX,MAX), (1240640185633341440,MIN,MIN ; 1240640185633341440,MAX,MAX), (1240640185637535744,
+      MIN,MIN ; 1240640185637535744,MAX,MAX), (1240640185587204096,MIN,MIN ; 1240640185587204096,MAX,MAX), (1240640185520095232,MIN,MIN ; 1240640185520095232,
+      MAX,MAX), (1240640184714788864,MIN,MIN ; 1240640184714788864,MAX,MAX), (1240640185788530688,MIN,MIN ; 1240640185788530688,MAX,MAX), (1240640181493563392,
+      MIN,MIN ; 1240640181493563392,MAX,MAX), (1240640198673432576,MIN,MIN ; 1240640198673432576,MAX,MAX), (1240640267392909312,MIN,MIN ; 1240640267392909312,
+      MAX,MAX), (1240639442759188480,MIN,MIN ; 1240639442759188480,MAX,MAX), (1240640542270816256,MIN,MIN ; 1240640542270816256,MAX,MAX), (1240653736410349568,
+      MIN,MIN ; 1240653736410349568,MAX,MAX), (1240671328596393984,MIN,MIN ; 1240671328596393984,MAX,MAX), (1240460222363860992,MIN,MIN ; 1240460222363860992,
+      MAX,MAX), (1239615797433729024,MIN,MIN ; 1239615797433729024,MAX,MAX), (1238489897526886400,MIN,MIN ; 1238489897526886400,MAX,MAX), (1242993497154256896,
+      MIN,MIN ; 1242993497154256896,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1240640185631322861,MIN,MIN ; 1240640185631322861,MAX,MAX)
 drop table tt1;
 create table t1 (a geometry not null, spatial index(a)) row_format=dynamic;
 INSERT IGNORE INTO t1 VALUES (NULL);
@@ -427,14 +427,14 @@ INSERT INTO t1 (g) VALUES
 (ST_GeomFromText('POINT(6 6)', 3294)),
 (ST_GeomFromText('POINT(7 7)', 3294)),
 (ST_GeomFromText('LINESTRING(0 0, 3 3)',3294));
-explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_covers(a.g, b.g);
+explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_covers(a.g, b.g);
 Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |27      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |306         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |33          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -448,14 +448,14 @@ Outputs & filters:
       access([b.__pk_increment], [b.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__cellid_16], [b.__mbr_16], [b.__pk_increment]), range(MIN ; MAX)
-explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_contains(a.g, b.g);
+explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_contains(a.g, b.g);
 Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |27      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |306         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |33          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -469,14 +469,14 @@ Outputs & filters:
       access([b.__pk_increment], [b.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__cellid_16], [b.__mbr_16], [b.__pk_increment]), range(MIN ; MAX)
-explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_within(a.g, b.g);
+explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_within(a.g, b.g);
 Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |27      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |306         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |33          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -490,14 +490,14 @@ Outputs & filters:
       access([b.__pk_increment], [b.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__cellid_16], [b.__mbr_16], [b.__pk_increment]), range(MIN ; MAX)
-explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_dwithin(a.g, b.g, 0.1);
+explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_dwithin(a.g, b.g, 0.1);
 Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |27      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |306         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |33          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -507,7 +507,7 @@ Outputs & filters:
       access([a.g]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([b.g]), filter([_st_dwithin(:0, b.g, cast(0.1, DOUBLE(-1, -1)))])
+  2 - output([b.g]), filter([_st_dwithin(:0, b.g, cast(0.1, DOUBLE(2, 1)))])
       access([b.__pk_increment], [b.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__cellid_16], [b.__mbr_16], [b.__pk_increment]), range(MIN ; MAX)
@@ -583,3 +583,92 @@ SELECT ST_ASTEXT(B) FROM FF01 WHERE B NOT IN (SELECT /*+no_unnest*/B FROM FF01 W
 ST_ASTEXT(B)
 POINT(-1 -2)
 drop table FF01;
+drop table if exists geek_poi_7;
+CREATE TABLE `geek_poi_7` (
+`p_id` bigint(20) NOT NULL COMMENT 'poi id',
+`p_name` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '场景名称',
+`p_branch_name` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '分店名称',
+`p_phone1` varchar(20) NOT NULL DEFAULT '\'\'' COMMENT '联系电话1',
+`p_phone2` varchar(20) NOT NULL DEFAULT '\'\'' COMMENT '联系电话2',
+`p_logo_url` longtext NOT NULL COMMENT '场景LOGO URL',
+`p_scene_url` longtext NOT NULL COMMENT '场景主页URL',
+`p_quickapp_url` longtext NOT NULL COMMENT '快应用场景主页URL',
+`p_service_list` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '服务列表，json数组',
+`c_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '分类ID',
+`p_radius` double NOT NULL DEFAULT '0' COMMENT '半径大小，单位 m',
+`p_province` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '省',
+`p_city` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '市',
+`p_district` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '区县',
+`p_address` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '详细地址',
+`p_longitude` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '经度',
+`p_latitude` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '纬度',
+`p_altitude` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '海拔高度',
+`p_baidu_id` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '百度城市ID',
+`p_parent_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '父级poi id',
+`p_parent_list` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '父级poi 列表',
+`pn_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '合作方ID，默认为 0 - 梦享网络',
+`pb_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '品牌id',
+`p_order` bigint(20) NOT NULL DEFAULT '0' COMMENT '排序次序',
+`p_coordinate` bigint(20) NOT NULL DEFAULT '0' COMMENT '坐标系 0 - WGS84 # 1 - GCJ02 # 2 - BD09',
+`p_category_list` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT 'poi 分类ID列表',
+`geohash_code` varchar(20) NOT NULL DEFAULT '\'\'' COMMENT 'geog_poi 转换为 geohash 的值',
+`p_create_time` bigint(20) NOT NULL DEFAULT '0' COMMENT '创建时间',
+`p_update_time` bigint(20) NOT NULL DEFAULT '0' COMMENT '更新时间',
+`p_delete_time` bigint(20) NOT NULL DEFAULT '0' COMMENT '删除时间',
+`p_encryption_id` bigint(20) NOT NULL DEFAULT '0' COMMENT 'POI 加密ID',
+`p_class` bigint(20) NOT NULL DEFAULT '0' COMMENT '场景等级',
+`p_config` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '配置项，JSON对象',
+`p_tags_id` json NOT NULL COMMENT '标签列表',
+`geog_poi` geometry NOT NULL /*!80003 SRID 4326 */ COMMENT '经纬度转换后的WGS84坐标对应的geography数据',
+PRIMARY KEY (`p_id`),
+SPATIAL KEY `idx_geohash_code_geog_poi_7` (`geog_poi`) BLOCK_SIZE 16384 LOCAL,
+KEY `idx_poi_del_time_7` (`p_delete_time`) BLOCK_SIZE 16384 LOCAL
+);
+explain SELECT p.p_id,0 as distance FROM geek_poi_7 as p WHERE p.geohash_code like 'ws0emp%' and p.p_delete_time = 0 AND ST_Contains(p.geog_poi,_ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'));
+Query Plan
+=========================================================================
+|ID|OPERATOR       |NAME                          |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |TABLE FULL SCAN|p(idx_geohash_code_geog_poi_7)|1       |203         |
+=========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([p.p_id], [0]), filter([p.p_delete_time = 0], [ST_Contains(p.geog_poi, _ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'))], [(T_OP_LIKE,
+       p.geohash_code, 'ws0emp%', '\\')])
+      access([p.p_id], [p.geog_poi], [p.geohash_code], [p.p_delete_time]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([p.__cellid_50], [p.__mbr_50], [p.p_id]), range(3747839687816876905,MIN,MIN ; 3747839687816876905,MAX,MAX), (3747839687816876908,MIN,MIN 
+      ; 3747839687816876908,MAX,MAX), (3747839687816876912,MIN,MIN ; 3747839687816876912,MAX,MAX), (3747839687816876864,MIN,MIN ; 3747839687816876864,MAX,MAX),
+       (3747839687816876800,MIN,MIN ; 3747839687816876800,MAX,MAX), (3747839687816877056,MIN,MIN ; 3747839687816877056,MAX,MAX), (3747839687816876032,MIN,MIN 
+      ; 3747839687816876032,MAX,MAX), (3747839687816888320,MIN,MIN ; 3747839687816888320,MAX,MAX), (3747839687816839168,MIN,MIN ; 3747839687816839168,MAX,MAX),
+       (3747839687816642560,MIN,MIN ; 3747839687816642560,MAX,MAX), (3747839687816904704,MIN,MIN ; 3747839687816904704,MAX,MAX), (3747839687813758976,MIN,MIN 
+      ; 3747839687813758976,MAX,MAX), (3747839687809564672,MIN,MIN ; 3747839687809564672,MAX,MAX), (3747839687826341888,MIN,MIN ; 3747839687826341888,MAX,MAX),
+       (3747839687759233024,MIN,MIN ; 3747839687759233024,MAX,MAX), (3747839687490797568,MIN,MIN ; 3747839687490797568,MAX,MAX), (3747839688564539392,MIN,MIN 
+      ; 3747839688564539392,MAX,MAX), (3747839675679637504,MIN,MIN ; 3747839675679637504,MAX,MAX), (3747839658499768320,MIN,MIN ; 3747839658499768320,MAX,MAX),
+       (3747839589780291584,MIN,MIN ; 3747839589780291584,MAX,MAX), (3747840414414012416,MIN,MIN ; 3747840414414012416,MAX,MAX), (3747843712948895744,MIN,MIN 
+      ; 3747843712948895744,MAX,MAX), (3747856907088429056,MIN,MIN ; 3747856907088429056,MAX,MAX), (3747909683646562304,MIN,MIN ; 3747909683646562304,MAX,MAX),
+       (3747839314902384640,MIN,MIN ; 3747839314902384640,MAX,MAX), (3748120789879095296,MIN,MIN ; 3748120789879095296,MAX,MAX), (3751498489599623168,MIN,MIN 
+      ; 3751498489599623168,MAX,MAX), (3765009288481734656,MIN,MIN ; 3765009288481734656,MAX,MAX), (3819052484010180608,MIN,MIN ; 3819052484010180608,MAX,MAX),
+       (3746994889972252672,MIN,MIN ; 3746994889972252672,MAX,MAX), (3458764513820540928,MIN,MIN ; 3458764513820540928,MAX,MAX)
+drop table if exists t1;
+create table t1( g geometry );//
+drop PROCEDURE IF EXISTS pro;//
+CREATE PROCEDURE pro()
+BEGIN
+DECLARE g blob;
+select ST_SymDifference(point(2,3),ST_GeomFromText('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(0.5 1,1 2,2 2,2 1,0.5 1)))')) INTO g; 
+insert into t1 values(g);     
+END ;
+//
+call pro();//
+select ST_AsText(g) from t1;//
+ST_AsText(g)
+POLYGON((0 0,3 0,3 3,0 3,0 0),(0.5 1,1 2,2 2,2 1,0.5 1))
+DROP FUNCTION IF EXISTS getg;//
+CREATE FUNCTION getg(stuId blob) 
+RETURNS varchar(200)  DETERMINISTIC
+RETURN  ST_AsText(stuId) ; //
+select getg(ST_SymDifference(point(1,0),point(1,6)));//
+getg(ST_SymDifference(point(1,0),point(1,6)))
+MULTIPOINT((1 0),(1 6))
+drop table t1;

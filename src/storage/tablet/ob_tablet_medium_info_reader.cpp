@@ -12,6 +12,7 @@
 
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "lib/ob_errno.h"
+#include "storage/compaction/ob_medium_compaction_info.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_mds_data.h"
 
@@ -43,6 +44,16 @@ ObTabletMediumInfoReader::~ObTabletMediumInfoReader()
   reset();
 }
 
+struct MdsNodeIteratorCommittedNodeFilter {
+  int operator()(mds::UserMdsNode<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> &node,
+                 bool &need_skip) {
+    int ret = OB_SUCCESS;
+    if (!node.is_committed_()) {
+      need_skip = true;
+    }
+    return ret;
+  }
+};
 int ObTabletMediumInfoReader::init(common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -63,7 +74,7 @@ int ObTabletMediumInfoReader::init(common::ObArenaAllocator &allocator)
         ret = OB_SUCCESS;
         LOG_DEBUG("no mds table", K(ret), K(ls_id), K(tablet_id), K_(mds_end));
       }
-    } else if (OB_FAIL(mds_iter_.init(mds_table))) {
+    } else if (OB_FAIL(mds_iter_.init(mds_table, MdsNodeIteratorCommittedNodeFilter()))) {
       LOG_WARN("failed to init mds iter", K(ret), K(ls_id), K(tablet_id));
     }
 

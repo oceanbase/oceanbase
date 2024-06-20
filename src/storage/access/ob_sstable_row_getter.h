@@ -30,16 +30,16 @@ public:
       iter_param_(nullptr),
       access_ctx_(nullptr),
       prefetcher_(),
-      macro_block_reader_(),
-      rowkey_(nullptr),
+      macro_block_reader_(nullptr),
       read_handle_()
   {
     type_ = ObStoreRowIterator::IteratorSingleGet;
   }
   virtual ~ObSSTableRowGetter();
-  void reset();
-  void reuse();
-  TO_STRING_KV(K_(is_opened), K_(has_fetched), K_(prefetcher));
+  virtual void reset() override;
+  virtual void reuse() override;
+  virtual void reclaim() override;
+  TO_STRING_KV(K_(is_opened), K_(has_fetched), K_(prefetcher), KP_(macro_block_reader));
 protected:
   int inner_open(
       const ObTableIterParam &iter_param,
@@ -57,9 +57,8 @@ protected:
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
   ObIndexTreePrefetcher prefetcher_;
-  ObMacroBlockReader macro_block_reader_;
+  ObMacroBlockReader *macro_block_reader_;
 private:
-  const blocksstable::ObDatumRowkey *rowkey_;
   ObSSTableReadHandle read_handle_;
 };
 

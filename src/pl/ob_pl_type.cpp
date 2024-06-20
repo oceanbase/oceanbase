@@ -26,6 +26,7 @@
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "pl/ob_pl_user_type.h"
 #include "dblink/ob_pl_dblink_guard.h"
+#include "sql/resolver/ob_stmt_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -279,7 +280,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
   const ObTableSchema *table_info = NULL;
   OZ (schema_guard.get_table_schema(tenant_id, owner_id, table, false, table_info));
   if (OB_SUCC(ret) && OB_ISNULL(table_info)) {
-    uint64_t object_owner_id = session_info.get_database_id();
+    uint64_t object_owner_id = owner_id;
     ObString object_name = table;
     bool exist = false;
     OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
@@ -614,7 +615,7 @@ int ObPLDataType::get_datum_type(common::ObObjType obj_type, jit::ObLLVMHelper& 
 }
 
 int ObPLDataType::generate_assign_with_null(ObPLCodeGenerator &generator,
-                                            const ObPLBlockNS &ns,
+                                            const ObPLINS &ns,
                                             jit::ObLLVMValue &allocator,
                                             jit::ObLLVMValue &dest) const
 {
@@ -624,7 +625,7 @@ int ObPLDataType::generate_assign_with_null(ObPLCodeGenerator &generator,
     LOG_WARN("unexpected type to assign NULL", K(*this), K(ret));
   } else {
     const ObUserDefinedType *user_type = NULL;
-    if (OB_FAIL(ns.get_pl_data_type_by_id(get_user_type_id(), user_type))) {
+    if (OB_FAIL(ns.get_user_type(get_user_type_id(), user_type))) {
       LOG_WARN("failed to get user type", K(*this), K(ret));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
@@ -763,9 +764,8 @@ int ObPLDataType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64
   return ret;
 }
 
-int ObPLDataType::get_size(const ObPLINS& ns, ObPLTypeSize type, int64_t &size) const
+int ObPLDataType::get_size(ObPLTypeSize type, int64_t &size) const
 {
-  UNUSED(ns);
   UNUSED(type);
   int ret = OB_SUCCESS;
 //  if (is_obj_type()) {
@@ -1087,11 +1087,14 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
     uint16_t flags;
     ObScale num_decimals;
     ObObj obj;
+    ObField field;
     if (OB_FAIL(ObSMUtils::get_mysql_type(get_obj_type(), mysql_type, flags, num_decimals))) {
       LOG_WARN("get mysql type failed", K(ret), K(get_obj_type()));
     } else {
       obj = *(reinterpret_cast<ObObj *>(src));
       src += sizeof(ObObj);
+      field.accuracy_ = get_data_type()->get_accuracy();
+      field.flags_ = get_data_type()->is_zero_fill() ? ZEROFILL_FLAG : 0;
     }
     if (OB_SUCC(ret)
         && !obj.is_invalid_type() // deleted element not serialize.
@@ -1100,7 +1103,7 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to serialize pl data type, data type inconsistent with pl type",
                  K(get_obj_type()), K(obj.get_type()), K(obj), K(*this), K(ret));
-      } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, NULL, NULL))) {
+      } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, NULL))) {
         LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
       } else {
         LOG_DEBUG("success serialize pl data type", K(*this), K(obj),
@@ -1151,7 +1154,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     uint16_t flags;
     ObScale num_decimals;
     ObObj param;
-    if (OB_FAIL(get_size(ObPLUDTNS(schema_guard), PL_TYPE_INIT_SIZE, init_size))) {
+    if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
       LOG_WARN("get base type init size failed", K(ret));
     } else if (OB_ISNULL(dst) || (dst_len - dst_pos < init_size)) {
       ret = OB_SIZE_OVERFLOW;
@@ -1554,7 +1557,6 @@ void ObObjAccessIdx::reset()
 
 bool ObObjAccessIdx::operator==(const ObObjAccessIdx &other) const
 {
-  int ret = OB_SUCCESS;
   // udf deterministic default value is false, we need display setting check_ctx.need_check_deterministic_
   ObExprEqualCheckContext check_ctx;
   check_ctx.need_check_deterministic_ = false;
@@ -1901,6 +1903,24 @@ int ObObjAccessIdx::get_package_id(
   return ret;
 }
 
+bool ObObjAccessIdx::has_same_collection_access(const ObRawExpr *expr, const ObObjAccessRawExpr *access_expr)
+{
+  bool ret = false;
+  if (expr->is_obj_access_expr()) {
+    const ObIArray<ObObjAccessIdx> &left = static_cast<const ObObjAccessRawExpr *>(expr)->get_access_idxs();
+    const ObIArray<ObObjAccessIdx> &right= access_expr->get_access_idxs();
+    for (int64_t i = 0; i < left.count() && i < right.count(); ++i) {
+      if (!(left.at(i) == right.at(i))) {
+        break;
+      } else if (left.at(i).elem_type_.is_collection_type()) {
+        ret = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 bool ObObjAccessIdx::has_collection_access(const ObRawExpr *expr)
 {
   bool ret = false;
@@ -2043,6 +2063,7 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
     snapshot_ = src.snapshot_;
     is_need_check_snapshot_ = src.is_need_check_snapshot_;
     last_execute_time_ = src.last_execute_time_;
+    sql_trace_id_ = src.sql_trace_id_;
     //these should not be copied ..
     //    lib::MemoryContext entity_;
     //    ObIAllocator *allocator_;
@@ -2066,7 +2087,9 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
     // it will happend not in ps cursor.
     OZ (prepare_spi_cursor(dest_cursor,
                             src_cursor->row_store_.get_tenant_id(),
-                            src_cursor->row_store_.get_mem_limit()));
+                            src_cursor->row_store_.get_mem_limit(),
+                            false,
+                            src_cursor->session_info_));
     CK (OB_NOT_NULL(dest_cursor));
     OZ (dest_cursor->row_desc_.assign(src_cursor->row_desc_));
 #ifdef OB_BUILD_ORACLE_PL
@@ -2232,13 +2255,6 @@ int ObPLCursorInfo::set_rowcount(int64_t rowcount)
         rowcount_ += rowcount;
       }
     } else {
-      // 非forall的dml语句，需要首先清除掉forall中填充的bulk信息
-      if (bulk_rowcount_.count() != 0) {
-        bulk_rowcount_.reset();
-      }
-      if (bulk_exceptions_.count() != 0) {
-        bulk_exceptions_.reset();
-      }
       rowcount_ = rowcount;
     }
     isopen_ = true; // 隐式游标用这个值来判断是否有执行过dml，因此每次set_rowcount都设置这个值
@@ -2253,7 +2269,7 @@ int ObPLCursorInfo::get_rowid(ObString &rowid) const
     if (!fetched_) {
       ret = OB_ER_SP_CURSOR_NOT_OPEN;
       LOG_WARN("cursor is not fetched", K(*this), K(ret));
-    } else if (!has_hidden_rowid_) {
+    } else if (!has_hidden_rowid_ || nullptr == current_row_.cells_) {
       ret = OB_INVALID_ROWID;
       LOG_WARN("cursor has no rowid", K(*this), K(ret));
     } else {
@@ -2354,7 +2370,8 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
 int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
                                         uint64_t tenant_id,
                                         uint64_t mem_limit,
-                                        bool is_local_for_update)
+                                        bool is_local_for_update,
+                                        sql::ObSQLSessionInfo* session_info)
 {
   int ret = OB_SUCCESS;
   ObIAllocator *spi_allocator = get_allocator();
@@ -2368,7 +2385,7 @@ int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
     OX (spi_cursor_ = spi_allocator->alloc(alloc_size));
     OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
   }
-  OX (spi_cursor = new (spi_cursor_) ObSPICursor(*spi_allocator));
+  OX (spi_cursor = new (spi_cursor_) ObSPICursor(*spi_allocator, session_info));
   OX (last_stream_cursor_ = false);
   if (OB_SUCC(ret)) {
     if (OB_INVALID_SIZE == mem_limit) {

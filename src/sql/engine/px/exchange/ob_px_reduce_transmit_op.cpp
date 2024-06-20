@@ -43,7 +43,7 @@ int ObPxReduceTransmitOp::do_transmit()
 {
   int ret = OB_SUCCESS;
   ObAllToOneSliceIdxCalc fixed_slice_calc(ctx_.get_allocator());
-  ret = send_rows(fixed_slice_calc);
+  ret = send_rows<ObSliceIdxCalc::ALL_TO_ONE>(fixed_slice_calc);
   return ret;
 }
 

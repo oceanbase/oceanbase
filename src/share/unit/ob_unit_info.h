@@ -42,6 +42,7 @@ public:
   ObUnit();
   ~ObUnit() {}
   inline bool operator <(const ObUnit &unit) const;
+  int assign(const ObUnit& that);
   void reset();
   bool is_valid() const;
   bool is_manual_migrate() const { return is_manual_migrate_; }
@@ -112,6 +113,7 @@ public:
  uint64_t get_unit_group_id() const { return unit_group_id_; }
  ObUnit::Status get_status() const  { return status_; }
  TO_STRING_KV(K_(unit_group_id), K_(status));
+ bool operator<(const ObSimpleUnitGroup &that) { return unit_group_id_ < that.unit_group_id_; }
 private:
   uint64_t unit_group_id_;
   ObUnit::Status status_;

@@ -76,6 +76,7 @@ namespace backup {
     }
 #endif
 ERRSIM_POINT_DEF(EN_LS_BACKUP_FAILED);
+ERRSIM_POINT_DEF(EN_BACKUP_DATA_TASK_FAILED);
 
 static int get_ls_handle(const uint64_t tenant_id, const share::ObLSID &ls_id, storage::ObLSHandle &ls_handle)
 {
@@ -187,7 +188,8 @@ ObLSBackupDagNetInitParam::ObLSBackupDagNetInitParam()
       start_scn_(),
       backup_data_type_(),
       compl_start_scn_(),
-      compl_end_scn_()
+      compl_end_scn_(),
+      is_only_calc_stat_(false)
 {}
 
 ObLSBackupDagNetInitParam::~ObLSBackupDagNetInitParam()
@@ -220,6 +222,7 @@ int ObLSBackupDagNetInitParam::assign(const ObLSBackupDagNetInitParam &other)
     backup_data_type_ = other.backup_data_type_;
     compl_start_scn_ = other.compl_start_scn_;
     compl_end_scn_ = other.compl_end_scn_;
+    is_only_calc_stat_ = other.is_only_calc_stat_;
   }
   return ret;
 }
@@ -267,9 +270,10 @@ int ObLSBackupDagNetInitParam::convert_to(ObLSBackupDagInitParam &init_param)
 
 bool ObLSBackupDagNetInitParam::operator==(const ObLSBackupDagNetInitParam &other) const
 {
-  return job_desc_ == other.job_desc_ && backup_dest_ == other.backup_dest_ && tenant_id_ == other.tenant_id_ &&
-         backup_set_desc_ == other.backup_set_desc_ && ls_id_ == other.ls_id_ &&
-         turn_id_ == other.turn_id_ && retry_id_ == other.retry_id_ && dest_id_ == other.dest_id_;
+  return job_desc_ == other.job_desc_ && backup_dest_ == other.backup_dest_ && tenant_id_ == other.tenant_id_
+      && backup_set_desc_ == other.backup_set_desc_ && ls_id_ == other.ls_id_
+      && turn_id_ == other.turn_id_ && retry_id_ == other.retry_id_ && dest_id_ == other.dest_id_
+      && is_only_calc_stat_ == other.is_only_calc_stat_;
 }
 
 /* ObLSBackupDagInitParam */
@@ -409,19 +413,19 @@ int ObLSBackupMetaDagNet::start_running()
       LOG_WARN("failed to add dag", K(ret), KP(finish_dag));
     } else if (OB_FAIL(dag_scheduler->add_dag(prepare_dag))) {
       LOG_WARN("failed to add dag", K(ret), KP(prepare_dag));
-      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag, prepare_dag))) {
+      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag))) {
         LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(dag_scheduler), KP(finish_dag));
       } else {
         finish_dag = nullptr;
       }
     } else if (OB_FAIL(dag_scheduler->add_dag(backup_meta_dag))) {
       LOG_WARN("failed to add dag", K(ret), KP(prepare_dag));
-      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag, prepare_dag))) {
+      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag))) {
         LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(dag_scheduler), KP(finish_dag));
       } else {
         finish_dag = nullptr;
       }
-      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(prepare_dag, backup_meta_dag))) {
+      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(prepare_dag))) {
         LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(dag_scheduler), KP(prepare_dag));
       } else {
         prepare_dag = nullptr;
@@ -564,14 +568,15 @@ int ObLSBackupDataDagNet::inner_init_before_run_()
   int64_t batch_size = 0;
   if (OB_FAIL(param_.convert_to(backup_param))) {
     LOG_WARN("failed to convert param", K(param_));
-  } else if (OB_FAIL(ls_backup_ctx_.open(backup_param, backup_data_type_, *param_.report_ctx_.sql_proxy_))) {
+  } else if (OB_FAIL(ls_backup_ctx_.open(backup_param, backup_data_type_,
+      *param_.report_ctx_.sql_proxy_, OB_BACKUP_INDEX_CACHE))) {
     LOG_WARN("failed to open log stream backup ctx", K(ret), K(backup_param));
   } else if (OB_FAIL(prepare_backup_tablet_provider_(backup_param, backup_data_type_, ls_backup_ctx_,
       OB_BACKUP_INDEX_CACHE, *param_.report_ctx_.sql_proxy_, provider_))) {
     LOG_WARN("failed to prepare backup tablet provider", K(ret), K(backup_param), K_(backup_data_type));
   } else if (OB_FAIL(get_batch_size_(batch_size))) {
     LOG_WARN("failed to get batch size", K(ret));
-  } else if (OB_FAIL(task_mgr_.init(backup_data_type_, batch_size))) {
+  } else if (OB_FAIL(task_mgr_.init(backup_data_type_, batch_size, ls_backup_ctx_))) {
     LOG_WARN("failed to init task mgr", K(ret), K(batch_size));
   } else {
     ls_backup_ctx_.stat_mgr_.mark_begin(backup_data_type_);
@@ -992,6 +997,7 @@ int ObLSBackupComplementLogDagNet::init_by_param(const share::ObIDagInitParam *p
     report_ctx_ = init_param.report_ctx_;
     compl_start_scn_ = init_param.compl_start_scn_;
     compl_end_scn_ = init_param.compl_end_scn_;
+    is_only_calc_stat_ = init_param.is_only_calc_stat_;
     is_inited_ = true;
   }
   return ret;
@@ -1024,6 +1030,7 @@ int ObLSBackupComplementLogDagNet::start_running()
                  param_.retry_id_,
                  compl_start_scn_,
                  compl_end_scn_,
+                 is_only_calc_stat_,
                  report_ctx_))) {
     LOG_WARN("failed to init child dag", K(ret), K_(param), K_(compl_start_scn), K_(compl_end_scn));
   } else if (OB_FAIL(complement_dag->create_first_task())) {
@@ -1835,6 +1842,7 @@ ObLSBackupComplementLogDag::ObLSBackupComplementLogDag()
       retry_id_(-1),
       compl_start_scn_(),
       compl_end_scn_(),
+      is_only_calc_stat_(false),
       report_ctx_()
 {}
 
@@ -1844,7 +1852,7 @@ ObLSBackupComplementLogDag::~ObLSBackupComplementLogDag()
 int ObLSBackupComplementLogDag::init(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
     const int64_t turn_id, const int64_t retry_id, const SCN &start_scn, const SCN &end_scn,
-    const ObBackupReportCtx &report_ctx)
+    const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -1875,6 +1883,7 @@ int ObLSBackupComplementLogDag::init(const ObBackupJobDesc &job_desc, const ObBa
     compl_start_scn_ = start_scn;
     compl_end_scn_ = end_scn;
     report_ctx_ = report_ctx;
+    is_only_calc_stat_ = is_only_calc_stat;
     is_inited_ = true;
   }
   return ret;
@@ -1887,7 +1896,7 @@ int ObLSBackupComplementLogDag::create_first_task()
   if (OB_FAIL(alloc_task(task))) {
     LOG_WARN("failed to alloc task", K(ret));
   } else if (OB_FAIL(task->init(job_desc_, backup_dest_, tenant_id_, dest_id_, backup_set_desc_, ls_id_, compl_start_scn_,
-      compl_end_scn_, turn_id_, retry_id_, report_ctx_))) {
+      compl_end_scn_, turn_id_, retry_id_, is_only_calc_stat_, report_ctx_))) {
     LOG_WARN("failed to init task", K(ret), K_(tenant_id), K_(backup_set_desc), K_(ls_id), K_(compl_start_scn), K_(compl_end_scn));
   } else if (OB_FAIL(add_task(*task))) {
     LOG_WARN("failed to add task", K(ret));
@@ -1931,7 +1940,7 @@ bool ObLSBackupComplementLogDag::operator==(const ObIDag &other) const
       const ObLSBackupComplementLogDag &other_dag = static_cast<const ObLSBackupComplementLogDag &>(other);
       bret = job_desc_ == other_dag.job_desc_ && backup_dest_ == other_dag.backup_dest_ &&
                 tenant_id_ == other_dag.tenant_id_ && dest_id_ == other_dag.dest_id_ && backup_set_desc_ == other_dag.backup_set_desc_ &&
-                ls_id_ == other_dag.ls_id_;
+                ls_id_ == other_dag.ls_id_ && is_only_calc_stat_ == other_dag.is_only_calc_stat_;
   }
   return bret;
 }
@@ -1944,6 +1953,7 @@ int64_t ObLSBackupComplementLogDag::hash() const
   hash_value = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_value);
   hash_value = common::murmurhash(&backup_set_desc_, sizeof(backup_set_desc_), hash_value);
   hash_value = common::murmurhash(&ls_id_, sizeof(ls_id_), hash_value);
+  hash_value = common::murmurhash(&is_only_calc_stat_, sizeof(is_only_calc_stat_), hash_value);
   return hash_value;
 }
 
@@ -1966,7 +1976,9 @@ ObPrefetchBackupInfoTask::ObPrefetchBackupInfoTask()
       index_kv_cache_(NULL),
       macro_index_store_for_inc_(),
       macro_index_store_for_turn_(),
-      index_rebuild_dag_(NULL)
+      index_rebuild_dag_(NULL),
+      next_prefetch_task_id_(-1),
+      next_backup_task_id_(-1)
 {}
 
 ObPrefetchBackupInfoTask::~ObPrefetchBackupInfoTask()
@@ -1987,6 +1999,7 @@ int ObPrefetchBackupInfoTask::init(const ObLSBackupDagInitParam &param, const sh
     LOG_WARN("failed to assign param", K(ret), K(param));
   } else {
     report_ctx_ = report_ctx;
+    prefetch_task_id_ = ls_backup_ctx.get_prefetch_task_id();
     backup_data_type_ = backup_data_type;
     ls_backup_ctx_ = &ls_backup_ctx;
     provider_ = &provider;
@@ -2008,7 +2021,14 @@ int ObPrefetchBackupInfoTask::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
   bool need_report_error = false;
+#ifdef ERRSIM
+  if (backup_data_type_.is_major_backup() && 1002 == param_.ls_id_.id() && 1 == param_.turn_id_ && 1 == param_.retry_id_) {
+    SERVER_EVENT_SYNC_ADD("backup_errsim", "before_backup_prefetch_task");
+    DEBUG_SYNC(BEFORE_BACKUP_PREFETCH_TASK);
+  }
+#endif
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("prefetch backup info task is not inited", K(ret));
@@ -2045,6 +2065,8 @@ int ObPrefetchBackupInfoTask::process()
   if (OB_NOT_NULL(ls_backup_ctx_) && need_report_error) {
     REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ls_backup_ctx_->get_result_code());
   }
+  const int64_t cost_us = ObTimeUtility::current_time() - start_ts;
+  record_server_event_(cost_us);
   return ret;
 }
 
@@ -2350,7 +2372,7 @@ int ObPrefetchBackupInfoTask::inner_check_backup_item_need_copy_when_change_turn
   need_copy = true;
   if (!macro_index_store_for_turn_.is_inited()) {
     need_copy = true;
-    LOG_INFO("macro index store for turn is not inited", K(ret));
+    LOG_DEBUG("macro index store for turn is not inited", K(ret));
   } else if (OB_FAIL(macro_index_store_for_turn_.get_macro_block_index(item.get_logic_id(), macro_index))) {
     LOG_WARN("inner check backup item need copy when change turn", K(ret), K(item), K(need_copy), K(macro_index));
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -2380,7 +2402,6 @@ int ObPrefetchBackupInfoTask::generate_next_prefetch_dag_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObPrefetchBackupInfoDag *child_dag = NULL;
-  int64_t prefetch_task_id = 0;
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
   ObIDagNet *dag_net = NULL;
   if (OB_ISNULL(scheduler) || OB_ISNULL(ls_backup_ctx_)) {
@@ -2391,9 +2412,8 @@ int ObPrefetchBackupInfoTask::generate_next_prefetch_dag_()
     LOG_WARN("dag net should not be NULL", K(ret), K(*this));
   } else if (OB_FAIL(scheduler->alloc_dag(child_dag))) {
     LOG_WARN("failed to alloc child dag", K(ret));
-  } else if (OB_FAIL(ls_backup_ctx_->get_prefetch_task_id(prefetch_task_id))) {
-    LOG_WARN("failed to get prefetch task id", K(ret));
-  } else if (OB_FAIL(child_dag->init(prefetch_task_id,
+  } else if (FALSE_IT(next_prefetch_task_id_ = ls_backup_ctx_->get_prefetch_task_id())) {
+  } else if (OB_FAIL(child_dag->init(next_prefetch_task_id_,
                  param_,
                  backup_data_type_,
                  report_ctx_,
@@ -2418,7 +2438,7 @@ int ObPrefetchBackupInfoTask::generate_next_prefetch_dag_()
       LOG_WARN("may exist same dag", K(ret));
     }
   } else {
-    LOG_INFO("success to alloc next prefetch dag", K(ret), K(prefetch_task_id), K_(param));
+    LOG_INFO("success to alloc next prefetch dag", K(ret), K_(param));
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(child_dag)) {
     scheduler->free_dag(*child_dag);
@@ -2476,6 +2496,7 @@ int ObPrefetchBackupInfoTask::generate_backup_dag_(
         LOG_WARN("may exist same dag", K(ret));
       }
     } else {
+      next_backup_task_id_ = task_id;
       LOG_INFO("success to alloc backup dag", K(ret), K(task_id), K_(backup_data_type), K(items));
     }
   }
@@ -2483,6 +2504,35 @@ int ObPrefetchBackupInfoTask::generate_backup_dag_(
     scheduler->free_dag(*child_dag);
   }
   return ret;
+}
+
+void ObPrefetchBackupInfoTask::record_server_event_(const int64_t cost_us)
+{
+  const char *prefetch_data_event = NULL;
+  if (backup_data_type_.is_sys_backup()) {
+    prefetch_data_event = "prefetch_sys_data";
+  } else if (backup_data_type_.is_minor_backup()) {
+    prefetch_data_event = "prefetch_minor_data";
+  } else if (backup_data_type_.is_major_backup()) {
+    prefetch_data_event = "prefetch_major_data";
+  }
+  int64_t pos = 0;
+  const int64_t buf_len = MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+  char buf[buf_len] = {};
+  if (-1 != next_prefetch_task_id_) {
+    (void)common::databuff_printf(buf, buf_len, pos, "prefetch_task_id:%ld -> next_prefetch_task_id:%ld",
+                                  prefetch_task_id_, next_prefetch_task_id_);
+  } else {
+    (void)common::databuff_printf(buf, buf_len, pos, "prefetch_task_id:%ld -> backup_task_id:%ld",
+                                  prefetch_task_id_, next_backup_task_id_);
+  }
+  SERVER_EVENT_ADD("backup", prefetch_data_event,
+      "tenant_id", param_.tenant_id_,
+      "backup_set_id", param_.backup_set_desc_.backup_set_id_,
+      "ls_id", param_.ls_id_.id(),
+      "turn_id", param_.turn_id_,
+      "retry_id", param_.retry_id_,
+      "cost_us", cost_us, buf);
 }
 
 /* ObLSBackupDataTask */
@@ -2504,7 +2554,8 @@ ObLSBackupDataTask::ObLSBackupDataTask()
       allocator_(),
       backup_items_(),
       finished_tablet_list_(),
-      index_rebuild_dag_(NULL)
+      index_rebuild_dag_(NULL),
+      next_prefetch_task_id_(-1)
 {}
 
 ObLSBackupDataTask::~ObLSBackupDataTask()
@@ -2577,6 +2628,19 @@ int ObLSBackupDataTask::process()
     }
   }
 #endif
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (backup_data_type_.is_major_backup() && 1002 == param_.ls_id_.id() && 1 == param_.turn_id_ && 0 == param_.retry_id_ && 1 == task_id_) {
+      ret = EN_BACKUP_DATA_TASK_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        SERVER_EVENT_SYNC_ADD("backup_errsim", "before_backup_data_task");
+        DEBUG_SYNC(BEFORE_BACKUP_DATA_TASK);
+      }
+    }
+  }
+#endif
+
   if (OB_FAIL(ret)) {
   } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2593,6 +2657,8 @@ int ObLSBackupDataTask::process()
     LOG_WARN("failed to check ls valid for backup", K(ret), K_(param));
   } else if (OB_FAIL(do_write_file_header_())) {
     LOG_WARN("failed to do write file header", K(ret));
+  } else if (OB_FAIL(do_check_tablet_valid_())) {
+    LOG_WARN("failed to check tablet valid", K(ret));
   } else if (OB_FAIL(do_backup_macro_block_data_())) {
     LOG_WARN("failed to do backup macro block data", K(ret));
   } else if (OB_FAIL(do_backup_meta_data_())) {
@@ -2694,6 +2760,55 @@ int ObLSBackupDataTask::do_write_file_header_()
   return ret;
 }
 
+int ObLSBackupDataTask::get_check_tablet_list_(common::ObIArray<ObBackupProviderItem> &tablet_list)
+{
+  int ret = OB_SUCCESS;
+  tablet_list.reset();
+  ARRAY_FOREACH_X(backup_items_, idx, cnt, OB_SUCC(ret)) {
+    const ObBackupProviderItem &item = backup_items_.at(idx);
+    if (PROVIDER_ITEM_CHECK == item.get_item_type()) {
+      if (OB_FAIL(tablet_list.push_back(item))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupDataTask::do_check_tablet_valid_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObBackupProviderItem> tablet_list;
+  ObBackupTabletChecker *checker = NULL;
+  if (OB_ISNULL(ls_backup_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls backup ctx should not be null", K(ret));
+  } else if (OB_FALSE_IT(checker = &ls_backup_ctx_->tablet_checker_)) {
+  } else if (!backup_data_type_.is_major_backup()) {
+    // do nothing
+  } else if (OB_FAIL(get_check_tablet_list_(tablet_list))) {
+    LOG_WARN("failed to get check tablet list", K(ret));
+  } else {
+    const ObBackupPhysicalID physical_id = ObBackupPhysicalID::get_default();
+    ARRAY_FOREACH_X(tablet_list, idx, cnt, OB_SUCC(ret)) {
+      const ObBackupProviderItem &tablet_item = tablet_list.at(idx);
+      const ObTabletID &tablet_id = tablet_item.get_tablet_id();
+      ObBackupTabletHandleRef *tablet_ref = NULL;
+      if (OB_ISNULL(checker)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("checker should not be null", K(ret));
+      } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_ref))) {
+        LOG_WARN("failed to get tablet handle", K(ret), K(tablet_id));
+      } else if (OB_FAIL(checker->check_tablet_valid(param_.tenant_id_, param_.ls_id_, tablet_id, tablet_ref->tablet_handle_))) {
+        LOG_WARN("failed to check tablet valid", K(ret), K_(param), K(tablet_id));
+      } else if (OB_FAIL(mark_backup_item_finished_(tablet_item, physical_id))) {
+        LOG_WARN("failed to mark backup item finished", K(ret), K(tablet_item));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSBackupDataTask::do_backup_macro_block_data_()
 {
   int ret = OB_SUCCESS;
@@ -2777,16 +2892,16 @@ int ObLSBackupDataTask::do_backup_meta_data_()
       const common::ObTabletID &tablet_id = item.get_tablet_id();
       ObITabletMetaBackupReader *reader = NULL;
       ObBufferReader buffer_reader;
-      ObTabletHandle tablet_handle;
+      ObBackupTabletHandleRef *tablet_ref = NULL;
       ObTabletMetaReaderType reader_type;
       ObBackupMetaType meta_type;
       ObBackupMetaIndex meta_index;
       const ObBackupPhysicalID physical_id = ObBackupPhysicalID::get_default();
       if (OB_FAIL(get_tablet_meta_info_(item, reader_type, meta_type))) {
         LOG_WARN("failed to get tablet meta info", K(ret), K(item));
-      } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_handle))) {
+      } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_ref))) {
         LOG_WARN("failed to get tablet handle", K(ret), K_(task_id), K(tablet_id), K(item), K(i), K(item_list));
-      } else if (OB_FAIL(prepare_tablet_meta_reader_(tablet_id, reader_type, tablet_handle, reader))) {
+      } else if (OB_FAIL(prepare_tablet_meta_reader_(tablet_id, reader_type, tablet_ref->tablet_handle_, reader))) {
         LOG_WARN("failed to prepare tablet meta reader", K(tablet_id), K(reader_type));
       } else if (OB_FAIL(reader->get_meta_data(buffer_reader))) {
         LOG_WARN("failed to get meta data", K(ret), K(tablet_id));
@@ -3050,7 +3165,8 @@ int ObLSBackupDataTask::get_meta_item_list_(common::ObIArray<ObBackupProviderIte
   list.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_items_.count(); ++i) {
     const ObBackupProviderItem &item = backup_items_.at(i);
-    if (PROVIDER_ITEM_MACRO_ID != item.get_item_type()) {
+    if (PROVIDER_ITEM_MACRO_ID != item.get_item_type()
+        && PROVIDER_ITEM_CHECK != item.get_item_type()) {
       if (OB_FAIL(list.push_back(item))) {
         LOG_WARN("failed to push back", K(ret), K(item));
       }
@@ -3175,14 +3291,15 @@ int ObLSBackupDataTask::write_backup_meta_(const ObBufferReader &data, const com
   } else if (OB_FAIL(backup_data_ctx_.write_meta_data(data, tablet_id, meta_type, meta_index))) {
     LOG_WARN("failed to write macro block data", K(ret), K(data), K(tablet_id), K(meta_type));
   } else {
-    LOG_INFO("write meta data", K(tablet_id), K(meta_type));
+    LOG_DEBUG("write meta data", K(tablet_id), K(meta_type), K(meta_index));
   }
   return ret;
 }
 
-int ObLSBackupDataTask::get_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle)
+int ObLSBackupDataTask::get_tablet_handle_(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle)
 {
   int ret = OB_SUCCESS;
+  tablet_handle = NULL;
   if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
@@ -3191,8 +3308,11 @@ int ObLSBackupDataTask::get_tablet_handle_(const common::ObTabletID &tablet_id, 
     LOG_WARN("ls backup ctx should not be null", K(ret));
   } else if (OB_FAIL(ls_backup_ctx_->get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(tablet_id));
+  } else if (OB_ISNULL(tablet_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet handle should not be null", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("get tablet handle", K(tablet_id));
+    LOG_DEBUG("get tablet handle", K(tablet_id));
   }
   return ret;
 }
@@ -3209,7 +3329,7 @@ int ObLSBackupDataTask::release_tablet_handle_(const common::ObTabletID &tablet_
   } else if (OB_FAIL(ls_backup_ctx_->release_tablet(tablet_id))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("release tablet handle", K(tablet_id));
+    LOG_DEBUG("release tablet handle", K(tablet_id));
   }
   return ret;
 }
@@ -3241,7 +3361,6 @@ int ObLSBackupDataTask::do_generate_next_backup_dag_()
   ObLSBackupStage stage = LOG_STREAM_BACKUP_MAJOR;
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
   ObIDagNet *dag_net = NULL;
-  int64_t prefetch_task_id = 0;
   if (OB_ISNULL(scheduler) || OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler), KP_(ls_backup_ctx));
@@ -3252,9 +3371,8 @@ int ObLSBackupDataTask::do_generate_next_backup_dag_()
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), K(*this));
-  } else if (OB_FAIL(ls_backup_ctx_->get_prefetch_task_id(prefetch_task_id))) {
-    LOG_WARN("failed to get prefetch task id", K(ret));
-  } else if (OB_FAIL(next_dag->init(prefetch_task_id,
+  } else if (FALSE_IT(next_prefetch_task_id_ = ls_backup_ctx_->get_prefetch_task_id())) {
+  } else if (OB_FAIL(next_dag->init(next_prefetch_task_id_,
                  dag_param,
                  backup_data_type_,
                  report_ctx_,
@@ -3315,20 +3433,18 @@ void ObLSBackupDataTask::record_server_event_(const int64_t cost_us) const
   } else if (backup_data_type_.is_major_backup()) {
     backup_data_event = "backup_major_data";
   }
-  SERVER_EVENT_ADD("backup",
-      backup_data_event,
-      "tenant_id",
-      param_.tenant_id_,
-      "backup_set_id",
-      param_.backup_set_desc_.backup_set_id_,
-      "ls_id",
-      param_.ls_id_.id(),
-      "retry_id",
-      param_.retry_id_,
-      "file_id",
-      task_id_,
-      "cost_us",
-      cost_us);
+  int64_t pos = 0;
+  const int64_t buf_len = MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+  char buf[buf_len] = {};
+  (void)common::databuff_printf(buf, buf_len, pos, "backup_task_id:%ld -> next_prefetch_task_id:%ld",
+                                task_id_, next_prefetch_task_id_);
+  SERVER_EVENT_ADD("backup", backup_data_event,
+      "tenant_id", param_.tenant_id_,
+      "backup_set_id", param_.backup_set_desc_.backup_set_id_,
+      "ls_id", param_.ls_id_.id(),
+      "turn_id", param_.turn_id_,
+      "retry_id", param_.retry_id_,
+      "cost_us", cost_us, buf);
 }
 
 int ObLSBackupDataTask::finish_backup_items_()
@@ -3428,11 +3544,11 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
     const common::ObTabletID &tablet_id, ObBackupTabletStat *tablet_stat)
 {
   int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
+  ObBackupTabletHandleRef *tablet_ref = NULL;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObBackupDataType backup_data_type;
   backup_data_type.set_major_data_backup();
-  ObArray<ObITable *> sstable_array;
+  ObArray<ObSSTableWrapper> sstable_array;
 
   if (OB_ISNULL(ls_backup_ctx_) || OB_ISNULL(tablet_stat)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3441,25 +3557,25 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
     // do nothing
   } else if (tablet_id.id() != ls_backup_ctx_->backup_retry_ctx_.need_skip_logic_id_.tablet_id_) {
     // do nothing
-  } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_handle))) {
+  } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_ref))) {
     LOG_WARN("failed to get tablet handle", K(ret), K(tablet_id));
-  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
+  } else if (OB_FAIL(tablet_ref->tablet_handle_.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_handle,
+  } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_ref->tablet_handle_,
       backup_data_type, *table_store_wrapper.get_member(), sstable_array))) {
-    LOG_WARN("failed to get sstable by data type", K(ret), K(tablet_handle));
+    LOG_WARN("failed to get sstable by data type", K(ret), K(tablet_ref));
   } else if (sstable_array.empty()) {
     // do nothing
-  } else if (1 != sstable_array.count() && tablet_handle.get_obj()->is_row_store()) {
+  } else if (1 != sstable_array.count() && tablet_ref->tablet_handle_.get_obj()->is_row_store()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable array count not 1", K(ret), K(sstable_array));
   } else if (1 == sstable_array.count()) {
-    if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(0), tablet_handle, tablet_stat))) {
+    if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(0).get_sstable(), tablet_ref->tablet_handle_, tablet_stat))) {
       LOG_WARN("failed to check and mark item reused", K(ret));
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-      if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(i), tablet_handle, tablet_stat))) {
+      if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(i).get_sstable(), tablet_ref->tablet_handle_, tablet_stat))) {
         LOG_WARN("failed to check and mark item reused", K(ret));
       }
     }
@@ -3586,7 +3702,27 @@ int ObLSBackupMetaTask::process()
     DEBUG_SYNC(BEFORE_BACKUP_1001_META);
   }
 #endif
-  if (IS_NOT_INIT) {
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (ls_id.is_sys_ls()) {
+      ret = OB_E(EventTable::EN_BACKUP_SYS_META_TASK_FAILED) OB_SUCCESS;
+    } else {
+      ret = OB_E(EventTable::EN_BACKUP_USER_META_TASK_FAILED) OB_SUCCESS;
+    }
+    if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_meta",
+                            "tenant_id", param_.tenant_id_,
+                            "task_id", param_.job_desc_.task_id_,
+                            "ls_id", param_.ls_id_.id(),
+                            "turn_id", param_.turn_id_,
+                            "retry_id", param_.retry_id_);
+      LOG_WARN("errsim backup meta task failed", K(ret));
+    }
+  }
+#endif
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup meta task do not init", K(ret));
   } else {
@@ -3603,19 +3739,6 @@ int ObLSBackupMetaTask::process()
     }
   }
 
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    if (ls_id.is_sys_ls()) {
-      ret = OB_E(EventTable::EN_BACKUP_SYS_META_TASK_FAILED) OB_SUCCESS;
-    } else {
-      ret = OB_E(EventTable::EN_BACKUP_USER_META_TASK_FAILED) OB_SUCCESS;
-    }
-    if (OB_FAIL(ret)) {
-      SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_meta");
-      LOG_WARN("errsim backup meta task failed", K(ret));
-    }
-  }
-#endif
   if (OB_FAIL(ret)) {
     bool is_set = false;
     ls_backup_ctx_->set_result_code(ret, is_set);
@@ -3683,9 +3806,14 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
     blocksstable::ObBufferReader buffer_reader;
     int64_t macro_block_count = 0;
     int64_t start_time = 0;
+    const int64_t serialize_size = tablet_info.param_.get_serialize_size();
     if (!tablet_info.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("tablet meta is invalid", K(ret), K(tablet_info));
+    } else if (MAX_BACKUP_TABLET_META_SERIALIZE_SIZE < serialize_size) {
+      // In case of the tablet meta is too large.
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet meta is too large.", K(ret), K(serialize_size), K(tablet_info));
     } else if (OB_FAIL(buffer_writer.ensure_space(backup::OB_BACKUP_READ_BLOCK_SIZE))) {
       LOG_WARN("failed to ensure space");
     } else if (OB_FAIL(buffer_writer.write_serialize(tablet_info.param_))) {
@@ -3978,8 +4106,7 @@ int ObLSBackupPrepareTask::process()
     } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dag net should not be NULL", K(ret), K(*this));
-    } else if (OB_FAIL(ls_backup_ctx_->get_prefetch_task_id(prefetch_task_id))) {
-      LOG_WARN("failed to get prefetch task id", K(ret));
+    } else if (FALSE_IT(prefetch_task_id = ls_backup_ctx_->prefetch_task_id_)) {
     } else if (OB_FAIL(child_dag->init(prefetch_task_id,
                    param_,
                    backup_data_type_,
@@ -4832,14 +4959,14 @@ ObLSBackupComplementLogTask::~ObLSBackupComplementLogTask()
 int ObLSBackupComplementLogTask::init(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
     const SCN &start_scn, const SCN &end_scn, const int64_t turn_id, const int64_t retry_id,
-    const ObBackupReportCtx &report_ctx)
+    const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ls backup complement log task init twice", K(ret));
   } else if (!job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id ||
-             !backup_set_desc.is_valid() || !ls_id.is_valid() || !start_scn.is_valid() || !end_scn.is_valid()) {
+             !backup_set_desc.is_valid() || !ls_id.is_valid() || !start_scn.is_valid_and_not_min() || !end_scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args",
         K(ret),
@@ -4862,6 +4989,7 @@ int ObLSBackupComplementLogTask::init(const ObBackupJobDesc &job_desc, const ObB
     compl_end_scn_ = end_scn;
     turn_id_ = turn_id;
     retry_id_ = retry_id;
+    is_only_calc_stat_ = is_only_calc_stat;
     report_ctx_ = report_ctx;
     is_inited_ = true;
   }
@@ -4973,8 +5101,16 @@ int ObLSBackupComplementLogTask::inner_process_(
     LOG_WARN("failed to make parent dir", K(ret), K(backup_path), K(backup_dest_));
   } else if (OB_FAIL(calc_backup_file_range_(archive_dest_id, ls_id, file_list))) {
     LOG_WARN("failed to calc backup file range", K(ret), K(archive_dest_id), K(ls_id));
-  } else if (OB_FAIL(backup_complement_log_(file_list))) {
-    LOG_WARN("failed to backup complement log", K(ret), K(file_list));
+  } else {
+    if (is_only_calc_stat_) {
+      if (OB_FAIL(report_complement_log_stat_(file_list))) {
+        LOG_WARN("failed to report complement log stat", K(ret), K(file_list));
+      }
+    } else {
+      if (OB_FAIL(backup_complement_log_(file_list))) {
+        LOG_WARN("failed to backup complement log", K(ret), K(file_list));
+      }
+    }
   }
   return ret;
 }
@@ -5280,7 +5416,7 @@ int ObLSBackupComplementLogTask::inner_get_piece_file_list_(const share::ObLSID 
   const share::SCN &start_scn = piece_attr.start_scn_;
   if (OB_FAIL(get_src_backup_piece_dir_(ls_id, piece_attr, src_piece_dir_path))) {
     LOG_WARN("failed to get src backup piece dir", K(ret), K(round_id), K(piece_id), K(ls_id), K(piece_attr));
-  } else if (OB_FAIL(util.list_files(src_piece_dir_path.get_obstr(), archive_dest_.get_storage_info(), op))) {
+  } else if (OB_FAIL(util.adaptively_list_files(src_piece_dir_path.get_obstr(), archive_dest_.get_storage_info(), op))) {
     LOG_WARN("failed to list files", K(ret), K(src_piece_dir_path));
   } else if (OB_FAIL(op.get_file_id_list(file_id_list))) {
     LOG_WARN("failed to get files", K(ret));
@@ -5440,6 +5576,60 @@ int ObLSBackupComplementLogTask::get_dst_backup_file_path_(
   return ret;
 }
 
+int ObLSBackupComplementLogTask::update_ls_task_stat_(const share::ObBackupStats &old_backup_stat,
+    const int64_t compl_log_file_count, share::ObBackupStats &new_backup_stat)
+{
+  int ret = OB_SUCCESS;
+  new_backup_stat.input_bytes_ = old_backup_stat.input_bytes_;
+  new_backup_stat.output_bytes_ = old_backup_stat.output_bytes_;
+  new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_;
+  new_backup_stat.macro_block_count_ = old_backup_stat.macro_block_count_;
+  new_backup_stat.finish_macro_block_count_ = old_backup_stat.finish_macro_block_count_;
+  new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_;
+  new_backup_stat.finish_macro_block_count_ = new_backup_stat.finish_macro_block_count_;
+  new_backup_stat.log_file_count_ += compl_log_file_count;
+  return ret;
+}
+
+int ObLSBackupComplementLogTask::report_complement_log_stat_(const common::ObIArray<BackupPieceFile> &file_list)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const int64_t compl_log_file_count = file_list.count();
+  ObMySQLTransaction trans;
+  int64_t max_file_id = 0;
+  const bool for_update = true;
+  const int64_t job_id = job_desc_.job_id_;
+  const int64_t task_id = job_desc_.task_id_;
+  const uint64_t tenant_id = tenant_id_;
+  const share::ObLSID &ls_id = ls_id_;
+  if (OB_FAIL(trans.start(report_ctx_.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
+    LOG_WARN("failed to start transaction", K(ret));
+  } else {
+    share::ObBackupLSTaskAttr old_ls_task_attr;
+    share::ObBackupStats new_ls_task_stat;
+    if (OB_FAIL(ObBackupLSTaskOperator::get_ls_task(trans, for_update,
+              task_id, tenant_id, ls_id, old_ls_task_attr))) {
+      LOG_WARN("failed to get ls task", K(ret));
+    } else if (OB_FAIL(update_ls_task_stat_(old_ls_task_attr.stats_, compl_log_file_count, new_ls_task_stat))) {
+      LOG_WARN("failed to update ls task stat", K(ret));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::update_stats(trans, task_id, tenant_id, ls_id, new_ls_task_stat))) {
+      LOG_WARN("failed to update stat", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true /*commit*/))) {
+        LOG_WARN("failed to commit", K(ret));
+      }
+    } else {
+      if (OB_TMP_FAIL(trans.end(false /* commit*/))) {
+        LOG_WARN("failed to rollback trans", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSBackupComplementLogTask::backup_complement_log_(const common::ObIArray<BackupPieceFile> &src_file_list)
 {
   int ret = OB_SUCCESS;
@@ -5476,7 +5666,9 @@ int ObLSBackupComplementLogTask::backup_complement_log_(const common::ObIArray<B
       LOG_WARN("failed to mk parent dir", K(ret), K(dst_path));
     } else if (OB_FAIL(inner_backup_complement_log_(src_path, dst_path))) {
       LOG_WARN("failed to inner backup complement log", K(ret), K(src_path), K(dst_path));
-    }else {
+    } else if (OB_FAIL(report_progress_())) {
+      LOG_WARN("failed to make progress", K(ret));
+    } else {
       SERVER_EVENT_ADD("backup", "backup_complement_log_file",
                       "tenant_id", tenant_id_,
                       "backup_set_id", backup_set_desc_.backup_set_id_,
@@ -5484,7 +5676,54 @@ int ObLSBackupComplementLogTask::backup_complement_log_(const common::ObIArray<B
                       "round_id", piece_file.round_id_,
                       "piece_id", piece_file.piece_id_,
                       "file_id", piece_file.file_id_);
+      DEBUG_SYNC(AFTER_REPORT_BACKUP_COMPL_LOG);
       LOG_INFO("inner backup complement log", K(piece_file), K(src_path), K(dst_path));
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupComplementLogTask::report_progress_()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  const bool for_update = true;
+  if (OB_FAIL(trans.start(report_ctx_.sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
+    LOG_WARN("failed to start transaction", K(ret));
+  } else {
+    const int64_t job_id = job_desc_.job_id_;
+    const int64_t task_id = job_desc_.task_id_;
+    const uint64_t tenant_id = tenant_id_;
+    const share::ObLSID &ls_id = ls_id_;
+    share::ObBackupSetTaskAttr old_set_task_attr;
+    share::ObBackupLSTaskAttr old_ls_task_attr;
+    share::ObBackupStats new_ls_task_stat;
+    share::ObBackupStats new_backup_set_stats;
+    if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans, job_id, tenant_id, for_update, old_set_task_attr))) {
+      LOG_WARN("failed to get backup task", K(ret));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::get_ls_task(trans, for_update,
+              task_id, tenant_id, ls_id, old_ls_task_attr))) {
+      LOG_WARN("failed to get ls task", K(ret));
+    } else if (OB_FALSE_IT(new_backup_set_stats = old_set_task_attr.stats_)) {
+    } else if (OB_FALSE_IT(new_backup_set_stats.finish_log_file_count_++)) {
+    } else if (OB_FALSE_IT(new_ls_task_stat = old_ls_task_attr.stats_)) {
+    } else if (OB_FALSE_IT(new_ls_task_stat.finish_log_file_count_++)) {
+    } else if (OB_FAIL(ObBackupLSTaskOperator::update_stats(trans, task_id, tenant_id, ls_id, new_ls_task_stat))) {
+      LOG_WARN("failed to update stat", K(ret));
+    } else if (OB_FAIL(ObBackupTaskOperator::update_stats(trans, task_id, tenant_id, new_backup_set_stats))) {
+      LOG_WARN("failed to update stats", K(ret), K(task_id), K(tenant_id));
+    } else {
+      LOG_INFO("make progress", K(new_backup_set_stats), K(new_ls_task_stat));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true /*commit*/))) {
+        LOG_WARN("failed to commit", K(ret));
+      }
+    } else {
+      if (OB_TMP_FAIL(trans.end(false /* commit*/))) {
+        LOG_WARN("failed to rollback trans", K(tmp_ret));
+      }
     }
   }
   return ret;
@@ -5506,41 +5745,58 @@ int ObLSBackupComplementLogTask::inner_backup_complement_log_(
 int ObLSBackupComplementLogTask::transfer_clog_file_(const ObBackupPath &src_path, const ObBackupPath &dst_path)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t dst_len = 0;
   int64_t transfer_len = 0;
-  while (OB_SUCC(ret)) {
-    if (OB_FAIL(inner_transfer_clog_file_(src_path, dst_path, transfer_len))) {
-      LOG_WARN("failed to inner transfer clog file", K(ret), K(src_path), K(dst_path));
+  ObIOFd fd;
+  ObBackupIoAdapter util;
+  ObIODevice *device_handle = NULL;
+  if (OB_FAIL(util.open_with_access_type(
+          device_handle, fd, backup_dest_.get_storage_info(), dst_path.get_obstr(), OB_STORAGE_ACCESS_MULTIPART_WRITER))) {
+    LOG_WARN("failed to open with access type", K(ret));
+  } else {
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(inner_transfer_clog_file_(src_path, dst_path, device_handle, fd, dst_len, transfer_len))) {
+        LOG_WARN("failed to inner transfer clog file", K(ret), K(src_path), K(dst_path));
+      } else {
+        dst_len += transfer_len;
+      }
+      if (0 == transfer_len) { //at this point, last part is still held in memory
+        LOG_INFO("transfer ended", K(ret), K(src_path), K(dst_path));
+        break;
+      }
     }
-    if (0 == transfer_len) {
-      LOG_INFO("transfer ended", K(ret), K(src_path), K(dst_path));
-      break;
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(device_handle->complete(fd))) {
+        LOG_WARN("fail to complete multipart upload", K(ret), K(device_handle), K(fd));
+      }
+    } else {
+      if (OB_NOT_NULL(device_handle) && OB_TMP_FAIL(device_handle->abort(fd))) {
+        ret = COVER_SUCC(tmp_ret);
+        LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
+      }
+    }
+    if (OB_SUCCESS != (tmp_ret = util.close_device_and_fd(device_handle, fd))) {
+      LOG_WARN("fail to close file", K(ret), K_(backup_dest), K(dst_path));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
   return ret;
 }
 
-int ObLSBackupComplementLogTask::inner_transfer_clog_file_(
-    const ObBackupPath &src_path, const ObBackupPath &dst_path, int64_t &transfer_len)
+int ObLSBackupComplementLogTask::inner_transfer_clog_file_(const ObBackupPath &src_path, const ObBackupPath &dst_path,
+    ObIODevice *&device_handle, ObIOFd &fd, const int64_t dst_len, int64_t &transfer_len)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   transfer_len = 0;
-  ObIOFd fd;
   ObBackupIoAdapter util;
-  ObIODevice *device_handle = NULL;
   int64_t write_size = -1;
   ObArenaAllocator allocator;
   int64_t src_len = 0;
-  int64_t dst_len = 0;
   char *buf = NULL;
   int64_t read_len = 0;
-  if (OB_FAIL(util.open_with_access_type(
-          device_handle, fd, backup_dest_.get_storage_info(), dst_path.get_obstr(), OB_STORAGE_ACCESS_RANDOMWRITER))) {
-    LOG_WARN("failed to open with access type", K(ret));
-  } else if (OB_FAIL(get_file_length_(src_path.get_obstr(), archive_dest_.get_storage_info(), src_len))) {
+  if (OB_FAIL(get_file_length_(src_path.get_obstr(), archive_dest_.get_storage_info(), src_len))) {
     LOG_WARN("failed to get file length", K(ret), K(src_path));
-  } else if (OB_FAIL(get_file_length_(dst_path.get_obstr(), backup_dest_.get_storage_info(), dst_len))) {
-    LOG_WARN("failed to get file length", K(ret), K(dst_path));
   } else if (dst_len == src_len) {
     transfer_len = 0;
   } else if (dst_len > src_len) {
@@ -5551,17 +5807,13 @@ int ObLSBackupComplementLogTask::inner_transfer_clog_file_(
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(transfer_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(transfer_len));
-  } else if (OB_FAIL(util.read_part_file(src_path.get_obstr(), archive_dest_.get_storage_info(), buf, transfer_len, dst_len, read_len))) {
+  } else if (OB_FAIL(util.adaptively_read_part_file(src_path.get_obstr(), archive_dest_.get_storage_info(), buf, transfer_len, dst_len, read_len))) {
     LOG_WARN("failed to read part file", K(ret), K(src_path));
   } else if (read_len != transfer_len) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("read len not expected", K(ret), K(read_len), K(transfer_len));
   } else if (OB_FAIL(device_handle->pwrite(fd, dst_len, transfer_len, buf, write_size))) {
-    LOG_WARN("failed to write appender file", K(ret));
-  }
-  if (OB_SUCCESS != (tmp_ret = util.close_device_and_fd(device_handle, fd))) {
-    LOG_WARN("failed to close storage appender", K(ret), KR(tmp_ret));
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    LOG_WARN("failed to write multipart upload file", K(ret));
   }
   return ret;
 }
@@ -5585,7 +5837,7 @@ int ObLSBackupComplementLogTask::get_file_length_(
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
-  if (OB_FAIL(util.get_file_length(file_path, storage_info, length))) {
+  if (OB_FAIL(util.adaptively_get_file_length(file_path, storage_info, length))) {
     if (OB_BACKUP_FILE_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       length = 0;

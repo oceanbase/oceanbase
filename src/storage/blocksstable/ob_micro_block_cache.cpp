@@ -424,9 +424,12 @@ int ObIMicroBlockIOCallback::read_block_and_copy(
 {
   int ret = OB_SUCCESS;
   block_data.type_ = cache_->get_type();
-  // only full_transform for index_block with cs_encoding when don't use block cache
-  if (ObMicroBlockData::INDEX_BLOCK == block_data.type_  &&
-      ObStoreFormat::is_row_store_type_with_cs_encoding(static_cast<ObRowStoreType>(header.row_store_type_))) {
+  // In normal cases, full_transform is not required if not using block cache,
+  // The ObMicroBlockCSDecoder can do part_transform and use the memory whose life cycle
+  // is consistent with decoder. However, at present, there are cases where rows obtained from
+  // index block or data block are continued to be used after decoder deconstruction,
+  // so the full_transform is also done here.
+  if (ObStoreFormat::is_row_store_type_with_cs_encoding(static_cast<ObRowStoreType>(header.row_store_type_))) {
     if (OB_FAIL(reader.decrypt_and_full_transform_data(header, block_des_meta_,
         buffer, size, block_data.get_buf(), block_data.get_buf_size(), nullptr))) {
       LOG_WARN("fail to decrypt_and_full_transform_data", K(ret), K(header), K_(block_des_meta));
@@ -827,7 +830,8 @@ int ObIMicroBlockCache::prefetch(
     ObMacroBlockReadInfo read_info;
     read_info.macro_block_id_ = macro_id;
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
     read_info.io_callback_ = &callback;
     read_info.offset_ = idx_row.get_block_offset();
     read_info.size_ = idx_row.get_block_size();
@@ -868,7 +872,8 @@ int ObIMicroBlockCache::prefetch(
     ObMacroBlockReadInfo read_info;
     read_info.macro_block_id_ = macro_id;
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
     read_info.io_callback_ = &callback;
     read_info.offset_ = offset;
     read_info.size_ = size;
@@ -1096,7 +1101,8 @@ int ObDataMicroBlockCache::load_block(
 
       macro_read_info.macro_block_id_ = micro_block_id.macro_id_;
       macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-      macro_read_info.io_desc_.set_group_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
+      macro_read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      macro_read_info.io_desc_.set_sys_module_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
       macro_read_info.io_callback_ = callback;
       macro_read_info.offset_ = micro_block_id.offset_;
       macro_read_info.size_ = micro_block_id.size_;
@@ -1373,7 +1379,8 @@ int ObIndexMicroBlockCache::load_block(
 
       macro_read_info.macro_block_id_ = micro_block_id.macro_id_;
       macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-      macro_read_info.io_desc_.set_group_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
+      macro_read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      macro_read_info.io_desc_.set_sys_module_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
       macro_read_info.io_callback_ = callback;
       macro_read_info.offset_ = micro_block_id.offset_;
       macro_read_info.size_ = micro_block_id.size_;
@@ -1383,8 +1390,11 @@ int ObIndexMicroBlockCache::load_block(
       char *raw_idx_block_buf = nullptr;
       if (OB_FAIL(ObBlockManager::read_block(macro_read_info, macro_handle))) {
         LOG_WARN("Fail to sync read block", K(ret), K(macro_read_info));
-      } else if (FALSE_IT(raw_idx_block_buf = const_cast<char *>(block_data.get_buf()))) {
-      } else if (OB_FAIL(idx_transformer.transform(block_data, block_data, *allocator, transform_buf))) {
+      }
+      // the reason why block_data.get_buf() can be released by this allocator directly is that the
+      // memory is deep coiped in ObSyncSingleMicroBLockIOCallback. Maybe we should deep copy the memory in any case.
+      raw_idx_block_buf = const_cast<char *>(block_data.get_buf());
+      if (FAILEDx(idx_transformer.transform(block_data, block_data, *allocator, transform_buf))) {
         LOG_WARN("Fail to transform index block to memory format", K(ret));
       } else {
         EVENT_INC(ObStatEventIds::IO_READ_PREFETCH_MICRO_COUNT);

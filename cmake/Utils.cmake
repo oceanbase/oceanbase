@@ -142,3 +142,22 @@ function(ob_add_new_object_target target target_objects_list)
   config_target_unity(${target})
   config_ccls_flag(${target})
 endfunction()
+
+function(ob_insert_nonlse_to_package_version INPUT_PACKAGE_VERSION OUTPUT_PACKAGE_VERSION)
+  # 在传入的版本号中插入nonlse版本号
+  # input: 2024041400001.el7
+  # output: 2024041400001.nonlse.el7
+  set(${OUTPUT_PACKAGE_VERSION} "${INPUT_PACKAGE_VERSION}" PARENT_SCOPE)
+  string(FIND "${INPUT_PACKAGE_VERSION}" "." DOT_INDEX REVERSE)
+  # 只有包含.的才处理
+  if(DOT_INDEX GREATER -1)
+    # 计算插入点位置
+    math(EXPR INSERT_INDEX "${DOT_INDEX} + 1")
+    string(SUBSTRING "${INPUT_PACKAGE_VERSION}" 0 "${INSERT_INDEX}" FILE_NAME_PREFIX)
+    string(SUBSTRING "${INPUT_PACKAGE_VERSION}" "${INSERT_INDEX}" "-1" FILE_NAME_SUFFIX)
+    # 拼接最后的带有nonlse版本号
+    set(${OUTPUT_PACKAGE_VERSION} "${FILE_NAME_PREFIX}nonlse.${FILE_NAME_SUFFIX}" PARENT_SCOPE)
+  else()
+    set(${OUTPUT_PACKAGE_VERSION} "${INPUT_PACKAGE_VERSION}.nonlse" PARENT_SCOPE)
+  endif()
+endfunction()

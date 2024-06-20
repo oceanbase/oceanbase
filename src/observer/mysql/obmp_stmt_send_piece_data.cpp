@@ -45,7 +45,7 @@ ObMPStmtSendPieceData::ObMPStmtSendPieceData(const ObGlobalContext &gctx)
       exec_start_timestamp_(0),
       exec_end_timestamp_(0),
       stmt_id_(0),
-      param_id_(-1),
+      param_id_(OB_MAX_PARAM_ID),
       buffer_len_(0),
       buffer_(),
       piece_mode_(ObInvalidPiece),
@@ -78,19 +78,23 @@ int ObMPStmtSendPieceData::before_process()
     ObMySQLUtil::get_int1(pos, piece_mode_);
     int8_t is_null = 0;
     ObMySQLUtil::get_int1(pos, is_null);
-    1 == is_null ? is_null_ = true : is_null_ = false;
+    is_null_ = (1 == is_null);
     ObMySQLUtil::get_int8(pos, buffer_len_);
-    if (stmt_id_ < 1 || param_id_ < 0 || buffer_len_ < 0) {
+    if (stmt_id_ < 1 || buffer_len_ < 0) {
       ret = OB_ERR_PARAM_INVALID;
-      LOG_WARN("send long data get error info.", K(stmt_id_), K(param_id_), K(buffer_len_));
-    } else {
+      LOG_WARN("send_piece receive unexpected params", K(ret), K(stmt_id_), K(buffer_len_));
+    } else if (param_id_ >= OB_PARAM_ID_OVERFLOW_RISK_THRESHOLD) {
+      LOG_WARN("param_id_ has the risk of overflow", K(ret), K(stmt_id_), K(param_id_));
+    }
+    if (OB_SUCC(ret)) {
       buffer_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(buffer_len_));
       pos += buffer_len_;
-      LOG_DEBUG("get info success in send long data protocol.", 
-                  K(stmt_id_), K(param_id_));
+      LOG_INFO("resolve send_piece protocol packet successfully",
+               K(ret), K(stmt_id_), K(param_id_), K(buffer_len_));
+      LOG_DEBUG("send_piece packet content", K(buffer_));
     }
-    LOG_DEBUG("send long data get param",K(stmt_id_), K(param_id_), 
-              K(piece_mode_), K(buffer_len_), K(buffer_.length()));
+    LOG_INFO("resolve send_piece protocol packet",
+             K(ret), K(stmt_id_), K(param_id_), K(buffer_len_), K(piece_mode_), K(is_null_));
   }
   return ret;
 }
@@ -125,6 +129,7 @@ int ObMPStmtSendPieceData::process()
     THIS_WORKER.set_session(sess);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
+    session.init_use_rich_format();
     session.get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
@@ -136,6 +141,8 @@ int ObMPStmtSendPieceData::process()
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(stmt_id), K_(param_id), K(ret));
+    } else if (OB_FAIL(process_kill_client_session(session))) {
+      LOG_WARN("client session has been killed", K(ret));
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(stmt_id), K_(param_id),
@@ -186,14 +193,9 @@ int ObMPStmtSendPieceData::process_send_long_data_stmt(ObSQLSessionInfo &session
 
   ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
-  const bool enable_trace_log = lib::is_trace_log_enabled();
-  if (enable_trace_log) {
-    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-  }
+  ObThreadLogLevelUtils::init(session.get_log_id_level_map());
   ret = do_process(session);
-  if (enable_trace_log) {
-    ObThreadLogLevelUtils::clear();
-  }
+  ObThreadLogLevelUtils::clear();
 
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
@@ -306,7 +308,7 @@ int ObMPStmtSendPieceData::do_process(ObSQLSessionInfo &session)
 int ObMPStmtSendPieceData::store_piece(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(true));
+  ObPieceCache *piece_cache = session.get_piece_cache(true);
   if (OB_ISNULL(piece_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("piece cache is null.", K(ret), K(stmt_id_));
@@ -328,6 +330,8 @@ int ObMPStmtSendPieceData::store_piece(ObSQLSessionInfo &session)
                                                       &buffer_))) {
         LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));
       } else {
+        LOG_INFO("store piece successfully", K(ret), K(session.get_sessid()),
+                                             K(stmt_id_), K(param_id_));
         if (is_null_) {
           OZ (piece->get_is_null_map().add_member(piece->get_position()));
         }
@@ -360,31 +364,31 @@ int ObPiece::piece_init(ObSQLSessionInfo &session,
                         int32_t stmt_id, 
                         uint16_t param_id) {
   int ret = OB_SUCCESS;
+  lib::ContextParam param;
+  ObPieceCache* piece_cache = nullptr;
   set_stmt_id(stmt_id);
   set_param_id(param_id);
-  lib::MemoryContext entity = NULL;
-  lib::ContextParam param;
-  param.set_mem_attr(session.get_effective_tenant_id(),
-                      ObModIds::OB_PL_TEMP, ObCtxIds::DEFAULT_CTX_ID);
-  param.set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
-  if (OB_FAIL((static_cast<ObPieceCache*>(session.get_piece_cache()))
-                    ->mem_context_->CREATE_CONTEXT(entity, param))) {
-    LOG_WARN("failed to create ref cursor entity", K(ret));
-  } else if (OB_ISNULL(entity)) {
+  param.set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE)
+      .set_mem_attr(session.get_effective_tenant_id(), "SendPieceProto", ObCtxIds::DEFAULT_CTX_ID);
+  if (OB_ISNULL(piece_cache = session.get_piece_cache())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("piece cache is null", K(ret));
+  } else if (OB_FAIL(piece_cache->mem_context_->CREATE_CONTEXT(entity_, param))) {
+    LOG_WARN("failed to create piece memory context", K(ret));
+  } else if (OB_ISNULL(entity_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc ref cursor entity", K(ret));
+    LOG_WARN("failed to alloc piece memory context", K(ret));
   } else {
-    void *buf = NULL;
-    ObPieceBufferArray *buf_array = NULL;
-    ObIAllocator *alloc = &entity->get_arena_allocator();
+    void *buf = nullptr;
+    ObPieceBufferArray *buf_array = nullptr;
+    ObIAllocator *alloc = &entity_->get_arena_allocator();
     OV (OB_NOT_NULL(buf = alloc->alloc(sizeof(ObPieceBufferArray))),
         OB_ALLOCATE_MEMORY_FAILED, sizeof(ObPieceBufferArray));
     OX (MEMSET(buf, 0, sizeof(ObPieceBufferArray)));
     OV (OB_NOT_NULL(buf_array = new (buf) ObPieceBufferArray(alloc)));
-    OZ (buf_array->reserve(OB_MAX_PIECE_COUNT));
+    OZ (buf_array->reserve(OB_MAX_PIECE_BUFFER_COUNT));
     if (OB_SUCC(ret)) {
-        set_allocator(alloc);
-        set_buffer_array(buf_array);
+      set_buffer_array(buf_array);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("alloc buffer array fail.", K(ret), K(stmt_id), K(param_id));
@@ -695,7 +699,7 @@ int ObPieceCache::make_piece_buffer(ObIAllocator *allocator,
   OX (MEMSET(piece_mem, 0, sizeof(ObPieceBuffer)));
   OV (OB_NOT_NULL(piece_buffer = new (piece_mem) ObPieceBuffer(allocator, mode)));
   CK (OB_NOT_NULL(piece_buffer));
-  OX (piece_buffer->set_piece_buffer(buf));
+  OZ (piece_buffer->set_piece_buffer(buf));
   LOG_DEBUG("make piece buffer.", K(ret), K(mode), K(buf->length()));
   return ret;
 }

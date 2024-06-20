@@ -46,7 +46,6 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ is null or parser error", K(ret));
   }
-
   //create alter table stmt
   if (OB_SUCC(ret)) {
     if (NULL == (truncate_table_stmt = create_stmt<ObTruncateTableStmt>())) {
@@ -123,6 +122,10 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
                        to_cstring(truncate_table_stmt->get_database_name()),
                        to_cstring(truncate_table_stmt->get_table_name()));
       }
+    } else if (orig_table_schema->is_external_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_WARN(OB_NOT_SUPPORTED, "truncate external table");
+      LOG_WARN("truncate external table not support", K(ret));
     } else {
       if (orig_table_schema->is_oracle_tmp_table()) {
         truncate_table_stmt->set_truncate_oracle_temp_table();
@@ -130,6 +133,18 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
       }
       if (orig_table_schema->is_mysql_tmp_table()) {
         is_mysql_tmp_table = true; 
+      }
+
+      if (orig_table_schema->is_mlog_table()) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "truncate materialized view log is not supported",
+            KR(ret), K(orig_table_schema->get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate materialized view log is");
+      } else if (orig_table_schema->has_mlog_table()) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "truncate table with materialized view log is not supported",
+            KR(ret), K(orig_table_schema->get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
       }
     }
   }

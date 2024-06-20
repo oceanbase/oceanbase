@@ -16,6 +16,7 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/schema/ob_table_param.h"
 #include "share/ob_ddl_sim_point.h"
 
 using namespace oceanbase::share;
@@ -103,7 +104,7 @@ int ObDDLErrorMessageTableOperator::get_index_task_info(
 }
 
 int ObDDLErrorMessageTableOperator::extract_index_key(const ObTableSchema &index_schema,
-    const ObStoreRowkey &index_key, char *buffer, const int64_t buffer_len)
+    const blocksstable::ObDatumRowkey &index_key, char *buffer, const int64_t buffer_len)
 {
   int ret = OB_SUCCESS;
   if (!index_schema.is_valid() || !index_key.is_valid() || OB_ISNULL(buffer) || buffer_len <= 0) {
@@ -112,33 +113,33 @@ int ObDDLErrorMessageTableOperator::extract_index_key(const ObTableSchema &index
   } else {
     const int64_t index_size = index_schema.get_index_column_num();
     int64_t pos = 0;
-    int64_t valid_index_size = 0;
-    uint64_t column_id = OB_INVALID_ID;
     MEMSET(buffer, 0, buffer_len);
-
     for (int64_t i = 0; OB_SUCC(ret) && i < index_size; i++) {
-      if (OB_FAIL(index_schema.get_index_info().get_column_id(i, column_id))) {
+      const ObRowkeyColumn *column = index_schema.get_index_info().get_column(i);
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Failed to get index column description", K(i), K(ret));
-      } else if (column_id <= OB_MIN_SHADOW_COLUMN_ID) {
-        valid_index_size ++;
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_size; ++i) {
-      const ObObj &obj  = index_key.get_obj_ptr()[i];
-      if (OB_FAIL(obj.print_plain_str_literal(buffer, buffer_len, pos))) {
-        LOG_WARN("fail to print_plain_str_literal", K(ret), KP(buffer));
-      } else if (i < valid_index_size - 1) {
-        if (OB_FAIL(databuff_printf(buffer,  buffer_len, pos, "-"))) {
+      } else if (IS_SHADOW_COLUMN(column->column_id_)) {
+        break;
+      } else {
+        const blocksstable::ObStorageDatum &datum = index_key.get_datum(i);
+        ObObj obj;
+        if (OB_FAIL(datum.to_obj(obj, column->get_meta_type()))) {
+          LOG_WARN("convert datum to obj failed", K(ret));
+        } else if (OB_FAIL(obj.print_plain_str_literal(buffer, buffer_len, pos))) {
+          LOG_WARN("fail to print_plain_str_literal", K(ret), KP(buffer));
+        } else if (OB_FAIL(databuff_printf(buffer,  buffer_len, pos, "-"))) {
           LOG_WARN("databuff print failed", K(ret));
         }
       }
     }
-    if (buffer != nullptr) {
-      buffer[pos++] = '\0';
-      if (OB_SIZE_OVERFLOW == ret) {
-        LOG_WARN("the index key length is larger than OB_TMP_BUF_SIZE_256", K(index_key), KP(buffer));
-        ret = OB_SUCCESS;
-      }
+    if (OB_SUCC(ret) && pos > 0) {
+      buffer[pos - 1] = '\0'; // overwrite the tail '-'
+    }
+    if (OB_SIZE_OVERFLOW == ret) {
+      buffer[buffer_len - 1] = '\0';
+      LOG_WARN("the index key length is larger than OB_TMP_BUF_SIZE_256", K(index_key), KP(buffer));
+      ret = OB_SUCCESS;
     }
   }
 
@@ -274,7 +275,8 @@ int ObDDLErrorMessageTableOperator::get_ddl_error_message(
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "user_message", str_user_message);
       forward_user_msg_len = str_user_message.length();
       const int64_t buf_size = str_user_message.length() + 1;
-      if (OB_ISNULL(error_message.user_message_ = static_cast<char *>(error_message.allocator_.alloc(buf_size)))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(error_message.user_message_ = static_cast<char *>(error_message.allocator_.alloc(buf_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FAIL(databuff_printf(error_message.dba_message_, OB_MAX_ERROR_MSG_LEN, "%.*s", str_dba_message.length(), str_dba_message.ptr()))) {
@@ -286,6 +288,71 @@ int ObDDLErrorMessageTableOperator::get_ddl_error_message(
     }
   }
   return ret;
+}
+
+int ObDDLErrorMessageTableOperator::get_ddl_error_message(
+    const uint64_t tenant_id,
+    const int64_t task_id,
+    const int64_t target_object_id,
+    const int64_t object_id,
+    common::ObMySQLProxy &sql_proxy,
+    ObBuildDDLErrorMessage &error_message,
+    int64_t &forward_user_msg_len)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  forward_user_msg_len = 0;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    sqlclient::ObMySQLResult *result = NULL;
+    char ip[common::OB_MAX_SERVER_ADDR_SIZE] = "";
+    if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0 || object_id < -1)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(object_id));
+    } else if (OB_FAIL(sql.assign_fmt(
+        "SELECT ret_code, ddl_type, affected_rows, dba_message, user_message from %s "
+        "WHERE tenant_id = %ld AND task_id = %ld AND target_object_id = %ld AND object_id = %ld ",
+        OB_ALL_DDL_ERROR_MESSAGE_TNAME,
+        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), task_id, target_object_id, object_id))) {
+      LOG_WARN("fail to assign sql", K(ret));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to execute sql", K(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+        ret = OB_ENTRY_NOT_EXIST;
+      } else {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    } else {
+      char *buf = nullptr;
+      int ddl_type = 0;
+      ObString str_dba_message;
+      ObString str_user_message;
+      EXTRACT_INT_FIELD_MYSQL(*result, "ddl_type", ddl_type, int);
+      EXTRACT_INT_FIELD_MYSQL(*result, "affected_rows", error_message.affected_rows_, int);
+      error_message.ddl_type_ = static_cast<ObDDLType>(ddl_type);
+      EXTRACT_INT_FIELD_MYSQL(*result, "ret_code", error_message.ret_code_, int);
+      EXTRACT_VARCHAR_FIELD_MYSQL(*result, "dba_message", str_dba_message);
+      EXTRACT_VARCHAR_FIELD_MYSQL(*result, "user_message", str_user_message);
+      forward_user_msg_len = str_user_message.length();
+      const int64_t buf_size = str_user_message.length() + 1;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(error_message.user_message_ = static_cast<char *>(error_message.allocator_.alloc(buf_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
+      } else if (OB_FAIL(databuff_printf(error_message.dba_message_, OB_MAX_ERROR_MSG_LEN, "%.*s", str_dba_message.length(), str_dba_message.ptr()))) {
+        LOG_WARN("print to buffer failed", K(ret), K(str_dba_message));
+      } else {
+        error_message.user_message_[buf_size - 1] = '\0';
+        MEMCPY(error_message.user_message_, str_user_message.ptr(), str_user_message.length());
+      }
+    }
+  }
+  return ret;
+
 }
 
 int ObDDLErrorMessageTableOperator::report_ddl_error_message(const ObBuildDDLErrorMessage &error_message,
@@ -469,6 +536,7 @@ int ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(const int r
 {
   int ret = OB_SUCCESS;
   ObBuildDDLErrorMessage error_message;
+  uint64_t tenant_data_format_version = 0;
   const uint64_t tenant_id = index_schema.get_tenant_id();
   const uint64_t data_table_id = index_schema.get_data_table_id();
   const uint64_t index_table_id = index_schema.get_table_id();
@@ -482,8 +550,10 @@ int ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(const int r
   } else if (OB_FALSE_IT(memset(error_message.user_message_, 0, OB_MAX_ERROR_MSG_LEN))) {
   } else if (OB_FAIL(index_schema.get_index_name(index_name))) {        //get index name
     LOG_WARN("fail to get index name", K(ret), K(index_name), K(index_table_id));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(sql_proxy, index_schema.get_tenant_id(), tenant_data_format_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(index_schema.get_tenant_id()));
   } else if (OB_FAIL(build_ddl_error_message(ret_code, index_schema.get_tenant_id(), data_table_id, error_message, index_name,
-      index_table_id, DDL_CREATE_INDEX, index_key, report_ret_code))) {
+      index_table_id, ((DATA_VERSION_4_2_2_0 <= tenant_data_format_version && tenant_data_format_version < DATA_VERSION_4_3_0_0) || tenant_data_format_version >= DATA_VERSION_4_3_2_0) && index_schema.is_storage_local_index_table() && index_schema.is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX, index_key, report_ret_code))) {
     LOG_WARN("build ddl error message failed", K(ret), K(data_table_id), K(index_name));
   } else if (OB_FAIL(report_ddl_error_message(error_message,    //report into __all_ddl_error_message
       tenant_id, trace_id, task_id, parent_task_id, data_table_id, schema_version, object_id, addr, sql_proxy))) {

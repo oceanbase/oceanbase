@@ -46,12 +46,16 @@ int eval_distance_with_point_strategy(const ObGeometry *g1,
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("srs is null", K(ret), K(g1->get_srid()), K(g1), K(g2));
   } else {
-    bg::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
-    bg::strategy::distance::andoyer<bg::srs::spheroid<double>> point_strategy(geog_sphere);
-
     const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
     const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
-    result = bg::distance(*geo1, *geo2, point_strategy);
+    if (lib::is_mysql_mode()) {
+      bg::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
+      bg::strategy::distance::andoyer<bg::srs::spheroid<double>> point_strategy(geog_sphere);
+      result = bg::distance(*geo1, *geo2, point_strategy);
+    } else {
+      bg::strategy::distance::geographic<bg::strategy::vincenty> vincenty_strategy;
+      result = bg::distance(*geo1, *geo2, vincenty_strategy);
+    }
   }
   return ret;
 }

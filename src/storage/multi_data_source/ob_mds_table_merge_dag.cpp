@@ -30,7 +30,7 @@ namespace storage
 namespace mds
 {
 ObMdsTableMergeDag::ObMdsTableMergeDag()
-  : ObTabletMergeDag(ObDagType::DAG_TYPE_MDS_TABLE_MERGE),
+  : ObTabletMergeDag(ObDagType::DAG_TYPE_MDS_MINI_MERGE),
     is_inited_(false),
     flush_scn_(),
     generate_ts_(0),

@@ -12,7 +12,10 @@
 
 #include "ob_storage_util.h"
 #include "lib/worker.h"
+#include "share/datum/ob_datum.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/vector/ob_discrete_format.h"
+#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/blocksstable/ob_datum_row.h"
 
@@ -35,35 +38,20 @@ OB_INLINE static const ObString get_padding_str(ObCollationType coll_type)
 OB_INLINE static void append_padding_pattern(const ObString &space_pattern,
                                              const int32_t offset,
                                              const int32_t buf_len,
-                                             char *&buf)
+                                             char *&buf,
+                                             int32_t &true_len)
 {
-  if (1 == space_pattern.length()) {
+  true_len = offset;
+  if (OB_UNLIKELY((buf_len - offset) < space_pattern.length())) {
+  } else if (1 == space_pattern.length()) {
     MEMSET(buf + offset, space_pattern[0], buf_len - offset);
+    true_len = buf_len;
   } else {
-    for (int32_t i = offset; i < buf_len; i += space_pattern.length()) {
+    for (int32_t i = offset; i <= (buf_len - space_pattern.length()); i += space_pattern.length()) {
       MEMCPY(buf + i, space_pattern.ptr(), space_pattern.length());
+      true_len += space_pattern.length();
     }
   }
-}
-
-OB_INLINE static int pad_datum_on_local_buf(const ObString &space_pattern,
-                                            int32_t pad_whitespace_length,
-                                            common::ObIAllocator &padding_alloc,
-                                            common::ObDatum &datum)
-{
-  int ret = OB_SUCCESS;
-  char *buf = nullptr;
-  const int32_t buf_len = datum.pack_ + pad_whitespace_length * space_pattern.length();
-  if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "no memory", K(ret));
-  } else {
-    MEMCPY(buf, datum.ptr_, datum.pack_);
-    append_padding_pattern(space_pattern, datum.pack_, buf_len, buf);
-    datum.ptr_ = buf;
-    datum.pack_ = buf_len;
-  }
-  return ret;
 }
 
 OB_INLINE static int pad_on_local_buf(const ObString &space_pattern,
@@ -74,15 +62,17 @@ OB_INLINE static int pad_on_local_buf(const ObString &space_pattern,
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
-  const int32_t buf_len = length + pad_whitespace_length * space_pattern.length();
+  const int32_t pad_len = length + pad_whitespace_length * space_pattern.length();
+  const int64_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
   if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "no memory", K(ret));
   } else {
+    int32_t true_len = 0;
     MEMCPY(buf, ptr, length);
-    append_padding_pattern(space_pattern, length, buf_len, buf);
+    append_padding_pattern(space_pattern, length, buf_len, buf, true_len);
     ptr = buf;
-    length = buf_len;
+    length = true_len;
   }
   return ret;
 }
@@ -131,7 +121,7 @@ int pad_column(const ObObjMeta &obj_meta, const ObAccuracy accuracy, common::ObI
       cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
     }
     if (cur_len < length &&
-        OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum))) {
+        OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
       STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len), K(datum));
     }
   }
@@ -157,15 +147,17 @@ int pad_column(const common::ObAccuracy accuracy, sql::ObEvalCtx &ctx, sql::ObEx
     }
     if (cur_len < length) {
       char *ptr = nullptr;
-      const int32_t buf_len = datum.pack_ + (length - cur_len) * space_pattern.length();
+      const int32_t pad_len = datum.pack_ + (length - cur_len) * space_pattern.length();
+      const int64_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
       if (OB_ISNULL(ptr = expr.get_str_res_mem(ctx, buf_len))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "no memory", K(ret));
       } else {
+        int32_t true_len = 0;
         MEMMOVE(ptr, datum.ptr_, datum.pack_);
-        append_padding_pattern(space_pattern, datum.pack_, buf_len, ptr);
+        append_padding_pattern(space_pattern, datum.pack_, buf_len, ptr, true_len);
         datum.ptr_ = ptr;
-        datum.pack_ = buf_len;
+        datum.pack_ = true_len;
       }
     }
   }
@@ -189,14 +181,15 @@ int pad_on_datums(const common::ObAccuracy accuracy,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "no memory", K(ret));
     } else {
-      append_padding_pattern(space_pattern, 0, buf_len, buf);
+      int32_t true_len = 0;
+      append_padding_pattern(space_pattern, 0, buf_len, buf, true_len);
       for (int64_t i = 0; i < row_count; i++) {
         common::ObDatum &datum = datums[i];
         if (datum.is_null()) {
           // do nothing
         } else if (0 == datum.pack_){
           datum.ptr_ = buf;
-          datum.pack_ = buf_len;
+          datum.pack_ = true_len;
         }
       }
     }
@@ -223,7 +216,7 @@ int pad_on_datums(const common::ObAccuracy accuracy,
           } else {
             int32_t cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
             if (cur_len < length &&
-                OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum))) {
+                OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
               STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len), K(datum));
             }
           }
@@ -243,8 +236,97 @@ int pad_on_datums(const common::ObAccuracy accuracy,
           cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
         }
         if (cur_len < length &&
-            OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum))) {
+            OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
           STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len), K(datum));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int pad_on_rich_format_columns(const common::ObAccuracy accuracy,
+                               const common::ObCollationType cs_type,
+                               const int64_t row_count,
+                               const int64_t vec_offset,
+                               common::ObIAllocator &padding_alloc,
+                               sql::ObExpr &expr,
+                               sql::ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(VectorFormat::VEC_DISCRETE != expr.get_format(eval_ctx))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected vector format for padding column", K(expr.get_format(eval_ctx)));
+  } else {
+    ObDiscreteFormat *discrete_format = static_cast<ObDiscreteFormat *>(expr.get_vector(eval_ctx));
+    ObLength *lens = discrete_format->get_lens();
+    char **ptrs = discrete_format->get_ptrs();
+    sql::ObBitVector *nulls = discrete_format->get_nulls();
+    ObLength length = accuracy.get_length(); // byte or char length
+    const ObString space_pattern = get_padding_str(cs_type);
+    bool is_oracle_byte = is_oracle_byte_length(lib::is_oracle_mode(), accuracy.get_length_semantics());
+    char *buf = nullptr;
+    if (1 == length) {
+      int32_t buf_len = space_pattern.length();
+      if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "no memory", K(ret));
+      } else {
+        int32_t true_len = 0;
+        append_padding_pattern(space_pattern, 0, buf_len, buf, true_len);
+        for (int64_t i = vec_offset; i < vec_offset + row_count; i++) {
+          if (nulls->at(i)) {
+            // do nothing
+          } else if (0 == lens[i]){
+            ptrs[i] = buf;
+            lens[i] = true_len;
+          }
+        }
+      }
+    } else if (can_do_ascii_optimize(cs_type)) {
+      int32_t buf_len = length * space_pattern.length() * row_count;
+      if (OB_ISNULL(buf = (char*) padding_alloc.alloc(buf_len))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "no memory", K(ret));
+      } else {
+        char *ptr = buf;
+        MEMSET(buf, OB_PADDING_CHAR, buf_len);
+        for (int64_t i = vec_offset; OB_SUCC(ret) && i < vec_offset + row_count; i++) {
+          if (nulls->at(i)) {
+            // do nothing
+          } else {
+            if (is_oracle_byte || is_ascii_str(ptrs[i], lens[i])) {
+              if (lens[i] < length) {
+                MEMCPY(ptr, ptrs[i], lens[i]);
+                ptrs[i] = ptr;
+                lens[i] = length;
+                ptr = ptr + length;
+              }
+            } else {
+              int32_t cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, ptrs[i], lens[i]));
+              if (cur_len < length &&
+                  OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, (const char *&)ptrs[i], (uint32_t &)lens[i]))) {
+                STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len));
+              }
+            }
+          }
+        }
+      }
+    } else {
+      for (int64_t i = vec_offset; OB_SUCC(ret) && i < vec_offset + row_count; i++) {
+        if (nulls->at(i)) {
+          // do nothing
+        } else {
+          int32_t cur_len = 0; // byte or char length
+          if (is_oracle_byte) {
+            cur_len = lens[i];
+          } else {
+            cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, ptrs[i], lens[i]));
+          }
+          if (cur_len < length &&
+              OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, (const char *&)ptrs[i], (uint32_t &)lens[i]))) {
+            STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len));
+          }
         }
       }
     }
@@ -322,6 +404,184 @@ int cast_obj(const common::ObObjMeta &src_meta,
             K(ob_obj_type_str(ori_obj.get_type())),
             K(src_meta.get_type()), K(ob_obj_type_str(src_meta.get_type())));
       }
+    }
+  }
+  return ret;
+}
+
+int init_expr_vector_header(
+    sql::ObExpr &expr,
+    sql::ObEvalCtx &eval_ctx,
+    const int64_t size,
+    const VectorFormat format)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.init_vector(eval_ctx, format, size, true))) {
+    STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(expr));
+  }
+  return ret;
+}
+
+int init_exprs_new_format_header(
+    const common::ObIArray<int32_t> &cols_projector,
+    const sql::ObExprPtrIArray &exprs,
+    sql::ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
+    sql::ObExpr *expr = exprs.at(i);
+    if (OB_FAIL(expr->init_vector_default(eval_ctx, eval_ctx.max_batch_size_))) {
+      STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
+    }
+  }
+  return ret;
+}
+
+int fill_datums_lob_locator(
+    const ObTableIterParam &iter_param,
+    const ObTableAccessContext &context,
+    const share::schema::ObColumnParam &col_param,
+    const int64_t row_cap,
+    ObDatum *datums,
+    bool reuse_lob_locator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!col_param.get_meta_type().is_lob_storage() ||
+                  nullptr == context.lob_locator_helper_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected param", K(ret), K(col_param.get_meta_type()), K(context.lob_locator_helper_));
+  } else {
+    if (reuse_lob_locator) {
+      context.lob_locator_helper_->reuse();
+    }
+    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_cap; ++row_idx) {
+      ObDatum &datum = datums[row_idx];
+      if (!datum.is_null() && !datum.get_lob_data().in_row_) {
+        if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(datum, col_param, iter_param, context))) {
+          STORAGE_LOG(WARN, "Failed to fill lob loactor", K(ret), K(row_idx), K(datum), K(context), K(iter_param));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int fill_exprs_lob_locator(
+    const ObTableIterParam &iter_param,
+    const ObTableAccessContext &context,
+    const share::schema::ObColumnParam &col_param,
+    sql::ObExpr &expr,
+    sql::ObEvalCtx &eval_ctx,
+    const int64_t vector_offset,
+    const int64_t row_cap)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!col_param.get_meta_type().is_lob_storage() ||
+                  nullptr == context.lob_locator_helper_ ||
+                  VectorFormat::VEC_DISCRETE != expr.get_format(eval_ctx))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected param", K(ret), K(col_param.get_meta_type()),
+                K(context.lob_locator_helper_), K(expr.get_format(eval_ctx)));
+  } else {
+    ObDiscreteFormat *discrete_format = static_cast<ObDiscreteFormat *>(expr.get_vector(eval_ctx));
+    ObDatum datum;
+    ObLength length;
+    for (int64_t row_idx = vector_offset; OB_SUCC(ret) && (row_idx < row_cap + vector_offset); ++row_idx) {
+      if (!discrete_format->is_null(row_idx)) {
+        discrete_format->get_payload(row_idx, datum.ptr_, length);
+        datum.len_ = static_cast<uint32_t>(length);
+        if (!datum.get_lob_data().in_row_) {
+          if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(datum, col_param, iter_param, context))) {
+            STORAGE_LOG(WARN, "Failed to fill lob loactor", K(ret), K(row_idx), K(datum), K(context), K(iter_param));
+          } else {
+            discrete_format->set_datum(row_idx, datum);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// Monotonic black filter only support ">", ">=", "<", "<=", "=" five types.
+// All of these monotonic black filters will return false if the input is null.
+// When has_null is true, we can not set_always_true() for bool_mask but can judge always false.
+int check_skip_by_monotonicity(
+    sql::ObBlackFilterExecutor &filter,
+    blocksstable::ObStorageDatum &min_datum,
+    blocksstable::ObStorageDatum &max_datum,
+    const sql::ObBitVector &skip_bit,
+    const bool has_null,
+    ObBitmap *result_bitmap,
+    sql::ObBoolMask &bool_mask)
+{
+  int ret = OB_SUCCESS;
+  bool_mask.set_uncertain();
+  if (min_datum.is_null() || max_datum.is_null()) {
+    // uncertain
+  } else {
+    const sql::PushdownFilterMonotonicity mono = filter.get_monotonicity();
+    bool is_asc = false;
+    switch (mono) {
+      case sql::PushdownFilterMonotonicity::MON_ASC: {
+        is_asc = true;
+      }
+      case sql::PushdownFilterMonotonicity::MON_DESC: {
+        bool filtered = false;
+        ObStorageDatum &false_datum = is_asc ? max_datum : min_datum;
+        ObStorageDatum &true_datum = is_asc ? min_datum : max_datum;
+        if (OB_FAIL(filter.filter(false_datum, skip_bit, filtered))) {
+          STORAGE_LOG(WARN, "Failed to compare with false_datum", K(ret), K(false_datum), K(is_asc));
+        } else if (filtered) {
+          bool_mask.set_always_false();
+        } else if (!has_null) {
+          if (OB_FAIL(filter.filter(true_datum, skip_bit, filtered))) {
+            STORAGE_LOG(WARN, "Failed to compare with true_datum", K(ret), K(true_datum), K(is_asc));
+          } else if (!filtered) {
+            bool_mask.set_always_true();
+          }
+        }
+        break;
+      }
+      case sql::PushdownFilterMonotonicity::MON_EQ_ASC: {
+        is_asc = true;
+      }
+      case sql::PushdownFilterMonotonicity::MON_EQ_DESC: {
+        bool min_cmp_res = false;
+        bool max_cmp_res = false;
+        if (OB_FAIL(filter.judge_greater_or_less(min_datum, skip_bit, is_asc, min_cmp_res))) {
+          STORAGE_LOG(WARN, "Failed to judge min_datum", K(ret), K(min_datum));
+        } else if (min_cmp_res) {
+          bool_mask.set_always_false();
+        } else if (OB_FAIL(filter.judge_greater_or_less(max_datum, skip_bit, !is_asc, max_cmp_res))) {
+          STORAGE_LOG(WARN, "Failed to judge max_datum", K(ret), K(max_datum));
+        } else if (max_cmp_res) {
+          bool_mask.set_always_false();
+        } else if (!has_null) {
+          if (OB_FAIL(filter.filter(min_datum, skip_bit, min_cmp_res))) {
+            STORAGE_LOG(WARN, "Failed to compare with min_datum", K(ret), K(min_datum));
+          } else if (min_cmp_res) {
+            // min datum is filtered
+          } else if (OB_FAIL(filter.filter(max_datum, skip_bit, max_cmp_res))) {
+            STORAGE_LOG(WARN, "Failed to compare with max_datum", K(ret), K(max_datum));
+          } else if (!max_cmp_res) {
+            // min datum and max datum are both not filtered
+            bool_mask.set_always_true();
+          }
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected monotonicity", K(ret), K(mono));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && nullptr != result_bitmap){
+    if (bool_mask.is_always_false()) {
+      result_bitmap->reuse(false);
+    } else if (bool_mask.is_always_true()) {
+      result_bitmap->reuse(true);
     }
   }
   return ret;

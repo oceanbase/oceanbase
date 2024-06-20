@@ -43,6 +43,7 @@ public:
   void reset();
   static char* store32be(char *ptr, uint32_t val);
   static uint32_t load32be(const char *ptr);
+  static int get_seq_id(int64_t idx, ObString &seq_id);
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   int init_digits();

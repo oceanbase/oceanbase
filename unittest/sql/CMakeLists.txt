@@ -5,7 +5,7 @@ add_library(sql_ut_base OBJECT
   optimizer/test_optimizer_utils.h
   optimizer/test_optimizer_utils.cpp
   )
-target_link_libraries(sql_ut_base PUBLIC oceanbase mockcontainer)
+target_link_libraries(sql_ut_base PUBLIC mockcontainer)
 
 function(sql_unittest case)
   ob_unittest(${ARGV})

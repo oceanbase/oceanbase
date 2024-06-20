@@ -161,6 +161,8 @@ int ObLogDistinct::do_re_est_cost(EstimateCostInfo &param, double &card, double 
     double child_cost = child->get_cost();
     double child_ndv = total_ndv_;
     const int64_t parallel = param.need_parallel_;
+    double origin_child_card = child_card;
+    bool need_scale_ndv = false;
     if (param.need_row_count_ >= 0 && 
         child_card > 0 &&
         total_ndv_ > 0 &&
@@ -170,9 +172,13 @@ int ObLogDistinct::do_re_est_cost(EstimateCostInfo &param, double &card, double 
       param.need_row_count_ = child_card * (1 - std::pow((1 - child_ndv / total_ndv_), total_ndv_ / child_card));
     } else {
       param.need_row_count_ = -1;
+      need_scale_ndv = true;
     }
     if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est child cost", K(ret));
+    } else if (need_scale_ndv &&
+               FALSE_IT(child_ndv = std::min(child_ndv, ObOptSelectivity::scale_distinct(child_card, origin_child_card, child_ndv)))) {
+      // do nothing
     } else if (OB_FAIL(inner_est_cost(parallel, child_card, child_ndv, op_cost))) {
       LOG_WARN("failed to est distinct cost", K(ret));
     } else {
@@ -366,6 +372,25 @@ int ObLogDistinct::print_used_hint(PlanText &plan_text)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObLogDistinct::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = get_total_ndv();
+  return ret;
+}
+
+int ObLogDistinct::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_AGGREGATE == get_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
   }
   return ret;
 }

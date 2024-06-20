@@ -85,7 +85,6 @@ public:
   void flush_washable_mbs(const uint64_t tenant_id, const int64_t cache_id);
 
   int sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_size,
-                    const bool wash_single_mb,
                     lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks);
 
   virtual int alloc_mbhandle(ObKVCacheInst &inst, const int64_t block_size,

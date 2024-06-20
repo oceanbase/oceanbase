@@ -232,7 +232,7 @@ int ObDDLRetryTask::init(const ObDDLTaskRecord &task_record)
     dst_schema_version_ = schema_version_;
     if (nullptr != task_record.message_) {
       int64_t pos = 0;
-      if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
+      if (OB_FAIL(deserialize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
         LOG_WARN("fail to deserialize params from message", K(ret));
       }
     }
@@ -643,13 +643,13 @@ int ObDDLRetryTask::serialize_params_to_message(char *buf, const int64_t buf_siz
   return ret;
 }
 
-int ObDDLRetryTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos)
+int ObDDLRetryTask::deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(buf_size));
-  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, buf_size, pos))) {
+  } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id, buf, buf_size, pos))) {
     LOG_WARN("fail to deserialize ObDDLTask", K(ret));
   } else if (ObDDLType::DDL_DROP_DATABASE == task_type_) {
     obrpc::ObDropDatabaseArg tmp_arg;
@@ -715,13 +715,14 @@ int ObDDLRetryTask::update_task_status_wait_child_task_finish(
   ObSqlString sql_string;
   int64_t curr_task_status = 0;
   int64_t execution_id = -1; /*unused*/
+  int64_t ret_code = 0;
   const int64_t new_task_status = ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, RETRY_TASK_UPDATE_BY_CHILD_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status, execution_id))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status, execution_id, ret_code))) {
     LOG_WARN("select for update failed", K(ret), K(tenant_id), K(task_id));
   } else if (OB_UNLIKELY(ObDDLTaskStatus::DROP_SCHEMA != curr_task_status)) {
     ret = OB_STATE_NOT_MATCH;

@@ -102,20 +102,38 @@ void ObCosWrapperHandle::reset()
   delete_mode_ = ObIStorageUtil::DELETE;
 }
 
-int ObCosWrapperHandle::create_cos_handle()
+int create_cos_handle(
+    ObCosMemAllocator &allocator,
+    const qcloud_cos::ObCosAccount &cos_account,
+    const bool check_md5,
+    qcloud_cos::ObCosWrapper::Handle *&handle)
 {
   int ret = OB_SUCCESS;
-  qcloud_cos::OB_COS_customMem cos_mem = {ob_cos_malloc, ob_cos_free, &allocator_};
+  handle = nullptr;
+  qcloud_cos::OB_COS_customMem cos_mem = {ob_cos_malloc, ob_cos_free, &allocator};
+  if (OB_FAIL(qcloud_cos::ObCosWrapper::create_cos_handle(cos_mem, cos_account,
+                                                          check_md5, &handle))) {
+    OB_LOG(WARN, "failed to create tmp cos handle", K(ret));
+  } else if (OB_ISNULL(handle)) {
+    ret = OB_COS_ERROR;
+    OB_LOG(WARN, "create tmp handle succeed, but returned handle is null", K(ret));
+  }
+
+  return ret;
+}
+
+int ObCosWrapperHandle::create_cos_handle(const bool check_md5)
+{
+  int ret = OB_SUCCESS;
   if (OB_NOT_NULL(handle_)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "handle is not null", K(ret));
-  } else if (OB_FAIL(qcloud_cos::ObCosWrapper::create_cos_handle(cos_mem, cos_account_, &handle_))) {
+  } else if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "handle is not inited", K(ret));
+  } else if (OB_FAIL(common::create_cos_handle(allocator_, cos_account_, check_md5, handle_))) {
     OB_LOG(WARN, "failed to create cos handle", K(ret));
-  } else if (OB_ISNULL(handle_)) {
-    ret = OB_COS_ERROR;
-    OB_LOG(WARN, "create handle succeed, but returned handle is null", K(ret));
   }
-
   return ret;
 }
 
@@ -229,6 +247,16 @@ int ObCosWrapperHandle::set_delete_mode(const char *parameter)
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(parameter));
   }
   return ret;
+}
+
+void* ObCosWrapperHandle::alloc_mem(size_t size)
+{
+  return allocator_.alloc(size);
+}
+
+void ObCosWrapperHandle::free_mem(void *addr)
+{
+  allocator_.free(addr);
 }
 
 } // common

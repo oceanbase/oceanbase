@@ -1,0 +1,3 @@
+mkdocs-material
+mkdocs-static-i18n
+mkdocs-git-authors-plugin

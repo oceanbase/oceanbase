@@ -37,7 +37,7 @@ public:
     } else {
       typename WholeMsg::WholeMsgProvider *provider =
           static_cast<typename WholeMsg::WholeMsgProvider *>(p);
-      if (provider->add_msg(pkt)) {
+      if (OB_FAIL(provider->add_msg(pkt))) {
         LOG_WARN("fail set whole msg to provider", K(ret));
       }
     }

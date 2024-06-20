@@ -123,7 +123,7 @@ int ObLCLNode::register_timer_task()
     CLICK();
     revert_self_ref_count_();
   } else {
-    DETECT_LOG_(INFO, "register first timer task successfully", K(*this));
+    DETECT_LOG_(TRACE, "register first timer task successfully", K(*this));
   }
 
   return ret;
@@ -262,7 +262,7 @@ int ObLCLNode::block_(const ObDependencyResource &resource)
     if (OB_FAIL(add_resource_to_list_(resource, block_list_))) {
       DETECT_LOG_(WARN, "block_list_ push resource failed", PRINT_WRAPPER);
     } else {
-      DETECT_LOG_(INFO, "block resource success", PRINT_WRAPPER);
+      DETECT_LOG_(TRACE, "block resource success", PRINT_WRAPPER);
     }
   }
 
@@ -288,7 +288,7 @@ int ObLCLNode::block(const BlockCallBack &func)
                        K(func), K(*this));
     block_callback_list_.pop_back();
   } else {
-    DETECT_LOG_(INFO, "block callback success", K(*this));
+    DETECT_LOG_(TRACE, "block callback success", K(*this));
   }
 
   return ret;
@@ -900,6 +900,7 @@ ObLCLNode::PushStateTask::PushStateTask(ObLCLNode &node) : expected_executed_ts(
 void ObLCLNode::PushStateTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const int64_t current_ts = ObClockGenerator::getRealClock();
 
   DETECT_TIME_GUARD(100_ms);
@@ -911,7 +912,7 @@ void ObLCLNode::PushStateTask::runTimerTask()
   }
   if (false == ATOMIC_LOAD(&lcl_node_.is_timer_task_canceled_)) {
     if (expected_executed_ts > current_ts) {
-      DETECT_LOG(ERROR, "schedule error", K(current_ts), K(expected_executed_ts));
+      DETECT_LOG(WARN, "schedule error", K(current_ts), K(expected_executed_ts));
     } else if (current_ts - expected_executed_ts > 100 * 1000) {// 100ms
       if (REACH_TIME_INTERVAL(100 * 1000)) {// 100ms
         DETECT_LOG(WARN, "task scheduled out of range", K(current_ts), K(expected_executed_ts));
@@ -921,13 +922,13 @@ void ObLCLNode::PushStateTask::runTimerTask()
     CLICK();
     (void)lcl_node_.update_lcl_period_if_necessary_with_lock_();
 
-    if (CLICK() && OB_FAIL(lcl_node_.push_state_to_downstreams_with_lock_())) {
+    if (CLICK() && OB_TMP_FAIL(lcl_node_.push_state_to_downstreams_with_lock_())) {
       DETECT_LOG(WARN, "push state to downstreams failed",
-                      K(current_ts), K(expected_executed_ts), K(*this));
+                     K(tmp_ret), K(current_ts), K(expected_executed_ts), K(*this));
     }
 
-    if (CLICK() && OB_FAIL(lcl_node_.register_timer_with_necessary_retry_with_lock_())) {
-      DETECT_LOG(ERROR, "register timer task with retry failed", K(*this));
+    if (CLICK() && OB_TMP_FAIL(lcl_node_.register_timer_with_necessary_retry_with_lock_())) {
+      DETECT_LOG(ERROR, "register timer task with retry failed", K(tmp_ret), K(*this));
     } else {}
   } else {
     // may destory itself here, make sure it is the last action of this function

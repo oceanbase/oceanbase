@@ -467,6 +467,7 @@ ObCharsetInfo ob_charset_bin =
   1,
   1,
   1,
+  1,
   0,
   255,
   0,

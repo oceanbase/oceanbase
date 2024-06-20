@@ -37,6 +37,7 @@ int ObViewTableResolver::do_resolve_set_query(const ParseNode &parse_tree,
   child_resolver.set_current_view_item(current_view_item);
   child_resolver.set_parent_view_resolver(parent_view_resolver_);
   child_resolver.set_calc_found_rows(is_left_child && has_calc_found_rows_);
+  child_resolver.set_is_top_stmt(is_top_stmt());
   
   if (OB_FAIL(add_cte_table_to_children(child_resolver))) {
     LOG_WARN("failed to add cte table to children", K(ret));
@@ -60,9 +61,26 @@ int ObViewTableResolver::expand_view(TableItem &view_item)
   } else {
     // expand view as subquery which use view name as alias
     const ObTableSchema *view_schema = NULL;
-
-    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), view_item.ref_id_, view_schema))) {
+    share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+    uint64_t database_id = OB_INVALID_ID;
+    ObString old_database_name;
+    uint64_t old_database_id = session_info_->get_database_id();
+    if (OB_ISNULL(schema_checker_)
+        || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(),
+                                                     view_item.database_name_,
+                                                     database_id))) {
+      LOG_WARN("failed to get database id", K(ret));
+    } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                  view_item.ref_id_,
+                                                  view_schema))) {
       LOG_WARN("get table schema failed", K(view_item));
+    } else if (OB_FAIL(ob_write_string(*allocator_,
+                                       session_info_->get_database_name(),
+                                       old_database_name))) {
+      LOG_WARN("failed to write string", K(ret));
     } else {
       ObViewTableResolver view_resolver(params_, view_db_name_, view_name_);
       view_resolver.set_current_level(current_level_);
@@ -71,8 +89,24 @@ int ObViewTableResolver::expand_view(TableItem &view_item)
       view_resolver.set_current_view_item(view_item);
       view_resolver.set_parent_view_resolver(this);
       view_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
-      if (OB_FAIL(do_expand_view(view_item, view_resolver))) {
+      if (is_oracle_mode()) {
+        if (OB_FAIL(session_info_->set_default_database(view_item.database_name_))) {
+          LOG_WARN("failed to set default database name", K(ret));
+        } else {
+          session_info_->set_database_id(database_id);
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(do_expand_view(view_item, view_resolver))) {
         LOG_WARN("do expand view failed", K(ret));
+      }
+      if (is_oracle_mode()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name))) {
+          ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
+          LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
+        } else {
+          session_info_->set_database_id(old_database_id);
+        }
       }
     }
   }
@@ -194,33 +228,13 @@ int ObViewTableResolver::set_select_item(SelectItem &select_item, bool is_auto_g
     }
   } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
     LOG_WARN("fail to get collation_connection", K(ret));
-  } else {
-    // 如果子查询列没有别名，超过 64 的话系统则自动为其会生成一个列别名
-    if (!is_create_view_ && !select_item.is_real_alias_ && is_auto_gen
-        && select_item.alias_name_.length() > static_cast<size_t>(
-        OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
-      ObString tmp_col_name;
-      ObString col_name;
-      char temp_str_buf[number::ObNumber::MAX_PRINTABLE_SIZE];
-      if (snprintf(temp_str_buf, sizeof(temp_str_buf), "Name_exp_%ld", auto_name_id_++) < 0) {
-        ret = OB_SIZE_OVERFLOW;
-        SQL_RESV_LOG(WARN, "failed to generate buffer for temp_str_buf", K(ret));
-      }
-      if (OB_SUCC(ret)) {
-        tmp_col_name = ObString::make_string(temp_str_buf);
-        if (OB_FAIL(ob_write_string(*allocator_, tmp_col_name, col_name))) {
-          SQL_RESV_LOG(WARN, "Can not malloc space for constraint name", K(ret));
-        } else {
-          select_item.alias_name_.assign_ptr(col_name.ptr(), col_name.length());
-        }
-      }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::check_column_name(cs_type, select_item.alias_name_, true))) {
-      LOG_WARN("fail to make field name", K(ret));
-    }
-    if (OB_SUCC(ret) && OB_FAIL(select_stmt->add_select_item(select_item))) {
-      LOG_WARN("add select item to select stmt failed", K(ret));
-    }
+  } else if (select_item.is_real_alias_
+             && OB_FAIL(ObSQLUtils::check_column_name(cs_type, select_item.alias_name_, true))) {
+    // Only check real alias here,
+    // auto generated alias will be checked in ObSelectResolver::check_auto_gen_column_names().
+    LOG_WARN("fail to make field name", K(ret));
+  } else if (OB_FAIL(select_stmt->add_select_item(select_item))) {
+    LOG_WARN("add select item to select stmt failed", K(ret));
   }
   return ret;
 }
@@ -243,17 +257,17 @@ int ObViewTableResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &s
     subquery_resolver.set_parent_namespace_resolver(this);
     subquery_resolver.set_parent_view_resolver(parent_view_resolver_);
     subquery_resolver.set_current_view_item(current_view_item);
-    set_query_ref_expr(info.ref_expr_);
+    set_query_ref_exec_params(info.ref_expr_ == NULL ? NULL : &info.ref_expr_->get_exec_params());
     if (OB_FAIL(add_cte_table_to_children(subquery_resolver))) {
-            LOG_WARN("add CTE table to children failed", K(ret));
+      LOG_WARN("add CTE table to children failed", K(ret));
     } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
       subquery_resolver.set_parent_aggr_level(info.parents_expr_info_.has_member(IS_AGG) ?
           current_level_ : parent_aggr_level_);
     }
-    if (OB_FAIL(do_resolve_subquery_info(info, subquery_resolver))) {
+    if (OB_SUCC(ret) && OB_FAIL(do_resolve_subquery_info(info, subquery_resolver))) {
       LOG_WARN("do resolve subquery info failed", K(ret));
     }
-    set_query_ref_expr(NULL);
+    set_query_ref_exec_params(NULL);
   }
   return ret;
 }

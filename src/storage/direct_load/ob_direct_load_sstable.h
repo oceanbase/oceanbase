@@ -100,6 +100,7 @@ public:
       index_block_count_(0),
       row_count_(0)
   {
+    fragments_.set_tenant_id(MTL_ID());
   }
   bool is_valid() const
   {
@@ -152,6 +153,7 @@ public:
   const common::ObTabletID &get_tablet_id() const override { return meta_.tablet_id_; }
   bool is_empty() const { return 0 == meta_.row_count_; }
   bool is_valid() const override { return is_inited_; }
+  void release_data() override;
   int copy(const ObDirectLoadSSTable &other);
   const common::ObArray<ObDirectLoadSSTableFragment> &get_fragment_array() const
   {

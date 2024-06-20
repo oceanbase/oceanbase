@@ -83,7 +83,7 @@ int ObExprJsonReplace::eval_json_replace(const ObExpr &expr, ObEvalCtx &ctx, ObD
   }
   
   for (int64_t i = 1; OB_SUCC(ret) && !is_null_result && i < expr.arg_cnt_; i+=2) {
-    ObJsonBaseVector hit;
+    ObJsonSeekResult hit;
     ObDatum *path_data = NULL;
     if (expr.args_[i]->datum_meta_.type_ == ObNullType) {
       is_null_result = true;
@@ -114,7 +114,8 @@ int ObExprJsonReplace::eval_json_replace(const ObExpr &expr, ObEvalCtx &ctx, ObD
 
       // replace 
       int32_t hits = hit.size();
-      if (hits == 0) {
+      if(OB_FAIL(ret)) {
+      } else if (hits == 0) {
         // do nothing
       } else if (hits != 1) {
         ret = OB_ERR_UNEXPECTED;
@@ -132,13 +133,11 @@ int ObExprJsonReplace::eval_json_replace(const ObExpr &expr, ObEvalCtx &ctx, ObD
     LOG_WARN("Json parse and seek failed", K(ret));
   } else if (is_null_result) {
     res.set_null();
-  } else {
-    ObString str;
-    if (OB_FAIL(json_doc->get_raw_binary(str, &temp_allocator))) {
-      LOG_WARN("json_replace result to binary failed", K(ret));
-    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str))) {
-      LOG_WARN("fail to pack json result", K(ret));
-    }
+  } else if (OB_FAIL(ObJsonExprHelper::pack_json_res(expr, ctx, temp_allocator, json_doc, res))) {
+    LOG_WARN("pack fail", K(ret));
+  }
+  if (OB_NOT_NULL(json_doc)) {
+    json_doc->reset();
   }
   return ret;
 }
@@ -147,10 +146,13 @@ int ObExprJsonReplace::cg_expr(ObExprCGCtx &expr_cg_ctx,
                                const ObRawExpr &raw_expr,
                                ObExpr &rt_expr) const
 {
-  UNUSED(expr_cg_ctx);
-  UNUSED(raw_expr);
-  rt_expr.eval_func_ = eval_json_replace;
-  return OB_SUCCESS;
+  INIT_SUCC(ret);
+  if (OB_FAIL(ObJsonExprHelper::init_json_expr_extra_info(expr_cg_ctx.allocator_, raw_expr, type_, rt_expr))) {
+    LOG_WARN("init_json_expr_extra_info fail", K(ret));
+  } else {
+    rt_expr.eval_func_ = eval_json_replace;
+  }
+  return ret;
 }
 
 }

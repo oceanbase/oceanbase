@@ -19,7 +19,6 @@
 #include "share/ob_rs_mgr.h"
 #include "share/ob_srv_rpc_proxy.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/ob_partition_component_factory.h"
 #include "storage/tx/ob_gts_rpc.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "observer/ob_srv_network_frame.h"
@@ -105,7 +104,6 @@ public:
 protected:
   bool is_inited_;
 protected:
-  ObPartitionComponentFactory partition_cfy_;
   //MockObSchemaService schema_service_;
   ObRestoreSchema restore_schema_;
   MockSchemaService *schema_service_;

@@ -34,13 +34,13 @@ using namespace compaction;
 namespace blocksstable
 {
 
-ObMacroBlockReader::ObMacroBlockReader()
+ObMacroBlockReader::ObMacroBlockReader(const uint64_t tenant_id)
     :compressor_(NULL),
      uncomp_buf_(NULL),
      uncomp_buf_size_(0),
      decrypt_buf_(NULL),
      decrypt_buf_size_(0),
-     allocator_(ObModIds::OB_CS_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+     allocator_(ObModIds::OB_CS_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
      encryption_(nullptr)
 {
   if (share::is_reserve_mode()) {
@@ -54,9 +54,6 @@ ObMacroBlockReader::~ObMacroBlockReader()
     encryption_->~ObMicroBlockEncryption();
     ob_free(encryption_);
     encryption_ = nullptr;
-  }
-  if (nullptr != compressor_) {
-    compressor_->reset_mem();
   }
 }
 
@@ -273,7 +270,7 @@ int ObMacroBlockReader::decompress_data_with_prealloc_buf(
       }
     }
 
-    if (OB_FAIL(compressor_->decompress(buf, size, uncomp_buf, uncomp_buf_size, uncomp_size))) {
+    if (FAILEDx(compressor_->decompress(buf, size, uncomp_buf, uncomp_buf_size, uncomp_size))) {
       LOG_WARN("Fail to decompress data", K(ret));
     } else {
       if (OB_UNLIKELY(uncomp_size != uncomp_buf_size)) {

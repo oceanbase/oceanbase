@@ -193,6 +193,7 @@ private:
   ObCopyMacroBlockHandle copy_macro_block_handle_[MAX_PREFETCH_MACRO_BLOCK_NUM];
   int64_t handle_idx_;
   int64_t prefetch_meta_time_;
+  common::ObArenaAllocator tablet_allocator_;
   ObTabletHandle tablet_handle_;
   ObTableHandleV2 sstable_handle_;
   const ObSSTable *sstable_;

@@ -87,7 +87,10 @@ enum class RestoreSyncStatus {
   RESTORE_SYNC_SUSPEND = 8,
   RESTORE_SYNC_STANDBY_NEED_UPGRADE = 9,
   RESTORE_SYNC_PRIMARY_IS_DROPPED = 10,
-  RESTORE_SYNC_NOT_AVAILABLE = 11,
+  RESTORE_SYNC_WAITING_LS_CREATED = 11,
+  RESTORE_SYNC_QUERY_PRIMARY_FAILED = 12,
+  RESTORE_SYNC_RESTORE_HANDLER_HAS_NO_LEADER = 13,
+  RESTORE_SYNC_NOT_AVAILABLE = 14,
   MAX_RESTORE_SYNC_STATUS
 };
 
@@ -254,6 +257,8 @@ private:
   int check_restore_to_newest_from_service_(const share::ObRestoreSourceServiceAttr &attr,
       const share::SCN &end_scn, share::SCN &archive_scn);
   int check_restore_to_newest_from_archive_(ObLogArchivePieceContext &piece_context,
+      const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn);
+  int check_restore_to_newest_from_rawpath_(ObLogRawPathPieceContext &rawpath_ctx,
       const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn);
   bool restore_to_end_unlock_() const;
   int get_offline_scn_(share::SCN &scn);

@@ -40,16 +40,21 @@ class ObPerfModeGuard
   friend bool is_diagnose_info_enabled();
   friend bool is_trace_log_enabled();
 public:
-  explicit ObPerfModeGuard() : old_value_(in_disable_diagnose_guard_)
+  explicit ObPerfModeGuard() : old_value_(get_tl_instance())
   {
-    in_disable_diagnose_guard_ = true;
+    get_tl_instance() = true;
   }
   ~ObPerfModeGuard()
   {
-    in_disable_diagnose_guard_ = old_value_;
+    get_tl_instance() = old_value_;
   }
 private:
-  static thread_local bool in_disable_diagnose_guard_;
+  static bool &get_tl_instance()
+  {
+    static thread_local bool in_disable_diagnose_guard = false;
+    return in_disable_diagnose_guard;
+  }
+private:
   bool old_value_;
 };
 
@@ -57,7 +62,7 @@ using ObDisableDiagnoseGuard = ObPerfModeGuard;
 
 inline bool is_diagnose_info_enabled()
 {
-  return ObLibConfig::enable_diagnose_info_ && !ObPerfModeGuard::in_disable_diagnose_guard_;
+  return ObLibConfig::enable_diagnose_info_ && !ObPerfModeGuard::get_tl_instance();
 }
 
 inline void reload_diagnose_info_config(const bool enable_diagnose_info)
@@ -67,7 +72,7 @@ inline void reload_diagnose_info_config(const bool enable_diagnose_info)
 
 inline bool is_trace_log_enabled()
 {
-  return ObLibConfig::enable_trace_log_ && !ObPerfModeGuard::in_disable_diagnose_guard_;
+  return ObLibConfig::enable_trace_log_ && !ObPerfModeGuard::get_tl_instance();
 }
 
 inline void reload_trace_log_config(const bool enable_trace_log)

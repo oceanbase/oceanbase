@@ -53,7 +53,8 @@ public:
   inline bool is_tablet_change_node() const
   {
     return transaction::ObTxDataSourceType::CREATE_TABLET_NEW_MDS == tx_buf_node_.get_data_source_type()
-           || transaction::ObTxDataSourceType::DELETE_TABLET_NEW_MDS == tx_buf_node_.get_data_source_type();
+           || transaction::ObTxDataSourceType::DELETE_TABLET_NEW_MDS == tx_buf_node_.get_data_source_type()
+           || transaction::ObTxDataSourceType::CHANGE_TABLET_TO_TABLE_MDS == tx_buf_node_.get_data_source_type();
   }
 
   inline bool is_ddl_trans_node() const

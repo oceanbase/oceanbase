@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_MYSQL_PROXY_H_
 #define OCEANBASE_MYSQL_PROXY_H_
 
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_statement.h"
@@ -36,8 +37,11 @@ struct ObSessionDDLInfo final
 {
 public:
   ObSessionDDLInfo()
-    : ddl_info_(0)
-  {}
+    : is_ddl_(false), is_source_table_hidden_(false), is_dest_table_hidden_(false), is_heap_table_ddl_(false),
+      is_ddl_check_default_value_bit_(false), is_mview_complete_refresh_(false), is_refreshing_mview_(false),
+      is_retryable_ddl_(false), reserved_bit_(0)
+  {
+  }
   ~ObSessionDDLInfo() = default;
   void set_is_ddl(const bool is_ddl) { is_ddl_ = is_ddl; }
   bool is_ddl() const { return is_ddl_; }
@@ -49,6 +53,13 @@ public:
   bool is_heap_table_ddl() const { return is_heap_table_ddl_; }
   void set_ddl_check_default_value(const bool flag) { is_ddl_check_default_value_bit_ = flag; }
   bool is_ddl_check_default_value() const { return is_ddl_check_default_value_bit_; }
+  void set_mview_complete_refresh(const bool flag) { is_mview_complete_refresh_ = flag; }
+  bool is_mview_complete_refresh() const { return is_mview_complete_refresh_; }
+  void set_refreshing_mview(const bool flag) { is_refreshing_mview_ = flag; }
+  bool is_refreshing_mview() const { return is_refreshing_mview_; }
+  void set_retryable_ddl(const bool flag) { is_retryable_ddl_ = flag; }
+  bool is_retryable_ddl() const { return is_retryable_ddl_; }
+  inline void reset() { ddl_info_ = 0; }
   TO_STRING_KV(K_(ddl_info));
   OB_UNIS_VERSION(1);
 public:
@@ -56,7 +67,10 @@ public:
   static const int64_t IS_TABLE_HIDDEN_BIT = 1;
   static const int64_t IS_HEAP_TABLE_DDL_BIT = 1;
   static const int64_t IS_DDL_CHECK_DEFAULT_VALUE_BIT = 1;
-  static const int64_t RESERVED_BIT = sizeof(int64_t) - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT;
+  static const int64_t IS_MVIEW_COMPLETE_REFRESH_BIT = 1;
+  static const int64_t IS_REFRESHING_MVIEW_BIT = 1;
+  static const int64_t IS_RETRYABLE_DDL_BIT = 1;
+  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT - IS_RETRYABLE_DDL_BIT;
   union {
     uint64_t ddl_info_;
     struct {
@@ -65,7 +79,10 @@ public:
       uint64_t is_dest_table_hidden_: IS_TABLE_HIDDEN_BIT;
       uint64_t is_heap_table_ddl_: IS_HEAP_TABLE_DDL_BIT;
       uint64_t is_ddl_check_default_value_bit_ : IS_DDL_CHECK_DEFAULT_VALUE_BIT;
-      uint64_t reserved_bit : RESERVED_BIT;
+      uint64_t is_mview_complete_refresh_: IS_MVIEW_COMPLETE_REFRESH_BIT;
+      uint64_t is_refreshing_mview_: IS_REFRESHING_MVIEW_BIT;
+      uint64_t is_retryable_ddl_: IS_RETRYABLE_DDL_BIT;
+      uint64_t reserved_bit_ : RESERVED_BIT;
     };
   };
 };
@@ -194,7 +211,8 @@ public:
                           ObString &sql,
                           const share::schema::ObRoutineInfo &routine_info,
                           const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                          const ObTimeZoneInfo *tz_info);
+                          const ObTimeZoneInfo *tz_info,
+                          ObObj *result);
   int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn, const char *sql);
   int dblink_bind_basic_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
                                     uint64_t position,

@@ -62,24 +62,6 @@ public:
                            ObString &space_str,
                            char* &result);
 
-  int calc(const LRpadType type,
-           const common::ObObj &text,
-           const common::ObObj &len,
-           const common::ObObj &pad_text,
-           common::ObExprCtx &expr_ctx,
-           common::ObObj &result) const;
-
-  // @param [in/out] use result.collation as input param
-  // for ObExprPad
-  static int calc_mysql(const LRpadType type,
-                        const ObExprResType result_type,
-                        const common::ObObj &text,
-                        const common::ObObj &len,
-                        const common::ObObj &pad_text,
-                        const ObSQLSessionInfo *session,
-                        common::ObIAllocator *allocator,
-                        common::ObObj &result);
-
   static int get_padding_info_mysql(const common::ObCollationType &cs,
                                     const common::ObString &str_text,
                                     const int64_t &len,
@@ -89,18 +71,11 @@ public:
                                     int64_t &prefix_size,
                                     int64_t &size);
 
-  static int calc_oracle(const LRpadType type,
-                         const ObExprResType result_type,
-                         const common::ObObj &text,
-                         const common::ObObj &len,
-                         const common::ObObj &pad_text,
-                         common::ObExprCtx &expr_ctx,
-                         common::ObObj &result);
   static int calc_type_length_mysql(const ObExprResType result_type,
                                     const common::ObObj &text,
                                     const common::ObObj &pad_text,
                                     const common::ObObj &len,
-                                    const ObBasicSessionInfo *session,
+                                    const ObExprTypeCtx &type_ctx,
                                     int64_t &result_size);
   static int calc_type_length_oracle(const ObExprResType &result_type,
                                      const common::ObObj &text,
@@ -138,6 +113,7 @@ public:
                          const common::ObDatum &len, const common::ObDatum &pad_text,
                          common::ObIAllocator &res_alloc, ObDatum &res, bool &is_unchanged_clob);
   int get_origin_len_obj(ObObj &len_obj) const;
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBaseLRpad);
 };

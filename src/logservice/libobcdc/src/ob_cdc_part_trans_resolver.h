@@ -146,7 +146,8 @@ public:
   // init part_trans_resolver
   virtual int init(
       const logservice::TenantLSID &ls_id,
-      const int64_t start_commit_version) = 0;
+      const int64_t start_commit_version,
+      const bool enable_direct_load_inc) = 0;
 
 public:
   /// read log entry
@@ -219,7 +220,8 @@ public:
 public:
   virtual int init(
       const logservice::TenantLSID &tls_id,
-      const int64_t start_commit_version);
+      const int64_t start_commit_version,
+      const bool enable_direct_load_inc);
 
   virtual int read(
       const char *buf,
@@ -291,6 +293,14 @@ private:
   int handle_multi_data_source_log_(
       const transaction::ObTransID &tx_id,
       const palf::LSN &lsn,
+      const bool handling_miss_log,
+      transaction::ObTxLogBlock &tx_log_block);
+
+  // read ObTxDirectLoadIncLog
+  int handle_direct_load_inc_log_(
+      const transaction::ObTransID &tx_id,
+      const palf::LSN &lsn,
+      const int64_t submit_ts,
       const bool handling_miss_log,
       transaction::ObTxLogBlock &tx_log_block);
 
@@ -427,6 +437,7 @@ private:
   logservice::TenantLSID    tls_id_;
   PartTransDispatcher       part_trans_dispatcher_;
   IObLogClusterIDFilter     &cluster_id_filter_;
+  bool                      enable_direct_load_inc_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCDCPartTransResolver);
 };

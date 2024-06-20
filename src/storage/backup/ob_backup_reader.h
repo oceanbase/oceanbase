@@ -269,7 +269,7 @@ private:
   int get_macro_block_id_list_(const blocksstable::ObSSTable &sstable, ObBackupSSTableMeta &sstable_meta);
 
 private:
-  common::ObArray<storage::ObITable *> sstable_array_;
+  common::ObArray<storage::ObSSTableWrapper> sstable_array_;
   blocksstable::ObSelfBufferWriter buffer_writer_;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMetaBackupReader);

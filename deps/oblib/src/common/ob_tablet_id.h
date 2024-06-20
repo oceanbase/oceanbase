@@ -61,6 +61,7 @@ public:
   bool is_valid() const { return id_ != INVALID_TABLET_ID; }
   bool is_sys_tablet() const { return (is_valid() && is_sys_table(id_)); }
   bool is_inner_tablet() const { return (is_valid() && is_inner_table(id_)); }
+  bool is_user_tablet() const { return (!is_sys_tablet() && !is_inner_tablet()); }
   bool is_reserved_tablet() const { return is_inner_tablet() && !is_sys_tablet(); }
   bool is_ls_inner_tablet() const { return (id_ > MIN_LS_INNER_TABLET_ID && id_ < MAX_LS_INNER_TABLET_ID); }
   bool is_ls_tx_data_tablet() const { return (LS_TX_DATA_TABLET_ID == id_); }

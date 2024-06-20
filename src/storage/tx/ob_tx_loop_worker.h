@@ -40,6 +40,7 @@ public:
   const static int64_t KEEP_ALIVE_PRINT_INFO_INTERVAL = 5 * 60 * 1000 * 1000; // 5min
   const static int64_t TX_GC_INTERVAL = 5 * 1000 * 1000;                     // 5s
   const static int64_t TX_RETAIN_CTX_GC_INTERVAL = 5 * 1000 * 1000;           // 5s
+  const static int64_t TX_START_WORKING_RETRY_INTERVAL = 5 * 1000 * 1000;  //5s
 public:
   ObTxLoopWorker() { reset(); }
   ~ObTxLoopWorker() {}
@@ -55,15 +56,17 @@ public:
   virtual void run1();
 
 private:
-  int scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx);
+  int scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx, bool can_check_and_retry_start_working);
   void do_keep_alive_(ObLS *ls, const share::SCN &min_start_scn, MinStartScnStatus status); // 100ms
   void do_tx_gc_(ObLS *ls, share::SCN &min_start_scn, MinStartScnStatus &status);     // 15s
   void update_max_commit_ts_();
   void do_retain_ctx_gc_(ObLS * ls);  // 15s
+  void do_start_working_retry_(ObLS * ls);
 
 private:
   int64_t last_tx_gc_ts_;
   int64_t last_retain_ctx_gc_ts_;
+  int64_t last_check_start_working_retry_ts_;
 };
 
 

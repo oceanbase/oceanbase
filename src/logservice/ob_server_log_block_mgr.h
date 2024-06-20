@@ -51,6 +51,7 @@ private:
       S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IROTH;
   static const int CREATE_FILE_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
   static const int64_t RUN_INTERVAL = 1 * 1000 * 1000;
+  static const int64_t PRINT_INTERVAL = 3 * 1000 * 1000;
 
 private:
   typedef common::RWLock RWLock;
@@ -201,6 +202,8 @@ public:
   // NB: accurately, when tenant not exist in 'omt_', we can remove it from ObServerLogBlockMgr
   int remove_tenant(const int64_t log_disk_size);
 
+  int force_update_tenant_log_disk(const uint64_t tenant_id,
+                                   const int64_t new_log_disk_size);
   TO_STRING_KV("dir:",
                log_pool_path_, K_(dir_fd), K_(meta_fd), K_(log_pool_meta),
                K_(min_block_id), K_(max_block_id), K(min_log_disk_size_for_all_tenants_),
@@ -276,6 +279,7 @@ private:
                                        int64_t &has_allocated_block_cnt);
   int64_t lower_align_(const int64_t new_size_byte);
   int remove_tmp_file_or_directory_for_tenant_(const char *log_disk_path);
+  int get_free_disk_space(int64_t &free_disk_space);
 private:
   int open_until_success_(const char *src_block_path, const int flag,
                           palf::FileDesc &out_fd);
@@ -291,6 +295,8 @@ private:
                            const int64_t src_buf_len, const int64_t offset);
   int read_unitl_success_(const palf::FileDesc &src_fd, char *dest_buf,
                           const int64_t dest_buf_len, const int64_t offset);
+  int scan_tenant_dir_(const char *tenant_dir, int64_t &has_allocated_block_cnt);
+  int scan_ls_dir_(const char *tenant_dir, int64_t &has_allocated_block_cnt);
 private:
   typedef common::ObFunction<int(int64_t&)> GetTenantsLogDiskSize;
   mutable ObSpinLock log_pool_meta_lock_;
@@ -337,6 +343,7 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObServerLogBlockMgr);
 };
+
 } // namespace logservice
 } // namespace oceanbase
 #endif

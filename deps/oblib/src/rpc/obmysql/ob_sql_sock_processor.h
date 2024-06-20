@@ -32,7 +32,7 @@ public:
   ObSqlSockProcessor(ObMySQLHandler& handler):
       mysql_processor_(), compress_processor_(), ob_2_0_processor_() {}
   ~ObSqlSockProcessor() {}
-  int decode_sql_packet(ObSqlSockSession& sess, rpc::ObPacket*& pkt);
+  int decode_sql_packet(ObICSMemPool& mem_pool, ObSqlSockSession& sess, void* read_handle, rpc::ObPacket*& pkt);
   int build_sql_req(ObSqlSockSession& sess, rpc::ObPacket* pkt, rpc::ObRequest*& sql_req);
 private:
   ObVirtualCSProtocolProcessor *get_protocol_processor(common::ObCSProtocolType type);

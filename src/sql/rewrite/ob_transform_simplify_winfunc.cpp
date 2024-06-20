@@ -632,6 +632,12 @@ int ObTransformSimplifyWinfunc::do_remove_stmt_win(ObSelectStmt *select_stmt,
     if (OB_SUCC(ret) && OB_FAIL(select_stmt->replace_relation_exprs(exprs, new_exprs))) {
       LOG_WARN("select_stmt replace inner stmt expr failed", K(ret), K(select_stmt));
     }
+    if (OB_SUCC(ret)) {
+      //check qualify filters
+      if (OB_FAIL(ObTransformUtils::pushdown_qualify_filters(select_stmt))) {
+        LOG_WARN("check pushdown qualify filters failed", K(ret));
+      }
+    }
   }
   return ret;
 }

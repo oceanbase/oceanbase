@@ -198,6 +198,7 @@ int ObLogRpc::init(const int64_t io_thread_num)
 void ObLogRpc::destroy()
 {
   is_inited_ = false;
+  global_poc_server.destroy();
   net_client_.destroy();
   last_ssl_info_hash_ = UINT64_MAX;
   ssl_key_expired_time_ = 0;

@@ -76,6 +76,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcCreateResourceUnitP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterResourceUnitP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropResourceUnitP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCloneResourcePoolP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateResourcePoolP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterResourcePoolP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropResoucePoolP, *gctx_.root_service_);
@@ -105,12 +106,14 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcUpdateDDLTaskActiveTimeP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateHiddenTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcExchangePartitionP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRenameTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcTruncateTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcTruncateTableV2P, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateIndexP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropIndexP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateMLogP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTableLikeP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcExecuteBootstrapP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRefreshConfigP, *gctx_.root_service_);
@@ -153,6 +156,8 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcDoContextDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRecompileAllViewsBatchP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcTryAddDepInfosForSynonymBatchP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcMViewCompleteRefreshP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcUpdateMViewTableStatusP, *gctx_.root_service_);
     //ob_admin
     RPC_PROCESSOR(rootserver::ObForceCreateSysTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObForceSetLocalityP, *gctx_.root_service_);
@@ -177,6 +182,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcLockUserP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeDBP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcRevokeRoutineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeSysPrivP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterRoleP, *gctx_.root_service_);
 
@@ -251,6 +257,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObBackupCleanP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObDeletePolicyP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRecoverTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCloneTenantP, *gctx_.root_service_);
 
     // auto part ddl
 
@@ -279,6 +286,8 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsContextDDLP, *gctx_.root_service_);
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(rootserver::ObGetRootKeyP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObReloadMasterKeyP, *gctx_.root_service_);
 #endif
+    RPC_PROCESSOR(rootserver::ObRpcAlterUserProxyP, *gctx_.root_service_);
 
 }

@@ -24,12 +24,17 @@ using namespace common;
 
 namespace lib
 {
-
 thread_local ObMemAttr ObMallocHookAttrGuard::tl_mem_attr(OB_SERVER_TENANT_ID,
                                                           "glibc_malloc",
                                                           ObCtxIds::GLIBC);
 static int64_t g_divisive_mem_size[OB_MAX_CPU_NUM];
 static thread_local bool g_is_ob_mem_mgr_path = false;
+
+static bool g_memleak_light_backtrace_enabled = false;
+
+uint32_t ObMemVersionNode::global_version = 0;
+__thread bool ObMemVersionNode::tl_ignore_node = true;
+__thread ObMemVersionNode* ObMemVersionNode::tl_node = NULL;
 
 ObMallocHookAttrGuard::ObMallocHookAttrGuard(const ObMemAttr& attr)
   : old_attr_(tl_mem_attr)
@@ -130,5 +135,17 @@ bool is_ob_mem_mgr_path()
   return g_is_ob_mem_mgr_path;
 }
 
+void enable_memleak_light_backtrace(const bool enable)
+{
+#if defined(__x86_64__) || defined(__aarch64__)
+  g_memleak_light_backtrace_enabled = enable;
+#else
+  UNUSED(enable);
+#endif
+}
+bool is_memleak_light_backtrace_enabled()
+{
+  return g_memleak_light_backtrace_enabled;
+}
 } // end of namespace lib
 } // end of namespace oceanbase

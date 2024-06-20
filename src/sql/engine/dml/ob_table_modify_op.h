@@ -137,6 +137,7 @@ public:
       uint64_t reserved_                        : 55;
     };
   };
+  int64_t das_dop_; // default is 0
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifySpec);
 };
@@ -206,6 +207,7 @@ public:
     dml_rtctx_.cleanup();
     trigger_clear_exprs_.reset();
     fk_checkers_.reset();
+    last_store_row_.reset();
     ObOperator::destroy();
   }
 
@@ -214,10 +216,6 @@ public:
   int close_inner_conn();
   int begin_nested_session(bool skip_cur_stmt_tables);
   int end_nested_session();
-  int set_foreign_key_cascade(bool is_cascade);
-  int get_foreign_key_cascade(bool &is_cascade) const;
-  int set_foreign_key_check_exist(bool is_check_exist);
-  int get_foreign_key_check_exist(bool &is_check_exist) const;
   int execute_write(const char *sql);
   int execute_read(const char *sql, common::ObMySQLProxy::MySQLResult &res);
   int check_stack();
@@ -292,6 +290,7 @@ public:
   ObSEArray<ObExpr *, 4> trigger_clear_exprs_;
   ObDMLModifyRowsList dml_modify_rows_;
   ObSEArray<ObForeignKeyChecker *, 4> fk_checkers_;
+  ObChunkDatumStore::ShadowStoredRow last_store_row_;
 private:
   ObSQLSessionInfo::StmtSavedValue *saved_session_;
   char saved_session_buf_[sizeof(ObSQLSessionInfo::StmtSavedValue)] __attribute__((aligned (16)));;

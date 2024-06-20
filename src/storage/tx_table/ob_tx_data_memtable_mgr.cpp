@@ -31,8 +31,7 @@ ObTxDataMemtableMgr::ObTxDataMemtableMgr()
     ls_id_(),
     mini_merge_recycle_commit_versions_ts_(0),
     tx_data_table_(nullptr),
-    ls_tablet_svr_(nullptr),
-    slice_allocator_(nullptr)
+    ls_tablet_svr_(nullptr)
 {
   lock_.lock_type_ = LockType::OB_SPIN_RWLOCK;
   lock_.lock_ = &lock_def_;
@@ -86,7 +85,6 @@ int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     t3m_ = t3m;
-    table_type_ = ObITable::TableType::TX_DATA_MEMTABLE;
     freezer_ = freezer;
     tx_data_table_ = tx_table->get_tx_data_table();
     ls_tablet_svr_ = ls_handle.get_ls()->get_tablet_svr();
@@ -125,7 +123,7 @@ int ObTxDataMemtableMgr::offline()
   return ret;
 }
 
-int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
+int ObTxDataMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
                                                 const bool force)
 {
   int ret = OB_SUCCESS;
@@ -139,7 +137,7 @@ int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       memtable->set_state(ObTxDataMemtable::State::RELEASED);
       memtable->set_release_time();
       if (true == memtable->do_recycled()) {
-        mini_merge_recycle_commit_versions_ts_ = ObClockGenerator::getCurrentTime();
+        mini_merge_recycle_commit_versions_ts_ = ObClockGenerator::getClock();
       }
       STORAGE_LOG(INFO, "[TX DATA MERGE]tx data memtable mgr release head memtable", K(ls_id_), KP(memtable), KPC(memtable));
       release_head_memtable();
@@ -153,26 +151,19 @@ int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
   return ret;
 }
 
-int ObTxDataMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
-                                         const int64_t schema_version,
-                                         const SCN newest_clog_checkpoint_scn,
-                                         const bool for_replay)
+int ObTxDataMemtableMgr::create_memtable(const CreateMemtableArg &arg)
 {
-  UNUSED(newest_clog_checkpoint_scn);
-  UNUSED(for_replay);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTxDataMemtableMgr has not initialized", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(schema_version < 0)) {
+  } else if (OB_UNLIKELY(arg.schema_version_ < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(schema_version));
-  } else if (OB_ISNULL(slice_allocator_)) {
-    ret = OB_ERR_NULL_VALUE;
-    STORAGE_LOG(WARN, "slice_allocator_ has not been set.");
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(arg.schema_version_));
   } else {
     MemMgrWLockGuard lock_guard(lock_);
-    if (OB_FAIL(create_memtable_(clog_checkpoint_scn, schema_version, ObTxDataHashMap::DEFAULT_BUCKETS_CNT))) {
+    if (OB_FAIL(
+            create_memtable_(arg.clog_checkpoint_scn_, arg.schema_version_, ObTxDataHashMap::DEFAULT_BUCKETS_CNT))) {
       STORAGE_LOG(WARN, "create memtable fail.", KR(ret));
     } else {
       // create memtable success
@@ -205,7 +196,7 @@ int ObTxDataMemtableMgr::create_memtable_(const SCN clog_checkpoint_scn,
   } else if (OB_ISNULL(tx_data_memtable)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "dynamic cast failed", KR(ret), KPC(this));
-  } else if (OB_FAIL(tx_data_memtable->init(table_key, slice_allocator_, this, freezer_, buckets_cnt))) {
+  } else if (OB_FAIL(tx_data_memtable->init(table_key, this, freezer_, buckets_cnt))) {
     STORAGE_LOG(WARN, "memtable init fail.", KR(ret), KPC(tx_data_memtable));
   } else if (OB_FAIL(add_memtable_(handle))) {
     STORAGE_LOG(WARN, "add memtable fail.", KR(ret));
@@ -213,7 +204,6 @@ int ObTxDataMemtableMgr::create_memtable_(const SCN clog_checkpoint_scn,
     // create memtable success
     STORAGE_LOG(INFO, "create tx data memtable done", KR(ret), KPC(tx_data_memtable), KPC(this));
   }
-
   return ret;
 }
 
@@ -225,21 +215,17 @@ int ObTxDataMemtableMgr::freeze()
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "tx data memtable container is not inited.", KR(ret));
-  } else if (get_memtable_count_() <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "there is no tx data memtable.", KR(ret), K(get_memtable_count_()));
-  } else if (OB_ISNULL(slice_allocator_)) {
-    ret = OB_ERR_NULL_VALUE;
-    STORAGE_LOG(WARN, "slice_allocator_ has not been set.", KR(ret), KP(slice_allocator_));
   } else {
     MemMgrWLockGuard lock_guard(lock_);
-    if (OB_FAIL(freeze_())) {
+    if (get_memtable_count_() <= 0) {
+      ret = OB_ENTRY_NOT_EXIST;
+      STORAGE_LOG(WARN, "Empty tx data memtable mgr. This ls may offline", KR(ret), K(memtable_head_), K(memtable_tail_));
+    } else if (OB_FAIL(freeze_())) {
       STORAGE_LOG(WARN, "freeze tx data memtable fail.", KR(ret));
     } else {
       // freeze success
     }
   }
-
   return ret;
 }
 
@@ -435,7 +421,7 @@ int ObTxDataMemtableMgr::get_all_memtables_for_write(ObTxDataMemtableWriteGuard 
   write_guard.reset();
   MemMgrRLockGuard lock_guard(lock_);
   for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
-    if (OB_FAIL(write_guard.push_back_table(tables_[get_memtable_idx(i)], t3m_, table_type_))) {
+    if (OB_FAIL(write_guard.push_back_table(tables_[get_memtable_idx(i)], t3m_))) {
       STORAGE_LOG(WARN, "push back table to write guard failed", KR(ret), K(ls_id_));
     }
   }
@@ -467,7 +453,8 @@ SCN ObTxDataMemtableMgr::get_rec_scn()
   return rec_scn;
 }
 
-int ObTxDataMemtableMgr::flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles)
+int ObTxDataMemtableMgr::flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles,
+    const int64_t trace_id)
 {
   int ret = OB_SUCCESS;
 
@@ -481,14 +468,14 @@ int ObTxDataMemtableMgr::flush_all_frozen_memtables_(ObTableHdlArray &memtable_h
                && !memtable->ready_for_flush()) {
       // on need return error
       STORAGE_LOG(INFO, "the tx data memtable is not frozen", KPC(memtable));
-    } else if (OB_FAIL(memtable->flush())) {
+    } else if (OB_FAIL(memtable->flush(trace_id))) {
       STORAGE_LOG(WARN, "the tx data memtable flush failed", KR(ret), KPC(memtable));
     }
   }
   return ret;
 }
 
-int ObTxDataMemtableMgr::flush(SCN recycle_scn, bool need_freeze)
+int ObTxDataMemtableMgr::flush(SCN recycle_scn, const int64_t trace_id, bool need_freeze)
 {
   int ret = OB_SUCCESS;
 
@@ -517,7 +504,7 @@ int ObTxDataMemtableMgr::flush(SCN recycle_scn, bool need_freeze)
     STORAGE_LOG(WARN, "get all memtables failed", KR(ret), KP(this));
   } else if (memtable_handles.count() == 0) {
     STORAGE_LOG(INFO, "memtable handles is empty. skip flush once.");
-  } else if (OB_FAIL(flush_all_frozen_memtables_(memtable_handles))) {
+  } else if (OB_FAIL(flush_all_frozen_memtables_(memtable_handles, trace_id))) {
     STORAGE_LOG(WARN, "flush all frozen memtables failed", KR(ret), KP(this));
   } else if (OB_NOT_NULL(tx_data_table_) && OB_FAIL(tx_data_table_->update_memtables_cache())) {
     STORAGE_LOG(WARN, "update memtables cache failed.", KR(ret), KP(this));
@@ -533,7 +520,7 @@ ObTabletID ObTxDataMemtableMgr::get_tablet_id() const
 
 bool ObTxDataMemtableMgr::is_flushing() const
 {
-  return memtable_tail_ - 1 != memtable_head_;
+  return memtable_tail_ - memtable_head_ > 1;
 }
 
 int ObTxDataMemtableMgr::get_memtable_range(int64_t &memtable_head, int64_t &memtable_tail)

@@ -14,6 +14,7 @@
 #define OB_STORAGE_TABLE_ACCESS_CONTEXT_H
 
 #include "ob_table_access_param.h"
+#include "ob_sample_filter.h"
 #include "storage/lob/ob_lob_locator.h"
 #include "storage/tx/ob_defensive_check_mgr.h"
 #include "share/scn.h"
@@ -94,6 +95,9 @@ struct ObTableAccessContext
   inline bool is_limit_end() const {
     return (nullptr != limit_param_ && limit_param_->limit_ >= 0 && (out_cnt_ - limit_param_->offset_ >= limit_param_->limit_));
   }
+  inline sql::ObPushdownFilterExecutor *get_sample_executor() {
+    return nullptr == sample_filter_ ? nullptr : sample_filter_->get_sample_executor();
+  }
   inline common::ObIAllocator *get_range_allocator() {
     return nullptr == range_allocator_ ? allocator_ : range_allocator_;
   }
@@ -104,10 +108,20 @@ struct ObTableAccessContext
       lob_allocator_.reset();
     }
   }
+  inline void reuse_lob_locator_helper() {
+    if (OB_NOT_NULL(lob_locator_helper_)) {
+      lob_locator_helper_->reuse();
+    }
+  }
+  inline void reset_cached_iter_node()
+  {
+    cached_iter_node_ = nullptr;
+  }
   // used for query
   int init(ObTableScanParam &scan_param,
            ObStoreCtx &ctx,
-           const common::ObVersionRange &trans_version_range);
+           const common::ObVersionRange &trans_version_range,
+           CachedIteratorNode *cached_iter_node);
   // used for merge and exist
   int init(const common::ObQueryFlag &query_flag,
            ObStoreCtx &ctx,
@@ -125,6 +139,8 @@ struct ObTableAccessContext
   int init_scan_allocator(ObTableScanParam &scan_param);
   TO_STRING_KV(
     K_(is_inited),
+    K_(use_fuse_row_cache),
+    K_(need_scn),
     K_(timeout),
     K_(ls_id),
     K_(tablet_id),
@@ -141,10 +157,12 @@ struct ObTableAccessContext
     K_(merge_scn),
     K_(lob_allocator),
     K_(lob_locator_helper),
-    KP_(iter_pool),
+    KP_(cached_iter_node),
+    KP_(stmt_iter_pool),
     KP_(cg_iter_pool),
     KP_(cg_param_pool),
-    KP_(block_row_store));
+    KP_(block_row_store),
+    KP_(sample_filter));
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
   static const int64_t USE_BLOCK_CACHE_LIMIT = 128L << 10;  // 128K
@@ -157,6 +175,14 @@ private:
   int init_column_scale_info(ObTableScanParam &scan_param);
 
 public:
+  OB_INLINE common::ObIAllocator *get_long_life_allocator()
+  {
+    return nullptr == cached_iter_node_ ? stmt_allocator_ : cached_iter_node_->get_iter_allocator();
+  }
+  OB_INLINE ObStoreRowIterPool<ObStoreRowIterator> *get_stmt_iter_pool()
+  {
+    return nullptr == cached_iter_node_ ? stmt_iter_pool_ : cached_iter_node_->get_stmt_iter_pool();
+  }
   bool is_inited_;
   bool use_fuse_row_cache_; // temporary code
   bool need_scn_;
@@ -183,10 +209,12 @@ public:
   share::SCN merge_scn_;
   common::ObArenaAllocator lob_allocator_;
   ObLobLocatorHelper *lob_locator_helper_;
-  ObStoreRowIterPool<ObStoreRowIterator> *iter_pool_;
+  CachedIteratorNode *cached_iter_node_;
+  ObStoreRowIterPool<ObStoreRowIterator> *stmt_iter_pool_;
   ObStoreRowIterPool<ObICGIterator> *cg_iter_pool_;
   ObCGIterParamPool *cg_param_pool_;
   ObBlockRowStore *block_row_store_;
+  ObRowSampleFilter *sample_filter_;
   compaction::ObCachedTransStateMgr *trans_state_mgr_;
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckRecordExtend defensive_check_record_;

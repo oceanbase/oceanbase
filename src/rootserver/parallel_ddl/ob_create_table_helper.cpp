@@ -164,6 +164,7 @@ int ObCreateTableHelper::execute()
     const ObTableSchema &table = arg_.schema_;
     //create table xx if not exist (...)
     if (arg_.if_not_exist_) {
+      res_.do_nothing_ = true;
       ret = OB_SUCCESS;
       LOG_INFO("table is exist, no need to create again",
                "tenant_id", table.get_tenant_id(),
@@ -440,7 +441,7 @@ int ObCreateTableHelper::lock_objects_by_id_()
       if (OB_ISNULL(col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema failed", KR(ret));
-      } else if (col->is_extend()) {
+      } else if (col->get_meta_type().is_user_defined_sql_type()) {
         const uint64_t udt_id = col->get_sub_data_type();
         if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
           // can't add object lock across tenant, assumed that sys inner udt won't be changed.
@@ -984,9 +985,16 @@ int ObCreateTableHelper::generate_table_schema_()
 
   // to make try_format_partition_schema() passed
   const uint64_t mock_table_id = OB_MIN_USER_OBJECT_ID + 1;
+  uint64_t compat_version = 0;
   bool is_oracle_mode = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K_(tenant_id));
+  } else if (not_compat_for_queuing_mode(compat_version) && arg_.schema_.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K_(tenant_id), K(compat_version), K(arg_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, QUEUING_MODE_NOT_COMPAT_USER_ERROR_STR);
   } else if (OB_UNLIKELY(OB_INVALID_ID != arg_.schema_.get_table_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create table with table_id in 4.x is not supported",
@@ -1041,7 +1049,7 @@ int ObCreateTableHelper::generate_table_schema_()
       if (OB_ISNULL(col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema failed", KR(ret));
-      } else if (col->is_extend()) {
+      } else if (col->get_meta_type().is_user_defined_sql_type()) {
         const uint64_t udt_id = col->get_sub_data_type();
         const ObUDTTypeInfo *udt_info = NULL;
         if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
@@ -1195,6 +1203,14 @@ int ObCreateTableHelper::generate_aux_table_schemas_()
           index_arg.index_type_ = INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE;
         } else if (INDEX_TYPE_SPATIAL_GLOBAL == index_arg.index_type_) {
           index_arg.index_type_ = INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE;
+        } else if (is_global_fts_index(index_arg.index_type_)) {
+          if (index_arg.index_type_ == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL) {
+            index_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
+          } else if (index_arg.index_type_ == INDEX_TYPE_FTS_INDEX_GLOBAL) {
+            index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE;
+          } else if (index_arg.index_type_ == INDEX_TYPE_FTS_DOC_WORD_GLOBAL) {
+            index_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE;
+          }
         }
       }
       // the global index has generated column schema during resolve, RS no need to generate index schema,
@@ -2318,6 +2334,8 @@ int ObCreateTableHelper::create_tablets_()
   SCN frozen_scn;
   ObSchemaGetterGuard schema_guard;
   ObSchemaService *schema_service_impl = NULL;
+  uint64_t tenant_data_version = 0;
+
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
@@ -2330,6 +2348,8 @@ int ObCreateTableHelper::create_tablets_()
   } else if (OB_UNLIKELY(new_tables_.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table cnt", KR(ret), K(new_tables_.count()));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+    LOG_WARN("get min data version failed", K(ret), K_(tenant_id));
   } else {
     ObTableCreator table_creator(
                    tenant_id_,
@@ -2360,6 +2380,7 @@ int ObCreateTableHelper::create_tablets_()
     } else {
       ObArray<const ObTableSchema*> schemas;
       common::ObArray<share::ObLSID> ls_id_array;
+      ObArray<bool> need_create_empty_majors;
       for (int64_t i = 0; OB_SUCC(ret) && i < new_tables_.count(); i++) {
         const ObTableSchema &new_table = new_tables_.at(i);
         const uint64_t table_id = new_table.get_table_id();
@@ -2368,6 +2389,8 @@ int ObCreateTableHelper::create_tablets_()
         } else if (!new_table.is_global_index_table()) {
           if (OB_FAIL(schemas.push_back(&new_table))) {
             LOG_WARN("fail to push back new table", KR(ret));
+          } else if (OB_FAIL(need_create_empty_majors.push_back(true))) {
+            LOG_WARN("fail to push back need create empty major", KR(ret));
           }
         } else {
           if (OB_FAIL(new_table_tablet_allocator.prepare(trans_, new_table))) {
@@ -2375,7 +2398,7 @@ int ObCreateTableHelper::create_tablets_()
           } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
             LOG_WARN("fail to get ls id array", KR(ret));
           } else if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(
-                     new_table, ls_id_array))) {
+                     new_table, ls_id_array, tenant_data_version, true/*need create major sstable*/))) {
             LOG_WARN("create table partitions failed", KR(ret), K(new_table));
           }
         }
@@ -2395,7 +2418,7 @@ int ObCreateTableHelper::create_tablets_()
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
           LOG_WARN("fail to get ls id array", KR(ret));
         } else if (OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
-                   schemas, ls_id_array))) {
+                   schemas, ls_id_array, tenant_data_version, need_create_empty_majors /*need create major sstable*/))) {
           LOG_WARN("create table partitions failed", KR(ret), K(data_table));
         } else if (OB_FAIL(table_creator.execute())) {
           LOG_WARN("execute create partition failed", KR(ret));

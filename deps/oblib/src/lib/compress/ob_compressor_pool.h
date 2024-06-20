@@ -15,6 +15,7 @@
 
 #include "lib/compress/ob_compressor.h"
 #include "lib/compress/ob_stream_compressor.h"
+#include "lib/allocator/ob_vslice_alloc.h"
 #include "none/ob_none_compressor.h"
 #include "lz4/ob_lz4_compressor.h"
 #include "snappy/ob_snappy_compressor.h"
@@ -24,6 +25,7 @@
 #include "zstd/ob_zstd_stream_compressor.h"
 #include "zstd_1_3_8/ob_zstd_compressor_1_3_8.h"
 #include "zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.h"
+#include "zlib_lite/ob_zlib_lite_compressor.h"
 
 namespace oceanbase
 {
@@ -61,6 +63,7 @@ private:
   ObCompressorPool();
   virtual ~ObCompressorPool() {}
 
+  ObVSliceAlloc allocator_;
   ObNoneCompressor none_compressor;
   ObLZ4Compressor lz4_compressor;
   ObLZ4Compressor191 lz4_compressor_1_9_1;
@@ -68,6 +71,7 @@ private:
   ObZlibCompressor zlib_compressor;
   zstd::ObZstdCompressor zstd_compressor;
   zstd_1_3_8::ObZstdCompressor_1_3_8 zstd_compressor_1_3_8;
+  ZLIB_LITE::ObZlibLiteCompressor zlib_lite_compressor;
 
   //stream compressor
   ObLZ4StreamCompressor lz4_stream_compressor;

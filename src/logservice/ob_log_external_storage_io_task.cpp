@@ -240,7 +240,7 @@ int convert_to_storage_access_type(const OPEN_FLAG &open_flag,
 {
   int ret = OB_SUCCESS;
   if (OPEN_FLAG::READ_FLAG == open_flag) {
-    storage_access_type = ObStorageAccessType::OB_STORAGE_ACCESS_READER;
+    storage_access_type = ObStorageAccessType::OB_STORAGE_ACCESS_ADAPTIVE_READER;
   } else {
     ret = OB_NOT_SUPPORTED;
     CLOG_LOG(WARN, "not supported flag", K(open_flag));
@@ -300,7 +300,7 @@ int ObLogExternalStorageIOTaskHandleAdapter::exist(const ObString &uri,
   ObIODevice *io_device = NULL;
   if (OB_FAIL(get_and_init_io_device(uri, storage_info, io_device))) {
     CLOG_LOG(WARN, "get_io_device failed", K(uri), KP(io_device));
-  } else if (OB_FAIL(io_device->exist(uri.ptr(), exist))) {
+  } else if (OB_FAIL(io_device->adaptive_exist(uri.ptr(), exist))) {
     CLOG_LOG(WARN, "exist failed", K(uri), KP(io_device), K(exist));
   } else {
     CLOG_LOG(TRACE, "exist success", K(uri), KP(io_device), K(exist));
@@ -319,7 +319,7 @@ int ObLogExternalStorageIOTaskHandleAdapter::get_file_size(const ObString &uri,
   ObIODevice *io_device = NULL;
   if (OB_FAIL(get_and_init_io_device(uri, storage_info, io_device))) {
     CLOG_LOG(WARN, "get_io_device failed", K(uri), KP(io_device));
-  } else if (OB_FAIL(io_device->stat(uri.ptr(), file_stat))) {
+  } else if (OB_FAIL(io_device->adaptive_stat(uri.ptr(), file_stat))) {
     CLOG_LOG(WARN, "stat io deveice failed", K(uri));
   } else {
     file_size = file_stat.size_;

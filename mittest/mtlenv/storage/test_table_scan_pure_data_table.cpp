@@ -65,7 +65,7 @@ TestTableScanPureDataTable::TestTableScanPureDataTable()
 
 void TestTableScanPureDataTable::SetUpTestCase()
 {
-  uint64_t version = cal_version(4, 2, 0, 0);
+  uint64_t version = cal_version(4, 3, 0, 0);
   ASSERT_EQ(OB_SUCCESS, ObClusterVersion::get_instance().init(version));
   ASSERT_EQ(OB_SUCCESS, omt::ObTenantConfigMgr::get_instance().add_tenant_config(MTL_ID()));
   ObClusterVersion::get_instance().tenant_config_mgr_ = &omt::ObTenantConfigMgr::get_instance();
@@ -124,6 +124,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   ASSERT_EQ(OB_SUCCESS, tx_service->get_read_snapshot(*tx_desc, isolation, expire_ts, read_snapshot));
 
   // 4. storage dml
+  ObStoreCtxGuard store_ctx_guard;
   ObDMLBaseParam dml_param;
   dml_param.timeout_ = ObTimeUtility::current_time() + TestDmlCommon::TX_EXPIRE_TIME_US;
   dml_param.is_total_quantity_log_ = false;
@@ -133,6 +134,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   dml_param.tenant_schema_version_ = share::OB_CORE_SCHEMA_VERSION + 1;
   dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
   dml_param.snapshot_ = read_snapshot;
+  dml_param.store_ctx_guard_ = &store_ctx_guard;
 
   ObArenaAllocator allocator;
   share::schema::ObTableDMLParam table_dml_param(allocator);
@@ -144,10 +146,16 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
 
   ASSERT_EQ(OB_SUCCESS, table_dml_param.convert(&table_schema, 1, column_ids));
   dml_param.table_param_ = &table_dml_param;
-
+  ASSERT_EQ(OB_SUCCESS, access_service->get_write_store_ctx_guard(ls_id_,
+                                                                  dml_param.timeout_,
+                                                                  *tx_desc,
+                                                                  read_snapshot,
+                                                                  0,/*branch_id*/
+                                                                  store_ctx_guard));
   int64_t affected_rows = 0;
   ASSERT_EQ(OB_SUCCESS, access_service->insert_rows(ls_id_, tablet_id_,
       *tx_desc, dml_param, column_ids, &mock_iter, affected_rows));
+  store_ctx_guard.reset();
 
   ASSERT_EQ(12, affected_rows);
 
@@ -215,7 +223,7 @@ void TestTableScanPureDataTable::table_scan(
     if (OB_SUCCESS == ret) {
       ++cnt;
     }
-    LOG_INFO("table scan row", KPC(row));
+    LOG_INFO("table scan row", KPC(row), K(ret));
   }
   ASSERT_EQ(12, cnt);
 
@@ -263,7 +271,7 @@ TEST_F(TestTableScanPureDataTable, table_scan_pure_data_table)
   // for exist
   // the iter has store ctx and store ctx has one ls handle.
   iter->reset();
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_));
 }
 } // namespace storage
 } // namespace oceanbase

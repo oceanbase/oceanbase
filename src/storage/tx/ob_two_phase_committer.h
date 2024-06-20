@@ -208,7 +208,7 @@ public:
   virtual int on_abort() = 0;
   virtual int on_clear() = 0;
 
-  // 1. when recive a new request msg, the participant will enter into the next phase.
+  // 1. when receive a new request msg, the participant will enter into the next phase.
   // 2. invoke do_xxx to execute all in-memory operation with the next phase
   // 3. set upstream_state at last
   // 4. retry submit log if upstream_state is larger than downstream_state
@@ -294,6 +294,9 @@ public:
   // and apply_prepare_log.
   virtual bool is_2pc_logging() const = 0;
 
+  // means 2pc state machine stop, don't advance to next phase
+  virtual bool is_2pc_blocking() const = 0;
+
   //durable state, set by applying log
   virtual ObTxState get_downstream_state() const = 0;
   virtual int set_downstream_state(const ObTxState state) = 0;
@@ -329,11 +332,29 @@ public:
   // TODO, refine in 4.1
   virtual bool is_sub2pc() const = 0;
   // only persist redo and commit info
-  //
   int prepare_redo();
+
+  virtual bool is_dup_tx() const = 0;
+
   // continue execution of two phase commit
   int continue_execution(const bool is_rollback);
 
+  // for tree phase commit
+  //
+  // Merge the intermediate_participants(created during transfer) into the
+  // participants to guarantee the consistency view of the 2pc(we guarantee the
+  // same participants in each state transfer).
+  // Implementer need to distinguish the particpants of the current 2pc state
+  // and the participants created during transfer in the current 2pc state. And
+  // merge them in the implementation
+  virtual int merge_intermediate_participants() = 0;
+  // Whether it is the real upstream of myself during handling the 2pc msg. We
+  // rely on thus information to prevent the deadlock(caused by cycled transfer.
+  // eg: A transfer to B and then B transfer to A) of the tree phase commit.
+  // Implementer need to remember that the request and compare with the real
+  // upstream. What's more, we need consider the case it is called not during
+  // the 2pc msg and so we are handling with the real upstream
+  virtual bool is_real_upstream() = 0;
 
 private:
   // Inner method for handle_2pc_xxx_request/response for clearity
@@ -362,7 +383,6 @@ private:
   //
   //  NB: We should take both upstream and downstream into consideration.
   int decide_downstream_msg_type_(bool &need_submit, ObTwoPhaseCommitMsgType &msg_type);
-  int retransmit_downstream_msg_();
   int retransmit_upstream_msg_(const ObTxState state);
   int retransmit_downstream_msg_(const int64_t participant);
 
@@ -375,6 +395,7 @@ private:
 protected:
   // Means we collect all downstream responses
   bool all_downstream_collected_();
+  int retransmit_downstream_msg_();
 protected:
   // colloected_ is the bit set for storing responses from participants
   //

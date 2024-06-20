@@ -80,6 +80,7 @@ int ObExprCollectionConstruct::calc_result_typeN(ObExprResType &type,
     }
   }
   OX (type.set_type(ObExtendType));
+  OX (type.set_extend_type(type_));
   OX (type.set_udt_id(udt_id_));
   return ret;
 }
@@ -220,9 +221,16 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     const pl::ObCollectionType *collection_type = NULL;
     pl::ObElemDesc elem_desc;
     pl::ObPLPackageGuard package_guard(session->get_effective_tenant_id());
+    ObSchemaGetterGuard *schema_guard = NULL;
+    // if called by check_default_value in ddl resolver, no sql ctx, get guard from session cache
+    if (OB_ISNULL(exec_ctx.get_sql_ctx()) || OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
+      schema_guard = &session->get_cached_schema_guard_info().get_schema_guard();
+    } else {
+      schema_guard = exec_ctx.get_sql_ctx()->schema_guard_;
+    }
     pl::ObPLResolveCtx resolve_ctx(alloc,
                                    *session,
-                                   *(exec_ctx.get_sql_ctx()->schema_guard_),
+                                   *(schema_guard),
                                    package_guard,
                                    *(exec_ctx.get_sql_proxy()),
                                    false);
@@ -290,7 +298,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
               int64_t ptr = 0;
               int64_t init_size = OB_INVALID_SIZE;
               OZ (collection_type->get_element_type().newx(*coll->get_allocator(), ns, ptr));
-              OZ (collection_type->get_element_type().get_size(*ns, pl::PL_TYPE_INIT_SIZE, init_size));
+              OZ (collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE, init_size));
               OX (new_composite.set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
               OX (static_cast<ObObj*>(coll->get_data())[i] = new_composite);
             } else if (pl::PL_OPAQUE_TYPE == v.get_meta().get_extend_type()

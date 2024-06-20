@@ -649,7 +649,7 @@ int ObNumber::find_point_range_(const char *str, const int64_t length,
       if (lib::is_oracle_mode() &&
           ((0 == str_length && contains_sign) || (1 == str_length && *str_ptr == '.'))) {
         ret = OB_INVALID_NUMERIC;
-        LIB_LOG(WARN, "invalid number", K(ret), KCSTRING(str));
+        LIB_LOG(WARN, "invalid number", K(ret), K(str[0]), K(str_length), K(length));
       }
 
       if (OB_SUCC(ret)) {
@@ -3058,6 +3058,7 @@ const char *ObNumber::format() const
   if (OB_ISNULL(buffers)) {
     buffer = nullptr;
   } else if(OB_UNLIKELY(OB_SUCCESS != format(buffer, BUFFER_SIZE, length, -1))) {
+    buffer = nullptr;
     LOG_ERROR_RET(OB_ERROR, "fail to format buffer");
   } else {
     buffer[length] = '\0';
@@ -3539,7 +3540,11 @@ int ObNumber::to_sci_str_(ObString &num_str, char *buf,
           }
           buf[digit_start_pos] = '1';
           buf[digit_start_pos + 1] = '.';
-          ++pow_size;
+          if ('-' == pow_str[1]) {
+            --pow_size;
+          } else {
+            ++pow_size;
+          }
         }
       }
     }
@@ -3557,6 +3562,7 @@ int ObNumber::to_sci_str_(ObString &num_str, char *buf,
     if (OB_SUCC(ret)) {
       if (str_len > SCI_NUMBER_LENGTH && pos - origin != SCI_NUMBER_LENGTH) {
         ret = OB_INVALID_ARGUMENT;
+        buf[pos] = '\0';
         LOG_WARN("the value of pos is invalid after number to char in oracle mode",
                  KCSTRING(buf), K(pos), K(origin), K(ret));
       }
@@ -4241,7 +4247,8 @@ int ObNumber::atan(ObNumber &value, ObIAllocator &allocator, const bool do_round
     int64_t count = 0;
     allocator_const1.free();
     //taylor series: atan(x) = x-(x^3)/3+(x^5)/5-(x^7)/7+... when |x|<1
-    if (OB_FAIL(taylor_series.from(copy_this, allocator_iter2))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(taylor_series.from(copy_this, allocator_iter2))) {
       LOG_WARN("taylor series from copy_this failed", K(copy_this), K(taylor_series), K(ret));
     } else if (OB_FAIL(copy_this.mul_v3(copy_this, doublex, allocator_doublex, true, false))) {
       LOG_WARN("doublex = copy_this*copy_this failed", K(copy_this), K(doublex), K(ret));
@@ -6081,7 +6088,7 @@ int ObNumber::sqrt(ObNumber &value, ObIAllocator &allocator, const bool do_round
 
       bool guess_is_answer = false;
       while (OB_SUCC(ret) && !guess_is_answer) {
-        if (OB_FAIL(div(guess, quotient, loop_allocator_current, OB_MAX_DECIMAL_DIGIT, false))) {
+        if (OB_FAIL(div_v3(guess, quotient, loop_allocator_current, OB_MAX_DECIMAL_DIGIT, false))) {
           LOG_WARN("failed: quotient = this / guess", KPC(this), K(guess), K(ret));
         } else if (OB_FAIL(guess.add_v3(quotient, new_guess, loop_allocator_current, true, false))) {
           // new guess is the average of current guess and quotient
@@ -7584,7 +7591,8 @@ int ObNumberBuilder::build_hex_integer_(const char *str, const int64_t integer_s
         LOG_WARN("integer part is longer than fmt str", K(ret), K(i), K(c_p));
       }
       int32_t dec_len = 0;
-      if (OB_FAIL(hex_to_dec_(hex_str, new_len, dec_str, dec_len))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(hex_to_dec_(hex_str, new_len, dec_str, dec_len))) {
         LOG_WARN("failed to hex_to_dec", K(ret));
       }
       i = dec_len - 1;

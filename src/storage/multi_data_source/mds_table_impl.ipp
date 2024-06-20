@@ -18,6 +18,7 @@
 #include "ob_clock_generator.h"
 #include "share/ob_errno.h"
 #include "storage/multi_data_source/mds_table_base.h"
+#include "storage/multi_data_source/mds_table_impl.h"
 #ifndef STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_H_IPP
 #define STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_H_IPP
 #include "mds_table_impl.h"
@@ -551,6 +552,26 @@ int MdsTableImpl<MdsTableType>::get_latest(int64_t unit_id,
   return ret;
 }
 
+// only normal mds table support this method, and only for transfer
+template <typename MdsTableType>
+int MdsTableImpl<MdsTableType>::get_tablet_status_node(ObFunction<int(void *)> &op, const int64_t read_seq) const
+{
+  return OB_NOT_SUPPORTED;
+}
+struct GetTabletSetusNodeOpWrapper {
+  GetTabletSetusNodeOpWrapper(ObFunction<int(void *)> &op) : op_(op) {}
+  int operator()(const UserMdsNode<DummyKey, ObTabletCreateDeleteMdsUserData> &node) {
+    return op_((void *)&node);
+  }
+  ObFunction<int(void *)> &op_;
+};
+template <>
+inline int MdsTableImpl<NormalMdsTable>::get_tablet_status_node(ObFunction<int(void *)> &op, const int64_t read_seq) const
+{
+  return const_cast<NormalMdsTable &>(unit_tuple_).element<MdsUnit<DummyKey, ObTabletCreateDeleteMdsUserData>>().
+         get_latest(GetTabletSetusNodeOpWrapper(op), read_seq);
+}
+
 template <typename MdsTableImpl>
 struct GetSnapshotHelper {
   GetSnapshotHelper(const MdsTableImpl &mds_table_impl,
@@ -956,11 +977,15 @@ int MdsTableImpl<MdsTableType>::flush(share::SCN need_advanced_rec_scn_lower_lim
   } else if (MDS_FAIL(calculate_flush_scn_and_need_dumped_nodes_cnt_(do_flush_scn, undump_node_cnt))) {
     MDS_LOG_FLUSH(WARN, "fail to call calculate_flush_scn_and_need_dumped_nodes_cnt_");
   } else if (undump_node_cnt == 0) {// no need do flush actually
-    // mds_ckpt_scn on tablet won't be advanced,
-    // replay will cost more time after restart process, but saved cpu and io for dump dag
-    MDS_LOG_FLUSH(INFO, "no undump nodes below do flush scn, directly advance rec_scn");
-    flushing_scn_ = do_flush_scn;// will be resetted in on_flush_()
-    on_flush_(do_flush_scn, OB_SUCCESS);
+    if (flushing_scn_.is_valid()) {
+      MDS_LOG_FLUSH(INFO, "there is a merge dag running, can not advance rec_scn here");
+    } else {
+      // mds_ckpt_scn on tablet won't be advanced,
+      // replay will cost more time after restart process, but saved cpu and io for dump dag
+      MDS_LOG_FLUSH(INFO, "no undump nodes below do flush scn, directly advance rec_scn");
+      flushing_scn_ = do_flush_scn;// will be resetted in on_flush_()
+      on_flush_(do_flush_scn, OB_SUCCESS);
+    }
   } else {
 #ifndef UNITTEST_DEBUG
     if (MDS_FAIL(merge(construct_sequence_, do_flush_scn))) {
@@ -1457,7 +1482,7 @@ int MdsTableImpl<MdsTableType>::forcely_reset_mds_table(const char *reason)
   if (OB_FAIL(for_each_scan_row(FowEachRowAction::RESET, op))) {
     MDS_LOG_GC(ERROR, "fail to do reset");
   } else {
-    debug_info_.last_reset_ts_ = ObClockGenerator::getCurrentTime();
+    debug_info_.last_reset_ts_ = ObClockGenerator::getClock();
     flushing_scn_.reset();
     last_inner_recycled_scn_ = share::SCN::min_scn();
     rec_scn_ = share::SCN::max_scn();

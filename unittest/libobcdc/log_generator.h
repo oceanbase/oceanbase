@@ -42,7 +42,7 @@ class ObTxLogBlockBuilder
 {
 public:
   ObTxLogBlockBuilder(const int64_t tx_id, const uint64_t cluster_id)
-    : tx_id_(tx_id), cluster_id_(cluster_id), log_entry_no_(0), tx_log_block_() {}
+    : tx_id_(tx_id), cluster_id_(cluster_id), cluster_version_(DATA_VERSION_4_3_0_0), log_entry_no_(0), tx_log_block_() {}
   ~ObTxLogBlockBuilder() {}
   public:
   int next_log_block();
@@ -55,7 +55,8 @@ public:
   int64_t get_log_entry_no() { return log_entry_no_; }
 private:
   TxID tx_id_;
-  uint64 cluster_id_;
+  uint64_t cluster_id_;
+  int64_t cluster_version_;
   int64_t log_entry_no_;
   ObTxLogBlock tx_log_block_;
 };
@@ -211,10 +212,10 @@ private:
 int ObTxLogBlockBuilder::next_log_block()
 {
   int ret = OB_SUCCESS;
-  ObTxLogBlockHeader block_header(cluster_id_, log_entry_no_, tx_id_, common::ObAddr());
   tx_log_block_.reset();
-
-  if (OB_FAIL(tx_log_block_.init(tx_id_, block_header))) {
+  ObTxLogBlockHeader &block_header = tx_log_block_.get_header();
+  block_header.init(cluster_id_, cluster_version_, log_entry_no_, tx_id_, common::ObAddr());
+  if (OB_FAIL(tx_log_block_.init_for_fill())) {
     LOG_ERROR("init tx_log_block_ failed", KR(ret), K_(tx_id), K(block_header));
   } else {
     log_entry_no_ ++;
@@ -299,7 +300,8 @@ void ObTxLogGenerator::gen_prepare_log()
 {
   share::ObLSArray inc_ls_arr;
   transaction::LogOffSet prev_lsn = last_lsn_();
-  ObTxPrepareLog prepare_log(inc_ls_arr, prev_lsn);
+  ObTxPrevLogType prev_log_type(ObTxPrevLogType::TypeEnum::COMMIT_INFO);
+  ObTxPrepareLog prepare_log(inc_ls_arr, prev_lsn, prev_log_type);
   LOG_DEBUG("gen prepare_log", K(prepare_log));
   EXPECT_EQ(OB_SUCCESS, block_builder_.fill_tx_log_except_redo(prepare_log));
   trans_type_ = transaction::TransType::DIST_TRANS; // dist trans.
@@ -321,15 +323,18 @@ void ObTxLogGenerator::gen_commit_log()
     EXPECT_EQ(OB_SUCCESS, ls_info_arr.push_back(ls_info1));
     EXPECT_EQ(OB_SUCCESS, ls_info_arr.push_back(ls_info2));
   }
-
+  ObArray<uint8_t> checksum_signature;
+  ObTxPrevLogType prev_log_type(ObTxPrevLogType::TypeEnum::PREPARE);
   ObTxCommitLog commit_log(
       commit_version,
       checksum,
+      checksum_signature,
       inc_ls_arr,
       mds_arr,
       trans_type_,
       last_lsn_(),
-      ls_info_arr);
+      ls_info_arr,
+      prev_log_type);
   LOG_DEBUG("gen commit_log", K(commit_log));
   EXPECT_EQ(OB_SUCCESS, block_builder_.fill_tx_log_except_redo(commit_log));
 }

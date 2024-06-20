@@ -106,8 +106,10 @@ public:
   TO_STRING_KV(K_(tablet_id), K_(start), K_(end), K_(cache_size), K_(next_value), K_(task_id));
   void set(uint64_t start, uint64_t end);
   int next_value(uint64_t &next_value);
+  int get_value(uint64_t &value);
   int fetch(uint64_t count, ObTabletCacheInterval &dest);
   uint64_t count() const { return end_ - start_ + 1; }
+  uint64_t remain_count() const { return end_ - next_value_ + 1; }
   bool operator <(const ObTabletCacheInterval &other) { return tablet_id_ < other.tablet_id_; }
 public:
   common::ObTabletID tablet_id_;

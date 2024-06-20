@@ -124,7 +124,7 @@ int ObRemoteErrorReporter::do_report_(ObLS &ls)
   } else if (! error_exist) {
   } else if (OB_FAIL(ls.get_ls_meta().get_restore_status(restore_status))) {
     LOG_WARN("get restore status failed", K(ret), K(ls));
-  } else if (restore_status.is_in_restore()) {
+  } else if (!restore_status.is_none()) {
     ret = report_restore_error_(ls, trace_id, ret_code);
   } else {
     ret = report_standby_error_(ls, trace_id, ret_code);

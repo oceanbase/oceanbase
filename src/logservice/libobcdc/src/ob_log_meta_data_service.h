@@ -12,7 +12,6 @@
 #define OCEANBASE_LOG_META_DATA_SERVICE_H_
 
 #include "common/ob_region.h"
-#include "lib/mysqlclient/ob_isql_client.h"  // ObISQLClient
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"  // ObConcurrentFIFOAllocator
 #include "share/backup/ob_backup_struct.h"  // ObBackupPathString
 #include "logservice/data_dictionary/ob_data_dict_meta_info.h" // ObDataDictMetaInfo
@@ -21,7 +20,6 @@
 #include "ob_log_task_pool.h"
 #include "ob_log_entry_task_pool.h"
 #include "logservice/logfetcher/ob_log_data_dictionary_in_log_table.h"
-#include "ob_log_meta_data_queryer.h"
 #include "ob_log_meta_data_baseline_loader.h"
 #include "ob_log_meta_data_replayer.h" // ObLogMetaDataReplayer
 #include "ob_log_meta_data_fetcher.h"  // ObLogMetaDataFetcher
@@ -29,11 +27,16 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObMySQLProxy;
+}
 namespace libobcdc
 {
 class IObLogSysLsTaskHandler;
 class ObLogSysTableHelper;
 class IObLogErrHandler;
+class IObLogPartTransParser;
 
 class ObLogMetaDataService
 {
@@ -48,11 +51,13 @@ public:
       const ClientFetchingMode fetching_mode,
       const share::ObBackupPathString &archive_dest,
       IObLogSysLsTaskHandler *sys_ls_handler,
-      common::ObISQLClient *proxy,
+      common::ObMySQLProxy *proxy,
       IObLogErrHandler *err_handler,
+      IObLogPartTransParser &part_trans_parser,
       const int64_t cluster_id,
       const ObLogConfig &cfg,
-      const int64_t start_seq);
+      const int64_t start_seq,
+      const bool enable_direct_load_inc);
   void destroy();
 
   static ObLogMetaDataService &get_instance();
@@ -112,10 +117,10 @@ private:
 private:
   bool is_inited_;
   ObLogMetaDataFetcher fetcher_;
-  ObLogMetaDataSQLQueryer sql_queryer_;
   ObLogMetaDataBaselineLoader baseline_loader_;
   ObLogMetaDataReplayer incremental_replayer_;
   ObLogMetaDataFetcherDispatcher fetcher_dispatcher_;
+  IObLogPartTransParser *part_trans_parser_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogMetaDataService);
 };

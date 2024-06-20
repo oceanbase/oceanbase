@@ -317,7 +317,6 @@ int ObLogResourceCollector::revert_log_entry_task_(ObLogEntryTask *log_entry_tas
         }
       }
     }
-
     log_entry_task_pool->free(log_entry_task);
   }
 
@@ -462,10 +461,10 @@ int ObLogResourceCollector::recycle_part_trans_task_(const int64_t thread_index,
     ret = OB_INVALID_ARGUMENT;
   } else {
     if (task->is_ddl_trans()) {
-      if (OB_FAIL(revert_dll_all_binlog_records_(task))) {
+      if (OB_FAIL(revert_dll_all_binlog_records(false/*is_build_baseline*/, task))) {
         if (OB_IN_STOP_STATE != ret) {
           // Reclaim all Binlog Records within a DDL partitioned transaction
-          LOG_ERROR("revert_dll_all_binlog_records_ fail", KR(ret), K(*task));
+          LOG_ERROR("revert_dll_all_binlog_records fail", KR(ret), K(*task));
         }
       }
     }
@@ -529,6 +528,8 @@ int ObLogResourceCollector::handle(void *data,
 
           if (OB_FAIL(trans_ctx_mgr_->get_trans_ctx(tenant_id, trans_id, trans_ctx, enable_create))) {
             LOG_ERROR("get trans_ctx fail", KR(ret), K(tenant_id), K(trans_id), K(*task));
+          } else if (task->is_dml_trans() && trans_ctx->has_ddl_participant() && OB_FAIL(recycle_stored_redo_(*task))) {
+            LOG_ERROR("recycle stored redo for dml_participant of dist ddl trans failed", KR(ret), KPC(task), KPC(trans_ctx));
           }
           // Increase the number of participants that can be recycled
           else if (OB_FAIL(trans_ctx->inc_revertable_participant_count(all_participant_revertable))) {
@@ -589,7 +590,7 @@ int ObLogResourceCollector::handle(void *data,
       if (OB_ISNULL(task)) {
         LOG_ERROR("ObLogBR task is NULL");
         ret = OB_ERR_UNEXPECTED;
-      } else if (task->get_record_type(record_type)) {
+      } else if (OB_FAIL(task->get_record_type(record_type))) {
         LOG_ERROR("ObLogBR task get_record_type fail", KR(ret));
       } else {
         if (HEARTBEAT == record_type || EBEGIN == record_type || ECOMMIT == record_type) {
@@ -779,7 +780,7 @@ int ObLogResourceCollector::dec_ref_cnt_and_try_to_recycle_log_entry_task_(ObLog
   return ret;
 }
 
-int ObLogResourceCollector::revert_dll_all_binlog_records_(PartTransTask *task)
+int ObLogResourceCollector::revert_dll_all_binlog_records(const bool is_build_baseline, PartTransTask *task)
 {
   int ret = OB_SUCCESS;
 
@@ -800,7 +801,7 @@ int ObLogResourceCollector::revert_dll_all_binlog_records_(PartTransTask *task)
     // FIXME: the Binlog Record contains references to memory allocated by the PartTransTask.
     // They should be actively freed here, but as PartTransTask will release the memory uniformly when it is reclaimed
     // memory in the Binlog Record is not actively freed here
-    while (OB_SUCC(ret) && OB_NOT_NULL(stmt_task) && ! RCThread::is_stoped()) {
+    while (OB_SUCC(ret) && OB_NOT_NULL(stmt_task) &&  (is_build_baseline || ! RCThread::is_stoped())) {
       DdlStmtTask *next = static_cast<DdlStmtTask *>(stmt_task->get_next());
       ObLogBR *br = stmt_task->get_binlog_record();
       stmt_task->set_binlog_record(NULL);
@@ -811,7 +812,7 @@ int ObLogResourceCollector::revert_dll_all_binlog_records_(PartTransTask *task)
 
       stmt_task = next;
     }
-    if (RCThread::is_stoped()) {
+    if (!is_build_baseline && RCThread::is_stoped()) {
       ret = OB_IN_STOP_STATE;
     }
   }
@@ -868,7 +869,7 @@ void ObLogResourceCollector::get_task_count(int64_t &part_trans_task_count, int6
   br_count = ATOMIC_LOAD(&br_count_);
 }
 
-int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t thread_idx, PartTransTask &task)
+int ObLogResourceCollector::recycle_stored_redo_(PartTransTask &task)
 {
   int ret = OB_SUCCESS;
   const logservice::TenantLSID &tenant_ls_id = task.get_tls_id();
@@ -899,14 +900,23 @@ int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t threa
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(recycle_part_trans_task_(thread_idx, &task))) {
-      if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("recycle_part_trans_task_ failed", KR(ret), K(thread_idx), K(task));
-      }
-    } else {
-      // no more access to task
+  return ret;
+}
+
+int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t thread_idx, PartTransTask &task)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(recycle_stored_redo_(task))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("recycle_stored_redo_ failed", KR(ret), K(thread_idx), K(task));
     }
+  } else if (OB_FAIL(recycle_part_trans_task_(thread_idx, &task))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("recycle_part_trans_task_ failed", KR(ret), K(thread_idx), K(task));
+    }
+  } else {
+    // no more access to task
   }
 
   return ret;

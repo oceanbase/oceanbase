@@ -16,6 +16,7 @@
 #include "ob_px_task_process.h"
 #include "ob_px_admission.h"
 #include "ob_px_sqc_handler.h"
+#include "lib/signal/ob_signal_struct.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
@@ -105,8 +106,10 @@ int ObInitSqcP::process()
   }
 
 #ifdef ERRSIM
-  if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_INIT_PROCESS_FAILED) OB_SUCCESS)) {
-    LOG_WARN("match sqc execute errism", K(ret));
+  int ecode = EventTable::EN_PX_SQC_INIT_PROCESS_FAILED;
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
+    LOG_WARN("match sqc execute errism", K(ecode));
+    ret = ecode;
   }
 #endif
 
@@ -167,6 +170,7 @@ int ObInitSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     LOG_WARN("session is NULL", K(ret));
   } else {
     ObPxRpcInitSqcArgs &arg = sqc_handler.get_sqc_init_arg();
+    SQL_INFO_GUARD(arg.sqc_.get_monitoring_info().cur_sql_, session->get_cur_sql_id());
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_current_trace_id(ObCurTraceId::get_trace_id());
@@ -326,7 +330,6 @@ int ObFastInitSqcReportQCMessageCall::mock_sqc_finish_msg()
           buffer->set_data_msg(false);
           buffer->timeout_ts() = timeout_ts_;
           buffer->set_msg_type(dtl::ObDtlMsgType::FINISH_SQC_RESULT);
-          const bool is_first_buffer_cached = false;
           const bool inc_recv_buf_cnt = false;
           if (OB_FAIL(common::serialization::encode(buf, size, pos, header))) {
             LOG_WARN("fail to encode buffer", K(ret));
@@ -335,7 +338,7 @@ int ObFastInitSqcReportQCMessageCall::mock_sqc_finish_msg()
           } else if (FALSE_IT(buffer->size() = pos)) {
           } else if (FALSE_IT(pos = 0)) {
           } else if (FALSE_IT(buffer->tenant_id() = ch->get_tenant_id())) {
-          } else if (OB_FAIL(ch->attach(buffer, is_first_buffer_cached, inc_recv_buf_cnt))) {
+          } else if (OB_FAIL(ch->attach(buffer, inc_recv_buf_cnt))) {
             LOG_WARN("fail to feedup buffer", K(ret));
           } else if (FALSE_IT(ch->free_buffer_count())) {
           } else {
@@ -462,6 +465,7 @@ int ObInitFastSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     LOG_WARN("session is NULL", K(ret));
   } else {
     ObPxRpcInitSqcArgs &arg = sqc_handler.get_sqc_init_arg();
+    SQL_INFO_GUARD(arg.sqc_.get_monitoring_info().cur_sql_, session->get_cur_sql_id());
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_peer_addr(arg.sqc_.get_qc_addr());
@@ -481,8 +485,14 @@ void ObFastInitSqcCB::on_timeout()
 {
   int ret = OB_TIMEOUT;
   ret = deal_with_rpc_timeout_err_safely();
-  const bool is_timeout = true;
-  interrupt_qc(ret, is_timeout);
+  interrupt_qc(ret);
+}
+
+void ObFastInitSqcCB::log_warn_sqc_fail(int ret)
+{
+  // Do not change the follow log about px_obdiag_sqc_addr, becacue it will use in obdiag tool
+  LOG_WARN("init fast sqc cb async interrupt qc", K_(trace_id), K(timeout_ts_), K(interrupt_id_),
+           K(ret), "px_obdiag_sqc_addr", addr_);
 }
 
 int ObFastInitSqcCB::process()
@@ -492,10 +502,8 @@ int ObFastInitSqcCB::process()
   if (OB_FAIL(ret)) {
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
     if (timeout_ts_ - cur_timestamp > 0) {
-      const bool is_timeout = false;
-      interrupt_qc(ret, is_timeout);
-      LOG_WARN("init fast sqc cb async interrupt qc", K_(trace_id),
-               K(addr_), K(timeout_ts_), K(interrupt_id_), K(ret));
+      interrupt_qc(ret);
+      log_warn_sqc_fail(ret);
     } else {
       LOG_WARN("init fast sqc cb async timeout", K_(trace_id),
                K(addr_), K(timeout_ts_), K(cur_timestamp), K(ret));
@@ -519,7 +527,7 @@ int ObFastInitSqcCB::deal_with_rpc_timeout_err_safely()
   return call.ret_;
 }
 
-void ObFastInitSqcCB::interrupt_qc(int err, bool is_timeout)
+void ObFastInitSqcCB::interrupt_qc(int err)
 {
   int ret = OB_SUCCESS;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
@@ -527,7 +535,7 @@ void ObFastInitSqcCB::interrupt_qc(int err, bool is_timeout)
     // if we are sure init_sqc msg is not sent to sqc successfully, we don't have to set sqc not alive.
     bool init_sqc_not_send_out = (get_error() == EASY_TIMEOUT_NOT_SENT_OUT
                                  || get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
-    const bool need_set_not_alive = is_timeout && !init_sqc_not_send_out;
+    const bool need_set_not_alive = !init_sqc_not_send_out;
     ObFastInitSqcReportQCMessageCall call(sqc_, err, timeout_ts_, need_set_not_alive);
     if (OB_FAIL(manager->get_map().atomic_refactored(interrupt_id_, call))) {
       LOG_WARN("fail to set need report", K(interrupt_id_));

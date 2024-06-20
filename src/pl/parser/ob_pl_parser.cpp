@@ -25,6 +25,7 @@ extern "C" {
 #endif
 extern int obpl_parser_init(ObParseCtx *parse_ctx);
 extern int obpl_parser_parse(ObParseCtx *parse_ctx);
+extern ParseNode *merge_tree(void *malloc_pool, int *fatal_error, ObItemType node_tag, ParseNode *source_tree);
 int obpl_parser_check_stack_overflow() {
   int ret = OB_SUCCESS;
   bool is_overflow = true;
@@ -340,6 +341,8 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
       if (OB_NOT_SUPPORTED == ret) {
         LOG_USER_ERROR(OB_NOT_SUPPORTED, parse_ctx.global_errmsg_);
       }
+      parse_ctx.stmt_tree_ = merge_tree(parse_ctx.mem_pool_, &(parse_ctx.global_errno_), T_STMT_LIST, parse_ctx.stmt_tree_);
+      multi_stmt = parse_ctx.stmt_tree_;
     }
   } else {
     multi_stmt = parse_ctx.stmt_tree_;

@@ -58,7 +58,7 @@ int ObRawExprPrintVisitor::visit(ObExecParamRawExpr &expr)
   if (OB_ISNULL(expr.get_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null", K(ret));
-  } else if (expr.get_ref_expr()->preorder_accept(*this)) {
+  } else if (OB_FAIL(expr.get_ref_expr()->preorder_accept(*this))) {
     LOG_WARN("failed to visit ref expr", K(ret));
   }
   return ret;
@@ -178,5 +178,16 @@ int ObRawExprPrintVisitor::visit(ObSetOpRawExpr &expr)
   }
   return ret;
 }
+
+int ObRawExprPrintVisitor::visit(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_printf(buf_, buf_len_, pos_, "%s<%ld>|", get_type_name(expr.get_expr_type()),
+                              expr.get_param_count()))) {
+    LOG_WARN("databuff setop failed", K(ret));
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

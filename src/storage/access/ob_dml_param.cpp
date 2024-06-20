@@ -250,7 +250,10 @@ DEF_TO_STRING(ObDMLBaseParam)
        K_(write_flag),
        K_(spec_seq_no),
        K_(snapshot),
-       K_(check_schema_version));
+       K_(branch_id),
+       K_(direct_insert_task_id),
+       K_(check_schema_version),
+       K_(ddl_task_id));
   J_OBJ_END();
   return pos;
 }

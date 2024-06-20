@@ -27,7 +27,6 @@ namespace storage
 class ObTxTable;
 class ObTxTableGuard
 {
-
 public:
   ObTxTableGuard() : tx_table_(nullptr), epoch_(-1), mini_cache_() {}
   ~ObTxTableGuard() { reset(); }
@@ -56,11 +55,22 @@ public:
 
   ObTxTable *get_tx_table() const { return tx_table_; }
 
+  share::ObLSID get_ls_id() const;
+
+  int64_t get_epoch() const { return epoch_; }
+
+  ObTxDataMiniCache &get_mini_cache() { return mini_cache_; }
+
 public: // dalegate functions
+  int check_with_tx_data(ObReadTxDataArg &read_tx_data_arg,
+                         ObITxDataCheckFunctor &fn);
+
   int check_row_locked(const transaction::ObTransID &read_tx_id,
                        const transaction::ObTransID data_tx_id,
                        const transaction::ObTxSEQ &sql_sequence,
                        storage::ObStoreRowLockState &lock_state);
+
+  int load_tx_op(const transaction::ObTransID &tx_id, ObTxData &tx_data);
 
   int check_sql_sequence_can_read(const transaction::ObTransID tx_id, const transaction::ObTxSEQ &sql_sequence, bool &can_read);
 
@@ -76,13 +86,11 @@ public: // dalegate functions
 
   int lock_for_read(const transaction::ObLockForReadArg &lock_for_read_arg,
                     bool &can_read,
-                    share::SCN &trans_version,
-                    bool &is_determined_state);
+                    share::SCN &trans_version);
 
   int lock_for_read(const transaction::ObLockForReadArg &lock_for_read_arg,
                     bool &can_read,
                     share::SCN &trans_version,
-                    bool &is_determined_state,
                     ObCleanoutOp &cleanout_op,
                     ObReCheckOp &recheck_op);
 

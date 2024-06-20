@@ -60,7 +60,7 @@ public:
   ObLinkedMacroBlockItemWriter(const ObLinkedMacroBlockItemWriter &) = delete;
   ObLinkedMacroBlockItemWriter &operator=(const ObLinkedMacroBlockItemWriter &) = delete;
 
-  int init(const bool need_disk_addr);
+  int init(const bool need_disk_addr, const ObMemAttr &mem_attr);
   int write_item(const char *item_buf, const int64_t item_buf_len, int64_t *item_idx = nullptr);
   int close();
   void reset();

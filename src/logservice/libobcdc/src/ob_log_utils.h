@@ -236,8 +236,8 @@ private:
 
 int get_local_ip(common::ObString &local_ip);
 
-RecordType get_record_type(const blocksstable::ObDmlFlag &dml_flag);
-const char *print_dml_flag(const blocksstable::ObDmlFlag &dml_flag);
+RecordType get_record_type(const blocksstable::ObDmlRowFlag &dml_flag);
+const char *print_dml_flag(const blocksstable::ObDmlRowFlag &dml_flag);
 const char *print_record_type(int type);
 const char *print_src_category(int src_category);
 const char *print_record_src_type(int type);
@@ -246,6 +246,7 @@ const char *print_table_status(int status);
 const char *print_compat_mode(const lib::Worker::CompatMode &compat_mode);
 const char *get_ctype_string(int ctype);
 bool is_lob_type(const int ctype);
+bool is_string_type(const int ctype);
 bool is_json_type(const int ctype);
 bool is_geometry_type(const int ctype);
 bool is_xml_type(const int ctype);
@@ -673,6 +674,10 @@ int read_from_file(const char *file_path, char *buf, const int64_t buf_len);
       } \
     } \
   } while (0)
+
+// convert to compat mode
+int convert_to_compat_mode(const common::ObCompatibilityMode &compatible_mode,
+    lib::Worker::CompatMode &compat_mode);
 
 } // namespace libobcdc
 } // namespace oceanbase

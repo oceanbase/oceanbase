@@ -26,15 +26,6 @@ using namespace oceanbase::observer;
 using namespace oceanbase::share;
 
 
-void ObAllVirtualDtlFirstBufferInfo::set_first_buffer_info(uint64_t tenant_id, ObDtlCacheBufferInfo *buffer_info)
-{
-  tenant_id_ = tenant_id;
-  channel_id_ = buffer_info->chid();
-  calced_val_ = buffer_info->chid();
-  buffer_pool_id_ = ObDtlLocalFirstBufferCache::get_hash_value(channel_id_);
-  timeout_ts_ = buffer_info->ts();
-}
-
 ObAllVirtualDtlFirstCachedBufferIterator::ObAllVirtualDtlFirstCachedBufferIterator(ObArenaAllocator *allocator) :
   cur_tenant_idx_(0),
   cur_buffer_idx_(0),
@@ -87,77 +78,10 @@ int ObAllVirtualDtlFirstCachedBufferIterator::init()
   return ret;
 }
 
-class ObAllVirtualDtlFirstCachedBufferPoolOp
-{
-public:
-  class ObDtlFirstBufferHashMapOp
-  {
-  public:
-    ObDtlFirstBufferHashMapOp(int64_t tenant_id, ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator> *first_buffer_info) :
-      tenant_id_(tenant_id), first_buffer_infos_(first_buffer_info)
-    {}
-    ~ObDtlFirstBufferHashMapOp() { first_buffer_infos_ = nullptr; }
-    int operator()(ObDtlCacheBufferInfo *cache_info)
-    {
-      int ret = OB_SUCCESS;
-      ObAllVirtualDtlFirstBufferInfo buffer_info;
-      buffer_info.set_first_buffer_info(tenant_id_, cache_info);
-      if (MAX_BUFFER_CNT_PER_TENANT > first_buffer_infos_->count() && OB_FAIL(first_buffer_infos_->push_back(buffer_info))) {
-        LOG_WARN("failed to push back first buffer info", K(ret));
-      }
-      return ret;
-    }
-  private:
-    int64_t tenant_id_;
-    ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator> *first_buffer_infos_;
-  };
-public:
-  explicit ObAllVirtualDtlFirstCachedBufferPoolOp(uint64_t tenant_id, ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator> *first_buffer_info):
-    tenant_id_(tenant_id), first_buffer_infos_(first_buffer_info)
-  {}
-  ~ObAllVirtualDtlFirstCachedBufferPoolOp() { first_buffer_infos_ = nullptr; }
-  int operator()(ObDtlLocalFirstBufferCache *buffer_cache)
-  {
-    int ret = OB_SUCCESS;
-    ObDtlFirstBufferHashTable<uint64_t, ObDtlCacheBufferInfo> &buffer_map = buffer_cache->get_buffer_map();
-    ObDtlFirstBufferHashMapOp op(tenant_id_, first_buffer_infos_);
-    if (OB_FAIL(buffer_map.foreach_refactored(op))) {
-      LOG_WARN("failed to get channel memory manager", K(ret));
-    }
-    LOG_TRACE("trace get first buffer cache", K(tenant_id_), K(first_buffer_infos_->count()));
-    return ret;
-  }
-
-private:
-  // the maxinum of get channels
-  static const int64_t MAX_BUFFER_CNT_PER_TENANT = 1000;
-  uint64_t tenant_id_;
-  ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator> *first_buffer_infos_;
-};
-
-int ObAllVirtualDtlFirstCachedBufferIterator::get_all_first_cached_buffer(int64_t tenant_id, ObTenantDfc *tenant_dfc)
-{
-  int ret = OB_SUCCESS;
-  ObDtlLocalFirstBufferCacheManager *first_buffer_mgr = tenant_dfc->get_new_first_buffer_manager();
-  ObDtlFirstBufferHashTable<ObDtlDfoKey, ObDtlLocalFirstBufferCache> &buffer_hash_table = first_buffer_mgr->get_buffer_hash_table();
-  ObAllVirtualDtlFirstCachedBufferPoolOp op(tenant_id, &buffer_infos_);
-  if (OB_FAIL(buffer_hash_table.foreach_refactored(op))) {
-    LOG_WARN("failed to get channel memory manager", K(ret));
-  }
-  LOG_TRACE("trace get first buffer cache", K(tenant_id), K(buffer_infos_.count()));
-  return ret;
-}
-
 int ObAllVirtualDtlFirstCachedBufferIterator::get_tenant_buffer_infos(uint64_t tenant_id)
 {
-  int ret = OB_SUCCESS;
-  iter_allocator_->reuse();
-  MTL_SWITCH(tenant_id) {
-    if (OB_FAIL(get_all_first_cached_buffer(tenant_id, MTL(ObTenantDfc*)))) {
-      LOG_WARN("failed to get all first cached buffer", K(ret));
-    }
-  }
-  return ret;
+  UNUSED(tenant_id);
+  return OB_SUCCESS;
 }
 
 int ObAllVirtualDtlFirstCachedBufferIterator::get_next_tenant_buffer_infos()
@@ -264,18 +188,7 @@ int ObAllVirtualDtlFirstCachedBuffer::inner_open()
 
 int ObAllVirtualDtlFirstCachedBuffer::inner_get_next_row(ObNewRow *&row)
 {
-  int ret = OB_SUCCESS;
-  ObAllVirtualDtlFirstBufferInfo buffer_info;
-  if (OB_FAIL(iter_.get_next_buffer_info(buffer_info))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("failed to get next channel", K(ret));
-    } else {
-      arena_allocator_.reuse();
-    }
-  } else if (OB_FAIL(get_row(buffer_info, row))) {
-    LOG_WARN("failed to get row from channel info", K(ret));
-  }
-  return ret;
+  return OB_ITER_END;
 }
 
 int ObAllVirtualDtlFirstCachedBuffer::get_row(ObAllVirtualDtlFirstBufferInfo &buffer_info, ObNewRow *&row)

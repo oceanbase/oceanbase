@@ -80,6 +80,7 @@ public:
   static const common::ObObj &get_default_value(int64_t i);
   static const common::ObObj &get_base_value(int64_t i);
   static int64_t get_amount();
+  static ObCollationType get_default_sysvar_collation();
   static int set_value(const char *name, const char * new_value);
   static int set_value(const common::ObString &name, const common::ObString &new_value);
   static int set_base_value(const char *name, const char * new_value);

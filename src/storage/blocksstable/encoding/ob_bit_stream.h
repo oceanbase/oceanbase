@@ -21,6 +21,12 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+typedef int (*bitstream_unpack) (
+    const unsigned char *buf,
+    const int64_t offset,
+    const int64_t cnt,
+    const int64_t bs_len,
+    int64_t &value);
 
 // Store and get integer which less than 64-bit.
 // NOTE: To simplify implement, we assume data been set to zero and only set once.
@@ -62,6 +68,17 @@ public:
       const int64_t cnt,
       const int64_t bs_len,
       int64_t &value);
+
+  template <ObBitStreamUnpackType type>
+  OB_INLINE static int memsafe_get(
+      const unsigned char *buf,
+      const int64_t offset,
+      const int64_t cnt,
+      const int64_t bs_len,
+      int64_t &value);
+
+
+  OB_INLINE static bitstream_unpack get_unpack_func(const int64_t packing_len);
 
   OB_INLINE static int get(const unsigned char *buf, const int64_t offset, const int64_t cnt, int64_t &value);
 
@@ -262,6 +279,19 @@ OB_INLINE int ObBitStream::get<ObBitStream::DEFAULT>(
 {
   UNUSED(bs_len);
   return get(buf, offset, cnt, value);
+}
+
+bitstream_unpack ObBitStream::get_unpack_func(const int64_t packing_len)
+{
+  bitstream_unpack unpack_func = nullptr;
+  if (packing_len < 10) {
+    unpack_func = &ObBitStream::get<ObBitStream::PACKED_LEN_LESS_THAN_10>;
+  } else if (packing_len < 26) {
+    unpack_func = &ObBitStream::get<ObBitStream::PACKED_LEN_LESS_THAN_26>;
+  } else {
+    unpack_func = &ObBitStream::get<ObBitStream::DEFAULT>;
+  }
+  return unpack_func;
 }
 
 OB_INLINE uint64_t ObBitStream::get_mask(const int64_t len)

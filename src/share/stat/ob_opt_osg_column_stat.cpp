@@ -28,7 +28,7 @@ int ObMinMaxValEval::get_obj(ObObj &obj) const
   int ret = OB_SUCCESS;
   if (datum_ == NULL) {
     obj.set_null();
-  } else if (datum_->to_obj(obj, meta_)) {
+  } else if (OB_FAIL(datum_->to_obj(obj, meta_))) {
     LOG_WARN("failed to to obj");
   }
   return ret;
@@ -117,9 +117,9 @@ int ObOptOSGColumnStat::set_min_max_datum_to_obj()
     LOG_WARN("failed to get min obj");
   } else if (OB_FAIL(max_val_.get_obj(*max_obj))) {
     LOG_WARN("failed to get max obj");
-  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(*min_obj, allocator_))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(*min_obj, allocator_))) {
     LOG_WARN("fail to truncate string", K(ret));
-  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(*max_obj, allocator_))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(*max_obj, allocator_))) {
     LOG_WARN("fail to truncate string", K(ret));
   } else {
     const ObObj &min_val = col_stat_->get_min_value();
@@ -190,18 +190,14 @@ int ObOptOSGColumnStat::update_column_stat_info(const ObDatum *datum,
     ObObj tmp_obj;
     if (OB_FAIL(datum->to_obj(tmp_obj, meta))) {
       LOG_WARN("failed to to obj");
-    } else if (tmp_obj.is_string_type()) {
-      hash_value = tmp_obj.varchar_hash(tmp_obj.get_collation_type(), hash_value);
-    } else if (OB_FAIL(tmp_obj.hash(hash_value, hash_value))) {
+    } else if (OB_FAIL(tmp_obj.hash_murmur(hash_value, hash_value))) {
       LOG_WARN("fail to do hash", K(ret), K(tmp_obj));
-    }
-    if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(col_stat_->get_llc_bitmap() == NULL || col_stat_->get_llc_bitmap_size() == 0)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid llc_bitmap", K(ret));
     } else if (OB_FAIL(ObAggregateProcessor::llc_add_value(hash_value,
-                                                            col_stat_->get_llc_bitmap(),
-                                                            col_stat_->get_llc_bitmap_size()))) {
+                                                           col_stat_->get_llc_bitmap(),
+                                                           col_stat_->get_llc_bitmap_size()))) {
       LOG_WARN("fail to calc llc", K(ret));
     } else if (OB_FAIL(inner_merge_min(*datum, meta, cmp_func))) {
       LOG_WARN("failed to inner merge min val");

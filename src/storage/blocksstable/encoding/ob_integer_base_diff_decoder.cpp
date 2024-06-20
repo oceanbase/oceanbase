@@ -219,6 +219,139 @@ int ObIntegerBaseDiffDecoder::batch_decode(
   return ret;
 }
 
+int ObIntegerBaseDiffDecoder::decode_vector(
+    const ObColumnDecoderCtx &decoder_ctx,
+    const ObIRowIndex* row_index,
+    ObVectorDecodeCtx &vector_ctx) const
+{
+  UNUSED(row_index);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else {
+    #define FILL_VECTOR_FUNC(vector_type, has_null) \
+      if (has_null) { \
+        ret = inner_decode_vector<vector_type, true>(decoder_ctx, vector_ctx); \
+      } else { \
+        ret = inner_decode_vector<vector_type, false>(decoder_ctx, vector_ctx); \
+      }
+    if (VEC_UNIFORM == vector_ctx.get_format()) {
+      FILL_VECTOR_FUNC(ObUniformFormat<false>, decoder_ctx.has_extend_value());
+    } else if (VEC_FIXED == vector_ctx.get_format()) {
+      const ObObjMeta &obj_meta = decoder_ctx.obj_meta_;
+      const int16_t precision = obj_meta.is_decimal_int() ? obj_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
+      VecValueTypeClass vec_tc = common::get_vec_value_tc(obj_meta.get_type(), obj_meta.get_scale(), precision);
+      switch (vec_tc) {
+      case VEC_TC_YEAR: {
+        // uint8_t
+        FILL_VECTOR_FUNC(ObFixedLengthFormat<uint8_t>, decoder_ctx.has_extend_value());
+        break;
+      }
+      case VEC_TC_DATE:
+      case VEC_TC_DEC_INT32: {
+        // int32_t
+        FILL_VECTOR_FUNC(ObFixedLengthFormat<int32_t>, decoder_ctx.has_extend_value());
+        break;
+      }
+      case VEC_TC_INTEGER:
+      case VEC_TC_DATETIME:
+      case VEC_TC_TIME:
+      case VEC_TC_UNKNOWN:
+      case VEC_TC_INTERVAL_YM:
+      case VEC_TC_DEC_INT64: {
+        // int64_t
+        FILL_VECTOR_FUNC(ObFixedLengthFormat<int64_t>, decoder_ctx.has_extend_value());
+        break;
+      }
+      case VEC_TC_UINTEGER:
+      case VEC_TC_BIT:
+      case VEC_TC_ENUM_SET:
+      case VEC_TC_DOUBLE:
+      case VEC_TC_FIXED_DOUBLE: {
+        // uint64_t
+        FILL_VECTOR_FUNC(ObFixedLengthFormat<uint64_t>, decoder_ctx.has_extend_value());
+        break;
+      }
+      case VEC_TC_FLOAT: {
+        // float
+        FILL_VECTOR_FUNC(ObFixedLengthFormat<uint32_t>, decoder_ctx.has_extend_value());
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector type class for fixed format", K(ret), K(vec_tc));
+      }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unnexpected vector format", K(ret), K(vector_ctx));
+    }
+    #undef FILL_VECTOR_FUNC
+  }
+  return ret;
+}
+
+template<typename VectorType, bool HAS_NULL>
+int ObIntegerBaseDiffDecoder::inner_decode_vector(
+    const ObColumnDecoderCtx &decoder_ctx,
+    ObVectorDecodeCtx &vector_ctx) const
+{
+  int ret = OB_SUCCESS;
+  int64_t data_offset = 0;
+  const unsigned char *col_data = reinterpret_cast<const unsigned char *>(header_)
+      + decoder_ctx.col_header_->length_;
+  const sql::ObBitVector *null_bitmap = nullptr;
+  uint32_t vec_data_len = 0;
+  if (OB_FAIL(get_uint_data_datum_len(
+      ObDatum::get_obj_datum_map_type(decoder_ctx.obj_meta_.get_type()), vec_data_len))) {
+    LOG_WARN("Failed to get vec data length", K(ret), K(decoder_ctx));
+  } else {
+    VectorType *vector = static_cast<VectorType *>(vector_ctx.get_vector());
+    if (decoder_ctx.has_extend_value()) {
+      null_bitmap = sql::to_bit_vector(col_data);
+      data_offset = decoder_ctx.micro_block_header_->row_count_ * decoder_ctx.micro_block_header_->extend_value_bit_;
+    }
+    if (decoder_ctx.is_bit_packing()) {
+      bitstream_unpack unpack_func = ObBitStream::get_unpack_func(header_->length_);
+      const int64_t bs_len = header_->length_ * decoder_ctx.micro_block_header_->row_count_;
+      for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
+        const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
+        const int64_t row_id = vector_ctx.row_ids_[i];
+        if (!HAS_NULL || !null_bitmap->contain(row_id)) {
+          int64_t unpacked_val = 0;
+          unpack_func(
+              col_data,
+              data_offset + row_id * header_->length_,
+              header_->length_,
+              bs_len,
+              unpacked_val);
+          unpacked_val += base_;
+          vector->set_payload(curr_vec_offset, &unpacked_val, vec_data_len);
+        } else {
+          vector->set_null(curr_vec_offset);
+        }
+      }
+    } else {
+      // fixed
+      data_offset = (data_offset + CHAR_BIT - 1) / CHAR_BIT;
+      for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
+        const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
+        const int64_t row_id = vector_ctx.row_ids_[i];
+        if (!HAS_NULL || !null_bitmap->contain(row_id)) {
+          int64_t unpacked_val = 0;
+          MEMCPY(&unpacked_val, col_data + data_offset + row_id * header_->length_, header_->length_);
+          unpacked_val += base_;
+          vector->set_payload(curr_vec_offset, &unpacked_val, vec_data_len);
+        } else {
+          vector->set_null(curr_vec_offset);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObIntegerBaseDiffDecoder::pushdown_operator(
     const sql::ObPushdownFilterExecutor *parent,
     const ObColumnDecoderCtx &col_ctx,
@@ -268,13 +401,17 @@ int ObIntegerBaseDiffDecoder::pushdown_operator(
                   filter,
                   pd_filter_info,
                   result_bitmap))) {
-        LOG_WARN("Failed on EQ / NE operator", K(ret), K(col_ctx));
+        if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
+          LOG_WARN("Failed on EQ / NE operator", K(ret), K(col_ctx));
+        }
       }
       break;
     }
     case sql::WHITE_OP_BT: {
       if (OB_FAIL(bt_operator(parent, col_ctx, col_data, filter, pd_filter_info, result_bitmap))) {
-        LOG_WARN("Failed on BT operator", K(ret), K(col_ctx));
+        if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
+          LOG_WARN("Failed on BT operator", K(ret), K(col_ctx));
+        }
       }
       break;
     }
@@ -384,7 +521,7 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     ObGetFilterCmpRetFunc get_cmp_ret = get_filter_cmp_ret_func(op_type);
     int cmp_res = 0;
-    if (OB_FAIL(cmp_func(ref_datum, base_datum, cmp_res))) {
+    if (FAILEDx(cmp_func(ref_datum, base_datum, cmp_res))) {
       LOG_WARN("Failed to compare datum", K(ret), K(ref_datum), K(base_datum));
     } else if (FALSE_IT(filter_obj_smaller_than_base = cmp_res < 0)){
     } else if (filter_obj_smaller_than_base) {
@@ -497,8 +634,7 @@ int ObIntegerBaseDiffDecoder::bt_operator(
         || ObIntSC == get_store_class_map()[col_ctx.obj_meta_.get_type_class()]) {
     if (OB_FAIL(traverse_all_data(parent, col_ctx, col_data,
                 filter, pd_filter_info, result_bitmap,
-                [](const ObObjMeta &obj_meta,
-                   const ObDatum &cur_datum,
+                [](const ObDatum &cur_datum,
                    const sql::ObWhiteFilterExecutor &filter,
                    bool &result) -> int {
                   int ret = OB_SUCCESS;
@@ -539,16 +675,12 @@ int ObIntegerBaseDiffDecoder::in_operator(
         K(ret), K(col_ctx), K(pd_filter_info), K(result_bitmap.size()), K(filter));
   } else if (OB_FAIL(traverse_all_data(parent, col_ctx, col_data,
                       filter, pd_filter_info, result_bitmap,
-                      [](const ObObjMeta &obj_meta,
-                         const ObDatum &cur_datum,
+                      [](const ObDatum &cur_datum,
                          const sql::ObWhiteFilterExecutor &filter,
                          bool &result) -> int {
                         int ret = OB_SUCCESS;
-                        ObObj cur_obj;
-                        if (OB_FAIL(cur_datum.to_obj(cur_obj, obj_meta))) {
-                          LOG_WARN("convert datum to obj failed", K(ret), K(cur_datum), K(obj_meta));
-                        } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
-                          LOG_WARN("Failed to check object in hashset", K(ret), K(cur_obj));
+                        if (OB_FAIL(filter.exist_in_datum_set(cur_datum, result))) {
+                          LOG_WARN("Failed to check datum in hashset", K(ret), K(cur_datum));
                         }
                         return ret;
                       }))) {
@@ -565,7 +697,6 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
     const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap,
     int (*lambda)(
-        const ObObjMeta &obj_meta,
         const ObDatum &cur_datum,
         const sql::ObWhiteFilterExecutor &filter,
         bool &result)) const
@@ -615,7 +746,7 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
         cur_datum.ptr_ = reinterpret_cast<char *> (&cur_int);
         // use lambda here to filter and set result bitmap
         bool result = false;
-        if (OB_FAIL(lambda(col_ctx.obj_meta_, cur_datum, filter, result))) {
+        if (FAILEDx(lambda(cur_datum, filter, result))) {
           LOG_WARN("Failed on trying to filter the row", K(ret), K(row_id), K(cur_int));
         } else if (result) {
           if (OB_FAIL(result_bitmap.set(offset))) {

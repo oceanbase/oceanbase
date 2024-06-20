@@ -58,6 +58,7 @@ OB_INLINE uint64_t countl_zero64(uint64_t mask)
   return __builtin_clzll(mask);
 }
 
+//TODO: use template to avoid branch prediction in simd
 class ObBitmap
 {
 public:
@@ -130,6 +131,12 @@ public:
       const int64_t to,
       const bool need_flip,
       uint8_t* bits) const;
+  static void filter(
+      const bool has_null,
+      const uint8_t *nulls,
+      const uint64_t *data,
+      const int64_t size,
+      uint8_t *skip);
 
   TO_STRING_KV(K_(is_inited), K_(valid_bytes), K_(capacity), KP_(data));
 

@@ -39,21 +39,28 @@ class ObTableLoadStoreCtx;
 class ObTableLoadTransStore
 {
 public:
-  ObTableLoadTransStore(ObTableLoadTransCtx *trans_ctx) : trans_ctx_(trans_ctx) {}
+  ObTableLoadTransStore(ObTableLoadTransCtx *trans_ctx) : trans_ctx_(trans_ctx)
+  {
+    session_store_array_.set_tenant_id(MTL_ID());
+  }
   ~ObTableLoadTransStore() { reset(); }
   int init();
   void reset();
   TO_STRING_KV(KP_(trans_ctx), K_(session_store_array));
   struct SessionStore
   {
-    SessionStore() : session_id_(0), allocator_("TLD_SessStore") {}
+    SessionStore() : session_id_(0), allocator_("TLD_SessStore")
+    {
+      allocator_.set_tenant_id(MTL_ID());
+      partition_table_array_.set_block_allocator(ModulePageAllocator(allocator_));
+    }
     int32_t session_id_;
     common::ObArenaAllocator allocator_;
     common::ObArray<storage::ObIDirectLoadPartitionTable *> partition_table_array_;
     TO_STRING_KV(K_(session_id), K_(partition_table_array));
   };
   ObTableLoadTransCtx *const trans_ctx_;
-  common::ObSEArray<SessionStore *, 64> session_store_array_;
+  common::ObArray<SessionStore *> session_store_array_;
 };
 
 class ObTableLoadTransStoreWriter
@@ -67,8 +74,7 @@ public:
 public:
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
-  int write(int32_t session_id, const ObTabletID &tablet_id,
-      const common::ObIArray<common::ObNewRow> &row_array);
+  int px_write(const ObTabletID &tablet_id, const common::ObNewRow &row);
   int flush(int32_t session_id);
   int clean_up(int32_t session_id);
 public:
@@ -78,7 +84,7 @@ public:
 private:
   class SessionContext;
   int init_session_ctx_array();
-  int init_column_schemas();
+  int init_column_schemas_and_lob_info();
   int cast_row(common::ObArenaAllocator &cast_allocator, ObDataTypeCastParams cast_params,
                const common::ObNewRow &row, blocksstable::ObDatumRow &datum_row,
                int32_t session_id);
@@ -93,6 +99,7 @@ private:
                                const common::ObTabletID &tablet_id,
                                const table::ObTableLoadSequenceNo &seq_no,
                                const blocksstable::ObDatumRow &datum_row);
+  int check_support_obj(const common::ObObj &obj);
 private:
   ObTableLoadTransStore *const trans_store_;
   ObTableLoadTransCtx *const trans_ctx_;
@@ -119,7 +126,10 @@ private:
     int64_t extra_buf_size_;
   };
   SessionContext *session_ctx_array_;
+  int64_t lob_inrow_threshold_; // for incremental direct load
   int64_t ref_count_ CACHE_ALIGNED;
+  bool is_incremental_;
+  bool is_inc_replace_;
   bool is_inited_;
   ObSchemaGetterGuard schema_guard_;
 };

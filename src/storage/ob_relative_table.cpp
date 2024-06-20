@@ -77,6 +77,11 @@ const ObTabletID& ObRelativeTable::get_tablet_id() const
   return tablet_id_;
 }
 
+const ObTabletHandle* ObRelativeTable::get_tablet_handle() const
+{
+  return tablet_iter_.get_tablet_handle_ptr();
+}
+
 int64_t ObRelativeTable::get_schema_version() const
 {
   return schema_param_->get_schema_version();
@@ -448,6 +453,11 @@ bool ObRelativeTable::is_storage_index_table() const
   return schema_param_->is_storage_index_table();
 }
 
+bool ObRelativeTable::is_index_local_storage() const
+{
+  return schema_param_->is_index_local_storage();
+}
+
 bool ObRelativeTable::can_read_index() const
 {
   return schema_param_->can_read_index();
@@ -471,6 +481,11 @@ bool ObRelativeTable::is_lob_meta_table() const
 bool ObRelativeTable::is_spatial_index() const
 {
   return schema_param_->is_spatial_index();
+}
+
+bool ObRelativeTable::is_fts_index() const
+{
+  return schema_param_->is_fts_index();
 }
 
 int ObRelativeTable::check_rowkey_in_column_ids(
@@ -615,7 +630,7 @@ int ObRelativeTable::set_index_value(
 {
   int ret = OB_SUCCESS;
   int32_t idx = -1;
-  uint64_t id = col_desc.col_id_ > OB_MIN_SHADOW_COLUMN_ID ?
+  uint64_t id = is_shadow_column(col_desc.col_id_) ?
                 col_desc.col_id_ - OB_MIN_SHADOW_COLUMN_ID :
                 col_desc.col_id_;
   if (table_row.is_invalid() || !col_map.is_inited() || rowkey_size <= 0) {

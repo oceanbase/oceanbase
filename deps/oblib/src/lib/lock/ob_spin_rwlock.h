@@ -84,6 +84,37 @@ private:
   DISALLOW_COPY_AND_ASSIGN(SpinRLockGuard);
 };
 
+class SpinRLockManualGuard
+{
+public:
+  explicit SpinRLockManualGuard()
+      : lock_(nullptr), ret_(OB_SUCCESS)
+  {
+  }
+  ~SpinRLockManualGuard()
+  {
+    if (OB_LIKELY(OB_SUCCESS == ret_) && OB_NOT_NULL(lock_)) {
+      if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_->unlock()))) {
+        COMMON_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
+      } else {
+        lock_ = nullptr;
+      }
+    }
+  }
+  void lock(SpinRWLock &lock) {
+    lock_ = &lock;
+    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_->rdlock()))) {
+      COMMON_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
+    }
+  }
+  inline int get_ret() const { return ret_; }
+private:
+  SpinRWLock *lock_;
+  int ret_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(SpinRLockManualGuard);
+};
+
 class SpinWLockGuard
 {
 public:

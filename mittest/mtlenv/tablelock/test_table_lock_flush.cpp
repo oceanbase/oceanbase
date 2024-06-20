@@ -217,7 +217,7 @@ TEST_F(TestTableLockFlush, checkpoint)
                                                      LOCK_OP_COMPLETE));
 
   ASSERT_EQ(table_lock_op2_commit_scn, memtable->get_rec_scn());
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, true));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 TEST_F(TestTableLockFlush, restore_tablelock_memtable)
@@ -339,7 +339,7 @@ TEST_F(TestTableLockFlush, restore_tablelock_memtable)
   ASSERT_EQ(share::SCN::max_scn(), memtable->get_rec_scn());
 
   LOG_INFO("remove ls");
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, true));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 TEST_F(TestTableLockFlush, restore_tx_ctx)
@@ -430,7 +430,7 @@ TEST_F(TestTableLockFlush, restore_tx_ctx)
 
   handle.reset();
   LOG_INFO("restore_tx_ctx remove_ls");
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, true));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 }  // namespace storage

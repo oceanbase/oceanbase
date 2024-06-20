@@ -31,6 +31,7 @@
 #include "lib/file/file_directory_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
+#include "sql/optimizer/ob_skyline_prunning.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -830,13 +831,49 @@ int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
   return ret;
 }
 
+int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
+{
+  int ret = OB_SUCCESS;
+  switch (dim.get_dim_type()) {
+    case ObSkylineDim::INDEX_BACK: {
+      const ObIndexBackDim &index_dim = static_cast<const ObIndexBackDim &>(dim);
+      append("[index back dim] need index back:", index_dim.need_index_back_);
+      append(", has interesting order:", index_dim.has_interesting_order_);
+      append(", can extract range:", index_dim.can_extract_range_);
+      append(", filter columns:", common::ObArrayWrap<uint64_t>(index_dim.filter_column_ids_, index_dim.filter_column_cnt_));
+      break;
+    }
+    case ObSkylineDim::INTERESTING_ORDER: {
+      const ObInterestOrderDim &order_dim = static_cast<const ObInterestOrderDim &>(dim);
+      append("[intersting order dim] is interesting order:", order_dim.is_interesting_order_);
+      append(", need index back:", order_dim.need_index_back_);
+      append(", can extract range:", order_dim.can_extract_range_);
+      append(", column ids:", common::ObArrayWrap<uint64_t>(order_dim.column_ids_,  order_dim.column_cnt_));
+      append(", filter columns:", common::ObArrayWrap<uint64_t>(order_dim.filter_column_ids_, order_dim.filter_column_cnt_));
+      break;
+    }
+    case ObSkylineDim::QUERY_RANGE: {
+      const ObQueryRangeDim &range_dim = static_cast<const ObQueryRangeDim &>(dim);
+      append("[query range dim] contain false range:", range_dim.contain_always_false_);
+      append(", rowkey ids:", common::ObArrayWrap<uint64_t>(range_dim.column_ids_, range_dim.column_cnt_));
+      break;
+    }
+    default: {
+      append("unknown dim");
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerTraceImpl::trace_env()
 {
   int ret = OB_SUCCESS;
   char buf[1024+1] = {0};
   int64_t buf_len = 1024;
-  get_package_and_svn(buf, buf_len);
-  if (OB_FAIL(new_line())) {
+  if (OB_FAIL(get_package_and_svn(buf, buf_len))) {
+    LOG_WARN("fail to get build_version", KR(ret));
+  } else if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FAIL(append_key_value("Version", ObString(strlen(buf), buf)))) {
     LOG_WARN("failed to append msg", K(ret));
@@ -895,6 +932,7 @@ int ObOptimizerTraceImpl::trace_parameters()
     //for tenant parameters
     TRACE_PARAMETER(_rowsets_enabled, bool);
     TRACE_PARAMETER(_enable_px_batch_rescan, bool);
+    TRACE_PARAMETER(_enable_spf_batch_rescan, bool);
     TRACE_PARAMETER(_hash_join_enabled, bool);
     TRACE_PARAMETER(_optimizer_sortmerge_join_enabled, bool);
     TRACE_PARAMETER(_nested_loop_join_enabled, bool);

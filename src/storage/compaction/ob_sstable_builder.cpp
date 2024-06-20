@@ -176,6 +176,7 @@ int ObSSTableBuilder::build_sstable_merge_res(
 {
   int ret = OB_SUCCESS;
   ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_ID_COUNT> macro_id_array;
+  macro_id_array.set_attr(ObMemAttr(MTL_ID(), "sstBuilder", ObCtxIds::MERGE_NORMAL_CTX_ID));
   blocksstable::ObSSTableIndexBuilder::ObMacroMetaIter iter;
   int64_t multiplexed_macro_block_count = 0;
 
@@ -314,7 +315,7 @@ int ObSSTableBuilder::rebuild_macro_block(const ObIArray<blocksstable::MacroBloc
     if (OB_FAIL(micro_iter.init())) {
       STORAGE_LOG(WARN, "init SSTableRebuildMicroBlockIter failed", K(ret));
     } else {
-      const blocksstable::ObDataMacroBlockMeta *macro_meta;
+      const blocksstable::ObDataMacroBlockMeta *macro_meta = NULL;
       int64_t macro_id_idx = 0;
       while (OB_SUCC(ret) && OB_SUCC(iter.get_next_macro_block(macro_meta))) {
         if (OB_UNLIKELY(nullptr == macro_meta || !macro_meta->is_valid())) {

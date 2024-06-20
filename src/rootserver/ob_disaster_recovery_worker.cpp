@@ -221,12 +221,10 @@ int ObDRWorker::LocalityAlignment::locate_zone_locality(
   return ret;
 }
 
-ObDRWorker::LocalityAlignment::LocalityAlignment(ObUnitManager *unit_mgr,
-                                                 ObZoneManager *zone_mgr,
+ObDRWorker::LocalityAlignment::LocalityAlignment(ObZoneManager *zone_mgr,
                                                  DRLSInfo &dr_ls_info)
   : task_idx_(0),
     add_replica_task_(),
-    unit_mgr_(unit_mgr),
     zone_mgr_(zone_mgr),
     dr_ls_info_(dr_ls_info),
     task_array_(),
@@ -274,10 +272,7 @@ int ObDRWorker::LocalityAlignment::build_locality_stat_map()
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID;
   share::ObLSID ls_id;
-  if (OB_ISNULL(unit_mgr_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("LocalityAlignment not init", KR(ret), KP(unit_mgr_));
-  } else if (OB_FAIL(dr_ls_info_.get_ls_id(tenant_id, ls_id))) {
+  if (OB_FAIL(dr_ls_info_.get_ls_id(tenant_id, ls_id))) {
     LOG_WARN("fail to get ls id", KR(ret));
   } else {
     LOG_INFO("build ls locality stat map", K(tenant_id), K(ls_id));
@@ -464,8 +459,8 @@ int ObDRWorker::LocalityAlignment::try_remove_match(
         LOG_WARN("zone replica desc ptr is null", KR(ret), K(zone));
       } else {
         bool has_correct_dest_replica = false;
-        if (replica->get_server() != unit_stat_info->get_unit_info().unit_.server_
-            || !unit_stat_info->get_unit_info().unit_.is_active_status()) {
+        if (replica->get_server() != unit_stat_info->get_unit().server_
+            || !unit_stat_info->get_unit().is_active_status()) {
           // this replica is migrating or unit is deleting, check whether has a correct dest replica
           LOG_TRACE("try to check whether has dest replica", KPC(replica), KPC(unit_stat_info));
           const int64_t map_count = replica_stat_map_.count();
@@ -482,9 +477,9 @@ int ObDRWorker::LocalityAlignment::try_remove_match(
             } else if (replica->is_in_service()
                        && replica_stat_desc_to_compare.replica_->get_replica_type() == replica->get_replica_type()
                        && replica_stat_desc_to_compare.replica_->get_server() != replica->get_server()
-                       && (replica_stat_desc_to_compare.replica_->get_server() == unit_stat_info->get_unit_info().unit_.server_
-                           || replica_stat_desc_to_compare.replica_->get_server() == replica_stat_desc_to_compare.unit_stat_info_->get_unit_info().unit_.server_)
-                       && replica_stat_desc_to_compare.unit_stat_info_->get_unit_info().unit_.is_active_status()) {
+                       && (replica_stat_desc_to_compare.replica_->get_server() == unit_stat_info->get_unit().server_
+                           || replica_stat_desc_to_compare.replica_->get_server() == replica_stat_desc_to_compare.unit_stat_info_->get_unit().server_)
+                       && replica_stat_desc_to_compare.unit_stat_info_->get_unit().is_active_status()) {
               // A replica is a correct dest replica if these conditions above all satisfied
               //   (1) replica is in member_list(learner_lsit)
               //   (2) replica type is expected
@@ -499,9 +494,9 @@ int ObDRWorker::LocalityAlignment::try_remove_match(
                         "replica_type", replica->get_replica_type(),
                         "server_to_compare", replica_stat_desc_to_compare.replica_->get_server(),
                         "server", replica->get_server(),
-                        "server_with_unit", unit_stat_info->get_unit_info().unit_.server_,
-                        "server_with_unit_to_compare", replica_stat_desc_to_compare.unit_stat_info_->get_unit_info().unit_.server_,
-                        "unit_status_is_active", replica_stat_desc_to_compare.unit_stat_info_->get_unit_info().unit_.is_active_status());
+                        "server_with_unit", unit_stat_info->get_unit().server_,
+                        "server_with_unit_to_compare", replica_stat_desc_to_compare.unit_stat_info_->get_unit().server_,
+                        "unit_status_is_active", replica_stat_desc_to_compare.unit_stat_info_->get_unit().is_active_status());
             }
           }
         }
@@ -514,8 +509,8 @@ int ObDRWorker::LocalityAlignment::try_remove_match(
               && replica->get_memstore_percent() == replica_desc.memstore_percent_
               && replica_desc.replica_num_ > 0
               && (!has_correct_dest_replica
-                  || (unit_stat_info->get_unit_info().unit_.is_active_status()
-                      && server_stat_info->get_server() == unit_stat_info->get_unit_info().unit_.server_))) {
+                  || (unit_stat_info->get_unit().is_active_status()
+                      && server_stat_info->get_server() == unit_stat_info->get_unit().server_))) {
             found = true;
             if (OB_FAIL(replica_stat_map_.remove(index))) {
               LOG_WARN("fail to remove from stat map", KR(ret));
@@ -741,14 +736,14 @@ int ObDRWorker::LocalityAlignment::try_generate_type_transform_task_for_readonly
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", KR(ret), K(replica_stat_desc));
         } else {
-          const share::ObUnitInfo &unit_info = replica_stat_desc.unit_stat_info_->get_unit_info();
+          const share::ObUnit &unit = replica_stat_desc.unit_stat_info_->get_unit();
           bool server_is_active = false;
-          if (!unit_info.unit_.is_active_status()) {
-            FLOG_INFO("unit status is not normal, can not generate type transform task", K(unit_info));
-          } else if (OB_FAIL(SVR_TRACER.check_server_active(unit_info.unit_.server_, server_is_active))) {
-            LOG_WARN("fail to check server is active", KR(ret), K(unit_info));
+          if (!unit.is_active_status()) {
+            FLOG_INFO("unit status is not normal, can not generate type transform task", K(unit));
+          } else if (OB_FAIL(SVR_TRACER.check_server_active(unit.server_, server_is_active))) {
+            LOG_WARN("fail to check server is active", KR(ret), K(unit));
           } else if (!server_is_active) {
-            FLOG_INFO("server status is not active, can not generate type transform task", K(unit_info));
+            FLOG_INFO("server status is not active, can not generate type transform task", K(unit));
           } else if (OB_FAIL(generate_type_transform_task(
                   replica_stat_desc,
                   replica_desc.replica_type_,
@@ -1053,8 +1048,8 @@ int ObDRWorker::LocalityAlignment::generate_type_transform_task(
     } else {
       task->zone_ = replica->get_zone();
       task->dst_server_ = replica->get_server();
-      task->unit_id_ = unit_stat_info->get_unit_info().unit_.unit_id_;
-      task->unit_group_id_ = unit_stat_info->get_unit_info().unit_.unit_group_id_;
+      task->unit_id_ = unit_stat_info->get_unit().unit_id_;
+      task->unit_group_id_ = unit_stat_info->get_unit().unit_group_id_;
       task->src_replica_type_ = replica->get_replica_type();
       task->src_memstore_percent_ = replica->get_memstore_percent();
       task->src_member_time_us_ = replica->get_member_time_us();
@@ -1139,10 +1134,9 @@ int ObDRWorker::LocalityAlignment::build()
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID;
-  if (OB_UNLIKELY(nullptr == unit_mgr_
-                  || nullptr == zone_mgr_)) {
+  if (OB_UNLIKELY(nullptr == zone_mgr_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("LocalityAlignment not init", KR(ret), KP(unit_mgr_), KP(zone_mgr_));
+    LOG_WARN("LocalityAlignment not init", KR(ret), KP(zone_mgr_));
   } else if (OB_FAIL(locality_map_.create(LOCALITY_MAP_BUCKET_NUM, "LocAlign"))) {
     LOG_WARN("fail to create locality map", KR(ret));
   } else if (OB_FAIL(generate_paxos_replica_number())) {
@@ -1156,7 +1150,7 @@ int ObDRWorker::LocalityAlignment::build()
   } else if (OB_FAIL(dr_ls_info_.get_tenant_id(tenant_id))) {
     LOG_WARN("fail to get tenant id", KR(ret), K(tenant_id));
   } else if (OB_FAIL(unit_provider_.init(gen_user_tenant_id(tenant_id),
-          dr_ls_info_, unit_mgr_))) {
+          dr_ls_info_))) {
     LOG_WARN("fail to init unit provider", KR(ret), K(tenant_id), K_(dr_ls_info));
   }
   return ret;
@@ -1222,14 +1216,14 @@ int ObDRWorker::LocalityAlignment::try_review_add_replica_task(
     LOG_WARN("ls status info ptr is null", KR(ret), KP(ls_status_info));
   } else {
     found = false;
-    share::ObUnitInfo unit_info;
+    share::ObUnit unit;
     const common::ObZone &zone = my_task->zone_;
-    int tmp_ret = unit_provider.allocate_unit(zone, ls_status_info->unit_group_id_, unit_info);
+    int tmp_ret = unit_provider.allocate_unit(zone, ls_status_info->unit_group_id_, unit);
     if (OB_ITER_END == tmp_ret) {
       // bypass
     } else if (OB_SUCCESS == tmp_ret) {
-      my_task->dst_server_ = unit_info.unit_.server_;
-      my_task->unit_id_ = unit_info.unit_.unit_id_;
+      my_task->dst_server_ = unit.server_;
+      my_task->unit_id_ = unit.unit_id_;
       my_task->unit_group_id_ = ls_status_info->unit_group_id_;
       if (ObReplicaTypeCheck::is_paxos_replica_V2(my_task->replica_type_)) {
         int64_t new_paxos_replica_number = 0;
@@ -1457,15 +1451,15 @@ int ObDRWorker::LocalityAlignment::try_get_readonly_all_server_locality_alignmen
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls status info ptr is null", KR(ret), KP(ls_status_info));
     } else {
-      share::ObUnitInfo unit_info;
-      int tmp_ret = unit_provider.allocate_unit(zone, ls_status_info->unit_group_id_, unit_info);
+      share::ObUnit unit;
+      int tmp_ret = unit_provider.allocate_unit(zone, ls_status_info->unit_group_id_, unit);
       if (OB_ITER_END == tmp_ret) {
         // bypass
       } else if (OB_SUCCESS == tmp_ret) {
         add_replica_task_.zone_ = zone;
-        add_replica_task_.dst_server_ = unit_info.unit_.server_;
+        add_replica_task_.dst_server_ = unit.server_;
         add_replica_task_.member_time_us_ = ObTimeUtility::current_time();
-        add_replica_task_.unit_id_ = unit_info.unit_.unit_id_;
+        add_replica_task_.unit_id_ = unit.unit_id_;
         add_replica_task_.unit_group_id_ = ls_status_info->unit_group_id_;
         add_replica_task_.replica_type_ = REPLICA_TYPE_READONLY;
         add_replica_task_.memstore_percent_ = replica_desc_array->readonly_memstore_percent_;
@@ -1512,21 +1506,24 @@ int ObDRWorker::LocalityAlignment::get_next_locality_alignment_task(
 
 int ObDRWorker::UnitProvider::init(
     const uint64_t tenant_id,
-    DRLSInfo &dr_ls_info,
-    ObUnitManager *unit_mgr)
+    DRLSInfo &dr_ls_info)
 {
   int ret = OB_SUCCESS;
   int64_t replica_cnt = 0;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || nullptr == unit_mgr)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret),
-             K(tenant_id),
-             KP(unit_mgr));
+             K(tenant_id));
   } else if (OB_FAIL(dr_ls_info.get_replica_cnt(replica_cnt))) {
     LOG_WARN("failed to get replica count", KR(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(unit_operator_.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("init unit table operator failed", KR(ret));
   } else {
     const int64_t hash_count = max(replica_cnt, 1);
     if (OB_FAIL(unit_set_.create(hash::cal_next_prime(hash_count)))) {
@@ -1535,7 +1532,6 @@ int ObDRWorker::UnitProvider::init(
       LOG_WARN("failed to init unit set", KR(ret), K(dr_ls_info));
     } else {
       tenant_id_ = tenant_id;
-      unit_mgr_ = unit_mgr;
       inited_ = true;
     }
   }
@@ -1578,7 +1574,7 @@ int ObDRWorker::UnitProvider::init_unit_set(
       } else if ((ObReplicaTypeCheck::is_paxos_replica_V2(ls_replica->get_replica_type())
                   && ls_replica->get_in_member_list())
           || (!ObReplicaTypeCheck::is_paxos_replica_V2(ls_replica->get_replica_type()))) {
-        if (OB_FAIL(unit_set_.set_refactored(unit_stat_info->get_unit_info().unit_.unit_id_))) {
+        if (OB_FAIL(unit_set_.set_refactored(unit_stat_info->get_unit().unit_id_))) {
           LOG_WARN("fail to set refactored", KR(ret));
         }
       }
@@ -1589,40 +1585,40 @@ int ObDRWorker::UnitProvider::init_unit_set(
 
 int ObDRWorker::UnitProvider::inner_get_valid_unit_(
     const common::ObZone &zone,
-    const common::ObArray<share::ObUnitInfo> &unit_array,
-    share::ObUnitInfo &output_unit_info,
+    const common::ObArray<share::ObUnit> &unit_array,
+    share::ObUnit &output_unit,
     const bool &force_get,
     bool &found)
 {
   int ret = OB_SUCCESS;
-  output_unit_info.reset();
+  output_unit.reset();
   found = false;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(unit_mgr_) || OB_UNLIKELY(0 >= unit_array.count())) {
+  } else if (OB_UNLIKELY(0 >= unit_array.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unit mgr ptr is null", KR(ret), KP(unit_mgr_), "unit_count", unit_array.count());
+    LOG_WARN("unit mgr ptr is null", KR(ret), "unit_count", unit_array.count());
   } else {
     bool server_is_active = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < unit_array.count(); ++i) {
       server_is_active = false;
-      const share::ObUnitInfo &unit_info = unit_array.at(i);
-      const uint64_t unit_id = unit_info.unit_.unit_id_;
+      const share::ObUnit &unit = unit_array.at(i);
+      const uint64_t unit_id = unit.unit_id_;
       int hash_ret = OB_SUCCESS;
       bool server_and_unit_status_is_valid = true;
-      if (unit_info.unit_.zone_ != zone) {
+      if (unit.zone_ != zone) {
         // bypass, because we do not support operation between different zones
       } else {
         if (!force_get) {
-          if (OB_FAIL(SVR_TRACER.check_server_active(unit_info.unit_.server_, server_is_active))) {
-            LOG_WARN("fail to check server active", KR(ret), "server", unit_info.unit_.server_);
+          if (OB_FAIL(SVR_TRACER.check_server_active(unit.server_, server_is_active))) {
+            LOG_WARN("fail to check server active", KR(ret), "server", unit.server_);
           } else if (!server_is_active) {
             server_and_unit_status_is_valid = false;
-            FLOG_INFO("server is not active", "server", unit_info.unit_.server_, K(server_is_active));
-          } else if (!unit_info.unit_.is_active_status()) {
+            FLOG_INFO("server is not active", "server", unit.server_, K(server_is_active));
+          } else if (!unit.is_active_status()) {
             server_and_unit_status_is_valid = false;
-            FLOG_INFO("unit status is not normal", K(unit_info));
+            FLOG_INFO("unit status is not normal", K(unit));
           } else {
             server_and_unit_status_is_valid = true;
           }
@@ -1633,8 +1629,8 @@ int ObDRWorker::UnitProvider::inner_get_valid_unit_(
           FLOG_INFO("unit existed", K(unit_id));
         } else if (OB_FAIL(hash_ret)) {
           LOG_WARN("set refactored failed", KR(ret), KR(hash_ret));
-        } else if (OB_FAIL(output_unit_info.assign(unit_info))) {
-          LOG_WARN("fail to assign unit info", KR(ret), K(unit_info));
+        } else if (OB_FAIL(output_unit.assign(unit))) {
+          LOG_WARN("fail to assign unit info", KR(ret), K(unit));
         } else {
           found = true;
           break;
@@ -1648,31 +1644,31 @@ int ObDRWorker::UnitProvider::inner_get_valid_unit_(
 int ObDRWorker::UnitProvider::allocate_unit(
     const common::ObZone &zone,
     const uint64_t unit_group_id,
-    share::ObUnitInfo &unit_info)
+    share::ObUnit &unit)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else {
-    common::ObArray<ObUnitInfo> unit_array;
+    common::ObArray<ObUnit> unit_array;
     bool found = false;
     bool force_get = true; // if unit_group_id is given, just allocate unit belongs to this unit group
     // 1. if unit_group_id is valid, try get valid unit in this unit group
     if (unit_group_id > 0) {
       force_get = true;
-      if (OB_FAIL(unit_mgr_->get_unit_group(tenant_id_, unit_group_id, unit_array))) {
-        LOG_WARN("fail to get unit group", KR(ret), K(tenant_id_), K(unit_group_id));
-      } else if (OB_FAIL(inner_get_valid_unit_(zone, unit_array, unit_info, force_get, found))) {
+      if (OB_FAIL(unit_operator_.get_units_by_unit_group_id(unit_group_id, unit_array))) {
+        LOG_WARN("fail to get unit group", KR(ret), K(unit_group_id));
+      } else if (OB_FAIL(inner_get_valid_unit_(zone, unit_array, unit, force_get, found))) {
         LOG_WARN("fail to get valid unit from certain unit group", KR(ret), K(zone), K(unit_array), K(force_get));
       }
     } else {
       // 2. if unit_group_id = 0, try get from all units
       unit_array.reset();
       force_get = false;
-      if (OB_FAIL(unit_mgr_->get_all_unit_infos_by_tenant(tenant_id_, unit_array))) {
+      if (OB_FAIL(unit_operator_.get_units_by_tenant(tenant_id_, unit_array))) {
         LOG_WARN("fail to get ll unit infos by tenant", KR(ret), K(tenant_id_));
-      } else if (OB_FAIL(inner_get_valid_unit_(zone, unit_array, unit_info, force_get, found))) {
+      } else if (OB_FAIL(inner_get_valid_unit_(zone, unit_array, unit, force_get, found))) {
         LOG_WARN("fail to get valid unit from all units in tenant", KR(ret), K(zone), K(unit_array), K(force_get));
       }
     }
@@ -1709,7 +1705,6 @@ ObDRWorker::ObDRWorker(volatile bool &stop)
     dr_task_mgr_is_loaded_(false),
     self_addr_(),
     config_(nullptr),
-    unit_mgr_(nullptr),
     zone_mgr_(nullptr),
     disaster_recovery_task_mgr_(nullptr),
     lst_operator_(nullptr),
@@ -1729,7 +1724,6 @@ ObDRWorker::~ObDRWorker()
 int ObDRWorker::init(
     common::ObAddr &self_addr,
     common::ObServerConfig &config,
-    ObUnitManager &unit_mgr,
     ObZoneManager &zone_mgr,
     ObDRTaskMgr &task_mgr,
     share::ObLSTableOperator &lst_operator,
@@ -1747,7 +1741,6 @@ int ObDRWorker::init(
   } else {
     self_addr_ = self_addr;
     config_ = &config;
-    unit_mgr_ = &unit_mgr;
     zone_mgr_ = &zone_mgr;
     disaster_recovery_task_mgr_ = &task_mgr;
     lst_operator_ = &lst_operator;
@@ -1841,7 +1834,6 @@ void ObDRWorker::statistic_total_dr_task(const int64_t task_cnt)
 
 int ObDRWorker::check_tenant_locality_match(
     const uint64_t tenant_id,
-    ObUnitManager &unit_mgr,
     ObZoneManager &zone_mgr,
     bool &locality_is_matched)
 {
@@ -1868,7 +1860,6 @@ int ObDRWorker::check_tenant_locality_match(
         share::ObLSStatusInfo &ls_status_info = ls_status_info_array.at(i);
         bool filter_readonly_replicas_with_flag = true;
         DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id),
-                            &unit_mgr,
                             &zone_mgr,
                             GCTX.schema_service_);
         if (ls_status_info.ls_is_creating()) {
@@ -1889,7 +1880,7 @@ int ObDRWorker::check_tenant_locality_match(
           LOG_WARN("fail to generate dr log stream info", KR(ret), K(ls_info),
                    K(ls_status_info), K(filter_readonly_replicas_with_flag));
         } else if (OB_FAIL(check_ls_locality_match_(
-                dr_ls_info, unit_mgr, zone_mgr, locality_is_matched))) {
+                dr_ls_info, zone_mgr, locality_is_matched))) {
           LOG_WARN("fail to try log stream disaster recovery", KR(ret));
         }
       }
@@ -1900,7 +1891,6 @@ int ObDRWorker::check_tenant_locality_match(
 
 int ObDRWorker::check_ls_locality_match_(
     DRLSInfo &dr_ls_info,
-    ObUnitManager &unit_mgr,
     ObZoneManager &zone_mgr,
     bool &locality_is_matched)
 {
@@ -1908,8 +1898,7 @@ int ObDRWorker::check_ls_locality_match_(
   int tmp_ret = OB_SUCCESS;
   locality_is_matched = false;
   LOG_INFO("start to check ls locality match", K(dr_ls_info));
-  LocalityAlignment locality_alignment(&unit_mgr,
-                                       &zone_mgr,
+  LocalityAlignment locality_alignment(&zone_mgr,
                                        dr_ls_info);
   if (!dr_ls_info.has_leader()) {
     LOG_WARN("has no leader, maybe not report yet",
@@ -1969,6 +1958,36 @@ int ObDRWorker::try_disaster_recovery()
   return ret;
 }
 
+int ObDRWorker::check_whether_the_tenant_role_can_exec_dr_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)
+             || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    // good, sys tenant and meta tenant can not in clone procedure
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                         tenant_id,
+                         GCTX.sql_proxy_,
+                         false,
+                         tenant_info))) {
+    LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+  } else if (tenant_info.is_clone()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_INFO("the tenant is currently in the clone processing and disaster recovery will"
+             " not be executed for the time being", KR(ret), K(tenant_id));
+  } else {
+    // good, can do dr-task
+  }
+  return ret;
+}
+
 int ObDRWorker::try_tenant_disaster_recovery(
     const uint64_t tenant_id,
     const bool only_for_display,
@@ -1986,6 +2005,8 @@ int ObDRWorker::try_tenant_disaster_recovery(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst operator ptr or sql proxy is null", KR(ret),
         KP(lst_operator_), KP(sql_proxy_));
+  } else if (OB_FAIL(check_whether_the_tenant_role_can_exec_dr_(tenant_id))) {
+    LOG_INFO("fail to check_whether_the_tenant_role_can_exec_dr_", KR(ret), K(tenant_id));
   } else {
     LOG_INFO("start try tenant disaster recovery", K(tenant_id), K(only_for_display));
     share::ObLSStatusOperator ls_status_operator;
@@ -1999,12 +2020,10 @@ int ObDRWorker::try_tenant_disaster_recovery(
         share::ObLSStatusInfo &ls_status_info = ls_status_info_array.at(i);
         // this structure is used to generate migrtion/locality alignment/shrink unit tasks
         DRLSInfo dr_ls_info_without_flag(gen_user_tenant_id(tenant_id),
-                                         unit_mgr_,
                                          zone_mgr_,
                                          schema_service_);
         // this structure is used to generate permanent offline tasks
         DRLSInfo dr_ls_info_with_flag(gen_user_tenant_id(tenant_id),
-                                      unit_mgr_,
                                       zone_mgr_,
                                       schema_service_);
         int64_t ls_acc_dr_task = 0;
@@ -2041,17 +2060,6 @@ int ObDRWorker::try_tenant_disaster_recovery(
       }
     }
   }
-  return ret;
-}
-
-int ObDRWorker::try_assign_unit(
-    DRLSInfo &dr_ls_info)
-{
-  int ret = OB_SUCCESS;
-  /* TODO: (wenduo)
-   * try assign unit_id/unit_group_id for replicas with invalid unit_id/unit_group_id
-   */
-  UNUSED(dr_ls_info);
   return ret;
 }
 
@@ -2402,7 +2410,6 @@ int ObDRWorker::generate_remove_permanent_offline_replicas_and_push_into_task_ma
                 GCONF.cluster_id,
                 0/*transmit_data_size*/,
                 obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-                false/*skip change member list*/,
                 ObDRTaskPriority::HIGH_PRI,
                 ObString(drtask::REMOVE_PERMANENT_OFFLINE_REPLICA),
                 leader_addr,
@@ -2628,7 +2635,7 @@ int ObDRWorker::check_need_generate_replicate_to_unit(
   } else if (REPLICA_STATUS_NORMAL == ls_replica->get_replica_status()
              && unit_stat_info->is_in_pool()
              && !server_stat_info->is_alive()
-             && unit_stat_info->get_unit_info().unit_.server_ != server_stat_info->get_server()
+             && unit_stat_info->get_unit().server_ != server_stat_info->get_server()
              && unit_stat_info->get_server_stat()->is_alive()
              && !unit_stat_info->get_server_stat()->is_block()) {
     need_generate = true;
@@ -2643,14 +2650,11 @@ int ObDRWorker::construct_extra_infos_to_build_migrate_task(
     const DRUnitStatInfo &unit_stat_info,
     const DRUnitStatInfo &unit_in_group_stat_info,
     const ObReplicaMember &dst_member,
-    const ObReplicaMember &src_member,
     uint64_t &tenant_id,
     share::ObLSID &ls_id,
     share::ObTaskId &task_id,
-    ObReplicaMember &data_source,
     int64_t &data_size,
     ObDstReplica &dst_replica,
-    bool &skip_change_member_list,
     int64_t &old_paxos_replica_number)
 {
   int ret = OB_SUCCESS;
@@ -2659,26 +2663,12 @@ int ObDRWorker::construct_extra_infos_to_build_migrate_task(
     LOG_WARN("not init", KR(ret));
   } else if (FALSE_IT(task_id.init(self_addr_))) {
     //shall never be here
-  } else if (OB_FAIL(choose_disaster_recovery_data_source(
-                         zone_mgr_,
-                         dr_ls_info,
-                         dst_member,
-                         src_member,
-                         data_source,
-                         data_size))) {
-    LOG_WARN("fail to choose disaster recovery data source", KR(ret));
   } else if (OB_FAIL(dst_replica.assign(
-                         unit_stat_info.get_unit_info().unit_.unit_id_,
-                         unit_in_group_stat_info.get_unit_info().unit_.unit_group_id_,
+                         unit_stat_info.get_unit().unit_id_,
+                         unit_in_group_stat_info.get_unit().unit_group_id_,
                          ls_replica.get_zone(),
                          dst_member))) {
     LOG_WARN("fail to assign dst replica", KR(ret));
-  } else if (OB_FAIL(ObDRTask::generate_skip_change_member_list(
-                         ObDRTaskType::LS_MIGRATE_REPLICA,
-                         ls_replica.get_replica_type(),
-                         ls_replica.get_replica_type(),
-                         skip_change_member_list))) {
-    LOG_WARN("fail to generate skip change member list", KR(ret));
   } else {
     tenant_id = ls_replica.get_tenant_id();
     ls_id = ls_replica.get_ls_id();
@@ -2693,7 +2683,6 @@ int ObDRWorker::generate_replicate_to_unit_and_push_into_task_manager(
     const share::ObLSID &ls_id,
     const share::ObTaskId &task_id,
     const int64_t &data_size,
-    const bool &skip_change_member_list,
     const ObDstReplica &dst_replica,
     const ObReplicaMember &src_member,
     const ObReplicaMember &data_source,
@@ -2719,12 +2708,12 @@ int ObDRWorker::generate_replicate_to_unit_and_push_into_task_manager(
                          GCONF.cluster_id,
                          data_size,
                          obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-                         skip_change_member_list,
                          ObDRTaskPriority::HIGH_PRI,
                          task_comment,
                          dst_replica,
                          src_member,
                          data_source,
+                         ObReplicaMember()/*empty force_data_source*/,
                          old_paxos_replica_number))) {
     LOG_WARN("fail to build migrate task", KR(ret));
   } else if (OB_FAIL(disaster_recovery_task_mgr_->add_task(migrate_task))) {
@@ -2771,7 +2760,7 @@ int ObDRWorker::try_replicate_to_unit(
                       need_generate))) {
         LOG_WARN("fail to check need generate replicate to unit task", KR(ret));
       } else if (need_generate) {
-        ObReplicaMember dst_member(unit_stat_info->get_unit_info().unit_.server_,
+        ObReplicaMember dst_member(unit_stat_info->get_unit().server_,
                                    ObTimeUtility::current_time(),
                                    ls_replica->get_replica_type(),
                                    ls_replica->get_memstore_percent());
@@ -2813,7 +2802,6 @@ int ObDRWorker::generate_migrate_ls_task(
     share::ObTaskId task_id;
     ObReplicaMember data_source;
     int64_t data_size = 0;
-    bool skip_change_member_list = false;
     ObDstReplica dst_replica;
     int64_t old_paxos_replica_number = 0;
     const bool need_check_has_leader_while_remove_replica = false;
@@ -2822,10 +2810,12 @@ int ObDRWorker::generate_migrate_ls_task(
     ObReplicaMember src_member(
         ls_replica.get_server(), ls_replica.get_member_time_us(),
         ls_replica.get_replica_type(), ls_replica.get_memstore_percent());
-    if (OB_FAIL(construct_extra_infos_to_build_migrate_task(
+    if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(construct_extra_infos_to_build_migrate_task(
             dr_ls_info, ls_replica, unit_stat_info, unit_in_group_stat_info,
-            dst_member, src_member, tenant_id, ls_id, task_id, data_source,
-            data_size, dst_replica, skip_change_member_list,
+            dst_member, tenant_id, ls_id, task_id,
+            data_size, dst_replica,
             old_paxos_replica_number))) {
       LOG_WARN("fail to construct extra infos to build migrate task", KR(ret));
     } else if (only_for_display) {
@@ -2833,11 +2823,11 @@ int ObDRWorker::generate_migrate_ls_task(
       if (OB_FAIL(display_info.init(
               tenant_id, ls_id, ObDRTaskType::LS_MIGRATE_REPLICA,
               ObDRTaskPriority::HIGH_PRI,
-              unit_stat_info.get_unit_info().unit_.server_,
+              unit_stat_info.get_unit().server_,
               ls_replica.get_replica_type(), old_paxos_replica_number,
               ls_replica.get_server(), ls_replica.get_replica_type(),
               old_paxos_replica_number,
-              unit_stat_info.get_unit_info().unit_.server_,
+              unit_stat_info.get_unit().server_,
               task_comment))) {
         LOG_WARN("fail to init a ObLSReplicaTaskDisplayInfo", KR(ret));
       } else if (OB_FAIL(add_display_info(display_info))) {
@@ -2853,7 +2843,7 @@ int ObDRWorker::generate_migrate_ls_task(
     } else if (can_generate) {
       if (OB_FAIL(generate_replicate_to_unit_and_push_into_task_manager(
               task_key, tenant_id, ls_id, task_id, data_size,
-              skip_change_member_list, dst_replica, src_member, data_source,
+              dst_replica, src_member, data_source,
               old_paxos_replica_number, task_comment, acc_dr_task))) {
         LOG_WARN("fail to generate replicate to unit task", KR(ret));
       }
@@ -2918,7 +2908,6 @@ int ObDRWorker::try_generate_remove_replica_locality_alignment_task(
             GCONF.cluster_id,
             0,/*transmit data size*/
             obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-            false,/*skip change member list*/
             ObDRTaskPriority::HIGH_PRI,
             comment_to_set,
             leader_addr,
@@ -2976,20 +2965,14 @@ int ObDRWorker::try_generate_add_replica_locality_alignment_task(
 
     if (FALSE_IT(task_id.init(self_addr_))) {
       //shall never be here
-    } else if (OB_FAIL(choose_disaster_recovery_data_source(
-            zone_mgr_,
-            dr_ls_info,
-            dst_member,
-            ObReplicaMember(),/*empty*/
-            data_source,
-            data_size))) {
-      LOG_WARN("fail to choose disaster recovery data source", KR(ret));
     } else if (OB_FAIL(dst_replica.assign(
             my_task->unit_id_,
             my_task->unit_group_id_,
             my_task->zone_,
             dst_member))) {
       LOG_WARN("fail to assign dst replica", KR(ret));
+    } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
     } else if (OB_FAIL(add_replica_task.build(
             task_key,
             tenant_id,
@@ -3000,11 +2983,11 @@ int ObDRWorker::try_generate_add_replica_locality_alignment_task(
             GCONF.cluster_id,
             data_size,
             obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-            false,/*skip change member list*/
             ObDRTaskPriority::HIGH_PRI,
             comment_to_set,
             dst_replica,
             data_source,
+            ObReplicaMember()/*empty force_data_source*/,
             my_task->orig_paxos_replica_number_,
             my_task->paxos_replica_number_))) {
       LOG_WARN("fail to build add replica task", KR(ret));
@@ -3040,7 +3023,6 @@ int ObDRWorker::try_generate_type_transform_locality_alignment_task(
     int64_t data_size = 0;
     ObReplicaMember data_source;
     ObDstReplica dst_replica;
-    bool skip_change_member_list = false;
     ObReplicaMember src_member(my_task->dst_server_,
                                my_task->src_member_time_us_,
                                my_task->src_replica_type_,
@@ -3060,26 +3042,14 @@ int ObDRWorker::try_generate_type_transform_locality_alignment_task(
       LOG_WARN("fail to check has leader while member change", KR(ret), K(dr_ls_info));
     } else if (!has_leader) {
       LOG_INFO("may has no leader while member change", K(dr_ls_info));
-    } else if (OB_FAIL(choose_disaster_recovery_data_source(
-            zone_mgr_,
-            dr_ls_info,
-            dst_member,
-            src_member,
-            data_source,
-            data_size))) {
-      LOG_WARN("fail to choose disaster recovery data source", KR(ret));
     } else if (OB_FAIL(dst_replica.assign(
             my_task->unit_id_,
             my_task->unit_group_id_,
             my_task->zone_,
             dst_member))) {
       LOG_WARN("fail to assign dst replica", KR(ret));
-    } else if (OB_FAIL(ObDRTask::generate_skip_change_member_list(
-            ObDRTaskType::LS_TYPE_TRANSFORM,
-            my_task->src_replica_type_,
-            my_task->dst_replica_type_,
-            skip_change_member_list))) {
-      LOG_WARN("fail to generate skip change member list", KR(ret));
+    } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
     } else if (OB_FAIL(type_transform_task.build(
             task_key,
             tenant_id,
@@ -3090,7 +3060,6 @@ int ObDRWorker::try_generate_type_transform_locality_alignment_task(
             GCONF.cluster_id,
             data_size,
             obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-            false,/*skip change member list*/
             ObDRTaskPriority::HIGH_PRI,
             ObString(drtask::TRANSFORM_LOCALITY_REPLICA_TYPE),
             dst_replica,
@@ -3149,7 +3118,6 @@ int ObDRWorker::try_generate_modify_paxos_replica_number_locality_alignment_task
             GCONF.cluster_id,
             0,/*transmit data size*/
             obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-            true,/*skip change member list*/
             ObDRTaskPriority::HIGH_PRI,
             ObString(drtask::MODIFY_PAXOS_REPLICA_NUMBER),
             leader_addr,
@@ -3289,18 +3257,8 @@ int ObDRWorker::record_task_plan_for_locality_alignment(
       }
       case AddReplica: {
         const AddReplicaLATask *my_task = reinterpret_cast<const AddReplicaLATask *>(task);
-        ObReplicaMember dst_member(my_task->dst_server_,
-                                   my_task->member_time_us_,
-                                   my_task->replica_type_,
-                                   my_task->memstore_percent_);
-        if (OB_FAIL(choose_disaster_recovery_data_source(
-            zone_mgr_,
-            dr_ls_info,
-            dst_member,
-            ObReplicaMember(),/*empty*/
-            data_source,
-            data_size))) {
-          LOG_WARN("fail to choose data source", KR(ret));
+        if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+          LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
         } else {
           task_type = ObDRTaskType::LS_ADD_REPLICA;
           source_replica_type = data_source.get_replica_type();
@@ -3321,22 +3279,8 @@ int ObDRWorker::record_task_plan_for_locality_alignment(
       }
       case TypeTransform: {
         const TypeTransformLATask *my_task = reinterpret_cast<const TypeTransformLATask *>(task);
-        ObReplicaMember src_member(my_task->dst_server_,
-                                   my_task->src_member_time_us_,
-                                   my_task->src_replica_type_,
-                                   my_task->src_memstore_percent_);
-        ObReplicaMember dst_member(my_task->dst_server_,
-                                   my_task->dst_member_time_us_,
-                                   my_task->dst_replica_type_,
-                                   my_task->dst_memstore_percent_);
-        if (OB_FAIL(choose_disaster_recovery_data_source(
-            zone_mgr_,
-            dr_ls_info,
-            dst_member,
-            ObReplicaMember(),/*empty*/
-            data_source,
-            data_size))) {
-          LOG_WARN("fail to choose data source", KR(ret));
+        if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+          LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
         } else {
           task_type = ObDRTaskType::LS_TYPE_TRANSFORM;
           source_replica_type = my_task->src_replica_type_;
@@ -3404,7 +3348,7 @@ int ObDRWorker::try_locality_alignment(
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_TRY_LOCALITY_ALIGNMENT);
   LOG_INFO("try locality alignment", K(dr_ls_info), K(only_for_display));
-  LocalityAlignment locality_alignment(unit_mgr_, zone_mgr_, dr_ls_info);
+  LocalityAlignment locality_alignment(zone_mgr_, dr_ls_info);
   const LATask *task = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -3494,8 +3438,7 @@ int ObDRWorker::try_shrink_resource_pools(
   } else {
     ObDRWorker::UnitProvider unit_provider;
     const uint64_t tenant_id = ls_status_info->tenant_id_;
-    if (OB_FAIL(unit_provider.init(gen_user_tenant_id(tenant_id), dr_ls_info,
-            unit_mgr_))) {
+    if (OB_FAIL(unit_provider.init(gen_user_tenant_id(tenant_id), dr_ls_info))) {
       LOG_WARN("fail to init unit provider", KR(ret), K(tenant_id), K(dr_ls_info));
     }
     for (int64_t index = 0; OB_SUCC(ret) && index < replica_cnt; ++index) {
@@ -3526,7 +3469,7 @@ int ObDRWorker::try_shrink_resource_pools(
                  KP(unit_stat_info),
                  KP(unit_in_group_stat_info));
       } else if (REPLICA_STATUS_NORMAL == ls_replica->get_replica_status()
-          && share::ObUnit::UNIT_STATUS_DELETING == unit_stat_info->get_unit_info().unit_.status_) {
+          && share::ObUnit::UNIT_STATUS_DELETING == unit_stat_info->get_unit().status_) {
         // replica is still in member_list, but unit is in DELETING status
         // If this is a duplicate log stream
         //   1.1 for R-replica: execute remove_learner task directly
@@ -3580,7 +3523,7 @@ int ObDRWorker::try_shrink_resource_pools(
         } else {
           // generate task for normal log stream replica
           if (0 == ls_status_info->ls_group_id_
-          || ls_status_info->unit_group_id_ != unit_stat_info->get_unit_info().unit_.unit_group_id_) {
+          || ls_status_info->unit_group_id_ != unit_stat_info->get_unit().unit_group_id_) {
             //If the Unit Group is in the DELETING status, we need to migrate out the LS that do not belong to that Unit Group.
             //LS belonging to this Unit Group will be automatically processed by Balance module
             // 2.1 try generate and execute migrate replica for normal log stream
@@ -3695,7 +3638,6 @@ int ObDRWorker::try_remove_readonly_replica_for_deleting_unit_(
                       GCONF.cluster_id,
                       0/*transmit_data_size*/,
                       obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-                      false/*skip change member list*/,
                       ObDRTaskPriority::HIGH_PRI,
                       "shrink unit task",
                       leader_addr,
@@ -3735,7 +3677,7 @@ int ObDRWorker::try_migrate_replica_for_deleting_unit_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ls_replica), K(ls_status_info));
   } else {
-    share::ObUnitInfo dest_unit;
+    share::ObUnit dest_unit;
     if (OB_FAIL(unit_provider.allocate_unit(
                 ls_replica.get_zone(),
                 ls_status_info.unit_group_id_,
@@ -3750,7 +3692,7 @@ int ObDRWorker::try_migrate_replica_for_deleting_unit_(
       }
     } else {
       ObReplicaMember dst_member(
-          dest_unit.unit_.server_,
+          dest_unit.server_,
           ObTimeUtility::current_time(),
           ls_replica.get_replica_type(),
           ls_replica.get_memstore_percent());
@@ -3814,24 +3756,24 @@ int ObDRWorker::try_type_transform_for_deleting_unit_(
                                target_replica.get_member_time_us(),
                                REPLICA_TYPE_FULL,
                                target_replica.get_memstore_percent());
-    if (OB_FAIL(construct_extra_info_to_build_type_transform_task_(
+    if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(construct_extra_info_to_build_type_transform_task_(
                          dr_ls_info,
                          ls_replica,
                          dst_member,
-                         src_member,
                          target_unit_id,
                          target_unit_group_id,
                          task_id,
                          tenant_id,
                          ls_id,
                          leader_addr,
-                         data_source,
                          data_size,
                          dst_replica,
                          old_paxos_replica_number,
                          new_paxos_replica_number))) {
       LOG_WARN("fail to construct extra info to build a type transform task", KR(ret),
-               K(dr_ls_info), K(ls_replica), K(dst_member), K(src_member),
+               K(dr_ls_info), K(ls_replica), K(dst_member),
                K(target_unit_id), K(target_unit_group_id));
     } else if (only_for_display) {
       ObLSReplicaTaskDisplayInfo display_info;
@@ -3881,8 +3823,8 @@ int ObDRWorker::try_type_transform_for_deleting_unit_(
                            new_paxos_replica_number,
                            acc_dr_task))) {
       LOG_WARN("fail to generate type transform task", KR(ret), K(task_key),
-               K(tenant_id), K(ls_id), K(task_id), K(data_size), K(dst_replica),
-               K(src_member), K(data_source), K(old_paxos_replica_number),
+               K(tenant_id), K(ls_id), K(task_id), K(data_size), K(data_source), K(dst_replica),
+               K(src_member), K(old_paxos_replica_number),
                K(new_paxos_replica_number), K(acc_dr_task));
     }
   }
@@ -3939,14 +3881,18 @@ int ObDRWorker::find_valid_readonly_replica_(
       } else if (replica->is_in_service()
                  && server_stat_info->is_alive()
                  && !server_stat_info->is_stopped()
-                 && !replica->get_restore_status().is_restore_failed()
+                 && !replica->get_restore_status().is_failed()
+                 // TODO@zhennan: after transfer partition cp to master, this condition(unit_stat_info->get_unit().is_active_status())
+                 //               should change to (unit_stat_info->get_unit().is_active_status() || OB_NOT_NULL(specified_unit_in_group))
+                 //               Also make sure add jingyu_alter_unit_group_for_ls_with_several_r_replicas.test back
+                 && unit_stat_info->get_unit().is_active_status()
                  && unit_stat_info->get_server_stat()->is_alive()
                  && !unit_stat_info->get_server_stat()->is_block()) {
         if (OB_FAIL(target_replica.assign(*replica))) {
           LOG_WARN("fail to assign replica", KR(ret), KPC(replica));
         } else {
-          unit_id = unit_stat_info->get_unit_info().unit_.unit_id_;
-          unit_group_id = unit_stat_info->get_unit_info().unit_.unit_group_id_;
+          unit_id = unit_stat_info->get_unit().unit_id_;
+          unit_group_id = unit_stat_info->get_unit().unit_group_id_;
           find_a_valid_readonly_replica = true;
           LOG_INFO("find a valid readonly replica to do type transform", K(dr_ls_info),
                    K(exclude_replica), K(target_zone), K(target_replica));
@@ -3962,14 +3908,12 @@ int ObDRWorker::construct_extra_info_to_build_type_transform_task_(
     DRLSInfo &dr_ls_info,
     const share::ObLSReplica &ls_replica,
     const ObReplicaMember &dst_member,
-    const ObReplicaMember &src_member,
     const uint64_t &target_unit_id,
     const uint64_t &target_unit_group_id,
     share::ObTaskId &task_id,
     uint64_t &tenant_id,
     share::ObLSID &ls_id,
     common::ObAddr &leader_addr,
-    ObReplicaMember &data_source,
     int64_t &data_size,
     ObDstReplica &dst_replica,
     int64_t &old_paxos_replica_number,
@@ -3995,15 +3939,6 @@ int ObDRWorker::construct_extra_info_to_build_type_transform_task_(
     LOG_WARN("fail to get leader address", KR(ret), K(dr_ls_info));
   } else if (OB_FAIL(dr_ls_info.get_ls_id(tenant_id, ls_id))) {
     LOG_WARN("fail to get tenant and ls id", KR(ret), K(dr_ls_info), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(choose_disaster_recovery_data_source(
-                         zone_mgr_,
-                         dr_ls_info,
-                         dst_member,
-                         src_member,
-                         data_source,
-                         data_size))) {
-    LOG_WARN("fail to choose disaster recovery data source", KR(ret), K(dr_ls_info),
-             K(dst_member), K(src_member));
   } else if (OB_FAIL(dst_replica.assign(
                          target_unit_id,
                          target_unit_group_id,
@@ -4046,7 +3981,6 @@ int ObDRWorker::generate_type_transform_task_(
                  GCONF.cluster_id,
                  data_size,
                  obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-                 false,/*skip change member list*/
                  ObDRTaskPriority::HIGH_PRI,
                  "shrink unit number",
                  dst_replica,
@@ -4102,7 +4036,7 @@ int ObDRWorker::check_need_generate_cancel_unit_migration_task(
                  KP(unit_stat_info),
                  KP(unit_in_group_stat_info));
   } else if (unit_stat_info->is_in_pool()
-          && unit_stat_info->get_unit_info().unit_.migrate_from_server_.is_valid()
+          && unit_stat_info->get_unit().migrate_from_server_.is_valid()
           && unit_stat_info->get_server_stat()->is_block()
           && ls_replica->get_server() == unit_stat_info->get_server_stat()->get_server()) {
     if (ObReplicaTypeCheck::is_paxos_replica_V2(ls_replica->get_replica_type())
@@ -4187,7 +4121,6 @@ int ObDRWorker::generate_cancel_unit_migration_task(
                   GCONF.cluster_id,
                   0/*transmit_data_size*/,
                   obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-                  false/*skip change member list*/,
                   ObDRTaskPriority::HIGH_PRI,
                   comment_to_set,
                   leader_addr,
@@ -4383,14 +4316,14 @@ int ObDRWorker::check_need_generate_migrate_to_unit_task(
                  KP(unit_in_group_stat_info));
   } else if (REPLICA_STATUS_NORMAL == ls_replica->get_replica_status()
           && unit_in_group_stat_info->is_in_pool()
-          && server_stat_info->get_server() != unit_in_group_stat_info->get_unit_info().unit_.server_
+          && server_stat_info->get_server() != unit_in_group_stat_info->get_unit().server_
           && unit_in_group_stat_info->get_server_stat()->is_alive()
           && !unit_in_group_stat_info->get_server_stat()->is_block()) {
     need_generate = true;
     is_unit_in_group_related = true;
   } else if (REPLICA_STATUS_NORMAL == ls_replica->get_replica_status()
           && unit_stat_info->is_in_pool()
-          && server_stat_info->get_server() != unit_stat_info->get_unit_info().unit_.server_
+          && server_stat_info->get_server() != unit_stat_info->get_unit().server_
           && unit_stat_info->get_server_stat()->is_alive()
           && !unit_stat_info->get_server_stat()->is_block()) {
     need_generate = true;
@@ -4405,15 +4338,12 @@ int ObDRWorker::construct_extra_infos_for_generate_migrate_to_unit_task(
     const DRUnitStatInfo &unit_stat_info,
     const DRUnitStatInfo &unit_in_group_stat_info,
     const ObReplicaMember &dst_member,
-    const ObReplicaMember &src_member,
     const bool &is_unit_in_group_related,
     uint64_t &tenant_id,
     share::ObLSID &ls_id,
     share::ObTaskId &task_id,
-    ObReplicaMember &data_source,
     int64_t &data_size,
     ObDstReplica &dst_replica,
-    bool &skip_change_member_list,
     int64_t &old_paxos_replica_number)
 {
   int ret = OB_SUCCESS;
@@ -4422,28 +4352,14 @@ int ObDRWorker::construct_extra_infos_for_generate_migrate_to_unit_task(
     LOG_WARN("not init", KR(ret));
   } else if (FALSE_IT(task_id.init(self_addr_))) {
     //shall never be here
-  } else if (OB_FAIL(choose_disaster_recovery_data_source(
-                         zone_mgr_,
-                         dr_ls_info,
-                         dst_member,
-                         src_member,
-                         data_source,
-                         data_size))) {
-    LOG_WARN("fail to choose disaster recovery data source", KR(ret));
   } else if (OB_FAIL(dst_replica.assign(
                          is_unit_in_group_related
-                         ? unit_in_group_stat_info.get_unit_info().unit_.unit_id_
-                         : unit_stat_info.get_unit_info().unit_.unit_id_,
-                         unit_in_group_stat_info.get_unit_info().unit_.unit_group_id_,
+                         ? unit_in_group_stat_info.get_unit().unit_id_
+                         : unit_stat_info.get_unit().unit_id_,
+                         unit_in_group_stat_info.get_unit().unit_group_id_,
                          ls_replica.get_zone(),
                          dst_member))) {
     LOG_WARN("fail to assign dst replica", KR(ret));
-  } else if (OB_FAIL(ObDRTask::generate_skip_change_member_list(
-                         ObDRTaskType::LS_MIGRATE_REPLICA,
-                         ls_replica.get_replica_type(),
-                         ls_replica.get_replica_type(),
-                         skip_change_member_list))) {
-    LOG_WARN("fail to generate skip change member list", KR(ret));
   } else {
     tenant_id = ls_replica.get_tenant_id();
     ls_id = ls_replica.get_ls_id();
@@ -4458,7 +4374,6 @@ int ObDRWorker::generate_migrate_to_unit_task(
     const share::ObLSID &ls_id,
     const share::ObTaskId &task_id,
     const int64_t &data_size,
-    const bool &skip_change_member_list,
     const ObDstReplica &dst_replica,
     const ObReplicaMember &src_member,
     const ObReplicaMember &data_source,
@@ -4490,12 +4405,12 @@ int ObDRWorker::generate_migrate_to_unit_task(
                          GCONF.cluster_id,
                          data_size,
                          obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,
-                         skip_change_member_list,
                          ObDRTaskPriority::LOW_PRI,
                          comment_to_set,
                          dst_replica,
                          src_member,
                          data_source,
+                         ObReplicaMember()/*empty force_data_source*/,
                          old_paxos_replica_number))) {
     LOG_WARN("fail to build migrate task", KR(ret));
   } else if (OB_FAIL(disaster_recovery_task_mgr_->add_task(migrate_task))) {
@@ -4560,7 +4475,6 @@ int ObDRWorker::try_migrate_to_unit(
         ObReplicaMember data_source;
         int64_t data_size = 0;
         ObDstReplica dst_replica;
-        bool skip_change_member_list = false;
         int64_t old_paxos_replica_number = 0;
         bool can_generate = false;
         const bool need_check_has_leader_while_remove_replica = false;
@@ -4570,8 +4484,8 @@ int ObDRWorker::try_migrate_to_unit(
                                    ls_replica->get_replica_type(),
                                    ls_replica->get_memstore_percent());
         ObReplicaMember dst_member(is_unit_in_group_related
-                                   ? unit_in_group_stat_info->get_unit_info().unit_.server_
-                                   : unit_stat_info->get_unit_info().unit_.server_,
+                                   ? unit_in_group_stat_info->get_unit().server_
+                                   : unit_stat_info->get_unit().server_,
                                    ObTimeUtility::current_time(),
                                    ls_replica->get_replica_type(),
                                    ls_replica->get_memstore_percent());
@@ -4584,21 +4498,20 @@ int ObDRWorker::try_migrate_to_unit(
           comment_to_set.assign_ptr(drtask::MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH,
                                     strlen(drtask::MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH));
         }
-        if (OB_FAIL(construct_extra_infos_for_generate_migrate_to_unit_task(
+        if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+          LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+        } else if (OB_FAIL(construct_extra_infos_for_generate_migrate_to_unit_task(
                         dr_ls_info,
                         *ls_replica,
                         *unit_stat_info,
                         *unit_in_group_stat_info,
                         dst_member,
-                        src_member,
                         is_unit_in_group_related,
                         tenant_id,
                         ls_id,
                         task_id,
-                        data_source,
                         data_size,
                         dst_replica,
-                        skip_change_member_list,
                         old_paxos_replica_number))) {
           LOG_WARN("fail to construct extra infos for generate migrate to unit task", KR(ret));
         } else if (only_for_display) {
@@ -4609,16 +4522,16 @@ int ObDRWorker::try_migrate_to_unit(
                         ObDRTaskType::LS_MIGRATE_REPLICA,
                         ObDRTaskPriority::LOW_PRI,
                         is_unit_in_group_related
-                          ? unit_in_group_stat_info->get_unit_info().unit_.server_
-                          : unit_stat_info->get_unit_info().unit_.server_,
+                          ? unit_in_group_stat_info->get_unit().server_
+                          : unit_stat_info->get_unit().server_,
                         ls_replica->get_replica_type(),
                         old_paxos_replica_number,
                         ls_replica->get_server(),
                         ls_replica->get_replica_type(),
                         old_paxos_replica_number,
                         is_unit_in_group_related
-                          ? unit_in_group_stat_info->get_unit_info().unit_.server_
-                          : unit_stat_info->get_unit_info().unit_.server_,
+                          ? unit_in_group_stat_info->get_unit().server_
+                          : unit_stat_info->get_unit().server_,
                         comment_to_set))) {
             LOG_WARN("fail to init a ObLSReplicaTaskDisplayInfo", KR(ret));
           } else if (OB_FAIL(add_display_info(display_info))) {
@@ -4642,7 +4555,6 @@ int ObDRWorker::try_migrate_to_unit(
                           ls_id,
                           task_id,
                           data_size,
-                          skip_change_member_list,
                           dst_replica,
                           src_member,
                           data_source,
@@ -4785,183 +4697,6 @@ int ObDRWorker::generate_disaster_recovery_paxos_replica_number(
   FLOG_INFO("finish generating disaster recovery paxos replica number", KR(ret),
            K(dr_ls_info), K(found), K(member_list_cnt), K(curr_paxos_replica_number),
            K(locality_paxos_replica_number), K(member_change_type), K(new_paxos_replica_number));
-  return ret;
-}
-
-int ObDRWorker::choose_disaster_recovery_data_source(
-    ObZoneManager *zone_mgr,
-    DRLSInfo &dr_ls_info,
-    const ObReplicaMember &dst_member,
-    const ObReplicaMember &src_member,
-    ObReplicaMember &data_source,
-    int64_t &data_size)
-{
-  int ret = OB_SUCCESS;
-  ObServerInfoInTable server_info;
-  ObRegion dst_region;
-  ObDataSourceCandidateChecker type_checker(dst_member.get_replica_type());
-  int64_t replica_cnt = 0;
-  share::ObLSReplica *ls_replica = nullptr;
-  DRServerStatInfo *server_stat_info = nullptr;
-  DRUnitStatInfo *unit_stat_info = nullptr;
-  DRUnitStatInfo *unit_in_group_stat_info = nullptr;
-  ObZone dst_zone;
-
-  if (OB_ISNULL(zone_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("zone_mgr is null", KR(ret), KP(zone_mgr));
-  } else if (OB_FAIL(SVR_TRACER.get_server_zone(dst_member.get_server(), dst_zone))) {
-    LOG_WARN("fail to get server zone", KR(ret), K(dst_member.get_server()));
-  } else if (OB_FAIL(zone_mgr->get_region(dst_zone, dst_region))) {
-    LOG_WARN("fail to get region", KR(ret), K(dst_zone));
-  } else if (OB_FAIL(dr_ls_info.get_replica_cnt(replica_cnt))) {
-    LOG_WARN("fail to get replica cnt", KR(ret));
-  } else {
-    ObLSReplica *src_replica = nullptr;
-    // try task offline src
-    for (int64_t i = 0;
-        OB_SUCC(ret) && i < replica_cnt && src_member.is_valid() && nullptr == src_replica;
-        ++i) {
-      if (OB_FAIL(dr_ls_info.get_replica_stat(
-              i,
-              ls_replica,
-              server_stat_info,
-              unit_stat_info,
-              unit_in_group_stat_info))) {
-        LOG_WARN("fail to get replica stat", KR(ret));
-      } else if (OB_ISNULL(ls_replica)
-                 || OB_ISNULL(server_stat_info)
-                 || OB_ISNULL(unit_stat_info)
-                 || OB_ISNULL(unit_in_group_stat_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("replica status ptr is null", KR(ret),
-                  KP(ls_replica),
-                  KP(server_stat_info),
-                  KP(unit_stat_info),
-                  KP(unit_in_group_stat_info));
-      } else if (ls_replica->is_in_service()
-          && server_stat_info->is_alive()
-          && !server_stat_info->is_stopped()
-          && type_checker.is_candidate(ls_replica->get_replica_type())
-          && ls_replica->get_server() == src_member.get_server()
-          && !ls_replica->get_restore_status().is_restore_failed()) {
-        src_replica = ls_replica;
-        break;
-      }
-    }
-    // try the same zone replica
-    for (int64_t i = 0;
-         OB_SUCC(ret) && i < replica_cnt && nullptr == src_replica && !dst_zone.is_empty();
-         ++i) {
-      if (OB_FAIL(dr_ls_info.get_replica_stat(
-              i,
-              ls_replica,
-              server_stat_info,
-              unit_stat_info,
-              unit_in_group_stat_info))) {
-        LOG_WARN("fail to get replica stat", KR(ret));
-      } else if (OB_ISNULL(ls_replica)
-                 || OB_ISNULL(server_stat_info)
-                 || OB_ISNULL(unit_stat_info)
-                 || OB_ISNULL(unit_in_group_stat_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("replica status ptr is null", KR(ret),
-                  KP(ls_replica),
-                  KP(server_stat_info),
-                  KP(unit_stat_info),
-                  KP(unit_in_group_stat_info));
-      } else if (ls_replica->is_in_service()
-          && server_stat_info->is_alive()
-          && !server_stat_info->is_stopped()
-          && type_checker.is_candidate(ls_replica->get_replica_type())
-          && ls_replica->get_zone() == dst_zone
-          && ls_replica->get_server() != dst_member.get_server()
-          && !ls_replica->get_restore_status().is_restore_failed()) {
-        src_replica = ls_replica;
-        break;
-      }
-    }
-    // try the same region replica
-    for (int64_t i = 0;
-         OB_SUCC(ret) && i < replica_cnt && nullptr == src_replica && !dst_region.is_empty();
-         ++i) {
-      common::ObRegion ls_region;
-      if (OB_FAIL(dr_ls_info.get_replica_stat(
-              i,
-              ls_replica,
-              server_stat_info,
-              unit_stat_info,
-              unit_in_group_stat_info))) {
-        LOG_WARN("fail to get replica stat", KR(ret));
-      } else if (OB_ISNULL(ls_replica)
-                 || OB_ISNULL(server_stat_info)
-                 || OB_ISNULL(unit_stat_info)
-                 || OB_ISNULL(unit_in_group_stat_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("replica status ptr is null", KR(ret),
-                  KP(ls_replica),
-                  KP(server_stat_info),
-                  KP(unit_stat_info),
-                  KP(unit_in_group_stat_info));
-      } else if (OB_SUCCESS != zone_mgr->get_region(ls_replica->get_zone(), ls_region)) {
-        // ignore ret
-        LOG_WARN("fail to get region", KPC(ls_replica));
-      } else if (ls_replica->is_in_service()
-          && server_stat_info->is_alive()
-          && !server_stat_info->is_stopped()
-          && type_checker.is_candidate(ls_replica->get_replica_type())
-          && ls_region == dst_region
-          && ls_replica->get_server() != dst_member.get_server()
-          && !ls_replica->get_restore_status().is_restore_failed()) {
-        src_replica = ls_replica;
-        break;
-      }
-    }
-    // try any qualified replica
-    for (int64_t i = 0;
-         OB_SUCC(ret) && i < replica_cnt && nullptr == src_replica;
-         ++i) {
-      if (OB_FAIL(dr_ls_info.get_replica_stat(
-              i,
-              ls_replica,
-              server_stat_info,
-              unit_stat_info,
-              unit_in_group_stat_info))) {
-        LOG_WARN("fail to get replica stat", KR(ret));
-      } else if (OB_ISNULL(ls_replica)
-                 || OB_ISNULL(server_stat_info)
-                 || OB_ISNULL(unit_stat_info)
-                 || OB_ISNULL(unit_in_group_stat_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("replica status ptr is null", KR(ret),
-                  KP(ls_replica),
-                  KP(server_stat_info),
-                  KP(unit_stat_info),
-                  KP(unit_in_group_stat_info));
-      } else if (ls_replica->is_in_service()
-          && server_stat_info->is_alive()
-          && !server_stat_info->is_stopped()
-          && type_checker.is_candidate(ls_replica->get_replica_type())
-          && ls_replica->get_server() != dst_member.get_server()
-          && !ls_replica->get_restore_status().is_restore_failed()) {
-        src_replica = ls_replica;
-        break;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (nullptr != src_replica) {
-        data_source = ObReplicaMember(src_replica->get_server(),
-                                      src_replica->get_member_time_us(),
-                                      src_replica->get_replica_type(),
-                                      src_replica->get_memstore_percent());
-        data_size = src_replica->get_required_size();
-      } else {
-        ret = OB_ENTRY_NOT_EXIST;
-        LOG_WARN("no valid source candidates", KR(ret));
-      }
-    }
-  }
   return ret;
 }
 

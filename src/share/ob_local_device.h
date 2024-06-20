@@ -70,6 +70,8 @@ public:
 
   //file/dir interfaces
   virtual int open(const char *pathname, const int flags, const mode_t mode, common::ObIOFd &fd, common::ObIODOpts *opts = NULL) override;
+  virtual int complete(const ObIOFd &fd) override;
+  virtual int abort(const ObIOFd &fd) override;
   virtual int close(const common::ObIOFd &fd) override;
   virtual int mkdir(const char *pathname, mode_t mode) override;
   virtual int rmdir(const char *pathname) override;
@@ -87,6 +89,13 @@ public:
   virtual int exist(const char *pathname, bool &is_exist) override;
   virtual int stat(const char *pathname, common::ObIODFileStat &statbuf) override;
   virtual int fstat(const common::ObIOFd &fd, common::ObIODFileStat &statbuf) override;
+
+  //for object device, local device should not use these
+  int del_unmerged_parts(const char *pathname);
+  int adaptive_exist(const char *pathname, bool &is_exist);
+  int adaptive_stat(const char *pathname, ObIODFileStat &statbuf);
+  int adaptive_unlink(const char *pathname);
+  int adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op);
 
   //block interfaces
   virtual int mark_blocks(common::ObIBlockIterator &block_iter) override;
@@ -167,11 +176,15 @@ public:
   virtual int64_t get_max_block_count(int64_t reserved_size) const override;
   virtual int64_t get_reserved_block_count() const override;
   virtual int check_space_full(const int64_t required_size) const override;
+  virtual int check_write_limited() const override;
 
 public:
   static const int64_t RESERVED_BLOCK_INDEX = 2; // the first 2 blocks is used for super block
 
 private:
+  int get_data_disk_used_percentage_(
+      const int64_t required_size,
+      int64_t &percent) const;
   int get_block_file_size(
     const char *sstable_dir,
     const int64_t reserved_size,

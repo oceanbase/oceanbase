@@ -65,6 +65,8 @@ int ObMPInitDB::process()
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("null pointer");
+  } else if (OB_FAIL(process_kill_client_session(*session))) {
+    LOG_WARN("client session has been killed", K(ret));
   } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {
     LOG_WARN("fail to get query timeout", K(ret));
   } else if (OB_ISNULL(gctx_.schema_service_)) {
@@ -215,8 +217,9 @@ int ObMPInitDB::do_process(sql::ObSQLSessionInfo *session)
     ret = OB_ERR_NO_DB_PRIVILEGE;
     LOG_WARN("can only access oceanbase database when tenant changed", K(ret));
   } else {
-    session->get_session_priv_info(session_priv);
-    if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, session, db_name_))) {
+    if (OB_FAIL(session->get_session_priv_info(session_priv))) {
+      LOG_WARN("fail to get session priv info", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, session, db_name_, NULL/*allocator*/))) {
       LOG_WARN("fail to cvt db name to orignal", K(db_name_), K(ret));
     } else if (OB_FAIL(schema_guard.check_db_access(session_priv, db_name_))) {
       LOG_WARN("fail to check db access.", K_(db_name), K(ret));

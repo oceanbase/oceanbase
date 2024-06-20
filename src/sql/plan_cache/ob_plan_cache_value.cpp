@@ -55,6 +55,7 @@ int PCVSchemaObj::init(const ObTableSchema *schema)
     schema_type_ = TABLE_SCHEMA;
     table_type_ = schema->get_table_type();
     is_tmp_table_ = schema->is_tmp_table();
+    is_mv_container_table_ = schema->mv_container_table();
     // copy table name
     char *buf = nullptr;
     const ObString &tname = schema->get_table_name_str();
@@ -135,6 +136,7 @@ int PCVSchemaObj::init_with_version_obj(const ObSchemaObjVersion &schema_obj_ver
   schema_type_ = schema_obj_version.get_schema_type();
   schema_id_ = schema_obj_version.object_id_;
   schema_version_ = schema_obj_version.version_;
+  is_explicit_db_name_ = schema_obj_version.is_db_explicit_;
   return ret;
 }
 
@@ -179,7 +181,8 @@ ObPlanCacheValue::ObPlanCacheValue()
     is_batch_execute_(false),
     has_dynamic_values_table_(false),
     stored_schema_objs_(pc_alloc_),
-    stmt_type_(stmt::T_MAX)
+    stmt_type_(stmt::T_MAX),
+    enable_rich_vector_format_(false)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
   not_param_index_.set_attr(ObMemAttr(MTL_ID(), "NotParamIdex"));
@@ -237,8 +240,10 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
   } else if (FALSE_IT(mem_attr = pcv_set->get_plan_cache()->get_mem_attr())) {
       // do nothing
   } else if (OB_ISNULL(pc_alloc_ = pcv_set->get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(pcv_set->get_allocator()));
   } else if (OB_ISNULL(pc_malloc_ = pcv_set->get_pc_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(pcv_set->get_pc_allocator()));
   } else if (OB_FAIL(outline_params_wrapper_.set_allocator(pc_alloc_, mem_attr))) {
     LOG_WARN("fail to set outline param wrapper allocator", K(ret));
@@ -262,6 +267,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
     sys_schema_version_ = plan->get_sys_schema_version();
     tenant_schema_version_ = plan->get_tenant_schema_version();
     sql_traits_ = pc_ctx.sql_traits_;
+    enable_rich_vector_format_ = static_cast<const ObPhysicalPlan *>(plan)->get_use_rich_format();
 #ifdef OB_BUILD_SPM
     is_spm_closed_ = pcv_set->get_spm_closed();
 #endif
@@ -476,6 +482,8 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   if (schema_array.count() == 0 && stored_schema_objs_.count() == 0) {
     need_check_schema = true;
   }
+  ObBasicSessionInfo::ForceRichFormatStatus orig_rich_format_status = ObBasicSessionInfo::ForceRichFormatStatus::Disable;
+  bool orig_phy_ctx_rich_format = false;
   if (stmt::T_NONE == pc_ctx.sql_ctx_.stmt_type_) {
     //sql_ctx_.stmt_type_ != stmt::T_NONE means this calling in nested sql,
     //can't cover the first stmt type in sql context
@@ -484,6 +492,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   if (OB_ISNULL(session = pc_ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(ERROR, "got session is NULL", K(ret));
+  } else if (FALSE_IT(orig_rich_format_status = session->get_force_rich_format_status())) {
   } else if (FALSE_IT(session->set_stmt_type(stmt_type_))) {
   } else if (OB_FAIL(session->get_use_plan_baseline(enable_baseline))) {
     LOG_WARN("fail to get use plan baseline", K(ret));
@@ -552,7 +561,12 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
     if (OB_SUCC(ret)) {
       ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
       if (NULL != phy_ctx) {
+        orig_phy_ctx_rich_format = phy_ctx->is_rich_format();
         phy_ctx->set_original_param_cnt(phy_ctx->get_param_store().count());
+        phy_ctx->set_rich_format(enable_rich_vector_format_);
+        session->set_force_rich_format(enable_rich_vector_format_ ?
+                                         ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON :
+                                         ObBasicSessionInfo::ForceRichFormatStatus::FORCE_OFF);
         if (OB_FAIL(phy_ctx->init_datum_param_store())) {
           LOG_WARN("fail to init datum param store", K(ret));
         }
@@ -672,6 +686,15 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   if (OB_SUCC(ret)) {
     plan_out = plan;
     pc_ctx.sql_traits_ = sql_traits_; //used for check read only
+  }
+  // reset force rich format status
+  if (NULL == plan) {
+    if (session != nullptr) {
+      session->set_force_rich_format(orig_rich_format_status);
+    }
+    if (pc_ctx.exec_ctx_.get_physical_plan_ctx() != nullptr) {
+      pc_ctx.exec_ctx_.get_physical_plan_ctx()->set_rich_format(orig_phy_ctx_rich_format);
+    }
   }
   return ret;
 }
@@ -1418,6 +1441,7 @@ void ObPlanCacheValue::reset()
     }
   }
   stored_schema_objs_.reset();
+  enable_rich_vector_format_ = false;
   pcv_set_ = NULL; //放最后，前面可能存在需要pcv_set
 }
 
@@ -1501,7 +1525,6 @@ int ObPlanCacheValue::check_value_version(bool need_check_schema,
     if (outline_version != outline_state_.outline_version_) {
       is_old_version = true;
     } else if (OB_FAIL(check_dep_schema_version(schema_array,
-                                                stored_schema_objs_,
                                                 is_old_version))) {
       LOG_WARN("failed to check schema obj versions", K(ret));
     } else {
@@ -1513,19 +1536,21 @@ int ObPlanCacheValue::check_value_version(bool need_check_schema,
 
 //检查table schema version是否过期, get plan时使用
 int ObPlanCacheValue::check_dep_schema_version(const ObIArray<PCVSchemaObj> &schema_array,
-                                               const ObIArray<PCVSchemaObj *> &pcv_schema_objs,
                                                bool &is_old_version)
 {
   int ret = OB_SUCCESS;
   is_old_version = false;
-  int64_t table_count = pcv_schema_objs.count();
+  int64_t table_count = schema_array.count();
+  ObSEArray<PCVSchemaObj*, 4> check_stored_schema;
 
-  if (schema_array.count() != pcv_schema_objs.count()) {
+  if (OB_FAIL(remove_mv_schema(schema_array, check_stored_schema))) {
+    LOG_WARN("failed to remove mv schema", K(ret));
+  } else if (schema_array.count() != check_stored_schema.count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table count do not match", K(ret), K(schema_array.count()), K(pcv_schema_objs.count()));
+    LOG_WARN("table count do not match", K(ret), K(schema_array.count()), K(check_stored_schema.count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !is_old_version && i < table_count; ++i) {
-      const PCVSchemaObj *schema_obj1 = pcv_schema_objs.at(i);
+      const PCVSchemaObj *schema_obj1 = check_stored_schema.at(i);
       const PCVSchemaObj &schema_obj2 = schema_array.at(i);
       if (nullptr == schema_obj1) {
         ret = OB_ERR_UNEXPECTED;
@@ -1938,12 +1963,23 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           tenant_id = get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
         } else if (SYNONYM_SCHEMA == pcv_schema->schema_type_) {
           const ObSimpleSynonymSchema *synonym_schema = nullptr;
-          if (OB_FAIL(schema_guard.get_synonym_info(
-                tenant_id, database_id, pcv_schema->table_name_, synonym_schema))) {
-            LOG_WARN("failed to get private synonym", K(ret));
-          } else if (OB_ISNULL(synonym_schema) && OB_FAIL(schema_guard.get_synonym_info(
-                tenant_id, OB_PUBLIC_SCHEMA_ID, pcv_schema->table_name_, synonym_schema))) {
-            LOG_WARN("failed to get public synonym", K(ret));
+          if (pcv_schema->is_explicit_db_name_) {
+            if (OB_FAIL(schema_guard.get_simple_synonym_info(tenant_id, pcv_schema->schema_id_,
+                                                             synonym_schema))) {
+              LOG_WARN("failed to get private synonym", K(ret));
+            }
+          } else {
+            if (OB_FAIL(schema_guard.get_synonym_info(tenant_id, database_id,
+                                                      pcv_schema->table_name_, synonym_schema))) {
+              LOG_WARN("failed to get private synonym", K(ret));
+            } else if (OB_ISNULL(synonym_schema)
+                       && OB_FAIL(schema_guard.get_synonym_info(tenant_id, OB_PUBLIC_SCHEMA_ID,
+                                                                pcv_schema->table_name_,
+                                                                synonym_schema))) {
+              LOG_WARN("failed to get public synonym", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else if (OB_NOT_NULL(synonym_schema)) {
             tmp_schema_obj.database_id_ = synonym_schema->get_database_id();
             tmp_schema_obj.schema_version_ = synonym_schema->get_schema_version();
@@ -2030,6 +2066,41 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
   return ret;
 }
 
+// 针对
+// 物化视图改写会使得同一条 SQL 的不同计划依赖的表不同，导致 plan cache 进入不同的 pcv set
+// 在检查 pcv set 的时候跳过物化视图相关的表，使得改写与不改写的 SQL 进入同一个 pcv set
+int ObPlanCacheValue::remove_mv_schema(const common::ObIArray<PCVSchemaObj> &schema_array,
+                                       common::ObIArray<PCVSchemaObj*> &check_stored_schema)
+{
+  int ret = OB_SUCCESS;
+  bool need_remove = true;
+  int64_t j = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < stored_schema_objs_.count(); ++i) {
+    if (OB_ISNULL(stored_schema_objs_.at(i))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null table schema", K(ret), K(i), K(stored_schema_objs_.at(i)));
+    } else if (MATERIALIZED_VIEW == stored_schema_objs_.at(i)->table_type_
+        || MATERIALIZED_VIEW_LOG == stored_schema_objs_.at(i)->table_type_
+        || stored_schema_objs_.at(i)->is_mv_container_table_) {
+      if (j < schema_array.count()
+          && stored_schema_objs_.at(i)->schema_id_ == schema_array.at(j).schema_id_) {
+        if (OB_FAIL(check_stored_schema.push_back(stored_schema_objs_.at(i)))) {
+          LOG_WARN("failed to push back schema", K(ret));
+        } else {
+          ++j;
+        }
+      } else {
+        // do nothing, 仅存在于 pcv set 中的物化视图是改写出来的，抛弃
+      }
+    } else if (OB_FAIL(check_stored_schema.push_back(stored_schema_objs_.at(i)))) {
+      LOG_WARN("failed to push back schema", K(ret));
+    } else {
+      ++j;
+    }
+  }
+  return ret;
+}
+
 // 对于计划所依赖的schema进行比较，注意这里不比较table schema的version信息
 // table schema的version信息用于淘汰pcv set，在check_value_version时进行比较
 int ObPlanCacheValue::match_dep_schema(const ObPlanCacheCtx &pc_ctx,
@@ -2039,20 +2110,23 @@ int ObPlanCacheValue::match_dep_schema(const ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   is_same = true;
   ObSQLSessionInfo *session_info = pc_ctx.sql_ctx_.session_info_;
+  common::ObSEArray<PCVSchemaObj*, 4> check_stored_schema;
   if (OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(session_info));
-  } else if (schema_array.count() != stored_schema_objs_.count()) {
+  } else if (OB_FAIL(remove_mv_schema(schema_array, check_stored_schema))) {
+    LOG_WARN("failed to remove mv schema", K(ret));
+  } else if (schema_array.count() != check_stored_schema.count()) {
     // schema objs count不匹配，可能是以下情况:
     // select * from all_sequences;  // 系统视图，系统视图的dependency_table有多个
     // select * from all_sequences;  // 普通表
     is_same = false;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < schema_array.count(); i++) {
-      if (OB_ISNULL(stored_schema_objs_.at(i))) {
+      if (OB_ISNULL(check_stored_schema.at(i))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null table schema",
-                 K(ret), K(i), K(schema_array.at(i)), K(stored_schema_objs_.at(i)));
+                 K(ret), K(i), K(schema_array.at(i)), K(check_stored_schema.at(i)));
       } else if (TMP_TABLE == schema_array.at(i).table_type_
                  && schema_array.at(i).is_tmp_table_) { // check for mysql tmp table
         // 如果包含临时表
@@ -2068,13 +2142,13 @@ int ObPlanCacheValue::match_dep_schema(const ObPlanCacheCtx &pc_ctx,
         is_same = ((session_info->get_sessid_for_table() == sessid_) &&
                    (session_info->get_sess_create_time() == sess_create_time_));
       } else if (lib::is_oracle_mode()
-                 && TABLE_SCHEMA == stored_schema_objs_.at(i)->schema_type_
-                 && !stored_schema_objs_.at(i)->match_compare(schema_array.at(i))) {
+                 && TABLE_SCHEMA == check_stored_schema.at(i)->schema_type_
+                 && !check_stored_schema.at(i)->match_compare(schema_array.at(i))) {
         // 检查oracle模式下普通表是否与系统表同名
         is_same = false;
       } else if (lib::is_oracle_mode()
-                 && SYNONYM_SCHEMA == stored_schema_objs_.at(i)->schema_type_) {
-        is_same = (stored_schema_objs_.at(i)->database_id_ == schema_array.at(i).database_id_);
+                 && SYNONYM_SCHEMA == check_stored_schema.at(i)->schema_type_) {
+        is_same = (check_stored_schema.at(i)->database_id_ == schema_array.at(i).database_id_);
       } else {
         // do nothing
       }

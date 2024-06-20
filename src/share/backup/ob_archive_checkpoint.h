@@ -61,10 +61,11 @@ public:
   typedef common::ObFunction<int(common::ObISQLClient *, const ObTenantArchiveRoundAttr &, const Result &, const GeneratedPiece &)> PieceGeneratedCb;
   typedef common::ObFunction<int(common::ObISQLClient *, const ObTenantArchiveRoundAttr &, const ObTenantArchiveRoundAttr &)> RoundCheckpointCb;
 
-  ObDestRoundCheckpointer() : is_inited_(false), round_handler_(nullptr), max_checkpoint_scn_() {}
+  ObDestRoundCheckpointer() : is_inited_(false), allow_force_stop_(false), round_handler_(nullptr), max_checkpoint_scn_() {}
 
   int init(ObArchiveRoundHandler *round_handler, const PieceGeneratedCb &piece_generated_cb, 
       const RoundCheckpointCb &round_checkpoint_cb, const SCN &max_checkpoint_scn);
+  void set_allow_force_stop();
 
   // This operation is allowed only if dest round is in BEGINNING/DOING/STOPPING state.
   int checkpoint(const ObTenantArchiveRoundAttr &round_info, const ObDestRoundSummary &summary);
@@ -105,8 +106,17 @@ private:
   bool can_do_checkpoint_(const ObTenantArchiveRoundAttr &round_info) const;
 
   int count_(const ObTenantArchiveRoundAttr &old_round_info, const ObDestRoundSummary &summary, Counter &counter) const;
-  int gen_new_round_info_(const ObTenantArchiveRoundAttr &old_round_info, const Counter &counter, 
-      ObTenantArchiveRoundAttr &new_round_info, bool &need_checkpoint) const;
+  int calc_next_checkpoint_scn_(
+      const ObTenantArchiveRoundAttr &old_round_info,
+      const ObDestRoundSummary &summary,
+      const Counter &counter,
+      SCN &next_checkpoint_scn) const;
+  int gen_new_round_info_(
+      const ObTenantArchiveRoundAttr &old_round_info,
+      const ObDestRoundSummary &summary,
+      const Counter &counter,
+      ObTenantArchiveRoundAttr &new_round_info,
+      bool &need_checkpoint) const;
 
   // do checkpoint to checkpoint_ts.
   int checkpoint_(const ObTenantArchiveRoundAttr &round_info, const ObDestRoundSummary &summary,
@@ -121,6 +131,7 @@ private:
   int fill_generated_pieces_(const Result &result, common::ObIArray<ObTenantArchivePieceAttr> &pieces) const;
 
   bool is_inited_;
+  bool allow_force_stop_;
   ObArchiveRoundHandler *round_handler_;
   SCN max_checkpoint_scn_;
   PieceGeneratedCb piece_generated_cb_;

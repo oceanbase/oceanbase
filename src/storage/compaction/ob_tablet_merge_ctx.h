@@ -73,7 +73,7 @@ private:
     const blocksstable::ObSSTable &sstable,
     ObTabletHandle &new_tablet_handle) override;
   void try_schedule_compaction_after_mini(storage::ObTabletHandle &tablet_handle);
-  int try_schedule_meta_merge(ObTabletHandle &tablet_handle, bool &create_meta_dag);
+  int try_schedule_adaptive_merge(ObTabletHandle &tablet_handle, bool &create_meta_dag);
   int try_report_tablet_stat_after_mini();
 };
 
@@ -83,9 +83,11 @@ struct ObTabletExeMergeCtx : public ObTabletMergeCtx
   DEFAULT_CONSTRUCTOR(ObTabletExeMergeCtx, ObTabletMergeCtx);
 protected:
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
+  virtual int cal_merge_param() override;
 private:
   int get_tables_by_key(ObGetMergeTablesResult &get_merge_table_result);
   int prepare_compaction_filter(); // for tx_minor
+  int init_static_param_tx_id();
 };
 
 struct ObTabletMajorMergeCtx : public ObTabletMergeCtx

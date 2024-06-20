@@ -85,15 +85,9 @@ int ObConnectByOpBFSPump::sort_sibling_rows()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected sort in connect by", K(ret));
   }
-  // if (OB_ISNULL(sort_collations_)) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   LOG_WARN("unexpected sort columns", K(ret));
-  // } else if (0 != sort_collations_->count()
-  //            && !sort_stack_.empty()) {
-  //   RowComparer compare(sort_collations_, sort_cmp_funs_, ret);
-  //   PumpNode *first_node = &sort_stack_.at(0);
-  //   std::sort(first_node, first_node + sort_stack_.count(), compare);
-  // }
+
+  // Since there is an external sort operator, the sort function here is actually no longer used.
+  // It is only used to reverse the order of the data in sort_stack and store it in pump_stack.
 
   //add siblings to pump stack
   while(OB_SUCC(ret) && false == sort_stack_.empty()) {
@@ -102,6 +96,10 @@ int ObConnectByOpBFSPump::sort_sibling_rows()
       LOG_WARN("fail to pop back stack", K(ret));
     } else if (OB_FAIL(pump_stack_.push_back(pump_node))) {
       LOG_WARN("fail to pop back stack", K(ret));
+      int tmp_ret = free_pump_node(pump_node);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail to free pump node", K(tmp_ret));
+      }
     }
   }
   return ret;
@@ -132,14 +130,17 @@ void ObConnectByOpBFSPump::free_memory_for_rescan()
   }
 
   if (OB_FAIL(free_pump_node_stack(pump_stack_))) {
+    // overwrite ret
     LOG_ERROR("fail to free pump stack", K(ret));
   }
 
   if (OB_FAIL(free_pump_node_stack(sort_stack_))) {
+    // overwrite ret
     LOG_ERROR("fail to free sort stack", K(ret));
   }
 
   if (OB_FAIL(free_record_rows())) {
+    // overwrite ret
     LOG_ERROR("fail to free record rows", K(ret));
   }
 }
@@ -173,6 +174,33 @@ int ObConnectByOpBFSPump::free_path_stack()
   return ret;
 }
 
+int ObConnectByOpBFSPump::free_pump_node(PumpNode &node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node.pump_row_)
+      || OB_ISNULL(node.output_row_)
+      || OB_ISNULL(node.path_node_.prior_exprs_result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid pop node", K(node), K(ret));
+  } else {
+    allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(node.pump_row_));
+    allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(node.output_row_));
+    allocator_.free(
+      const_cast<ObChunkDatumStore::StoredRow *>(node.path_node_.prior_exprs_result_));
+    node.pump_row_ = NULL;
+    node.output_row_ = NULL;
+    node.path_node_.prior_exprs_result_ = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < connect_by_path_count_; ++i) {
+      if (node.path_node_.paths_[i].ptr() != NULL) {
+        LOG_ERROR("unexpected path value");
+        allocator_.free(node.path_node_.paths_.at(i).ptr());
+        node.path_node_.paths_.at(i).reset();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObConnectByOpBFSPump::free_pump_node_stack(ObSegmentArray<PumpNode> &stack)
 {
   int ret = OB_SUCCESS;
@@ -180,25 +208,8 @@ int ObConnectByOpBFSPump::free_pump_node_stack(ObSegmentArray<PumpNode> &stack)
   while(OB_SUCC(ret) && false == stack.empty()) {
     if (OB_FAIL(stack.pop_back(pop_node))) {
       LOG_WARN("fail to pop back pump_stack", K(ret));
-    } else if (OB_ISNULL(pop_node.pump_row_)
-               || OB_ISNULL(pop_node.output_row_)
-               || OB_ISNULL(pop_node.path_node_.prior_exprs_result_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid pop node", K(pop_node), K(ret));
-    } else {
-      allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(pop_node.pump_row_));
-      allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(pop_node.output_row_));
-      allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(pop_node.path_node_.prior_exprs_result_));
-      pop_node.pump_row_ = NULL;
-      pop_node.output_row_ = NULL;
-      pop_node.path_node_.prior_exprs_result_ = NULL;
-      for (int64_t i =0; OB_SUCC(ret) && i < connect_by_path_count_; ++i) {
-        if (pop_node.path_node_.paths_[i].ptr() != NULL) {
-          LOG_ERROR("unexpected path value");
-          allocator_.free(pop_node.path_node_.paths_.at(i).ptr());
-          pop_node.path_node_.paths_.at(i).reset();
-        }
-      }
+    } else if (OB_FAIL(free_pump_node(pop_node))) {
+      LOG_WARN("fail to free node", K(ret));
     }
   }
   return ret;

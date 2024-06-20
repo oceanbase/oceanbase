@@ -20,10 +20,12 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_backup_data_set_task_mgr.cpp
   backup/ob_backup_proxy.cpp
   backup/ob_backup_data_ls_task_mgr.cpp
+  backup/ob_backup_table_list_mgr.cpp
 )
 
 ob_set_subtarget(ob_rootserver common
   ob_bootstrap.cpp
+  ob_admin_drtask_util.cpp
   ob_disaster_recovery_task_table_updater.cpp
   ob_balance_group_ls_stat_operator.cpp
   ob_disaster_recovery_info.cpp
@@ -42,6 +44,7 @@ ob_set_subtarget(ob_rootserver common
   ob_ddl_operator.cpp
   ob_ddl_sql_generator.cpp
   ob_index_builder.cpp
+  ob_mlog_builder.cpp
   ob_locality_util.cpp
   ob_resource_weight_parser.cpp
   ob_root_balancer.cpp
@@ -83,6 +86,7 @@ ob_set_subtarget(ob_rootserver common
   ob_ls_service_helper.cpp
   ob_tenant_role_transition_service.cpp
   ob_tenant_transfer_service.cpp
+  ob_transfer_partition_task.cpp
   ob_tenant_balance_service.cpp
   ob_ls_balance_helper.cpp
   ob_balance_task_execute_service.cpp
@@ -96,6 +100,8 @@ ob_set_subtarget(ob_rootserver common
   ob_lob_meta_builder.cpp
   ob_ls_recovery_stat_handler.cpp
   ob_shrink_expand_resource_pool_checker.cpp
+  ob_transfer_partition_command.cpp
+  ob_partition_exchange.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance
@@ -110,17 +116,19 @@ ob_set_subtarget(ob_rootserver balance
 ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_column_redefinition_task.cpp
   ddl_task/ob_constraint_task.cpp
-
   ddl_task/ob_ddl_retry_task.cpp
   ddl_task/ob_ddl_scheduler.cpp
   ddl_task/ob_ddl_single_replica_executor.cpp
   ddl_task/ob_ddl_task.cpp
   ddl_task/ob_drop_index_task.cpp
+  ddl_task/ob_drop_fts_index_task.cpp
   ddl_task/ob_drop_primary_key_task.cpp
   ddl_task/ob_index_build_task.cpp
+  ddl_task/ob_build_mview_task.cpp
   ddl_task/ob_modify_autoinc_task.cpp
   ddl_task/ob_table_redefinition_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
+  ddl_task/ob_ddl_tablet_scheduler.cpp
 )
 
 ob_set_subtarget(ob_rootserver parallel_ddl
@@ -148,6 +156,7 @@ ob_set_subtarget(ob_rootserver freeze
   freeze/ob_major_freeze_helper.cpp
   freeze/ob_major_freeze_util.cpp
   freeze/ob_major_merge_progress_util.cpp
+  freeze/ob_fts_checksum_validate_util.cpp
 )
 
 ob_set_subtarget(ob_rootserver restore
@@ -158,6 +167,9 @@ ob_set_subtarget(ob_rootserver restore
   restore/ob_restore_service.cpp
   restore/ob_restore_scheduler.cpp
   restore/ob_restore_util.cpp
+  restore/ob_tenant_clone_util.cpp
+  restore/ob_clone_scheduler.cpp
+  restore/ob_restore_common_util.cpp
 )
 
 ob_set_subtarget(ob_rootserver virtual_table
@@ -165,6 +177,20 @@ ob_set_subtarget(ob_rootserver virtual_table
   virtual_table/ob_virtual_core_inner_table.cpp
   virtual_table/ob_all_virtual_backup_task_scheduler_stat.cpp
   virtual_table/ob_all_virtual_ls_replica_task_plan.cpp
+)
+
+ob_set_subtarget(ob_rootserver tenant_snapshot
+  tenant_snapshot/ob_tenant_snapshot_scheduler.cpp
+  tenant_snapshot/ob_tenant_snapshot_util.cpp
+)
+
+ob_set_subtarget(ob_rootserver mview
+  mview/ob_mview_maintenance_service.cpp
+  mview/ob_mlog_maintenance_task.cpp
+  mview/ob_mview_maintenance_task.cpp
+  mview/ob_mview_refresh_stats_maintenance_task.cpp
+  mview/ob_mview_timer_task.cpp
+  mview/ob_mview_dependency_service.cpp
 )
 
 ob_server_add_target(ob_rootserver)

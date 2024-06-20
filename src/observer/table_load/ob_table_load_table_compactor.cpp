@@ -21,6 +21,7 @@
 #include "observer/table_load/ob_table_load_mem_compactor.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 #include "observer/table_load/ob_table_load_multiple_heap_table_compactor.h"
+#include "observer/table_load/ob_table_load_parallel_merge_table_compactor.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,8 @@ using namespace storage;
 ObTableLoadTableCompactResult::ObTableLoadTableCompactResult()
   : allocator_("TLD_TCResult"), tablet_result_map_(64)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  all_table_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTableCompactResult::~ObTableLoadTableCompactResult()
@@ -58,7 +61,6 @@ void ObTableLoadTableCompactResult::reset()
 int ObTableLoadTableCompactResult::init()
 {
   int ret = OB_SUCCESS;
-  allocator_.set_tenant_id(MTL_ID());
   if (OB_FAIL(tablet_result_map_.init("TLD_TCResult", MTL_ID()))) {
     LOG_WARN("fail to init link hash map", KR(ret));
   }
@@ -97,22 +99,26 @@ int ObTableLoadTableCompactResult::add_table(ObIDirectLoadPartitionTable *table)
   return ret;
 }
 
+void ObTableLoadTableCompactResult::release_all_table_data()
+{
+  for (int64_t i = 0; i < all_table_array_.count(); ++i) {
+    ObIDirectLoadPartitionTable *table = all_table_array_.at(i);
+    table->release_data();
+  }
+}
+
 /**
  * ObTableLoadTableCompactCtx
  */
 
 ObTableLoadTableCompactCtx::ObTableLoadTableCompactCtx()
-  : allocator_("TLD_TCCtx"), store_ctx_(nullptr), merger_(nullptr), compactor_(nullptr)
+  : store_ctx_(nullptr), merger_(nullptr), compactor_(nullptr)
 {
 }
 
 ObTableLoadTableCompactCtx::~ObTableLoadTableCompactCtx()
 {
-  if (nullptr != compactor_) {
-    compactor_->~ObTableLoadTableCompactor();
-    allocator_.free(compactor_);
-    compactor_ = nullptr;
-  }
+  release_compactor();
 }
 
 int ObTableLoadTableCompactCtx::init(ObTableLoadStoreCtx *store_ctx, ObTableLoadMerger &merger)
@@ -125,7 +131,6 @@ int ObTableLoadTableCompactCtx::init(ObTableLoadStoreCtx *store_ctx, ObTableLoad
     if (OB_FAIL(result_.init())) {
       LOG_WARN("fail to init result", KR(ret));
     } else {
-      allocator_.set_tenant_id(MTL_ID());
       store_ctx_ = store_ctx;
       merger_ = &merger;
     }
@@ -138,37 +143,62 @@ bool ObTableLoadTableCompactCtx::is_valid() const
   return nullptr != store_ctx_ && nullptr != merger_;
 }
 
-ObTableLoadTableCompactor *ObTableLoadTableCompactCtx::new_compactor()
+int ObTableLoadTableCompactCtx::new_compactor()
 {
-  ObTableLoadTableCompactor *ret = nullptr;
-  if (store_ctx_->is_multiple_mode_) {
-    if (store_ctx_->table_data_desc_.is_heap_table_) {
-      ret = OB_NEWx(ObTableLoadMultipleHeapTableCompactor, (&allocator_));
-    } else {
-      ret = OB_NEWx(ObTableLoadMemCompactor, (&allocator_));
-    }
+  int ret = OB_SUCCESS;
+  obsys::ObWLockGuard guard(rwlock_);
+  if (OB_NOT_NULL(compactor_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not null compactor", KR(ret), KP(compactor_));
   } else {
-    ret = OB_NEWx(ObTableLoadGeneralTableCompactor, (&allocator_));
+    ObMemAttr attr(MTL_ID(), "TLD_Compactor");
+    if (store_ctx_->is_multiple_mode_) {
+      if (store_ctx_->table_data_desc_.is_heap_table_) {
+        compactor_ = OB_NEW(ObTableLoadMultipleHeapTableCompactor, attr);
+      } else {
+        compactor_ = OB_NEW(ObTableLoadMemCompactor, attr);
+      }
+    } else {
+      // 有主键表不排序
+      compactor_ = OB_NEW(ObTableLoadParallelMergeTableCompactor, attr);
+    }
+    if (OB_ISNULL(compactor_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObTableLoadTableCompactor", KR(ret));
+    }
   }
   return ret;
+}
+
+void ObTableLoadTableCompactCtx::release_compactor()
+{
+  obsys::ObWLockGuard guard(rwlock_);
+  if (nullptr != compactor_) {
+    ObMemAttr attr(MTL_ID(), "TLD_Compactor");
+    OB_DELETE(ObTableLoadTableCompactor, attr, compactor_);
+    compactor_ = nullptr;
+  }
 }
 
 int ObTableLoadTableCompactCtx::start()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(compactor_ = new_compactor())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObTableLoadGeneralTableCompactor", KR(ret));
-  } else if (OB_FAIL(compactor_->init(this))) {
-    LOG_WARN("fail to init compactor", KR(ret));
-  } else if (OB_FAIL(compactor_->start())) {
-    LOG_WARN("fail to start compactor", KR(ret));
+  if (OB_FAIL(new_compactor())) {
+    LOG_WARN("fail to new compactor", KR(ret));
+  } else {
+    obsys::ObRLockGuard guard(rwlock_);
+    if (OB_FAIL(compactor_->init(this))) {
+      LOG_WARN("fail to init compactor", KR(ret));
+    } else if (OB_FAIL(compactor_->start())) {
+      LOG_WARN("fail to start compactor", KR(ret));
+    }
   }
   return ret;
 }
 
 void ObTableLoadTableCompactCtx::stop()
 {
+  obsys::ObRLockGuard guard(rwlock_);
   if (OB_NOT_NULL(compactor_)) {
     compactor_->stop();
   }
@@ -177,9 +207,7 @@ void ObTableLoadTableCompactCtx::stop()
 int ObTableLoadTableCompactCtx::handle_table_compact_success()
 {
   // release compactor
-  compactor_->~ObTableLoadTableCompactor();
-  allocator_.free(compactor_);
-  compactor_ = nullptr;
+  release_compactor();
   // notify merger
   return merger_->handle_table_compact_success();
 }

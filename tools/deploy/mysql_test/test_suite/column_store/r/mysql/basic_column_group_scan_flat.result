@@ -1,6 +1,6 @@
 drop table if exists ct1;
 set session ob_trx_timeout=100000000000;
-create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group for all columns, each column;
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group (all columns, each column);
 alter system minor freeze;
 alter system major freeze;
 select c1, c2, c3, length(c4) from ct1 where c1 < 1;

@@ -330,7 +330,8 @@ void ObTCFactory<T, MAX_CLASS_NUM, LABEL, MEM_LIMIT, MAX_FREE_LIST_LENGTH>::garb
   int ret = OB_SUCCESS;
   global_factory_t *gfactory = global_factory_t::get_instance();
   if (OB_ISNULL(gfactory)) {
-    LIB_LOG(ERROR, "gfactory is NULL");
+    ret = OB_INVALID_ARGUMENT;
+    LIB_LOG(ERROR, "gfactory is NULL", K(ret));
   } else {
     common::ObDList<T> range;
     for (int32_t type_id = 0; OB_SUCC(ret) && type_id < MAX_CLASS_NUM; ++type_id) {

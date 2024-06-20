@@ -61,7 +61,10 @@ ObUnitResource::ObUnitResource(
     log_disk_size_(log_disk_size),
     max_iops_(max_iops),
     min_iops_(min_iops),
-    iops_weight_(iops_weight)
+    iops_weight_(iops_weight),
+    data_disk_size_(DEFAULT_DATA_DISK_SIZE),
+    max_net_bandwidth_(DEFAULT_NET_BANDWIDTH),
+    net_bandwidth_weight_(DEFAULT_NET_BANDWIDTH_WEIGHT)
 {
 }
 
@@ -74,6 +77,9 @@ void ObUnitResource::reset()
   max_iops_ = 0;
   min_iops_ = 0;
   iops_weight_ = INVALID_IOPS_WEIGHT;
+  data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
+  max_net_bandwidth_ = DEFAULT_NET_BANDWIDTH;
+  net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
 }
 
 void ObUnitResource::set(
@@ -92,6 +98,9 @@ void ObUnitResource::set(
   max_iops_ = max_iops;
   min_iops_ = min_iops;
   iops_weight_ = iops_weight;
+  data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
+  max_net_bandwidth_ = DEFAULT_NET_BANDWIDTH;
+  net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
 }
 
 int ObUnitResource::init_and_check_cpu_(const ObUnitResource &user_spec)
@@ -508,6 +517,9 @@ ObUnitResource &ObUnitResource::operator=(const ObUnitResource &other)
     max_iops_ = other.max_iops_;
     min_iops_ = other.min_iops_;
     iops_weight_ = other.iops_weight_;
+    data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
+    max_net_bandwidth_ = DEFAULT_NET_BANDWIDTH;
+    net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
   }
   return *this;
 }
@@ -586,8 +598,43 @@ OB_SERIALIZE_MEMBER(ObUnitResource,
                     log_disk_size_,
                     max_iops_,
                     min_iops_,
-                    iops_weight_);
+                    iops_weight_,
+                    data_disk_size_,
+                    max_net_bandwidth_,
+                    net_bandwidth_weight_);
 
+
+bool ObUnitResource::has_expanded_resource_than(const ObUnitResource &other) const
+{
+  // check if any of max_cpu, min_cpu, memory_size, log_disk_size is greater than other
+  bool b_ret = false;
+  if ((is_max_cpu_valid() && other.is_max_cpu_valid() && max_cpu_ > other.max_cpu())
+      || (is_min_cpu_valid() && other.is_min_cpu_valid() && min_cpu_ > other.min_cpu())
+      || (is_memory_size_valid() && other.is_memory_size_valid() && memory_size_ > other.memory_size())
+      || (is_log_disk_size_valid() && other.is_log_disk_size_valid() && log_disk_size_ > other.log_disk_size()))
+  {
+    b_ret = true;
+  } else {
+    b_ret = false;
+  }
+  return b_ret;
+}
+
+bool ObUnitResource::has_shrunk_resource_than(const ObUnitResource &other) const
+{
+  // check if any of max_cpu, min_cpu, memory_size, log_disk_size is smaller than other
+  bool b_ret = false;
+  if ((is_max_cpu_valid() && other.is_max_cpu_valid() && max_cpu_ < other.max_cpu())
+      || (is_min_cpu_valid() && other.is_min_cpu_valid() && min_cpu_ < other.min_cpu())
+      || (is_memory_size_valid() && other.is_memory_size_valid() && memory_size_ < other.memory_size())
+      || (is_log_disk_size_valid() && other.is_log_disk_size_valid() && log_disk_size_ < other.log_disk_size()))
+  {
+    b_ret = true;
+  } else {
+    b_ret = false;
+  }
+  return b_ret;
+}
 
 int ObUnitResource::divide_meta_tenant(ObUnitResource &meta_resource)
 {

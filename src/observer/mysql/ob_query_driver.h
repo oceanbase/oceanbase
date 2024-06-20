@@ -25,6 +25,7 @@ namespace sql
 {
 struct ObSqlCtx;
 class ObSQLSessionInfo;
+class ObExecContext;
 class ObResultSet;
 }
 
@@ -69,6 +70,7 @@ public:
                                     bool has_more_result,
                                     bool &can_retry,
                                     int64_t fetch_limit  = common::OB_INVALID_COUNT);
+  ObIMPPacketSender& get_packet_sender() { return sender_; }
   int response_query_header(const ColumnsFieldIArray &fields,
                                     bool has_more_result = false,
                                     bool need_set_ps_out = false,
@@ -80,7 +82,6 @@ public:
                                    common::ObIAllocator &allocator);
   int convert_lob_locator_to_longtext(common::ObObj& value, sql::ObResultSet &result);
   int process_lob_locator_results(common::ObObj& value, sql::ObResultSet &result);
-  int process_sql_udt_results(common::ObObj& value, sql::ObResultSet &result);
   int convert_lob_value_charset(common::ObObj& value, sql::ObResultSet &result);
   int convert_text_value_charset(common::ObObj& value, sql::ObResultSet &result);
   static int convert_lob_locator_to_longtext(common::ObObj& value, 
@@ -90,12 +91,8 @@ public:
                                          bool is_use_lob_locator,
                                          bool is_support_outrow_locator_v2,
                                          common::ObIAllocator *allocator,
-                                         const sql::ObSQLSessionInfo *session_info);
-
-  static int process_sql_udt_results(common::ObObj& value,
-                                     common::ObIAllocator *allocator,
-                                     sql::ObSQLSessionInfo *session_info);
-
+                                         const sql::ObSQLSessionInfo *session_info,
+                                         sql::ObExecContext *exec_ctx = nullptr);
   static int convert_string_charset(const common::ObString &in_str, 
                                     const common::ObCollationType in_cs_type,
                                     const common::ObCollationType out_cs_type, 
@@ -106,7 +103,8 @@ public:
   static int convert_text_value_charset(ObObj& value,
                                         ObCharsetType charset_type,
                                         ObIAllocator &allocator,
-                                        const sql::ObSQLSessionInfo *session_info);
+                                        const sql::ObSQLSessionInfo *session_info,
+                                        sql::ObExecContext *exec_ctx = nullptr);
 private:
   int convert_field_charset(common::ObIAllocator& allocator,
       const common::ObCollationType& from_collation,

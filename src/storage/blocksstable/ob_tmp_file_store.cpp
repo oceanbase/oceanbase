@@ -426,6 +426,7 @@ ObTmpMacroBlock::ObTmpMacroBlock()
     alloc_time_(0),
     access_time_(0)
 {
+  using_extents_.set_attr(ObMemAttr(MTL_ID(), "TMP_US_META"));
 }
 
 ObTmpMacroBlock::~ObTmpMacroBlock()
@@ -741,10 +742,10 @@ ObTmpTenantMacroBlockManager::~ObTmpTenantMacroBlockManager()
   destroy();
 }
 
-int ObTmpTenantMacroBlockManager::init(common::ObIAllocator &allocator)
+int ObTmpTenantMacroBlockManager::init(const uint64_t tenant_id, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr = SET_USE_500(ObModIds::OB_TMP_BLOCK_MAP);
+  ObMemAttr attr(tenant_id, ObModIds::OB_TMP_BLOCK_MAP);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpMacroBlockManager has been inited", K(ret));
@@ -802,7 +803,7 @@ int ObTmpTenantMacroBlockManager::get_macro_block(const int64_t block_id, ObTmpM
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(block_id));
   } else if (OB_FAIL(blocks_.get_refactored(block_id, t_mblk))) {
-    STORAGE_LOG(WARN, "fail to get tmp macro block", K(ret));
+    STORAGE_LOG(WARN, "fail to get tmp macro block", K(ret), K(block_id));
   }
   return ret;
 }
@@ -822,6 +823,19 @@ int ObTmpTenantMacroBlockManager::free_macro_block(const int64_t block_id)
   return ret;
 }
 
+int ObTmpTenantMacroBlockManager::get_disk_macro_block_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpMacroBlockManager has not been inited", K(ret));
+  } else {
+    count = blocks_.size();
+  }
+
+  return ret;
+}
 
 int ObTmpTenantMacroBlockManager::get_disk_macro_block_list(
                                                 common::ObIArray<MacroBlockId> &macro_id_list)
@@ -939,14 +953,15 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
     STORAGE_LOG(WARN, "ObTmpTenantFileStore has not been inited", K(ret));
   } else if (OB_FAIL(allocator_.init(BLOCK_SIZE, ObModIds::OB_TMP_BLOCK_MANAGER, tenant_id, get_memory_limit(tenant_id)))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
-  } else if (OB_FAIL(io_allocator_.init(lib::ObMallocAllocator::get_instance(),
-                                     OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                                     ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_TMP_PAGE_CACHE, ObCtxIds::DEFAULT_CTX_ID)))) {
+  } else if (OB_FAIL(io_allocator_.init(
+                 lib::ObMallocAllocator::get_instance(),
+                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                 ObMemAttr(tenant_id, ObModIds::OB_TMP_PAGE_CACHE, ObCtxIds::DEFAULT_CTX_ID)))) {
     STORAGE_LOG(WARN, "Fail to init io allocator, ", K(ret));
   } else if (OB_ISNULL(page_cache_ = &ObTmpPageCache::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "fail to get the page cache", K(ret));
-  } else if (OB_FAIL(tmp_block_manager_.init(allocator_))) {
+  } else if (OB_FAIL(tmp_block_manager_.init(tenant_id, allocator_))) {
     STORAGE_LOG(WARN, "fail to init the block manager for ObTmpFileStore", K(ret));
   } else if (OB_FAIL(tmp_mem_block_manager_.init(tenant_id, allocator_))) {
     STORAGE_LOG(WARN, "fail to init memory block manager", K(ret));
@@ -1305,7 +1320,9 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
   int32_t page_nums = 0;
   common::ObIArray<ObTmpPageIOInfo> *page_io_infos = nullptr;
 
-  void *buf = ob_malloc(sizeof(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>), "TmpReadPage");
+  void *buf =
+      ob_malloc(sizeof(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>),
+                ObMemAttr(MTL_ID(), "TmpReadPage"));
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to alloc a buf", K(ret));
@@ -1350,14 +1367,21 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
       // merge multi page io into one.
       ObMacroBlockHandle mb_handle;
       ObTmpBlockIOInfo info(io_info);
-      int64_t p_offset = common::lower_align(io_info.offset_, ObTmpMacroBlock::get_default_page_size());
+      const int64_t p_offset = common::lower_align(io_info.offset_, ObTmpMacroBlock::get_default_page_size());
       // just skip header and padding.
       info.offset_ = p_offset + ObTmpMacroBlock::get_header_padding();
       info.size_ = page_nums * ObTmpMacroBlock::get_default_page_size();
       info.macro_block_id_ = block->get_macro_block_id();
-      if (OB_FAIL(page_cache_->prefetch(info, *page_io_infos, mb_handle, io_allocator_))) {
-        STORAGE_LOG(WARN, "fail to prefetch multi tmp page", K(ret));
+      if (handle.is_disable_page_cache()) {
+        if (OB_FAIL(page_cache_->direct_read(info, mb_handle, io_allocator_))) {
+          STORAGE_LOG(WARN, "fail to direct read multi page", K(ret));
+        }
       } else {
+        if (OB_FAIL(page_cache_->prefetch(info, *page_io_infos, mb_handle, io_allocator_))) {
+          STORAGE_LOG(WARN, "fail to prefetch multi tmp page", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
         ObTmpFileIOHandle::ObIOReadHandle read_handle(mb_handle, io_info.buf_,
             io_info.offset_ - p_offset, io_info.size_);
         if (OB_FAIL(handle.get_io_handles().push_back(read_handle))) {
@@ -1374,9 +1398,16 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
         info.offset_ += ObTmpMacroBlock::get_header_padding();
         info.size_ = ObTmpMacroBlock::get_default_page_size();
         info.macro_block_id_ = block->get_macro_block_id();
-        if (OB_FAIL(page_cache_->prefetch(page_io_infos->at(i).key_, info, mb_handle, io_allocator_))) {
-          STORAGE_LOG(WARN, "fail to prefetch tmp page", K(ret));
+        if (handle.is_disable_page_cache()) {
+          if (OB_FAIL(page_cache_->direct_read(info, mb_handle, io_allocator_))) {
+            STORAGE_LOG(WARN, "fail to direct read tmp page", K(ret));
+          }
         } else {
+          if (OB_FAIL(page_cache_->prefetch(page_io_infos->at(i).key_, info, mb_handle, io_allocator_))) {
+            STORAGE_LOG(WARN, "fail to prefetch tmp page", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
           char *buf = io_info.buf_ + ObTmpMacroBlock::calculate_offset(
               page_io_infos->at(i).key_.get_page_id(), page_io_infos->at(i).offset_) - io_info.offset_;
           ObTmpFileIOHandle::ObIOReadHandle read_handle(mb_handle, buf, page_io_infos->at(i).offset_,
@@ -1489,6 +1520,19 @@ int ObTmpTenantFileStore::wait_write_finish(const int64_t block_id, const int64_
   } else if (blk->is_washing() &&
              OB_FAIL(tmp_mem_block_manager_.wait_write_finish(block_id, timeout_ms))){
     STORAGE_LOG(WARN, "wait write finish failed", K(ret), K(block_id));
+  }
+  return ret;
+}
+
+int ObTmpTenantFileStore::get_disk_macro_block_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  SpinRLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpTenantFileStore has not been inited", K(ret));
+  } else if (OB_FAIL(tmp_block_manager_.get_disk_macro_block_count(count))) {
+    STORAGE_LOG(WARN, "fail to get disk macro block count from tmp_block_manager_", K(ret));
   }
   return ret;
 }
@@ -1621,6 +1665,7 @@ int ObTmpFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, const 
     ObTmpFileExtent &extent)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObTmpTenantFileStoreHandle store_handle;
   if (OB_FAIL(get_store(tenant_id, store_handle))) {
     STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
@@ -1825,21 +1870,20 @@ int ObTmpFileStore::get_macro_block_list(ObIArray<TenantTmpBlockCntPair> &tmp_bl
     STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret));
   } else {
     tmp_block_cnt_pairs.reset();
-    common::ObSEArray<MacroBlockId, 64> macro_id_list;
     TenantFileStoreMap::iterator iter;
     ObTmpTenantFileStore *tmp = NULL;
     for (iter = tenant_file_stores_.begin(); OB_SUCC(ret) && iter != tenant_file_stores_.end();
         ++iter) {
+      int64_t macro_id_count = 0;
       TenantTmpBlockCntPair pair;
-      macro_id_list.reset();
       if (OB_ISNULL(tmp = iter->second.get_tenant_store())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "fail to iterate tmp tenant file store", K(ret));
-      } else if (OB_FAIL(tmp->get_disk_macro_block_list(macro_id_list))){
+      } else if (OB_FAIL(tmp->get_disk_macro_block_count(macro_id_count))){
         STORAGE_LOG(WARN, "fail to get list of tenant macro block in disk", K(ret));
-      } else if (OB_FAIL(pair.init(iter->first, macro_id_list.count()))) {
+      } else if (OB_FAIL(pair.init(iter->first, macro_id_count))) {
         STORAGE_LOG(WARN, "fail to init tenant tmp block count pair", K(ret), "tenant id",
-            iter->first, "macro block count", macro_id_list.count());
+            iter->first, "macro block count", macro_id_count);
       } else if (OB_FAIL(tmp_block_cnt_pairs.push_back(pair))) {
         STORAGE_LOG(WARN, "fail to push back tmp_block_cnt_pairs", K(ret), K(pair));
       }
@@ -1874,6 +1918,7 @@ int ObTmpFileStore::get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids)
 int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStoreHandle &handle)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   void *buf = NULL;
   handle.reset();
   if (IS_NOT_INIT) {
@@ -1937,6 +1982,21 @@ int64_t ObTmpFileStore::get_next_blk_id()
     old_val = new_val;
   }
   return next_blk_id;
+}
+
+int ObTmpFileStore::get_tenant_extent_allocator(const int64_t tenant_id, common::ObIAllocator *&allocator)
+{
+  int ret = OB_SUCCESS;
+  ObTmpTenantFileStoreHandle store_handle;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_store(tenant_id, store_handle))) {
+    STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
+  } else {
+    allocator = &(store_handle.get_tenant_store()->get_extent_allocator());
+  }
+  return ret;
 }
 
 void ObTmpFileStore::destroy()

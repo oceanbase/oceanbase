@@ -9,9 +9,8 @@ drop table if exists t1,t2;
 --enable_warnings
 --enable_query_log
 
-alter system enable_table_without_all_cg = false;
-create table t1(a int, b varchar(3048), primary key (a), c int) with column group for all columns, each column;
-create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group for all columns, each column;
+create table t1(a int, b varchar(3048), primary key (a), c int) with column group (all columns, each column);
+create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group (all columns, each column);
 
 sleep 10;
 
@@ -186,11 +185,10 @@ select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from
 
 drop table t1,t2;
 
-alter system enable_table_without_all_cg = true;
 alter system flush plan cache;
 
-create table t1(a int, b varchar(3048), primary key (a), c int) with column group for all columns, each column;
-create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group for all columns, each column;
+create table t1(a int, b varchar(3048), primary key (a), c int) with column group (each column);
+create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group (each column);
 
 sleep 10;
 
@@ -352,8 +350,6 @@ drop table t1,t2;
 
 --disable_query_log
 set @@recyclebin = on;
-alter system enable_table_without_all_cg = false;
 alter system set _pushdown_storage_level = 4;
 alter system set _rowsets_enabled = true;
 alter system flush plan cache;
---enable_query_log

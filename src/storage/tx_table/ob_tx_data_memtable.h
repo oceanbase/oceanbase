@@ -19,6 +19,7 @@
 #include "storage/tx/ob_tx_data_define.h"
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx_table/tx_table_local_buffer.h"
+#include "storage/tx/ob_tx_data_op.h"
 
 namespace oceanbase
 {
@@ -38,7 +39,7 @@ class ObTxDataTable;
 
 
 // The basic unit that manages tx_data
-class ObTxDataMemtable : public memtable::ObIMemtable
+class ObTxDataMemtable : public ObIMemtable
 {
 private:
   // The MINI_MERGE of TxDataTable uses recycle_scn to recycle the pre-processed commit versions. But it no need be
@@ -167,7 +168,6 @@ public:  // ObTxDataMemtable
       arena_allocator_(),
       sort_list_head_(),
       tx_data_map_(nullptr),
-      slice_allocator_(nullptr),
       memtable_mgr_(nullptr),
       freezer_(nullptr),
       buf_(arena_allocator_),
@@ -175,7 +175,6 @@ public:  // ObTxDataMemtable
   ~ObTxDataMemtable() { reset(); }
   void reset();
   int init(const ObITable::TableKey &table_key,
-           SliceAllocator *slice_allocator,
            ObTxDataMemtableMgr *memtable_mgr,
            storage::ObFreezer *freezer,
            const int64_t buckets_cnt);
@@ -257,7 +256,7 @@ public:  // ObTxDataMemtable
 
 public: /* derived from ObITable */
 
-  virtual bool is_active_memtable() const override { return ObTxDataMemtable::State::ACTIVE == state_; }
+  virtual bool is_active_memtable() override { return ObTxDataMemtable::State::ACTIVE == state_; }
 
   /**
    * @brief Scan this memtable to flush the tx data
@@ -289,7 +288,7 @@ public: /* derived from ObITable */
   // not supported
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;
   // check if this memtable is frozen
-  virtual bool is_frozen_memtable() const { return ObTxDataMemtable::State::FROZEN == state_; }
+  virtual bool is_frozen_memtable() { return ObTxDataMemtable::State::FROZEN == state_; }
 
 public: /* derived from ObIMemtable */
   virtual int64_t get_occupied_size() const;
@@ -298,8 +297,7 @@ public: /* derived from ObIMemtable */
                                 int64_t &total_bytes,
                                 int64_t &total_rows) override;
 
-  virtual int get_split_ranges(const ObStoreRowkey *start_key,
-                               const ObStoreRowkey *end_key,
+  virtual int get_split_ranges(const ObStoreRange &input_range,
                                const int64_t part_cnt,
                                common::ObIArray<common::ObStoreRange> &range_array) override;
   // not supported
@@ -307,6 +305,7 @@ public: /* derived from ObIMemtable */
                   storage::ObTableAccessContext &context,
                   const blocksstable::ObDatumRowkey &rowkey,
                   blocksstable::ObDatumRow &row) override;
+  virtual ObTabletID get_tablet_id() const { return LS_TX_DATA_TABLET; }
 
 public:  // checkpoint
   share::SCN get_rec_scn()
@@ -314,8 +313,7 @@ public:  // checkpoint
     return get_min_tx_scn();
   }
 
-  int flush();
-  
+  int flush(const int64_t trace_id);
   /**
    * @brief Because of the random order of clog callbacks, the tx data in a freezing tx data
    * memtable may not completed. We must wait until the max_consequent_callbacked_scn is larger
@@ -475,10 +473,6 @@ private:  // ObTxDataMemtable
   // the hash map sotres tx data
   TxDataMap *tx_data_map_;
 
-  // the link hash map of tx data need the slice allocator of tx data table to construct because the
-  // destruct of link hash map will free all tx data
-  SliceAllocator *slice_allocator_;
-
   // used for freeze
   ObTxDataMemtableMgr *memtable_mgr_;
 
@@ -517,7 +511,10 @@ public:
 
     // printf undo status list
     fprintf(fd_, "Undo Actions [from, to): {");
-    ObUndoStatusNode *cur_node = tx_data->undo_status_list_.head_;
+    ObUndoStatusNode *cur_node = NULL;
+    if (tx_data->op_guard_.is_valid()) {
+      cur_node = tx_data->op_guard_->get_undo_status_list().head_;
+    }
     while (OB_NOT_NULL(cur_node))
     {
       for (int i = 0; i < cur_node->size_; i++) {

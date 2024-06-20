@@ -35,12 +35,15 @@ private:
 class ObDDLCtrl final
 {
 public:
-  ObDDLCtrl() : context_id_(0) {}
+  ObDDLCtrl() : context_id_(0), in_progress_(false) {}
   ~ObDDLCtrl() = default;
-  bool is_valid() const { return context_id_ > 0; }
-  TO_STRING_KV(K_(context_id));
+
+  bool is_in_progress() const { return in_progress_; }
+  TO_STRING_KV(K_(in_progress));
 public:
   int64_t context_id_;
+  // to tag whether the ddl is in progress (between start_ddl and end_ddl).
+  bool in_progress_;
 };
 }
 }

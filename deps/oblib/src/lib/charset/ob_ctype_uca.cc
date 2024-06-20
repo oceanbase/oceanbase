@@ -2895,7 +2895,7 @@ static ObCollationHandler ob_collation_utf16_uca_handler =
 ObCharsetInfo ob_charset_utf8mb4_unicode_ci=
 {
   224,0,0,
-  OB_CS_UTF8MB4_UCA_FLAGS,
+  OB_CS_UTF8MB4_UCA_FLAGS | OB_CS_CI,
   OB_UTF8MB4,
   OB_UTF8MB4_UNICODE_CI,
   "",
@@ -2916,6 +2916,7 @@ ObCharsetInfo ob_charset_utf8mb4_unicode_ci=
   1,
   1,
   4,
+  1,
   9,
   0xFFFF,
   ' ',
@@ -2929,7 +2930,7 @@ ObCharsetInfo ob_charset_utf8mb4_unicode_ci=
 ObCharsetInfo ob_charset_utf16_unicode_ci=
 {
     101,0,0,
-    OB_CS_UTF16_UCA_FLAGS,
+    OB_CS_UTF16_UCA_FLAGS | OB_CS_CI,
     OB_UTF16,
     OB_UTF16_UNICODE_CI,
     "",
@@ -2950,6 +2951,7 @@ ObCharsetInfo ob_charset_utf16_unicode_ci=
     1,
     2,
     4,
+    1,
     9,
     0xFFFF,
     ' ',
@@ -2980,6 +2982,7 @@ ObCharsetInfo ob_charset_utf8mb4_0900_ai_ci = {
     1,
     1,
     4,
+    1,
     9,
     0x10FFFF,
     ' ',
@@ -3012,6 +3015,7 @@ ObCharsetInfo ob_charset_utf8mb4_zh_0900_as_cs = {
     1,
     1,
     4,
+    1,
     32,
     0x10FFFF,
     ' ',
@@ -3044,6 +3048,7 @@ ObCharsetInfo ob_charset_utf8mb4_zh2_0900_as_cs = {
     1,
     1,
     4,
+    1,
     32,
     0x10FFFF,
     ' ',
@@ -3076,6 +3081,7 @@ ObCharsetInfo ob_charset_utf8mb4_zh3_0900_as_cs = {
     1,
     1,
     4,
+    1,
     32,
     0x10FFFF,
     ' ',
@@ -3142,6 +3148,7 @@ ObCharsetInfo ob_charset_utf8mb4_0900_bin = {
   1,                                        // casedn_multiply
   1,                                        // mbminlen
   4,                                        // mbmaxlen
+  1,                                        // mbmaxlenlen
   0,                                        // min_sort_char
   0x10FFFF,                                 // max_sort_char
   ' ',                                      // pad char

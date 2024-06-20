@@ -31,7 +31,7 @@ namespace unittest
 class TestIndexSSTableEstimator : public TestIndexBlockDataPrepare
 {
 public:
-  TestIndexSSTableEstimator() : TestIndexBlockDataPrepare("Test index sstable estimator") {}
+  TestIndexSSTableEstimator();
   virtual ~TestIndexSSTableEstimator() {}
   virtual void SetUp();
   virtual void TearDown();
@@ -46,6 +46,14 @@ private:
   ObDatumRow end_row_;
 };
 
+TestIndexSSTableEstimator::TestIndexSSTableEstimator()
+  : TestIndexBlockDataPrepare("Test index sstable estimator")
+{
+  is_ddl_merge_data_ = true;
+  max_row_cnt_ = 150000;
+  max_partial_row_cnt_ = 78881;
+  partial_kv_start_idx_ = 3;
+}
 void TestIndexSSTableEstimator::SetUpTestCase()
 {
   TestIndexBlockDataPrepare::SetUpTestCase();
@@ -73,6 +81,8 @@ void TestIndexSSTableEstimator::SetUp()
 void TestIndexSSTableEstimator::TearDown()
 {
   destroy_query_param();
+  tablet_handle_.get_obj()->ddl_kv_count_ = 0;
+  tablet_handle_.get_obj()->ddl_kvs_ = nullptr;
   tablet_handle_.reset();
   TestIndexBlockDataPrepare::TearDown();
 }
@@ -113,12 +123,21 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_whole_range)
   range.set_whole_range();
 
   ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_kv_esti_ctx(ddl_kv_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_merge_esti_ctx(partial_sstable_, tablet_handle_, context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
+  ObPartitionEst ddl_kv_part_est;
+  ObIndexBlockScanEstimator ddl_kv_estimator(ddl_kv_esti_ctx);
+  ObPartitionEst ddl_merge_part_est;
+  ObIndexBlockScanEstimator ddl_merge_estimator(ddl_merge_esti_ctx);
 
   ASSERT_EQ(OB_SUCCESS, estimator.estimate_row_count(part_est));
-  STORAGE_LOG(INFO, "part_est", K(part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_estimator.estimate_row_count(ddl_kv_part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_merge_estimator.estimate_row_count(ddl_merge_part_est));
+  STORAGE_LOG(INFO, "part_est", K(part_est), K(ddl_kv_part_est), K(ddl_merge_part_est));
+  ASSERT_EQ(part_est, ddl_merge_part_est);
 }
 
 TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_range)
@@ -126,12 +145,21 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_range)
   ObDatumRange range;
   generate_range(100, -1, range);
   ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_kv_esti_ctx(ddl_kv_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_merge_esti_ctx(partial_sstable_, tablet_handle_, context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
+  ObPartitionEst ddl_kv_part_est;
+  ObIndexBlockScanEstimator ddl_kv_estimator(ddl_kv_esti_ctx);
+  ObPartitionEst ddl_merge_part_est;
+  ObIndexBlockScanEstimator ddl_merge_estimator(ddl_merge_esti_ctx);
 
   ASSERT_EQ(OB_SUCCESS, estimator.estimate_row_count(part_est));
-  STORAGE_LOG(INFO, "part_est", K(part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_estimator.estimate_row_count(ddl_kv_part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_merge_estimator.estimate_row_count(ddl_merge_part_est));
+  STORAGE_LOG(INFO, "part_est", K(part_est), K(ddl_kv_part_est), K(ddl_merge_part_est));
+  ASSERT_EQ(part_est, ddl_merge_part_est);
 }
 
 TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_left_range)
@@ -139,12 +167,21 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_left_range)
   ObDatumRange range;
   generate_range(-1, 100, range);
   ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_kv_esti_ctx(ddl_kv_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_merge_esti_ctx(partial_sstable_, tablet_handle_, context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
+  ObPartitionEst ddl_kv_part_est;
+  ObIndexBlockScanEstimator ddl_kv_estimator(ddl_kv_esti_ctx);
+  ObPartitionEst ddl_merge_part_est;
+  ObIndexBlockScanEstimator ddl_merge_estimator(ddl_merge_esti_ctx);
 
   ASSERT_EQ(OB_SUCCESS, estimator.estimate_row_count(part_est));
-  STORAGE_LOG(INFO, "part_est", K(part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_estimator.estimate_row_count(ddl_kv_part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_merge_estimator.estimate_row_count(ddl_merge_part_est));
+  STORAGE_LOG(INFO, "part_est", K(part_est), K(ddl_kv_part_est), K(ddl_merge_part_est));
+  ASSERT_EQ(part_est, ddl_merge_part_est);
 }
 
 TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_right_range)
@@ -152,12 +189,21 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_right_range)
   ObDatumRange range;
   generate_range(row_cnt_ - 100, -1, range);
   ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_kv_esti_ctx(ddl_kv_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_merge_esti_ctx(partial_sstable_, tablet_handle_, context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
+  ObPartitionEst ddl_kv_part_est;
+  ObIndexBlockScanEstimator ddl_kv_estimator(ddl_kv_esti_ctx);
+  ObPartitionEst ddl_merge_part_est;
+  ObIndexBlockScanEstimator ddl_merge_estimator(ddl_merge_esti_ctx);
 
   ASSERT_EQ(OB_SUCCESS, estimator.estimate_row_count(part_est));
-  STORAGE_LOG(INFO, "part_est", K(part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_estimator.estimate_row_count(ddl_kv_part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_merge_estimator.estimate_row_count(ddl_merge_part_est));
+  STORAGE_LOG(INFO, "part_est", K(part_est), K(ddl_kv_part_est), K(ddl_merge_part_est));
+  ASSERT_EQ(part_est, ddl_merge_part_est);
 }
 
 TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_middle_range)
@@ -165,12 +211,21 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_middle_range)
   ObDatumRange range;
   generate_range(100, row_cnt_ - 100, range);
   ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_kv_esti_ctx(ddl_kv_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_merge_esti_ctx(partial_sstable_, tablet_handle_, context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
+  ObPartitionEst ddl_kv_part_est;
+  ObIndexBlockScanEstimator ddl_kv_estimator(ddl_kv_esti_ctx);
+  ObPartitionEst ddl_merge_part_est;
+  ObIndexBlockScanEstimator ddl_merge_estimator(ddl_merge_esti_ctx);
 
   ASSERT_EQ(OB_SUCCESS, estimator.estimate_row_count(part_est));
-  STORAGE_LOG(INFO, "part_est", K(part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_estimator.estimate_row_count(ddl_kv_part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_merge_estimator.estimate_row_count(ddl_merge_part_est));
+  STORAGE_LOG(INFO, "part_est", K(part_est), K(ddl_kv_part_est), K(ddl_merge_part_est));
+  ASSERT_EQ(part_est, ddl_merge_part_est);
 }
 
 TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_noexist_range)
@@ -178,12 +233,21 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_noexist_range)
   ObDatumRange range;
   generate_range(row_cnt_, row_cnt_, range);
   ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_kv_esti_ctx(ddl_kv_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext ddl_merge_esti_ctx(partial_sstable_, tablet_handle_, context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
+  ObPartitionEst ddl_kv_part_est;
+  ObIndexBlockScanEstimator ddl_kv_estimator(ddl_kv_esti_ctx);
+  ObPartitionEst ddl_merge_part_est;
+  ObIndexBlockScanEstimator ddl_merge_estimator(ddl_merge_esti_ctx);
 
   ASSERT_EQ(OB_SUCCESS, estimator.estimate_row_count(part_est));
-  STORAGE_LOG(INFO, "part_est", K(part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_estimator.estimate_row_count(ddl_kv_part_est));
+  ASSERT_EQ(OB_SUCCESS, ddl_merge_estimator.estimate_row_count(ddl_merge_part_est));
+  STORAGE_LOG(INFO, "part_est", K(part_est), K(ddl_kv_part_est), K(ddl_merge_part_est));
+  ASSERT_EQ(part_est, ddl_merge_part_est);
 }
 
 }  // end namespace unittest

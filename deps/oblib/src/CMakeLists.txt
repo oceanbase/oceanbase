@@ -56,6 +56,14 @@ if(OB_BUILD_ARBITRATION)
   )
 endif()
 
+if(OB_BUILD_LOG_STORAGE_COMPRESS)
+  target_include_directories(
+    oblib_base_base_base INTERFACE
+    ${CMAKE_SOURCE_DIR}/close_modules/log_storage_compress
+  )
+endif()
+
+
 if(OB_BUILD_ORACLE_PL)
   target_include_directories(
     oblib_base_base_base INTERFACE
@@ -67,14 +75,6 @@ if(OB_BUILD_TDE_SECURITY)
   target_include_directories(
     oblib_base_base_base INTERFACE
     ${CMAKE_SOURCE_DIR}/close_modules/tde_security
-  )
-endif()
-
-if(OB_BUILD_ORACLE_XML)
-  target_include_directories(
-    oblib_base_base_base INTERFACE
-    ${CMAKE_SOURCE_DIR}/close_modules/xml
-    ${CMAKE_SOURCE_DIR}/close_modules/xml/deps/oblib/src/
   )
 endif()
 
@@ -198,6 +198,7 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
+  ${DEP_DIR}/lib/libprotobuf-c.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib
@@ -222,6 +223,7 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
+  ${DEP_DIR}/lib/libprotobuf-c.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib

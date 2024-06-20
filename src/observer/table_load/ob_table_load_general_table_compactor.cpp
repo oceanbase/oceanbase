@@ -159,6 +159,7 @@ void ObTableLoadGeneralTableCompactor::CompactorTask::stop()
 ObTableLoadGeneralTableCompactor::CompactorTaskIter::CompactorTaskIter()
   : pos_(0)
 {
+  compactor_task_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadGeneralTableCompactor::CompactorTaskIter::~CompactorTaskIter()
@@ -207,11 +208,12 @@ ObTableLoadGeneralTableCompactor::ObTableLoadGeneralTableCompactor()
   : store_ctx_(nullptr),
     param_(nullptr),
     allocator_("TLD_GeneralTC"),
-    all_compactor_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
     running_thread_count_(0),
     has_error_(false),
     is_stop_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  all_compactor_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadGeneralTableCompactor::~ObTableLoadGeneralTableCompactor()
@@ -241,7 +243,6 @@ int ObTableLoadGeneralTableCompactor::inner_init()
   int ret = OB_SUCCESS;
   store_ctx_ = compact_ctx_->store_ctx_;
   param_ = &store_ctx_->ctx_->param_;
-  allocator_.set_tenant_id(MTL_ID());
   return ret;
 }
 
@@ -277,19 +278,21 @@ void ObTableLoadGeneralTableCompactor::stop()
 int ObTableLoadGeneralTableCompactor::construct_compactors()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator("TLD_Tmp");
   CompactorTaskMap *compactor_task_map_array = nullptr;
-  ObSEArray<ObTableLoadTransStore *, 64> trans_store_array;
+  ObArray<ObTableLoadTransStore *> trans_store_array;
+  allocator.set_tenant_id(MTL_ID());
+  trans_store_array.set_block_allocator(ModulePageAllocator(allocator));
   if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
     LOG_WARN("fail to get committed trans stores", KR(ret));
   } else if (OB_ISNULL(compactor_task_map_array = static_cast<CompactorTaskMap *>(
-                         allocator.alloc(sizeof(CompactorTaskMap) * param_->session_count_)))) {
+                         allocator.alloc(sizeof(CompactorTaskMap) * param_->write_session_count_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret));
   } else {
-    new (compactor_task_map_array) CompactorTaskMap[param_->session_count_];
+    new (compactor_task_map_array) CompactorTaskMap[param_->write_session_count_];
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_->session_count_; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_->write_session_count_; ++i) {
     CompactorTaskMap &compactor_map = compactor_task_map_array[i];
     if (OB_FAIL(compactor_map.create(1024, "TLD_CT_Map", "TLD_CT_Map", MTL_ID()))) {
       LOG_WARN("fail to create compactor map", KR(ret));
@@ -313,7 +316,7 @@ int ObTableLoadGeneralTableCompactor::construct_compactors()
     store_ctx_->clear_committed_trans_stores();
   }
   if (nullptr != compactor_task_map_array) {
-    for (int64_t i = 0; i < param_->session_count_; ++i) {
+    for (int64_t i = 0; i < param_->write_session_count_; ++i) {
       CompactorTaskMap *compactor_map = compactor_task_map_array + i;
       compactor_map->~CompactorTaskMap();
     }
@@ -414,6 +417,7 @@ int ObTableLoadGeneralTableCompactor::create_tablet_compactor_task(int32_t sessi
   if (OB_FAIL(create_tablet_table_compactor(session_id, tablet_id, table_compactor))) {
     LOG_WARN("fail to create tablet table compactor", KR(ret));
   } else if (OB_ISNULL(compactor_task = OB_NEWx(CompactorTask, (&allocator_), table_compactor))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new CompactorTask", KR(ret));
   } else if (OB_FAIL(compactor_task_iter_.add(compactor_task))) {
     LOG_WARN("fail to add compactor task", KR(ret));

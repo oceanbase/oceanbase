@@ -28,19 +28,26 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     table_id_(OB_INVALID_ID),
     schema_version_(OB_INVALID_VERSION),
     table_type_(MAX_TABLE_TYPE),
-    index_type_(INDEX_TYPE_MAX),
-    index_status_(INDEX_STATUS_MAX),
+    index_type_(INDEX_TYPE_IS_NOT),
+    index_status_(INDEX_STATUS_NOT_FOUND),
     shadow_rowkey_column_num_(0),
+    doc_id_col_id_(OB_INVALID_ID),
     fulltext_col_id_(OB_INVALID_ID),
     spatial_geo_col_id_(OB_INVALID_ID),
     spatial_cellid_col_id_(OB_INVALID_ID),
     spatial_mbr_col_id_(OB_INVALID_ID),
     index_name_(),
+    fts_parser_name_(),
     columns_(allocator),
     col_map_(allocator),
     pk_name_(),
+    read_param_version_(0),
     read_info_(),
-    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
+    cg_read_infos_(),
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    multivalue_col_id_(OB_INVALID_ID),
+    multivalue_arr_col_id_(OB_INVALID_ID),
+    data_table_rowkey_column_num_(0)
 {
 }
 
@@ -54,19 +61,26 @@ void ObTableSchemaParam::reset()
   table_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
   table_type_ = MAX_TABLE_TYPE;
-  index_type_ = INDEX_TYPE_MAX;
-  index_status_ = INDEX_STATUS_MAX;
+  index_type_ = INDEX_TYPE_IS_NOT;
+  index_status_ = INDEX_STATUS_NOT_FOUND;
   shadow_rowkey_column_num_ = 0;
+  doc_id_col_id_ = OB_INVALID_ID;
   fulltext_col_id_ = OB_INVALID_ID;
   spatial_geo_col_id_ = OB_INVALID_ID;
   spatial_cellid_col_id_ = OB_INVALID_ID;
   spatial_mbr_col_id_ = OB_INVALID_ID;
   index_name_.reset();
+  fts_parser_name_.reset();
   columns_.reset();
   col_map_.clear();
   pk_name_.reset();
   read_info_.reset();
+  cg_read_infos_.reset();
+  read_param_version_ = 0;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  multivalue_col_id_ = OB_INVALID_ID;
+  multivalue_arr_col_id_ = OB_INVALID_ID;
+  data_table_rowkey_column_num_ =0 ;
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -88,8 +102,12 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     table_id_ = schema->get_table_id();
     schema_version_ = schema->get_schema_version();
     table_type_ = schema->get_table_type();
-    use_cs = !schema->is_row_store();
     lob_inrow_threshold_ = schema->get_lob_inrow_threshold();
+    if (OB_FAIL(schema->get_is_row_store(use_cs))) {
+      LOG_WARN("fail to get is row store", K(ret));
+    } else {
+      use_cs = !use_cs;
+    }
   }
 
   if (OB_SUCC(ret) && schema->is_user_table() && !schema->is_heap_table()) {
@@ -115,16 +133,49 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
       } else if (OB_FAIL(schema->get_index_info().get_spatial_mbr_col_id(spatial_mbr_col_id_))) {
         LOG_WARN("fail to get spatial mbr column id", K(ret), K(schema->get_index_info()));
       }
+    } else if (schema->is_fts_index_aux() || schema->is_fts_doc_word_aux()) {
+      if (OB_FAIL(schema->get_fulltext_column_ids(doc_id_col_id_, fulltext_col_id_))) {
+        LOG_WARN("fail to get fulltext column ids", K(ret));
+      } else if (OB_UNLIKELY(doc_id_col_id_ <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == doc_id_col_id_
+                        || fulltext_col_id_ <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == fulltext_col_id_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid doc id or fulltext column id", K(ret), K(doc_id_col_id_), K(fulltext_col_id_));
+      } else if (OB_FAIL(ob_write_string(allocator_, schema->get_parser_name_str(), fts_parser_name_))) {
+        LOG_WARN("fail to copy fts parser name", K(ret), K(schema->get_parser_name_str()));
+      }
+    } else if (schema->is_multivalue_index_aux()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_column_count(); ++i) {
+        const ObColumnSchemaV2 *column_schema = schema->get_column_schema_by_idx(i);
+        if (OB_ISNULL(column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(schema));
+        } else if (column_schema->is_doc_id_column()) {
+          doc_id_col_id_ = column_schema->get_column_id();
+        } else if (column_schema->is_multivalue_generated_column()) {
+          multivalue_col_id_ = column_schema->get_column_id();
+        } else if (column_schema->is_multivalue_generated_array_column()) {
+          multivalue_arr_col_id_ = column_schema->get_column_id();
+        }
+      }
     }
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(schema->get_index_info().get_fulltext_column(fulltext_col_id_))) {
-      LOG_WARN("fail to get fulltext column id", K(ret), K(schema->get_index_info()));
     } else if (OB_FAIL(schema->get_index_name(tmp_name))) {
       LOG_WARN("fail to get index name", K(ret), K(schema->get_index_info()));
     } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, index_name_))) {
       LOG_WARN("fail to copy index name", K(ret), K(tmp_name));
+    }
+  }
+
+  if (OB_SUCC(ret) && schema->is_mlog_table()) {
+    index_type_ = schema->get_index_type();
+    index_status_ = schema->get_index_status();
+    ObString tmp_name;
+    if (OB_FAIL(schema->get_mlog_name(tmp_name))) {
+      LOG_WARN("fail to get materialized view log name", KR(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, index_name_))) {
+      LOG_WARN("fail to copy materialized view log name", KR(ret), K(tmp_name));
     }
   }
 
@@ -189,6 +240,39 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     }
   }
   LOG_DEBUG("Generated read info", K_(read_info));
+  read_param_version_ = storage::ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE;
+  if (OB_SUCC(ret) && use_cs && tmp_cg_idxs.count() <= storage::ObCGReadInfo::LOCAL_MAX_CG_READ_INFO_CNT) {
+    // construct cg read infos
+    void *tmp_ptr  = nullptr;
+    int64_t cg_cnt = tmp_cg_idxs.count();
+    ObArray<storage::ObTableReadInfo *> tmp_read_infos;
+    if (OB_UNLIKELY(tmp_col_descs.count() != cg_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected not equal col count", K(ret), K(cg_cnt), K(tmp_col_descs.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < cg_cnt; i++) {
+        storage::ObTableReadInfo *cur_read_info = nullptr;
+        if (0 > tmp_cg_idxs.at(i)) {
+        } else if (OB_ISNULL(tmp_ptr = allocator_.alloc(sizeof(storage::ObTableReadInfo)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc failed", K(ret));
+        } else if (FALSE_IT(cur_read_info = new (tmp_ptr) storage::ObTableReadInfo())) {
+        } else if (OB_FAIL(storage::ObTenantCGReadInfoMgr::construct_cg_read_info(allocator_,
+                                                                                  read_info_.is_oracle_mode(),
+                                                                                  tmp_col_descs.at(i),
+                                                                                  tmp_cols.at(i),
+                                                                                  *cur_read_info))) {
+          LOG_WARN("Fail to init cg read info", K(ret));
+        }
+        if (OB_SUCC(ret) && OB_FAIL(tmp_read_infos.push_back(cur_read_info))) {
+          LOG_WARN("Fail to push back read info", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(cg_read_infos_.init_and_assign(tmp_read_infos, allocator_))) {
+        LOG_WARN("Fail to add read infos", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -238,6 +322,17 @@ const ObColumnParam * ObTableSchemaParam::get_column(const uint64_t column_id) c
 const ObColumnParam * ObTableSchemaParam::get_column_by_idx(const int64_t idx) const
 {
   const ObColumnParam * ptr = NULL;
+  if (idx < 0 || idx >= columns_.count()) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "idx out of range", K(idx), K(columns_.count()), K(lbt()));
+  } else {
+    ptr = columns_.at(idx);
+  }
+  return ptr;
+}
+
+ObColumnParam * ObTableSchemaParam::get_column_by_idx(const int64_t idx)
+{
+  ObColumnParam * ptr = NULL;
   if (idx < 0 || idx >= columns_.count()) {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "idx out of range", K(idx), K(columns_.count()), K(lbt()));
   } else {
@@ -344,8 +439,10 @@ int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
        K_(index_type),
        K_(index_status),
        K_(shadow_rowkey_column_num),
+       K_(doc_id_col_id),
        K_(fulltext_col_id),
        K_(index_name),
+       K_(fts_parser_name),
        K_(pk_name),
        K_(columns),
        K_(read_info),
@@ -383,6 +480,26 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(spatial_cellid_col_id_);
   OB_UNIS_ENCODE(spatial_mbr_col_id_);
   OB_UNIS_ENCODE(lob_inrow_threshold_);
+  OB_UNIS_ENCODE(read_param_version_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, cg_read_infos_.count()))) {
+      LOG_WARN("Fail to encode column count", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_infos_.count(); ++i) {
+      if (nullptr != cg_read_infos_.at(i) && OB_FAIL(cg_read_infos_.at(i)->serialize(buf, buf_len, pos))) {
+        LOG_WARN("Fail to serialize column", K(ret));
+      }
+    }
+  }
+  OB_UNIS_ENCODE(multivalue_col_id_);
+  OB_UNIS_ENCODE(multivalue_arr_col_id_);
+  OB_UNIS_ENCODE(data_table_rowkey_column_num_);
+  OB_UNIS_ENCODE(doc_id_col_id_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(fts_parser_name_.serialize(buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize fts parser name", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -429,6 +546,80 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   OB_UNIS_DECODE(spatial_cellid_col_id_);
   OB_UNIS_DECODE(spatial_mbr_col_id_);
   OB_UNIS_DECODE(lob_inrow_threshold_);
+  OB_UNIS_DECODE(read_param_version_);
+  if (OB_SUCC(ret) && pos < data_len) {
+    int64_t cg_read_info_cnt = 0;
+    if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &cg_read_info_cnt))) {
+      LOG_WARN("Fail to decode cg read info count", K(ret));
+    } else if (cg_read_info_cnt > 0) {
+      void *tmp_ptr  = nullptr;
+      const common::ObIArray<int32_t> *access_cgs = read_info_.get_cg_idxs();
+      if (OB_UNLIKELY(nullptr == access_cgs || access_cgs->count() != cg_read_info_cnt ||
+                      storage::ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE != read_param_version_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected cg read count", K(ret), KPC(access_cgs), K(cg_read_info_cnt), K_(read_param_version));
+      } else {
+        ObArray<storage::ObTableReadInfo *> tmp_read_infos;
+        for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_info_cnt; ++i) {
+          storage::ObTableReadInfo *cur_read_info = nullptr;
+          if (0 > access_cgs->at(i)) {
+          } else if (OB_ISNULL(tmp_ptr = allocator_.alloc(sizeof(storage::ObTableReadInfo)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc failed", K(ret));
+          } else if (FALSE_IT(cur_read_info = new (tmp_ptr) storage::ObTableReadInfo())) {
+          } else if (OB_FAIL(cur_read_info->deserialize(allocator_, buf, data_len, pos))) {
+            LOG_WARN("Fail to deserialize read info", K(ret));
+          }
+
+          if (OB_SUCC(ret) && OB_FAIL(tmp_read_infos.push_back(cur_read_info))) {
+            LOG_WARN("Fail to add read info", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(cg_read_infos_.init_and_assign(tmp_read_infos, allocator_))) {
+          LOG_WARN("Fail to add read infos", K(ret));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && pos == data_len) {
+    // Here is to solve the compatibility problem and correct the `index_type_` and `index_status_`.
+    //
+    // Before version 4.3.1.0, the default value of `index_type_` and `index_sattus_` was max. In
+    // version 4.3.1.0, the full-text search and json multi-value indexes were introduced. If the
+    // RPC request from older version observer is received, the `index_type_` will be mistaken for
+    // a valid json multi-valued index.
+    //
+    // Therefore, if there are still unresolved fields here, it means that it is a new version
+    // observer. It is necessary to re-assign the initial values to the `index_type_` and
+    // `index_status_` to avoid misjudgment as a valid index.
+
+
+    // ATTENTION!!!
+    // The front-end version is currently only 4.3.0.x, and its value of max index type is 23.
+    if (23 == index_type_) {
+      index_type_ = INDEX_TYPE_IS_NOT;
+    }
+    // ATTENTION!!!
+    // The front-end version is currently only 4.3.0.x, and its value of max index status is 8.
+    if (8 == index_status_) {
+      index_status_ = INDEX_STATUS_NOT_FOUND;
+    }
+  }
+
+  OB_UNIS_DECODE(multivalue_col_id_);
+  OB_UNIS_DECODE(multivalue_arr_col_id_);
+  OB_UNIS_DECODE(data_table_rowkey_column_num_);
+  OB_UNIS_DECODE(doc_id_col_id_)
+
+  if (OB_SUCC(ret) && pos < data_len) {
+    ObString tmp_name;
+    if (OB_FAIL(tmp_name.deserialize(buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize fts parser name", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, fts_parser_name_))) {
+      LOG_WARN("fail to copy fts parser name", K(ret), K(tmp_name));
+    }
+  }
   return ret;
 }
 
@@ -461,6 +652,21 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(spatial_cellid_col_id_);
   OB_UNIS_ADD_LEN(spatial_mbr_col_id_);
   OB_UNIS_ADD_LEN(lob_inrow_threshold_);
+  OB_UNIS_ADD_LEN(read_param_version_);
+  if (OB_SUCC(ret)) {
+    len += serialization::encoded_length_vi64(cg_read_infos_.count());
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_infos_.count(); ++i) {
+      if (nullptr != cg_read_infos_.at(i)) {
+        len += cg_read_infos_.at(i)->get_serialize_size();
+      }
+    }
+  }
+
+  OB_UNIS_ADD_LEN(multivalue_col_id_);
+  OB_UNIS_ADD_LEN(multivalue_arr_col_id_);
+  OB_UNIS_ADD_LEN(data_table_rowkey_column_num_);
+  OB_UNIS_ADD_LEN(doc_id_col_id_);
+  len += fts_parser_name_.get_serialize_size();
   return len;
 }
 

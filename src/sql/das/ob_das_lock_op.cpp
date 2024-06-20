@@ -55,7 +55,17 @@ int ObDASLockOp::open_op()
 
   ObDASDMLIterator dml_iter(lock_ctdef_, lock_buffer_, op_alloc_);
   ObAccessService *as = MTL(ObAccessService *);
-  if (OB_FAIL(ObDMLService::init_dml_param(*lock_ctdef_, *lock_rtdef_, *snapshot_, op_alloc_, dml_param))) {
+  storage::ObStoreCtxGuard store_ctx_guard;
+
+  if (OB_FAIL(as->get_write_store_ctx_guard(ls_id_,
+                                            lock_rtdef_->timeout_ts_,
+                                            *trans_desc_,
+                                            *snapshot_,
+                                            write_branch_id_,
+                                            store_ctx_guard))) {
+    LOG_WARN("fail to get_write_access_tx_ctx_guard", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ObDMLService::init_dml_param(
+      *lock_ctdef_, *lock_rtdef_, *snapshot_, write_branch_id_, op_alloc_, store_ctx_guard, dml_param))) {
     LOG_WARN("init dml param failed", K(ret));
   } else if (OB_FAIL(as->lock_rows(ls_id_,
                                    tablet_id_,

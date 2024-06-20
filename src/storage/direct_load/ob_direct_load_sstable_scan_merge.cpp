@@ -59,6 +59,9 @@ ObDirectLoadSSTableScanMerge::ObDirectLoadSSTableScanMerge()
     rows_merger_(nullptr),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  scanners_.set_tenant_id(MTL_ID());
+  rows_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadSSTableScanMerge::~ObDirectLoadSSTableScanMerge()
@@ -105,7 +108,6 @@ int ObDirectLoadSSTableScanMerge::init(const ObDirectLoadSSTableScanMergeParam &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param), K(sstable_array), K(range));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     // construct scanners
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
       ObDirectLoadSSTable *sstable = sstable_array.at(i);

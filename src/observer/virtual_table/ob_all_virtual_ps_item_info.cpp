@@ -254,7 +254,7 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
 
         // still need to deref_stmt_item even though ret is not OB_SUCCESS
         if (OB_NOT_NULL(stmt_item)) {
-          stmt_item->dec_ref_count_check_erase();
+          stmt_item->dec_ref_count();
           stmt_item = NULL;
         }
 

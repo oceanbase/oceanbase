@@ -93,7 +93,8 @@ public:
                                             const ObRawExpr *esp_expr,
                                             ObExecContext *exec_ctx,
                                             ObIAllocator &allocator,
-                                            bool &is_start_with);
+                                            bool &is_start_with,
+                                            bool &all_is_percent_sign);
 
 
   //whether the value of first_expr and second_expr is equal.
@@ -135,11 +136,12 @@ public:
                                      common::ObObj *min_out,
                                      common::ObObj *max_out,
                                      common::ObObj *start_out,
-                                     common::ObObj *end_out);
+                                     common::ObObj *end_out,
+                                     bool convert2sortkey = true);
   /////////////Start convert obj to scalar related function//////
   // @param obj
   // @return
-  static double convert_obj_to_scalar(const common::ObObj* obj);
+  static int convert_obj_to_scalar(const common::ObObj* obj, double &scalar_value);
 
 
   // double type cannot represent min (max can be represented using Double.INF).
@@ -151,19 +153,25 @@ public:
   static int convert_string_to_scalar_for_number(const common::ObString &str, double &scala);
 private:
   static int add_to_string_conversion_array(const common::ObObj &strobj,
+                                            common::ObIArray<ObCollationType> &cs_type,
                                             common::ObIArray<common::ObString> &arr,
                                             uint64_t &convertable_map,
                                             int64_t pos);
   // 1, find common prefix length of strings
   // 2, find dynamic base and offset of strings
   // 3, use dynamic base and offset to convert strings to scalars
-  static int convert_strings_to_scalar(const common::ObIArray<common::ObString> &origin_strs,
+  static int convert_strings_to_scalar(const common::ObIArray<ObCollationType> &cs_type,
+                                       const common::ObIArray<common::ObString> &origin_strs,
                                        common::ObIArray<double> &scalars);
 
   static double convert_string_to_scalar(const common::ObString &str,
                                          int64_t prefix_len = 0,
                                          uint8_t offset = 0,
                                          double base = 256.0);
+
+  static int get_string_sort_key(ObIAllocator &alloc, ObCollationType cs_type, const common::ObString &str, common::ObString &sort_key);
+
+  static int convert_string_to_scalar(ObCollationType cs_type, const common::ObString &str, double &scalar);
 
   static int find_common_prefix_len(const common::ObIArray<common::ObString> &strs,
                                     int64_t &length);

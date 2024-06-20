@@ -33,8 +33,6 @@ public:
     tenant_id_(0), channel_id_(0), calced_val_(0), buffer_pool_id_(0), timeout_ts_(0)
   {}
 
-  void set_first_buffer_info(uint64_t tenant_id, sql::dtl::ObDtlCacheBufferInfo *buffer_info);
-
   TO_STRING_KV(K(tenant_id_), K(channel_id_));
 
 public:

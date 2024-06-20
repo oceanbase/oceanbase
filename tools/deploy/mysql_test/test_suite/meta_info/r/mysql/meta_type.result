@@ -252,6 +252,9 @@ def	test	t4	t4	a	a	246	11	0	Y	32768	0	63
 def	test	t4	t4	b	b	246	10	0	Y	32800	0	63
 a	b
 insert into t4 value(0.1,0.2);
+Warnings:
+Warning	1265	Data truncated for column 'a' at row 1
+Warning	1265	Data truncated for column '"test"."t4"."b"' at row 1
 select * from t4;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def	test	t4	t4	a	a	246	11	1	Y	32768	0	63

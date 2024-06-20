@@ -131,8 +131,6 @@ enum {
     EASY_REQQUEST_TYPE_SQL      = 1,
 };
 
-#define OB_TRACE_ID_FORMAT "Y%lX-%016lX"
-
 // async + spinlock
 #define EASY_BASETH_DEFINE                          \
     easy_baseth_on_start_pt         *on_start;      \

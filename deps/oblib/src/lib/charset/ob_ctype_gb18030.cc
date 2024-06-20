@@ -994,7 +994,7 @@ ObCharsetInfo ob_charset_gb18030_chinese_ci = {
     oceanbase::common::CS_TYPE_GB18030_CHINESE_CI,
     0,
     0,                                               /* number        */
-    OB_CS_COMPILED | OB_CS_PRIMARY | OB_CS_STRNXFRM,                 /* state         */
+    OB_CS_COMPILED | OB_CS_PRIMARY | OB_CS_STRNXFRM | OB_CS_CI,  /* state         */
     "gb18030",                                       /* cs name       */
     "gb18030_chinese_ci",                            /* name          */
     "",                                              /* comment       */
@@ -1015,6 +1015,7 @@ ObCharsetInfo ob_charset_gb18030_chinese_ci = {
     2,                                               /* casedn_multiply  */
     1,                                               /* mbminlen      */
     4,                                               /* mbmaxlen      */
+    2,                                               /* mbmaxlenlen   */
     0,                                               /* min_sort_char */
     0xFE39FE39,                                      /* max_sort_char */
     ' ',                                             /* pad char      */
@@ -1050,6 +1051,7 @@ ObCharsetInfo ob_charset_gb18030_chinese_cs = {
     2,                                               /* casedn_multiply  */
     1,                                               /* mbminlen      */
     4,                                               /* mbmaxlen      */
+    2,                                               /* mbmaxlenlen   */
     0,                                               /* min_sort_char */
     0xFE39FE39,                                      /* max_sort_char */
     ' ',                                             /* pad char      */
@@ -1085,6 +1087,7 @@ ObCharsetInfo ob_charset_gb18030_bin = {
     2,
     1,
     4,
+    2,                                               /* mbmaxlenlen   */
     0,
     0xFEFEFEFE,
     ' ',
@@ -1095,16 +1098,12 @@ ObCharsetInfo ob_charset_gb18030_bin = {
     &ob_collation_mb_bin_handler,
     PAD_SPACE};
 
-/*[GB+82358F33, GB+82359134] or [U+9FA6, U+9FBB]*/
-const static int GB_2022_CNT_PART_1 = 0x9FBB - 0x9FA6 + 1;
-/*[GB+84318236, GB+84318537]*/
-const static int GB_2022_CNT_PART_2 = (0x85 - 0x82) * 10 + (0x37 - 0x36) + 1;
 
 // These four arrays will be init in ObCharset::init_charset()
-static uint16 tab_gb18030_2022_2_uni[sizeof(tab_gb18030_2_uni)/sizeof(uint16)];
-static uint16 tab_gb18030_2022_4_uni[sizeof(tab_gb18030_4_uni)/sizeof(uint16) + GB_2022_CNT_PART_1 + GB_2022_CNT_PART_2];
-static uint16 tab_uni_gb18030_2022_p1[sizeof(tab_uni_gb18030_p1)/sizeof(uint16) + GB_2022_CNT_PART_1];
-static uint16 tab_uni_gb18030_2022_p2[sizeof(tab_uni_gb18030_p2)/sizeof(uint16)];
+uint16 tab_gb18030_2022_2_uni[sizeof(tab_gb18030_2_uni)/sizeof(uint16)];
+uint16 tab_gb18030_2022_4_uni[sizeof(tab_gb18030_4_uni)/sizeof(uint16) + GB_2022_CNT_PART_1 + GB_2022_CNT_PART_2];
+uint16 tab_uni_gb18030_2022_p1[sizeof(tab_uni_gb18030_p1)/sizeof(uint16) + GB_2022_CNT_PART_1];
+uint16 tab_uni_gb18030_2022_p2[sizeof(tab_uni_gb18030_p2)/sizeof(uint16)];
 
 static uint gb18030_2_idx(const uchar *s)
 {
@@ -1646,6 +1645,7 @@ ObCharsetInfo ob_charset_gb18030_2022_bin =
   2,                              /* casedn_multiply  */
   1,                              /* mbminlen      */
   4,                              /* mbmaxlen      */
+  2,                              /* mbmaxlenlen   */
   0,                              /* min_sort_char */
   0xFEFEFEFE,                     /* max_sort_char */
   ' ',                            /* pad char      */
@@ -1662,7 +1662,7 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_ci =
   oceanbase::common::CS_TYPE_GB18030_2022_PINYIN_CI,
   0,
   0,
-  OB_CS_COMPILED | OB_CS_PRIMARY | OB_CS_STRNXFRM, /* state         */
+  OB_CS_COMPILED | OB_CS_PRIMARY | OB_CS_STRNXFRM | OB_CS_CI, /* state         */
   "gb18030_2022",                                  /* cs name       */
   "gb18030_2022_chinese_ci",                       /* name          */
   "",                                              /* comment       */
@@ -1681,6 +1681,7 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_ci =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1716,6 +1717,7 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_cs =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1732,7 +1734,7 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_ci =
   oceanbase::common::CS_TYPE_GB18030_2022_RADICAL_CI,
   0,
   0,
-  OB_CS_COMPILED | OB_CS_STRNXFRM,                 /* state         */
+  OB_CS_COMPILED | OB_CS_STRNXFRM | OB_CS_CI,                 /* state         */
   "gb18030_2022",                                  /* cs name       */
   "gb18030_2022_radical_ci",                       /* name          */
   "",                                              /* comment       */
@@ -1751,6 +1753,7 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_ci =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1786,6 +1789,7 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_cs =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1802,7 +1806,7 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_ci =
   oceanbase::common::CS_TYPE_GB18030_2022_STROKE_CI,
   0,
   0,
-  OB_CS_COMPILED | OB_CS_STRNXFRM,                 /* state         */
+  OB_CS_COMPILED | OB_CS_STRNXFRM | OB_CS_CI,                 /* state         */
   "gb18030_2022",                                  /* cs name       */
   "gb18030_2022_stroke_ci",                        /* name          */
   "",                                              /* comment       */
@@ -1821,6 +1825,7 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_ci =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1856,6 +1861,7 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_cs =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */

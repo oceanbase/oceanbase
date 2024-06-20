@@ -72,6 +72,7 @@ int ObMPStmtClose::process()
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session->get_sessid());
+    session->init_use_rich_format();
     LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_sessid()));
     if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), *session,
                      get_conn()->proxy_cap_flags_.is_full_link_trace_support()))) {
@@ -92,6 +93,7 @@ int ObMPStmtClose::process()
         }
       }
       if (OB_FAIL(session->close_ps_stmt(stmt_id_))) {
+        // overwrite ret, 优先级低，被覆盖
         LOG_WARN("fail to close ps stmt", K(ret), K_(stmt_id), K(session->get_sessid()));
       }
       if (OB_SUCCESS != tmp_ret) {

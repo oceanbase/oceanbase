@@ -334,19 +334,19 @@ TEST_F(TestCOSSTable, get_cg_table_test)
   EXPECT_EQ(true, co_sstable->valid_for_cs_reading_);
 
 
-  ObSSTable *get_cg_table1 = nullptr;
+  ObSSTableWrapper get_cg_table1;
   ret = co_sstable->get_cg_sstable(1, get_cg_table1);
-  EXPECT_EQ(co_sstable->key_.column_group_idx_, get_cg_table1->key_.column_group_idx_);
+  EXPECT_EQ(co_sstable->key_.column_group_idx_, get_cg_table1.sstable_->key_.column_group_idx_);
 
-  ObSSTable *get_cg_table2 = nullptr;
+  ObSSTableWrapper get_cg_table2;
   ret = co_sstable->get_cg_sstable(0, get_cg_table2);
-  EXPECT_EQ(cg_table1->key_.column_group_idx_, get_cg_table2->key_.column_group_idx_);
+  EXPECT_EQ(cg_table1->key_.column_group_idx_, get_cg_table2.sstable_->key_.column_group_idx_);
 
-  ObSSTable *get_cg_table3 = nullptr;
+  ObSSTableWrapper get_cg_table3;
   ret = co_sstable->get_cg_sstable(2, get_cg_table3);
-  EXPECT_EQ(cg_table2->key_.column_group_idx_, get_cg_table3->key_.column_group_idx_);
+  EXPECT_EQ(cg_table2->key_.column_group_idx_, get_cg_table3.sstable_->key_.column_group_idx_);
 
-  ObSSTable *get_cg_table4 = nullptr;
+  ObSSTableWrapper get_cg_table4;
   ret = co_sstable->get_cg_sstable(3, get_cg_table4);
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
 }
@@ -406,7 +406,7 @@ TEST_F(TestCOSSTable, empty_co_table_test)
 
   ObCOSSTableV2 *co_table = static_cast<ObCOSSTableV2 *>(co_table_handle.get_table());
   EXPECT_EQ(0, co_table->meta_->cg_sstables_.count());
-  EXPECT_EQ(true, co_table->is_empty_co_table());
+  EXPECT_EQ(true, co_table->is_empty());
   EXPECT_EQ(storage_schema.get_column_group_count(), co_table->get_cs_meta().column_group_cnt_);
 }
 

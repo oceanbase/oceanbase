@@ -34,6 +34,19 @@ double ObGeoWkbByteOrderUtil::read<double>(const char* data, ObGeoWkbByteOrder b
   return res;
 }
 
+double ObGeoWkbByteOrderUtil::read_double(const char* data, ObGeoWkbByteOrder bo)
+{
+  double res = 0.0;
+  if (bo == ObGeoWkbByteOrder::LittleEndian) {
+    res = *reinterpret_cast<const double*>(data);
+  } else {
+    for(int i = 0; i < 8; i++) {
+      reinterpret_cast<char *>(&res)[i] = data[7 - i];
+    }
+  }
+  return res;
+}
+
 template<>
 uint32_t ObGeoWkbByteOrderUtil::read<uint32_t>(const char* data, ObGeoWkbByteOrder bo)
 {
@@ -132,6 +145,18 @@ int ObWkbBuffer::write(uint64_t pos, uint32_t val)
 {
   int ret = OB_SUCCESS;
   ObGeoWkbByteOrderUtil::write<uint32_t>(buf_.ptr() + pos, val, bo_);
+  return ret;
+}
+
+int ObWkbBuffer::read(uint64_t pos, uint32_t &val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf_.ptr()) || pos + sizeof(uint32_t) > buf_.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("read is not safe", K(ret), K(pos));
+  } else {
+    val = ObGeoWkbByteOrderUtil::read<uint32_t>(buf_.ptr() + pos, bo_);
+  }
   return ret;
 }
 

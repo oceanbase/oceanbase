@@ -189,6 +189,12 @@ const char *ObConfigItem::data_type() const
   }
   return type_ptr;
 }
+bool ObConfigItem::is_default(const char *value_str_,
+                             const char *value_default_str_,
+                             int64_t size) const
+{
+  return 0 == strncasecmp(value_str_, value_default_str_, size);
+}
 
 // ObConfigIntListItem
 ObConfigIntListItem::ObConfigIntListItem(ObConfigContainer *container,

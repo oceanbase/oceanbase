@@ -27,7 +27,8 @@ enum AllocFailedReason
   CTX_HOLD_REACH_LIMIT,
   TENANT_HOLD_REACH_LIMIT,
   SERVER_HOLD_REACH_LIMIT,
-  PHYSICAL_MEMORY_EXHAUST
+  PHYSICAL_MEMORY_EXHAUST,
+  ERRSIM
 };
 
 struct AllocFailedCtx
@@ -53,11 +54,22 @@ public:
       int64_t server_limit_;
     };
   };
-  bool need_wash() const
+  bool need_wash_block() const
   {
     return reason_ == lib::CTX_HOLD_REACH_LIMIT ||
-            reason_ == lib::TENANT_HOLD_REACH_LIMIT ||
-            reason_ == lib::SERVER_HOLD_REACH_LIMIT;
+           reason_ == lib::TENANT_HOLD_REACH_LIMIT ||
+           reason_ == lib::SERVER_HOLD_REACH_LIMIT;
+  }
+  bool need_wash_chunk() const
+  {
+    return reason_ == lib::PHYSICAL_MEMORY_EXHAUST;
+
+  }
+  bool reach_limit_except_ctx() const
+  {
+    return reason_ == lib::TENANT_HOLD_REACH_LIMIT ||
+           reason_ == lib::SERVER_HOLD_REACH_LIMIT ||
+           reason_ == lib::PHYSICAL_MEMORY_EXHAUST;
   }
 };
 

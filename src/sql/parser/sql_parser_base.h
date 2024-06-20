@@ -240,6 +240,30 @@ do {                                                                            
     setup_token_pos_info(node, word_start - 1, word_end - word_start + 1);  \
   } while (0)
 
+#define gen_expr_node(node, name, len, p, off)                                         \
+  do {                                                                                 \
+    char *src = (char*)parse_malloc(len + 1, p->malloc_pool_);                         \
+    check_malloc(src);                                                                 \
+    memmove(src, name, len);                                                           \
+    src[len] = '\0';                                                                   \
+    const NonReservedKeyword *word = NULL;                                             \
+    if (NULL == (word = mysql_non_reserved_keyword_lookup(src)))                       \
+    {                                                                                  \
+      if (p->is_not_utf8_connection_) {                                                \
+        node->str_value_ = parse_str_convert_utf8(p->charset_info_, src, p->malloc_pool_, &(node->str_len_), &(p->extra_errno_)); \
+        check_identifier_convert_result(p->extra_errno_);                              \
+      } else {                                                                         \
+        node->str_value_ = parse_strdup(src, p->malloc_pool_, &(node->str_len_));      \
+      }                                                                                \
+    } else {                                                                           \
+      node->str_value_ = parse_strndup(src, len, p->malloc_pool_);                     \
+      node->str_len_ = len;                                                            \
+    }                                                                                  \
+    check_malloc(node->str_value_);                                                    \
+    node->sql_str_off_ = off;                                                          \
+    setup_token_pos_info(node, off,  node->str_len_);                                  \
+  } while (0)
+
 //oracle下生成非保留关键字结点请使用该宏,区别于mysql的是做了大写的转换
 #define get_oracle_non_reserved_node(node, malloc_pool, expr_start, expr_end) \
   do {                                                                 \

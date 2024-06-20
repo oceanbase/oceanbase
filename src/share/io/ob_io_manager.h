@@ -68,11 +68,8 @@ public:
   int get_device_channel(const ObIODevice *device_handle, ObDeviceChannel *&device_channel);
 
   // tenant management
-  int add_tenant_io_manager(const uint64_t tenant_id, const ObTenantIOConfig &tenant_io_config);
-  int remove_tenant_io_manager(const uint64_t tenant_id);
   int refresh_tenant_io_config(const uint64_t tenant_id, const ObTenantIOConfig &tenant_io_config);
   int get_tenant_io_manager(const uint64_t tenant_id, ObRefHolder<ObTenantIOManager> &tenant_holder);
-  int get_tenant_ids(ObIArray<uint64_t> &tenant_ids);
   int modify_group_io_config(const uint64_t tenant_id,
                              const uint64_t index,
                              const int64_t min_percent,
@@ -98,13 +95,13 @@ private:
   hash::ObHashMap<int64_t /*device_handle*/, ObDeviceChannel *> channel_map_;
   ObIOFaultDetector fault_detector_;
   ObIOScheduler io_scheduler_;
-  DRWLock tenant_map_lock_;
-  hash::ObHashMap<uint64_t /*tenant_id*/, ObTenantIOManager *> tenant_map_;
+  ObTenantIOManager *server_io_manager_;
 };
 
 class ObTenantIOManager final
 {
 public:
+  static int mtl_new(ObTenantIOManager *&io_service);
   static int mtl_init(ObTenantIOManager *&io_service);
   static void mtl_destroy(ObTenantIOManager *&io_service);
 public:
@@ -171,6 +168,7 @@ public:
   void print_io_status();
   void inc_ref();
   void dec_ref();
+  int get_throttled_time(uint64_t group_id, int64_t &throttled_time);
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(ref_cnt_), K(io_memory_limit_), K(request_count_), K(result_count_),
        K(io_config_), K(io_clock_), K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_), K(io_memory_limit_),
        K(request_count_), K(result_count_), K(io_request_pool_), K(io_result_pool_));

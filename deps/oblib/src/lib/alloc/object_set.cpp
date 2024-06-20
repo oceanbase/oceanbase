@@ -55,7 +55,8 @@ AObject *ObjectSet::alloc_object(
     const uint64_t size, const ObMemAttr &attr)
 {
   const uint64_t adj_size = MAX(size, MIN_AOBJECT_SIZE);
-  const uint64_t all_size = align_up2(adj_size + AOBJECT_META_SIZE, 16);
+  const uint64_t meta_size = AOBJECT_META_SIZE + (attr.alloc_extra_info_ ? AOBJECT_EXTRA_INFO_SIZE : 0);
+  const uint64_t all_size = align_up2(adj_size + meta_size, 16);
 
   const int64_t ctx_id = blk_mgr_->get_ctx_id();
   abort_unless(ctx_id == attr.ctx_id_);
@@ -77,23 +78,15 @@ AObject *ObjectSet::alloc_object(
       normal_used_bytes_ += obj->nobjs_ * AOBJECT_CELL_BYTES;
     }
   } else {
-    obj = alloc_big_object(adj_size, attr);
+    obj = alloc_big_object(all_size, attr);
     abort_unless(NULL == obj || obj->in_use_);
   }
 
   if (NULL != obj) {
     abort_unless(obj->in_use_);
     abort_unless(obj->is_valid());
-
     reinterpret_cast<uint64_t&>(obj->data_[size]) = AOBJECT_TAIL_MAGIC_CODE;
     obj->alloc_bytes_ = static_cast<uint32_t>(size);
-
-    if (attr.label_.str_ != nullptr) {
-      STRNCPY(&obj->label_[0], attr.label_.str_, sizeof(obj->label_));
-      obj->label_[sizeof(obj->label_) - 1] = '\0';
-    } else {
-      MEMSET(obj->label_, '\0', sizeof(obj->label_));
-    }
     allocs_++;
     alloc_bytes_ += size;
     used_bytes_ += obj->hold(cells_per_block_);
@@ -106,19 +99,12 @@ AObject *ObjectSet::realloc_object(
     AObject *obj, const uint64_t size, const ObMemAttr &attr)
 {
   AObject *new_obj = NULL;
-  uint64_t copy_size = 0;
 
   if (NULL == obj) {
     new_obj = alloc_object(size, attr);
   } else {
     abort_unless(obj->is_valid());
-    if (obj->is_large_ != 0) {
-      copy_size = MIN(obj->alloc_bytes_, size);
-    } else {
-      copy_size = MIN(
-          size, (obj->nobjs_ - META_CELLS) * AOBJECT_CELL_BYTES);
-    }
-
+    uint64_t copy_size = MIN(obj->alloc_bytes_, size);
     new_obj = alloc_object(size, attr);
     if (NULL != new_obj && copy_size != 0) {
       memmove(new_obj->data_, obj->data_, copy_size);
@@ -338,13 +324,12 @@ void ObjectSet::free_block(ABlock *block)
 AObject *ObjectSet::alloc_big_object(const uint64_t size, const ObMemAttr &attr)
 {
   AObject *obj = NULL;
-  ABlock *block = alloc_block(size + AOBJECT_META_SIZE, attr);
+  ABlock *block = alloc_block(size, attr);
 
   if (NULL != block) {
     obj = new (block->data()) AObject();
     obj->is_large_ = true;
     obj->in_use_ = true;
-    obj->alloc_bytes_ = static_cast<uint32_t>(size);
   }
 
   return obj;
@@ -467,7 +452,7 @@ void ObjectSet::do_free_dirty_list()
   }
 }
 
-bool ObjectSet::check_has_unfree(char *first_label)
+bool ObjectSet::check_has_unfree(char *first_label, char *first_bt)
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   bool has_unfree = false;
@@ -490,6 +475,11 @@ bool ObjectSet::check_has_unfree(char *first_label)
           if (OB_UNLIKELY(tmp_has_unfree)) {
             if ('\0' == first_label[0]) {
               STRCPY(first_label, obj->label_);
+            }
+            if (obj->on_malloc_sample_ && '\0' == first_bt[0]) {
+              void *addrs[AOBJECT_BACKTRACE_COUNT];
+              MEMCPY((char*)addrs, obj->bt(), AOBJECT_BACKTRACE_SIZE);
+              IGNORE_RETURN parray(first_bt, MAX_BACKTRACE_LENGTH, (int64_t*)addrs, AOBJECT_BACKTRACE_COUNT);
             }
             if (!has_unfree) {
               has_unfree = true;
@@ -516,23 +506,23 @@ bool ObjectSet::check_has_unfree(char *first_label)
 void ObjectSet::reset()
 {
   const bool context_check = mem_context_ != nullptr;
-  const static int buf_len = 256;
+  const static int buf_len = 512;
   char buf[buf_len] = {'\0'};
   char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
-  bool has_unfree = check_has_unfree(first_label);
+  char first_bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+  bool has_unfree = check_has_unfree(first_label, first_bt);
   if (has_unfree) {
     if (context_check) {
       const StaticInfo &static_info = mem_context_->get_static_info();
       const DynamicInfo &dynamic_info = mem_context_->get_dynamic_info();
-      int64_t pos = snprintf(buf, buf_len,
-                             "context: %p, label: %s, static_id: 0x%lx, "
-                             "static_info:{filename: %s, line: %d, function: %s}, "
-                             "dynamic_info:{tid: %ld, cid: %ld, create_time: %ld}",
-                             mem_context_, first_label,
-                             mem_context_->get_static_id(),
-                             static_info.filename_, static_info.line_, static_info.function_,
-                             dynamic_info.tid_, dynamic_info.cid_, dynamic_info.create_time_);
-      buf[pos] = '\0';
+      snprintf(buf, buf_len,
+          "context: %p, label: %s, backtrace: %s, static_id: 0x%lx, "
+          "static_info:{filename: %s, line: %d, function: %s}, "
+          "dynamic_info:{tid: %ld, cid: %ld, create_time: %ld}",
+          mem_context_, first_label, first_bt,
+          mem_context_->get_static_id(),
+          static_info.filename_, static_info.line_, static_info.function_,
+          dynamic_info.tid_, dynamic_info.cid_, dynamic_info.create_time_);
     }
     has_unfree_callback(buf);
   }

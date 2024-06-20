@@ -1100,7 +1100,7 @@ int ObBackupMetaIndexIterator::get_cur_index(ObBackupMetaIndex &meta_index)
     LOG_WARN("iterator is end", K(ret), KPC(this));
   } else {
     meta_index = cur_index_list_.at(cur_idx_);
-    LOG_INFO("get cur meta index",
+    LOG_DEBUG("get cur meta index",
         K(meta_index),
         K_(ls_id),
         K_(cur_idx),

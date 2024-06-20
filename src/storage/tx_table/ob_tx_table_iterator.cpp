@@ -73,6 +73,10 @@ int ObTxDataMemtableScanIterator::TxData2DatumRowConverter::init(ObTxData *tx_da
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "tx data is null", KR(ret));
   } else if (INT64_MAX != tx_data->tx_id_.get_id()) {// normal tx data need local buffer to serialize
+    SpinRLockManualGuard tx_op_guard;
+    if (tx_data->op_guard_.is_valid()) {
+      tx_op_guard.lock(tx_data->op_guard_->get_lock());
+    }
     buffer_len_ = tx_data->get_serialize_size();
     if (nullptr == (serialize_buffer_ = (char *)DEFAULT_TX_DATA_ALLOCATOR.alloc(buffer_len_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -203,7 +207,6 @@ int ObTxDataMemtableScanIterator::init(ObTxDataMemtable *tx_data_memtable)
   } else {
     STORAGE_LOG(INFO, "[TX DATA MERGE]init tx data dump iter finish", KR(ret), KPC(this), KPC(tx_data_memtable_));
   }
-
   return ret;
 }
 
@@ -589,7 +592,7 @@ int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &t
       p_dest += tx_data_buffers_[idx].get_ob_string().length();
     }
     tx_data.tx_id_ = tx_id_;
-    if (OB_FAIL(tx_data.deserialize(merge_buffer, total_buffer_size, pos, slice_allocator_))) {
+    if (OB_FAIL(tx_data.deserialize(merge_buffer, total_buffer_size, pos, tx_data_allocator_))) {
       STORAGE_LOG(WARN, "deserialize tx data failed",
                         KR(ret), KPHEX(merge_buffer, total_buffer_size));
       hex_dump(merge_buffer, total_buffer_size, true, OB_LOG_LEVEL_WARN);

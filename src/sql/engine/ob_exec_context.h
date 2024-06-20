@@ -28,6 +28,7 @@
 #include "sql/das/ob_das_context.h"
 #include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
 #include "pl/ob_pl_package_guard.h"
+#include "lib/udt/ob_udt_type.h"
 
 #define GET_PHY_PLAN_CTX(ctx) ((ctx).get_physical_plan_ctx())
 #define GET_MY_SESSION(ctx) ((ctx).get_my_session())
@@ -61,6 +62,11 @@ namespace oceanbase
 namespace common
 {
 class ObMySQLProxy;
+}
+
+namespace storage
+{
+class ObLobAccessCtx;
 }
 
 namespace pl
@@ -124,6 +130,33 @@ public:
 
   int64_t size_;
   ObOperatorKit *kits_;
+};
+
+struct ObUserLoggingCtx
+{
+  friend class ObExecContext;
+  friend class Guard;
+  class Guard
+  {
+  public:
+    explicit Guard(ObUserLoggingCtx &ctx) : ctx_(ctx) {}
+    ~Guard() { ctx_.reset(); }
+  private:
+    ObUserLoggingCtx &ctx_;
+  };
+  ObUserLoggingCtx() : column_name_(NULL), row_num_(-1) {}
+  inline bool skip_logging() const { return NULL == column_name_ || row_num_ <= 0; }
+  inline const ObString *get_column_name() const  { return column_name_; }
+  inline int64_t get_row_num() const { return row_num_; }
+private:
+  inline void reset()
+  {
+    column_name_ = NULL;
+    row_num_ = -1;
+  }
+private:
+  const ObString *column_name_;
+  int64_t row_num_;
 };
 
 class ObIExtraStatusCheck;
@@ -208,9 +241,6 @@ public:
   inline ObSQLSessionInfo *get_my_session() const;
   //get the parent execute context in nested sql
   ObExecContext *get_parent_ctx() { return parent_ctx_; }
-  //get the root execute context of foreign key in nested sql
-  int get_fk_root_ctx(ObExecContext* &root_ctx);
-  bool is_fk_root_ctx();
   int64_t get_nested_level() const { return nested_level_; }
   /**
    * @brief set sql proxy
@@ -291,7 +321,8 @@ public:
   bool has_non_trivial_expr_op_ctx() const { return has_non_trivial_expr_op_ctx_; }
   void set_non_trivial_expr_op_ctx(bool v) { has_non_trivial_expr_op_ctx_ = v; }
   inline bool &get_tmp_alloc_used() { return tmp_alloc_used_; }
-
+  // set write branch id for DML write
+  void set_branch_id(const int16_t branch_id) { das_ctx_.set_write_branch_id(branch_id); }
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 protected:
   uint64_t get_ser_version() const;
@@ -342,7 +373,9 @@ public:
   inline pl::ObPLCtx *get_pl_ctx() { return pl_ctx_; }
   inline void set_pl_ctx(pl::ObPLCtx *pl_ctx) { pl_ctx_ = pl_ctx; }
   pl::ObPLPackageGuard* get_package_guard();
-
+  int get_package_guard(pl::ObPLPackageGuard *&package_guard);
+  inline pl::ObPLPackageGuard* get_original_package_guard() { return package_guard_; }
+  inline void set_package_guard(pl::ObPLPackageGuard* v) { package_guard_ = v; }
   int init_pl_ctx();
 
   ObPartIdRowMapManager& get_part_row_manager() { return part_row_map_manager_; }
@@ -355,8 +388,6 @@ public:
   int64_t get_row_id_list_total_count() const { return total_row_count_; }
   void set_plan_start_time(int64_t t) { phy_plan_ctx_->set_plan_start_time(t); }
   int64_t get_plan_start_time() const { return phy_plan_ctx_->get_plan_start_time(); }
-  void set_is_evolution(bool v) { is_evolution_ = v; }
-  bool get_is_evolution() const { return is_evolution_; }
   void set_is_ps_prepare_stage(bool v) { is_ps_prepare_stage_ = v; }
   bool is_ps_prepare_stage() const { return is_ps_prepare_stage_; }
 
@@ -466,9 +497,17 @@ public:
   void set_errcode(const int errcode) { ATOMIC_STORE(&errcode_, errcode); }
   int get_errcode() const { return ATOMIC_LOAD(&errcode_); }
   hash::ObHashMap<uint64_t, void*> &get_dblink_snapshot_map() { return dblink_snapshot_map_; }
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
+  int get_subschema_id_by_udt_id(uint64_t udt_type_id,
+                                 uint16_t &subschema_id,
+                                 share::schema::ObSchemaGetterGuard *schema_guard = NULL);
+
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
-  void set_cur_rownum(int64_t cur_rownum) { cur_row_num_ = cur_rownum; }
-  int64_t get_cur_rownum() { return cur_row_num_; }
+  inline void set_cur_rownum(int64_t cur_rownum) { user_logging_ctx_.row_num_ = cur_rownum; }
+  inline int64_t get_cur_rownum() const { return user_logging_ctx_.row_num_; }
+  inline void set_cur_column_name(const ObString *column_name)
+  { user_logging_ctx_.column_name_ = column_name; }
+  inline ObUserLoggingCtx *get_user_logging_ctx() { return &user_logging_ctx_; }
   bool use_temp_expr_ctx_cache() const { return use_temp_expr_ctx_cache_; }
   bool has_dynamic_values_table() const {
     bool ret = false;
@@ -477,6 +516,12 @@ public:
     }
     return ret;
   }
+  int get_local_var_array(int64_t local_var_array_id, const ObSolidifiedVarsContext *&var_array);
+  void set_is_online_stats_gathering(bool v) { is_online_stats_gathering_ = v; }
+  bool is_online_stats_gathering() const { return is_online_stats_gathering_; }
+
+  int get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx);
+
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -551,9 +596,6 @@ protected:
   ObRowIdListArray row_id_list_array_;
   //判断现在执行的计划是否为演进过程中的计划
   int64_t total_row_count_;
-  // -----------------------
-
-  bool is_evolution_;
   // Interminate result of index building is reusable, reused in build index retry with same snapshot.
   // Reusable intermediate result is not deleted in the close phase, deleted deliberately after
   // execution is completed.
@@ -599,7 +641,7 @@ protected:
   // expression evaluating allocator
   common::ObArenaAllocator eval_res_allocator_;
   common::ObArenaAllocator eval_tmp_allocator_;
-  ObSEArray<ObSqlTempTableCtx, 2> temp_ctx_;
+  ObTMArray<ObSqlTempTableCtx> temp_ctx_;
 
   // 用于 NLJ 场景下对右侧分区表 TSC 扫描做动态 pruning
   ObGIPruningInfo gi_pruning_info_;
@@ -654,9 +696,13 @@ protected:
   hash::ObHashMap<uint64_t, void*> dblink_snapshot_map_;
   // for feedback
   ObExecFeedbackInfo fb_info_;
-  // for dml report user warning/error at specific row
-  int64_t cur_row_num_;
+  // for dml report user warning/error at specific row and column
+  ObUserLoggingCtx user_logging_ctx_;
+  // for online stats gathering
+  bool is_online_stats_gathering_;
   //---------------
+
+  ObLobAccessCtx *lob_access_ctx_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

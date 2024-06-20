@@ -63,6 +63,7 @@ int ObILibCacheNode::remove_all_plan_stat()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(lib_cache_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is invalid");
   } else {
     SpinRLockGuard lock_guard(co_list_lock_);
@@ -207,6 +208,7 @@ int64_t ObILibCacheNode::dec_ref_count(const CacheRefHandleID ref_handle)
   } else if (0 == ref_count) {
     LOG_DEBUG("remove cache node", K(ref_count), K(this));
     if (OB_ISNULL(lib_cache_)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid null lib cache");
     } else {
       ObLCNodeFactory &ln_factory = lib_cache_->get_cache_node_factory();
@@ -230,6 +232,7 @@ int ObILibCacheNode::remove_cache_obj_entry(const ObCacheObjID obj_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(lib_cache_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is invalid");
   } else {
     ObLCObjectManager &mgr = lib_cache_->get_cache_obj_mgr();

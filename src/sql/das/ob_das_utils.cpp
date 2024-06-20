@@ -21,8 +21,8 @@
 #include "share/location_cache/ob_location_service.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_srs.h"
-#include "lib/geo/ob_s2adapter.h"
-#include "lib/geo/ob_geo_utils.h"
+#include "share/ob_tablet_autoincrement_service.h"
+#include "storage/access/ob_dml_param.h"
 namespace oceanbase
 {
 using namespace common;
@@ -257,8 +257,21 @@ int ObDASUtils::reshape_storage_value(const ObObjMeta &col_type,
                                       ObObj &value)
 {
   int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode() && value.is_character_type() && value.get_string_len() == 0) {
+    // Oracle compatibility mode: '' as null
+    LOG_DEBUG("reshape empty string to null", K(value));
+    value.set_null();
+  } else if (OB_FAIL(padding_fixed_string_value(col_accuracy.get_length(), allocator, value))) {
+    LOG_WARN("padding char value failed", K(ret), K(col_accuracy), K(value));
+  }
+  return ret;
+}
+
+int ObDASUtils::padding_fixed_string_value(int64_t max_len, ObIAllocator &allocator, ObObj &value)
+{
+  int ret = OB_SUCCESS;
   if (value.is_binary()) {
-    int32_t binary_len = col_accuracy.get_length();
+    int32_t binary_len = max_len;
     int32_t len = value.get_string_len();
     if (binary_len > len) {
       char *dest_str = NULL;
@@ -273,10 +286,6 @@ int ObDASUtils::reshape_storage_value(const ObObjMeta &col_type,
         value.set_binary(ObString(binary_len, dest_str));
       }
     }
-  } else if (lib::is_oracle_mode() && value.is_character_type() && value.get_string_len() == 0) {
-    // Oracle compatibility mode: '' as null
-    LOG_DEBUG("reshape empty string to null", K(value));
-    value.set_null();
   } else if (value.is_fixed_len_char_type()) {
     const char *str = value.get_string_ptr();
     int32_t len = value.get_string_len();
@@ -293,97 +302,44 @@ int ObDASUtils::reshape_storage_value(const ObObjMeta &col_type,
   return ret;
 }
 
-int ObDASUtils::generate_spatial_index_rows(
-    ObIAllocator &allocator,
-    const ObDASDMLBaseCtDef &das_ctdef,
-    const ObString &wkb_str,
-    const IntFixedArray &row_projector,
-    const ObDASWriteBuffer::DmlRow &dml_row,
-    ObSpatIndexRow &spat_rows)
+int ObDASUtils::reshape_datum_value(const ObObjMeta &col_type,
+                                    const ObAccuracy &col_accuracy,
+                                    const bool enable_oracle_empty_char_reshape_to_null,
+                                    ObIAllocator &allocator,
+                                    blocksstable::ObStorageDatum &datum_value)
 {
   int ret = OB_SUCCESS;
-  omt::ObSrsCacheGuard srs_guard;
-  const ObSrsItem *srs_item = NULL;
-  const ObSrsBoundsItem *srs_bound = NULL;
-  uint32_t srid = UINT32_MAX;
-  uint64_t rowkey_num = das_ctdef.table_param_.get_data_table().get_rowkey_column_num();
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
-
-  if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
-    LOG_WARN("failed to get srid", K(ret), K(wkb_str));
-  } else if (srid != 0 &&
-      OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
-    LOG_WARN("failed to get srs guard", K(ret), K(MTL_ID()), K(srid));
-  } else if (srid != 0 &&
-      OB_FAIL(srs_guard.get_srs_item(srid, srs_item))) {
-    LOG_WARN("failed to get srs item", K(ret), K(MTL_ID()), K(srid));
-  } else if (((srid == 0) || !(srs_item->is_geographical_srs())) &&
-              OB_FAIL(OTSRS_MGR->get_srs_bounds(srid, srs_item, srs_bound))) {
-    LOG_WARN("failed to get srs bound", K(ret), K(srid));
-  } else {
-    ObS2Adapter s2object(&allocator, srid != 0 ? srs_item->is_geographical_srs() : false);
-    ObSpatialMBR spa_mbr;
-    ObObj *obj_arr = NULL;
-    ObS2Cellids cellids;
-    char *mbr = NULL;
-    int64_t mbr_len = 0;
-    if (OB_FAIL(s2object.init(wkb_str, srs_bound))) {
-      LOG_WARN("Init s2object failed", K(ret));
-    } else if (OB_FAIL(s2object.get_cellids(cellids, false))) {
-      LOG_WARN("Get cellids from s2object failed", K(ret));
-    } else if (OB_FAIL(s2object.get_mbr(spa_mbr))) {
-      LOG_WARN("Get mbr from s2object failed", K(ret));
-    } else if (spa_mbr.is_empty()) {
-      if (cellids.size() == 0) {
-        LOG_DEBUG("it's might be empty geometry collection", K(wkb_str));
+  if (col_type.is_binary()) {
+    int32_t binary_len = col_accuracy.get_length();
+    int32_t len = datum_value.len_;
+    if (binary_len > len) {
+      char *dest_str = NULL;
+      const char *str = datum_value.ptr_;
+      if (OB_ISNULL(dest_str = (char *)(allocator.alloc(binary_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc mem to binary", K(ret), K(binary_len));
       } else {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_WARN("invalid geometry", K(ret), K(wkb_str));
-      }
-    } else if (OB_ISNULL(mbr = reinterpret_cast<char *>(allocator.alloc(OB_DEFAULT_MBR_SIZE)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory for spatial index row mbr", K(ret));
-    } else if (OB_FAIL(spa_mbr.to_char(mbr, mbr_len))) {
-      LOG_WARN("failed transform ObSpatialMBR to string", K(ret));
-    } else {
-      for (uint64_t i = 0; OB_SUCC(ret) && i < cellids.size(); i++) {
-        if (OB_ISNULL(obj_arr = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * rowkey_num)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc memory for spatial index row cells", K(ret));
-        } else {
-          // 索引行[cellid_obj][mbr_obj][rowkey_obj]
-          for(uint64_t j = 0; OB_SUCC(ret) && j < rowkey_num; j++) {
-            obj_arr[j].set_nop_value();
-            const ObObjMeta &col_type = das_ctdef.column_types_.at(j);
-            const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
-            int64_t projector_idx = row_projector.at(j);
-            if (OB_FAIL(dml_row.cells()[projector_idx].to_obj(obj_arr[j], col_type))) {
-              LOG_WARN("stored row to new row obj failed", K(ret),
-                  K(dml_row.cells()[projector_idx]), K(col_type), K(projector_idx), K(j));
-            } else if (OB_FAIL(ObDASUtils::reshape_storage_value(col_type, col_accuracy, allocator, obj_arr[j]))) {
-              LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
-            }
-          }
-          if (OB_SUCC(ret)) {
-            int64_t cellid_col_idx = 0;
-            int64_t mbr_col_idx = 1;
-            obj_arr[cellid_col_idx].set_uint64(cellids.at(i));
-            ObString mbr_val(mbr_len, mbr);
-            obj_arr[mbr_col_idx].set_varchar(mbr_val);
-            obj_arr[mbr_col_idx].set_collation_type(CS_TYPE_BINARY);
-            obj_arr[mbr_col_idx].set_collation_level(CS_LEVEL_IMPLICIT);
-            ObNewRow row;
-            row.cells_ = obj_arr;
-            row.count_ = rowkey_num;
-            if (OB_FAIL(spat_rows.push_back(row))) {
-              LOG_WARN("failed to push back spatial index row", K(ret), K(row));
-            }
-          }
-        }
+        char pad_char = '\0';
+        MEMCPY(dest_str, str, len);
+        MEMSET(dest_str + len, pad_char, binary_len - len);
+        datum_value.set_string(ObString(binary_len, dest_str));
       }
     }
+  } else if (lib::is_oracle_mode() && !enable_oracle_empty_char_reshape_to_null && col_type.is_character_type() && datum_value.len_ == 0) {
+    // Oracle compatibility mode: '' as null
+    LOG_DEBUG("reshape empty string to null", K(datum_value));
+    datum_value.set_null();
+  } else if (col_type.is_fixed_len_char_type()) {
+    const char *str = datum_value.ptr_;
+    int32_t len = datum_value.len_;
+    ObString space_pattern = ObCharsetUtils::get_const_str(col_type.get_collation_type(), ' ');
+    for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+      if (0 != MEMCMP(str + len - space_pattern.length(), space_pattern.ptr(), space_pattern.length())) {
+        break;
+      }
+    }
+    datum_value.set_string(ObString(len, str));
   }
-
   return ret;
 }
 
@@ -407,5 +363,94 @@ int ObDASUtils::wait_das_retry(int64_t retry_cnt)
   return ret;
 }
 
+int ObDASUtils::find_child_das_def(const ObDASBaseCtDef *root_ctdef,
+                                   ObDASBaseRtDef *root_rtdef,
+                                   ObDASOpType op_type,
+                                   const ObDASBaseCtDef *&target_ctdef,
+                                   ObDASBaseRtDef *&target_rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root_ctdef) || OB_ISNULL(root_rtdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root ctdef or rtdef is nullptr", K(ret), KP(root_ctdef), K(root_rtdef));
+  } else if (OB_UNLIKELY(root_ctdef->op_type_ != root_rtdef->op_type_
+      || root_ctdef->children_cnt_ != root_rtdef->children_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the op_type of ctdef and rtdef do not match", K(ret),
+             K(root_ctdef->op_type_), K(root_rtdef->op_type_),
+             K(root_ctdef->children_cnt_), K(root_rtdef->children_cnt_));
+  } else if (root_ctdef->op_type_ == op_type) {
+    target_ctdef = root_ctdef;
+    target_rtdef = root_rtdef;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < root_ctdef->children_cnt_; ++i) {
+      if (OB_FAIL(find_child_das_def(root_ctdef->children_[i],
+                                     root_rtdef->children_[i],
+                                     op_type,
+                                     target_ctdef,
+                                     target_rtdef))) {
+        LOG_WARN("find child das def failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
+                                  const storage::ObDMLBaseParam &dml_param,
+                                  ObNewRow &row,
+                                  ObDASOpType op_type,
+                                  bool is_old_row)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t autoinc_seq = 0;
+  ObTabletAutoincrementService &auto_inc = ObTabletAutoincrementService::get_instance();
+  if (OB_ISNULL(dml_param.table_param_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table param is null", KR(ret));
+  } else if (!dml_param.table_param_->get_data_table().is_mlog_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data table is not materialized view log",
+        KR(ret), K(dml_param.table_param_->get_data_table()));
+  } else if (row.count_ < 4) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("each mlog row should at least contain 4 columns", KR(ret), K(row.count_));
+  } else if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, tablet_id, autoinc_seq))) {
+    LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(tablet_id));
+  } else {
+    // mlog_row = | base_table_rowkey_cols | partition key cols | sequence_col | ... | dmltype_col | old_new_col |
+    int sequence_col = 0;
+    int dmltype_col = row.count_ - 2;
+    int old_new_col = row.count_ - 1;
+    const ObTableDMLParam::ObColDescArray &col_descs = dml_param.table_param_->get_col_descs();
+    bool found_seq_col = false;
+    for (int64_t i = 0; !found_seq_col && (i < row.count_); ++i) {
+      if (OB_MLOG_SEQ_NO_COLUMN_ID == col_descs.at(i).col_id_) {
+        sequence_col = i; // sequence_no is the last rowkey
+        found_seq_col = true;
+      }
+    }
+
+    row.cells_[sequence_col].set_int(ObObjType::ObIntType, static_cast<int64_t>(autoinc_seq));
+    if (sql::DAS_OP_TABLE_DELETE == op_type) {
+      row.cells_[dmltype_col].set_varchar("D");
+      row.cells_[old_new_col].set_varchar("O");
+    } else if (sql::DAS_OP_TABLE_UPDATE == op_type) {
+      row.cells_[dmltype_col].set_varchar("U");
+      if (is_old_row) {
+        row.cells_[old_new_col].set_varchar("O");
+      } else {
+        row.cells_[old_new_col].set_varchar("N");
+      }
+    } else {
+      row.cells_[dmltype_col].set_varchar("I");
+      row.cells_[old_new_col].set_varchar("N");
+    }
+    row.cells_[dmltype_col].set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+    row.cells_[old_new_col].set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+  }
+  return ret;
+}
 }  // namespace sql
 }  // namespace oceanbase

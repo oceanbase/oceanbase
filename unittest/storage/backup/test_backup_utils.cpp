@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/ob_parallel_external_sort.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
+#include "storage/backup/ob_backup_ctx.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -195,7 +196,8 @@ void test_task_mgr(const int64_t batch_count, const int64_t total_item_count, co
   backup_data_type.set_minor_data_backup();
   ObBackupMacroBlockTaskMgr *task_mgr = new ObBackupMacroBlockTaskMgr;
   ObFakeBackupTabletProvider *provider = new ObFakeBackupTabletProvider;
-  ret = task_mgr->init(backup_data_type, batch_count);
+  ObLSBackupCtx ls_backup_ctx;
+  ret = task_mgr->init(backup_data_type, batch_count, ls_backup_ctx);
   EXPECT_EQ(OB_SUCCESS, ret);
   ret = provider->init(total_item_count);
   EXPECT_EQ(OB_SUCCESS, ret);
@@ -316,7 +318,11 @@ void TestBackupExternalSort::SetUp()
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
   ObTenantIOManager *io_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
+  EXPECT_EQ(OB_SUCCESS, io_service->start());
+  tenant_ctx.set(io_service);
+  ObTenantEnv::set_tenant(&tenant_ctx);
 }
 
 void TestBackupExternalSort::TearDown()

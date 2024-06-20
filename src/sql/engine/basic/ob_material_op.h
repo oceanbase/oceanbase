@@ -53,9 +53,8 @@ class ObMaterialOp : public ObOperator
 public:
   ObMaterialOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObOperator(exec_ctx, spec, input),
-    profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
     is_first_(false),
-    material_impl_(op_monitor_info_, profile_)
+    material_impl_(op_monitor_info_)
   {}
 
   virtual int inner_open() override;
@@ -79,7 +78,6 @@ private:
 
 private:
   friend class ObValues;
-  ObSqlWorkAreaProfile profile_;
   bool is_first_;
   ObMaterialOpImpl material_impl_;
 };

@@ -276,7 +276,7 @@ void FetchStream::configure(const ObLogConfig &config)
   LOG_INFO("[CONFIG]", K(print_stream_dispatch_info));
 }
 
-void FetchStream::do_stat()
+void FetchStream::do_stat(int64_t &traffic)
 {
   ObByteLockGuard lock_guard(stat_lock_);
 
@@ -305,7 +305,7 @@ void FetchStream::do_stat()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), "fs", *this);
     }
-
+    traffic = fsi_printer.get_traffic();
     last_stat_time_ = cur_time;
     last_stat_info_ = cur_stat_info_;
   }
@@ -1331,6 +1331,10 @@ const char *FetchStream::print_kick_out_reason_(const KickOutReason reason)
       str = "Discarded";
       break;
 
+    case ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
+      str = "ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF";
+      break;
+
     default:
       str = "NONE";
       break;
@@ -1982,19 +1986,19 @@ FetchStream::KickOutReason FetchStream::get_feedback_reason_(const Feedback &fee
   // Get KickOutReason based on feedback
   KickOutReason reason = NONE;
   switch (feedback) {
-    case ObCdcLSFetchLogResp::LAGGED_FOLLOWER:
+    case FeedbackType::LAGGED_FOLLOWER:
       reason = LAGGED_FOLLOWER;
       break;
 
-    case ObCdcLSFetchLogResp::LOG_NOT_IN_THIS_SERVER:
+    case FeedbackType::LOG_NOT_IN_THIS_SERVER:
       reason = LOG_NOT_IN_THIS_SERVER;
       break;
 
-    case ObCdcLSFetchLogResp::LS_OFFLINED:
+    case FeedbackType::LS_OFFLINED:
       reason = LS_OFFLINED;
       break;
 
-    case ObCdcLSFetchLogResp::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
+    case FeedbackType::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
       reason = ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF;
       break;
 

@@ -45,7 +45,7 @@
 #include "observer/table/ob_table_batch_execute_processor.h"
 #include "observer/table/ob_table_query_processor.h"
 #include "observer/table/ob_table_query_and_mutate_processor.h"
-#include "observer/table/ob_table_query_sync_processor.h"
+#include "observer/table/ob_table_query_async_processor.h"
 #include "observer/table/ob_table_direct_load_processor.h"
 #include "storage/ob_storage_rpc.h"
 
@@ -54,6 +54,7 @@
 #include "storage/tx/ob_xa_rpc.h"
 
 #include "observer/table_load/ob_table_load_rpc_processor.h"
+#include "observer/table_load/resource/ob_table_load_resource_processor.h"
 #include "observer/net/ob_net_endpoint_ingress_rpc_processor.h"
 #include "share/wr/ob_wr_snapshot_rpc_processor.h"
 
@@ -101,6 +102,8 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObGetMasterKeyP, gctx_);
   RPC_PROCESSOR(ObRestoreKeyP, gctx_);
   RPC_PROCESSOR(ObSetRootKeyP, gctx_);
+  RPC_PROCESSOR(ObCloneKeyP, gctx_);
+  RPC_PROCESSOR(ObTrimKeyListP, gctx_);
 #endif
   RPC_PROCESSOR(ObHandlePartTransCtxP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY
@@ -118,6 +121,8 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObRpcGetLSAccessModeP, gctx_);
   RPC_PROCESSOR(ObRpcChangeLSAccessModeP, gctx_);
   RPC_PROCESSOR(ObTabletLocationReceiveP, gctx_);
+  RPC_PROCESSOR(ObForceSetTenantLogDiskP, gctx_);
+  RPC_PROCESSOR(ObForceDumpServerUsageP, gctx_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_migrator(ObSrvRpcXlator *xlator) {
@@ -162,6 +167,8 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObFetchLSReplayScnP);
   RPC_PROCESSOR(ObCheckTransferTabletsBackfillP);
   RPC_PROCESSOR(ObStorageGetConfigVersionAndTransferScnP);
+  RPC_PROCESSOR(ObStorageSubmitTxLogP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObStorageGetTransferDestPrepareSCNP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObStorageLockConfigChangeP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObStorageUnlockConfigChangeP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObStorageGetLogConfigStatP, gctx_.bandwidth_throttle_);
@@ -198,7 +205,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObTableBatchExecuteP, gctx_);
   RPC_PROCESSOR(ObTableQueryP, gctx_);
   RPC_PROCESSOR(ObTableQueryAndMutateP, gctx_);
-  RPC_PROCESSOR(ObTableQuerySyncP, gctx_);
+  RPC_PROCESSOR(ObTableQueryAsyncP, gctx_);
   RPC_PROCESSOR(ObTableDirectLoadP, gctx_);
   RPC_PROCESSOR(ObTenantTTLP, gctx_);
 
@@ -267,6 +274,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObGAISCurrAutoIncP);
   RPC_PROCESSOR(ObGAISPushAutoIncP);
   RPC_PROCESSOR(ObGAISClearAutoIncCacheP);
+  RPC_PROCESSOR(ObGAISNextSequenceP);
 
 #ifdef OB_BUILD_SPM
   // sql plan baseline
@@ -292,6 +300,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObNetEndpointRegisterP, gctx_);
   RPC_PROCESSOR(ObNetEndpointPredictIngressP, gctx_);
   RPC_PROCESSOR(ObNetEndpointSetIngressP, gctx_);
+  RPC_PROCESSOR(ObRpcGetTenantResP, gctx_);
 
   // session info verification
   RPC_PROCESSOR(ObSessInfoVerificationP, gctx_);
@@ -299,6 +308,8 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // direct load
   RPC_PROCESSOR(ObDirectLoadControlP, gctx_);
+  // direct load resource
+  RPC_PROCESSOR(ObDirectLoadResourceP, gctx_);
 
   // wr
   RPC_PROCESSOR(ObWrAsyncSnapshotTaskP, gctx_);
@@ -307,7 +318,14 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObWrSyncUserModifySettingsTaskP, gctx_);
 
   // kill client session
-  // RPC_PROCESSOR(ObKillClientSessionP, gctx_);
+  RPC_PROCESSOR(ObKillClientSessionP, gctx_);
   // client session create time
-  // RPC_PROCESSOR(ObClientSessionConnectTimeP, gctx_);
+  RPC_PROCESSOR(ObClientSessionConnectTimeP, gctx_);
+  // limit calculator
+  RPC_PROCESSOR(ObResourceLimitCalculatorP, gctx_);
+
+  // ddl
+  RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
+
+  RPC_PROCESSOR(ObGAISBroadcastAutoIncCacheP);
 }

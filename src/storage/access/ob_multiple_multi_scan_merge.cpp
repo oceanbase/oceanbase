@@ -111,7 +111,7 @@ int ObMultipleMultiScanMerge::calc_scan_range()
           const ObDatumRowkey &range_key = is_reverse_scan ? range.get_start_key() : range.get_end_key();
           if (OB_FAIL(range_key.compare(curr_rowkey_, read_info->get_datum_utils(), cmp_ret))) {
             STORAGE_LOG(WARN, "Failed to cmopare range key ", K(ret), K(range_key), K(curr_rowkey_));
-          } else if (cmp_ret > 0) {
+          } else if ((is_reverse_scan && cmp_ret < 0) || (!is_reverse_scan && cmp_ret > 0)) {
             range.change_boundary(curr_rowkey_, is_reverse_scan);
             range_idx_delta_ += i;
             if (OB_FAIL(cow_ranges_.push_back(range))) {

@@ -60,7 +60,7 @@ int ObExprHex::calc_result_type1(ObExprResType &type,
     type.set_varchar();
   }
   type.set_collation_level(common::CS_LEVEL_COERCIBLE);
-  type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
+  type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
 
   //calc length now...
   common::ObLength length = -1;
@@ -263,5 +263,15 @@ int ObExprHex::eval_hex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
   }
   return ret;
 }
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprHex, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
+  }
+  return ret;
+}
+
 }
 }

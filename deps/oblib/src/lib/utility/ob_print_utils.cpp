@@ -291,11 +291,6 @@ const char *to_cstring<int64_t>(const int64_t &v)
   return to_cstring<int64_t>(v, BoolType<false>());
 }
 
-const char *to_cstring(const int64_t v)
-{
-  return to_cstring<int64_t>(v, BoolType<false>());
-}
-
 ////////////////////////////////////////////////////////////////
 
 int databuff_printf(char *buf, const int64_t buf_len, const char *fmt, ...)

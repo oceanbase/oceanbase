@@ -112,7 +112,7 @@ public:
   void minor_freeze_data_memtable(ObLS *ls)
   {
     TRANS_LOG(INFO, "minor_freeze_data_memtable begin");
-    ASSERT_EQ(OB_SUCCESS, ls->ls_freezer_.logstream_freeze());
+    ASSERT_EQ(OB_SUCCESS, ls->ls_freezer_.logstream_freeze(0));
 
     // TODO(handora.qc): use more graceful wait
     usleep(10 * 1000 * 1000);
@@ -131,7 +131,7 @@ public:
           dynamic_cast<ObLSTxService *>(
             checkpoint_executor->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
           ->common_checkpoints_[ObCommonCheckpointType::TX_CTX_MEMTABLE_TYPE]);
-      ASSERT_EQ(OB_SUCCESS, tx_ctx_memtable->flush(share::SCN::max_scn()));
+      ASSERT_EQ(OB_SUCCESS, tx_ctx_memtable->flush(share::SCN::max_scn(), 0));
 
       // TODO(handora.qc): use more graceful wait
       usleep(10 * 1000 * 1000);

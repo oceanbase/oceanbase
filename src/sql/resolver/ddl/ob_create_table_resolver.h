@@ -13,7 +13,7 @@
 #ifndef _OB_CREATE_TABLE_RESOLVER_H
 #define _OB_CREATE_TABLE_RESOLVER_H 1
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
-#include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "sql/resolver/ddl/ob_create_table_resolver_base.h"
 #include "lib/container/ob_se_array.h"
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
@@ -25,7 +25,7 @@ namespace oceanbase
 namespace sql
 {
 
-class ObCreateTableResolver: public ObDDLResolver
+class ObCreateTableResolver: public ObCreateTableResolverBase
 {
 public:
   //store generated column and its' dependent expr.
@@ -73,11 +73,11 @@ private:
   int add_hidden_tablet_seq_col();
   int add_hidden_external_table_pk_col();
 
-  int add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
-                                          ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols,
-                                          ObColumnSchemaV2 &udt_column);
-  int add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
-                                          ObColumnSchemaV2 &udt_column);
+  int add_udt_hidden_column(ObTableSchema &table_schema,
+                            ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols,
+                            ObColumnSchemaV2 &udt_column);
+  int add_udt_hidden_column(ObTableSchema &table_schema,
+                            ObColumnSchemaV2 &udt_column);
   int check_column_name_duplicate(const ParseNode *node);
   int resolve_primary_key_node(const ParseNode &pk_node, common::ObArray<ObColumnResolveStat> &stats);
   int resolve_table_elements(const ParseNode *node,
@@ -85,10 +85,10 @@ private:
                              common::ObArray<int> &foreign_key_node_position_list,
                              common::ObArray<int> &table_level_constraint_list,
                              const int resolve_rule);
+  int resolve_insert_mode(const ParseNode *parse_tree);
   int resolve_table_elements_from_select(const ParseNode &parse_tree);
   int set_temp_table_info(share::schema::ObTableSchema &table_schema, ParseNode *commit_option_node);
 
-  int set_table_option_to_schema(share::schema::ObTableSchema &table_schema);
   int resolve_table_charset_info(const ParseNode *node);
   //index
   int add_sort_column(const obrpc::ObColumnSortItem &sort_column);
@@ -127,23 +127,18 @@ private:
   int generate_uk_idx_array(const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list, ObIArray<int64_t> &uk_idx_in_index_arg_list);
   bool is_pk_uk_duplicate(const ObIArray<ObString> &pk_columns_name, const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list, const ObIArray<int64_t> &uk_idx);
   bool is_uk_uk_duplicate(const ObIArray<int64_t> &uk_idx, const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
-  int resolve_vertical_partition(const ParseNode *column_partition_node);
   int resolve_auto_partition(const ParseNode *partition_node);
-
+  int check_external_table_generated_partition_column_sanity(ObTableSchema &table_schema, ObRawExpr *dependant_expr, ObIArray<int64_t> &external_part_idx);
   typedef common::hash::ObPlacementHashSet<uint64_t, common::OB_MAX_USER_DEFINED_COLUMNS_COUNT> VPColumnIdHashSet;
-  int resolve_vertical_column(
-      const ParseNode *aux_vertical_column_node,
-      VPColumnIdHashSet &vp_column_id_set,
-      const bool is_auxiliary_part);
 
   // check this type of table_schema should build column_group or not
-  bool need_column_group(const share::schema::ObTableSchema &table_schema);
   uint64_t gen_column_group_id();
   int resolve_column_group(const ParseNode *cg_node);
-  int parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const;
-  int check_column_store_config();
 
   int add_inner_index_for_heap_gtt();
+  int check_max_row_data_length(const ObTableSchema &table_schema);
+
+  int create_default_partition_for_table(ObTableSchema &table_schema);
 
 private:
   // data members

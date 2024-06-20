@@ -106,6 +106,7 @@ int ObMvccEngine::try_compact_row_when_mvcc_read_(const SCN &snapshot_version,
 int ObMvccEngine::get(ObMvccAccessCtx &ctx,
                       const ObQueryFlag &query_flag,
                       const ObMemtableKey *parameter_key,
+                      const share::ObLSID memtable_ls_id,
                       ObMemtableKey *returned_key,
                       ObMvccValueIterator &value_iter,
                       ObStoreRowLockState &lock_state)
@@ -139,6 +140,7 @@ int ObMvccEngine::get(ObMvccAccessCtx &ctx,
     if (OB_FAIL(value_iter.init(ctx,
                                 returned_key,
                                 value,
+                                memtable_ls_id,
                                 query_flag))) {
       TRANS_LOG(WARN, "ObMvccValueIterator init fail", KR(ret));
     }
@@ -153,6 +155,7 @@ int ObMvccEngine::scan(
     ObMvccAccessCtx &ctx,
     const ObQueryFlag &query_flag,
     const ObMvccScanRange &range,
+    const share::ObLSID memtable_ls_id,
     ObMvccRowIterator &row_iter)
 {
   int ret = OB_SUCCESS;
@@ -165,6 +168,7 @@ int ObMvccEngine::scan(
   } else if (OB_FAIL(row_iter.init(*query_engine_,
                                    ctx,
                                    range,
+                                   memtable_ls_id,
                                    query_flag))) {
     TRANS_LOG(WARN, "row_iter init fail", K(ret));
   } else {
@@ -223,12 +227,14 @@ int ObMvccEngine::estimate_scan_row_count(
               part_est.logical_row_count_, part_est.physical_row_count_))) {
     TRANS_LOG(WARN, "query engine estimate row count fail", K(ret));
   }
+
   return ret;
 }
 
 int ObMvccEngine::check_row_locked(ObMvccAccessCtx &ctx,
                                    const ObMemtableKey *key,
-                                   ObStoreRowLockState &lock_state)
+                                   ObStoreRowLockState &lock_state,
+                                   ObRowState &row_state)
 {
   int ret = OB_SUCCESS;
   ObMemtableKey stored_key;
@@ -242,7 +248,7 @@ int ObMvccEngine::check_row_locked(ObMvccAccessCtx &ctx,
       // rewrite ret
       ret = OB_SUCCESS;
     }
-  } else if (OB_FAIL(value->check_row_locked(ctx, lock_state))) {
+  } else if (OB_FAIL(value->check_row_locked(ctx, lock_state, row_state))) {
     TRANS_LOG(WARN, "check row locked fail", K(ret), KPC(value), K(ctx), K(lock_state));
   }
 
@@ -251,9 +257,9 @@ int ObMvccEngine::check_row_locked(ObMvccAccessCtx &ctx,
 
 int ObMvccEngine::create_kv(
     const ObMemtableKey *key,
+    const bool is_insert,
     ObMemtableKey *stored_key,
     ObMvccRow *&value,
-    RowHeaderGetter &getter,
     bool &is_new_add)
 {
   int64_t loop_cnt = 0;
@@ -266,13 +272,18 @@ int ObMvccEngine::create_kv(
     is_new_add = false;
     while (OB_SUCCESS == ret && NULL == value) {
       ObStoreRowkey *tmp_key = nullptr;
-      if (OB_SUCCESS == (ret = query_engine_->get(key, value, stored_key))) {
+      // We optimize the create_kv operation by skipping the first hash table
+      // get for insert operation because it is unnecessary at most cases. Under
+      // the concurrent inserts, we rely on the conflict on the hash table set
+      // and the while loops for the next hash table get to maintain the origin
+      // create_kv semantic
+      if (!(0 == loop_cnt // is the first try in the loop
+            && is_insert) // is insert dml operation
+          && OB_SUCC(query_engine_->get(key, value, stored_key))) {
         if (NULL == value) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "get NULL value");
         }
-      } else if (OB_FAIL(getter.get())) {
-        TRANS_LOG(WARN, "get row header error");
       } else if (OB_FAIL(kv_builder_->dup_key(tmp_key,
                                               *engine_allocator_,
                                               key->get_rowkey()))) {
@@ -307,8 +318,7 @@ int ObMvccEngine::create_kv(
   return ret;
 }
 
-int ObMvccEngine::mvcc_write(ObIMemtableCtx &ctx,
-                             const concurrent_control::ObWriteFlag write_flag,
+int ObMvccEngine::mvcc_write(storage::ObStoreCtx &ctx,
                              const transaction::ObTxSnapshot &snapshot,
                              ObMvccRow &value,
                              const ObTxNodeArg &arg,
@@ -316,53 +326,48 @@ int ObMvccEngine::mvcc_write(ObIMemtableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *node = NULL;
+  ObMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
 
-  if (OB_FAIL(build_tx_node_(ctx, arg, node))) {
+  if (OB_FAIL(build_tx_node_(arg, node))) {
     TRANS_LOG(WARN, "build tx node failed", K(ret), K(ctx), K(arg));
   } else if (OB_FAIL(value.mvcc_write(ctx,
-                                      write_flag,
                                       snapshot,
                                       *node,
                                       res))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret &&
         OB_TRANSACTION_SET_VIOLATION != ret) {
-      TRANS_LOG(WARN, "mvcc write failed", K(ret), K(ctx), K(arg));
+      TRANS_LOG(WARN, "mvcc write failed", K(ret), KPC(mem_ctx), K(arg));
     }
   } else {
-    TRANS_LOG(DEBUG, "mvcc write succeed", K(ret), K(ctx), K(arg), K(*node));
+    TRANS_LOG(DEBUG, "mvcc write succeed", K(ret), KPC(mem_ctx), K(arg), K(*node));
   }
 
   return ret;
 }
 
-int ObMvccEngine::mvcc_replay(ObIMemtableCtx &ctx,
-                              const ObMemtableKey *stored_key,
-                              ObMvccRow &value,
-                              const ObTxNodeArg &arg,
+int ObMvccEngine::mvcc_replay(const ObTxNodeArg &arg,
                               ObMvccReplayResult &res)
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *node = NULL;
 
-  if (OB_FAIL(build_tx_node_(ctx, arg, node))) {
-    TRANS_LOG(WARN, "build tx node failed", K(ret), K(ctx), K(arg));
+  if (OB_FAIL(build_tx_node_(arg, node))) {
+    TRANS_LOG(WARN, "build tx node failed", K(ret), K(arg));
   } else {
     res.tx_node_ = node;
-    TRANS_LOG(DEBUG, "mvcc replay succeed", K(ret), K(ctx), K(arg));
+    TRANS_LOG(DEBUG, "mvcc replay succeed", K(ret), K(arg));
   }
   return ret;
 }
 
-int ObMvccEngine::build_tx_node_(ObIMemtableCtx &ctx,
-                                 const ObTxNodeArg &arg,
+int ObMvccEngine::build_tx_node_(const ObTxNodeArg &arg,
                                  ObMvccTransNode *&node)
 {
   int ret = OB_SUCCESS;
-
   if (OB_FAIL(kv_builder_->dup_data(node, *engine_allocator_, arg.data_))) {
     TRANS_LOG(WARN, "MvccTranNode dup fail", K(ret), "node", node);
   } else {
-    node->tx_id_ = ctx.get_tx_id();
+    node->tx_id_ = arg.tx_id_;
     node->trans_version_ = SCN::max_scn();
     node->modify_count_ = arg.modify_count_;
     node->acc_checksum_ = arg.acc_checksum_;
@@ -391,7 +396,6 @@ int ObMvccEngine::ensure_kv(const ObMemtableKey *stored_key,
       TRANS_LOG(WARN, "ensure_row fail", K(ret));
     }
   }
-
   return ret;
 }
 

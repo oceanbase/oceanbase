@@ -23,18 +23,79 @@
 #include "share/ob_tenant_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer_rpc.h"
 #include "storage/multi_data_source/runtime_utility/mds_factory.h"
+#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {
-namespace common
-{
-class ObServerConfig;
-class ObMemstoreAllocatorMgr;
-}
 namespace storage
 {
 class ObTenantFreezer;
 class ObTenantTxDataFreezeGuard;
+
+class ObTenantFreezerStat
+{
+public:
+  static const int64_t MAX_FREEZER_MERGE_TYPE = 3;
+  enum ObFreezerMergeType
+  {
+    UNNECESSARY_TYPE = -1,
+    MINI_MERGE       = 0,
+    MINOR_MERGE      = 1,
+    MAJOR_MERGE      = 2,
+    MAX_MERGE_TYPE   = 3
+  };
+  ObTenantFreezerStat() { reset(); }
+  ~ObTenantFreezerStat() {}
+public:
+  int64_t last_captured_timestamp_;
+  // captured data size from last captured time
+  int64_t captured_data_size_;
+  int64_t captured_freeze_times_;
+
+  int64_t captured_merge_time_cost_[ObFreezerMergeType::MAX_MERGE_TYPE];
+  int64_t captured_merge_times_[ObFreezerMergeType::MAX_MERGE_TYPE];
+
+  int64_t last_captured_retire_clock_;
+
+  ObFreezerMergeType switch_to_freezer_merge_type(const compaction::ObMergeType type);
+
+  const char *freezer_merge_type_to_str(const ObFreezerMergeType merge_type);
+
+  bool is_useful_freezer_merge_type(const ObFreezerMergeType merge_type);
+
+  void reset(int64_t retire_clock = 0);
+
+  void refresh();
+
+  void add_freeze_event();
+
+  void add_merge_event(const compaction::ObMergeType type, const int64_t cost);
+
+  void print_activity_metrics();
+
+  void assign(const ObTenantFreezerStat stat);
+
+  TO_STRING_KV(K_(last_captured_timestamp),
+               K_(captured_data_size),
+               K_(captured_freeze_times),
+               K_(last_captured_retire_clock));
+};
+
+class ObTenantFreezerStatHistory
+{
+public:
+  // 5(day in working week) * 24(hour in day) * 2(half of an hour in an hour)
+  static const int64_t MAX_HISTORY_LENGTH = 5 * 24 * 2;
+  ObTenantFreezerStatHistory(): start_(0), length_(0) {}
+
+  void add_activity_metric(const ObTenantFreezerStat stat);
+
+  void reset();
+public:
+  int64_t start_;
+  int64_t length_;
+  ObTenantFreezerStat history_[MAX_HISTORY_LENGTH];
+};
 
 // this is used for tenant freeze, all the freeze task should call the function of this unit.
 class ObTenantFreezer
@@ -83,6 +144,8 @@ public:
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.
   int check_and_do_freeze();
 
+  int do_freeze_diagnose();
+
   // used for replay to check whether can enqueue another replay task
   bool is_replay_pending_log_too_large(const int64_t pending_size);
   // If the tenant's freeze process is slowed, we will only freeze one time every
@@ -121,8 +184,13 @@ public:
                                int64_t &memstore_limit,
                                int64_t &freeze_cnt,
                                const bool force_refresh = true);
+  // get the tenant memstore used
+  int get_tenant_memstore_used(int64_t &total_memstore_used,
+                               const bool force_refresh = true);
   // get the tenant memstore limit.
   int get_tenant_memstore_limit(int64_t &mem_limit);
+  // get the memstore limit percentage
+  static int64_t get_memstore_limit_percentage();
   // this is used to check if the tenant's memstore is out at user side.
   int check_memstore_full(bool &is_out_of_mem);
   // this is used for internal check rather than user side.
@@ -142,21 +210,37 @@ public:
                          int64_t &pos);
   // if major freeze is failed and need retry, set the major freeze into at retry_major_info_.
   const ObRetryMajorInfo &get_retry_major_info() const { return retry_major_info_; }
+  void record_freeze_failed_tablet(const ObTabletID &tablet_id);
+  void erase_freeze_failed_tablet(const ObTabletID &tablet_id);
   void set_retry_major_info(const ObRetryMajorInfo &retry_major_info)
   {
     retry_major_info_ = retry_major_info;
   }
   static int64_t get_freeze_trigger_interval() { return FREEZE_TRIGGER_INTERVAL; }
   bool exist_ls_freezing();
+
+  // freezer stat collector and generator
+  void add_merge_event(const compaction::ObMergeType type, const int64_t cost)
+  {
+    freezer_stat_.add_merge_event(type, cost);
+  }
+
+  void get_freezer_stat_history_snapshot(int64_t &length);
+
+  void get_freezer_stat_from_history(int64_t pos, ObTenantFreezerStat& stat);
+
 private:
+  int get_tenant_memstore_cond_(int64_t &active_memstore_used,
+                                int64_t &total_memstore_used,
+                                int64_t &memstore_freeze_trigger,
+                                int64_t &memstore_limit,
+                                int64_t &freeze_cnt,
+                                const bool force_refresh = true);
   int check_memstore_full_(bool &last_result,
                            int64_t &last_check_timestamp,
                            bool &is_out_of_mem,
                            const bool from_user = true);
-  static int ls_freeze_(ObLS *ls,
-                        const bool is_sync = true,
-                        const bool need_rewrite_tablet_meta = true,
-                        const int64_t abs_timeout_ts = INT64_MAX);
+  static int ls_freeze_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts);
   static int ls_freeze_all_unit_(ObLS *ls,
                                  const int64_t abs_timeout_ts = INT64_MAX);
   static int tablet_freeze_(ObLS *ls,
@@ -215,7 +299,6 @@ private:
   const share::ObRsMgr *rs_mgr_;
   ObAddr self_;
   ObRetryMajorInfo retry_major_info_;
-  common::ObMemstoreAllocatorMgr *allocator_mgr_;
 
   common::ObOccamThreadPool freeze_trigger_pool_;
   common::ObOccamTimer freeze_trigger_timer_;
@@ -224,6 +307,11 @@ private:
   ObSpinLock freeze_thread_pool_lock_;
   bool exist_ls_freezing_;
   int64_t last_update_ts_;
+
+  // diagnose only, we capture the freeze stats every 30 minutes
+  ObTenantFreezerStat freezer_stat_;
+  // diagnose only, we capture the freeze history in one monthes
+  ObTenantFreezerStatHistory freezer_history_;
 };
 
 class ObTenantTxDataFreezeGuard

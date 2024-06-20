@@ -14,6 +14,7 @@
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_xa_query.h"
+#include "ob_xa_trans_event.h"
 
 namespace oceanbase
 {
@@ -54,7 +55,8 @@ public:
   explicit ObDBLinkClient() : lock_(), is_inited_(false), index_(0), xid_(),
       state_(ObDBLinkClientState::IDLE),
       dblink_type_(common::sqlclient::DblinkDriverProto::DBLINK_UNKNOWN), dblink_conn_(NULL),
-      impl_(NULL), tx_timeout_us_(-1)
+      impl_(NULL), tx_timeout_us_(-1),
+      dblink_statistics_(NULL)
   {}
   ~ObDBLinkClient() { destroy(); }
   void reset();
@@ -62,7 +64,8 @@ public:
   int init(const uint32_t index,
            const common::sqlclient::DblinkDriverProto dblink_type,
            const int64_t tx_timeout_us,
-           common::sqlclient::ObISQLConnection *dblink_conn);
+           common::sqlclient::ObISQLConnection *dblink_conn,
+           ObDBLinkTransStatistics *dblink_statistics);
 public:
   int rm_xa_start(const transaction::ObXATransID &xid, const ObTxIsolationLevel isolation);
   int rm_xa_end();
@@ -93,6 +96,7 @@ protected:
   common::sqlclient::ObISQLConnection *dblink_conn_;
   transaction::ObXAQuery *impl_;
   int64_t tx_timeout_us_;
+  ObDBLinkTransStatistics *dblink_statistics_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBLinkClient);
 };

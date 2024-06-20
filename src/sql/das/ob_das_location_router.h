@@ -132,9 +132,12 @@ public:
   int insert_related_tablet_map();
   void clear()
   {
-    list_.clear();
-    map_.clear();
+    if (!empty()) {
+      list_.clear();
+      map_.clear();
+    }
   }
+  bool empty() const { return list_.empty() && map_.empty(); }
   const RelatedTabletList &get_list() const { return list_; }
   TO_STRING_KV(K_(list), "map_size", map_.size());
 private:
@@ -331,6 +334,7 @@ public:
   }
   int save_success_task(const common::ObTabletID &succ_id)
   { return succ_tablet_list_.push_back(succ_id); }
+  bool is_refresh_location_error(int err_no) const;
   TO_STRING_KV(K(all_tablet_list_));
 private:
   int get_vt_svr_pair(uint64_t vt_id, const VirtualSvrPair *&vt_svr_pair);

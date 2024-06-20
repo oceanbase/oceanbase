@@ -49,6 +49,10 @@ public:
                           ObTableSchema &alter_table_schema,
                           share::schema::ObSchemaOperationType operation_type,
                           const common::ObString *ddl_stmt_str = NULL);
+  int only_update_table_options(common::ObISQLClient &sql_client,
+                                ObTableSchema &new_table_schema,
+                                share::schema::ObSchemaOperationType operation_type,
+                                const common::ObString *ddl_stmt_str = NULL);
   int update_table_schema_version(common::ObISQLClient &sql_client,
                                   const ObTableSchema &table_schema,
                                   share::schema::ObSchemaOperationType operation_type,
@@ -134,6 +138,10 @@ public:
                                   common::ObISQLClient &sql_client,
                                   const common::ObString *ddl_stmt_str);
 
+  virtual int update_mview_status(const ObTableSchema &mview_table_schema,
+                                 common::ObISQLClient &sql_client);
+  virtual int update_mview_reference_table_status(const ObTableSchema &table_schema,
+                                                  common::ObISQLClient &sql_client);
   // TODO: merge these two API
   int sync_aux_schema_version_for_history(common::ObISQLClient &sql_client,
                                           const ObTableSchema &index_schema1,
@@ -157,7 +165,8 @@ public:
   int rename_inc_part_info(common::ObISQLClient &sql_client,
                            const ObTableSchema &ori_table,
                            const ObTableSchema &inc_table,
-                           const int64_t schema_version);
+                           const int64_t schema_version,
+                           const bool update_part_idx);
   int rename_inc_subpart_info(common::ObISQLClient &sql_client,
                            const ObTableSchema &ori_table,
                            const ObTableSchema &inc_table,
@@ -200,6 +209,20 @@ public:
       const int64_t schema_version);
 
   int truncate_subpart_info(
+      common::ObISQLClient &sql_client,
+      const ObTableSchema &ori_table,
+      ObTableSchema &inc_table,
+      ObTableSchema &del_table,
+      const int64_t schema_version);
+
+  int exchange_part_info(
+      common::ObISQLClient &sql_client,
+      const ObTableSchema &ori_table,
+      ObTableSchema &inc_table,
+      ObTableSchema &del_table,
+      const int64_t schema_version);
+
+  int exchange_subpart_info(
       common::ObISQLClient &sql_client,
       const ObTableSchema &ori_table,
       ObTableSchema &inc_table,
@@ -253,6 +276,8 @@ public:
       const ObConstraint &cst);
 
 private:
+  int inner_update_table_options_(ObISQLClient &sql_client,
+                                  const ObTableSchema &new_table_schema);
 
   int add_table(common::ObISQLClient &sql_client, const ObTableSchema &table,
                 const bool update_object_status_ignore_version,
@@ -298,7 +323,8 @@ private:
   int delete_constraint(common::ObISQLClient &sql_client,
                         const ObTableSchema &table_schema,
                         const int64_t new_schema_version);
-  int add_sequence(const uint64_t tenant_id,
+  int add_sequence(common::ObISQLClient &sql_client,
+                   const uint64_t tenant_id,
                    const uint64_t table_id,
                    const uint64_t column_id,
                    const uint64_t auto_increment,
@@ -307,6 +333,8 @@ private:
                                const ObTableSchema &table);
   int add_interval_range_val(share::ObDMLSqlSplicer &dml,
                                const ObTableSchema &table);
+  int gen_mview_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
+                    share::ObDMLSqlSplicer &dml);
   int gen_table_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
                     const bool update_object_status_ignore_version, share::ObDMLSqlSplicer &dml);
   int gen_table_options_dml(const uint64_t exec_tenant_id,
@@ -391,6 +419,10 @@ public:
   int delete_from_all_temp_table(common::ObISQLClient &sql_client,
                                  const uint64_t tenant_id,
                                  const uint64_t table_id);
+  int update_single_column_group(ObISQLClient &sql_client,
+                                 const ObTableSchema &new_table_schema,
+                                 const ObColumnGroupSchema &ori_cg_schema,
+                                 const ObColumnGroupSchema &new_cg_schema);
 private:
   int log_operation_wrapper(
       ObSchemaOperation &opt,
@@ -430,12 +462,37 @@ private:
                                        const ObTableSchema &table,
 	                                   const int64_t schema_version,
                                        bool is_history);
-	int exec_insert_column_group_mapping(ObISQLClient &sql_client,
-                                         const ObTableSchema &table,
-                                         const int64_t schema_version,
-                                         const ObColumnGroupSchema &column_group,
-                                         const ObIArray<uint64_t> &column_ids,
-                                         const bool is_history);
+  int exec_insert_column_group_mapping(ObISQLClient &sql_client,
+                                       const ObTableSchema &table,
+                                       const int64_t schema_version,
+                                       const ObColumnGroupSchema &column_group,
+                                       const ObIArray<uint64_t> &column_ids,
+                                       const bool is_history);
+
+  int delete_column_group(ObISQLClient &sql_clinet,
+                          const ObTableSchema &table,
+                          const int64_t schema_version);
+  int gen_column_group_dml(const ObTableSchema &table_schema,
+                           const ObColumnGroupSchema &column_group_schema,
+                           const bool is_history,
+                           const bool is_deleted,
+                           const int64_t schema_verison,
+                           ObDMLSqlSplicer &dml);
+  int gen_column_group_mapping_dml(const ObTableSchema &table_schema,
+                                   const ObColumnGroupSchema &column_group_schema,
+                                   const int64_t column_id_index,
+                                   const bool is_history,
+                                   const bool is_deleted,
+                                   const int64_t schema_version,
+                                   ObDMLSqlSplicer &dml);
+  int delete_from_column_group(ObISQLClient &sql_client,
+                               const ObTableSchema &table_schema,
+                               const int64_t schema_version,
+                               const bool is_history = false);
+  int delete_from_column_group_mapping(ObISQLClient &sql_client,
+                                       const ObTableSchema &table_schema,
+                                       const int64_t schema_version,
+                                       const bool is_history = false);
 // MockFKParentTable begin
 public:
   int add_mock_fk_parent_table(

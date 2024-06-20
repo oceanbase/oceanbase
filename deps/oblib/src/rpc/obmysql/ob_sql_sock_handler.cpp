@@ -39,19 +39,7 @@ static int get_client_addr_for_sql_sock_session(int fd, ObAddr& client_addr)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql nio getpeername failed", K(errno), K(ret));
   } else {
-    if (AF_INET == addr.ss_family) {
-      struct sockaddr_in  *s = (struct sockaddr_in *)&addr;
-      if (false == client_addr.set_ipv4_addr(ntohl(s->sin_addr.s_addr), ntohs(s->sin_port))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sql nio set_ipv4_addr failed", K(ret));
-      }
-    } else if (AF_INET6 == addr.ss_family) {
-      struct sockaddr_in6  *s = (struct sockaddr_in6 *)&addr;
-      if (false == client_addr.set_ipv6_addr((void *)&s->sin6_addr, ntohs(s->sin6_port))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sql nio set_ipv6_addr failed", K(ret));
-      }
-    }
+    client_addr.from_sockaddr(&addr);
   }
 
   return ret;
@@ -130,18 +118,18 @@ int ObSqlSockHandler::on_readable(void* udata)
   if (NULL == sess) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("sess is null!", K(ret));
-  } else if (OB_FAIL(sock_processor_.decode_sql_packet(*sess, pkt))) {
-    LOG_WARN("decode sql req fail", K(ret));
+  } else if (OB_FAIL(sock_processor_.decode_sql_packet(sess->pool_, *sess, NULL, pkt))) {
+    LOG_WARN("decode sql req fail", K(ret), K(sess->sql_session_id_));
   } else if (NULL == pkt) {
     sess->revert_sock();
   } else if (OB_FAIL(sock_processor_.build_sql_req(*sess, pkt, sql_req))) {
-    LOG_WARN("build sql req fail", K(ret));
+    LOG_WARN("build sql req fail", K(ret), K(sess->sql_session_id_));
   }
 
   if (OB_SUCCESS != ret || NULL == sql_req) {
-  } else if (FALSE_IT(sess->set_last_decode_succ_and_deliver_time(ObTimeUtility::current_time()))) {
+  } else if (FALSE_IT(sess->set_last_decode_succ_and_deliver_time(ObClockGenerator::getClock()))) {
   } else if (OB_FAIL(deliver_->deliver(*sql_req))) {
-    LOG_WARN("deliver sql request fail", K(ret));
+    LOG_WARN("deliver sql request fail", K(ret), K(sess->sql_session_id_));
   }
 
   return ret;

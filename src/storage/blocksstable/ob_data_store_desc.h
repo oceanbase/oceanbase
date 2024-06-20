@@ -262,7 +262,6 @@ public:
   OB_INLINE int64_t get_encrypt_key_size() const { return sizeof(static_desc_->encrypt_key_); }
   OB_INLINE int64_t get_micro_block_size() const { return micro_block_size_; }
   OB_INLINE common::ObRowStoreType get_row_store_type() const { return row_store_type_; }
-  OB_INLINE bool need_pre_warm() const { return need_pre_warm_; }
   static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
   // emergency magic table id is 10000
   static const uint64_t EMERGENCY_TENANT_ID_MAGIC = 0;
@@ -276,8 +275,6 @@ public:
       K_(encoder_opt),
       KP_(merge_info),
       KP_(sstable_index_builder),
-      K_(need_pre_warm),
-      K_(need_build_hash_index_for_micro_block),
       K_(micro_block_size));
 
 private:
@@ -296,9 +293,7 @@ public:
   ObMicroBlockEncoderOpt encoder_opt_; // binding to row_store_type_
   storage::ObSSTableMergeInfo *merge_info_;
   ObSSTableIndexBuilder *sstable_index_builder_;
-  bool need_pre_warm_;
   bool is_force_flat_store_type_;
-  bool need_build_hash_index_for_micro_block_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDataStoreDesc);
 };

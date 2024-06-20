@@ -208,7 +208,22 @@ int ObDirectLoadRangeSplitUtils::construct_origin_table_rowkey_iters(
   } else {
     const ObITableReadInfo &read_info =
       origin_table->get_tablet_handle().get_obj()->get_rowkey_read_info();
-    if (nullptr != origin_table->get_major_sstable()) {
+    if (!ObDirectLoadInsertMode::need_origin_data(origin_table->get_meta().insert_mode_)) {
+      ObDirectLoadDatumRowkeyEmptyIterator *rowkey_iter = nullptr;
+      if (OB_ISNULL(rowkey_iter = OB_NEWx(ObDirectLoadDatumRowkeyEmptyIterator, &allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObDirectLoadDatumRowkeyEmptyIterator", KR(ret));
+      } else if (OB_FAIL(rowkey_iters.push_back(rowkey_iter))) {
+        LOG_WARN("fail to push back rowkey iter", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+        if (nullptr != rowkey_iter) {
+          rowkey_iter->~ObDirectLoadDatumRowkeyEmptyIterator();
+          allocator.free(rowkey_iter);
+          rowkey_iter = nullptr;
+        }
+      }
+    } else if (nullptr != origin_table->get_major_sstable()) {
       ObSSTable *major_sstable = origin_table->get_major_sstable();
       ObIDirectLoadDatumRowkeyIterator *rowkey_iter = nullptr;
       if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
@@ -340,13 +355,19 @@ int ObDirectLoadRowkeyMergeRangeSplitter::split_range(ObIArray<ObDatumRange> &ra
     range_array.reset();
     const int64_t range_count = MIN(total_rowkey_count_, max_range_count);
     if (range_count > 1) {
-      const int64_t block_count_per_range = (total_rowkey_count_ + range_count - 1) / range_count;
+      const int64_t block_count_per_range = total_rowkey_count_ / range_count;
+      int64_t block_count_remainder = total_rowkey_count_ - block_count_per_range * range_count;
+      int64_t block_count_cur_range = block_count_per_range;
       ObDatumRange range;
       range.end_key_.set_min_rowkey();
       range.set_left_open();
       range.set_right_closed();
       int64_t count = 0;
       const ObDatumRowkey *rowkey = nullptr;
+      if (block_count_remainder > 0) {
+        block_count_cur_range = block_count_per_range + 1;
+        --block_count_remainder;
+      }
       while (OB_SUCC(ret)) {
         if (OB_FAIL(rowkey_merger_.get_next_rowkey(rowkey))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -369,7 +390,7 @@ int ObDirectLoadRowkeyMergeRangeSplitter::split_range(ObIArray<ObDatumRange> &ra
             }
             break;
           }
-        } else if (++count >= block_count_per_range) {
+        } else if (++count >= block_count_cur_range) {
           bool rowkey_equal = false;
           if (OB_FAIL(rowkey->equal(range.end_key_, *datum_utils_, rowkey_equal))) {
             LOG_WARN("fail to compare euqal rowkey", KR(ret));
@@ -385,6 +406,13 @@ int ObDirectLoadRowkeyMergeRangeSplitter::split_range(ObIArray<ObDatumRange> &ra
               LOG_WARN("fail to push back datum ranges", KR(ret));
             } else {
               count = 0;
+              block_count_cur_range = block_count_per_range;
+              if (block_count_remainder > 0) {
+                block_count_cur_range = block_count_per_range + 1;
+                --block_count_remainder;
+              } else {
+                block_count_cur_range = block_count_per_range;
+              }
             }
           }
         }
@@ -410,6 +438,8 @@ int ObDirectLoadRowkeyMergeRangeSplitter::split_range(ObIArray<ObDatumRange> &ra
 ObDirectLoadSSTableRangeSplitter::ObDirectLoadSSTableRangeSplitter()
   : allocator_("TLD_SSTRGSplit"), total_block_count_(0), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  rowkey_iters_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadSSTableRangeSplitter::~ObDirectLoadSSTableRangeSplitter()
@@ -433,7 +463,6 @@ int ObDirectLoadSSTableRangeSplitter::init(const ObIArray<ObDirectLoadSSTable *>
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(sstable_array), KP(datum_utils));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(construct_rowkey_iters(sstable_array))) {
       LOG_WARN("fail to construct rowkey itres", KR(ret));
     } else if (OB_FAIL(
@@ -492,6 +521,8 @@ int ObDirectLoadSSTableRangeSplitter::split_range(ObIArray<ObDatumRange> &range_
 ObDirectLoadMergeRangeSplitter::ObDirectLoadMergeRangeSplitter()
   : allocator_("TLD_MegRGSplit"), total_block_count_(0), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  rowkey_iters_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMergeRangeSplitter::~ObDirectLoadMergeRangeSplitter()
@@ -518,7 +549,6 @@ int ObDirectLoadMergeRangeSplitter::init(ObDirectLoadOriginTable *origin_table,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(origin_table), K(sstable_array), KP(datum_utils));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     scan_range_.set_whole_range();
     if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_origin_table_rowkey_iters(
           origin_table, scan_range_, allocator_, total_block_count_, rowkey_iters_))) {
@@ -584,6 +614,8 @@ int ObDirectLoadMergeRangeSplitter::split_range(ObIArray<ObDatumRange> &range_ar
 ObDirectLoadMultipleMergeTabletRangeSplitter::ObDirectLoadMultipleMergeTabletRangeSplitter()
   : allocator_("TLD_MulMegTRS"), total_block_count_(0), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  rowkey_iters_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleMergeTabletRangeSplitter::~ObDirectLoadMultipleMergeTabletRangeSplitter()
@@ -616,7 +648,6 @@ int ObDirectLoadMultipleMergeTabletRangeSplitter::init(
              K(table_data_desc), KP(datum_utils));
   } else {
     tablet_id_ = tablet_id;
-    allocator_.set_tenant_id(MTL_ID());
     scan_range_.set_whole_range();
     if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_origin_table_rowkey_iters(
           origin_table, scan_range_, allocator_, total_block_count_, rowkey_iters_))) {
@@ -726,6 +757,8 @@ ObDirectLoadMultipleMergeRangeSplitter::ObDirectLoadMultipleMergeRangeSplitter()
     last_rowkey_(nullptr),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  rowkey_iters_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleMergeRangeSplitter::~ObDirectLoadMultipleMergeRangeSplitter()
@@ -753,7 +786,6 @@ int ObDirectLoadMultipleMergeRangeSplitter::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(sstable_array), K(table_data_desc), KP(datum_utils));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(construct_rowkey_iters(sstable_array, table_data_desc, datum_utils))) {
       LOG_WARN("fail to construct sstable rowkey itres", KR(ret));
     } else if (OB_FAIL(compare_.init(*datum_utils))) {
@@ -824,6 +856,7 @@ int ObDirectLoadMultipleMergeRangeSplitter::get_rowkeys_by_origin(
   const ObDatumRowkey *datum_rowkey = nullptr;
   ObDatumRowkey copied_rowkey;
   int64_t count = 0;
+  rowkey_iters.set_tenant_id(MTL_ID());
   if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_origin_table_rowkey_iters(
         origin_table, scan_range, allocator, unused_total_block_count, rowkey_iters))) {
     LOG_WARN("fail to construct origin table rowkey iters", KR(ret));
@@ -872,7 +905,11 @@ int ObDirectLoadMultipleMergeRangeSplitter::get_rowkeys_by_multiple(
     }
   }
   if (OB_SUCC(ret) && nullptr != last_rowkey_) {
-    if (last_rowkey_->tablet_id_.compare(tablet_id) == 0) {
+    const int cmp_ret = last_rowkey_->tablet_id_.compare(tablet_id);
+    if (OB_UNLIKELY(cmp_ret < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tablet id", KR(ret), KPC(last_rowkey_), K(tablet_id));
+    } else if (cmp_ret == 0) {
       // the same tablet
       ObDatumRowkey rowkey;
       ObDatumRowkey copied_rowkey;
@@ -903,9 +940,8 @@ int ObDirectLoadMultipleMergeRangeSplitter::get_rowkeys_by_multiple(
           }
         }
       }
-    } else {
-      // the different tablet
-      abort_unless(last_rowkey_->tablet_id_.compare(tablet_id) > 0);
+    } else { /* cmp_ret > 0 */
+      // no rowkey for current tablet_id, do nothing
     }
   }
   return ret;
@@ -946,13 +982,20 @@ int ObDirectLoadMultipleMergeRangeSplitter::combine_final_ranges(
       LOG_WARN("fail to init rowkey merger", KR(ret));
     } else {
       const int64_t rowkey_count_per_range =
-        (rowkey_array1.count() + rowkey_array2.count() + max_range_count - 1) / max_range_count;
+        (rowkey_array1.count() + rowkey_array2.count()) / max_range_count;
+      int64_t rowkey_count_remainder =
+        (rowkey_array1.count() + rowkey_array2.count()) - rowkey_count_per_range * max_range_count;
+      int64_t rowkey_count_cur_range = rowkey_count_per_range;
       ObDatumRange range;
       range.end_key_.set_min_rowkey();
       range.set_left_open();
       range.set_right_closed();
       const ObDatumRowkey *datum_rowkey = nullptr;
       int64_t count = 0;
+      if (rowkey_count_remainder > 0) {
+        rowkey_count_cur_range = rowkey_count_per_range + 1;
+        --rowkey_count_remainder;
+      }
       while (OB_SUCC(ret)) {
         if (OB_FAIL(rowkey_merger.get_next_rowkey(datum_rowkey))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -961,7 +1004,7 @@ int ObDirectLoadMultipleMergeRangeSplitter::combine_final_ranges(
             ret = OB_SUCCESS;
             break;
           }
-        } else if (++count >= rowkey_count_per_range) {
+        } else if (++count >= rowkey_count_cur_range) {
           int cmp_ret = 0;
           if (OB_FAIL(datum_rowkey->compare(range.end_key_, *datum_utils_, cmp_ret))) {
             LOG_WARN("fail to compare rowkey", KR(ret));
@@ -975,6 +1018,12 @@ int ObDirectLoadMultipleMergeRangeSplitter::combine_final_ranges(
               LOG_WARN("fail to push back range", KR(ret));
             } else {
               count = 0;
+              if (rowkey_count_remainder > 0) {
+                rowkey_count_cur_range = rowkey_count_per_range + 1;
+                --rowkey_count_remainder;
+              } else {
+                rowkey_count_cur_range = rowkey_count_per_range;
+              }
             }
           } else {
             abort_unless(0 == cmp_ret);
@@ -1025,6 +1074,8 @@ int ObDirectLoadMultipleMergeRangeSplitter::split_range(ObTabletID &tablet_id,
     ObArray<ObDatumRowkey> origin_rowkey_array;
     ObArray<ObDatumRowkey> multiple_rowkey_array;
     tmp_allocator.set_tenant_id(MTL_ID());
+    origin_rowkey_array.set_block_allocator(ModulePageAllocator(tmp_allocator));
+    multiple_rowkey_array.set_block_allocator(ModulePageAllocator(tmp_allocator));
     if (OB_FAIL(get_rowkeys_by_origin(origin_table, origin_rowkey_array, tmp_allocator))) {
       LOG_WARN("fail to get rowkeys by origin", KR(ret));
     } else if (OB_FAIL(get_rowkeys_by_multiple(tablet_id, multiple_rowkey_array, tmp_allocator))) {
@@ -1046,6 +1097,8 @@ int ObDirectLoadMultipleMergeRangeSplitter::split_range(ObTabletID &tablet_id,
 ObDirectLoadMultipleSSTableRangeSplitter::ObDirectLoadMultipleSSTableRangeSplitter()
   : allocator_("TLD_MulSSTRS"), datum_utils_(nullptr), total_block_count_(0), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  rowkey_iters_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleSSTableRangeSplitter::~ObDirectLoadMultipleSSTableRangeSplitter()
@@ -1073,7 +1126,6 @@ int ObDirectLoadMultipleSSTableRangeSplitter::init(
     LOG_WARN("invalid args", KR(ret), K(sstable_array), K(table_data_desc), KP(datum_utils));
   } else {
     datum_utils_ = datum_utils;
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(construct_rowkey_iters(sstable_array, table_data_desc, datum_utils))) {
       LOG_WARN("fail to construct rowkey iters", KR(ret));
     } else if (OB_FAIL(compare_.init(*datum_utils))) {
@@ -1137,13 +1189,19 @@ int ObDirectLoadMultipleSSTableRangeSplitter::split_range(
         LOG_WARN("fail to push back range", KR(ret));
       }
     } else {
-      const int64_t block_count_per_range = (total_block_count_ + range_count - 1) / range_count;
+      const int64_t block_count_per_range = total_block_count_ / range_count;
+      int64_t block_count_remainder = total_block_count_ - block_count_per_range * range_count;
+      int64_t block_count_cur_range = block_count_per_range;
       ObDirectLoadMultipleDatumRange range;
       range.end_key_.set_min_rowkey();
       range.set_left_open();
       range.set_right_closed();
       int64_t count = 0;
       const ObDirectLoadMultipleDatumRowkey *rowkey = nullptr;
+      if (block_count_remainder > 0) {
+        block_count_cur_range = block_count_per_range + 1;
+        --block_count_remainder;
+      }
       while (OB_SUCC(ret)) {
         if (OB_FAIL(rowkey_merger_.get_next_rowkey(rowkey))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -1164,7 +1222,7 @@ int ObDirectLoadMultipleSSTableRangeSplitter::split_range(
             }
             break;
           }
-        } else if (++count >= block_count_per_range) {
+        } else if (++count >= block_count_cur_range) {
           int cmp_ret = 0;
           if (OB_FAIL(rowkey->compare(range.end_key_, *datum_utils_, cmp_ret))) {
             LOG_WARN("fail to compare euqal rowkey", KR(ret));
@@ -1178,6 +1236,12 @@ int ObDirectLoadMultipleSSTableRangeSplitter::split_range(
               LOG_WARN("fail to push back datum ranges", KR(ret));
             } else {
               count = 0;
+              if (block_count_remainder > 0) {
+                block_count_cur_range = block_count_per_range + 1;
+                --block_count_remainder;
+              } else {
+                block_count_cur_range = block_count_per_range;
+              }
             }
           }
         }

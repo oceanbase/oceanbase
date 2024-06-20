@@ -180,9 +180,19 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
     } else if (FALSE_IT(tablet = tablet_handle_.get_obj())) {
     } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper_))) {
       SERVER_LOG(WARN, "fail to fetch table store", K(ret));
-    } else if (OB_FAIL(table_store_wrapper_.get_member()->get_minor_sstables().get_all_tables(sstable_handles_))) {
-      SERVER_LOG(WARN, "fail to get sstable handles", KR(ret));
     } else {
+      const ObSSTableArray &minor_tables = table_store_wrapper_.get_member()->get_minor_sstables();
+      for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables.count(); ++i) {
+        if (OB_ISNULL(minor_tables[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "get unexpected null sstable", KR(ret));
+        } else if (OB_FAIL(sstable_handles_.push_back(minor_tables[i]))) {
+          SERVER_LOG(WARN, "fail to add sstable", KR(ret));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       // iterate from the newest memtable in memtable handles
       memtable_array_pos_ = memtable_handles_.count() - 1;
       // iterate from the newest sstable in sstable handles

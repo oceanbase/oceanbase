@@ -61,7 +61,8 @@ public:
   int transform_heuristic_rule(ObDMLStmt *&stmt);
   int transform_rule_set(ObDMLStmt *&stmt,
                          uint64_t needed_types,
-                         int64_t iteration_count);
+                         int64_t iteration_count,
+                         bool &trans_happened);
   int transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
                                           uint64_t needed_types,
                                           bool &trans_happened);
@@ -118,7 +119,9 @@ public:
       contain_enum_set_values_(false),
       contain_geometry_values_(false),
       contain_link_table_(false),
-      contain_json_table_(false)
+      contain_json_table_(false),
+      contain_fulltext_search_(false),
+      contain_dml_with_doc_id_(false)
     {}
 
     bool all_found() const {
@@ -130,7 +133,9 @@ public:
           contain_enum_set_values_ &&
           contain_geometry_values_ &&
           contain_link_table_ &&
-          contain_json_table_;
+          contain_json_table_ &&
+          contain_fulltext_search_ &&
+          contain_dml_with_doc_id_;
     }
 
     bool contain_hie_query_;
@@ -142,8 +147,10 @@ public:
     bool contain_geometry_values_;
     bool contain_link_table_;
     bool contain_json_table_;
+    bool contain_fulltext_search_;
+    bool contain_dml_with_doc_id_;
   };
-  int check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func);
+  static int check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &func);
   int check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &func);
   inline ObTransformerCtx *get_trans_ctx() { return ctx_; }
 private:
@@ -153,11 +160,15 @@ private:
   void print_trans_stat();
 
   int finalize_exec_params(ObDMLStmt *stmt);
+
+  int finalize_exec_params(ObDMLStmt *stmt, ObIArray<ObExecParamRawExpr*> & exec_params);
   /**
    * @brief adjust_global_dependency_tables
    * 为pl收集依赖表的schema version信息
    */
   int adjust_global_dependency_tables(ObDMLStmt *stmt);
+  int verify_all_stmt_exprs(ObDMLStmt *stmt);
+  int verify_stmt_exprs(ObDMLStmt *stmt);
 
   template<typename T>
   int transform_one_rule(ObDMLStmt *&stmt,
@@ -165,6 +176,15 @@ private:
                         TRANSFORM_TYPE type,
                         const char *rule_name,
                         bool &trans_happened);
+
+  int transform_random_order(ObDMLStmt *&stmt,
+                             ObQueryCtx *query_ctx,
+                             uint64_t need_types,
+                             int iter_count);
+
+  static int get_random_order_array(uint64_t need_types,
+                                    ObQueryCtx *query_ctx,
+                                    ObArray<uint64_t> &need_types_array);
 
 private:
   ObTransformerCtx *ctx_;
@@ -186,21 +206,22 @@ int ObTransformerImpl::transform_one_rule(ObDMLStmt *&stmt,
     LOG_WARN("unexpect null param", K(ret));
   } else if (is_type_needed(needed_types & needed_transform_types_,
                             type)) {
-    T trans(ctx_);
-    trans.set_transformer_type(type);
-    OPT_TRACE_TITLE("start transform rule", rule_name);
-    if (OB_FAIL(THIS_WORKER.check_status())) {
-      LOG_WARN("check status fail", K(ret));
-    } else if (OB_FAIL(trans.transform(stmt, needed_transform_types_))) {
-      LOG_WARN("failed to transform a rewrite rule", "class", rule_name, K(ret), K(ctx_->outline_trans_hints_));
-    } else if (OB_FAIL(collect_trans_stat(trans))) {
-      LOG_WARN("failed to collect transform stat", K(ret));
-    } else {
-      trans_happened |= trans.get_trans_happened();
-      OPT_TRACE_TIME_USED;
-      OPT_TRACE_MEM_USED;
-      LOG_TRACE("succeed to transform a rewrite rule", "class",
-                rule_name, K(trans.get_trans_happened()), K(ret));
+    SMART_VAR(T, trans, ctx_) {
+      trans.set_transformer_type(type);
+      OPT_TRACE_TITLE("start transform rule", rule_name);
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status fail", K(ret));
+      } else if (OB_FAIL(trans.transform(stmt, needed_transform_types_))) {
+        LOG_WARN("failed to transform a rewrite rule", "class", rule_name, K(ret), K(ctx_->outline_trans_hints_));
+      } else if (OB_FAIL(collect_trans_stat(trans))) {
+        LOG_WARN("failed to collect transform stat", K(ret));
+      } else {
+        trans_happened |= trans.get_trans_happened();
+        OPT_TRACE_TIME_USED;
+        OPT_TRACE_MEM_USED;
+        LOG_TRACE("succeed to transform a rewrite rule", "class",
+                  rule_name, K(trans.get_trans_happened()), K(ret));
+      }
     }
   } else {
     LOG_TRACE("skip tranform a rewrite rule", "class", rule_name);

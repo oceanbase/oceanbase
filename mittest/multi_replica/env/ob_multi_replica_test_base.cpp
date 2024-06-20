@@ -444,10 +444,9 @@ int ObMultiReplicaTestBase::init_replicas_()
       for (int j = 0; j < MAX_ZONE_COUNT && OB_SUCC(ret); j++) {
         std::string rpc_port_str = "";
         if (OB_FAIL(wait_event_finish("ZONE" + std::to_string(j + 1) + "_RPC_PORT", rpc_port_str,
-                                      5000 /*5s*/, 100 /*100ms*/))) {
+                                      30000 /*30s*/, 100 /*100ms*/))) {
 
-          SERVER_LOG(ERROR, "read RPC_PORT event failed", K(ret), K(j), K(rpc_ports_[j]),
-                     K(rpc_port_str.c_str()));
+          SERVER_LOG(ERROR, "read RPC_PORT event failed", K(ret), K(j), K(rpc_port_str.c_str()));
         } else {
 
           int tmp_rpc_port = std::stoi(rpc_port_str);
@@ -462,8 +461,7 @@ int ObMultiReplicaTestBase::init_replicas_()
           obrpc::ObServerInfo server_info;
           std::string zone_dir = "zone" + std::to_string(j + 1);
           server_info.zone_ = zone_dir.c_str();
-          server_info.server_ =
-              common::ObAddr(common::ObAddr::IPV4, local_ip_.c_str(), tmp_rpc_port);
+          server_info.server_ = common::ObAddr(common::ObAddr::IPV4, local_ip_.c_str(), tmp_rpc_port);
           server_info.region_ = "sys_region";
           server_list_.push_back(server_info);
         }
@@ -582,7 +580,7 @@ int ObMultiReplicaTestBase::init_test_replica_(const int zone_id)
 int ObMultiReplicaTestBase::read_cur_json_document_(rapidjson::Document &json_doc)
 {
   int ret = OB_SUCCESS;
-  FILE *fp = fopen(event_file_path_.c_str(), "r");
+  FILE *fp = fopen(event_file_path_.c_str(), "rb");
   if (fp == NULL) {
     if (json_doc.IsObject()) {
       fprintf(stdout, "Fail to open file! file_path = %s\n", event_file_path_.c_str());
@@ -591,10 +589,17 @@ int ObMultiReplicaTestBase::read_cur_json_document_(rapidjson::Document &json_do
     return ret;
   }
 
-  char read_buffer[2 * 1024 * 1024];
+  char read_buffer[4 * 1024];
   rapidjson::FileReadStream rs(fp, read_buffer, sizeof(read_buffer));
 
   json_doc.ParseStream(rs);
+
+  if (json_doc.HasParseError()) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "[ObMultiReplicaTestBase] Parse EVENT JSON ERROR", K(ret),
+               K(json_doc.GetParseError()));
+    fprintf(stdout, "Parse Event Json Error\n");
+  }
 
   fclose(fp);
 
@@ -643,7 +648,7 @@ int ObMultiReplicaTestBase::wait_event_finish(const std::string &event_name,
         ret = OB_TIMEOUT;
         break;
       } else {
-        ob_usleep(retry_interval_ms * 1000);
+        usleep(retry_interval_ms * 1000);
       }
     } else {
       break;
@@ -670,7 +675,7 @@ int ObMultiReplicaTestBase::finish_event(const std::string &event_name,
 
   if (OB_SUCC(ret)) {
     FILE *fp = fopen(event_file_path_.c_str(), "w");
-    char write_buffer[2 * 1024 * 1024];
+    char write_buffer[4 * 1024];
     rapidjson::FileWriteStream file_w_stream(fp, write_buffer, sizeof(write_buffer));
     rapidjson::PrettyWriter<rapidjson::FileWriteStream> prettywriter(file_w_stream);
     json_doc.AddMember(rapidjson::StringRef(event_name.c_str(), event_name.size()),
@@ -680,8 +685,8 @@ int ObMultiReplicaTestBase::finish_event(const std::string &event_name,
     fclose(fp);
   }
 
-        fprintf(stdout, "[WAIT EVENT] write target event : EVENT_KEY = %s; EVENT_VAL = %s\n",
-                event_name.c_str(), event_content.c_str());
+  fprintf(stdout, "[WAIT EVENT] write target event : EVENT_KEY = %s; EVENT_VAL = %s\n",
+          event_name.c_str(), event_content.c_str());
   SERVER_LOG(INFO, "[ObMultiReplicaTestBase] [WAIT EVENT] write target event",
              K(event_name.c_str()), K(event_content.c_str()));
   return ret;
@@ -728,7 +733,8 @@ int ObMultiReplicaTestBase::close()
 int ObMultiReplicaTestBase::create_tenant(const char *tenant_name,
                                           const char *memory_size,
                                           const char *log_disk_size,
-                                          const bool oracle_mode)
+                                          const bool oracle_mode,
+                                          const char *primary_zone)
 {
   SERVER_LOG(INFO, "create tenant start");
   int32_t log_level;
@@ -787,9 +793,9 @@ int ObMultiReplicaTestBase::create_tenant(const char *tenant_name,
     ObSqlString sql;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(sql.assign_fmt(
-                   "create tenant %s replica_num = 3, primary_zone='zone1', "
+                   "create tenant %s replica_num = 3, primary_zone='%s', "
                    "resource_pool_list=('pool_ym_%s') set ob_tcp_invited_nodes='%%'%s",
-                   tenant_name, tenant_name,
+                   tenant_name, primary_zone, tenant_name,
                    oracle_mode ? ", ob_compatibility_mode='oracle'" : ";"))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
@@ -892,13 +898,13 @@ int ObMultiReplicaTestBase::check_tenant_exist(bool &bool_ret, const char *tenan
 } // namespace unittest
 } // namespace oceanbase
 
-int ::oceanbase::omt::ObWorkerProcessor::process_err_test()
+OB_NOINLINE int ::oceanbase::omt::ObWorkerProcessor::process_err_test()
 {
   int ret = OB_SUCCESS;
 
   if (ATOMIC_LOAD(&::oceanbase::unittest::ObMultiReplicaTestBase::block_msg_)) {
     ret = OB_EAGAIN;
-    SERVER_LOG(INFO, "[ObMultiReplicaTestBase] block msg process", K(ret));
+    SERVER_LOG(INFO, "[ERRSIM] block msg process", K(ret));
   }
 
   return ret;

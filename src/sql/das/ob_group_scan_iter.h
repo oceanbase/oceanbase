@@ -23,7 +23,7 @@ class ObGroupResultRows
 public:
   ObGroupResultRows() : inited_(false), exprs_(NULL), eval_ctx_(NULL),
                         saved_size_(0), max_size_(1), start_pos_(0), group_id_expr_pos_(0),
-                        rows_(NULL), need_check_output_datum_(false),reuse_alloc_(nullptr)
+                        rows_(NULL), need_check_output_datum_(false),reuse_alloc_(nullptr),access_exprs_(nullptr)
   {
   }
 
@@ -31,6 +31,7 @@ public:
 
   int init(const common::ObIArray<ObExpr *> &exprs,
            ObEvalCtx &eval_ctx,
+           const ExprFixedArray &access_exprs,
            common::ObIAllocator &das_op_allocator,
            int64_t max_size,
            ObExpr *group_id_expr,
@@ -57,6 +58,7 @@ public:
       reuse_alloc_->~ObArenaAllocator();
       reuse_alloc_ = nullptr;
     }
+    access_exprs_ = nullptr;
   }
   TO_STRING_KV(K_(saved_size),
                K_(start_pos),
@@ -86,6 +88,7 @@ public:
   //be move from das into Table scan op, every thing will be easy.
   common::ObArenaAllocator *reuse_alloc_;
   char reuse_alloc_buf_[sizeof(common::ObArenaAllocator)];
+  const ExprFixedArray *access_exprs_;
 };
 
 class ObGroupScanIter : public ObNewRowIterator
@@ -116,6 +119,7 @@ public:
   ObExpr *get_group_id_expr() { return group_id_expr_; }
   int init_row_store(const common::ObIArray<ObExpr *> &exprs,
                      ObEvalCtx &eval_ctx,
+                     const ExprFixedArray &access_exprs,
                      common::ObIAllocator &das_op_allocator,
                      int64_t max_size,
                      ObExpr *group_id_expr,
@@ -127,6 +131,7 @@ public:
     iter_ = iter;
     return row_store_.init(exprs,
                            eval_ctx,
+                           access_exprs,
                            das_op_allocator,
                            max_size,
                            group_id_expr,

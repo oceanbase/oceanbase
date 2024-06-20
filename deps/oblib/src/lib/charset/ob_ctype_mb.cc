@@ -290,6 +290,16 @@ unsigned int ob_instr_mb(const ObCharsetInfo *cs,
   return 0;
 }
 
+uint ob_mbcharlen_ptr(const struct ObCharsetInfo *cs, const char *s, const char *e)
+{
+  uint len = ob_mbcharlen(cs, (uchar)*s);
+  if (len == 0 && ob_mbmaxlenlen(cs) == 2 && s + 1 < e) {
+    len = ob_mbcharlen_2(cs, (uchar)*s, (uchar) * (s + 1));
+    assert(len == 0 || len == 2 || len == 4);
+  }
+  return len;
+}
+
 size_t ob_numchars_mb(const ObCharsetInfo *cs __attribute__((unused)), const char *pos, const char *end)
 {
   size_t count= 0;

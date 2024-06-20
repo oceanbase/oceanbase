@@ -31,6 +31,14 @@ public:
   virtual common::ObAddr get_peer(const rpc::ObRequest* req) override;
   virtual void disconnect_sql_conn(rpc::ObRequest* req) override;
   virtual void finish_sql_request(rpc::ObRequest* req) override;
+  virtual int create_read_handle(rpc::ObRequest* req, void*& read_handle) override;
+  virtual int release_read_handle(rpc::ObRequest* req, void* read_handle) override;
+  virtual int read_packet(rpc::ObRequest* req,
+                          ObICSMemPool& mem_pool,
+                          void* read_handle,
+                          ObSqlSockProcessor& sock_processor,
+                          rpc::ObPacket*& pkt) override; // TODO change to mysql packet
+  virtual int release_packet(rpc::ObRequest* req, void* read_handle, rpc::ObPacket* pkt) override;
   virtual int write_response(rpc::ObRequest* req, const char* buf, int64_t sz) override;
   virtual int async_write_response(rpc::ObRequest* req, const char* buf, int64_t sz) override;
   virtual void get_sock_desc(rpc::ObRequest* req, rpc::ObSqlSockDesc& desc) override;

@@ -53,6 +53,7 @@ class ObMySQLTransaction;
 namespace obrpc
 {
 class ObAccountArg;
+class ObCreateMLogArg;
 }
 
 namespace share
@@ -71,6 +72,7 @@ class ObTableSchema;
 class ObMultiVersionSchemaService;
 class ObNeedPriv;
 class ObSchemaMgr;
+class ObMViewInfo;
 }
 }
 
@@ -133,8 +135,26 @@ public:
 
   // create_index_table will fill table_id and frozen_version to table_schema
   virtual int create_index_table(const obrpc::ObCreateIndexArg &arg,
+                                 const uint64_t tenant_data_version,
                                  share::schema::ObTableSchema &table_schema,
                                  ObMySQLTransaction &sql_trans);
+
+  virtual int create_mlog_table(ObMySQLTransaction &sql_trans,
+                                const obrpc::ObCreateMLogArg &arg,
+                                const uint64_t tenant_data_version,
+                                share::schema::ObSchemaGetterGuard &schema_guard,
+                                share::schema::ObTableSchema &table_schema);
+
+  virtual int create_mlog_tablet(ObMySQLTransaction &trans,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const share::schema::ObTableSchema &mlog_schema,
+                                 const bool need_check_tablet_cnt,
+                                 const uint64_t tenant_data_version);
+
+  virtual int add_mlog(ObMySQLTransaction &trans,
+                       const obrpc::ObCreateMLogArg &arg,
+                       ObSchemaGetterGuard &schema_guard,
+                       const share::schema::ObTableSchema &mlog_schema);
 
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg,
                     obrpc::ObAlterTableRes &res);
@@ -143,10 +163,12 @@ public:
                              const share::schema::ObTableSchema &data_table_schema,
                              share::schema::ObTableSchema &table_schema,
                              const ObString *ddl_stmt_str,
-                             ObMySQLTransaction *sql_trans);
+                             ObMySQLTransaction *sql_trans,
+                             const uint64_t tenant_data_version);
 
   int create_inner_expr_index(ObMySQLTransaction &trans,
                               const share::schema::ObTableSchema &orig_table_schema,
+                              const uint64_t tenant_data_version,
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
                               share::schema::ObTableSchema &index_schema);
@@ -159,10 +181,12 @@ public:
       ObMySQLTransaction &trans,
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &table_schema,
+      const uint64_t tenant_data_version,
       share::schema::ObTableSchema &index_schema);
   int create_global_inner_expr_index(
       ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &orig_table_schema,
+      const uint64_t tenant_data_version,
       share::schema::ObTableSchema &new_table_schema,
       common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
       share::schema::ObTableSchema &index_schema);
@@ -209,7 +233,8 @@ public:
       const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
       const uint64_t last_replay_log_id,
       const common::ObIArray<share::schema::ObDependencyInfo> *dependency_infos,
-      ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array);
+      ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array,
+      int64_t &ddl_task_id);
 
   virtual int create_table_like(const obrpc::ObCreateTableLikeArg &arg);
 
@@ -223,6 +248,16 @@ public:
                          const share::schema::ObTableSchema **table_schema);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &create_hidden_table_arg,
                                       obrpc::ObCreateHiddenTableRes &res);
+  int mview_complete_refresh(const obrpc::ObMViewCompleteRefreshArg &arg,
+                             obrpc::ObMViewCompleteRefreshRes &res,
+                             share::schema::ObSchemaGetterGuard &schema_guard);
+  int mview_complete_refresh_in_trans(const obrpc::ObMViewCompleteRefreshArg &arg,
+                                      obrpc::ObMViewCompleteRefreshRes &res,
+                                      ObDDLSQLTransaction &trans,
+                                      common::ObIAllocator &allocator,
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
+                                      const uint64_t tenant_data_version,
+                                      ObDDLTaskRecord &task_record);
   /**
    * For recover restore table ddl task, it is a cross-tenant task, including,
    * 1. Create a hidden table under different tenant but associated with the source table;
@@ -235,11 +270,12 @@ public:
                                 const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos,
                                 bool &have_index);
   virtual int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);
+  virtual int update_mview_status(const obrpc::ObUpdateMViewStatusArg &arg);
 
   int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
   virtual int add_table_schema(share::schema::ObTableSchema &table_schema,
       share::schema::ObSchemaGetterGuard &schema_guard);
-  virtual int drop_inner_table(const share::schema::ObTableSchema &table_schema);
+  virtual int drop_inner_table(const share::schema::ObTableSchema &table_schema, const bool delete_priv = true);
   virtual int create_sys_tenant(const obrpc::ObCreateTenantArg &arg,
                                 share::schema::ObTenantSchema &tenant_schema);
   virtual int create_tenant(const obrpc::ObCreateTenantArg &arg,
@@ -273,14 +309,16 @@ public:
   int create_index_tablet(const ObTableSchema &index_schema,
                           ObMySQLTransaction &trans,
                           share::schema::ObSchemaGetterGuard &schema_guard,
-                          const bool need_check_tablet_cnt);
-  virtual int alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
+                          const bool need_check_tablet_cnt,
+                          const uint64_t tenant_data_version);
+  virtual int alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                                 const share::schema::ObTableSchema &orgin_table_schema,
                                 share::schema::ObTableSchema &new_table_schema,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                 ObDDLOperator &ddl_operator,
                                 ObMySQLTransaction &trans,
                                 common::ObArenaAllocator &allocator,
+                                const uint64_t tenant_data_version,
                                 obrpc::ObAlterTableRes &res,
                                 ObIArray<ObDDLTaskRecord> &ddl_tasks);
   int generate_object_id_for_partition_schemas(
@@ -308,15 +346,17 @@ public:
       const share::schema::AlterTableSchema &alter_table_schema,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObString &nls_formats,
+      share::schema::ObLocalSessionVar &local_session_var,
       obrpc::ObSequenceDDLArg &sequence_ddl_arg,
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &new_table_schema,
       share::schema::AlterColumnSchema &alter_column_schema,
       ObIArray<ObString> &gen_col_expr_arr,
       share::schema::ObSchemaGetterGuard &schema_guard,
+      uint64_t &curr_udt_set_id,
       ObDDLOperator *ddl_operator,
       common::ObMySQLTransaction *trans);
-  int add_column_group_to_table_schema(
+  int add_column_to_column_group(
       const share::schema::ObTableSchema &origin_table_schema,
       const share::schema::AlterTableSchema &alter_table_schema,
       share::schema::ObTableSchema &new_table_schema,
@@ -475,23 +515,31 @@ public:
                                        ObTableSchema &new_table_schema,
                                        ObDDLOperator &ddl_operator,
                                        ObMySQLTransaction &trans);
+
+  int alter_table_auto_increment(const ObTableSchema &orig_table_schema,
+                                 const AlterTableSchema &alter_table_schema,
+                                 const obrpc::ObAlterTableArg &alter_table_arg,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 ObTableSchema &new_table_schema,
+                                 ObDDLOperator &ddl_operator,
+                                 ObMySQLTransaction &trans);
+
   int get_tablets(
-      const share::schema::ObTableSchema &table_schema,
-      const uint64_t session_id,
-      common::ObIArray<LSTabletID> &tablets,
-      ObDDLSQLTransaction &trans);
+    const uint64_t tenant_id,
+    const ObArray<common::ObTabletID> &tablet_ids,
+    ObIArray<LSTabletID> &tablets,
+    ObDDLSQLTransaction &trans);
   int build_modify_tablet_binding_args(
-      const share::schema::ObTableSchema &table_schema,
-      const bool is_hidden_tablets,
-      const int64_t schema_version,
-      const uint64_t session_id,
-      common::ObIArray<storage::ObBatchUnbindTabletArg> &args,
-      ObDDLSQLTransaction &trans);
+    const uint64_t tenant_id,
+    const ObArray<ObTabletID> &tablet_ids,
+    const bool is_hidden_tablets,
+    const int64_t schema_version,
+    ObIArray<ObBatchUnbindTabletArg> &modify_args,
+    ObDDLSQLTransaction &trans);
   int unbind_hidden_tablets(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       const int64_t schema_version,
-      const uint64_t session_id,
       ObDDLSQLTransaction &trans);
   int write_ddl_barrier(
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -669,7 +717,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObArenaAllocator &allocator,
-      const obrpc::ObIndexArg::IndexActionType &index_action_type);
+      const obrpc::ObIndexArg::IndexActionType &index_action_type,
+      const uint64_t tenant_data_version);
   int get_add_pk_index_name(const share::schema::ObTableSchema &origin_table_schema,
                             share::schema::ObTableSchema &new_table_schema,
                             const obrpc::ObIndexArg::IndexActionType &index_action_type,
@@ -691,11 +740,6 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int check_database_exist(const uint64_t tenant_id, const common::ObString &database_name, uint64_t &database_id);
   int check_create_with_db_id(share::schema::ObDatabaseSchema &schema);
   int replace_table_schema_type(share::schema::ObTableSchema &schema);
-  // drop/truncate limitation for depend table
-  int check_table_has_materialized_view(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const share::schema::ObTableSchema &table_schema,
-    bool &has_mv);
 
   int flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg &arg);
   //----Functions for recyclebin ----
@@ -780,8 +824,9 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                            share::schema::ObSchemaGetterGuard &schema_guard);
   int exists_role_grant_cycle(share::schema::ObSchemaGetterGuard &schema_guard,
                               const uint64_t tenant_id,
-                              uint64_t role_id,
-                              const share::schema::ObUserInfo *user_info);
+                              const ObUserInfo &role_info,
+                              const share::schema::ObUserInfo *user_info,
+                              const bool is_oracle_mode);
   virtual int grant(const obrpc::ObGrantArg &arg);
   int revoke(const obrpc::ObRevokeUserArg &arg);
   virtual int grant_priv_to_user(const uint64_t tenant_id,
@@ -809,11 +854,31 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                 const common::ObString *ddl_stmt_str,
                                 share::schema::ObSchemaGetterGuard &schema_guard);
 
+ int grant_or_revoke_column_priv_mysql(const uint64_t tenant_id,
+                                        const uint64_t table_id,
+                                        const uint64_t user_id,
+                                        const ObString& user_name,
+                                        const ObString& host_name,
+                                        const ObString& db,
+                                        const ObString& table,
+                                        const ObIArray<std::pair<ObString, ObPrivType>> &column_names_priv,
+                                        ObDDLOperator &ddl_operator,
+                                        ObDDLSQLTransaction &trans,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        const bool is_grant);
+
+  int grant_table_and_column_mysql(const obrpc::ObGrantArg &arg,
+                                         uint64_t user_id,
+                                         const ObString &user_name,
+                                         const ObString &host_name,
+                                         const ObNeedPriv &need_priv,
+                                         share::schema::ObSchemaGetterGuard &schema_guard);
   int lock_user(const obrpc::ObLockUserArg &arg, common::ObIArray<int64_t> &failed_index);
   int standby_grant(const obrpc::ObStandbyGrantArg &arg);
 
   int alter_user_profile(const obrpc::ObAlterUserProfileArg &arg);
   int alter_user_default_role(const obrpc::ObAlterUserProfileArg &arg);
+  int alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg);
   int get_all_users_in_tenant_with_profile(const uint64_t tenant_id,
                                            const uint64_t profile_id,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
@@ -847,11 +912,24 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                           const uint64_t option,
                           const share::schema::ObObjPrivSortKey &obj_key,
                           share::schema::ObSchemaGetterGuard &schema_guard);
-  virtual int revoke_table(const share::schema::ObTablePrivSortKey &table_key,
+
+  virtual int grant_routine(
+    const share::schema::ObRoutinePrivSortKey &routine_key,
+    const ObPrivSet priv_set,
+    const ObString *ddl_stmt_str,
+    const uint64_t option,
+    share::schema::ObSchemaGetterGuard &schema_guard);
+
+  virtual int revoke_routine(
+    const share::schema::ObRoutinePrivSortKey &routine_key,
+    const ObPrivSet priv_set);
+  virtual int revoke_table(const obrpc::ObRevokeTableArg &arg,
+                           const share::schema::ObTablePrivSortKey &table_key,
                            const ObPrivSet priv_set,
                            const share::schema::ObObjPrivSortKey &obj_key,
                            const share::ObRawObjPrivArray &obj_priv_array,
                            const bool revoke_all_ora);
+  virtual int revoke_table_and_column_mysql(const obrpc::ObRevokeTableArg& arg);
   //----End of functions for managing privileges----
   //----Functions for managing outlines----
   virtual int check_outline_exist(share::schema::ObOutlineInfo &Outline_info,
@@ -906,15 +984,19 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   //----Functions for managing udt----
   virtual int create_udt(share::schema::ObUDTTypeInfo &routine_info,
                          const share::schema::ObUDTTypeInfo *old_routine_info,
-                         bool replace,
                          ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
                          share::schema::ObErrorInfo &error_info,
                          share::schema::ObSchemaGetterGuard &schema_guard,
                          common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                         const common::ObString *ddl_stmt_str);
+                         const common::ObString *ddl_stmt_str,
+                         bool need_replace,
+                         bool exist_valid_udt,
+                         bool specify_force);
   virtual int drop_udt(const share::schema::ObUDTTypeInfo &routine_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,
-                       const common::ObString *ddl_stmt_str);
+                       const common::ObString *ddl_stmt_str,
+                       bool specify_force,
+                       bool exist_valid_udt);
   //----End of functions for managing routine----
 
   //----Functions for managing package----
@@ -1121,11 +1203,12 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int rename_dropping_index_name(
       const uint64_t data_table_id,
       const uint64_t database_id,
+      const bool is_inner_and_fts_index,
       const obrpc::ObDropIndexArg &drop_index_arg,
       ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
-      share::schema::ObTableSchema &new_index_schema);
+      common::ObIArray<share::schema::ObTableSchema> &new_index_schemas);
   int get_index_schema_by_name(
       const uint64_t data_table_id,
       const uint64_t database_id,
@@ -1142,7 +1225,10 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                    const ObTabletIDArray &tablet_ids);
   // lock table, unlock when ddl trans end
   int lock_table(ObMySQLTransaction &trans,
-                 const share::schema::ObTableSchema &table_schema);
+                 const ObSimpleTableSchemaV2 &table_schema);
+  // lock mview object, unlock when ddl trans end
+  // Must before locking the container table
+  int lock_mview(ObMySQLTransaction &trans, const ObSimpleTableSchemaV2 &table_schema);
   int recompile_view(const ObTableSchema &view_schema, const bool reset_view_column_infos, ObDDLSQLTransaction &trans);
   int recompile_all_views_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t > &view_ids);
   int try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t> &synonym_ids);
@@ -1208,6 +1294,11 @@ private:
       const ObTableSchema &table_schema,
       uint64_t &tablet_cnt);
 
+  int check_has_domain_index(
+      ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      bool &fts_exist);
   int check_has_index_operation(
       ObSchemaGetterGuard &schema_guard,
       const uint64_t teannt_id,
@@ -1223,7 +1314,8 @@ private:
       const uint64_t tenant_id,
       const share::schema::ObTableSchema &orig_table_schema,
       ObDDLOperator &ddl_operator,
-      ObMySQLTransaction &trans);
+      ObMySQLTransaction &trans,
+      const uint64_t tenant_data_version);
   int fill_interval_info_for_set_interval(const ObTableSchema &orig_table_schema,
       ObTableSchema &new_table_schema,
       AlterTableSchema &inc_table_schema);
@@ -1257,14 +1349,31 @@ private:
   int get_sample_table_schema(
       common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
       const share::schema::ObSimpleTableSchemaV2 *&sample_table_schema);
+  int get_valid_index_schema_by_id_for_drop_index_(
+      const uint64_t data_table_id,
+      const obrpc::ObDropIndexArg &drop_index_arg,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema *&index_table_schema);
   int set_tablegroup_id(share::schema::ObTableSchema &table_schema);
   template<typename SCHEMA>
   int set_default_tablegroup_id(SCHEMA &schema);
-  int create_table_in_trans(share::schema::ObTableSchema &table_schema,
+  int create_index_or_mlog_table_in_trans(share::schema::ObTableSchema &table_schema,
                             const common::ObString *ddl_stmt_str,
                             ObMySQLTransaction *sql_trans,
                             share::schema::ObSchemaGetterGuard &schema_guard,
-                            const bool need_check_tablet_cnt);
+                            const bool need_check_tablet_cnt,
+                            const uint64_t tenant_data_version);
+  int create_tablets_in_trans_(common::ObIArray<share::schema::ObTableSchema> &table_schemas,
+                              ObDDLOperator &ddl_operator,
+                              ObMySQLTransaction &trans,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              const uint64_t tenant_data_version);
+  int create_tablets_in_trans_for_mv_(common::ObIArray<share::schema::ObTableSchema> &table_schemas,
+                              ObDDLOperator &ddl_operator,
+                              ObMySQLTransaction &trans,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              const uint64_t tenant_data_version);
+
   /*
    * Check and set various options of modify tenant, among which the modifications of zone_list,
    *  locality and resource_pool are related to each other.
@@ -1363,7 +1472,8 @@ private:
               const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
               const uint64_t last_replay_log_id,
               const common::ObIArray<share::schema::ObDependencyInfo> *dep_infos,
-              ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array);
+              ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array,
+              int64_t &ddl_task_id);
   int print_view_expanded_definition(
       const share::schema::ObTableSchema &table_schema,
       ObString &ddl_stmt_str,
@@ -1376,7 +1486,9 @@ private:
                               const share::schema::ObSchemaOperationType operation_type,
                               const common::ObString &ddl_stmt_str);
   int alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                           obrpc::ObAlterTableRes &res);
+
+                           obrpc::ObAlterTableRes &res,
+                           const uint64_t tenant_data_version);
   int need_modify_not_null_constraint_validate(const obrpc::ObAlterTableArg &alter_table_arg,
                                                bool &is_add_not_null_col,
                                                bool &need_modify) const;
@@ -1384,7 +1496,8 @@ private:
   // offline ddl cannot appear at the same time with other ddl types
   // Offline ddl cannot appear at the same time as offline ddl
   int check_is_offline_ddl(obrpc::ObAlterTableArg &alter_table_arg,
-                           share::ObDDLType &ddl_type);
+                           share::ObDDLType &ddl_type,
+                           bool &ddl_need_retry_at_executor);
   int check_can_bind_tablets(const share::ObDDLType ddl_type,
                              bool &bind_tablets);
   int check_ddl_with_primary_key_operation(const obrpc::ObAlterTableArg &alter_table_arg,
@@ -1419,6 +1532,7 @@ private:
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObIAllocator &allocator,
+      const uint64_t tenant_data_version,
       const ObString &index_name = ObString(""));
   int rebuild_triggers_on_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
@@ -1507,7 +1621,8 @@ private:
                                const share::schema::ObTableSchema &orig_table_schema,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                const bool is_oracle_mode,
-                               share::ObDDLType &ddl_type);
+                               share::ObDDLType &ddl_type,
+                               bool &ddl_need_retry_at_executor);
   int check_alter_table_partition(const obrpc::ObAlterTableArg &alter_table_arg,
                                   const share::schema::ObTableSchema &orig_table_schema,
                                   const bool is_oracle_mode,
@@ -1524,7 +1639,8 @@ private:
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               ObDDLOperator &ddl_operator,
                               common::ObMySQLTransaction &trans,
-                              common::ObArenaAllocator &allocator);
+                              common::ObArenaAllocator &allocator,
+                              const uint64_t tenant_data_version);
   int check_alter_partition_with_tablegroup(const ObTableSchema *orig_table_schema,
                                             ObTableSchema &new_table_schema,
                                             ObSchemaGetterGuard &schema_guard);
@@ -1533,7 +1649,8 @@ private:
                               share::schema::ObTableSchema &new_table_schema,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               ObDDLOperator &ddl_operator,
-                              common::ObMySQLTransaction &trans);
+                              common::ObMySQLTransaction &trans,
+                              const uint64_t tenant_data_version);
   int convert_to_character_for_partition(const ObCollationType &to_collation,
                            share::schema::ObTableSchema &new_table_schema);
   int convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
@@ -1541,7 +1658,17 @@ private:
                            share::schema::ObTableSchema &new_table_schema,
                            share::schema::ObSchemaGetterGuard &schema_guard,
                            ObDDLOperator &ddl_operator,
-                           common::ObMySQLTransaction &trans);
+                           common::ObMySQLTransaction &trans,
+                           const uint64_t tenant_data_version);
+  int check_alter_column_group(const obrpc::ObAlterTableArg &alter_table_arg, share::ObDDLType &ddl_type) const;
+  int alter_column_group(obrpc::ObAlterTableArg &alter_table_arg,
+                         const share::schema::ObTableSchema &origin_table_schema,
+                         share::schema::ObTableSchema &new_table_schema,
+                         share::schema::ObSchemaGetterGuard &schema_guard,
+                         ObDDLOperator &ddl_operator,
+                         common::ObMySQLTransaction &trans);
+
+
   int check_alter_table_constraint(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const ObTableSchema &orig_table_schema,
@@ -1648,7 +1775,8 @@ private:
       share::schema::ObTableSchema &new_table_schema,
       share::schema::ObTableSchema &index_schema);
   int alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                            obrpc::ObAlterTableRes &res);
+                                            obrpc::ObAlterTableRes &res,
+                                            const uint64_t tenant_data_version);
   int truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
                               const share::schema::ObTableSchema &orig_table_schema,
                               common::ObIArray<share::schema::ObTableSchema> &table_schemas,
@@ -1715,7 +1843,10 @@ private:
       const share::schema::ObColumnSchemaV2 &orig_column_schema,
       const share::schema::ObTableSchema &origin_table_schema,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
+      const share::schema::ObLocalSessionVar *local_session_var,
       share::schema::ObTableSchema &new_table_schema,
+      const bool need_update_default_value,
+      const bool need_update_session_var,
       ObDDLOperator *ddl_operator = NULL,
       common::ObMySQLTransaction *trans = NULL);
   int modify_generated_column_default_value(share::schema::ObColumnSchemaV2 &generated_column,
@@ -1723,9 +1854,17 @@ private:
                                             const common::ObString &new_column_name,
                                             const share::schema::ObTableSchema &table_schema,
                                             const common::ObTimeZoneInfo &tz_info);
-  int validate_update_column_for_materialized_view(
-      const share::schema::ObTableSchema &origin_table_schema,
-      const share::schema::ObColumnSchemaV2 &orig_column_schema);
+  int modify_generated_column_local_vars(ObColumnSchemaV2 &generated_column,
+                                        const common::ObString &column_name,
+                                        const ObObjType origin_type,
+                                        const AlterColumnSchema &new_column_schema,
+                                        const ObTableSchema &table_schema,
+                                        const share::schema::ObLocalSessionVar *local_session_var);
+  int modify_depend_column_type(sql::ObRawExpr *expr,
+                                const ObString &column_name,
+                                const AlterColumnSchema &alter_column_schema,
+                                lib::Worker::CompatMode compat_mode);
+
   int modify_part_func_expr(const ObString &orig_column_name,
                             const ObString &alter_column_name,
                             share::schema::ObTableSchema &table_schema,
@@ -1787,7 +1926,8 @@ private:
   int check_can_alter_column_type(
       const share::schema::ObColumnSchemaV2 &src_column,
       const share::schema::ObColumnSchemaV2 &dst_column,
-      const share::schema::ObTableSchema &table_schema);
+      const share::schema::ObTableSchema &table_schema,
+      const bool is_oracle_mode);
   int check_is_change_column_type(
       const share::schema::ObColumnSchemaV2 &src_column,
       const share::schema::ObColumnSchemaV2 &dst_column,
@@ -1802,6 +1942,13 @@ private:
   int check_modify_column_when_upgrade(
       const share::schema::ObColumnSchemaV2 &new_column,
       const share::schema::ObColumnSchemaV2 &orig_column);
+  int alter_shadow_column_for_index(
+    const ObArray<ObTableSchema> &idx_schema_array,
+    const AlterColumnSchema *alter_column_schema,
+    const ObColumnSchemaV2 &new_column_schema,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans);
+
   int check_new_column_for_index(
       ObIArray<share::schema::ObTableSchema> &idx_schemas,
       const share::schema::ObColumnSchemaV2 &new_column_schema);
@@ -1835,6 +1982,11 @@ private:
       share::schema::AlterColumnSchema &alter_column_schema,
       ObDDLOperator *ddl_operator,
       common::ObMySQLTransaction *trans);
+
+  int alter_table_update_cg_column(common::ObMySQLTransaction &trans,
+                                   ObDDLOperator &ddl_operator,
+                                   share::schema::ObColumnSchemaV2 &new_column_schema,
+                                   share::schema::ObTableSchema &new_table_schema);
 
   bool is_zone_exist(const common::ObArray<common::ObZone> &zones, const common::ObZone &zone);
   int try_drop_sys_ls_(const uint64_t meta_tenant_id,
@@ -1921,13 +2073,34 @@ private:
       common::ObMySQLTransaction &trans,
       bool &is_add_lob);
   int lock_tables_of_database(const share::schema::ObDatabaseSchema &database_schema,
-                              share::schema::ObSchemaGetterGuard &schema_guard,
                               ObMySQLTransaction &trans);
   int lock_tables_in_recyclebin(const share::schema::ObDatabaseSchema &database_schema,
-                                share::schema::ObSchemaGetterGuard &schema_guard,
                                 ObMySQLTransaction &trans);
+  int get_dropping_domain_index_invisiable_aux_table_schema(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      const uint64_t index_table_id,
+      const bool is_fts_index,
+      const ObString &index_name,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans,
+      common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
+  int build_single_table_rw_defensive_(
+    const uint64_t tenant_id,
+    const ObArray<ObTabletID> &tablet_ids,
+    const int64_t schema_version,
+    ObDDLSQLTransaction &trans);
+  int build_rw_defense_for_table_(
+      const ObTableSchema &table_schema,
+      const int64_t new_data_table_schema_version,
+      const ObIArray<std::pair<uint64_t, int64_t>> &aux_schema_versions,
+      ObDDLSQLTransaction &trans);
 
 public:
+  int check_parallel_ddl_conflict(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const obrpc::ObDDLArg &arg);
   int construct_zone_region_list(
       common::ObIArray<share::schema::ObZoneRegion> &zone_region_list,
       const common::ObIArray<common::ObZone> &zone_list);
@@ -1958,6 +2131,7 @@ public:
              obrpc::ObSrvRpcProxy &rpc_proxy,
              const common::ObIArray<common::ObConfigPairs> &init_configs,
              const common::ObIArray<common::ObAddr> &addrs);
+
 #ifdef OB_BUILD_TDE_SECURITY
   int check_need_create_root_key(const obrpc::ObCreateTenantArg &arg, bool &need_create);
   int get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
@@ -1983,6 +2157,14 @@ public:
              common::ObIAllocator *allocator = NULL);
 #endif
 private:
+  int adjust_cg_for_offline(ObTableSchema &new_table_schema);
+  int add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
+                       const share::schema::ObTableSchema &ori_table_schema,
+                       share::schema::ObTableSchema &new_table_schema);
+
+  int drop_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
+                        const share::schema::ObTableSchema &ori_table_schema,
+                        share::schema::ObTableSchema &new_table_schema);
   int handle_security_audit_for_stmt(const obrpc::ObSecurityAuditArg &arg,
                                      share::schema::ObSAuditSchema &audit_schema);
   int handle_security_audit_for_object(const obrpc::ObSecurityAuditArg &arg,
@@ -2029,7 +2211,7 @@ private:
       const obrpc::ObCreateTenantArg &arg,
       share::schema::ObTenantSchema &tenant_schema,
       share::schema::ObSysVariableSchema &sys_variable_schema);
-  int create_tenant(
+  int inner_create_tenant_(
       const obrpc::ObCreateTenantArg &arg,
       share::schema::ObSchemaGetterGuard &schema_guard,
       obrpc::UInt64 &tenant_id);
@@ -2050,13 +2232,15 @@ private:
       const palf::PalfBaseInfo &palf_base_info,
       const common::ObIArray<common::ObConfigPairs> &init_configs,
       bool is_creating_standby,
-      const common::ObString &log_restore_source);
+      const common::ObString &log_restore_source,
+      const uint64_t source_tenant_id);
   int set_sys_ls_status(const uint64_t tenant_id);
   int create_tenant_sys_ls(
       const share::schema::ObTenantSchema &tenant_schema,
       const common::ObIArray<share::ObResourcePoolName> &pool_list,
       const bool create_ls_with_palf,
-      const palf::PalfBaseInfo &palf_base_info);
+      const palf::PalfBaseInfo &palf_base_info,
+      const uint64_t source_tenant_id);
   int create_tenant_user_ls(const uint64_t tenant_id);
   int broadcast_sys_table_schemas(
       const uint64_t tenant_id,
@@ -2078,10 +2262,11 @@ private:
       const uint64_t tenant_id,
       const common::ObString &log_restore_source,
       common::ObMySQLTransaction &trans);
-  int insert_restore_tenant_job(
+  int insert_restore_or_clone_tenant_job_(
       const uint64_t tenant_id,
       const ObString &tenant_name,
-      const share::ObTenantRole &tenant_role);
+      const share::ObTenantRole &tenant_role,
+      const uint64_t source_tenant_id);
   int create_sys_table_schemas(
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
@@ -2113,6 +2298,10 @@ private:
                            uint64_t creator_id,
                            uint64_t &user_id,
                            share::schema::ObSchemaGetterGuard &schema_guard);
+
+  int create_mysql_roles_in_trans(const uint64_t tenant_id,
+                                  const bool if_not_exist,
+                                  common::ObIArray<share::schema::ObUserInfo> &user_infos);
   int replay_alter_user(const share::schema::ObUserInfo &user_info,
       share::schema::ObSchemaGetterGuard &schema_guard);
   int set_passwd_in_trans(const uint64_t tenant_id,
@@ -2142,7 +2331,7 @@ private:
                          const common::ObString *ddl_stmt_str,
                          share::schema::ObSchemaGetterGuard &schema_guard);
   int drop_user_in_trans(const uint64_t tenant_id,
-                         const uint64_t user_id,
+                         const common::ObIArray<uint64_t> &user_ids,
                          const ObString *ddl_stmt_str);
 
   //----End of Functions for managing privileges----
@@ -2238,7 +2427,8 @@ private:
       const common::ObString *ddl_stmt_str,
       ObMySQLTransaction *sql_trans,
       share::schema::DropTableIdHashSet *drop_table_set,
-      ObMockFKParentTableSchema *mock_fk_parent_table_ptr);
+      ObMockFKParentTableSchema *mock_fk_parent_table_ptr,
+      const bool delete_priv = true);
   int drop_aux_table_in_drop_table(
       ObMySQLTransaction &trans,
       ObDDLOperator &ddl_operator,
@@ -2433,9 +2623,43 @@ private:
   int gen_inc_table_schema_for_add_part(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
+  int gen_inc_table_schema_for_add_subpart(
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::AlterTableSchema &inc_table_schema);
   int gen_inc_table_schema_for_drop_part(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
+  int gen_inc_table_schema_for_drop_subpart(
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::AlterTableSchema &inc_table_schema);
+public:
+  //not check belong to the same table
+  int check_same_partition(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
+                           const ObPartitionFuncType part_type, bool &is_matched) const;
+  //not check belong to the same table
+  int check_same_subpartition(const bool is_oracle_mode, const ObSubPartition &l, const ObSubPartition &r,
+                              const ObPartitionFuncType part_type, bool &is_matched) const;
+private:
+  //After renaming a partition/subpartition, the consistency of the partition name between the data table and aux table is no longer guaranteed.
+  //Therefore, the partition names in the inc aux table must be synchronized with the ori aux table after assigning the data table's partition
+  //schema to the inc aux table.
+  //This function relies on the assumption that the inc table schema has a valid partition name.
+  int fix_local_idx_part_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
+                               const ObSimpleTableSchemaV2 &ori_table_schema,
+                               ObSimpleTableSchemaV2 &inc_table_schema);
+  //This function relies on the assumption that the inc table schema has a valid subpartition name.
+  int fix_local_idx_subpart_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
+                                  const ObSimpleTableSchemaV2 &ori_table_schema,
+                                  ObSimpleTableSchemaV2 &inc_table_schema);
+  //During the process of adding a partition/subpartition, we only check whether the partition schema of the argument is valid.
+  //It's possible for the inc aux table's partition name to duplicate with an existing partition name if one renames a partition/subpartition
+  //to another name and then adds a partition/subpartition with the same name.
+  //In this case, we will generate a name with a part/subpart id to replace the inc part/subpart name to avoid duplication.
+  int fix_local_idx_part_name_for_add_part_(const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema);
+
+  int fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema);
   int gen_inc_table_schema_for_rename_part_(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
@@ -2443,12 +2667,6 @@ private:
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema,
       share::schema::AlterTableSchema &del_table_schema);
-  int gen_inc_table_schema_for_add_subpart(
-      const share::schema::ObTableSchema &orig_table_schema,
-      share::schema::AlterTableSchema &inc_table_schema);
-  int gen_inc_table_schema_for_drop_subpart(
-      const share::schema::ObTableSchema &orig_table_schema,
-      share::schema::AlterTableSchema &inc_table_schema);
   int gen_inc_table_schema_for_rename_subpart_(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
@@ -2494,34 +2712,6 @@ private:
       const share::schema::ObTenantSchema &orig_tenant_schema,
       const share::schema::ObTenantSchema &new_tenant_schema);
 
-  //not check belong to the same table
-  int check_same_partition_(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
-                            const ObPartitionFuncType part_type, bool &is_matched) const;
-  //not check belong to the same table
-  int check_same_subpartition_(const bool is_oracle_mode, const ObSubPartition &l, const ObSubPartition &r,
-                               const ObPartitionFuncType part_type, bool &is_matched) const;
-  //After renaming a partition/subpartition, the consistency of the partition name between the data table and aux table is no longer guaranteed.
-  //Therefore, the partition names in the inc aux table must be synchronized with the ori aux table after assigning the data table's partition
-  //schema to the inc aux table.
-  //This function relies on the assumption that the inc table schema has a valid partition name.
-  int fix_local_idx_part_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
-                                          const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema);
-  //This function relies on the assumption that the inc table schema has a valid subpartition name.
-  int fix_local_idx_subpart_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
-                                          const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema);
-  //During the process of adding a partition/subpartition, we only check whether the partition schema of the argument is valid.
-  //It's possible for the inc aux table's partition name to duplicate with an existing partition name if one renames a partition/subpartition
-  //to another name and then adds a partition/subpartition with the same name.
-  //In this case, we will generate a name with a part/subpart id to replace the inc part/subpart name to avoid duplication.
-  int fix_local_idx_part_name_for_add_part_(const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema);
-
-  int fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema);
-
-private:
   int check_locality_compatible_(ObTenantSchema &schema);
 
   int pre_rename_mysql_columns_online(const ObTableSchema &origin_table_schema,
@@ -2595,6 +2785,15 @@ private:
     ObColumnNameHashWrapper new_key(alter_column_schema.get_column_name_str());
     return !(orig_key == (new_key));
   }
+  int start_mview_complete_refresh_task(ObMySQLTransaction &trans,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        const ObTableSchema &mview_schema,
+                                        const ObTableSchema &container_table_schema,
+                                        const ObIArray<ObDependencyInfo> *dep_infos,
+                                        common::ObIAllocator &allocator,
+                                        const uint64_t tenant_data_version,
+                                        const share::schema::ObMViewInfo &mview_info,
+                                        ObDDLTaskRecord &task_record);
 
   bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;
 
@@ -2741,7 +2940,7 @@ int ObDDLService::fill_part_name(const SCHEMA &orig_schema,
   if (OB_ISNULL(part_array)) {
     ret = OB_ERR_UNEXPECTED;
     RS_LOG(WARN, "part_array is null", K(ret), K(part_array));
-  } else if (OB_FAIL(orig_schema.get_max_part_idx(max_part_id))) {
+  } else if (OB_FAIL(orig_schema.get_max_part_idx(max_part_id, orig_schema.is_external_table()))) {
     RS_LOG(WARN, "fail to get max part id", KR(ret), K(max_part_id));
   }
   // Supplement the default partition name p+OB_MAX_PARTITION_NUM_MYSQL, accumulate after judging duplicates

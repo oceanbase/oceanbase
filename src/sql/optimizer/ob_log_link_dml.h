@@ -30,10 +30,12 @@ public:
   virtual int get_explain_name_internal(char *buf, const int64_t buf_len, int64_t &pos) override;
   virtual int get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_item) override;
   inline void set_dml_type(stmt::StmtType type) { dml_type_ = type; }
+  inline ObIArray<int64_t> &get_related_dblink_ids() { return related_dblink_ids_; }
 private:
   virtual bool print_flashback_query() const override { return false; };
 private:
   stmt::StmtType dml_type_;
+  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> related_dblink_ids_; // all dblinks related in this link dml sql
 };
 
 } // namespace sql

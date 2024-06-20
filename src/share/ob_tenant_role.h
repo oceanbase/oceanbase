@@ -32,7 +32,8 @@ public:
     PRIMARY_TENANT = 1,
     STANDBY_TENANT = 2,
     RESTORE_TENANT = 3,
-    MAX_TENANT = 4,
+    CLONE_TENANT   = 4,
+    MAX_TENANT = 5,
   };
 public:
   ObTenantRole() : value_(INVALID_TENANT) {}
@@ -57,6 +58,7 @@ public:
   bool is_primary() const { return PRIMARY_TENANT == value_; }
   bool is_standby() const { return STANDBY_TENANT == value_; }
   bool is_restore() const { return RESTORE_TENANT == value_; }
+  bool is_clone() const { return CLONE_TENANT == value_; }
 
   TO_STRING_KV(K_(value));
   DECLARE_TO_YSON_KV;
@@ -71,12 +73,14 @@ GEN_IS_TENANT_ROLE_DECLARE(ObTenantRole::Role::INVALID_TENANT, invalid)
 GEN_IS_TENANT_ROLE_DECLARE(ObTenantRole::Role::PRIMARY_TENANT, primary)
 GEN_IS_TENANT_ROLE_DECLARE(ObTenantRole::Role::STANDBY_TENANT, standby)
 GEN_IS_TENANT_ROLE_DECLARE(ObTenantRole::Role::RESTORE_TENANT, restore)
+GEN_IS_TENANT_ROLE_DECLARE(ObTenantRole::Role::CLONE_TENANT, clone)
 #undef GEN_IS_TENANT_ROLE_DECLARE
 
 static const ObTenantRole INVALID_TENANT_ROLE(ObTenantRole::INVALID_TENANT);
 static const ObTenantRole PRIMARY_TENANT_ROLE(ObTenantRole::PRIMARY_TENANT);
 static const ObTenantRole STANDBY_TENANT_ROLE(ObTenantRole::STANDBY_TENANT);
 static const ObTenantRole RESTORE_TENANT_ROLE(ObTenantRole::RESTORE_TENANT);
+static const ObTenantRole CLONE_TENANT_ROLE(ObTenantRole::CLONE_TENANT);
 
 }  // share
 }  // oceanbase

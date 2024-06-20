@@ -37,7 +37,7 @@ int ObTabletMergeChecker::check_need_merge(const ObMergeType merge_type, const O
     LOG_WARN("merge type is invalid", K(ret), "merge_type", merge_type_to_str(merge_type));
   } else if (!is_minor_merge(merge_type)
       && !is_mini_merge(merge_type)
-      && !is_major_merge(merge_type)
+      && !is_major_or_meta_merge_type(merge_type)
       && !is_medium_merge(merge_type)) {
     need_merge = true;
   } else {
@@ -46,7 +46,7 @@ int ObTabletMergeChecker::check_need_merge(const ObMergeType merge_type, const O
     bool is_empty_shell = tablet.is_empty_shell();
     if (is_minor_merge(merge_type) || is_mini_merge(merge_type)) {
       need_merge = !is_empty_shell;
-    } else if (is_major_merge(merge_type) || is_medium_merge(merge_type)) {
+    } else if (is_major_or_meta_merge_type(merge_type) || is_medium_merge(merge_type)) {
       need_merge = tablet.is_data_complete();
     }
 
@@ -110,7 +110,7 @@ int ObTabletMergeChecker::check_ls_state_in_major(ObLS &ls, bool &need_merge)
     // do nothing
   } else if (OB_FAIL(ls.get_ls_meta().get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), K(ls));
-  } else if (OB_UNLIKELY(!restore_status.is_restore_none())) {
+  } else if (OB_UNLIKELY(!restore_status.is_none())) {
     if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("ls is in restore status, should not loop tablet to schedule", K(ret), "ls_id", ls.get_ls_id());
     }

@@ -43,16 +43,19 @@ class ObExprObjAccess;
 
 struct ObSPICursor
 {
-  ObSPICursor(ObIAllocator &allocator) :
-    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator)
+  ObSPICursor(ObIAllocator &allocator, sql::ObSQLSessionInfo* session_info) :
+    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_(),
+    session_info_(session_info)
   {
     row_desc_.set_tenant_id(MTL_ID());
+    complex_objs_.reset();
+    complex_objs_.set_tenant_id(MTL_ID());
   }
 
   ~ObSPICursor()
   {
     for (int64_t i = 0; i < complex_objs_.count(); ++i) {
-      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i)));
+      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i), session_info_));
     }
   }
 
@@ -62,6 +65,7 @@ struct ObSPICursor
   int64_t cur_;
   common::ColumnsFieldArray fields_;
   ObArray<ObObj> complex_objs_;
+  sql::ObSQLSessionInfo* session_info_;
 };
 
 struct ObSPIOutParams
@@ -126,7 +130,8 @@ public:
       orign_session_value_(NULL),
       cursor_session_value_(NULL),
       nested_session_value_(NULL),
-      out_params_() {
+      out_params_(),
+      exec_params_str_() {
       }
   ~ObSPIResultSet() { reset(); }
   int init(sql::ObSQLSessionInfo &session_info);
@@ -157,8 +162,8 @@ public:
     cursor_session_value_ = NULL;
     nested_session_value_ = NULL;
     out_params_.reset();
+    exec_params_str_.reset();
     allocator_.reset();
-
     is_inited_ = false;
   }
   void reset_member_for_retry(sql::ObSQLSessionInfo &session_info)
@@ -167,6 +172,7 @@ public:
       result_set_->~ObResultSet();
     }
     sql_ctx_.reset();
+    exec_params_str_.reset();
     //allocator_.reset();
     mem_context_->get_arena_allocator().reset();
     result_set_ = new (buf_) ObResultSet(session_info, mem_context_->get_arena_allocator());
@@ -212,6 +218,7 @@ public:
   void end_cursor_stmt(pl::ObPLExecCtx *pl_ctx, int &result);
   int start_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, const ObString &sql, stmt::StmtType stmt_type, bool for_update);
   void end_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, int &result);
+  ObString *get_exec_params_str_ptr() { return &exec_params_str_; }
 private:
   bool is_inited_;
   EndStmtType need_end_nested_stmt_;
@@ -232,6 +239,7 @@ private:
   sql::ObSQLSessionInfo::StmtSavedValue *cursor_session_value_;
   sql::ObSQLSessionInfo::StmtSavedValue *nested_session_value_;
   ObSPIOutParams out_params_; // 用于记录function的返回值
+  ObString exec_params_str_;
 };
 
 class ObSPIService
@@ -239,6 +247,23 @@ class ObSPIService
 public:
   struct ObSPIPrepareResult
   {
+    ObSPIPrepareResult() :
+    type_(stmt::T_NONE),
+    for_update_(false),
+    has_hidden_rowid_(false),
+    exec_params_(),
+    into_exprs_(),
+    ref_objects_(),
+    route_sql_(),
+    record_type_(nullptr),
+    tg_timing_event_(),
+    rowid_table_id_(OB_INVALID_ID),
+    ps_sql_(),
+    is_bulk_(false),
+    has_dup_column_name_(false),
+    has_link_table_(false),
+    is_skip_locked_(false)
+    {}
     stmt::StmtType type_; //prepare的语句类型
     bool for_update_;
     bool has_hidden_rowid_;
@@ -253,6 +278,7 @@ public:
     bool is_bulk_;
     bool has_dup_column_name_;
     bool has_link_table_;
+    bool is_skip_locked_;
   };
 
   struct PLPrepareCtx
@@ -289,6 +315,7 @@ public:
     PLPrepareResult() :
         mem_context_(nullptr),
         mem_context_destroy_guard_(mem_context_),
+        result_set_(nullptr),
         sql_ctx_(),
         schema_guard_(share::schema::ObSchemaMgrItem::MOD_PL_PREPARE_RESULT) {}
     ~PLPrepareResult() { reset(); }
@@ -337,6 +364,10 @@ public:
                            const ObSqlExpression *expr,
                            const int64_t result_idx,
                            ObObjParam *result);
+  static int spi_calc_expr_at_idx(pl::ObPLExecCtx *ctx,
+                                  const int64_t expr_idx,
+                                  const int64_t result_idx,
+                                  ObObjParam *result);
 
   static int spi_calc_subprogram_expr(pl::ObPLExecCtx *ctx,
                                       uint64_t package_id,
@@ -374,11 +405,28 @@ public:
   static int check_and_deep_copy_result(ObIAllocator &alloc,
                                         const ObObj &src,
                                         ObObj &dst);
+  static int spi_set_variable_to_expr(pl::ObPLExecCtx *ctx,
+                                      const int64_t expr_idx,
+                                      const ObObjParam *value,
+                                      bool is_default = false,
+                                      bool need_copy = false);
   static int spi_set_variable(pl::ObPLExecCtx *ctx,
                               const ObSqlExpression* expr,
                               const ObObjParam *value,
                               bool is_default = false,
                               bool need_copy = false);
+  static int spi_query_into_expr_idx(pl::ObPLExecCtx *ctx,
+                                     const char* sql,
+                                     int64_t type,
+                                     const int64_t *into_exprs_idx = NULL,
+                                     int64_t into_count = 0,
+                                     const ObDataType *column_types = NULL,
+                                     int64_t type_count = 0,
+                                     const bool *exprs_not_null_flag = NULL,
+                                     const int64_t *pl_integer_ranges = NULL,
+                                     bool is_bulk = false,
+                                     bool is_type_record = false,
+                                     bool for_update = false);
   static int spi_query(pl::ObPLExecCtx *ctx,
                        const char* sql,
                        int64_t type,
@@ -401,6 +449,21 @@ public:
                          bool is_cursor,
                          pl::ObPLBlockNS *secondary_namespace,
                          ObSPIPrepareResult &prepare_result);
+  static int spi_execute_with_expr_idx(pl::ObPLExecCtx *ctx,
+                                       const char *ps_sql,
+                                       int64_t type,
+                                       const int64_t *param_exprs_idx,
+                                       int64_t param_count,
+                                       const int64_t *into_exprs_idx,
+                                       int64_t into_count,
+                                       const ObDataType *column_types,
+                                       int64_t type_count,
+                                       const bool *exprs_not_null_flag,
+                                       const int64_t *pl_integer_ranges,
+                                       bool is_bulk,
+                                       bool is_forall,
+                                       bool is_type_record,
+                                       bool for_update);
   static int spi_execute(pl::ObPLExecCtx *ctx,
                          const char* ps_sql,
                          int64_t type,
@@ -418,11 +481,11 @@ public:
                          bool for_update = false);
 
   static int spi_execute_immediate(pl::ObPLExecCtx *ctx,
-                                   const ObSqlExpression *sql,
+                                   const int64_t sql_dix,
                                    common::ObObjParam **params,
                                    const int64_t *params_mode,
                                    int64_t param_count,
-                                   const ObSqlExpression **into_exprs,
+                                   const int64_t *into_exprs_idx,
                                    int64_t into_count,
                                    const ObDataType *column_types,
                                    int64_t type_count,
@@ -466,6 +529,21 @@ public:
                                    pl::ObPLCursorInfo *&cursor,
                                    common::ObObjParam &obj,
                                    ObCusorDeclareLoc loc);
+  static int spi_cursor_open_with_param_idx(pl::ObPLExecCtx *ctx,
+                                  const char *sql,
+                                  const char *ps_sql,
+                                  int64_t type,
+                                  bool for_update,
+                                  bool has_hidden_rowid,
+                                  const int64_t *sql_param_exprs,
+                                  int64_t sql_param_count,
+                                  uint64_t package_id,
+                                  uint64_t routine_id,
+                                  int64_t cursor_index,
+                                  const int64_t *formal_param_idxs,
+                                  const int64_t *actual_param_exprs,
+                                  int64_t cursor_param_count,
+                                  bool skip_locked);
   static int spi_cursor_open(pl::ObPLExecCtx *ctx,
                              const char *sql,
                              const char *ps_sql,
@@ -479,7 +557,8 @@ public:
                              int64_t cursor_index,
                              const int64_t *formal_param_idxs,
                              const ObSqlExpression **actual_param_exprs,
-                             int64_t cursor_param_count);
+                             int64_t cursor_param_count,
+                             bool skip_locked);
   static int dbms_cursor_open(pl::ObPLExecCtx *ctx,
                               pl::ObDbmsCursorInfo &cursor,
                               const ObString &ps_sql,
@@ -487,8 +566,8 @@ public:
                               bool for_update,
                               bool has_hidden_rowid);
   static int spi_dynamic_open(pl::ObPLExecCtx *ctx,
-                              const ObSqlExpression *sql,
-                              const ObSqlExpression **sql_param_exprs,
+                              const int64_t sql_idx,
+                              const int64_t *sql_param_exprs_idx,
                               int64_t sql_param_count,
                               uint64_t package_id,
                               uint64_t routine_id,
@@ -503,7 +582,7 @@ public:
                               uint64_t package_id,
                               uint64_t routine_id,
                               int64_t cursor_index,
-                              const ObSqlExpression **into_exprs,
+                              const int64_t *into_exprs,
                               int64_t into_count,
                               const ObDataType *column_types,
                               int64_t type_count,
@@ -530,10 +609,10 @@ public:
                                    int64_t *addr);
 
   static int spi_extend_collection(pl::ObPLExecCtx *ctx,
-                                   const ObSqlExpression *collection_expr,
+                                   const int64_t collection_expr_idx,
                                    int64_t column_count,
-                                   const ObSqlExpression *n_expr,
-                                   const ObSqlExpression *i_expr = NULL,
+                                   const int64_t n_expr_idx,
+                                   const int64_t i_expr_idx = OB_INVALID_ID,
                                    uint64_t package_id = OB_INVALID_ID);
 
   static int spi_set_collection(int64_t tenant_id,
@@ -546,27 +625,27 @@ public:
   static int spi_reset_collection(pl::ObPLCollection *coll);
 
   static int spi_raise_application_error(pl::ObPLExecCtx *ctx,
-                                         const ObSqlExpression *errcode_expr,
-                                         const ObSqlExpression *errmsg_expr);
+                                         const int64_t errcode_expr_idx,
+                                         const int64_t errmsg_expr_idx);
 
   static int spi_process_resignal(pl::ObPLExecCtx *ctx,
-                                  const ObSqlExpression *errcode_expr,
-                                  const ObSqlExpression *errmsg_expr,
+                                  const int64_t errcode_expr,
+                                  const int64_t errmsg_expr,
                                   const char *sql_state,
                                   int *error_code,
                                   const char *resignal_sql_state,
                                   bool is_signal);
 
   static int spi_delete_collection(pl::ObPLExecCtx *ctx,
-                                   const ObSqlExpression *collection_expr,
+                                   const int64_t collection_expr_idx,
                                    int64_t row_size,
-                                   const ObSqlExpression *m_expr,
-                                   const ObSqlExpression *n_expr);
+                                   const int64_t m_expr_idx,
+                                   const int64_t n_expr_idx);
 
   static int spi_trim_collection(pl::ObPLExecCtx *ctx,
-                                   const ObSqlExpression *collection_expr,
+                                   const int64_t collection_expr_idx,
                                    int64_t row_size,
-                                   const ObSqlExpression *n_expr);
+                                   const int64_t n_expr_idx);
 
   static int acquire_spi_conn(ObMySQLProxy &sql_proxy,
                               ObSQLSessionInfo &session_info,
@@ -676,7 +755,8 @@ public:
                              stmt::StmtType &type,
                              bool &for_update,
                              bool &hidden_rowid,
-                             int64_t &into_cnt);
+                             int64_t &into_cnt,
+                             bool &skip_locked);
   static int prepare_dynamic(pl::ObPLExecCtx *ctx,
                              ObIAllocator &allocator,
                              bool is_returning,
@@ -688,6 +768,7 @@ public:
                              bool &for_update,
                              bool &hidden_rowid,
                              int64_t &into_cnt,
+                             bool &skip_locked,
                              common::ColumnsFieldArray *field_list = NULL);
   static int force_refresh_schema(uint64_t tenant_id);
 
@@ -712,24 +793,35 @@ public:
                         ObSPIOutParams &out_params);
 
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
-  static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor);
+  static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int64_t new_query_start_time);
+
+  static int spi_opaque_assign_null(int64_t opaque_ptr);
+
+  static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
+
+  static int spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
 
 #ifdef OB_BUILD_ORACLE_PL
-  static int spi_execute_dblink(pl::ObPLExecCtx *ctx,
+  static int spi_execute_dblink(ObExecContext &exec_ctx,
+                                ObIAllocator &allocator,
                                 uint64_t dblink_id,
                                 uint64_t package_id,
                                 uint64_t proc_id,
-                                ParamStore &params);
+                                ParamStore &params,
+                                ObObj *result);
   static int spi_execute_dblink(ObExecContext &exec_ctx,
                                 ObIAllocator &allocator,
                                 const pl::ObPLDbLinkInfo *dblink_info,
                                 const ObRoutineInfo *routine_info,
-                                ParamStore &params);
+                                ParamStore &params,
+                                ObObj *result);
   static int spi_after_execute_dblink(ObSQLSessionInfo *session,
                                       const ObRoutineInfo *routine_info,
                                       ObIAllocator &allocator,
                                       ParamStore &params,
-                                      ParamStore &exec_params);
+                                      ParamStore &exec_params,
+                                      ObObj *result,
+                                      ObObj &tmp_result);
 #endif
 private:
   static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);
@@ -979,7 +1071,8 @@ private:
                                 bool is_type_record);
 
   static int store_datums(ObObj &dest_addr, ObIArray<ObObj> &result,
-                          ObIAllocator *alloc, ObSQLSessionInfo *session_info, bool is_schema_object);
+                          ObIAllocator *alloc,  ObSQLSessionInfo *session_info,
+                          bool is_schema_object);
 
   static int store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSessionInfo *session_info);
 
@@ -1066,6 +1159,17 @@ private:
                                     const int64_t *formal_param_idxs,
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
+  static bool is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array);
+};
+
+struct ObPLSubPLSqlTimeGuard
+{
+  ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx);
+  ~ObPLSubPLSqlTimeGuard();
+  int64_t old_sub_plsql_exec_time_;
+  int64_t execute_start_;
+  pl::ObPLExecState *state_;
+  int64_t old_pure_sql_exec_time_;
 };
 
 }

@@ -67,7 +67,7 @@ public:
   }
   void clear() { map_.clear(); }
 private:
-  ObLinearHashMap<ObIntWarp, ObTransID> map_;
+  ObLinearHashMap<ObIntWarp, ObTransID, UniqueMemMgrTag> map_;
 };
 
 class DeadLockBlockCallBack {
@@ -237,9 +237,11 @@ public:
                 const bool is_remote_sql,
                 const int64_t last_compact_cnt,
                 const int64_t total_trans_node_cnt,
+                const uint32_t sess_id,
                 const transaction::ObTransID &tx_id,
                 const transaction::ObTransID &holder_tx_id,
-                ObFunction<int(bool&, bool&)> &rechecker);
+                const ObLSID &ls_id,
+                ObFunction<int(bool &, bool &)> &rechecker);
   int post_lock(const int tmp_ret,
                 const ObTabletID &tablet_id,
                 const transaction::tablelock::ObLockID &lock_id,
@@ -247,9 +249,11 @@ public:
                 const bool is_remote_sql,
                 const int64_t last_compact_cnt,
                 const int64_t total_trans_node_cnt,
+                const uint32_t sess_id,
                 const transaction::ObTransID &tx_id,
                 const transaction::ObTransID &holder_tx_id,
                 const transaction::tablelock::ObTableLockMode &lock_mode,
+                const ObLSID &ls_id,
                 ObFunction<int(bool &need_wait)> &check_need_wait);
   // when removing the callbacks of uncommitted transaction, we need transfer
   // the conflict dependency from rows to transactions
@@ -358,6 +362,7 @@ private:
   DeadlockedSessionArray deadlocked_sessions_[2];
 private:
   RowHolderMapper row_holder_mapper_;
+  int64_t total_wait_node_;
 };
 
 class LockHashHelper {

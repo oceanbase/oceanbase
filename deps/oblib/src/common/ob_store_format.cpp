@@ -118,6 +118,29 @@ int ObStoreFormat::find_store_format_type(const ObString &store_format, const bo
 {
   return is_oracle_mode ? find_store_format_type_oracle(store_format, store_format_type) : find_store_format_type_mysql(store_format, store_format_type);
 }
+
+int ObTableStoreFormat::find_table_store_type(const ObString &table_store_format, ObTableStoreType &table_store_type)
+{
+  int ret = OB_SUCCESS;
+  table_store_type = OB_TABLE_STORE_INVALID;
+  if (table_store_format.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Empty table store format str", K(ret), K(table_store_format));
+  } else {
+    if (0 == table_store_format.case_compare("ROW")) {
+      table_store_type = OB_TABLE_STORE_ROW;
+    } else if (0 == table_store_format.case_compare("COLUMN")) {
+      table_store_type = OB_TABLE_STORE_COLUMN;
+    } else if (0 == table_store_format.case_compare("COMPOUND")) {
+      table_store_type = OB_TABLE_STORE_ROW_WITH_COLUMN;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected store format type", K(ret), K(table_store_format), K(table_store_type));
+    }
+  }
+  return ret;
+}
+
 }//end namespace common
 }//end namespace oceanbase
 

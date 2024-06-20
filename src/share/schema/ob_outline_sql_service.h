@@ -50,11 +50,6 @@ public:
                              const int64_t new_schema_version,
                              common::ObISQLClient &sql_client,
                              const common::ObString *ddl_stmt_str = NULL);
-
-  virtual int drop_outline(const ObOutlineInfo &outline_info,
-                           const int64_t new_schema_version,
-                           common::ObISQLClient &sql_client,
-                           const common::ObString *ddl_stmt_str = NULL);
 private:
   int add_outline(common::ObISQLClient &sql_client, const ObOutlineInfo &outline_info,
                   const bool only_history = false);

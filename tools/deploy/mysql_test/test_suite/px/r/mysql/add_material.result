@@ -27,8 +27,8 @@ Query Plan
 =================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=16
-  1 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, cast(1, BIGINT(20, 0)))]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, cast(1, BIGINT(20, 0)))]), filter(nil), rowset=16
       dop=3
   2 - output([t1.c1], [t2.c1]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)

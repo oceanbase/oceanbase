@@ -80,7 +80,6 @@ TEST_F(TestAggRow, test_agg_row)
         agg_row.storage_datums_[cnt].set_int(cnt);
       }
       OK(is_null.push_back(null));
-      STORAGE_LOG(INFO, "zhuixin debug", K(cnt), K(col_meta), K(null));
       has[col_idx][col_type] = true;
       ++cnt;
     }

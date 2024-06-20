@@ -73,39 +73,17 @@ public:
       share::schema::ObTableSchema &table_schema,
       const bool is_hidden,
       const bool is_specified_storing_col);
+  static int set_shadow_column_info(
+      const ObString &src_column_name,
+      const uint64_t src_column_id,
+      ObColumnSchemaV2 &shadow_column_schema);
 private:
   static const int SPATIAL_MBR_COLUMN_MAX_LENGTH = 32;
-  typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
-  class FulltextColumnOrder
-  {
-  public:
-    FulltextColumnOrder() {}
-    ~FulltextColumnOrder() {}
-
-    bool operator()(const std::pair<int64_t, common::ObString> &left,
-                    const std::pair<int64_t, common::ObString> &right) const
-    {
-      return left.first < right.first;
-    }
-  };
-  static int generate_fulltext_column(
-      OrderFTColumns &ft_cols,
-      share::schema::ObTableSchema &data_schema,
-      uint64_t specified_virtual_cid,
-      share::schema::ObColumnSchemaV2 *&ft_col);
   static int generate_prefix_column(
       const obrpc::ObColumnSortItem &sort_item,
       const ObSQLMode sql_mode,
       share::schema::ObTableSchema &data_schema,
       share::schema::ObColumnSchemaV2 *&prefix_col);
-  static int adjust_fulltext_args(
-      obrpc::ObCreateIndexArg &arg,
-      share::schema::ObTableSchema &data_schema,
-      common::ObIAllocator &allocator,
-      share::schema::ObColumnSchemaV2 *&ft_col);
-  static int adjust_fulltext_columns(
-      obrpc::ObCreateIndexArg &arg,
-      OrderFTColumns &ft_columns);
   static int adjust_ordinary_index_column_args(
       obrpc::ObCreateIndexArg &arg,
       share::schema::ObTableSchema &data_schema,

@@ -63,7 +63,11 @@ public:
                              mem_dump_task_count_(0),
                              running_dump_count_(0),
                              allocator_("TLD_mem_ctx"),
-                             has_error_(false) {}
+                             has_error_(false)
+  {
+    allocator_.set_tenant_id(MTL_ID());
+    tables_.set_tenant_id(MTL_ID());
+  }
 
   ~ObDirectLoadMemContext();
 

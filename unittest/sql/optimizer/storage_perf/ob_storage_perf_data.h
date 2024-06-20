@@ -74,7 +74,6 @@ private:
   storage::ObSSStore ssstore_;
   memtable::ObMemtable memtable_;
   blocksstable::ObSSTable *sstable_;
-  storage::ObPartitionComponentFactory cp_fty_;
   blocksstable::ObPartitionMeta meta_;
   storage::ObPartitionStorage storage_;
   blocksstable::ObDataFile data_file_;

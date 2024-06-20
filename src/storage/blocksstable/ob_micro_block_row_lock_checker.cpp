@@ -25,9 +25,10 @@ using namespace share;
 
 ObMicroBlockRowLockChecker::ObMicroBlockRowLockChecker(common::ObIAllocator &allocator)
     : ObMicroBlockRowScanner(allocator),
-      check_exist_(false),
-      snapshot_version_(),
-      lock_state_(nullptr)
+    check_exist_(false),
+    snapshot_version_(),
+    lock_state_(nullptr),
+    row_state_(nullptr)
 {
 }
 
@@ -144,7 +145,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         } else if (OB_FAIL(lock_state->trans_version_.convert_for_tx(trans_version))) {
           LOG_ERROR("convert failed", K(ret), K(trans_version));
         } else if (row_header->get_row_multi_version_flag().is_uncommitted_row()) {
-          ObTxTableGuards tx_table_guards = ctx.get_tx_table_guards();
+          ObTxTableGuards &tx_table_guards = ctx.get_tx_table_guards();
           transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
           if (!tx_table_guards.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
@@ -219,7 +220,9 @@ int ObMicroBlockRowLockMultiChecker::open(
 
 void ObMicroBlockRowLockMultiChecker::inc_empty_read()
 {
-  if (empty_read_cnt_ > 0) {
+  if (OB_NOT_NULL(context_) && OB_NOT_NULL(sstable_) &&
+      !context_->query_flag_.is_index_back() && context_->query_flag_.is_use_bloomfilter_cache() &&
+      !sstable_->is_small_sstable() && empty_read_cnt_ > 0) {
     (void) OB_STORE_CACHE.get_bf_cache().inc_empty_read(
              MTL_ID(),
              param_->table_id_,

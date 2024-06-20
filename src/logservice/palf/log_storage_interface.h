@@ -19,6 +19,7 @@ namespace palf
 {
 class ReadBuf;
 class LSN;
+class LogIOContext;
 class ILogStorage
 {
 public:
@@ -31,7 +32,8 @@ public:
   virtual int pread(const LSN &lsn,
                     const int64_t in_read_size,
                     ReadBuf &read_buf,
-                    int64_t &out_read_size) = 0;
+                    int64_t &out_read_size,
+                    LogIOContext &io_ctx) = 0;
 };
 }
 }

@@ -48,7 +48,8 @@ class ObExprCollectionConstruct;
 class ObExprObjectConstruct;
 class ObExprCalcPartitionId;
 class ObExprOpSubQueryInPl;
-
+class ObExprUdtConstruct;
+class ObExprUDTAttributeAccess;
 typedef common::ObSEArray<ObIterExprOperator*, 2> PhyIterExprDesc;
 
 class ObExprGeneratorImpl: public ObExprGenerator, public ObRawExprVisitor
@@ -96,6 +97,7 @@ private:
   virtual int visit(ObWinFunRawExpr &expr);
   virtual int visit(ObPseudoColumnRawExpr &expr);
   virtual int visit(ObPlQueryRefRawExpr &expr);
+  virtual int visit(ObMatchFunRawExpr &expr);
   virtual bool skip_child(ObRawExpr &expr);
 private:
   // types and constants
@@ -132,6 +134,8 @@ private:
   inline int visit_pl_object_construct_expr(ObRawExpr &expr, ObExprObjectConstruct *pl_object_construct);
   inline int visit_pl_get_cursor_attr_expr(
     ObRawExpr &expr, ObExprPLGetCursorAttr *pl_get_cursor_attr);
+  inline int visit_sql_udt_construct_expr(ObRawExpr &expr, ObExprUdtConstruct *udt_construct);
+  inline int visit_sql_udt_attr_access_expr(ObRawExpr &expr, ObExprUDTAttributeAccess *udt_attr_access);
 
   // %item_pos is the position of %raw_expr (infix expr item) in infix_expr_.exprs_ array.
   int add_child_infix_expr(ObRawExpr &raw_expr, const int64_t item_pos,

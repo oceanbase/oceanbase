@@ -152,6 +152,12 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
         TRANS_LOG(WARN, "current trans node has not submit clog yet", K(ret), KPC_(version_iter));
       } else if (NDT_COMPACT == version_iter_->type_) { // ignore compact node
         version_iter_ = version_iter_->prev_;
+      } else if (version_iter_->scn_ > merge_scn_) {
+        // skip tx node which not log succ
+        if (REACH_TIME_INTERVAL(100_ms)) {
+          TRANS_LOG(INFO, "skip txn-node log sync failed", KPC(version_iter_), K(merge_scn_));
+        }
+        version_iter_ = version_iter_->prev_;
       } else {
         bool need_get_state = version_iter_->get_tx_end_scn() > merge_scn_;
         if (need_get_state) {
@@ -264,7 +270,7 @@ int ObMultiVersionValueIterator::get_trans_status(const transaction::ObTransID &
   UNUSED(cluster_version);
   int ret = OB_SUCCESS;
   SCN trans_version = SCN::max_scn();
-  storage::ObTxTableGuards tx_table_guards = ctx_->get_tx_table_guards();
+  storage::ObTxTableGuards &tx_table_guards = ctx_->get_tx_table_guards();
   if (OB_FAIL(tx_table_guards.get_tx_state_with_scn(trans_id,
                                                     merge_scn_,
                                                     state,
@@ -498,12 +504,10 @@ int ObMultiVersionRowIterator::init(
   if (OB_FAIL(query_engine.scan(
       range.start_key_,  !range.border_flag_.inclusive_start(),
       range.end_key_,    !range.border_flag_.inclusive_end(),
-      ctx.snapshot_.version_.get_val_for_tx(),
       query_engine_iter_))) {
     TRANS_LOG(WARN, "query engine scan fail", K(ret));
   } else {
     query_engine_ = &query_engine;
-    query_engine_iter_->set_version(ctx.snapshot_.version_.get_val_for_tx());
     ctx_ = &ctx;
     version_range_ = version_range;
     is_inited_ = true;
@@ -516,7 +520,6 @@ int ObMultiVersionRowIterator::get_next_row(
     ObMultiVersionValueIterator *&value_iter)
 {
   int ret = OB_SUCCESS;
-  const bool skip_purge_memtable = true;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", KP(this));
     ret = OB_NOT_INIT;
@@ -525,7 +528,7 @@ int ObMultiVersionRowIterator::get_next_row(
   while (OB_SUCC(ret)) {
     const ObMemtableKey *tmp_key = NULL;
     ObMvccRow *value = NULL;
-    if (OB_FAIL(query_engine_iter_->next(skip_purge_memtable))) {
+    if (OB_FAIL(query_engine_iter_->next())) {
       if (OB_ITER_END != ret) {
         TRANS_LOG(WARN, "query engine iter next fail", K(ret), "ctx", *ctx_);
       }

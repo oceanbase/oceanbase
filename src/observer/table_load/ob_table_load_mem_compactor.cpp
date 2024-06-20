@@ -51,7 +51,7 @@ public:
   int process() override
   {
     int ret = OB_SUCCESS;
-    storage::ObDirectLoadMemSample sample(mem_ctx_);
+    storage::ObDirectLoadMemSample sample(ctx_, mem_ctx_);
     if (OB_FAIL(sample.do_sample())) {
       LOG_WARN("fail to do sample", KR(ret));
     }
@@ -161,8 +161,8 @@ private:
 class ObTableLoadMemCompactor::FinishTaskCallback : public ObITableLoadTaskCallback
 {
 public:
-  FinishTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadMemCompactor *compactor)
-    : ctx_(ctx), compactor_(compactor)
+  FinishTaskCallback(ObTableLoadTableCtx *ctx)
+    : ctx_(ctx)
   {
     ctx_->inc_ref_count();
   }
@@ -174,7 +174,6 @@ public:
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(ret_code)) {
-      compactor_->set_has_error();
       ctx_->store_ctx_->set_status_error(ret);
     }
     ctx_->free_task(task);
@@ -182,7 +181,6 @@ public:
   }
 private:
   ObTableLoadTableCtx *const ctx_;
-  ObTableLoadMemCompactor *const compactor_;
 };
 
 class ObTableLoadMemCompactor::MemDumpTaskProcessor : public ObITableLoadTaskProcessor
@@ -240,6 +238,7 @@ ObTableLoadMemCompactor::ObTableLoadMemCompactor()
     task_scheduler_(nullptr),
     parallel_merge_cb_(this)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadMemCompactor::~ObTableLoadMemCompactor()
@@ -270,7 +269,6 @@ int ObTableLoadMemCompactor::inner_init()
   const uint64_t tenant_id = MTL_ID();
   store_ctx_ = compact_ctx_->store_ctx_;
   param_ = &(store_ctx_->ctx_->param_);
-  allocator_.set_tenant_id(tenant_id);
   if (OB_FAIL(init_scheduler())) {
     LOG_WARN("fail to init_scheduler", KR(ret));
   } else {
@@ -333,7 +331,8 @@ int ObTableLoadMemCompactor::start()
 int ObTableLoadMemCompactor::construct_compactors()
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObTableLoadTransStore *, 64> trans_store_array;
+  ObArray<ObTableLoadTransStore *> trans_store_array;
+  trans_store_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
     LOG_WARN("fail to get committed trans stores", KR(ret));
   }
@@ -379,7 +378,7 @@ int ObTableLoadMemCompactor::create_mem_loader(ObDirectLoadMemLoader *&mem_loade
   int ret = OB_SUCCESS;
   mem_loader = nullptr;
   if (OB_ISNULL(mem_loader =
-                  OB_NEWx(ObDirectLoadMemLoader, (&allocator_), &mem_ctx_))) {
+                  OB_NEWx(ObDirectLoadMemLoader, (&allocator_), store_ctx_->ctx_, &mem_ctx_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObDirectLoadMemLoader", KR(ret));
   }
@@ -467,7 +466,7 @@ int ObTableLoadMemCompactor::start_finish()
     LOG_WARN("fail to set compactor task processor", KR(ret));
   }
   // 3. 设置callback
-  else if (OB_FAIL(task->set_callback<FinishTaskCallback>(ctx, this))) {
+  else if (OB_FAIL(task->set_callback<FinishTaskCallback>(ctx))) {
     LOG_WARN("fail to set compactor task callback", KR(ret));
   }
   // 4. 把task放入调度器
@@ -531,11 +530,11 @@ int ObTableLoadMemCompactor::start_compact()
 
 void ObTableLoadMemCompactor::stop()
 {
+  set_has_error(); //先设置为error，因为stop的场景就是error
   if (nullptr != task_scheduler_) {
     task_scheduler_->stop();
     task_scheduler_->wait();
   }
-  set_has_error(); //先设置为error，因为stop的场景就是error
 }
 
 int64_t ObTableLoadMemCompactor::get_compact_task_count() const
@@ -548,8 +547,8 @@ int ObTableLoadMemCompactor::handle_compact_task_finish(int ret_code)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ret_code)) {
   } else {
-    const int64_t finish_task_count = ATOMIC_AAF(&finish_task_count_, 1);
     int64_t task_to_wait = param_->session_count_ + 1; // one for sample task
+    const int64_t finish_task_count = ATOMIC_AAF(&finish_task_count_, 1);
     if (task_to_wait == finish_task_count) {
       if (OB_LIKELY(!(mem_ctx_.has_error_)) && OB_FAIL(start_finish())) {
         LOG_WARN("fail to start finish", KR(ret));
@@ -574,9 +573,6 @@ int ObTableLoadMemCompactor::finish()
     } else if (OB_FAIL(start_parallel_merge())) {
       LOG_WARN("fail to start parallel merge", KR(ret));
     }
-  }
-  if (OB_SUCC(ret)) {
-    mem_ctx_.reset(); // mem_ctx的tables已经copy，需要提前释放
   }
   return ret;
 }
@@ -608,6 +604,9 @@ int ObTableLoadMemCompactor::build_result_for_heap_table()
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    mem_ctx_.reset();
+  }
   return ret;
 }
 
@@ -624,6 +623,9 @@ int ObTableLoadMemCompactor::add_table_to_parallel_merge_ctx()
     } else if (OB_FAIL(parallel_merge_ctx_.add_tablet_sstable(sstable))) {
       LOG_WARN("fail to add tablet sstable", KR(ret));
     }
+  }
+  if (OB_SUCC(ret)) {
+    mem_ctx_.reset(); // mem_ctx的tables已经copy，需要提前释放
   }
   return ret;
 }

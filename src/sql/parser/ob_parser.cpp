@@ -558,13 +558,30 @@ int ObParser::split_start_with_pl(const ObString &stmt,
     ObString part(remain, stmt.ptr());
 
     if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode, false, true))) {
-      ret = queries.push_back(part);
+      if(parse_result.result_tree_ != NULL && parse_result.result_tree_->num_child_ > 0) {
+        ret = OB_SUCCESS;
+        for (int64_t i = 0; OB_SUCC(ret) && i < parse_result.result_tree_->num_child_; ++i) {
+          int64_t str_len = parse_result.result_tree_->children_[i]->str_len_;
+          int64_t offset = parse_result.result_tree_->children_[i]->pos_;
+          ObString query(str_len, stmt.ptr() + offset);
+          OZ(queries.push_back(query));
+        }
+        int64_t success_len = 0;
+        OX(success_len = parse_result.result_tree_->children_[parse_result.result_tree_->num_child_ - 1]->str_len_ +
+          parse_result.result_tree_->children_[parse_result.result_tree_->num_child_ - 1]->pos_);
+        if(OB_SUCC(ret) && ';' == stmt[success_len]) success_len++;
+        CK(success_len < remain);
+        ObString error_part(remain - success_len, stmt.ptr() + success_len);
+        OZ(queries.push_back(error_part));
+      } else {
+        ret = queries.push_back(part);
+      }
       if (OB_SUCCESS == ret) {
         parse_stat.parse_fail_ = true;
         parse_stat.fail_query_idx_ = queries.count() - 1;
         parse_stat.fail_ret_ = tmp_ret;
       }
-      LOG_WARN("fail parse multi part", K(part), K(stmt), K(ret));
+      LOG_WARN("fail parse multi part", K(part), K(stmt), K(tmp_ret));
     } else {
       CK(remain == parse_result.end_col_);
       CK(nullptr != bak_allocator);
@@ -613,6 +630,7 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
     ParseMode parse_mode = MULTI_MODE;
     int64_t offset = 0;
     int64_t remain = stmt.length();
+    int64_t semicolon_offset = INT64_MIN;
 
     parse_stat.reset();
     // 绕过parser对空查询处理不友好的方法：自己把末尾空格去掉
@@ -623,12 +641,16 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
     if (remain > 0 && '\0' == stmt[remain - 1]) {
       --remain;
     }
-    //再删除末尾空格
+    //再删除末尾空格和分号
     while (remain > 0 && ((ISSPACE(stmt[remain - 1])) ||
-           (lib::is_mysql_mode() && is_prepare && stmt[remain - 1] == ';'))) {
+           (lib::is_mysql_mode() && stmt[remain - 1] == ';'))) {
+      if (stmt[remain - 1] == ';') {
+        semicolon_offset = remain - 1;
+      }
       --remain;
     }
-
+    //留下最多一个分号
+    remain = max(remain, semicolon_offset + 1);
     // 对于空语句的特殊处理
     if (OB_UNLIKELY(0 >= remain)) {
       ObString part; // 空串
@@ -1040,6 +1062,7 @@ int ObParser::parse(const ObString &query,
   parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(charsets4parser_.string_collation_) ?
         (ObCharset::charset_type_by_coll(charsets4parser_.string_collation_) != CHARSET_UTF8MB4) : false;
   parse_result.malloc_pool_ = allocator_;
+  parse_result.semicolon_start_col_ = INT32_MAX;
   if (lib::is_oracle_mode()) {
     parse_result.sql_mode_ = sql_mode_ | SMO_ORACLE;
   } else {

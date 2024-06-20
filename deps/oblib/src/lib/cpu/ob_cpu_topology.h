@@ -41,11 +41,23 @@ inline uint64_t our_xgetbv(uint32_t xcr) noexcept
   return (static_cast<uint64_t>(edx) << 32) | eax;
 }
 #endif
+inline bool haveOSXSAVE();
 inline bool have_sse42();
 inline bool have_avx();
 inline bool have_avx2();
 inline bool have_avxf();
 inline bool have_avx512bw();
+
+inline bool haveOSXSAVE()
+{
+#if defined(__x86_64__)
+  int regs[4];
+  get_cpuid(regs, 0x1);
+  return (regs[2] >> 27) & 1u;
+#else
+  return false;
+#endif
+}
 
 inline bool have_sse42()
 {
@@ -62,7 +74,7 @@ inline bool have_avx()
 #if defined(__x86_64__)
   int regs[4];
   get_cpuid(regs, 0x1);
-  return ((our_xgetbv(0) & 6u) == 6u) && (regs[2] >> 28 & 1);
+  return haveOSXSAVE() && ((our_xgetbv(0) & 6u) == 6u) && (regs[2] >> 28 & 1);
 #else
   return false;
 #endif

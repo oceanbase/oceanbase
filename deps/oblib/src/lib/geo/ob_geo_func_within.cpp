@@ -85,10 +85,23 @@ static int apply_bg_within(const ObGeometry *g1,
                            bool &result)
 {
   UNUSED(context);
-  const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
-  const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
-  result = bg::within(*geo1, *geo2);
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  const GeoType1 *geo1 = nullptr;
+  const GeoType2 *geo2 = nullptr;
+  if (!g1->is_tree()) {
+    geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
+    geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+  } else {
+    geo1 = reinterpret_cast<GeoType1 *>(const_cast<ObGeometry *>(g1));
+    geo2 = reinterpret_cast<GeoType2 *>(const_cast<ObGeometry *>(g2));
+  }
+  if (OB_ISNULL(geo1) || OB_ISNULL(geo2)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("geometry can not be null", K(ret), K(geo1), K(geo2));
+  } else {
+    result = bg::within(*geo1, *geo2);
+  }
+  return ret;
 }
 
 template <typename GeoType1, typename GeoType2>
@@ -107,7 +120,11 @@ static int apply_bg_within_pl_pa_strategy(const ObGeometry *g1,
     ObPlPaStrategy geog_pl_pa_strategy(geog_sphere);
     const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
     const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+#ifdef USE_SPHERE_GEO
     result = bg::within(*geo1, *geo2, geog_pl_pa_strategy);
+#else
+    result = bg::within(*geo1, *geo2);
+#endif
   }
   return ret;
 }
@@ -128,7 +145,11 @@ static int apply_bg_within_ll_la_aa_strategy(const ObGeometry *g1,
     ObLlLaAaStrategy geog_ll_la_aa_strategy(geog_sphere);
     const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
     const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+#ifdef USE_SPHERE_GEO
     result = bg::within(*geo1, *geo2, geog_ll_la_aa_strategy);
+#else
+    result = bg::within(*geo1, *geo2);
+#endif
   }
   return ret;
 }
@@ -207,6 +228,7 @@ static int ob_caculate_mp_within_l_a_geog(const ObGeometry *g1, const ObGeometry
     for (; iter != geo1->end(); ++iter) {
       typename MpType::value_type& point = *iter;
       if (!within) {
+#ifdef USE_SPHERE_GEO
         within = bg::within(point, *geo2, geog_pl_pa_strategy);
         if (!within) {
           intersects = bg::intersects(point, *geo2, geog_pl_pa_strategy);
@@ -216,6 +238,17 @@ static int ob_caculate_mp_within_l_a_geog(const ObGeometry *g1, const ObGeometry
       } else {
         intersects = bg::intersects(point, *geo2, geog_pl_pa_strategy);
       }
+#else
+        within = bg::within(point, *geo2);
+        if (!within) {
+          intersects = bg::intersects(point, *geo2);
+        } else {
+          intersects = true;
+        }
+      } else {
+        intersects = bg::intersects(point, *geo2);
+      }
+#endif
       if (!intersects) break;
     }
     result = (within && intersects);
@@ -303,8 +336,13 @@ static int ob_caculate_ml_within_gc_geog(const ObGeometry *g1, const ObGeometry 
       // Checks relation between a pair of geometries defined by a mask.
       bg::de9im::mask mask("T********");
       result = res_geo2->is_empty() &&
+#ifdef USE_SPHERE_GEO
               (bg::relate(*geo1, *multi_line, mask, geog_ll_la_aa_strategy) ||
               bg::relate(*geo1, *multi_poly, mask, geog_ll_la_aa_strategy));
+#else
+              (bg::relate(*geo1, *multi_line, mask) ||
+              bg::relate(*geo1, *multi_poly, mask));
+#endif
     }
   }
   return ret;
@@ -355,7 +393,11 @@ static int ob_caculate_mpl_within_gc_geog(const ObGeometry *g1, const ObGeometry
   } else {
     bg::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
     ObLlLaAaStrategy geog_ll_la_aa_strategy(geog_sphere);
+#ifdef USE_SPHERE_GEO
     result = bg::within(*geo1, *multi_poly, geog_ll_la_aa_strategy);
+#else
+    result = bg::within(*geo1, *multi_poly);
+#endif
   }
   return ret;
 }
@@ -1292,13 +1334,22 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
       LOG_WARN("failed to do within by functor between GeogMultiPoint and GeogLineString", K(ret));
     } else if (mp_within_l) {
       result = multi_line->empty() ||
+#ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_line, *geo2, geog_ll_la_aa_strategy);
     } else if (bg::within(*multi_line, *geo2, geog_ll_la_aa_strategy)){
+#else
+               bg::covered_by(*multi_line, *geo2);
+    } else if (bg::within(*multi_line, *geo2)){
+#endif
       bool covered = true;
       ObGeographMultipoint::iterator iter = multi_point->begin();
       for (; iter != multi_point->end() && covered; ++iter) {
         ObGeographMultipoint::value_type& point = *iter;
+#ifdef USE_SPHERE_GEO
         covered = bg::covered_by(point, *geo2, geog_pl_pa_strategy);
+#else
+        covered = bg::covered_by(point, *geo2);
+#endif
       }
       result = covered;
     } else {
@@ -1341,29 +1392,53 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
       LOG_WARN("failed to do within by functor between multipoint and polygon", K(ret));
     } else if (mp_within_l) {
       result = (multi_line->empty() ||
+#ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_line, *geo2, geog_ll_la_aa_strategy)) &&
                (multi_poly->empty() ||
                bg::covered_by(*multi_poly, *geo2, geog_ll_la_aa_strategy));
     } else if (bg::within(*multi_line, *geo2, geog_ll_la_aa_strategy)) {
+#else
+               bg::covered_by(*multi_line, *geo2)) &&
+               (multi_poly->empty() ||
+               bg::covered_by(*multi_poly, *geo2));
+    } else if (bg::within(*multi_line, *geo2)) {
+#endif
       bool covered = true;
       ObGeographMultipoint::iterator iter = multi_point->begin();
       for (; iter != multi_point->end() && covered; ++iter) {
         ObGeographMultipoint::value_type& point = *iter;
+#ifdef USE_SPHERE_GEO
         covered = bg::covered_by(point, *geo2, geog_pl_pa_strategy);
+#else
+        covered = bg::covered_by(point, *geo2);
+#endif
       }
       result = !covered ? false :
                (multi_poly->empty() ||
+#ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_poly, *geo2, geog_ll_la_aa_strategy));
     } else if (bg::within(*multi_poly, *geo2, geog_ll_la_aa_strategy)) {
+#else
+               bg::covered_by(*multi_poly, *geo2));
+    } else if (bg::within(*multi_poly, *geo2)) {
+#endif
       bool covered = true;
       ObGeographMultipoint::iterator iter = multi_point->begin();
       for (; iter != multi_point->end() && covered; ++iter) {
         ObGeographMultipoint::value_type& point = *iter;
+#ifdef USE_SPHERE_GEO
         covered = bg::covered_by(point, *geo2, geog_pl_pa_strategy);
+#else
+        covered = bg::covered_by(point, *geo2);
+#endif
       }
       result = !covered ? false :
                (multi_line->empty() ||
+#ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_line, *geo2, geog_ll_la_aa_strategy));
+#else
+               bg::covered_by(*multi_line, *geo2));
+#endif
     } else {
       result = false;
     }
@@ -1410,14 +1485,24 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to do within by functor between GeogMultiPoint and GeogMultiLineString", K(ret));
     } else if (mp_within_l) {
+#ifdef USE_SPHERE_GEO
       result = multi_line->empty() ||
                bg::covered_by(*multi_line, *geo2, geog_ll_la_aa_strategy);
     } else if (bg::within(*multi_line, *geo2, geog_ll_la_aa_strategy)){
+#else
+      result = multi_line->empty() ||
+               bg::covered_by(*multi_line, *geo2);
+    } else if (bg::within(*multi_line, *geo2)){
+#endif
       bool covered = true;
       ObGeographMultipoint::iterator iter = multi_point->begin();
       for (; iter != multi_point->end() && covered; ++iter) {
         typename ObGeographMultipoint::value_type& point = *iter;
+#ifdef USE_SPHERE_GEO
         covered = bg::covered_by(point, *geo2, geog_pl_pa_strategy);
+#else
+        covered = bg::covered_by(point, *geo2);
+#endif
       }
       result = covered;
     } else {
@@ -1459,30 +1544,55 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to do within by functor between multipoint and polygon", K(ret));
     } else if (mp_within_poly) {
+#ifdef USE_SPHERE_GEO
       result = (multi_line->empty() ||
                bg::covered_by(*multi_line, *geo2, geog_ll_la_aa_strategy)) &&
                (multi_poly->empty() ||
                bg::covered_by(*multi_poly, *geo2, geog_ll_la_aa_strategy));
     } else if (bg::within(*multi_line, *geo2, geog_ll_la_aa_strategy)){
+#else
+      result = (multi_line->empty() ||
+               bg::covered_by(*multi_line, *geo2)) &&
+               (multi_poly->empty() ||
+               bg::covered_by(*multi_poly, *geo2));
+    } else if (bg::within(*multi_line, *geo2)){
+#endif
       bool covered = true;
       ObGeographMultipoint::iterator iter = multi_point->begin();
       for (; iter != multi_point->end() && covered; ++iter) {
         ObGeographMultipoint::value_type& point = *iter;
+#ifdef USE_SPHERE_GEO
         covered = bg::covered_by(point, *geo2, geog_pl_pa_strategy);
+#else
+        covered = bg::covered_by(point, *geo2);
+#endif
       }
       result = !covered ? false :
                (multi_poly->empty() ||
+#ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_poly, *geo2, geog_ll_la_aa_strategy));
-    } else if (bg::within(*multi_poly, *geo2, geog_ll_la_aa_strategy)){
+    } else if (bg::within(*multi_poly, *geo2, geog_ll_la_aa_strategy)) {
+#else
+               bg::covered_by(*multi_poly, *geo2));
+    } else if (bg::within(*multi_poly, *geo2)) {
+#endif
       bool covered = true;
       ObGeographMultipoint::iterator iter = multi_point->begin();
       for (; iter != multi_point->end() && covered; ++iter) {
         ObGeographMultipoint::value_type& point = *iter;
+#ifdef USE_SPHERE_GEO
         covered = bg::covered_by(point, *geo2, geog_pl_pa_strategy);
+#else
+        covered = bg::covered_by(point, *geo2);
+#endif
       }
       result = !covered ? false :
                (multi_line->empty() ||
+#ifdef USE_SPHERE_GEO
                bg::covered_by(*multi_line, *geo2, geog_ll_la_aa_strategy));
+#else
+               bg::covered_by(*multi_line, *geo2));
+#endif
     } else {
       result = false;
     }
@@ -1565,10 +1675,17 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
             } else {
               // Checks relation between a pair of geometries defined by a mask.
               bg::de9im::mask mask("T********");
+#ifdef USE_SPHERE_GEO
               result = mp_within_gc ||
                        bg::relate(*g1_multi_line, *g2_multi_line, mask, geog_ll_la_aa_strategy) ||
                        bg::relate(*g1_multi_line, *g2_multi_poly, mask, geog_ll_la_aa_strategy) ||
                        bg::relate(*g1_multi_poly, *g2_multi_poly, mask, geog_ll_la_aa_strategy);
+#else
+              result = mp_within_gc ||
+                       bg::relate(*g1_multi_line, *g2_multi_line, mask) ||
+                       bg::relate(*g1_multi_line, *g2_multi_poly, mask) ||
+                       bg::relate(*g1_multi_poly, *g2_multi_poly, mask);
+#endif
             }
           }
         }
@@ -1576,6 +1693,11 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
     }
   }
   return ret;
+} OB_GEO_FUNC_END;
+
+OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncWithinImpl, ObCartesianPoint, ObCartesianPolygon, bool)
+{
+  return apply_bg_within<ObCartesianPoint, ObCartesianPolygon>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
 int ObGeoFuncWithin::eval(const ObGeoEvalCtx &gis_context, bool &result)

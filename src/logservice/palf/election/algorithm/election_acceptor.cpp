@@ -59,7 +59,7 @@ public:
     if (OB_UNLIKELY(msg.get_ballot_number() < p_acceptor->ballot_number_)) {
       using T = typename ResponseType<RequestMsg>::type;
       T reject_msg = create_reject_message_(p_acceptor->p_election_->get_self_addr(),
-                                            p_acceptor->p_election_->inner_priority_seed_,
+                                            p_acceptor->p_election_->generate_inner_priority_seed_(),
                                             p_acceptor->p_election_->get_membership_version_(),
                                             p_acceptor->p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
                                             msg);
@@ -132,8 +132,8 @@ int ElectionAcceptor::start()
     
     LockGuard lock_guard(p_election_->lock_);
     // 周期性打印选举的状态
-    if (ObClockGenerator::getCurrentTime() > last_dump_acceptor_info_ts_ + 3_s) {
-      last_dump_acceptor_info_ts_ = ObClockGenerator::getCurrentTime();
+    if (ObClockGenerator::getClock() > last_dump_acceptor_info_ts_ + 3_s) {
+      last_dump_acceptor_info_ts_ = ObClockGenerator::getClock();
       ELECT_LOG(INFO, "dump acceptor info", K(*this));
     }
     // 当acceptor的Lease有效状态发生变化时需要打印日志以及汇报事件
@@ -163,7 +163,7 @@ int ElectionAcceptor::start()
       if (last_record_lease_valid_state && !lease_valid_state) {// 这个定时任务可能是被延迟致lease到期时触发的，为了在lease到期的第一时间投票
         can_vote = true;
         LOG_ELECT_LEADER(INFO, "vote when lease expired");
-      } else if (ObClockGenerator::getCurrentTime() - last_time_window_open_ts_ >= CALCULATE_TIME_WINDOW_SPAN_TS()) {
+      } else if (ObClockGenerator::getClock() - last_time_window_open_ts_ >= CALCULATE_TIME_WINDOW_SPAN_TS()) {
         can_vote = true;
       } else {
         LOG_ELECT_LEADER(INFO, "can't vote now", K(last_record_lease_valid_state),
@@ -235,6 +235,7 @@ void ElectionAcceptor::on_prepare_request(const ElectionPrepareRequestMsg &prepa
     // 0. 收到leader prepare的时候无须比较优先级，直接返回投票结果
     if (prepare_req.get_role() == common::ObRole::LEADER) {
       if (prepare_req.get_ballot_number() <= ballot_number_) {
+        // ignore ret
         LOG_PHASE(WARN, phase, "leader prepare message's ballot number is smaller than self");
       } else {
         advance_ballot_number_and_reset_related_states_(prepare_req.get_ballot_number(), phase);
@@ -269,7 +270,7 @@ void ElectionAcceptor::on_prepare_request(const ElectionPrepareRequestMsg &prepa
           LOG_PHASE(ERROR, phase, "open time window failed");
         } else {
           is_time_window_opened_ = true;// 定时任务注册成功，打开时间窗口
-          last_time_window_open_ts_ = ObClockGenerator::getCurrentTime();
+          last_time_window_open_ts_ = ObClockGenerator::getClock();
           LOG_PHASE(INFO, phase, "open time window success", K(timewindow_span));
         }
       }
@@ -321,7 +322,7 @@ void ElectionAcceptor::on_accept_request(const ElectionAcceptRequestMsg &accept_
     *us_to_expired = lease_.get_lease_end_ts() - get_monotonic_ts();
     // 3. 构造accept ok消息
     ElectionAcceptResponseMsg accept_res_accept(p_election_->get_self_addr(),
-                                                p_election_->inner_priority_seed_,
+                                                p_election_->generate_inner_priority_seed_(),
                                                 p_election_->get_membership_version_(),
                                                 p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
                                                 accept_req);

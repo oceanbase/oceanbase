@@ -20,6 +20,7 @@
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_join_filter.h"
+#include "sql/optimizer/ob_log_set.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -90,6 +91,10 @@ int ObLogJoin::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to generate join partition id expr", K(ret));
   } else if (NULL != partition_id_expr_ && OB_FAIL(all_exprs.push_back(partition_id_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+    // lateral derived table exec params may eliminate by group by, add exec_params to all_exprs here
+    // otherwise, will report 4002 in cg
+  } else if (OB_FAIL(append(all_exprs, nl_params_))) {
+    LOG_WARN("failed to append exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < nl_params_.count(); i++) {
       if (OB_ISNULL(nl_params_.at(i)) ||
@@ -710,7 +715,7 @@ bool ObLogJoin::is_scan_operator(log_op_def::ObLogOpType type)
 {
   return LOG_TABLE_SCAN == type || LOG_SUBPLAN_SCAN == type ||
          LOG_FUNCTION_TABLE == type || LOG_UNPIVOT == type ||
-         LOG_TEMP_TABLE_ACCESS == type || LOG_JSON_TABLE == type;
+         LOG_TEMP_TABLE_ACCESS == type || LOG_JSON_TABLE == type || LOG_VALUES_TABLE_ACCESS == type;
 }
 
 int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)
@@ -1347,7 +1352,9 @@ int ObLogJoin::check_and_set_use_batch()
   if (OB_SUCC(ret) && can_use_batch_nlj_) {
     bool contains_invalid_startup = false;
     bool contains_limit = false;
-    if (get_child(1)->get_type() == log_op_def::LOG_GRANULE_ITERATOR) {
+    bool enable_group_rescan_test_mode = false;
+    enable_group_rescan_test_mode = (OB_SUCCESS != (OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS));
+    if (get_child(1)->get_type() == log_op_def::LOG_GRANULE_ITERATOR && !enable_group_rescan_test_mode) {
       can_use_batch_nlj_ = false;
     } else if (OB_FAIL(plan->contains_startup_with_exec_param(get_child(1),
                                                               contains_invalid_startup))) {
@@ -1360,6 +1367,8 @@ int ObLogJoin::check_and_set_use_batch()
       can_use_batch_nlj_ = false;
     } else if (OB_FAIL(check_if_disable_batch(get_child(1), can_use_batch_nlj_))) {
       LOG_WARN("failed to check if disable batch", K(ret));
+    } else if (can_use_batch_nlj_ && OB_FAIL(ObOptimizerUtil::check_ancestor_node_support_skip_scan(this, can_use_batch_nlj_))) {
+      LOG_WARN("failed to check whether ancestor node support skip read", K(ret));
     }
   }
   // set use batch
@@ -1370,6 +1379,7 @@ int ObLogJoin::check_and_set_use_batch()
   }
   return ret;
 }
+
 
 int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_batch_nlj)
 {
@@ -1414,6 +1424,7 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
       LOG_WARN("failed to check if disable batch", K(ret));
     }
   } else if (log_op_def::LOG_SET == root->get_type()) {
+    ObLogSet *log_set = static_cast<ObLogSet *>(root);
     for (int64_t i = 0; OB_SUCC(ret) && can_use_batch_nlj && i < root->get_num_of_child(); ++i) {
       ObLogicalOperator *child = root->get_child(i);
       if (OB_ISNULL(child)) {
@@ -1424,18 +1435,8 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
       }
     }
   } else if (log_op_def::LOG_JOIN == root->get_type()) {
-    ObLogJoin *join = NULL;
-    if (OB_ISNULL(join = static_cast<ObLogJoin *>(root))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid input", K(ret));
-    } else if (!join->can_use_batch_nlj()) {
-      can_use_batch_nlj = false;
-      LOG_TRACE("child join not support batch_nlj", K(root->get_name()));
-    } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(0), can_use_batch_nlj)))) {
-      LOG_WARN("failed to check use batch nlj", K(ret));
-    } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(1), can_use_batch_nlj)))) {
-      LOG_WARN("failed to check use batch nlj for right op", K(ret));
-    }
+    // multi level nlj use batch is disabled
+    can_use_batch_nlj = false;
   } else {
     can_use_batch_nlj = false;
   }
@@ -1488,6 +1489,45 @@ int ObLogJoin::allocate_startup_expr_post(int64_t child_idx)
         LOG_WARN("failed to assign exprs", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObLogJoin::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = 0;
+  ObLogicalOperator *child_op = NULL;
+  const JoinPath *path = static_cast<ObLogJoin *>(this)->get_join_path();
+  if (OB_ISNULL(path)) {
+    //for late materialization
+    card = get_card();
+  } else if (path->other_cond_sel_ > 0) {
+    card = get_card() / path->other_cond_sel_;
+  } else {
+    card = 1.0;
+  }
+  return ret;
+}
+
+int ObLogJoin::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_JOIN == get_join_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  } else if (NESTED_LOOP_JOIN == get_join_algo()) {
+    used = false;
+    if (CONNECT_BY_JOIN == get_join_type()) {
+      inherit_child_ordering_index = -1;
+    } else {
+      inherit_child_ordering_index = first_child;
+    }
+  } else if (MERGE_JOIN == get_join_algo()) {
+    used = true;
+    inherit_child_ordering_index = first_child;
   }
   return ret;
 }

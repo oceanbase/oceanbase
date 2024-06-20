@@ -43,7 +43,7 @@ class ObTableLoadCoordinatorCtx
 public:
   ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadCoordinatorCtx();
-  int init(const common::ObIArray<int64_t> &idx_array, ObTableLoadExecCtx *exec_ctx);
+  int init(const common::ObIArray<uint64_t> &column_ids, ObTableLoadExecCtx *exec_ctx);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
@@ -114,10 +114,12 @@ public:
                               common::ObIAllocator &allocator) const;
   int check_exist_trans(bool &is_exist) const;
   int check_exist_committed_trans(bool &is_exist) const;
+  int init_complete();
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadSegmentID &segment_id,
                   ObTableLoadCoordinatorTrans *&trans);
+  int init_column_idxs(const common::ObIArray<uint64_t> &column_ids);
   int init_session_ctx_array();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
@@ -173,7 +175,7 @@ private:
   TransMap trans_map_;
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;
-  common::ObSEArray<ObTableLoadTransCtx *, 64> commited_trans_ctx_array_;
+  common::ObArray<ObTableLoadTransCtx *> commited_trans_ctx_array_;
   bool enable_heart_beat_;
   bool is_inited_;
 };

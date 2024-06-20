@@ -63,7 +63,7 @@ class ObLogConfig : public common::ObBaseConfig
   typedef std::map<std::string, std::string> ConfigMap;
 
 public:
-  ObLogConfig() : inited_(false), common_config_()
+  ObLogConfig() : inited_(false), common_config_(), tb_white_list_buf_(nullptr), tb_black_list_buf_(nullptr)
   {
   }
 
@@ -76,14 +76,26 @@ public:
 public:
   virtual bool need_print_config(const std::string& config_key) const override;
   void print() const;
+
+  int load_from_file(const char *config_file,
+      const int64_t version = 0,
+      const bool check_name = false);
+
   int load_from_map(const ConfigMap& configs,
       const int64_t version = 0,
       const bool check_name = false);
 
+  int dump2file(const char *file) const;
   common::ObCommonConfig &get_common_config() { return common_config_; }
 
   // remove quotes of cluster_url
   int format_cluster_url();
+
+private:
+  int load_from_buffer_(char *config_str,
+      const int64_t config_str_len,
+      const int64_t version,
+      const bool check_name);
 
 public:
 
@@ -103,14 +115,15 @@ public:
   DEF_INT(sequencer_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "sequencer thread number");
   DEF_INT(sequencer_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "sequencer queue length");
   DEF_INT(formatter_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "formatter thread number");
-  DEF_INT(lob_data_merger_thread_num, OB_CLUSTER_PARAMETER, "2", "[1,]", "lob data merger thread number");
+  DEF_INT(lob_data_merger_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "lob data merger thread number");
+  DEF_INT(lob_data_merger_queue_length, OB_CLUSTER_PARAMETER, "1000000", "[0,]", "lob data merger queue length");
   DEF_CAP(batch_buf_size, OB_CLUSTER_PARAMETER, "20MB", "[2MB,]", "batch buf size");
   DEF_INT(batch_buf_count, OB_CLUSTER_PARAMETER, "10", "[5,]", "batch buf count");
   DEF_INT(storager_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "storager thread number");
   DEF_INT(storager_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "storager queue length");
   DEF_INT(reader_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "reader thread number");
   DEF_INT(reader_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "reader queue length");
-  DEF_INT(br_queue_length, OB_CLUSTER_PARAMETER, "0", "[0, ]", "user_binlog_record queue length");
+  DEF_INT(br_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "user_binlog_record queue length");
   DEF_INT(cached_schema_version_count, OB_CLUSTER_PARAMETER, "32", "[1,]", "cached schema version count");
   DEF_INT(history_schema_version_count, OB_CLUSTER_PARAMETER, "16", "[1,]", "history schema version count");
   DEF_INT(resource_collector_thread_num, OB_CLUSTER_PARAMETER, "11", "[1,]", "resource collector thread number");
@@ -135,7 +148,7 @@ public:
       "part trans task prealloc page count");
   // Log_level=INFO in the startup scenario, and then optimize the schema to WARN afterwards
   DEF_STR(init_log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:INFO", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
-  DEF_STR(log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
+  DEF_STR(log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN;CLOG.*:WARN;STORAGE.*:WARN;ARCHIVE.*:WARN", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
   // root server info for oblog, seperated by `;` between multi rootserver, a root server info format as `ip:rpc_port:sql_port`
   DEF_STR(rootserver_list, OB_CLUSTER_PARAMETER, "|", "OB RootServer list");
   DEF_STR(cluster_url, OB_CLUSTER_PARAMETER, "|", "OB configure url");
@@ -410,13 +423,23 @@ public:
   DEF_CAP(extra_redo_dispatch_memory_size, OB_CLUSTER_PARAMETER, "0KB", "[0, 512M]", "extra redo dispatcher memory for data skew participant");
   T_DEF_INT(pause_redo_dispatch_task_count_threshold, OB_CLUSTER_PARAMETER, 80, 0, 100, "task cound percent threshold for pause redo dispatch");
   T_DEF_INT(memory_usage_warn_threshold, OB_CLUSTER_PARAMETER, 85, 10, 100, "memory usage wan threshold, may pause fetch while reach the threshold");
-  T_DEF_INT_INFT(queue_backlog_lowest_tolerance, OB_CLUSTER_PARAMETER, 500, 0, "lowest threshold of queue_backlog that will touch redo_dispatch flow controll");
+  T_DEF_INT_INFT(queue_backlog_lowest_tolerance, OB_CLUSTER_PARAMETER, 100, 0, "lowest threshold of queue_backlog that will touch flow controll");
   // sorter thread num
   T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
   // sorter thread
   T_DEF_INT_INFT(msg_sorter_task_count_upper_limit, OB_CLUSTER_PARAMETER, 0, 0, "trans msg sorter task count per thread");
+
+  // ------------------------------------------------------------------------
+  // Emergency Mode, used to handle unexpected behavior of observer.
+  // NOTICE: Most configurations of emergency mode may have some side effects:
+  //    for example, increased memory usage by OBCDC, reduced data synchronization efficiency, and even unknown risks to data correctness.
+
   // ignore delete tablets
   T_DEF_BOOL(skip_delete_tablet_op, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
+  // lsn black list, using vertical line separation
+  DEF_STR(lsn_black_list, OB_CLUSTER_PARAMETER, "|", "lsn black list");
+  // ignore check if update of outrow lob is actually empty update to empty.
+  T_DEF_BOOL(skip_empty_outrow_lob_update, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
 
   // ------------------------------------------------------------------------
   // Test mode, used only in obtest and other test tool scenarios
@@ -533,6 +556,9 @@ public:
   // 2. Backup is on by default
   T_DEF_BOOL(enable_output_invisible_column, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
+  // Whether to open white black list
+  T_DEF_BOOL(enable_white_black_list, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
+
   // The point in time when the sql server used for querying in SYSTABLE HELPER changes, i.e., the periodic rotation of the sql server
   T_DEF_INT_INFT(sql_server_change_interval_sec, OB_CLUSTER_PARAMETER, 60, 1,
       "change interval of sql server in seconds");
@@ -577,12 +603,35 @@ public:
   DEF_CAP(lob_data_storage_memory_limit, OB_CLUSTER_PARAMETER, "1G", "[128M,]", "lob data storage memory limit");
   T_DEF_INT_INFT(lob_data_storage_clean_interval_sec, OB_CLUSTER_PARAMETER, 5, 1,
                  "lob_data_storage clean task nterval in seconds");
+  DEF_TIME(print_mod_memory_usage_interval, OB_CLUSTER_PARAMETER, "1m", "[0s,]", "print mod memory usage interval");
+  DEF_CAP(print_mod_memory_usage_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "print mod memory usage threshold");
+  DEF_STR(print_mod_memory_usage_label, OB_CLUSTER_PARAMETER, "|", "mod label for print memmory usage");
+  T_DEF_INT_INFT(max_chunk_cache_size, OB_CLUSTER_PARAMETER, 0, 0, "chunkmgr max chunk size");
+
+  // direct load inc
+  // Whether to sync the incremental direct load data
+  T_DEF_BOOL(enable_direct_load_inc, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+  T_DEF_INT_INFT(direct_load_inc_thread_num, OB_CLUSTER_PARAMETER, 0, 0, "thread num of reading and parsing direct load inc log");
+  T_DEF_INT_INFT(direct_load_inc_queue_backlog_lowest_tolerance, OB_CLUSTER_PARAMETER, 0, 0, "lowest threshold of queue_backlog that will touch parser flow control in direct load inc case");
 
 #undef OB_CLUSTER_PARAMETER
+
+public:
+  const char *get_tb_white_list_buf()
+  {
+    return tb_white_list_buf_;
+  }
+
+  const char *get_tb_black_list_buf()
+  {
+    return tb_black_list_buf_;
+  }
 
 private:
   bool                  inited_;
   ObLogFakeCommonConfig common_config_;
+  char *tb_white_list_buf_;
+  char *tb_black_list_buf_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogConfig);

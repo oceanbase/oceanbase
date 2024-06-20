@@ -24,7 +24,7 @@ using namespace share;
 namespace sql
 {
 ObExprTabletAutoincNextval::ObExprTabletAutoincNextval(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TABLET_AUTOINC_NEXTVAL, N_TABLET_AUTOINC_NEXTVAL, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_TABLET_AUTOINC_NEXTVAL, N_TABLET_AUTOINC_NEXTVAL, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
    disable_operand_auto_cast();
 }

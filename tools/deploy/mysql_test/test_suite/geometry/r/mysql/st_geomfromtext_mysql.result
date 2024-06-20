@@ -6919,7 +6919,8 @@ select ST_AsText(ST_GeomFromText('LINESTRING(1 2,3 4)'));
 ST_AsText(ST_GeomFromText('LINESTRING(1 2,3 4)'))
 LINESTRING(1 2,3 4)
 select ST_AsText(ST_GeomFromText('LINESTRING(1 2 3,4 5 6)'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('LINESTRING(1 2 3,4 5 6)'))
+LINESTRING Z (1 2 3,4 5 6)
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2,3 4))'));
 ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2,3 4))'))
 GEOMETRYCOLLECTION(LINESTRING(1 2,3 4))
@@ -6936,9 +6937,11 @@ select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2))'));
 ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2))'))
 GEOMETRYCOLLECTION(POINT(1 2))
 select ST_AsText(ST_GeomFromText('POINT(1 2 3)'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('POINT(1 2 3)'))
+POINT Z (1 2 3)
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2 -1,3 4 -2,5 6 -3),LINESTRING(7 8 -1,9 10 -2,11 12 -3))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2 -1,3 4 -2,5 6 -3),LINESTRING(7 8 -1,9 10 -2,11 12 -3))'))
+GEOMETRYCOLLECTION Z (LINESTRING Z (1 2 -1,3 4 -2,5 6 -3),LINESTRING Z (7 8 -1,9 10 -2,11 12 -3))
 select ST_AsText(ST_GeomFromText('LINESTRING(1 2,3 4,5 6,7 8,9 10)'));
 ST_AsText(ST_GeomFromText('LINESTRING(1 2,3 4,5 6,7 8,9 10)'))
 LINESTRING(1 2,3 4,5 6,7 8,9 10)
@@ -6946,14 +6949,17 @@ select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2,3 4,5 6),LIN
 ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2,3 4,5 6),LINESTRING(7 8,9 10))'))
 GEOMETRYCOLLECTION(LINESTRING(1 2,3 4,5 6),LINESTRING(7 8,9 10))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(5 6 -55,7 8 -22),LINESTRING(1 2 -1,3 4 -2))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(5 6 -55,7 8 -22),LINESTRING(1 2 -1,3 4 -2))'))
+GEOMETRYCOLLECTION Z (LINESTRING Z (5 6 -55,7 8 -22),LINESTRING Z (1 2 -1,3 4 -2))
 select ST_AsText(ST_GeomFromText('LINESTRING(1 2,3 4,5 6,7 8)'));
 ST_AsText(ST_GeomFromText('LINESTRING(1 2,3 4,5 6,7 8)'))
 LINESTRING(1 2,3 4,5 6,7 8)
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2 -1))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2 -1))'))
+GEOMETRYCOLLECTION Z (POINT Z (1 2 -1))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2 -1,3 4 -2))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2 -1,3 4 -2))'))
+GEOMETRYCOLLECTION Z (LINESTRING Z (1 2 -1,3 4 -2))
 select ST_AsText(ST_GeomFromText('LINESTRING(1 2,3 4,5 6)'));
 ST_AsText(ST_GeomFromText('LINESTRING(1 2,3 4,5 6)'))
 LINESTRING(1 2,3 4,5 6)
@@ -6961,7 +6967,8 @@ select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2,3 4,5 6))'))
 ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2,3 4,5 6))'))
 GEOMETRYCOLLECTION(LINESTRING(1 2,3 4,5 6))
 select ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2 -1,3 4 -2,5 6 -3),(7 8 -1,9 10 -2,11 12 -3))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2 -1,3 4 -2,5 6 -3),(7 8 -1,9 10 -2,11 12 -3))'))
+MULTILINESTRING Z ((1 2 -1,3 4 -2,5 6 -3),(7 8 -1,9 10 -2,11 12 -3))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2)))'));
 ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2)))'))
 GEOMETRYCOLLECTION(POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2)))
@@ -6978,38 +6985,50 @@ select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0
 ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2)))'))
 MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2)))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2 -2),POINT(3 4 -2),POINT(5 6 -3))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2 -2),POINT(3 4 -2),POINT(5 6 -3))'))
+GEOMETRYCOLLECTION Z (POINT Z (1 2 -2),POINT Z (3 4 -2),POINT Z (5 6 -3))
 select ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2,3 4,5 6))'));
 ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2,3 4,5 6))'))
 MULTILINESTRING((1 2,3 4,5 6))
 select ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2 -1,3 4 -2))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2 -1,3 4 -2))'))
+MULTILINESTRING Z ((1 2 -1,3 4 -2))
 select ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2 -1,3 4 -2,5 6 -3))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2 -1,3 4 -2,5 6 -3))'))
+MULTILINESTRING Z ((1 2 -1,3 4 -2,5 6 -3))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2),POINT(3 4),POINT(5 6))'));
 ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2),POINT(3 4),POINT(5 6))'))
 GEOMETRYCOLLECTION(POINT(1 2),POINT(3 4),POINT(5 6))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2 -1),POINT(3 4 -2))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(1 2 -1),POINT(3 4 -2))'))
+GEOMETRYCOLLECTION Z (POINT Z (1 2 -1),POINT Z (3 4 -2))
 select ST_AsText(ST_GeomFromText('MULTILINESTRING((5 6 -55,7 8 -22),(1 2 -1,3 4 -2))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTILINESTRING((5 6 -55,7 8 -22),(1 2 -1,3 4 -2))'))
+MULTILINESTRING Z ((5 6 -55,7 8 -22),(1 2 -1,3 4 -2))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2 -1,3 4 -2,5 6 -3))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2 -1,3 4 -2,5 6 -3))'))
+GEOMETRYCOLLECTION Z (LINESTRING Z (1 2 -1,3 4 -2,5 6 -3))
 select ST_AsText(ST_GeomFromText('LINESTRING(1 2 3,4 5 6,7 8 9)'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('LINESTRING(1 2 3,4 5 6,7 8 9)'))
+LINESTRING Z (1 2 3,4 5 6,7 8 9)
 select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01)))'))
+MULTIPOLYGON Z (((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01)))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2 -1,3 4 -2),LINESTRING(5 6 -55,7 8 -22))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(LINESTRING(1 2 -1,3 4 -2),LINESTRING(5 6 -55,7 8 -22))'))
+GEOMETRYCOLLECTION Z (LINESTRING Z (1 2 -1,3 4 -2),LINESTRING Z (5 6 -55,7 8 -22))
 select ST_AsText(ST_GeomFromText('LINESTRING(1 2 3,4 5 6,7 8 9,10 11 12)'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('LINESTRING(1 2 3,4 5 6,7 8 9,10 11 12)'))
+LINESTRING Z (1 2 3,4 5 6,7 8 9,10 11 12)
 select ST_AsText(ST_GeomFromText('MULTIPOINT(1 2,3 4)'));
 ST_AsText(ST_GeomFromText('MULTIPOINT(1 2,3 4)'))
 MULTIPOINT((1 2),(3 4))
 select ST_AsText(ST_GeomFromText('MULTIPOINT(1 2 3,4 5 6)'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTIPOINT(1 2 3,4 5 6)'))
+MULTIPOINT Z ((1 2 3),(4 5 6))
 select ST_AsText(ST_GeomFromText('MULTIPOINT(1 2 3,4 5 6,7 8 9)'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTIPOINT(1 2 3,4 5 6,7 8 9)'))
+MULTIPOINT Z ((1 2 3),(4 5 6),(7 8 9))
 select ST_AsText(ST_GeomFromText('MULTIPOINT(1 2,4 5,7 8)'));
 ST_AsText(ST_GeomFromText('MULTIPOINT(1 2,4 5,7 8)'))
 MULTIPOINT((1 2),(4 5),(7 8))
@@ -7017,9 +7036,11 @@ select ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2,3 4))'));
 ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2,3 4))'))
 MULTILINESTRING((1 2,3 4))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01)))'))
+GEOMETRYCOLLECTION Z (POLYGON Z ((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01)))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)))'))
+GEOMETRYCOLLECTION Z (POLYGON Z ((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)))'));
 ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)))'))
 GEOMETRYCOLLECTION(POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)))
@@ -7027,7 +7048,8 @@ select ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2,3 4,5 6),(7 8,9 10))'));
 ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2,3 4,5 6),(7 8,9 10))'))
 MULTILINESTRING((1 2,3 4,5 6),(7 8,9 10))
 select ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2 -1,3 4 -2),(5 6 -55,7 8 -22))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTILINESTRING((1 2 -1,3 4 -2),(5 6 -55,7 8 -22))'))
+MULTILINESTRING Z ((1 2 -1,3 4 -2),(5 6 -55,7 8 -22))
 select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)))'));
 ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)))'))
 MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)))
@@ -7035,34 +7057,44 @@ select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0
 ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2)))'))
 MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2)))
 select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)))'))
+MULTIPOLYGON Z (((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)))
 select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0)))'))
+MULTIPOLYGON Z (((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0)))
 select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)))'));
 ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)))'))
 MULTIPOLYGON(((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)),((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1)))
 select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)),((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)),((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01)))'))
+MULTIPOLYGON Z (((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)),((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01)))
 select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)),((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)),((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)))'))
+MULTIPOLYGON Z (((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)),((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)))
 select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)),((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)),((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0)))'))
+MULTIPOLYGON Z (((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)),((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0)))
 select ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)),((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('MULTIPOLYGON(((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)),((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)))'))
+MULTIPOLYGON Z (((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01)),((0 0.1 0,0.2 10.3 0,10.4 10.5 0,10.7 0.6 0,0 0.1 0)))
 select ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0)))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0)))'))
+GEOMETRYCOLLECTION Z (POLYGON Z ((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0)))
 select ST_AsText(ST_GeomFromText('POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1))'));
 ST_AsText(ST_GeomFromText('POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1))'))
 POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1))
 select ST_AsText(ST_GeomFromText('POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01))'))
+POLYGON Z ((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01))
 select ST_AsText(ST_GeomFromText('POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2))'));
 ST_AsText(ST_GeomFromText('POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2))'))
 POLYGON((0 0.1,0.2 10.3,10.4 10.5,10.7 0.6,0 0.1),(2 2,2 3,3 3,3 2,2 2))
 select ST_AsText(ST_GeomFromText('POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01))'))
+POLYGON Z ((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01))
 select ST_AsText(ST_GeomFromText('POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0))'));
-ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+ST_AsText(ST_GeomFromText('POLYGON((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0))'))
+POLYGON Z ((0 0.1 -0.01,0.2 10.3 -0.02,10.4 10.5 -0.03,10.7 0.6 -0.04,0 0.1 -0.01),(2 2 -0.01,2 3 -0.01,3 3 -0.01,3 2 -0.01,2 2 -0.01),(4 2 0,4 3 0,5 3 0,5 2 0,4 2 0))
 # check result collation under old sql engine
 set @pt = st_geomfromtext('point(1 2)', 4326);
 select length(@pt);
@@ -7100,3 +7132,54 @@ SRID=4326;POINT(123.32112345678988 38.87700000000001)
 SELECT _ST_ASEWKT(_ST_GEOGRAPHYFROMTEXT('SRID=4326;point(180 180)'));
 _ST_ASEWKT(_ST_GEOGRAPHYFROMTEXT('SRID=4326;point(180 180)'))
 SRID=4326;POINT(180 0)
+bugfix: 54159493
+select ST_GeomFromText('geomcollection(POINT(10 10), POINT(30 30), LINESTRING(15 15, 20 20))');
+ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+select _ST_GEOGRAPHYFROMTEXT('geomcollection(POINT(10 10), POINT(30 30), LINESTRING(15 15, 20 20))');
+ERROR 22023: Invalid GIS data provided to function _st_geographyfromtext.
+select _ST_GeogFromText('geomcollection(POINT(10 10), POINT(30 30), LINESTRING(15 15, 20 20))');
+ERROR 22023: Invalid GIS data provided to function _st_geogfromtext.
+bugfix: 53612010
+drop table typy_set;
+create table typy_set (em enum('春','point(0 5)'));
+insert into typy_set values('point(0 5)');
+select ST_GeomFromText(em ) from typy_set;
+ST_GeomFromText(em )
+                     @
+select ST_AsText(ST_GeomFromText(em )) from typy_set;
+ST_AsText(ST_GeomFromText(em ))
+POINT(0 5)
+drop table t2;
+create table t2 (it1 tinyint, it2 tinyint not null, i int not null, ib bigint, f float, d double, y year, da  datetime(6), dt datetime(6), sc char(50), sv varchar(50), b blob, tx text);
+insert into t2 values (NULL, 1, 3, 4, 1.5, 2.5, 1972, '1972-10-22', '1972-10-22 11:50', 'LINESTRING(0 0,10 10)', 'LINESTRING(0 0,10 10)', 'LINESTRING(0 0,10 10)', 'LINESTRING(0 0,10 10)');
+select ST_GeomFromText(it1) from t2;
+ST_GeomFromText(it1)
+NULL
+select ST_GeomFromText(it2) from t2;
+ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+select ST_GeomFromText(i) from t2;
+ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+select ST_GeomFromText(ib) from t2;
+ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+select ST_GeomFromText(f) from t2;
+ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+select ST_GeomFromText(d) from t2;
+ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+select ST_GeomFromText(y) from t2;
+ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+select ST_GeomFromText(da) from t2;
+ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+select ST_GeomFromText(dt) from t2;
+ERROR 22023: Invalid GIS data provided to function st_geomfromtext.
+select ST_GeomFromText(sc) from t2;
+ST_GeomFromText(sc)
+                                $@      $@
+select ST_GeomFromText(sv) from t2;
+ST_GeomFromText(sv)
+                                $@      $@
+select ST_GeomFromText(b) from t2;
+ST_GeomFromText(b)
+                                $@      $@
+select ST_GeomFromText(tx) from t2;
+ST_GeomFromText(tx)
+                                $@      $@

@@ -473,12 +473,12 @@ int ObDtl::new_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
     if (is_local) {
       chan = static_cast<ObDtlChannel *> (ob_malloc(sizeof(ObDtlLocalChannel), ObMemAttr(tenant_id, "SqlDtlChan")));
       if (nullptr != chan) {
-        new (chan) ObDtlLocalChannel(tenant_id, chid, peer);
+        new (chan) ObDtlLocalChannel(tenant_id, chid, peer, ObDtlChannel::DtlChannelType::LOCAL_CHANNEL);
       }
     } else {
       chan = static_cast<ObDtlChannel *> (ob_malloc(sizeof(ObDtlRpcChannel), ObMemAttr(tenant_id, "SqlDtlChan")));
       if (nullptr != chan) {
-        new (chan) ObDtlRpcChannel(tenant_id, chid, peer);
+        new (chan) ObDtlRpcChannel(tenant_id, chid, peer, ObDtlChannel::DtlChannelType::RPC_CHANNEL);
       }
     }
     if (nullptr == chan) {

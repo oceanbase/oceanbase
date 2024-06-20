@@ -187,6 +187,7 @@ int ObRestoreSourceServiceAttr::set_service_user_config(const char *user_tenant)
     if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%s", user_tenant))) {
       LOG_WARN("fail to print user_tenant", K(user_tenant));
     } else if (OB_ISNULL(user_name = ::STRTOK_R(tmp_str, "@", &tenant_name))) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to split user_tenant", K(tmp_str));
     } else if (OB_FAIL(set_service_user(user_name, tenant_name))) {
       LOG_WARN("fail to set service user", K(user_name), K(tenant_name));
@@ -295,7 +296,7 @@ int ObRestoreSourceServiceAttr::parse_ip_port_from_str(const char *ip_list, cons
   char tmp_str[OB_MAX_RESTORE_SOURCE_IP_LIST_LEN + 1] = { 0 };
   char *token = nullptr;
   char *saveptr = nullptr;
-  if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%s", ip_list))) {
+  if (FAILEDx(databuff_printf(tmp_str, sizeof(tmp_str), "%s", ip_list))) {
     LOG_WARN("fail to get ip list", K(ip_list));
   } else {
     token = tmp_str;

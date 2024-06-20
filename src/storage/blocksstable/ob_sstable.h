@@ -36,6 +36,8 @@ class ObRowState;
 }
 namespace blocksstable
 {
+extern const char *DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_BUF;
+extern const int64_t DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_SIZE;
 class ObSSTableSecMetaIterator;
 class ObIMacroBlockIterator;
 struct ObMacroBlocksWriteCtx;
@@ -78,6 +80,7 @@ public:
   ~ObSSTableMetaCache() = default;
   void reset();
   int init(const blocksstable::ObSSTableMeta *meta, const bool has_multi_version_row = false);
+  void set_upper_trans_version(const int64_t upper_trans_version);
   bool is_valid() const { return version_ >= SSTABLE_META_CACHE_VERSION; }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
@@ -200,7 +203,9 @@ public:
       storage::ObTableAccessContext &context,
       share::SCN &max_trans_version,
       ObRowsInfo &rows_info);
-  int set_upper_trans_version(const int64_t upper_trans_version);
+  int set_upper_trans_version(
+      common::ObArenaAllocator &allocator,
+      const int64_t upper_trans_version);
   virtual int64_t get_upper_trans_version() const override
   {
     return meta_cache_.upper_trans_version_;
@@ -225,6 +230,14 @@ public:
   bool is_empty() const
   {
     return 0 == meta_cache_.data_macro_block_count_;
+  }
+  virtual bool no_data_to_read() const override
+  {
+    return is_empty() && !is_ddl_merge_sstable();
+  }
+  virtual bool is_ddl_merge_empty_sstable() const override
+  {
+    return is_empty() && is_ddl_merge_sstable();
   }
   int set_addr(const ObMetaDiskAddr &addr);
   OB_INLINE const ObMetaDiskAddr &get_addr() const { return addr_; }
@@ -263,6 +276,8 @@ public:
   OB_INLINE bool is_valid() const { return valid_for_reading_; }
   OB_INLINE bool is_loaded() const { return nullptr != meta_; }
   int get_meta(ObSSTableMetaHandle &meta_handle, common::ObSafeArenaAllocator *allocator = nullptr) const;
+  // load sstable meta bypass. Lifetime is guaranteed by allocator, which should cover this sstable
+  int bypass_load_meta(common::ObArenaAllocator &allocator);
   int set_status_for_read(const ObSSTableStatus status);
 
   // TODO: get_index_tree_root and get_last_rowkey now required sstable to be loaded
@@ -334,7 +349,11 @@ protected:
       const ObDatumRowkey &rowkey,
       ObTableAccessContext &access_context,
       ObStoreRowIterator *&iter);
-  int build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowIterator *&iter);
+  int build_multi_exist_iterator(
+      const ObTableIterParam &iter_param,
+      const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
+      ObTableAccessContext &access_context,
+      ObStoreRowIterator *&iter);
   int init_sstable_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator *allocator);
   int get_last_rowkey(const ObDatumRowkey *&sstable_endkey);
   int serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t &pos) const;

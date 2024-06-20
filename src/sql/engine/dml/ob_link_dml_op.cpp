@@ -114,13 +114,11 @@ int ObLinkDmlOp::send_reverse_link_info(transaction::ObTransID &tx_id)
 int ObLinkDmlOp::inner_execute_link_stmt(const char *link_stmt)
 {
   int ret = OB_SUCCESS;
-  transaction::ObTransID tx_id;
-  if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(dblink_conn_) || OB_ISNULL(link_stmt)) {
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(dblink_conn_) || OB_ISNULL(link_stmt) || OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dblink_proxy or link_stmt is NULL", K(ret), KP(dblink_proxy_), KP(link_stmt), KP(dblink_conn_));
-  } else if (OB_FAIL(ObTMService::tm_rm_start(ctx_, link_type_, dblink_conn_, tx_id))) {
-    LOG_WARN("failed to tm_rm_start", K(ret), K(dblink_id_), K(dblink_conn_));
-  } else if (MY_SPEC.is_reverse_link_ && OB_FAIL(send_reverse_link_info(tx_id))) {
+    LOG_WARN("dblink_proxy or link_stmt is NULL", K(ret), KP(dblink_proxy_), KP(link_stmt), KP(dblink_conn_), KP(session));
+  } else if (MY_SPEC.is_reverse_link_ && OB_FAIL(send_reverse_link_info(session->get_dblink_context().get_tx_id()))) {
     LOG_WARN("failed to send reverse link info", K(ret), K(link_stmt));
   } else if (OB_FAIL(dblink_proxy_->dblink_write(dblink_conn_, affected_rows_, link_stmt))) {
     LOG_WARN("write failed", K(ret), K(link_stmt));
@@ -133,7 +131,8 @@ int ObLinkDmlOp::inner_execute_link_stmt(const char *link_stmt)
 void ObLinkDmlOp::reset_dblink()
 {
   int tmp_ret = OB_SUCCESS;
-  // when it is oci connection, does need terminate stmt like read, because write will terminate stmt after execute_update immediately
+  // when it is oci connection, does not need terminate stmt like read, because write will terminate stmt after execute_update immediately
+  ObDblinkCtxInSession::revert_dblink_conn(dblink_conn_); // release rlock locked by get_dblink_conn
   tenant_id_ = OB_INVALID_ID;
   dblink_id_ = OB_INVALID_ID;
   dblink_proxy_ = NULL;
@@ -146,19 +145,22 @@ int ObLinkDmlOp::inner_open()
   ObSQLSessionInfo *session = ctx_.get_my_session();
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
   stmt_buf_len_ += head_comment_length_;
-  if (OB_ISNULL(session) || OB_ISNULL(plan_ctx)) {
+  in_xa_transaction_ = true; // link dml aways in xa trasaction
+  dblink_id_ = MY_SPEC.dblink_id_;
+  dblink_proxy_ = GCTX.dblink_proxy_;
+  if (OB_ISNULL(session) || OB_ISNULL(plan_ctx) || OB_ISNULL(dblink_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session or plan_ctx is NULL", K(ret), KP(session), KP(plan_ctx));
+    LOG_WARN("session or plan_ctx or dblink_proxy_ is NULL", K(ret), KP(session), KP(plan_ctx), KP(dblink_proxy_));
   } else if (FALSE_IT(tenant_id_ = session->get_effective_tenant_id())) {
+  } else if (FALSE_IT(sessid_ = session->get_sessid())) {
   } else if (OB_FAIL(set_next_sql_req_level())) {
     LOG_WARN("failed to set next sql req level", K(ret));
-  } else if (OB_FAIL(init_dblink(MY_SPEC.dblink_id_, GCTX.dblink_proxy_, true))) {
-    LOG_WARN("failed to init dblink", K(ret), K(MY_SPEC.dblink_id_));
+  } else if (OB_FAIL(init_dblink())) {
+    LOG_WARN("failed to init dblink", K(ret), K(dblink_id_));
   } else if (OB_ISNULL(stmt_buf_ = static_cast<char *>(allocator_.alloc(stmt_buf_len_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to init stmt buf", K(ret), K(stmt_buf_len_));
   } else {
-
     LOG_DEBUG("succ to open link dml", K(lbt()));
   }
   return ret;

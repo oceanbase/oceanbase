@@ -70,6 +70,7 @@ public:
   OB_INLINE bool get_eof() const { return eof_; }
 
   OB_INLINE void count() { ++counter_; }
+  OB_INLINE void count(int64_t cnt) { counter_ += cnt; }
   int64_t get_counter() { return counter_; }
 
   void set_audit(bool enable_audit) { enable_audit_ = enable_audit; }

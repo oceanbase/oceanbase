@@ -61,6 +61,10 @@ public:
     ObSQLSessionInfo session;
     ctx.session_info_ = &session;
 
+    EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
+    EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));
+    EXPECT_TRUE(OB_SUCCESS == session.load_default_sys_variable(false, true));
+
     OK(ObRawExprUtils::make_raw_expr_from_str(expr_str, strlen(expr_str),
                                                                  ctx, expr, columns,
                                                                  sys_vars, &sub_query_info,
@@ -134,6 +138,10 @@ public:
     ctx.param_list_ = &params;
     ObSQLSessionInfo session;
     ctx.session_info_ = &session;
+
+    EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
+    EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));
+    EXPECT_TRUE(OB_SUCCESS == session.load_default_sys_variable(false, true));
 
     for (int64_t i = 0; i < more_range_columns_.count(); ++i) {
       OK(tmp_range_columns.push_back(more_range_columns_.at(i)));
@@ -704,6 +712,7 @@ void ObQueryRangeTest::get_query_range_collation(const char *sql_expr, const cha
 
 TEST_F(ObQueryRangeTest, collation_test)
 {
+  set_compat_mode(lib::Worker::CompatMode::MYSQL);
   static const char* test_file = "./test_query_range_collation.test";
   static const char* tmp_file = "./test_query_range_collation.tmp";
   static const char* result_file = "./test_query_range_collation.result";
@@ -974,80 +983,80 @@ TEST_F(ObQueryRangeTest, range_column_with_triple_key)
   //_OB_LOG(INFO, "ranges: %s", to_cstring(ranges));
 }
 
-TEST_F(ObQueryRangeTest, simple_row_in)
-{
-  _OB_LOG(INFO, "start test: (a, d) in ((1 , 1.5), (2, 2), (1, 3), (2, 3), (0, 0), ('3', 3))");
-  ParamStore &params = exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update();
-  params.reset();
-  ObObjParam param;
-  param.set_int(1);
-  param.set_param_meta();
-  OK(params.push_back(param));
-  param.set_double(1.5);
-  param.set_param_meta();
-  OK(params.push_back(param));
-//  param.set_int(2);
-//  OK(params.push_back(param));
-//  param.set_int(2);
-//  OK(params.push_back(param));
+//TEST_F(ObQueryRangeTest, simple_row_in)
+//{
+//  _OB_LOG(INFO, "start test: (a, d) in ((1 , 1.5), (2, 2), (1, 3), (2, 3), (0, 0), ('3', 3))");
+//  ParamStore &params = exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update();
+//  params.reset();
+//  ObObjParam param;
 //  param.set_int(1);
+//  param.set_param_meta();
+//  OK(params.push_back(param));
+//  param.set_double(1.5);
+//  param.set_param_meta();
+//  OK(params.push_back(param));
+////  param.set_int(2);
+////  OK(params.push_back(param));
+////  param.set_int(2);
+////  OK(params.push_back(param));
+////  param.set_int(1);
+////  OK(params.push_back(param));
+////  param.set_int(3);
+////  OK(params.push_back(param));
+////  param.set_int(2);
+////  OK(params.push_back(param));
+////  param.set_int(3);
+////  OK(params.push_back(param));
+////  param.set_int(0);
+////  OK(params.push_back(param));
+////  param.set_int(0);
+////  OK(params.push_back(param));
+//  param.set_varchar("3");
+//  param.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+//  param.set_param_meta();
 //  OK(params.push_back(param));
 //  param.set_int(3);
+//  param.set_param_meta();
 //  OK(params.push_back(param));
-//  param.set_int(2);
-//  OK(params.push_back(param));
-//  param.set_int(3);
-//  OK(params.push_back(param));
-//  param.set_int(0);
-//  OK(params.push_back(param));
-//  param.set_int(0);
-//  OK(params.push_back(param));
-  param.set_varchar("3");
-  param.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-  param.set_param_meta();
-  OK(params.push_back(param));
-  param.set_int(3);
-  param.set_param_meta();
-  OK(params.push_back(param));
-  ObRawExpr *condition = NULL;
-  const ObDataTypeCastParams dtc_params;
-
-  resolve_condition(triple_range_columns_, "(a, d) in ((? , ?)) or (a, d) = (?, ?)", condition, &params);
-  OK(query_range.preliminary_extract_query_range(triple_range_columns_, condition, dtc_params, &exec_ctx_));
-
-  _OB_LOG(INFO, "XXXX %s", to_cstring(query_range));
-  _OB_LOG(INFO, "XXXX params: %s", to_cstring(params));
-  OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
-  _OB_LOG(INFO, "XXXX final: %s", to_cstring(query_range));
-
-  ObQueryRangeArray ranges;
-  bool all_single_value_ranges = true;
-
-  OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
-  _OB_LOG(INFO, "ranges: %s", to_cstring(ranges));
-//  ASSERT_EQ(1, ranges.count());
-//  int64_t value = 0;
+//  ObRawExpr *condition = NULL;
+//  const ObDataTypeCastParams dtc_params;
 //
-//  EXPECT_TRUE(get_methods.at(0));
+//  resolve_condition(triple_range_columns_, "(a, d) in ((? , ?)) or (a, d) = (?, ?)", condition, &params);
+//  OK(query_range.preliminary_extract_query_range(triple_range_columns_, condition, dtc_params, &exec_ctx_));
 //
-//  // expect: ((1, 1, 1), (1, 1, 2))
-//  EXPECT_FALSE(ranges.at(0)->border_flag_.inclusive_start());
-//  EXPECT_FALSE(ranges.at(0)->border_flag_.inclusive_end());
-//  ASSERT_EQ(1, ranges.count());
-//  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[0].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
-//  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[1].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
-//  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[2].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
+//  _OB_LOG(INFO, "XXXX %s", to_cstring(query_range));
+//  _OB_LOG(INFO, "XXXX params: %s", to_cstring(params));
+//  OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
+//  _OB_LOG(INFO, "XXXX final: %s", to_cstring(query_range));
 //
-//  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[0].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
-//  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[1].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
-//  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[2].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(2, value);
-}
+//  ObQueryRangeArray ranges;
+//  bool all_single_value_ranges = true;
+//
+//  OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
+//  _OB_LOG(INFO, "ranges: %s", to_cstring(ranges));
+////  ASSERT_EQ(1, ranges.count());
+////  int64_t value = 0;
+////
+////  EXPECT_TRUE(get_methods.at(0));
+////
+////  // expect: ((1, 1, 1), (1, 1, 2))
+////  EXPECT_FALSE(ranges.at(0)->border_flag_.inclusive_start());
+////  EXPECT_FALSE(ranges.at(0)->border_flag_.inclusive_end());
+////  ASSERT_EQ(1, ranges.count());
+////  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[0].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[1].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[2].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////
+////  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[0].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[1].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[2].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(2, value);
+//}
 
 TEST_F(ObQueryRangeTest, basic_test)
 {
@@ -1214,7 +1223,7 @@ TEST_F(ObQueryRangeTest, serialize_geo_queryrange)
   pre_mbr.x_max_ = 60;
   pre_mbr.y_min_ = 60;
   pre_mbr.y_max_ = 90;
-  pre_mbr.mbr_type_ = ObGeoRelationType::T_INTERSECTS;
+  pre_mbr.mbr_type_ = ObDomainOpType::T_GEO_INTERSECTS;
   OK(mbr_array.push_back(pre_mbr));
   ObGeoColumnInfo info1;
   info1.srid_ = 0;
@@ -1276,7 +1285,7 @@ TEST_F(ObQueryRangeTest, serialize_geo_keypart)
 {
   // build geo keypart
   ObKeyPart pre_key_part(allocator_);
-  OK(pre_key_part.create_geo_key());
+  OK(pre_key_part.create_domain_key());
   ObObj wkb;
   // ST_GeomFromText('POINT(5 5)')
   char hexstring[25] ={'\x01', '\x01', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
@@ -1284,8 +1293,8 @@ TEST_F(ObQueryRangeTest, serialize_geo_keypart)
                        '\x00', '\x00', '\x00', '\x14', '\x40', '\x00', '\x00', '\x00',
                        '\x00'};
   wkb.set_string(ObGeometryType ,hexstring, 25);
-  OK(ob_write_obj(allocator_, wkb, pre_key_part.geo_keypart_->wkb_));
-  pre_key_part.geo_keypart_->geo_type_ = ObGeoRelationType::T_DWITHIN;
+  OK(ob_write_obj(allocator_, wkb, pre_key_part.domain_keypart_->const_param_));
+  pre_key_part.domain_keypart_->domain_op_ = ObDomainOpType::T_GEO_DWITHIN;
   char buf[512 * 1024] = {'\0'};
   int64_t pos = 0;
   int64_t data_len = 0;
@@ -1295,13 +1304,15 @@ TEST_F(ObQueryRangeTest, serialize_geo_keypart)
   pos = 0;
   ObKeyPart dec_key_part(allocator_);
   OK(dec_key_part.deserialize(buf, data_len, pos));
-  EXPECT_EQ(dec_key_part.geo_keypart_->wkb_, pre_key_part.geo_keypart_->wkb_);
-  EXPECT_EQ(dec_key_part.geo_keypart_->geo_type_, pre_key_part.geo_keypart_->geo_type_);
+  EXPECT_EQ(dec_key_part.domain_keypart_->const_param_, pre_key_part.domain_keypart_->const_param_);
+  EXPECT_EQ(dec_key_part.domain_keypart_->domain_op_, pre_key_part.domain_keypart_->domain_op_);
 }
 
 int main(int argc, char **argv)
 {
   init_sql_factories();
+  system("rm -rf test_query_range.log*");
+  OB_LOGGER.set_file_name("test_query_range.log", true);
   OB_LOGGER.set_log_level("TRACE");
   int ret = 0;
   ContextParam param;

@@ -14,7 +14,6 @@
 #define OB_INDEX_BLOCK_MACRO_ITERATOR_H_
 
 #include "ob_index_block_tree_cursor.h"
-#include "ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
 
 namespace oceanbase {
@@ -63,6 +62,36 @@ struct ObMacroBlockDesc
               K_(row_count_delta), K_(contain_uncommitted_row), K_(is_deleted));
 };
 
+// ObIndexBlockMacroIterator cannot guarantee the life of previous iteration products after move_forward()
+// todo @qilu: refine after delete ObIndexBlockMacroIterator
+struct ObMicroIndexRowItem final
+{
+public:
+  ObMicroIndexRowItem() : allocator_(nullptr), endkey_(nullptr), idx_row_header_(nullptr),
+                      idx_minor_info_(nullptr), agg_row_buf_(nullptr), agg_buf_size_(0) {}
+  ~ObMicroIndexRowItem()
+  {
+    reset();
+  }
+  int init(ObIAllocator &allocator,
+            const ObIndexBlockRowHeader *idx_row_header,
+            const ObDatumRowkey *endkey,
+            const ObIndexBlockRowMinorMetaInfo *idx_minor_info,
+            const char *agg_row_buf,
+            const int64_t agg_buf_size);
+  void reset();
+  void reuse();
+  TO_STRING_KV(KPC(idx_row_header_), KPC(endkey_), KPC(idx_minor_info_), K(agg_row_buf_), K(agg_buf_size_), KP(allocator_));
+
+public:
+  ObIAllocator *allocator_;
+  blocksstable::ObDatumRowkey *endkey_;
+  ObIndexBlockRowHeader *idx_row_header_;
+  ObIndexBlockRowMinorMetaInfo *idx_minor_info_;
+  char *agg_row_buf_; //max 1024
+  int64_t agg_buf_size_;
+};
+
 class ObIMacroBlockIterator
 {
 public:
@@ -100,6 +129,7 @@ public:
       const bool need_record_micro_info = false) override;
   int get_next_macro_block(MacroBlockId &macro_block_id, int64_t &start_row_offset);
   int get_next_macro_block(blocksstable::ObMacroBlockDesc &block_desc);
+  int get_next_idx_row(ObIAllocator &item_allocator, ObMicroIndexRowItem &macro_index_item, int64_t &row_offset, bool &reach_cursor_end);
   int get_cs_range(
       const ObITableReadInfo &rowkey_read_info,
       const bool is_start,
@@ -156,40 +186,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexBlockMacroIterator);
 };
 
-// Wrap-up of iterate both index block tree and secondary meta in sstable
-class ObDualMacroMetaIterator final : public ObIMacroBlockIterator
-{
-public:
-  ObDualMacroMetaIterator();
-  virtual ~ObDualMacroMetaIterator() {}
-
-  void reset() override;
-  virtual int open(
-      ObSSTable &sstable,
-      const ObDatumRange &query_range,
-      const ObITableReadInfo &rowkey_read_info,
-      ObIAllocator &allocator,
-      const bool is_reverse_scan = false,
-      const bool need_record_micro_info = false) override;
-  virtual int get_next_macro_block(blocksstable::ObMacroBlockDesc &block_desc) override;
-
-  virtual const ObIArray<blocksstable::ObMicroIndexInfo> &get_micro_index_infos() const
-  {
-    return macro_iter_.get_micro_index_infos();
-  }
-  virtual const ObIArray<ObDatumRowkey> &get_micro_endkeys() const
-  {
-    return macro_iter_.get_micro_endkeys();
-  }
-  TO_STRING_KV(K_(iter_end), K_(is_inited), K_(macro_iter), K_(sec_meta_iter));
-private:
-  ObIAllocator *allocator_; // allocator for member struct and macro endkeys
-  ObIndexBlockMacroIterator macro_iter_;
-  ObSSTableSecMetaIterator sec_meta_iter_;
-  bool iter_end_;
-  bool is_inited_;
-  DISALLOW_COPY_AND_ASSIGN(ObDualMacroMetaIterator);
-};
 
 } // namespace blocksstable
 } // namespace oceanbase

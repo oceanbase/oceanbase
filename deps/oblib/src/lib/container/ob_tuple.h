@@ -325,6 +325,7 @@ public:
     return pos;
   }
   std::tuple<T...> &tuple() { return tuple_; }
+  const std::tuple<T...> &tuple() const { return tuple_; }
 protected:
   template <int N>
   int64_t print_(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -450,6 +451,13 @@ public:
     return obtuple::ObTupleBaseBase<T...>::template assign_<0>(rhs.tuple_);
   }
 };
+
+template <typename... T, typename... U>
+constexpr bool operator==(const ObTuple<T...> &lhs, const ObTuple<U...> &rhs) {
+  static_assert(sizeof...(T) == sizeof...(U),
+                "tuple objects can only be compared if they have equal sizes.");
+  return lhs.tuple() == rhs.tuple();
+}
 
 }
 }

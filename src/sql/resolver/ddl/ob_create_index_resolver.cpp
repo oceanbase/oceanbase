@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
 #include "share/ob_index_builder_util.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -172,6 +173,17 @@ int ObCreateIndexResolver::resolve_index_column_node(
         }
         sort_item.column_name_.assign_ptr(const_cast<char *>(col_node->children_[0]->str_value_),
                                           static_cast<int32_t>(col_node->children_[0]->str_len_));
+        bool is_multivalue_index = false;
+        if (OB_FAIL(ObMulValueIndexBuilderUtil::is_multivalue_index_type(sort_item.column_name_,
+                                                                         is_multivalue_index))) {
+          LOG_WARN("failed to resolve index type", K(ret));
+        } else if (is_multivalue_index) {
+          // not support dynamic create multi-value index
+          // todo: weiyouchao.wyc
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support dynaimic create multivlaue index", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support dynaimic create multivlaue index");
+        }
       }
       // 前缀索引的前缀长度
       if (OB_FAIL(ret)) {
@@ -186,10 +198,20 @@ int ObCreateIndexResolver::resolve_index_column_node(
         sort_item.prefix_len_ = 0;
       }
 
-      // spatial index constraint
       if (OB_FAIL(ret)) {
         // do nothing
-      } else {
+      } else if (index_keyname_ == FTS_KEY) {
+        if (!GCONF._enable_add_fulltext_index_to_existing_table) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("build fulltext index afterward is experimental feature", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "experimental feature: build fulltext index afterward");
+        } else if (OB_FAIL(resolve_fts_index_constraint(*tbl_schema,
+                                                 sort_item.column_name_,
+                                                 index_keyname_value))) {
+          SQL_RESV_LOG(WARN, "check fts index constraint fail",K(ret),
+              K(sort_item.column_name_));
+        }
+      } else { // spatial index, NOTE resolve_spatial_index_constraint() will set index_keyname
         bool is_explicit_order = (NULL != col_node->children_[2]
             && 1 != col_node->children_[2]->is_empty_);
         if (OB_FAIL(resolve_spatial_index_constraint(*tbl_schema, sort_item.column_name_,
@@ -200,13 +222,14 @@ int ObCreateIndexResolver::resolve_index_column_node(
 
       // 索引排序方式
       if (OB_FAIL(ret)) {
-      } else if (col_node->children_[2]
-          && col_node->children_[2]->type_ == T_SORT_DESC) {
+      } else if (is_oracle_mode() && col_node->children_[2]
+                 && col_node->children_[2]->type_ == T_SORT_DESC) {
         // sort_item.order_type_ = common::ObOrderType::DESC;
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support desc index now", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "create desc index");
       } else {
+        //兼容mysql5.7, 降序索引不生效且不报错
         sort_item.order_type_ = common::ObOrderType::ASC;
       }
 
@@ -255,6 +278,14 @@ int ObCreateIndexResolver::resolve_index_column_node(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("tenant version is less than 4.2, functional index is not supported in mysql mode", K(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2, functional index in mysql mode not supported");
+      }
+    }
+
+    if (OB_SUCC(ret) && cnt_func_index) {
+      if (OB_UNLIKELY(tbl_schema->mv_container_table())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("use functional index on materialized view not supported", K(ret), KPC(tbl_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "use functional index on materialized view");
       }
     }
 
@@ -335,12 +366,9 @@ int ObCreateIndexResolver::resolve_index_option_node(
 
     // block_size
     if (OB_SUCC(ret)) {
-      if(T_TABLE_OPTION_LIST != index_option_node->type_ || index_option_node->num_child_ < 1) {
+      if(T_TABLE_OPTION_LIST != index_option_node->type_) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse node", K(ret));
-      } else if (OB_ISNULL(index_option_node->children_)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_RESV_LOG(WARN, "node children is null", K(index_option_node->children_), K(ret));
       } else {
         int64_t num = index_option_node->num_child_;
         for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
@@ -431,6 +459,14 @@ int ObCreateIndexResolver::fill_session_info_into_arg(const sql::ObSQLSessionInf
     arg.nls_date_format_ = session->get_local_nls_date_format();
     arg.nls_timestamp_format_ = session->get_local_nls_timestamp_format();
     arg.nls_timestamp_tz_format_ = session->get_local_nls_timestamp_tz_format();
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+      //do nothing
+    } else if (OB_FAIL(arg.local_session_var_.load_session_vars(session))) {
+      LOG_WARN("fail to fill session info into local_session_var", K(ret));
+    }
   }
   return ret;
 }
@@ -442,6 +478,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   ParseNode &parse_node = const_cast<ParseNode &>(parse_tree);
   ParseNode *if_not_exist_node = NULL;
   const ObTableSchema *tbl_schema = NULL;
+  const ObTableSchema *data_tbl_schema = NULL;
   bool has_synonym = false;
   ObString new_db_name;
   ObString new_tbl_name;
@@ -464,7 +501,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("session_info_ is null", K(ret));
   } else {
     stmt_ = crt_idx_stmt;
-    if_not_exist_node = parse_tree.children_[6];
+    if_not_exist_node = parse_tree.children_[7];
   }
 
   // 将session中的信息添写到 stmt 的 arg 中
@@ -500,11 +537,38 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   } else if (tbl_schema->is_external_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation on external table");
+  } else if (tbl_schema->is_mlog_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create index on materialized view log is not supported",
+        KR(ret), K(tbl_schema->get_table_name()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on materialized view log is");
+  } else if (tbl_schema->is_materialized_view()) {
+    const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    const uint64_t mv_container_table_id = tbl_schema->get_data_table_id();
+    const ObTableSchema *mv_container_table_schema = nullptr;
+    ObString mv_container_table_name;
+    if (OB_FAIL(get_mv_container_table(tenant_id,
+                                       mv_container_table_id,
+                                       mv_container_table_schema,
+                                       mv_container_table_name))) {
+      LOG_WARN("fail to get mv container table", KR(ret), K(tenant_id), K(mv_container_table_id));
+      if (OB_TABLE_NOT_EXIST == ret) {
+        ret = OB_ERR_UNEXPECTED; // rewrite errno
+      }
+    } else {
+      is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
+      ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
+      index_schema.set_tenant_id(session_info_->get_effective_tenant_id());
+      crt_idx_stmt->set_table_id(mv_container_table_schema->get_table_id());
+      crt_idx_stmt->set_table_name(mv_container_table_name);
+      data_tbl_schema = mv_container_table_schema;
+    }
   } else {
     is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
     ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
     index_schema.set_tenant_id(session_info_->get_effective_tenant_id());
     crt_idx_stmt->set_table_id(tbl_schema->get_table_id());
+    data_tbl_schema = tbl_schema;
   }
   if (OB_SUCC(ret) && has_synonym) {
     ObString tmp_new_db_name;
@@ -527,14 +591,14 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
                                                parse_tree.children_[0]->value_,
                                                parse_tree.children_[3],
                                                crt_idx_stmt,
-                                               tbl_schema))) {
+                                               data_tbl_schema))) {
     LOG_WARN("fail to resolve index column node", K(ret));
   } else if (NULL != parse_node.children_[4]
       && OB_FAIL(resolve_index_method_node(parse_node.children_[4], crt_idx_stmt))) {
     LOG_WARN("fail to resolve index method node", K(ret));
   } else if (OB_FAIL(resolve_index_option_node(parse_node.children_[3],
                                                crt_idx_stmt,
-                                               tbl_schema,
+                                               data_tbl_schema,
                                                NULL != parse_node.children_[5]))) {
     LOG_WARN("fail to resolve index option node", K(ret));
   } else if (global_ && OB_FAIL(generate_global_index_schema(crt_idx_stmt))) {
@@ -542,7 +606,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   } else {
     if (NULL != parse_node.children_[5]) {
       // 0: 普通分区node // 1: 垂直分区node, 不支持建全局索引时指定垂直分区
-      if (2 != parse_node.children_[5]->num_child_
+      if (1 != parse_node.children_[5]->num_child_
           || T_PARTITION_OPTION != parse_node.children_[5]->type_) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "column vertical partition for index table");
@@ -558,20 +622,34 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       }
     }
 
+    // index column_group
+    if (OB_FAIL(ret)) {
+    } else if (NULL != parse_node.children_[6]) {
+      if (T_COLUMN_GROUP != parse_node.children_[6]->type_ || parse_node.children_[6]->num_child_ <= 0) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(parse_node.children_[6]->type_), K(parse_node.children_[6]->num_child_));
+      } else if (OB_ISNULL(parse_node.children_[6]->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("node is null", K(ret));
+      } else if (OB_FAIL(resolve_index_column_group(parse_node.children_[6], crt_idx_stmt->get_create_index_arg()))) {
+        SQL_RESV_LOG(WARN, "resolve index column group failed", K(ret));
+      }
+    }
+
     if (OB_SUCC(ret)) {
       crt_idx_stmt->set_if_not_exists(NULL != if_not_exist_node);
       // 设置block size, 如果未指定block size，则使用主表block size
       // 否则使用默认block_size
       if (!is_spec_block_size) {
-        ObCreateIndexArg &index_arg =crt_idx_stmt->get_create_index_arg();
+        ObCreateIndexArg &index_arg = crt_idx_stmt->get_create_index_arg();
         index_arg.index_option_.block_size_ = tbl_schema->get_block_size();
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    const ParseNode *parallel_node = parse_tree.children_[7];
-    if (OB_FAIL(resolve_hints(parse_tree.children_[7], *crt_idx_stmt, *tbl_schema))) {
+    const ParseNode *parallel_node = parse_tree.children_[8];
+    if (OB_FAIL(resolve_hints(parse_tree.children_[8], *crt_idx_stmt, *tbl_schema))) {
       LOG_WARN("resolve hints failed", K(ret));
     }
   }
@@ -670,6 +748,9 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
       } else {
         index_arg.index_type_ = INDEX_TYPE_SPATIAL_LOCAL;
       }
+    } else if (FTS_KEY == index_keyname_) {
+      // TODO hanxuan
+      ret = OB_NOT_SUPPORTED;
     }
     index_arg.data_table_id_ = data_table_id_;
     index_arg.index_table_id_ = index_table_id_;
@@ -684,7 +765,8 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
     index_arg.sql_mode_ = session_info_->get_sql_mode();
     create_index_stmt->set_comment(comment_);
     create_index_stmt->set_tablespace_id(tablespace_id_);
-    if (OB_FAIL(create_index_stmt->set_encryption_str(encryption_))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_index_stmt->set_encryption_str(encryption_))) {
       LOG_WARN("fail to set encryption str", K(ret));
     }
   }

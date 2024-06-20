@@ -36,21 +36,30 @@ public:
   void reset(
       const uint64_t snapshot_scn,
       const uint64_t start_lsn,
-      const uint64_t end_lsn);
+      const uint64_t end_lsn,
+      const int64_t end_scn);
 
   bool operator==(const ObDataDictMetaInfoItem &that) const {
     return snapshot_scn_ == that.snapshot_scn_ &&
            start_lsn_ == that.start_lsn_ &&
-           end_lsn_ == that.end_lsn_;
+           end_lsn_ == that.end_lsn_ &&
+           end_scn_ == that.end_scn_;
   }
+
+  void set_version(const int16_t version) { version_ = version; }
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  TO_STRING_KV(K_(snapshot_scn), K_(start_lsn), K_(end_lsn));
+  TO_STRING_KV(K_(snapshot_scn), K_(end_scn), K_(start_lsn), K_(end_lsn));
 public:
+  // Decide deserialize behavious;
+  // set while deserialize ObDataDictMetaInfo, value should be same with meta_version_ in ObDataDictMetaInfoHeader;
+  // NOTICE: SHOULD NOT SERIALIZE THIS FIELD.
+  int16_t  version_;
   uint64_t snapshot_scn_;
   uint64_t start_lsn_;
   uint64_t end_lsn_;
+  int64_t end_scn_; // generate from ora_rowscn(int64_t), add at meta_version = 2;
 };
 
 typedef ObSEArray<ObDataDictMetaInfoItem, 16> DataDictMetaInfoItemArr;
@@ -59,7 +68,7 @@ class ObDataDictMetaInfoHeader
 {
 public:
   static const int16_t DATADICT_METAINFO_HEADER_MAGIC = 0x4444; // hex of "DD"
-  static const int64_t DATADICT_METAINFO_META_VERSION = 0x0001; // version = 1
+  static const int64_t DATADICT_METAINFO_META_VERSION = 0x0002; // version = 1
 public:
   ObDataDictMetaInfoHeader();
   ~ObDataDictMetaInfoHeader();
@@ -73,7 +82,7 @@ public:
       const int64_t data_size);
 
   uint64_t get_tenant_id() const { return tenant_id_; }
-  OB_INLINE int32_t get_meta_version() const {
+  OB_INLINE int16_t get_meta_version() const {
     return meta_version_;
   }
   OB_INLINE int32_t get_item_count() const {
@@ -132,7 +141,7 @@ public:
   int64_t get_data_size() const {
     return header_.get_data_size();
   }
-  int32_t get_meta_version() const {
+  int16_t get_meta_version() const {
     return header_.get_meta_version();
   }
 

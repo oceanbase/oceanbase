@@ -68,13 +68,9 @@ int ObExprLeft::calc_result_type2(ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
-  ObExecContext *exec_ctx = nullptr;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (OB_ISNULL(exec_ctx = session->get_cur_exec_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("exec context is NULL", K(ret));
   } else if (session->is_varparams_sql_prepare()) {
     // the ps prepare stage does not do type deduction, and directly gives a default type.
     type.set_char();
@@ -153,9 +149,9 @@ int calc_left_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
     // res_str会指向s_datum的内存空间，所以下面不能改变res_str指向的字符串
     ObString res_str;
     const ObCollationType arg_cs_type = expr.args_[0]->datum_meta_.cs_type_;
-		if(OB_FAIL(calc_left(res_str, s_datum->get_string(), arg_cs_type, n_datum->get_int()))) {
-			LOG_WARN("failed to calculate left expression", K(ret));
-		} else {
+    if (OB_FAIL(calc_left(res_str, s_datum->get_string(), arg_cs_type, n_datum->get_int()))) {
+      LOG_WARN("failed to calculate left expression", K(ret));
+    } else {
       if (res_str.empty() && is_oracle_mode()) {
         res_datum.set_null();
       } else {
@@ -174,6 +170,13 @@ int ObExprLeft::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_left_expr;
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprLeft, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

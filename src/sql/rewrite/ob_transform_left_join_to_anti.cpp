@@ -497,6 +497,7 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
   is_valid = false;
   TableItem *right_table = NULL;
   bool is_table_valid = true;
+  bool is_contain_lateral = false;
   if (OB_ISNULL(stmt) ||
       OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -506,6 +507,12 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
              OB_ISNULL(right_table = joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid joined table", K(ret), K(joined_table));
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_lateral_table(
+                                       joined_table, is_contain_lateral))) {
+    LOG_WARN("failed to check contain correlated lateral table", K(ret));
+  } else if (is_contain_lateral) {
+    is_table_valid = false;
+    OPT_TRACE("contain lateral derived table, cannot do left to anti");
   } else if (stmt->is_delete_stmt() || stmt->is_update_stmt()) {
     // transformation is not allowed if the updated/deleted table is 
     // on the right side of the join table

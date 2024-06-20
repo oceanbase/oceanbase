@@ -181,7 +181,6 @@ inline void ObWarningBuffer::append_msg(ObLogger::UserMsgLevel msg_level, const 
 {
   // warning_buffer will be reset before requests handled
   if (OB_SUCCESS == error_ret_) {
-    std::string eg(str);
     int ret = OB_SUCCESS;
     ObWarningBuffer::WarningItem *item = nullptr;
     if (append_idx_ >= item_.count()) {
@@ -268,6 +267,29 @@ inline void ob_reset_tsi_warning_buffer()
     wb->reset();
   }
 }
+
+// ignore errors in this scope
+class ObWarningBufferIgnoreScope
+{
+public:
+  ObWarningBufferIgnoreScope()
+      : ignore_scope_warn_buf_(), ori_warn_buf_(ob_get_tsi_warning_buffer()) {
+    ignore_scope_warn_buf_.reset();
+    ob_setup_tsi_warning_buffer(&ignore_scope_warn_buf_);
+  }
+  ~ObWarningBufferIgnoreScope() {
+    ob_setup_tsi_warning_buffer(ori_warn_buf_);
+    ignore_scope_warn_buf_.reset();
+  }
+
+  ObWarningBufferIgnoreScope(const ObWarningBufferIgnoreScope &) = delete;
+  ObWarningBufferIgnoreScope &
+  operator=(const ObWarningBufferIgnoreScope &) = delete;
+
+private:
+  ObWarningBuffer ignore_scope_warn_buf_;
+  ObWarningBuffer *ori_warn_buf_;
+};
 
 }  // end of namespace common
 }

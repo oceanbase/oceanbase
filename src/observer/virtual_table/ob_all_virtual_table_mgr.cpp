@@ -232,22 +232,10 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case TABLE_TYPE:
           cur_row_.cells_[i].set_int(table_key.table_type_);
           break;
-        case DATA_CHECKSUM: {
-          int64_t data_checksum = 0;
-          if (table->is_memtable()) {
-            // memtable has no data checksum, do nothing
-          } else if (table->is_co_sstable()) {
-            data_checksum = static_cast<storage::ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_;
-          } else if (table->is_sstable()) {
-            data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();
-          }
-          cur_row_.cells_[i].set_int(data_checksum);
-          break;
-        }
         case SIZE: {
           int64_t size = 0;
           if (table->is_memtable()) {
-            size = static_cast<memtable::ObIMemtable *>(table)->get_occupied_size();
+            size = static_cast<ObIMemtable *>(table)->get_occupied_size();
           } else if (table->is_sstable()) {
             size = static_cast<blocksstable::ObSSTable *>(table)->get_occupy_size();
           }
@@ -288,7 +276,7 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case IS_ACTIVE: {
           bool is_active = false;
           if (table->is_memtable()) {
-            is_active = static_cast<memtable::ObIMemtable *>(table)->is_active_memtable();
+            is_active = static_cast<ObIMemtable *>(table)->is_active_memtable();
           }
           cur_row_.cells_[i].set_varchar(is_active ? "YES" : "NO");
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -313,6 +301,22 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           break;
         case CG_IDX:
           cur_row_.cells_[i].set_int(table_key.get_column_group_id());
+          break;
+        case DATA_CHECKSUM: {
+          int64_t data_checksum = 0;
+          if (table->is_memtable()) {
+            // memtable has no data checksum, do nothing
+          } else if (table->is_co_sstable()) {
+            data_checksum = static_cast<storage::ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_;
+          } else if (table->is_sstable()) {
+            data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();
+          }
+          cur_row_.cells_[i].set_int(data_checksum);
+          break;
+        }
+        case TABLE_FLAG:
+          // TODO(yanfeng): only for place holder purpose, need change when auto_split branch merge
+          cur_row_.cells_[i].set_int(0);
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

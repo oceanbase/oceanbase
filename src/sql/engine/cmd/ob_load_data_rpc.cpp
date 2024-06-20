@@ -435,6 +435,7 @@ void ObRpcLoadDataTaskCallBack::on_timeout()
     }
     MEM_BARRIER();
     if (OB_FAIL(task_controller_.on_task_finished())) {
+      // overwrite ret
       LOG_ERROR("error on task finish", K(ret));
     }
     LOG_WARN("load data task is timeout", K(ret), KPC(buffer));

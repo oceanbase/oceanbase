@@ -209,6 +209,7 @@ void ObLogStat::reset()
   total_tx_redo_log_count_ = 0;
   normal_row_count_ = 0;
   table_lock_count_ = 0;
+  ext_info_log_count_ = 0;
 }
 
 int64_t ObLogStat::total_size() const
@@ -225,6 +226,8 @@ void ObAdminMutatorStringArg::reset()
 {
   buf_ = nullptr;
   buf_len_ = 0;
+  decompress_buf_ = NULL;
+  decompress_buf_len_ = 0;
   flag_ = LogFormatFlag::NO_FORMAT;
   //pos_ = 0;
   //:w
@@ -240,14 +243,14 @@ void ObAdminMutatorStringArg::reset_buf()
   pos_ = 0;
 }
 
-ObAdminMutatorStringArg &ObAdminMutatorStringArg::operator= (const ObAdminMutatorStringArg &rhs)
+ObAdminMutatorStringArg &ObAdminMutatorStringArg::operator=(const ObAdminMutatorStringArg &rhs)
 {
-
   buf_ = rhs.buf_;
   buf_len_ = rhs.buf_len_;
+  decompress_buf_ = rhs.decompress_buf_;
+  decompress_buf_len_ = rhs.decompress_buf_len_;
   pos_ = rhs.pos_;
   flag_ = rhs.flag_;
-  //tx_id_ = rhs.tx_id_;
   writer_ptr_ = rhs.writer_ptr_;
   filter_ = rhs.filter_;
   log_stat_ = rhs.log_stat_;

@@ -34,7 +34,7 @@
 // 查询 __all_virtual_ls_info 的语句，设置了2s超时时间
 // select /*+query_timeout(2000000)*/ a.svr_ip, a.svr_port, a.tenant_id, a.ls_id, a.role, nvl(b.weak_read_scn, 1) as weak_read_scn, nvl(b.migrate_status, 0) as migrate_status, nvl(b.tx_blocked, 0) as tx_blocked from oceanbase.__all_virtual_ls_meta_table a left join oceanbase.__all_virtual_ls_info b on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port and a.tenant_id = b.tenant_id and a.ls_id = b.ls_id;
 #define BLACK_LIST_SELECT_LS_INFO_STMT \
-  "select /*+query_timeout(2000000)*/ a.svr_ip, a.svr_port, a.tenant_id, a.ls_id, a.role, \
+  "select a.svr_ip, a.svr_port, a.tenant_id, a.ls_id, a.role, \
   nvl(b.weak_read_scn, 1) as weak_read_scn, nvl(b.migrate_status, 0) as migrate_status, nvl(b.tx_blocked, 0) as tx_blocked \
   from oceanbase.__all_virtual_ls_meta_table a left join oceanbase.__all_virtual_ls_info b \
   on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port and a.tenant_id = b.tenant_id and a.ls_id = b.ls_id;"
@@ -340,8 +340,10 @@ public:
   {
     int ret = OB_SUCCESS;
 
-    if (!bl_key.is_valid()) {
+    if (OB_UNLIKELY(!bl_key.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
+    } else if (0 == map_.size()) {
+      in_black_list = false;
     } else if (OB_ENTRY_EXIST == map_.contains_key(bl_key)) {
       in_black_list = true;
     } else {

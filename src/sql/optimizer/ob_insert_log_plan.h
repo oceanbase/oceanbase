@@ -28,7 +28,8 @@ class ObInsertLogPlan: public ObDelUpdLogPlan
 public:
   ObInsertLogPlan(ObOptimizerContext &ctx, const ObInsertStmt *insert_stmt)
       : ObDelUpdLogPlan(ctx, insert_stmt),
-        is_direct_insert_(false)
+        is_direct_insert_(false),
+        is_insert_overwrite_(false)
   { }
   virtual ~ObInsertLogPlan()
   { }
@@ -50,13 +51,15 @@ public:
   { return insert_up_index_upd_infos_; }
 
   bool is_direct_insert() const { return is_direct_insert_; }
+  void set_is_insert_overwrite(const bool is_insert_overwrite) { is_insert_overwrite_ = is_insert_overwrite; }
+  bool is_insert_overwrite() const { return is_insert_overwrite_; }
 protected:
   int allocate_insert_values_as_top(ObLogicalOperator *&top);
   int candi_allocate_insert(OSGShareInfo *osg_info);
   int build_lock_row_flag_expr(ObConstRawExpr *&lock_row_flag_expr);
   int create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
                           ObTablePartitionInfo *insert_table_part,
-                          ObShardingInfo *insert_sharding,
+                          ObShardingInfo *insert_table_sharding,
                           ObConstRawExpr *lock_row_flag_expr,
                           const bool force_no_multi_part,
                           const bool force_multi_part,
@@ -65,22 +68,27 @@ protected:
   int allocate_insert_as_top(ObLogicalOperator *&top,
                              ObRawExpr *lock_row_flag_expr,
                              ObTablePartitionInfo *table_partition_info,
-                             ObShardingInfo *insert_sharding,
-                             bool is_multi_part);
+                             ObShardingInfo *insert_op_sharding,
+                             bool is_multi_part,
+                             bool is_partition_wise);
   int candi_allocate_pdml_insert(OSGShareInfo *osg_info);
   int candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info);
 
-  virtual int check_insert_need_multi_partition_dml(ObLogicalOperator &top,
-                                                    ObTablePartitionInfo *insert_table_partition,
-                                                    ObShardingInfo *insert_sharding,
-                                                    bool &is_multi_part_dml);
-  virtual int check_insert_stmt_need_multi_partition_dml(bool &is_multi_part_dml,
-                                                         bool &is_one_part_table);
-  virtual int check_insert_location_need_multi_partition_dml(ObLogicalOperator &top,
-                                                             ObTablePartitionInfo *insert_table_partition,
-                                                             ObShardingInfo *insert_sharding,
-                                                             bool is_one_part_table,
-                                                             bool &is_multi_part_dml);
+  int get_osg_type(bool is_multi_part_dml,
+                   ObShardingInfo *insert_table_sharding,
+                   int64_t distributed_method,
+                   OSG_TYPE &type);
+
+  virtual int get_best_insert_dist_method(ObLogicalOperator &top,
+                                          ObTablePartitionInfo *insert_table_partition,
+                                          ObShardingInfo *insert_table_sharding,
+                                          const bool force_no_multi_part,
+                                          const bool force_multi_part,
+                                          int64_t &distributed_methods,
+                                          bool &is_multi_part_dml);
+  virtual int check_insert_plan_need_multi_partition_dml(ObTablePartitionInfo *insert_table_partition,
+                                                        ObShardingInfo *insert_table_sharding,
+                                                        bool &is_multi_part_dml);
   int check_basic_sharding_for_insert_stmt(ObShardingInfo &target_sharding,
                                            ObLogicalOperator &child,
                                            bool &is_basic);
@@ -122,6 +130,7 @@ protected:
   int check_contain_non_onetime_expr(const ObRawExpr *expr, bool &contain);
   int check_contain_non_onetime_expr(const ObIArray<ObRawExpr *> &exprs, bool &contain);
 private:
+  int get_index_part_ids(const ObInsertTableInfo& table_info, const ObTableSchema *&data_table_schema, const ObTableSchema *&index_schema, ObIArray<uint64_t> &index_part_ids);
   int generate_osg_share_info(OSGShareInfo *&info);
   int check_need_online_stats_gather(bool &need_osg);
   int set_is_direct_insert();
@@ -131,6 +140,7 @@ private:
   common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> insert_up_index_upd_infos_;
   common::ObSEArray<ObUniqueConstraintInfo, 8, common::ModulePageAllocator, true> uk_constraint_infos_;
   bool is_direct_insert_;
+  bool is_insert_overwrite_;
 };
 }
 }

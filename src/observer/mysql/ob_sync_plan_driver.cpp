@@ -82,6 +82,9 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
                  K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
       }
     }
+    if (retry_ctrl_.need_retry()) {
+      result.set_will_retry();
+    }
     cret = result.close(cli_ret);
     if (cret != OB_SUCCESS &&
         cret != OB_TRANSACTION_SET_VIOLATION &&
@@ -115,6 +118,9 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       } else {
         result.refresh_location_cache_by_errno(true, ret);
       }
+      if (retry_ctrl_.need_retry()) {
+        result.set_will_retry();
+      }
       int cret = result.close(ret);
       if (cret != OB_SUCCESS) {
         LOG_WARN("close result set fail", K(cret));
@@ -129,6 +135,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
       uint16_t warning_count = 0;
       if (OB_ISNULL(warnings_buf)) {
+        // ignore ret
         LOG_WARN("can not get thread warnings buffer");
       } else {
         warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
@@ -189,6 +196,11 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
     }
   } else {
     if (is_prexecute_ && OB_FAIL(response_query_header(result, false, false, true))) {
+      // need close result set
+      int close_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (close_ret = result.close())) {
+        LOG_WARN("close result failed", K(close_ret));
+      }
       LOG_WARN("prexecute response query head fail. ", K(ret));
     } else if (OB_FAIL(result.close())) {
       LOG_WARN("close result set fail", K(ret));
@@ -201,6 +213,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
         ok_param.lii_ = result.get_last_insert_id_to_client();
         const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
         if (OB_ISNULL(warnings_buf)) {
+          // ignore ret
           LOG_WARN("can not get thread warnings buffer");
         } else {
           ok_param.warnings_count_ =
@@ -237,7 +250,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
     }
   }
   //if the error code is ob_timeout, we add more error info msg for dml query.
-  if (OB_TIMEOUT == ret) {
+  if (OB_TIMEOUT == ret && session_.is_user_session()) {
     LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - session_.get_query_start_time());
   }
 
@@ -253,7 +266,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
     } else {
       int sret = OB_SUCCESS;
       bool is_partition_hit = session_.get_err_final_partition_hit(ret);
-      if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
+      if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit, (void *)ctx_.get_reroute_info()))) {
         LOG_WARN("send error packet fail", K(sret), K(ret));
       }
     }

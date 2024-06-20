@@ -151,7 +151,7 @@ TEST_F(TestLockMemtableCheckpoint, replay_disorder)
   LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 5");
   ret = memtable_->recover_obj_lock(DEFAULT_OUT_TRANS_UNLOCK_OP);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, checkpoint->flush(share::SCN::max_scn()));
+  ASSERT_EQ(OB_SUCCESS, checkpoint->flush(share::SCN::max_scn(), 0));
   commit_version.val_ = 1;
   commit_scn.val_ = 1;
   ret = memtable_->update_lock_status(DEFAULT_OUT_TRANS_UNLOCK_OP,
@@ -205,7 +205,7 @@ TEST_F(TestLockMemtableCheckpoint, replay_disorder)
   LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 11");
   table_handle_.reset();
   ls_handle_.reset();
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_));
 }
 }  // namespace tablelock
 }  // namespace transaction

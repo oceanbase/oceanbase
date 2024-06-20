@@ -24,8 +24,15 @@ namespace oceanbase
 namespace lib
 {
 class ObTenantCtxAllocator;
+struct AChunk;
 struct ABlock;
 struct ObMemAttr;
+class IChunkMgr
+{
+public:
+  virtual AChunk *alloc_chunk(const uint64_t size, const ObMemAttr &attr) = 0;
+  virtual void free_chunk(AChunk *chunk, const ObMemAttr &attr) = 0;
+}; // end of class IChunkMgr
 
 class IBlockMgr
 {

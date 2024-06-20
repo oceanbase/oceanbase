@@ -62,10 +62,10 @@ class ObLockObjRequest;
 class ObLockTableRequest;
 class ObLockTabletRequest;
 class ObLockPartitionRequest;
-using ObUnLockObjRequest = ObLockObjRequest;
-using ObUnLockTableRequest = ObLockTableRequest;
-using ObUnLockPartitionRequest = ObLockPartitionRequest;
-using ObUnLockTabletRequest = ObLockTabletRequest;
+class ObUnLockObjRequest;
+class ObUnLockTableRequest;
+class ObUnLockPartitionRequest;
+class ObUnLockTabletRequest;
 }
 }
 namespace observer
@@ -163,7 +163,8 @@ public:
                           ObString &sql,
                           const share::schema::ObRoutineInfo &routine_info,
                           const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                          const ObTimeZoneInfo *tz_info) override;
+                          const ObTimeZoneInfo *tz_info,
+                          ObObj *result) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int register_multi_data_source(const uint64_t &tenant_id,
                                          const share::ObLSID ls_id,
@@ -254,7 +255,8 @@ public:
   int forward_request(const uint64_t tenant_id,
                       const int64_t op_type,
                       const ObString &sql,
-                      ObInnerSQLResult &res);
+                      ObInnerSQLResult &res,
+                      const int32_t group_id = 0);
 
 public:
   // nested session and sql execute for foreign key.
@@ -262,10 +264,6 @@ public:
                            SavedValue &saved_conn, bool skip_cur_stmt_tables);
   int end_nested_session(sql::ObSQLSessionInfo::StmtSavedValue &saved_session,
                          SavedValue &saved_conn);
-  int set_foreign_key_cascade(bool is_cascade);
-  int get_foreign_key_cascade(bool &is_cascade) const;
-  int set_foreign_key_check_exist(bool is_check_exist);
-  int get_foreign_key_check_exist(bool &is_check_exist) const;
   bool is_extern_session() const { return NULL != extern_session_; }
   bool is_inner_session() const { return NULL == extern_session_; }
   bool is_spi_conn() const { return is_spi_conn_; }
@@ -286,7 +284,8 @@ public:
                             sql::ObExecTimestamp &exec_timestamp,
                             bool has_tenant_resource,
                             const ObString &ps_sql,
-                            bool is_from_pl = false);
+                            bool is_from_pl = false,
+                            ObString *pl_exec_params = NULL);
   static int process_audit_record(sql::ObResultSet &result_set,
                                   sql::ObSqlCtx &sql_ctx,
                                   sql::ObSQLSessionInfo &session,
@@ -365,7 +364,8 @@ private:
   int forward_request_(const uint64_t tenant_id,
                        const int64_t op_type,
                        const ObString &sql,
-                       ObInnerSQLResult &res);
+                       ObInnerSQLResult &res,
+                       const int32_t group_id = 0);
   int get_session_timeout_for_rpc(int64_t &query_timeout, int64_t &trx_timeout);
 private:
   bool inited_;

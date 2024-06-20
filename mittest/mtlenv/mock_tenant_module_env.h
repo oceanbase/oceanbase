@@ -85,11 +85,15 @@
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx/wrs/ob_tenant_weak_read_service.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"   // ObSharedMemAllocMgr
 #include "logservice/palf/log_define.h"
 #include "storage/access/ob_empty_read_bucket.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "observer/table/ob_htable_lock_mgr.h"
 #include "observer/table/ob_table_session_pool.h"
+#include "share/index_usage/ob_index_usage_info_mgr.h"
+#include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 
 namespace oceanbase
 {
@@ -168,6 +172,18 @@ public:
     UNUSED(tenant_id);
     return source_.get_gts(stc, task, gts, receive_gts_ts);
   }
+
+  virtual int get_gts_sync(const uint64_t tenant_id,
+                           const MonotonicTs stc,
+                           int64_t timeout_us,
+                           share::SCN &gts,
+                           MonotonicTs &receive_gts_ts)
+  {
+    UNUSED(tenant_id);
+    UNUSED(timeout_us);
+    return source_.get_gts(stc, NULL, gts, receive_gts_ts);
+  }
+
   virtual int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &gts)
   {
     UNUSED(tenant_id);
@@ -242,6 +258,17 @@ public:
     UNUSED(ts_type);
     MonotonicTs unused;
     return source_.get_gts(stc, NULL, gts, unused);
+  }
+  virtual int remove_dropped_tenant(const uint64_t tenant_id)
+  {
+    UNUSED(tenant_id);
+    return OB_SUCCESS;
+  }
+  virtual int interrupt_gts_callback_for_ls_offline(const uint64_t tenant_id, const share::ObLSID ls_id)
+  {
+    UNUSED(tenant_id);
+    UNUSED(ls_id);
+    return OB_SUCCESS;
   }
 private:
   MockObGtsSource &source_;
@@ -522,8 +549,6 @@ int MockTenantModuleEnv::prepare_io()
     SERVER_LOG(ERROR, "init log pool fail", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     STORAGE_LOG(WARN, "fail to start io manager", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, io_config))) {
-    STORAGE_LOG(WARN, "add tenant io config failed", K(ret));
   } else if (OB_FAIL(ObKVGlobalCache::get_instance().init(&getter_,
       bucket_num,
       max_cache_size,
@@ -574,7 +599,7 @@ int MockTenantModuleEnv::init_slogger_mgr(const char *log_dir)
   log_file_spec.retry_write_policy_ = "normal";
   log_file_spec.log_create_policy_ = "normal";
   log_file_spec.log_write_policy_ = "truncate";
-  if (OB_FAIL(SLOGGERMGR.init(log_dir, MAX_FILE_SIZE, log_file_spec))) {
+  if (OB_FAIL(SLOGGERMGR.init(log_dir, log_dir, MAX_FILE_SIZE, log_file_spec))) {
     STORAGE_LOG(WARN, "fail to init SLOGGERMGR", K(ret));
   }
 
@@ -635,8 +660,6 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(ERROR, "failed to init bandwidth_throttle_", K(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
     STORAGE_LOG(ERROR, "init timer fail", KR(ret));
-  } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
-    STORAGE_LOG(ERROR, "init memory dump timer fail", KR(ret));
   } else {
     obrpc::ObRpcNetHandler::CLUSTER_ID = 1;
     oceanbase::palf::election::INIT_TS = 1;
@@ -656,16 +679,19 @@ int MockTenantModuleEnv::init()
     if (inited_) {
       ret = OB_INIT_TWICE;
       STORAGE_LOG(ERROR, "init twice", K(ret));
+    } else if (OB_FAIL(ObClockGenerator::init())) {
+      STORAGE_LOG(ERROR, "init ClockGenerator failed", K(ret));
     } else if (FALSE_IT(init_gctx_gconf())) {
     } else if (OB_FAIL(init_before_start_mtl())) {
       STORAGE_LOG(ERROR, "init_before_start_mtl failed", K(ret));
     } else {
       oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
-      MTL_BIND(ObTenantIOManager::mtl_init, ObTenantIOManager::mtl_destroy);
+      MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
       MTL_BIND2(mtl_new_default, omt::ObSharedTimer::mtl_init, omt::ObSharedTimer::mtl_start, omt::ObSharedTimer::mtl_stop, omt::ObSharedTimer::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantSchemaService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObStorageLogger::mtl_init, ObStorageLogger::mtl_start, ObStorageLogger::mtl_stop, ObStorageLogger::mtl_wait, mtl_destroy_default);
       MTL_BIND2(ObTenantMetaMemMgr::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, share::ObSharedMemAllocMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTransService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, logservice::ObGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTimestampService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -699,15 +725,22 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObTableLockService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(server_obj_pool_mtl_new<transaction::ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<transaction::ObPartTransCtx>);
       MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
-      MTL_BIND(ObTenantSQLSessionMgr::mtl_init, ObTenantSQLSessionMgr::mtl_destroy);
+      MTL_BIND2(ObTenantSQLSessionMgr::mtl_new, ObTenantSQLSessionMgr::mtl_init, nullptr, nullptr, nullptr, ObTenantSQLSessionMgr::mtl_destroy);
       MTL_BIND2(mtl_new_default, ObTenantCGReadInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObDecodeResourcePool::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObTenantDirectLoadMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObEmptyReadBucket::mtl_init, nullptr, nullptr, nullptr, ObEmptyReadBucket::mtl_destroy);
       MTL_BIND2(mtl_new_default, ObRebuildService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, table::ObHTableLockMgr::mtl_init, nullptr, nullptr, nullptr, table::ObHTableLockMgr::mtl_destroy);
       MTL_BIND2(mtl_new_default, omt::ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, table::ObTableApiSessPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(ObTenantFTPluginMgr::mtl_new, mtl_init_default, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObIndexUsageInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, storage::ObTabletMemtableMgrPool::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObTenantSnapshotService::mtl_init, mtl_start_default, mtl_stop_default, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, memtable::ObLockWaitMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObGlobalIteratorPool::mtl_init, nullptr, nullptr, nullptr, ObGlobalIteratorPool::mtl_destroy);
     }
     if (OB_FAIL(ret)) {
 
@@ -834,11 +867,9 @@ void MockTenantModuleEnv::destroy()
   TG_WAIT(lib::TGDefIDs::ServerGTimer);
   TG_DESTROY(lib::TGDefIDs::ServerGTimer);
 
-  TG_STOP(lib::TGDefIDs::MemDumpTimer);
-  TG_WAIT(lib::TGDefIDs::MemDumpTimer);
-  TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
-
-  THE_IO_DEVICE->destroy();
+  if (OB_NOT_NULL(THE_IO_DEVICE)) {
+    THE_IO_DEVICE->destroy();
+  }
 
 
   destroyed_ = true;

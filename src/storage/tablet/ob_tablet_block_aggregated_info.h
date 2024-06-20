@@ -35,6 +35,7 @@ enum class ObTabletMacroType : int16_t
   DATA_BLOCK = 2,
   SHARED_META_BLOCK = 3,
   SHARED_DATA_BLOCK = 4,
+  LINKED_BLOCK = 5,
   MAX
 
 };
@@ -95,8 +96,8 @@ public:
                                           common::hash::NormalPointer,
                                           oceanbase::common::ObMalloc,
                                           MAP_EXTEND_RATIO> TabletMacroMap;
-  typedef typename TabletMacroSet::iterator SetIterator;
-  typedef typename TabletMacroMap::iterator MapIterator;
+  typedef typename TabletMacroSet::const_iterator SetIterator;
+  typedef typename TabletMacroMap::const_iterator MapIterator;
 public:
   ObBlockInfoSet()
     : meta_block_info_set_(), data_block_info_set_(), shared_meta_block_info_set_(), shared_data_block_info_map_()
@@ -122,56 +123,47 @@ public:
   TabletMacroMap shared_data_block_info_map_;
 };
 
-template <typename T>
-class ObBlockInfoArray final
-{
-public:
-  ObBlockInfoArray();
-  ~ObBlockInfoArray();
-  void reset();
-  int init(const int64_t cnt, ObArenaAllocator &allocator);
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
-  int64_t get_serialize_size() const;
-  int64_t get_deep_copy_size() const;
-  int deep_copy(char *buf, const int64_t buf_len, int64_t &pos, ObBlockInfoArray &dest_obj) const;
-  OB_INLINE bool is_valid() const
-  {
-    return (0 == cnt_ && nullptr == arr_) || (0 < cnt_ && nullptr != arr_);
-  }
-  TO_STRING_KV(K_(cnt), KP_(arr), K_(capacity), K_(is_inited));
-
-public:
-  int64_t cnt_;
-  T *arr_;
-
-  // no need to be persisted
-  int64_t capacity_;
-  bool is_inited_;
-};
-
 class ObTabletMacroInfo final
 {
+friend class ObMacroInfoIterator;
+private:
+  template <typename T>
+  class ObBlockInfoArray final
+  {
+  public:
+    ObBlockInfoArray();
+    ~ObBlockInfoArray();
+    void reset();
+    int reserve(const int64_t cnt, ObArenaAllocator &allocator);
+    int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+    int deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+    int64_t get_serialize_size() const;
+    int64_t get_deep_copy_size() const;
+    int deep_copy(char *buf, const int64_t buf_len, int64_t &pos, ObBlockInfoArray &dest_obj) const;
+    OB_INLINE bool is_valid() const
+    {
+      return (0 == cnt_ && nullptr == arr_) || (0 < cnt_ && nullptr != arr_);
+    }
+    TO_STRING_KV(K_(cnt), KP_(arr), K_(capacity));
+
+  public:
+    int64_t cnt_;
+    T *arr_;
+
+    // no need to be persisted and only used by iterator
+    int64_t capacity_;
+  };
 public:
   ObTabletMacroInfo();
   ~ObTabletMacroInfo();
   void reset();
-  int init(ObArenaAllocator &allocator, ObBlockInfoSet &id_set, ObLinkedMacroBlockItemWriter &linked_writer);
+  int init(ObArenaAllocator &allocator, const ObBlockInfoSet &id_set, ObLinkedMacroBlockItemWriter &linked_writer);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
   int64_t get_deep_copy_size() const;
   int deep_copy(char *buf, const int64_t buf_len, ObTabletMacroInfo *&dest_obj) const;
   bool is_valid() const;
-
-  // inc and dec macro ref cnt, can only be called by tablet
-  int inc_macro_ref(bool &inc_success) const;
-  void dec_macro_ref() const;
-  int get_all_macro_ids(
-      ObIArray<blocksstable::MacroBlockId> &meta_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &data_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &shared_meta_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &shared_data_block_arr);
   TO_STRING_KV(
       K_(entry_block),
       K_(meta_block_info_arr),
@@ -180,37 +172,8 @@ public:
       K_(shared_data_block_info_arr),
       K_(is_inited));
 private:
-  static bool ignore_ret(const int ret);
-  static int parse_info_arr(
-      const ObBlockInfoArray<ObSharedBlockInfo> &info_arr,
-      ObIArray<blocksstable::MacroBlockId> &id_arr);
-  static int parse_id_arr(
-      const ObBlockInfoArray<blocksstable::MacroBlockId> &info_arr,
-      ObIArray<blocksstable::MacroBlockId> &id_arr);
-  static int parse_info_buf(
-      const char *buf,
-      const int64_t buf_len,
-      ObIArray<blocksstable::MacroBlockId> &block_id_arr);
-  static int parse_id_buf(
-      const char *buf,
-      const int64_t buf_len,
-      ObIArray<blocksstable::MacroBlockId> &block_id_arr);
-  int get_macro_ids_with_io(
-      ObIArray<blocksstable::MacroBlockId> &meta_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &data_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &shared_meta_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &shared_data_block_arr);
-  int get_macro_ids_without_io(
-      ObIArray<blocksstable::MacroBlockId> &meta_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &data_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &shared_meta_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &shared_data_block_arr);
-  int inc_linked_block_ref_cnt(
-      const ObIArray<blocksstable::MacroBlockId> &linked_block_list,
-      bool &inc_macro_id_success) const;
-  void dec_linked_block_ref_cnt(const ObIArray<blocksstable::MacroBlockId> &linked_block_list) const;
-  int construct_block_id_arr(ObBlockInfoSet::TabletMacroSet &id_set, ObBlockInfoArray<blocksstable::MacroBlockId> &block_id_arr);
-  int construct_block_info_arr(ObBlockInfoSet::TabletMacroMap &block_info_map, ObBlockInfoArray<ObSharedBlockInfo> &block_info_arr);
+  int construct_block_id_arr(const ObBlockInfoSet::TabletMacroSet &id_set, ObBlockInfoArray<blocksstable::MacroBlockId> &block_id_arr);
+  int construct_block_info_arr(const ObBlockInfoSet::TabletMacroMap &block_info_map, ObBlockInfoArray<ObSharedBlockInfo> &block_info_arr);
   int persist_macro_ids(ObArenaAllocator &allocator, ObLinkedMacroBlockItemWriter &linked_writer);
   int do_flush_ids(
       const ObTabletMacroType macro_type,
@@ -221,18 +184,6 @@ private:
       ObBlockInfoArray<ObSharedBlockInfo> &block_info_arr,
       ObArenaAllocator &allocator,
       ObLinkedMacroBlockItemWriter &linked_writer);
-  int inc_macro_ref_with_io() const;
-  int inc_macro_ref_without_io() const;
-  void dec_macro_ref_with_io() const;
-  void dec_macro_ref_without_io() const;
-  int deserialize_and_inc_macro_ref(const char *buf, const int64_t buf_len, bool &inc_success) const;
-  void deserialize_and_dec_macro_ref(const char *buf, const int64_t buf_len) const;
-  int deserialize_and_inc_shared_macro_ref(const char *buf, const int64_t buf_len, bool &inc_success) const;
-  void deserialize_and_dec_shared_macro_ref(const char *buf, const int64_t buf_len) const;
-  int do_inc_macro_ref(const ObBlockInfoArray<blocksstable::MacroBlockId> &block_info_arr, bool &inc_macro_id_success) const;
-  void do_dec_macro_ref(const ObBlockInfoArray<blocksstable::MacroBlockId> &block_info_arr) const;
-  int do_inc_macro_ref(const ObBlockInfoArray<ObSharedBlockInfo> &block_info_arr, bool &inc_macro_id_success) const;
-  void do_dec_macro_ref(const ObBlockInfoArray<ObSharedBlockInfo> &block_info_arr) const;
 private:
   static const int64_t ID_COUNT_THRESHOLD = 50000; // occupy almost 1.2MB disk space
   static const int32_t TABLET_MACRO_INFO_VERSION = 1;

@@ -57,7 +57,10 @@ public:
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums) const override;
-
+  virtual int decode_vector(
+      const ObColumnDecoderCtx &ctx,
+      const ObIRowIndex* row_index,
+      ObVectorDecodeCtx &vector_ctx) const override;
   virtual int pushdown_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
@@ -123,10 +126,12 @@ private:
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap,
       int (*lambda)(
-          const ObObjMeta &obj_meta,
           const ObDatum &cur_datum,
           const sql::ObWhiteFilterExecutor &filter,
           bool &result)) const;
+
+  template<typename VectorType, bool HAS_NULL>
+  int inner_decode_vector(const ObColumnDecoderCtx &decoder_ctx, ObVectorDecodeCtx &vector_ctx) const;
 private:
   const ObIntegerBaseDiffHeader *header_;
   uint64_t base_;

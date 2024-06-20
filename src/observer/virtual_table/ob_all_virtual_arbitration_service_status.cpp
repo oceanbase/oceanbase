@@ -141,9 +141,9 @@ int ObAllVirtualArbServiceStatus::insert_row_(
       }
       case OB_APP_MIN_COLUMN_ID + 3: {
         if (is_in_blacklist) {
-          strncpy(arb_service_status_buf_, ARB_STATUS_INACTIVE, VARCHAR_32);
+          strncpy(arb_service_status_buf_, ARB_STATUS_INACTIVE, VARCHAR_32 - 1);
         } else {
-          strncpy(arb_service_status_buf_, ARB_STATUS_ACTIVE, VARCHAR_32);
+          strncpy(arb_service_status_buf_, ARB_STATUS_ACTIVE, VARCHAR_32 - 1);
         }
         cur_row_.cells_[i].set_varchar(ObString::make_string(arb_service_status_buf_));
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(

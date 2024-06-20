@@ -295,11 +295,10 @@ TEST_F(ObTableLockServiceTest, lock_table)
 {
   LOG_INFO("ObTableLockServiceTest::lock_table");
   int ret = OB_SUCCESS;
-  ObTableLockOwnerID OWNER_ONE(1);
-  ObTableLockOwnerID OWNER_TWO(2);
+  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner_by_value(1));
+  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner_by_value(2));
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
-  ObTableLockOwnerID lock_owner(0);
   share::ObTenantSwitchGuard tenant_guard;
 
   ret = tenant_guard.switch_to(OB_SYS_TENANT_ID);
@@ -311,7 +310,7 @@ TEST_F(ObTableLockServiceTest, lock_table)
   get_table_id("t_one_part", table_id);
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
+                                             out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 1.2 lock multi part table
@@ -319,7 +318,7 @@ TEST_F(ObTableLockServiceTest, lock_table)
   get_table_id("t_multi_part", table_id);
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_TWO);
+                                             out_trans_owner_2);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 2. UNLOCK TABLE
@@ -328,14 +327,14 @@ TEST_F(ObTableLockServiceTest, lock_table)
   get_table_id("t_one_part", table_id);
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               OWNER_ONE);
+                                               out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   // 2.2 unlock multi part table
   LOG_INFO("ObTableLockServiceTest::lock_table 2.2");
   get_table_id("t_multi_part", table_id);
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               OWNER_TWO);
+                                               out_trans_owner_2);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 3. UNLOCK NOT EXIST LOCK
@@ -344,23 +343,23 @@ TEST_F(ObTableLockServiceTest, lock_table)
   get_table_id("t_one_part", table_id);
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               OWNER_ONE);
+                                               out_trans_owner_1);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
   // 3.2 check unlock with no lock of the specified owner
   LOG_INFO("ObTableLockServiceTest::lock_table 3.2");
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
+                                             out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               OWNER_TWO);
+                                               out_trans_owner_2);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
   // 3.3 check unlock with no lock of specified lock mode
   LOG_INFO("ObTableLockServiceTest::lock_table 3.3");
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                SHARE,
-                                               OWNER_ONE);
+                                               out_trans_owner_1);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
 
   // 4. LOCK TWICE
@@ -368,11 +367,11 @@ TEST_F(ObTableLockServiceTest, lock_table)
   get_table_id("t_one_part", table_id);
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
+                                             out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               OWNER_ONE);
+                                               out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -389,9 +388,10 @@ TEST_F(ObTableLockServiceTest, lock_part)
   uint64_t table_id = 0;
   ObSEArray<ObObjectID, 1> part_ids;
   ObTableLockMode lock_mode = ROW_EXCLUSIVE;
-  ObTableLockOwnerID OWNER_ONE(1);
-  ObTableLockOwnerID OWNER_TWO(2);
+  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner_by_value(1));
+  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner_by_value(2));
   ObLockPartitionRequest lock_arg;
+  ObUnLockPartitionRequest unlock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
   tx_param.isolation_ = ObTxIsolationLevel::RC;
@@ -415,12 +415,13 @@ TEST_F(ObTableLockServiceTest, lock_part)
   get_table_part_ids(table_id, part_ids);
 
   lock_mode = ROW_EXCLUSIVE;
-  lock_arg.owner_id_ = OWNER_ONE;
+  lock_arg.owner_id_ = out_trans_owner_1;
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = OUT_TRANS_LOCK;
   lock_arg.timeout_us_ = 0;
   lock_arg.table_id_ = table_id;
   lock_arg.part_object_id_ = part_ids[0];
+  lock_arg.is_from_sql_ = true;
 
   ret = MTL(ObTableLockService*)->lock_partition(*tx_desc,
                                                  tx_param,
@@ -431,8 +432,8 @@ TEST_F(ObTableLockServiceTest, lock_part)
   lock_mode = SHARE;
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_TWO);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+                                             out_trans_owner_2);
+  ASSERT_EQ(OB_EAGAIN, ret);
 
   // 2. COMMIT
   LOG_INFO("ObTableLockServiceTest::lock_part 2");
@@ -447,8 +448,8 @@ TEST_F(ObTableLockServiceTest, lock_part)
   lock_mode = SHARE;
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_TWO);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+                                             out_trans_owner_2);
+  ASSERT_EQ(OB_EAGAIN, ret);
 
   // 4. UNLOCK
   LOG_INFO("ObTableLockServiceTest::unlock_part 4");
@@ -460,16 +461,16 @@ TEST_F(ObTableLockServiceTest, lock_part)
   get_table_part_ids(table_id, part_ids);
 
   lock_mode = ROW_EXCLUSIVE;
-  lock_arg.owner_id_ = OWNER_ONE;
-  lock_arg.lock_mode_ = lock_mode;
-  lock_arg.op_type_ = OUT_TRANS_UNLOCK;
-  lock_arg.timeout_us_ = 0;
-  lock_arg.table_id_ = table_id;
-  lock_arg.part_object_id_ = part_ids[0];
+  unlock_arg.owner_id_ = out_trans_owner_1;
+  unlock_arg.lock_mode_ = lock_mode;
+  unlock_arg.op_type_ = OUT_TRANS_UNLOCK;
+  unlock_arg.timeout_us_ = 0;
+  unlock_arg.table_id_ = table_id;
+  unlock_arg.part_object_id_ = part_ids[0];
 
   ret = MTL(ObTableLockService*)->unlock_partition(*tx_desc,
                                                    tx_param,
-                                                   lock_arg);
+                                                   unlock_arg);
   ASSERT_EQ(OB_SUCCESS, ret);
   // commit
   LOG_INFO("ObTableLockServiceTest::lock_part 4.2");
@@ -483,11 +484,11 @@ TEST_F(ObTableLockServiceTest, lock_part)
   lock_mode = SHARE;
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_TWO);
+                                             out_trans_owner_2);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               OWNER_TWO);
+                                               out_trans_owner_2);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -500,11 +501,10 @@ TEST_F(ObTableLockServiceTest, lock_tablet)
   // 2.1 unlock tablet of one part table
   // 2.2 unlock tablet of multi part table
   int ret = OB_SUCCESS;
-  ObTableLockOwnerID OWNER_ONE(1);
-  ObTableLockOwnerID OWNER_TWO(2);
+  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner_by_value(1));
+  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner_by_value(2));
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
-  ObTableLockOwnerID lock_owner(0);
   share::ObTenantSwitchGuard tenant_guard;
   ObTabletIDArray tablet_list;
 
@@ -519,7 +519,7 @@ TEST_F(ObTableLockServiceTest, lock_tablet)
   ret = MTL(ObTableLockService*)->lock_tablet(table_id,
                                               tablet_list[0],
                                               lock_mode,
-                                              OWNER_ONE);
+                                              out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 1.2 lock multi part table
@@ -529,7 +529,7 @@ TEST_F(ObTableLockServiceTest, lock_tablet)
   ret = MTL(ObTableLockService*)->lock_tablet(table_id,
                                               tablet_list[0],
                                               lock_mode,
-                                              OWNER_TWO);
+                                              out_trans_owner_2);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 2. UNLOCK TABLE
@@ -540,7 +540,7 @@ TEST_F(ObTableLockServiceTest, lock_tablet)
   ret = MTL(ObTableLockService*)->unlock_tablet(table_id,
                                                 tablet_list[0],
                                                 lock_mode,
-                                                OWNER_ONE);
+                                                out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   // 2.2 unlock multi part table
   LOG_INFO("ObTableLockServiceTest::lock_tablet 2.2");
@@ -549,7 +549,7 @@ TEST_F(ObTableLockServiceTest, lock_tablet)
   ret = MTL(ObTableLockService*)->unlock_tablet(table_id,
                                                 tablet_list[0],
                                                 lock_mode,
-                                                OWNER_TWO);
+                                                out_trans_owner_2);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 3. UNLOCK NOT EXIST LOCK
@@ -560,26 +560,26 @@ TEST_F(ObTableLockServiceTest, lock_tablet)
   ret = MTL(ObTableLockService*)->unlock_tablet(table_id,
                                                 tablet_list[0],
                                                 lock_mode,
-                                                OWNER_ONE);
+                                                out_trans_owner_2);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
   // 3.2 check unlock with no lock of the specified owner
   LOG_INFO("ObTableLockServiceTest::lock_tablet 3.2");
   ret = MTL(ObTableLockService*)->lock_tablet(table_id,
                                               tablet_list[0],
                                               lock_mode,
-                                              OWNER_ONE);
+                                              out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = MTL(ObTableLockService*)->unlock_tablet(table_id,
                                                 tablet_list[0],
                                                 lock_mode,
-                                                OWNER_TWO);
+                                                out_trans_owner_2);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
   // 3.3 check unlock with no lock of specified lock mode
   LOG_INFO("ObTableLockServiceTest::lock_tablet 3.3");
   ret = MTL(ObTableLockService*)->unlock_tablet(table_id,
                                                 tablet_list[0],
                                                 SHARE,
-                                                OWNER_ONE);
+                                                out_trans_owner_1);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
 
   // 4. LOCK TWICE
@@ -589,12 +589,12 @@ TEST_F(ObTableLockServiceTest, lock_tablet)
   ret = MTL(ObTableLockService*)->lock_tablet(table_id,
                                               tablet_list[0],
                                               lock_mode,
-                                              OWNER_ONE);
+                                              out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = MTL(ObTableLockService*)->unlock_tablet(table_id,
                                                 tablet_list[0],
                                                 lock_mode,
-                                                OWNER_ONE);
+                                                out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -611,7 +611,8 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   ObTransService *txs = nullptr;
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = ROW_EXCLUSIVE;
-  ObTableLockOwnerID OWNER_ONE(1);
+  ObTableLockOwnerID in_trans_owner(ObTableLockOwnerID::default_owner());
+  ObTableLockOwnerID out_trans_owner(ObTableLockOwnerID::get_owner_by_value(1));
   ObLockTableRequest lock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
@@ -633,10 +634,11 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   get_table_id("t_one_part", table_id);
   lock_mode = ROW_EXCLUSIVE;
   lock_arg.table_id_ = table_id;
-  lock_arg.owner_id_ = 0;
+  lock_arg.owner_id_ = in_trans_owner;
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = 0;
+  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -646,8 +648,8 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   LOG_INFO("ObTableLockServiceTest::in_trans_lock_table 1.2");
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+                                             out_trans_owner);
+  ASSERT_EQ(OB_EAGAIN, ret);
   // 2. LOCK MULTI PART TABLE
   // 2.1 lock multi part table
   // lock upgrade
@@ -655,10 +657,11 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   get_table_id("t_multi_part", table_id);
   lock_mode = ROW_EXCLUSIVE;
   lock_arg.table_id_ = table_id;
-  lock_arg.owner_id_ = 0;
+  lock_arg.owner_id_ = in_trans_owner;
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = 0;
+  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -668,8 +671,8 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   lock_mode = SHARE;
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+                                             out_trans_owner);
+  ASSERT_EQ(OB_EAGAIN, ret);
   // 3. CLEAN
   LOG_INFO("ObTableLockServiceTest::in_trans_lock_table 3");
   const int64_t stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;
@@ -691,8 +694,9 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   ObTransService *txs = nullptr;
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = ROW_EXCLUSIVE;
-  ObTableLockOwnerID OWNER_ONE(1);
-  ObTableLockOwnerID DEFAULT_OWNER_ID(0);
+  ObTableLockOwnerID out_trans_owner_1(ObTableLockOwnerID::get_owner_by_value(1));
+  ObTableLockOwnerID out_trans_owner_2(ObTableLockOwnerID::get_owner_by_value(2));
+  ObTableLockOwnerID in_trans_owner(ObTableLockOwnerID::default_owner());
   ObLockTableRequest lock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
@@ -715,10 +719,11 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   get_table_id("t_one_part", table_id);
   lock_mode = ROW_EXCLUSIVE;
   lock_arg.table_id_ = table_id;
-  lock_arg.owner_id_ = 0;
+  lock_arg.owner_id_ = in_trans_owner;
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = 0;
+  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -728,8 +733,8 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 1.2");
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+                                             out_trans_owner_1);
+  ASSERT_EQ(OB_EAGAIN, ret);
 
   // 1.3. commit lock
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 1.3");
@@ -744,7 +749,7 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 1.4");
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
+                                             out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 1.5 unlock check lock
@@ -752,7 +757,7 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 1.4");
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               OWNER_ONE);
+                                               out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 2. BOTH OUT_TRANS AND IN_TRANS
@@ -762,10 +767,11 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   get_table_id("t_one_part", table_id);
   lock_mode = ROW_EXCLUSIVE;
   lock_arg.table_id_ = table_id;
-  lock_arg.owner_id_ = 0;
+  lock_arg.owner_id_ = in_trans_owner;
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = 0;
+  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -775,10 +781,11 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 2.2");
   lock_mode = ROW_EXCLUSIVE;
   lock_arg.table_id_ = table_id;
-  lock_arg.owner_id_ = 0;
+  lock_arg.owner_id_ = out_trans_owner_1;
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = OUT_TRANS_LOCK;
   lock_arg.timeout_us_ = 0;
+  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -789,8 +796,8 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 2.3");
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+                                             out_trans_owner_2);
+  ASSERT_EQ(OB_EAGAIN, ret);
 
   // 2.4 commit lock
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 2.4");
@@ -805,15 +812,15 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 2.5");
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+                                             out_trans_owner_2);
+  ASSERT_EQ(OB_EAGAIN, ret);
 
   // 2.6 unlock out_trans lock
   lock_mode = ROW_EXCLUSIVE;
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 2.6");
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               DEFAULT_OWNER_ID);
+                                               out_trans_owner_1);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 2.7 recheck after unlock
@@ -821,7 +828,7 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 2.7");
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
-                                             OWNER_ONE);
+                                             out_trans_owner_2);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // 2.8 unlock check lock
@@ -829,7 +836,7 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 2.8");
   ret = MTL(ObTableLockService*)->unlock_table(table_id,
                                                lock_mode,
-                                               OWNER_ONE);
+                                               out_trans_owner_2);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -844,8 +851,9 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   ObTransService *txs = nullptr;
   uint64_t obj_id1 = 1010;
   ObTableLockMode lock_mode1 = SHARE;
-  ObTableLockOwnerID OWNER_ONE(1);
+  ObTableLockOwnerID OWNER_ONE;
   ObLockObjRequest lock_arg;
+  OWNER_ONE.convert_from_value(1);
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
   tx_param.isolation_ = ObTxIsolationLevel::RC;
@@ -867,6 +875,7 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   lock_arg.timeout_us_ = 0;
   lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_COMMON_OBJ;
   lock_arg.obj_id_ = obj_id1;
+  lock_arg.is_from_sql_ = true;
 
   ret = MTL(ObTableLockService*)->lock_obj(*tx_desc1,
                                            tx_param,
@@ -881,6 +890,7 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   lock_arg.timeout_us_ = 0;
   lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_COMMON_OBJ;
   lock_arg.obj_id_ = obj_id1;
+  lock_arg.is_from_sql_ = true;
 
   ret = MTL(ObTableLockService*)->lock_obj(*tx_desc2,
                                            tx_param,
@@ -896,11 +906,12 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   lock_arg.timeout_us_ = 0;
   lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_COMMON_OBJ;
   lock_arg.obj_id_ = obj_id1;
+  lock_arg.is_from_sql_ = true;
 
   ret = MTL(ObTableLockService*)->lock_obj(*tx_desc3,
                                            tx_param,
                                            lock_arg);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+  ASSERT_EQ(OB_ERR_EXCLUSIVE_LOCK_CONFLICT, ret);
 
   LOG_INFO("ObTableLockServiceTest::in_trans_lock_obj 1.4");
   const int64_t stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;

@@ -16,6 +16,7 @@
 #include "rpc/obrpc/ob_rpc_mem_pool.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
+#include "lib/compress/ob_compressor_pool.h"
 
 namespace oceanbase
 {
@@ -84,15 +85,17 @@ template <typename T>
                   K(extra_payload_size), K(pcode));
   } else {
     const common::ObCompressorType &compressor_type = get_proxy_compressor_type(proxy);
-    bool need_compressed = ObCompressorPool::get_instance().need_common_compress(compressor_type);
+    bool need_compressed = common::ObCompressorPool::get_instance().need_common_compress(compressor_type);
     if (need_compressed) {
       // compress
+      EVENT_INC(RPC_COMPRESS_ORIGINAL_PACKET_CNT);
+      EVENT_ADD(RPC_COMPRESS_ORIGINAL_SIZE, payload_sz);
       int tmp_ret = OB_SUCCESS;
       common::ObCompressor *compressor = NULL;
       char *compressed_buf = NULL;
       int64_t dst_data_size = 0;
       int64_t max_overflow_size = 0;
-      if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(compressor_type, compressor))) {
+      if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type, compressor))) {
         RPC_OBRPC_LOG(WARN, "get_compressor failed", K(ret), K(compressor_type));
       } else if (OB_FAIL(compressor->get_max_overflow_size(payload_sz, max_overflow_size))) {
         RPC_OBRPC_LOG(WARN, "get_max_overflow_size failed", K(ret), K(payload_sz), K(max_overflow_size));
@@ -112,6 +115,8 @@ template <typename T>
         pkt.set_original_len(static_cast<int32_t>(payload_sz));
         memcpy(payload_buf, compressed_buf, dst_data_size);
         payload_sz = dst_data_size;
+        EVENT_INC(RPC_COMPRESS_COMPRESSED_PACKET_CNT);
+        EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, dst_data_size);
       }
       if (NULL != compressed_buf) {
         ob_free(compressed_buf);

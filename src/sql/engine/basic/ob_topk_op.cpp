@@ -16,6 +16,9 @@
 #include "sql/engine/sort/ob_sort_op.h"
 #include "sql/engine/basic/ob_material_op.h"
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
+#include "sql/engine/basic/ob_material_vec_op.h"
+#include "sql/engine/aggregate/ob_hash_groupby_vec_op.h"
+#include "sql/engine/basic/ob_monitoring_dump_op.h"
 
 namespace oceanbase
 {
@@ -120,6 +123,23 @@ int ObTopKOp::get_topk_final_count()
       case PHY_HASH_GROUP_BY: {
         ObHashGroupByOp *gby_op = static_cast<ObHashGroupByOp *>(child_);
         row_count = gby_op->get_hash_groupby_row_count();
+        break;
+      }
+      case PHY_VEC_HASH_GROUP_BY: {
+        ObHashGroupByVecOp *vec_gby_op = static_cast<ObHashGroupByVecOp *>(child_);
+        row_count = vec_gby_op->get_hash_groupby_row_count();
+        break;
+      }
+      case PHY_VEC_MATERIAL: {
+        ObMaterialVecOp *mtrl_op = static_cast<ObMaterialVecOp *>(child_);
+        if (OB_FAIL(mtrl_op->get_material_row_count(row_count))) {
+          LOG_WARN("get material row count failed", K(ret));
+        }
+        break;
+      }
+      case PHY_MONITORING_DUMP: {
+        ObMonitoringDumpOp *monitor_op = static_cast<ObMonitoringDumpOp *>(child_);
+        row_count = monitor_op->get_monitored_row_count();
         break;
       }
       default: {

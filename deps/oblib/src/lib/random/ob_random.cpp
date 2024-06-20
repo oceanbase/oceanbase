@@ -31,6 +31,14 @@ ObRandom::~ObRandom()
 {
 }
 
+void ObRandom::seed(const uint64_t seed)
+{
+  seed_[0] = (uint16_t)seed;
+  seed_[1] = (uint16_t)(seed >> 16);
+  seed_[2] = (uint16_t)(seed >> 32);
+  seed48(seed_);
+}
+
 int64_t ObRandom::rand(const int64_t a, const int64_t b)
 {
   struct Wrapper {

@@ -429,6 +429,9 @@ public:
                                  ObCollationLevel &res_level,
                                  ObCollationType &res_type);
   static bool is_bin_sort(ObCollationType collation_type);
+
+  static bool is_ci_collate(ObCollationType collation_type);
+
   static ObCollationType get_bin_collation(const ObCharsetType charset_type);
   static int first_valid_char(const ObCollationType collation_type,
                               const char *buf,
@@ -473,6 +476,9 @@ public:
                      const ObString &src, ObString &dst,
                      ObIAllocator &allocator);
   static int tolower(const ObCollationType collation_type,
+                     const ObString &src, ObString &dst,
+                     ObIAllocator &allocator);
+  static int tolower(const ObCharsetInfo *cs,
                      const ObString &src, ObString &dst,
                      ObIAllocator &allocator);
 
@@ -538,6 +544,7 @@ public:
 
   static bool is_cs_nonascii(ObCollationType collation_type);
   static bool is_cs_unicode(ObCollationType collation_type);
+  static int get_replace_character(ObCollationType collation_type, int32_t &replaced_char_unicode);
   static bool is_cjk_charset(ObCollationType collation_type);
   static bool is_valid_connection_collation(ObCollationType collation_type);
   static const char* get_oracle_charset_name_by_charset_type(ObCharsetType charset_type);

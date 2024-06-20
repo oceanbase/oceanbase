@@ -122,6 +122,13 @@ bool ObLobCommon::operator!=(const ObLobCommon &other) const
   return !(operator==(other));
 }
 
+int64_t ObLobDataOutRowCtx::get_real_chunk_size() const
+{
+  // ObLobDataOutRowCtx::chunk_size_ only have 8 bit, range is 0~255
+  // and chunk size can not be zero, so if chunk size is 256KB, ObLobDataOutRowCtx::chunk_size_ is zero
+  return chunk_size_ == 0 ? OB_MAX_LOB_CHUNK_SIZE : chunk_size_ * OUTROW_LOB_CHUNK_SIZE_UNIT;
+}
+
 void ObLobData::reset()
 {
   id_.reset();
@@ -284,6 +291,7 @@ DEF_TO_STRING(ObLobLocatorV2)
           J_KV(K(*extern_header));
           J_COMMA();
           J_KV("extern size", *(uint16_t *)extern_header->data_);
+          offset += MEM_LOB_EXTERN_SIZE_LEN;
           J_COMMA();
           if (buf_len > pos && extern_header->flags_.has_tx_info_
               && size_ >= offset + MEM_LOB_EXTERN_TXINFO_LEN) {
@@ -297,6 +305,13 @@ DEF_TO_STRING(ObLobLocatorV2)
             ObMemLobLocationInfo *location_info = reinterpret_cast<ObMemLobLocationInfo *>(ptr_ + offset);
             offset += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
             J_KV(K(*location_info));
+            J_COMMA();
+          }
+          if (buf_len > pos && extern_header->flags_.has_retry_info_
+              && size_ >= offset + MEM_LOB_EXTERN_RETRYINFO_LEN) {
+            ObMemLobRetryInfo *retry_info = reinterpret_cast<ObMemLobRetryInfo *>(ptr_ + offset);
+            offset += MEM_LOB_EXTERN_RETRYINFO_LEN;
+            J_KV(K(*retry_info));
             J_COMMA();
           }
           if (buf_len > pos) {
@@ -345,6 +360,9 @@ uint32_t ObLobLocatorV2::calc_locator_full_len(const ObMemLobExternFlags &flags,
     }
     if (flags.has_location_info_) {
       loc_len += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
+    }
+    if (flags.has_retry_info_) {
+      loc_len += MEM_LOB_EXTERN_RETRYINFO_LEN;
     }
     loc_len += MEM_LOB_ADDR_LEN; //ToDo:@gehao server address.
     loc_len += rowkey_size;
@@ -425,6 +443,10 @@ int ObLobLocatorV2::fill(ObMemLobType type,
         if (flags.has_location_info_) {
           offset += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
           *extern_len += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
+        }
+        if (flags.has_retry_info_) {
+          offset += MEM_LOB_EXTERN_RETRYINFO_LEN;
+          *extern_len += MEM_LOB_EXTERN_RETRYINFO_LEN;
         }
 
         if ((offset + rowkey_str.length()) && OB_UNLIKELY(offset > size_)) {
@@ -571,7 +593,7 @@ int ObLobLocatorV2::get_disk_locator(ObString &disc_loc_buff) const
     int64_t handle_size = reinterpret_cast<intptr_t>(disk_loc) - reinterpret_cast<intptr_t>(ptr_);
     if (handle_size > size_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid handle size", K(ret), K(size_), K(disk_loc), K(ptr_));
+      LOG_WARN("get invalid handle size", K(ret), K(size_), K(disk_loc), K(ptr_), K(handle_size));
     } else {
       if (disk_loc->in_row_) {
         handle_size = size_ - handle_size;
@@ -749,6 +771,28 @@ int ObLobLocatorV2::get_location_info(ObMemLobLocationInfo *&location_info) cons
   return ret;
 }
 
+int ObLobLocatorV2::get_retry_info(ObMemLobRetryInfo *&retry_info) const
+{
+  int ret =  OB_SUCCESS;
+  ObMemLobExternHeader *extern_header = NULL;
+  if (OB_SUCC(get_extern_header(extern_header))) {
+    char *cur_pos = extern_header->data_ + MEM_LOB_EXTERN_SIZE_LEN;
+    if (extern_header->flags_.has_tx_info_) {
+      cur_pos += MEM_LOB_EXTERN_TXINFO_LEN;
+    }
+    if (extern_header->flags_.has_location_info_) {
+      cur_pos += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
+    }
+    if (extern_header->flags_.has_retry_info_) {
+      retry_info = reinterpret_cast<ObMemLobRetryInfo *>(cur_pos);
+    } else {
+      ret = OB_ERR_NULL_VALUE;
+      COMMON_LOG(WARN, "Lob: does not have retry info", K(this), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLobLocatorV2::get_real_locator_len(int64_t &real_len) const
 {
   int ret = OB_SUCCESS;
@@ -769,6 +813,35 @@ int ObLobLocatorV2::get_real_locator_len(int64_t &real_len) const
     } else {
       real_len += disk_loc->get_handle_size(0);
     }
+  }
+  return ret;
+}
+
+int ObLobLocatorV2::get_chunk_size(int64_t &chunk_size) const
+{
+  int ret = OB_SUCCESS;
+  ObLobCommon *disk_loc = nullptr;
+  if (! has_lob_header_ || size_ == 0 || OB_ISNULL(ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "no locator or is null", K(ret), K(has_lob_header_), K(size_), KP(ptr_));
+  } else if (! is_persist_lob()) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "non-persist_lob should not call this function", K(ret), KPC(this));
+  } else if (is_inrow()) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "inrow-persist_lob should not call this function", K(ret), KPC(this));
+  } else if (OB_FAIL(get_disk_locator(disk_loc))) {
+    COMMON_LOG(WARN, "get disk locator fail", K(ret), KPC(this));
+  } else if(((uintptr_t)disk_loc - (uintptr_t)ptr_) < DISK_LOB_OUTROW_FULL_SIZE) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "size overflow", K(ret), KPC(this), KP(disk_loc), KP(ptr_), "left_size", ((uintptr_t)disk_loc - (uintptr_t)ptr_));
+  } else if (! disk_loc ->is_init_) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "disk lob not init", K(ret), KPC(this), KPC(disk_loc));
+  } else {
+    const ObLobData *lob_data = reinterpret_cast<const ObLobData*>(disk_loc->buffer_);
+    const ObLobDataOutRowCtx *ctx = reinterpret_cast<const ObLobDataOutRowCtx*>(lob_data->buffer_);
+    chunk_size = ctx->get_real_chunk_size();
   }
   return ret;
 }
@@ -883,6 +956,17 @@ int ObLobLocatorV2::set_location_info(const ObMemLobLocationInfo &location_info)
   return ret;
 }
 
+int ObLobLocatorV2::set_retry_info(const ObMemLobRetryInfo &retry_info)
+{
+  validate_has_lob_header(has_lob_header_);
+  int ret = OB_SUCCESS;
+  ObMemLobRetryInfo *retry_info_ptr = NULL;
+  if (OB_SUCC(get_retry_info(retry_info_ptr))) {
+    *retry_info_ptr = retry_info;
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObLobLocatorV2)
 {
   int ret = OB_SUCCESS;
@@ -930,6 +1014,95 @@ OB_DEF_DESERIALIZE(ObLobLocatorV2)
 OB_DEF_SERIALIZE_SIZE(ObLobLocatorV2)
 {
   return size_ + sizeof(size_) + sizeof(has_lob_header_);
+}
+
+ObDocId::ObDocId()
+  : tablet_id_(ObTabletID::INVALID_TABLET_ID),
+    seq_id_(0)
+{
+  static_assert(sizeof(ObDocId) == OB_DOC_ID_COLUMN_BYTE_LENGTH, "size of ObDocId isn't equal to OB_DOC_ID_COLUMN_BYTE_LENGTH");
+}
+
+ObDocId::ObDocId(const uint64_t tablet_id, const uint64_t seq_id)
+  : tablet_id_(tablet_id),
+    seq_id_(seq_id)
+{
+  static_assert(sizeof(ObDocId) == OB_DOC_ID_COLUMN_BYTE_LENGTH, "size of ObDocId isn't equal to OB_DOC_ID_COLUMN_BYTE_LENGTH");
+}
+
+bool ObDocId::operator==(const ObDocId &other) const
+{
+  return tablet_id_ == other.tablet_id_ && seq_id_ == other.seq_id_;
+}
+
+bool ObDocId::operator!=(const ObDocId &other) const
+{
+  return !(operator==(other));
+}
+
+bool ObDocId::operator <(const ObDocId &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret= true;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret = false;
+  } else if (seq_id_ < other.seq_id_) {
+    bool_ret= true;
+  } else if (seq_id_ > other.seq_id_) {
+    bool_ret = false;
+  }
+
+  return bool_ret;
+}
+
+bool ObDocId::operator >(const ObDocId &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret = false;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret= true;
+  } else if (seq_id_ < other.seq_id_) {
+    bool_ret = false;
+  } else if (seq_id_ > other.seq_id_) {
+    bool_ret= true;
+  }
+
+  return bool_ret;
+
+}
+
+void ObDocId::reset()
+{
+  tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+  seq_id_ = 0;
+}
+
+bool ObDocId::is_valid() const
+{
+  return ObTabletID(tablet_id_).is_valid() && seq_id_ > 0;
+}
+
+ObString ObDocId::get_string() const
+{
+  return ObString(OB_DOC_ID_COLUMN_BYTE_LENGTH, reinterpret_cast<const char *>(this));
+}
+
+int ObDocId::from_string(const ObString &doc_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(doc_id.ptr()) || OB_UNLIKELY(doc_id.length() < OB_DOC_ID_COLUMN_BYTE_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid document id", K(ret));
+  } else {
+    const ObDocId *doc_id_ptr = reinterpret_cast<const ObDocId *>(doc_id.ptr());
+    tablet_id_ = doc_id_ptr->tablet_id_;
+    seq_id_ = doc_id_ptr->seq_id_;
+  }
+  return ret;
 }
 
 #define PRINT_META()
@@ -1264,7 +1437,8 @@ int ObObj::deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &p
       this->set_lob_locator(*res);
       pos += src.get_val_len();
     }
-  } else if (ob_is_user_defined_sql_type(src.get_type())) {
+  } else if (ob_is_user_defined_sql_type(src.get_type())
+             || ob_is_collection_sql_type(src.get_type())) {
     ObString src_str = src.get_string();
     if (OB_UNLIKELY(size < (pos + src_str.length()))) {
       ret = OB_BUF_NOT_ENOUGH;
@@ -1293,8 +1467,11 @@ int ObObj::deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &p
 void* ObObj::get_deep_copy_obj_ptr()
 {
   void * ptr = NULL;
-  if (ob_is_string_type(this->get_type()) || ob_is_json(this->get_type())
-      || ob_is_geometry(this->get_type()) || ob_is_user_defined_sql_type(this->get_type())) {
+  if (ob_is_string_type(this->get_type())
+      || ob_is_json(this->get_type())
+      || ob_is_geometry(this->get_type())
+      || ob_is_user_defined_sql_type(this->get_type())
+      || ob_is_collection_sql_type(this->get_type())) {
     // val_len_ == 0 is empty string, and it may point to unexpected address
     // Therefore, reset it to NULL
     if (val_len_ != 0) {
@@ -1722,7 +1899,10 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObJsonType),          // 47, json
   DEF_FUNC_ENTRY(ObGeometryType),      // 48, geometry TODO!!!!!
   DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
-  DEF_FUNC_ENTRY(ObDecimalIntType)     // 50, decimal int
+  DEF_FUNC_ENTRY(ObDecimalIntType),     // 50, decimal int
+  DEF_FUNC_ENTRY(ObCollectionSQLType), // 51, collection
+  DEF_FUNC_ENTRY(ObNullType),           // 52, mysql date
+  DEF_FUNC_ENTRY(ObNullType),           // 53, mysql datetime
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)
@@ -2184,6 +2364,25 @@ int ObObj::convert_string_value_charset(ObCharsetType charset_type, ObIAllocator
   return ret;
 }
 
+int ObObj::get_real_param_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  count = 1;
+  if (ObExtendType == meta_.get_type()) {
+    const ObSqlArrayObj *array_obj = NULL;
+    if (OB_ISNULL(array_obj = reinterpret_cast<const ObSqlArrayObj*>(v_.ext_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(v_.ext_));
+    } else if (array_obj->count_ < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected group_idx", K(ret), K(array_obj->count_));
+    } else {
+      count = array_obj->count_;
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 DEFINE_SERIALIZE(ObObj)
 {
@@ -2227,35 +2426,6 @@ DEFINE_SERIALIZE(ObObjParam)
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(accuracy_);
     OB_UNIS_ENCODE(res_flags_);
-    if (OB_SUCC(ret) && is_ext_sql_array()) {
-      const ObSqlArrayObj *array_obj = reinterpret_cast<const ObSqlArrayObj*>(get_ext());
-      int64_t n = sizeof(ObSqlArrayObj);
-      if (OB_ISNULL(array_obj)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected NULL ptr", K(ret), KP(array_obj));
-      } else if (buf_len - pos < n) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_WARN("serialize buf not enough", K(ret), "remain", buf_len - pos, "needed", n);
-      } else {
-        MEMCPY(buf + pos, array_obj, n);
-        pos += n;
-        if (array_obj->count_ == 0) {
-          /* do nothing */
-        } else if (OB_ISNULL(array_obj->data_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("data is NULL ptr", K(ret), KP(array_obj->data_));
-        } else {
-          n = sizeof(array_obj->data_[0]) * array_obj->count_;
-          if (buf_len - pos < n) {
-            ret = OB_BUF_NOT_ENOUGH;
-            LOG_WARN("serialize buf not enough", K(ret), "remain", buf_len - pos, "needed", n);
-          } else {
-            MEMCPY(buf + pos, static_cast<const void*>(array_obj->data_), n);
-            pos += n;
-          }
-        }
-      }
-    }
   }
   return ret;
 }
@@ -2266,30 +2436,6 @@ DEFINE_DESERIALIZE(ObObjParam)
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE(accuracy_);
     OB_UNIS_DECODE(res_flags_);
-    if (OB_SUCC(ret) && is_ext_sql_array()) {
-      ObSqlArrayObj *array_obj = NULL;
-      int64_t n = sizeof(ObSqlArrayObj);
-      if (data_len - pos < n) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_WARN("deserialize buf not enough", K(ret), "remain", data_len - pos, "needed", n);
-      } else {
-        array_obj = reinterpret_cast<ObSqlArrayObj *>(const_cast<char *>(buf + pos));
-        pos += n;
-      }
-      if (OB_SUCC(ret) && array_obj->count_ > 0) {
-        n = sizeof(ObObjParam) * array_obj->count_;
-        if (data_len - pos < n) {
-          ret = OB_BUF_NOT_ENOUGH;
-          LOG_WARN("deserialize buf not enough", K(ret), "remain", data_len - pos, "needed", n);
-        } else {
-          array_obj->data_ = reinterpret_cast<ObObjParam *>(const_cast<char *>(buf + pos));
-          pos += n;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        set_extend(reinterpret_cast<int64_t>(array_obj), T_EXT_SQL_ARRAY);
-      }
-    }
   }
   return ret;
 }
@@ -2299,18 +2445,6 @@ DEFINE_GET_SERIALIZE_SIZE(ObObjParam)
   int64_t len = ObObj::get_serialize_size();
   OB_UNIS_ADD_LEN(accuracy_);
   OB_UNIS_ADD_LEN(res_flags_);
-  if (is_ext_sql_array()) {
-    len += sizeof(ObSqlArrayObj);
-    const ObSqlArrayObj *array_obj = reinterpret_cast<const ObSqlArrayObj*>(get_ext());
-    if (NULL != array_obj) {
-      len += sizeof(ObSqlArrayObj);
-      if (array_obj->count_ == 0) {
-        /* do nothing */
-      } else if (NULL != array_obj->data_) {
-        len += sizeof(array_obj->data_[0]) * array_obj->count_;
-      }
-    }
-  }
   return len;
 }
 
@@ -2450,4 +2584,92 @@ int64_t ObHexEscapeSqlStr::get_extra_length() const
     }
   }
   return ret_length;
+}
+
+int ObSqlArrayObj::do_real_deserialize(common::ObIAllocator &allocator, char *buf, int64_t data_len,
+                                       ObSqlArrayObj *&array_obj)
+{
+  int ret = OB_SUCCESS;
+  int64_t n = sizeof(ObSqlArrayObj);
+  void *array_buf = allocator.alloc(n);
+  int64_t pos = 0;
+  if (OB_ISNULL(array_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    array_obj = new (array_buf) ObSqlArrayObj();
+    if (OB_FAIL(array_obj->deserialize(allocator, buf, data_len, pos))) {
+      LOG_WARN("failed to deserialize ObSqlArrayObj", K(ret));
+    }
+  }
+  return ret;
+}
+
+DEFINE_SERIALIZE(ObSqlArrayObj)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  OB_UNIS_ENCODE(element_);
+  OB_UNIS_ENCODE_ARRAY(data_, count_);
+  return ret;
+}
+
+int ObSqlArrayObj::deserialize(ObIAllocator &allocator, const char* buf, const int64_t data_len,
+                               int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(element_);
+  OB_UNIS_DECODE(count_);
+  if (OB_SUCC(ret) && count_ > 0) {
+    void *data_buf = allocator.alloc(sizeof(ObObjParam) * count_);
+    if (OB_ISNULL(data_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      data_ = new (data_buf) common::ObObjParam[count_];
+      OB_UNIS_DECODE_ARRAY(data_, count_);
+    }
+  }
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(ObSqlArrayObj)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(element_);
+  OB_UNIS_ADD_LEN_ARRAY(data_, count_);
+  return len;
+}
+int ObObjUDTUtil::ob_udt_obj_value_serialize(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  if (obj.get_meta().is_invalid()) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ret = OBJ_FUNCS[obj.get_meta().get_type()].serialize(obj, buf, buf_len, pos);
+  }
+  return ret;
+}
+
+int ObObjUDTUtil::ob_udt_obj_value_deserialize(ObObj &obj, const char* buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  // set meta before deserialize!
+  if (obj.get_meta().is_invalid()) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ret = OBJ_FUNCS[obj.get_meta().get_type()].deserialize(obj, buf, data_len, pos);
+  }
+  return ret;
+}
+
+int ObObjUDTUtil::ob_udt_obj_value_get_serialize_size(const ObObj &obj, int64_t &value_len)
+{
+  int ret = OB_SUCCESS;
+  if (obj.get_meta().is_invalid()) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    value_len = OBJ_FUNCS[obj.get_meta().get_type()].get_serialize_size(obj);
+  }
+  return ret;
 }

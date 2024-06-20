@@ -51,6 +51,7 @@ public:
   int get_tablet_status(const share::SCN &snapshot,
                         ObTabletCreateDeleteMdsUserData &data,
                         const int64_t timeout = 0) const;
+  int get_latest_ddl_data(ObTabletBindingMdsUserData &data, bool &is_committed) const;
   int get_ddl_data(const share::SCN &snapshot,
                    ObTabletBindingMdsUserData &data,
                    const int64_t timeout = 0) const;
@@ -60,16 +61,24 @@ public:
                       const int64_t timeout = 0) const;
   int fill_virtual_info(ObIArray<mds::MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
   TO_STRING_KV(KP(this), "is_inited", check_is_inited_(), "ls_id", get_tablet_meta_().ls_id_,
-               "tablet_id", get_table_id_(), KP(get_tablet_ponter_()));
+               "tablet_id", get_table_id_(), KP(get_tablet_pointer_()));
   int get_mds_table_rec_log_scn(share::SCN &rec_scn);
   int mds_table_flush(const share::SCN &recycle_scn);
+  // get tablet status from MDS, and check whether state is TRANSFER_IN and redo scn is valid.
+  // @param [in] written : if current tablet status is TRANSFER_IN, set true if redo_scn is valid, otherwise set fasle
+  // @return OB_STATE_NOT_MATCH : tablet status is not TRANSFER_IN.
+  //         OB_EMPTY_RESULT : never has tablet status written.
+  //         OB_LS_OFFLINE : read meet ls offline
+  //         other error...
+  // CAUTIONS: this interface is only for transfer! anyone else shouldn't call this!
+  int check_transfer_in_redo_written(bool &written);
 protected:// implemented by ObTablet
   virtual bool check_is_inited_() const = 0;
   virtual const ObTabletMdsData &get_mds_data_() const = 0;
   virtual const ObTabletMeta &get_tablet_meta_() const = 0;
   virtual int get_mds_table_handle_(mds::MdsTableHandle &handle,
                                     const bool create_if_not_exist) const = 0;
-  virtual ObTabletPointer *get_tablet_ponter_() const = 0;
+  virtual ObTabletPointer *get_tablet_pointer_() const = 0;
   template <typename T>
   int get_mds_data_from_tablet(const common::ObFunction<int(const T&)> &read_op) const;
 

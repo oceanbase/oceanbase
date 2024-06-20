@@ -160,10 +160,12 @@ Query Plan
 =============================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(VIEW2.teacher.name, VIEW2.teacher.subject, cast(cast(cast(VIEW1.T_FUN_SUM(score.score) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL_INT(20,
-       0)), DECIMAL_INT(33, 0)), DECIMAL(33, 0)) / cast(VIEW1.T_FUN_COUNT(score.score) * VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(VIEW2.teacher.name, VIEW2.teacher.subject, cast(cast(cast(VIEW1.T_FUN_SUM(score.score) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL_INT(20,
-       0)), DECIMAL_INT(33, 0)), DECIMAL(33, 0)) / cast(VIEW1.T_FUN_COUNT(score.score) * VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
+  0 - output([INTERNAL_FUNCTION(VIEW2.teacher.name, VIEW2.teacher.subject, cast(cast(cast(cast(VIEW1.T_FUN_SUM(score.score) * cast(VIEW2.T_FUN_COUNT(*),
+       DECIMAL_INT(20, 0)), DECIMAL_INT(75, 0)), DECIMAL_INT(33, 0)), DECIMAL(33, 0)) / cast(cast(VIEW1.T_FUN_COUNT(score.score) * VIEW2.T_FUN_COUNT(*), BIGINT(20,
+       0)), DECIMAL(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(VIEW2.teacher.name, VIEW2.teacher.subject, cast(cast(cast(cast(VIEW1.T_FUN_SUM(score.score) * cast(VIEW2.T_FUN_COUNT(*),
+       DECIMAL_INT(20, 0)), DECIMAL_INT(75, 0)), DECIMAL_INT(33, 0)), DECIMAL(33, 0)) / cast(cast(VIEW1.T_FUN_COUNT(score.score) * VIEW2.T_FUN_COUNT(*), BIGINT(20,
+       0)), DECIMAL(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
       dop=2
   2 - output([VIEW2.T_FUN_COUNT(*)], [VIEW2.teacher.subject], [VIEW1.T_FUN_SUM(score.score)], [VIEW1.T_FUN_COUNT(score.score)], [VIEW2.teacher.name]), filter(nil), rowset=256
       equal_conds([VIEW2.teacher.subject = VIEW1.score.subject]), other_conds(nil)

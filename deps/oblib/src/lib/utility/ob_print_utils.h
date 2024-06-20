@@ -272,8 +272,6 @@ const char *to_cstring<const char *>(const char *const &str);
 template <>
 const char *to_cstring<int64_t>(const int64_t &v);
 
-const char *to_cstring(const int64_t v);
-
 template <typename T>
 const char *to_cstring(T *obj)
 {

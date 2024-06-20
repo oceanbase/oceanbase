@@ -66,15 +66,16 @@ void flush_trace()
         int ret = OB_SUCCESS;
         ObTagCtxBase* tag = span->tags_;
         bool first = true;
+        char tagstr[] = "\"tags\":[";
         INIT_SPAN(span);
         while (OB_SUCC(ret) && OB_NOT_NULL(tag)) {
-          if (pos + 10 >= MAX_TRACE_LOG_SIZE) {
+          if (pos + sizeof(tagstr) + 1 >= MAX_TRACE_LOG_SIZE) {
             ret = OB_BUF_NOT_ENOUGH;
           } else {
             buf[pos++] = ',';
             if (first) {
-              strcpy(buf + pos, "\"tags\":[");
-              pos += 8;
+              strncpy(buf + pos, tagstr, MAX_TRACE_LOG_SIZE - pos);
+              pos += sizeof(tagstr) - 1;
               first = false;
             }
             ret = tag->tostring(buf, MAX_TRACE_LOG_SIZE, pos);
@@ -507,6 +508,7 @@ int ObTrace::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
 int ObTrace::deserialize(const char* buf, const int64_t buf_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
+  reset();
   if (OB_FAIL(trace_id_.deserialize(buf, buf_len, pos))) {
     // LOG_WARN("deserialize failed", K(ret), K(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(root_span_id_.deserialize(buf, buf_len, pos))) {

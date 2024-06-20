@@ -1,0 +1,13 @@
+#!/bin/bash
+echo "execute pre uninstall script"
+prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
+
+echo remove oceanbase service
+systemctl stop oceanbase
+systemctl disable oceanbase
+/bin/bash $prefix/profile/oceanbase-service.sh destroy
+rm -f /etc/systemd/system/oceanbase.service /etc/oceanbase.cnf
+systemctl daemon-reload
+
+# telemetry
+/bin/bash $prefix/profile/telemetry.sh $1 >/dev/null 2>&1

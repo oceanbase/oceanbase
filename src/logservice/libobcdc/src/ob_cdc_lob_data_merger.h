@@ -37,7 +37,7 @@ public:
   virtual void mark_stop_flag() = 0;
 
   virtual int push(ObLobDataOutRowCtxList &task, volatile bool &stop_flag) = 0;
-  virtual void get_task_count(int64_t &log_entry_task_count) const = 0;
+  virtual void get_task_count(int64_t &lob_data_list_task_count) const = 0;
   virtual void print_stat_info() = 0;
 };
 
@@ -81,6 +81,11 @@ private:
       ObLobDataOutRowCtxList &task,
       ObLobDataGetCtx &lob_data_get_ctx,
       volatile bool &stop_flag);
+  int check_empty_outrow_lob_col_(
+      ObLobDataGetCtx &lob_data_get_ctx,
+      uint32_t seq_no_cnt,
+      uint32_t del_seq_no_cnt,
+      bool &is_update_outrow_lob_from_empty_to_empty);
   int get_lob_col_fra_ctx_list_(
       const bool is_new_col,
       const transaction::ObTxSEQ &seq_no_start,
@@ -95,7 +100,7 @@ private:
       LobColumnFragmentCtx &task,
       const int64_t thread_index,
       volatile bool &stop_flag);
-  int handle_when_all_lob_col_fragment_progress_done_(
+  int handle_when_outrow_log_fragment_progress_done_(
       LobColumnFragmentCtx &task,
       ObLobDataGetCtx &lob_data_get_ctx,
       ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
@@ -103,6 +108,25 @@ private:
   int try_to_push_task_into_formatter_(
       ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
       volatile bool &stop_flag);
+  int merge_fragments_(
+      LobColumnFragmentCtx &task,
+      ObLobDataGetCtx &lob_data_get_ctx,
+      ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
+      ObString &data);
+  int after_fragment_progress_done_(
+      ObLobDataGetCtx &lob_data_get_ctx,
+      ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
+      volatile bool &stop_flag);
+  // ext info log handle
+  int handle_ext_info_log_(
+      ObLobDataGetCtx &lob_data_get_ctx,
+      ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
+      const ObString &src_data,
+      ObString &format_data);
+  int handle_json_diff_ext_info_log_(
+      ObIAllocator &allocator,
+      const char *buf, uint64_t len, int64_t pos,
+      ObString &format_data);
 
   bool is_in_stop_status(volatile bool stop_flag) const { return stop_flag || LobDataMergerThread::is_stoped(); }
   // TODO

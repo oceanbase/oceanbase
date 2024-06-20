@@ -332,8 +332,10 @@ void FetchLogEngine::handle_drop(void *task)
   int ret = OB_SUCCESS;
   IPalfHandleImpl *palf_handle_impl = NULL;
   if (!is_inited_) {
+    ret = OB_NOT_INIT;
     PALF_LOG(WARN, "FetchLogEngine not init");
   } else if (OB_ISNULL(task)) {
+    ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "invalid argument", KP(task));
   } else {
     FetchLogTask *fetch_log_task = static_cast<FetchLogTask *>(task);

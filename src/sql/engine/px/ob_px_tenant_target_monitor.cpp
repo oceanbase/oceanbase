@@ -110,7 +110,8 @@ int ObPxTenantTargetMonitor::refresh_statistics(bool need_refresh_all)
         LOG_WARN("reset statistics failed", K(ret));
       }
     }
-    if (OB_FAIL(query_statistics(leader))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(query_statistics(leader))) {
       LOG_WARN("query statistics failed", K(ret));
     }
   } else {
@@ -265,7 +266,8 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
         }
       }
     }
-    if (OB_FAIL(rpc_proxy_
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(rpc_proxy_
                 .to(leader)
                 .by(tenant_id_)
                 .timeout(OB_TARGET_MONITOR_RPC_TIMEOUT)
@@ -436,11 +438,13 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
     }
     if (OB_SUCC(ret)) {
       if (is_first_query || is_target_enough) {
+        int64_t total_admit_count = 0;
         for (hash::ObHashMap<ObAddr, int64_t>::iterator it = worker_map.begin();
             OB_SUCC(ret) && it != worker_map.end(); it++) {
           it->second = std::min(it->second, target);
           ObAddr &server = it->first;
           int64_t acquired_cnt = it->second;
+          total_admit_count += acquired_cnt;
           auto apply_local_target = [=](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> void {
             entry.second.update_local_used(acquired_cnt);
             if (is_leader()) {
@@ -456,7 +460,7 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
                                               K(parallel_servers_target_));
           }
         }
-        admit_count = std::min(req_cnt, target);
+        admit_count = total_admit_count;
         admit_version = version;
         parallel_session_count_++;
       } else {

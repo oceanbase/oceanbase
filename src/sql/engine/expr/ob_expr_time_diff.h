@@ -36,6 +36,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
   static int get_diff_value(const common::ObObj &obj1,

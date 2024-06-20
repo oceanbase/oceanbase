@@ -274,6 +274,9 @@ private:
   int fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, const PlanCacheMode mode,
                              ObCollationType collation_type, const ObString &type_name,
                              ObStmt &basic_stmt, ObField &field);
+  static int get_composite_type_field_name(share::schema::ObSchemaGetterGuard &schema_guard,
+                                           int64_t type_id,
+                                           ObSqlString &name_string);
   int pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
                       ObPlanCacheCtx &pc_ctx,
                       ObResultSet &result,
@@ -493,7 +496,7 @@ private:
   int get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_sql);
   static int add_param_to_param_store(const ObObjParam &param,
                                       ParamStore &param_store);
-
+  void rollback_implicit_trans_when_fail(ObResultSet &result, int &ret);
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;
 private:

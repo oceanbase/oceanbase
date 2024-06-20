@@ -67,6 +67,7 @@ void ObTableHandleV2::reset()
       }
       table_ = nullptr;
       t3m_ = nullptr;
+      table_type_ = ObITable::TableType::MAX_TABLE_TYPE;
     }
   }
 }
@@ -107,9 +108,9 @@ public:
 
   bool ready_for_flush() { return ready_for_flush_; }
 
-  bool is_frozen_checkpoint() const { return is_frozen_; }
+  bool is_frozen_checkpoint() { return is_frozen_; }
 
-  bool is_active_checkpoint() const { return !is_frozen_; }
+  bool is_active_checkpoint() { return !is_frozen_; }
 
   ObTabletID get_tablet_id() const { return ObTabletID(111111111111); }
 
@@ -218,7 +219,7 @@ TEST_F(TestDataCheckpoint, dlink_base)
   // for exist
   handle.reset();
   //ASSERT_EQ(OB_SUCCESS, ls->disable_palf(true));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 TEST_F(TestDataCheckpoint, ls_freeze)
@@ -279,7 +280,7 @@ TEST_F(TestDataCheckpoint, ls_freeze)
   // for exist
   handle.reset();
   //ASSERT_EQ(OB_SUCCESS, ls->disable_palf(true));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 }

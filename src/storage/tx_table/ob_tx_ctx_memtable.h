@@ -37,7 +37,7 @@ namespace storage
 //
 // [1]:
 // [2]:
-class ObTxCtxMemtable : public memtable::ObIMemtable, public checkpoint::ObCommonCheckpoint
+class ObTxCtxMemtable : public ObIMemtable, public checkpoint::ObCommonCheckpoint
 {
 public:
   ObTxCtxMemtable();
@@ -47,8 +47,8 @@ public:
 
   void reset();
   int on_memtable_flushed() override;
-  bool is_frozen_memtable() const override;
-  bool is_active_memtable() const override;
+  bool is_frozen_memtable() override;
+  bool is_active_memtable() override;
 
   // ================ INHERITED FROM ObIMemtable ===============
   // We need to inherient the memtable method for merge process to iterate the
@@ -66,7 +66,7 @@ public:
 
   // ================ INHERITED FROM ObCommonCheckpoint ===============
   virtual share::SCN get_rec_scn();
-  virtual int flush(share::SCN recycle_scn, bool need_freeze = true);
+  virtual int flush(share::SCN recycle_scn, const int64_t trace_id, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const override;
   virtual bool is_flushing() const override;

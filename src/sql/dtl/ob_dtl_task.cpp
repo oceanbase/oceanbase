@@ -27,7 +27,7 @@ OB_SERIALIZE_MEMBER(ObDtlChSet, exec_addr_, ch_info_set_);
 OB_SERIALIZE_MEMBER(ObDtlTask, jobid_, taskid_, cis_, chans_cnt_);
 OB_SERIALIZE_MEMBER(ObDtlExecServer, total_task_cnt_, exec_addrs_, prefix_task_counts_);
 OB_SERIALIZE_MEMBER(ObDtlChTotalInfo, start_channel_id_, transmit_exec_server_,
-                    receive_exec_server_, channel_count_, tenant_id_);
+                    receive_exec_server_, channel_count_, tenant_id_, is_local_shuffle_);
 
 
 int ObDtlChSet::add_channel_info(const ObDtlChannelInfo &info)
@@ -98,6 +98,7 @@ int ObDtlChTotalInfo::assign(const ObDtlChTotalInfo &other)
   tenant_id_ = other.tenant_id_;
   OZ(transmit_exec_server_.assign(other.transmit_exec_server_));
   OZ(receive_exec_server_.assign(other.receive_exec_server_));
+  is_local_shuffle_ = other.is_local_shuffle_;
   return ret;
 }
 

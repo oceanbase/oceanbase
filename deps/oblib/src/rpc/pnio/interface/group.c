@@ -49,6 +49,7 @@ typedef struct pn_t
 static int next_pn_listen_idx;
 static pn_listen_t pn_listen_array[MAX_PN_LISTEN];
 static pn_grp_t* pn_grp_array[MAX_PN_GRP];
+static int pn_has_listened = 0;
 int64_t pnio_keepalive_timeout;
 PN_API int64_t pn_set_keepalive_timeout(int64_t user_timeout) {
   if (user_timeout >= 0) {
@@ -88,19 +89,27 @@ static void* pn_thread_func(void* arg)
 }
 
 static int pnl_dispatch_accept(int fd, const void* b, int sz);
+extern bool is_support_ipv6_c();
 PN_API int pn_listen(int port, serve_cb_t cb)
 {
   int idx = FAA(&next_pn_listen_idx, 1);
   pn_listen_t* pnl = locate_listen(idx);
   addr_t addr;
+  addr_t addr6;
   addr_init(&addr, "0.0.0.0", port);
-
-  if (listen_create(addr) <= 0) {
-    idx = -1;
-  } else {
-    pnl->serve_cb = cb;
+  if (is_support_ipv6_c()) {
+    addr_init(&addr6, "::", port);
   }
 
+  if (ATOMIC_BCAS(&pn_has_listened, 0, 1)) {
+    if (listen_create(addr) <= 0 ||
+        (is_support_ipv6_c() && listen_create(addr6) <= 0)) {
+      idx = -1;
+      ATOMIC_STORE(&pn_has_listened, 0);
+    } else {
+      pnl->serve_cb = cb;
+    }
+  }
   return idx;
 }
 
@@ -246,8 +255,32 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
   int err = 0;
   int count = 0;
   pn_grp_t* pn_grp = ensure_grp(gid);
-  ef(pn_grp == NULL);
+  if (pn_grp == NULL) {
+    err = -ENOMEM;
+    rk_error("ensure group failed, gid=%d", gid);
+  } else if (thread_count > MAX_PN_PER_GRP) {
+    err = -EINVAL;
+    rk_error("thread count is too large, thread_count=%d, MAX_PN_PER_GRP=%d", thread_count, MAX_PN_PER_GRP);
+  }
   count = pn_grp->count;
+  // restart stoped threads
+  for (int i = 0; 0 == err && i < count; i++) {
+    pn_t* pn = pn_grp->pn_array[i];
+    if (!pn->is_stop_) {
+      // pn thread is running, do nothing
+    } else if (pn->pd) {
+      err = PNIO_ERROR;
+      rk_error("pn is stopped but the thread is still running, gid=%d, i=%d", gid, i)
+    } else {
+      pn->is_stop_ = false;
+      if (0 != (err = ob_pthread_create(&pn->pd, pn_thread_func, pn))) {
+        pn->is_stop_ = true;
+        rk_error("pthread_create failed, gid=%d, i=%d", gid, i);
+      } else {
+        rk_info("pn pthread created, gid=%d, i=%d", gid, i);
+      }
+    }
+  }
   while(0 == err && count < thread_count) {
     pn_t* pn = pn_create(listen_id, gid, count);
     if (NULL == pn) {
@@ -255,14 +288,15 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
     } else if (0 != (err = ob_pthread_create(&pn->pd, pn_thread_func, pn))) {
       pn_destroy(pn);
     } else {
-      pn->has_stopped_ = false;
       pn_grp->pn_array[count++] = pn;
     }
   }
-  pn_grp->count = count;
-  return pn_grp->count;
-  el();
-  return -1;
+  int ret = -1;
+  if (0 == err) {
+    pn_grp->count = count;
+    ret = pn_grp->count;
+  }
+  return ret;
 }
 
 typedef struct pn_pktc_cb_t
@@ -277,6 +311,7 @@ typedef struct pn_client_req_t
   pktc_req_t req;
   easy_head_t head;
 } pn_client_req_t;
+
 
 typedef struct pn_client_slice_t
 {
@@ -302,13 +337,19 @@ static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
   if (req) {
     req->resp_cb = NULL;
   }
+  if (cb->sk) {
+    cb->sk->sk_diag_info.doing_cnt --;
+    cb->sk->sk_diag_info.done_cnt ++;
+  }
   PNIO_DELAY_WARN(STAT_TIME_GUARD(eloop_client_cb_count, eloop_client_cb_time));
   pn_cb->client_cb(pn_cb->arg, cb->errcode, resp, sz);
   cfifo_free(pn_cb);
 }
 
-static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, const char* req, int64_t req_sz, int16_t categ_id, int64_t expire_us, client_cb_t client_cb, void* arg)
+static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, const pn_pkt_t* pkt)
 {
+  const char* req = pkt->buf;
+  const int64_t req_sz = pkt->sz;
   pn_client_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req) + req_sz);
   if (unlikely(NULL == pn_req)) {
     return NULL;
@@ -320,19 +361,39 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
   }
   pktc_cb_t* cb = &pn_cb->cb;
   pktc_req_t* r = &pn_req->req;
-  pn_cb->client_cb = client_cb;
-  pn_cb->arg = arg;
+  pn_cb->client_cb = pkt->cb;
+  pn_cb->arg = pkt->arg;
   cb->id = pkt_id;
-  cb->expire_us = expire_us;
+  cb->expire_us = pkt->expire_us;
   cb->resp_cb = pn_pktc_resp_cb;
   cb->errcode = PNIO_OK;
   cb->req = r;
+  cb->sk = NULL;
+  r->pkt_type = PN_NORMAL_PKT;
   r->flush_cb = pn_pktc_flush_cb;
   r->resp_cb = cb;
   r->dest = dest;
-  r->categ_id = categ_id;
+  r->categ_id = pkt->categ_id;
+  r->sk = NULL;
   dlink_init(&r->link);
   eh_copy_msg(&r->msg, cb->id, req, req_sz);
+  return r;
+}
+
+static pktc_req_t* pn_create_cmd_req(pn_t* pn, int64_t cmd, uint64_t pkt_id)
+{
+  pktc_req_t* r = NULL;
+  pn_client_cmd_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req));
+  if (likely(pn_req)) {
+    memset(pn_req, 0, sizeof(*pn_req));
+    r = &pn_req->req;
+    r->pkt_type = PN_CMD_PKT;
+    r->flush_cb = NULL;
+    r->resp_cb = NULL;
+    pn_req->cmd = cmd;
+    pn_req->arg = pkt_id;
+    eh_copy_msg(&r->msg, pkt_id, NULL, 0);
+  }
   return r;
 }
 
@@ -348,28 +409,37 @@ static pn_t* get_pn_for_send(pn_grp_t* pgrp, int tid)
   return pgrp->pn_array[tid % pgrp->count];
 }
 
-PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int64_t sz, int16_t categ_id, int64_t expire_us, client_cb_t cb, void* arg)
+extern bool is_valid_sockaddr_c(struct sockaddr_storage *sock_addr);
+PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret)
 {
   int err = 0;
+  const char* buf = pkt->buf;
+  const int64_t sz = pkt->sz;
+  const int16_t categ_id = pkt->categ_id;
+  const int64_t expire_us = pkt->expire_us;
+  const void* arg = pkt->arg;
+
   pn_grp_t* pgrp = locate_grp(gtid>>32);
   pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
-  addr_t dest = {.ip=addr->sin_addr.s_addr, .port=htons(addr->sin_port), .tid=0};
+  addr_t dest;
+  sockaddr_to_addr(sock_addr, &dest);
   uint32_t pkt_id = gen_pkt_id();
-  if (addr->sin_addr.s_addr == 0 || htons(addr->sin_port) == 0) {
+  if (!is_valid_sockaddr_c(sock_addr)) {
     err = -EINVAL;
-    rk_warn("invalid sin_addr: %x:%d", addr->sin_addr.s_addr, addr->sin_port);
+    rk_warn("invalid sin_addr");
   } else if (expire_us < 0) {
     err = -EINVAL;
     rk_error("invalid rpc timeout: %ld, it might be that the up-layer rpc timeout is too large, categ_id=%d", expire_us, categ_id);
   } else if (LOAD(&pn->is_stop_)) {
     err = PNIO_STOPPED;
   } else {
-    pktc_req_t* r = pn_create_pktc_req(pn, pkt_id, dest, buf, sz, categ_id, expire_us, cb, arg);
+    pktc_req_t* r = pn_create_pktc_req(pn, pkt_id, dest, pkt);
     if (NULL == r) {
       err = ENOMEM;
     } else {
       if (NULL != arg) {
         *((void**)arg) = r;
+        *pkt_id_ret = pkt_id;
       }
       err = pktc_post(&pn->pktc, r);
     }
@@ -395,10 +465,9 @@ PN_API void pn_wait(uint64_t gid)
   if (pgrp != NULL) {
     for (int tid = 0; tid < pgrp->count; tid++) {
       pn_t *pn = get_pn_for_send(pgrp, tid);
-      if (!pn->has_stopped_) {
+      if (NULL != pn->pd) {
         ob_pthread_join(pn->pd);
         pn->pd = NULL;
-        pn->has_stopped_ = true;
       }
     }
   }
@@ -533,10 +602,7 @@ PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr) {
       err = -EINVAL;
       rk_warn("idm_get sock failed, sock_id=%lx", ctx->sock_id);
     } else {
-      struct sockaddr_in* sin = (typeof(sin))addr;
-      sin->sin_family = AF_INET;
-      sin->sin_addr.s_addr = sock->peer.ip;
-      sin->sin_port = htons(sock->peer.port);
+      make_sockaddr(addr, sock->peer);
     }
   }
   return err;
@@ -574,6 +640,24 @@ PN_API uint64_t pn_get_rxbytes(int grp_id) {
   return bytes;
 }
 
+PN_API int pn_terminate_pkt(uint64_t gtid, uint32_t pkt_id) {
+  int err = 0;
+  pn_grp_t* pgrp = locate_grp(gtid>>32);
+  if (NULL == pgrp) {
+    err = EINVAL;
+  } else {
+    pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
+    pktc_req_t* r = pn_create_cmd_req(pn, PN_CMD_TERMINATE_PKT, pkt_id);
+    if (NULL == r) {
+      err = ENOMEM;
+      rk_warn("create cmd req failed, gtid=0x%lx, pkt_id=%u", gtid, pkt_id);
+    } else {
+      err = pktc_post(&pn->pktc, r);
+    }
+  }
+  return err;
+}
+
 int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid)
 {
   int ret = 0;
@@ -587,4 +671,65 @@ int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid)
     ret = dispatch_fd_to(fd, group_id, thread_idx);
   }
   return ret;
+}
+
+PN_API int pn_get_fd(uint64_t req_id)
+{
+  int fd = -1;
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  if (unlikely(NULL == ctx)) {
+    rk_warn("invalid arguments, req_id=%p", ctx);
+  } else {
+    pkts_t* pkts = &ctx->pn->pkts;
+    pkts_sk_t* sock = (typeof(sock))idm_get(&pkts->sk_map, ctx->sock_id);
+    fd = sock->fd;
+  }
+  return fd;
+}
+
+PN_API int64_t pn_get_pkt_id(uint64_t req_id)
+{
+  int64_t pkt_id = -1;
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  if (unlikely(NULL == ctx)) {
+    rk_warn("invalid arguments, req_id=%p", ctx);
+  } else {
+    pkt_id = ctx->pkt_id;
+  }
+  return pkt_id;
+}
+
+void pn_print_diag_info(pn_comm_t* pn_comm) {
+  pn_t* pn = (pn_t*)pn_comm;
+  int64_t client_cnt = 0;
+  int64_t server_cnt = 0;
+  // print socket diag info
+  dlink_for(&pn->pktc.sk_list, p) {
+    pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
+    rk_info("client:%p_%s_%s_%d_%ld_%d, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
+              s, T2S(addr, s->sk_diag_info.local_addr), T2S(addr, s->dest), s->fd, s->sk_diag_info.establish_time, s->conn_ok,
+              s->wq.cnt, s->wq.sz,
+              s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
+              s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
+              s->sk_diag_info.doing_cnt, s->sk_diag_info.done_cnt,
+              s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time);
+    client_cnt++;
+  }
+  if (pn->pkts.sk_list.next != NULL) {
+    dlink_for(&pn->pkts.sk_list, p) {
+      pkts_sk_t* s = structof(p, pkts_sk_t, list_link);
+      rk_info("server:%p_%s_%d_%ld, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
+                s, T2S(addr, s->peer), s->fd, s->sk_diag_info.establish_time,
+                s->wq.cnt, s->wq.sz,
+                s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
+                s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
+                s->sk_diag_info.doing_cnt, s->sk_diag_info.done_cnt,
+                s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time);
+      server_cnt++;
+    }
+  }
+  // print pnio diag info
+  rk_info("client_send:%lu/%lu, client_queue_time=%lu, cnt=%ld, server_send:%lu/%lu, server_queue_time=%lu, cnt=%ld",
+            pn->pktc.diag_info.send_cnt, pn->pktc.diag_info.send_size, pn->pktc.diag_info.sc_queue_time, client_cnt,
+            pn->pkts.diag_info.send_cnt, pn->pkts.diag_info.send_size, pn->pkts.diag_info.sc_queue_time, server_cnt);
 }

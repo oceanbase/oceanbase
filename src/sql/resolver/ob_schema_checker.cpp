@@ -29,6 +29,9 @@
 #include "common/ob_smart_call.h"
 #include "share/schema/ob_sys_variable_mgr.h" // ObSimpleSysVariableSchema
 #include "sql/resolver/ob_stmt_resolver.h"
+#include "pl/ob_pl_stmt.h"
+#include "sql/privilege_check/ob_privilege_check.h"
+#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -291,7 +294,8 @@ int ObSchemaChecker::check_table_or_index_exists(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const ObString &table_name,
-    const bool is_hidden,
+    const bool with_hidden_flag,
+    const bool is_built_in_index,
     bool &is_exist)
 {
   int ret = OB_SUCCESS;
@@ -304,13 +308,13 @@ int ObSchemaChecker::check_table_or_index_exists(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(table_name), K(ret));
   } else if (OB_FAIL(check_table_exists(tenant_id, database_id, table_name,
-                                        is_index_table, is_hidden, is_exist))) {
+                                        is_index_table, with_hidden_flag, is_exist))) {
     LOG_WARN("check table exist failed", K(tenant_id), K(database_id), K(table_name), K(ret));
   } else if(!is_exist) {
     is_index_table = true;
     if (OB_FAIL(check_table_exists(tenant_id, database_id, table_name,
-                                   is_index_table, is_hidden, is_exist))) {
-      LOG_WARN("check index exist failed", K(tenant_id), K(database_id), K(table_name), K(ret));
+                                   is_index_table, with_hidden_flag, is_exist, is_built_in_index))) {
+      LOG_WARN("check index exist failed", K(tenant_id), K(database_id), K(table_name), K(ret), K(is_built_in_index));
     }
   }
   return ret;
@@ -320,8 +324,9 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
                                         const uint64_t database_id,
                                         const ObString &table_name,
                                         const bool is_index_table,
-                                        const bool is_hidden,
-                                        bool &is_exist)
+                                        const bool with_hidden_flag,
+                                        bool &is_exist,
+                                        const bool is_built_in_index)
 {
   int ret = OB_SUCCESS;
 
@@ -335,9 +340,9 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(table_name), K(ret));
   } else {
-    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_id, table_name,
-                                          is_index_table, is_hidden ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id))) {
-
+    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_id, table_name, is_index_table,
+            with_hidden_flag ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
+            table_id, is_built_in_index))) {
       LOG_WARN("get table id failed", K(ret), K(tenant_id), K(database_id),
                K(table_name), K(is_index_table));
     } else {
@@ -371,8 +376,9 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
                                         const ObString &database_name,
                                         const ObString &table_name,
                                         const bool is_index_table,
-                                        const bool is_hidden,
-                                        bool &is_exist)
+                                        const bool with_hidden_flag,
+                                        bool &is_exist,
+                                        const bool is_built_in_index)
 {
   int ret = OB_SUCCESS;
 
@@ -385,8 +391,9 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_name), K(table_name), K(ret));
   } else {
-    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_name, table_name,
-                                          is_index_table, is_hidden ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id))) {
+    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_name, table_name, is_index_table,
+            with_hidden_flag ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
+            table_id, is_built_in_index))) {
       LOG_WARN("fail to check table exist", K(tenant_id), K(database_name), K(table_name),
                K(is_index_table), K(ret));
     } else {
@@ -568,9 +575,12 @@ int ObSchemaChecker::get_user_info(const uint64_t tenant_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || user_name.empty())) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(user_name), K(ret));
+  } else if (OB_UNLIKELY(user_name.empty())) {
+    ret = OB_USER_NOT_EXIST;
+    LOG_WARN("user is not exist", K(tenant_id), K(user_name), K(host_name), K(ret));
   } else if (OB_FAIL(schema_mgr_->get_user_id(tenant_id, user_name, host_name, user_id))) {
     LOG_WARN("get user id failed", K(tenant_id), K(user_name), K(host_name), K(ret));
   } else if (OB_FAIL(get_user_info(tenant_id, user_id, user_info))) {
@@ -753,6 +763,9 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &
              && OB_INVALID_ID != schema_mgr_->get_session_id()) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
+  } else if (table->is_materialized_view() && !(table->mv_available())) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
   } else {
     table_schema = table;
   }
@@ -765,8 +778,9 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
                                       const ObString &table_name,
                                       const bool is_index_table,
                                       const bool cte_table_fisrt,
-                                      const bool is_hidden,
-                                      const ObTableSchema *&table_schema)
+                                      const bool with_hidden_flag,
+                                      const ObTableSchema *&table_schema,
+                                      const bool is_built_in_index/*= false*/)
 {
   int ret = OB_SUCCESS;
   table_schema = NULL;
@@ -781,9 +795,9 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
     LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(table_name), K(ret));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(schema_mgr_->get_table_schema(tenant_id, database_id, table_name,
-        is_index_table, table, is_hidden))) {
+        is_index_table, table, with_hidden_flag, is_built_in_index))) {
     LOG_WARN("get table schema failed", K(tenant_id), K(database_id), K(table_name),
-             K(is_index_table), K(ret));
+             K(with_hidden_flag), K(is_built_in_index), K(is_index_table), K(ret));
   } else {
     // 也有可能是临时cte递归表schema与已有表重名，
     // 这个时候必须由cte递归表schema优先(same with oracle)
@@ -951,7 +965,8 @@ int ObSchemaChecker::get_can_write_index_array(const uint64_t tenant_id,
                                                uint64_t table_id,
                                                uint64_t *index_tid_array,
                                                int64_t &size,
-                                               bool only_global) const
+                                               bool only_global,
+                                               bool with_mlog) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -960,7 +975,7 @@ int ObSchemaChecker::get_can_write_index_array(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id || size <= 0) || OB_ISNULL(index_tid_array)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(table_id), K(size), K(index_tid_array), K(ret));
-  } else if (OB_FAIL(schema_mgr_->get_can_write_index_array(tenant_id, table_id, index_tid_array, size, only_global))) {
+  } else if (OB_FAIL(schema_mgr_->get_can_write_index_array(tenant_id, table_id, index_tid_array, size, only_global, with_mlog))) {
     LOG_WARN("failed to get_can_write_index_array", K(tenant_id), K(table_id), K(ret));
   } else {}
   return ret;
@@ -1211,10 +1226,9 @@ int ObSchemaChecker::get_sys_udt_id(const ObString &udt_name,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K_(is_inited));
-  } else if (lib::is_oracle_mode() && udt_name.case_compare("xmltype") == 0) {
-    if (OB_FAIL(schema_mgr_->get_udt_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, -1, udt_name, udt_id))) {
-      LOG_WARN("get udt info failed", K(ret));
-    }
+  } else if (lib::is_oracle_mode() &&
+             OB_FAIL(schema_mgr_->get_udt_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, -1, udt_name, udt_id))) {
+    LOG_WARN("get udt info failed", K(ret));
   }
   return ret;
 }
@@ -1444,7 +1458,7 @@ int ObSchemaChecker::get_trigger_info(const uint64_t tenant_id,
     LOG_WARN("schema checker is not inited", K_(is_inited));
   } else if (OB_FAIL(get_database_id(tenant_id, database_name, db_id))) {
     LOG_WARN("get database id failed", K(ret), K(tenant_id), K(database_name), K(tg_name));
-  } else if (schema_mgr_->get_trigger_info(tenant_id, db_id, tg_name, tg_info)) {
+  } else if (OB_FAIL(schema_mgr_->get_trigger_info(tenant_id, db_id, tg_name, tg_info))) {
     LOG_WARN("get trigger info failed", K(ret), K(tenant_id), K(database_name), K(tg_name));
   }
   return ret;
@@ -2394,10 +2408,12 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
 int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t tenant_id,
                                      uint64_t database_id,
                                      const common::ObString &object_name,
-                                     bool &exist)
+                                     bool &exist,
+                                     bool &is_private_syn)
 {
   int ret = OB_SUCCESS;
   exist = false;
+  is_private_syn = false;
   common::ObString database_name;
   const ObDatabaseSchema  *db_schema = NULL;
   const share::schema::ObTableSchema *table_schema = NULL;
@@ -2477,6 +2493,20 @@ int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t te
         }
       } else {
         exist = true;
+      }
+    }
+    //check synonym
+    if (OB_TABLE_NOT_EXIST == ret) {
+      ObString obj_db_name;
+      ObString obj_name;
+      uint64_t synonym_id = OB_INVALID_ID;
+      uint64_t database_id = OB_INVALID_ID;
+      ret = OB_SUCCESS;
+      if (OB_FAIL(get_syn_info(tenant_id, database_name, object_name, obj_db_name,
+                               obj_name, synonym_id, database_id, exist))) {
+        ret = OB_TABLE_NOT_EXIST;
+      } else {
+        is_private_syn = true;
       }
     }
   }
@@ -2728,9 +2758,9 @@ int ObSchemaChecker::check_ora_grant_obj_priv(
     const uint64_t obj_id,
     const uint64_t obj_type,
     const share::ObRawObjPrivArray &table_priv_array,
-    const ObSEArray<uint64_t, 4> &ins_col_ids,
-    const ObSEArray<uint64_t, 4> &upd_col_ids,
-    const ObSEArray<uint64_t, 4> &ref_col_ids,
+    const ObIArray<uint64_t> &ins_col_ids,
+    const ObIArray<uint64_t> &upd_col_ids,
+    const ObIArray<uint64_t> &ref_col_ids,
     uint64_t &grantor_id_out,
     const ObIArray<uint64_t> &role_id_array)
 {
@@ -2855,6 +2885,18 @@ int ObSchemaChecker::check_access_to_obj(
               K(tenant_id), K(user_id), K(stmt_type), K(role_id_array));
             break;
           }
+          case stmt::T_CREATE_MLOG: {
+            OZ (ObOraSysChecker::check_access_to_mlog_base_table(
+                *schema_mgr_,
+                tenant_id,
+                user_id,
+                obj_id,
+                database_name,
+                role_id_array,
+                accessible),
+              K(tenant_id), K(user_id), K(stmt_type), K(role_id_array));
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexcepted stmt_type", K(ret), K(stmt_type));
@@ -2973,6 +3015,164 @@ bool ObSchemaChecker::is_ora_priv_check()
     return false;
 }
 
+int ObSchemaChecker::flatten_udt_attributes(
+    const uint64_t tenant_id,
+    const uint64_t udt_id,
+    ObIAllocator &allocator,
+    ObString &qualified_name,
+    int64_t &schema_version,
+    ObIArray<ObString> &udt_qualified_names)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObUDTTypeInfo *udt_info = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K_(is_inited));
+  } else if (OB_FAIL(schema_mgr_->get_udt_info(tenant_id, udt_id, udt_info))) {
+    LOG_WARN("get udt info failed", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(udt_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("udt info is null.", K(ret), K(udt_id));
+  } else if (OB_FAIL(construct_udt_qualified_name(*udt_info, allocator, tenant_id, qualified_name, udt_qualified_names))) {
+    LOG_WARN("failed to construct udt qualified name.", K(ret), K(udt_id));
+  } else {
+    schema_version = udt_info->get_schema_version();
+  }
+  return ret;
+}
+
+int ObSchemaChecker::construct_udt_qualified_name(const ObUDTTypeInfo &udt_info, ObIAllocator &allocator,
+                                                  const uint64_t tenant_id,
+                                                  ObString &qualified_name,
+                                                  ObIArray<ObString> &udt_qualified_names)
+{
+  int ret = OB_SUCCESS;
+  bool is_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recusive", K(ret));
+  }
+  for (int i = 0; i < udt_info.get_attributes() && OB_SUCC(ret); i++) {
+    const ObUDTTypeAttr *attr = udt_info.get_attrs().at(i);
+    const char *curr_content = qualified_name.ptr() + qualified_name.length();
+    if (OB_ISNULL(attr)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument.", K(ret));
+    } else if ((i + 1) != attr->get_attribute()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("attribute sequence is wrong.", K(ret), K(udt_info.get_type_id()), K(i), K(attr->get_attribute()));
+    } else if (qualified_name.write(".", 1) == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to write qualified name", K(ret), K(udt_info.get_type_id()));
+    } else if (qualified_name.write(attr->get_name().ptr(), attr->get_name().length()) == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to write qualified name", K(ret), K(udt_info.get_type_id()), K(attr->get_name()));
+    } else if (attr->get_type_attr_id() >= ObMaxType) {
+      // udt type
+      const ObUDTTypeInfo *sub_udt_info = NULL;
+      if (OB_FAIL(get_udt_info(tenant_id, attr->get_type_attr_id(), sub_udt_info))) {
+        LOG_WARN("failed to get udt info", K(ret), K(tenant_id), K(udt_info.get_type_id()));
+      } else if (sub_udt_info->is_collection()) {
+        char *name_str = static_cast<char *>(allocator.alloc(qualified_name.length()));
+        if (OB_ISNULL(name_str)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to alloc memory", K(ret), K(qualified_name.length()), K(udt_info.get_type_id()));
+        } else {
+          MEMCPY(name_str, qualified_name.ptr(), qualified_name.length());
+          if (OB_FAIL(udt_qualified_names.push_back(ObString(qualified_name.length(), name_str)))) {
+            LOG_WARN("failed to push back qualified name", K(ret), K(udt_info.get_type_id()));
+          }
+        }
+      } else if (sub_udt_info->get_typecode() == UDT_TYPE_OBJECT) {
+        // object
+        if (OB_FAIL(construct_udt_qualified_name(*sub_udt_info, allocator, tenant_id,
+                                                 qualified_name, udt_qualified_names))) {
+          LOG_WARN("add udt attribute to table_schema failed", K(ret), K(attr->get_type_attr_id()), K(tenant_id));
+        }
+      }
+    } else {
+      char *name_str = static_cast<char *>(allocator.alloc(qualified_name.length()));
+      if (OB_ISNULL(name_str)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to alloc memory", K(ret), K(qualified_name.length()), K(udt_info.get_type_id()));
+      } else {
+        MEMCPY(name_str, qualified_name.ptr(), qualified_name.length());
+        if (OB_FAIL(udt_qualified_names.push_back(ObString(qualified_name.length(), name_str)))) {
+          LOG_WARN("failed to push back qualified name", K(ret), K(udt_info.get_type_id()));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      qualified_name.clip(curr_content);
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id, uint64_t &attr_pos)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+  const share::schema::ObUDTTypeInfo *udt_info = NULL;
+  bool is_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recusive", K(ret));
+  } else if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K_(is_inited));
+  } else if (OB_FAIL(schema_mgr_->get_udt_info(tenant_id, udt_id, udt_info))) {
+    LOG_WARN("get udt info failed", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(udt_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("udt info is null.", K(ret), K(udt_id));
+  } else if (!udt_info->is_collection()) {
+    for (int i = 0; i < udt_info->get_attributes() && OB_SUCC(ret) && attr_id == OB_INVALID_ID; i++) {
+      const ObUDTTypeAttr *attr = udt_info->get_attrs().at(i);
+      if (attr->get_name().case_compare(attr_name) == 0) {
+        attr_id = attr->get_type_attr_id();
+        attr_pos++;
+      } else if (attr->get_type_attr_id() >= ObMaxType) {
+        attr_pos++;
+        if (OB_FAIL(get_udt_attribute_id(attr->get_type_attr_id(), attr_name, attr_id, attr_pos))) {
+           LOG_WARN("failed to get udt attribute id", K(ret), K(udt_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObSchemaChecker::enable_mysql_pl_priv_check(int64_t tenant_id, ObSchemaGetterGuard &schema_guard)
+{
+  bool enable = false;
+  uint64_t compat_version = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(tenant_id));
+  } else if (lib::is_mysql_mode() && sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
+    const ObSysVarSchema *sys_var = NULL;
+    ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
+    ObObj val;
+    if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, share::SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK, sys_var))) {
+      LOG_WARN("fail to get tenant var schema", K(ret));
+    } else if (OB_ISNULL(sys_var)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys variable schema is null", KR(ret));
+    } else if (OB_FAIL(sys_var->get_value(&alloc, NULL, val))) {
+      LOG_WARN("fail to get charset var value", K(ret));
+    } else {
+      enable = val.get_bool();
+    }
+  }
+  LOG_DEBUG("show enabale mysql routine priv enable", K(enable));
+  return enable;
+}
+
 int ObSchemaChecker::remove_tmp_cte_schemas(const ObString& cte_table_name)
 {
   int ret = OB_SUCCESS;
@@ -2985,6 +3185,97 @@ int ObSchemaChecker::remove_tmp_cte_schemas(const ObString& cte_table_name)
       }
     }
   }
+  return ret;
+}
+
+int ObSchemaChecker::check_mysql_grant_role_priv(
+    const ObSqlCtx &sql_ctx,
+    const ObIArray<uint64_t> &granting_role_ids)
+{
+  int ret = OB_SUCCESS;
+
+  //check SUPER or ROLE_ADMIN [TODO PRIV]
+  ObArenaAllocator alloc;
+  ObStmtNeedPrivs stmt_need_privs(alloc);
+  ObNeedPriv need_priv("", "", OB_PRIV_USER_LEVEL, OB_PRIV_SUPER, false);
+  OZ (stmt_need_privs.need_privs_.init(1));
+  OZ (stmt_need_privs.need_privs_.push_back(need_priv));
+
+  if (OB_SUCC(ret) && OB_FAIL(ObPrivilegeCheck::check_privilege(sql_ctx, stmt_need_privs))) {
+    int ret_bak = ret;
+    ret = OB_SUCCESS;
+    const ObUserInfo *user_info = NULL;
+    uint64_t user_id = sql_ctx.session_info_->get_priv_user_id();
+    OZ (get_user_info(sql_ctx.session_info_->get_effective_tenant_id(), user_id, user_info));
+    for (int i = 0; OB_SUCC(ret) && i < granting_role_ids.count(); i++) {
+      int64_t idx = -1;
+      if (!has_exist_in_array(user_info->get_role_id_array(), granting_role_ids.at(i), &idx)
+          || ADMIN_OPTION != user_info->get_admin_option(user_info->get_role_id_option_array().at(idx))) {
+        ret = ret_bak;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObSchemaChecker::check_mysql_revoke_role_priv(
+    const ObSqlCtx &sql_ctx,
+    const ObIArray<uint64_t> &granting_role_ids)
+{
+  int ret = OB_SUCCESS;
+
+  //check SUPER or ROLE_ADMIN [TODO PRIV]
+  ObArenaAllocator alloc;
+  ObStmtNeedPrivs stmt_need_privs(alloc);
+  ObNeedPriv need_priv("", "", OB_PRIV_USER_LEVEL, OB_PRIV_SUPER, false);
+
+  CK (OB_NOT_NULL(sql_ctx.session_info_));
+  OZ (stmt_need_privs.need_privs_.init(1));
+  OZ (stmt_need_privs.need_privs_.push_back(need_priv));
+
+  if (OB_SUCC(ret) && OB_FAIL(ObPrivilegeCheck::check_privilege(sql_ctx, stmt_need_privs))) {
+    if (sql_ctx.session_info_->is_read_only()) {
+      //SUPER or CONNECTION_ADMIN [TODO PRIV]
+    } else {
+      int ret_bak = ret;
+      ret = OB_SUCCESS;
+      const ObUserInfo *user_info = NULL;
+      uint64_t user_id = sql_ctx.session_info_->get_priv_user_id();
+      OZ (get_user_info(sql_ctx.session_info_->get_effective_tenant_id(), user_id, user_info));
+      for (int i = 0; OB_SUCC(ret) && i < granting_role_ids.count(); i++) {
+        int64_t idx = -1;
+        if (!has_exist_in_array(user_info->get_role_id_array(), granting_role_ids.at(i), &idx)
+            || ADMIN_OPTION != user_info->get_admin_option(user_info->get_role_id_option_array().at(idx))) {
+          ret = ret_bak;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObSchemaChecker::check_set_default_role_priv(
+    const ObSqlCtx &sql_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc;
+  ObStmtNeedPrivs stmt_need_privs(alloc);
+  ObNeedPriv need_priv("mysql", "", OB_PRIV_DB_LEVEL, OB_PRIV_UPDATE, false);
+
+  OZ (stmt_need_privs.need_privs_.init(1));
+  OZ (stmt_need_privs.need_privs_.push_back(need_priv));
+
+  //check CREATE USER or UPDATE privilege on mysql
+  if (OB_SUCC(ret) && OB_FAIL(ObPrivilegeCheck::check_privilege(sql_ctx, stmt_need_privs))) {
+    stmt_need_privs.need_privs_.at(0) =
+        ObNeedPriv("", "", OB_PRIV_USER_LEVEL, OB_PRIV_CREATE_USER, false);
+    if (OB_FAIL(ObPrivilegeCheck::check_privilege(sql_ctx, stmt_need_privs))) {
+      LOG_WARN("no priv", K(ret));
+    }
+  }
+
   return ret;
 }
 

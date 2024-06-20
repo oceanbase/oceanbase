@@ -111,14 +111,14 @@ class ObTransDeadlockDetectorAdapter
   }
   /**********MAIN INTERFACE**********/
   // for local execution, call from lock wait mgr
-  static int register_local_execution_to_deadlock_detector_waiting_for_row(CollectCallBack &on_collect_op,
-                                                                           const BlockCallBack &call_back,
-                                                                           const ObTransID &self_trans_id,
-                                                                           const uint32_t sess_id);
-  static int register_local_execution_to_deadlock_detector_waiting_for_trans(CollectCallBack &on_collect_op,
-                                                                             const ObTransID &conflict_trans_id,
-                                                                             const ObTransID &self_trans_id,
-                                                                             const uint32_t sess_id);
+  static int lock_wait_mgr_reconstruct_detector_waiting_for_row(CollectCallBack &on_collect_op,
+                                                                const BlockCallBack &call_back,
+                                                                const ObTransID &self_trans_id,
+                                                                const uint32_t sess_id);
+  static int lock_wait_mgr_reconstruct_detector_waiting_for_trans(CollectCallBack &on_collect_op,
+                                                                  const ObTransID &conflict_trans_id,
+                                                                  const ObTransID &self_trans_id,
+                                                                  const uint32_t sess_id);
   // for remote execution, call from sql trans control
   static int maintain_deadlock_info_when_end_stmt(sql::ObExecContext &exec_ctx, const bool is_rollback);
   // for autonomous trans
@@ -143,22 +143,22 @@ class ObTransDeadlockDetectorAdapter
   static int get_trans_scheduler_info_on_participant(const ObTransID trans_id,
                                                      const share::ObLSID ls_id, 
                                                      ObAddr &scheduler_addr);
-  static int register_remote_execution_or_replace_conflict_trans_ids(const ObTransID self_tx_id,
-                                                                     const uint32_t self_session_id,
-                                                                     const ObArray<ObTransIDAndAddr> &conflict_tx_ids);
+  static int register_or_replace_conflict_trans_ids(const ObTransID self_tx_id,
+                                                    const uint32_t self_session_id,
+                                                    const ObArray<ObTransIDAndAddr> &conflict_tx_ids);
   static int kill_stmt(const uint32_t sess_id);
   static void copy_str_and_translate_apostrophe(const char *src_ptr,
                                                 const int64_t src_len,
                                                 char *dest_ptr,// C-style str, contain '\0'
                                                 const int64_t dest_len);
 private:
-  static int register_remote_execution_to_deadlock_detector_(const ObTransID self_tx_id,
-                                                             const uint32_t self_session_id,
-                                                             const ObIArray<ObTransIDAndAddr> &conflict_tx_ids,
-                                                             SessionGuard &session_guard);
-  static int remote_execution_replace_conflict_trans_ids_(const ObTransID self_tx_id,
-                                                          const ObIArray<ObTransIDAndAddr> &conflict_tx_ids,
-                                                          SessionGuard &session_guard);
+  static int register_to_deadlock_detector_(const ObTransID self_tx_id,
+                                            const uint32_t self_session_id,
+                                            const ObIArray<ObTransIDAndAddr> &conflict_tx_ids,
+                                            SessionGuard &session_guard);
+  static int replace_conflict_trans_ids_(const ObTransID self_tx_id,
+                                         const ObIArray<ObTransIDAndAddr> &conflict_tx_ids,
+                                         SessionGuard &session_guard);
   static int create_detector_node_and_set_parent_if_needed_(CollectCallBack &on_collect_op,
                                                             const ObTransID &self_trans_id,
                                                             const uint32_t sess_id);

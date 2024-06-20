@@ -24,6 +24,7 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_srv_network_frame.h"
+#include "share/ob_autoincrement_service.h"
 
 namespace oceanbase
 {
@@ -92,6 +93,7 @@ int ObSequenceSqlService::alter_sequence_start_with(const ObSequenceSchema &sequ
 // to get sync value from inner table.
 int ObSequenceSqlService::get_sequence_sync_value(const uint64_t tenant_id,
                                                   const uint64_t sequence_id,
+                                                  const bool is_for_update,
                                                   common::ObISQLClient &sql_client,
                                                   ObIAllocator &allocator,
                                                   common::number::ObNumber &next_value)
@@ -100,6 +102,7 @@ int ObSequenceSqlService::get_sequence_sync_value(const uint64_t tenant_id,
   ObSqlString sql;
   common::number::ObNumber tmp;
   const char *tname = OB_ALL_SEQUENCE_VALUE_TNAME;
+  const char *is_for_update_str = "FOR UPDATE";
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     common::sqlclient::ObMySQLResult *result = nullptr;
     if (OB_FAIL(sql.assign_fmt(
@@ -107,29 +110,36 @@ int ObSequenceSqlService::get_sequence_sync_value(const uint64_t tenant_id,
                 "WHERE SEQUENCE_ID = %lu",
                 tname, sequence_id))) {
       LOG_WARN("fail to format sql", K(ret));
-    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
-      LOG_WARN("fail to execute sql", K(sql), K(ret));
-    } else if (nullptr == (result = res.get_result())) {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("can't find sequence", K(ret), K(tname), K(tenant_id), K(sequence_id));
-    } else if (OB_FAIL(result->next())) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get next row", K(ret), K(tname), K(tenant_id), K(sequence_id));
-      } else {
-        // OB_ITER_END means there is no record in table, 
-        // thus the sync value is its' start value, and init the table when operate it.
+    } else if (is_for_update) {
+      if (OB_FAIL(sql.append_fmt(" %s", is_for_update_str))) {
+        LOG_WARN("fail to assign sql", K(ret));
       }
-    } else {
-      EXTRACT_NUMBER_FIELD_MYSQL(*result, NEXT_VALUE, tmp);
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to get NEXT_VALUE", K(ret));
-      } else if (OB_FAIL(next_value.from(tmp, allocator))) {
-        LOG_WARN("fail to deep copy next_val", K(tmp), K(ret));
-      } else if (OB_ITER_END != (ret = result->next())) {
-        LOG_WARN("expected OB_ITER_END", K(ret));
-        ret = (OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret);
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      } else if (nullptr == (result = res.get_result())) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("can't find sequence", K(ret), K(tname), K(tenant_id), K(sequence_id));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next row", K(ret), K(tname), K(tenant_id), K(sequence_id));
+        } else {
+          // OB_ITER_END means there is no record in table,
+          // thus the sync value is its' start value, and init the table when operate it.
+        }
       } else {
-        ret = OB_SUCCESS;
+        EXTRACT_NUMBER_FIELD_MYSQL(*result, NEXT_VALUE, tmp);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("fail to get NEXT_VALUE", K(ret));
+        } else if (OB_FAIL(next_value.from(tmp, allocator))) {
+          LOG_WARN("fail to deep copy next_val", K(tmp), K(ret));
+        } else if (OB_ITER_END != (ret = result->next())) {
+          LOG_WARN("expected OB_ITER_END", K(ret));
+          ret = (OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret);
+        } else {
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
@@ -206,6 +216,24 @@ int ObSequenceSqlService::replace_sequence(const ObSequenceSchema &sequence_sche
             || OB_FAIL(dml.add_column("schema_version", sequence_schema.get_schema_version()))
             || OB_FAIL(dml.add_gmt_modified())) {
           LOG_WARN("add column failed", K(ret));
+        } else {
+          uint64_t compat_version = 0;
+          if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+          } else if (((compat_version < MOCK_DATA_VERSION_4_2_3_0)
+                      || (compat_version >= DATA_VERSION_4_3_0_0
+                          && compat_version < DATA_VERSION_4_3_2_0))
+                     && sequence_schema.get_flag() != 0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not suppported flag != 0 when tenant's data version is below 4.2.3.0",
+                     KR(ret));
+          } else if ((compat_version >= MOCK_DATA_VERSION_4_2_3_0
+                      && compat_version < DATA_VERSION_4_3_0_0)
+                     || (compat_version >= DATA_VERSION_4_3_2_0)) {
+            if (OB_FAIL(dml.add_column("flag", sequence_schema.get_flag()))) {
+              LOG_WARN("add flag column failed", K(ret));
+            }
+          }
         }
       } else { // rename sequence
         if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
@@ -238,7 +266,6 @@ int ObSequenceSqlService::replace_sequence(const ObSequenceSchema &sequence_sche
                  K(ret));
       }
     }
-
     if (OB_SUCC(ret)) {
       if (alter_start_with && OB_FAIL(alter_sequence_start_with(sequence_schema, *sql_client))) {
         LOG_WARN("alter sequence for start with failed", K(ret));
@@ -283,7 +310,9 @@ int ObSequenceSqlService::delete_sequence(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql client is NULL", K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
-                         || OB_INVALID_ID == sequence_id)) {
+                         || OB_INVALID_ID == sequence_id
+                         || OB_INVALID_ID == database_id
+                         || new_schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sequence info in drop sequence", K(tenant_id), K(database_id),
              K(sequence_id), K(ret));
@@ -424,6 +453,20 @@ int ObSequenceSqlService::add_sequence(common::ObISQLClient &sql_client,
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_order_flag(), "order_flag", "%d");
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_cycle_flag(), "cycle_flag", "%d");
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_is_system_generated(), "is_system_generated", "%d");
+      uint64_t compat_version = 0;
+      if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (((compat_version < MOCK_DATA_VERSION_4_2_3_0)
+                  || (compat_version >= DATA_VERSION_4_3_0_0
+                      && compat_version < DATA_VERSION_4_3_2_0))
+                 && sequence_schema.get_flag() != 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not suppported flag != 0 when tenant's data version is below 4.2.3.0", KR(ret));
+      } else if ((compat_version >= MOCK_DATA_VERSION_4_2_3_0
+                  && compat_version < DATA_VERSION_4_3_0_0)
+                 || (compat_version >= DATA_VERSION_4_3_2_0)) {
+        SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_flag(), "flag", "%ld");
+      }
       if (0 == STRCMP(tname[i], OB_ALL_SEQUENCE_OBJECT_HISTORY_TNAME)) {
         SQL_COL_APPEND_VALUE(sql, values, "false", "is_deleted", "%s");
       }
@@ -473,6 +516,7 @@ int ObSequenceSqlService::add_sequence_to_value_table(const uint64_t tenant_id,
   common::number::ObNumber next_value;
   if (OB_FAIL(get_sequence_sync_value(tenant_id,
                                       old_sequence_id,
+                                      false,/*is select for update*/
                                       sql_client,
                                       allocator,
                                       next_value))) {

@@ -49,8 +49,8 @@ int ObTaskStateDetectReq::deserialize(const char *buf, const int64_t data_len, i
   if (NULL == buf || data_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "[DM] invalid arguments.", KP(buf), K(data_len), K(ret));
-  } else if (serialization::decode_vi64(
-      buf, data_len, pos, reinterpret_cast<int64_t *>(&peer_id_size))) {
+  } else if (OB_FAIL(serialization::decode_vi64(
+      buf, data_len, pos, reinterpret_cast<int64_t *>(&peer_id_size)))) {
     COMMON_LOG(WARN, "[DM] deserialize peer_id_size failed.",
                KP(buf), K(data_len), K(pos), K(peer_id_size), K(ret));
   } else {

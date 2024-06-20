@@ -99,18 +99,17 @@ public:
     BASIC_CHANNEL = 2
   };
 public:
-  explicit ObDtlChannel(uint64_t id, const common::ObAddr &peer);
+  explicit ObDtlChannel(uint64_t id, const common::ObAddr &peer, DtlChannelType type);
   virtual ~ObDtlChannel() {}
 
-  virtual DtlChannelType get_channel_type() = 0;
+  DtlChannelType get_channel_type() const { return channel_type_; };
   virtual int init() = 0;
 
   // typical queue interfaces
   virtual int send(const ObDtlMsg &msg, int64_t timeout_ts,
       ObEvalCtx *eval_ctx = nullptr, bool is_eof = false) = 0;
   virtual int feedup(ObDtlLinkedBuffer *&buffer) = 0;
-  virtual int attach(ObDtlLinkedBuffer *&linked_buffer, bool is_firt_buffer_cached = false,
-                     bool inc_recv_buf_cnt = true) = 0;
+  virtual int attach(ObDtlLinkedBuffer *&linked_buffer, bool inc_recv_buf_cnt = true) = 0;
   virtual int flush(bool wait=true, bool wait_response = true) = 0;
 
   virtual bool is_empty() const = 0;
@@ -206,7 +205,6 @@ public:
   }
   void set_drain() { set_status(DTL_CHAN_DARIN); }
   void set_eof() { set_status(DTL_CHAN_EOF); }
-  void set_first_buffer() { set_status(DTL_CHAN_FIRST_BUF); }
   void set_blocked() { set_status(DTL_CHAN_BLOCKED); }
 
   void unset_status(int64_t status)
@@ -295,6 +293,7 @@ protected:
   int64_t thread_id_;
   // choose new dtl channel sync or first buffer cache
   bool enable_channel_sync_;
+  DtlChannelType channel_type_;
 
 public:
   // ObDtlChannel is link base, so it add extra link

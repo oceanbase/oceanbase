@@ -46,13 +46,13 @@ void ObCGAggregatedScanner::reuse()
 int ObCGAggregatedScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObCGAggregatedScanner has been inited", K(ret));
-  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.cg_sstable_->is_major_sstable() ||
+  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.get_sstable()->is_major_or_ddl_merge_sstable() ||
                          !iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(wrapper), K(iter_param));
@@ -104,7 +104,7 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
   } else if (check_agg_finished()) {
     ret = OB_ITER_END;
   } else if (!need_access_data_) {
-    if (OB_FAIL(cg_agg_cells_.process(0/*col_idx*/, nullptr/*reader*/, nullptr/*row_ids*/, cur_processed_row_count_))) {
+    if (OB_FAIL(cg_agg_cells_.process(*iter_param_, *access_ctx_, 0/*col_idx*/, nullptr/*reader*/, nullptr/*row_ids*/, cur_processed_row_count_))) {
       LOG_WARN("Fail to process agg cells", K(ret));
     } else {
       ret = OB_ITER_END;

@@ -22,6 +22,7 @@ namespace blocksstable
 enum class ObMacroBlockIdMode : uint8_t
 {
   ID_MODE_LOCAL = 0,
+  ID_MODE_BACKUP = 1,
   ID_MODE_MAX,
 };
 

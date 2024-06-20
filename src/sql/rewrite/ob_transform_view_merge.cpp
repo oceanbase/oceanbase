@@ -117,7 +117,8 @@ int ObTransformViewMerge::need_transform(const common::ObIArray<ObParentDMLStmt>
       if (OB_ISNULL(table = stmt.get_table_item(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
-      } else if (!table->is_generated_table()) {
+      } else if (!table->is_generated_table() &&
+                 !table->is_lateral_table()) {
         /*do nothing*/
       } else if (OB_ISNULL(table->ref_query_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -211,7 +212,8 @@ int ObTransformViewMerge::transform_in_from_item(ObDMLStmt *stmt,
           LOG_TRACE("succeed to do view merge for joined table", K(is_happened),
                     K(table_item->table_id_));
         }
-      } else if (table_item->is_generated_table()) {
+      } else if (table_item->is_generated_table() ||
+                 table_item->is_lateral_table()) {
         if (OB_FAIL(transform_generated_table(stmt, table_item, merged_stmts, is_happened))) {
           LOG_WARN("failed to transform basic table", K(ret));
         } else {
@@ -347,7 +349,7 @@ int ObTransformViewMerge::check_semi_right_table_can_be_merged(ObDMLStmt *stmt,
   bool has_rownum = false;
   bool force_merge = false;
   bool force_no_merge = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ref_query)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ref_query) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(ref_query));
   } else if (OB_FAIL(check_hint_allowed_merge(*stmt, 
@@ -369,7 +371,9 @@ int ObTransformViewMerge::check_semi_right_table_can_be_merged(ObDMLStmt *stmt,
              || ref_query->has_sequence()
              || ref_query->is_hierarchical_query()
              || ref_query->has_ora_rowscn()
-             || (lib::is_mysql_mode() && ref_query->has_for_update())) {
+             || (lib::is_mysql_mode() && ref_query->has_for_update())
+             || (ref_query->is_values_table_query() &&
+                 !ObTransformUtils::is_enable_values_table_rewrite(stmt->get_query_ctx()->optimizer_features_enable_version_))) {
     can_be = false;
   } else if (OB_FAIL(ref_query->has_rownum(has_rownum))) {
     LOG_WARN("failed to check has rownum expr", K(ret));
@@ -394,10 +398,12 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
   ViewMergeHelper helper;
   trans_happened = false;
   OPT_TRACE("try to merge view:", table_item);
+  helper.trans_table = table_item;
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null ptr", K(ret), K(parent_stmt), K(table_item));
-  } else if (!table_item->is_generated_table()) {
+  } else if (!table_item->is_generated_table() &&
+             !table_item->is_lateral_table()) {
     /*do nothing*/
   } else if (OB_ISNULL(child_stmt = table_item->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -445,7 +451,8 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(parent_table) || OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null ptr", K(ret), K(parent_stmt), K(parent_table), K(table_item));
-  } else if (!table_item->is_generated_table()) {
+  } else if (!table_item->is_generated_table() &&
+             !table_item->is_lateral_table()) {
     /*do nothing*/
   } else if (OB_ISNULL(child_stmt = table_item->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -466,7 +473,9 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
       is_left_join_right_table = true;
     }
   } else {/*do nothing*/}
-  if (OB_FAIL(ret) || !table_item->is_generated_table()) {
+  if (OB_FAIL(ret) ||
+      (!table_item->is_generated_table() &&
+       !table_item->is_lateral_table())) {
     /*do nothing*/
   } else if (need_check_where_condi && child_stmt->get_condition_size() > 0) {
     /*do nothing*/
@@ -505,7 +514,7 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
   bool force_no_merge = false;
   bool is_select_expr_valid = false;
   ObSEArray<ObRawExpr*, 8> select_exprs;
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
+  if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt) || OB_ISNULL(parent_stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(check_hint_allowed_merge(*parent_stmt, 
@@ -527,7 +536,8 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
              || child_stmt->has_window_function()
              || child_stmt->has_sequence()
              || child_stmt->has_ora_rowscn()
-             || child_stmt->is_values_table_query()) {
+             || (child_stmt->is_values_table_query() &&
+                 !ObTransformUtils::is_enable_values_table_rewrite(parent_stmt->get_query_ctx()->optimizer_features_enable_version_))) {
     can_be = false;
     OPT_TRACE("not a valid view");
   } else if (!force_merge && parent_stmt->get_table_size() > 1 && child_stmt->get_table_size() > 1 &&
@@ -644,6 +654,32 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
       } else if (has_rand) {
         can_be = false;
         OPT_TRACE("view has random expr, can not merge");
+      }
+    }
+    if (OB_SUCC(ret) && can_be) {
+      bool contain = false;
+      bool is_ref_outer = false;
+      if (OB_ISNULL(helper.trans_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null table item", K(ret));
+      } else if (!helper.trans_table->is_lateral_table()) {
+        // do nothing
+      } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(helper.trans_table->exec_params_,
+                                                                    *child_stmt,
+                                                                    contain))) {
+        LOG_WARN("failed to check is table item correlated", K(ret));
+      } else if (contain) {
+        can_be = false;
+        OPT_TRACE("lateral inline view has correlated table item, can not merge");
+      } else if (helper.parent_table != NULL &&
+                 OB_FAIL(ObTransformUtils::check_lateral_ref_outer_table(parent_stmt,
+                                                                         helper.parent_table,
+                                                                         helper.trans_table,
+                                                                         is_ref_outer))) {
+        LOG_WARN("failed to check lateral ref outer table", K(ret));
+      } else if (is_ref_outer) {
+        can_be = false;
+        OPT_TRACE("lateral inline view ref outer table, can not merge");
       }
     }
   }
@@ -817,7 +853,8 @@ int ObTransformViewMerge::find_not_null_column_with_condition(
     for (int64_t i = 0; OB_SUCC(ret) && !find && i < old_column_exprs.count(); ++i) {
       bool has_null_reject = false;
       //首先找到null reject的select expr
-      if (OB_FAIL(ObTransformUtils::has_null_reject_condition(join_conditions,
+      if (FULL_OUTER_JOIN != helper.parent_table->joined_type_ &&
+          OB_FAIL(ObTransformUtils::has_null_reject_condition(join_conditions,
                                                               old_column_exprs.at(i),
                                                               has_null_reject))) {
         LOG_WARN("failed to check has null reject condition", K(ret));
@@ -965,11 +1002,15 @@ int ObTransformViewMerge::transform_joined_table(ObDMLStmt *stmt,
     //处理joined table single table ids
     if (OB_SUCC(ret)) {
       joined_table->single_table_ids_.reset();
-      if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table,
-                                                                      *left_table))) {
+      if (OB_ISNULL(joined_table->left_table_) ||
+          OB_ISNULL(joined_table->right_table_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table,
+                                                                             *joined_table->left_table_))) {
         LOG_WARN("failed to add joined table single table ids",K(ret));
       } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table,
-                                                                             *right_table))) {
+                                                                             *joined_table->right_table_))) {
         LOG_WARN("failed to add joined table single table ids",K(ret));
       } else {/*do nothing*/}
     }
@@ -1112,6 +1153,9 @@ int ObTransformViewMerge::do_view_merge(ObDMLStmt *parent_stmt,
       LOG_WARN("failed to remove from item", K(ret));
     } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*parent_stmt))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
+    } else if (table_item->is_lateral_table() &&
+               OB_FAIL(ObTransformUtils::decorrelate(parent_stmt, table_item->exec_params_))) {
+      LOG_WARN("failed to decorrelate exec params", K(ret));
     } else if (OB_FAIL(parent_stmt->rebuild_tables_hash())) {
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(parent_stmt->update_column_item_rel_id())) {
@@ -1127,7 +1171,7 @@ int ObTransformViewMerge::adjust_updatable_view(ObDMLStmt *parent_stmt, TableIte
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(parent_stmt), K(table_item), K(ret));
-  } else if (OB_UNLIKELY(!table_item->is_generated_table())) {
+  } else if (OB_UNLIKELY(!table_item->is_generated_table() && !table_item->is_lateral_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected table type", K(table_item->type_), K(ret));
   } else if (parent_stmt->is_update_stmt() &&

@@ -113,7 +113,7 @@ int ObMemtable::flush(share::ObLSID ls_id)
   int ret = OB_SUCCESS;
 
   int64_t cur_time = ObTimeUtility::current_time();
-  if (is_flushed_) {
+  if (get_is_flushed()) {
     ret = OB_NO_NEED_UPDATE;
   } else {
     if (mt_stat_.create_flush_dag_time_ == 0 &&
@@ -638,7 +638,7 @@ public:
     ASSERT_EQ(OB_SUCCESS, ((ObTxDataMemtableMgr *)(memtable_mgr))->freeze());
     share::SCN start_log_ts =  tx_data_memtable->get_start_scn();
     share::SCN end_log_ts =  tx_data_memtable->get_end_scn();
-    ASSERT_EQ(OB_SUCCESS, tx_data_memtable->flush());
+    ASSERT_EQ(OB_SUCCESS, tx_data_memtable->flush(0));
 
     wait_freeze_tx_table_finish(start_log_ts, end_log_ts);
 

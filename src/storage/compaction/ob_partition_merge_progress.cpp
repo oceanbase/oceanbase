@@ -149,7 +149,7 @@ int ObPartitionMergeProgress::estimate_mini_merge(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null data memtable", K(ret), KPC(tables.at(0)));
   } else {
-    const memtable::ObMtStat &mt_stat = data_memtable->get_mt_stat();
+    const ObMtStat &mt_stat = data_memtable->get_mt_stat();
     estimate_row_cnt_ = MAX(1, mt_stat.insert_row_count_ + mt_stat.update_row_count_ + mt_stat.delete_row_count_);
 
     for (int64_t i = tables.count() - 1; OB_SUCC(ret) && i >= 0; --i) {

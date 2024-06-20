@@ -132,7 +132,9 @@ const char *oceanbase::common::get_io_sys_group_name(ObIOModule module)
 
 /******************             IOFlag              **********************/
 ObIOFlag::ObIOFlag()
-  : flag_(0)
+  : flag_(0),
+    group_id_(USER_RESOURCE_OTHER_GROUP_ID),
+    sys_module_id_(OB_INVALID_ID)
 {
 
 }
@@ -145,12 +147,14 @@ ObIOFlag::~ObIOFlag()
 void ObIOFlag::reset()
 {
   flag_ = 0;
+  group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
+  sys_module_id_ = OB_INVALID_ID;
 }
 
 bool ObIOFlag::is_valid() const
 {
   return mode_ >= 0 && mode_ < static_cast<int>(ObIOMode::MAX_MODE)
-    && group_id_ >= 0
+    && is_valid_group(group_id_)
     && wait_event_id_ > 0;
 }
 
@@ -164,12 +168,7 @@ ObIOMode ObIOFlag::get_mode() const
   return static_cast<ObIOMode>(mode_);
 }
 
-void ObIOFlag::set_group_id(ObIOModule module)
-{
-  group_id_ = THIS_WORKER.get_group_id() != 0 ? THIS_WORKER.get_group_id() : static_cast<int64_t>(module);
-}
-
-void ObIOFlag::set_group_id(int64_t group_id)
+void ObIOFlag::set_resource_group_id(const uint64_t group_id)
 {
   group_id_ = group_id;
 }
@@ -179,14 +178,26 @@ void ObIOFlag::set_wait_event(int64_t wait_event_id)
   wait_event_id_ = wait_event_id;
 }
 
-int64_t ObIOFlag::get_group_id() const
+uint64_t ObIOFlag::get_resource_group_id() const
 {
   return group_id_;
 }
 
-ObIOModule ObIOFlag::get_io_module() const
+uint64_t ObIOFlag::get_sys_module_id() const
 {
-  return static_cast<ObIOModule>(group_id_);
+  return sys_module_id_;
+}
+
+void ObIOFlag::set_sys_module_id(const uint64_t sys_module_id)
+{
+  sys_module_id_ = sys_module_id;
+}
+
+bool ObIOFlag::is_sys_module() const
+{
+  return USER_RESOURCE_OTHER_GROUP_ID == group_id_
+          && sys_module_id_ >= SYS_RESOURCE_GROUP_START_ID
+          && sys_module_id_ < SYS_RESOURCE_GROUP_END_ID;
 }
 
 int64_t ObIOFlag::get_wait_event() const
@@ -419,8 +430,9 @@ ObIOResult::ObIOResult()
     user_data_buf_(nullptr),
     io_callback_(nullptr),
     flag_(),
-    ret_code_(),
-    cond_()
+    cond_(),
+    time_log_(),
+    ret_code_()
 {
 
 }
@@ -498,6 +510,7 @@ void ObIOResult::reset()
   io_callback_ = nullptr;
   flag_.reset();
   ret_code_.reset();
+  time_log_.reset();
   tenant_io_mgr_.reset();
   //do not destroy thread_cond
   is_inited_ = false;
@@ -521,6 +534,7 @@ void ObIOResult::destroy()
   io_callback_ = nullptr;
   flag_.reset();
   ret_code_.reset();
+  time_log_.reset();
   cond_.destroy();
   tenant_io_mgr_.reset();
   is_inited_ = false;
@@ -553,18 +567,27 @@ void ObIOResult::calc_io_offset_and_size(int64_t &size, int32_t &offset)
   }
 }
 
-int64_t ObIOResult::get_group_id() const
+uint64_t ObIOResult::get_resource_group_id() const
 {
-  return flag_.get_group_id();
+  return flag_.get_resource_group_id();
+}
+uint64_t ObIOResult::get_sys_module_id() const
+{
+  return flag_.get_sys_module_id();
+}
+
+bool ObIOResult::is_sys_module() const
+{
+  return flag_.is_sys_module();
 }
 
 uint64_t ObIOResult::get_io_usage_index()
 {
   uint64_t index = 0;
-  if (!is_user_group(get_group_id())) {
+  if (!is_user_group(get_resource_group_id())) {
     //other group , do nothing
   } else {
-    index = tenant_io_mgr_.get_ptr()->get_usage_index(get_group_id());
+    index = tenant_io_mgr_.get_ptr()->get_usage_index(get_resource_group_id());
   }
   return index;
 }
@@ -630,7 +653,7 @@ void ObIOResult::finish(const ObIORetCode &ret_code, ObIORequest *req)
       ret_code_ = ret_code;
       is_finished_ = true;
       if (OB_NOT_NULL(tenant_io_mgr_.get_ptr()) && OB_NOT_NULL(req)) {
-        if (is_sys_group(get_group_id())) {
+        if (is_sys_module()) {
           tenant_io_mgr_.get_ptr()->io_backup_usage_.accumulate(*this, *req);
         } else {
           tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this, *req);
@@ -719,7 +742,6 @@ ObIORequest::ObIORequest()
     tenant_id_(OB_INVALID_TENANT_ID),
     tenant_io_mgr_(),
     fd_(),
-    time_log_(),
     trace_id_()
 {
 
@@ -810,7 +832,6 @@ void ObIORequest::reset() //only for test, not dec resut_ref
   free_io_buffer();
   ref_cnt_ = 0;
   trace_id_.reset();
-  time_log_.reset();
   io_result_ = nullptr;
   fd_.reset();
   tenant_io_mgr_.reset();
@@ -829,7 +850,6 @@ void ObIORequest::destroy()
   free_io_buffer();
   ref_cnt_ = 0;
   trace_id_.reset();
-  time_log_.reset();
   if (nullptr != io_result_) {
     io_result_->dec_ref("request");
     io_result_ = nullptr;
@@ -849,9 +869,9 @@ int64_t ObIORequest::get_data_size() const
   return nullptr == io_result_ ? 0 : io_result_->get_data_size();
 }
 
-int64_t ObIORequest::get_group_id() const
+uint64_t ObIORequest::get_resource_group_id() const
 {
-  return nullptr == io_result_ ? 0 : io_result_->flag_.get_group_id();
+  return nullptr == io_result_ ? 0 : io_result_->flag_.get_resource_group_id();
 }
 
 int64_t ObIORequest::timeout_ts() const
@@ -859,13 +879,23 @@ int64_t ObIORequest::timeout_ts() const
   return nullptr == io_result_ ? 0 : io_result_->begin_ts_ > 0 ? io_result_->begin_ts_ + io_result_->timeout_us_ : 0;
 }
 
+uint64_t ObIORequest::get_sys_module_id() const
+{
+  return nullptr == io_result_ ? OB_INVALID_ID : io_result_->flag_.get_sys_module_id();
+}
+
+bool ObIORequest::is_sys_module() const
+{
+  return nullptr == io_result_ ? false : io_result_->flag_.is_sys_module();
+}
+
 uint64_t ObIORequest::get_io_usage_index()
 {
   uint64_t index = 0;
-  if (!is_user_group(get_group_id())) {
+  if (USER_RESOURCE_OTHER_GROUP_ID == get_resource_group_id()) {
     //other group or sys group , do nothing
   } else {
-    index = tenant_io_mgr_.get_ptr()->get_usage_index(get_group_id());
+    index = tenant_io_mgr_.get_ptr()->get_usage_index(get_resource_group_id());
   }
   return index;
 }
@@ -1936,7 +1966,9 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("request is null", K(ret), KP(req));
         } else {
-          req->io_result_ == nullptr ? : req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          if (OB_NOT_NULL(req->io_result_)) {
+            req->io_result_->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          }
           if (tmp_phy_queue->req_list_.is_empty()) {
             tmp_phy_queue->reset_time_info();
             tmp_phy_queue->last_empty_ts_ = ObTimeUtility::fast_current_time();
@@ -2007,7 +2039,7 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
   req = nullptr;
   while (OB_SUCC(ret) && !gl_heap_.empty() && !gl_heap_.top()->req_list_.is_empty()) {
     tmp_phy_queue = gl_heap_.top();
-    deadline_ts = 0 == iter_count ? tmp_phy_queue->tenant_limitation_ts_ : deadline_ts;
+    deadline_ts = 0 == iter_count ? tmp_phy_queue->group_limitation_ts_ : deadline_ts;
     ++iter_count;
     if (tmp_phy_queue->group_limitation_ts_ > current_ts) {
       break;
@@ -2063,7 +2095,9 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("req is null", K(ret), KP(req));
         } else {
-          req->io_result_ == nullptr ? : req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          if (OB_NOT_NULL(req->io_result_)) {
+            req->io_result_->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          }
           LOG_DEBUG("req pop from phy queue succcess(P schedule)", KP(req), K(iter_count), "time_cost", ObTimeUtility::fast_current_time() - current_ts, K(ready_heap_.count()), K(current_ts));
           if (tmp_phy_queue->req_list_.is_empty()) {
             tmp_phy_queue->reset_time_info();

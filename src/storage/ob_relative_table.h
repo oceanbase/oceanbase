@@ -58,6 +58,7 @@ public:
       const bool allow_not_ready = false);
   uint64_t get_table_id() const;
   const ObTabletID& get_tablet_id() const;
+  const ObTabletHandle *get_tablet_handle() const;
   int64_t get_schema_version() const;
   int get_col_desc(const uint64_t column_id, share::schema::ObColDesc &col_desc) const;
   int get_col_desc_by_idx(const int64_t idx, share::schema::ObColDesc &col_desc) const;
@@ -85,10 +86,12 @@ public:
   bool is_index_table() const;
   bool is_lob_meta_table() const;
   bool is_storage_index_table() const;
+  bool is_index_local_storage() const;
   bool can_read_index() const;
   bool is_unique_index() const;
   bool is_domain_index() const;
   bool is_spatial_index() const;
+  bool is_fts_index() const;
   int check_rowkey_in_column_ids(const common::ObIArray<uint64_t> &column_ids,
                                   const bool has_other_column) const;
   int build_index_row(const common::ObNewRow &table_row,

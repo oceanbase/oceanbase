@@ -77,6 +77,9 @@ public:
     pkt_rec_wrapper_.init();
     client_type_ = common::OB_CLIENT_INVALID_TYPE;
     client_version_ = 0;
+    client_sessid_ = INVALID_SESSID;
+    client_addr_port_ = 0;
+    client_create_time_ = 0;
   }
 
   obmysql::ObCompressType get_compress_type() {
@@ -149,9 +152,15 @@ public:
     return type;
   }
 
+  bool is_support_plugin_auth() const {
+    return (1 == cap_flags_.cap_flags_.OB_CLIENT_PLUGIN_AUTH);
+  }
+
   inline bool is_in_connected_phase() { return rpc::ConnectionPhaseEnum::CPE_CONNECTED == connection_phase_; }
   inline bool is_in_ssl_connect_phase() { return rpc::ConnectionPhaseEnum::CPE_SSL_CONNECT == connection_phase_; }
   inline bool is_in_authed_phase() { return rpc::ConnectionPhaseEnum::CPE_AUTHED == connection_phase_; }
+  inline bool is_in_auth_switch_phase() { return rpc::ConnectionPhaseEnum::CPE_AUTH_SWITCH == connection_phase_; }
+  inline void set_auth_switch_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_AUTH_SWITCH; }
   inline void set_ssl_connect_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_SSL_CONNECT; }
   inline void set_auth_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_AUTHED; }
   inline void set_connect_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_CONNECTED; }
@@ -202,6 +211,10 @@ public:
   obmysql::ObPacketRecordWrapper pkt_rec_wrapper_;
   ObClientType client_type_;
   uint64_t client_version_;
+  // The client establishes a connection ID to ensure that the tenant is globally unique.
+  uint32_t client_sessid_;
+  int32_t client_addr_port_;
+  int64_t client_create_time_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

@@ -32,15 +32,6 @@ using namespace share;
 using namespace storage;
 using namespace memtable;
 
-namespace memtable
-{
-
-void ObMemtableCtx::update_max_submitted_seq_no(const ObTxSEQ seq_no)
-{
-  UNUSEDx(seq_no);
-}
-
-}
 namespace transaction
 {
 namespace tablelock
@@ -103,16 +94,13 @@ private:
   void create_callback(const ObTableLockOp &lock_op, ObOBJLockCallback *&cb)
   {
     int ret = OB_SUCCESS;
-    bool is_replay = false;
     ObMemCtxLockOpLinkNode *lock_op_node = nullptr;
     static ObFakeStoreRowKey tablelock_fake_rowkey("tbl", 3);
     const ObStoreRowkey &rowkey = tablelock_fake_rowkey.get_rowkey();
     ObMemtableKey mt_key;
-    ret = mt_ctx_.lock_mem_ctx_.add_lock_record(lock_op,
-                                                lock_op_node,
-                                                is_replay);
+    ret = mt_ctx_.lock_mem_ctx_.add_lock_record(lock_op, lock_op_node);
     ASSERT_EQ(OB_SUCCESS, ret);
-    cb = mt_ctx_.alloc_table_lock_callback(mt_ctx_,
+    cb = mt_ctx_.create_table_lock_callback(mt_ctx_,
                                            &memtable_);
     ASSERT_NE(nullptr, cb);
     ret = mt_key.encode(&rowkey);
@@ -145,7 +133,7 @@ TEST_F(TestLockTableCallback, callback)
 {
   int ret = OB_SUCCESS;
   bool lock_exist = false;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   const bool for_replay = false;
   ObIMemtable *memtable = nullptr;
   ObOBJLockCallback *cb = nullptr;
@@ -167,7 +155,7 @@ TEST_F(TestLockTableCallback, callback)
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
-                                 lock_mode_in_same_trans);
+                                 lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   ret = cb->trans_commit();
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -176,7 +164,7 @@ TEST_F(TestLockTableCallback, callback)
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
-                                 lock_mode_in_same_trans);
+                                 lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, false);
   // 3.2 intrans abort
   LOG_INFO("TestLockTableCallback::callback 3.2");
@@ -186,7 +174,7 @@ TEST_F(TestLockTableCallback, callback)
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
-                                 lock_mode_in_same_trans);
+                                 lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   ret = cb->trans_abort();
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -195,7 +183,7 @@ TEST_F(TestLockTableCallback, callback)
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
-                                 lock_mode_in_same_trans);
+                                 lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, false);
   // 3.3 intrans stmt abort
   LOG_INFO("TestLockTableCallback::callback 3.3");
@@ -205,7 +193,7 @@ TEST_F(TestLockTableCallback, callback)
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
-                                 lock_mode_in_same_trans);
+                                 lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   ret = cb->rollback_callback();
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -214,7 +202,7 @@ TEST_F(TestLockTableCallback, callback)
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                  DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                  lock_exist,
-                                 lock_mode_in_same_trans);
+                                 lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, false);
 }
 
@@ -228,12 +216,13 @@ TEST_F(TestLockTableCallback, basic)
   create_callback(lock_op, cb);
   ASSERT_EQ(lock_op.lock_seq_no_, cb->get_seq_no());
   ASSERT_EQ(false, cb->must_log());
-  ASSERT_EQ(false, cb->log_synced());
+  ASSERT_EQ(false, cb->is_log_submitted());
   share::SCN scn_10;
   scn_10.convert_for_logservice(10);
-  ret = cb->log_sync(scn_10);
+  ObIMemtable *mt = NULL;
+  ret = cb->log_submitted_cb(scn_10, mt);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, cb->log_synced());
+  ASSERT_EQ(true, cb->is_log_submitted());
   ASSERT_EQ(LS_LOCK_TABLET, cb->get_tablet_id());
 
   TableLockRedoDataNode redo_node;

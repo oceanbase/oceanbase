@@ -79,14 +79,15 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
 
 int ObTxData::add_undo_action(ObTxTable *tx_table,
                               transaction::ObUndoAction &new_undo_action,
-                              ObUndoStatusNode *undo_node)
+                              ObUndoStatusNode *&undo_node)
 {
   // STORAGE_LOG(DEBUG, "do add_undo_action");
   UNUSED(undo_node);
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(undo_status_list_.lock_);
+  init_tx_op();
+  SpinWLockGuard guard(op_guard_->get_undo_status_list().lock_);
   ObTxDataTable *tx_data_table = nullptr;
-  ObUndoStatusNode *node = undo_status_list_.head_;
+  ObUndoStatusNode *node = op_guard_->get_undo_status_list().head_;
   if (OB_ISNULL(tx_table)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "tx table is nullptr.", KR(ret));
@@ -104,9 +105,9 @@ int ObTxData::add_undo_action(ObTxTable *tx_table,
         STORAGE_LOG(WARN, "alloc_undo_status_node() fail", KR(ret));
       } else {
         new_node->next_ = node;
-        undo_status_list_.head_ = new_node;
+        op_guard_->get_undo_status_list().head_ = new_node;
         node = new_node;
-        undo_status_list_.undo_node_cnt_++;
+        op_guard_->get_undo_status_list().undo_node_cnt_++;
       }
       for (int64_t idx = 0; idx < TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE; ++idx) {
         node->undo_actions_[node->size_++] = new_undo_action;
@@ -140,8 +141,8 @@ int ObTxDataMemtableScanIterator
         // not exactly accurate, but enough for unittest
         ATOMIC_STORE(&BIGGEST_TX_DATA_SIZE, buffer_len_);
       }
-      if (tx_data_->undo_status_list_.undo_node_cnt_ > 0) {
-        std::cout << "tx_id:" << tx_data_->tx_id_.get_id() << ", undo cnt:" << tx_data_->undo_status_list_.undo_node_cnt_ << ", generate size:" << generate_size_ << std::endl;
+      if (tx_data_->op_guard_->get_undo_status_list().undo_node_cnt_ > 0) {
+        std::cout << "tx_id:" << tx_data_->tx_id_.get_id() << ", undo cnt:" << tx_data_->op_guard_->get_undo_status_list().undo_node_cnt_ << ", generate size:" << generate_size_ << std::endl;
       }
       ATOMIC_STORE(&DUMP_BIG_TX_DATA, true);
 /**************************************************************************************************/
@@ -201,6 +202,7 @@ int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &t
   char *merge_buffer = (char*)DEFAULT_TX_DATA_ALLOCATOR.alloc(total_buffer_size);
   int64_t pos = 0;
   if (OB_ISNULL(merge_buffer)) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "fail to alloc merge buffer", KR(ret), K(total_buffer_size));
   } else {
     char *p_dest = merge_buffer;
@@ -210,7 +212,7 @@ int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &t
       p_dest += tx_data_buffers_[idx].get_ob_string().length();
     }
     tx_data.tx_id_ = tx_id_;
-    if (OB_FAIL(tx_data.deserialize(merge_buffer, total_buffer_size, pos, slice_allocator_))) {
+    if (OB_FAIL(tx_data.deserialize(merge_buffer, total_buffer_size, pos, tx_data_allocator_))) {
       STORAGE_LOG(WARN, "deserialize tx data failed", KR(ret), KPHEX(merge_buffer, total_buffer_size));
       hex_dump(merge_buffer, total_buffer_size, true, OB_LOG_LEVEL_WARN);
     } else if (!tx_data.is_valid_in_tx_data_table()) {
@@ -225,7 +227,11 @@ int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &t
                 tx_data.tx_id_.get_id(),
                 tx_data_buffers_.count());
         ATOMIC_STORE(&LOAD_BIG_TX_DATA, true);
-        std::cout << "read big tx id from sstable, tx_id:" << ATOMIC_LOAD(&TEST_TX_ID) << ", undo cnt:" << tx_data.undo_status_list_.undo_node_cnt_ << ", buffer cnt:" << tx_data_buffers_.count() << std::endl;
+        int64_t undo_cnt = 0;
+        if (tx_data.op_guard_.is_valid()) {
+          undo_cnt = tx_data.op_guard_->get_undo_status_list().undo_node_cnt_;
+        }
+        std::cout << "read big tx id from sstable, tx_id:" << ATOMIC_LOAD(&TEST_TX_ID) << ", undo cnt:" << undo_cnt << ", buffer cnt:" << tx_data_buffers_.count() << std::endl;
       }
     }
 /**************************************************************************************************/

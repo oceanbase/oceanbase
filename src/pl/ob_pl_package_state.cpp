@@ -211,7 +211,7 @@ int ObPLPackageState::set_package_var_val(const int64_t var_idx, const ObObj &va
                && types_.at(var_idx) != PL_CURSOR_TYPE
                && types_.at(var_idx) != PL_REF_CURSOR_TYPE) {
       CK (vars_.at(var_idx).get_ext() != 0);
-      OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx), NULL, false));
+      OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx), NULL));
     } else {
       vars_.at(var_idx) = value;
     }
@@ -272,16 +272,18 @@ int ObPLPackageState::make_pkg_var_kv_value(ObPLExecCtx &ctx, ObObj &var_val, in
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql session is null.", K(ret));
   } else {
-    pl::ObPLPackageGuard package_guard(sql_session->get_effective_tenant_id());
+    pl::ObPLPackageGuard *package_guard = NULL;
     CK (OB_NOT_NULL(sql_session->get_pl_engine()));
-    OZ (package_guard.init());
+    OZ (ctx.exec_ctx_->get_package_guard(package_guard));
+    CK (OB_NOT_NULL(package_guard));
 
     if (OB_SUCC(ret)) {
       const ObPLVar *var = NULL;
       ObPLResolveCtx resolve_ctx(*ctx.allocator_,
                                  *sql_session,
                                  *ctx.exec_ctx_->get_sql_ctx()->schema_guard_,
-                                 package_guard,
+                                 nullptr != ctx.exec_ctx_->get_package_guard() ? *ctx.exec_ctx_->get_package_guard()
+                                                                                 : *package_guard,
                                  *ctx.exec_ctx_->get_sql_proxy(),
                                  false /*is_ps*/);
       OZ (sql_session->get_pl_engine()

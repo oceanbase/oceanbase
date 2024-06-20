@@ -47,6 +47,7 @@
       && common::OB_ENTRY_NOT_EXIST != ret) {   \
     ARCHIVE_LOG(WARN, "check and get record failed", K(ret));    \
   } else if (common::OB_SUCCESS == ret   \
+      && record_context.last_record_round_ == key.round_ \
       && common::ObTimeUtility::current_time_ns() - record_context.last_record_scn_.convert_to_ts()*1000L < interval) {   \
   } else if (OB_FAIL(t.get_ls_array(array))) {   \
     ARCHIVE_LOG(WARN, "get ls array failed", K(ret), K(task_type)); \
@@ -57,7 +58,7 @@
       share::SCN scn;                          \
       share::ObBackupPath path;                 \
       const share::ObLSID &id = array.at(i);    \
-      if (OB_FAIL(OB_FAIL(t.get_data(id, archive_start_scn, buf_ + COMMON_HEADER_SIZE, MAX_META_RECORD_DATA_SIZE, real_size, scn)))) {  \
+      if (OB_FAIL(t.get_data(id, archive_start_scn, buf_ + COMMON_HEADER_SIZE, MAX_META_RECORD_DATA_SIZE, real_size, scn))) {  \
         ARCHIVE_LOG(WARN, "get data failed", K(ret));      \
       } else if (OB_UNLIKELY(! scn.is_valid())) {      \
         ARCHIVE_LOG(WARN, "scn is invalid", K(ret), K(task_type), K(scn));                  \

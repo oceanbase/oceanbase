@@ -16,12 +16,14 @@
 #include "share/rc/ob_tenant_module_init_ctx.h"
 #define private public
 #include "logservice/palf/log_config_mgr.h"
+#include "logservice/palf/palf_callback_wrapper.h"
 #include "mock_logservice_container/mock_election.h"
 #include "mock_logservice_container/mock_log_state_mgr.h"
 #include "mock_logservice_container/mock_log_sliding_window.h"
 #include "mock_logservice_container/mock_log_engine.h"
 #include "mock_logservice_container/mock_log_mode_mgr.h"
 #include "mock_logservice_container/mock_log_reconfirm.h"
+#include "mittest/logservice/env/mock_ob_locality_manager.h"
 #undef private
 namespace oceanbase
 {
@@ -58,9 +60,16 @@ public:
     mock_mode_mgr_ = OB_NEW(MockLogModeMgr, "TestLog");
     mock_reconfirm_ = OB_NEW(MockLogReconfirm, "TestLog");
     mock_plugins_ = OB_NEW(LogPlugins, "TestLog");
+    mock_locality_cb_ = OB_NEW(MockObLocalityManager, "TestLog");
+
+    region_map_.create(OB_MAX_MEMBER_NUMBER, ObMemAttr(MTL_ID(), ObModIds::OB_HASH_NODE,
+        ObCtxIds::DEFAULT_CTX_ID));
+    EXPECT_EQ(OB_SUCCESS, mock_locality_cb_->init(&region_map_));
+    EXPECT_EQ(OB_SUCCESS, mock_plugins_->add_plugin(dynamic_cast<PalfLocalityInfoCb*>(mock_locality_cb_)));
   }
   ~TestLogConfigMgr()
   {
+    EXPECT_EQ(OB_SUCCESS, mock_plugins_->del_plugin(dynamic_cast<PalfLocalityInfoCb*>(mock_locality_cb_)));
     OB_DELETE(MockElection, "TestLog", mock_election_);
     OB_DELETE(MockLogStateMgr, "TestLog", mock_state_mgr_);
     OB_DELETE(MockLogSlidingWindow, "TestLog", mock_sw_);
@@ -68,6 +77,7 @@ public:
     OB_DELETE(MockLogModeMgr, "TestLog", mock_mode_mgr_);
     OB_DELETE(MockLogReconfirm, "TestLog", mock_reconfirm_);
     OB_DELETE(LogPlugins, "TestLog", mock_plugins_);
+    OB_DELETE(MockObLocalityManager, "TestLog", mock_locality_cb_);
   }
   void init_test_log_config_env(const common::ObAddr &self,
                                 const LogConfigInfoV2 &config_info,
@@ -93,14 +103,6 @@ public:
     EXPECT_EQ(OB_SUCCESS, config_meta.generate(init_pid, config_info, config_info, 1, LSN(0), 1));
     EXPECT_EQ(OB_SUCCESS, cm.init(1, self, config_meta, mock_log_engine_, mock_sw_, mock_state_mgr_, mock_election_,
         mock_mode_mgr_, mock_reconfirm_, mock_plugins_));
-    LogMemberRegionMap region_map;
-    EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
-    for (int i = 0; i < cm.alive_paxos_memberlist_.get_member_number(); ++i) {
-      ObAddr server;
-      cm.alive_paxos_memberlist_.get_server_by_index(i, server);
-      region_map.insert(server, default_region);
-    }
-    EXPECT_EQ(OB_SUCCESS, cm.set_paxos_member_region_map(region_map));
   }
 public:
   mockelection::MockElection *mock_election_;
@@ -110,6 +112,8 @@ public:
   palf::MockLogModeMgr *mock_mode_mgr_;
   palf::MockLogReconfirm *mock_reconfirm_;
   palf::LogPlugins *mock_plugins_;
+  unittest::MockObLocalityManager *mock_locality_cb_;
+  LogMemberRegionMap region_map_;
 };
 
 TEST_F(TestLogConfigMgr, test_set_initial_member_list)
@@ -131,8 +135,6 @@ TEST_F(TestLogConfigMgr, test_set_initial_member_list)
     EXPECT_EQ(OB_NOT_SUPPORTED, cm.set_initial_member_list(init_member_list, ObMember(addr1, 0), 2, learner_list, 1, config_version));
     // arb_member overlaps with member_list
     EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr2, 0), 2, learner_list, 1, config_version));
-    // invalid replica_num
-    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr3, 0), 3, learner_list, 1, config_version));
     // arb_member overlaps with learners
     learner_list.add_learner(ObMember(addr4, 0));
     EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr4, 0), 2, learner_list, 1, config_version));
@@ -225,28 +227,6 @@ TEST_F(TestLogConfigMgr, test_handle_learner_keepalive)
   LogLearner child_in_list;
   EXPECT_EQ(OB_SUCCESS, cm.children_.get_learner_by_addr(addr1, child_in_list));
   EXPECT_GT(child_in_list.keepalive_ts_, 0);
-}
-
-TEST_F(TestLogConfigMgr, test_set_paxos_member_region_map)
-{
-  LogConfigMgr cm;
-  cm.is_inited_ = true;
-  EXPECT_EQ(OB_SUCCESS, cm.paxos_member_region_map_.init("testmap", OB_MAX_MEMBER_NUMBER));
-  cm.alive_paxos_memberlist_.add_server(addr1);
-  cm.alive_paxos_memberlist_.add_server(addr2);
-  cm.alive_paxos_memberlist_.add_server(addr3);
-  LogMemberRegionMap region_map;
-  EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
-  region_map.insert(addr1, region1);
-  region_map.insert(addr2, region2);
-  cm.set_paxos_member_region_map(region_map);
-  ObRegion tmp_region;
-  EXPECT_EQ(OB_SUCCESS, cm.paxos_member_region_map_.get(addr1, tmp_region));
-  EXPECT_EQ(region1, tmp_region);
-  EXPECT_EQ(OB_SUCCESS, cm.paxos_member_region_map_.get(addr2, tmp_region));
-  EXPECT_EQ(region2, tmp_region);
-  EXPECT_EQ(OB_SUCCESS, cm.paxos_member_region_map_.get(addr3, tmp_region));
-  EXPECT_EQ(default_region, tmp_region);
 }
 
 TEST_F(TestLogConfigMgr, test_config_change_lock)
@@ -1373,19 +1353,20 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
     EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     // ack defensive code
-    EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 2, expect_config_version));
-    EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 1, LogConfigVersion()));
+    bool unused_bool = false;
+    EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 2, expect_config_version, unused_bool));
+    EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 1, LogConfigVersion(), unused_bool));
     // receive ack from learner
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr4, 1, expect_config_version));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr4, 1, expect_config_version, unused_bool));
     EXPECT_EQ(0, cm.ms_ack_list_.get_count());
     EXPECT_EQ(2, cm.resend_log_list_.get_member_number());
     EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
     // receive ack from member
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, 1, expect_config_version));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, 1, expect_config_version, unused_bool));
     EXPECT_EQ(1, cm.ms_ack_list_.get_count());
     EXPECT_EQ(2, cm.resend_log_list_.get_member_number());
     EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr2, 1, expect_config_version));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr2, 1, expect_config_version, unused_bool));
     EXPECT_EQ(2, cm.ms_ack_list_.get_count());
     EXPECT_EQ(1, cm.resend_log_list_.get_member_number());
     // check if config log is committed
@@ -1398,7 +1379,7 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     cm.last_submit_config_log_time_us_ = 0;
     EXPECT_EQ(OB_SUCCESS, cm.try_resend_config_log_(1));
     // receive ack from last member
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, 1, expect_config_version));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, 1, expect_config_version, unused_bool));
     EXPECT_EQ(0, cm.ms_ack_list_.get_count());
     EXPECT_EQ(0, cm.resend_log_list_.get_member_number());
   }
@@ -1620,13 +1601,14 @@ TEST_F(TestLogConfigMgr, test_degrade_upgrade_scenario)
     // member_list will not take effect after append_config_meta_
     EXPECT_FALSE(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(addr2));
     // self ack config log
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_));
+    bool unused_bool = false;
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_, unused_bool));
     // reach majority - 1
     EXPECT_EQ(OB_EAGAIN, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
     EXPECT_EQ(1, cm.state_);
     EXPECT_FALSE(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(addr2));
     // ack config log
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_, unused_bool));
     // degrade success, switch to INIT state
     EXPECT_EQ(OB_SUCCESS, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
     EXPECT_EQ(0, cm.state_);
@@ -1640,13 +1622,13 @@ TEST_F(TestLogConfigMgr, test_degrade_upgrade_scenario)
     // member_list will not take effect after append_config_meta_
     EXPECT_TRUE(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(addr2));
     // self ack config log
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_, unused_bool));
     // reach majority - 1
     EXPECT_EQ(OB_EAGAIN, cm.change_config(up_args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, up_config_version));
     EXPECT_TRUE(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(addr2));
     EXPECT_EQ(1, cm.state_);
     // ack config log
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_, unused_bool));
     // degrade success, switch to INIT state
     EXPECT_EQ(OB_SUCCESS, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, up_config_version));
     EXPECT_EQ(0, cm.state_);
@@ -1701,7 +1683,9 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     cm.all_learnerlist_.add_learner(ObMember(exist_child.get_server(), -1));
     child1.register_time_us_ = 1;
     child1.region_ = region1;
-    cm.paxos_member_region_map_.update(addr2, region1);
+    EXPECT_EQ(OB_SUCCESS, mock_locality_cb_->set_server_region(addr2, region1));
+    // cm.paxos_member_region_map_.erase_refactored(addr2);
+    // cm.paxos_member_region_map_.set_refactored(addr2, region1);
     // child1 register
     // duplicate register req, region has changed
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child1, true));
@@ -1872,7 +1856,7 @@ TEST_F(TestLogConfigMgr, test_check_children_health)
     cm.children_.add_learner(timeout_child);
     cm.children_.add_learner(dup_region_child);
     cm.children_.add_learner(normal_child);
-    EXPECT_EQ(OB_SUCCESS, cm.check_children_health());
+    (void) cm.check_children_health();
     EXPECT_EQ(1, cm.children_.get_member_number());
     EXPECT_TRUE(cm.children_.contains(normal_child.server_));
   }
@@ -1890,7 +1874,7 @@ TEST_F(TestLogConfigMgr, test_check_children_health)
     cm.children_.add_learner(timeout_child);
     cm.children_.add_learner(diff_region_child);
     cm.children_.add_learner(normal_child);
-    EXPECT_EQ(OB_SUCCESS, cm.check_children_health());
+    (void) cm.check_children_health();
     LogLearnerList children;
     EXPECT_EQ(OB_SUCCESS, cm.get_children_list(children));
     EXPECT_EQ(1, children.get_member_number());

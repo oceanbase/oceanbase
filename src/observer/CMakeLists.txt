@@ -36,8 +36,9 @@ ob_set_subtarget(ob_server common
   ob_srv_xlator_storage.cpp
   ob_tenant_duty_task.cpp
   ob_uniq_task_queue.cpp
-  ob_server_startup_task_handler.cpp
+  ob_startup_accel_task_handler.cpp
   ob_srv_rpc_handler.cpp
+  ob_check_params.cpp
 )
 
 ob_set_subtarget(ob_server common_mixed
@@ -81,6 +82,10 @@ ob_set_subtarget(ob_server mysql
   mysql/obmp_packet_sender.cpp
   mysql/obmp_ping.cpp
   mysql/obmp_query.cpp
+  mysql/obmp_process_info.cpp
+  mysql/obmp_process_kill.cpp
+  mysql/obmp_debug.cpp
+  mysql/obmp_refresh.cpp
   mysql/obmp_reset_connection.cpp
   mysql/obmp_statistic.cpp
   mysql/obmp_stmt_close.cpp
@@ -93,16 +98,20 @@ ob_set_subtarget(ob_server mysql
   mysql/obmp_stmt_send_long_data.cpp
   mysql/obmp_stmt_send_piece_data.cpp
   mysql/obmp_utils.cpp
+  mysql/obmp_auth_response.cpp
   mysql/obsm_conn_callback.cpp
   mysql/obsm_handler.cpp
   mysql/obsm_row.cpp
   mysql/obsm_utils.cpp
+  mysql/obmp_set_option.cpp
+  mysql/ob_feedback_proxy_utils.cpp
 )
 
 ob_set_subtarget(ob_server net
   net/ob_ingress_bw_alloc_service.cpp
   net/ob_net_endpoint_ingress_rpc_proccessor.cpp
   net/ob_net_endpoint_ingress_rpc_struct.cpp
+  net/ob_rpc_reverse_keepalive.cpp
 )
 
 ob_set_subtarget(ob_server omt
@@ -136,7 +145,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_query_and_mutate_processor.cpp
   table/ob_table_query_processor.cpp
   table/ob_table_rpc_processor.cpp
-  table/ob_table_query_sync_processor.cpp
+  table/ob_table_query_async_processor.cpp
   table/ob_table_service.cpp
   table/ob_htable_lock_mgr.cpp
   table/ob_table_context.cpp
@@ -173,6 +182,14 @@ ob_set_subtarget(ob_server table_load
   table_load/control/ob_table_load_control_rpc_executor.cpp
   table_load/control/ob_table_load_control_rpc_proxy.cpp
   table_load/control/ob_table_load_control_rpc_struct.cpp
+  table_load/resource/ob_table_load_resource_manager.cpp
+  table_load/resource/ob_table_load_resource_processor.cpp
+  table_load/resource/ob_table_load_resource_rpc_executor.cpp
+  table_load/resource/ob_table_load_resource_rpc_proxy.cpp
+  table_load/resource/ob_table_load_resource_rpc_struct.cpp
+  table_load/resource/ob_table_load_resource_service.cpp
+  table_load/ob_table_load_assigned_memory_manager.cpp
+  table_load/ob_table_load_assigned_task_manager.cpp
   table_load/ob_table_load_autoinc_nextval.cpp
   table_load/ob_table_load_bucket.cpp
   table_load/ob_table_load_client_service.cpp
@@ -194,7 +211,9 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_service.cpp
   table_load/ob_table_load_store_ctx.cpp
   table_load/ob_table_load_store_trans.cpp
+  table_load/ob_table_load_store_trans_px_writer.cpp
   table_load/ob_table_load_store.cpp
+  table_load/ob_table_load_struct.cpp
   table_load/ob_table_load_table_compactor.cpp
   table_load/ob_table_load_table_ctx.cpp
   table_load/ob_table_load_task_scheduler.cpp
@@ -245,8 +264,12 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_load_data_stat.cpp
   virtual_table/ob_all_virtual_lock_wait_stat.cpp
   virtual_table/ob_all_virtual_long_ops_status.cpp
+  virtual_table/ob_all_virtual_tenant_snapshot_ls_replica.cpp
+  virtual_table/ob_all_virtual_tenant_snapshot_ls_replica_history.cpp
   virtual_table/ob_all_virtual_ls_info.cpp
+  virtual_table/ob_all_virtual_ls_snapshot.cpp
   virtual_table/ob_all_virtual_timestamp_service.cpp
+  virtual_table/ob_all_virtual_tracepoint_info.cpp
   virtual_table/ob_all_virtual_transaction_freeze_checkpoint.cpp
   virtual_table/ob_all_virtual_transaction_checkpoint.cpp
   virtual_table/ob_all_virtual_checkpoint.cpp
@@ -345,6 +368,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_information_triggers_table.cpp
   virtual_table/ob_information_user_privileges_table.cpp
   virtual_table/ob_information_query_response_time.cpp
+  virtual_table/ob_information_schema_enable_roles_table.cpp
   virtual_table/ob_iterate_private_virtual_table.cpp
   virtual_table/ob_iterate_virtual_table.cpp
   virtual_table/ob_mem_leak_checker_info.cpp
@@ -396,8 +420,19 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sql_plan.cpp
   virtual_table/ob_all_virtual_opt_stat_gather_monitor.cpp
   virtual_table/ob_all_virtual_thread.cpp
+  virtual_table/ob_all_virtual_cgroup_config.cpp
   virtual_table/ob_virtual_flt_config.cpp
   virtual_table/ob_all_virtual_kv_connection.cpp
+  virtual_table/ob_all_virtual_tenant_resource_limit.cpp
+  virtual_table/ob_all_virtual_tenant_resource_limit_detail.cpp
+  virtual_table/ob_all_virtual_activity_metrics.cpp
+  virtual_table/ob_all_virtual_checkpoint_diagnose_info.cpp
+  virtual_table/ob_all_virtual_checkpoint_diagnose_memtable_info.cpp
+  virtual_table/ob_all_virtual_nic_info.cpp
+  virtual_table/ob_all_virtual_storage_ha_error_diagnose.cpp
+  virtual_table/ob_all_virtual_storage_ha_perf_diagnose.cpp
+  virtual_table/ob_all_virtual_sys_variable_default_value.cpp
+  virtual_table/ob_all_virtual_compatibility_control.cpp
 )
 
 ob_server_add_target(ob_server)

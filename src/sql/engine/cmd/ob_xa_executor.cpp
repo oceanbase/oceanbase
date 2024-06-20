@@ -49,6 +49,8 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
   int64_t org_cluster_id = OB_INVALID_ORG_CLUSTER_ID;
   int64_t tx_timeout = 0;
   uint64_t tenant_id = 0;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
 
   if (OB_ISNULL(plan_ctx) || OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -66,6 +68,9 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
     ret = OB_TRANS_XA_OUTSIDE;
     LOG_WARN("already start trans", K(ret), K(xid), K(tx_desc->tid()),
         K(tx_desc->get_xid()));
+  } else if (true == my_session->is_for_trigger_package()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support xa start in trigger", K(ret), K(xid));
   } else if (OB_FAIL(get_org_cluster_id_(my_session, org_cluster_id))) {
   } else if (OB_FAIL(my_session->get_tx_timeout(tx_timeout))) {
     LOG_ERROR("fail to get trans timeout ts", K(ret));
@@ -96,7 +101,8 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
                                                          my_session->get_xa_end_timeout_seconds(),
                                                          my_session->get_sessid(),
                                                          tx_param,
-                                                         tx_desc))) {
+                                                         tx_desc,
+                                                         my_session->get_data_version()))) {
       LOG_WARN("xa start failed", K(ret), K(tx_param));
       my_session->reset_tx_variable();
       my_session->set_early_lock_release(false);
@@ -107,7 +113,14 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
       my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
     }
   }
-  LOG_INFO("xa start execute", K(stmt));
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_START_TOTAL_COUNT();
+  XA_STAT_ADD_XA_START_TOTAL_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    XA_STAT_ADD_XA_START_FAIL_COUNT();
+  }
+  LOG_INFO("xa start", K(ret), K(stmt), K(xid), K(used_time_us));
   return ret;
 }
 
@@ -178,6 +191,8 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
   ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx);
   ObTaskExecutorCtx &task_exec_ctx = ctx.get_task_exec_ctx();
   ObXATransID xid;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
 
   if (OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -192,6 +207,9 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
   } else if (!my_session->get_in_transaction()) {
     ret = OB_TRANS_XA_PROTO;
     LOG_WARN("not in a trans", K(ret));
+  } else if (true == my_session->is_for_trigger_package()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support xa end in trigger", K(ret), K(xid));
   } else if (my_session->get_xid().empty()) {
     ret = OB_TRANS_XA_PROTO;
     LOG_WARN("not in xa trans", K(ret));
@@ -219,7 +237,14 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
       ctx.set_need_disconnect(false);
     }
   }
-  LOG_DEBUG("xa end execute", K(stmt));
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_END_TOTAL_COUNT();
+  XA_STAT_ADD_XA_END_TOTAL_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    XA_STAT_ADD_XA_END_FAIL_COUNT();
+  }
+  LOG_DEBUG("xa end", K(ret), K(stmt), K(xid), K(used_time_us));
   return ret;
 }
 
@@ -273,6 +298,8 @@ int ObPlXaPrepareExecutor::execute(ObExecContext &ctx, ObXaPrepareStmt &stmt)
   ObTaskExecutorCtx &task_exec_ctx = ctx.get_task_exec_ctx();
   ObXATransID xid;
   ObTransID tx_id;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
 
   if (OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -297,8 +324,14 @@ int ObPlXaPrepareExecutor::execute(ObExecContext &ctx, ObXaPrepareStmt &stmt)
     }
     my_session->get_raw_audit_record().trans_id_ = tx_id;
   }
-
-  LOG_INFO("xa prepare execute", K(ret), K(stmt), K(xid), K(tx_id));
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_PREPARE_TOTAL_COUNT();
+  XA_STAT_ADD_XA_PREPARE_TOTAL_USED_TIME(used_time_us);
+  if (OB_SUCCESS != ret && OB_TRANS_XA_RDONLY != ret) {
+    XA_STAT_ADD_XA_PREPARE_FAIL_COUNT();
+  }
+  LOG_INFO("xa prepare", K(ret), K(xid), K(tx_id), K(used_time_us));
   return ret;
 }
 
@@ -403,6 +436,8 @@ int ObPlXaCommitExecutor::execute(ObExecContext &ctx, ObXaCommitStmt &stmt)
   ObXATransID xid;
   ObTransID tx_id;
   bool has_tx_level_temp_table = false;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
   if (!stmt.is_valid_oracle_xid()) {
     ret = OB_TRANS_XA_INVAL;
     LOG_WARN("invalid xid for oracle mode", K(ret), K(stmt));
@@ -429,7 +464,14 @@ int ObPlXaCommitExecutor::execute(ObExecContext &ctx, ObXaCommitStmt &stmt)
       LOG_WARN("trx level temporary table clean failed", KR(temp_ret));
     }
   }
-  LOG_INFO("xa commit", K(ret), K(stmt), K(xid), K(tx_id));
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_COMMIT_TOTAL_COUNT();
+  XA_STAT_ADD_XA_COMMIT_TOTAL_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    XA_STAT_ADD_XA_COMMIT_FAIL_COUNT();
+  }
+  LOG_INFO("xa commit", K(ret), K(stmt), K(xid), K(tx_id), K(used_time_us));
   return ret;
 }
 
@@ -441,6 +483,8 @@ int ObPlXaRollbackExecutor::execute(ObExecContext &ctx, ObXaRollBackStmt &stmt)
   int64_t xa_timeout_seconds = my_session->get_xa_end_timeout_seconds();
   ObXATransID xid;
   ObTransID tx_id;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObXAStmtGuard xa_stmt_guard(start_ts);
   if (!stmt.is_valid_oracle_xid()) {
     ret = OB_TRANS_XA_INVAL;
     LOG_WARN("invalid xid for oracle mode", K(ret), K(stmt));
@@ -460,7 +504,14 @@ int ObPlXaRollbackExecutor::execute(ObExecContext &ctx, ObXaRollBackStmt &stmt)
     }
     my_session->get_raw_audit_record().trans_id_ = tx_id;
   }
-  LOG_INFO("xa rollback", K(ret), K(stmt), K(xid), K(tx_id));
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  XA_STAT_ADD_XA_ROLLBACK_TOTAL_COUNT();
+  XA_STAT_ADD_XA_ROLLBACK_TOTAL_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    XA_STAT_ADD_XA_ROLLBACK_FAIL_COUNT();
+  }
+  LOG_INFO("xa rollback", K(ret), K(stmt), K(xid), K(tx_id), K(used_time_us));
   return ret;
 }
 

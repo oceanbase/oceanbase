@@ -192,8 +192,6 @@ public:
   common::ObString cur_sql_;
   // in nested px situation, it is the current px coordinator's thread id
   int64_t qc_tid_;
-  // no need to deserialize
-  static constexpr int64_t LIMIT_LENGTH = 100;
   TO_STRING_KV(K_(cur_sql), K_(qc_tid));
 };
 
@@ -207,6 +205,7 @@ public:
               qc_id_(common::OB_INVALID_ID),
               sqc_id_(common::OB_INVALID_ID),
               dfo_id_(common::OB_INVALID_ID),
+              branch_id_base_(0),
               access_table_locations_(),
               qc_ch_info_(),
               sqc_ch_info_(),
@@ -368,8 +367,10 @@ public:
   bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
   ObQCMonitoringInfo &get_monitoring_info() { return monitoring_info_; }
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
+  void set_branch_id_base(const int16_t branch_id_base) { branch_id_base_ = branch_id_base; }
+  int16_t get_branch_id_base() const { return branch_id_base_; }
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
-               K_(qc_ch_info), K_(sqc_ch_info),
+               K_(branch_id_base), K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
                K_(thread_inited), K_(thread_finish), K_(px_int_id),
                K_(transmit_use_interm_result),
@@ -380,6 +381,9 @@ private:
   uint64_t qc_id_;
   int64_t sqc_id_;
   int64_t dfo_id_;
+  // branch id is used to distinguish datas written concurrently by px-workers
+  // for replace and insert update operator, they need branch_id to rollback writes by one px-worker
+  int16_t branch_id_base_;
   ObQCMonitoringInfo monitoring_info_;
   // The partition location information of the all table_scan op and dml op
   // used for px worker execution
@@ -472,6 +476,7 @@ public:
     child_dfos_(),
     has_scan_(false),
     has_dml_op_(false),
+    has_need_branch_id_op_(false),
     has_temp_scan_(false),
     is_active_(false),
     is_scheduled_(false),
@@ -541,6 +546,8 @@ public:
   inline bool has_scan_op() const { return has_scan_; }
   inline void set_dml_op(bool has_dml_op) { has_dml_op_ = has_dml_op; }
   inline bool has_dml_op() { return has_dml_op_; }
+  inline void set_need_branch_id_op(bool has_need_branch_id_op) { has_need_branch_id_op_ = has_need_branch_id_op; }
+  inline bool has_need_branch_id_op() const { return has_need_branch_id_op_; }
   inline void set_temp_table_scan(bool has_scan) { has_temp_scan_ = has_scan; }
   inline bool has_temp_table_scan() const { return has_temp_scan_; }
   inline bool is_fast_dfo() const { return is_prealloc_receive_channel() || is_prealloc_transmit_channel(); }
@@ -741,6 +748,7 @@ private:
   common::ObSEArray<ObDfo *, 4> child_dfos_;
   bool has_scan_; // DFO 中包含至少一个 scan 算子，或者仅仅包含一个dml
   bool has_dml_op_; // DFO中可能包含一个dml
+  bool has_need_branch_id_op_; // DFO 中有算子需要分配branch_id
   bool has_temp_scan_;
   bool is_active_;
   bool is_scheduled_;
@@ -906,6 +914,7 @@ public:
       dfo_id_(0),
       sqc_id_(0),
       task_id_(-1),
+      branch_id_(0),
       execution_id_(0),
       task_channel_(NULL),
       sqc_channel_(NULL),
@@ -922,7 +931,9 @@ public:
       tx_desc_(NULL),
       is_use_local_thread_(false),
       fb_info_(),
-      err_msg_()
+      err_msg_(),
+      memstore_read_row_count_(0),
+      ssstore_read_row_count_(0)
   {
 
   }
@@ -933,6 +944,7 @@ public:
     dfo_id_ = other.dfo_id_;
     sqc_id_ = other.sqc_id_;
     task_id_ = other.task_id_;
+    branch_id_ = other.branch_id_;
     execution_id_ = other.execution_id_;
     sqc_ch_info_ = other.sqc_ch_info_;
     task_ch_info_ = other.task_ch_info_;
@@ -951,6 +963,8 @@ public:
     tx_desc_ = other.tx_desc_;
     is_use_local_thread_ = other.is_use_local_thread_;
     fb_info_.assign(other.fb_info_);
+    memstore_read_row_count_ = other.memstore_read_row_count_;
+    ssstore_read_row_count_ = other.ssstore_read_row_count_;
     return *this;
   }
 public:
@@ -958,6 +972,7 @@ public:
                K_(dfo_id),
                K_(sqc_id),
                K_(task_id),
+               K_(branch_id),
                K_(execution_id),
                K_(sqc_ch_info),
                K_(task_ch_info),
@@ -975,7 +990,9 @@ public:
                K_(interm_result_ids),
                K_(tx_desc),
                K_(is_use_local_thread),
-               K_(fb_info));
+               K_(fb_info),
+               K_(memstore_read_row_count),
+               K_(ssstore_read_row_count));
   dtl::ObDtlChannelInfo &get_sqc_channel_info() { return sqc_ch_info_; }
   dtl::ObDtlChannelInfo &get_task_channel_info() { return task_ch_info_; }
   void set_task_channel(dtl::ObDtlChannel *ch) { task_channel_ = ch; }
@@ -986,6 +1003,8 @@ public:
   inline bool is_task_state_set(int32_t flag) const { return 0 != (state_ & flag); }
   inline void set_task_id(int64_t task_id) { task_id_ = task_id; }
   inline int64_t get_task_id() const { return task_id_; }
+  inline void set_branch_id(int16_t branch_id) { branch_id_ = branch_id; }
+  inline int16_t get_branch_id() const { return branch_id_; }
   inline void set_qc_id(uint64_t qc_id) { qc_id_ = qc_id; }
   inline int64_t get_qc_id() const { return qc_id_; }
   inline void set_sqc_id(int64_t sqc_id) { sqc_id_ = sqc_id; }
@@ -1021,6 +1040,10 @@ public:
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
   const ObPxUserErrorMsg &get_err_msg() const { return err_msg_; }
   ObPxUserErrorMsg &get_err_msg() { return err_msg_; }
+  void set_memstore_read_row_count(int64_t v) { memstore_read_row_count_ = v; }
+  void set_ssstore_read_row_count(int64_t v) { ssstore_read_row_count_ = v; }
+  int64_t get_memstore_read_row_count() const { return memstore_read_row_count_; }
+  int64_t get_ssstore_read_row_count() const { return ssstore_read_row_count_; }
 public:
   // 小于等于0表示设置了rc 值, task default ret值为1
   static const int64_t TASK_DEFAULT_RET_VALUE = 1;
@@ -1029,6 +1052,7 @@ public:
   int64_t dfo_id_;
   int64_t sqc_id_;
   int64_t task_id_;
+  int16_t branch_id_;
   int64_t execution_id_;
   dtl::ObDtlChannelInfo sqc_ch_info_;
   dtl::ObDtlChannelInfo task_ch_info_;
@@ -1051,6 +1075,8 @@ public:
   bool is_use_local_thread_;
   ObExecFeedbackInfo fb_info_; //for feedback info
   ObPxUserErrorMsg err_msg_; // for error msg & warning msg
+  int64_t memstore_read_row_count_; // the count of row from mem
+  int64_t ssstore_read_row_count_; // the count of row from disk
 };
 
 class ObPxRpcInitTaskArgs

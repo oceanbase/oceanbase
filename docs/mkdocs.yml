@@ -1,0 +1,57 @@
+site_name: OceanBase Developer Guide
+site_url: https://oceanbase.github.io/oceanbase
+repo_url: https://github.com/oceanbase/oceanbase
+repo_name: oceanbase/oceanbase
+plugins:
+  - search
+  #- material-relative-language-selector
+  #- mdpo
+  - i18n:
+      docs_structure: folder
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: zh
+          name: 中文
+          build: true
+          link: /zh/
+  - git-authors
+nav:
+  - README.md
+  - toolchain.md
+  - build-and-run.md
+  - ide-settings.md
+  - coding-convension.md
+  - unittest.md
+  - mysqltest.md
+  - debug.md
+  - logging.md
+  - memory.md
+  - container.md
+  - architecture.md
+  - coding_standard.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+theme:
+  name: material
+  language: en
+  features:
+    - search.highlight
+    - navigation.sections
+    - navigation.path
+    - navigation.top
+  logo: assets/logo.png
+  favicon: assets/favicon.ico
+  icon:
+    repo: fontawesome/brands/github

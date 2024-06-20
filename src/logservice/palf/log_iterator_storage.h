@@ -18,6 +18,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_utility.h"
 #include "lib/function/ob_function.h"   // ObFunction
+#include "log_io_context.h"
 #include "log_storage_interface.h"
 #include "lsn.h"
 #include "log_reader_utils.h"
@@ -43,7 +44,8 @@ public:
   int pread(const int64_t pos,
             const int64_t in_read_size,
             char *&buf,
-            int64_t &out_read_size);
+            int64_t &out_read_size,
+            LogIOContext &io_ctx);
   VIRTUAL_TO_STRING_KV(K_(start_lsn), K_(end_lsn), K_(read_buf), K_(block_size), KP(log_storage_));
 protected:
   inline int64_t get_valid_data_len_()
@@ -51,7 +53,8 @@ protected:
   virtual int read_data_from_storage_(int64_t &pos,
       const int64_t in_read_size,
       char *&buf,
-      int64_t &out_read_size) = 0;
+      int64_t &out_read_size,
+      LogIOContext &io_ctx) = 0;
 protected:
   // update after read_data_from_storage
   // 'start_lsn_' is the base position
@@ -73,7 +76,7 @@ public:
   void destroy();
   bool is_inited() const { return is_inited_; }
   int append(const char *buf, const int64_t buf_len);
-  int pread(const LSN& lsn, const int64_t in_read_size, ReadBuf &read_buf, int64_t &out_read_size) final;
+  int pread(const LSN& lsn, const int64_t in_read_size, ReadBuf &read_buf, int64_t &out_read_size, LogIOContext &io_ctx) final;
   TO_STRING_KV(K_(start_lsn), K_(log_tail), K_(buf), K_(buf_len), K_(is_inited));
 private:
   const char *buf_;
@@ -91,7 +94,8 @@ private:
   int read_data_from_storage_(int64_t &pos,
       const int64_t in_read_size,
       char *&buf,
-      int64_t &out_read_size) final;
+      int64_t &out_read_size,
+      LogIOContext &io_ctx) final;
 public:
   INHERIT_TO_STRING_KV("IteratorStorage", IteratorStorage, "IteratorStorageType:", "MemoryIteratorStorage");
 };
@@ -111,7 +115,8 @@ private:
       int64_t &pos,
       const int64_t in_read_size,
       char *&buf,
-      int64_t &out_read_size) final;
+      int64_t &out_read_size,
+      LogIOContext &io_ctx) final;
 
   int ensure_memory_layout_correct_(const int64_t pos, const int64_t in_read_size, int64_t &remain_valid_data_size);
   void do_memove_(ReadBuf &dst, const int64_t pos, int64_t &valid_tail_part_size);

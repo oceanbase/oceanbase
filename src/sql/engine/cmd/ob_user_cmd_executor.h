@@ -47,6 +47,13 @@ public:
       const common::ObIArray<int64_t> &index,
       common::ObIArray<common::ObString> &users,
       common::ObIArray<common::ObString> &hosts);
+
+  static int check_user_valid(share::schema::ObSchemaGetterGuard& schema_guard,
+                              uint64_t priv_set,
+                              int64_t tenant_id,
+                              const common::ObString &user_name,
+                              const common::ObString &host_name,
+                              const common::ObString &opreation_name);
 private:
   int create_user(obrpc::ObCommonRpcProxy *rpc_proxy,
                   const obrpc::ObCreateUserArg &arg) const;
@@ -68,11 +75,16 @@ public:
                                         const common::ObIArray<int64_t> &index,
                                         common::ObIArray<common::ObString> &dst_users,
                                         common::ObIArray<common::ObString> &dst_hosts);
+
+  static int build_fail_msg_for_one(const ObString &user,
+                                    const ObString &host,
+                                    common::ObSqlString &msg);
+  static int drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
+                       const obrpc::ObDropUserArg &arg,
+                       bool if_exists);
   int execute(ObExecContext &ctx, ObDropUserStmt &stmt);
 
 private:
-  int drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
-                const obrpc::ObDropUserArg &arg);
   DISALLOW_COPY_AND_ASSIGN(ObDropUserExecutor);
 };
 
@@ -101,6 +113,18 @@ public:
   int execute(ObExecContext &ctx, ObAlterUserProfileStmt &stmt);
 
   DISALLOW_COPY_AND_ASSIGN(ObAlterUserProfileExecutor);
+};
+
+class ObAlterUserProxyStmt;
+class ObAlterUserProxyExecutor
+{
+private:
+public:
+  ObAlterUserProxyExecutor() {}
+  virtual ~ObAlterUserProxyExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterUserProxyStmt &stmt);
+
+  DISALLOW_COPY_AND_ASSIGN(ObAlterUserProxyExecutor);
 };
 
 class ObRenameUserStmt;

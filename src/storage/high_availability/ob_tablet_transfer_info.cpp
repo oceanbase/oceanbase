@@ -44,7 +44,7 @@ int ObTabletTransferInfo::init(
   int ret = OB_SUCCESS;
   if (!ls_id.is_valid() || !transfer_start_scn.is_valid_and_not_min() || transfer_seq < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init transfer info get invalid agument", K(ret), K(ls_id), K(transfer_start_scn), K(transfer_seq));
+    LOG_WARN("init transfer info get invalid argument", K(ret), K(ls_id), K(transfer_start_scn), K(transfer_seq));
   } else {
     ls_id_ = ls_id;
     transfer_start_scn_ = transfer_start_scn;

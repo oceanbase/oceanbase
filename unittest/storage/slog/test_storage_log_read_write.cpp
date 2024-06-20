@@ -57,7 +57,7 @@ class TestStorageLogRW : public TestDataFilePrepare
 public:
   TestStorageLogRW()
     : TestDataFilePrepare(&getter, "TestStorageLogRW"),
-      tenant_base1_(1),
+      tenant_base1_(OB_SERVER_TENANT_ID),
       slogger_(nullptr)
   {
   }
@@ -97,17 +97,15 @@ void TestStorageLogRW::SetUp()
   TestDataFilePrepare::SetUp();
   FileDirectoryUtils::create_full_path("./test_storage_log_read_write");
   SLOGGERMGR.destroy();
-  SLOGGERMGR.init(dir_, MAX_FILE_SIZE, log_file_spec_);
+  SLOGGERMGR.init(dir_, dir_, MAX_FILE_SIZE, log_file_spec_);
 
   ObStorageLogger *tmp_slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
-  ASSERT_EQ(OB_SUCCESS, tmp_slogger->init(SLOGGERMGR, 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_slogger->init(SLOGGERMGR, OB_SERVER_TENANT_ID));
   ASSERT_EQ(OB_SUCCESS, tmp_slogger->start());
 
   tenant_base1_.set(tmp_slogger);
   ObTenantEnv::set_tenant(&tenant_base1_);
   ASSERT_EQ(OB_SUCCESS, tenant_base1_.init());
-  EXPECT_EQ(OB_SUCCESS, ObIOManager::get_instance().add_tenant_io_manager(
-        tenant_base1_.id(), ObTenantIOConfig::default_instance()));
 
   slogger_ = MTL(ObStorageLogger*);
   slogger_->start_log(start_cursor_);

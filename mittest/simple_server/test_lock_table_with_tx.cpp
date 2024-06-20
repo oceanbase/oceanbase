@@ -151,10 +151,12 @@ TEST_F(ObLockTableBeforeRestartTest, test_commit_log)
 
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObTableLockOwnerID OWNER_ONE(1);
+  ObTableLockOwnerID OWNER_ONE;
+  OWNER_ONE.convert_from_value(1);
   uint64_t table_id = 0;
   ObTableLockMode lock_mode = EXCLUSIVE;
-  ObTableLockOwnerID lock_owner(0);
+  ObTableLockOwnerID lock_owner;
+  lock_owner.convert_from_value(0);
   ObLS *ls = nullptr;
   ObLockMemtable *lock_memtable = nullptr;
   ObCheckpointExecutor *checkpoint_executor = nullptr;
@@ -219,7 +221,7 @@ TEST_F(ObLockTableBeforeRestartTest, test_commit_log)
   // wait until ls checkpoint updated.
   LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.4");
   // freeze data, make sure other type flushed.
-  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(false));
+  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(checkpoint::INVALID_TRACE_ID, false /*is_sync*/));
   while (ls->get_clog_checkpoint_scn() < rec_scn) {
     usleep(100 * 1000); // sleep 100 ms
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {

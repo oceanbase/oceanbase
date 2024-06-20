@@ -283,7 +283,7 @@ int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
 {
   int ret = OB_SUCCESS;
   int64_t tmp_gts = 0;
-  const MonotonicTs srr = MonotonicTs::current_time();
+  const MonotonicTs cur_ts = MonotonicTs::current_time();
 
   ObTimestampAccess *timestamp_access = MTL(ObTimestampAccess *);
   if (OB_ISNULL(timestamp_access)) {
@@ -297,18 +297,17 @@ int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
         gts_cache_leader_.reset();
     }
   } else {
-    if (leader.is_valid()) {
+    if (gts_cache_leader_ != leader) {
       gts_cache_leader_ = leader;
     }
-    const MonotonicTs tmp_receive_gts_ts = MonotonicTs::current_time();
-    if (OB_FAIL(gts_local_cache_.update_gts_and_check_barrier(srr,
+    if (OB_FAIL(gts_local_cache_.update_gts_and_check_barrier(cur_ts,
                                                               tmp_gts,
-                                                              tmp_receive_gts_ts))) {
-      TRANS_LOG(WARN, "update gts fail", K(srr), K(gts), K(receive_gts_ts), KR(ret));
+                                                              cur_ts))) {
+      TRANS_LOG(WARN, "update gts fail", K(cur_ts), K(gts), K(receive_gts_ts), KR(ret));
     } else {
       // get gts success, need to overwrite the OB_EAGAIN error code to OB_SUCCESS
       gts = tmp_gts;
-      receive_gts_ts = tmp_receive_gts_ts;
+      receive_gts_ts = cur_ts;
     }
   }
 
@@ -357,16 +356,21 @@ int64_t ObGtsSource::get_task_count() const
   return task_count;
 }
 
-int ObGtsSource::gts_callback_interrupted(const int errcode)
+int ObGtsSource::gts_callback_interrupted(const int errcode, const share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
   int64_t task_count = 0;
   for (int64_t i = 0; i < TOTAL_GTS_QUEUE_COUNT; i++) {
-    queue_[i].gts_callback_interrupted(errcode);
+    queue_[i].gts_callback_interrupted(errcode, ls_id);
     task_count += queue_[i].get_task_count();
   }
-  if (task_count > 0) {
-    ret = OB_EAGAIN;
+  if (OB_LS_OFFLINE != errcode) {
+    // in this case, all callbacck tasks of this tenant need to be cleared.
+    if (task_count > 0) {
+      ret = OB_EAGAIN;
+    }
+  } else {
+    // if OB_LS_OFFLINE, return OB_SUCCESS
   }
   return ret;
 }
@@ -668,7 +672,17 @@ int ObGtsSource::handle_gts_result(const uint64_t tenant_id, const int64_t queue
   } else {
     ObGTSTaskQueue *queue = &(queue_[queue_index]);
     if (OB_FAIL(queue->foreach_task(srr, gts, receive_gts_ts))) {
-      TRANS_LOG(WARN, "iterate task failed", KR(ret), K(queue_index));
+      if (OB_EAGAIN == ret) {
+        ret = OB_SUCCESS;
+        if (gts_local_cache_.no_rpc_on_road()) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = refresh_gts_(false))) {
+            TRANS_LOG(WARN, "refresh gts failed", K(tmp_ret));
+          }
+        }
+      } else {
+        TRANS_LOG(WARN, "iterate task failed", KR(ret), K(queue_index));
+      }
     }
   }
   return ret;

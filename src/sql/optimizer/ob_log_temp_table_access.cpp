@@ -208,3 +208,18 @@ int ObLogTempTableAccess::get_temp_table_plan(ObLogicalOperator *& insert_op)
   }
   return ret;
 }
+
+int ObLogTempTableAccess::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child_op = NULL;
+  if (OB_FAIL(get_temp_table_plan(child_op))) {
+    LOG_WARN("failed to get temp table plan", K(ret));
+  } else if (OB_ISNULL(child_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null operator", K(ret));
+  } else {
+    card = child_op->get_card();
+  }
+  return ret;
+}

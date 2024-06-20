@@ -1,0 +1,162 @@
+[
+  {
+    "scenario": "express_oltp",
+    "comment" : "for workloads like trade, payment core system, internet high throughput application, etc. no restrictions like foreign key, no stored procedure, no long transaction, no large transaction, no complex join, no complex subquery",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "_enable_defensive_check",
+          "value": 0,
+          "comment": "disabling the defensive check feature in production environment can result in a 10% performance improvement for DML operations"
+        },
+        {
+          "name": "enable_syslog_recycle",
+          "value": 1,
+          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+        },
+        {
+          "name": "max_syslog_file_count",
+          "value": 300,
+          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
+        }
+      ],
+      "tenant": [
+        {
+          "name": "_rowsets_max_rows",
+          "value": 1,
+          "comment": "for simple OLTP workloads, rowset = 1 is most effective."
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 1,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "complex_oltp",
+    "comment" : "for workloads like bank, insurance system. they often have complex join, complex correlated subquery, batch jobs written in PL, have both long and large transactions. Sometimes use parallel execution for short running queries",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "large_query_threshold",
+          "value": "600s",
+          "comment": "for complex OLTP scenario, some query will run for very long time."
+        },
+        {
+          "name": "_enable_defensive_check",
+          "value": 0,
+          "comment": "disabling the defensive check feature in production environment can result in a 3% performance improvement"
+        },
+        {
+          "name": "enable_syslog_recycle",
+          "value": 1,
+          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+        },
+        {
+          "name": "max_syslog_file_count",
+          "value": 300,
+          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
+        }
+      ],
+      "tenant": [
+        {
+          "name": "_rowsets_max_rows",
+          "value": 4,
+          "comment": "for complex OLTP workloads, rowset = 4 is most effective."
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 1,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "olap",
+    "comment": "for real-time data warehouse analytics scenarios.",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "enable_record_trace_log",
+          "value": false,
+          "comment": "disable trace log for better AP performance"
+        },
+        {
+          "name": "trace_log_slow_query_watermark",
+          "value": "7d",
+          "comment": "7 days. no 'slow query' concept for AP query"
+        },
+        {
+          "name": "large_query_threshold",
+          "value": "0ms",
+          "comment": "disable large query detection for AP query"
+        }
+      ],
+      "tenant": [
+        {
+          "name": "default_table_store_format",
+          "value": "column",
+          "comment": "default to column format for AP"
+        },
+        {
+          "name": "_rowsets_max_rows",
+          "value": 256,
+          "comment": "for classic OLAP workloads, rowset 256 is adequate"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "kv",
+    "comment": "for key-value workloads and hbase-like wide-column workloads, which commonly experience very high throughput and are sensitive to latency",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "large_query_threshold",
+          "value": "0ms",
+          "comment": "disable large query detection for KV mode"
+        }
+      ],
+      "tenant": [
+      ]
+    }
+  },
+  {
+    "scenario": "htap",
+    "comment": "for mixed OLAP and OLTP workload. Typically utilized for obtaining instant insights from active operational data, fraud detection, and personalized recommendations",
+    "parameters": {
+      "cluster": [
+        {
+          "name": "large_query_threshold",
+          "value": "600s",
+          "comment": "AP query exist in HTAP workload, we need it running fast too."
+        },
+        {
+          "name": "enable_syslog_recycle",
+          "value": 1,
+          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+        },
+        {
+          "name": "max_syslog_file_count",
+          "value": 300,
+          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
+        }
+      ],
+      "tenant": [
+        {
+          "name": "_rowsets_max_rows",
+          "value": 32,
+          "comment": "for classic HTAP workloads, rowset 32 is tradeoff"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 1,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        }
+      ]
+    }
+  }
+]

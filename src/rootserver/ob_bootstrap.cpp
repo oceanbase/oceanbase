@@ -240,6 +240,7 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   int ret = OB_SUCCESS;
   bool is_empty = false;
   bool match = false;
+  LOG_DBA_INFO_V2(OB_BOOTSTRAP_PREPARE_BEGIN, "bootstrap prepare begin.");
   begin_ts_ = ObTimeUtility::current_time();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
@@ -267,6 +268,12 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
     LOG_WARN("failed to wait elect master partition", KR(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR_V2(OB_BOOTSTRAP_PREPARE_FAIL, ret, "bootstrap prepare fail. "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_PREPARE_SUCCESS, "bootstrap prepare success.");
+  }
   return ret;
 }
 
@@ -498,7 +505,7 @@ int ObPreBootstrap::check_is_all_server_empty(bool &is_empty)
   return ret;
 }
 
-bool ObBootstrap::TableIdCompare::operator() (const ObTableSchema* left, const ObTableSchema* right)
+bool ObBootstrap::TableIdCompare::operator() (const ObSimpleTableSchemaV2* left, const ObSimpleTableSchemaV2* right)
 {
   bool bret = false;
 
@@ -591,18 +598,50 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_system_data())) {
       LOG_WARN("failed to init system data", KR(ret));
-    } else if (OB_FAIL(ddl_service_.refresh_schema(OB_SYS_TENANT_ID))) {
+    }
+    if (OB_SUCC(ret)) {
+      LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_BEGIN,
+                      DBA_STEP_INC_INFO(bootstrap),
+                      "bootstrap refresh all schema begin.");
+    }
+    if (FAILEDx(ddl_service_.refresh_schema(OB_SYS_TENANT_ID))) {
       LOG_WARN("failed to refresh_schema", K(ret));
+      LOG_DBA_ERROR_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_FAIL, ret,
+                       DBA_STEP_INC_INFO(bootstrap),
+                       "bootstrap refresh all schema fail. [suggestion] you can: "
+                       "1. Search previous error logs that may indicate the cause of this failure. "
+                       "2. Check if other nodes are accessible via ssh. "
+                       "2. Check whether other nodes can establish connections through sql client. "
+                       "3. Check the alert.log on others node to see if there are other error logs.");
+    } else {
+      LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_SUCCESS,
+                      DBA_STEP_INC_INFO(bootstrap),
+                      "bootstrap refresh all schema success.");
     }
   }
   BOOTSTRAP_CHECK_SUCCESS_V2("refresh_schema");
 
   if (FAILEDx(add_servers_in_rs_list(server_zone_op_service))) {
     LOG_WARN("fail to add servers in rs_list_", KR(ret));
-  } else if (OB_FAIL(wait_all_rs_in_service())) {
-    LOG_WARN("failed to wait all rs in service", KR(ret));
   } else {
-    ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_BEGIN,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap wait all rootservice in service begin.");
+    if (OB_FAIL(wait_all_rs_in_service())) {
+      LOG_WARN("failed to wait all rs in service", KR(ret));
+      LOG_DBA_ERROR_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_FAIL, ret,
+                      DBA_STEP_INC_INFO(bootstrap),
+                      "bootstrap wait all rootservice in service fail. "
+                      "[suggestion] maybe this node is not leader anymore or just timeout.(depends on error code) you can:"
+                      "1. Check whether the current node is the leader through oceanbase.CDB_OB_LS; "
+                      "2. Check whether the network between nodes is connected; "
+                      "3. Check the alert.log on other nodes;");
+    } else {
+      ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
+      LOG_DBA_INFO_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_SUCCESS,
+                      DBA_STEP_INC_INFO(bootstrap),
+                      "bootstrap wait all rootservice in service success.");
+    }
   }
 
   BOOTSTRAP_CHECK_SUCCESS();
@@ -679,16 +718,19 @@ int ObBootstrap::prepare_create_partition(
     common::ObArray<share::schema::ObTableSchema> table_schema_array;
     common::ObArray<const share::schema::ObTableSchema*> table_schema_ptrs;
     common::ObArray<share::ObLSID> ls_id_array;
+    common::ObArray<bool> need_create_empty_majors;
     if (OB_FAIL(generate_table_schema_array_for_create_partition(tschema, table_schema_array))) {
       LOG_WARN("fail to generate table schema array", KR(ret));
     } else if (OB_UNLIKELY(table_schema_array.count() < 1)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("generate table schema count is unexpected", KR(ret));
-    } else if (OB_FAIL(table_schema_ptrs.reserve(table_schema_array.count()))) {
+    } else if (OB_FAIL(table_schema_ptrs.reserve(table_schema_array.count()))
+      || OB_FAIL(need_create_empty_majors.reserve(table_schema_array.count()))) {
       LOG_WARN("Fail to reserve rowkey column array", KR(ret));
     } else {
       for (int i = 0; i < table_schema_array.count() && OB_SUCC(ret); ++i) {
-        if (OB_FAIL(table_schema_ptrs.push_back(&table_schema_array.at(i)))) {
+        if (OB_FAIL(table_schema_ptrs.push_back(&table_schema_array.at(i)))
+          || OB_FAIL(need_create_empty_majors.push_back(true))) {
           LOG_WARN("fail to push back", KR(ret), K(table_schema_array));
         }
       }
@@ -702,7 +744,9 @@ int ObBootstrap::prepare_create_partition(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(creator.add_create_tablets_of_tables_arg(
             table_schema_ptrs,
-            ls_id_array))) {
+            ls_id_array,
+            DATA_CURRENT_VERSION,
+            need_create_empty_majors/*need_create_empty_major_sstable*/))) {
       LOG_WARN("fail to add create tablet arg", KR(ret));
     }
   }
@@ -957,6 +1001,9 @@ int ObBootstrap::create_all_schema(ObDDLService &ddl_service,
   int ret = OB_SUCCESS;
   const int64_t begin_time = ObTimeUtility::current_time();
   LOG_INFO("start create all schemas", "table count", table_schemas.count());
+  LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_BEGIN,
+                  DBA_STEP_INC_INFO(bootstrap),
+                  "bootstrap create all schema begin.");
   if (table_schemas.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_schemas is empty", K(table_schemas), K(ret));
@@ -1003,6 +1050,16 @@ int ObBootstrap::create_all_schema(ObDDLService &ddl_service,
   }
   LOG_INFO("end create all schemas", K(ret), "table count", table_schemas.count(),
            "time_used", ObTimeUtility::current_time() - begin_time);
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_FAIL, ret,
+                     DBA_STEP_INC_INFO(bootstrap),
+                     "bootstrap create all schema fail. "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap create all schema success.");
+  }
   return ret;
 }
 
@@ -1430,6 +1487,9 @@ int ObBootstrap::insert_sys_ls_(const share::schema::ObTenantSchema &tenant_sche
 int ObBootstrap::init_system_data()
 {
   int ret = OB_SUCCESS;
+  LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_SYS_TENANT_BEGIN,
+                  DBA_STEP_INC_INFO(bootstrap),
+                  "bootstrap create sys tenant begin.");
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
   } else if (OB_FAIL(unit_mgr_.load())) {
@@ -1442,6 +1502,16 @@ int ObBootstrap::init_system_data()
     LOG_WARN("create system tenant failed", KR(ret));
   } else if (OB_FAIL(init_all_zone_table())) {
     LOG_WARN("failed to init all zone table", KR(ret));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR_V2(OB_BOOTSTRAP_CREATE_SYS_TENANT_FAIL, ret,
+                     DBA_STEP_INC_INFO(bootstrap),
+                     "bootstrap create sys tenant fail. maybe some resources are not enough. "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_SYS_TENANT_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap create sys tenant success.");
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
@@ -1500,8 +1570,9 @@ int ObBootstrap::create_sys_resource_pool()
   ObArray<ObUnit> sys_units;
   ObArray<ObResourcePoolName> pool_names;
   share::ObResourcePool pool;
-  bool is_bootstrap = true;
+  const bool is_bootstrap = true;
   const bool if_not_exist = false;
+  const bool check_data_version = false;
   common::ObMySQLTransaction trans;
   common::ObArray<uint64_t> new_ug_id_array;
   if (OB_FAIL(check_inner_stat())) {
@@ -1523,7 +1594,8 @@ int ObBootstrap::create_sys_resource_pool()
   } else if (OB_FAIL(unit_mgr_.grant_pools(
           trans, new_ug_id_array,
           lib::Worker::CompatMode::MYSQL, pool_names,
-          OB_SYS_TENANT_ID, is_bootstrap))) {
+          OB_SYS_TENANT_ID, is_bootstrap, OB_INVALID_TENANT_ID/*source_tenant_id*/,
+          check_data_version))) {
     LOG_WARN("grant_pools_to_tenant failed", K(pool_names),
         "tenant_id", static_cast<uint64_t>(OB_SYS_TENANT_ID), K(ret));
   } else {

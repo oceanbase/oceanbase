@@ -25,6 +25,7 @@ public:
     // constructor
     ObGeometry(uint32_t srid = 0, ObIAllocator *allocator = NULL)
         : srid_(srid),
+          zoom_in_value_(0),
           allocator_(allocator),
           version_(ENCODE_GEO_VERSION(GEO_VESION_1))  {}
     virtual ~ObGeometry() = default;
@@ -46,7 +47,7 @@ public:
     // srid
     uint32_t get_srid() const { return srid_; }
     void set_srid(uint32_t srid) { srid_ = srid; }
-    uint32_t get_zoom_in_value() { return zoom_in_value_; }
+    uint32_t get_zoom_in_value() const { return zoom_in_value_; }
     void set_zoom_in_value(uint32_t value) { zoom_in_value_ = value; }
     // version
     uint8_t get_version() { return version_; }

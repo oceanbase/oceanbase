@@ -44,8 +44,15 @@ int eval_intersects_by_disjoint(const ObGeometry *g1, const ObGeometry *g2, cons
 template <typename GeoType1, typename GeoType2>
 int eval_intersects_without_strategy(const ObGeometry *g1, const ObGeometry *g2, bool &result)
 {
-  const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
-  const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+  const GeoType1 *geo1 = nullptr;
+  const GeoType2 *geo2 = nullptr;
+  if (!g1->is_tree()) {
+    geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
+    geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+  } else {
+    geo1 = reinterpret_cast<const GeoType1 *>(g1);
+    geo2 = reinterpret_cast<const GeoType2 *>(g2);
+  }
   result = bg::intersects(*geo1, *geo2);
   return OB_SUCCESS;
 }
@@ -66,7 +73,11 @@ int eval_intersects_with_point_strategy(const ObGeometry *g1,
     bg::strategy::within::geographic_winding<ObWkbGeogPoint> point_strategy(geog_sphere);
     const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
     const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+#ifdef USE_SPHERE_GEO
     result = bg::intersects(*geo1, *geo2, point_strategy);
+#else
+    result = bg::intersects(*geo1, *geo2);
+#endif
   }
   return ret;
 }
@@ -87,7 +98,11 @@ int eval_intersects_with_nonpoint_strategy(const ObGeometry *g1,
     bg::strategy::intersection::geographic_segments<> nonpoint_strategy(geog_sphere);
     const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
     const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+#ifdef USE_SPHERE_GEO
     result = bg::intersects(*geo1, *geo2, nonpoint_strategy);
+#else
+    result = bg::intersects(*geo1, *geo2);
+#endif
   }
   return ret;
 }
@@ -329,6 +344,20 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogCollection, ObWk
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectsImpl, ObWkbGeogPoint, ObWkbGeogCollection, bool)
 {
   return eval_intersects_geometry_collection<ObWkbGeogCollection>(g1, g2, context, result);
+} OB_GEO_FUNC_END;
+
+OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncIntersectsImpl, ObCartesianPolygon, ObCartesianPolygon, bool)
+{
+  UNUSED(context);
+  return eval_intersects_without_strategy<ObCartesianPolygon, ObCartesianPolygon>(g1, g2, result);
+} OB_GEO_FUNC_END;
+// detect polygon self-intersection
+OB_GEO_UNARY_TREE_FUNC_BEGIN(ObGeoFuncIntersectsImpl, ObCartesianPolygon, bool)
+{
+  UNUSED(context);
+  const ObCartesianPolygon *geo = reinterpret_cast<const ObCartesianPolygon *>(g);
+  result = bg::intersects(*geo);
+  return OB_SUCCESS;
 } OB_GEO_FUNC_END;
 
 int ObGeoFuncIntersects::eval(const ObGeoEvalCtx &gis_context, bool &result)

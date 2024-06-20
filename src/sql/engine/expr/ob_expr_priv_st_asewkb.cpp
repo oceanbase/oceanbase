@@ -91,18 +91,19 @@ int ObExprStPrivAsEwkb::eval_priv_st_as_ewkb(const ObExpr &expr,
     LOG_WARN("fail to get real data.", K(ret), K(wkb_str));
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb_str, srs))) {
     LOG_WARN("fail to get srs item", K(ret), K(wkb_str));
-  } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_wkb(tmp_allocator, wkb_str, srs, geo, true))) {
+  } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_wkb(tmp_allocator, wkb_str, srs, geo, true, true, true))) {
     LOG_WARN("fail to create geo by wkb", K(ret), K(wkb_str));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASEWKB);
     }
   } else if (OB_NOT_NULL(srs)) {
-    is_geog = srs->is_geographical_srs();
+      is_geog = srs->is_geographical_srs();
   }
 
   if (OB_SUCC(ret)) {
     ObString res_wkb;
+    const int64_t data_offset = WKB_OFFSET + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE;
     if (is_null_result) {
       res.set_null();
     } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*geo, expr, ctx, srs, res_wkb))) {
@@ -114,6 +115,9 @@ int ObExprStPrivAsEwkb::eval_priv_st_as_ewkb(const ObExpr &expr,
         LOG_WARN("fail to check coordinate range", K(ret));
       } else if (OB_FAIL(lob.get_inrow_data(res_wkb))) {
         LOG_WARN("fail to get inrow data", K(ret), K(lob));
+      } else if (res_wkb.length() < data_offset) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected wkb length", K(ret), K(res_wkb.length()));
       } else if (OB_FAIL(ObGeoTypeUtil::get_header_info_from_wkb(res_wkb, header))) {
         LOG_WARN("fail to get wkb header info", K(ret), K(res_wkb));
       } else {
@@ -121,17 +125,19 @@ int ObExprStPrivAsEwkb::eval_priv_st_as_ewkb(const ObExpr &expr,
         // swkb:[srid][version][bo][type][data]
         *(reinterpret_cast<uint8_t *>(res_wkb.ptr())) = static_cast<uint8_t>(header.bo_); // 1. write [bo]
         int64_t pos = WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE;
-        int64_t data_offset = WKB_OFFSET + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE;
         int64_t remove_len = WKB_VERSION_SIZE;
+        uint32_t geo_type = static_cast<uint32_t>(header.type_);
+        bool is_3d_geo = ObGeoTypeUtil::is_3d_geo_type(geo->type());
+        //transform to EWKB format
+        geo_type = is_3d_geo ? ((geo_type - ObGeoTypeUtil::WKB_3D_TYPE_OFFSET) | ObGeoTypeUtil::EWKB_Z_FLAG) : geo_type;
         if (0 != header.srid_) {
           ObGeoWkbByteOrderUtil::write<uint32_t>(res_wkb.ptr() + WKB_GEO_BO_SIZE,
-              static_cast<uint32_t>(header.type_) | ObGeoTypeUtil::EWKB_SRID_FLAG, header.bo_); // 2. write [type]
+              geo_type | ObGeoTypeUtil::EWKB_SRID_FLAG, header.bo_); // 2. write [type]
           ObGeoWkbByteOrderUtil::write<uint32_t>(res_wkb.ptr() + WKB_GEO_BO_SIZE
               + WKB_GEO_TYPE_SIZE, header.srid_, header.bo_); // write [srid]
           pos += WKB_GEO_SRID_SIZE;
         } else { // 当srid为0时，ewkb中不输出srid字段
-          ObGeoWkbByteOrderUtil::write<uint32_t>(res_wkb.ptr() + WKB_GEO_BO_SIZE,
-              static_cast<uint32_t>(header.type_), header.bo_); // 2. write [type]
+          ObGeoWkbByteOrderUtil::write<uint32_t>(res_wkb.ptr() + WKB_GEO_BO_SIZE, geo_type, header.bo_); // 2. write [type]
           remove_len += WKB_GEO_SRID_SIZE;
         }
         MEMMOVE(res_wkb.ptr() + pos, res_wkb.ptr() + data_offset, res_wkb.length() - data_offset);// write [data]

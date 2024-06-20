@@ -102,12 +102,14 @@ private:
 class ObCOMergeWriter
 {
 public:
-  ObCOMergeWriter()
+  ObCOMergeWriter(bool iter_co_build_row_store = false)
     : allocator_("MergeWriter"),
       fuser_(allocator_),
       iter_(nullptr),
       default_row_(),
-      is_inited_(false)
+      is_inited_(false),
+      iter_co_build_row_store_(iter_co_build_row_store),
+      error_location_(nullptr)
   {}
   virtual ~ObCOMergeWriter();
   virtual int init(
@@ -167,6 +169,7 @@ private:
   ObMergeIter *iter_;
   blocksstable::ObDatumRow default_row_;
   bool is_inited_;
+  bool iter_co_build_row_store_;
 protected:
   share::ObDiagnoseLocation *error_location_;
 };
@@ -174,12 +177,12 @@ protected:
 class ObCOMergeRowWriter : public ObCOMergeWriter
 {
 public:
-  ObCOMergeRowWriter()
-    : ObCOMergeWriter(),
+  ObCOMergeRowWriter(bool iter_co_build_row_store = false)
+    : ObCOMergeWriter(iter_co_build_row_store),
       progressive_merge_helper_(nullptr),
       write_helper_(),
       row_(),
-      cg_read_info_handle_()
+      single_read_info_()
   {}
   ~ObCOMergeRowWriter();
   virtual int init(
@@ -205,7 +208,7 @@ private:
   ObProgressiveMergeHelper *progressive_merge_helper_;
   ObWriteHelper write_helper_;
   blocksstable::ObDatumRow row_;
-  ObCGReadInfoHandle cg_read_info_handle_;
+  ObTableReadInfo single_read_info_;
 };
 
 class ObCOMergeSingleWriter : public ObCOMergeWriter

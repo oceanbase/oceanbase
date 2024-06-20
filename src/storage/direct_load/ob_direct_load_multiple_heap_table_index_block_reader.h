@@ -21,11 +21,12 @@ namespace storage
 
 class ObDirectLoadMultipleHeapTableIndexBlockReader
   : public ObDirectLoadDataBlockReader<ObDirectLoadMultipleHeapTableIndexBlock::Header,
-                                       ObDirectLoadMultipleHeapTableIndexBlock::Entry>
+                                       ObDirectLoadMultipleHeapTableIndexBlock::Entry,
+                                       true/*align*/>
 {
   typedef ObDirectLoadMultipleHeapTableIndexBlock::Header Header;
   typedef ObDirectLoadMultipleHeapTableIndexBlock::Entry Entry;
-  typedef ObDirectLoadDataBlockReader<Header, Entry> ParentType;
+  typedef ObDirectLoadDataBlockReader<Header, Entry, true> ParentType;
 public:
   ObDirectLoadMultipleHeapTableIndexBlockReader();
   virtual ~ObDirectLoadMultipleHeapTableIndexBlockReader();

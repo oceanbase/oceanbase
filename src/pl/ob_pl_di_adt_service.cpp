@@ -860,6 +860,7 @@ int ObPLDIADTService::get_seg_pointer_array(jit::ObLLVMDIType &type)
                                                   32, member_types, seg_pointer_array_))) {
       LOG_WARN("failed to create struct type", K(ret));
     } else if (OB_ISNULL(seg_pointer_array_.get_v())) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create di seg pointer array", K(ret));
     }
   }

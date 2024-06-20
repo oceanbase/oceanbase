@@ -22,6 +22,8 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/engine/px/ob_granule_pump.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_share_info.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
+#include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 namespace oceanbase
 {
 namespace sql
@@ -93,7 +95,8 @@ public:
   void set_tablet_size(int64_t tablet_size) { tablet_size_ = tablet_size; }
   int64_t get_tablet_size() { return tablet_size_; }
 
-
+  int set_px_rf_info(const ObPxRFStaticInfo &px_rf_info) { return px_rf_info_.assign(px_rf_info); }
+  ObPxRFStaticInfo &get_px_rf_info() { return px_rf_info_; }
 
   void set_gi_flags(uint64_t flags) {
     gi_attri_flag_ = flags;
@@ -134,6 +137,8 @@ public:
   ObExpr *tablet_id_expr_;
   // end for partition join filter
   int64_t repart_pruning_tsc_idx_;
+  // for runtime filter extract query range
+  ObPxRFStaticInfo px_rf_info_;
 };
 
 class ObGranuleIteratorOp : public ObOperator
@@ -145,6 +150,27 @@ private:
     GI_TABLE_SCAN,
     GI_GET_NEXT_GRANULE_TASK,
     GI_END,
+  };
+  class RescanTasksInfo
+  {
+  public:
+    RescanTasksInfo() : use_opt_(false) {}
+    void reset() {
+      rescan_tasks_pos_.reset();
+      rescan_tasks_map_.clear();
+    }
+    void destroy() {
+      rescan_tasks_pos_.reset();
+      rescan_tasks_map_.destroy();
+    }
+    int insert_rescan_task(int64_t pos, const ObGranuleTaskInfo &info);
+    // use opt means partition_pruning is enabled and pos of task of each tablet is recorded in rescan_tasks_map_.
+    bool use_opt_;
+    common::ObSEArray<int64_t, OB_MIN_PARALLEL_TASK_COUNT * 2> rescan_tasks_pos_;
+    // key is tablet_id, value is
+    // 1.non-pw: pos. call ObGITaskSet::get_task_at_pos(pos) to get ObGranuleTaskInfo.
+    // 2.pw: rescan_task_idx_. pwj_rescan_task_infos_[rescan_task_idx_] to get ObGranuleTaskInfo.
+    hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> rescan_tasks_map_;
   };
 public:
   ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
@@ -170,6 +196,8 @@ private:
   // 非full partition wise获得task的方式
   // TODO: jiangting.lk 重构下函数名字
   int try_fetch_task(ObGranuleTaskInfo &info);
+  int get_next_task_pos(int64_t &pos, const ObGITaskSet *&taskset);
+  int pw_get_next_task_pos(const common::ObIArray<int64_t> &op_ids);
   /**
    * @brief
    * full partition wise的模式下，通过op ids获得对应的task infos
@@ -185,7 +213,7 @@ private:
   bool is_not_init() { return state_ == GI_UNINITIALIZED; }
   // 获得消费GI task的node：
   // 目前仅仅支持TSC或者Join
-  int get_gi_task_consumer_node(ObOperator *cur, ObOperator *&child) const;
+  int get_gi_task_consumer_node(ObOperator *cur, ObOperator *&consumer) const;
   // ---for nlj pkey
   int try_pruning_repart_partition(
       const ObGITaskSet &taskset,
@@ -214,10 +242,19 @@ private:
   bool enable_single_runtime_filter_pruning();
   int do_single_runtime_filter_pruning(const ObGranuleTaskInfo &gi_task_info, bool &partition_pruning);
   int do_parallel_runtime_filter_pruning();
-  int wait_runtime_ready(bool &partition_pruning);
+  int wait_partition_runtime_filter_ready(bool &partition_pruning);
   int do_join_filter_partition_pruning(int64_t tablet_id, bool &partition_pruning);
   int try_build_tablet2part_id_map();
+  int init_rescan_tasks_info();
   //---end----
+
+  // for runtime filter extract query_range
+  int wait_runtime_filter_ready(ObP2PDhKey &rf_key, ObP2PDatahubMsgBase *&rf_msg);
+  bool enable_single_runtime_filter_extract_query_range();
+  bool enable_parallel_runtime_filter_extract_query_range();
+  int do_single_runtime_filter_extract_query_range(ObGranuleTaskInfo &gi_task_info);
+  int do_parallel_runtime_filter_extract_query_range(bool need_regenerate_gi_task = true);
+  // ---end----
 private:
   typedef common::hash::ObHashMap<int64_t, int64_t,
       common::hash::NoPthreadDefendMode> ObPxTablet2PartIdMap;
@@ -232,7 +269,7 @@ private:
   bool all_task_fetched_;
   bool is_rescan_;
   const ObGITaskSet *rescan_taskset_ = NULL;
-  common::ObSEArray<int64_t, OB_MIN_PARALLEL_TASK_COUNT * 2> rescan_tasks_;
+  RescanTasksInfo rescan_tasks_info_;
   int64_t rescan_task_idx_;
   // full pwj场景下, 在执行过程中缓存住了自己的任务队列.
   // 供GI rescan使用
@@ -249,6 +286,11 @@ private:
   ObPxTablet2PartIdMap tablet2part_id_map_;
   ObOperator *real_child_;
   bool is_parallel_runtime_filtered_;
+
+  // for runtime filter extract query range
+  bool is_parallel_rf_qr_extracted_; // parallel runtime filter query range extracted
+  ObSEArray<ObP2PDhKey, 2> query_range_rf_keys_;
+  ObSEArray<ObP2PDatahubMsgBase *, 2> query_range_rf_msgs_;
 };
 
 } // end namespace sql

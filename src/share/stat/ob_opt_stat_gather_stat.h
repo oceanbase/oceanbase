@@ -29,30 +29,43 @@ enum ObOptStatGatherType {
   AUTO_GATHER
 };
 
-// enum ObOptStatRunningPhase {
-//   GATHER_BEGIN = 0,
-//   GATHER_SUBPART_STATS,
-//   GATHER_PART_STATS,
-//   DERIVE_PART_STATS,
-//   GATHER_GLOBAL_STATS,
-//   DERIVE_GLOBAL_STATS,
-//   WRITE_STATS,
-//   GATHER_INDEX_STATS,
-//   GATHER_END
-// };
+enum ObOptStatRunningPhase {
+  GATHER_PREPARE,
+  GATHER_SUBPART_STATS,
+  GATHER_PART_STATS,
+  APPROX_GATHER_PART_STATS,
+  GATHER_GLOBAL_STATS,
+  APPROX_GATHER_GLOBAL_STATS,
+  BACKUP_HISTORY_STATS,
+  GATHER_INDEX_STATS,
+  GATHER_END
+};
 
-// static const char *running_phase_name[ObOptStatRunningPhase::GATHER_END + 1] =
-// {
-//   "GATHER BEGIN",
-//   "GATHER SUBPART STATS",
-//   "GATHER PART STATS",
-//   "DERIVE PART STATS",
-//   "GATHER GLOBAL STATS",
-//   "DERIVE GLOBAL STATS",
-//   "WRITE STATS",
-//   "GATHER INDEX STATS",
-//   "GATHER END"
-// };
+static const char *running_phase_name[ObOptStatRunningPhase::GATHER_END + 1] =
+{
+  "GATHER PREPARE",
+  "GATHER SUBPART STATS",
+  "GATHER PART STATS",
+  "APPROX GATHER PART STATS",
+  "GATHER GLOBAL STATS",
+  "APPROX GATHER GLOBAL STATS",
+  "BACKUP HISTORY STATS",
+  "GATHER INDEX STATS",
+  "GATHER END"
+};
+
+static const int64_t running_progress_ratio[ObOptStatRunningPhase::GATHER_END + 1] =
+{
+  0,//GATHER_PREPARE
+  5,//GATHER_SUBPART_STATS
+  45,//GATHER_PART_STATS
+  65,//APPROX_GATHER_PART_STATS
+  70,//GATHER_GLOBAL_STATS
+  80,//APPROX_GATHER_GLOBAL_STATS
+  90,//BACKUP_HISTORY_STATS
+  95,//GATHER_INDEX_STATS
+  100//GATHER_END
+};
 
 struct ObOptStatTaskInfo
 {
@@ -67,13 +80,12 @@ struct ObOptStatTaskInfo
     task_end_time_(0),
     ret_code_(0),
     failed_count_(0),
-    completed_table_count_(0)
+    completed_table_count_(0),
+    session_(NULL)
   {}
   int64_t size() const { return trace_id_.length() + task_id_.length(); }
   int init(common::ObIAllocator &allocator,
-           uint64_t tenant_id,
-           uint64_t session_id,
-           const common::ObCurTraceId::TraceId &trace_id,
+           sql::ObSQLSessionInfo *session,
            ObString &task_id,
            ObOptStatGatherType type,
            uint64_t task_start_time,
@@ -101,6 +113,7 @@ struct ObOptStatTaskInfo
   int ret_code_;
   int64_t failed_count_;
   int64_t completed_table_count_;
+  sql::ObSQLSessionInfo *session_;//no deep copy
 };
 
 class ObOptStatGatherStat : public common::ObDLinkBase<ObOptStatGatherStat>
@@ -154,6 +167,9 @@ public:
   inline void set_properties(const char *ptr, int32_t len) { properties_.assign_ptr(ptr, len); }
   inline int64_t get_running_table_duration_time() const { return ObTimeUtility::current_time() - start_time_; }
   inline int64_t get_completed_table_count() { return task_info_.completed_table_count_; }
+  inline const ObString &get_table_gather_progress() const { return table_gather_progress_; }
+  inline void set_table_gather_progress(const char *ptr, int32_t len) { table_gather_progress_.assign_ptr(ptr, len); }
+  sql::ObSQLSessionInfo *get_session() { return task_info_.session_; }
   TO_STRING_KV(K(task_info_),
                K(database_name_),
                K(table_id_),
@@ -163,7 +179,8 @@ public:
                K(end_time_),
                K(memory_used_),
                K(stat_refresh_failed_list_),
-               K(properties_));
+               K(properties_),
+               K(table_gather_progress_));
 
 private:
   ObOptStatTaskInfo task_info_;
@@ -176,6 +193,7 @@ private:
   int64_t memory_used_;
   ObString stat_refresh_failed_list_;
   ObString properties_;
+  ObString table_gather_progress_;
 };
 
 struct ObOptStatRunningMonitor
@@ -197,6 +215,10 @@ struct ObOptStatRunningMonitor
             ObOptStatGatherStat &opt_stat_gather_stat);
   int add_table_info(common::ObTableStatParam &table_param,
                      double stale_percent = -1.0);
+  int add_monitor_info(ObOptStatRunningPhase current_phase, double extra_progress_ratio = 0);
+  double get_monitor_extra_progress_ratio(ObOptStatRunningPhase current_phase,
+                                          ObOptStatRunningPhase next_phase,
+                                          int64_t total_split_cnt);
   void set_monitor_result(int ret_code,
                           int64_t current_time,
                           int64_t current_memory_used);
@@ -216,9 +238,12 @@ public:
   int push(ObOptStatGatherStat &stat_value);
   int remove(ObOptStatGatherStat &stat_value);
   void update_gather_stat_info(ObString &db_name,
-                                ObString &tab_name,
-                                ObString &properties,
-                                ObOptStatGatherStat &stat_value);
+                               ObString &tab_name,
+                               ObString &properties,
+                               ObOptStatGatherStat &stat_value);
+  void update_table_gather_progress(ObString &table_gather_progress,
+                                    ObOptStatGatherStat &stat_value);
+  int cancel_gather_stats(const uint64_t tenant_id, const ObString &task_id);
   void update_gather_stat_refresh_failed_list(ObString &failed_list,
                                               ObOptStatGatherStat &stat_value);
   // param[in] tenant_id  if tenant is sys, list all tenant stat, else list target tenant stat

@@ -234,6 +234,7 @@ public:
   bool is_arrived_expired_time() const {
     return stat_expired_time_ != -1 && stat_expired_time_ <= ObTimeUtility::current_time(); }
 
+  int64_t get_stat_expired_time() const { return stat_expired_time_; }
   void set_stat_expired_time(int64_t expired_time) {  stat_expired_time_ = expired_time; }
 
   bool is_locked() const { return stattype_locked_ > 0; }

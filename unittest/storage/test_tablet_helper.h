@@ -128,12 +128,14 @@ inline int TestTabletHelper::create_tablet(
     ObFreezer *freezer = ls_handle.get_ls()->get_freezer();
     ObTabletHandle tablet_handle;
     const ObTabletMapKey key(ls_id, tablet_id);
+    const bool need_create_empty_major_sstable =
+      !(create_tablet_schema.is_user_hidden_table() || (create_tablet_schema.is_index_table() && !create_tablet_schema.can_read_index()));
     if (OB_FAIL(t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle))) {
       STORAGE_LOG(WARN, "t3m acquire tablet failed", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(tablet_handle.get_obj()->init_for_first_time_creation(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
-        snapshot_version, create_tablet_schema, true, freezer))){
+        snapshot_version, create_tablet_schema, need_create_empty_major_sstable, freezer))){
       STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;
@@ -157,8 +159,11 @@ inline int TestTabletHelper::create_tablet(
       }
     }
 
-    if (FAILEDx(t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle))) {
-      STORAGE_LOG(WARN, "failed to compare and swap tablet", K(ret), K(ls_id), K(tablet_id));
+    ObUpdateTabletPointerParam param;
+    if (FAILEDx(tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
+      STORAGE_LOG(WARN, "fail to get updating tablet pointer parameters", K(ret), K(tablet_handle));
+    } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle, param))) {
+      STORAGE_LOG(WARN, "failed to compare and swap tablet", K(ret), K(ls_id), K(tablet_id), K(param));
     } else if (OB_FAIL(ls_tablet_svr->tablet_id_set_.set(tablet_id))){
       STORAGE_LOG(WARN, "set tablet id failed", K(ret), K(tablet_id));
     } else {
@@ -206,9 +211,12 @@ inline int TestTabletHelper::remove_tablet(const ObLSHandle &ls_handle, const Ob
   } else {
     tablet_handle.get_obj()->mds_data_.tablet_status_.committed_kv_.get_ptr()->v_.user_data_.assign(buf, data_serialize_size);
     ObMetaDiskAddr disk_addr;
+    ObUpdateTabletPointerParam param;
     disk_addr.set_mem_addr(0, sizeof(ObTablet));
-    if(OB_FAIL(t3m->compare_and_swap_tablet(
-            ObTabletMapKey(ls_id, tablet_id), tablet_handle, tablet_handle))) {
+    if (OB_FAIL(tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
+      STORAGE_LOG(WARN, "fail to get updating tablet pointer parameters", K(ret), K(tablet_handle));
+    } else if(OB_FAIL(t3m->compare_and_swap_tablet(
+            ObTabletMapKey(ls_id, tablet_id), tablet_handle, tablet_handle, param))) {
       STORAGE_LOG(WARN, "failed to compare and swap tablet", K(ret), K(ls_id), K(tablet_id), K(disk_addr));
     }
   }

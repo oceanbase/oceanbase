@@ -83,23 +83,25 @@ PhysicalRestoreStatus ObPhysicalRestoreTableOperator::get_restore_status(
 
 ObPhysicalRestoreTableOperator::ObPhysicalRestoreTableOperator()
   : inited_(false),
-    sql_client_(NULL), tenant_id_(OB_INVALID_TENANT_ID)
+    sql_client_(NULL), tenant_id_(OB_INVALID_TENANT_ID), group_id_(0)
 {
 }
 
 int ObPhysicalRestoreTableOperator::init(common::ObISQLClient *sql_client,
-                                         const uint64_t tenant_id)
+                                         const uint64_t tenant_id,
+                                         const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("physical restore table operator init twice", K(ret));
-  } else if (OB_ISNULL(sql_client) || is_meta_tenant(tenant_id))  {
+  } else if (OB_ISNULL(sql_client) || is_meta_tenant(tenant_id) || group_id < 0)  {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sql client is null or tenant id is invalid", KR(ret), KP(sql_client), K(tenant_id));
+    LOG_WARN("sql client is null or tenant id is invalid", KR(ret), KP(sql_client), K(tenant_id), K(group_id));
   } else {
     sql_client_ = sql_client;
     tenant_id_ = tenant_id;
+    group_id_ = group_id;
     inited_ = true;
   }
   return ret;
@@ -124,7 +126,7 @@ int ObPhysicalRestoreTableOperator::insert_job(const ObPhysicalRestoreJob &job_i
       LOG_WARN("fail to fill dml splicer", KR(ret), K(tenant_id_), K(job_info));
     } else if (OB_FAIL(dml.splice_batch_insert_sql(OB_ALL_RESTORE_JOB_TNAME, sql))) {
       LOG_WARN("splice_insert_sql failed", KR(ret));
-    } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
       LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K(sql));
     } else if (affected_rows <= 0) {
       ret = OB_ERR_UNEXPECTED;
@@ -357,7 +359,7 @@ int ObPhysicalRestoreTableOperator::get_jobs(
     } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s ORDER BY job_id, name",
                                       OB_ALL_RESTORE_JOB_TNAME))) {
       LOG_WARN("failed to assign sql", K(ret));
-    } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr()))) {
+    } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr(), group_id_))) {
       LOG_WARN("execute sql failed", K(ret), K(exec_tenant_id), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -748,7 +750,7 @@ int ObPhysicalRestoreTableOperator::check_job_exist(
     } else if (OB_FAIL(sql.assign_fmt("SELECT count(*) as count FROM %s WHERE job_id = %ld",
                                       OB_ALL_RESTORE_JOB_TNAME, job_id))) {
       LOG_WARN("failed to assign sql", K(ret));
-    } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr()))) {
+    } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr(), group_id_))) {
       LOG_WARN("execute sql failed", K(ret), K(exec_tenant_id), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -785,7 +787,7 @@ int ObPhysicalRestoreTableOperator::get_job(
     } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE job_id = %ld",
                                       OB_ALL_RESTORE_JOB_TNAME, job_id))) {
       LOG_WARN("failed to assign sql", K(ret));
-    } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr()))) {
+    } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr(), group_id_))) {
       LOG_WARN("execute sql failed", K(ret), K(exec_tenant_id), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -853,7 +855,7 @@ int ObPhysicalRestoreTableOperator::update_job_error_info(
                                to_cstring(addr), to_cstring(trace_id),
                                job_id))) {
       LOG_WARN("failed to set sql", K(ret), K(mod_str), K(return_ret), K(trace_id), K(addr));
-    } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
       LOG_WARN("execute sql failed", K(sql), KR(ret), K(exec_tenant_id));
     } else if (!is_single_row(affected_rows)
                && !is_zero_row(affected_rows)) {
@@ -888,7 +890,7 @@ int ObPhysicalRestoreTableOperator::update_job_status(
                                     "AND name = 'status' AND value != 'RESTORE_FAIL'",
                                     OB_ALL_RESTORE_JOB_TNAME, status_str, job_id))) {
     LOG_WARN("fail to assign fmt", K(ret), K(sql));
-  } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
     LOG_WARN("execute sql failed", K(sql), K(ret), K(exec_tenant_id));
   } else if (!is_single_row(affected_rows)
              && !is_zero_row(affected_rows)) {
@@ -918,7 +920,7 @@ int ObPhysicalRestoreTableOperator::remove_job(
       LOG_WARN("failed to add pk column", K(ret), K(job_id));
     } else if (OB_FAIL(dml.splice_delete_sql(OB_ALL_RESTORE_JOB_TNAME, sql))) {
       LOG_WARN("splice_delete_sql failed", K(ret));
-    } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
       LOG_WARN("execute sql failed", K(sql), K(ret), K(exec_tenant_id));
     } else {
       // no need to check affected_rows
@@ -1017,7 +1019,7 @@ int ObPhysicalRestoreTableOperator::get_restore_job_by_sql_(
   } else {
     SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr()))) {
+      if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr(), group_id_))) {
         LOG_WARN("execute sql failed", K(ret), K(exec_tenant_id), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1082,7 +1084,7 @@ int ObPhysicalRestoreTableOperator::check_finish_restore_to_consistent_scn(
               "left join %s as b on a.ls_id = b.ls_id",
               OB_ALL_LS_STATUS_TNAME, OB_ALL_LS_META_TABLE_TNAME))) {
         LOG_WARN("failed to assign sql", K(ret));
-      } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr()))) {
+      } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr(), group_id_))) {
         LOG_WARN("execute sql failed", KR(ret), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1099,14 +1101,14 @@ int ObPhysicalRestoreTableOperator::check_finish_restore_to_consistent_scn(
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
             LOG_WARN("failed to set status", KR(ret), K(restore_status));
-          } else if (ls_restore_status.is_restore_failed()) {
+          } else if (!ls_restore_status.is_in_restore_or_none() || ls_restore_status.is_failed()) {
             //restore failed
             is_finished = true;
             is_success = false;
           } else {
             const ObLSRestoreStatus target_status(ObLSRestoreStatus::Status::WAIT_RESTORE_TO_CONSISTENT_SCN);
             if (ls_restore_status.get_status() < target_status.get_status()
-                && !ls_restore_status.is_restore_none()
+                && !ls_restore_status.is_none()
                 && is_finished && is_success) {
               is_finished = false;
             }

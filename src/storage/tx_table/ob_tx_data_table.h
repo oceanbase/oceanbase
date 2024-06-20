@@ -13,12 +13,12 @@
 #ifndef OCEANBASE_STORAGE_OB_TX_DATA_TABLE
 #define OCEANBASE_STORAGE_OB_TX_DATA_TABLE
 
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "lib/future/ob_future.h"
 #include "share/scn.h"
+#include "share/ob_occam_timer.h"
+#include "share/allocator/ob_tx_data_allocator.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tx_table/ob_tx_data_memtable_mgr.h"
 #include "storage/tx_table/ob_tx_table_define.h"
-#include "share/ob_occam_timer.h"
 
 namespace oceanbase
 {
@@ -80,36 +80,8 @@ public:
     TO_STRING_KV(K(memtable_head_), K(memtable_tail_), K(memtable_handles_));
   };
 
-  struct CalcUpperInfo
-  {
-    CalcUpperInfo() {reset();}
-
-    void reset()
-    {
-      min_start_scn_in_ctx_.set_min();
-      keep_alive_scn_.set_min();
-      update_ts_ = 0;
-    }
-
-    CalcUpperInfo &operator= (const CalcUpperInfo &rhs)
-    {
-      min_start_scn_in_ctx_ = rhs.min_start_scn_in_ctx_;
-      keep_alive_scn_ = rhs.keep_alive_scn_;
-      update_ts_ = rhs.update_ts_;
-      return *this;
-    }
-
-    share::SCN min_start_scn_in_ctx_;
-    share::SCN keep_alive_scn_;
-    int64_t update_ts_;
-    common::SpinRWLock lock_;
-
-    TO_STRING_KV(K(min_start_scn_in_ctx_), K(keep_alive_scn_), K(update_ts_));
-  };
 
   using SliceAllocator = ObSliceAlloc;
-
-  static int64_t UPDATE_CALC_UPPER_INFO_INTERVAL;
 
   static const int64_t TX_DATA_MAX_CONCURRENCY = 32;
   // A tx data is 128 bytes, 128 * 262144 = 32MB
@@ -136,16 +108,17 @@ public:  // ObTxDataTable
   ObTxDataTable()
     : is_inited_(false),
       is_started_(false),
+      calc_upper_trans_is_disabled_(false),
+      latest_transfer_scn_(),
       ls_id_(),
       tablet_id_(0),
-      slice_allocator_(),
       arena_allocator_(),
+      tx_data_allocator_(nullptr),
       ls_(nullptr),
       ls_tablet_svr_(nullptr),
       memtable_mgr_(nullptr),
       tx_ctx_table_(nullptr),
       read_schema_(),
-      calc_upper_info_(),
       calc_upper_trans_version_cache_(),
       memtables_cache_() {}
   ~ObTxDataTable() {}
@@ -159,11 +132,11 @@ public:  // ObTxDataTable
   int online();
 
   /**
-   * @brief Allocate tx data with slice allocator
-   *
-   * @param[out] tx_data the tx data allocated by slice allocator
+   * @brief the same as ObTxTable::alloc_tx_data
    */
-  virtual int alloc_tx_data(ObTxDataGuard &tx_data);
+  virtual int alloc_tx_data(ObTxDataGuard &tx_data,
+                            const bool enable_throttle = true,
+                            const int64_t abs_expire_time = 0);
 
   /**
    * @brief allocate memory and deep copy tx data
@@ -221,14 +194,13 @@ public:  // ObTxDataTable
   int get_upper_trans_version_before_given_scn(const share::SCN sstable_end_scn, share::SCN &upper_trans_version);
 
   /**
-   * @brief see ObTxTable::supplement_undo_actions_if_exist
+   * @brief see ObTxTable::supplement_tx_op_if_exist
    */
-  int supplement_undo_actions_if_exist(ObTxData *tx_data);
+  int supplement_tx_op_if_exist(ObTxData *tx_data);
 
   int self_freeze_task();
 
   int update_memtables_cache();
-
 
   int prepare_for_safe_destroy();
 
@@ -246,18 +218,20 @@ public:  // ObTxDataTable
                K_(is_started),
                K_(ls_id),
                K_(tablet_id),
-               K_(calc_upper_info),
                K_(memtables_cache),
                KP_(ls),
                KP_(ls_tablet_svr),
                KP_(memtable_mgr),
-               KP_(tx_ctx_table));
+               KP_(tx_ctx_table),
+               KP_(&tx_data_allocator));
 
 public: // getter and setter
-  SliceAllocator *get_slice_allocator() { return &slice_allocator_; }
+  share::ObTenantTxDataAllocator *get_tx_data_allocator() { return tx_data_allocator_; }
   TxDataReadSchema &get_read_schema() { return read_schema_; };
 
   share::ObLSID get_ls_id();
+  void disable_upper_trans_calculation();
+  void enable_upper_trans_calculation(const share::SCN latest_transfer_scn);
 
 private:
   virtual ObTxDataMemtableMgr *get_memtable_mgr_() { return memtable_mgr_; }
@@ -325,26 +299,30 @@ private:
                                 const share::SCN &sstable_end_scn,
                                 share::SCN &tmp_upper_trans_version);
   bool skip_this_sstable_end_scn_(const share::SCN &sstable_end_scn);
-  int check_min_start_in_ctx_(const share::SCN &sstable_end_scn, const share::SCN &max_decided_scn, bool &need_skip);
+  int check_min_start_in_ctx_(const share::SCN &sstable_end_scn,
+                              const share::SCN &max_decided_scn,
+                              share::SCN &min_start_scn,
+                              share::SCN &effective_scn,
+                              bool &need_skip);
   int check_min_start_in_tx_data_(const share::SCN &sstable_end_scn,
                                   share::SCN &min_start_ts_in_tx_data_memtable,
                                   bool &need_skip);
   void print_alloc_size_for_test_();
   // free the whole undo status list allocated by slice allocator
   void free_undo_status_list_(ObUndoStatusNode *node_ptr);
-  void clean_sstable_cache_task_(int64_t cache_keeped_time);
-  void update_calc_upper_info_(const share::SCN &max_decided_log_ts);
 private:
   static const int64_t LS_TX_DATA_SCHEMA_VERSION = 0;
   static const int64_t LS_TX_DATA_SCHEMA_ROWKEY_CNT = 2;
   static const int64_t LS_TX_DATA_SCHEMA_COLUMN_CNT = 5;
   bool is_inited_;
   bool is_started_;
+  bool calc_upper_trans_is_disabled_;
+  share::SCN latest_transfer_scn_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   // Allocator to allocate ObTxData and ObUndoStatus
-  SliceAllocator slice_allocator_;
   ObArenaAllocator arena_allocator_;
+  share::ObTenantTxDataAllocator *tx_data_allocator_;
   ObLS *ls_;
   // Pointer to tablet service, used for get tx data memtable mgr
   ObLSTabletService *ls_tablet_svr_;
@@ -352,23 +330,9 @@ private:
   ObTxDataMemtableMgr *memtable_mgr_;
   ObTxCtxTable *tx_ctx_table_;
   TxDataReadSchema read_schema_;
-  CalcUpperInfo calc_upper_info_;
   CalcUpperTransSCNCache calc_upper_trans_version_cache_;
   MemtableHandlesCache memtables_cache_;
 };  // tx_table
-
-
-class CleanTxDataSSTableCacheFunctor
-{
-public:
-  CleanTxDataSSTableCacheFunctor(TxDataMap &sstable_cache, int64_t clean_ts) : sstable_cache_(sstable_cache), clean_ts_(clean_ts) {}
-
-  bool operator()(const transaction::ObTransID &key, ObTxData *tx_data);
-
-private:
-  TxDataMap &sstable_cache_;
-  int64_t clean_ts_;
-};
 
 }  // namespace storage
 

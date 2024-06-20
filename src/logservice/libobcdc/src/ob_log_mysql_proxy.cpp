@@ -84,13 +84,13 @@ int ObLogMysqlProxy::init(
     const char *db_name = nullptr;
     if (is_tenant_server_provider) {
       // tenant conn poll will always query via sys tenant
-      db_name = ObLogMySQLConnector::DEFAULT_DB_NAME_MYSQL_MODE;
+      db_name = OB_SYS_DATABASE_NAME;
     } else if (OB_FAIL(detect_tenant_mode_(server_provider))) {
     LOG_ERROR("detect_tenant_mode_ failed", KR(ret), K(cluster_user), K(cluster_password));
     } else if (is_oracle_mode_) {
-      db_name = ObLogMySQLConnector::DEFAULT_DB_NAME_ORACLE_MODE;
+      db_name = OB_ORA_SYS_SCHEMA_NAME;
     } else {
-      db_name = ObLogMySQLConnector::DEFAULT_DB_NAME_MYSQL_MODE;
+      db_name = OB_SYS_DATABASE_NAME;
     }
     ObConnPoolConfigParam conn_pool_config;
     conn_pool_config.reset();

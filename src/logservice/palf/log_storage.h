@@ -23,6 +23,7 @@
 #include "lsn.h"                   // LSN
 #include "palf_iterator.h"         // PalfIteraor
 #include "palf_callback_wrapper.h"
+#include "log_cache.h"
 
 namespace oceanbase
 {
@@ -37,7 +38,8 @@ class SCN;
 namespace palf
 {
 class ReadBuf;
-class LogHotCache;
+class LogCache;
+class LogIOContext;
 class LogStorage : public ILogStorage
 {
 public:
@@ -54,7 +56,7 @@ public:
            const UpdateManifestCallback &update_manifest_cb,
            ILogBlockPool *log_block_pool,
            LogPlugins *plugins,
-           LogHotCache *hot_cache);
+           LogCache *log_cache);
 
   template <class EntryHeaderType>
   int load(const char *log_dir,
@@ -67,7 +69,7 @@ public:
            const UpdateManifestCallback &update_manifest_cb,
            ILogBlockPool *log_block_pool,
            LogPlugins *plugins,
-           LogHotCache *hot_cache,
+           LogCache *log_cache,
            EntryHeaderType &entry_header,
            LSN &lsn);
 
@@ -88,12 +90,14 @@ public:
   int pread(const LSN &lsn,
             const int64_t in_read_size,
             ReadBuf &read_buf,
-            int64_t &out_read_size) final;
+            int64_t &out_read_size,
+            LogIOContext &io_ctx) final;
 
-  int pread_without_block_header(const LSN &read_lsn,
-                                 const int64_t in_read_size,
-                                 ReadBuf &read_buf,
-                                 int64_t &out_read_size);
+  int pread_with_block_header(const LSN &read_lsn,
+                              const int64_t in_read_size,
+                              ReadBuf &read_buf,
+                              int64_t &out_read_size,
+                              LogIOContext &io_ctx);
 
   int truncate(const LSN &lsn);
   int truncate_prefix_blocks(const LSN &lsn);
@@ -117,6 +121,9 @@ public:
 
   int get_logical_block_size(int64_t &logical_block_size) const;
 
+  LogReader *get_log_reader();
+  int fill_cache_when_slide(const LSN &begin_lsn, const int64_t size);
+
   TO_STRING_KV(K_(log_tail),
                K_(readable_log_tail),
                K_(log_block_header),
@@ -137,7 +144,7 @@ private:
                const UpdateManifestCallback &update_manifest_cb,
                ILogBlockPool *log_block_pool,
                LogPlugins *plugins,
-               LogHotCache *hot_cache);
+               LogCache *log_cache);
   // @ret val:
   //   OB_SUCCESS
   //   OB_ERR_OUT_OF_LOWER_BOUND
@@ -172,6 +179,7 @@ private:
   const LSN &get_log_tail_guarded_by_lock_() const;
   void get_readable_log_tail_guarded_by_lock_(LSN &readable_log_tail,
                                               int64_t &flashback_version) const;
+  void get_flashback_version_guarded_by_lock_(int64_t &flashback_version) const;
   offset_t get_phy_offset_(const LSN &lsn) const;
   int read_block_header_(const block_id_t block_id, LogBlockHeader &block_header) const;
   bool check_last_block_is_full_(const block_id_t max_block_id) const;
@@ -180,10 +188,12 @@ private:
                    const int64_t in_read_size,
                    const bool need_read_block_header,
                    ReadBuf &read_buf,
-                   int64_t &out_read_size);
+                   int64_t &out_read_size,
+                   LogIOContext &io_ctx);
   void reset_log_tail_for_last_block_(const LSN &lsn, bool last_block_exist);
   int update_manifest_(const block_id_t expected_next_block_id, const bool in_restart = false);
   int check_read_integrity_(const block_id_t &block_id);
+  bool is_log_cache_inited_();
 private:
   // Used to perform IO tasks in the background
   LogBlockMgr block_mgr_;
@@ -204,11 +214,7 @@ private:
   UpdateManifestCallback update_manifest_cb_;
   LogPlugins *plugins_;
   char block_header_serialize_buf_[MAX_INFO_BLOCK_SIZE];
-  LogHotCache *hot_cache_;
-  int64_t last_accum_read_statistic_time_;
-  int64_t accum_read_io_count_;
-  int64_t accum_read_log_size_;
-  int64_t accum_read_cost_ts_;
+  LogCache *log_cache_;
   int64_t flashback_version_;
   bool is_inited_;
 };
@@ -230,7 +236,7 @@ int LogStorage::load(const char *base_dir,
                      const UpdateManifestCallback &update_manifest_cb,
                      ILogBlockPool *log_block_pool,
                      LogPlugins *plugins,
-                     LogHotCache *hot_cache,
+                     LogCache *log_cache,
                      EntryHeaderType &entry_header,
                      LSN &lsn)
 {
@@ -251,7 +257,7 @@ int LogStorage::load(const char *base_dir,
                               update_manifest_cb,
                               log_block_pool,
                               plugins,
-                              hot_cache))) {
+                              log_cache))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
     // NB: if there is no valid data on disk, no need to load last block
   } else if (OB_FAIL(block_mgr_.get_block_id_range(min_block_id, max_block_id))
@@ -288,6 +294,7 @@ int LogStorage::locate_log_tail_and_last_valid_entry_header_(const block_id_t mi
   // the last block may has not valid data, we need iterate prev block
   // for GC, we must ensure that the block which include 'max_committed_lsn' will no be reused
   const bool need_print_error = false;
+  const bool enable_fill_cache = false;
   while (OB_SUCC(ret) && true == is_valid_block_id(iterate_block_id)
          && iterate_block_id >= min_block_id) {
     // NB: 'log_tail_' need point to the tail of 'iterate_block_id', because 'pread' interface
@@ -297,7 +304,7 @@ int LogStorage::locate_log_tail_and_last_valid_entry_header_(const block_id_t mi
     PalfIterator<DiskIteratorStorage, EntryType> iterator;
     auto get_file_end_lsn = []() { return LSN(LOG_MAX_LSN_VAL); };
     LSN start_lsn(iterate_block_id * logical_block_size_);
-    if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, this))) {
+    if (OB_FAIL(iterator.init(start_lsn, get_file_end_lsn, this, enable_fill_cache))) {
       PALF_LOG(WARN, "PalfGroupBufferIterator init failed", K(ret), K(start_lsn));
     } else {
       iterator.set_need_print_error(need_print_error);

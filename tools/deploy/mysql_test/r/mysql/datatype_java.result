@@ -12,6 +12,7 @@ insert into t(int_val, uint_val, flt_val, dbl_val, dec_val, vc_val) values
 (-184467440737095516150, -184467440737095516150,     0.444444,    0.444444, '98.76abc',    '987654321'),
 (NULL,                   NULL,                      -0.555555,   -0.555555, 'abc',         '阿里巴巴');
 Warnings:
+Warning	1265	Data truncated for column 'dec_val' at row 1
 Warning	1265	Data truncated for column '"test"."t"."vc_val"' at row 1
 Warning	1265	Data truncated for column '"test"."t"."vc_val"' at row 2
 Warning	1265	Data truncated for column '"test"."t"."vc_val"' at row 3
@@ -22,6 +23,7 @@ auto_increment_id	-32768	0	0.444	0.4444	98.760	98
 auto_increment_id	NULL	NULL	-0.556	-0.5556	0.000	阿里
 update t set int_val = 123456789, uint_val = -123456789, flt_val = 98765.43210, dbl_val = 98765.43210, dec_val = 98765.43210, vc_val = '支付宝';
 Warnings:
+Warning	1265	Data truncated for column 'dec_val' at row 1
 Warning	1265	Data truncated for column '"test"."t"."vc_val"' at row 1
 select * from t order by id limit 1;
 id	int_val	uint_val	flt_val	dbl_val	dec_val	vc_val

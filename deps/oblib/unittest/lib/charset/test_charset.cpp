@@ -15,14 +15,20 @@
 #include <time.h>
 #include <sys/time.h>
 #include <codecvt>
+#include "gtest/gtest.h"
+
+#define protected public
+#define private public
+
 #include "lib/allocator/page_arena.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
-#include "gtest/gtest.h"
 #include "unicode_map.h"
 #include "common/data_buffer.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/charset/mb_wc.h"
+#include "lib/charset/ob_charset_string_helper.h"
 #define USING_LOG_PREFIX SQL
 
 using namespace oceanbase::common;
@@ -821,6 +827,169 @@ TEST_F(TestCharset, check_gb18030_2022)
     uint code_gb18030_2022 = (len_gb18030_2022 == 0) ? 0 : gb18030_chs_to_code(s_gb18030_2022, len_gb18030_2022);
     ASSERT_TRUE(target == code_gb18030_2022);
   }
+}
+
+TEST_F(TestCharset, check_mbmaxlenlen)
+{
+  for (int64_t type = ObCollationType::CS_TYPE_INVALID; type < ObCollationType::CS_TYPE_MAX; ++type) {
+    if (nullptr != ObCharset::charset_arr[type]) {
+      const uint mbmaxlenlen = ob_mbmaxlenlen(ObCharset::charset_arr[type]);
+      const char *cs_name = ObCharset::charset_name(static_cast<ObCollationType>(type));
+      std::cout << "charset=" << cs_name << ", mbmaxlenlen=" << mbmaxlenlen << ", type=" << type << std::endl;
+      if (ObCharset::is_gb18030_2022(type)
+          || CS_TYPE_GB18030_CHINESE_CI == type
+          || CS_TYPE_GB18030_CHINESE_CS == type
+          || CS_TYPE_GB18030_BIN == type
+          || CS_TYPE_GB18030_ZH_0900_AS_CS == type
+          || CS_TYPE_GB18030_ZH2_0900_AS_CS == type
+          || CS_TYPE_GB18030_ZH3_0900_AS_CS == type
+          || CS_TYPE_GB18030_2022_ZH_0900_AS_CS == type
+          || CS_TYPE_GB18030_2022_ZH2_0900_AS_CS == type
+          || CS_TYPE_GB18030_2022_ZH3_0900_AS_CS == type) {
+        ASSERT_EQ(2, mbmaxlenlen);
+      } else {
+        ASSERT_EQ(1, mbmaxlenlen);
+      }
+    }
+  }
+}
+
+TEST_F(TestCharset, foreach_char) {
+  const char *data = "豫章故郡，洪都新府。星分翼轸，地接衡庐。襟三江而带五湖，控蛮荆而引瓯越。物华天宝，龙光射牛斗之墟"
+               "人杰地灵，徐孺下陈蕃之榻。雄州雾列，俊采星驰。台隍枕夷夏之交，宾主尽东南之美。都督阎公之雅望，棨戟遥临"
+               "宇文新州之懿范，襜帷暂驻。十旬休假，胜友如云；千里逢迎，高朋满座。腾蛟起凤，孟学士之词宗；紫电青霜"
+               "王将军之武库。家君作宰，路出名区；童子何知，躬逢胜饯。时维九月，序属三秋。潦水尽而寒潭清，烟光凝而暮山紫"
+               "俨骖騑于上路，访风景于崇阿。临帝子之长洲，得天人之旧馆。层峦耸翠，上出重霄；飞阁流丹，下临无地。鹤汀凫渚"
+               "穷岛屿之萦回；桂殿兰宫，即冈峦之体势。披绣闼，俯雕甍，山原旷其盈视，川泽纡其骇瞩。闾阎扑地，钟鸣鼎食之家"
+               "舸舰弥津，青雀黄龙之舳。云销雨霁，彩彻区明。落霞与孤鹜齐飞，秋水共长天一色。渔舟唱晚，响穷彭蠡之滨"
+               "雁阵惊寒，声断衡阳之浦。遥襟甫畅，逸兴遄飞。爽籁发而清风生，纤歌凝而白云遏。睢园绿竹，气凌彭泽之樽"
+               "邺水朱华，光照临川之笔。四美具，二难并。穷睇眄于中天，极娱游于暇日。天高地迥，觉宇宙之无穷；兴尽悲来"
+               "识盈虚之有数。望长安于日下，目吴会于云间。地势极而南溟深，天柱高而北辰远。关山难越，谁悲失路之人"
+               "萍水相逢，尽是他乡之客。怀帝阍而不见，奉宣室以何年？嗟乎！时运不齐，命途多舛。冯唐易老，李广难封"
+               "屈贾谊于长沙，非无圣主；窜梁鸿于海曲，岂乏明时？所赖君子见机，达人知命。老当益壮，宁移白首之心"
+               "穷且益坚，不坠青云之志。酌贪泉而觉爽，处涸辙以犹欢。北海虽赊，扶摇可接；东隅已逝，桑榆非晚。孟尝高洁"
+               "空余报国之情；阮籍猖狂，岂效穷途之哭！勃，三尺微命，一介书生。无路请缨，等终军之弱冠；有怀投笔，慕宗悫之长风"
+               "舍簪笏于百龄，奉晨昏于万里。非谢家之宝树，接孟氏之芳邻。他日趋庭，叨陪鲤对；今兹捧袂，喜托龙门。杨意不逢"
+               "抚凌云而自惜；钟期既遇，奏流水以何惭？呜呼！胜地不常，盛筵难再；兰亭已矣，梓泽丘墟。临别赠言，幸承恩于伟饯"
+               "登高作赋，是所望于群公。敢竭鄙怀，恭疏短引；一言均赋，四韵俱成。请洒潘江，各倾陆海云尔：滕王高阁临江渚"
+               "佩玉鸣鸾罢歌舞。画栋朝飞南浦云，珠帘暮卷西山雨。闲云潭影日悠悠，物换星移几度秋。阁中帝子今何在？槛外长江空自流。";
+  /*
+  const char *data = "I hear America singing, the varied carols I hear,Those of mechanics, "
+                     "each one singing his as it should be blithe and strong,The carpenter "
+                     "singing his as he measures his plank or beam,The mason singing his as "
+                     "he makes ready for work, or leaves off work,The boatman singing what "
+                     "belongs to him in his boat, the deckhand singing on the steamboat deck,"
+                     "The shoemaker singing as he sits on his bench, the hatter singing as "
+                     "he stands,The wood-cutter’s song, the ploughboy’s on his way in the morning, "
+                     "or at noon intermission or at sundown,The delicious singing of the mother, "
+                     "or of the young wife at work, or of the girl sewing or washing,Each singing "
+                     "what belongs to him or her and to none else,The day what belongs to the day—at "
+                     "night the party of young fellows, robust, friendly,Singing with open "
+                     "mouths their strong melodious songs.";
+                     */
+  int64_t word_cnt = 0;
+  auto do_nothing = [&word_cnt] (const ObString &str, ob_wc_t wchar) -> int {
+    int ret = OB_SUCCESS;
+    word_cnt++;
+    return ret;
+  };
+
+  int repeat = 10000;
+  int64_t total_bytes = 0;
+  int64_t time_start = 0;
+  int64_t time_dur = 0;
+
+  auto start_timer = [&]() { time_start = ObTimeUtility::current_time(); word_cnt = 0; };
+  auto end_timer = [&]() {
+    time_dur = ObTimeUtility::current_time() - time_start;
+    fprintf(stdout, "==> speed:%ldM/s, word_cnt=>%ld\n", (total_bytes >> 20) * 1000000 / time_dur, word_cnt);
+  };
+
+  ObString data_in(data);
+  ObArenaAllocator alloc;
+
+  for (int i = CHARSET_BINARY + 1; i <= CHARSET_GB18030; i++) {
+    ObCharsetType test_cs_type = static_cast<ObCharsetType>(i);
+    ObCollationType test_collation_type = ObCharset::get_default_collation(test_cs_type);
+    ObString data_out;
+    char *buf = NULL;
+    buf = static_cast<char*>(alloc.alloc(data_in.length() * repeat));
+    ASSERT_TRUE(NULL != buf);
+    ObString input(data_in.length() * repeat, buf);
+    for (int i = 0; i < repeat; i++) {
+      MEMCPY(buf + i*data_in.length(), data_in.ptr(), data_in.length());
+    }
+
+    int32_t buf_len = input.length() * ObCharset::MAX_MB_LEN;
+    buf = static_cast<char*>(alloc.alloc(buf_len));
+    ASSERT_TRUE(NULL != buf);
+    data_out.assign_buffer(buf, buf_len);
+
+    total_bytes = input.length();
+    fprintf(stdout, "\n# For charset: %s, ConvertDataLen: %d\n", ObCharset::charset_name(test_collation_type), input.length());
+
+
+    uint32_t result_len;
+    start_timer();
+    ASSERT_EQ(OB_SUCCESS,
+              ObCharset::charset_convert(CS_TYPE_UTF8MB4_BIN, input.ptr(), input.length(),
+                                         test_collation_type, data_out.ptr(), data_out.size(),
+                                         result_len));
+    end_timer();
+
+    start_timer();
+    int64_t pos = 0;
+    ASSERT_EQ(OB_SUCCESS,
+              ObFastStringScanner::convert_charset(
+                input, CS_TYPE_UTF8MB4_BIN, test_collation_type, buf, buf_len, pos));
+    end_timer();
+    fprintf(stdout, "input.length = %d, data_out.length = %ld\n", input.length(), pos);
+  }
+
+
+  for (int i = CHARSET_INVALID + 1; i < CHARSET_MAX; i++) {
+    ObCharsetType test_cs_type = static_cast<ObCharsetType>(i);
+    ObCollationType test_collation_type = ObCharset::get_default_collation(test_cs_type);
+    ObString data_out;
+    ASSERT_TRUE(ObCharset::is_valid_collation(test_collation_type));
+    if (ObCharset::get_charset(test_collation_type)->mbmaxlen == 1) {
+      data_out = data_in;
+    } else {
+      ASSERT_TRUE(OB_SUCCESS == ObCharset::charset_convert(alloc, data_in, CS_TYPE_UTF8MB4_BIN, test_collation_type, data_out));
+    }
+
+
+    int data_len = data_out.length();
+    total_bytes = static_cast<int64_t>(data_len) * repeat;
+    char *buf = (char*)(alloc.alloc(data_len * repeat));
+    ObString input(data_len * repeat, buf);
+    for (int i = 0; i < repeat; i++) {
+      MEMCPY(buf + i*data_len, data_out.ptr(), data_len);
+    }
+    fprintf(stdout, "\n# For charset: %s, TestDataLen: %d\n", ObCharset::charset_name(test_collation_type), data_len * repeat);
+    ASSERT_TRUE(NULL != buf);
+
+    fprintf(stdout, "Raw Impl\n");
+    start_timer();
+    ASSERT_EQ(OB_SUCCESS, ObCharsetUtils::foreach_char(input, test_collation_type, do_nothing));
+    end_timer();
+
+
+    fprintf(stdout, "Inline Impl\n");
+    start_timer();
+    ASSERT_EQ(OB_SUCCESS, ObFastStringScanner::foreach_char(input, test_cs_type, do_nothing));
+    end_timer();
+
+    fprintf(stdout, "Skip encoding Impl\n");
+    start_timer();
+    ASSERT_EQ(OB_SUCCESS, ObFastStringScanner::foreach_char(input, test_cs_type, do_nothing, false));
+    end_timer();
+  }
+
+
+
+
+
 }
 
 int main(int argc, char **argv)

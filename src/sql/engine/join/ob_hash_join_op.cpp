@@ -607,14 +607,18 @@ void ObHashJoinOp::part_rescan()
     for (int64_t i = 0; i < part_count_; i ++) {
       hj_part_array_[i].~ObHashJoinPartition();
     }
-    alloc_->free(hj_part_array_);
+    if (OB_NOT_NULL(alloc_)) {
+      alloc_->free(hj_part_array_);
+    }
     hj_part_array_ = NULL;
   }
   if (right_hj_part_array_ != NULL) {
     for (int64_t i = 0; i < part_count_; i ++) {
       right_hj_part_array_[i].~ObHashJoinPartition();
     }
-    alloc_->free(right_hj_part_array_);
+    if (OB_NOT_NULL(alloc_)) {
+      alloc_->free(right_hj_part_array_);
+    }
     right_hj_part_array_ = NULL;
   }
   int64_t tmp_part_count = 0 < level2_part_count_ ?
@@ -624,11 +628,15 @@ void ObHashJoinOp::part_rescan()
     for (int64_t i = 0; i < tmp_part_count; i ++) {
       part_histograms_[i].~HashJoinHistogram();
     }
-    alloc_->free(part_histograms_);
+    if (OB_NOT_NULL(alloc_)) {
+      alloc_->free(part_histograms_);
+    }
     part_histograms_ = NULL;
   }
   if (OB_NOT_NULL(part_selectors_)) {
-    alloc_->free(part_selectors_);
+    if (OB_NOT_NULL(alloc_)) {
+      alloc_->free(part_selectors_);
+    }
     part_selectors_ = nullptr;
     part_selector_sizes_ = nullptr;
   }

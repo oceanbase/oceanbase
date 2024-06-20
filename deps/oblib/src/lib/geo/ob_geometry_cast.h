@@ -49,7 +49,10 @@ public:
                             const common::ObSrsItem *srs,
                             double val);
   static const char *get_cast_name(common::ObGeoType type);
+  static bool is_sdo_geometry_type_compatible(uint64_t src_udt_id, uint64_t dst_udt_id);
+  static bool is_sdo_geometry_udt(uint64_t udt_id);
 private:
+  static bool is_sdo_geometry_varray_type(uint64_t udt_id);
   DISALLOW_COPY_AND_ASSIGN(ObGeometryTypeCastUtil);
 };
 

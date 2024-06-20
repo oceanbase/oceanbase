@@ -21,7 +21,6 @@
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "storage/tx/ob_trans_define_v4.h"
-#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase
 {
@@ -47,7 +46,7 @@ struct ObStorageDatum;
 }
 namespace storage
 {
-class ObIPartitionGroupGuard;
+class ObStoreCtxGuard;
 
 //
 // Project storage output row to expression array, the core project logic is:
@@ -136,7 +135,6 @@ public:
         table_param_(NULL),
         allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
         need_scn_(false),
-        partition_guard_(NULL),
         need_switch_param_(false),
         is_thread_scope_(true)
   {}
@@ -151,7 +149,6 @@ public:
   common::ObIAllocator *allocator_; //stmt level allocator, only be free at the end of query
   common::SampleInfo sample_info_;
   bool need_scn_;
-  ObIPartitionGroupGuard *partition_guard_; // remove after SQL adopt tablet
   bool need_switch_param_;
   OB_INLINE virtual bool is_valid() const {
     return  snapshot_.valid_ && ObVTableScanParam::is_valid();
@@ -181,13 +178,16 @@ struct ObDMLBaseParam
         prelock_(false),
         is_batch_stmt_(false),
         dml_allocator_(nullptr),
+        store_ctx_guard_(nullptr),
         encrypt_meta_(NULL),
         encrypt_meta_legacy_(),
         spec_seq_no_(),
         snapshot_(),
+        branch_id_(0),
         direct_insert_task_id_(0),
         write_flag_(),
-        check_schema_version_(true)
+        check_schema_version_(true),
+        ddl_task_id_(0)
   {
   }
 
@@ -206,7 +206,7 @@ struct ObDMLBaseParam
   bool prelock_;
   bool is_batch_stmt_;
   mutable common::ObIAllocator *dml_allocator_;
-
+  mutable ObStoreCtxGuard *store_ctx_guard_;
   // table_id_, local_index_id_ and its encrypt_meta
   const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_;
   common::ObSEArray<transaction::ObEncryptMetaCache, 1> encrypt_meta_legacy_;
@@ -215,11 +215,14 @@ struct ObDMLBaseParam
   transaction::ObTxSEQ spec_seq_no_;
   // transaction snapshot
   transaction::ObTxReadSnapshot snapshot_;
+  // parallel dml write branch id
+  int16_t branch_id_;
   int64_t direct_insert_task_id_; // 0 means no direct insert
   // write flag for inner write processing
   concurrent_control::ObWriteFlag write_flag_;
   bool check_schema_version_;
-  bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0); }
+  int64_t ddl_task_id_;
+  bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0) && nullptr != store_ctx_guard_; }
   bool is_direct_insert() const { return (direct_insert_task_id_ > 0); }
   DECLARE_TO_STRING;
 };

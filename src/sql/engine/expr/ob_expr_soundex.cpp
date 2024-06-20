@@ -101,6 +101,7 @@ int ObExprSoundex::calc_result_type1(
       res_type = ObVarcharType;
       res_length = OB_MAX_BINARY_LENGTH;
       res_cs_type = type_ctx.get_coll_type();
+      raw_expr->set_extra(static_cast<uint64_t>(res_cs_type));
     }
   }
   if (OB_SUCC(ret)) {
@@ -311,6 +312,7 @@ int ObExprSoundex::calc_text(const ObDatum &input_datum,
       ObDataBuffer buf_alloc(buf, buf_size);
       int64_t block_buf_len = is_oracle_mode
                               ? MIN_RESULT_LENGTH : MAX(MIN_RESULT_LENGTH, input_data.length());
+      pos = 0;
       if (need_charset_convert) {
         block_buf = static_cast<char *>(tmp_alloc.alloc(block_buf_len));
       } else {
@@ -397,6 +399,13 @@ int ObExprSoundex::eval_soundex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
     }
   }
 
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprSoundex, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

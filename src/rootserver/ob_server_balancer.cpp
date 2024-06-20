@@ -3157,9 +3157,9 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_inter_ttg_lo
             LOG_WARN("fail to get excluded servers", K(ret));
           } else if (has_exist_in_array(excluded_servers, left_inter_load.server_)) {
             // ignore this
-          } else if (left_ug->get_inter_ttg_load_value(right_inter_load, left_ug_load_value)) {
+          } else if (OB_FAIL(left_ug->get_inter_ttg_load_value(right_inter_load, left_ug_load_value))) {
             LOG_WARN("fail to get inter ttg load value", K(ret));
-          } else if (right_ug->get_inter_ttg_load_value(right_inter_load, right_ug_load_value)) {
+          } else if (OB_FAIL(right_ug->get_inter_ttg_load_value(right_inter_load, right_ug_load_value))) {
             LOG_WARN("fail to get inter ttg load value", K(ret));
           } else if (left_ug_load_value - right_ug_load_value <= EPSILON) {
             // ignore this, since this almost has no effect for load balance

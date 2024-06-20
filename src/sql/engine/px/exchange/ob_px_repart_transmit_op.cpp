@@ -107,6 +107,7 @@ int ObPxRepartTransmitOp::do_transmit()
   ObPxRepartTransmitOpInput *trans_input = static_cast<ObPxRepartTransmitOpInput*>(input_);
 
   if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_)) || OB_ISNULL(trans_input)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to op ctx", "op_id", MY_SPEC.id_, "op_type", MY_SPEC.type_,
               KP(trans_input), K(ret));
   } else if (!MY_SPEC.is_repart_exchange()) {
@@ -137,14 +138,14 @@ int ObPxRepartTransmitOp::do_transmit()
       switch (MY_SPEC.dist_method_) {
         case ObPQDistributeMethod::PARTITION_RANDOM: {
           // pkey random
-          ObRepartRandomSliceIdxCalc repart_slice_calc(ctx_,
+          ObSlaveMapPkeyRandomIdxCalc repart_slice_calc(ctx_,
                                                        *table_schema,
                                                        MY_SPEC.calc_tablet_id_expr_,
                                                        MY_SPEC.unmatch_row_dist_method_,
                                                        MY_SPEC.null_row_dist_method_,
                                                        part_ch_info_,
                                                        MY_SPEC.repartition_type_);
-          if (OB_FAIL(do_repart_transmit(repart_slice_calc))) {
+          if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::SM_REPART_RANDOM>(repart_slice_calc))) {
             LOG_WARN("failed to do repart transmit for pkey random", K(ret));
           }
           break;
@@ -161,7 +162,7 @@ int ObPxRepartTransmitOp::do_transmit()
                                                       MY_SPEC.dist_exprs_,
                                                       MY_SPEC.dist_hash_funcs_,
                                                       MY_SPEC.repartition_type_);
-          if (OB_FAIL(do_repart_transmit(repart_slice_calc))) {
+          if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::SM_REPART_HASH>(repart_slice_calc))) {
             LOG_WARN("failed to do repart transmit for pkey random", K(ret));
           }
           break;
@@ -179,7 +180,7 @@ int ObPxRepartTransmitOp::do_transmit()
                                                       MY_SPEC.repartition_type_);
           if (OB_FAIL(dynamic_sample())) {
             LOG_WARN("fail to do dynamic sample", K(ret));
-          } else if (OB_FAIL(do_repart_transmit(range_slice_calc))) {
+          } else if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::SM_REPART_RANGE>(range_slice_calc))) {
             LOG_WARN("failed to do repart transmit for pkey range", K(ret));
           }
           break;
@@ -196,7 +197,7 @@ int ObPxRepartTransmitOp::do_transmit()
                                                                   &MY_SPEC.dist_exprs_,
                                                                   &MY_SPEC.dist_hash_funcs_,
                                                                   &MY_SPEC.repartition_exprs_);
-            if (OB_FAIL(do_repart_transmit(repart_slice_calc))) {
+            if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::NULL_AWARE_AFFINITY_REPART>(repart_slice_calc))) {
               LOG_WARN("failed to do repart transmit for pkey", K(ret));
             }
           } else {
@@ -210,7 +211,7 @@ int ObPxRepartTransmitOp::do_transmit()
                                                               MY_SPEC.repartition_type_,
                                                               &MY_SPEC.dist_exprs_,
                                                               &MY_SPEC.dist_hash_funcs_);
-            if (OB_FAIL(do_repart_transmit(repart_slice_calc))) {
+            if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::AFFINITY_REPART>(repart_slice_calc))) {
               LOG_WARN("failed to do repart transmit for pkey", K(ret));
             }
           }
@@ -222,13 +223,14 @@ int ObPxRepartTransmitOp::do_transmit()
   return ret;
 }
 
+template <ObSliceIdxCalc::SliceCalcType CALC_TYPE>
 int ObPxRepartTransmitOp::do_repart_transmit(ObRepartSliceIdxCalc &repart_slice_calc)
 {
   int ret = OB_SUCCESS;
   // init the ObRepartSliceIdxCalc cache map
   if (OB_FAIL(repart_slice_calc.init(ctx_.get_my_session()->get_effective_tenant_id()))) {
     LOG_WARN("failed to init repart slice calc", K(ret));
-  } else if (OB_FAIL(send_rows(repart_slice_calc))) {
+  } else if (OB_FAIL(send_rows<CALC_TYPE>(repart_slice_calc))) {
     LOG_WARN("failed to send rows", K(ret));
   }
 

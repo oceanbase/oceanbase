@@ -32,6 +32,7 @@ EVENT_INFO(BLOCKSCAN_BLOCK_CNT, blockscan_block_cnt)
 EVENT_INFO(BLOCKSCAN_ROW_CNT, blockscan_row_cnt)
 EVENT_INFO(PUSHDOWN_STORAGE_FILTER_ROW_CNT, pushdown_storage_filter_row_cnt)
 EVENT_INFO(FUSE_ROW_CACHE_HIT, fuse_row_cache_hit)
+EVENT_INFO(SCHEDULE_TIME, schedule_time)
 #endif
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
@@ -100,6 +101,10 @@ struct ObExecRecord
       blockscan_row_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::BLOCKSCAN_ROW_CNT);              \
       pushdown_storage_filter_row_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT); \
       fuse_row_cache_hit_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::FUSE_ROW_CACHE_HIT);             \
+      user_io_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::USER_IO_WAIT_TIME);                   \
+      application_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::APWAIT_TIME);                     \
+      concurrency_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                     \
+      schedule_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SCHEDULE_WAIT_TIME);                 \
     } \
   } while(0);
 
@@ -129,6 +134,7 @@ struct ObExecRecord
     UPDATE_EVENT(user_io_time);
     UPDATE_EVENT(concurrency_time);
     UPDATE_EVENT(application_time);
+    UPDATE_EVENT(schedule_time);
     UPDATE_EVENT(memstore_read_row_count);
     UPDATE_EVENT(ssstore_read_row_count);
     UPDATE_EVENT(data_block_read_cnt);
@@ -138,6 +144,32 @@ struct ObExecRecord
     UPDATE_EVENT(blockscan_block_cnt);
     UPDATE_EVENT(blockscan_row_cnt);
     UPDATE_EVENT(pushdown_storage_filter_row_cnt);
+  }
+
+  uint64_t get_cur_memstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
+    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+    uint64_t cur_memstore_read_row_count = 0;
+    if (NULL != diag_session_info) {
+      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
+      cur_memstore_read_row_count = memstore_read_row_count_ +
+                                    (EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT)
+                                    - memstore_read_row_count_start_);
+    }
+    return cur_memstore_read_row_count;
+  }
+
+  uint64_t get_cur_ssstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
+    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+    uint64_t cur_ssstore_read_row_count = 0;
+    if (NULL != diag_session_info) {
+      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
+      cur_ssstore_read_row_count = ssstore_read_row_count_ +
+                                   (EVENT_STAT_GET(arr, ObStatEventIds::SSSTORE_READ_ROW_COUNT)
+                                   - ssstore_read_row_count_start_);
+    }
+    return cur_ssstore_read_row_count;
   }
 };
 
@@ -284,6 +316,7 @@ struct ObAuditRecordData {
     params_value_len_ = 0;
     partition_hit_ = true;
     is_perf_event_closed_ = false;
+    pl_trace_id_.reset();
   }
 
   int64_t get_elapsed_time() const
@@ -332,7 +365,7 @@ struct ObAuditRecordData {
 
   ObString get_snapshot_source() const
   {
-    return ObString(snapshot_.source_);
+    return ObString(snapshot_source_);
   }
 
   int16_t seq_; //packet->get_packet_header().seq_; always 0 currently
@@ -356,6 +389,9 @@ struct ObAuditRecordData {
   int64_t user_id_;
   char *user_name_;
   int64_t user_name_len_;
+  int64_t proxy_user_id_;
+  char *proxy_user_name_;
+  int64_t proxy_user_name_len_;
   int user_group_; // user 所属 cgroup id，仅主线程展示
   uint64_t db_id_;
   char *db_name_;
@@ -399,11 +435,17 @@ struct ObAuditRecordData {
     int64_t scn_;          // snapshot's position in the txn
     char const* source_;   // snapshot's acquire source
   } snapshot_; // stmt's tx snapshot
+  int64_t seq_num_; // sequence num, for sequencing stmts in transaction
   uint64_t txn_free_route_flag_; // flag contains txn free route meta
   uint64_t txn_free_route_version_; // the version of txn's state
   bool partition_hit_;// flag for need das partition route or not
   bool is_perf_event_closed_;
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
+  char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
+  ObCurTraceId::TraceId pl_trace_id_;
+  int64_t plsql_exec_time_;
+  uint64_t total_memstore_read_row_count_;
+  uint64_t total_ssstore_read_row_count_;
 };
 
 } //namespace sql

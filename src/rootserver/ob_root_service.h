@@ -423,9 +423,6 @@ public:
       const ObIArray<ObAddr> &servers,
       const ObZone &zone);
 
-  // not implemented rpc, helper function for rs rpc processor define.
-  int not_implement();
-
   int execute_bootstrap(const obrpc::ObBootstrapArg &arg);
 #ifdef OB_BUILD_TDE_SECURITY
   int check_sys_tenant_initial_master_key_valid();
@@ -458,6 +455,7 @@ public:
   int create_resource_unit(const obrpc::ObCreateResourceUnitArg &arg);
   int alter_resource_unit(const obrpc::ObAlterResourceUnitArg &arg);
   int drop_resource_unit(const obrpc::ObDropResourceUnitArg &arg);
+  int clone_resource_pool(const obrpc::ObCloneResourcePoolArg &arg);
   int create_resource_pool(const obrpc::ObCreateResourcePoolArg &arg);
   int alter_resource_pool(const obrpc::ObAlterResourcePoolArg &arg);
   int drop_resource_pool(const obrpc::ObDropResourcePoolArg &arg);
@@ -499,15 +497,19 @@ public:
   int cancel_ddl_task(const obrpc::ObCancelDDLTaskArg &arg);
   int alter_tablegroup(const obrpc::ObAlterTablegroupArg &arg);
   int maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLArg &arg);
+  int mview_complete_refresh(const obrpc::ObMViewCompleteRefreshArg &arg, obrpc::ObMViewCompleteRefreshRes &res);
   int rename_table(const obrpc::ObRenameTableArg &arg);
   int truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
+  int exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res);
   int create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes &res);
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);
   int drop_tablegroup(const obrpc::ObDropTablegroupArg &arg);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
+  int create_mlog(const obrpc::ObCreateMLogArg &arg, obrpc::ObCreateMLogRes &res);
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
+  int clone_tenant(const obrpc::ObCloneTenantArg &arg, obrpc::ObCloneTenantRes &res);
   //the interface only for switchover: execute skip check enable_ddl
   int flashback_index(const obrpc::ObFlashBackIndexArg &arg);
   int purge_index(const obrpc::ObPurgeIndexArg &arg);
@@ -515,6 +517,7 @@ public:
   int refresh_config();
   int root_minor_freeze(const obrpc::ObRootMinorFreezeArg &arg);
   int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);
+  int update_mview_status(const obrpc::ObUpdateMViewStatusArg &arg);
   int purge_table(const obrpc::ObPurgeTableArg &arg);
   int flashback_table_from_recyclebin(const obrpc::ObFlashBackTableFromRecyclebinArg &arg);
   int flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg &arg);
@@ -544,8 +547,10 @@ public:
   int lock_user(const obrpc::ObLockUserArg &arg, common::ObSArray<int64_t> &failed_index);
   int revoke_database(const obrpc::ObRevokeDBArg &arg);
   int revoke_table(const obrpc::ObRevokeTableArg &arg);
+  int revoke_routine(const obrpc::ObRevokeRoutineArg &arg);
   int revoke_syspriv(const obrpc::ObRevokeSysPrivArg &arg);
   int alter_user_profile(const obrpc::ObAlterUserProfileArg &arg);
+  int alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg, obrpc::ObAlterUserProxyRes &res);
   int alter_role(const obrpc::ObAlterRoleArg &arg);
   //----End of functions for managing privileges----
 
@@ -812,6 +817,8 @@ public:
   int try_add_dep_infos_for_synonym_batch(const obrpc::ObTryAddDepInofsForSynonymBatchArg &arg);
 #ifdef OB_BUILD_TDE_SECURITY
   int handle_get_root_key(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
+  int reload_master_key(const obrpc::ObReloadMasterKeyArg &arg,
+                        obrpc::ObReloadMasterKeyResult &result);
 #endif
 private:
 #ifdef OB_BUILD_TDE_SECURITY
@@ -885,6 +892,8 @@ private:
        const share::ObServerStatus &server_status);
   void update_cpu_quota_concurrency_in_memory_();
   int set_cpu_quota_concurrency_config_();
+  int set_enable_trace_log_();
+  int disable_dbms_job();
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 
   int precheck_interval_part(const obrpc::ObAlterTableArg &arg);
@@ -893,6 +902,20 @@ private:
   int old_cancel_delete_server(const obrpc::ObAdminServerArg &arg);
 
   int parallel_ddl_pre_check_(const uint64_t tenant_id);
+  int gen_container_table_schema_(const obrpc::ObCreateTableArg &arg,
+                                  share::schema::ObSchemaGetterGuard &schema_guard,
+                                  share::schema::ObTableSchema &mv_table_schema,
+                                  common::ObArray<share::schema::ObTableSchema> &table_schemas);
+
+  int check_tx_share_memory_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_memstore_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_tenant_memstore_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_tx_data_memory_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_mds_memory_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_freeze_trigger_percentage_(obrpc::ObAdminSetConfigItem &item);
+  int check_write_throttle_trigger_percentage(obrpc::ObAdminSetConfigItem &item);
+  int check_data_disk_write_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

@@ -419,10 +419,6 @@ public:
       DUP_TABLE_LOG(INFO, "this readable set used for other operation, should skip gc", KPC(this));
       bool_ret = false;
     } else {
-      bool_ret = true;
-    }
-
-    if (bool_ret) {
       if (last_gc_scan_ts_ <= 0
           || gc_start_time > last_gc_scan_ts_) {
         bool_ret = true;
@@ -430,6 +426,8 @@ public:
         bool_ret = false;
       }
     }
+
+    DUP_TABLE_LOG(INFO, "check need gc scan", K(bool_ret),K(last_gc_scan_ts_),K(gc_start_time),KPC(this));
 
     return bool_ret;
   }
@@ -440,6 +438,8 @@ public:
     } else {
       last_gc_scan_ts_ = gc_start_time;
     }
+
+    DUP_TABLE_LOG(INFO, "set last gc scn ts", K(last_gc_scan_ts_),K(gc_start_time),KPC(this));
   }
   int64_t get_last_gc_scan_ts() { return last_gc_scan_ts_; }
 
@@ -605,6 +605,7 @@ public:
   {
     reset();
   }
+  ~ObLSDupTabletsMgr() { destroy(); }
   int init(ObDupTableLSHandler *dup_ls_handle);
   void destroy();
   void reset();
@@ -629,7 +630,7 @@ public:
                                     const share::SCN &to_scn);
   int gc_tmporary_dup_tablets(const int64_t gc_ts, const int64_t max_task_interval);
   // new gc methods
-  int scan_readable_set_for_gc();
+  int scan_readable_set_for_gc(const int64_t leader_takeover_ts);
 
   int refresh_dup_tablet(const common::ObTabletID &tablet_id,
                          bool is_dup_table,
@@ -662,6 +663,7 @@ public:
   int try_to_confirm_tablets(const share::SCN &confirm_scn);
   // bool need_log_tablets();
   int64_t get_dup_tablet_count();
+  int64_t get_readable_tablet_count();
   bool has_dup_tablet();
   int64_t get_readable_tablet_set_count();
   int64_t get_need_confirm_tablet_set_count();
@@ -807,9 +809,8 @@ private:
   int init_free_tablet_pool_();
   int destroy_free_tablet_pool_();
 
-  // int get_changing_new_set_(DupTabletChangeMap *&changing_new_set);
-  // int get_old_tablet_set_(DupTabletChangeMap *&old_tablet_set);
-  int alloc_extra_free_tablet_set_();
+  int alloc_one_free_tablet_set_(const uint64_t uid);
+
   int get_free_tablet_set(DupTabletChangeMap *&free_set,
                           const bool force_alloc = false,
                           const uint64_t target_id = 0);
@@ -836,6 +837,13 @@ private:
                            const bool for_replay);
   bool need_seralize_readable_set() { return true; }
 
+  int prepare_serialize_readable_tablet_set_(int64_t &max_ser_size,
+                                             DupTabletSetIDArray &unique_id_array,
+                                             const int64_t max_log_buf_len);
+  int prepare_serialize_confirming_tablet_set_(int64_t &max_ser_size,
+                                               DupTabletSetIDArray &unique_id_array,
+                                               const int64_t max_log_buf_len);
+
   int cal_single_set_max_ser_size_(DupTabletChangeMap *hash_map,
                                    int64_t &max_ser_size,
                                    const int64_t ser_size_limit,
@@ -855,8 +863,9 @@ private:
   int remove_src_and_related_set_header_from_array_(DupTabletChangeMap *src_set,
                                                     DupTabletChangeMap *related_set,
                                                     DupTabletSetIDArray &unique_id_array);
-  DupTabletChangeMap *get_need_gc_set_(bool &new_round);
+  DupTabletChangeMap *get_need_gc_set_();
   int remove_tablet_from_readable_set_();
+  bool is_busy_in_readable_change_();
 private:
   //
   static int64_t GC_DUP_TABLETS_TIME_INTERVAL;  // 5 min
@@ -867,6 +876,7 @@ private:
   const static int64_t MAX_FREE_SET_COUNT;
   const static int64_t MAX_GC_TABLET_COUNT;
 
+  static int64_t MAX_READABLE_SET_SER_INTERVAL;
 
 public:
   TO_STRING_KV(K(free_set_pool_.get_size()),
@@ -874,7 +884,6 @@ public:
                K(need_confirm_new_queue_.get_size()),
                K(readable_tablets_list_.get_size()),
                KPC(removing_old_set_),
-               K(last_gc_succ_time_),
                K(last_no_free_set_time_),
                K(extra_free_set_alloc_count_));
 
@@ -886,16 +895,12 @@ private:
   bool is_master_;
   bool is_stopped_;
 
-  // used for gc_handler
-  int64_t tablet_gc_window_; // default is 2 * ObDupTabletScanTask::DUP_TABLET_SCAN_INTERVAL;
-
   common::ObDList<DupTabletChangeMap> free_set_pool_;
   DupTabletChangeMap *changing_new_set_;
   common::ObDList<DupTabletChangeMap> need_confirm_new_queue_;
   common::ObDList<DupTabletChangeMap> readable_tablets_list_;
   DupTabletChangeMap *removing_old_set_;
-  // gc_dup_table
-  int64_t last_gc_succ_time_;
+
   /*  1. gc one round means iter all readable set
    *  2. use readable_set_in_gc_ point to readable set not finish gc in one round
    *  3. use gc_start_time_ mark gc one round start time one round

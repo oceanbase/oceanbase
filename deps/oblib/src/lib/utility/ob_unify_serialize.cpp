@@ -22,19 +22,19 @@ void begin_record_serialization()
 {
   ser_diag_record.count = 0;
   ser_diag_record.check_index = 0;
-  ser_diag_record.flag = 1;
+  ser_diag_record.flag = CHECK_STATUS_RECORDING;
 }
 
 void finish_record_serialization()
 {
-  ser_diag_record.flag = 0;
+  ser_diag_record.flag = CHECK_STATUS_WATING;
 }
 
 void begin_check_serialization()
 {
   ser_diag_record.check_index = 0;
   if (ser_diag_record.count > 0) {
-    ser_diag_record.flag = 2;
+    ser_diag_record.flag = CHECK_STATUS_COMPARING;
   }
 }
 
@@ -42,8 +42,9 @@ void finish_check_serialization()
 {
   ser_diag_record.count = -1;
   ser_diag_record.check_index = -1;
-  ser_diag_record.flag = 0;
+  ser_diag_record.flag = CHECK_STATUS_WATING;
 }
+
 }  // namespace lib
 }  // namespace oceanbase
 #endif

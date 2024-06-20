@@ -441,12 +441,15 @@ int ObRawExprInfoExtractor::visit(ObCaseOpRawExpr &expr)
 int ObRawExprInfoExtractor::visit(ObAggFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
+  const bool is_inner_added = expr.has_flag(IS_INNER_ADDED_EXPR);
   if (OB_FAIL(clear_info(expr))) {
     LOG_WARN("fail to clear info", K(ret));
   } else if (OB_FAIL(pull_info(expr))) {
     LOG_WARN("fail to add pull info", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_AGG))) {
-      LOG_WARN("failed to add flag IS_AGG", K(ret));
+    LOG_WARN("failed to add flag IS_AGG", K(ret));
+  } else if (is_inner_added && OB_FAIL(expr.add_flag(IS_INNER_ADDED_EXPR))) {
+    LOG_WARN("failed to add inner added expr flag", K(ret));
   } else { }
   return ret;
 }
@@ -471,6 +474,7 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
   } else {
     // these functions should not be calculated first
     if (T_FUN_SYS_AUTOINC_NEXTVAL == expr.get_expr_type()
+        || T_FUN_SYS_DOC_ID == expr.get_expr_type()
         || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == expr.get_expr_type()
         || T_FUN_SYS_SLEEP == expr.get_expr_type()
         || (T_FUN_SYS_LAST_INSERT_ID == expr.get_expr_type() && expr.get_param_count() > 0)
@@ -480,8 +484,14 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         || (T_FUN_SYS_SYSDATE == expr.get_expr_type() && !lib::is_oracle_mode())
         || T_FUN_NORMAL_UDF == expr.get_expr_type()
         || T_FUN_SYS_GENERATOR == expr.get_expr_type()
+        || T_FUN_SYS_LAST_REFRESH_SCN == expr.get_expr_type()
         || (T_FUN_UDF == expr.get_expr_type()
-            && !static_cast<ObUDFRawExpr&>(expr).is_deterministic())) {
+            && !static_cast<ObUDFRawExpr&>(expr).is_deterministic())
+        || T_FUN_SYS_GET_LOCK == expr.get_expr_type()
+        || T_FUN_SYS_IS_FREE_LOCK == expr.get_expr_type()
+        || T_FUN_SYS_IS_USED_LOCK == expr.get_expr_type()
+        || T_FUN_SYS_RELEASE_LOCK == expr.get_expr_type()
+        || T_FUN_SYS_RELEASE_ALL_LOCKS == expr.get_expr_type()) {
       if (OB_FAIL(expr.add_flag(IS_STATE_FUNC))) {
         LOG_WARN("failed to add flag IS_STATE_FUNC", K(ret));
       }
@@ -568,31 +578,6 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
       } else {}
     }
 
-    if (OB_SUCC(ret)
-        && (T_FUN_SYS_JSON_VALUE == expr.get_expr_type()
-           || T_FUN_SYS_JSON_QUERY == expr.get_expr_type()
-           || (T_FUN_SYS_JSON_EXISTS == expr.get_expr_type() && lib::is_oracle_mode())
-           || T_FUN_SYS_JSON_EQUAL == expr.get_expr_type()
-           || T_FUN_SYS_IS_JSON == expr.get_expr_type()
-           || (T_FUN_SYS_JSON_MERGE_PATCH == expr.get_expr_type() && lib::is_oracle_mode())
-           || T_FUN_SYS_JSON_OBJECT == expr.get_expr_type()
-           || IS_LABEL_SE_POLICY_FUNC(expr.get_expr_type()))
-        && OB_FAIL(expr.clear_flag(IS_CONST_EXPR))) {
-      LOG_WARN("failed to clear flag", K(ret));
-    }
-
-    if (OB_SUCC(ret) && T_FUN_SYS_JSON_VALUE == expr.get_expr_type()) {
-      if (expr.get_param_count() >= 12) {
-        ObRawExpr * sub_expr = expr.get_param_expr(7);
-        if (OB_NOT_NULL(sub_expr)
-            && OB_FAIL(sub_expr->clear_flag(IS_CONST_EXPR))) {
-          LOG_WARN("failed to clear flag", K(ret));
-        } else if (OB_NOT_NULL(sub_expr = expr.get_param_expr(4))
-                   && OB_FAIL(sub_expr->clear_flag(IS_CONST_EXPR))) {
-          LOG_WARN("failed to clear flag", K(ret));
-        }
-      }
-    }
   }
   return ret;
 }
@@ -666,6 +651,19 @@ int ObRawExprInfoExtractor::visit(ObPseudoColumnRawExpr &expr)
     if (OB_FAIL(expr.add_flag(IS_ORA_ROWSCN_EXPR))) {
         LOG_WARN("failed to add flag IS_ORA_ROWSCN_EXPR", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObRawExprInfoExtractor::visit(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("failed to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
+    LOG_WARN("pull match against info failed", K(ret));
+  } else if (OB_FAIL(expr.add_flag(IS_MATCH_EXPR))) {
+    LOG_WARN("add flag to match against failed", K(ret));
   }
   return ret;
 }

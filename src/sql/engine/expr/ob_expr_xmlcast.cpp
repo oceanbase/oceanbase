@@ -15,13 +15,11 @@
 #include "share/object/ob_obj_cast.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/session/ob_sql_session_info.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_tree.h"
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xpath.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#endif
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/ob_spi.h"
@@ -147,7 +145,6 @@ int ObExprXmlcast::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, 
   return OB_SUCCESS;
 }
 
-#ifdef OB_BUILD_ORACLE_XML
 int ObExprXmlcast::eval_xmlcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -175,159 +172,24 @@ int ObExprXmlcast::eval_xmlcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
     LOG_WARN("fail to get xml str", K(ret));
   } else if (OB_FAIL(ObXMLExprHelper::get_xml_base(mem_ctx, xml_datum, cs_type, ObNodeMemType::BINARY_TYPE, xml_doc))) {
     LOG_WARN("fail to parse xml doc", K(ret));
-  } else if (OB_FAIL(extract_xml_text_node(mem_ctx, xml_doc, xml_res_str))) {
+  } else if (OB_FAIL(ObXMLExprHelper::extract_xml_text_node(mem_ctx, xml_doc, xml_res_str))) {
     LOG_WARN("fail to extract xml text node", K(ret), K(xml_res_str));
-  } else if (OB_FAIL(cast_to_res(allocator, xml_res_str, expr, ctx, res))) {
+  } else if (OB_FAIL(ObXMLExprHelper::cast_to_res(allocator, xml_res_str, expr, ctx, res))) {
     LOG_WARN("fail to cast to res", K(ret), K(xml_res_str));
   }
   return ret;
 }
 
-int ObExprXmlcast::cast_to_res(ObIAllocator &allocator, ObString &xml_content, const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
-{
+DEF_SET_LOCAL_SESSION_VARS(ObExprXmlcast, raw_expr) {
   int ret = OB_SUCCESS;
-  ObCastMode def_cm = CM_NONE;
-  ObSQLSessionInfo *session = NULL;
-  ObObj src_obj,dst_obj, buf_obj;
-  const ObObj *res_obj = NULL;
-  ObAccuracy out_acc;
-  if (xml_content.empty()) {
-    res.set_null();
-  } else {
-    src_obj.set_string(ObVarcharType, xml_content);
-    src_obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    // to type
-    if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sessioninfo is NULL");
-    } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                                  session, def_cm))) {
-      LOG_WARN("get_default_cast_mode failed", K(ret));
-    } else {
-      ObObjType obj_type = expr.datum_meta_.type_;
-      ObCollationType cs_type = expr.datum_meta_.cs_type_;
-      ObPhysicalPlanCtx *phy_plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
-      const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
-      ObCastCtx cast_ctx(&allocator, &dtc_params, get_cur_time(phy_plan_ctx), def_cm,
-                         cs_type, NULL, NULL);
-      if (OB_FAIL(ObObjCaster::to_type(obj_type, cs_type, cast_ctx, src_obj, dst_obj))) {
-        LOG_WARN("failed to cast object to ", K(ret), K(src_obj), K(obj_type));
-      } else if (FALSE_IT(get_accuracy_from_expr(expr, out_acc))) {
-      } else if (FALSE_IT(res_obj = &dst_obj)) {
-      } else if (OB_FAIL(obj_accuracy_check(cast_ctx, out_acc, cs_type, dst_obj, buf_obj, res_obj))) {
-        if ((ob_is_varchar_or_char(obj_type, cs_type) || ob_is_nchar(obj_type)) && ret == OB_ERR_DATA_TOO_LONG) {
-          ObLengthSemantics ls = lib::is_oracle_mode() ?
-                                 expr.datum_meta_.length_semantics_ : LS_CHAR;
-          const char* str = dst_obj.get_string_ptr();
-          int32_t str_len_byte = dst_obj.get_string_len();
-          int64_t char_len = 0;
-          int32_t trunc_len_byte = 0;
-          trunc_len_byte = (ls == LS_BYTE ?
-                ObCharset::max_bytes_charpos(cs_type, str, str_len_byte,
-                                             expr.max_length_, char_len):
-                ObCharset::charpos(cs_type, str, str_len_byte, expr.max_length_));
-          if (trunc_len_byte == 0) {
-            (const_cast<ObObj*>(res_obj))->set_null();
-          } else {
-            (const_cast<ObObj*>(res_obj))->set_common_value(ObString(trunc_len_byte, str));
-          }
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("accuracy check failed", K(ret), K(out_acc), K(res_obj));
-        }
-      } else if (OB_FAIL(ObSPIService::spi_pad_char_or_varchar(session, obj_type, out_acc, &allocator, const_cast<ObObj *>(res_obj)))) {
-        LOG_WARN("fail to pad char", K(ret), K(*res_obj));
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_NOT_NULL(res_obj)) {
-          res.from_obj(*res_obj);
-          ObExprStrResAlloc res_alloc(expr, ctx);
-          if (OB_FAIL(res.deep_copy(res, res_alloc))) {
-            LOG_WARN("fail to deep copy for res datum", K(ret), KPC(res_obj), K(res));
-          }
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("res obj is NULL", K(ret));
-        }
-      }
-    }
-  }
+  SET_LOCAL_SYSVAR_CAPACITY(5);
+  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_DATE_FORMAT);
+  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_FORMAT);
+  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT);
+  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
+  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 
-
-int ObExprXmlcast::extract_xml_text_node(ObMulModeMemCtx* mem_ctx, ObIMulModeBase *xml_doc, ObString &res)
-{
-  int ret = OB_SUCCESS;
-  ObStringBuffer buff(mem_ctx->allocator_);
-  ObPathExprIter xpath_iter(mem_ctx->allocator_);
-  ObString xpath_str = ObString::make_string("//node()");
-  ObString default_ns; // unused
-  ObIMulModeBase *xml_node = NULL;
-  bool is_xml_document = false;
-  bool is_head_comment = true;
-  if (OB_ISNULL(xml_doc)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("xml doc node is NULL", K(ret));
-  } else if (FALSE_IT(is_xml_document = xml_doc->type() == M_DOCUMENT)) {
-  } else if (OB_FAIL(xpath_iter.init(mem_ctx, xpath_str, default_ns, xml_doc, NULL))) {
-    LOG_WARN("fail to init xpath iterator", K(xpath_str), K(default_ns), K(ret));
-  } else if (OB_FAIL(xpath_iter.open())) {
-    LOG_WARN("fail to open xpath iterator", K(ret));
-  }
-
-  while (OB_SUCC(ret)) {
-    ObString content;
-    if (OB_FAIL(xpath_iter.get_next_node(xml_node))) {
-      if (ret != OB_ITER_END) {
-        LOG_WARN("fail to get next xml node", K(ret));
-      }
-    } else if (OB_ISNULL(xml_node)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("xpath result node is null", K(ret));
-    } else {
-      ObMulModeNodeType node_type = xml_node->type();
-      if (node_type != M_TEXT &&
-          node_type != M_CDATA &&
-          node_type != M_COMMENT &&
-          node_type != M_INSTRUCT) {
-        is_head_comment = false;
-      } else if ((node_type == M_COMMENT || node_type == M_INSTRUCT) &&
-                 (is_xml_document || (!is_xml_document && !is_head_comment))) {
-        /* filter the comment node */
-      } else if (OB_FAIL(xml_node->get_value(content))) {
-        LOG_WARN("fail to get text node content", K(ret));
-      } else if (OB_FAIL(buff.append(content))) {
-        LOG_WARN("fail to append text node content", K(ret), K(content));
-      }
-    }
-  }
-
-  if (ret == OB_ITER_END) {
-    res.assign_ptr(buff.ptr(), buff.length());
-    ret = OB_SUCCESS;
-  }
-
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = xpath_iter.close())) {
-    LOG_WARN("fail to close xpath iter", K(tmp_ret));
-    ret = COVER_SUCC(tmp_ret);
-  }
-  return ret;
-}
-
-void ObExprXmlcast::get_accuracy_from_expr(const ObExpr &expr, ObAccuracy &accuracy)
-{
-  accuracy.set_length(expr.max_length_);
-  accuracy.set_scale(expr.datum_meta_.scale_);
-  const ObObjTypeClass &dst_tc = ob_obj_type_class(expr.datum_meta_.type_);
-  if (ObStringTC == dst_tc || ObTextTC == dst_tc) {
-    accuracy.set_length_semantics(expr.datum_meta_.length_semantics_);
-  } else {
-    accuracy.set_precision(expr.datum_meta_.precision_);
-  }
-}
-#endif
 } // sql
 } // oceanbase

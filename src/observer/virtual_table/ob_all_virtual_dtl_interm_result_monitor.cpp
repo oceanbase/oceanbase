@@ -52,7 +52,7 @@ int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<Ob
   int ret = OB_SUCCESS;
   const ObDTLIntermResultInfo &info = *entry.second;
   const ObDTLIntermResultKey &key = entry.first;
-  int64_t tenant_id = info.is_store_valid() ? info.datum_store_->get_tenant_id() : OB_INVALID_ID;
+  int64_t tenant_id = info.is_store_valid() ? info.get_tenant_id() : OB_INVALID_ID;
   if (OB_SYS_TENANT_ID == effective_tenant_id_ || tenant_id == effective_tenant_id_) {
     int64_t hold_mem = 0;
     int64_t max_hold_mem = 0;
@@ -63,7 +63,11 @@ int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<Ob
     const char *owner = NULL;
     ObObj *cells = cur_row_.cells_;
     if (info.is_store_valid()) {
-      GET_CHUNK_STORE_INFO(info.datum_store_);
+      if (info.use_rich_format_) {
+        GET_CHUNK_STORE_INFO(info.col_store_);
+      } else {
+        GET_CHUNK_STORE_INFO(info.datum_store_);
+      }
     }
     for (int64_t cell_idx = 0;
         OB_SUCC(ret) && cell_idx < output_column_ids_.count();
@@ -120,7 +124,7 @@ int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<Ob
           break;
         }
         case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::EXPIRE_TIME: {
-          int64_t expire_time = key.time_us_;
+          int64_t expire_time = key.timeout_ts_;
           cells[cell_idx].set_timestamp(expire_time);
           break;
         }
@@ -250,7 +254,7 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
           }
         }
       }
-    } else if(is_user_tenant(cur_tenant_id)) {
+    } else {
       ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
                                   cur_row_, *addr_, ipstr, cur_tenant_id);
       MTL_SWITCH(cur_tenant_id) {
@@ -258,9 +262,6 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
           SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
         }
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "Non-system non-user tenants try generate_monitor_info_rows", K(ret));
     }
     if(OB_SUCC(ret)) {
       scanner_it_ = scanner_.begin();

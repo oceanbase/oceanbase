@@ -33,6 +33,7 @@ protected:
   int try_process() override;
   table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
   uint64_t get_request_checksum() override;
+  virtual bool is_kv_processor() override { return false; }
 private:
   common::ObArenaAllocator allocator_;
   ObTableDirectLoadExecContext exec_ctx_;

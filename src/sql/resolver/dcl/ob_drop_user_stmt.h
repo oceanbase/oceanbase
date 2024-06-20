@@ -28,7 +28,9 @@ public:
   virtual ~ObDropUserStmt();
   int add_user(const common::ObString &user_name, const common::ObString &host_name);
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; };
+  void set_if_exists(const bool if_exists) { if_exists_ = if_exists; }
   const common::ObStrings *get_users() const { return &users_; };
+  bool get_if_exists() const { return if_exists_; };
   uint64_t get_tenant_id() const { return tenant_id_; };
   virtual bool cause_implicit_commit() const { return true; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return drop_user_arg_; }
@@ -37,6 +39,7 @@ private:
   // data members
   common::ObStrings users_;//user1,host1; usr2,host2;...
   uint64_t tenant_id_;
+  bool if_exists_;
   obrpc::ObDropUserArg drop_user_arg_; // 用于返回exec_tenant_id_
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDropUserStmt);

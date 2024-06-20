@@ -40,5 +40,15 @@ int ObGeoZoomInVisitor::visit(ObIWkbGeogPoint *geo)
 {
   return zoom_in_point(geo);
 }
+
+int ObGeoZoomInVisitor::visit(ObCartesianPoint *geo)
+{
+  return zoom_in_point(geo);
+}
+
+int ObGeoZoomInVisitor::visit(ObIWkbGeomPoint *geo)
+{
+  return zoom_in_point(geo);
+}
 } // namespace common
 } // namespace oceanbase

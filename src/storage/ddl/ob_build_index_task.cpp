@@ -97,9 +97,9 @@ int ObUniqueIndexChecker::calc_column_checksum(
   const int64_t column_cnt = output_projector.count();
   row_count = 0;
   column_checksum.reuse();
-  if (OB_UNLIKELY(column_cnt <= 0)) {
+  if (OB_UNLIKELY(column_cnt <= 0 || column_cnt > need_reshape.count() || column_cnt > cols_desc.count())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(column_cnt));
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(column_cnt), K(need_reshape), K(cols_desc));
   } else if (OB_FAIL(column_checksum.reserve(column_cnt))) {
     STORAGE_LOG(WARN, "fail to reserve column", K(ret), K(column_cnt));
   } else {
@@ -128,9 +128,13 @@ int ObUniqueIndexChecker::calc_column_checksum(
       } else {
         ++row_count;
         for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-          column_checksum.at(i) += row->storage_datums_[i].checksum(0);
+          if (need_reshape.at(i) && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(row->storage_datums_[i], cols_desc.at(i).col_type_))) {
+            LOG_WARN("reshape ddl column obj failed", K(ret));
+          } else {
+            column_checksum.at(i) += row->storage_datums_[i].checksum(0);
+          }
         }
-        if (OB_FAIL(dag_yield())) {
+        if (OB_SUCC(ret) && OB_FAIL(dag_yield())) {
           STORAGE_LOG(WARN, "fail to yield dag", KR(ret));
         }
       }
@@ -155,18 +159,20 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
       transaction::ObTransService *trans_service = nullptr;
       ObTabletTableIterator iterator;
       ObQueryFlag query_flag(ObQueryFlag::Forward,
-          true, /*is daily merge scan*/
-          true, /*is read multiple macro block*/
-          false, /*sys task scan, read one macro block in single io*/
-          false, /*is full row scan?*/
-          false,
-          false);
+          false, /* daily merge*/
+          true,  /* use *optimize */
+          false,  /* use whole macro scan*/
+          false, /* not full row*/
+          false, /* not index_back*/
+          false);/* query stat */
+      query_flag.disable_cache();
       query_flag.skip_read_lob_ = 1;
       ObDatumRange range;
       bool allow_not_ready = false;
       ObArray<bool> need_reshape;
       ObLSHandle ls_handle;
       range.set_whole_range();
+
       if (OB_ISNULL(trans_service = MTL(transaction::ObTransService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("trans_service is null", K(ret));
@@ -198,7 +204,7 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to get column schema", K(ret), K(param), K(col_id));
           } else {
-            const bool col_need_reshape = !param.is_scan_index_ && col->is_virtual_generated_column()
+            const bool col_need_reshape = !param.is_scan_index_ && (col->is_virtual_generated_column() || !col->get_orig_default_value().is_null())
               && col->get_meta_type().is_fixed_len_char_type();
             if (OB_FAIL(need_reshape.push_back(col_need_reshape))) {
               LOG_WARN("failed to push back is virtual col", K(ret));
@@ -206,7 +212,7 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(calc_column_checksum(need_reshape, *param.col_ids_, *param.output_projector_, local_scan, column_checksum, row_count))) {
+        } else if (OB_FAIL(calc_column_checksum(need_reshape, *param.org_col_ids_, *param.output_projector_, local_scan, column_checksum, row_count))) {
           LOG_WARN("fail to calc column checksum", K(ret));
         }
       }
@@ -352,6 +358,7 @@ int ObUniqueIndexChecker::scan_main_table_with_column_checksum(
     param.org_col_ids_ = &org_col_ids;
     param.output_projector_ = &output_projector;
     param.is_scan_index_ = false;
+
     STORAGE_LOG(INFO, "scan main table column checksum", K(col_ids), K(org_col_ids));
     if (OB_FAIL(scan_table_with_column_checksum(param, column_checksum, row_count))) {
       STORAGE_LOG(WARN, "fail to scan table with column checksum", K(ret));
@@ -495,6 +502,7 @@ int ObUniqueIndexChecker::report_column_checksum(
         item.execution_id_ = execution_id_;
         item.tenant_id_ = tenant_id_;
         item.table_id_ = report_table_id;
+        item.tablet_id_ = tablet_id_.id();
         item.ddl_task_id_ = task_id_;
         item.column_id_ = column_ids.at(i).col_id_;
         item.task_id_ = -tablet_id_.id();
@@ -506,7 +514,12 @@ int ObUniqueIndexChecker::report_column_checksum(
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDDLChecksumOperator::update_checksum(checksum_items, *GCTX.sql_proxy_))) {
+      uint64_t data_format_version;
+      int64_t snapshot_version = 0;
+      share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
+      if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id_, task_id_, data_format_version, snapshot_version, unused_task_status))) {
+        LOG_WARN("get ddl cluster version failed", K(ret));
+      } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, checksum_items, *GCTX.sql_proxy_))) {
         LOG_WARN("fail to update checksum", K(ret));
       }
     }
@@ -531,7 +544,7 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
         LOG_WARN("fail to get log stream", K(ret), K(ls_id_));
       } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id_, tablet_handle_))) {
         LOG_WARN("fail to get tablet", K(ret), K(tablet_id_), K(tablet_handle_));
-      } else if (index_schema_->is_domain_index()) {
+      } else if (index_schema_->is_fts_index()) {
         STORAGE_LOG(INFO, "do not need to check unique for domain index", "index_id", index_schema_->get_table_id());
       } else {
         if (OB_FAIL(ret)) {

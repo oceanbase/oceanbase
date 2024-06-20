@@ -54,14 +54,19 @@ int ObExprJsonRemove::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-static int remove_from_json(ObJsonPath *path_node, ObIJsonBase *parent)
+static int remove_from_json(ObJsonPath *path_node, ObIJsonBase *child)
 {
   INIT_SUCC(ret);
   // remove item in hits
   ObJsonPathBasicNode* last_node = path_node->last_path_node();
   // get node to be removed
-  ObJsonNodeType type = parent->json_type();
-  if (type == ObJsonNodeType::J_OBJECT && last_node->get_node_type() == JPN_MEMBER) {
+  ObJsonNodeType type;
+  ObIJsonBase* parent = nullptr;
+  if (OB_FAIL(child->get_parent(parent)) || OB_ISNULL(parent)) {
+    // may be null parent
+    ret = OB_SUCCESS;
+  } else if (FALSE_IT(type = parent->json_type())) {
+  } else if (type == ObJsonNodeType::J_OBJECT && last_node->get_node_type() == JPN_MEMBER) {
     ObPathMember member = last_node->get_object();
     ObString key(member.len_, member.object_name_);
     if (OB_FAIL(parent->object_remove(key))) {
@@ -101,7 +106,7 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
   }
   
-  ObJsonBaseVector hits;
+  ObJsonSeekResult hits;
   for (int64_t i = 1; OB_SUCC(ret) && !is_null_result && i < expr.arg_cnt_; i++) {
     hits.clear();
     ObDatum *path_data = NULL;
@@ -120,7 +125,7 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       } else if (json_path->path_node_cnt() == 0) {
         ret = OB_ERR_JSON_VACUOUS_PATH;
         LOG_USER_ERROR(OB_ERR_JSON_VACUOUS_PATH); 
-      } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt() - 1, true, false, hits))) {
+      } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt(), true, false, hits))) {
         LOG_WARN("json seek failed", K(path_data->get_string()), K(ret));
       } else if (hits.size() == 0){
         continue;
@@ -130,6 +135,8 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       } else {
         if (OB_FAIL(remove_from_json(json_path, hits[0]))) {
           LOG_WARN("remove_from_json failed", K(ret));
+        } else if (OB_FAIL(ObJsonExprHelper::refresh_root_when_bin_rebuild_all(json_doc))) {
+          LOG_WARN("refresh_root_when_bin_rebuild_all fail", K(ret));
         }
       }
     }
@@ -140,25 +147,25 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     LOG_WARN("json_remove failed", K(ret));
   } else if (is_null_result) {
     res.set_null();
-  } else {
-    ObString str;
-    if (OB_FAIL(json_doc->get_raw_binary(str, &temp_allocator))) {
-      LOG_WARN("json_remove get result binary failed", K(ret));
-    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str))) {
-      LOG_WARN("fail to pack json result", K(ret));
-    }
+  } else if (OB_FAIL(ObJsonExprHelper::pack_json_res(expr, ctx, temp_allocator, json_doc, res))) {
+    LOG_WARN("pack fail", K(ret));
   }
-
+  if (OB_NOT_NULL(json_doc)) {
+    json_doc->reset();
+  }
   return ret;
 }
 
 int ObExprJsonRemove::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                               ObExpr &rt_expr) const
 {
-  UNUSED(expr_cg_ctx);
-  UNUSED(raw_expr);
-  rt_expr.eval_func_ = eval_json_remove;
-  return OB_SUCCESS;
+  INIT_SUCC(ret);
+  if (OB_FAIL(ObJsonExprHelper::init_json_expr_extra_info(expr_cg_ctx.allocator_, raw_expr, type_, rt_expr))) {
+    LOG_WARN("init_json_partial_update_extra_info fail", K(ret));
+  } else {
+    rt_expr.eval_func_ = eval_json_remove;
+  }
+  return ret;
 }
 
 }

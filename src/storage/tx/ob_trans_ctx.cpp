@@ -27,21 +27,14 @@ using namespace share;
 namespace transaction
 {
 
-void ObTransCtx::get_ctx_guard(CtxLockGuard &guard)
+void ObTransCtx::get_ctx_guard(CtxLockGuard &guard, uint8_t mode)
 {
-  guard.set(lock_);
+  guard.set(lock_, mode);
 }
 
 void ObTransCtx::print_trace_log()
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(lock_.try_lock())) {
-    TRANS_LOG(WARN, "print trace log trylock error", K(ret));
-  } else {
-    print_trace_log_();
-    lock_.unlock();
-  }
-  UNUSED(ret);
+  print_trace_log_();
 }
 
 void ObTransCtx::print_trace_log_()
@@ -52,11 +45,17 @@ void ObTransCtx::print_trace_log_()
 void ObTransCtx::before_unlock(CtxLockArg &arg)
 {
   arg.trans_id_ = trans_id_;
+  arg.ls_id_ = ls_id_;
   opid_++;
   if (has_pending_callback_) {
     arg.commit_cb_ = commit_cb_;
     arg.has_pending_callback_ = has_pending_callback_;
     has_pending_callback_ = false;
+  }
+
+  if (need_retry_redo_sync_by_task_) {
+    arg.need_retry_redo_sync_ = true;
+    need_retry_redo_sync_by_task_ = false;
   }
 
   if (elr_handler_.is_elr_prepared()
@@ -74,6 +73,10 @@ void ObTransCtx::after_unlock(CtxLockArg &arg)
     // in the ending transaction context in the subsequent process after unlocking
     (void)ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
   }
+  if (arg.need_retry_redo_sync_) {
+    (void)MTL(ObTransService *)->retry_redo_sync_by_task(arg.trans_id_, arg.ls_id_);
+  }
+
   if (arg.has_pending_callback_) {
     int64_t remaining_wait_interval_us = get_remaining_wait_interval_us_();
     if (0 == remaining_wait_interval_us) {
@@ -221,19 +224,17 @@ int ObTransCtx::defer_callback_scheduler_(const int retcode, const SCN &commit_v
   return ret;
 }
 
-void ObTransCtx::test_lock(ObTxLogCb *log_cb)
+int ObTransCtx::prepare_commit_cb_for_role_change_(const int cb_ret, ObTxCommitCallback *&cb_list)
 {
-  const int64_t before_lock_time = ObClockGenerator::getRealClock();
-  CtxLockGuard guard(lock_);
-  const int64_t after_lock_time = ObClockGenerator::getRealClock();
-  const int64_t log_sync_used_time = before_lock_time - log_cb->get_submit_ts();
-  const int64_t ctx_lock_wait_time = after_lock_time - before_lock_time;
-
-  if (log_sync_used_time + ctx_lock_wait_time
-      >= ObServerConfig::get_instance().clog_sync_time_warn_threshold) {
-    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "transaction log sync use too much time", KPC(log_cb),
-                  K(log_sync_used_time), K(ctx_lock_wait_time));
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(commit_cb_.init(trans_service_, trans_id_, cb_ret, share::SCN()))) {
+    TRANS_LOG(WARN, "init commit cb fail", K(ret), KPC(this));
+  } else if (OB_FAIL(commit_cb_.link(this, cb_list))) {
+    TRANS_LOG(WARN, "link commit cb fail", K(ret), KPC(this));
+  } else {
+    cb_list = &commit_cb_;
   }
+  return ret;
 }
 
 void ObTransCtx::generate_request_id_()
@@ -357,6 +358,11 @@ int ObTransCtx::set_app_trace_id_(const ObString &app_trace_id)
     // do nothing
   }
   return ret;
+}
+
+void ObTransCtx::release_ctx_ref()
+{
+  ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
 }
 
 } // transaction

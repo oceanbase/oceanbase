@@ -29,7 +29,9 @@ namespace sql
 {
 bool ObTableDirectInsertService::is_direct_insert(const ObPhysicalPlan &phy_plan)
 {
-  return (phy_plan.get_enable_append() && (0 != phy_plan.get_append_table_id()));
+  return ((phy_plan.get_enable_append() ||
+           phy_plan.get_is_insert_overwrite()) &&
+           (0 != phy_plan.get_append_table_id()));
 }
 
 int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
@@ -38,22 +40,31 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   if (!GCONF._ob_enable_direct_load) { // recheck
     phy_plan.set_enable_append(false);
+    phy_plan.set_enable_inc_direct_load(false);
+    phy_plan.set_enable_replace(false);
     phy_plan.set_append_table_id(0);
   } else {
+    const bool is_inc_direct_load = phy_plan.get_enable_inc_direct_load();
+    const bool is_inc_replace = phy_plan.get_enable_replace();
+    const bool is_insert_overwrite = phy_plan.get_is_insert_overwrite();
     ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
-    CK (OB_NOT_NULL(session));
     bool auto_commit = false;
-    if (OB_FAIL(session->get_autocommit(auto_commit))) {
+    CK (OB_NOT_NULL(session));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(session->get_autocommit(auto_commit))) {
       LOG_WARN("failed to get auto commit", KR(ret));
-    } else if (!auto_commit || session->is_in_transaction()) {
+    } else if (!is_inc_direct_load
+        && (!auto_commit || session->is_in_transaction())) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "using direct-insert within a transaction is");
+      LOG_WARN("using full direct-insert with a transaction is not supported", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "using full direct-insert within a transaction is");
     } else {
       ObTableDirectInsertCtx &table_direct_insert_ctx = ctx.get_table_direct_insert_ctx();
       uint64_t table_id = phy_plan.get_append_table_id();
       int64_t parallel = phy_plan.get_px_dop();
-      if (OB_FAIL(table_direct_insert_ctx.init(&ctx, table_id, parallel))) {
-        LOG_WARN("failed to init table direct insert ctx", KR(ret), K(table_id), K(parallel));
+      if (OB_FAIL(table_direct_insert_ctx.init(&ctx, table_id, parallel, is_inc_direct_load, is_inc_replace, is_insert_overwrite))) {
+        LOG_WARN("failed to init table direct insert ctx",
+            KR(ret), K(table_id), K(parallel), K(is_inc_direct_load), K(is_inc_replace), K(is_insert_overwrite));
       }
     }
   }
@@ -72,13 +83,14 @@ int ObTableDirectInsertService::commit_direct_insert(ObExecContext &ctx,
 }
 
 int ObTableDirectInsertService::finish_direct_insert(ObExecContext &ctx,
-    ObPhysicalPlan &phy_plan)
+    ObPhysicalPlan &phy_plan, const bool commit)
 {
   int ret = OB_SUCCESS;
   ObTableDirectInsertCtx &table_direct_insert_ctx = ctx.get_table_direct_insert_ctx();
-  if (OB_FAIL(table_direct_insert_ctx.finish())) {
+  if (commit && OB_FAIL(table_direct_insert_ctx.finish())) {
     LOG_WARN("failed to finish table direct insert ctx", KR(ret));
   }
+  table_direct_insert_ctx.destroy();
   return ret;
 }
 

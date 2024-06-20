@@ -32,6 +32,14 @@ enum PartitionRelation
   COMPATIBLE_COMMON
 };
 
+enum Monotonicity
+{
+  NONE_MONO,
+  ASC,
+  DESC,
+  CONST
+};
+
 struct MergeKeyInfo
 {
   MergeKeyInfo(common::ObIAllocator &allocator, int64_t size)
@@ -127,6 +135,18 @@ public:
                                       bool &ordering_all_used,
                                       common::ObIArray<ObOrderDirection> &directions,
                                       common::ObIArray<int64_t> *match_map = NULL);
+  // when there is no input ordering or interesting ordering, generate a stable ordering use this function
+  static int generate_stable_ordering(common::ObIArray<ObRawExpr *> &exprs,
+                                      ObIArray<ObOrderDirection> &directions);
+  static int generate_stable_ordering(common::ObIArray<ObRawExpr *> &exprs,
+                                      ObIArray<ObOrderDirection> &directions,
+                                      ObBitSet<64> &used_expr_idxs,
+                                      ObIArray<int64_t> &expr_map,
+                                      ObIArray<ObRawExpr*> &adjusted_exprs,
+                                      ObIArray<ObOrderDirection> &adjusted_directions);
+  static bool stable_expr_cmp_func(std::pair<ObRawExpr*,int64_t> l_pair,
+                                   std::pair<ObRawExpr*,int64_t> r_pair);
+  static int cmp_expr(ObRawExpr *l_expr, ObRawExpr *r_expr, int64_t &res);
 
   static int adjust_exprs_by_mapping(const common::ObIArray<ObRawExpr *> &exprs,
                                      const common::ObIArray<int64_t> &match_map,
@@ -174,6 +194,23 @@ public:
                                      const common::ObIArray<ObRawExpr *> &const_exprs,
                                      const ObIArray<ObRawExpr *> &exec_ref_exprs,
                                      int64_t &number);
+
+
+  static int get_expr_monotonicity(const ObRawExpr *expr,
+                                   const ObRawExpr *var,
+                                   ObExecContext &ctx,
+                                   Monotonicity &monotonicity,
+                                   bool &is_strict,
+                                   const ParamStore &param_store,
+                                   ObPCConstParamInfo& const_param_info);
+
+  static int get_expr_monotonicity_recursively(const ObRawExpr *expr,
+                                               const ObColumnRefRawExpr *var,
+                                               ObExecContext &ctx,
+                                               Monotonicity &monotonicity,
+                                               bool &is_strict,
+                                               const ParamStore &param_store,
+                                               ObPCConstParamInfo &const_param_info);
 
   static bool is_sub_expr(const ObRawExpr *sub_expr, const ObRawExpr *expr);
   static bool is_sub_expr(const ObRawExpr *sub_expr, const ObIArray<ObRawExpr*> &exprs);
@@ -851,7 +888,8 @@ public:
    *  @param new_expr 新生成的谓词，值为NULL表示无法从or谓词中分离属于table的谓词
    */
   static int split_or_qual_on_table(const ObDMLStmt *stmt,
-                                    ObOptimizerContext &opt_ctx,
+                                    ObRawExprFactory &expr_factory,
+                                    const ObSQLSessionInfo *session_info,
                                     const ObRelIds &table_ids,
                                     ObOpRawExpr &or_qual,
                                     ObOpRawExpr *&new_expr);
@@ -862,7 +900,8 @@ public:
                                   bool &all_contain);
 
   static int generate_push_down_expr(const ObDMLStmt *stmt,
-                                     ObOptimizerContext &opt_ctx,
+                                     ObRawExprFactory &expr_factory,
+                                     const ObSQLSessionInfo *session_info,
                                      ObIArray<ObSEArray<ObRawExpr *, 16> > &sub_exprs,
                                      ObOpRawExpr *&new_expr);
 
@@ -1383,6 +1422,8 @@ public:
 
   static int allocate_group_id_expr(ObLogPlan *log_plan, ObRawExpr *&group_id_expr);
 
+  static int allocate_identify_seq_expr(ObOptimizerContext &opt_ctx, ObRawExpr *&identify_seq_expr);
+
   static int check_contribute_query_range(ObLogicalOperator *tsc,
                                           const ObIArray<ObExecParamRawExpr *> &params,
                                           bool &is_valid);
@@ -1477,7 +1518,11 @@ public:
                                                    ObOptimizerContext &opt_ctx,
                                                    ObRawExpr *&calc_part_id_expr);
 
-  static int check_contain_my_exec_param(ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain);
+  static int check_contain_my_exec_param(const ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain);
+
+  static int check_contain_my_exec_param(const ObIArray<ObRawExpr *> &exprs,
+                                         const ObIArray<ObExecParamRawExpr*> &my_exec_params,
+                                         bool &contain);
 
   static int generate_pseudo_trans_info_expr(ObOptimizerContext &opt_ctx,
                                              const common::ObString &table_name,
@@ -1522,6 +1567,38 @@ public:
                                          ObSqlTempTableInfo &temp_table_info,
                                          ObRawExpr *&temp_table_filter,
                                          ObSelectStmt *temp_table_query = NULL);
+
+  static int check_is_static_false_expr(ObOptimizerContext &opt_ctx, ObRawExpr &expr, bool &is_static_false);
+
+  static int check_ancestor_node_support_skip_scan(ObLogicalOperator* op, bool &can_use_batch_nlj);
+
+  static int try_split_or_qual(const ObDMLStmt *stmt,
+                               ObRawExprFactory &expr_factory,
+                               const ObSQLSessionInfo *session_info,
+                               const ObRelIds &table_ids,
+                               ObOpRawExpr &or_qual,
+                               ObIArray<ObRawExpr*> &table_quals,
+                               ObIArray<ObRawExpr*> &new_or_quals);
+
+  static int split_or_quals(const ObDMLStmt *stmt,
+                            ObRawExprFactory &expr_factory,
+                            const ObSQLSessionInfo *session_info,
+                            const ObIArray<TableItem*> &table_items,
+                            ObIArray<ObRawExpr*> &quals,
+                            ObIArray<ObRawExpr*> &new_or_quals);
+
+  static int split_or_quals(const ObDMLStmt *stmt,
+                            ObRawExprFactory &expr_factory,
+                            const ObSQLSessionInfo *session_info,
+                            const ObIArray<TableItem*> &table_items,
+                            ObRawExpr *qual,
+                            ObIArray<ObRawExpr*> &new_quals,
+                            ObIArray<ObRawExpr*> &new_or_quals);
+
+  static int is_joined_table_filter(const ObDMLStmt *stmt,
+                                    const ObIArray<TableItem*> &table_items,
+                                    const ObRawExpr *expr,
+                                    bool &is_filter);
 private:
   //disallow construct
   ObOptimizerUtil();

@@ -63,7 +63,7 @@ int ObExprSysOpOpnsize::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
   return ret;
 }
 
-int ObExprSysOpOpnsize::calc_sys_op_opnsize(ObExpr *expr, ObDatum *arg, int64_t &size) {
+int ObExprSysOpOpnsize::calc_sys_op_opnsize(const ObExpr *expr,const ObDatum *arg, int64_t &size) {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(arg) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;

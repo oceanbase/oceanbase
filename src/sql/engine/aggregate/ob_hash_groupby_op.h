@@ -22,6 +22,7 @@
 #include "sql/engine/basic/ob_hash_partitioning_infrastructure_op.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
+#include "sql/engine/aggregate/ob_hash_groupby_vec_op.h"
 
 namespace oceanbase
 {
@@ -111,7 +112,6 @@ public:
   uint16_t group_row_offset_in_selector_;
 };
 
-
 class ObGroupRowHashTable : public ObExtendHashTable<ObGroupRowItem>
 {
 public:
@@ -125,6 +125,7 @@ public:
           ObEvalCtx *eval_ctx,
           const common::ObIArray<ObCmpFunc> *cmp_funcs,
           int64_t initial_size = INITIAL_SIZE);
+  int add_hashval_to_llc_map(LlcEstimate &llc_est);
 private:
   int likely_equal(const ObGroupRowItem &left, const ObGroupRowItem &right, bool &result) const;
 private:
@@ -270,7 +271,8 @@ public:
       by_pass_nth_group_(0),
       last_child_row_(nullptr),
       by_pass_child_brs_(nullptr),
-      force_by_pass_(false)
+      force_by_pass_(false),
+      llc_est_()
   {
   }
   void reset();
@@ -285,7 +287,15 @@ public:
 
   // for batch
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
-
+  void calc_avg_group_mem();
+  OB_INLINE void llc_add_value(int64_t hash_value)
+  {
+    ObAggregateProcessor::llc_add_value(hash_value, llc_est_.llc_map_);
+    ++llc_est_.est_cnt_;
+  }
+  int bypass_add_llc_map(uint64_t hash_val, bool ready_to_check_ndv);
+  int bypass_add_llc_map_batch(bool ready_to_check_ndv);
+  int check_llc_ndv();
   int check_same_group(int64_t &diff_pos);
   int restore_groupby_datum(const int64_t diff_pos);
   int rollup_and_calc_results(const int64_t group_id);
@@ -606,6 +616,7 @@ private:
   const ObBatchRows *by_pass_child_brs_;
   ObBatchResultHolder by_pass_brs_holder_;
   bool force_by_pass_;
+  LlcEstimate llc_est_;
 };
 
 } // end namespace sql

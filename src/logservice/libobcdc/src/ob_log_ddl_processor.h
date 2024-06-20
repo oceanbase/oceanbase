@@ -53,13 +53,14 @@ public:
 public:
   int init(
       IObLogSchemaGetter *schema_getter,
-      const bool skip_reversed_schema_version);
+      const bool skip_reversed_schema_version,
+      const bool enable_white_black_list);
   void destroy();
   int handle_ddl_trans(
       PartTransTask &task,
       ObLogTenant &tenant,
+      const bool need_update_tic,
       volatile bool &stop_flag);
-
 private:
   void mark_stmt_binlog_record_invalid_(DdlStmtTask &stmt_task);
   void mark_all_binlog_records_invalid_(PartTransTask &task);
@@ -85,8 +86,16 @@ private:
   int handle_tenant_ddl_task_(
       PartTransTask &task,
       ObLogTenant &tenant,
+      const bool need_update_tic,
       volatile bool &stop_flag);
   int handle_ddl_stmt_(
+      ObLogTenant &tenant,
+      PartTransTask &task,
+      DdlStmtTask &ddl_stmt,
+      const int64_t old_schema_version,
+      const int64_t new_schema_version,
+      volatile bool &stop_flag);
+  int handle_ddl_stmt_update_tic_(
       ObLogTenant &tenant,
       PartTransTask &task,
       DdlStmtTask &ddl_stmt,
@@ -162,6 +171,7 @@ private:
       DdlStmtTask &ddl_stmt,
       const int64_t old_schema,
       const int64_t new_schema,
+      const bool need_update_tic,
       volatile bool &stop_flag);
   int handle_ddl_stmt_drop_table_to_recyclebin_(
       ObLogTenant &tenant,
@@ -179,18 +189,20 @@ private:
       DdlStmtTask &ddl_stmt,
       const int64_t old_schema,
       const int64_t new_schema,
-      const char *event,
+      const bool need_update_tic,
       volatile bool &stop_flag);
   int handle_ddl_stmt_create_table_(
       ObLogTenant &tenant,
       DdlStmtTask &ddl_stmt,
       const int64_t new_schema,
+      const bool need_update_tic,
       volatile bool &stop_flag);
   int handle_ddl_stmt_rename_table_(
       ObLogTenant &tenant,
       DdlStmtTask &ddl_stmt,
       const int64_t old_schema,
       const int64_t new_schema,
+      const bool need_update_tic,
       volatile bool &stop_flag);
 
   /*************** Index related DDL ***************/
@@ -281,6 +293,7 @@ private:
       DdlStmtTask &ddl_stmt,
       const int64_t old_schema,
       const int64_t new_schema,
+      const bool need_update_tic,
       volatile bool &stop_flag);
   int handle_ddl_stmt_drop_database_to_recyclebin_(
       ObLogTenant &tenant,
@@ -314,6 +327,7 @@ private:
   bool                is_inited_;
   IObLogSchemaGetter  *schema_getter_;
   bool                skip_reversed_schema_version_;
+  bool                enable_white_black_list_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDDLProcessor);

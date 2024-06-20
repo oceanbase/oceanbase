@@ -197,7 +197,8 @@ int ObHelpResolver::search_topic(ObHelpStmt *help_stmt,
                 help_stmt->add_row(row);
               }
             }
-            if (OB_FAIL(GET_COL_IGNORE_NULL(result->get_varchar, "name", col1))) {
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(GET_COL_IGNORE_NULL(result->get_varchar, "name", col1))) {
               SQL_REWRITE_LOG(WARN, "fail to get name column", K(ret), K(col1));
             } else {
               cells[0].set_varchar(col1);

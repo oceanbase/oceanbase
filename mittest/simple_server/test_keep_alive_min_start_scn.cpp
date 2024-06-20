@@ -26,7 +26,7 @@ namespace oceanbase
 
 namespace storage
 {
-int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 0;
+int64_t ObTxTable::UPDATE_MIN_START_SCN_INTERVAL = 0;
 }
 
 namespace unittest
@@ -90,26 +90,26 @@ void ObTestKeepAliveMinStartSCN::loop_check_start_scn(SCN &prev_min_start_scn, S
   MTL_SWITCH(RunCtx.tenant_id_)
   {
     ObLS *ls = get_ls(RunCtx.tenant_id_, ObLSID(1001));
-    ObTxDataTable *tx_data_table = ls->get_tx_table()->get_tx_data_table();
+    ObTxTable *tx_table = ls->get_tx_table();
 
     // 每100毫秒循环一次，对应tx loop worker的单次循环interval，循环200次，对应20秒
     // 因为tx loop worker会15秒遍历一次上下文，略大于遍历间隔
     int retry_times = 200;
     while (--retry_times >= 0) {
       // 每次循环都更新tx data table中的min_start_scn
-      tx_data_table->update_calc_upper_info_(SCN::max_scn());
+      tx_table->update_min_start_scn_info(SCN::max_scn());
 
       // 判断min_start_scn的大小关系，若出错，打印到stdout
-      if (prev_min_start_scn > tx_data_table->calc_upper_info_.min_start_scn_in_ctx_) {
+      if (prev_min_start_scn > tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_) {
         fprintf(stdout,
                 "Incorrect min_start_scn in tx data table, prev_min_start_scn = %s, current_min_start_scn = %s\n",
                 to_cstring(prev_min_start_scn),
-                to_cstring(tx_data_table->calc_upper_info_.min_start_scn_in_ctx_));
+                to_cstring(tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_));
       }
-      ASSERT_LE(prev_min_start_scn, tx_data_table->calc_upper_info_.min_start_scn_in_ctx_);
-      prev_min_start_scn = tx_data_table->calc_upper_info_.min_start_scn_in_ctx_;
-      ASSERT_LE(prev_keep_alive_scn, tx_data_table->calc_upper_info_.keep_alive_scn_);
-      prev_keep_alive_scn = tx_data_table->calc_upper_info_.keep_alive_scn_;
+      ASSERT_LE(prev_min_start_scn, tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_);
+      prev_min_start_scn = tx_table->ctx_min_start_scn_info_.min_start_scn_in_ctx_;
+      ASSERT_LE(prev_keep_alive_scn, tx_table->ctx_min_start_scn_info_.keep_alive_scn_);
+      prev_keep_alive_scn = tx_table->ctx_min_start_scn_info_.keep_alive_scn_;
 
       ::usleep(ObTxLoopWorker::LOOP_INTERVAL);
     }

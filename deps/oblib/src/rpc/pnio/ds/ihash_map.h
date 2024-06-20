@@ -10,6 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-extern link_t* ihash_insert(hash_t* map, link_t* k);
-extern link_t* ihash_del(hash_t* map, uint64_t k);
-extern link_t* ihash_get(hash_t* map, uint64_t k);
+extern link_t* ihash_insert(hash_t* map, link_t* klink);
+extern link_t* ihash_del(hash_t* map, void* key);
+extern link_t* ihash_get(hash_t* map, void* key);

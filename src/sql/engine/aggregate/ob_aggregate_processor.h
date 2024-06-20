@@ -28,6 +28,7 @@
 #include "sql/engine/user_defined_function/ob_pl_user_defined_agg_function.h"
 #include "sql/engine/expr/ob_expr_dll_udf.h"
 #include "sql/engine/expr/ob_rt_datum_arith.h"
+#include "lib/geo/ob_geo_mvt.h"
 
 namespace oceanbase
 {
@@ -167,6 +168,7 @@ public:
     group_idxs_.set_allocator(alloc);
   }
   int64_t to_string(char *buf, const int64_t buf_len) const;
+  int assign(const ObAggrInfo &rhs);
 
   common::ObIAllocator *alloc_;
   ObExpr *expr_;
@@ -412,7 +414,7 @@ public:
 
     int init(const uint64_t tenant_id, const ObAggrInfo &aggr_info,
              ObEvalCtx &eval_ctx, const bool need_rewind,
-             ObIOEventObserver *io_event_observer, ObSqlWorkAreaProfile &profile,
+             ObIOEventObserver *io_event_observer,
              ObMonitorNode &op_monitor_info);
 
     int add_sort_row(const ObIArray<ObExpr *> &expr, ObEvalCtx &eval_ctx);
@@ -667,7 +669,6 @@ public:
                         const int64_t group_id = 0,
                         const ObExpr *diff_expr = NULL,
                         const int64_t max_group_cnt = INT64_MIN);
-  OB_INLINE int prepare_in_batch_mode(GroupRow *group_rows);
   // Todo: check group_id, diff_expr usage
   int collect_scalar_batch(const ObBatchRows &brs, const int64_t group_id,
                     const ObExpr *diff_expr, const int64_t max_cnt);
@@ -692,6 +693,7 @@ public:
   }
   inline void set_in_window_func() { in_window_func_ = true; }
   inline bool has_distinct() const { return has_distinct_; }
+  inline bool has_extra() const { return has_extra_; }
   inline bool has_order_by() const { return has_order_by_; }
 
   RemovalInfo &get_removal_info() { return removal_info_; }
@@ -701,7 +703,9 @@ public:
   inline common::ObIAllocator &get_aggr_alloc() { return aggr_alloc_; }
   inline void set_tenant_id(const uint64_t tenant_id) { aggr_alloc_.set_tenant_id(tenant_id); }
   int generate_group_row(GroupRow *&new_group_row, const int64_t group_id);
+  int fill_group_row(GroupRow *new_group_row, const int64_t group_id);
   int init_one_group(const int64_t group_id = 0, bool fill_pos = false);
+  int add_one_group(const int64_t group_id, GroupRow *new_group_row);
   int init_group_rows(const int64_t num_group_col, bool is_empty = false);
   int rollup_process(const int64_t group_id,
                      const int64_t rollup_group_id,
@@ -788,6 +792,7 @@ public:
   inline void set_support_fast_single_row_agg(const bool flag) { support_fast_single_row_agg_ = flag; }
   void set_need_advance_collect() { need_advance_collect_ = true; }
   bool get_need_advance_collect() const { return need_advance_collect_; }
+  static int llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc);
   static int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size);
 private:
   template <typename T>
@@ -883,9 +888,11 @@ public:
   OB_INLINE int clone_number_cell(const number::ObNumber &src_cell,
                                   AggrCell &aggr_cell);
 private:
+  template <typename T>
   int init_group_extra_aggr_info(
         AggrCell &aggr_cell,
-        const ObAggrInfo &aggr_info);
+        const ObAggrInfo &aggr_info,
+        const T &selector);
   int max_calc(AggrCell &aggr_cell,
                ObDatum &base,
                const ObDatum &other,
@@ -982,12 +989,25 @@ private:
   int get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
                             GroupConcatExtraResult *&extra,
                             ObDatum &concat_result);
-
+  int get_asmvt_result(const ObAggrInfo &aggr_info,
+                       GroupConcatExtraResult *&extra,
+                       ObDatum &concat_result);
+  int init_asmvt_result(ObIAllocator &allocator,
+                        const ObAggrInfo &aggr_info,
+                        const ObObj *tmp_obj,
+                        uint32_t obj_cnt,
+                        mvt_agg_result &mvt_res);
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
   int shadow_truncate_string_for_hist(const ObObjMeta obj_meta,
                                       ObDatum &datum,
                                       int32_t *origin_str_len = NULL);
+
+  int check_rows_prefix_str_equal_for_hybrid_hist(const ObChunkDatumStore::LastStoredRow &prev_row,
+                                                  const ObChunkDatumStore::StoredRow &cur_row,
+                                                  const ObAggrInfo &aggr_info,
+                                                  const ObObjMeta &obj_meta,
+                                                  bool &is_equal);
 
   OB_INLINE void clear_op_evaluated_flag()
   {
@@ -1074,6 +1094,48 @@ public:
  *    2. Second demension: the selector of batch agg functions, same with `DEC_INT_ADD_BATCH_FUNCS`.
 */
   static ObDecIntAggOpBatchFunc DEC_INT_MERGE_BATCH_FUNCS[DECIMAL_INT_MAX][2];
+  static bool need_alloc_dir_id(const ObExprOperatorType type)
+  {
+    bool need_id = false;
+    switch (type) {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_GROUP_RANK:
+      case T_FUN_GROUP_DENSE_RANK:
+      case T_FUN_GROUP_PERCENT_RANK:
+      case T_FUN_GROUP_CUME_DIST:
+      case T_FUN_MEDIAN:
+      case T_FUN_GROUP_PERCENTILE_CONT:
+      case T_FUN_GROUP_PERCENTILE_DISC:
+      case T_FUN_KEEP_MAX:
+      case T_FUN_KEEP_MIN:
+      case T_FUN_KEEP_SUM:
+      case T_FUN_KEEP_COUNT:
+      case T_FUN_KEEP_WM_CONCAT:
+      case T_FUN_WM_CONCAT:
+      case T_FUN_PL_AGG_UDF:
+      case T_FUN_JSON_ARRAYAGG:
+      case T_FUN_ORA_JSON_ARRAYAGG:
+      case T_FUN_JSON_OBJECTAGG:
+      case T_FUN_ORA_JSON_OBJECTAGG:
+      case T_FUN_ORA_XMLAGG:
+      case T_FUN_SYS_ST_ASMVT: {
+        need_id = true;
+        break;
+      }
+      default:
+        need_id = false;
+    }
+    return need_id;
+  }
+  bool processor_need_alloc_dir_id() const
+  {
+    bool need_id = false;
+    for (int64_t i = 0; !need_id && i < aggr_infos_.count(); ++i) {
+      const ObAggrInfo &aggr_info = aggr_infos_.at(i);
+      need_id = need_alloc_dir_id(aggr_info.get_expr_type());
+    }
+    return need_id;
+  }
 
 private:
   struct DecIntAggFuncCtx : public IAggrFuncCtx
@@ -1160,7 +1222,6 @@ private:
   RemovalInfo removal_info_;
   bool support_fast_single_row_agg_;
   ObIArray<ObEvalInfo *> *op_eval_infos_;
-  ObSqlWorkAreaProfile profile_;
   ObMonitorNode &op_monitor_info_;
   bool need_advance_collect_;
 };
@@ -1206,6 +1267,7 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       need_extra = true;
       break;
@@ -1303,26 +1365,6 @@ OB_INLINE int ObAggregateProcessor::clone_aggr_cell(AggrCell &aggr_cell, const O
     aggr_cell.get_iter_result().pack_ = src_cell.pack_;
   }
   OX(SQL_LOG(DEBUG, "succ to clone cell", K(src_cell), K(need_size)));
-  return ret;
-}
-
-OB_INLINE int ObAggregateProcessor::prepare_in_batch_mode(GroupRow *group_rows)
-{
-  int ret = OB_SUCCESS;
-  // for sort-based group by operator, for performance reason,
-  // after producing a group, we will invoke reuse_group() function to clear the group
-  // thus, we do not need to allocate the group space again here, simply reuse the space
-  // process aggregate columns
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < group_rows->n_cells_; ++i) {
-    const ObAggrInfo &aggr_info = aggr_infos_.at(i);
-    AggrCell &aggr_cell = group_rows->aggr_cells_[i];
-    if (OB_ISNULL(aggr_info.expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "expr info is null", K(aggr_cell), K(ret));
-    }
-    //OX(LOG_DEBUG("finish prepare", K(aggr_cell)));
-  }
   return ret;
 }
 

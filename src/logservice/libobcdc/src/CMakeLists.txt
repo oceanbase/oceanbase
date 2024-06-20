@@ -31,6 +31,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_cdc_global_info.cpp
   ob_cdc_lob_aux_table_schema_info.cpp
   ob_cdc_lob_aux_table_parse.cpp
+  ob_cdc_malloc_sample_info.cpp
   ob_cdc_server_endpoint_access_info.cpp
   ob_cdc_tenant_endpoint_provider.cpp
   ob_cdc_udt.cpp
@@ -117,6 +118,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_table_id_cache.cpp
   ob_log_table_matcher.cpp
   ob_log_tenant.cpp
+  ob_log_tic_update_info.cpp
   ob_log_tenant_mgr.cpp
   ob_log_tenant_task_queue.cpp
   ob_log_timer.cpp

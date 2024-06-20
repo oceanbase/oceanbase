@@ -372,7 +372,7 @@ int ObSharedBlockReadHandle::verify_checksum(
       header_size = header->header_size_;
       buf_len = header->data_size_;
     }
-    LOG_DEBUG("zhuixin debug read shared block", K(ret), KPC(header));
+    LOG_DEBUG("read shared block", K(ret), KPC(header));
   }
   return ret;
 }
@@ -552,7 +552,7 @@ int ObSharedBlockLinkIter::read_next_block(ObSharedBlockReadHandle &block_handle
       const ObSharedBlockHeader *header =
           reinterpret_cast<const ObSharedBlockHeader *>(macro_handle.get_buffer());
       cur_ = header->prev_addr_;
-      LOG_DEBUG("zhuixin debug get next link block", K(ret), K(head_), K(cur_), KPC(header));
+      LOG_DEBUG("get next link block", K(ret), K(head_), K(cur_), KPC(header));
   }
   return ret;
 }
@@ -899,7 +899,8 @@ int ObSharedBlockReaderWriter::inner_write_block(
       macro_info.offset_ = align_offset_;
       macro_info.size_ = align_store_size;
       macro_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-      macro_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
+      macro_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      macro_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
       // io_callback
       if (OB_FAIL(addr.set_block_addr(macro_handle_.get_macro_id(),
                                       offset_,
@@ -926,7 +927,7 @@ int ObSharedBlockReaderWriter::inner_write_block(
       } else if (!need_flush) {
         hanging_ = true;
       }
-      LOG_DEBUG("zhuixin debug inner write block", K(ret), K(header), K(size), K(need_flush),
+      LOG_DEBUG("inner write block", K(ret), K(header), K(size), K(need_flush),
           K(need_align), K(store_size), K(align_store_size), K(offset_), K(align_offset_),
           K(hanging_), K(addr), K(macro_handle));
     }
@@ -1013,8 +1014,8 @@ int ObSharedBlockReaderWriter::async_read(
   ObMacroBlockHandle macro_handle;
   macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   macro_read_info.io_timeout_ms_ = read_info.io_timeout_ms_;
-
-  macro_read_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
+  macro_read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  macro_read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
   macro_read_info.io_callback_ = read_info.io_callback_;
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

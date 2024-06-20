@@ -16,6 +16,7 @@
 #include "ob_integer_stream_decoder.h"
 #include "ob_cs_encoding_util.h"
 #include "ob_cs_decoding_util.h"
+#include "ob_string_stream_vector_decoder.h"
 
 namespace oceanbase
 {
@@ -71,6 +72,23 @@ int ObStringColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx,
     convert_func(string_ctx, string_ctx.str_data_, *string_ctx.str_ctx_,
         string_ctx.offset_data_, nullptr/*ref_data*/, row_ids, row_cap, datums);
   }
+  return ret;
+}
+
+int ObStringColumnDecoder::decode_vector(
+    const ObColumnCSDecoderCtx &ctx, ObVectorDecodeCtx &vector_ctx) const
+{
+  int ret = OB_SUCCESS;
+  const ObStringColumnDecoderCtx &string_ctx = ctx.string_ctx_;
+  ObStringStreamVecDecoder::StrVecDecoderCtx vec_decoder_ctx(
+    string_ctx.str_data_, string_ctx.str_ctx_, string_ctx.offset_data_, string_ctx.offset_ctx_, string_ctx.need_copy_);
+
+  if (OB_FAIL(ObStringStreamVecDecoder::decode_vector(
+    string_ctx, vec_decoder_ctx, nullptr, ObVecDecodeRefWidth::VDRW_NOT_REF, vector_ctx))) {
+    LOG_WARN("fail to decode_vector", K(ret), K(vec_decoder_ctx), K(vector_ctx));
+  }
+  return ret;
+
   return ret;
 }
 
@@ -140,7 +158,7 @@ struct FilterTranverseDatum_T
     const int64_t row_count,
     const sql::ObWhiteFilterExecutor &filter,
     common::ObBitmap &result_bitmap,
-    const ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> &op_handle)
+    const ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> &op_handle)
   {
     int ret = OB_INNER_STAT_ERROR;
     LOG_ERROR("impossible here", K(offset_width_V), K(null_flag_V), K(need_padding_V));
@@ -155,7 +173,7 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
     const ObStringColumnDecoderCtx &ctx,
     const int64_t row_start,
     const int64_t row_count,
-    const ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> &op_handle)
+    const ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> &op_handle)
   {
     int ret = OB_SUCCESS;
     typedef typename ObCSEncodingStoreTypeInference<offset_width_V>::Type OffsetIntType;
@@ -179,7 +197,7 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
 
       if (need_padding_V && OB_FAIL(pad_datum(ctx, cur_datum))) {
         LOG_WARN("failed to pad datum", K(ret));
-      } else if (OB_FAIL(op_handle(ctx.obj_meta_, cur_datum, i))) {
+      } else if (OB_FAIL(op_handle(cur_datum, i))) {
         LOG_WARN("fail to handle op", KR(ret), K(i), K(ctx), K(cur_datum));
       }
     }
@@ -194,7 +212,7 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
     const ObStringColumnDecoderCtx &ctx,
     const int64_t row_start,
     const int64_t row_count,
-    const ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> &op_handle)
+    const ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> &op_handle)
   {
     int ret = OB_SUCCESS;
     typedef typename ObCSEncodingStoreTypeInference<offset_width_V>::Type OffsetIntType;
@@ -219,7 +237,7 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
       }
       if (need_padding_V && OB_FAIL(pad_datum(ctx, cur_datum))) {
         LOG_WARN("failed to pad datum", K(ret));
-      } else if (OB_FAIL(op_handle(ctx.obj_meta_, cur_datum, i))) {
+      } else if (OB_FAIL(op_handle(cur_datum, i))) {
         LOG_WARN("fail to handle op", KR(ret), K(i), K(ctx), K(cur_datum));
       }
     }
@@ -234,7 +252,7 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
     const ObStringColumnDecoderCtx &ctx,
     const int64_t row_start,
     const int64_t row_count,
-    const ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> &op_handle)
+    const ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> &op_handle)
   {
     int ret = OB_SUCCESS;
     typedef typename ObCSEncodingStoreTypeInference<offset_width_V>::Type OffsetIntType;
@@ -266,7 +284,7 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
       }
       if (need_padding_V && OB_FAIL(pad_datum(ctx, cur_datum))) {
         LOG_WARN("failed to pad datum", K(ret));
-      } else if (OB_FAIL(op_handle(ctx.obj_meta_, cur_datum, i))) {
+      } else if (OB_FAIL(op_handle(cur_datum, i))) {
         LOG_WARN("fail to handle op", KR(ret), K(i), K(ctx), K(cur_datum));
       }
     }
@@ -284,7 +302,7 @@ struct FilterTranverseDatum_T<FIX_STRING_OFFSET_WIDTH_V,
     const ObStringColumnDecoderCtx &ctx,
     const int64_t row_start,
     const int64_t row_count,
-    const ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> &op_handle)
+    const ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> &op_handle)
   {
     int ret = OB_SUCCESS;
     const char *start = ctx.str_data_;
@@ -305,7 +323,7 @@ struct FilterTranverseDatum_T<FIX_STRING_OFFSET_WIDTH_V,
 
       if (need_padding_V && OB_FAIL(pad_datum(ctx, cur_datum))) {
         LOG_WARN("failed to pad datum", K(ret));
-      } else if (OB_FAIL(op_handle(ctx.obj_meta_, cur_datum, i))) {
+      } else if (OB_FAIL(op_handle(cur_datum, i))) {
         LOG_WARN("fail to handle op", KR(ret), K(i), K(ctx), K(cur_datum));
       }
     }
@@ -322,7 +340,7 @@ struct FilterTranverseDatum_T<FIX_STRING_OFFSET_WIDTH_V,
       const ObStringColumnDecoderCtx &ctx,
       const int64_t row_start,
       const int64_t row_count,
-      const ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> &op_handle)
+      const ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> &op_handle)
   {
     int ret = OB_SUCCESS;
     const char *start = ctx.str_data_;
@@ -343,7 +361,7 @@ struct FilterTranverseDatum_T<FIX_STRING_OFFSET_WIDTH_V,
       }
       if (need_padding_V && OB_FAIL(pad_datum(ctx, cur_datum))) {
         LOG_WARN("failed to pad datum", K(ret));
-      } else if (OB_FAIL(op_handle(ctx.obj_meta_, cur_datum, i))) {
+      } else if (OB_FAIL(op_handle(cur_datum, i))) {
         LOG_WARN("fail to handle op", KR(ret), K(i), K(ctx), K(cur_datum));
       }
     }
@@ -355,7 +373,7 @@ typedef int (*FilterTranverseDatum) (
     const ObStringColumnDecoderCtx &ctx,
     const int64_t row_start,
     const int64_t row_count,
-    const ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> &op_handle);
+    const ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> &op_handle);
 static ObMultiDimArray_T<FilterTranverseDatum, 5, 3, 2> filter_tranverse_datum_;
 
 template <int32_t offset_width_V, int32_t null_flag_V, int32_t need_padding_V>
@@ -384,8 +402,6 @@ int ObStringColumnDecoder::pushdown_operator(
   if (OB_UNLIKELY(row_cnt < 1 || row_cnt != result_bitmap.size())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(row_cnt), K(string_ctx), K(result_bitmap.size()));
-  } else if (!GCONF.enable_cs_encoding_filter) {
-    ret = OB_NOT_SUPPORTED;
   } else {
     const int64_t row_start = pd_filter_info.start_;
     const int64_t row_count = pd_filter_info.count_;
@@ -433,7 +449,7 @@ int ObStringColumnDecoder::pushdown_operator(
         LOG_WARN("Unexpected operation type", KR(ret), K(op_type));
       }
     }
-    LOG_DEBUG("string white filter pushdown", K(ret), "string_ctx", col_ctx.string_ctx_,
+    LOG_TRACE("string white filter pushdown", K(ret), "string_ctx", col_ctx.string_ctx_,
         K(filter.get_op_type()), K(pd_filter_info), K(result_bitmap.popcnt()));
   }
   return ret;
@@ -454,8 +470,8 @@ int ObStringColumnDecoder::nunn_operator(
     const bool is_fixed_len_str = ctx.str_ctx_->meta_.is_fixed_len_string();
     const bool need_padding = (ctx.obj_meta_.is_fixed_len_char_type() && nullptr != ctx.col_param_);
 
-    ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> op_handle =
-    [&] (const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)
+    ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> op_handle =
+    [&] (const ObDatum &cur_datum, const int64_t idx)
     {
       int tmp_ret = OB_SUCCESS;
       if (cur_datum.is_null()) {
@@ -502,8 +518,8 @@ int ObStringColumnDecoder::comparison_operator(
   const common::ObCmpOp &cmp_op = sql::ObPushdownWhiteFilterNode::WHITE_OP_TO_CMP_OP[op_type];
   const bool need_padding = (ctx.obj_meta_.is_fixed_len_char_type() && nullptr != ctx.col_param_);
 
-  ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> op_handle =
-  [&] (const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)
+  ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> op_handle =
+  [&] (const ObDatum &cur_datum, const int64_t idx)
   {
     int tmp_ret = OB_SUCCESS;
     bool cmp_ret = false;
@@ -542,33 +558,52 @@ int ObStringColumnDecoder::in_operator(
   const bool need_padding = (ctx.obj_meta_.is_fixed_len_char_type() && nullptr != ctx.col_param_);
   const bool is_fixed_len_str = ctx.str_ctx_->meta_.is_fixed_len_string();
 
-  ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> op_handle =
-  [&] (const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)
-  {
-    int tmp_ret = OB_SUCCESS;
-    ObObj cur_obj;
-    bool is_exist = false;
-    if (cur_datum.is_null()) {
-    } else if (OB_TMP_FAIL(cur_datum.to_obj(cur_obj, obj_meta))) {
-      LOG_WARN("fail to convert datum to obj", KR(tmp_ret), K(cur_datum), K(obj_meta));
-    } else if (OB_TMP_FAIL(filter.exist_in_obj_set(cur_obj, is_exist))) {
-      LOG_WARN("fail to check obj in hashset", KR(tmp_ret), K(cur_obj));
-    } else if (is_exist) {
-      if (OB_TMP_FAIL(result_bitmap.set(idx))) {
-        LOG_WARN("fail to set", KR(tmp_ret), K(idx), K(row_start));
+  ObFilterInCmpType cmp_type = get_filter_in_cmp_type(row_count, filter.get_datums().count(), false);
+  ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> op_handle;
+  if (cmp_type == ObFilterInCmpType::BINARY_SEARCH) {
+    op_handle = [&] (const ObDatum &cur_datum, const int64_t idx)
+    {
+      int tmp_ret = OB_SUCCESS;
+      bool is_exist = false;
+      if (cur_datum.is_null()) {
+      } else if (OB_TMP_FAIL(filter.exist_in_datum_array(cur_datum, is_exist))) {
+        LOG_WARN("fail to check datum in array", KR(tmp_ret), K(cur_datum));
+      } else if (is_exist) {
+        if (OB_TMP_FAIL(result_bitmap.set(idx))) {
+          LOG_WARN("fail to set", KR(tmp_ret), K(idx), K(row_start));
+        }
       }
-    }
-    return tmp_ret;
-  };
+      return tmp_ret;
+    };
+  } else if (cmp_type == ObFilterInCmpType::HASH_SEARCH) {
+    op_handle = [&] (const ObDatum &cur_datum, const int64_t idx)
+    {
+      int tmp_ret = OB_SUCCESS;
+      bool is_exist = false;
+      if (cur_datum.is_null()) {
+      } else if (OB_TMP_FAIL(filter.exist_in_datum_set(cur_datum, is_exist))) {
+        LOG_WARN("fail to check datum in hashset", KR(tmp_ret), K(cur_datum));
+      } else if (is_exist) {
+        if (OB_TMP_FAIL(result_bitmap.set(idx))) {
+          LOG_WARN("fail to set", KR(tmp_ret), K(idx), K(row_start));
+        }
+      }
+      return tmp_ret;
+    };
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected filter in compare type", KR(ret), K(cmp_type));
+  }
 
-  if (is_fixed_len_str) {
+  if (OB_FAIL(ret)) {
+  } else if (is_fixed_len_str) {
     ret = filter_tranverse_datum_[FIX_STRING_OFFSET_WIDTH_V]
-                                 [ctx.null_flag_]
-                                 [need_padding] (ctx, row_start, row_count, op_handle);
+                                [ctx.null_flag_]
+                                [need_padding] (ctx, row_start, row_count, op_handle);
   } else {
     ret = filter_tranverse_datum_[ctx.offset_ctx_->meta_.width_]
-                                 [ctx.null_flag_]
-                                 [need_padding] (ctx, row_start, row_count, op_handle);
+                                [ctx.null_flag_]
+                                [need_padding] (ctx, row_start, row_count, op_handle);
   }
   return ret;
 }
@@ -587,8 +622,8 @@ int ObStringColumnDecoder::bt_operator(
   const bool need_padding = (ctx.obj_meta_.is_fixed_len_char_type() && nullptr != ctx.col_param_);
   const bool is_fixed_len_str = ctx.str_ctx_->meta_.is_fixed_len_string();
 
-  ObFunction<int(const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)> op_handle =
-  [&] (const ObObjMeta &obj_meta, const ObDatum &cur_datum, const int64_t idx)
+  ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> op_handle =
+  [&] (const ObDatum &cur_datum, const int64_t idx)
   {
     int tmp_ret = OB_SUCCESS;
     int left_cmp_ret = 0;

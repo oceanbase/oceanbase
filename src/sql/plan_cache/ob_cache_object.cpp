@@ -97,6 +97,11 @@ int ObPlanCacheObject::set_params_info(const ParamStore &params)
         param_info.scale_ = data_type.get_scale();
       }
       LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
+    } else if (params.at(i).is_user_defined_sql_type() || params.at(i).is_collection_sql_type()) {
+      param_info.scale_ = 0;
+      uint64_t udt_id = params.at(i).get_accuracy().get_accuracy();
+      *(reinterpret_cast<uint32 *>(&param_info.ext_real_type_)) = (udt_id >> 32) & UINT_MAX32;
+      *(reinterpret_cast<uint32 *>(&param_info.col_type_)) = (udt_id) & UINT_MAX32;
     } else {
       param_info.scale_ = params.at(i).get_scale();
       param_info.precision_ = params.at(i).get_precision();
@@ -434,7 +439,7 @@ int ObPlanCacheObject::type_to_name(const ObLibCacheNameSpace ns,
                                     common::ObString &type_name)
 {
   int ret = OB_SUCCESS;
-  const char* type_strs[] = {"NS_INVALID", "SQL_PLAN", "PROCEDURE", "FUNCTION", "ANONYMOUS", "TRIGGER", "PACKAGE", "NS_MAX"};
+  const char* type_strs[] = {"NS_INVALID", "SQL_PLAN", "PROCEDURE", "FUNCTION", "ANONYMOUS", "TRIGGER", "PACKAGE", "TABLEAPI", "CALLSTMT", "NS_MAX"};
   char *buf = NULL;
   if (ns <= NS_INVALID || ns >= NS_MAX) {
     ret = OB_INVALID_ARGUMENT;

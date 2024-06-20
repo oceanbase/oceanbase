@@ -33,7 +33,7 @@ enum ObKeyPartType
   T_NORMAL_KEY = 0,
   T_LIKE_KEY,
   T_IN_KEY,
-  T_GEO_KEY
+  T_DOMAIN_KEY
 };
 
 enum InType
@@ -274,11 +274,14 @@ struct ObInKeyPart
   bool contain_questionmark_;
 };
 
-struct ObGeoKeyPart
+// need override folling function if add a new type
+// set_domain_const_param(const param in expr): for json is const_param_, for gis is wkb_
+// set_domain_extra_param(extra param in expr): fro gis is distance
+struct ObDomainKeyPart
 {
-  common::ObObj wkb_;
-  common::ObGeoRelationType geo_type_;
-  common::ObObj distance_;
+  common::ObObj const_param_;
+  common::ObDomainOpType domain_op_;
+  common::ObObj extra_param_;
 };
 
 class ObKeyPart : public common::ObDLinkBase<ObKeyPart>
@@ -303,8 +306,9 @@ public:
   virtual void reset();
   void reset_key();
   typedef common::hash::ObHashMap<int64_t, ObSEArray<int64_t, 16>> SameValIdxMap;
-  static int try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
-                            const ObKeyPartPos &pos, ObObj &value, int64_t &cmp);
+  static int try_cast_value(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime, ObIAllocator &alloc,
+                            const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
+                            common::ObCmpOp cmp_op = CO_EQ, bool left_border = true);
   inline bool operator <=(const ObKeyPart &other) const { return pos_.offset_ <= other.pos_.offset_; }
 
   inline void set_normal_start(ObKeyPart *other)
@@ -343,13 +347,14 @@ public:
   inline bool is_like_key() const { return T_LIKE_KEY == key_type_ && like_keypart_ != NULL; }
   inline bool is_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_IN_KEY_PART; }
   inline bool is_not_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_NOT_IN_KEY_PART; }
-  inline bool is_geo_key() const { return T_GEO_KEY == key_type_ && geo_keypart_ != NULL; }
+  inline bool is_geo_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL && (domain_keypart_->domain_op_ >= ObDomainOpType::T_GEO_COVERS && domain_keypart_->domain_op_ <= ObDomainOpType::T_GEO_RELATE); }
+  inline bool is_domain_key() const { return T_DOMAIN_KEY == key_type_ && domain_keypart_ != NULL; }
 
   int create_normal_key();
   int create_like_key();
   int create_in_key();
   int create_not_in_key();
-  int create_geo_key();
+  int create_domain_key();
 
   inline ObNormalKeyPart *get_normal_key()
   {
@@ -404,7 +409,8 @@ public:
   int remove_in_dup_vals();
   int convert_to_true_or_false(bool is_always_true);
 
-  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row, bool &is_bound_modified);
+  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
+                      bool contain_row, bool &is_bound_modified);
 
   // copy all except next_ pointer
   int deep_node_copy(const ObKeyPart &other);
@@ -428,8 +434,8 @@ public:
     ObLikeKeyPart *like_keypart_;
     // in expr type
     ObInKeyPart *in_keypart_;
-    //geo expr type
-    ObGeoKeyPart *geo_keypart_;
+    //domain expr type
+    ObDomainKeyPart *domain_keypart_;
   };
   //list member
   ObKeyPart *item_next_;

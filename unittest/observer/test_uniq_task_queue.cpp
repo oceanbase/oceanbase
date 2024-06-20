@@ -203,25 +203,49 @@ TEST_F(TestUniqTaskQueue, test_concurrency_execute)
 }
 */
 
-// bugfix: workitem/49006474
-TEST_F(TestUniqTaskQueue, test_queue_starvation)
+// bugfix:53694448
+TEST_F(TestUniqTaskQueue, test_get_queue_fail)
 {
-  obrpc::MockObCommonRpcProxy rpc;
-  GDS.set_rpc_proxy(&rpc);
-
-  ObMalloc allocator;
-  ObDSSessionActions sa;
-  ASSERT_EQ(OB_SUCCESS, sa.init(1024, allocator));
-
-  GCONF.debug_sync_timeout.set_value("1000s");
-  ASSERT_TRUE(GCONF.is_debug_sync_enabled());
-
-  const bool L = false; // local
-  ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("BEFORE_UNIQ_TASK_RUN wait_for signal", L, sa));
-
   MockTaskQueue queue;
   MockTaskProcesser processor(queue);
   ASSERT_EQ(OB_SUCCESS, queue.init(&processor, 1 /*thread_num*/, 1024 /*queue_size*/));
+
+  // error injection
+  TP_SET_EVENT(common::EventTable::EN_UNIQ_TASK_QUEUE_GET_GROUP_FAIL, OB_ALLOCATE_MEMORY_FAILED, 0, 1);
+
+  // add task failed
+  MockTask task(0 /*group_id*/, 0 /*task_id*/);
+  ASSERT_EQ(OB_ALLOCATE_MEMORY_FAILED, queue.add(task));
+
+  // reset error injection
+  TP_SET_EVENT(common::EventTable::EN_UNIQ_TASK_QUEUE_GET_GROUP_FAIL, OB_SUCCESS, 0, 1);
+
+  // add the same task again
+
+  // before bugfix
+  // add task will fail and do nothing
+  // ASSERT_EQ(OB_EAGAIN, queue.add(task));
+  // usleep(1 * 1000 * 1000L); //1s
+  // ASSERT_EQ(0, processor.get_results().count());
+
+  // after bugfix
+  // add task will success and task will be scheduled
+  ASSERT_EQ(OB_SUCCESS, queue.add(task));
+  usleep(1 * 1000 * 1000L); //1s
+  ASSERT_EQ(1, processor.get_results().count());
+  ASSERT_EQ(task, processor.get_results().at(0));
+}
+
+// bugfix: workitem/49006474
+TEST_F(TestUniqTaskQueue, test_queue_starvation)
+{
+  MockTaskQueue queue;
+  MockTaskProcesser processor(queue);
+  ASSERT_EQ(OB_SUCCESS, queue.init(&processor, 1 /*thread_num*/, 1024 /*queue_size*/));
+
+  // to reproduce the bug scenario's groups and tasks, stop the queue first and add tasks
+  queue.stop();
+  queue.wait();
 
   MockTask task(0 /*group_id*/, 0 /*task_id*/);
   ASSERT_EQ(OB_SUCCESS, queue.add(task));
@@ -243,7 +267,8 @@ TEST_F(TestUniqTaskQueue, test_queue_starvation)
    *       |-----------|
    */
 
-  ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("now signal signal", L, sa));
+  // continue to start queue
+  ASSERT_EQ(OB_SUCCESS, queue.start());
 
   /*
    * before task(1, 0) runs, tasks in queue are as follows:
@@ -297,7 +322,7 @@ TEST_F(TestUniqTaskQueue, test_queue_starvation)
 int main(int argc, char **argv)
 {
   system("rm -f test_uniq_task_queue.log");
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  oceanbase::common::ObLogger::get_logger().set_log_level("WDIAG");
   OB_LOGGER.set_file_name("test_uniq_task_queue.log", true);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

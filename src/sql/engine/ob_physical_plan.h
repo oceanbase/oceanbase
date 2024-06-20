@@ -126,7 +126,6 @@ public:
    */
   void update_plan_stat(const ObAuditRecordData &record,
                         const bool is_first,
-                        const bool is_evolution,
                         const ObIArray<ObTableRowCount> *table_row_count_list);
   void update_cache_access_stat(const ObTableScanStat &scan_stat)
   {
@@ -277,8 +276,10 @@ public:
   uint64_t get_session_id() const { return session_id_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
+  common::ObIArray<uint64_t> &get_immediate_refresh_external_table_ids() { return immediate_refresh_external_table_ids_; }
   bool is_contain_oracle_trx_level_temporary_table() const { return gtt_trans_scope_ids_.count() > 0; }
   bool is_contain_oracle_session_level_temporary_table() const { return gtt_session_scope_ids_.count() > 0; }
+  bool is_contain_immediate_refresh_external_table() const { return immediate_refresh_external_table_ids_.count() > 0; }
   bool contains_temp_table() const {return 0 != session_id_; }
   void set_returning(bool is_returning) { is_returning_ = is_returning; }
   bool is_returning() const { return is_returning_; }
@@ -331,6 +332,9 @@ public:
   inline bool has_link_table() const { return has_link_table_; }
   inline void set_has_link_sfd(bool value) { has_link_sfd_ = value; }
   inline bool has_link_sfd() const { return has_link_sfd_; }
+
+  inline void set_has_link_udf(bool value) { has_link_udf_ = value; }
+  inline bool has_link_udf() const { return has_link_udf_; }
   void set_batch_size(const int64_t v) { batch_size_ = v; }
   int64_t get_batch_size() const { return batch_size_; }
   bool is_vectorized() const { return batch_size_ > 0; }
@@ -345,6 +349,10 @@ public:
   inline void set_enable_append(const bool enable_append) { enable_append_ = enable_append; }
   inline bool get_enable_append() const { return enable_append_; }
   inline void set_append_table_id(const uint64_t append_table_id) { append_table_id_ = append_table_id; }
+  inline void set_is_insert_overwrite(const bool is_insert_overwrite) { insert_overwrite_ = is_insert_overwrite; }
+  inline bool get_is_insert_overwrite() const { return insert_overwrite_; }
+  inline void set_use_rich_format(const bool v) { use_rich_format_ = v; }
+  inline bool get_use_rich_format() const { return use_rich_format_; }
   inline uint64_t get_append_table_id() const { return append_table_id_; }
   void set_record_plan_info(bool v) { need_record_plan_info_ = v; }
   bool need_record_plan_info() const { return need_record_plan_info_; }
@@ -361,6 +369,16 @@ public:
   }
   inline int64_t get_plan_error_cnt() { return stat_.evolution_stat_.error_cnt_; }
   inline void update_plan_error_cnt() { ATOMIC_INC(&(stat_.evolution_stat_.error_cnt_)); }
+  inline bool get_enable_inc_direct_load() const { return enable_inc_direct_load_; }
+  inline void set_enable_inc_direct_load(const bool enable_inc_direct_load)
+  {
+    enable_inc_direct_load_ = enable_inc_direct_load;
+  }
+  inline bool get_enable_replace() const { return enable_replace_; }
+  inline void set_enable_replace(const bool enable_replace)
+  {
+    enable_replace_ = enable_replace;
+  }
 
 public:
   int inc_concurrent_num();
@@ -437,7 +455,13 @@ public:
   }
   inline bool is_plain_select() const
   {
-    return stmt::T_SELECT == stmt_type_ && !has_for_update() && !contain_pl_udf_or_trigger_;
+    bool is_plain = true;
+    if (lib::is_mysql_mode()) {
+      is_plain = stmt::T_SELECT == stmt_type_ && !has_for_update() && !(contain_pl_udf_or_trigger_ && udf_has_dml_stmt_);
+    } else { // in oralce mode, select + udf, udf cannot has dml stmt.
+      is_plain = stmt::T_SELECT == stmt_type_ && !has_for_update();
+    }
+    return is_plain;
   }
 
   inline bool contain_paramed_column_field() const { return contain_paramed_column_field_; }
@@ -445,7 +469,7 @@ public:
   inline const ObExprFrameInfo &get_expr_frame_info() const { return expr_frame_info_; }
 
   const ObOpSpec *get_root_op_spec() const { return root_op_spec_; }
-  inline bool is_link_dml_plan() {
+  inline bool is_link_dml_plan() const {
     bool is_link_dml = false;
     if (NULL != get_root_op_spec()) {
       is_link_dml = oceanbase::sql::ObPhyOperatorType::PHY_LINK_DML == get_root_op_spec()->type_;
@@ -459,7 +483,8 @@ public:
 
   void set_need_serial_exec(bool need_serial_exec) { need_serial_exec_ = need_serial_exec; }
   bool get_need_serial_exec() const { return need_serial_exec_; }
-
+  void set_udf_has_dml_stmt(bool v) { udf_has_dml_stmt_ = v; }
+  bool udf_has_dml_stmt() { return udf_has_dml_stmt_; }
   void set_contain_pl_udf_or_trigger(bool v) { contain_pl_udf_or_trigger_ = v; }
   bool contain_pl_udf_or_trigger() { return contain_pl_udf_or_trigger_; }
   bool contain_pl_udf_or_trigger() const { return contain_pl_udf_or_trigger_; }
@@ -476,6 +501,8 @@ public:
       min_cluster_version_ = curr_cluster_version;
     }
   }
+  inline bool is_disable_auto_memory_mgr() const { return disable_auto_memory_mgr_; }
+  inline void disable_auto_memory_mgr() { disable_auto_memory_mgr_ = true; }
 
   int set_logical_plan(ObLogicalPlanRawData &logical_plan);
   inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }
@@ -484,6 +511,12 @@ public:
 
   void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
   bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
+  ObSubSchemaCtx &get_subschema_ctx_for_update() { return subschema_ctx_; }
+  const ObSubSchemaCtx &get_subschema_ctx() const { return subschema_ctx_; }
+  int set_all_local_session_vars(ObIArray<ObLocalSessionVar> *all_local_session_vars);
+  ObIArray<ObLocalSessionVar> & get_all_local_session_vars() { return all_local_session_vars_; }
+  inline const ObIArray<uint64_t> &get_mview_ids() const { return mview_ids_; }
+  int set_mview_ids(const ObIArray<uint64_t> &mview_ids) { return mview_ids_.assign(mview_ids); }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -567,6 +600,7 @@ private:
   bool contain_oracle_session_level_temporary_table_; // not used
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_session_scope_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_trans_scope_ids_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> immediate_refresh_external_table_ids_;
 
   //for outline use
   ObOutlineState outline_state_;
@@ -606,8 +640,6 @@ public:
   //@todo: yuchen.wyc add a temporary member to mark whether
   //the DML statement needs to be executed through get_next_row
   bool need_drive_dml_query_;
-  int64_t tx_id_; //for dblink recover xa tx
-  int64_t tm_sessid_; //for dblink get connection attached on tm session
   ExprFixedArray var_init_exprs_;
 private:
   bool is_returning_; //是否设置了returning
@@ -640,6 +672,7 @@ public:
   bool use_temp_table_;
   bool has_link_table_;
   bool has_link_sfd_;
+  bool has_link_udf_;
   bool need_serial_exec_;//mark if need serial execute?
   bool temp_sql_can_prepare_;
   bool is_need_trans_;
@@ -660,7 +693,18 @@ public:
   ObLogicalPlanRawData logical_plan_;
   // for detector manager
   bool is_enable_px_fast_reclaim_;
+  bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
+  bool disable_auto_memory_mgr_;
+private:
+  common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
+public:
+  bool udf_has_dml_stmt_;
+private:
+  common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
+  bool enable_inc_direct_load_; // for incremental direct load
+  bool enable_replace_; // for incremental direct load
+  bool insert_overwrite_; // for insert overwrite
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

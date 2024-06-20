@@ -152,6 +152,7 @@ public:
   void record_request_finish(ObIOResult &result);
   bool is_request_doing(const int64_t index) const;
   int64_t get_io_usage_num() const;
+  ObSEArray<int64_t, GROUP_START_NUM> group_throttled_time_us_;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   ObSEArray<ObSEArray<ObIOStat, GROUP_START_NUM>, 2> io_stats_;
@@ -204,7 +205,7 @@ public:
   void destroy();
   int send_detect_task();
   virtual void run1() override;
-
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
   void print_sender_status();
   int try_release_thread();
@@ -322,8 +323,8 @@ private:
 class ObDeviceChannel;
 
 /**
- * worker to process sync io reuest and get result of async io request from file system
- * io channel has two independent threads, one for sync io operation, anather for polling events from file system
+ * worker to process sync io request and get result of async io request from file system
+ * io channel has two independent threads, one for sync io operation, another for polling events from file system
  */
 class ObIOChannel : public lib::TGRunnable
 {
@@ -570,6 +571,7 @@ public:
   void reuse();
   int trace_request(const ObIORequest *req, const char *msg, const TraceType trace_type);
   void print_status();
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
   bool is_inited_;
   uint64_t tenant_id_;

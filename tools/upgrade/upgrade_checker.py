@@ -8,10 +8,17 @@ from mysql.connector import errorcode
 import logging
 import getopt
 import time
+import re
 
 class UpgradeParams:
   log_filename = 'upgrade_checker.log'
   old_version = '4.0.0.0'
+
+class PasswordMaskingFormatter(logging.Formatter):
+  def format(self, record):
+    s = super(PasswordMaskingFormatter, self).format(record)
+    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+
 #### --------------start : my_error.py --------------
 class MyError(Exception):
   def __init__(self, value):
@@ -281,15 +288,18 @@ def config_logging_module(log_filenamme):
       filename=log_filenamme,\
       filemode='w')
   # 定义日志打印格式
-  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
   #######################################
   # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
   stdout_handler = logging.StreamHandler(sys.stdout)
   stdout_handler.setLevel(logging.INFO)
-  # 设置日志打印格式
   stdout_handler.setFormatter(formatter)
-  # 将定义好的stdout_handler日志handler添加到root logger
+  # 定义一个Handler处理文件输出
+  file_handler = logging.FileHandler(log_filenamme, mode='w')
+  file_handler.setLevel(logging.INFO)
+  file_handler.setFormatter(formatter)
   logging.getLogger('').addHandler(stdout_handler)
+  logging.getLogger('').addHandler(file_handler)
 #### ---------------end----------------------
 
 
@@ -427,6 +437,15 @@ def check_tenant_status(query_cur):
     fail_list.append('has abnormal tenant info, should stop')
   else:
     logging.info('check tenant info success')
+
+   # check tenant lock status
+  (desc, results) = query_cur.exec_query("""select count(*) from DBA_OB_TENANTS where LOCKED = 'YES'""")
+  if len(results) != 1 or len(results[0]) != 1:
+    fail_list.append('results len not match')
+  elif 0 != results[0][0]:
+    fail_list.append('has locked tenant, should unlock')
+  else:
+    logging.info('check tenant lock status success')
 
 # 6. 检查无恢复任务
 def check_restore_job_exist(query_cur):
@@ -589,6 +608,64 @@ def check_not_supported_tenant_name(query_cur):
       fail_list.append('a tenant named all/all_user/all_meta (case insensitive) cannot exist in the cluster, please rename the tenant')
       break
   logging.info('check special tenant name success')
+# 17  检查日志传输压缩是否有使用zlib压缩算法，在升级前需要保证所有observer未开启日志传输压缩或使用非zlib压缩算法
+def check_log_transport_compress_func(query_cur):
+  (desc, results) = query_cur.exec_query("""select count(1) as cnt from oceanbase.__all_virtual_tenant_parameter_info where (name like "log_transport_compress_func" and value like "zlib_1.0")""")
+  if results[0][0] > 0 :
+    fail_list.append('The zlib compression algorithm is no longer supported with log_transport_compress_func, please replace it with other compression algorithms')
+  logging.info('check log_transport_compress_func success')
+# 18 检查升级过程中是否有表使用zlib压缩，在升级前需要保证所有表都不使用zlib压缩
+def check_table_compress_func(query_cur):
+  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_table where (compress_func_name like '%zlib%')""")
+  if results[0][0] > 0 :
+    fail_list.append('There are tables use zlib compression, please replace it with other compression algorithms or do not use compression during the upgrade')
+  logging.info('check table compression method success')
+# 19 检查升级过程中 table_api/obkv 连接传输是否使用了zlib压缩，在升级前需要保证所有 obkv/table_api 连接未开启zlib压缩传输或者使用非zlib压缩算法
+def check_table_api_transport_compress_func(query_cur):
+  (desc, results) = query_cur.exec_query("""select count(1) as cnt from GV$OB_PARAMETERS where (name like "tableapi_transport_compress_func" and value like "zlib%");""")
+  if results[0][0] > 0 :
+    fail_list.append('Table api connection is not allowed to use zlib as compression algorithm during the upgrade, please use other compression algorithms by setting table_api_transport_compress_func')
+  logging.info('check table_api_transport_compress_func success')
+
+# 17. 检查无租户克隆任务
+def check_tenant_clone_job_exist(query_cur):
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    if min_cluster_version >= get_version("4.3.0.0"):
+      (desc, results) = query_cur.exec_query("""select count(1) from __all_virtual_clone_job""")
+      if len(results) != 1 or len(results[0]) != 1:
+        fail_list.append('failed to tenant clone job cnt')
+      elif results[0][0] != 0:
+        fail_list.append("""still has tenant clone job, upgrade is not allowed temporarily""")
+      else:
+        logging.info('check tenant clone job success')
+
+# 18. 检查无租户快照任务
+def check_tenant_snapshot_task_exist(query_cur):
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    if min_cluster_version >= get_version("4.3.0.0"):
+      (desc, results) = query_cur.exec_query("""select count(1) from __all_virtual_tenant_snapshot where status!='NORMAL'""")
+      if len(results) != 1 or len(results[0]) != 1:
+        fail_list.append('failed to tenant snapshot task')
+      elif results[0][0] != 0:
+        fail_list.append("""still has tenant snapshot task, upgrade is not allowed temporarily""")
+      else:
+        logging.info('check tenant snapshot task success')
 
 # 17. 检查是否有租户在升到4.3.0版本之前已将binlog_row_image设为MINIMAL
 def check_variable_binlog_row_image(query_cur):
@@ -610,6 +687,39 @@ def check_variable_binlog_row_image(query_cur):
         fail_list.append('Sys Variable binlog_row_image is set to MINIMAL, please check'.format(results[0][0]))
     logging.info('check variable binlog_row_image success')
 
+# 20. check oracle tenant's standby_replication privs
+def check_oracle_standby_replication_exist(query_cur):
+  check_success = True
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    check_success = False
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    check_success = False
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    (desc, results) = query_cur.exec_query("""select tenant_id from oceanbase.__all_tenant where compatibility_mode = 1""")
+    if len(results) > 0 :
+      tenant_ids = results
+      if (min_cluster_version < get_version("4.2.2.0") or (get_version("4.3.0.0") <= min_cluster_version < get_version("4.3.1.0"))):
+        for tenant_id in tenant_ids:
+          sql = """select count(1)=1 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+          (desc, results) = query_cur.exec_query(sql)
+          if results[0][0] == 1 :
+            check_success = False
+            fail_list.append('{0} tenant standby_replication already exists, please check'.format(tenant_id[0]))
+      else :
+        for tenant_id in tenant_ids:
+          sql = """select count(1)=0 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+          (desc, results) = query_cur.exec_query(sql)
+          if results[0][0] == 1 :
+            check_success = False
+            fail_list.append('{0} tenant standby_replication not exist, please check'.format(tenant_id[0]))
+  if check_success:
+    logging.info('check oracle standby_replication privs success')
 # last check of do_check, make sure no function execute after check_fail_list
 def check_fail_list():
   if len(fail_list) != 0 :
@@ -652,7 +762,13 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_schema_status(query_cur)
       check_server_version(query_cur)
       check_not_supported_tenant_name(query_cur)
+      check_tenant_clone_job_exist(query_cur)
+      check_tenant_snapshot_task_exist(query_cur)
+      check_log_transport_compress_func(query_cur)
+      check_table_compress_func(query_cur)
+      check_table_api_transport_compress_func(query_cur)
       check_variable_binlog_row_image(query_cur)
+      check_oracle_standby_replication_exist(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)
@@ -688,7 +804,7 @@ if __name__ == '__main__':
       password = get_opt_password()
       timeout = int(get_opt_timeout())
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
-          host, port, user, password, timeout, log_filename)
+          host, port, user, password.replace('"', '\\"'), timeout, log_filename)
       do_check(host, port, user, password, timeout, upgrade_params)
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')

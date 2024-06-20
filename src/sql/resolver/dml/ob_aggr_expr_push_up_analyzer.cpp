@@ -37,7 +37,7 @@ int ObAggrExprPushUpAnalyzer::analyze_and_push_up_aggr_expr(ObRawExprFactory &ex
   if (OB_ISNULL(aggr_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("aggr expr is null", K(ret));
-  } else if (OB_FAIL(analyze_aggr_param_expr(root_expr, true))) {
+  } else if (OB_FAIL(analyze_aggr_param_expr(root_expr, false, true))) {
     LOG_WARN("failed to analyze aggr param expr", K(ret), K(*root_expr));
   } else if (OB_FAIL(get_min_level_resolver(min_level_resolver))) {
     LOG_WARN("failed to get min level resolver", K(ret));
@@ -64,6 +64,8 @@ int ObAggrExprPushUpAnalyzer::analyze_and_push_up_aggr_expr(ObRawExprFactory &ex
   } else if (OB_FAIL(ObTransformUtils::decorrelate(reinterpret_cast<ObRawExpr *&>(aggr_expr),
                                                    final_exec_params))) {
     LOG_WARN("failed to decorrelate exec params", K(ret));
+  } else if (OB_FAIL(replace_final_exec_param_in_aggr(final_exec_params, param_query_refs, expr_factory))) {
+    LOG_WARN("failed to replace real exec param in aggr", K(ret));
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(final_aggr_resolver->add_aggr_expr(aggr_expr))) {
@@ -71,7 +73,7 @@ int ObAggrExprPushUpAnalyzer::analyze_and_push_up_aggr_expr(ObRawExprFactory &ex
     } else if (final_aggr_resolver == &cur_resolver_) {
       final_aggr = aggr_expr;
     } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(expr_factory,
-                                                           final_aggr_resolver->get_subquery(),
+                                                           final_aggr_resolver->get_query_ref_exec_params(),
                                                            aggr_expr,
                                                            final_aggr))) {
       LOG_WARN("failed to get exec param expr", K(ret));
@@ -97,6 +99,7 @@ int ObAggrExprPushUpAnalyzer::analyze_and_push_up_aggr_expr(ObRawExprFactory &ex
  * @return
  */
 int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
+                                                      bool is_in_aggr_expr,
                                                       bool is_root /* = false*/,
                                                       bool is_child_stmt /* = false*/)
 {
@@ -128,7 +131,7 @@ int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
     if (OB_SUCC(ret) &&
         !is_child_stmt &&
         param_expr->is_aggr_expr() &&
-        !static_cast<ObAggFunRawExpr *>(param_expr)->is_nested_aggr()) {
+        !is_in_aggr_expr) {
       //在聚集函数中含有同层级的聚集函数，这个对于mysql不允许的
       //select count(select count(t1.c1) from t) from t1;
       //在上面的例子中，count(t1.c1)推上去了，和最外层的count()处于同一级
@@ -141,7 +144,10 @@ int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
 
   for (int64_t i = 0; OB_SUCC(ret) && i < param_expr->get_param_count(); ++i) {
     ObRawExpr *&param = param_expr->get_param_expr(i);
-    if (OB_FAIL(SMART_CALL(analyze_aggr_param_expr(param, false, is_child_stmt)))) {
+    if (OB_ISNULL(param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(analyze_aggr_param_expr(param, is_in_aggr_expr || param_expr->is_aggr_expr(), false, is_child_stmt)))) {
       LOG_WARN("analyze child expr failed", K(ret));
     }
   }
@@ -168,7 +174,10 @@ int ObAggrExprPushUpAnalyzer::analyze_child_stmt(ObSelectStmt *child_stmt)
     ObRawExpr *expr = NULL;
     if (OB_FAIL(relation_exprs.at(i).get(expr))) {
       LOG_WARN("failed to get expr", K(ret));
-    } else if (OB_FAIL(analyze_aggr_param_expr(expr, false, true))) {
+    } else if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(analyze_aggr_param_expr(expr, false, false, true))) {
       LOG_WARN("failed to analyze aggr param expr", K(ret));
     } else if (OB_FAIL(relation_exprs.at(i).set(expr))) {
       LOG_WARN("failed to set expr", K(ret));
@@ -429,16 +438,147 @@ int ObAggrExprPushUpAnalyzer::get_exec_params(ObDMLResolver *resolver,
                                               ObIArray<ObExecParamRawExpr *> &my_exec_params)
 {
   int ret = OB_SUCCESS;
-  ObQueryRefRawExpr *query_ref = NULL;
-  if (OB_ISNULL(resolver) || OB_ISNULL(query_ref = resolver->get_subquery())) {
+  ObIArray<ObExecParamRawExpr*> *query_ref_exec_params = NULL;
+  if (OB_ISNULL(resolver) || OB_ISNULL(query_ref_exec_params = resolver->get_query_ref_exec_params())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(resolver), K(query_ref));
+    LOG_WARN("params have null", K(ret), K(resolver), K(query_ref_exec_params));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < all_exec_params.count(); ++i) {
-    if (!ObRawExprUtils::find_expr(query_ref->get_exec_params(), all_exec_params.at(i))) {
+    if (!ObRawExprUtils::find_expr(*query_ref_exec_params, all_exec_params.at(i))) {
       // do nothing
     } else if (OB_FAIL(my_exec_params.push_back(all_exec_params.at(i)))) {
       LOG_WARN("failed to push back exec param", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAggrExprPushUpAnalyzer::replace_final_exec_param_in_aggr(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                                              ObIArray<ObQueryRefRawExpr *> &param_query_refs,
+                                                              ObRawExprFactory &expr_factory)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObExecParamRawExpr *, 4> new_execs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exec_params.count(); ++i) {
+    ObExecParamRawExpr *new_expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::create_new_exec_param(expr_factory,
+                                                      exec_params.at(i)->get_ref_expr(),
+                                                      new_expr,
+                                                      false))) {
+      LOG_WARN("failed to create new exec param", K(ret));
+    } else if (OB_FAIL(new_execs.push_back(static_cast<ObExecParamRawExpr *>(new_expr)))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObStmtExecParamReplacer replacer;
+    replacer.set_relation_scope();
+    if (OB_FAIL(replacer.add_replace_exprs(exec_params, new_execs))) {
+      LOG_WARN("failed to add replace exprs", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < param_query_refs.count(); i++) {
+        if (OB_FAIL(replacer.do_visit(reinterpret_cast<ObRawExpr *&>(param_query_refs.at(i))))) {
+          LOG_WARN("failed to replace exec param", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStmtExecParamReplacer::check_need_replace(const ObRawExpr *old_expr,
+                                                ObRawExpr *&new_expr,
+                                                bool &need_replace)
+{
+  int ret = OB_SUCCESS;
+  uint64_t key = reinterpret_cast<uint64_t>(old_expr);
+  uint64_t val = 0;
+  need_replace = false;
+  if (OB_UNLIKELY(!expr_replace_map_.created())) {
+    // do nothing
+  } else if (OB_FAIL(expr_replace_map_.get_refactored(key, val))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get expr from hash map", K(ret));
+    }
+  } else {
+    need_replace = true;
+    new_expr = reinterpret_cast<ObRawExpr *>(val);
+  }
+  return ret;
+}
+
+int ObStmtExecParamReplacer::add_replace_exprs(const ObIArray<ObExecParamRawExpr *> &from_exprs,
+                                               const ObIArray<ObExecParamRawExpr *> &to_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t bucket_size = MAX(from_exprs.count(), 64);
+  if (OB_UNLIKELY(from_exprs.count() != to_exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr size mismatch", K(from_exprs.count()), K(to_exprs.count()), K(ret));
+  } else if (expr_replace_map_.created()) {
+    /* do nothing */
+  } else if (OB_FAIL(expr_replace_map_.create(bucket_size, ObModIds::OB_SQL_COMPILE))) {
+    LOG_WARN("failed to create expr map", K(ret));
+  } else if (OB_FAIL(to_exprs_.create(bucket_size))) {
+    LOG_WARN("failed to create expr set", K(ret));
+  }
+  const ObRawExpr *from_expr = NULL;
+  const ObRawExpr *to_expr = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_exprs.count(); ++i) {
+    bool is_existed = false;
+    ObRawExpr *new_expr = NULL;
+    if (OB_ISNULL(from_expr = from_exprs.at(i)) || OB_ISNULL(to_expr = to_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", KP(from_expr), KP(to_expr), K(ret));
+    } else if (OB_FAIL(check_need_replace(from_expr, new_expr, is_existed))) {
+      LOG_WARN("failed to check need replace", K(ret));
+    } else if (is_existed) {
+      /* do nothing */
+    } else if (OB_FAIL(expr_replace_map_.set_refactored(reinterpret_cast<uint64_t>(from_expr),
+                                                        reinterpret_cast<uint64_t>(to_expr)))) {
+      LOG_WARN("failed to add replace expr into map", K(ret));
+    } else if (OB_FAIL(to_exprs_.set_refactored(reinterpret_cast<uint64_t>(to_expr)))) {
+      LOG_WARN("failed to add replace expr into set", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObStmtExecParamReplacer::do_visit(ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_happended = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (expr->is_exec_param_expr()) {
+    bool need_replace = false;
+    ObRawExpr *to_expr;
+    if (OB_FAIL(check_need_replace(expr, to_expr, need_replace))) {
+      LOG_WARN("failed to check need replace", K(ret));
+    } else if (need_replace) {
+      expr = to_expr;
+    }
+  } else if (expr->is_query_ref_expr()) {
+    ObQueryRefRawExpr *query_ref_expr = static_cast<ObQueryRefRawExpr*>(expr);
+    for (int64_t i = 0; OB_SUCC(ret) && i < query_ref_expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(do_visit(reinterpret_cast<ObRawExpr *&>(
+                                                      query_ref_expr->get_exec_params().at(i)))))) {
+        LOG_WARN("failed to remove const exec param", K(ret));
+      }
+    }
+    if (NULL == query_ref_expr->get_ref_stmt()) {
+      /* ref_stmt may has not been resolve yet */
+    } else if (OB_FAIL(SMART_CALL(query_ref_expr->get_ref_stmt()->iterate_stmt_expr(*this)))) {
+      LOG_WARN("failed to iterator stmt expr", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(do_visit(expr->get_param_expr(i))))) {
+        LOG_WARN("failed to do replace exec param", K(ret));
+      }
     }
   }
   return ret;

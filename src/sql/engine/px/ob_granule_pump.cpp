@@ -64,6 +64,19 @@ int ObGITaskSet::get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) co
   return ret;
 }
 
+int ObGITaskSet::get_task_tablet_id_at_pos(const int64_t &pos, uint64_t &tablet_id) const
+{
+  int ret = OB_SUCCESS;
+  if (pos < 0 || pos >= gi_task_set_.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(pos));
+  } else {
+    int64_t cur_idx = gi_task_set_.at(pos).idx_;
+    tablet_id = gi_task_set_.at(pos).tablet_loc_->tablet_id_.id();
+  }
+  return ret;
+}
+
 int ObGITaskSet::get_next_gi_task_pos(int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -439,7 +452,9 @@ int ObGranulePump::fetch_pw_granule_by_worker_id(ObIArray<ObGranuleTaskInfo> &in
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_pw_end(end_tsc_count, op_ids.count(), infos.count()))) {
-    LOG_WARN("incorrect state", K(ret));
+    if (OB_ITER_END != ret) {
+      LOG_WARN("incorrect state", K(ret));
+    }
   }
   LOG_TRACE("get a new partition wise join gi tasks", K(infos), K(ret));
   return ret;
@@ -666,10 +681,10 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
   can_randomize = (need_start_ddl || need_start_pdml)
                   && (!(ObGranuleUtil::asc_order(args.gi_attri_flag_)
                         || ObGranuleUtil::desc_order(args.gi_attri_flag_)
-                        || ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)));
+                        || ObGranuleUtil::is_partition_granule_flag(args.gi_attri_flag_)));
   LOG_DEBUG("scan order is ", K(ObGranuleUtil::asc_order(args.gi_attri_flag_)),
             K(ObGranuleUtil::desc_order(args.gi_attri_flag_)),
-            K(ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)), K(can_randomize),
+            K(ObGranuleUtil::is_partition_granule_flag(args.gi_attri_flag_)), K(can_randomize),
             K(need_start_ddl), K(need_start_pdml));
   return ret;
 }
@@ -741,8 +756,13 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
   } else if (tablets.count() <= 0 || OB_ISNULL(args.ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the task has an empty tablets", K(ret), K(tablets));
-  } else if (OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range(), ranges, ss_ranges,
-      table_id, op_id, partition_granule, ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
+  } else if (!args.query_range_by_runtime_filter_.empty()
+             && OB_FAIL(ranges.assign(args.query_range_by_runtime_filter_))) {
+    LOG_WARN("failed to assign query range", K(ret), K(tablets));
+  } else if (args.query_range_by_runtime_filter_.empty()
+             && OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range(), ranges, ss_ranges,
+                                        table_id, op_id, partition_granule,
+                                        ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
     LOG_WARN("get query range failed", K(ret));
   } else if (ranges.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -1096,7 +1116,8 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
         if (is_virtual_table(table_schema->get_table_id())) {
           tablet_idx = tablet_loc.tablet_id_.id() + 1;
         } else if (OB_FAIL(idx_map.get_refactored(tablet_loc.tablet_id_.id(), tablet_idx))) {
-          LOG_WARN("fail to get tablet idx", K(ret));
+          ret = OB_HASH_NOT_EXIST == ret ? OB_SCHEMA_ERROR : ret;
+          LOG_WARN("fail to get tablet idx", K(ret), K(tablet_loc), KPC(table_schema));
         }
       }
       if (OB_FAIL(ret)) {
@@ -1266,13 +1287,13 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     LOG_TRACE("handler split dml op task", K(modify_op->get_type()));
     if (OB_FAIL(modify_op->get_single_dml_ctdef(dml_ctdef))) {
       LOG_WARN("get single table loc id failed", K(ret));
-    } else if (split_insert_gi_task(args,
+    } else if (OB_FAIL(split_insert_gi_task(args,
                                     dml_ctdef->das_base_ctdef_.index_tid_,
                                     dml_ctdef->das_base_ctdef_.rowkey_cnt_, // insert对应的row key count
                                     tablet_arrays.at(0),
                                     partition_granule,
                                     total_task_set,
-                                    random_type)){
+                                    random_type))){
       LOG_WARN("failed to prepare pw insert gi task", K(ret));
     } else if (OB_FAIL(taskset_array.push_back(total_task_set))) {
       LOG_WARN("failed to push back task set", K(ret));
@@ -1629,6 +1650,46 @@ int ObGranulePump::reset_gi_task()
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObGranulePumpArgs::assign(const ObGranulePumpArgs &rhs)
+{
+  int ret = OB_SUCCESS;
+  ctx_ = rhs.ctx_;
+  cur_tablet_idx_ = rhs.cur_tablet_idx_;
+  finish_pruning_tablet_idx_ = rhs.finish_pruning_tablet_idx_;
+  sharing_iter_end_ = rhs.sharing_iter_end_;
+  pruning_status_ = rhs.pruning_status_;
+  pruning_ret_ = rhs.pruning_ret_;
+  parallelism_ = rhs.parallelism_;
+  tablet_size_ = rhs.tablet_size_;
+  gi_attri_flag_ = rhs.gi_attri_flag_;
+  lucky_one_ = rhs.lucky_one_;
+  extract_finished_ = rhs.extract_finished_;
+  if (OB_FAIL(op_info_.assign(rhs.op_info_))) {
+    LOG_WARN("Failed to assign op_info", K(ret));
+  } else if (OB_FAIL(tablet_arrays_.assign(rhs.tablet_arrays_))) {
+    LOG_WARN("Failed to assign tablet_arrays", K(ret));
+  } else if (OB_FAIL(run_time_pruning_flags_.assign(rhs.run_time_pruning_flags_))) {
+    LOG_WARN("Failed to assign run_time_pruning_flags", K(ret));
+  } else if (OB_FAIL(partitions_info_.assign(rhs.partitions_info_))) {
+    LOG_WARN("Failed to assign partitions_info", K(ret));
+  } else if (OB_FAIL(external_table_files_.assign(rhs.external_table_files_))) {
+    LOG_WARN("Failed to assign external_table_files", K(ret));
+  } else if (OB_FAIL(query_range_by_runtime_filter_.assign(rhs.query_range_by_runtime_filter_))) {
+    LOG_WARN("Failed to assign query_range_by_runtime_filter", K(ret));
+  }
+  return ret;
+}
+
+int ObGranulePumpArgs::ObGranulePumpOpInfo::assign(const ObGranulePumpOpInfo &rhs) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(scan_ops_.assign(rhs.scan_ops_))) {
+    LOG_WARN("Failed to assign scan_ops_.", K(ret));
+  } else {
+    modify_op_ = rhs.modify_op_;
   }
   return ret;
 }

@@ -67,7 +67,7 @@ int LogBlockMgr::init(const char *log_dir,
     PALF_LOG(ERROR, "init curr_writable_handler_ failed", K(ret), K(log_dir));
   } else if (OB_FAIL(do_scan_dir_(log_dir, initial_block_id, log_block_pool))) {
     PALF_LOG(ERROR, "do_scan_dir_ failed", K(ret), K(log_dir));
-  } else if (OB_FAIL(try_recovery_last_block_(log_dir))) {
+  } else if (OB_FAIL(try_recovery_last_block_(log_dir, log_block_size))) {
     PALF_LOG(ERROR, "try_recovery_last_block_ failed", K(ret), KPC(this));
   } else {
     MEMCPY(log_dir_, log_dir, OB_MAX_FILE_NAME_LENGTH);
@@ -503,7 +503,8 @@ bool LogBlockMgr::empty_() const
   return  min_block_id_ == max_block_id_;
 }
 
-int LogBlockMgr::try_recovery_last_block_(const char *log_dir)
+int LogBlockMgr::try_recovery_last_block_(const char *log_dir,
+                                          const int64_t log_block_size)
 {
   int ret = OB_SUCCESS;
   int64_t file_size = 0;
@@ -516,9 +517,9 @@ int LogBlockMgr::try_recovery_last_block_(const char *log_dir)
     PALF_LOG(WARN, "convert_to_normal_block failed", K(ret), K(block_id));
   } else if (OB_FAIL(FileDirectoryUtils::get_file_size(block_path, file_size))) {
     PALF_LOG(WARN, "get_file_size failed", K(ret), K(block_path));
-  } else if (file_size == PALF_PHY_BLOCK_SIZE) {
+  } else if (file_size == log_block_size) {
     PALF_LOG(INFO, "last block no need to recovery", K(block_id));
-  } else if (-1 == ::truncate(block_path, PALF_PHY_BLOCK_SIZE)) {
+  } else if (-1 == ::truncate(block_path, log_block_size)) {
     ret = convert_sys_errno();
     PALF_LOG(ERROR, "ftruncate failed", K(ret), KPC(this), K(file_size));
   } else {

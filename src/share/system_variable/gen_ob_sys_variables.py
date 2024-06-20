@@ -72,7 +72,7 @@ type_value_dict["bool"] = 5 # FIXME: tinyint?
 type_value_dict["enum"] = 5
 
 required_attrs = ["publish_version", "info_cn", "background_cn", "ref_url"]
-ignored_attrs = ["publish_version", "info_cn", "background_cn", "ref_url"]
+ignored_attrs = ["publish_version", "info_cn", "background_cn", "ref_url", "placeholder"]
 
 file_head_annotation = """/**
  * Copyright (c) 2021 OceanBase
@@ -92,8 +92,13 @@ def parse_json(json_file_name):
   json_file = open(json_file_name,'r')
   all_the_vars = json_file.read( )
   json_Dict = json.loads(all_the_vars)
-  list_sorted_by_name= sorted(json_Dict.iteritems(), key=lambda d:d[0])
-  list_sorted_by_id= sorted(json_Dict.iteritems(), key=lambda d:d[1]['id'])
+  # add new attribute placeholder
+  # If placeholder is false, it means it is not a placeholder variable.
+  # If it is true, it means it is a placeholder variable.
+  filtered_json = filter(lambda d: 'placeholder' not in d[1] or d[1]['placeholder'] is False, json_Dict.iteritems())
+  filtered_dict = dict(filtered_json)
+  list_sorted_by_name= sorted(filtered_dict.iteritems(), key=lambda d:d[0])
+  list_sorted_by_id= sorted(filtered_dict.iteritems(), key=lambda d:d[1]['id'])
   json_file.close()
   return (json_Dict, list_sorted_by_name, list_sorted_by_id)
 
@@ -202,6 +207,7 @@ def make_head_file(pdir, head_file_name, sorted_list):
   head_file.write("  static const common::ObObj &get_default_value(int64_t i);\n")
   head_file.write("  static const common::ObObj &get_base_value(int64_t i);\n")
   head_file.write("  static int64_t get_amount();\n");
+  head_file.write("  static ObCollationType get_default_sysvar_collation();\n");
   head_file.write("  static int set_value(const char *name, const char * new_value);\n");
   head_file.write("  static int set_value(const common::ObString &name, const common::ObString &new_value);\n");
   head_file.write("  static int set_base_value(const char *name, const char * new_value);\n");
@@ -331,6 +337,7 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("const ObObj &ObSysVariables::get_default_value(int64_t i){ return ObSysVarDefaultValues[i];}\n")
   cpp_file.write("const ObObj &ObSysVariables::get_base_value(int64_t i){ return ObSysVarBaseValues[i];}\n")
   cpp_file.write("int64_t ObSysVariables::get_amount(){ return var_amount;}\n")
+  cpp_file.write("ObCollationType ObSysVariables::get_default_sysvar_collation() { return CS_TYPE_UTF8MB4_GENERAL_CI;}\n")
   cpp_file.write("\n")
   cpp_file.write("int ObSysVariables::set_value(const char *name, const char * new_value)\n")
   cpp_file.write("{\n")
@@ -395,11 +402,11 @@ int ObSysVariables::init_default_values()
       ObObj in_obj;
       ObObj out_obj;
       in_obj.set_varchar(sys_var_val_str);
-      in_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      in_obj.set_collation_type(ObSysVariables::get_default_sysvar_collation());
       ObObj base_in_obj;
       ObObj base_out_obj;
       base_in_obj.set_varchar(base_sys_var_val_str);
-      base_in_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      base_in_obj.set_collation_type(ObSysVariables::get_default_sysvar_collation());
       //varchar to others. so, no need to get collation from session
       ObCastCtx cast_ctx(&ObSysVarAllocator,
                          NULL,

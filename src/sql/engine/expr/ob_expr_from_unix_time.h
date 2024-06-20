@@ -49,6 +49,7 @@ public:
   static int eval_fromtime_special(const ObExpr &expr,
                                    ObEvalCtx &eval_ctx,
                                    ObDatum &expr_datum);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   int set_scale_for_single_param(ObExprResType &type,
                                  const ObExprResType &type1) const;

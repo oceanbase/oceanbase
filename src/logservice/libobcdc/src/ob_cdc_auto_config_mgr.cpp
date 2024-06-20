@@ -92,7 +92,7 @@ void ObCDCAutoConfigMgr::init_queue_length_(const ObLogConfig &config)
 
   const int64_t msg_sorter_queue_length = br_queue_length;
   REFRESH_NUM_FIELD_WITH_CONFIG(msg_sorter_task_count_upper_limit, msg_sorter_queue_length, config.msg_sorter_task_count_upper_limit.get());
-  REFRESH_NUM_FIELD_WITH_CONFIG(sequencer_queue_length, MAX_QUEUE_LENGTH, config.sequencer_queue_length.get());
+  REFRESH_NUM_FIELD_WITH_CONFIG(sequencer_queue_length, MAX_QUEUE_LENGTH / 10, config.sequencer_queue_length.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(storager_queue_length, DEFAULT_STORAGE_QUEUE_LENGTH, config.storager_queue_length.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(reader_queue_length, DEFAULT_STORAGE_QUEUE_LENGTH, config.reader_queue_length.get());
 }
@@ -116,6 +116,9 @@ void ObCDCAutoConfigMgr::refresh_dynamic_config_(const ObLogConfig &config)
   const int64_t ready_to_seq_task_upper_bound = auto_part_trans_task_upper_bound;
   const int64_t extra_redo_dispatch_memory_size = 1 * _K_ + (1 << (factor_ - 9)) * (factor_ - 11)  * _M_;
   const int64_t redo_dispatch_exceed_ratio = factor_ <= 12 ? 1 : (1 << (factor_ - 13));
+  const int64_t direct_load_inc_thread_num = factor_ <= 12 ? 1 : (factor_ - 12);
+  const int64_t direct_load_inc_queue_backlog_lowest_tolerance = 1 << (factor_ + 1);
+  const int64_t max_chunk_cache_size =  factor_ <= 12 ? (1 << (factor_ - 11)) * 512 * _M_ : 4096 * _M_;
 
   REFRESH_NUM_FIELD_WITH_CONFIG(redo_dispatcher_memory_limit, redo_dispatcher_limit, config.redo_dispatcher_memory_limit.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(extra_redo_dispatch_memory_size, extra_redo_dispatch_memory_size, config.extra_redo_dispatch_memory_size.get());
@@ -128,7 +131,10 @@ void ObCDCAutoConfigMgr::refresh_dynamic_config_(const ObLogConfig &config)
   REFRESH_NUM_FIELD_WITH_CONFIG(ready_to_seq_task_upper_bound, ready_to_seq_task_upper_bound, config.ready_to_seq_task_upper_bound.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(storager_task_count_upper_bound, DEFAULT_STORAGER_TASK_UPPER_BOUND, config.storager_task_count_upper_bound.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(storager_mem_percentage, DEFAULT_STORAGER_MEM_PERCENT, config.storager_mem_percentage.get());
-
+  REFRESH_NUM_FIELD_WITH_CONFIG(max_chunk_cache_size, max_chunk_cache_size, config.max_chunk_cache_size.get());
+  REFRESH_NUM_FIELD_WITH_CONFIG(direct_load_inc_thread_num, direct_load_inc_thread_num, config.direct_load_inc_thread_num.get());
+  REFRESH_NUM_FIELD_WITH_CONFIG(direct_load_inc_queue_backlog_lowest_tolerance, direct_load_inc_queue_backlog_lowest_tolerance, config.direct_load_inc_queue_backlog_lowest_tolerance.get());
+  _LOG_INFO("[AUTO_CONFIG][MAX_CHUNK_CACHE_SIZE: %s(%ld)}]", SIZE_TO_STR(max_chunk_cache_size_), max_chunk_cache_size_);
 }
 
 int64_t ObCDCAutoConfigMgr::get_log2_(int64_t value)

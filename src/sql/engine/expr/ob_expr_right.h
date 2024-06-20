@@ -30,6 +30,7 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const;
   int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                             ObExpr &rt_expr) const;
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRight);
 };

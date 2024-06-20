@@ -317,6 +317,7 @@ typedef struct
     uint32_t is_for_remap_                     : 1;
     uint32_t contain_sensitive_data_           : 1;
     uint32_t may_contain_sensitive_data_       : 1;
+    uint32_t is_external_table_                : 1;
   };
 
   ParseNode *result_tree_;
@@ -341,6 +342,7 @@ typedef struct
   int connection_collation_;//connection collation
   bool mysql_compatible_comment_; //whether the parser is parsing "/*! xxxx */"
   bool enable_compatible_comment_;
+  int semicolon_start_col_;
 
   InsMultiValuesResult *ins_multi_value_res_;
 
@@ -417,6 +419,7 @@ extern int64_t get_question_mark_by_defined_name(ObQuestionMarkCtx *ctx, const c
 // @param [in] pat_len     length of pattern
 extern bool nodename_equal(const ParseNode *node, const char *pattern, int64_t pat_len);
 
+extern bool nodename_is_sdo_geometry_type(const ParseNode *node);
 #define OB_NODE_CAST_TYPE_IDX 0
 #define OB_NODE_CAST_COLL_IDX 1
 #define OB_NODE_CAST_N_PREC_IDX 2

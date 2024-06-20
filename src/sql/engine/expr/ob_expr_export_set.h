@@ -25,6 +25,8 @@ public:
       ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_export_set(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprExportSet);

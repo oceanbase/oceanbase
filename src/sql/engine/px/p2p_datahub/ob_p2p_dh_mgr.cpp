@@ -14,6 +14,7 @@
 
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
+#include "sql/engine/px/p2p_datahub/ob_runtime_filter_vec_msg.h"
 #include "lib/rc/context.h"
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "share/ob_rpc_share.h"
@@ -82,28 +83,13 @@ int ObP2PDatahubManager::process_msg(ObP2PDatahubMsgBase &msg)
 }
 
 template<typename T>
-int ObP2PDatahubManager::alloc_msg(int64_t tenant_id, T *&msg_ptr)
-{
-  int ret = OB_SUCCESS;
-  void *ptr = nullptr;
-  ObMemAttr attr(tenant_id, "PxP2PDhMsg", common::ObCtxIds::DEFAULT_CTX_ID);
-  if (OB_ISNULL(ptr = (ob_malloc(sizeof(T), attr)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for p2p dh msg", K(ret));
-  } else {
-    msg_ptr = new(ptr) T();
-  }
-  return ret;
-}
-
-template<typename T>
 int ObP2PDatahubManager::alloc_msg(
     common::ObIAllocator &allocator,
-    T *&msg_ptr)
+    T *&msg_ptr, const ObMemAttr &mem_attr)
 {
   int ret = OB_SUCCESS;
   void *ptr = nullptr;
-  if (OB_ISNULL(ptr = (allocator.alloc(sizeof(T))))) {
+  if (OB_ISNULL(ptr = (allocator.alloc(sizeof(T), mem_attr)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for p2p dh msg", K(ret));
   } else {
@@ -119,9 +105,11 @@ int ObP2PDatahubManager::alloc_msg(
 {
   int ret = OB_SUCCESS;
   switch(type) {
+    case ObP2PDatahubMsgBase::BLOOM_FILTER_VEC_MSG:
     case ObP2PDatahubMsgBase::BLOOM_FILTER_MSG: {
       ObRFBloomFilterMsg *bf_ptr = nullptr;
-      if (OB_FAIL(alloc_msg<ObRFBloomFilterMsg>(allocator, bf_ptr))) {
+      ObMemAttr attr(ob_get_tenant_id(), "PxBfMsg");
+      if (OB_FAIL(alloc_msg<ObRFBloomFilterMsg>(allocator, bf_ptr, attr))) {
         LOG_WARN("fail to alloc msg", K(ret));
       } else {
         msg_ptr = bf_ptr;
@@ -130,7 +118,18 @@ int ObP2PDatahubManager::alloc_msg(
     }
     case ObP2PDatahubMsgBase::RANGE_FILTER_MSG: {
       ObRFRangeFilterMsg *range_ptr = nullptr;
-      if (OB_FAIL(alloc_msg<ObRFRangeFilterMsg>(allocator, range_ptr))) {
+      ObMemAttr attr(ob_get_tenant_id(), "PxRangeMsg");
+      if (OB_FAIL(alloc_msg<ObRFRangeFilterMsg>(allocator, range_ptr, attr))) {
+        LOG_WARN("fail to alloc msg", K(ret));
+      } else {
+        msg_ptr = range_ptr;
+      }
+      break;
+    }
+    case ObP2PDatahubMsgBase::RANGE_FILTER_VEC_MSG: {
+      ObRFRangeFilterVecMsg *range_ptr = nullptr;
+      ObMemAttr attr(ob_get_tenant_id(), "PxRangeVecMsg");
+      if (OB_FAIL(alloc_msg<ObRFRangeFilterVecMsg>(allocator, range_ptr, attr))) {
         LOG_WARN("fail to alloc msg", K(ret));
       } else {
         msg_ptr = range_ptr;
@@ -139,7 +138,18 @@ int ObP2PDatahubManager::alloc_msg(
     }
     case ObP2PDatahubMsgBase::IN_FILTER_MSG: {
       ObRFInFilterMsg *in_ptr = nullptr;
-      if (OB_FAIL(alloc_msg<ObRFInFilterMsg>(allocator, in_ptr))) {
+      ObMemAttr attr(ob_get_tenant_id(), "PxInMsg");
+      if (OB_FAIL(alloc_msg<ObRFInFilterMsg>(allocator, in_ptr, attr))) {
+        LOG_WARN("fail to alloc msg", K(ret));
+      } else {
+        msg_ptr = in_ptr;
+      }
+      break;
+    }
+    case ObP2PDatahubMsgBase::IN_FILTER_VEC_MSG: {
+      ObRFInFilterVecMsg *in_ptr = nullptr;
+      ObMemAttr attr(ob_get_tenant_id(), "PxInVecMsg");
+      if (OB_FAIL(alloc_msg<ObRFInFilterVecMsg>(allocator, in_ptr, attr))) {
         LOG_WARN("fail to alloc msg", K(ret));
       } else {
         msg_ptr = in_ptr;
@@ -195,6 +205,7 @@ int ObP2PDatahubManager::send_local_msg(ObP2PDatahubMsgBase *msg)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("msg is null", K(ret));
   } else {
+    (void) msg->after_process();
     ObP2PDhKey dh_key(msg->get_p2p_datahub_id(),
         msg->get_px_seq_id(),
         msg->get_task_id(),
@@ -384,42 +395,15 @@ int ObP2PDatahubManager::P2PMsgSetCall::operator() (const common::hash::HashMapP
     ObP2PDatahubMsgBase *> &entry)
 {
   // entry.second == &dh_msg_
-  // 1. register into dm
-  // 2. do dh_msg_.regenerate()
+  // once the msg is set to p2p datahub map, other threads will access it, so
+  // the regenerate process must be done in the setting process.
   UNUSED(entry);
   int ret = OB_SUCCESS;
 
-#ifdef ERRSIM
-  if (OB_FAIL(OB_E(EventTable::EN_PX_P2P_MSG_REG_DM_FAILED) OB_SUCCESS)) {
-    LOG_WARN("p2p msg reg dm failed by design", K(ret));
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    ret_ = ret;
-    return ret;
-  }
-#endif
-  if (OB_FAIL(ObDetectManagerUtils::p2p_datahub_register_check_item_into_dm(
-      dh_msg_.get_register_dm_info(), dh_key_, dh_msg_.get_dm_cb_node_seq_id()))) {
-    LOG_WARN("[DM] failed to register check item to dm", K(dh_msg_.get_register_dm_info()),
-        K(dh_key_), K(dh_msg_.get_dm_cb_node_seq_id()));
-  } else {
-    succ_reg_dm_ = true;
-    LOG_TRACE("[DM] rf register check item to dm", K(dh_msg_.get_register_dm_info()),
-        K(dh_key_), K(dh_msg_.get_dm_cb_node_seq_id()));
-    if (OB_FAIL(dh_msg_.regenerate())) {
-      LOG_WARN("failed to do regen_call", K(dh_key_));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    (void) revert();
+  if (OB_FAIL(dh_msg_.regenerate())) {
+    LOG_WARN("failed to do regen_call", K(dh_key_));
+  } else if (FALSE_IT(dh_msg_.check_finish_receive())) {
   }
   ret_ = ret;
   return ret;
-}
-
-void ObP2PDatahubManager::P2PMsgSetCall::revert()
-{
-  if (succ_reg_dm_) {
-    (void) ObDetectManagerUtils::p2p_datahub_unregister_check_item_from_dm(
-        dh_msg_.get_register_dm_info().detectable_id_, dh_msg_.get_dm_cb_node_seq_id());
-  }
 }

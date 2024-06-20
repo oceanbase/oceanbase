@@ -21,11 +21,14 @@
 #include "storage/ob_i_store.h"
 #include "ob_row_latch.h"
 #include "storage/memtable/ob_memtable_data.h"
-#include "storage/ob_i_store.h"
 #include "storage/memtable/mvcc/ob_mvcc_define.h"
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObRowState;
+}
 namespace memtable
 {
 
@@ -232,9 +235,7 @@ struct ObMvccRow
   static const uint8_t F_INIT = 0x0;
   static const uint8_t F_HASH_INDEX = 0x1;
   static const uint8_t F_BTREE_INDEX = 0x2;
-  static const uint8_t F_BTREE_TAG_DEL = 0x4;
   static const uint8_t F_LOWER_LOCK_SCANED = 0x8;
-  static const uint8_t F_LOCK_DELAYED_CLEANOUT = 0x10;
 
   static const int64_t NODE_SIZE_UNIT = 1024;
   static const int64_t WARN_WAIT_LOCK_TIME = 1 *1000 * 1000;
@@ -247,27 +248,29 @@ struct ObMvccRow
 
   // Spin lock that protects row data.
   ObRowLatch latch_;
-  // Update count since last row compact.
-  int32_t update_since_compact_;
   uint8_t flag_;
   blocksstable::ObDmlFlag first_dml_flag_;
   blocksstable::ObDmlFlag last_dml_flag_;
-  ObMvccTransNode *list_head_;
-  transaction::ObTransID max_trans_id_;
-  share::SCN max_trans_version_;
-  transaction::ObTransID max_elr_trans_id_;
-  share::SCN max_elr_trans_version_;
-  ObMvccTransNode *latest_compact_node_;
-  // using for optimizing inserting trans node when replaying
-  ObMvccRowIndex *index_;
+  int32_t update_since_compact_;
+
   int64_t total_trans_node_cnt_;
   int64_t latest_compact_ts_;
   int64_t last_compact_cnt_;
-  // TODO(handora.qc): remove it after link all nodes
-  uint32_t max_modify_count_;
-  uint32_t min_modify_count_;
+  share::SCN max_trans_version_;
+  share::SCN max_elr_trans_version_;
+  share::SCN max_modify_scn_;
+  share::SCN min_modify_scn_;
+  transaction::ObTransID max_trans_id_;
+  transaction::ObTransID max_elr_trans_id_;
+  ObMvccTransNode *list_head_;
+  ObMvccTransNode *latest_compact_node_;
+  ObMvccRowIndex *index_;
 
-  ObMvccRow() { reset(); }
+  ObMvccRow()
+  {
+    STATIC_ASSERT(sizeof(ObMvccRow) <= 120, "Size of ObMvccRow Overflow.");
+    reset();
+  }
   void reset();
 
   // ===================== ObMvccRow Operation Interface =====================
@@ -277,8 +280,7 @@ struct ObMvccRow
   // has_insert returns whether node is inserted into the ObMvccRow
   // is_new_locked returns whether node represents the first lock for the operation
   // conflict_tx_id if write failed this field indicate the txn-id which hold the lock of current row
-  int mvcc_write(ObIMemtableCtx &ctx,
-                 const concurrent_control::ObWriteFlag write_flag,
+  int mvcc_write(storage::ObStoreCtx &ctx,
                  const transaction::ObTxSnapshot &snapshot,
                  ObMvccTransNode &node,
                  ObMvccWriteResult &res);
@@ -296,7 +298,9 @@ struct ObMvccRow
   // key is the row key for lock
   // ctx is the write txn's context, currently the tx_table is the only required field
   // lock_state is the check's result
-  int check_row_locked(ObMvccAccessCtx &ctx, storage::ObStoreRowLockState &lock_state);
+  int check_row_locked(ObMvccAccessCtx &ctx,
+                       storage::ObStoreRowLockState &lock_state,
+                       storage::ObRowState &row_state);
 
   // insert_trans_node insert the tx node for replay
   // ctx is the write txn's context
@@ -340,12 +344,6 @@ struct ObMvccRow
   int wakeup_waiter(const ObTabletID &tablet_id, const ObMemtableKey &key);
 
   // ===================== ObMvccRow Checker Interface =====================
-  // is_partial checks whether mvcc row whose version below than version is completed
-  // TODO(handora.qc): handle it properly
-  bool is_partial(const int64_t version) const;
-  // is_del checks whether mvcc row whose version below than version is completed
-  // TODO(handora.qc): handle it properly
-  bool is_del(const int64_t version) const;
   // is_transaction_set_violation check the tsc problem for the row
   bool is_transaction_set_violation(const share::SCN snapshot_version);
 
@@ -360,8 +358,8 @@ struct ObMvccRow
   bool is_valid_replay_queue_index(const int64_t index) const;
 
   // ======================== ObMvccRow Row Metas ========================
-  // first dml and last dml is the important statistics for row estimation
-  void update_dml_flag_(blocksstable::ObDmlFlag flag, uint32_t modify_count);
+  // first dml and last dml is the importatnt statistics for row estimation
+  void update_dml_flag_(const blocksstable::ObDmlFlag flag, const share::SCN modify_count);
   blocksstable::ObDmlFlag get_first_dml_flag() const { return first_dml_flag_; }
 
   // max_trans_version/max_elr_trans_version is the max (elr) version on the row
@@ -386,18 +384,6 @@ struct ObMvccRow
   {
     ATOMIC_SUB_TAG(F_BTREE_INDEX);
   }
-  OB_INLINE bool is_btree_tag_del() const
-  {
-    return ATOMIC_LOAD(&flag_) & F_BTREE_TAG_DEL;
-  }
-  OB_INLINE void set_btree_tag_del()
-  {
-    ATOMIC_ADD_TAG(F_BTREE_TAG_DEL);
-  }
-  OB_INLINE void clear_btree_tag_del()
-  {
-    ATOMIC_SUB_TAG(F_BTREE_TAG_DEL);
-  }
   OB_INLINE void set_hash_indexed()
   {
     ATOMIC_ADD_TAG(F_HASH_INDEX);
@@ -416,8 +402,7 @@ struct ObMvccRow
   void print_row();
 
   // ===================== ObMvccRow Private Function =====================
-  int mvcc_write_(ObIMemtableCtx &ctx,
-                  const concurrent_control::ObWriteFlag write_flag,
+  int mvcc_write_(storage::ObStoreCtx &ctx,
                   ObMvccTransNode &node,
                   const transaction::ObTxSnapshot &snapshot,
                   ObMvccWriteResult &res);

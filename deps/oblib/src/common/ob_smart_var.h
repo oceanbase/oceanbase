@@ -15,6 +15,7 @@
 
 #include "common/ob_common_utility.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {

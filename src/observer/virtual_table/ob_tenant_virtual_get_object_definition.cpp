@@ -685,6 +685,25 @@ int ObGetObjectDefinition::get_synonym_definition(ObString &ddl_str, const ObStr
   return ret;
 }
 
+int ObGetObjectDefinition::get_database_id(uint64_t tenant_id,
+                                           const ObString db_name,
+                                           uint64_t &database_id)
+{
+  int ret = OB_SUCCESS;
+  const ObDatabaseSchema *database_schema = NULL;
+  if (OB_ISNULL(schema_guard_)) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN, "schema guard is NULL", K(ret), K(schema_guard_));
+  } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id, db_name, database_schema))) {
+    LOG_WARN("get database schema failed", K(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_OBJECT_NOT_FOUND;
+    LOG_WARN("database not found", K(db_name));
+  } else if (FALSE_IT(database_id = database_schema->get_database_id())) {
+  }
+  return ret;
+}
+
 int ObGetObjectDefinition::get_udt_definition(ObString &ddl_str, const ObString &udt_name,
                                               const ObString &db_name,
                                               GetDDLObjectType object_type)
@@ -693,20 +712,21 @@ int ObGetObjectDefinition::get_udt_definition(ObString &ddl_str, const ObString 
   uint64_t tenant_id = table_schema_->get_tenant_id();
   uint64_t database_id = OB_INVALID_ID;
   const ObUDTTypeInfo *udt_info = NULL;
-  const ObDatabaseSchema *database_schema = NULL;
   bool body_exist = false;
-  if (OB_ISNULL(schema_guard_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "schema guard is NULL", K(ret), K(schema_guard_));
-  } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id, db_name, database_schema))) {
-    LOG_WARN("get database schema failed", K(ret));
-  } else if (OB_ISNULL(database_schema)) {
+  if (OB_FAIL(get_database_id(tenant_id, db_name, database_id))) {
     ret = print_error_log(object_type, db_name, udt_name);
     LOG_WARN("database not found", K(db_name));
-  } else if (FALSE_IT(database_id = database_schema->get_database_id())) {
   } else if (OB_FAIL(schema_guard_->get_udt_info(tenant_id, database_id, OB_INVALID_ID, udt_name,
                                                 udt_info))) {
     LOG_WARN("get udt info failed", K(ret), K(tenant_id), K(udt_name));
+  } else if (OB_ISNULL(udt_info) &&
+             OB_SUCC(get_database_id(OB_SYS_TENANT_ID, "oceanbase", database_id)) &&
+             OB_FAIL(schema_guard_->get_udt_info(OB_SYS_TENANT_ID,
+                                                 database_id,
+                                                 OB_INVALID_ID,
+                                                 udt_name,
+                                                 udt_info))) {
+    LOG_WARN("get udt info failed in system tenant", K(ret), K(tenant_id), K(udt_name));
   } else if (OB_ISNULL(udt_info)) {
     ret = print_error_log(object_type, db_name, udt_name);
     LOG_WARN("type not found", K(ret));

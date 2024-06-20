@@ -13,7 +13,7 @@
 #ifndef _OB_DYNAMIC_SAMPLING_H_
 #define _OB_DYNAMIC_SAMPLING_H_
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_stat_define.h"
@@ -199,6 +199,8 @@ static T *copy_ds_stat_item(ObIAllocator &allocator, const T &src)
 
 const int64_t OB_DS_BASIC_SAMPLE_MICRO_CNT = 32;
 const int64_t OB_DS_MAX_FILTER_EXPR_COUNT = 10000;
+const int64_t OB_DS_MIN_QUERY_TIMEOUT = 1000;//Dynamic sampling requires a minimum timeout of 1ms.
+const int64_t OB_DS_MAX_BASIC_SAMPLE_MICRO_CNT = 1000000;
 //const int64_t OB_OPT_DS_ADAPTIVE_SAMPLE_MICRO_CNT = 200;
 //const int64_t OB_OPT_DS_MAX_TIMES = 7;
 
@@ -222,7 +224,10 @@ public:
     basic_hints_(),
     where_conditions_(),
     ds_stat_items_(),
-    results_()
+    results_(),
+    is_big_table_(false),
+    sample_big_table_rown_cnt_(0),
+    table_clause_()
   {}
 
   int estimate_table_rowcount(const ObDSTableParam &param,
@@ -317,6 +322,7 @@ private:
                       int64_t nested_count,
                       bool is_no_backslash_escapes,
                       transaction::ObTxDesc *tx_desc);
+  int add_table_clause(ObSqlString &table_str);
 
 private:
   ObOptimizerContext *ctx_;
@@ -336,6 +342,9 @@ private:
   ObString where_conditions_;
   ObSEArray<ObDSStatItem *, 4, common::ModulePageAllocator, true> ds_stat_items_;
   ObSEArray<ObObj, 4, common::ModulePageAllocator, true> results_;
+  bool is_big_table_;
+  int64_t sample_big_table_rown_cnt_;
+  ObString table_clause_;
   //following members will be used for dynamic sampling join in the future
   //ObString join_type_;
   //ObString join_conditions_;
@@ -349,7 +358,6 @@ public:
   static int get_valid_dynamic_sampling_level(const ObSQLSessionInfo *session_info,
                                               const ObTableDynamicSamplingHint *table_ds_hint,
                                               const int64_t global_ds_level,
-                                              bool has_opt_stat,
                                               int64_t &ds_level,
                                               int64_t &sample_block_cnt,
                                               bool &specify_ds);
@@ -357,7 +365,6 @@ public:
   static int get_ds_table_param(ObOptimizerContext &ctx,
                                 const ObLogPlan *log_plan,
                                 const OptTableMeta *table_meta,
-                                bool ignore_opt_stat,
                                 ObDSTableParam &ds_table_param,
                                 bool &specify_ds);
 
@@ -382,6 +389,10 @@ public:
                                  const uint64_t ref_table_id,
                                  int64_t &degree);
 
+  static bool check_is_failed_ds_table(const uint64_t table_id,
+                                       const common::ObIArray<int64_t> &used_part_id,
+                                       const common::ObIArray<ObDSFailTabInfo> &failed_list);
+
 private:
   static int check_ds_can_use_filter(const ObRawExpr *filter,
                                      bool &no_use,
@@ -393,9 +404,6 @@ private:
                                     bool &need_specify_partition,
                                     ObIArray<PartInfo> &partition_infos);
 
-  static bool check_is_failed_ds_table(const uint64_t table_id,
-                                       const common::ObIArray<int64_t> &used_part_id,
-                                       const common::ObIArray<ObDSFailTabInfo> &failed_list);
 }
 ;
 

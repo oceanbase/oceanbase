@@ -14,17 +14,13 @@
 #define OCEANBASE_MEMTABLE_MVCC_OB_MVCC_ENGINE_
 
 #include "share/ob_define.h"
-#include "storage/memtable/mvcc/ob_mvcc_define.h"
-#include "storage/memtable/mvcc/ob_multi_version_iterator.h"
-#include "storage/memtable/mvcc/ob_mvcc_iterator.h"
-#include "storage/memtable/mvcc/ob_query_engine.h"
-#include "storage/memtable/ob_row_compactor.h"
+#include "storage/memtable/ob_concurrent_control.h"
+// #include "storage/memtable/ob_memtable_context.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-class ObRowPurgeHandle;
 struct ObPartitionEst;
 }
 
@@ -32,13 +28,22 @@ namespace memtable
 {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ObRowData;
-class ObIMemtableCtx;
+class ObMemtableCtx;
 class ObMvccAccessCtx;
-class RowHeaderGetter;
 class ObMemtableData;
-class ObMemtableDataHeader;
 class ObMemtable;
 class ObMTKVBuilder;
+class ObQueryEngine;
+class ObMemtableKey;
+class ObMvccRow;
+class ObTxNodeArg;
+class ObMvccWriteResult;
+class ObMvccReplayResult;
+class ObMvccValueIterator;
+class ObMvccScanRange;
+class ObMvccRowIterator;
+class ObMvccTransNode;
+class ObMultiVersionRowIterator;
 
 // class for concurrent control
 class ObMvccEngine
@@ -57,9 +62,9 @@ public:
   // Return the ObMvccRow according to the memtable key or create
   // the new one if the memtable key is not exist.
   int create_kv(const ObMemtableKey *key,
+                const bool is_insert,
                 ObMemtableKey *stored_key,
                 ObMvccRow *&value,
-                RowHeaderGetter &getter,
                 bool &is_new_add);
 
   // mvcc_write builds the ObMvccTransNode according to the arg and write
@@ -67,8 +72,7 @@ public:
   // OB_TRY_LOCK_ROW_CONFLICT if encountering write-write conflict or
   // OB_TRANSACTION_SET_VIOLATION if encountering lost update. The interesting
   // implementation about mvcc_write is located in ob_mvcc_row.cpp/.h
-  int mvcc_write(ObIMemtableCtx &ctx,
-                 const concurrent_control::ObWriteFlag write_flag,
+  int mvcc_write(storage::ObStoreCtx &ctx,
                  const transaction::ObTxSnapshot &snapshot,
                  ObMvccRow &value,
                  const ObTxNodeArg &arg,
@@ -78,12 +82,8 @@ public:
   // and always succeed.
   void mvcc_undo(ObMvccRow *value);
 
-  // mvcc_replay builds the ObMvccTransNode according to the arg and replay
-  // into the ascending ordering of the value based on the scn recorded in ctx.
-  int mvcc_replay(ObIMemtableCtx &ctx,
-                  const ObMemtableKey *stored_key,
-                  ObMvccRow &value,
-                  const ObTxNodeArg &arg,
+  // mvcc_replay builds the ObMvccTransNode according to the arg
+  int mvcc_replay(const ObTxNodeArg &arg,
                   ObMvccReplayResult &res);
 
   // ensure_kv is used to make sure b-tree is no longer broken by the deleted
@@ -95,12 +95,14 @@ public:
   int get(ObMvccAccessCtx &ctx,
           const ObQueryFlag &query_flag,
           const ObMemtableKey *parameter_key,
+          const share::ObLSID memtable_ls_id,
           ObMemtableKey *internal_key,
           ObMvccValueIterator &value_iter,
           storage::ObStoreRowLockState &lock_state);
   int scan(ObMvccAccessCtx &ctx,
            const ObQueryFlag &query_flag,
            const ObMvccScanRange &range,
+           const share::ObLSID memtable_ls_id,
            ObMvccRowIterator &row_iter);
   int scan(ObMvccAccessCtx &ctx,
            const ObMvccScanRange &range,
@@ -111,7 +113,8 @@ public:
   // also returns tx_id for same txn write and max_trans_version for TSC check
   int check_row_locked(ObMvccAccessCtx &ctx,
                        const ObMemtableKey *key,
-                       storage::ObStoreRowLockState &lock_state);
+                       storage::ObStoreRowLockState &lock_state,
+                       storage::ObRowState &row_state);
   // estimate_scan_row_count estimate the row count for the range
   int estimate_scan_row_count(const transaction::ObTransID &tx_id,
                               const ObMvccScanRange &range,
@@ -120,8 +123,7 @@ private:
   int try_compact_row_when_mvcc_read_(const share::SCN &snapshot_version,
                                       ObMvccRow &row);
 
-  int build_tx_node_(ObIMemtableCtx &ctx,
-                     const ObTxNodeArg &arg,
+  int build_tx_node_(const ObTxNodeArg &arg,
                      ObMvccTransNode *&node);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMvccEngine);

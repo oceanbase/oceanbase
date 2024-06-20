@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"                      // OB_MAX_FILE_NAME_LENGTH
 #include "lib/utility/ob_macro_utils.h"         //DISALLOW_COPY_AND_ASSIGN
 #include "log_define.h"
+#include "palf_iterator.h"
 namespace oceanbase
 {
 namespace common
@@ -37,7 +38,8 @@ public:
             const offset_t offset,
             int64_t in_read_size,
             ReadBuf &read_buf,
-            int64_t &out_read_size) const;
+            int64_t &out_read_size,
+            LogIteratorInfo *iterator_info) const;
 private:
   int limit_and_align_in_read_size_by_block_size_(
       offset_t aligned_start_offset,
@@ -50,12 +52,18 @@ private:
                    offset_t start_offset,
                    int64_t in_read_size,
                    char *read_buf,
-                   int64_t &out_read_size) const;
+                   const int64_t read_buf_len,
+                   int64_t &out_read_size,
+                   LogIteratorInfo *iterator_info) const;
 
 private:
   offset_t block_size_;
   char log_dir_[OB_MAX_FILE_NAME_LENGTH];
   // LogDir *log_dir_;
+  mutable int64_t last_accum_read_statistic_time_;
+  mutable int64_t accum_read_io_count_;
+  mutable int64_t accum_read_log_size_;
+  mutable int64_t accum_read_cost_ts_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(LogReader);
   // TODO by runlin

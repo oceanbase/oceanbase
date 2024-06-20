@@ -12,7 +12,9 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "common/ob_common_utility.h"
-
+#include "lib/alloc/malloc_hook.h"
+#include "lib/string/ob_string.h"
+#include "lib/utility/ob_print_utils.h"
 using namespace oceanbase::lib;
 
 namespace oceanbase
@@ -107,6 +109,9 @@ int get_stackattr(void *&stackaddr, size_t &stacksize)
     stackaddr = g_stackaddr;
     stacksize = g_stacksize;
   } else {
+    bool in_hook_bak = in_hook();
+    in_hook() = true;
+    DEFER(in_hook() = in_hook_bak);
     pthread_attr_t attr;
     if (OB_UNLIKELY(0 != pthread_getattr_np(pthread_self(), &attr))) {
       ret = OB_ERR_UNEXPECTED;
@@ -154,5 +159,45 @@ const ObFatalErrExtraInfoGuard *ObFatalErrExtraInfoGuard::get_thd_local_val_ptr(
   return ObFatalErrExtraInfoGuard::get_val();
 }
 
+int64_t ObFatalErrExtraInfoGuard::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_OBJ_END();
+  return pos;
+}
+__thread bool ObBasicTimeGuard::tl_enable_time_guard = true;
+__thread ObBasicTimeGuard *ObBasicTimeGuard::tl_time_guard = NULL;
+int64_t ObBasicTimeGuard::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (click_count_ > 0) {
+    const int64_t click_count = click_count_ < MAX_CLICK_COUNT ? click_count_ : MAX_CLICK_COUNT;
+    ClickInfo click_infos[click_count];
+    MEMCPY(click_infos, click_infos_, sizeof(click_infos));
+    std::sort(click_infos, click_infos + click_count, ClickInfo::compare);
+    ret = databuff_printf(buf, buf_len, pos,
+        "owner: %s, click_count: %ld, time dist:[%s=%d",
+        owner_, click_count_, click_infos[0].mod_, click_infos[0].cost_time_);
+    for (int i = 1; OB_SUCC(ret) && i < click_count; ++i) {
+      ret = databuff_printf(buf, buf_len, pos, ", %s=%d",
+          click_infos[i].mod_, click_infos[i].cost_time_);
+    }
+    if (OB_SUCC(ret)) {
+      ret = databuff_printf(buf, buf_len, pos, "], seq:[%d",
+          click_infos[0].seq_);
+    }
+    for (int i = 1; OB_SUCC(ret) && i < click_count; ++i) {
+      ret = databuff_printf(buf, buf_len, pos, ", %d",
+          click_infos[i].seq_);
+    }
+    if (OB_SUCC(ret)) {
+      ret = databuff_printf(buf, buf_len, pos, "]");
+    }
+  }
+  if (OB_FAIL(ret)) pos = 0;
+  return pos;
+}
 } // end of namespace common
 } // end of namespace oceanbse
