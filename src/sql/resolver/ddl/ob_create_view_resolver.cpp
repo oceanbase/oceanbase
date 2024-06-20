@@ -321,7 +321,8 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                                              *allocator_,
                                              *session_info_,
                                              column_list,
-                                             comment_list))) {
+                                             comment_list,
+                                             params_.is_from_create_mview_))) {
         LOG_WARN("failed to add column infos", K(ret));
       } else if ((!resolve_succ || add_undefined_columns)
                   && is_force_view && lib::is_oracle_mode()
@@ -1652,7 +1653,8 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
                                            ObIAllocator &alloc,
                                            ObSQLSessionInfo &session_info,
                                            const ObIArray<ObString> &column_list,
-                                           const ObIArray<ObString> &comment_list)
+                                           const ObIArray<ObString> &comment_list,
+                                           bool is_from_create_mview /* =false */)
 {
   int ret = OB_SUCCESS;
   ObIArray<SelectItem> &select_items = select_stmt.get_select_items();
@@ -1694,7 +1696,8 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
       } else if (OB_FAIL(fill_column_meta_infos(*expr,
                                                 table_schema.get_charset_type(),
                                                 table_schema.get_table_id(),
-                                                column))) {
+                                                column,
+                                                is_from_create_mview))) {
         LOG_WARN("failed to fill column meta infos", K(ret), K(column));
       } else if (lib::is_mysql_mode() &&
                  OB_FAIL(resolve_column_default_value(&select_stmt, select_item, column, alloc, session_info))) {
@@ -1713,7 +1716,8 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
 int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
                                                  const ObCharsetType charset_type,
                                                  const uint64_t table_id,
-                                                 ObColumnSchemaV2 &column)
+                                                 ObColumnSchemaV2 &column,
+                                                 bool is_from_create_mview /* =false */)
 {
   int ret = OB_SUCCESS;
   ObObjMeta column_meta = expr.get_result_type().get_obj_meta();
@@ -1728,7 +1732,13 @@ int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
   column.set_collation_type(expr.get_collation_type());
   column.set_accuracy(expr.get_accuracy());
   column.set_zero_fill(expr.get_result_type().has_result_flag(ZEROFILL_FLAG));
-  column.set_nullable(expr.get_result_type().is_not_null_for_read() ? false : true);
+  if (is_from_create_mview) {
+    // bug fix for
+    // mview should not set not null
+    column.set_nullable(true);
+  } else {
+    column.set_nullable(expr.get_result_type().is_not_null_for_read() ? false : true);
+  }
   if (OB_FAIL(ret)) {
   } else if (column.is_enum_or_set() && OB_FAIL(column.set_extended_type_info(expr.get_enum_set_values()))) {
     LOG_WARN("set enum or set info failed", K(ret), K(expr));
