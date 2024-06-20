@@ -7043,6 +7043,7 @@ int ObTablet::check_schema_version_with_cache(
 
 int ObTablet::check_snapshot_readable_with_cache(
     const int64_t snapshot_version,
+    const int64_t schema_version,
     const int64_t timeout)
 {
   int ret = OB_SUCCESS;
@@ -7058,7 +7059,7 @@ int ObTablet::check_snapshot_readable_with_cache(
     {
       SpinRLockGuard guard(mds_cache_lock_);
       if (ddl_data_cache_.is_valid()) {
-        if (OB_FAIL(check_snapshot_readable(ddl_data_cache_, snapshot_version))) {
+        if (OB_FAIL(check_snapshot_readable(ddl_data_cache_, snapshot_version, schema_version))) {
           LOG_WARN("fail to check schema version", K(ret));
         }
         r_valid = true;
@@ -7068,7 +7069,7 @@ int ObTablet::check_snapshot_readable_with_cache(
     if (OB_SUCC(ret) && !r_valid) {
       SpinWLockGuard guard(mds_cache_lock_);
       if (ddl_data_cache_.is_valid()) {
-        if (OB_FAIL(check_snapshot_readable(ddl_data_cache_, snapshot_version))) {
+        if (OB_FAIL(check_snapshot_readable(ddl_data_cache_, snapshot_version, schema_version))) {
           LOG_WARN("fail to check snapshot version", K(ret));
         }
       } else {
@@ -7108,7 +7109,7 @@ int ObTablet::check_snapshot_readable_with_cache(
           } else if (OB_ISNULL(candidate_cache)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("ddl data cache is null", K(ret), KP(candidate_cache), K(tablet_meta_.ls_id_), K(tablet_id));
-          } else if (OB_FAIL(check_snapshot_readable(*candidate_cache, snapshot_version))) {
+          } else if (OB_FAIL(check_snapshot_readable(*candidate_cache, snapshot_version, schema_version))) {
             LOG_WARN("fail to check snapshot version", K(ret), K(tablet_meta_.ls_id_), K(tablet_id));
           }
         }
@@ -7119,15 +7120,19 @@ int ObTablet::check_snapshot_readable_with_cache(
   return ret;
 }
 
-int ObTablet::check_snapshot_readable(const ObDDLInfoCache& ddl_info_cache, const int64_t snapshot_version)
+int ObTablet::check_snapshot_readable(const ObDDLInfoCache& ddl_info_cache, const int64_t snapshot_version, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(ddl_info_cache.is_redefined() && snapshot_version >= ddl_info_cache.get_snapshot_version())) {
     ret = OB_SCHEMA_EAGAIN;
     LOG_WARN("read data after ddl, need to retry on new tablet", K(ret), K(snapshot_version), K(ddl_info_cache));
   } else if (OB_UNLIKELY(!ddl_info_cache.is_redefined() && snapshot_version < ddl_info_cache.get_snapshot_version())) {
-    ret = OB_SNAPSHOT_DISCARDED;
-    LOG_WARN("read data before ddl", K(ret), K(snapshot_version), K(ddl_info_cache));
+    if (schema_version < ddl_info_cache.get_schema_version()) {
+      LOG_DEBUG("allow old schema and old snapshot read", K(ret), K(ddl_info_cache), K(snapshot_version), K(schema_version));
+    } else {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("read data before ddl", K(ret), K(ddl_info_cache), K(snapshot_version), K(schema_version));
+    }
   }
   return ret;
 }
