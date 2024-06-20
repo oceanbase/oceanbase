@@ -2029,14 +2029,6 @@ private:
                                   ObSelectStmt *view_stmt,
                                   ObIArray<ObRawExpr *> &common_exprs,
                                   const ObIArray<ObRawExpr *> *extra_view_exprs = NULL);
-
-  static int generate_col_exprs(ObDMLStmt *stmt,
-                                const ObIArray<TableItem *> &tables,
-                                const ObIArray<ObRawExpr *> &tmp_select_exprs,
-                                const ObIArray<ObRawExpr *> &tmp_column_exprs,
-                                ObIArray<ObRawExpr *> &old_column_exprs,
-                                ObIArray<ObRawExpr *> &new_column_exprs);
-
   static int is_scalar_expr(ObRawExpr* expr, bool &is_scalar);
 
   static int check_is_bypass_string_expr(const ObRawExpr *expr,

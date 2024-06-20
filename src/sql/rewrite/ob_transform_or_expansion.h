@@ -163,7 +163,9 @@ private:
                                       uint64_t joined_table_id,
                                       TableItem *&view_table,
                                       ObSelectStmt *&ref_query);
-
+  int get_joined_table_pushdown_conditions(const TableItem *cur_table,
+                                           const ObDMLStmt *trans_stmt,
+                                           ObIArray<ObRawExpr *> &pushdown_conds);
   int add_select_item_to_ref_query(ObSelectStmt *stmt,
                                    const uint64_t flag_table_id,
                                    StmtUniqueKeyProvider &unique_key_provider,
