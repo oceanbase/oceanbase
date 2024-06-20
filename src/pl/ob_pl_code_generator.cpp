@@ -8499,8 +8499,12 @@ int ObPLCodeGenerator::generate(ObPLPackage &pl_package)
     LOG_INFO("================Original LLVM Module================", K(debug_mode_));
     helper_.dump_module();
 #endif
+
+    // set optimize_level to 1 if in debug mode, otherwise use PLSQL_OPTIMIZE_LEVEL in exec_env
+    int64_t optimize_level = debug_mode_ ? 1 : pl_package.get_exec_env().get_plsql_optimize_level();
+
     OZ (helper_.verify_module(), pl_package);
-    OZ (helper_.compile_module(!debug_mode_));
+    OZ (helper_.compile_module(static_cast<jit::ObPLOptLevel>(optimize_level)));
   }
 
   OZ (final_expression(pl_package));
@@ -8653,8 +8657,12 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
     LOG_INFO("================Original================", K(pl_func), K(debug_mode_));
     helper_.dump_module();
 #endif
+
+    // set optimize_level to 1 if in debug mode, otherwise use PLSQL_OPTIMIZE_LEVEL in exec_env
+    int64_t optimize_level = debug_mode_ ? 1 : pl_func.get_exec_env().get_plsql_optimize_level();
+
     OZ (helper_.verify_module(), pl_func);
-    OZ (helper_.compile_module(!debug_mode_));
+    OZ (helper_.compile_module(static_cast<jit::ObPLOptLevel>(optimize_level)));
   }
 
   if (OB_SUCC(ret)) {

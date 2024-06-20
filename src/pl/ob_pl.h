@@ -1207,7 +1207,7 @@ public:
 
   static int check_trigger_arg(const ParamStore &params, const ObPLFunction &func);
 
-  ObBucketLock& get_jit_lock() { return jit_lock_; }
+  std::pair<common::ObBucketLock, common::ObBucketLock>& get_jit_lock() { return jit_lock_; }
 
   static int check_session_alive(const ObBasicSessionInfo &session);
 
@@ -1216,7 +1216,9 @@ private:
   ObPLPackageManager package_manager_;
   ObPLInterfaceService interface_service_;
   common::ObBucketLock codegen_lock_;
-  common::ObBucketLock jit_lock_;
+
+  // first bucket is for deduplication, second bucket is for concurrency control
+  std::pair<common::ObBucketLock, common::ObBucketLock> jit_lock_;
 };
 
 class LinkPLStackGuard

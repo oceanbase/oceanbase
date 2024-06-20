@@ -6828,6 +6828,19 @@
     "background_cn": "",
     "ref_url": ""
   },
+  "plsql_optimize_level": {
+    "id": 10393,
+    "name": "plsql_optimize_level",
+    "default_value": "2",
+    "base_value": "2",
+    "data_type": "int",
+    "info": "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units.",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "publish_version": "423",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
   "low_priority_updates": {
       "id": 10394,
       "name": "low_priority_updates",

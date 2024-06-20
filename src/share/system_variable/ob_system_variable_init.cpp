@@ -6616,46 +6616,59 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[473].default_value_ = "0" ;
-      ObSysVars[473].info_ = "mock for mysql5.7" ;
-      ObSysVars[473].name_ = "low_priority_updates" ;
+      ObSysVars[473].default_value_ = "2" ;
+      ObSysVars[473].info_ = "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units." ;
+      ObSysVars[473].name_ = "plsql_optimize_level" ;
       ObSysVars[473].data_type_ = ObIntType ;
-      ObSysVars[473].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[473].id_ = SYS_VAR_LOW_PRIORITY_UPDATES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOW_PRIORITY_UPDATES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_LOW_PRIORITY_UPDATES] = 473 ;
-      ObSysVars[473].base_value_ = "0" ;
-    ObSysVars[473].alias_ = "OB_SV_LOW_PRIORITY_UPDATES" ;
+      ObSysVars[473].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[473].id_ = SYS_VAR_PLSQL_OPTIMIZE_LEVEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_OPTIMIZE_LEVEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_OPTIMIZE_LEVEL] = 473 ;
+      ObSysVars[473].base_value_ = "2" ;
+    ObSysVars[473].alias_ = "OB_SV_PLSQL_OPTIMIZE_LEVEL" ;
     }();
 
     [&] (){
-      ObSysVars[474].default_value_ = "64" ;
+      ObSysVars[474].default_value_ = "0" ;
       ObSysVars[474].info_ = "mock for mysql5.7" ;
-      ObSysVars[474].name_ = "max_error_count" ;
+      ObSysVars[474].name_ = "low_priority_updates" ;
       ObSysVars[474].data_type_ = ObIntType ;
-      ObSysVars[474].min_val_ = "0" ;
-      ObSysVars[474].max_val_ = "65535" ;
       ObSysVars[474].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[474].id_ = SYS_VAR_MAX_ERROR_COUNT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_ERROR_COUNT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_ERROR_COUNT] = 474 ;
-      ObSysVars[474].base_value_ = "64" ;
-    ObSysVars[474].alias_ = "OB_SV_MAX_ERROR_COUNT" ;
+      ObSysVars[474].id_ = SYS_VAR_LOW_PRIORITY_UPDATES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOW_PRIORITY_UPDATES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOW_PRIORITY_UPDATES] = 474 ;
+      ObSysVars[474].base_value_ = "0" ;
+    ObSysVars[474].alias_ = "OB_SV_LOW_PRIORITY_UPDATES" ;
     }();
 
     [&] (){
-      ObSysVars[475].default_value_ = "0" ;
+      ObSysVars[475].default_value_ = "64" ;
       ObSysVars[475].info_ = "mock for mysql5.7" ;
-      ObSysVars[475].name_ = "max_insert_delayed_threads" ;
+      ObSysVars[475].name_ = "max_error_count" ;
       ObSysVars[475].data_type_ = ObIntType ;
-      ObSysVars[475].min_val_ = "20" ;
-      ObSysVars[475].max_val_ = "16384" ;
+      ObSysVars[475].min_val_ = "0" ;
+      ObSysVars[475].max_val_ = "65535" ;
       ObSysVars[475].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[475].id_ = SYS_VAR_MAX_INSERT_DELAYED_THREADS ;
+      ObSysVars[475].id_ = SYS_VAR_MAX_ERROR_COUNT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_ERROR_COUNT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_ERROR_COUNT] = 475 ;
+      ObSysVars[475].base_value_ = "64" ;
+    ObSysVars[475].alias_ = "OB_SV_MAX_ERROR_COUNT" ;
+    }();
+
+    [&] (){
+      ObSysVars[476].default_value_ = "0" ;
+      ObSysVars[476].info_ = "mock for mysql5.7" ;
+      ObSysVars[476].name_ = "max_insert_delayed_threads" ;
+      ObSysVars[476].data_type_ = ObIntType ;
+      ObSysVars[476].min_val_ = "20" ;
+      ObSysVars[476].max_val_ = "16384" ;
+      ObSysVars[476].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[476].id_ = SYS_VAR_MAX_INSERT_DELAYED_THREADS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_INSERT_DELAYED_THREADS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_INSERT_DELAYED_THREADS] = 475 ;
-      ObSysVars[475].base_value_ = "0" ;
-    ObSysVars[475].alias_ = "OB_SV_MAX_INSERT_DELAYED_THREADS" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MAX_INSERT_DELAYED_THREADS] = 476 ;
+      ObSysVars[476].base_value_ = "0" ;
+    ObSysVars[476].alias_ = "OB_SV_MAX_INSERT_DELAYED_THREADS" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -6664,7 +6677,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 476;
+static int64_t var_amount = 477;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

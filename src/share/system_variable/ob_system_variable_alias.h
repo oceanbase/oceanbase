@@ -489,6 +489,7 @@ namespace share
   static const char* const OB_SV_SKIP_EXTERNAL_LOCKING = "skip_external_locking";
   static const char* const OB_SV_SUPER_READ_ONLY = "super_read_only";
   static const char* const OB_SV_EVENT_SCHEDULER = "event_scheduler";
+  static const char* const OB_SV_PLSQL_OPTIMIZE_LEVEL = "plsql_optimize_level";
   static const char* const OB_SV_LOW_PRIORITY_UPDATES = "low_priority_updates";
   static const char* const OB_SV_MAX_ERROR_COUNT = "max_error_count";
   static const char* const OB_SV_MAX_INSERT_DELAYED_THREADS = "max_insert_delayed_threads";

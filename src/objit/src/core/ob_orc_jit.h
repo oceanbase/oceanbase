@@ -59,6 +59,14 @@ static inline int ob_jit_make_unique(std::unique_ptr<T> &ptr, Args&&... args) {
 
   return ret;
 }
+enum class ObPLOptLevel : int
+{
+  INVALID = -1,
+  O0 = 0,
+  O1 = 1,
+  O2 = 2,
+  O3 = 3
+};
 
 namespace core {
 using namespace llvm;
@@ -134,8 +142,8 @@ private:
 class ObOrcJit
 {
 public:
+  using ObLLJITBuilder = llvm::orc::LLJITBuilder;
   using ObJitEngineT = llvm::orc::LLJIT;
-
 
   explicit ObOrcJit(common::ObIAllocator &Allocator);
   virtual ~ObOrcJit() {};
@@ -156,8 +164,12 @@ public:
 
   const ObDataLayout &get_DL() const { return ObDL; }
 
+  int set_optimize_level(ObPLOptLevel level);
+
 private:
   int lookup(const std::string &name, ObJITSymbol &symbol);
+
+  int create_jit_engine();
 
   static ObJitGlobalSymbolGenerator symbol_generator;
 
@@ -172,6 +184,7 @@ private:
 
   ObString SoObject;
 
+  ObLLJITBuilder ObEngineBuilder;
   std::unique_ptr<ObJitEngineT> ObJitEngine;
 };
 

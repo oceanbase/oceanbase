@@ -605,28 +605,34 @@ int ObLLVMHelper::init_llvm() {
   OZ (helper.get_int64(OB_SUCCESS, magic));
   OZ (helper.create_ret(magic));
 
-  OZ (helper.compile_module());
-  OZ (helper.get_function_address(init_func_name, addr));
+  OZ (helper.compile_module(jit::ObPLOptLevel::O2));
+  OX (helper.get_function_address(init_func_name, addr));
 
   return ret;
 }
 
-int ObLLVMHelper::compile_module(bool optimization)
+int ObLLVMHelper::compile_module(jit::ObPLOptLevel optimization)
 {
   int ret = OB_SUCCESS;
 
   CK (OB_NOT_NULL(jc_));
 
-  if (OB_SUCC(ret) && optimization) {
-    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
-    jc_->optimize();
-    LOG_INFO("================Optimized LLVM Module================");
-    dump_module();
-  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(jit_->set_optimize_level(optimization))) {
+    LOG_WARN("failed to set backend optimize level", K(ret), K(optimization));
+  } else {
+    if (optimization >= jit::ObPLOptLevel::O2) {
+      OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
+      OZ (jc_->optimize());
+      LOG_INFO("================Optimized LLVM Module================");
+      dump_module();
+    }
 
-  if (OB_SUCC(ret)) {
-    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
-    OZ (jc_->compile(*jit_));
+    if (OB_SUCC(ret)) {
+      OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+      OZ (jc_->compile(*jit_));
+    }
   }
 
   return ret;

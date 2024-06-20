@@ -1767,7 +1767,9 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
           }
           ret = OB_SUCCESS == ret ? close_ret : ret;
 
-          spi_result.destruct_exec_params(*session);
+          if (!is_dbms_sql) {
+            spi_result.destruct_exec_params(*session);
+          }
 
         } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type()); //SPI只做LOCAL重试
       }

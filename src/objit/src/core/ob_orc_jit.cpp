@@ -64,6 +64,7 @@ ObOrcJit::ObOrcJit(common::ObIAllocator &Allocator)
     NotifyLoaded(Allocator, DebugBuf, DebugLen, SoObject),
     ObTM(EngineBuilder().selectTarget()),
     ObDL(ObTM->createDataLayout()),
+    ObEngineBuilder(),
     ObJitEngine()
 { }
 
@@ -71,43 +72,34 @@ int ObOrcJit::init()
 {
   int ret = OB_SUCCESS;
 
-  std::unique_ptr<ObJitGlobalSymbolGenerator> symbol_generator = nullptr;
+  ObEngineBuilder.setObjectLinkingLayerCreator(
+    [this](ExecutionSession &ES, const Triple &TT) {
+      auto ObjLinkingLayer =
+          std::make_unique<RTDyldObjectLinkingLayer>(
+            ES,
+            [&]() {
+              return std::make_unique<ObJitMemoryManager>(JITAllocator);
+          });
 
-  auto engine_wrapper =
-      LLJITBuilder()
-          .setObjectLinkingLayerCreator(
-              [this](ExecutionSession &ES, const Triple &TT) {
-                auto ObjLinkingLayer =
-                    std::make_unique<RTDyldObjectLinkingLayer>(
-                      ES,
-                      [&]() {
-                        return std::make_unique<ObJitMemoryManager>(JITAllocator);
-                    });
+#ifndef NDEBUG
+      ObjLinkingLayer->registerJITEventListener(
+          *JITEventListener::createGDBRegistrationListener());
+#endif // NDEBUG
+      ObjLinkingLayer->registerJITEventListener(NotifyLoaded);
+      return ObjLinkingLayer;
+    });
 
-                ObjLinkingLayer->registerJITEventListener(
-                    *JITEventListener::createGDBRegistrationListener());
-                ObjLinkingLayer->registerJITEventListener(NotifyLoaded);
-                return ObjLinkingLayer;
-              })
-          .create();
+    auto tm_builder_wrapper = JITTargetMachineBuilder::detectHost();
 
-  if (!engine_wrapper) {
-    Error err = engine_wrapper.takeError();
-    std::string msg = toString(std::move(err));
+    if (!tm_builder_wrapper) {
+      Error err = tm_builder_wrapper.takeError();
+      std::string msg = toString(std::move(err));
 
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to build LLVM JIT engine", K(msg.c_str()));
-  } else {
-    ObJitEngine = std::move(*engine_wrapper);
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(ob_jit_make_unique(symbol_generator))) {
-    LOG_WARN("failed to make ObJitGlobalSymbolGenerator unique_ptr", K(ret));
-  } else {
-    ObJitEngine->getMainJITDylib().addGenerator(std::move(symbol_generator));
-  }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get target machine", K(msg.c_str()));
+    } else {
+      ObEngineBuilder.setJITTargetMachineBuilder(*tm_builder_wrapper);
+    }
 
   return ret;
 }
@@ -116,7 +108,9 @@ int ObOrcJit::addModule(std::unique_ptr<Module> M, std::unique_ptr<ObLLVMContext
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(ObJitEngine)) {
+  if (OB_FAIL(create_jit_engine())) {
+    LOG_WARN("failed to create jit engine", K(ret));
+  } else if (OB_ISNULL(ObJitEngine)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL jit engine", K(ret), K(lbt()));
   } else {
@@ -224,7 +218,9 @@ int ObOrcJit::add_compiled_object(size_t length, const char *ptr)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(ObJitEngine)) {
+  if (OB_FAIL(create_jit_engine())) {
+    LOG_WARN("failed to create jit engine", K(ret));
+  } else if (OB_ISNULL(ObJitEngine)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL jit engine", K(ret), K(lbt()));
   } else {
@@ -237,6 +233,67 @@ int ObOrcJit::add_compiled_object(size_t length, const char *ptr)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to add compile result to jit engine",
                K(ret), K(msg.c_str()), K(length), K(ptr));
+    }
+  }
+
+  return ret;
+}
+
+int ObOrcJit::set_optimize_level(ObPLOptLevel level)
+{
+  int ret = OB_SUCCESS;
+
+  if (level <= ObPLOptLevel::INVALID || level > ObPLOptLevel::O3) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected PLSQL_OPTIMIZE_LEVEL", K(ret), K(level), K(lbt()));
+  }
+
+  if (OB_SUCC(ret) && level == ObPLOptLevel::O0) {
+    auto &tm_builder = ObEngineBuilder.getJITTargetMachineBuilder();
+    if (!tm_builder.hasValue()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL JITTargetMachineBuilder", K(ret), K(lbt()));
+    } else {
+      auto &builder = *tm_builder;
+      builder.setCodeGenOptLevel(CodeGenOpt::Level::None);
+      builder.getOptions().EnableFastISel = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObOrcJit::create_jit_engine()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(ObJitEngine)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NOT NULL jit engine", K(ret), K(lbt()));
+  } else {
+    std::unique_ptr<ObJitGlobalSymbolGenerator> symbol_generator = nullptr;
+
+    auto engine_wrapper = ObEngineBuilder.create();
+
+    if (!engine_wrapper) {
+      Error err = engine_wrapper.takeError();
+      std::string msg = toString(std::move(err));
+
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to build LLVM JIT engine", K(msg.c_str()));
+    } else {
+      ObJitEngine = std::move(*engine_wrapper);
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_ISNULL(ObJitEngine)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL jit engine", K(ret));
+    } else if (OB_FAIL(ob_jit_make_unique(symbol_generator))) {
+      LOG_WARN("failed to make ObJitGlobalSymbolGenerator unique_ptr", K(ret));
+    } else {
+      ObJitEngine->getMainJITDylib().addGenerator(std::move(symbol_generator));
     }
   }
 
