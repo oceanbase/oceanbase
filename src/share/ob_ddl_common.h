@@ -190,6 +190,13 @@ enum SortCompactLevel
   SORT_COMPRESSION_ENCODE_LEVEL = 5
 };
 
+enum ObSplitSSTableType
+{
+  SPLIT_BOTH = 0, // Major and Minor
+  SPLIT_MAJOR = 1,
+  SPLIT_MINOR = 2
+};
+
 static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
   const char *str = nullptr;
   switch(task_status) {

@@ -8240,29 +8240,43 @@ OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressResponse, err_, progress_);
 
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_,
   source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_,
-  execution_id_, parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_, dest_tenant_id_, dest_ls_id_, dest_schema_version_);
+  execution_id_, parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_, dest_tenant_id_, dest_ls_id_, dest_schema_version_,
+  compaction_scn_, can_reuse_macro_block_, split_sstable_type_,
+  lob_col_idxs_, data_split_ranges_);
 
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
   int ret = OB_SUCCESS;
-  tenant_id_ = other.tenant_id_;
-  ls_id_ = other.ls_id_;
-  dest_tenant_id_ = other.dest_tenant_id_;
-  dest_ls_id_ = other.dest_ls_id_;
-  source_tablet_id_ = other.source_tablet_id_;
-  dest_tablet_id_ = other.dest_tablet_id_;
-  source_table_id_ = other.source_table_id_;
-  dest_schema_id_ = other.dest_schema_id_;
-  schema_version_ = other.schema_version_;
-  dest_schema_version_ = other.dest_schema_version_;
-  snapshot_version_ = other.snapshot_version_;
-  ddl_type_ = other.ddl_type_;
-  task_id_ = other.task_id_;
-  parallelism_ = other.parallelism_;
-  execution_id_ = other.execution_id_;
-  tablet_task_id_ = other.tablet_task_id_;
-  data_format_version_ = other.data_format_version_;
-  consumer_group_id_ = other.consumer_group_id_;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(other));
+  } else if (OB_FAIL(lob_col_idxs_.assign(other.lob_col_idxs_))) {
+    LOG_WARN("failed to assign to lob col idxs", K(ret));
+  } else if (OB_FAIL(data_split_ranges_.assign(other.data_split_ranges_))) {
+    LOG_WARN("assign failed", K(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    dest_tenant_id_ = other.dest_tenant_id_;
+    dest_ls_id_ = other.dest_ls_id_;
+    source_tablet_id_ = other.source_tablet_id_;
+    dest_tablet_id_ = other.dest_tablet_id_;
+    source_table_id_ = other.source_table_id_;
+    dest_schema_id_ = other.dest_schema_id_;
+    schema_version_ = other.schema_version_;
+    dest_schema_version_ = other.dest_schema_version_;
+    snapshot_version_ = other.snapshot_version_;
+    ddl_type_ = other.ddl_type_;
+    task_id_ = other.task_id_;
+    parallelism_ = other.parallelism_;
+    execution_id_ = other.execution_id_;
+    tablet_task_id_ = other.tablet_task_id_;
+    data_format_version_ = other.data_format_version_;
+    consumer_group_id_ = other.consumer_group_id_;
+    compaction_scn_ = other.compaction_scn_;
+    can_reuse_macro_block_ = other.can_reuse_macro_block_;
+    split_sstable_type_ = other.split_sstable_type_;
+  }
   return ret;
 }
 

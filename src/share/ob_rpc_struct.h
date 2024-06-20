@@ -9754,7 +9754,9 @@ public:
   ObDDLBuildSingleReplicaRequestArg() : tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(),
                                         source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
                                         schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(-1), tablet_task_id_(0),
-                                        data_format_version_(0), consumer_group_id_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0)
+                                        data_format_version_(0), consumer_group_id_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0),
+                                        compaction_scn_(0), can_reuse_macro_block_(false), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH),
+                                        lob_col_idxs_(), data_split_ranges_()
   {}
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
@@ -9766,7 +9768,9 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ls_id), K_(dest_ls_id), K_(source_tablet_id),
     K_(dest_tablet_id), K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(dest_schema_version),
     K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(data_format_version),
-    K_(consumer_group_id));
+    K_(consumer_group_id),
+    K_(compaction_scn), K_(can_reuse_macro_block), K_(split_sstable_type),
+    K_(lob_col_idxs), K_(data_split_ranges));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -9786,6 +9790,11 @@ public:
   uint64_t dest_tenant_id_;
   share::ObLSID dest_ls_id_;
   int64_t dest_schema_version_;
+  int64_t compaction_scn_;
+  bool can_reuse_macro_block_;
+  share::ObSplitSSTableType split_sstable_type_;
+  ObSArray<uint64_t> lob_col_idxs_;
+  common::ObSEArray<common::ObNewRange, 16> data_split_ranges_;
 };
 
 struct ObDDLBuildSingleReplicaRequestResult final
