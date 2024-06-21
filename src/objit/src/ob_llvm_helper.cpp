@@ -674,7 +674,9 @@ int ObLLVMHelper::verify_function(ObLLVMFunction &function)
   } else if (verifyFunction(*function.get_v())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to verify function", K(ret));
-  } else { /*do nothing*/ }
+  } else {
+    jc_->Builder.reset();
+  }
   return ret;
 }
 
