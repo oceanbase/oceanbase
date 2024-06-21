@@ -116,67 +116,38 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
 {
   int ret = OB_SUCCESS;
   int64_t query_timeout = 0;
-  ObMemLobTxInfo *tx_info = NULL;
-  ObMemLobLocationInfo *location_info = NULL;
-  ObLobCommon *disk_loc = NULL;
-  ObString disk_loc_str;
+  int64_t timeout_ts = 0;
+  storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
 
   if (OB_ISNULL(lob_iter_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Lob: invalid lob iter ctx.", K(ret));
+  } else if (OB_ISNULL(allocator = (allocator == nullptr ? lob_iter_ctx->alloc_: allocator))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Lob: allocator is null", K(ret), KP(allocator), KP(lob_iter_ctx->alloc_));
   } else if (!lob_iter_ctx->locator_.is_persist_lob()) {
     ret = OB_NOT_IMPLEMENT;
     COMMON_LOG(WARN, "Lob: outrow temp lob is not supported", K(ret), K(lob_iter_ctx->locator_));
-  } else if (OB_FAIL(lob_iter_ctx->locator_.get_disk_locator(disk_loc_str))) {
-    COMMON_LOG(WARN, "Lob: get disk locator failed.", K(ret));
-  } else if (FALSE_IT(disk_loc = reinterpret_cast<ObLobCommon *>(disk_loc_str.ptr()))){
-  } else if (OB_ISNULL(disk_loc) || disk_loc->is_init_ == false) {
+  } else if (lob_iter_ctx->locator_.is_delta_temp_lob()) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Lob: invalid disk_locator.", K(ret), KP(disk_loc));
-  } else {
-    if (OB_ISNULL(lob_iter_ctx->session_)) {
-      query_timeout = ObTimeUtility::current_time() + 60 * USECS_PER_SEC;
-    } else if (OB_FAIL(lob_iter_ctx->session_->get_query_timeout(query_timeout))) {
-      COMMON_LOG(WARN, "Lob: get_query_timeout failed.", K(ret), K(*lob_iter_ctx));
-    }
+    COMMON_LOG(WARN, "Lob: is delta lob", K(ret), K(lob_iter_ctx->locator_));
+  } else if (OB_ISNULL(lob_iter_ctx->session_)) {
+    query_timeout = ObTimeUtility::current_time() + 60 * USECS_PER_SEC;
+  } else if (OB_FAIL(lob_iter_ctx->session_->get_query_timeout(query_timeout))) {
+    COMMON_LOG(WARN, "Lob: get_query_timeout failed.", K(ret), K(*lob_iter_ctx));
+  }
+
+  if (OB_SUCC(ret)) {
+    timeout_ts = (lob_iter_ctx->session_ == NULL)
+                    ? query_timeout
+                    : (lob_iter_ctx->session_->get_query_start_time() + query_timeout);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(lob_iter_ctx->locator_.get_tx_info(tx_info))) {
-  } else if (OB_FAIL(lob_iter_ctx->locator_.get_location_info(location_info))) {
-  } else {
-    param.tx_desc_ = NULL;
-    param.snapshot_.core_.tx_id_ = tx_info->snapshot_tx_id_;
-    param.snapshot_.core_.version_.convert_for_tx(tx_info->snapshot_version_);
-    param.snapshot_.core_.scn_ = transaction::ObTxSEQ::cast_from_int(tx_info->snapshot_seq_);
-    param.snapshot_.valid_= true;
-    param.snapshot_.source_ = transaction::ObTxReadSnapshot::SRC::LS;
-    param.snapshot_.snapshot_lsid_ = share::ObLSID(location_info->ls_id_);
-
-    param.ls_id_ = share::ObLSID(location_info->ls_id_);
-    param.sql_mode_ = (lob_iter_ctx->session_ == NULL) ? SMO_DEFAULT : lob_iter_ctx->session_->get_sql_mode();
-
-    param.tablet_id_ = ObTabletID(location_info->tablet_id_);
-    if (allocator == nullptr) {
-      allocator = lob_iter_ctx->alloc_;
-    }
-    param.allocator_ = allocator;
-    int64_t disk_loc_handle_size = disk_loc_str.length();
-    param.lob_common_ = disk_loc;
-    param.handle_size_ = disk_loc_handle_size;
-    param.byte_size_ = param.lob_common_->get_byte_size(param.handle_size_);
-    param.coll_type_ = cs_type;
-    if (!lob_iter_ctx->locator_.is_lob_disk_locator()) {
-      param.lob_locator_ = &lob_iter_ctx->locator_;
-    }
-    param.timeout_ = (lob_iter_ctx->session_ == NULL)
-                      ? query_timeout
-                      : (lob_iter_ctx->session_->get_query_start_time() + query_timeout);
-    param.scan_backward_ = false;
-    param.offset_ = 0; // use 0 offset when reading full lob data
-    param.len_ = 0;
+  } else if (OB_FAIL(lob_mngr->build_lob_param(param, *allocator, cs_type,
+                  0, UINT64_MAX, timeout_ts, lob_iter_ctx->locator_))) {
+    LOG_WARN("build_lob_param fail", K(ret), K(*lob_iter_ctx));
   }
-
   return ret;
 }
 
@@ -557,6 +528,14 @@ int ObTextStringIter::get_next_block_inner(ObString &str)
         COMMON_LOG(WARN,"Lob: falied to get first block.", K(ret));
       }
     } else {
+      // if put backward, we should compact buffer remain and move reserved part closed to the reading value
+      if (output_data.remain() > 0 && ctx_->is_backward_ && ctx_->reserved_byte_len_ > 0) {
+        // from :[0, output_data.length_][output_data.length_, output_data.buffer_size_][reserved_part]
+        // to   :[0, output_data.length_][reserved_part]
+        MEMMOVE(output_data.ptr() + output_data.length(),
+                output_data.ptr() + output_data.length() + output_data.remain(),
+                ctx_->reserved_byte_len_);
+      }
       ctx_->content_byte_len_ = ctx_->reserved_byte_len_ + output_data.length();
       // ToDo: @gehao get directly from lob mngr ?
       uint32 cur_out_len = static_cast<uint32_t>(ObCharset::strlen_char(cs_type_,
@@ -566,7 +545,7 @@ int ObTextStringIter::get_next_block_inner(ObString &str)
       ctx_->last_accessed_byte_len_ = ctx_->accessed_byte_len_;
       ctx_->last_accessed_len_ = ctx_->accessed_len_;
       ctx_->accessed_byte_len_ += output_data.length();
-      ctx_->accessed_len_ += cur_out_len;\
+      ctx_->accessed_len_ += cur_out_len;
       ctx_->iter_count_++;
       str.assign_ptr(ctx_->buff_, ctx_->content_byte_len_);
     }
@@ -655,7 +634,7 @@ void ObTextStringIter::set_reserved_byte_len(uint32_t reserved_byte_len)
 
 void ObTextStringIter::reset_reserve_len()
 {
-  if (is_valid_for_config()) {
+  if (is_valid_for_config(TEXTSTRING_ITER_NEXT)) {
     ctx_->reserved_byte_len_ = 0;
     ctx_->reserved_len_ = 0;
   }
