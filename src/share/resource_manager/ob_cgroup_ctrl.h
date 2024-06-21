@@ -228,7 +228,7 @@ private:
   enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
   int which_type_dir_(const char *curr_path, int &result);
   int recursion_remove_group_(const char *curr_path);
-  int recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr);
+  int recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr, bool is_top_dir = false);
 };
 
 }  // share

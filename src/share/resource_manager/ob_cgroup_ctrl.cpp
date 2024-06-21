@@ -194,10 +194,10 @@ public:
 int ObCgroupCtrl::recursion_remove_group_(const char *curr_path)
 {
   RemoveProccessor remove_process;
-  return recursion_process_group_(curr_path, &remove_process);
+  return recursion_process_group_(curr_path, &remove_process, true /* is_top_dir */);
 }
 
-int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr)
+int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr, bool is_top_dir)
 {
   int ret = OB_SUCCESS;
   int type = NOT_DIR;
@@ -230,7 +230,8 @@ int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *
         }
       }
     }
-    if (OB_SUCC(ret) && 0 != strcmp(root_cgroup_, curr_path) && OB_FAIL(processor_ptr->handle_dir(curr_path, true))) {
+    if (OB_SUCC(ret) && 0 != strcmp(root_cgroup_, curr_path) &&
+        OB_FAIL(processor_ptr->handle_dir(curr_path, is_top_dir))) {
       LOG_WARN("process group directory failed", K(ret), K(curr_path));
     }
   }
