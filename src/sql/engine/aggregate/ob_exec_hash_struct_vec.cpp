@@ -378,6 +378,13 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
                               need_reinit_vectors))) {
         LOG_WARN("failed to append batch", K(ret));
       } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < gby_exprs.count(); ++i) {
+          if (nullptr == gby_exprs.at(i)) {
+            //3 stage null equal
+            continue;
+          }
+          col_has_null_.at(i) |= gby_exprs.at(i)->get_vector(*eval_ctx_)->has_null();
+        }
         new_row_selector_cnt_ = 0;
       }
     }
@@ -851,6 +858,9 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const RowMeta &row
     } else if (OB_FAIL(sf(vector_ptrs_, &new_row_selector_.at(0), new_row_selector_cnt_, srows_))) {
       LOG_WARN("failed to append batch", K(ret));
     } else {
+      for (int64_t i = 0; i < hash_expr_cnt_; ++i) {
+        col_has_null_.at(i) |= gby_exprs_->at(i)->get_vector(*eval_ctx_)->has_null();
+      }
       for (int64_t i = 0; i < new_row_selector_cnt_; ++i) {
         int64_t idx = new_row_selector_.at(i);
         locate_buckets_[idx]->set_hash(hash_values[idx]);
