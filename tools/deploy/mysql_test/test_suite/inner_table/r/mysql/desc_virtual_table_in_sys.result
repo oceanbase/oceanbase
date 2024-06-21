@@ -9187,6 +9187,33 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_checkpoint_diagnose_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_tenant_scheduler_running_job;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+owner	varchar(128)	YES		NULL	
+job_name	varchar(128)	NO		NULL	
+job_subname	varchar(30)	YES		NULL	
+job_style	varchar(11)	YES		NULL	
+detached	varchar(5)	YES		NULL	
+session_id	bigint(20) unsigned	YES		NULL	
+slave_process_id	bigint(20) unsigned	YES		NULL	
+slave_os_process_id	bigint(20) unsigned	YES		NULL	
+resource_consumer_group	varchar(30)	YES		NULL	
+running_instance	varchar(30)	YES		NULL	
+elapsed_time	bigint(20)	YES		NULL	
+cpu_used	bigint(20)	YES		NULL	
+destination_owner	varchar(128)	YES		NULL	
+destination	varchar(128)	YES		NULL	
+credential_owner	varchar(30)	YES		NULL	
+credential_name	varchar(30)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_scheduler_running_job;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_tenant_scheduler_running_job runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_routine_privilege;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -9553,6 +9580,40 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 "oceanbase.__all_virtual_nic_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_scheduler_job_run_detail_v2;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+job_name	varchar(128)	NO	PRI	NULL	
+time	timestamp(6)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+job	bigint(20)	YES		0	
+log_id	bigint(20)	YES		0	
+log_date	timestamp(6)	YES		NULL	
+owner	varchar(128)	YES		NULL	
+job_subname	varchar(128)	YES		NULL	
+job_class	varchar(128)	YES		NULL	
+operation	varchar(128)	YES		NULL	
+status	varchar(128)	YES		NULL	
+code	bigint(20)	YES		0	
+req_start_date	timestamp(6)	YES		NULL	
+actual_start_date	timestamp(6)	YES		NULL	
+run_duration	bigint(20)	YES		NULL	
+instance_id	varchar(128)	YES		NULL	
+session_id	bigint(20) unsigned	YES		NULL	
+slave_pid	varchar(128)	YES		NULL	
+cpu_used	bigint(20)	YES		NULL	
+user_name	varchar(128)	YES		NULL	
+client_id	varchar(128)	YES		NULL	
+global_uid	varchar(128)	YES		NULL	
+credential_owner	varchar(128)	YES		NULL	
+credential_name	varchar(128)	YES		NULL	
+destination_owner	varchar(128)	YES		NULL	
+destination	varchar(128)	YES		NULL	
+message	varchar(4000)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_scheduler_job_run_detail_v2;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_spatial_reference_systems;

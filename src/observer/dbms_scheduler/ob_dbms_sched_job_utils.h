@@ -20,7 +20,8 @@
 #include "lib/container/ob_iarray.h"
 
 
-#define MOCK_DATA_VERSION (oceanbase::common::cal_version(9, 9, 9, 9))
+#define DATA_VERSION_SUPPORT_JOB_CLASS(data_version) (data_version >= DATA_VERSION_4_3_2_0)
+#define DATA_VERSION_SUPPORT_RUN_DETAIL_V2(data_version) ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && DATA_VERSION_4_3_0_0 > data_version) || DATA_VERSION_4_3_2_0 <= data_version)
 
 namespace oceanbase
 {

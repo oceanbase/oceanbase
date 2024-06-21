@@ -9304,6 +9304,65 @@ SPEED_MBPS	bigint(20)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_NIC_INFO limit 1);
 cnt
 1
+desc oceanbase.DBA_SCHEDULER_JOB_RUN_DETAILS;
+Field	Type	Null	Key	Default	Extra
+LOG_ID	decimal(20,0)	NO			
+LOG_DATE	datetime	NO			
+OWNER	varchar(128)	NO			
+JOB_NAME	varchar(128)	NO			
+JOB_SUBNAME	varchar(128)	NO			
+STATUS	varchar(128)	NO			
+CODE	bigint(20)	YES			
+REQ_START_DATE	datetime	NO			
+ACTUAL_START_DATE	datetime	NO			
+RUN_DURATION	decimal(20,0)	NO			
+INSTANCE_ID	varchar(128)	NO			
+SESSION_ID	decimal(20,0)	NO			
+SLAVE_PID	varchar(128)	NO			
+CPU_USED	decimal(20,0)	NO			
+CREDENTIAL_OWNER	varchar(128)	NO			
+CREDENTIAL_NAME	varchar(128)	NO			
+DESTINATION_OWNER	varchar(128)	NO			
+DESTINATION	varchar(128)	NO			
+MESSAGE	varchar(4000)	NO		NULL	
+JOB	bigint(20)	NO		NULL	
+TIME	timestamp(6)	NO		NULL	
+JOB_CLASS	varchar(30)	YES		NULL	
+GMT_CREATE	timestamp(6)	YES			
+GMT_MODIFIED	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SCHEDULER_JOB_RUN_DETAILS limit 1);
+cnt
+1
+desc oceanbase.CDB_SCHEDULER_JOB_RUN_DETAILS;
+Field	Type	Null	Key	Default	Extra
+LOG_ID	decimal(20,0)	NO			
+LOG_DATE	datetime	NO			
+OWNER	varchar(128)	NO			
+JOB_NAME	varchar(128)	NO			
+JOB_SUBNAME	varchar(128)	NO			
+STATUS	varchar(128)	NO			
+CODE	bigint(20)	YES			
+REQ_START_DATE	datetime	NO			
+ACTUAL_START_DATE	datetime	NO			
+RUN_DURATION	decimal(20,0)	NO			
+INSTANCE_ID	varchar(128)	NO			
+SESSION_ID	decimal(20,0)	NO			
+SLAVE_PID	varchar(128)	NO			
+CPU_USED	decimal(20,0)	NO			
+CREDENTIAL_OWNER	varchar(128)	NO			
+CREDENTIAL_NAME	varchar(128)	NO			
+DESTINATION_OWNER	varchar(128)	NO			
+DESTINATION	varchar(128)	NO			
+MESSAGE	varchar(4000)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+JOB	bigint(20)	NO		NULL	
+TIME	timestamp(6)	NO		NULL	
+JOB_CLASS	varchar(30)	YES		NULL	
+GMT_CREATE	timestamp(6)	NO		NULL	
+GMT_MODIFIED	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_SCHEDULER_JOB_RUN_DETAILS limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

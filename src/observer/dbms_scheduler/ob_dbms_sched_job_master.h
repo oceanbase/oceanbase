@@ -212,7 +212,8 @@ public:
     ObDBMSSchedJobKey *&job_key,
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name);
   void free_job_key(ObDBMSSchedJobKey *&job_key);
-  int server_random_pick(int64_t tenant_id, common::ObString &pick_zone, ObAddr &server);
+
+  int server_random_pick_from_zone_list(int64_t tenant_id, common::ObIArray<common::ObZone> &zone_list, ObAddr &server);
   int get_execute_addr(ObDBMSSchedJobInfo &job_info, common::ObAddr &execute_addr);
 
   int check_all_tenants();
@@ -227,6 +228,9 @@ private:
   const static int MAX_READY_JOBS_CAPACITY = 1024 * 1024;
   const static int MIN_SCHEDULER_INTERVAL = 1 * 1000 * 1000;
   const static int CHECK_NEW_INTERVAL = 20 * 1000 * 1000;
+  const static int DEFAULT_ZONE_SIZE = 4;
+  const static int FILTER_ZONE_SIZE = 1;
+  const static int DEFALUT_SERVER_SIZE = 16;
 
   bool inited_;
   bool stoped_;

@@ -355,6 +355,7 @@
 # 515: __all_user_proxy_role_info_history
 # 515: __all_user_proxy_role_info  # BASE_TABLE_NAME
 # 518: __all_mview_dep
+# 519: __all_scheduler_job_run_detail_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1071,6 +1072,7 @@
 # 12437: __all_virtual_checkpoint_diagnose_memtable_info
 # 12438: __all_virtual_checkpoint_diagnose_checkpoint_unit_info
 # 12439: __all_virtual_checkpoint_diagnose_info
+# 12442: __all_virtual_tenant_scheduler_running_job
 # 12443: __all_virtual_routine_privilege
 # 12443: __all_routine_privilege  # BASE_TABLE_NAME
 # 12444: __all_virtual_routine_privilege_history
@@ -1118,6 +1120,8 @@
 # 12481: __all_virtual_tenant_resource_limit
 # 12482: __all_virtual_tenant_resource_limit_detail
 # 12487: __all_virtual_nic_info
+# 12488: __all_virtual_scheduler_job_run_detail_v2
+# 12488: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 12490: __all_virtual_spatial_reference_systems
 # 12490: __all_spatial_reference_systems  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
@@ -1719,6 +1723,8 @@
 # 15451: __all_virtual_tenant_resource_limit_detail  # BASE_TABLE_NAME
 # 15456: ALL_VIRTUAL_NIC_INFO
 # 15456: __all_virtual_nic_info  # BASE_TABLE_NAME
+# 15458: ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT
+# 15458: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 15459: ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT
 # 15459: __all_spatial_reference_systems  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
@@ -2157,6 +2163,8 @@
 # 21580: EVENTS
 # 21581: V$OB_NIC_INFO
 # 21586: GV$OB_NIC_INFO
+# 21589: DBA_SCHEDULER_JOB_RUN_DETAILS
+# 21590: CDB_SCHEDULER_JOB_RUN_DETAILS
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -3022,6 +3030,9 @@
 # 101103: idx_user_proxy_role_info_proxy_user_id_history  # INDEX_NAME
 # 101103: __all_user_proxy_role_info  # DATA_BASE_TABLE_NAME
 # 101103: __all_user_proxy_role_info_history  # DATA_BASE_TABLE_NAME1
+# 101105: __idx_519_idx_scheduler_job_run_detail_v2_time
+# 101105: idx_scheduler_job_run_detail_v2_time  # INDEX_NAME
+# 101105: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
 # 15306: __idx_15120_idx_data_table_id_real_agent
 # 15306: idx_data_table_id_real_agent  # INDEX_NAME
 # 15306: __all_table  # DATA_BASE_TABLE_NAME
@@ -3314,3 +3325,7 @@
 # 15448: idx_user_proxy_info_proxy_user_id_real_agent  # INDEX_NAME
 # 15448: __all_user_proxy_info  # DATA_BASE_TABLE_NAME
 # 15448: ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15460: __idx_15458_idx_scheduler_job_run_detail_v2_time_real_agent
+# 15460: idx_scheduler_job_run_detail_v2_time_real_agent  # INDEX_NAME
+# 15460: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
+# 15460: ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT  # DATA_BASE_TABLE_NAME1

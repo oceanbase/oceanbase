@@ -1860,6 +1860,7 @@ case OB_ALL_VIRTUAL_ROUTINE_PARAM_TID:
 case OB_ALL_VIRTUAL_ROUTINE_PARAM_HISTORY_TID:
 case OB_ALL_VIRTUAL_ROUTINE_PRIVILEGE_TID:
 case OB_ALL_VIRTUAL_ROUTINE_PRIVILEGE_HISTORY_TID:
+case OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_TID:
 case OB_ALL_VIRTUAL_SECURITY_AUDIT_TID:
 case OB_ALL_VIRTUAL_SECURITY_AUDIT_HISTORY_TID:
 case OB_ALL_VIRTUAL_SECURITY_AUDIT_RECORD_TID:
@@ -3525,6 +3526,21 @@ case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_SECURITY_AUDIT_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3734,7 +3750,9 @@ case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_SYS_VARIABLE_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -3749,9 +3767,7 @@ case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_SYSAUTH_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4036,7 +4052,9 @@ case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_OLS_COMPONENT_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4051,9 +4069,7 @@ case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_OLS_COMPONENT_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4338,7 +4354,9 @@ case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TIME_ZONE_NAME_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4353,9 +4371,7 @@ case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TIME_ZONE_TRANSITION_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4995,6 +5011,7 @@ case OB_ALL_COLUMN_PRIVILEGE_IDX_COLUMN_PRIVILEGE_NAME_TID:
 case OB_ALL_USER_PROXY_INFO_IDX_USER_PROXY_INFO_PROXY_USER_ID_TID:
 case OB_ALL_USER_PROXY_INFO_HISTORY_IDX_USER_PROXY_INFO_PROXY_USER_ID_HISTORY_TID:
 case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID:
+case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_TIME_TID:
 
 #endif
 
@@ -5074,6 +5091,7 @@ case OB_ALL_TENANT_OBJECT_TYPE_TID:
 case OB_ALL_FOREIGN_KEY_HISTORY_TID:
 case OB_ALL_RLS_GROUP_HISTORY_TID:
 case OB_ALL_SYNONYM_TID:
+case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID:
 case OB_ALL_TENANT_SECURITY_AUDIT_TID:
 case OB_ALL_ROOTSERVICE_JOB_TID:
 case OB_ALL_PENDING_TRANSACTION_TID:
@@ -5603,6 +5621,12 @@ case OB_ALL_SYNONYM_TID: {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   if (FAILEDx(index_tids.push_back(OB_ALL_SYNONYM_IDX_SYNONYM_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_TIME_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -6474,6 +6498,15 @@ case OB_ALL_SYNONYM_TID: {
   }
   break;
 }
+case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_detail_v2_time_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
 case OB_ALL_TENANT_SECURITY_AUDIT_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_tenant_security_audit_idx_audit_type_schema(index_schema))) {
@@ -6752,6 +6785,8 @@ case OB_ALL_FOREIGN_KEY_TID: {
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_USER_PROXY_INFO_HISTORY_IDX_USER_PROXY_INFO_PROXY_USER_ID_HISTORY_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_TIME_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
 
 #endif
