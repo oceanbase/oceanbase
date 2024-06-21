@@ -359,7 +359,10 @@ int ObVectorStore::fill_group_by_rows(
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(group_by_cell_->pad_column_in_group_by(output_cnt))) {
+    LOG_WARN("Failed to pad column in group by", K(ret), K(output_cnt));
+  } else {
     count_ = output_cnt;
     eval_ctx_.set_batch_idx(count_);
     if (OB_FAIL(fill_group_idx(group_idx))) {
