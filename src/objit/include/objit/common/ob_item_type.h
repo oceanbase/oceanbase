@@ -2540,6 +2540,9 @@ typedef enum ObItemType
   // for vector index
   T_APPROX,
 
+  // select into outfile
+  T_BUFFER_SIZE,
+  T_PARTITION_EXPR,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

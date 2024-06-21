@@ -66,7 +66,9 @@ public:
       is_single_(true),
       max_file_size_(DEFAULT_MAX_FILE_SIZE),
       escaped_cht_(),
-      parallel_(1)
+      parallel_(1),
+      file_partition_expr_(NULL),
+      buffer_size_(DEFAULT_BUFFER_SIZE)
   {
     cs_type_ = ObCharset::get_system_collation();
   }
@@ -74,9 +76,10 @@ public:
   ObItemType into_type_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> user_vars_;
   common::ObObj outfile_name_;
-  common::ObObj field_str_;
+  common::ObObj field_str_; // FARM COMPAT WHITELIST FOR filed_str_: renamed
   common::ObObj line_str_;
-  common::ObObj closed_cht_;
+  // 431以下版本select into无法并行执行, 不会序列化算子, 修改closed_cht_类型不会导致升级兼容性问题
+  common::ObObj closed_cht_; // FARM COMPAT WHITELIST FOR closed_cht_: change type
   bool is_optional_;
   common::ObFixedArray<ObExpr*, common::ObIAllocator> select_exprs_;
   bool is_single_;
@@ -84,7 +87,10 @@ public:
   common::ObObj escaped_cht_;
   common::ObCollationType cs_type_;
   int64_t parallel_;
+  sql::ObExpr* file_partition_expr_;
+  int64_t buffer_size_;
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
+  static const int64_t DEFAULT_BUFFER_SIZE = 1LL * 1024 * 1024;
 };
 
 class ObSelectIntoOp : public ObOperator
