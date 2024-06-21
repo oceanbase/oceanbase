@@ -68,12 +68,14 @@ int ObIndexBlockDataHeader::deep_copy_transformed_index_block(
         K(header), K(buf_size), K(pos));
   } else {
     char *data_buf = buf + pos;
-    ObRowkeyVector *rowkey_vector = new (buf + pos) ObRowkeyVector();
-    pos += sizeof(ObRowkeyVector);
     ObStorageDatum *index_datum_array = new (buf + pos) ObStorageDatum [header.row_cnt_];
     pos += sizeof(ObStorageDatum) * header.row_cnt_;
+    const int64_t align_inc = common::upper_align(reinterpret_cast<uint64_t>(buf + pos), ObMicroBlockData::ALIGN_SIZE) - reinterpret_cast<uint64_t>(buf + pos);
+    pos += align_inc;
     common::ObPointerSwizzleNode *ps_node_arr = new (buf + pos) common::ObPointerSwizzleNode[header.row_cnt_];
     pos += sizeof(common::ObPointerSwizzleNode) * header.row_cnt_;
+    ObRowkeyVector *rowkey_vector = new (buf + pos) ObRowkeyVector();
+    pos += sizeof(ObRowkeyVector);
     if (OB_FAIL(rowkey_vector->deep_copy(buf, pos, buf_size, *header.rowkey_vector_))) {
       LOG_WARN("Failed to deep copy rowkey vector", K(ret));
     } else {
@@ -85,6 +87,7 @@ int ObIndexBlockDataHeader::deep_copy_transformed_index_block(
       }
     }
     if (OB_SUCC(ret)) {
+      pos += ObMicroBlockData::ALIGN_REDUNDANCY_SIZE - align_inc;
       rowkey_vector_ = rowkey_vector;
       index_datum_array_ = index_datum_array;
       row_cnt_ = header.row_cnt_;
@@ -152,6 +155,10 @@ int ObIndexBlockDataTransformer::transform(
     pos += sizeof(ObIndexBlockDataHeader);
     ObStorageDatum *index_datum_array = new (block_buf + pos) ObStorageDatum [row_cnt];
     pos += sizeof(ObStorageDatum) * row_cnt;
+    // The ps_node_arr undergoes atomic operations during usage and thus requires alignment to
+    // ObMicroBlockData::ALIGN_SIZE bytes on ARM architecture for proper functioning.
+    const int64_t align_inc = common::upper_align(reinterpret_cast<uint64_t>(block_buf + pos), ObMicroBlockData::ALIGN_SIZE) - reinterpret_cast<uint64_t>(block_buf + pos);
+    pos += align_inc;
     common::ObPointerSwizzleNode *ps_node_arr = new (block_buf + pos) common::ObPointerSwizzleNode[row_cnt];
     pos += sizeof(common::ObPointerSwizzleNode) * row_cnt;
     ObRowkeyVector *rowkey_vector = nullptr;
@@ -194,10 +201,12 @@ int ObIndexBlockDataTransformer::transform(
       idx_header->rowkey_vector_ = rowkey_vector;
       idx_header->index_datum_array_ = index_datum_array;
       idx_header->ps_node_array_ = ps_node_arr;
-      idx_header->data_buf_size_ = pos - micro_header_size;
+      idx_header->data_buf_ = block_buf + micro_header_size;
+      // Ensure that extra_buf can at most accommodate ObMicroBlockData::ALIGN_REDUNDANCY_SIZE additional bytes for redundancy.
+      idx_header->data_buf_size_ = pos + (ObMicroBlockData::ALIGN_REDUNDANCY_SIZE - align_inc) - micro_header_size;
       transformed_data.buf_ = block_buf;
       transformed_data.size_ = micro_header_size;
-      transformed_data.extra_buf_ = block_buf + micro_header_size;
+      transformed_data.extra_buf_ = idx_header->data_buf_;
       transformed_data.extra_size_ = idx_header->data_buf_size_;
       transformed_data.type_ = ObMicroBlockData::INDEX_BLOCK;
       allocated_buf = block_buf;
@@ -303,6 +312,7 @@ int ObIndexBlockDataTransformer::get_transformed_upper_mem_size(
     } else {
       mem_limit += rowkey_vector_size;
       mem_limit += micro_header->original_length_;
+      mem_limit += ObMicroBlockData::ALIGN_REDUNDANCY_SIZE;
     }
   }
   return ret;

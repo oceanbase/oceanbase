@@ -162,6 +162,9 @@ public:
   const char *extra_buf_;
   int64_t extra_size_;
   Type type_;
+
+  static const uint64_t ALIGN_SIZE = 8;
+  static const int64_t ALIGN_REDUNDANCY_SIZE = ALIGN_SIZE - 1;
 };
 
 class ObMicroBlock

@@ -75,7 +75,7 @@ struct ObIndexBlockDataHeader
       K_(row_cnt), K_(col_cnt),
       KPC_(rowkey_vector),
       KP_(index_datum_array),
-      KP_(ps_node_array), K_(data_buf_size)
+      KP_(ps_node_array), KP_(data_buf), K_(data_buf_size)
       );
 };
 

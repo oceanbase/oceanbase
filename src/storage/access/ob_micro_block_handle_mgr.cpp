@@ -411,10 +411,6 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
   ObPointerSwizzleNode *ps_node = index_block_info.ps_node_;
   micro_block_handle.reset();
   ObIMicroBlockCache *cache = is_data_block ? data_block_cache_ : index_block_cache_;
-  bool is_effective = true;
-#if defined(__aarch64__)
-  is_effective = false;
-#endif
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -425,7 +421,7 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
   } else if (OB_FAIL(idx_header->fill_micro_des_meta(true /* deep_copy_key */, micro_block_handle.des_meta_))) {
     LOG_WARN("Fail to fill micro block deserialize meta", K(ret));
   } else if (FALSE_IT(micro_block_handle.init(tenant_id, macro_id, offset, size, this))) {
-  } else if (OB_LIKELY(nullptr != ps_node) && is_effective
+  } else if (OB_LIKELY(nullptr != ps_node)
       && OB_SUCC(ps_node->access_mem_ptr(micro_block_handle.cache_handle_))) {
     // get data / index block cache with direct memory pointer
     micro_block_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
@@ -450,7 +446,7 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
     micro_block_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
     cache_mem_ctrl_.add_hold_size(micro_block_handle.get_handle_size());
     cache->cache_hit(table_store_stat_->block_cache_hit_cnt_);
-    if (nullptr == ps_node || !is_effective) {
+    if (nullptr == ps_node) {
     } else if (OB_FAIL(ps_node->swizzle(micro_block_handle.cache_handle_))) {
       LOG_WARN("Fail to swizzle", K(is_data_block), K(tenant_id), K(macro_id), K(offset), K(size), K(cur_level),
                                   K(micro_block_handle), KP(ps_node), KPC(ps_node));
