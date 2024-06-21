@@ -41,6 +41,23 @@ namespace sql
 {
 class ObExprObjAccess;
 
+struct ObPLSPITraceIdGuard
+{
+  ObPLSPITraceIdGuard(const ObString &sql,
+                      const ObString &ps_sql,
+                      ObSQLSessionInfo &session,
+                      int &ret,
+                      ObCurTraceId::TraceId *reused_trace_id = nullptr);
+
+  ~ObPLSPITraceIdGuard();
+
+  ObCurTraceId::TraceId origin_trace_id_;
+  const ObString sql_;
+  const ObString ps_sql_;
+  ObSQLSessionInfo& session_;
+  int &ret_;
+};
+
 struct ObSPICursor
 {
   ObSPICursor(ObIAllocator &allocator, sql::ObSQLSessionInfo* session_info) :
