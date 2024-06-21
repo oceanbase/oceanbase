@@ -2395,7 +2395,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
           param.set_collation_type(ncs_type);
         }
         LOG_DEBUG("recieve Nchar param", K(ret), K(str), K(dst));
-      } else if (ObURowIDType == type) {
+      } else if (MYSQL_TYPE_OB_UROWID == type) {
         // decode bae64 str and get urowid content
         ObURowIDData urowid_data;
         if (OB_FAIL(ObURowIDData::decode2urowid(str.ptr(), str.length(),
@@ -2541,16 +2541,22 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                 LOG_WARN("Fail to convert plain lob data to templob",K(ret));
               }
             }
-          } else {
+          } else if (MYSQL_TYPE_STRING == type
+                     || MYSQL_TYPE_VARCHAR == type
+                     || MYSQL_TYPE_VAR_STRING == type) {
             param.set_collation_type(cs_type);
-            if (is_oracle_mode() && !is_complex_element) {
-              param.set_char(dst);
-            } else {
-              if (is_complex_element && dst.length()== 0) {
+            if (is_complex_element) {
+              if (dst.length()== 0) {
                 param.set_null();
+              } else if (MYSQL_TYPE_STRING == type) {  // ObCharType
+                param.set_char(dst);
               } else {
                 param.set_varchar(dst);
               }
+            } else if (is_oracle_mode()) {
+              param.set_char(dst);
+            } else {
+              param.set_varchar(dst);
             }
           }
         }
