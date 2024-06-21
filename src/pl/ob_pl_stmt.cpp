@@ -2398,7 +2398,7 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
         } else {
           SET_ACCESS_AA(IDX_COLLECTION_PLACEHOLD, data_type);
         }
-        if (OB_SUCC(ret) && access_ident.params_.count() > 1) {
+        if (OB_SUCC(ret) && access_ident.params_.count() != 1) {
           ret = OB_ERR_CALL_WRONG_ARG;
           LOG_WARN("call collection method with wrong parameter",
                     K(ret), K(access_ident.params_), K(attr_name));
