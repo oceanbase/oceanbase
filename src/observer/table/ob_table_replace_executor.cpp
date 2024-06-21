@@ -245,6 +245,10 @@ int ObTableApiReplaceExecutor::prepare_final_replace_task()
 
   OZ(conflict_checker_.get_primary_table_map(primary_map));
   CK(OB_NOT_NULL(primary_map));
+  // Notice: here need to clear the evaluated flag, cause the new_row used in try_insert is the same as old_row in do_delete
+  //  and if we don't clear the evaluated flag, the generated columns in old_row won't refresh and will use the new_row result
+  //  which will cause 4377 when do_delete
+  clear_evaluated_flag();
   OZ(do_delete(primary_map));
   OZ(do_insert());
 
@@ -335,6 +339,12 @@ int ObTableApiReplaceExecutor::close()
     }
     // close dml das tasks
     close_ret = ObTableApiModifyExecutor::close();
+    // reset the new_row expr datum ptr:
+    // each replace use the same spec in multi_replace and the new_row expr datum will
+    // be set to a temporally ObChunkDatumStore when meet conflict row, which will be release after current replace
+    // done, so need to reset the datum to its origin reserved buffer.Ohterwise, it may cause use after free in next replace
+    const ObExprPtrIArray &new_row_exprs = get_primary_table_new_row();
+    reset_new_row_datum(new_row_exprs);
   }
 
   return (OB_SUCCESS == ret) ? close_ret : ret;

@@ -510,17 +510,13 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
       } else if (new_row.count() < assign.column_item_->col_idx_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected assign projector_index_", K(ret), K(new_row), K(assign.column_item_));
-      } else if (assign.column_item_->is_virtual_generated_column_) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "update virtual generated column");
-        LOG_WARN("virtual generated column not support to update", K(ret), K(assign));
       } else {
         ObExpr *expr = new_row.at(assign.column_item_->col_idx_);
         if (OB_ISNULL(expr)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("expr is null", K(ret));
-        } else if (assign.column_item_->is_stored_generated_column_) {
-          // do nothing, stored generated column not need to fill
+        } else if (assign.column_item_->is_generated_column_) {
+          // do nothing, generated column not need to fill
         } else if (assign.column_item_->auto_filled_timestamp_ && !assign.is_assigned_) {
           ObDatum *tmp_datum = nullptr;
           if (OB_FAIL(expr->eval(eval_ctx_, tmp_datum))) {
@@ -699,18 +695,35 @@ int ObTableApiModifyExecutor::stored_row_to_exprs(const ObChunkDatumStore::Store
                                                   ObEvalCtx &ctx)
 {
   int ret = OB_SUCCESS;
+  const ObIArray<ObTableColumnItem>& column_items = tb_ctx_.get_column_items();
 
-  if (OB_UNLIKELY(row.cnt_ != exprs.count())) {
+  if (OB_UNLIKELY(row.cnt_ != exprs.count()) && OB_UNLIKELY(row.cnt_ != column_items.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("datum count mismatch", K(ret), K(row.cnt_), K(exprs.count()));
+    LOG_WARN("datum count mismatch", K(ret), K(row.cnt_), K(exprs.count()), K(column_items.count()));
   } else {
     for (uint32_t i = 0; i < row.cnt_; ++i) {
-      exprs.at(i)->locate_expr_datum(ctx) = row.cells()[i];
-      exprs.at(i)->set_evaluated_projected(ctx);
+      if (column_items.at(i).is_generated_column_) {
+        // generate column need to clear the evaluated flag
+        exprs.at(i)->clear_evaluated_flag(ctx);
+      } else {
+        exprs.at(i)->locate_expr_datum(ctx) = row.cells()[i];
+        exprs.at(i)->set_evaluated_projected(ctx);
+      }
     }
   }
-
   return ret;
+}
+
+void ObTableApiModifyExecutor::reset_new_row_datum(const ObExprPtrIArray &new_row_exprs)
+{
+  clear_evaluated_flag();
+  // reset ptr in ObDatum to reserved buf
+  for (int64_t i = 0; i < new_row_exprs.count(); ++i) {
+    if (OB_NOT_NULL(new_row_exprs.at(i))) {
+      // locate expr datum && reset ptr_ to reserved buf
+      new_row_exprs.at(i)->locate_datum_for_write(eval_ctx_);
+    }
+  }
 }
 
 }  // namespace table
