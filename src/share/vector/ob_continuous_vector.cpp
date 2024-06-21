@@ -74,6 +74,7 @@ template class ObContinuousVector<VectorBasicOp<VEC_TC_LOB>>;
 template class ObContinuousVector<VectorBasicOp<VEC_TC_JSON>>;
 template class ObContinuousVector<VectorBasicOp<VEC_TC_GEO>>;
 template class ObContinuousVector<VectorBasicOp<VEC_TC_UDT>>;
+template class ObContinuousVector<VectorBasicOp<VEC_TC_ROARINGBITMAP>>;
 
 } // end namespace common
 } // end namespace oceanbase

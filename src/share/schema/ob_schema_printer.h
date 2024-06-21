@@ -501,6 +501,11 @@ public:
                                         const int64_t& buf_len,
                                         int64_t& pos) const;
 
+  int print_roaringbitmap_default_value(const ObTableSchema &table_schema,
+                                        ObObj &default_value,
+                                        char* buf,
+                                        const int64_t& buf_len,
+                                        int64_t& pos) const;
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)
   {

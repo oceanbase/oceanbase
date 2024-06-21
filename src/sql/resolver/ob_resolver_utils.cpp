@@ -6461,6 +6461,21 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         }
       //}
       break;
+    case ObRoaringBitmapTC: {
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_3_2_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.3.2, roaringbitmap type");
+      } else {
+        data_type.set_length(length);
+        data_type.set_scale(default_accuracy.get_scale());
+        data_type.set_charset_type(CHARSET_BINARY);
+        data_type.set_collation_type(CS_TYPE_BINARY);
+      }
+      break;
+    }
     default:
       ret = OB_ERR_ILLEGAL_TYPE;
       SQL_RESV_LOG(WARN, "Unsupport data type of column definiton", K(ident_name), K(data_type), K(ret));

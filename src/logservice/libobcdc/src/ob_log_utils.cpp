@@ -487,6 +487,10 @@ const char *get_ctype_string(int ctype)
       sc_type = "MYSQL_TYPE_OB_RAW";
       break;
 
+    case oceanbase::obmysql::MYSQL_TYPE_ROARINGBITMAP:
+      sc_type = "MYSQL_TYPE_ROARINGBITMAP";
+      break;
+
     case oceanbase::obmysql::MYSQL_TYPE_NEWDECIMAL:
       sc_type = "MYSQL_TYPE_NEWDECIMAL";
       break;
@@ -619,6 +623,11 @@ bool is_geometry_type(const int ctype)
 bool is_xml_type(const int ctype)
 {
   return (ctype == drcmsg_field_types::DRCMSG_TYPE_ORA_XML);
+}
+
+bool is_roaringbitmap_type(const int ctype)
+{
+  return (ctype == oceanbase::obmysql::MYSQL_TYPE_ROARINGBITMAP);
 }
 
 double get_delay_sec(const int64_t tstamp_ns)

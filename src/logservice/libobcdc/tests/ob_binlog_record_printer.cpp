@@ -553,9 +553,10 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   ObStringBuffer enum_set_values_str(&str_allocator);
   bool is_geometry = is_geometry_type(ctype);
   bool is_xml = is_xml_type(ctype);
+  bool is_roaringbitmap = is_roaringbitmap_type(ctype);
   bool is_diff = (index < new_cols_count) && new_cols[index].m_diff_val;
   constexpr int64_t string_print_md5_threshold = 4L << 10;
-  const bool is_type_for_md5_printing = is_lob || is_json || is_geometry || is_xml ||
+  const bool is_type_for_md5_printing = is_lob || is_json || is_geometry || is_xml || is_roaringbitmap ||
     (is_string && col_data_length >= string_print_md5_threshold);
   // TODO 止尘 patch the code
   // bool is_json_diff = br->isJsonDiffColVal(cname);
@@ -826,7 +827,8 @@ bool ObBinlogRecordPrinter::need_print_hex(int ctype)
       || obmysql::MYSQL_TYPE_OB_NVARCHAR2 == ctype
       || obmysql::MYSQL_TYPE_OB_NCHAR == ctype
       || obmysql::MYSQL_TYPE_JSON == ctype
-      || obmysql::MYSQL_TYPE_GEOMETRY == ctype);
+      || obmysql::MYSQL_TYPE_GEOMETRY == ctype
+      || obmysql::MYSQL_TYPE_ROARINGBITMAP == ctype);
 }
 
 int ObBinlogRecordPrinter::write_data_file(const int fd,

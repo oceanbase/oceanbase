@@ -84,7 +84,8 @@ int ObColumnEqualDecoder::decode(const ObColumnDecoderCtx &ctx, ObDatum &datum, 
         case ObStringSC:
         case ObTextSC:
         case ObJsonSC:
-        case ObGeometrySC: {
+        case ObGeometrySC:
+        case ObRoaringBitmapSC: {
           if (OB_FAIL(ObBitMapMetaReader<ObStringSC>::read(
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,

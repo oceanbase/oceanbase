@@ -154,6 +154,7 @@ static int32_t reserved_agg_col_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     RTSIZE(VEC_TC_DEC_INT256),            // dec_int256
     RTSIZE(VEC_TC_DEC_INT512),            // dec_int512
     string_reserved_size,                 // collection
+    string_reserved_size,                 // roaringbitmap
   };
   static_assert(sizeof(reserved_sizes) / sizeof(reserved_sizes[0]) == MAX_VEC_TC, "");
   OB_ASSERT(aggr_info.expr_ != NULL);

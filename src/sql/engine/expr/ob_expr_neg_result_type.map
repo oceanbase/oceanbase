@@ -54,6 +54,7 @@ static constexpr ObObjType NEG_RESULT_TYPE[ObMaxType] =
     ObMaxType,         /* ObCollectionSQLType */
     ObDoubleType,      /* ObMySQLDateType */
     ObDoubleType,      /* ObMySQLDateTimeType */
+    ObMaxType,         /* ObRoaringBitmapType */
 };
 
 static constexpr ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
@@ -112,6 +113,7 @@ static constexpr ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
     ObMaxType,         /* ObCollectionSQLType */
     ObMaxType,         /* ObMySQLDateType */
     ObMaxType,         /* ObMySQLDateTimeType */
+    ObMaxType,         /* ObRoaringBitmapType */
 };
 
 static_assert(is_array_fully_initialized(NEG_RESULT_TYPE_ORACLE), "NEG_RESULT_TYPE_ORACLE is partially initlized");

@@ -1736,7 +1736,7 @@ int ObTableSqlService::supplement_for_core_table(ObISQLClient &sql_client,
     MEMSET(orig_default_value_buf, 0, value_buf_len);
     lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
     if (!ob_is_string_type(column.get_data_type()) && !ob_is_json(column.get_data_type())
-        && !ob_is_geometry(column.get_data_type())) {
+        && !ob_is_geometry(column.get_data_type()) && !ob_is_roaringbitmap(column.get_data_type())) {
       if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(
           column.get_tenant_id(), column.get_table_id(), compat_mode))) {
         LOG_WARN("fail to get tenant mode", K(ret), K(column));
@@ -1754,7 +1754,7 @@ int ObTableSqlService::supplement_for_core_table(ObISQLClient &sql_client,
   ObString orig_default_value;
   if (OB_SUCC(ret)) {
     if (ob_is_string_type(column.get_data_type()) || ob_is_json(column.get_data_type())
-        || ob_is_geometry(column.get_data_type())) {
+        || ob_is_geometry(column.get_data_type()) || ob_is_roaringbitmap(column.get_data_type())) {
       ObString orig_default_value_str = column.get_orig_default_value().get_string();
       orig_default_value.assign_ptr(orig_default_value_str.ptr(), orig_default_value_str.length());
     } else {
@@ -4246,6 +4246,11 @@ int ObTableSqlService::gen_column_dml(
     LOG_WARN("tenant data version is less than 4.2, skip index feature is not supported",
         K(ret), K(tenant_data_version), K(column));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, skip index");
+  } else if (tenant_data_version < DATA_VERSION_4_3_2_0 &&
+             (ob_is_roaringbitmap(column.get_data_type()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.3.2, roaringbitmap type is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.2, roaringbitmap type");
   } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(column.get_charset_type(),
                                                                     exec_tenant_id))) {
     LOG_WARN("failed to check charset data version valid",  K(column.get_charset_type()), K(ret));
@@ -4256,7 +4261,8 @@ int ObTableSqlService::gen_column_dml(
       column.is_identity_column() ||
       ob_is_string_type(column.get_data_type()) ||
       ob_is_json(column.get_data_type()) ||
-      ob_is_geometry(column.get_data_type())) {
+      ob_is_geometry(column.get_data_type()) ||
+      ob_is_roaringbitmap(column.get_data_type())) {
     //The default value of the generated column is the expression definition of the generated column
     ObString orig_default_value_str = column.get_orig_default_value().get_string();
     ObString cur_default_value_str = column.get_cur_default_value().get_string();

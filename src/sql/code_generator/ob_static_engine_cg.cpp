@@ -2060,6 +2060,9 @@ int ObStaticEngineCG::fill_sort_funcs(
       } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == expr->datum_meta_.type_)) {
         ret = OB_ERR_INVALID_CMP_OP;
         LOG_WARN("order by json not allowed", K(ret));
+      } else if (OB_UNLIKELY(ObRoaringBitmapType == expr->datum_meta_.type_)) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("order by roaringbitmap not allowed", K(ret));
       } else {
         ObSortCmpFunc cmp_func;
         cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
@@ -4591,7 +4594,10 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
     ARRAY_FOREACH(group_exprs, i) {
       const ObRawExpr *raw_expr = group_exprs.at(i);
       ObExpr *expr = NULL;
-      if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
+      if (ObRoaringBitmapType == raw_expr->get_data_type()) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("group by roaringbitmap not allowed", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
         LOG_WARN("failed to generate_rt_expr", K(ret));
       } else if (OB_FAIL(spec.add_group_expr(expr))) {
         OB_LOG(WARN, "fail to add_group_expr", K(ret));
@@ -4856,7 +4862,10 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec,
     ARRAY_FOREACH(group_exprs, i) {
       const ObRawExpr *raw_expr = group_exprs.at(i);
       ObExpr *expr = NULL;
-      if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
+      if (ObRoaringBitmapType == raw_expr->get_data_type()) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("group by roaringbitmap not allowed", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
         LOG_WARN("failed to generate_rt_expr", K(ret));
       } else if (OB_FAIL(spec.add_group_expr(expr))) {
         OB_LOG(WARN, "fail to add_group_expr", K(ret));

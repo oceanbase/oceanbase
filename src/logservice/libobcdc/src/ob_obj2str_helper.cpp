@@ -21,6 +21,7 @@
 #include "sql/engine/expr/ob_datum_cast.h"          // padding_char_for_cast
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "lib/roaringbitmap/ob_rb_utils.h"
 #include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
 #include "sql/engine/expr/ob_expr_operator.h"
@@ -163,6 +164,11 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
   } else if (ObGeometryType == obj_type) {
     if (OB_FAIL(convert_ob_geometry_to_ewkt_(obj, str, allocator))) {
       OBLOG_LOG(ERROR, "convert_ob_geometry_to_ewkt_ fail", KR(ret), K(table_id), K(column_id),
+          K(obj), K(obj_type), K(str));
+    }
+  } else if (ObRoaringBitmapType == obj_type) {
+    if (OB_FAIL(ObRbUtils::binary_format_convert(allocator, obj.get_string(), str))) {
+      OBLOG_LOG(ERROR, "binary_format_convert fail", KR(ret), K(table_id), K(column_id),
           K(obj), K(obj_type), K(str));
     }
   // This should be before is_string_type, because for char/nchar it is also ObStringTC, so is_string_type=true

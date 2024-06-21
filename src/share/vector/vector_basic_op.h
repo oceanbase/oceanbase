@@ -328,6 +328,7 @@ struct VecTCHashCalc<VEC_TC_ROWID, HashMethod, hash_v2>
   }
 };
 
+
 template<VecValueTypeClass vec_type, typename HashMethod, bool hash_v2,  typename hash_type>
 struct VecTCHashCalcWithHashType
 {
@@ -790,6 +791,7 @@ struct VecTCCmpCalc<VEC_TC_UDT, VEC_TC_UDT>
     return ret;
   }
 };
+
 
 // null type comparison
 

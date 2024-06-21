@@ -670,14 +670,15 @@ int ObMPUtils::get_literal_print_length(const ObObj &obj, bool is_plain, int64_t
   len = 0;
   int32_t len_of_string = 0;
   const ObLobLocator *locator = nullptr;
-  if (!obj.is_string_or_lob_locator_type() && !obj.is_json() && !obj.is_geometry()) {
+  if (!obj.is_string_or_lob_locator_type() && !obj.is_json() && !obj.is_geometry() && !obj.is_roaringbitmap()) {
     len = OB_MAX_SYS_VAR_NON_STRING_VAL_LENGTH;
   } else if (OB_UNLIKELY((len_of_string = obj.get_string_len()) < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("string length invalid", K(obj), K(len_of_string));
   } else if (obj.is_char() || obj.is_varchar()
              || obj.is_text() || ob_is_nstring_type(obj.get_type())
-             || obj.is_json() || obj.is_geometry()) {
+             || obj.is_json() || obj.is_geometry()
+             || obj.is_roaringbitmap()) {
     //if is_plain is false, 'j' will be print as "j\0" (with Quotation Marks here)
     //otherwise. as j\0 (withOUT Quotation Marks here)
     ObHexEscapeSqlStr sql_str(obj.get_string());

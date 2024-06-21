@@ -108,6 +108,7 @@ const char *ob_sql_type_str(ObObjType type)
       "COLLECTION",
       "MYSQL_DATE",
       "MYSQL_DATETIME",
+      "ROARINGBITMAP",
       ""
     },
     {
@@ -167,6 +168,7 @@ const char *ob_sql_type_str(ObObjType type)
       "COLLECTION",
       "MYSQL_DATE",
       "MYSQL_DATETIME",
+      "ROARINGBITMAP",
       ""
     }
   };
@@ -402,6 +404,7 @@ DEF_TYPE_TEXT_FUNCS_LENGTH(lob, (lib::is_oracle_mode() ? "clob" : "longtext"), (
 DEF_TYPE_TEXT_FUNCS_LENGTH(json, "json", "json");
 DEF_TYPE_STR_FUNCS_PRECISION_SCALE(decimal_int, "decimal", "", "number");
 DEF_TYPE_TEXT_FUNCS_LENGTH(geometry, (lib::is_oracle_mode() ? "sdo_geometry" : "geometry"), (lib::is_oracle_mode() ? "sdo_geometry" : "geometry"));
+DEF_TYPE_TEXT_FUNCS_LENGTH(roaringbitmap, "roaringbitmap", "roaringbitmap");
 
 ///////////////////////////////////////////////////////////
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(null, "null", "");
@@ -452,6 +455,7 @@ DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(lob, (lib::is_oracle_mode() ? "cl
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(json, "json", "json");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(decimal_int, "decimal", "");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(geometry, (lib::is_oracle_mode() ? "sdo_geometry" : "geometry"), (lib::is_oracle_mode() ? "sdo_geometry" : "geometry"));
+DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(roaringbitmap, "roaringbitmap", "roaringbitmap");
 
 
 int ob_empty_str(char *buff, int64_t buff_length, ObCollationType coll_type)
@@ -769,6 +773,7 @@ int ob_sql_type_str(char *buff,
     nullptr, // collection
     nullptr, // mysql date
     nullptr, // mysql datetime
+    ob_roaringbitmap_str,//roaringbitmap
     ob_empty_str             // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(ObSqlTypeStrFunc) == ObMaxType + 1, "Not enough initializer");
@@ -858,6 +863,7 @@ int ob_sql_type_str(char *buff,
     nullptr,//collection
     nullptr,//mysql date
     nullptr,//mysql datetime
+    ob_roaringbitmap_str_without_accuracy,//roaringbitmap
     ob_empty_str   // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(obSqlTypeStrWithoutAccuracyFunc) == ObMaxType + 1, "Not enough initializer");
@@ -960,6 +966,7 @@ const char *ob_sql_tc_str(ObObjTypeClass tc)
     "COLLECTION",
     "MYSQL_DATE",
     "MYSQL_DATETIME",
+    "ROARINGBITMAP",
     ""
   };
   static_assert(sizeof(sql_tc_name) / sizeof(const char *) == ObMaxTC + 1, "Not enough initializer");

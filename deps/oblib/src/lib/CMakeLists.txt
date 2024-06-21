@@ -115,6 +115,12 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_point_location_visitor.cpp
 )
 
+ob_set_subtarget(oblib_lib roaringbitmap
+  roaringbitmap/ob_roaringbitmap.cpp
+  roaringbitmap/ob_rb_utils.cpp
+  roaringbitmap/ob_rb_bin.cpp
+)
+
 ob_set_subtarget(oblib_lib encode
   encode/ob_base64_encode.cpp
   encode/ob_quoted_printable_encode.cpp

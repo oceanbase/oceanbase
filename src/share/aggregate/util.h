@@ -615,7 +615,8 @@ inline bool supported_aggregate_function(const ObItemType agg_op)
   VEC_TC_DEC_INT64,           \
   VEC_TC_DEC_INT128,          \
   VEC_TC_DEC_INT256,          \
-  VEC_TC_DEC_INT512
+  VEC_TC_DEC_INT512,          \
+  VEC_TC_ROARINGBITMAP
 
 } // end namespace aggregate
 } // end namespace share

@@ -104,6 +104,7 @@ OB_INLINE int ObRawEncoder::store_data(
       case ObTextSC: 
       case ObJsonSC:
       case ObGeometrySC:
+      case ObRoaringBitmapSC:
       case ObOTimestampSC:
       case ObIntervalSC: {
         MEMCPY(buf, datum.ptr_, datum.len_);

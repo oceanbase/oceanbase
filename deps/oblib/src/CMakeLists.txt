@@ -190,10 +190,12 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
   ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib/libroaring.a
   ${LGPL_DEPS}
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib/libroaring.a
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
@@ -218,6 +220,7 @@ target_link_libraries(oblib_base_base_base
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libcrypto.a
   ${DEP_3RD_DIR}/u01/obclient/lib/libobclnt.a
   ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib/libroaring.a
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicustubdata.a

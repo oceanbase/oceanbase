@@ -441,6 +441,15 @@
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
+#include "sql/engine/expr/ob_expr_rb_build_empty.h"
+#include "sql/engine/expr/ob_expr_rb_is_empty.h"
+#include "sql/engine/expr/ob_expr_rb_build_varbinary.h"
+#include "sql/engine/expr/ob_expr_rb_to_varbinary.h"
+#include "sql/engine/expr/ob_expr_rb_cardinality.h"
+#include "sql/engine/expr/ob_expr_rb_calc_cardinality.h"
+#include "sql/engine/expr/ob_expr_rb_calc.h"
+#include "sql/engine/expr/ob_expr_rb_to_string.h"
+#include "sql/engine/expr/ob_expr_rb_from_string.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 
@@ -1083,6 +1092,27 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCurrentRole);
     REG_OP(ObExprInnerTableOptionPrinter);
     REG_OP(ObExprInnerTableSequenceGetter);
+    REG_OP(ObExprRbBuildEmpty);
+    REG_OP(ObExprRbIsEmpty);
+    REG_OP(ObExprRbBuildVarbinary);
+    REG_OP(ObExprRbToVarbinary);
+    REG_OP(ObExprRbCardinality);
+    REG_OP(ObExprRbAndCardinality);
+    REG_OP(ObExprRbOrCardinality);
+    REG_OP(ObExprRbXorCardinality);
+    REG_OP(ObExprRbAndnotCardinality);
+    REG_OP(ObExprRbAndNull2emptyCardinality);
+    REG_OP(ObExprRbOrNull2emptyCardinality);
+    REG_OP(ObExprRbAndnotNull2emptyCardinality);
+    REG_OP(ObExprRbAnd);
+    REG_OP(ObExprRbOr);
+    REG_OP(ObExprRbXor);
+    REG_OP(ObExprRbAndnot);
+    REG_OP(ObExprRbAndNull2empty);
+    REG_OP(ObExprRbOrNull2empty);
+    REG_OP(ObExprRbAndnotNull2empty);
+    REG_OP(ObExprRbToString);
+    REG_OP(ObExprRbFromString);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

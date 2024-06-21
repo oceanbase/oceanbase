@@ -338,11 +338,11 @@ END_P SET_VAR DELIMITER
 
         QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK
 
-        REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
+        RB_AND_AGG RB_BUILD_AGG RB_OR_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
-        ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROWS RTREE RUN
+        ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
         RANK READ_ONLY RECOVERY REJECT ROLE
 
@@ -3232,6 +3232,21 @@ MOD '(' expr ',' expr ')'
 | SUM_OPNSIZE '(' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SUM_OPNSIZE, 2, NULL, $3);
+}
+| RB_BUILD_AGG '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_BUILD_AGG, 1, $3);
+  $$->reserved_ = 0;
+}
+| RB_OR_AGG '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_OR_AGG, 1, $3);
+  $$->reserved_ = 0;
+}
+| RB_AND_AGG '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_AND_AGG, 1, $3);
+  $$->reserved_ = 0;
 }
 ;
 
@@ -6331,6 +6346,11 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 7; /* geometrycollection, geometry uses collation type value convey sub geometry type. */
+}
+| ROARINGBITMAP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ROARINGBITMAP);
+  $$->int32_values_[0] = 0; /* length */
 }
 ;
 
@@ -22196,6 +22216,7 @@ ACCOUNT
 |       RETURNS
 |       REVERSE
 |       REWRITE
+|       ROARINGBITMAP
 |       ROLE
 |       ROLLBACK
 |       ROLLING
@@ -22445,6 +22466,9 @@ ACCOUNT
 |       TRANSFER
 |       SUM_OPNSIZE
 |       VALIDATION
+|       RB_BUILD_AGG
+|       RB_OR_AGG
+|       RB_AND_AGG
 |       OVERWRITE
 ;
 

@@ -42,7 +42,7 @@ public:
   {
     // ObOTimestampSC and ObIntervalSC are fixed len string
     return ObNumberSC == sc || ObStringSC == sc || ObTextSC == sc ||
-        ObLobSC == sc || ObJsonSC == sc || ObGeometrySC == sc;
+        ObLobSC == sc || ObJsonSC == sc || ObGeometrySC == sc || ObRoaringBitmapSC == sc;
   }
   static OB_INLINE bool is_integer_store_class(const ObObjTypeStoreClass sc)
   {
@@ -52,7 +52,7 @@ public:
   {
     return ObNumberSC == sc || ObStringSC == sc || ObTextSC == sc ||
         sc == ObLobSC || ObJsonSC == sc || ObGeometrySC == sc ||
-        ObOTimestampSC == sc ||  ObIntervalSC == sc;
+        ObOTimestampSC == sc ||  ObIntervalSC == sc || ObRoaringBitmapSC == sc;
   }
 
   // the sql layer does not allow to modify ptr of datums of these store class,
@@ -64,7 +64,7 @@ public:
   static OB_INLINE bool is_no_need_sort_lob(const ObObjTypeStoreClass sc)
   {
     // ObTextSC type sorting can speeds up filter, ObLobSC/ObJsonSC/ObGeometrySC sorting is meaningless
-    return sc == ObLobSC || sc == ObJsonSC || sc == ObGeometrySC;
+    return sc == ObLobSC || sc == ObJsonSC || sc == ObGeometrySC || ObRoaringBitmapSC == sc;
   }
 
   static int build_cs_column_encoding_ctx(ObEncodingHashTable *ht,

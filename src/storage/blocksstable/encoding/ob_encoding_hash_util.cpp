@@ -117,7 +117,7 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
   } else {
     ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
     const bool need_binary_hash =
-        (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC || store_class == ObGeometrySC);
+        (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC || store_class == ObGeometrySC || store_class == ObRoaringBitmapSC);
     bool has_lob_header = col_desc.col_type_.is_lob_storage();
     ObPrecision precision = PRECISION_UNKNOWN_YET;
     if (col_desc.col_type_.is_decimal_int()) {
@@ -363,7 +363,8 @@ int build_column_encoding_ctx(ObEncodingHashTable *ht,
       case ObStringSC:
       case ObTextSC:
       case ObJsonSC:
-      case ObGeometrySC: { // geometry, json and text storage class have the same behavior currently
+      case ObGeometrySC:
+      case ObRoaringBitmapSC: { // geometry, json and text storage class have the same behavior currently
         col_ctx.fix_data_size_ = -1;
         col_ctx.max_string_size_ = -1;
         bool var_store = false;

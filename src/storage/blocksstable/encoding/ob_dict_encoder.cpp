@@ -301,6 +301,7 @@ int ObDictEncoder::store_dict(const ObDatum &datum, char *buf, int64_t &len)
       case ObOTimestampSC:
       case ObIntervalSC:
       case ObGeometrySC:
+      case ObRoaringBitmapSC:
         MEMCPY(buf, datum.ptr_, datum.len_);
         len = datum.len_;
         break;

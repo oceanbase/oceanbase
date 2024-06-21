@@ -1236,6 +1236,10 @@ int ObDMLStmtPrinter::print_mysql_json_return_type(int64_t value, ObDataType dat
       }
       break;
     }
+    case T_ROARINGBITMAP: {
+      DATA_PRINTF("roaringbitmap ");
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown cast type", K(ret), K(cast_type));

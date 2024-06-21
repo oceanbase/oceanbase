@@ -1926,7 +1926,7 @@ bool ObTableSchema::is_valid() const
                 }
               }
             } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
-                       || ob_is_geometry_tc(column->get_data_type())) {
+                       || ob_is_geometry_tc(column->get_data_type()) || ob_is_roaringbitmap_tc(column->get_data_type())) {
               ObLength max_length = 0;
               max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
               if (max_length < column->get_data_length()) {
@@ -5390,7 +5390,7 @@ int ObTableSchema::check_row_length(
         // The full text column in the index only counts the length of one word segment
         row_length += OB_MAX_OBJECT_NAME_LENGTH;
       } else if (ob_is_string_type(col->get_data_type()) || ob_is_json(col->get_data_type())
-                 || ob_is_geometry(col->get_data_type())) {
+                 || ob_is_geometry(col->get_data_type()) || ob_is_roaringbitmap(col->get_data_type())) {
         int64_t length = 0;
         if (OB_FAIL(col->get_byte_length(length, is_oracle_mode, true))) {
           SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret));
@@ -5550,7 +5550,8 @@ int ObTableSchema::has_lob_column(bool &has_lob, const bool check_large /*= fals
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Column schema is NULL", K(ret));
     } else if (ob_is_json_tc(column_schema->get_data_type())
-               || ob_is_geometry_tc(column_schema->get_data_type())) {
+               || ob_is_geometry_tc(column_schema->get_data_type())
+               || ob_is_roaringbitmap_tc(column_schema->get_data_type())) {
       has_lob = true; // cannot know whether a json is lob or not from schema
     } else if (check_large) {
       if (ob_is_large_text(column_schema->get_data_type())) {

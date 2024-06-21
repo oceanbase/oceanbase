@@ -739,6 +739,16 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_last_refresh_scn.cpp
   engine/expr/ob_expr_json_utils.cpp
   engine/expr/ob_expr_inner_table_option_printer.cpp
+  engine/expr/ob_expr_rb_build_empty.cpp
+  engine/expr/ob_expr_rb_is_empty.cpp
+  engine/expr/ob_expr_rb_func_helper.cpp
+  engine/expr/ob_expr_rb_build_varbinary.cpp
+  engine/expr/ob_expr_rb_to_varbinary.cpp
+  engine/expr/ob_expr_rb_cardinality.cpp
+  engine/expr/ob_expr_rb_calc_cardinality.cpp
+  engine/expr/ob_expr_rb_calc.cpp
+  engine/expr/ob_expr_rb_to_string.cpp
+  engine/expr/ob_expr_rb_from_string.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

@@ -54,6 +54,7 @@
 <NULL, COLLECTION> : defined
 <NULL, MYSQL_DATE> : defined
 <NULL, MYSQL_DATETIME> : defined
+<NULL, ROARINGBITMAP> : defined
 
 /**************** TINYINT ****************/
 
@@ -111,6 +112,7 @@
 <TINYINT, COLLECTION> : not defined
 <TINYINT, MYSQL_DATE> : not defined
 <TINYINT, MYSQL_DATETIME> : not defined
+<TINYINT, ROARINGBITMAP> : not defined
 
 /**************** SMALLINT ****************/
 
@@ -168,6 +170,7 @@
 <SMALLINT, COLLECTION> : not defined
 <SMALLINT, MYSQL_DATE> : not defined
 <SMALLINT, MYSQL_DATETIME> : not defined
+<SMALLINT, ROARINGBITMAP> : not defined
 
 /**************** MEDIUMINT ****************/
 
@@ -225,6 +228,7 @@
 <MEDIUMINT, COLLECTION> : not defined
 <MEDIUMINT, MYSQL_DATE> : not defined
 <MEDIUMINT, MYSQL_DATETIME> : not defined
+<MEDIUMINT, ROARINGBITMAP> : not defined
 
 /**************** INT ****************/
 
@@ -282,6 +286,7 @@
 <INT, COLLECTION> : not defined
 <INT, MYSQL_DATE> : not defined
 <INT, MYSQL_DATETIME> : not defined
+<INT, ROARINGBITMAP> : not defined
 
 /**************** BIGINT ****************/
 
@@ -339,6 +344,7 @@
 <BIGINT, COLLECTION> : not defined
 <BIGINT, MYSQL_DATE> : not defined
 <BIGINT, MYSQL_DATETIME> : not defined
+<BIGINT, ROARINGBITMAP> : not defined
 
 /**************** TINYINT UNSIGNED ****************/
 
@@ -396,6 +402,7 @@
 <TINYINT UNSIGNED, COLLECTION> : not defined
 <TINYINT UNSIGNED, MYSQL_DATE> : not defined
 <TINYINT UNSIGNED, MYSQL_DATETIME> : not defined
+<TINYINT UNSIGNED, ROARINGBITMAP> : not defined
 
 /**************** SMALLINT UNSIGNED ****************/
 
@@ -453,6 +460,7 @@
 <SMALLINT UNSIGNED, COLLECTION> : not defined
 <SMALLINT UNSIGNED, MYSQL_DATE> : not defined
 <SMALLINT UNSIGNED, MYSQL_DATETIME> : not defined
+<SMALLINT UNSIGNED, ROARINGBITMAP> : not defined
 
 /**************** MEDIUMINT UNSIGNED ****************/
 
@@ -510,6 +518,7 @@
 <MEDIUMINT UNSIGNED, COLLECTION> : not defined
 <MEDIUMINT UNSIGNED, MYSQL_DATE> : not defined
 <MEDIUMINT UNSIGNED, MYSQL_DATETIME> : not defined
+<MEDIUMINT UNSIGNED, ROARINGBITMAP> : not defined
 
 /**************** INT UNSIGNED ****************/
 
@@ -567,6 +576,7 @@
 <INT UNSIGNED, COLLECTION> : not defined
 <INT UNSIGNED, MYSQL_DATE> : not defined
 <INT UNSIGNED, MYSQL_DATETIME> : not defined
+<INT UNSIGNED, ROARINGBITMAP> : not defined
 
 /**************** BIGINT UNSIGNED ****************/
 
@@ -624,6 +634,7 @@
 <BIGINT UNSIGNED, COLLECTION> : not defined
 <BIGINT UNSIGNED, MYSQL_DATE> : not defined
 <BIGINT UNSIGNED, MYSQL_DATETIME> : not defined
+<BIGINT UNSIGNED, ROARINGBITMAP> : not defined
 
 /**************** FLOAT ****************/
 
@@ -681,6 +692,7 @@
 <FLOAT, COLLECTION> : not defined
 <FLOAT, MYSQL_DATE> : not defined
 <FLOAT, MYSQL_DATETIME> : not defined
+<FLOAT, ROARINGBITMAP> : not defined
 
 /**************** DOUBLE ****************/
 
@@ -738,6 +750,7 @@
 <DOUBLE, COLLECTION> : not defined
 <DOUBLE, MYSQL_DATE> : not defined
 <DOUBLE, MYSQL_DATETIME> : not defined
+<DOUBLE, ROARINGBITMAP> : not defined
 
 /**************** FLOAT UNSIGNED ****************/
 
@@ -795,6 +808,7 @@
 <FLOAT UNSIGNED, COLLECTION> : not defined
 <FLOAT UNSIGNED, MYSQL_DATE> : not defined
 <FLOAT UNSIGNED, MYSQL_DATETIME> : not defined
+<FLOAT UNSIGNED, ROARINGBITMAP> : not defined
 
 /**************** DOUBLE UNSIGNED ****************/
 
@@ -852,6 +866,7 @@
 <DOUBLE UNSIGNED, COLLECTION> : not defined
 <DOUBLE UNSIGNED, MYSQL_DATE> : not defined
 <DOUBLE UNSIGNED, MYSQL_DATETIME> : not defined
+<DOUBLE UNSIGNED, ROARINGBITMAP> : not defined
 
 /**************** DECIMAL ****************/
 
@@ -909,6 +924,7 @@
 <DECIMAL, COLLECTION> : not defined
 <DECIMAL, MYSQL_DATE> : not defined
 <DECIMAL, MYSQL_DATETIME> : not defined
+<DECIMAL, ROARINGBITMAP> : not defined
 
 /**************** DECIMAL UNSIGNED ****************/
 
@@ -966,6 +982,7 @@
 <DECIMAL UNSIGNED, COLLECTION> : not defined
 <DECIMAL UNSIGNED, MYSQL_DATE> : not defined
 <DECIMAL UNSIGNED, MYSQL_DATETIME> : not defined
+<DECIMAL UNSIGNED, ROARINGBITMAP> : not defined
 
 /**************** DATETIME ****************/
 
@@ -1023,6 +1040,7 @@
 <DATETIME, COLLECTION> : not defined
 <DATETIME, MYSQL_DATE> : not defined
 <DATETIME, MYSQL_DATETIME> : not defined
+<DATETIME, ROARINGBITMAP> : not defined
 
 /**************** TIMESTAMP ****************/
 
@@ -1080,6 +1098,7 @@
 <TIMESTAMP, COLLECTION> : not defined
 <TIMESTAMP, MYSQL_DATE> : not defined
 <TIMESTAMP, MYSQL_DATETIME> : not defined
+<TIMESTAMP, ROARINGBITMAP> : not defined
 
 /**************** DATE ****************/
 
@@ -1137,6 +1156,7 @@
 <DATE, COLLECTION> : not defined
 <DATE, MYSQL_DATE> : not defined
 <DATE, MYSQL_DATETIME> : not defined
+<DATE, ROARINGBITMAP> : not defined
 
 /**************** TIME ****************/
 
@@ -1194,6 +1214,7 @@
 <TIME, COLLECTION> : not defined
 <TIME, MYSQL_DATE> : not defined
 <TIME, MYSQL_DATETIME> : not defined
+<TIME, ROARINGBITMAP> : not defined
 
 /**************** YEAR ****************/
 
@@ -1251,6 +1272,7 @@
 <YEAR, COLLECTION> : not defined
 <YEAR, MYSQL_DATE> : not defined
 <YEAR, MYSQL_DATETIME> : not defined
+<YEAR, ROARINGBITMAP> : not defined
 
 /**************** VARCHAR ****************/
 
@@ -1308,6 +1330,7 @@
 <VARCHAR, COLLECTION> : not defined
 <VARCHAR, MYSQL_DATE> : not defined
 <VARCHAR, MYSQL_DATETIME> : not defined
+<VARCHAR, ROARINGBITMAP> : not defined
 
 /**************** CHAR ****************/
 
@@ -1365,6 +1388,7 @@
 <CHAR, COLLECTION> : not defined
 <CHAR, MYSQL_DATE> : not defined
 <CHAR, MYSQL_DATETIME> : not defined
+<CHAR, ROARINGBITMAP> : not defined
 
 /**************** HEX_STRING ****************/
 
@@ -1422,6 +1446,7 @@
 <HEX_STRING, COLLECTION> : not defined
 <HEX_STRING, MYSQL_DATE> : not defined
 <HEX_STRING, MYSQL_DATETIME> : not defined
+<HEX_STRING, ROARINGBITMAP> : not defined
 
 /**************** EXT ****************/
 
@@ -1479,6 +1504,7 @@
 <EXT, COLLECTION> : defined
 <EXT, MYSQL_DATE> : defined
 <EXT, MYSQL_DATETIME> : defined
+<EXT, ROARINGBITMAP> : defined
 
 /**************** UNKNOWN ****************/
 
@@ -1536,6 +1562,7 @@
 <UNKNOWN, COLLECTION> : not defined
 <UNKNOWN, MYSQL_DATE> : not defined
 <UNKNOWN, MYSQL_DATETIME> : not defined
+<UNKNOWN, ROARINGBITMAP> : not defined
 
 /**************** TINYTEXT ****************/
 
@@ -1593,6 +1620,7 @@
 <TINYTEXT, COLLECTION> : not defined
 <TINYTEXT, MYSQL_DATE> : not defined
 <TINYTEXT, MYSQL_DATETIME> : not defined
+<TINYTEXT, ROARINGBITMAP> : not defined
 
 /**************** TEXT ****************/
 
@@ -1650,6 +1678,7 @@
 <TEXT, COLLECTION> : not defined
 <TEXT, MYSQL_DATE> : not defined
 <TEXT, MYSQL_DATETIME> : not defined
+<TEXT, ROARINGBITMAP> : not defined
 
 /**************** MEDIUMTEXT ****************/
 
@@ -1707,6 +1736,7 @@
 <MEDIUMTEXT, COLLECTION> : not defined
 <MEDIUMTEXT, MYSQL_DATE> : not defined
 <MEDIUMTEXT, MYSQL_DATETIME> : not defined
+<MEDIUMTEXT, ROARINGBITMAP> : not defined
 
 /**************** LONGTEXT ****************/
 
@@ -1764,6 +1794,7 @@
 <LONGTEXT, COLLECTION> : not defined
 <LONGTEXT, MYSQL_DATE> : not defined
 <LONGTEXT, MYSQL_DATETIME> : not defined
+<LONGTEXT, ROARINGBITMAP> : not defined
 
 /**************** BIT ****************/
 
@@ -1821,6 +1852,7 @@
 <BIT, COLLECTION> : not defined
 <BIT, MYSQL_DATE> : not defined
 <BIT, MYSQL_DATETIME> : not defined
+<BIT, ROARINGBITMAP> : not defined
 
 /**************** ENUM ****************/
 
@@ -1878,6 +1910,7 @@
 <ENUM, COLLECTION> : not defined
 <ENUM, MYSQL_DATE> : not defined
 <ENUM, MYSQL_DATETIME> : not defined
+<ENUM, ROARINGBITMAP> : not defined
 
 /**************** SET ****************/
 
@@ -1935,6 +1968,7 @@
 <SET, COLLECTION> : not defined
 <SET, MYSQL_DATE> : not defined
 <SET, MYSQL_DATETIME> : not defined
+<SET, ROARINGBITMAP> : not defined
 
 /**************** ENUM_INNER ****************/
 
@@ -1992,6 +2026,7 @@
 <ENUM_INNER, COLLECTION> : not defined
 <ENUM_INNER, MYSQL_DATE> : not defined
 <ENUM_INNER, MYSQL_DATETIME> : not defined
+<ENUM_INNER, ROARINGBITMAP> : not defined
 
 /**************** SET_INNER ****************/
 
@@ -2049,6 +2084,7 @@
 <SET_INNER, COLLECTION> : not defined
 <SET_INNER, MYSQL_DATE> : not defined
 <SET_INNER, MYSQL_DATETIME> : not defined
+<SET_INNER, ROARINGBITMAP> : not defined
 
 /**************** TIMESTAMP_WITH_TIME_ZONE ****************/
 
@@ -2106,6 +2142,7 @@
 <TIMESTAMP_WITH_TIME_ZONE, COLLECTION> : not defined
 <TIMESTAMP_WITH_TIME_ZONE, MYSQL_DATE> : not defined
 <TIMESTAMP_WITH_TIME_ZONE, MYSQL_DATETIME> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, ROARINGBITMAP> : not defined
 
 /**************** TIMESTAMP_WITH_LOCAL_TIME_ZONE ****************/
 
@@ -2163,6 +2200,7 @@
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, COLLECTION> : not defined
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, MYSQL_DATE> : not defined
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, MYSQL_DATETIME> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, ROARINGBITMAP> : not defined
 
 /**************** TIMESTAMP ****************/
 
@@ -2220,6 +2258,7 @@
 <TIMESTAMP, COLLECTION> : not defined
 <TIMESTAMP, MYSQL_DATE> : not defined
 <TIMESTAMP, MYSQL_DATETIME> : not defined
+<TIMESTAMP, ROARINGBITMAP> : not defined
 
 /**************** RAW ****************/
 
@@ -2277,6 +2316,7 @@
 <RAW, COLLECTION> : not defined
 <RAW, MYSQL_DATE> : not defined
 <RAW, MYSQL_DATETIME> : not defined
+<RAW, ROARINGBITMAP> : not defined
 
 /**************** INTERVAL_YEAR_TO_MONTH ****************/
 
@@ -2334,6 +2374,7 @@
 <INTERVAL_YEAR_TO_MONTH, COLLECTION> : not defined
 <INTERVAL_YEAR_TO_MONTH, MYSQL_DATE> : not defined
 <INTERVAL_YEAR_TO_MONTH, MYSQL_DATETIME> : not defined
+<INTERVAL_YEAR_TO_MONTH, ROARINGBITMAP> : not defined
 
 /**************** INTERVAL_DAY_TO_SECOND ****************/
 
@@ -2391,6 +2432,7 @@
 <INTERVAL_DAY_TO_SECOND, COLLECTION> : not defined
 <INTERVAL_DAY_TO_SECOND, MYSQL_DATE> : not defined
 <INTERVAL_DAY_TO_SECOND, MYSQL_DATETIME> : not defined
+<INTERVAL_DAY_TO_SECOND, ROARINGBITMAP> : not defined
 
 /**************** NUMBER_FLOAT ****************/
 
@@ -2448,6 +2490,7 @@
 <NUMBER_FLOAT, COLLECTION> : not defined
 <NUMBER_FLOAT, MYSQL_DATE> : not defined
 <NUMBER_FLOAT, MYSQL_DATETIME> : not defined
+<NUMBER_FLOAT, ROARINGBITMAP> : not defined
 
 /**************** NVARCHAR2 ****************/
 
@@ -2505,6 +2548,7 @@
 <NVARCHAR2, COLLECTION> : not defined
 <NVARCHAR2, MYSQL_DATE> : not defined
 <NVARCHAR2, MYSQL_DATETIME> : not defined
+<NVARCHAR2, ROARINGBITMAP> : not defined
 
 /**************** NCHAR ****************/
 
@@ -2562,6 +2606,7 @@
 <NCHAR, COLLECTION> : not defined
 <NCHAR, MYSQL_DATE> : not defined
 <NCHAR, MYSQL_DATETIME> : not defined
+<NCHAR, ROARINGBITMAP> : not defined
 
 /**************** ROWID ****************/
 
@@ -2619,6 +2664,7 @@
 <ROWID, COLLECTION> : not defined
 <ROWID, MYSQL_DATE> : not defined
 <ROWID, MYSQL_DATETIME> : not defined
+<ROWID, ROARINGBITMAP> : not defined
 
 /**************** LOB ****************/
 
@@ -2676,6 +2722,7 @@
 <LOB, COLLECTION> : not defined
 <LOB, MYSQL_DATE> : not defined
 <LOB, MYSQL_DATETIME> : not defined
+<LOB, ROARINGBITMAP> : not defined
 
 /**************** JSON ****************/
 
@@ -2733,6 +2780,7 @@
 <JSON, COLLECTION> : not defined
 <JSON, MYSQL_DATE> : not defined
 <JSON, MYSQL_DATETIME> : not defined
+<JSON, ROARINGBITMAP> : not defined
 
 /**************** GEOMETRY ****************/
 
@@ -2790,6 +2838,7 @@
 <GEOMETRY, COLLECTION> : not defined
 <GEOMETRY, MYSQL_DATE> : not defined
 <GEOMETRY, MYSQL_DATETIME> : not defined
+<GEOMETRY, ROARINGBITMAP> : not defined
 
 /**************** UDT ****************/
 
@@ -2847,6 +2896,7 @@
 <UDT, COLLECTION> : not defined
 <UDT, MYSQL_DATE> : not defined
 <UDT, MYSQL_DATETIME> : not defined
+<UDT, ROARINGBITMAP> : not defined
 
 /**************** DECIMAL_INT ****************/
 
@@ -2904,6 +2954,7 @@
 <DECIMAL_INT, COLLECTION> : not defined
 <DECIMAL_INT, MYSQL_DATE> : not defined
 <DECIMAL_INT, MYSQL_DATETIME> : not defined
+<DECIMAL_INT, ROARINGBITMAP> : not defined
 
 /**************** COLLECTION ****************/
 
@@ -2961,6 +3012,7 @@
 <COLLECTION, COLLECTION> : not defined
 <COLLECTION, MYSQL_DATE> : not defined
 <COLLECTION, MYSQL_DATETIME> : not defined
+<COLLECTION, ROARINGBITMAP> : not defined
 
 /**************** MYSQL_DATE ****************/
 
@@ -3018,6 +3070,7 @@
 <MYSQL_DATE, COLLECTION> : not defined
 <MYSQL_DATE, MYSQL_DATE> : not defined
 <MYSQL_DATE, MYSQL_DATETIME> : not defined
+<MYSQL_DATE, ROARINGBITMAP> : not defined
 
 /**************** MYSQL_DATETIME ****************/
 
@@ -3075,4 +3128,63 @@
 <MYSQL_DATETIME, COLLECTION> : not defined
 <MYSQL_DATETIME, MYSQL_DATE> : not defined
 <MYSQL_DATETIME, MYSQL_DATETIME> : not defined
+<MYSQL_DATETIME, ROARINGBITMAP> : not defined
+
+/**************** ROARINGBITMAP ****************/
+
+<ROARINGBITMAP, NULL> : defined
+<ROARINGBITMAP, TINYINT> : not defined
+<ROARINGBITMAP, SMALLINT> : not defined
+<ROARINGBITMAP, MEDIUMINT> : not defined
+<ROARINGBITMAP, INT> : not defined
+<ROARINGBITMAP, BIGINT> : not defined
+<ROARINGBITMAP, TINYINT UNSIGNED> : not defined
+<ROARINGBITMAP, SMALLINT UNSIGNED> : not defined
+<ROARINGBITMAP, MEDIUMINT UNSIGNED> : not defined
+<ROARINGBITMAP, INT UNSIGNED> : not defined
+<ROARINGBITMAP, BIGINT UNSIGNED> : not defined
+<ROARINGBITMAP, FLOAT> : not defined
+<ROARINGBITMAP, DOUBLE> : not defined
+<ROARINGBITMAP, FLOAT UNSIGNED> : not defined
+<ROARINGBITMAP, DOUBLE UNSIGNED> : not defined
+<ROARINGBITMAP, DECIMAL> : not defined
+<ROARINGBITMAP, DECIMAL UNSIGNED> : not defined
+<ROARINGBITMAP, DATETIME> : not defined
+<ROARINGBITMAP, TIMESTAMP> : not defined
+<ROARINGBITMAP, DATE> : not defined
+<ROARINGBITMAP, TIME> : not defined
+<ROARINGBITMAP, YEAR> : not defined
+<ROARINGBITMAP, VARCHAR> : not defined
+<ROARINGBITMAP, CHAR> : not defined
+<ROARINGBITMAP, HEX_STRING> : not defined
+<ROARINGBITMAP, EXT> : defined
+<ROARINGBITMAP, UNKNOWN> : not defined
+<ROARINGBITMAP, TINYTEXT> : not defined
+<ROARINGBITMAP, TEXT> : not defined
+<ROARINGBITMAP, MEDIUMTEXT> : not defined
+<ROARINGBITMAP, LONGTEXT> : not defined
+<ROARINGBITMAP, BIT> : not defined
+<ROARINGBITMAP, ENUM> : not defined
+<ROARINGBITMAP, SET> : not defined
+<ROARINGBITMAP, ENUM_INNER> : not defined
+<ROARINGBITMAP, SET_INNER> : not defined
+<ROARINGBITMAP, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<ROARINGBITMAP, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<ROARINGBITMAP, TIMESTAMP> : not defined
+<ROARINGBITMAP, RAW> : not defined
+<ROARINGBITMAP, INTERVAL_YEAR_TO_MONTH> : not defined
+<ROARINGBITMAP, INTERVAL_DAY_TO_SECOND> : not defined
+<ROARINGBITMAP, NUMBER_FLOAT> : not defined
+<ROARINGBITMAP, NVARCHAR2> : not defined
+<ROARINGBITMAP, NCHAR> : not defined
+<ROARINGBITMAP, ROWID> : not defined
+<ROARINGBITMAP, LOB> : not defined
+<ROARINGBITMAP, JSON> : not defined
+<ROARINGBITMAP, GEOMETRY> : not defined
+<ROARINGBITMAP, UDT> : not defined
+<ROARINGBITMAP, DECIMAL_INT> : not defined
+<ROARINGBITMAP, COLLECTION> : not defined
+<ROARINGBITMAP, MYSQL_DATE> : not defined
+<ROARINGBITMAP, MYSQL_DATETIME> : not defined
+<ROARINGBITMAP, ROARINGBITMAP> : not defined
 

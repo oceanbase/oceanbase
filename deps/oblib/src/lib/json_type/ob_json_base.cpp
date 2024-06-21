@@ -3792,9 +3792,12 @@ static const obmysql::EMySQLFieldType opaque_ob_type_to_mysql_type[ObMaxType] =
   obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_BLOB,                          /* ObLobType */
   obmysql::EMySQLFieldType::MYSQL_TYPE_JSON,                              /* ObJsonType */
   obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY,                          /* ObGeometryType */
-  obmysql::EMySQLFieldType::MYSQL_TYPE_COMPLEX,       /* ObUserDefinedSQLType, buf for xml we use long_blob type currently? */
-  obmysql::EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL,                       /* ObDecimalIntType */
-  obmysql::EMySQLFieldType::MYSQL_TYPE_COMPLEX,       /* ObCollectionSQLType */
+  obmysql::EMySQLFieldType::MYSQL_TYPE_COMPLEX,                           /* ObUserDefinedSQLType, buf for xml we use long_blob type currently? */
+  obmysql::EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL,                        /* ObDecimalIntType */
+  obmysql::EMySQLFieldType::MYSQL_TYPE_COMPLEX,                           /* ObCollectionSQLType */
+  obmysql::EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED,                       /* reserved for ObMySQLDateType */
+  obmysql::EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED,                       /* reserved for ObMySQLDateTimeType */
+  obmysql::EMySQLFieldType::MYSQL_TYPE_BLOB,                              /* ObRoaringBitmapType */
   /* ObMaxType */
 };
 

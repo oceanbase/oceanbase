@@ -273,7 +273,8 @@ int ObConstDecoder::batch_decode_without_dict(
         case ObStringSC:
         case ObTextSC:
         case ObJsonSC:
-        case ObGeometrySC: {
+        case ObGeometrySC:
+        case ObRoaringBitmapSC: {
             for (int64_t i = 1; i < row_cap; ++i) {
               datums[i].pack_ = datums[0].pack_;
               datums[i].ptr_ = datums[0].ptr_;

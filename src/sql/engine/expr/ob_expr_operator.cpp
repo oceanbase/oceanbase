@@ -1030,6 +1030,8 @@ int ObExprOperator::is_same_kind_type_for_case(const ObExprResType &type1, const
       match = type2.is_geometry();
     } else if (type1.is_user_defined_sql_type()) {
       match = type2.is_user_defined_sql_type() && type1.get_udt_id() == type2.get_udt_id();
+    } else if (type1.is_roaringbitmap()) {
+      match = type2.is_roaringbitmap();
     }
   }
   return ret;
@@ -1581,6 +1583,7 @@ ObObjType ObExprOperator::enumset_calc_types_[ObMaxTC] =
   ObNullType, /*COLLECTION*/
   ObVarcharType, /*ObMySQLDateTC*/
   ObVarcharType, /*ObMySQLDateTimeTC*/
+  ObVarcharType, /*ObRoaringBitmapTC*/
 };
 ////////////////////////////////////////////////////////////////
 
@@ -2087,6 +2090,15 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
                   || type_ == T_OP_IS_NOT
                   || type_ == T_OP_IN
                   || type_ == T_OP_NOT_IN)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
+  } else if ((type1.is_roaringbitmap() || type2.is_roaringbitmap())
+             && !(type_ == T_OP_EQ
+                  || type_ == T_OP_NE
+                  || type_ == T_OP_NSEQ
+                  || type_ == T_OP_SQ_EQ
+                  || type_ == T_OP_SQ_NE
+                  || type_ == T_OP_SQ_NSEQ)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (is_oracle_mode()

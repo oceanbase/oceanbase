@@ -1185,6 +1185,39 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       }
       break;
     }
+    case T_FUN_SYS_RB_BUILD_AGG: {
+      if (1 != expr->get_param_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param count should be equal 1", K(ret), K(expr->get_param_count()));
+      } else {
+        DATA_PRINTF("rb_build_agg(");
+        PRINT_EXPR(expr->get_param_expr(0));
+        DATA_PRINTF(")");
+      }
+      break;
+    }
+    case T_FUN_SYS_RB_OR_AGG: {
+      if (1 != expr->get_param_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param count should be equal 1", K(ret), K(expr->get_param_count()));
+      } else {
+        DATA_PRINTF("rb_or_agg(");
+        PRINT_EXPR(expr->get_param_expr(0));
+        DATA_PRINTF(")");
+      }
+      break;
+    }
+    case T_FUN_SYS_RB_AND_AGG: {
+      if (1 != expr->get_param_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param count should be equal 1", K(ret), K(expr->get_param_count()));
+      } else {
+        DATA_PRINTF("rb_and_agg(");
+        PRINT_EXPR(expr->get_param_expr(0));
+        DATA_PRINTF(")");
+      }
+      break;
+    }
     case T_FUN_GROUP_RANK:
       SET_SYMBOL_IF_EMPTY("rank");
     case T_FUN_GROUP_DENSE_RANK:
@@ -4614,6 +4647,10 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
           }
           PRINT_IDENT_WITH_QUOT(dest_info->get_type_name());
         }
+        break;
+      }
+      case T_ROARINGBITMAP: {
+        DATA_PRINTF("roaringbitmap");
         break;
       }
       default: {
