@@ -39,7 +39,8 @@ ObSortSpec::ObSortSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type
   is_fetch_with_ties_(false),
   prescan_enabled_(false),
   enable_encode_sortkey_opt_(false),
-  part_cnt_(0)
+  part_cnt_(0),
+  pd_topn_filter_info_(alloc)
 {}
 
 OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
@@ -57,7 +58,8 @@ OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
                     prescan_enabled_,
                     enable_encode_sortkey_opt_,
                     part_cnt_,
-                    compress_type_);
+                    compress_type_,
+                    pd_topn_filter_info_);
 
 ObSortOp::ObSortOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(ctx_, spec, input),

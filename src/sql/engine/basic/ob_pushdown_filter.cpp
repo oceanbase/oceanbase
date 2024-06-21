@@ -52,7 +52,7 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
 };
 
 ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPARE_PD_DATA_FUNCS
-    [PreparePushdownDataFuncType::MAX_PREPARE_DATA_FUNC_TYPE] = {
+    [DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE] = {
   ObExprJoinFilter::prepare_storage_white_filter_data,
 };
 
@@ -111,7 +111,7 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownWhiteFilterNode)
 }
 
 OB_SERIALIZE_MEMBER((ObPushdownDynamicFilterNode, ObPushdownWhiteFilterNode), col_idx_,
-                    is_first_child_, is_last_child_, val_meta_, prepare_data_func_type_);
+                    is_first_child_, is_last_child_, val_meta_, dynamic_filter_type_);
 
 int ObPushdownBlackFilterNode::merge(ObIArray<ObPushdownFilterNode*> &merged_node)
 {
@@ -227,11 +227,11 @@ int ObPushdownDynamicFilterNode::set_op_type(const ObRawExpr &raw_expr)
   switch (type) {
     case RANGE:
       op_type_ = WHITE_OP_BT;
-      prepare_data_func_type_ = RUNTIME_FILTER_PREPARE_DATA;
+      dynamic_filter_type_ = JOIN_RUNTIME_FILTER;
       break;
     case IN:
       op_type_ = WHITE_OP_IN;
-      prepare_data_func_type_ = RUNTIME_FILTER_PREPARE_DATA;
+      dynamic_filter_type_ = JOIN_RUNTIME_FILTER;
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -2444,13 +2444,13 @@ int ObDynamicFilterExecutor::try_preparing_data()
 {
   int ret = OB_SUCCESS;
   ObRuntimeFilterParams runtime_filter_params;
-  PreparePushdownDataFuncType prepare_data_func_type =
-      static_cast<ObPushdownDynamicFilterNode &>(filter_).get_prepare_data_func_type();
-  if (prepare_data_func_type >= PreparePushdownDataFuncType::MAX_PREPARE_DATA_FUNC_TYPE) {
+  DynamicFilterType dynamic_filter_type =
+      static_cast<ObPushdownDynamicFilterNode &>(filter_).get_dynamic_filter_type();
+  if (dynamic_filter_type >= DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid func type", K(ret), K(prepare_data_func_type));
+    LOG_WARN("invalid func type", K(ret), K(dynamic_filter_type));
   } else {
-    ret = PREPARE_PD_DATA_FUNCS[prepare_data_func_type](
+    ret = PREPARE_PD_DATA_FUNCS[dynamic_filter_type](
         *filter_.expr_, *this, op_.get_eval_ctx(), runtime_filter_params, is_data_prepared_);
   }
   if (OB_FAIL(ret)) {

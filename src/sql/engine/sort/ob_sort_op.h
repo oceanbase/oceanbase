@@ -20,6 +20,7 @@
 #include "sql/engine/sort/ob_sort_basic_info.h"
 #include "sql/engine/basic/chunk_store/ob_compact_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/px/p2p_datahub/ob_pushdown_topn_filter_msg.h"
 
 namespace oceanbase
 {
@@ -59,6 +60,7 @@ public:
   bool enable_encode_sortkey_opt_;
   // if use, all_exprs_ is : hash(part_by) + part_by + order_by.
   int64_t part_cnt_;
+  ObPushDownTopNFilterInfo pd_topn_filter_info_;
 };
 
 class ObSortOp : public ObOperator

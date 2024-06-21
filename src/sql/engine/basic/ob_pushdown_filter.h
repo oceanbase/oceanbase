@@ -93,10 +93,11 @@ enum DynamicFilterAction
   PASS_ALL,  // if the filter not ready or not active, all data are selected
 };
 
-enum PreparePushdownDataFuncType
+enum DynamicFilterType
 {
-  RUNTIME_FILTER_PREPARE_DATA = 0,
-  MAX_PREPARE_DATA_FUNC_TYPE
+  JOIN_RUNTIME_FILTER= 0,
+  PD_TOPN_FILTER = 1,
+  MAX_DYNAMIC_FILTER_TYPE
 };
 
 struct ObBoolMask
@@ -384,7 +385,7 @@ public:
   ObPushdownDynamicFilterNode(common::ObIAllocator &alloc)
       : ObPushdownWhiteFilterNode(alloc), col_idx_(0), is_first_child_(false),
         is_last_child_(false), val_meta_(),
-        prepare_data_func_type_(PreparePushdownDataFuncType::MAX_PREPARE_DATA_FUNC_TYPE)
+        dynamic_filter_type_(DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE)
   {
     type_ = PushdownFilterType::DYNAMIC_FILTER;
   }
@@ -411,13 +412,13 @@ public:
     UNUSED(arg_idx);
     return val_meta_.get_type();
   }
-  inline void set_prepare_data_func_type(PreparePushdownDataFuncType func_type)
+  inline void set_dynamic_filter_type(DynamicFilterType func_type)
   {
-    prepare_data_func_type_ = func_type;
+    dynamic_filter_type_ = func_type;
   }
-  inline PreparePushdownDataFuncType get_prepare_data_func_type()
+  inline DynamicFilterType get_dynamic_filter_type() const
   {
-    return prepare_data_func_type_;
+    return dynamic_filter_type_;
   }
 private:
   int64_t col_idx_; // mark which column for multi columns runtime filter
@@ -432,7 +433,7 @@ private:
   bool is_first_child_;
   bool is_last_child_;
   ObObjMeta val_meta_;
-  PreparePushdownDataFuncType prepare_data_func_type_;
+  DynamicFilterType dynamic_filter_type_;
 };
 
 class ObPushdownFilterExecutor;
@@ -1047,8 +1048,7 @@ public:
                                  ObEvalCtx &eval_ctx,
                                  ObRuntimeFilterParams &params,
                                  bool &is_data_prepared);
-  static PreparePushdownDataFunc
-      PREPARE_PD_DATA_FUNCS[PreparePushdownDataFuncType::MAX_PREPARE_DATA_FUNC_TYPE];
+  static PreparePushdownDataFunc PREPARE_PD_DATA_FUNCS[DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE];
 private:
   int try_preparing_data();
   void update_rf_slide_window();

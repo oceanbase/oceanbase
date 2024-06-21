@@ -28,13 +28,14 @@ ObSortVecSpec::ObSortVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorTyp
   sk_exprs_(alloc), addon_exprs_(alloc), sk_collations_(alloc), addon_collations_(alloc),
   minimum_row_count_(0), topk_precision_(0), prefix_pos_(0), is_local_merge_sort_(false),
   is_fetch_with_ties_(false), prescan_enabled_(false), enable_encode_sortkey_opt_(false),
-  has_addon_(false), part_cnt_(0), compress_type_(NONE_COMPRESSOR)
+  has_addon_(false), part_cnt_(0), pd_topn_filter_info_(alloc)
 {}
 
 OB_SERIALIZE_MEMBER((ObSortVecSpec, ObOpSpec), topn_expr_, topk_limit_expr_, topk_offset_expr_,
                     sk_exprs_, addon_exprs_, sk_collations_, addon_collations_, minimum_row_count_,
                     topk_precision_, prefix_pos_, is_local_merge_sort_, is_fetch_with_ties_,
-                    prescan_enabled_, enable_encode_sortkey_opt_, has_addon_, part_cnt_, compress_type_);
+                    prescan_enabled_, enable_encode_sortkey_opt_, has_addon_, part_cnt_, compress_type_,
+                    pd_topn_filter_info_);
 
 ObSortVecOp::ObSortVecOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input) :
   ObOperator(ctx_, spec, input), sort_op_provider_(op_monitor_info_), sort_row_count_(0),

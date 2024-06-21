@@ -19,6 +19,7 @@
 #include "sql/engine/ob_operator.h"
 #include "sql/engine/sort/ob_sort_basic_info.h"
 #include "sql/engine/sort/ob_sort_vec_op_provider.h"
+#include "sql/engine/px/p2p_datahub/ob_pushdown_topn_filter_msg.h"
 
 namespace oceanbase
 {
@@ -57,7 +58,8 @@ public:
   bool has_addon_;
   // if use, all_exprs_ is : hash(part_by) + part_by + order_by.
   int64_t part_cnt_;
-  ObCompressorType compress_type_;
+  // pushdown topn filter: pushdown the heap top data to table scan for filtering out data early.
+  ObPushDownTopNFilterInfo pd_topn_filter_info_;
 };
 
 class ObSortVecOp : public ObOperator
