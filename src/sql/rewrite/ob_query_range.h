@@ -100,7 +100,8 @@ private:
         params_(params),
         use_in_optimization_(false),
         row_in_offsets_(),
-        is_oracle_char_gt_varchar_(false)
+        is_oracle_char_gt_varchar_(false),
+        cur_datetime_(0)
     {
     }
     ~ObQueryRangeCtx()
@@ -123,6 +124,7 @@ private:
     bool use_in_optimization_;
     ObSEArray<int64_t, 4> row_in_offsets_;
     bool is_oracle_char_gt_varchar_;
+    int64_t cur_datetime_;
   };
 public:
   enum ObQueryRangeState
@@ -826,6 +828,7 @@ private:
                                   ObExecContext &exec_ctx,
                                   ObSearchState &search_state,
                                   const common::ObDataTypeCastParams &dtc_params,
+                                  const int64_t cur_datetime,
                                   int64_t skip_offset = 0) const;
   int gen_simple_get_range(const ObKeyPart &root,
                            common::ObIAllocator &allocator,
@@ -851,6 +854,7 @@ private:
   int cold_cast_cur_node(const ObKeyPart *cur,
                          common::ObIAllocator &allocator,
                          const common::ObDataTypeCastParams &dtc_params,
+                         const int64_t cur_datetime,
                          common::ObObj &cur_val,
                          bool &always_false) const;
   int remove_precise_range_expr(int64_t offset);
