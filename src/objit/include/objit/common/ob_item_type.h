@@ -2537,6 +2537,8 @@ typedef enum ObItemType
   // for tablelock
   T_MYSQL_LOCK_LIST,
   T_MYSQL_LOCK_NODE,
+  // for vector index
+  T_APPROX,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
