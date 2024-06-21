@@ -32,14 +32,14 @@ size_t ObLobWriteBuffer::max_bytes_charpos(
   return byte_len;
 }
 
-int ObLobWriteBuffer::align_write_postion(char *data_ptr, int64_t data_byte_len, int64_t &byte_len, int64_t &char_len)
+int ObLobWriteBuffer::align_write_postion(const char *data_ptr, const int64_t data_byte_len, const int64_t max_byte_can_write, int64_t &byte_len, int64_t &char_len)
 {
   int ret = OB_SUCCESS;
-  if (data_byte_len > max_byte_len_) {
+  if (data_byte_len > max_byte_can_write) {
     byte_len = ObCharset::max_bytes_charpos(coll_type_,
                                           data_ptr,
                                           data_byte_len,
-                                          max_byte_len_,
+                                          max_byte_can_write,
                                           char_len);
     byte_len = ob_lob_writer_length_validation(coll_type_, data_byte_len, byte_len, char_len);
   } else {
@@ -345,7 +345,7 @@ int ObLobWriteBuffer::append(char *data_ptr, int64_t data_byte_len, int64_t &rea
     if (OB_FAIL(set_data(data_ptr, data_byte_len, real_write_byte_len))) {
       LOG_WARN("set_data fail", K(ret), K(data_byte_len), K(real_write_byte_len));
     }
-  } else if (OB_FAIL(align_write_postion(data_ptr, data_byte_len, write_byte_len, write_char_len))) {
+  } else if (OB_FAIL(align_write_postion(data_ptr, data_byte_len, inner_buffer_.remain(), write_byte_len, write_char_len))) {
     LOG_WARN("align_write_postion fail", K(ret), K(data_byte_len), K(inner_buffer_));
   } else if (inner_buffer_.write(data_ptr, write_byte_len) != write_byte_len) {
     ret = OB_ERR_UNEXPECTED;
@@ -388,7 +388,7 @@ int ObLobWriteBuffer::set_data(char *data_ptr, int64_t data_byte_len, int64_t &r
   int ret = OB_SUCCESS;
   int64_t char_len = 0;
   int64_t byte_len = 0;
-  if (OB_FAIL(align_write_postion(data_ptr, data_byte_len, byte_len, char_len))) {
+  if (OB_FAIL(align_write_postion(data_ptr, data_byte_len, max_byte_len_, byte_len, char_len))) {
     LOG_WARN("align_write_postion fail", K(ret), K(data_byte_len), KP(data_ptr));
   } else if (char_len != -1 && OB_FAIL(set_char_len(char_len))) {
     LOG_WARN("set_char_len fail", K(ret), K(char_len), K(data_byte_len), K(byte_len));
