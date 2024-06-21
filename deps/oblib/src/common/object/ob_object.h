@@ -554,10 +554,10 @@ struct ObLobDataOutRowCtx
   };
   ObLobDataOutRowCtx()
     : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
-      del_seq_no_cnt_(0), modified_len_(0), first_meta_offset_(0), chunk_size_(0)
+      del_seq_no_cnt_(0), modified_len_(0), first_meta_offset_(0), chunk_size_(0), reserved_(0)
   {}
   TO_STRING_KV(K_(is_full), K_(op), K_(offset), K_(check_sum), K_(seq_no_st), K_(seq_no_cnt),
-    K_(del_seq_no_cnt), K_(modified_len), K_(first_meta_offset), K_(chunk_size));
+    K_(del_seq_no_cnt), K_(modified_len), K_(first_meta_offset), K_(chunk_size), K_(reserved));
   uint64_t is_full_ : 1;
   uint64_t op_ : 8;
   uint64_t offset_ : 55;
@@ -568,6 +568,9 @@ struct ObLobDataOutRowCtx
   uint64_t modified_len_;
   uint32_t first_meta_offset_ : 24;
   uint32_t chunk_size_ : 8;   // unit is kb
+  // this is 8 bytes aligned, so left 4 byte
+  // and this field is added later when bug is found, and may be a random value
+  uint32_t reserved_;
 
   bool is_diff() const { return OpType::DIFF == op_; }
   int64_t get_real_chunk_size() const;
