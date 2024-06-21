@@ -256,9 +256,9 @@ int ObVectorsResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalC
     exprs_ = &exprs;
     eval_ctx_ = &eval_ctx;
     int64_t batch_size = eval_ctx.max_batch_size_;
-    if (OB_ISNULL(backup_cols_ = static_cast<ObColResultHolder *>
-                (eval_ctx.exec_ctx_.get_allocator().alloc(sizeof(ObColResultHolder)
-                                                          * exprs.count())))) {
+    ObIAllocator &allocator = (tmp_alloc_ != nullptr ? *tmp_alloc_ : eval_ctx_->exec_ctx_.get_allocator());
+    if (OB_ISNULL(backup_cols_ = static_cast<ObColResultHolder *>(
+                    allocator.alloc(sizeof(ObColResultHolder) * exprs.count())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc ptrs", K(ret));
     } else {
@@ -281,7 +281,7 @@ int ObVectorsResultHolder::save(const int64_t batch_size)
     ret = OB_NOT_INIT;
   } else {
     saved_size_ = batch_size;
-    ObIAllocator &alloc = eval_ctx_->exec_ctx_.get_allocator();
+    ObIAllocator &alloc = (tmp_alloc_ != nullptr ? *tmp_alloc_ : eval_ctx_->exec_ctx_.get_allocator());
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs_->count(); ++i) {
       if (OB_FAIL(backup_cols_[i].header_.assign(exprs_->at(i)->get_vector_header(*eval_ctx_)))) {
         LOG_WARN("failed to assign vector", K(ret));
@@ -374,6 +374,83 @@ int ObVectorsResultHolder::restore() const
   }
   return ret;
 }
+
+#define CALC_FIXED_COL(vec_tc)                                                                     \
+  case (vec_tc): {                                                                                 \
+    mem_size += sizeof(RTCType<vec_tc>) * batch_size;                                              \
+  } break
+
+template<VectorFormat fmt>
+int ObVectorsResultHolder::calc_col_backup_size(ObExpr *expr, int32_t batch_size, int32_t &mem_size)
+{
+  int ret = OB_SUCCESS;
+  mem_size = 0;
+  if (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST) {
+    int32_t copy_size = (fmt == VEC_UNIFORM_CONST ? 1 : batch_size);
+    mem_size += sizeof(ObDatum) * copy_size;
+    bool need_copy_rev_buf = (expr->is_fixed_length_data_
+                              || ObNumberTC == ob_obj_type_class(expr->datum_meta_.get_type()));
+    if (need_copy_rev_buf) {
+      mem_size += expr->res_buf_len_ * copy_size;
+    }
+  } else {
+    // bitmap
+    mem_size += sql::ObBitVector::memory_size(batch_size);
+    if (fmt == VEC_FIXED) {
+      switch(expr->get_vec_value_tc()) {
+        LST_DO_CODE(CALC_FIXED_COL, FIXED_VEC_LIST);
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected vector class", K(ret), K(expr->get_vec_value_tc()));
+        }
+      }
+    } else if (fmt == VEC_DISCRETE) {
+      mem_size += (sizeof(ObLength) + sizeof(char *)) * batch_size;
+    } else if (fmt == VEC_CONTINUOUS) {
+      mem_size += sizeof(uint32_t) * (batch_size + 1);
+    }
+  }
+  return ret;
+}
+
+#define CALC_COL_BACKUP_SIZE(fmt)                                                                  \
+  do {                                                                                             \
+    if (OB_FAIL(calc_col_backup_size<fmt>(exprs.at(i), eval_ctx.max_batch_size_, col_mem_size))) { \
+      LOG_WARN("calc col backup size failed", K(ret));                                             \
+    } else {                                                                                       \
+      max_col_mem_size = std::max(col_mem_size, max_col_mem_size);                                 \
+    }                                                                                              \
+  } while (false)
+
+int ObVectorsResultHolder::calc_backup_size(const common::ObIArray<ObExpr *> &exprs,
+                                            ObEvalCtx &eval_ctx, int32_t &mem_size)
+{
+  int ret = OB_SUCCESS;
+  mem_size = 0;
+  if (OB_LIKELY(exprs.count() > 0)) {
+    // ObColResultHolder
+    mem_size += sizeof(ObColResultHolder) * exprs.count();
+    // VectorHeader
+    mem_size += sizeof(VectorHeader) * exprs.count();
+    for (int i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+      int32_t max_col_mem_size = 0, col_mem_size = 0;
+      if (!exprs.at(i)->is_batch_result()) {
+        CALC_COL_BACKUP_SIZE(VEC_UNIFORM_CONST);
+      } else if (is_fixed_length_vec(exprs.at(i)->get_vec_value_tc())) {
+        LST_DO_CODE(CALC_COL_BACKUP_SIZE, VEC_FIXED, VEC_UNIFORM);
+      } else {
+        LST_DO_CODE(CALC_COL_BACKUP_SIZE, VEC_DISCRETE, VEC_CONTINUOUS, VEC_UNIFORM);
+      }
+      if (OB_SUCC(ret)) {
+        mem_size += max_col_mem_size;
+      }
+    }
+  }
+  return ret;
+}
+
+#undef CALC_FIXED_COL
+#undef CALC_COL_BACKUP_SIZE
 
 } // end namespace sql
 } // end namespace oceanbase

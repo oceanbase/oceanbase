@@ -78,7 +78,8 @@ private:
         alloc_(nullptr),
         sql_mem_processor_(nullptr),
         io_event_observer_(nullptr),
-        processed_cnt_(0)
+        processed_cnt_(0),
+        compressor_type_(NONE_COMPRESSOR)
     {}
     virtual ~MergeSortInput() = default;
 
@@ -113,6 +114,7 @@ private:
     ObSqlMemMgrProcessor *sql_mem_processor_;
     ObIOEventObserver *io_event_observer_;
     int64_t processed_cnt_;
+    common::ObCompressorType compressor_type_;
   };
 
   // 全局有序，表示merge sort receive的每一个channel传入的数据是有序的。只要对所有路进行归并排序即可

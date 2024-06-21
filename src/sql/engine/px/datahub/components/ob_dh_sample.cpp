@@ -484,8 +484,19 @@ int ObDynamicSamplePieceMsgCtx::split_range(
       LOG_WARN("reserve datum key failed", K(ret), K(sort_def_.exprs_->count()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < sort_def_.exprs_->count(); ++i) {
-      if (OB_FAIL(copied_key.push_back(ObDatum()))) {
-        LOG_WARN("push back empty datum failed", K(ret), K(i));
+      ObExpr *expr = sort_def_.exprs_->at(i);
+      if (coord_.get_spec().use_rich_format_ &&
+          !is_uniform_format(expr->get_format(coord_.get_eval_ctx()))) {
+        if (OB_FAIL(expr->init_vector(coord_.get_eval_ctx(),
+                          expr->is_const_expr() ? VEC_UNIFORM_CONST : VEC_UNIFORM,
+                          coord_.get_eval_ctx().get_batch_size()))) {
+          LOG_WARN("expr init vector failed", K(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(copied_key.push_back(ObDatum()))) {
+          LOG_WARN("push back empty datum failed", K(ret), K(i));
+        }
       }
     }
     while (OB_SUCC(ret) && !sort_iter_end && tmp_key_count < expect_range_count) {

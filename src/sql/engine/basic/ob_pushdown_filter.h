@@ -51,6 +51,7 @@ namespace sql
 {
 class ObRawExpr;
 class ObOpRawExpr;
+class ObExprOperatorCtx;
 class ObStaticEngineCG;
 class ObPushdownOperator;
 struct ObExprFrameInfo;
@@ -391,6 +392,8 @@ public:
   }
   ~ObPushdownDynamicFilterNode() {}
   int set_op_type(const ObRawExpr &raw_expr) override;
+  // for topn filter, we set op_type during runtime rather than compile time
+  inline void set_op_type(const ObWhiteFilterOperatorType &op_type) { op_type_ = op_type; }
   inline int64_t get_col_idx() const
   {
     return col_idx_;
@@ -420,6 +423,11 @@ public:
   {
     return dynamic_filter_type_;
   }
+  inline bool need_continuous_update()
+  {
+    return DynamicFilterType::PD_TOPN_FILTER == dynamic_filter_type_;
+  }
+
 private:
   int64_t col_idx_; // mark which column for multi columns runtime filter
   /*
@@ -580,6 +588,7 @@ public:
   virtual OB_INLINE bool is_logic_or_node() const { return type_ == OR_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_logic_op_node() const { return is_logic_and_node() || is_logic_or_node(); }
   OB_INLINE bool is_filter_dynamic_node() const { return type_ == DYNAMIC_FILTER_EXECUTOR; }
+  virtual OB_INLINE bool filter_can_continuous_filter() const { return true; }
   int prepare_skip_filter();
   OB_INLINE bool can_skip_filter(int64_t row) const
   {
@@ -788,6 +797,16 @@ public:
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterExecutor", ObPhysicalFilterExecutor,
                        K_(filter), KP_(skip_bit));
   virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) override;
+  OB_INLINE bool filter_can_continuous_filter() const override final {
+    bool can_continuous_filter = true;
+    for (int64_t i = 0; i < filter_.filter_exprs_.count();++i) {
+      if (T_OP_PUSHDOWN_TOPN_FILTER == filter_.filter_exprs_.at(i)->type_) {
+        can_continuous_filter = false;
+        break;
+      }
+    }
+    return can_continuous_filter;
+  }
   virtual int filter(blocksstable::ObStorageDatum &datum, const sql::ObBitVector &skip_bit, bool &ret_val);
   virtual int judge_greater_or_less(blocksstable::ObStorageDatum &datum,
                                    const sql::ObBitVector &skip_bit,
@@ -1012,20 +1031,29 @@ public:
       : ObWhiteFilterExecutor(alloc, filter, op),
         is_data_prepared_(false),
         batch_cnt_(0),
-        join_filter_ctx_(nullptr),
+        runtime_filter_ctx_(nullptr),
         is_first_check_(true),
         build_obj_type_(ObNullType),
-        filter_action_(DO_FILTER)
+        filter_action_(DO_FILTER),
+        stored_data_version_(0)
   {}
+  OB_INLINE ObPushdownDynamicFilterNode &get_filter_node()
+  {
+    return static_cast<ObPushdownDynamicFilterNode &>(filter_);
+  }
+  OB_INLINE const ObPushdownDynamicFilterNode &get_filter_node() const
+  {
+    return static_cast<const ObPushdownDynamicFilterNode &>(filter_);
+  }
   virtual int init_evaluated_datums() override;
-  int check_runtime_filter(bool &is_needed);
+  int check_runtime_filter(ObPushdownFilterExecutor* parent_filter, bool &is_needed);
   void filter_on_bypass(ObPushdownFilterExecutor* parent_filter);
   void filter_on_success(ObPushdownFilterExecutor* parent_filter);
   int64_t get_col_idx() const
   {
     return static_cast<const ObPushdownDynamicFilterNode *>(&filter_)->get_col_idx();
   }
-  void locate_join_filter_ctx();
+  void locate_runtime_filter_ctx();
   inline void set_filter_val_meta(const ObObjMeta &val_meta_)
   {
     return static_cast<ObPushdownDynamicFilterNode &>(filter_).set_filter_val_meta(val_meta_);
@@ -1035,12 +1063,22 @@ public:
     return static_cast<ObPushdownDynamicFilterNode &>(filter_).get_filter_val_meta();
   }
   inline void set_filter_action(DynamicFilterAction value) {filter_action_ = value; }
+  inline DynamicFilterAction get_filter_action() const { return filter_action_; }
   inline bool is_filter_all_data() { return DynamicFilterAction::FILTER_ALL == filter_action_; }
   inline bool is_pass_all_data() { return DynamicFilterAction::PASS_ALL == filter_action_; }
   inline bool is_check_all_data() { return DynamicFilterAction::DO_FILTER == filter_action_; }
   inline bool is_data_prepared() const { return is_data_prepared_; }
+  inline void set_stored_data_version(int64_t data_version)
+  {
+    stored_data_version_ = data_version;
+  };
+  OB_INLINE bool filter_can_continuous_filter() const override final
+  {
+    // for topn sort runtime filter, the filter can not do continuouly check
+    return DynamicFilterType::PD_TOPN_FILTER != get_filter_node().get_dynamic_filter_type();
+  }
   INHERIT_TO_STRING_KV("ObDynamicFilterExecutor", ObWhiteFilterExecutor, K_(is_data_prepared),
-                       K_(batch_cnt), KP_(join_filter_ctx));
+                       K_(batch_cnt), KP_(runtime_filter_ctx));
 public:
   using ObRuntimeFilterParams = common::ObSEArray<common::ObDatum, 4>;
   typedef int (*PreparePushdownDataFunc) (const ObExpr &expr,
@@ -1048,17 +1086,28 @@ public:
                                  ObEvalCtx &eval_ctx,
                                  ObRuntimeFilterParams &params,
                                  bool &is_data_prepared);
+  typedef int (*UpdatePushdownDataFunc) (const ObExpr &expr,
+                                 ObDynamicFilterExecutor &dynamic_filter,
+                                 ObEvalCtx &eval_ctx,
+                                 ObRuntimeFilterParams &params,
+                                 bool &is_update);
   static PreparePushdownDataFunc PREPARE_PD_DATA_FUNCS[DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE];
+  static UpdatePushdownDataFunc UPDATE_PD_DATA_FUNCS[DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE];
+
 private:
   int try_preparing_data();
-  void update_rf_slide_window();
+  int try_updating_data();
+  inline bool is_data_version_updated();
 private:
   bool is_data_prepared_;
   int64_t batch_cnt_;
-  void *join_filter_ctx_;
+  ObExprOperatorCtx *runtime_filter_ctx_;
   bool is_first_check_;
   ObObjType build_obj_type_; // for runtime filter, the datum_params_ are from the build table
   DynamicFilterAction filter_action_;
+  // for topn runtime filter, we need continuosly update the dynamic filter data
+  // stored_data_version_ means the data version now the dynamic filter use
+  int64_t stored_data_version_;
 };
 
 class ObFilterExecutorConstructor

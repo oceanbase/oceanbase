@@ -52,6 +52,10 @@ namespace common
                                 const ObLength r_len,       \
                                 int &cmp_ret
 
+#define VECTOR_NOT_NULL_COMPARE_ARGS const sql::ObExpr &expr,    \
+                                const int64_t row_idx1,      \
+                                const int64_t row_idx2,      \
+                                int &cmp_ret
 #define DEF_VEC_READ_INTERFACES(Derived)                                                           \
 public:                                                                                            \
   OB_INLINE bool is_false(const int64_t idx) const                                                 \
@@ -490,6 +494,7 @@ public:
   // the type of other value must be same as this vector
   virtual int null_first_cmp(VECTOR_ONE_COMPARE_ARGS) const = 0;
   virtual int null_last_cmp(VECTOR_ONE_COMPARE_ARGS) const = 0;
+  virtual int no_null_cmp(VECTOR_NOT_NULL_COMPARE_ARGS) const = 0;
 
   // append values to this vector from idx-th column of rows
   virtual int from_rows(const sql::RowMeta &row_meta,
@@ -514,6 +519,12 @@ public:
                       const uint16_t selector[],
                       const int64_t size,
                       const int64_t col_idx) const = 0;
+
+  virtual void to_rows(const sql::RowMeta &row_meta,
+                      sql::ObCompactRow **stored_rows,
+                      const int64_t size,
+                      const int64_t col_idx) const = 0;
+
   virtual int to_row(const sql::RowMeta &row_meta,
                      sql::ObCompactRow *stored_row,
                      const uint64_t row_idx,

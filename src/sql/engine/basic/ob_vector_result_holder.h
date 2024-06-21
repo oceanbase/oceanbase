@@ -37,13 +37,18 @@ namespace sql
 class ObVectorsResultHolder
 {
 public:
-  ObVectorsResultHolder() : exprs_(nullptr), eval_ctx_(nullptr),
-                            inited_(false), backup_cols_(nullptr), saved_(false), saved_size_(0) {}
+  ObVectorsResultHolder(ObIAllocator *tmp_alloc = nullptr) :
+    exprs_(nullptr), eval_ctx_(nullptr), inited_(false), backup_cols_(nullptr), saved_(false),
+    saved_size_(0), tmp_alloc_(tmp_alloc)
+  {}
   int init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
   int save(const int64_t batch_size);
   int restore() const;
   void reset() {  }
+  static int calc_backup_size(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx, int32_t &mem_size);
 private:
+  template<VectorFormat>
+  static int calc_col_backup_size(ObExpr *expr, int32_t batch_size, int32_t &mem_size);
   struct ObColResultHolder
   {
     ObColResultHolder(int64_t max_batch_size, const ObExpr *expr) :
@@ -116,6 +121,7 @@ private:
   ObColResultHolder *backup_cols_;
   bool saved_;
   int64_t saved_size_;
+  ObIAllocator *tmp_alloc_;
 };
 
 

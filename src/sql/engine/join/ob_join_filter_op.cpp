@@ -1005,7 +1005,7 @@ int ObJoinFilterOp::open_join_filter_use()
           ObP2PDhKey dh_key(MY_SPEC.rf_infos_.at(i).p2p_datahub_id_, px_seq_id, task_id);
           join_filter_ctx->rf_key_ = dh_key;
           int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
-          join_filter_ctx->window_size_ = ADAPTIVE_BF_WINDOW_ORG_SIZE;
+          join_filter_ctx->slide_window_.set_window_size(ADAPTIVE_BF_WINDOW_ORG_SIZE);
           join_filter_ctx->max_wait_time_ms_ = filter_input->config_.runtime_filter_wait_time_ms_;
           join_filter_ctx->hash_funcs_.set_allocator(&ctx_.get_allocator());
           join_filter_ctx->cmp_funcs_.set_allocator(&ctx_.get_allocator());

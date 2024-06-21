@@ -743,7 +743,8 @@ public:
     group_store_.set_io_event_observer(observer);
     ObMemAttr attr(tenant_id_, ObModIds::OB_HASH_NODE_GROUP_ROWS, ObCtxIds::WORK_AREA);
     int64_t extra_size = calc_extra_size(agg_row_size);
-    return group_store_.init(*gby_exprs_, max_batch_size, attr, 0, false, extra_size);
+    return group_store_.init(*gby_exprs_, max_batch_size, attr, 0/*mem_limit*/,
+                             false/* enable_dump*/, extra_size, NONE_COMPRESSOR);
   }
 
   int get_next_batch(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows)
@@ -1171,7 +1172,7 @@ public:
     return ret;
   }
 
-  bool exist(const uint64_t hash_val) const
+  OB_INLINE bool exist(const uint64_t hash_val) const
   {
     return bits_.has_member(h1(hash_val) & (cnt_ - 1))
         && bits_.has_member(h2(hash_val) & (cnt_ - 1));

@@ -49,6 +49,30 @@ namespace common
     }
   }
 
+  void ObUniformBase::to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+                              const int64_t size, const int64_t col_idx) const
+  {
+    if (get_format() == VEC_UNIFORM) {
+      for (int64_t row_idx = 0; row_idx < size; row_idx++) {
+        if (datums_[row_idx].is_null()) {
+          stored_rows[row_idx]->set_null(row_meta, col_idx);
+        } else {
+          stored_rows[row_idx]->set_cell_payload(row_meta, col_idx, datums_[row_idx].ptr_,
+                                                 datums_[row_idx].len_);
+        }
+      }
+    } else {
+      for (int64_t i = 0, row_idx = 0; i < size; i++) {
+        if (datums_[row_idx].is_null()) {
+          stored_rows[i]->set_null(row_meta, col_idx);
+        } else {
+          stored_rows[i]->set_cell_payload(row_meta, col_idx, datums_[row_idx].ptr_,
+                                           datums_[row_idx].len_);
+        }
+      }
+    }
+  }
+
   DEF_TO_STRING(ObUniformBase)
   {
     int64_t pos = 0;

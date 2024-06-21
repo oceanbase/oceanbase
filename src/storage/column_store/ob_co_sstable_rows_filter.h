@@ -64,6 +64,7 @@ public:
       common::ObIArray<ObTableIterParam*> &cg_params,
       const bool col_cnt_changed,
       ObICGIterator *&cg_iter);
+  inline bool can_continuous_filter() const { return can_continuous_filter_; }
   TO_STRING_KV(K_(is_inited), K_(subtree_filter_iter_to_locate), K_(batch_size),
       KPC_(iter_param), KP_(access_ctx), KP_(co_sstable), K_(filter), K_(filter_iters),
       K_(iter_filter_node), K_(bitmap_buffer), K_(pd_filter_info));
@@ -124,6 +125,8 @@ private:
       const sql::ObCommonFilterTreeStatus status_two);
   static void set_status_of_filter_tree(sql::ObPushdownFilterExecutor *filter);
   static void clear_filter_state(sql::ObPushdownFilterExecutor *filter);
+  int filter_tree_can_continuous_filter(sql::ObPushdownFilterExecutor *filter,
+                                        bool &can_continuous_filter) const;
 private:
   bool is_inited_;
   bool prepared_;
@@ -139,6 +142,7 @@ private:
   ObSEArray<sql::ObPushdownFilterExecutor*, 4> iter_filter_node_;
   ObSEArray<ObCGBitmap*, 4> bitmap_buffer_;
   sql::PushdownFilterInfo pd_filter_info_;
+  bool can_continuous_filter_;
 };
 }
 }

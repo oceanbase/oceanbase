@@ -18,6 +18,7 @@
 #include "sql/engine/basic/ob_temp_row_store.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/window_function/ob_window_function_op.h"
+#include "sql/engine/expr/ob_expr_topn_filter.h"
 
 namespace oceanbase
 {
@@ -45,8 +46,22 @@ ObSortVecOp::ObSortVecOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *i
 
 int ObSortVecOp::inner_rescan()
 {
+  if (MY_SPEC.enable_pd_topn_filter() && !MY_SPEC.pd_topn_filter_info_.is_shuffle_) {
+    // for local topn runtime filter, rescan topn filter expression context
+    reset_pd_topn_filter_expr_ctx();
+  }
   reset();
   return ObOperator::inner_rescan();
+}
+
+void ObSortVecOp::reset_pd_topn_filter_expr_ctx()
+{
+  uint32_t expr_ctx_id = MY_SPEC.pd_topn_filter_info_.expr_ctx_id_;
+  ObExprTopNFilterContext *topn_filter_ctx =
+      static_cast<ObExprTopNFilterContext *>(ctx_.get_expr_op_ctx(expr_ctx_id));
+  if (nullptr != topn_filter_ctx) {
+    topn_filter_ctx->reset_for_rescan();
+  }
 }
 
 void ObSortVecOp::reset()
@@ -75,6 +90,11 @@ int ObSortVecOp::inner_close()
 {
   sort_op_provider_.collect_memory_dump_info(op_monitor_info_);
   sort_op_provider_.unregister_profile();
+  if (MY_SPEC.enable_pd_topn_filter()) {
+    // TODO XUNSI: update plan monitor info of pushdown topn filter
+    // but all the others_values of the plan_monitor_node is used,
+    // add an extra string in json format is a considered way
+  }
   return OB_SUCCESS;
 }
 
@@ -201,7 +221,7 @@ int ObSortVecOp::init_temp_row_store(const common::ObIArray<ObExpr *> &exprs,
     // do nothing
   } else if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, 2 * 1024 * 1024, true,
                              sort_op_provider_.get_extra_size(is_sort_key) /* row_extra_size */,
-                             reorder_fixed_expr, enable_trunc, compress_type))) {
+                             compress_type, reorder_fixed_expr, enable_trunc))) {
     LOG_WARN("init row store failed", K(ret));
   } else if (OB_FAIL(row_store.alloc_dir_id())) {
     LOG_WARN("failed to alloc dir id", K(ret));
@@ -389,9 +409,11 @@ int ObSortVecOp::init_sort(int64_t tenant_id, int64_t row_count, int64_t topn_cn
   context.is_fetch_with_ties_ = MY_SPEC.is_fetch_with_ties_;
   context.has_addon_ = MY_SPEC.has_addon_;
   context.compress_type_ = MY_SPEC.compress_type_;
+  context.enable_pd_topn_filter_ = MY_SPEC.enable_pd_topn_filter();
+  context.pd_topn_filter_info_ = &MY_SPEC.pd_topn_filter_info_;
+  context.op_ = this;
   if (MY_SPEC.prefix_pos_ > 0) {
     context.prefix_pos_ = MY_SPEC.prefix_pos_;
-    context.op_ = this;
     context.sort_row_cnt_ = &sort_row_count_;
   } else {
     context.in_local_order_ = MY_SPEC.is_local_merge_sort_;

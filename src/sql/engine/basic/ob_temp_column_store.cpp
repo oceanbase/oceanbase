@@ -63,19 +63,19 @@ int ObTempColumnStore::ColumnBlock::calc_rows_size(const IVectorPtrs &vectors,
   return ret;
 }
 
-int ObTempColumnStore::ColumnBlock::add_batch(const IVectorPtrs &vectors,
+int ObTempColumnStore::ColumnBlock::add_batch(ShrinkBuffer &buf,
+                                              const IVectorPtrs &vectors,
                                               const uint16_t *selector,
                                               const ObArray<ObLength> &lengths,
                                               const int64_t size,
                                               const int64_t batch_mem_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(batch_mem_size > remain())) {
+  if (OB_UNLIKELY(batch_mem_size > buf.remain())) {
     ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("block is not enough", K(ret), K(batch_mem_size), K(remain()));
+    LOG_WARN("block is not enough", K(ret), K(batch_mem_size), K(buf));
   } else {
-    ShrinkBuffer *buf = get_buffer();
-    char *head = buf->head();
+    char *head = buf.head();
     *reinterpret_cast<int32_t *>(head) = static_cast<int32_t>(size); // row_count
     int32_t *vec_offsets = reinterpret_cast<int32_t *>(head + sizeof(int32_t));
     int64_t pos = get_header_size(vectors.count());
@@ -106,7 +106,7 @@ int ObTempColumnStore::ColumnBlock::add_batch(const IVectorPtrs &vectors,
       }
     }
     vec_offsets[vectors.count()] = pos; // last offset, the size of vector
-    buf->fast_advance(pos);
+    buf.fast_advance(pos);
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(pos != batch_mem_size)) {
       ret = OB_ERR_UNEXPECTED;
@@ -317,7 +317,8 @@ int ObTempColumnStore::init(const ObExprPtrIArray &exprs,
                             const lib::ObMemAttr &mem_attr,
                             const int64_t mem_limit,
                             const bool enable_dump,
-                            const bool reuse_vector_array)
+                            const bool reuse_vector_array,
+                            const common::ObCompressorType compressor_type)
 {
   int ret = OB_SUCCESS;
   mem_attr_ = mem_attr;
@@ -325,7 +326,7 @@ int ObTempColumnStore::init(const ObExprPtrIArray &exprs,
   max_batch_size_ = max_batch_size;
   ObTempBlockStore::set_inner_allocator_attr(mem_attr);
   OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_,
-                            mem_attr_.label_));
+                            mem_attr_.label_, compressor_type));
   reuse_vector_array_ = reuse_vector_array;
   inited_ = true;
   return ret;
@@ -425,8 +426,8 @@ int ObTempColumnStore::add_batch(const common::ObIArray<ObExpr *> &exprs, ObEval
       LOG_WARN("fail to calc rows size", K(ret));
     } else if (OB_FAIL(ensure_write_blk(batch_mem_size))) {
       LOG_WARN("ensure write block failed", K(ret));
-    } else if (OB_FAIL(cur_blk_->add_batch(batch_ctx_->vectors_, selector, batch_ctx_->lengths_,
-                                           size, batch_mem_size))) {
+    } else if (OB_FAIL(cur_blk_->add_batch(blk_buf_, batch_ctx_->vectors_, selector,
+                                           batch_ctx_->lengths_, size, batch_mem_size))) {
       LOG_WARN("fail to add batch to column store", K(ret));
     } else {
       block_id_cnt_ += size;

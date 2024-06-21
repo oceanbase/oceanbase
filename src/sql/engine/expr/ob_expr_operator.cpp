@@ -107,6 +107,44 @@ int get_tz_offset(const ObTimeZoneInfo *tz_info, int64_t &offset)
   return ret;
 }
 
+int ObAdaptiveFilterSlideWindow::update_slide_window_info(const int64_t filtered_rows_count,
+                                                         const int64_t total_rows_count)
+{
+  int ret = OB_SUCCESS;
+  if (!ready_to_work_) {
+    // if filter is not ready, do not need check whether dynamic disable
+  } else if (dynamic_disable()) {
+    // if filter is dynamic disable, not need to add any filter statistic info
+    // but check whether end of the punished windows, try reenable it.
+    // since we cannot control the size of each batch/block size, we may drop part of the
+    // statistic info which located in the effective window
+    if (cur_pos_ >= next_check_start_pos_) {
+      dynamic_disable_ = false;
+    }
+  } else {
+    // if filter is enabled, add statistic info
+    partial_filter_count_ += filtered_rows_count;
+    partial_total_count_ += total_rows_count;
+
+    // if end of the window, check the filter rate and clear the statistic info
+    if (cur_pos_ >= next_check_start_pos_ + window_size_) {
+      if (partial_filter_count_ >= partial_total_count_ * adptive_ratio_thresheld_) {
+        // partial_filter_count_ / partial_total_count_ >= adptive_ratio_thresheld_
+        // if enabled, the slide window not needs to expand
+        window_cnt_ = 0;
+        next_check_start_pos_ = cur_pos_;
+      } else {
+        window_cnt_++;
+        next_check_start_pos_ = cur_pos_ + (window_size_ * window_cnt_);
+        dynamic_disable_ = true;
+      }
+      partial_total_count_ = 0;
+      partial_filter_count_ = 0;
+    }
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObExprOperator::DatumCastExtraInfo, cmp_meta_, cm_);
 
 int ObExprOperator::DatumCastExtraInfo::deep_copy(common::ObIAllocator &allocator,

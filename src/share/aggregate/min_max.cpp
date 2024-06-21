@@ -33,20 +33,20 @@ inline static int init_min_max_agg(RuntimeContext &agg_ctx,
     if (OB_FAIL(ret)) { SQL_LOG(WARN, "init aggregate failed", K(ret)); }                          \
   } break
 
-int ret = OB_SUCCESS;
-agg = nullptr;
+  int ret = OB_SUCCESS;
+  agg = nullptr;
 
-ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
-if (OB_ISNULL(aggr_info.expr_)) {
-  ret = OB_ERR_UNEXPECTED;
-  SQL_LOG(WARN, "invalid null expr", K(ret));
-} else {
-  VecValueTypeClass res_vec =
-    get_vec_value_tc(aggr_info.expr_->datum_meta_.type_, aggr_info.expr_->datum_meta_.scale_,
-                     aggr_info.expr_->datum_meta_.precision_);
+  ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
+  if (OB_ISNULL(aggr_info.expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_LOG(WARN, "invalid null expr", K(ret));
+  } else {
+    VecValueTypeClass res_vec =
+      get_vec_value_tc(aggr_info.expr_->datum_meta_.type_, aggr_info.expr_->datum_meta_.scale_,
+                       aggr_info.expr_->datum_meta_.precision_);
 
-  switch (res_vec) {
-    LST_DO_CODE(INIT_AGGREGATE_CASE, AGG_VEC_TC_LIST);
+    switch (res_vec) {
+      LST_DO_CODE(INIT_AGGREGATE_CASE, AGG_VEC_TC_LIST);
     default: {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "unexpected result type of min/max aggregate", K(ret), K(res_vec));

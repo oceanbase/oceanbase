@@ -137,6 +137,14 @@ uint64_t ObCOWhereOptimizer::estimate_execution_cost(sql::ObPushdownFilterExecut
   uint64_t execution_cost;
   if (!filter.is_filter_white_node()) {
     execution_cost = UINT64_MAX;
+  } else if (filter.is_filter_dynamic_node()) {
+    ObDynamicFilterExecutor &dynamic_filter = static_cast<ObDynamicFilterExecutor &>(filter);
+    if (dynamic_filter.get_filter_node().get_dynamic_filter_type()
+        == DynamicFilterType::PD_TOPN_FILTER) {
+      execution_cost = 1;
+    } else {
+      execution_cost = UINT64_MAX;
+    }
   } else {
     ObWhiteFilterExecutor &white_filter = static_cast<ObWhiteFilterExecutor &>(filter);
     switch (white_filter.get_op_type()) {

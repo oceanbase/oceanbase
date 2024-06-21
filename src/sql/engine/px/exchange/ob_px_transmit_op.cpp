@@ -611,13 +611,34 @@ int ObPxTransmitOp::set_wf_hybrid_slice_id_calc_type(ObSliceIdxCalc &slice_calc)
 
   const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
   if (spec.is_wf_hybrid_) {
-    ObDatum &wf_hybrid_aggr_status =
-        MY_SPEC.wf_hybrid_aggr_status_expr_->locate_expr_datum(eval_ctx_);
-    if (OB_ISNULL(wf_hybrid_aggr_status.ptr().int_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("wf_hybrid_aggr_status_expr_expr_ is null ptr", K(ret));
+    int64_t aggr_status = INT64_MIN;
+    if (spec.use_rich_format_) {
+      VectorFormat fmt = MY_SPEC.wf_hybrid_aggr_status_expr_->get_format(eval_ctx_);
+      if (OB_UNLIKELY(VEC_FIXED != fmt && fmt != VEC_UNIFORM)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected format", K(ret), K(fmt));
+      } else if (OB_LIKELY(fmt == VEC_FIXED)) {
+        ObIVector *data = MY_SPEC.wf_hybrid_aggr_status_expr_->get_vector(eval_ctx_);
+        int64_t batch_idx = eval_ctx_.get_batch_idx();
+        aggr_status = *reinterpret_cast<const int64_t *>(
+          static_cast<ObFixedLengthFormat<int64_t> *>(data)->get_payload(batch_idx));
+      } else {
+        ObIVector *data = MY_SPEC.wf_hybrid_aggr_status_expr_->get_vector(eval_ctx_);
+        int64_t batch_idx = eval_ctx_.get_batch_idx();
+        aggr_status = *reinterpret_cast<const int64_t *>(
+          static_cast<ObUniformFormat<false> *>(data)->get_payload(batch_idx));
+      }
     } else {
-      int64_t aggr_status = wf_hybrid_aggr_status.get_int();
+      ObDatum &wf_hybrid_aggr_status =
+        MY_SPEC.wf_hybrid_aggr_status_expr_->locate_expr_datum(eval_ctx_);
+      if (OB_ISNULL(wf_hybrid_aggr_status.ptr().int_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("wf_hybrid_aggr_status_expr_expr_ is null ptr", K(ret));
+      } else {
+        aggr_status = wf_hybrid_aggr_status.get_int();
+      }
+    }
+    if (OB_SUCC(ret)) {
       ObWfHybridDistSliceIdCalc &wf_hybrid_slice_calc =
           static_cast< ObWfHybridDistSliceIdCalc &>(slice_calc);
       // distribute method is calculate by aggr_status

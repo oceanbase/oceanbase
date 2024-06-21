@@ -581,7 +581,7 @@ int ObRFBloomFilterMsg::might_contain(const ObExpr &expr,
         }
         filter_ctx.check_count_++;
         res.set_int(is_match ? 1 : 0);
-        ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+        filter_ctx.collect_sample_info(!is_match, 1);
       }
     }
   }
@@ -656,7 +656,7 @@ int ObRFBloomFilterMsg::might_contain_batch(
       filter_ctx.filter_count_ += filter_count;
       filter_ctx.check_count_ += total_count;
       filter_ctx.total_count_ += total_count;
-      ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+      filter_ctx.collect_sample_info(filter_count, total_count);
     }
   }
   return ret;
@@ -841,7 +841,7 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
     filter_ctx.check_count_ += total_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.filter_count_ += filter_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -1553,7 +1553,7 @@ int ObRFRangeFilterMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -1609,7 +1609,7 @@ int ObRFRangeFilterMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -1972,7 +1972,7 @@ int ObRFInFilterMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -2052,7 +2052,7 @@ int ObRFInFilterMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }

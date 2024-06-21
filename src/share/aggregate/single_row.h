@@ -36,7 +36,7 @@ public:
                                   const int32_t agg_col_id, const char *agg_cell,
                                   const int32_t agg_cell_len)
   {
-  int ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;
     const NotNullBitVector &notnulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
     int64_t output_idx = agg_ctx.eval_ctx_.get_batch_idx();
     ResultFmt *res_vec = static_cast<ResultFmt *>(agg_expr.get_vector(agg_ctx.eval_ctx_));
@@ -194,7 +194,7 @@ public:
     return ret;
   }
   void set_first_row(bool is_first_row) { is_first_row_ = is_first_row; }
-  TO_STRING_KV("aggregate", "single_row", K(in_tc), K(out_tc), K(is_first_row_));
+  TO_STRING_KV("aggregate", "single_row", K(in_tc), K(out_tc), K(is_first_row_), K(agg_func));
 private:
   bool is_first_row_;
 };

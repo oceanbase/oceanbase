@@ -746,7 +746,9 @@ int ObCOSSTableRowScanner::update_continuous_range(
     if (nullptr != result_bitmap) {
       group_is_true = result_bitmap->is_all_true();
     }
-    if (group_is_true) {
+    bool filter_tree_can_continuous =
+        rows_filter_ == nullptr ? true : rows_filter_->can_continuous_filter();
+    if (group_is_true && filter_tree_can_continuous) {
       // current group is true, continue do filter if not reach end
       if (reverse_scan_) {
         continuous_end_row_id = current_start_row_id;

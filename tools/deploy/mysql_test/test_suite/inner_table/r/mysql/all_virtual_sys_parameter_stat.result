@@ -213,6 +213,7 @@ server_check_interval
 server_cpu_quota_max
 server_cpu_quota_min
 server_permanent_offline_time
+spill_compression_codec
 sql_login_thread_count
 sql_net_thread_count
 sql_protocol_min_tls_version

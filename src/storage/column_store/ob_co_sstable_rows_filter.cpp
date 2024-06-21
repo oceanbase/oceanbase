@@ -17,6 +17,7 @@
 #include "ob_co_where_optimizer.h"
 #include "storage/access/ob_block_row_store.h"
 #include "storage/access/ob_table_access_context.h"
+#include "common/ob_smart_call.h"
 
 namespace oceanbase
 {
@@ -37,7 +38,8 @@ ObCOSSTableRowsFilter::ObCOSSTableRowsFilter()
     filter_iters_(),
     iter_filter_node_(),
     bitmap_buffer_(),
-    pd_filter_info_()
+    pd_filter_info_(),
+    can_continuous_filter_(true)
 {
 }
 
@@ -78,6 +80,8 @@ int ObCOSSTableRowsFilter::init(
     } else if (FALSE_IT(depth = nullptr == context.sample_filter_ ? depth : depth + 1)) {
     } else if (OB_FAIL(init_bitmap_buffer(depth))) {
       LOG_WARN("Failed to init bitmap buffer", K(ret), K(depth));
+    } else if (OB_FAIL(filter_tree_can_continuous_filter(filter_, can_continuous_filter_))) {
+      LOG_WARN("failed to filter_tree_can_continuous_filter", K(ret));
     } else {
       is_inited_ = true;
     }
@@ -873,6 +877,28 @@ int ObCOSSTableRowsFilter::switch_context_for_cg_iter(
   } else if (OB_FAIL(static_cast<ObCGTileScanner*>(cg_iter)->switch_context(
       cg_params, project_single_row, is_projector && without_filter, context, co_sstable, col_cnt_changed))) {
     LOG_WARN("Failed to switch context for project iter", K(ret));
+  }
+  return ret;
+}
+
+int ObCOSSTableRowsFilter::filter_tree_can_continuous_filter(sql::ObPushdownFilterExecutor *filter,
+                                                             bool &can_continuous_filter) const
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == filter) {
+    can_continuous_filter =  true;
+  } else if (!filter->filter_can_continuous_filter()) {
+    can_continuous_filter = false;
+  } else {
+    for (int64_t i = 0; i < filter->get_child_count(); ++i) {
+      sql::ObPushdownFilterExecutor *child = nullptr;
+      (void)filter->get_child(i, child);
+      if (OB_FAIL(SMART_CALL(filter_tree_can_continuous_filter(child, can_continuous_filter)))) {
+        LOG_WARN("failed to filter_tree_can_continuous_filter");
+      } else if (!can_continuous_filter) {
+        break;
+      }
+    }
   }
   return ret;
 }

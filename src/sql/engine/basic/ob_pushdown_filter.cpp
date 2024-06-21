@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "storage/column_store/ob_column_store_util.h"
 #include "storage/lob/ob_lob_manager.h"
+#include "sql/engine/expr/ob_expr_topn_filter.h"
 
 namespace oceanbase
 {
@@ -54,6 +55,13 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
 ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPARE_PD_DATA_FUNCS
     [DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE] = {
   ObExprJoinFilter::prepare_storage_white_filter_data,
+  ObExprTopNFilter::prepare_storage_white_filter_data,
+};
+
+ObDynamicFilterExecutor::UpdatePushdownDataFunc ObDynamicFilterExecutor::UPDATE_PD_DATA_FUNCS
+    [DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE] = {
+  nullptr,
+  ObExprTopNFilter::update_storage_white_filter_data,
 };
 
 OB_SERIALIZE_MEMBER(ObPushdownFilterNode, type_, n_child_, col_ids_);
@@ -223,19 +231,25 @@ int ObPushdownWhiteFilterNode::set_op_type(const ObRawExpr &raw_expr)
 int ObPushdownDynamicFilterNode::set_op_type(const ObRawExpr &raw_expr)
 {
   int ret = OB_SUCCESS;
-  const RuntimeFilterType type = raw_expr.get_runtime_filter_type();
-  switch (type) {
-    case RANGE:
-      op_type_ = WHITE_OP_BT;
-      dynamic_filter_type_ = JOIN_RUNTIME_FILTER;
-      break;
-    case IN:
-      op_type_ = WHITE_OP_IN;
-      dynamic_filter_type_ = JOIN_RUNTIME_FILTER;
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      break;
+  if (T_OP_RUNTIME_FILTER == raw_expr.get_expr_type()) {
+    const RuntimeFilterType type = raw_expr.get_runtime_filter_type();
+    switch (type) {
+      case RANGE:
+        op_type_ = WHITE_OP_BT;
+        dynamic_filter_type_ = JOIN_RUNTIME_FILTER;
+        break;
+      case IN:
+        op_type_ = WHITE_OP_IN;
+        dynamic_filter_type_ = JOIN_RUNTIME_FILTER;
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        break;
+    }
+  } else if (T_OP_PUSHDOWN_TOPN_FILTER == raw_expr.get_expr_type()) {
+    // for topn pushdown filter, we can not sure whether is ascding or not
+    // so we set the real optype in ObExprTopNFilter::prepare_storage_white_filter_data
+    dynamic_filter_type_ = PD_TOPN_FILTER;
   }
   return ret;
 }
@@ -714,7 +728,10 @@ int ObPushdownFilterConstructor::generate(ObRawExpr *raw_expr, ObPushdownFilterN
   if (OB_ISNULL(raw_expr) || OB_ISNULL(alloc_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid null parameter", K(ret), KP(raw_expr), KP(alloc_));
-  } else if (use_column_store_ && raw_expr->is_white_runtime_filter_expr()) {
+  // join runtime filter only in column store can be pushdown as white filter
+  // topn runtime filter can be pushdown as white filter both in row store and column store
+  } else if ((use_column_store_ || T_OP_PUSHDOWN_TOPN_FILTER == raw_expr->get_expr_type())
+             && raw_expr->is_white_runtime_filter_expr()) {
     // only in column store, the runtime filter can be pushdown as white filter
     ObOpRawExpr *op_raw_expr = static_cast<ObOpRawExpr *>(raw_expr);
     if (op_raw_expr->get_children_count() > 1) {
@@ -1469,8 +1486,9 @@ int ObPushdownFilterExecutor::do_filter(
   int ret = OB_SUCCESS;
   bool is_needed_to_do_filter = check_sstable_index_filter();
   if (!is_needed_to_do_filter) {
-  } else if (is_filter_dynamic_node() &&
-             OB_FAIL(static_cast<ObDynamicFilterExecutor *>(this)->check_runtime_filter(is_needed_to_do_filter))) {
+  } else if (is_filter_dynamic_node()
+             && OB_FAIL(static_cast<ObDynamicFilterExecutor *>(this)->check_runtime_filter(
+                    parent, is_needed_to_do_filter))) {
     LOG_WARN("Failed to check runtime filter", K(ret), KPC(this));
   } else if (is_filter_dynamic_node() && !is_needed_to_do_filter) {
     ObDynamicFilterExecutor *dynamic_filter = static_cast<ObDynamicFilterExecutor *>(this);
@@ -2298,65 +2316,35 @@ int ObBlackFilterExecutor::filter_batch(
   return ret;
 }
 
-void ObDynamicFilterExecutor::update_rf_slide_window()
-{
-  int ret = OB_SUCCESS;
-  sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-        static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
-  if (OB_NOT_NULL(join_filter_ctx)) {
-    if (join_filter_ctx->cur_pos_ >= join_filter_ctx->next_check_start_pos_
-        && join_filter_ctx->need_reset_sample_info_) {
-      join_filter_ctx->partial_total_count_ = 0;
-      join_filter_ctx->partial_filter_count_ = 0;
-      join_filter_ctx->need_reset_sample_info_ = false;
-      if (join_filter_ctx->dynamic_disable()) {
-        join_filter_ctx->dynamic_disable_ = false;
-      }
-    } else if (join_filter_ctx->cur_pos_ >=
-              join_filter_ctx->next_check_start_pos_ + join_filter_ctx->window_size_) {
-      if (join_filter_ctx->partial_total_count_ -
-            join_filter_ctx->partial_filter_count_ <
-            join_filter_ctx->partial_filter_count_) {
-        // partial_filter_count_ / partial_total_count_ > 0.5
-        // The optimizer choose the bloom filter when the filter threshold is larger than 0.6
-        // 0.5 is a acceptable value
-        // if enabled, the slide window not needs to expand
-        join_filter_ctx->window_cnt_ = 0;
-        join_filter_ctx->next_check_start_pos_ = join_filter_ctx->cur_pos_;
-      } else {
-        // if enabled, the slide window needs to expand
-        join_filter_ctx->window_cnt_++;
-        join_filter_ctx->next_check_start_pos_ = join_filter_ctx->cur_pos_ +
-            (join_filter_ctx->window_size_ * join_filter_ctx->window_cnt_);
-        join_filter_ctx->dynamic_disable_ = true;
-      }
-      join_filter_ctx->partial_total_count_ = 0;
-      join_filter_ctx->partial_filter_count_ = 0;
-      join_filter_ctx->need_reset_sample_info_ = true;
-    }
-  }
-}
 
 void ObDynamicFilterExecutor::filter_on_bypass(ObPushdownFilterExecutor* parent_filter)
 {
   ObPushdownDynamicFilterNode &dynamic_filter_node =
       static_cast<ObPushdownDynamicFilterNode &>(filter_);
+  int64_t total_rows_count = 0;
+  int64_t filter_count = 0;
+  int64_t check_count = 0;
+
   if (!dynamic_filter_node.is_first_child()) {
   } else {
-    int64_t total_rows_count = filter_bitmap_->size();
+    total_rows_count = filter_bitmap_->size();
     if (parent_filter) {
       total_rows_count = parent_filter->get_result()->popcnt();
     }
-    sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-        static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
-
-    if (OB_NOT_NULL(join_filter_ctx)) {
-      join_filter_ctx->inc_partial_rows_count(0, total_rows_count);
-      join_filter_ctx->collect_monitor_info(0, 0, total_rows_count);
+    if (is_filter_always_false() || DynamicFilterAction::FILTER_ALL == filter_action_) {
+      // is_filter_always_false is set by skip index
+      // filter_action_ is set by runtime filter msg
+      filter_count = total_rows_count;
+      check_count = total_rows_count;
+    }
+    if (OB_NOT_NULL(runtime_filter_ctx_)) {
+      runtime_filter_ctx_->collect_monitor_info(filter_count, check_count, total_rows_count);
     }
   }
   if (dynamic_filter_node.is_last_child()) {
-    update_rf_slide_window();
+    if (OB_NOT_NULL(runtime_filter_ctx_)) {
+      runtime_filter_ctx_->collect_sample_info(filter_count, total_rows_count);
+    }
   }
 }
 
@@ -2364,8 +2352,6 @@ void ObDynamicFilterExecutor::filter_on_success(ObPushdownFilterExecutor* parent
 {
   int64_t total_rows_count = filter_bitmap_->size();
   int64_t filtered_rows_count = total_rows_count - filter_bitmap_->popcnt();
-  sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-      static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
   if (parent_filter) {
     const int64_t skipped_rows_count = parent_filter->get_skipped_rows();
     total_rows_count -= skipped_rows_count;
@@ -2378,21 +2364,20 @@ void ObDynamicFilterExecutor::filter_on_success(ObPushdownFilterExecutor* parent
   if (!dynamic_filter_node.is_first_child()) {
     total_rows_count = 0;
   }
-  if (OB_NOT_NULL(join_filter_ctx)) {
-    join_filter_ctx->inc_partial_rows_count(filtered_rows_count, total_rows_count);
-    join_filter_ctx->collect_monitor_info(filtered_rows_count, total_rows_count, total_rows_count);
-  }
-  if (dynamic_filter_node.is_last_child()) {
-    update_rf_slide_window();
+  if (OB_NOT_NULL(runtime_filter_ctx_)) {
+    runtime_filter_ctx_->collect_monitor_info(filtered_rows_count, total_rows_count,
+                                              total_rows_count);
+    if (dynamic_filter_node.is_last_child()) {
+      runtime_filter_ctx_->collect_sample_info(filtered_rows_count, total_rows_count);
+    }
   }
 }
 
 int ObDynamicFilterExecutor::init_evaluated_datums()
 {
   int ret = OB_SUCCESS;
-  sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-      static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
-  if (is_data_prepared_ && OB_NOT_NULL(join_filter_ctx) && join_filter_ctx->is_partition_wise_jf_) {
+  if (is_data_prepared_ && OB_NOT_NULL(runtime_filter_ctx_)
+      && runtime_filter_ctx_->need_reset_in_rescan()) {
     is_data_prepared_ = false;
     batch_cnt_ = 0;
     datum_params_.clear();
@@ -2400,30 +2385,34 @@ int ObDynamicFilterExecutor::init_evaluated_datums()
   return ret;
 }
 
-int ObDynamicFilterExecutor::check_runtime_filter(bool &is_needed)
+int ObDynamicFilterExecutor::check_runtime_filter(ObPushdownFilterExecutor *parent_filter,
+                                                  bool &is_needed)
 {
   int ret = OB_SUCCESS;
   is_needed = false;
   if (is_first_check_) {
-    locate_join_filter_ctx();
+    locate_runtime_filter_ctx();
     is_first_check_ = false;
   }
-  if (!is_data_prepared() && (0 == ((batch_cnt_++) % DEFAULT_CHECK_INTERVAL)) &&
+  // If data has prepared, and need continuous update(such as topn runtime filter)
+  // we check whether the data in runtime filter has a new version and then update it.
+  // If the data has not prepared, we check whether the runtime filter is ready and
+  // get data from it.
+  if (is_data_prepared() && is_data_version_updated() && OB_FAIL(try_updating_data())) {
+    LOG_WARN("Failed to updating data");
+  } else if (!is_data_prepared() /*&& (0 == ((batch_cnt_++) % DEFAULT_CHECK_INTERVAL))*/ &&
       OB_FAIL(try_preparing_data())) {
     LOG_WARN("Failed to try preparing data", K_(is_data_prepared));
-  }
-  if (OB_SUCC(ret)) {
+  } else {
     if (!is_data_prepared()) {
       filter_bitmap_->reuse(true);
     } else {
       if (DynamicFilterAction::PASS_ALL == filter_action_) {
         filter_bitmap_->reuse(true);
       } else if (DynamicFilterAction::FILTER_ALL == filter_action_) {
-        filter_bitmap_->reuse(false);
-      } else if (OB_NOT_NULL(join_filter_ctx_)) {
-        sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-            static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
-        is_needed = !join_filter_ctx->dynamic_disable();
+        // bitmap is inited as all false, do not fill false again
+      } else if (DynamicFilterAction::DO_FILTER == filter_action_) {
+        is_needed = !runtime_filter_ctx_->dynamic_disable();
         if (!is_needed) {
           filter_bitmap_->reuse(true);
         }
@@ -2433,11 +2422,11 @@ int ObDynamicFilterExecutor::check_runtime_filter(bool &is_needed)
   return ret;
 }
 
-void ObDynamicFilterExecutor::locate_join_filter_ctx()
+void ObDynamicFilterExecutor::locate_runtime_filter_ctx()
 {
   const uint64_t op_id = get_filter_node().expr_->expr_ctx_id_;
   ObEvalCtx &eval_ctx = op_.get_eval_ctx();
-  join_filter_ctx_ = eval_ctx.exec_ctx_.get_expr_op_ctx(op_id);
+  runtime_filter_ctx_ = static_cast<ObExprOperatorCtx *>(eval_ctx.exec_ctx_.get_expr_op_ctx(op_id));
 }
 
 int ObDynamicFilterExecutor::try_preparing_data()
@@ -2464,6 +2453,39 @@ int ObDynamicFilterExecutor::try_preparing_data()
     }
   }
   return ret;
+}
+
+int ObDynamicFilterExecutor::try_updating_data()
+{
+  int ret = OB_SUCCESS;
+  bool is_update = false;
+  ObRuntimeFilterParams runtime_filter_params;
+  DynamicFilterType dynamic_filter_type =
+      static_cast<ObPushdownDynamicFilterNode &>(filter_).get_dynamic_filter_type();
+  if (dynamic_filter_type >= DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid func type", K(ret), K(dynamic_filter_type));
+  } else {
+    ret = UPDATE_PD_DATA_FUNCS[dynamic_filter_type](
+        *filter_.expr_, *this, op_.get_eval_ctx(), runtime_filter_params, is_update);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_update) {
+    if (OB_FAIL(datum_params_.assign(runtime_filter_params))) {
+      LOG_WARN("Failed to assing params for white filter", K(runtime_filter_params));
+    }
+  }
+  return ret;
+}
+
+inline bool ObDynamicFilterExecutor::is_data_version_updated()
+{
+  bool bool_ret = false;
+  if (!get_filter_node().need_continuous_update()) {
+  } else if (OB_NOT_NULL(runtime_filter_ctx_)) {
+    bool_ret = runtime_filter_ctx_->is_data_version_updated(stored_data_version_);
+  }
+  return bool_ret;
 }
 
 //--------------------- end filter executor ----------------------------

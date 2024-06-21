@@ -53,6 +53,10 @@ enum ObDtlMsgType {
   PX_VECTOR,
   PX_VECTOR_FIXED,
   PX_VECTOR_ROW,
+  DH_SP_WINFUNC_PX_PIECE_MSG, // SP stands for single partition
+  DH_SP_WINFUNC_PX_WHOLE_MSG, // 45
+  DH_RD_WINFUNC_PX_PIECE_MSG,
+  DH_RD_WINFUNC_PX_WHOLE_MSG,
   MAX
 };
 

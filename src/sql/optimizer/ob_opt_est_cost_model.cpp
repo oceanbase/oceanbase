@@ -128,6 +128,34 @@ void ObTableMetaInfo::assign(const ObTableMetaInfo &table_meta_info)
   table_type_ = table_meta_info.table_type_;
 }
 
+int ObCostTableScanInfo::has_exec_param(const ObIArray<ObRawExpr *> &exprs, bool &bool_ret) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret) && !bool_ret; ++i) {
+    if (OB_FAIL(exprs.at(i)->has_exec_param(bool_ret))) {
+      LOG_WARN("failed to has_exec_param");
+    }
+  }
+  return ret;
+}
+
+int ObCostTableScanInfo::has_exec_param(bool &bool_ret) const
+{
+  int ret = OB_SUCCESS;
+  bool_ret = false;
+  if (OB_FAIL(has_exec_param(prefix_filters_, bool_ret))) {
+  } else if (OB_FAIL(has_exec_param(pushdown_prefix_filters_, bool_ret))) {
+    LOG_WARN("failed to has_exec_param");
+  } else if (OB_FAIL(has_exec_param(ss_postfix_range_filters_, bool_ret))) {
+    LOG_WARN("failed to has_exec_param");
+  } else if (OB_FAIL(has_exec_param(postfix_filters_, bool_ret))) {
+    LOG_WARN("failed to has_exec_param");
+  } else if (OB_FAIL(has_exec_param(table_filters_, bool_ret))) {
+    LOG_WARN("failed to has_exec_param");
+  }
+  return ret;
+}
+
 double ObTableMetaInfo::get_micro_block_numbers() const
 {
   double ret = 0.0;

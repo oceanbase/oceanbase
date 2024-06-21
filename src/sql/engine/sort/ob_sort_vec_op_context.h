@@ -18,6 +18,7 @@
 
 namespace oceanbase {
 namespace sql {
+struct ObPushDownTopNFilterInfo;
 struct ObSortVecOpContext
 {
   ObSortVecOpContext() :
@@ -52,11 +53,13 @@ struct ObSortVecOpContext
       uint32_t need_rewind_ : 1;
       uint32_t is_fetch_with_ties_ : 1;
       uint32_t has_addon_ : 1;
-      uint32_t reserved_ : 27;
+      uint32_t enable_pd_topn_filter_ : 1;
+      uint32_t reserved_ : 26;
     };
     uint32_t flag_;
   };
   ObCompressorType compress_type_;
+  const ObPushDownTopNFilterInfo *pd_topn_filter_info_;
 };
 
 } // end namespace sql

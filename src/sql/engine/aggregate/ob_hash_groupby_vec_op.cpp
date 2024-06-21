@@ -260,6 +260,7 @@ int ObHashGroupByVecOp::inner_open()
       }
     }
   }
+
   if (OB_SUCC(ret)) {
     if (ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_) {
       no_non_distinct_aggr_ = (0 == MY_SPEC.aggr_infos_.count());
@@ -321,6 +322,7 @@ int ObHashGroupByVecOp::inner_close()
   sql_mem_processor_.unregister_profile();
   distinct_sql_mem_processor_.unregister_profile();
   group_expr_fixed_lengths_.destroy();
+  dump_vectors_.destroy();
   curr_group_id_ = common::OB_INVALID_INDEX;
   return ObGroupByVecOp::inner_close();
 }
@@ -501,7 +503,8 @@ int ObHashGroupByVecOp::init_distinct_info(bool is_part)
     LOG_WARN("unexpected status: distinct origin exprs is empty", K(ret));
   } else if (OB_FAIL(distinct_data_set_.init(
                tenant_id, GCONF.is_sql_operator_dump_enabled(), true, true, 1,
-               MY_SPEC.max_batch_size_, distinct_origin_exprs_, &distinct_sql_mem_processor_))) {
+               MY_SPEC.max_batch_size_, distinct_origin_exprs_, &distinct_sql_mem_processor_,
+               MY_SPEC.compress_type_))) {
     LOG_WARN("failed to init hash partition infrastructure", K(ret));
   } else if (FALSE_IT(distinct_data_set_.set_io_event_observer(&io_event_observer_))) {
   } else if (OB_FAIL(hash_funcs_.init(n_distinct_expr_))) {// TODO: remove hash_funcs_
@@ -816,7 +819,8 @@ int ObHashGroupByVecOp::setup_dump_env(const int64_t part_id, const int64_t inpu
                                               attr,
                                               1/* memory limit, dump immediately */,
                                               true,
-                                              extra_size))) {
+                                              extra_size,
+                                              MY_SPEC.compress_type_))) {
           LOG_WARN("init temp row store failed", K(ret));
         } else {
           parts[i]->row_store_.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -834,6 +838,39 @@ int ObHashGroupByVecOp::setup_dump_env(const int64_t part_id, const int64_t inpu
       LOG_WARN("failed to update mem size", K(ret));
     }
     LOG_TRACE("trace setup dump", K(part_cnt), K(pre_part_cnt), K(part_id));
+  }
+
+  if (OB_SUCC(ret) && part_cnt <= MAX_BATCH_DUMP_PART_CNT && need_reinit_vectors_) {
+    // only_init_once
+    dump_vectors_.set_allocator(&mem_context_->get_allocator());
+    if (OB_ISNULL(dump_rows_ = static_cast<ObCompactRow **>
+                        (mem_context_->get_arena_allocator().alloc(sizeof(ObCompactRow *) * MY_SPEC.max_batch_size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc dump_rows_", K(ret), K(MY_SPEC.max_batch_size_));
+    } else if (OB_FAIL(dump_vectors_.prepare_allocate(child_->get_spec().output_.count()))) {
+      LOG_WARN("failed to init dump_vectors prepare_allocate", K(ret), K(child_->get_spec().output_.count()));
+    } else if (OB_ISNULL(dump_add_row_selectors_ =
+                  static_cast<uint16_t **> (mem_context_->get_arena_allocator().alloc(sizeof(uint16_t *) * MAX_BATCH_DUMP_PART_CNT)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to init temp_add_row_selectors_", K(ret));
+    } else if (OB_ISNULL(dump_add_row_selectors_item_cnt_ =
+                      static_cast<uint16_t *> (mem_context_->get_arena_allocator().alloc(sizeof(uint16_t) * MAX_BATCH_DUMP_PART_CNT)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to init temp_add_row_selectors_item_cnt_", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < MAX_BATCH_DUMP_PART_CNT; ++i) {
+        if (OB_ISNULL(dump_add_row_selectors_[i] = static_cast<uint16_t *> (mem_context_->get_arena_allocator().alloc(sizeof(uint16_t)
+                                                              * MY_SPEC.max_batch_size_)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to init temp_add_row_selectors_item_cnt_[index]", K(ret), K(i));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_->get_spec().output_.count() ; i++) {
+        ObIVector *col_vec = child_->get_spec().output_.at(i)->get_vector(eval_ctx_);
+        dump_vectors_.at(i) = col_vec;
+      }
+      need_reinit_vectors_ = false;
+    }
   }
   return ret;
 }
@@ -1585,29 +1622,56 @@ int ObHashGroupByVecOp::batch_process_duplicate_data(
           }
         }
         // need dump
-        for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; ++i) {
-          if (child_brs.skip_->exist(i)
-              || nullptr != batch_new_rows_[i]
-              || nullptr != batch_old_rows_[i]) {
-            continue;
+        if (1 != nth_dup_data) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected status: dump is not expected", K(ret));
+        } else if (part_cnt <= MAX_BATCH_DUMP_PART_CNT) {
+          reuse_dump_selectors();
+          for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; i++) {
+            if (child_brs.skip_->exist(i)
+                || nullptr != batch_new_rows_[i]
+                || nullptr != batch_old_rows_[i]) {
+              continue;
+            }
+            is_dumped_[i] = true;
+            ++agged_dumped_cnt_;
+            const int64_t part_idx = (hash_vals_[i] >> part_shift) & (part_cnt - 1);
+            dump_add_row_selectors_[part_idx][dump_add_row_selectors_item_cnt_[part_idx]++] = i;
           }
-          is_dumped_[i] = true;
-          ++agged_dumped_cnt_;
-          const int64_t part_idx = (hash_vals_[i] >> part_shift) & (part_cnt - 1);
-          ObCompactRow *stored_row = nullptr;
-          if (OB_FAIL(parts[part_idx]->row_store_.add_row(child_->get_spec().output_,
-                                                          i,
-                                                          eval_ctx_,
-                                                          stored_row))) {
-            LOG_WARN("add row failed", K(ret));
-          } else if (1 != nth_dup_data) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected status: dump is not expected", K(ret));
-          } else {
-            *static_cast<uint64_t *>(stored_row[0].get_extra_payload(parts[part_idx]->row_store_.get_row_meta())) = hash_vals_[i];
+          for (int64_t i = 0; OB_SUCC(ret) && i < part_cnt ; i++) {
+            if (OB_FAIL(parts[i]->row_store_.add_batch(dump_vectors_, dump_add_row_selectors_[i],
+                                        dump_add_row_selectors_item_cnt_[i], dump_rows_, nullptr))) {
+              LOG_WARN("add row batch failed", K(ret));
+            } else {
+              // set dump rows hash_val
+              for (int64_t j = 0; j < dump_add_row_selectors_item_cnt_[i]; j++) {
+                *static_cast<uint64_t *>(dump_rows_[j][0].get_extra_payload(parts[i]->row_store_.get_row_meta())) =
+                  hash_vals_[dump_add_row_selectors_[i][j]];
+              }
+            }
           }
-          LOG_DEBUG("finish dump", K(part_idx), K(agged_dumped_cnt_), K(agged_row_cnt_),
-                                  K(parts[part_idx]->row_store_.get_row_cnt()), K(i));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; ++i) {
+            if (child_brs.skip_->exist(i)
+                || nullptr != batch_new_rows_[i]
+                || nullptr != batch_old_rows_[i]) {
+              continue;
+            }
+            is_dumped_[i] = true;
+            ++agged_dumped_cnt_;
+            const int64_t part_idx = (hash_vals_[i] >> part_shift) & (part_cnt - 1);
+            ObCompactRow *stored_row = nullptr;
+            if (OB_FAIL(parts[part_idx]->row_store_.add_row(child_->get_spec().output_,
+                                                            i,
+                                                            eval_ctx_,
+                                                            stored_row))) {
+              LOG_WARN("add row failed", K(ret));
+            } else {
+              *static_cast<uint64_t *>(stored_row[0].get_extra_payload(parts[part_idx]->row_store_.get_row_meta())) = hash_vals_[i];
+            }
+            LOG_DEBUG("finish dump", K(part_idx), K(agged_dumped_cnt_), K(agged_row_cnt_),
+                                    K(parts[part_idx]->row_store_.get_row_cnt()), K(i));
+          }
         }
       }
       force_check_dump = false;
@@ -1758,6 +1822,12 @@ int ObHashGroupByVecOp::get_next_batch_distinct_rows(
   return ret;
 }
 
+void ObHashGroupByVecOp::reuse_dump_selectors() {
+  if (nullptr != dump_add_row_selectors_item_cnt_) {
+    memset(dump_add_row_selectors_item_cnt_, 0, sizeof(uint16_t) * MAX_BATCH_DUMP_PART_CNT);
+  }
+}
+
 int ObHashGroupByVecOp::group_child_batch_rows(const ObCompactRow **store_rows,
                                                const RowMeta *meta,
                                                const int64_t input_rows,
@@ -1865,30 +1935,57 @@ int ObHashGroupByVecOp::group_child_batch_rows(const ObCompactRow **store_rows,
           sql_mem_processor_.set_number_pass(part_id + 1);
         }
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; i++) {
-        if (child_brs.skip_->exist(i)
-            || is_dumped_[i]
-            || nullptr != batch_new_rows_[i]
-            || nullptr != batch_old_rows_[i]) {
-          continue;
-        }
-        if (OB_SUCC(ret)) {
+      if (process_check_dump) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: check dump is processed", K(ret));
+      } else if (part_cnt <= MAX_BATCH_DUMP_PART_CNT) {
+        reuse_dump_selectors();
+        for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; i++) {
+          if (child_brs.skip_->exist(i)
+              || is_dumped_[i]
+              || nullptr != batch_new_rows_[i]
+              || nullptr != batch_old_rows_[i]) {
+            continue;
+          }
           ++agged_dumped_cnt_;
           const int64_t part_idx = (hash_vals_[i] >> part_shift) & (part_cnt - 1);
-          ObCompactRow *stored_row = nullptr;
-          if (OB_FAIL(parts[part_idx]->row_store_.add_row(child_->get_spec().output_,
-                                                          i,
-                                                          eval_ctx_,
-                                                          stored_row))) {
-            LOG_WARN("add row failed", K(ret));
-          } else if (process_check_dump) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected status: check dump is processed", K(ret));
+          dump_add_row_selectors_[part_idx][dump_add_row_selectors_item_cnt_[part_idx]++] = i;
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_cnt ; i++) {
+          if (OB_FAIL(parts[i]->row_store_.add_batch(dump_vectors_, dump_add_row_selectors_[i],
+                                                    dump_add_row_selectors_item_cnt_[i], dump_rows_, nullptr))) {
+            LOG_WARN("add row batch failed", K(ret));
           } else {
-            *static_cast<uint64_t *>(stored_row[0].get_extra_payload(parts[part_idx]->row_store_.get_row_meta())) = hash_vals_[i];
+            // set dump rows hash_val
+            for (int64_t j = 0; j < dump_add_row_selectors_item_cnt_[i]; j++) {
+              *static_cast<uint64_t *>(dump_rows_[j][0].get_extra_payload(parts[i]->row_store_.get_row_meta())) =
+                                                                                          hash_vals_[dump_add_row_selectors_[i][j]];
+            }
           }
-          LOG_DEBUG("finish dump", K(part_idx), K(agged_dumped_cnt_), K(agged_row_cnt_),
-                                  K(parts[part_idx]->row_store_.get_row_cnt()), K(i));
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; i++) {
+          if (child_brs.skip_->exist(i)
+              || is_dumped_[i]
+              || nullptr != batch_new_rows_[i]
+              || nullptr != batch_old_rows_[i]) {
+            continue;
+          }
+          if (OB_SUCC(ret)) {
+            ++agged_dumped_cnt_;
+            const int64_t part_idx = (hash_vals_[i] >> part_shift) & (part_cnt - 1);
+            ObCompactRow *stored_row = nullptr;
+            if (OB_FAIL(parts[part_idx]->row_store_.add_row(child_->get_spec().output_,
+                                                            i,
+                                                            eval_ctx_,
+                                                            stored_row))) {
+              LOG_WARN("add row failed", K(ret));
+            } else {
+              *static_cast<uint64_t *>(stored_row[0].get_extra_payload(parts[part_idx]->row_store_.get_row_meta())) = hash_vals_[i];
+            }
+            LOG_DEBUG("finish dump", K(part_idx), K(agged_dumped_cnt_), K(agged_row_cnt_),
+                                    K(parts[part_idx]->row_store_.get_row_cnt()), K(i));
+          }
         }
       }
     }

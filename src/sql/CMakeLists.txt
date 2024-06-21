@@ -141,6 +141,11 @@ ob_set_subtarget(ob_sql engine
   engine/sort/ob_sort_vec_op_eager_filter.cpp
   engine/sort/ob_sort_key_fetcher_vec_op.cpp
   engine/ob_subschema_ctx.cpp
+  engine/sort/ob_pd_topn_sort_filter.cpp
+  engine/window_function/ob_window_function_vec_op.cpp
+  engine/window_function/row_store.cpp
+  engine/window_function/win_expr.cpp
+  engine/window_function/row_store.cpp
 )
 
 ob_set_subtarget(ob_sql engine_aggregate
@@ -151,6 +156,7 @@ ob_set_subtarget(ob_sql engine_aggregate
   engine/aggregate/ob_hash_distinct_op.cpp
   engine/aggregate/ob_hash_groupby_op.cpp
   engine/aggregate/ob_merge_distinct_op.cpp
+  engine/aggregate/ob_merge_distinct_vec_op.cpp
   engine/aggregate/ob_merge_groupby_op.cpp
   engine/aggregate/ob_scalar_aggregate_op.cpp
   engine/aggregate/ob_adaptive_bypass_ctrl.cpp
@@ -738,6 +744,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_inner_row_cmp_val.cpp
   engine/expr/ob_expr_last_refresh_scn.cpp
   engine/expr/ob_expr_json_utils.cpp
+  engine/expr/ob_expr_topn_filter.cpp
   engine/expr/ob_expr_inner_table_option_printer.cpp
   engine/expr/ob_expr_rb_build_empty.cpp
   engine/expr/ob_expr_rb_is_empty.cpp
@@ -853,6 +860,10 @@ ob_set_subtarget(ob_sql engine_set
   engine/set/ob_merge_intersect_op.cpp
   engine/set/ob_merge_set_op.cpp
   engine/set/ob_merge_union_op.cpp
+  engine/set/ob_hash_set_vec_op.cpp
+  engine/set/ob_hash_union_vec_op.cpp
+  engine/set/ob_hash_except_vec_op.cpp
+  engine/set/ob_hash_intersect_vec_op.cpp
   engine/set/ob_set_op.cpp
 )
 

@@ -109,6 +109,7 @@ public:
 public:
   static const int64_t MIN_PARTITION_CNT = 8;
   static const int64_t MAX_PARTITION_CNT = 256;
+  static const int64_t MAX_BATCH_DUMP_PART_CNT = 64;
   static const int64_t INIT_BKT_SIZE_FOR_ADAPTIVE_GBY = 256;
 
   // min in memory groups
@@ -176,7 +177,12 @@ public:
       reorder_aggr_rows_(false),
       old_row_selector_(nullptr),
       batch_aggr_rows_table_(),
-      llc_est_()
+      llc_est_(),
+      dump_add_row_selectors_(nullptr),
+      dump_add_row_selectors_item_cnt_(nullptr),
+      dump_vectors_(nullptr),
+      dump_rows_(nullptr),
+      need_reinit_vectors_(true)
   {
   }
   void reset(bool for_rescan);
@@ -336,6 +342,7 @@ private:
   int by_pass_get_next_permutation_batch(int64_t &nth_group, bool &last_group,
                                          const ObBatchRows *child_brs, ObBatchRows &my_brs,
                                          const int64_t batch_size, bool &insert_group_ht);
+  void reuse_dump_selectors();
   int init_by_pass_op();
 
   int process_multi_groups(aggregate::AggrRowPtr *agg_rows, const ObBatchRows &brs);
@@ -419,6 +426,11 @@ private:
   uint16_t *old_row_selector_;
   BatchAggrRowsTable batch_aggr_rows_table_;
   LlcEstimate llc_est_;
+  uint16_t **dump_add_row_selectors_;
+  uint16_t *dump_add_row_selectors_item_cnt_;
+  common::ObFixedArray<ObIVector *, common::ObIAllocator> dump_vectors_;
+  ObCompactRow **dump_rows_;
+  bool need_reinit_vectors_;
 };
 
 } // end namespace sql

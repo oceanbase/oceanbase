@@ -40,6 +40,7 @@
 #include "sql/engine/basic/ob_select_into_op.h"
 #include "observer/mysql/obmp_base.h"
 #include "lib/alloc/ob_malloc_callback.h"
+#include "sql/engine/window_function/ob_window_function_vec_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -859,6 +860,23 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
       if (OB_ISNULL(input)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else if (wf_spec.is_participator() && OB_SUCCESS != ret_) {
+        input->set_error_code(ret_);
+        LOG_TRACE("debug post apply info", K(ret_));
+      } else {
+        LOG_TRACE("debug post apply info", K(ret_));
+      }
+    }
+  } else if (PHY_VEC_WINDOW_FUNCTION == op.type_) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is null", K(ret), K(kit));
+    } else {
+      ObWindowFunctionVecSpec &wf_spec = static_cast<ObWindowFunctionVecSpec &>(op);
+      ObWindowFunctionOpInput *input = static_cast<ObWindowFunctionOpInput *>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input is null", K(ret));
       } else if (wf_spec.is_participator() && OB_SUCCESS != ret_) {
         input->set_error_code(ret_);
         LOG_TRACE("debug post apply info", K(ret_));

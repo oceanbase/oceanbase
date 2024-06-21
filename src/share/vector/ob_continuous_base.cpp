@@ -35,5 +35,19 @@ namespace common
       }
     }
   }
+
+  void ObContinuousBase::to_rows(const sql::RowMeta &row_meta,
+                                            sql::ObCompactRow **stored_rows,
+                                            const int64_t size,
+                                            const int64_t col_idx) const
+  {
+    for (int i = 0; i < size; i++) {
+      if (nulls_->at(i)) {
+        stored_rows[i]->set_null(row_meta, col_idx);
+      } else {
+        stored_rows[i]->set_cell_payload(row_meta, col_idx, data_ + offsets_[i], get_length(i));
+      }
+    }
+  }
 }
 }

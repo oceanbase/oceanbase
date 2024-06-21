@@ -375,6 +375,8 @@
 #include "ob_expr_st_symdifference.h"
 #include "ob_expr_priv_st_asmvtgeom.h"
 #include "ob_expr_priv_st_makevalid.h"
+#include "ob_expr_func_ceil.h"
+#include "ob_expr_topn_filter.h"
 #include "ob_expr_sdo_relate.h"
 #include "ob_expr_inner_table_option_printer.h"
 #include "ob_expr_password.h"
@@ -1180,7 +1182,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids /* 689 */
   ObExprLastRefreshScn::eval_last_refresh_scn,                        /* 690 */
   ObExprDocLength::generate_doc_length,                               /* 691 */
-  NULL, // ObExprTopNFilter::eval_topn_filter,                        /* 692 */
+  ObExprTopNFilter::eval_topn_filter,                                 /* 692 */
   NULL, // ObExprIsEnabledRole::eval_is_enabled_role,                 /* 693 */
   NULL, // ObExprCanAccessTrigger::can_access_trigger,                /* 694 */
   NULL, //ObRelationalExprOperator::eval_min_max_compare,             /* 695 */
@@ -1354,7 +1356,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 127 */
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,        /* 129 */
-  NULL,//ObExprTopNFilter::eval_topn_filter_batch,                    /* 130 */
+  ObExprTopNFilter::eval_topn_filter_batch,                           /* 130 */
   NULL,//ObRelationalExprOperator::eval_batch_min_max_compare,        /* 131 */
   NULL,//ObExprBM25::eval_batch_bm25_relevance_expr,                  /* 132 */
 };
@@ -1472,10 +1474,10 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprInOrNotIn::eval_vector_in_without_row_fallback,         /* 109 */
   ObExprInOrNotIn::eval_vector_in_without_row,                  /* 110 */
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_vector  /* 111 */
-  NULL,//ObExprTopNFilter::eval_topn_filter_vector,             /* 112 */
+  ObExprTopNFilter::eval_topn_filter_vector,                    /* 112 */
   NULL,//ObRelationalExprOperator::eval_vector_min_max_compare, /* 113 */
-  NULL,//ObExprCeilFloor::calc_ceil_floor_vector,               /* 114 */
-  NULL,//ObExprRepeat::eval_repeat_vector,                      /* 115 */
+  ObExprCeilFloor::calc_ceil_floor_vector,                      /* 114 */
+  ObExprRepeat::eval_repeat_vector,                             /* 115 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

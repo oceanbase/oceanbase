@@ -27,7 +27,7 @@ ObIHashPartInfrastructure::~ObIHashPartInfrastructure()
 int ObIHashPartInfrastructure::init(
   uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part, int64_t ways,
   int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-  ObSqlMemMgrProcessor *sql_mem_processor)
+  ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
@@ -53,6 +53,7 @@ int ObIHashPartInfrastructure::init(
     arena_alloc_->set_label("HashPartInfra");
     alloc_ = &mem_context_->get_malloc_allocator();
     sql_mem_processor_ = sql_mem_processor;
+    compressor_type_ = compressor_type;
     init_part_func_ = &ObIHashPartInfrastructure::init_default_part;
     insert_row_func_ = &ObIHashPartInfrastructure::direct_insert_row;
     part_shift_ = sizeof(uint64_t) * CHAR_BIT / 2;
@@ -206,8 +207,8 @@ int ObIHashPartInfrastructure::init_default_part(
     part->part_key_.level_ = cur_level_ + 1;
     part->part_key_.nth_part_ = nth_part;
     ObMemAttr attr(tenant_id_, "HashPartInfra", ObCtxIds::WORK_AREA);
-    if (OB_FAIL(part->store_.init(*exprs_, max_batch_size_, attr, limit, true,
-                                  ObHashPartItem::get_extra_size()))) {
+    if (OB_FAIL(part->store_.init(*exprs_, max_batch_size_, attr, limit, true, /*enable_dump*/
+                                  ObHashPartItem::get_extra_size(), compressor_type_))) {
       SQL_ENG_LOG(WARN, "failed to init row store", K(ret));
     } else if (OB_ISNULL(sql_mem_processor_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -457,6 +458,7 @@ insert_batch_on_partitions(const common::ObIArray<ObExpr *> &exprs,
         } else {
           ObHashPartItem *store_row = static_cast<ObHashPartItem *>(srow);
           store_row->set_hash_value(hash_values[idx], cur_dumped_parts_[part_idx]->store_.get_row_meta());
+          store_row->set_is_match(cur_dumped_parts_[part_idx]->store_.get_row_meta(), false);
         }
         return ret;
       }
@@ -1245,7 +1247,7 @@ int64_t ObHashPartInfrastructureVecImpl::get_bucket_size() const
 int ObHashPartInfrastructureVecImpl::init(uint64_t tenant_id,
   bool enable_sql_dumped, bool unique, bool need_pre_part,
   int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-  ObSqlMemMgrProcessor *sql_mem_processor)
+  ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -1256,7 +1258,7 @@ int ObHashPartInfrastructureVecImpl::init(uint64_t tenant_id,
   } else if (OB_FAIL(init_hp_infras(tenant_id, exprs, hp_infras_))) {
     LOG_WARN("failed to init hash part infras instance", K(ret));
   } else if (OB_FAIL(hp_infras_->init(tenant_id, enable_sql_dumped, unique,
-      need_pre_part, ways, max_batch_size, exprs, sql_mem_processor))) {
+      need_pre_part, ways, max_batch_size, exprs, sql_mem_processor, compressor_type))) {
     LOG_WARN("failed to init hash part infras", K(ret));
   } else {
     is_inited_ = true;
@@ -1327,6 +1329,54 @@ int ObHashPartInfrastructureVecImpl::end_round()
     }
   }
   return ret;
+}
+
+void ObHashPartInfrastructureVecImpl::switch_left()
+{
+  hp_infras_->switch_left();
+}
+
+bool ObHashPartInfrastructureVecImpl::has_cur_part(InputSide input_side)
+{
+  return hp_infras_->has_cur_part(input_side);
+}
+
+int ObHashPartInfrastructureVecImpl::get_right_next_batch(
+                           const common::ObIArray<ObExpr *> &exprs,
+                           const int64_t max_row_cnt,
+                           int64_t &read_rows)
+{
+  HP_INFRAS_STATUS_CHECK
+  {
+    if (OB_FAIL(hp_infras_->get_right_next_batch(exprs, max_row_cnt, read_rows))) {
+      LOG_WARN("failed to end round", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHashPartInfrastructureVecImpl::exists_batch(
+                  const common::ObIArray<ObExpr*> &exprs,
+                  const ObBatchRows &brs, ObBitVector *skip,
+                  uint64_t *hash_values_for_batch)
+{
+  HP_INFRAS_STATUS_CHECK
+  {
+    if (OB_FAIL(hp_infras_->exists_batch(exprs, brs, skip, hash_values_for_batch))) {
+      LOG_WARN("failed to end round", K(ret));
+    }
+  }
+  return ret;
+}
+
+const RowMeta &ObHashPartInfrastructureVecImpl::get_hash_store_row_meta() const
+{
+  return hp_infras_->get_hash_store_row_meta();
+}
+
+void ObHashPartInfrastructureVecImpl::switch_right()
+{
+  hp_infras_->switch_right();
 }
 
 int ObHashPartInfrastructureVecImpl::init_hash_table(int64_t bucket_cnt,

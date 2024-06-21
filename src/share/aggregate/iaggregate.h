@@ -400,72 +400,99 @@ protected:
   {
     int ret = OB_SUCCESS;
     ObEvalCtx &ctx = agg_ctx.eval_ctx_;
-    auto &columns = *static_cast<ColumnFmt *>(param_expr.get_vector(ctx));
+    ColumnFmt &columns = *static_cast<ColumnFmt *>(param_expr.get_vector(ctx));
     bool all_not_null = !columns.has_null();
     Derived &derived = *static_cast<Derived *>(this);
     void *tmp_res = derived.get_tmp_res(agg_ctx, agg_col_id, agg_cell);
     int64_t calc_info = derived.get_batch_calc_info(agg_ctx, agg_col_id, agg_cell);
-    if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
-      if (all_not_null) {
-        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-          if (OB_FAIL(
-                derived.add_row(agg_ctx, columns, i, agg_col_id, agg_cell, tmp_res, calc_info))) {
-            SQL_LOG(WARN, "add row failed", K(ret));
+    if (OB_LIKELY(!agg_ctx.removal_info_.enable_removal_opt_)) {
+      if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
+        if (all_not_null) {
+          for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+            if (OB_FAIL(
+                  derived.add_row(agg_ctx, columns, i, agg_col_id, agg_cell, tmp_res, calc_info))) {
+              SQL_LOG(WARN, "add row failed", K(ret));
+            }
+          } // end for
+          if (agg_cell != nullptr) {
+            NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
+            not_nulls.set(agg_col_id);
           }
-        } // end for
-        if (agg_cell != nullptr) {
-          NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
-          not_nulls.set(agg_col_id);
+        } else {
+          for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+            if (OB_FAIL(derived.add_nullable_row(agg_ctx, columns, i, agg_col_id, agg_cell, tmp_res,
+                                                 calc_info))) {
+              SQL_LOG(WARN, "add row failed", K(ret));
+            }
+          } // end for
+        }
+      } else if (!row_sel.is_empty()) {
+        if (all_not_null) {
+          for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
+            if (OB_FAIL(derived.add_row(agg_ctx, columns, row_sel.index(i), agg_col_id, agg_cell,
+                                        tmp_res, calc_info))) {
+              SQL_LOG(WARN, "add row failed", K(ret));
+            }
+          } // end for
+          if (agg_cell != nullptr) {
+            NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
+            not_nulls.set(agg_col_id);
+          }
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
+            if (OB_FAIL(derived.add_nullable_row(agg_ctx, columns, row_sel.index(i), agg_col_id,
+                                                 agg_cell, tmp_res, calc_info))) {
+              SQL_LOG(WARN, "add row failed", K(ret));
+            }
+          } // end for
         }
       } else {
-        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-          if (OB_FAIL(derived.add_nullable_row(agg_ctx, columns, i, agg_col_id, agg_cell, tmp_res,
+        if (all_not_null) {
+          for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+            if (skip.at(i)) {
+            } else if (OB_FAIL(derived.add_row(agg_ctx, columns, i, agg_col_id, agg_cell, tmp_res,
                                                calc_info))) {
-            SQL_LOG(WARN, "add row failed", K(ret));
+              SQL_LOG(WARN, "add row failed", K(ret));
+            }
+          } // end for
+          if (agg_cell != nullptr) {
+            NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
+            not_nulls.set(agg_col_id);
           }
-        } // end for
-      }
-    } else if (!row_sel.is_empty()) {
-      if (all_not_null) {
-        for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-          if (OB_FAIL(derived.add_row(agg_ctx, columns, row_sel.index(i), agg_col_id, agg_cell,
-                                      tmp_res, calc_info))) {
-            SQL_LOG(WARN, "add row failed", K(ret));
-          }
-        } // end for
-        if (agg_cell != nullptr) {
-          NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
-          not_nulls.set(agg_col_id);
+        } else {
+          for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+            if (skip.at(i)) {
+            } else if (OB_FAIL(derived.add_nullable_row(agg_ctx, columns, i, agg_col_id, agg_cell,
+                                                        tmp_res, calc_info))) {
+              SQL_LOG(WARN, "add row failed", K(ret));
+            }
+          } // end for
         }
-      } else {
-        for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-          if (OB_FAIL(derived.add_nullable_row(agg_ctx, columns, row_sel.index(i), agg_col_id,
-                                               agg_cell, tmp_res, calc_info))) {
-            SQL_LOG(WARN, "add row failed", K(ret));
-          }
-        } // end for
       }
     } else {
-      if (all_not_null) {
-        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-          if (skip.at(i)) {
-          } else if (OB_FAIL(derived.add_row(agg_ctx, columns, i, agg_col_id, agg_cell, tmp_res,
-                                             calc_info))) {
-            SQL_LOG(WARN, "add row failed", K(ret));
+      if (row_sel.is_empty()) {
+        if (bound.get_all_rows_active()) {
+          for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+            ret = removal_opt<Derived>::add_or_sub_row(derived, agg_ctx, columns, i, agg_col_id, agg_cell,
+                                                       tmp_res, calc_info);
+            if (OB_FAIL(ret)) { SQL_LOG(WARN, "add or sub row failed", K(ret)); }
           }
-        } // end for
-        if (agg_cell != nullptr) {
-          NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
-          not_nulls.set(agg_col_id);
+        } else {
+          for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+            if (skip.at(i)) {
+            } else {
+              ret = removal_opt<Derived>::add_or_sub_row(derived, agg_ctx, columns, i, agg_col_id, agg_cell,
+                                                         tmp_res, calc_info);
+              if (OB_FAIL(ret)) { SQL_LOG(WARN, "add or sub row failed", K(ret)); }
+            }
+          }
         }
       } else {
-        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-          if (skip.at(i)) {
-          } else if (OB_FAIL(derived.add_nullable_row(agg_ctx, columns, i, agg_col_id, agg_cell,
-                                                      tmp_res, calc_info))) {
-            SQL_LOG(WARN, "add row failed", K(ret));
-          }
-        } // end for
+        for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
+          ret = removal_opt<Derived>::add_or_sub_row(derived, agg_ctx, columns, i, agg_col_id, agg_cell,
+                                                     tmp_res, calc_info);
+          if (OB_FAIL(ret)) { SQL_LOG(WARN, "add or sub row failed", K(ret)); }
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -595,7 +622,7 @@ protected:
     } else {
       MEMSET(skip_buf, 0, skip_size);
       ObBitVector *tmp_skip = to_bit_vector(skip_buf);
-      tmp_skip->deep_copy(skip, skip_size);
+      tmp_skip->deep_copy(skip, bound.batch_size());
       Derived &derived = *static_cast<Derived *>(this);
       for (int param_id = 0; OB_SUCC(ret) && param_id < param_exprs.count(); param_id++) {
         ObIVector *param_vec = param_exprs.at(param_id)->get_vector(agg_ctx.eval_ctx_);
@@ -836,9 +863,8 @@ namespace helper
 int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
                     ObIArray<IAggregate *> &aggregates);
 
-template <ObItemType op>
-int init_aggregate(sql::ObEvalCtx &ctx, RuntimeContext &agg_ctx, const int64_t agg_col_id,
-                   ObIAllocator &allocator, IAggregate *&agg);
+int init_aggregate(RuntimeContext &agg_ctx, ObIAllocator &allocator, const int64_t col_id,
+                   IAggregate *&aggregate);
 
 inline constexpr bool is_var_len_agg_cell(VecValueTypeClass vec_tc)
 {

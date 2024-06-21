@@ -19,6 +19,8 @@ namespace share
 {
 namespace aggregate
 {
+  // TODO: add approx_distinct_count
+  // TODO: add sysbit_ops
 #define INIT_GENERAL_CASE(func_type, vec_tc)                                                       \
   case (vec_tc): {                                                                                 \
     ret =                                                                                          \

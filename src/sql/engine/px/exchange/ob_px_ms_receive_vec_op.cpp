@@ -104,6 +104,7 @@ int ObPxMSReceiveVecOp::init_merge_sort_input(int64_t n_channel)
           msi->alloc_ = &mem_context_->get_malloc_allocator();
           msi->sql_mem_processor_ = &sql_mem_processor_;
           msi->io_event_observer_ = &io_event_observer_;
+          msi->compressor_type_ = MY_SPEC.compress_type_;
           if (OB_FAIL(merge_inputs_.push_back(msi))) {
             LOG_WARN("push back merge sort input fail", K(idx), K(ret));
           }
@@ -144,7 +145,7 @@ int ObPxMSReceiveVecOp::inner_open()
                      "PxMsOutputStore", ObCtxIds::EXECUTE_CTX_ID);
       if (OB_FAIL(output_store_.init(MY_SPEC.all_exprs_, get_spec().max_batch_size_,
                                      attr, 0 /*mem_limit*/, false /*enable_dump*/,
-                                     0 /*row_extra_size*/))) {
+                                     0 /*row_extra_size*/, NONE_COMPRESSOR))) {
         LOG_WARN("init output store failed", K(ret));
       } else if (OB_ISNULL(mem = ctx_.get_allocator().alloc(
             ObBitVector::memory_size(get_spec().max_batch_size_)))) {
@@ -594,7 +595,8 @@ int ObPxMSReceiveVecOp::GlobalOrderInput::create_temp_row_store(
     const ObPxMSReceiveVecSpec &spec = ms_receive_op.my_spec();
     if (OB_FAIL(row_store->init(spec.all_exprs_, spec.max_batch_size_,
                                 mem_attr, mem_limit, true /* enable_dump*/,
-                                0 /*row_extra_size*/))) {
+                                0 /*row_extra_size*/,
+                                compressor_type_))) {
       row_store->~ObTempRowStore();
       ctx.get_allocator().free(buf);
       row_store = nullptr;
@@ -824,7 +826,8 @@ int ObPxMSReceiveVecOp::new_local_order_input(MergeSortInput *&out_msi)
     ObMemAttr mem_attr(ctx_.get_my_session()->get_effective_tenant_id(), "PxMSRecvLocal", ObCtxIds::WORK_AREA);
     if (OB_FAIL(local_input->row_store_.init(MY_SPEC.all_exprs_, get_spec().max_batch_size_,
                                          mem_attr, 0 /* mem_limit */, true /* enable_dump*/,
-                                         0 /*row_extra_size*/))) {
+                                         0 /*row_extra_size*/,
+                                         local_input->compressor_type_))) {
       LOG_WARN("failed to init temp row store", K(ret));
     } else if (FALSE_IT(local_input->row_store_.set_dir_id(sql_mem_processor_.get_dir_id()))) {
       LOG_WARN("failed to allocate dir id for temp row store", K(ret));

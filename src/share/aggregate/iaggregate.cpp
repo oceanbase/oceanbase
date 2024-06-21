@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "iaggregate.h"
 #include "share/datum/ob_datum_util.h"
-#include "share/aggregate/count.h"
-#include "share/aggregate/min_max.h"
-#include "share/aggregate/sum.h"
 #include "share/aggregate/first_row.h"
 
 namespace oceanbase
@@ -40,9 +37,13 @@ extern int init_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                               ObIAllocator &allocator, IAggregate *&agg, int32 *tmp_res_size = NULL);
 extern int init_count_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                     ObIAllocator &allocator, IAggregate *&agg);
-#define INIT_AGGREGATE_CASE(OP_TYPE, func_name)                                                    \
+extern int init_approx_count_distinct_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                                ObIAllocator &allocator, IAggregate *&agg);
+extern int init_sysbit_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                 ObIAllocator &allocator, IAggregate *&agg);
+#define INIT_AGGREGATE_CASE(OP_TYPE, func_name, col_id)                                            \
   case (OP_TYPE): {                                                                                \
-    ret = init_##func_name##_aggregate(agg_ctx, i, allocator, agg);                                \
+    ret = init_##func_name##_aggregate(agg_ctx, col_id, allocator, aggregate);                     \
   } break
 int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
                     ObIArray<IAggregate *> &aggregates)
@@ -54,18 +55,27 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
   }
   for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
     ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(i);
-    IAggregate *agg = nullptr;
+    IAggregate *aggregate = nullptr;
     if (aggr_info.is_implicit_first_aggr()) {
-      if (OB_FAIL(init_first_row_aggregate(agg_ctx, i, allocator, agg))) {
+      if (OB_FAIL(init_first_row_aggregate(agg_ctx, i, allocator, aggregate))) {
         SQL_LOG(WARN, "init first row aggregate failed", K(ret));
       }
     } else {
-      switch (aggr_info.expr_->type_) {
-        INIT_AGGREGATE_CASE(T_FUN_MIN, min);
-        INIT_AGGREGATE_CASE(T_FUN_MAX, max);
-        INIT_AGGREGATE_CASE(T_FUN_COUNT, count);
-        INIT_AGGREGATE_CASE(T_FUN_SUM, sum);
-        INIT_AGGREGATE_CASE(T_FUN_COUNT_SUM, count_sum);
+      ObExprOperatorType fun_type =
+        (aggr_info.expr_->type_ == T_WINDOW_FUNCTION ? aggr_info.real_aggr_type_ :
+                                                       aggr_info.expr_->type_);
+      switch (fun_type) {
+        INIT_AGGREGATE_CASE(T_FUN_MIN, min, i);
+        INIT_AGGREGATE_CASE(T_FUN_MAX, max, i);
+        INIT_AGGREGATE_CASE(T_FUN_COUNT, count, i);
+        INIT_AGGREGATE_CASE(T_FUN_SUM, sum, i);
+        INIT_AGGREGATE_CASE(T_FUN_COUNT_SUM, count_sum, i);
+        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT, approx_count_distinct, i);
+        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, approx_count_distinct, i);
+        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE, approx_count_distinct, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_OR, sysbit, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_AND, sysbit, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_XOR, sysbit, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));
@@ -73,17 +83,18 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
       }
       if (OB_FAIL(ret)) {
         SQL_LOG(WARN, "init aggregate failed", K(ret));
-      } else if (OB_ISNULL(agg)) {
+      } else if (OB_ISNULL(aggregate)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_LOG(WARN, "unexpected null aggregate", K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(aggregates.push_back(agg))) {
+    if (OB_SUCC(ret) && OB_FAIL(aggregates.push_back(aggregate))) {
       SQL_LOG(WARN, "push back element failed", K(ret));
     }
   } // end for
   return ret;
 }
+
 #undef INIT_AGGREGATE_CASE
 
 static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id)
@@ -110,6 +121,8 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     } else {
       ret_size = tmp_res_size;
     }
+  } else if (info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT) {
+    ret_size = sizeof(char *);
   }
   return ret_size;
 }

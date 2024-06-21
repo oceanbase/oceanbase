@@ -427,6 +427,218 @@ int eval_batch_ceil_floor(const ObExpr &expr,
   return ret;
 }
 
+int ObExprCeilFloor::calc_ceil_floor_vector(const ObExpr &expr,
+                           ObEvalCtx &ctx,
+                           const ObBitVector &skip,
+                           const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("eval arg failed", K(ret), K(expr));
+  } else {
+    VectorFormat res_format = expr.get_format(ctx);
+    VectorFormat left_format = expr.args_[0]->get_format(ctx);
+    const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+    const ObObjType res_type = expr.datum_meta_.type_;
+    int input_type = 0;
+    if (ObNumberTC == ob_obj_type_class(arg_type)) {
+      input_type = NUMBER_TYPE;
+    } else if (ob_is_integer_type(arg_type)) {
+      input_type = INTEGER_TYPE;
+    } else if (ObFloatType == arg_type) {
+      input_type = FLOAT_TYPE;
+    } else if (ObDoubleType == arg_type) {
+      input_type = DOUBLE_TYPE;
+    } else if (ObDecimalIntType == arg_type) {
+      input_type = DECIMAL_INT_TYPE;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected arg type", K(ret), K(arg_type));
+    }
+    VecValueTypeClass arg_tc = get_vec_value_tc(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.scale_,
+              expr.args_[0]->datum_meta_.precision_);
+    if (OB_SUCC(ret)) {
+      if (res_format == VEC_FIXED && left_format == VEC_FIXED) {
+        if (arg_tc == VEC_TC_INTEGER || arg_tc == VEC_TC_UINTEGER) {
+          ret = inner_calc_ceil_floor_vector<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>, ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>
+                                (expr, input_type, ctx, skip, bound);
+        } else if (arg_tc == VEC_TC_DOUBLE || arg_tc == VEC_TC_FIXED_DOUBLE) {
+          ret = inner_calc_ceil_floor_vector<ObFixedLengthFormat<RTCType<VEC_TC_DOUBLE>>, ObFixedLengthFormat<RTCType<VEC_TC_DOUBLE>>>
+                      (expr, input_type, ctx, skip, bound);
+        } else if (ObDecimalIntType == arg_type) {
+          // if use ObFixedLengthFormat, don't know length of decimal_int
+          // use ObFixedLengthBase, don't need length
+          ret = inner_calc_ceil_floor_vector<ObFixedLengthBase, ObFixedLengthBase>(expr, input_type, ctx, skip, bound);
+        } else {
+          ret = inner_calc_ceil_floor_vector<ObVectorBase, ObVectorBase>(expr, input_type, ctx, skip, bound);
+        }
+      } else {
+        // float type input is uniform....., output is fixed format...
+        ret = inner_calc_ceil_floor_vector<ObVectorBase, ObVectorBase>(expr, input_type, ctx, skip, bound);
+      }
+    }
+  }
+  return ret;
+}
+
+#define CHECK_CEIL_VECTOR()               \
+if (IsCheck) {                             \
+  if (skip.at(j) || eval_flags.at(j)) {    \
+    continue;                              \
+  } else if (left_vec->is_null(j)) {       \
+    res_vec->set_null(j);                  \
+    eval_flags.set(j);                     \
+    continue;                              \
+  }                                        \
+}
+
+template <typename LeftVec, typename ResVec, bool IS_FLOOR, bool IsCheck>
+static int do_eval_ceil_floor_vector(const ObExpr &expr,ObEvalCtx &ctx,
+                                     int input_type,
+                                     const ObBitVector &skip,
+                                     const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  LeftVec *left_vec = static_cast<LeftVec *>(expr.args_[0]->get_vector(ctx));
+
+  switch (input_type) {
+    case NUMBER_TYPE: {
+      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
+        CHECK_CEIL_VECTOR();
+        const number::ObNumber arg_nmb(left_vec->get_number(j));
+        number::ObNumber res_nmb;
+        ObNumStackOnceAlloc tmp_alloc;
+        if (OB_FAIL(res_nmb.from(arg_nmb, tmp_alloc))) {
+          LOG_WARN("get number from arg failed", K(ret), K(arg_nmb));
+        } else {
+          if (IS_FLOOR) {
+            if (OB_FAIL(res_nmb.floor(0))) {
+              LOG_WARN("calc floor for number failed", K(ret), K(res_nmb));
+            }
+          } else {
+            if (OB_FAIL(res_nmb.ceil(0))) {
+              LOG_WARN("calc ceil for number failed", K(ret), K(res_nmb));
+            }
+          }
+          const ObObjType res_type = expr.datum_meta_.type_;
+          if (OB_FAIL(ret)) {
+          } else if (ObNumberTC == ob_obj_type_class(res_type)) {
+            res_vec->set_number(j, res_nmb);
+            eval_flags.set(j);
+          } else if (ob_is_integer_type(res_type)) {
+            int64_t res_int = 0;
+            if (res_nmb.is_valid_int64(res_int)) {
+              res_vec->set_int(j, res_int);
+              eval_flags.set(j);
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected res type", K(ret), K(res_type));
+            }
+          }
+        }
+      }
+      break;
+    }
+    case INTEGER_TYPE: {
+      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
+        CHECK_CEIL_VECTOR();
+        res_vec->set_int(j, left_vec->get_int(j));
+        eval_flags.set(j);
+      }
+      break;
+    }
+    case FLOAT_TYPE: {
+      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
+        CHECK_CEIL_VECTOR();
+        if (IS_FLOOR) {
+          res_vec->set_float(j, floorf(left_vec->get_float(j)));
+        } else {
+          res_vec->set_float(j, ceilf(left_vec->get_float(j)));
+        }
+        eval_flags.set(j);
+      }
+      break;
+    }
+    case DOUBLE_TYPE: {
+      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
+        CHECK_CEIL_VECTOR();
+        if (IS_FLOOR) {
+          res_vec->set_double(j, floor(left_vec->get_double(j)));
+        } else {
+          res_vec->set_double(j, ceil(left_vec->get_double(j)));
+        }
+        eval_flags.set(j);
+      }
+      break;
+    }
+    case DECIMAL_INT_TYPE: {
+      const ObDatumMeta &in_meta = expr.args_[0]->datum_meta_;
+      const ObDatumMeta &out_meta = expr.datum_meta_;
+      for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
+        CHECK_CEIL_VECTOR();
+        ObDatum left_datum(left_vec->get_payload(j), left_vec->get_length(j), false);
+        ObDatum res_datum(res_vec->get_payload(j), res_vec->get_length(j), false);
+        if (OB_FAIL(ObExprCeilFloor::ceil_floor_decint(IS_FLOOR, &left_datum, in_meta, out_meta, res_datum))) {
+          LOG_WARN("do_round_decimalint failed", K(ret), K(in_meta), K(out_meta), K(left_datum), K(res_datum));
+        }
+        res_vec->set_decimal_int(j, res_datum.get_decimal_int(), res_datum.get_int_bytes());
+        eval_flags.set(j);
+      }
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected arg type", K(ret), K(input_type));
+      break;
+  }
+  return ret;
+}
+
+uint64_t bitwise_or(uint64_t l, uint64_t r) {
+    return l | r;
+}
+
+template <typename LeftVec>
+static bool if_vector_need_cal_all(LeftVec *left_vec,
+                            const ObBitVector &skip,
+                            const ObBitVector &eval_flags,
+                            const EvalBound &bound)
+{
+  bool is_need = ObBitVector::bit_op_zero(skip, eval_flags, bound, bitwise_or);
+  for (int64_t j = bound.start(); is_need && j < bound.end(); ++j) {
+    is_need = !(left_vec->is_null(j));
+  }
+  return is_need;
+}
+
+template <typename LeftVec, typename ResVec>
+int ObExprCeilFloor::inner_calc_ceil_floor_vector(const ObExpr &expr,
+                                                 int input_type,
+                                                 ObEvalCtx &ctx,
+                                                 const ObBitVector &skip,
+                                                 const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  LeftVec *left_vec = static_cast<LeftVec *>(expr.args_[0]->get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx); // to do for skip
+  const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+  const bool is_floor = (T_FUN_SYS_FLOOR == expr.type_) ? true : false;
+  const bool is_check = if_vector_need_cal_all<LeftVec>(left_vec, skip, eval_flags, bound) ? false : true;
+
+  if (is_check && is_floor) {
+    ret = do_eval_ceil_floor_vector<LeftVec, ResVec, true, true>(expr, ctx, input_type, skip, bound);
+  } else if (!is_check && is_floor) {
+    ret = do_eval_ceil_floor_vector<LeftVec, ResVec, true, false>(expr, ctx, input_type, skip, bound);
+  } else if (is_check && !is_floor) {
+    ret = do_eval_ceil_floor_vector<LeftVec, ResVec, false, true>(expr, ctx, input_type, skip, bound);
+  } else if (!is_check && !is_floor) {
+    ret = do_eval_ceil_floor_vector<LeftVec, ResVec, false, false>(expr, ctx, input_type, skip, bound);
+  }
+  return ret;
+}
+
 int ObExprCeilFloor::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const
 {
@@ -435,6 +647,7 @@ int ObExprCeilFloor::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_ceil_floor;
   rt_expr.eval_batch_func_ = eval_batch_ceil_floor;
+  rt_expr.eval_vector_func_ = calc_ceil_floor_vector;
   return ret;
 }
 

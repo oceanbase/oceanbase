@@ -1609,6 +1609,12 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
         AllocBloomFilterContext *alloc_bf_ctx = static_cast<AllocBloomFilterContext *>(ctx);
         CK( OB_NOT_NULL(alloc_bf_ctx));
         OC( (allocate_runtime_filter_for_hash_join)(*alloc_bf_ctx));
+        if (OB_FAIL(ret)) {
+        } else if (LOG_SORT == get_type()
+                   && OB_FAIL(static_cast<ObLogSort *>(this)
+                                  ->try_allocate_pushdown_topn_runtime_filter())) {
+          LOG_WARN("failed to allocate topn runtime filter for sort");
+        }
         break;
       }
       case ALLOC_OP: {
@@ -5218,6 +5224,241 @@ int ObLogicalOperator::find_table_scan(ObLogicalOperator* root_op,
   return ret;
 }
 
+int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_detail(
+    ObLogicalOperator *op, ObRawExpr *candidate_sk_expr, uint64_t table_id,
+    ObLogicalOperator *&scan_op, bool &find_table_scan, bool &table_scan_has_exchange,
+    bool &has_px_coord)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null logical operator", K(ret));
+  } else if (op->is_block_op()) {
+  } else {
+    switch (op->get_type()) {
+      case LOG_GROUP_BY: {
+        if (OB_FAIL(check_sort_key_can_pushdown_to_tsc_for_gby(
+                op, candidate_sk_expr, table_id, scan_op, find_table_scan,
+                table_scan_has_exchange, has_px_coord))) {
+          LOG_WARN("failed to check group by");
+        }
+        break;
+      }
+
+      case LOG_WINDOW_FUNCTION: {
+        if (OB_FAIL(check_sort_key_can_pushdown_to_tsc_for_winfunc(
+                op, candidate_sk_expr, table_id, scan_op, find_table_scan, table_scan_has_exchange,
+                has_px_coord))) {
+          LOG_WARN("failed to check window function");
+        }
+        break;
+      }
+
+      case LOG_JOIN: {
+        if (OB_FAIL(check_sort_key_can_pushdown_to_tsc_for_join(
+                op, candidate_sk_expr, table_id, scan_op, find_table_scan, table_scan_has_exchange,
+                has_px_coord))) {
+          LOG_WARN("failed to check join");
+        }
+        break;
+      }
+
+      case LOG_DISTINCT:
+      case LOG_EXCHANGE: {
+        ObLogicalOperator *child = op->get_child(first_child);
+        if (op->is_block_input(first_child)) {
+        } else if (OB_FAIL(SMART_CALL(check_sort_key_can_pushdown_to_tsc_detail(
+                       child, candidate_sk_expr, table_id, scan_op, find_table_scan,
+                       table_scan_has_exchange, has_px_coord)))) {
+          LOG_WARN("failed to check", K(ret));
+        }
+        break;
+      }
+      case LOG_TABLE_SCAN: {
+        ObLogTableScan *scan = static_cast<ObLogTableScan *>(op);
+        if (scan->get_table_id() == table_id) {
+          bool has_exec_param = false;
+          if (scan->use_das()) {
+            LOG_TRACE("[TopN Filter]can not pushdown to das table scan");
+          } else if (OB_FAIL(scan->has_exec_param(has_exec_param))) {
+            LOG_WARN("failed to has_exec_param");
+          } else if (has_exec_param) {
+            LOG_TRACE("[TopN Filter]can not pushdown to tsc with exec param");
+          } else {
+            scan_op = op;
+            find_table_scan = true;
+          }
+        }
+        break;
+      }
+      case LOG_TEMP_TABLE_ACCESS: {
+        ObLogTempTableAccess *scan = static_cast<ObLogTempTableAccess *>(op);
+        if (scan->get_table_id() == table_id) {
+          scan_op = op;
+          find_table_scan = true;
+        }
+        break;
+      }
+      case LOG_SORT:
+      case LOG_MATERIAL: {
+        LOG_TRACE("[TopN Filter]can not pushdown across sort or material");
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && find_table_scan && log_op_def::LOG_EXCHANGE == op->get_type()) {
+    table_scan_has_exchange = true;
+    ObLogExchange *exch_op = static_cast<ObLogExchange *>(op);
+    if (exch_op->is_px_coord()) {
+      has_px_coord = true;
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_for_gby(
+    ObLogicalOperator *op, ObRawExpr *candidate_sk_expr, uint64_t table_id,
+    ObLogicalOperator *&scan_op, bool &find_table_scan, bool &table_scan_has_exchange,
+    bool &has_px_coord)
+{
+  int ret = OB_SUCCESS;
+  ObLogGroupBy *group_by = static_cast<ObLogGroupBy *>(op);
+  const common::ObIArray<ObRawExpr *> &group_by_exprs = group_by->get_group_by_exprs();
+  // only the sort key is in group by expr, topn filter can pushdown
+  if (!is_contain(group_by_exprs, candidate_sk_expr)) {
+  } else {
+    ObLogicalOperator *child = group_by->get_child(first_child);
+    if (group_by->is_block_input(first_child)) {
+    } else if (OB_FAIL(SMART_CALL(check_sort_key_can_pushdown_to_tsc_detail(
+                   child, candidate_sk_expr, table_id, scan_op, find_table_scan,
+                   table_scan_has_exchange, has_px_coord)))) {
+      LOG_WARN("failed to check", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_for_winfunc(
+    ObLogicalOperator *op, ObRawExpr *candidate_sk_expr, uint64_t table_id,
+    ObLogicalOperator *&scan_op, bool &find_table_scan, bool &table_scan_has_exchange,
+    bool &has_px_coord)
+{
+  int ret = OB_SUCCESS;
+  ObLogWindowFunction *log_win_func = static_cast<ObLogWindowFunction *>(op);
+  ObSEArray<ObRawExpr *, 4> partition_exprs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < log_win_func->get_window_exprs().count(); ++i) {
+    ObWinFunRawExpr *win_expr = log_win_func->get_window_exprs().at(i);
+    if (OB_ISNULL(win_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("window function expr is null", K(ret));
+    } else if (i == 0) {
+      if (OB_FAIL(partition_exprs.assign(win_expr->get_partition_exprs()))) {
+        LOG_WARN("failed to assign partition exprs", K(ret));
+      }
+    } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(
+                   partition_exprs, win_expr->get_partition_exprs(), partition_exprs))) {
+      LOG_WARN("failed to intersect expr array", K(ret));
+    } else if (partition_exprs.empty()) {
+      break;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (candidate_sk_expr->has_flag(CNT_WINDOW_FUNC)) {
+    LOG_TRACE("[TopN Filter]countain win func, can not pushdown");
+  } else if (!is_contain(partition_exprs, candidate_sk_expr)) {
+    LOG_TRACE("[TopN Filter]contain none partition by expr, can not pushdown");
+  } else {
+    ObLogicalOperator *child = log_win_func->get_child(first_child);
+    if (log_win_func->is_block_input(first_child)) {
+    } else if (OB_FAIL(SMART_CALL(check_sort_key_can_pushdown_to_tsc_detail(
+                   child, candidate_sk_expr, table_id, scan_op, find_table_scan,
+                   table_scan_has_exchange, has_px_coord)))) {
+      LOG_WARN("failed to check", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_for_join(
+    ObLogicalOperator *op, ObRawExpr *candidate_sk_expr, uint64_t table_id,
+    ObLogicalOperator *&scan_op, bool &find_table_scan, bool &table_scan_has_exchange,
+    bool &has_px_coord)
+{
+  int ret = OB_SUCCESS;
+  ObLogJoin *log_join = static_cast<ObLogJoin *>(op);
+  ObJoinType join_type = log_join->get_join_type();
+  if (FULL_OUTER_JOIN == join_type || CONNECT_BY_JOIN == join_type) {
+    // can not pushdown
+    LOG_TRACE("[TopN Filter]can not pushdown across full outer join and connnect by join");
+  } else if (LEFT_OUTER_JOIN == join_type || LEFT_SEMI_JOIN == join_type
+             || LEFT_ANTI_JOIN == join_type) {
+    // output in left
+    ObLogicalOperator *child = log_join->get_child(first_child);
+    if (log_join->is_block_input(first_child)) {
+      LOG_TRACE("[TopN Filter]can not pushdown across left join but block left");
+    } else if (OB_FAIL(SMART_CALL(check_sort_key_can_pushdown_to_tsc_detail(
+                   child, candidate_sk_expr, table_id, scan_op, find_table_scan,
+                   table_scan_has_exchange, has_px_coord)))) {
+      LOG_WARN("failed to check", K(ret));
+    }
+  } else if (RIGHT_OUTER_JOIN == join_type || RIGHT_ANTI_JOIN == join_type
+             || RIGHT_SEMI_JOIN == join_type) {
+    // output in right
+    ObLogicalOperator *child = log_join->get_child(second_child);
+    if (log_join->is_block_input(second_child)) {
+      LOG_TRACE("[TopN Filter]can not pushdown across right join but block right");
+    } else if (OB_FAIL(SMART_CALL(check_sort_key_can_pushdown_to_tsc_detail(
+                   child, candidate_sk_expr, table_id, scan_op, find_table_scan,
+                   table_scan_has_exchange, has_px_coord)))) {
+      LOG_WARN("failed to check", K(ret));
+    }
+  } else if (INNER_JOIN == join_type) {
+    for (int64_t i = 0; OB_SUCC(ret) && nullptr == scan_op && i < log_join->get_num_of_child();
+         ++i) {
+      ObLogicalOperator *child = log_join->get_child(i);
+      if (log_join->is_block_input(i)) {
+        continue;
+      } else if (OB_FAIL(SMART_CALL(check_sort_key_can_pushdown_to_tsc_detail(
+                     child, candidate_sk_expr, table_id, scan_op, find_table_scan,
+                     table_scan_has_exchange, has_px_coord)))) {
+        LOG_WARN("failed to check", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc(
+    ObLogicalOperator *root_op,
+    common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> &candidate_sk_exprs,
+    uint64_t table_id, ObLogicalOperator *&scan_op, bool &table_scan_has_exchange,
+    bool &has_px_coord, int64_t &effective_sk_cnt)
+{
+  int ret = OB_SUCCESS;
+  scan_op = nullptr;
+  bool find_table_scan = true;
+  if (OB_ISNULL(root_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null logical operator", K(ret));
+  }
+  for (int64_t i = 0; i < candidate_sk_exprs.count() && OB_SUCC(ret) && find_table_scan; ++i) {
+    // for every expr, set to false and check
+    find_table_scan = false;
+    ObRawExpr *candidate_sk_expr = candidate_sk_exprs.at(i);
+    if (OB_FAIL(check_sort_key_can_pushdown_to_tsc_detail(root_op, candidate_sk_expr, table_id,
+                                                          scan_op, find_table_scan,
+                                                          table_scan_has_exchange, has_px_coord))) {
+      LOG_WARN("failed to check_sort_key_can_pushdown_to_tsc_detail");
+    } else if (find_table_scan) {
+      effective_sk_cnt = i + 1;
+    }
+  }
+  return ret;
+}
+
 int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                                       int64_t &filter_id)
 {
@@ -6242,7 +6483,6 @@ int ObLogicalOperator::find_max_px_resource_child(OPEN_PX_RESOURCE_ANALYZE_DECLA
   }
   return ret;
 }
-
 
 int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
 {

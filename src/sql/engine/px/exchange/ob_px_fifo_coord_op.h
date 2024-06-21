@@ -110,6 +110,8 @@ private:
   ObInitChannelPieceMsgP init_channel_piece_msg_proc_;
   ObReportingWFPieceMsgP reporting_wf_piece_msg_proc_;
   ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc_;
+  ObSPWinFuncPXPieceMsgP sp_winfunc_px_piece_msg_proc_;
+  ObRDWinFuncPXPieceMsgP rd_winfunc_px_piece_msg_proc_;
 };
 
 } // end namespace sql

@@ -452,6 +452,7 @@
 #include "sql/engine/expr/ob_expr_rb_from_string.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
+#include "sql/engine/expr/ob_expr_topn_filter.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1074,7 +1075,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprTransactionId);
     REG_OP(ObExprInnerRowCmpVal);
     REG_OP(ObExprLastRefreshScn);
-    // REG_OP(ObExprTopNFilter);
+    REG_OP(ObExprTopNFilter);
     REG_OP(ObExprPrivSTMakeEnvelope);
     REG_OP(ObExprPrivSTClipByBox2D);
     REG_OP(ObExprPrivSTPointOnSurface);
@@ -1434,6 +1435,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprTransactionId);
   REG_OP_ORCL(ObExprInnerRowCmpVal);
   REG_OP_ORCL(ObExprLastRefreshScn);
+  REG_OP_ORCL(ObExprTopNFilter);
   REG_OP_ORCL(ObExprInnerTableOptionPrinter);
   REG_OP_ORCL(ObExprInnerTableSequenceGetter);
   // REG_OP_ORCL(ObExprTopNFilter);

@@ -2029,6 +2029,8 @@ public:
   void set_local_session_var_id(int64_t idx) { local_session_var_id_ = idx; }
   int64_t get_local_session_var_id() { return local_session_var_id_; }
 
+  int has_exec_param(bool &bool_ret) const;
+
 private:
   const ObRawExpr *get_same_identify(const ObRawExpr *e,
                                      const ObExprEqualCheckContext *check_ctx) const;

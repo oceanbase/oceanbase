@@ -1107,6 +1107,23 @@ int ObRawExpr::extract_local_session_vars_recursively(ObIArray<const share::sche
   return ret;
 }
 
+int ObRawExpr::has_exec_param(bool &bool_ret) const
+{
+  int ret = OB_SUCCESS;
+  bool_ret = false;
+  if (is_exec_param_expr()) {
+    bool_ret = true;
+  } else {
+    for (int64_t i = 0; i < get_param_count() && OB_SUCC(ret) && !bool_ret; ++i) {
+      const ObRawExpr *child_expr = get_param_expr(i);
+      if (OB_FAIL(SMART_CALL(child_expr->has_exec_param(bool_ret)))) {
+        LOG_WARN("failed to has_exec_param");
+      }
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 int ObConstRawExpr::assign(const ObRawExpr &other)
 {
@@ -2887,6 +2904,25 @@ int ObOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &po
     if (OB_FAIL(BUF_PRINTF("BM25(k1=1.2, b=0.75, epsilon=0.25)"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
+  } else if (T_OP_PUSHDOWN_TOPN_FILTER == get_expr_type()) {
+    if (OB_FAIL(BUF_PRINTF("TOPN_FILTER("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
+        if (OB_ISNULL(get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param_expr is NULL", K(i), K(ret));
+        } else if (OB_FAIL(get_param_expr(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (i < get_param_count() - 1) {
+          if (OB_FAIL(BUF_PRINTF(", "))) {
+            LOG_WARN("fail to BUF_PRINTF", K(i), K(ret));
+          }
+        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(i), K(ret));
+        }
+      }
+    }
   } else {
     if (OB_FAIL(BUF_PRINTF("(%s", get_type_name(get_expr_type())))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
@@ -2990,6 +3026,15 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
         break;
       }
     }
+  // sort is compare in vectorize format, so only one column can pushdown as
+  // white filter
+  } else if (T_OP_PUSHDOWN_TOPN_FILTER == type_ && 1 == exprs_.count()
+             && T_REF_COLUMN == exprs_.at(0)->get_expr_type()) {
+    // FIXME: @zhouhaiyu.zhy
+    // for now, storage pushdown filter can not process both a < 10 and a is null in one filter
+    // so disable white topn runtime filter
+    // LOG_TRACE("[TopN Filter] push topn filter as white filter");
+    bool_ret = false;
   } else {
     bool_ret = false;
   }

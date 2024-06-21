@@ -142,7 +142,8 @@ int ObHJPartition::begin_iterator()
   return ret;
 }
 
-int ObHJPartition::init(const ObExprPtrIArray &exprs, const int64_t max_batch_size)
+int ObHJPartition::init(const ObExprPtrIArray &exprs, const int64_t max_batch_size,
+                        const ObCompressorType compressor_type)
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr(tenant_id_, common::ObModIds::OB_ARENA_HASH_JOIN, ObCtxIds::WORK_AREA);
@@ -151,7 +152,8 @@ int ObHJPartition::init(const ObExprPtrIArray &exprs, const int64_t max_batch_si
                               mem_attr,
                               0/*mem limit*/,
                               true,
-                              8/*extra_size*/))) {
+                              8/*extra_size*/,
+                              compressor_type))) {
     LOG_WARN("failed to init chunk row store", K(ret));
   }
   return ret;

@@ -33,7 +33,7 @@ public:
     support_fast_single_row_agg_(false), has_distinct_(false), has_order_by_(false), dir_id_(-1),
     op_eval_infos_(nullptr),
     allocator_(label, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id, ObCtxIds::WORK_AREA),
-    agg_ctx_(eval_ctx, tenant_id, aggr_infos, label, allocator_),
+    agg_ctx_(eval_ctx, tenant_id, aggr_infos, label),
     aggregates_(allocator_, aggr_infos.count()),
     fast_single_row_aggregates_(allocator_, aggr_infos.count()), extra_rt_info_buf_(nullptr),
     cur_extra_rt_info_idx_(0), add_one_row_fns_(allocator_, aggr_infos.count()), row_selector_(nullptr)
@@ -212,9 +212,14 @@ public:
   int init_scalar_aggregate_row(ObCompactRow *&row, RowMeta &row_meta, ObIAllocator &allocator);
 
   int init_fast_single_row_aggs();
-private:
-  int setup_rt_info(AggrRowPtr data, const int32_t row_size);
 
+  RuntimeContext *get_rt_ctx() { return &agg_ctx_; }
+
+  static int setup_rt_info(AggrRowPtr data, RuntimeContext &agg_ctx);
+
+  ObIArray<IAggregate *> &get_aggregates() { return aggregates_; }
+
+private:
   int setup_bypass_rt_infos(const int64_t batch_size);
 
   int llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx) const;

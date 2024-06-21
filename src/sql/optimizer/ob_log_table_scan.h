@@ -576,6 +576,10 @@ public:
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
   virtual int get_card_without_filter(double &card) override;
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
+  inline int has_exec_param(bool &bool_ret) const
+  {
+    return est_cost_info_ == NULL ? common::OB_SUCCESS : est_cost_info_->has_exec_param(bool_ret);
+  }
   void set_identify_seq_expr(ObRawExpr *expr) { identify_seq_expr_ = expr; }
 
   const ObIArray<ObRawFilterMonotonicity>& get_filter_monotonicity() const

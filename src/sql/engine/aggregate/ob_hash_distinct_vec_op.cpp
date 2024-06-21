@@ -161,7 +161,8 @@ int ObHashDistinctVecOp::init_hash_partition_infras()
     LOG_WARN("failed to init sql mem processor", K(ret));
   } else if (OB_FAIL(hp_infras_.init(tenant_id_,
       enable_sql_dumped_,
-      true, true, 2, MY_SPEC.max_batch_size_, MY_SPEC.distinct_exprs_, &sql_mem_processor_))) {
+      true, true, 2, MY_SPEC.max_batch_size_, MY_SPEC.distinct_exprs_, &sql_mem_processor_,
+      MY_SPEC.compress_type_))) {
     LOG_WARN("failed to init hash partition infrastructure", K(ret));
   } else {
     hp_infras_.set_io_event_observer(&io_event_observer_);
