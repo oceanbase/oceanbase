@@ -1657,6 +1657,9 @@ struct NullAwareAntiJoinInfo {
     int check_exprs_overlap_index(const common::ObIArray<ObRawExpr*>& quals,
                                   const common::ObIArray<ObRawExpr*>& keys,
                                   bool &match);
+    int check_exprs_overlap_gis_index(const ObIArray<ObRawExpr*>& quals,
+                                      const ObIArray<ObRawExpr*>& keys,
+                                      bool &match);
 
     /**
      * 判断连接条件是否匹配索引前缀
@@ -1707,6 +1710,7 @@ struct NullAwareAntiJoinInfo {
      * */
     int check_and_extract_query_range(const uint64_t table_id,
                                       const uint64_t index_table_id,
+                                      const IndexInfoEntry &index_info_entry,
                                       const ObIArray<ObRawExpr*> &index_keys,
                                       const ObIndexInfoCache &index_info_cache,
                                       bool &contain_always_false,

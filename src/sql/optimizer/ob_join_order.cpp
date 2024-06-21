@@ -2011,6 +2011,7 @@ int ObJoinOrder::add_access_filters(AccessPath *path,
 
 int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
                                                const uint64_t index_table_id,
+                                               const IndexInfoEntry &index_info_entry,
                                                const ObIArray<ObRawExpr*> &index_keys,
                                                const ObIndexInfoCache &index_info_cache,
                                                bool &contain_always_false,
@@ -2021,8 +2022,10 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
   //do some quick check
   bool expr_match = false; //some condition on index
   contain_always_false = false;
-  if (OB_FAIL(check_exprs_overlap_index(restrict_infos, index_keys, expr_match))) {
+  if (!index_info_entry.is_index_geo() && OB_FAIL(check_exprs_overlap_index(restrict_infos, index_keys, expr_match))) {
     LOG_WARN("check quals match index error", K(restrict_infos), K(index_keys));
+  } else if (index_info_entry.is_index_geo() && OB_FAIL(check_exprs_overlap_gis_index(restrict_infos, index_keys, expr_match))) {
+    LOG_WARN("check quals match gis index error", K(restrict_infos), K(index_keys));
   } else if (expr_match) {
     prefix_range_ids.reset();
     const QueryRangeInfo *query_range_info = NULL;
@@ -2098,6 +2101,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
       LOG_WARN("failed to extract interest column ids", K(ret));
     } else if (OB_FAIL(check_and_extract_query_range(table_id,
                                                      index_table_id,
+                                                     *index_info_entry,
                                                      ordering_info->get_index_keys(),
                                                      index_info_cache,
                                                      contain_always_false,
@@ -3229,6 +3233,48 @@ int ObJoinOrder::check_exprs_overlap_index(const ObIArray<ObRawExpr*>& quals,
         if (OB_FAIL(check_expr_overlap_index(expr, keys, match))) {
           LOG_WARN("check_expr_overlap_index error", K(ret));
         } else { /*do nothing*/ }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_exprs_overlap_gis_index(const ObIArray<ObRawExpr*>& quals,
+                                               const ObIArray<ObRawExpr*>& keys,
+                                               bool &match)
+{
+  LOG_TRACE("OPT:[CHECK GIS MATCH]", K(keys));
+
+  int ret = OB_SUCCESS;
+  match = false;
+  ObColumnRefRawExpr *cell_id = nullptr;
+  if (keys.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Index keys should not be empty", K(keys.count()), K(ret));
+  } else if (OB_ISNULL(cell_id = static_cast<ObColumnRefRawExpr *>(keys.at(0)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("spatial Index keys should not be empty", K(keys.count()), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !match && i < quals.count(); ++i) {
+      ObRawExpr *expr = quals.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("qual expr should not be NULL", K(expr), K(i), K(ret));
+      } else {
+        LOG_TRACE("OPT:[CHECK MATCH]", K(*expr));
+        ObArray<ObRawExpr*> cur_vars;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, cur_vars))) {
+          LOG_WARN("extract_column_exprs error", K(ret));
+        } else {
+          for (int64_t j = 0; j < cur_vars.count() && !match; j++) {
+            ObColumnRefRawExpr *ref = static_cast<ObColumnRefRawExpr *>(cur_vars.at(j));
+            if (OB_NOT_NULL(ref) && ref->get_data_type() == ObGeometryType
+                && cell_id->get_srs_id() == ref->get_column_id()) {
+              // srs_id of cellid_column is column id of which column gis index is built on
+              match = true;
+            }
+          }
+        }
       }
     }
   }
