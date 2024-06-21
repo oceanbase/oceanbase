@@ -115,12 +115,11 @@ int ObTableDirectInsertCtx::init(
         param.session_count_ = parallel;
         param.column_count_ = column_ids.count();
         param.px_mode_ = true;
-        param.online_opt_stat_gather_ = true;
+        param.online_opt_stat_gather_ = is_online_gather_statistics_;
         param.need_sort_ = true;
         param.max_error_row_count_ = 0;
         param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE
                                                 : sql::ObLoadDupActionType::LOAD_STOP_ON_DUP);
-        param.online_opt_stat_gather_ = is_online_gather_statistics_;
         param.method_ = method;
         param.insert_mode_ = insert_mode;
         param.load_mode_ = load_mode;

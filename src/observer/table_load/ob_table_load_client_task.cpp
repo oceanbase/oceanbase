@@ -611,8 +611,9 @@ int ObTableLoadClientTask::init_instance()
     ObSchemaGetterGuard schema_guard;
     ObArray<uint64_t> column_ids;
     ObCompressorType compressor_type = INVALID_COMPRESSOR;
-    if (OB_FAIL(GCTX.omt_->get_tenant(param_.get_tenant_id(), tenant))) {
-      LOG_WARN("fail to get tenant handle", KR(ret), K(param_.get_tenant_id()));
+    bool online_opt_stat_gather = false;
+    if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
+      LOG_WARN("fail to get tenant handle", KR(ret), K(tenant_id));
     } else if (OB_FAIL(ObTableLoadSchema::get_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id), K(table_id));
     } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(schema_guard,
@@ -626,8 +627,11 @@ int ObTableLoadClientTask::init_instance()
                                                               table_id,
                                                               column_ids))) {
       LOG_WARN("fail to get user column ids", KR(ret));
-    } else if (OB_FAIL(get_compressor_type(param_.get_tenant_id(), param_.get_table_id(), session_count_, compressor_type))) {
+    } else if (OB_FAIL(get_compressor_type(tenant_id, table_id, session_count_, compressor_type))) {
       LOG_WARN("fail to get compressor type", KR(ret));
+    } else if (OB_FAIL(ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(
+                 tenant_id, online_opt_stat_gather))) {
+      LOG_WARN("fail to get tenant optimizer gather stats on load", KR(ret), K(tenant_id));
     } else {
       ObTableLoadParam load_param;
       load_param.tenant_id_ = tenant_id;
@@ -639,7 +643,9 @@ int ObTableLoadClientTask::init_instance()
       load_param.column_count_ = column_ids.count();
       load_param.need_sort_ = true;
       load_param.px_mode_ = false;
-      load_param.online_opt_stat_gather_ = false; // 支持统计信息收集需要构造ObExecContext
+      load_param.online_opt_stat_gather_ =
+        (online_opt_stat_gather &&
+         !ObDirectLoadMethod::is_incremental(method)); // 增量统计信息收集需要构造ObExecContext
       load_param.dup_action_ = param_.get_dup_action();
       load_param.method_ = method;
       load_param.insert_mode_ = insert_mode;
