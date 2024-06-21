@@ -1227,7 +1227,7 @@ int ObTmpTenantMemBlockManager::ChooseBlocksMapOp::operator () (oceanbase::commo
       STORAGE_LOG(WARN, "insert block to array failed", K(ret));
     }
   }
-  STORAGE_LOG(DEBUG, "choose one block", K(ret), KPC(blk));
+  STORAGE_LOG(DEBUG, "choose one block", K(ret));
   return ret;
 }
 
