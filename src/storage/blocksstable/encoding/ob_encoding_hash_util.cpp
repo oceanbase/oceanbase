@@ -283,7 +283,7 @@ int ObEncodingHashTableFactory::create(const int64_t bucket_num, const int64_t n
   return ret;
 }
 
-int ObEncodingHashTableFactory::recycle(ObEncodingHashTable *hashtable)
+int ObEncodingHashTableFactory::recycle(const bool force_cache, ObEncodingHashTable *hashtable)
 {
   int ret = OB_SUCCESS;
   if (NULL == hashtable) {
@@ -292,7 +292,7 @@ int ObEncodingHashTableFactory::recycle(ObEncodingHashTable *hashtable)
   } else if (!hashtable->created()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("hashtable not created", K(ret));
-  } else if (hashtable->get_node_cnt() >= MAX_CACHED_HASHTABLE_SIZE) {
+  } else if (!force_cache && hashtable->get_node_cnt() >= MAX_CACHED_HASHTABLE_SIZE) {
     allocator_.free(hashtable);
   } else {
     if (OB_FAIL(hashtables_.push_back(hashtable))) {
