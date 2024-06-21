@@ -1794,10 +1794,17 @@ ObFreezer::PendTenantReplayGuard::PendTenantReplayGuard()
     STORAGE_LOG(WARN, "[ObFreezer] fail to get ls iterator", KR(ret));
   } else {
     ObLS *ls = nullptr;
+    ls_handle_array_.reuse();
     while (OB_SUCC(iter->get_next(ls))) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ls->get_freezer()->pend_ls_replay())) {
-        STORAGE_LOG(WARN, "[ObFreezer] pend replay failed", KR(ret), KPC(ls));
+      ObLSHandle ls_handle;
+      if (OB_TMP_FAIL(ls_srv->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::STORAGE_MOD))) {
+        STORAGE_LOG(WARN, "[ObFreezer] get ls handle failed", KR(tmp_ret), KP(ls));
+      } else if (OB_TMP_FAIL(ls_handle_array_.push_back(ls_handle))) {
+        STORAGE_LOG(WARN, "[ObFreezer] push back ls handle failed", KR(tmp_ret), KP(ls));
+      } else if (OB_TMP_FAIL(ls->get_freezer()->pend_ls_replay())) {
+        STORAGE_LOG(WARN, "[ObFreezer] pend replay failed", KR(tmp_ret), KPC(ls));
+        (void)ls_handle_array_.pop_back();
       }
     }
   }
@@ -1806,17 +1813,14 @@ ObFreezer::PendTenantReplayGuard::PendTenantReplayGuard()
 ObFreezer::PendTenantReplayGuard::~PendTenantReplayGuard()
 {
   int ret = OB_SUCCESS;
-  common::ObSharedGuard<ObLSIterator> iter;
-  ObLSService *ls_srv = MTL(ObLSService *);
-  if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD))) {
-    STORAGE_LOG(WARN, "[ObFreezer] fail to get ls iterator", KR(ret));
-  } else {
+  for (int64_t i = 0; i < ls_handle_array_.count(); i++) {
+    int tmp_ret = OB_SUCCESS;
     ObLS *ls = nullptr;
-    while (OB_SUCC(iter->get_next(ls))) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ls->get_freezer()->restore_ls_replay())) {
-        STORAGE_LOG(WARN, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
-      }
+    if (OB_ISNULL(ls = ls_handle_array_.at(i).get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "[ObFreezer] invalid ls handle", KR(ret), KPC(ls));
+    } else if (OB_TMP_FAIL(ls->get_freezer()->restore_ls_replay())) {
+      STORAGE_LOG(WARN, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
     }
   }
 }
