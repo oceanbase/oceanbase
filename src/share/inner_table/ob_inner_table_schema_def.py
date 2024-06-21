@@ -14469,6 +14469,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_spatial_reference_systems',
   keywords = all_def_keywords['__all_spatial_reference_systems']))
 
+# 12491: __all_virtual_log_transport_dest_stat
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -14951,6 +14953,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15456'
 # 15458: __all_scheduler_job_run_detail_v2
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15459', all_def_keywords['__all_spatial_reference_systems'])))
 # 15460: idx_scheduler_job_run_detail_v2_time_real_agent
+# 15461: __all_virtual_log_transport_dest_stat
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -35105,6 +35108,8 @@ def_table_schema(
 # 21594: CDB_OB_SPACE_USAGE
 # 21595: DBA_OB_TABLE_SPACE_USAGE
 # 21596: CDB_OB_TABLE_SPACE_USAGE
+# 21597: GV$OB_LOG_TRANSPORT_DEST_STAT
+# 21598: V$OB_LOG_TRANSPORT_DEST_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -62857,6 +62862,8 @@ left join
 # 28235: DBA_OB_SERVER_SPACE_USAGE_ORA
 # 28236: DBA_OB_SPACE_USAGE_ORA
 # 28237: DBA_OB_TABLE_SPACE_USAGE_ORA
+# 28238: GV$OB_LOG_TRANSPORT_DEST_STAT
+# 28239: V$OB_LOG_TRANSPORT_DEST_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
