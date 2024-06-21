@@ -57,6 +57,7 @@ int ObForeignKeyChecker::do_fk_check_batch(bool &all_has_result)
   int ret = OB_SUCCESS;
 
   int64_t get_row_count = 0;
+  FLOG_WARN("asdfasdf task cnt:", K(das_ref_.get_das_task_cnt()));
   if (0 == batch_distinct_fk_cnt_) {
     LOG_TRACE("distinct foreign key count is 0 in a batch");
     all_has_result = true;
@@ -89,20 +90,18 @@ int ObForeignKeyChecker::get_scan_result_count(int64_t &get_row_count)
   get_row_count = 0;
   DASOpResultIter result_iter = das_ref_.begin_result_iter();
   while (OB_SUCC(ret)) {
-    // Read one row from every task
     if (OB_FAIL(result_iter.get_next_row())) {
-      if (OB_ITER_END != ret) {
+      if (OB_ITER_END == ret) {
+        if (OB_FAIL(result_iter.next_result())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fetch next task failed", K(ret));
+          }
+        }
+      } else {
         LOG_WARN("get next row from das result failed", K(ret));
-        break;
       }
-      ret = OB_SUCCESS;
     } else {
       get_row_count++;
-    }
-    if (OB_FAIL(result_iter.next_result())) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fetch next task failed", K(ret));
-      }
     }
   }
   FLOG_WARN("asdfasdf the number of rows: s", K(get_row_count));

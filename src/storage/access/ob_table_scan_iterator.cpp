@@ -556,6 +556,9 @@ int ObTableScanIterator::init_and_open_scan_merge_iter_()
 {
   int ret = OB_SUCCESS;
 
+  FLOG_WARN("asdfasdf range count: ", K(table_scan_range_.get_ranges().count()));
+  FLOG_WARN("asdfasdf ranges: ", K(table_scan_range_));
+
   if (table_scan_range_.get_ranges().count() == 1) {
     if (scan_param_->sample_info_.is_row_sample() || scan_param_->sample_info_.is_block_sample()) {
       bool need_scan_multiple_range = false;
