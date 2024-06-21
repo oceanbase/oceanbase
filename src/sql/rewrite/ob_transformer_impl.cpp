@@ -294,6 +294,8 @@ int ObTransformerImpl::do_transform_pre_precessing(ObDMLStmt *&stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
   } else {
+    OPT_TRACE_TIME_USED;
+    OPT_TRACE_MEM_USED;
     ObTransformPreProcess trans(ctx_);
     trans.set_transformer_type(PRE_PROCESS);
     uint64_t dummy_value = 0;
@@ -303,6 +305,8 @@ int ObTransformerImpl::do_transform_pre_precessing(ObDMLStmt *&stmt)
     } else {
       LOG_TRACE("succeed to do transform pre processing");
     }
+    OPT_TRACE_TIME_USED;
+    OPT_TRACE_MEM_USED;
   }
   return ret;
 }

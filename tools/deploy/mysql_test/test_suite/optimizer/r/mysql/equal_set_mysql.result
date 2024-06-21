@@ -8504,134 +8504,128 @@ Outputs & filters:
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
 explain select * from (select a from t1 intersect select 1 a intersect select b from t3) as t4, t1 as t5 where t4.a = t5.a;
 Query Plan
-=====================================================================
-|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN       |        |1       |28          |
-|1 |├─TABLE FULL SCAN                |t5      |1       |4           |
-|2 |└─MATERIAL                       |        |1       |24          |
-|3 |  └─SUBPLAN SCAN                 |t4      |1       |24          |
-|4 |    └─HASH INTERSECT DISTINCT    |        |1       |24          |
-|5 |      ├─MERGE INTERSECT DISTINCT |        |1       |4           |
-|6 |      │ ├─TABLE FULL SCAN        |t1      |1       |4           |
-|7 |      │ └─EXPRESSION             |        |1       |1           |
-|8 |      └─PX COORDINATOR           |        |1       |20          |
-|9 |        └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
-|10|          └─PX PARTITION ITERATOR|        |1       |19          |
-|11|            └─TABLE FULL SCAN    |t3      |1       |19          |
-=====================================================================
+===================================================================
+|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |29          |
+|1 |├─SUBPLAN SCAN                 |t4      |1       |24          |
+|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |24          |
+|3 |│   ├─MERGE INTERSECT DISTINCT |        |1       |4           |
+|4 |│   │ ├─TABLE FULL SCAN        |t1      |1       |4           |
+|5 |│   │ └─EXPRESSION             |        |1       |1           |
+|6 |│   └─PX COORDINATOR           |        |1       |20          |
+|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|8 |│       └─PX PARTITION ITERATOR|        |1       |19          |
+|9 |│         └─TABLE FULL SCAN    |t3      |1       |19          |
+|10|└─TABLE FULL SCAN              |t5      |1       |4           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t4.a], [t5.a], [t5.b], [t5.c]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([t5.a], [t5.b], [t5.c]), filter([t5.a = 1]), rowset=16
-      access([t5.a], [t5.b], [t5.c]), partitions(p1)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t5.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t4.a]), filter(nil), rowset=16
-  3 - output([t4.a]), filter(nil), rowset=16
+  1 - output([t4.a]), filter(nil), rowset=16
       access([t4.a])
-  4 - output([INTERSECT([1])]), filter(nil), rowset=16
-  5 - output([INTERSECT([1])]), filter(nil), rowset=16
-  6 - output([cast(t1.a, BIGINT(20, 0))]), filter([cast(t1.a, BIGINT(20, 0)) = 1]), rowset=16
+  2 - output([INTERSECT([1])]), filter(nil), rowset=16
+  3 - output([INTERSECT([1])]), filter(nil), rowset=16
+  4 - output([cast(t1.a, BIGINT(20, 0))]), filter([cast(t1.a, BIGINT(20, 0)) = 1]), rowset=16
       access([t1.a]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([1]), filter(nil)
+  5 - output([1]), filter(nil)
       values({1})
-  8 - output([cast(t3.b, BIGINT(20, 0))]), filter(nil), rowset=16
-  9 - output([cast(t3.b, BIGINT(20, 0))]), filter(nil), rowset=16
+  6 - output([cast(t3.b, BIGINT(20, 0))]), filter(nil), rowset=16
+  7 - output([cast(t3.b, BIGINT(20, 0))]), filter(nil), rowset=16
       dop=1
- 10 - output([cast(t3.b, BIGINT(20, 0))]), filter(nil), rowset=16
+  8 - output([cast(t3.b, BIGINT(20, 0))]), filter(nil), rowset=16
       force partition granule
- 11 - output([cast(t3.b, BIGINT(20, 0))]), filter([cast(t3.b, BIGINT(20, 0)) = 1]), rowset=16
+  9 - output([cast(t3.b, BIGINT(20, 0))]), filter([cast(t3.b, BIGINT(20, 0)) = 1]), rowset=16
       access([t3.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([t5.a], [t5.b], [t5.c]), filter([t5.a = 1]), rowset=16
+      access([t5.a], [t5.b], [t5.c]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t5.__pk_increment]), range(MIN ; MAX)always true
 explain select * from (select 1 a intersect select a from t1 intersect select b from t2) as t3, t1 as t4 where t3.a = t4.a;
 Query Plan
-=====================================================================
-|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN       |        |1       |28          |
-|1 |├─TABLE FULL SCAN                |t4      |1       |4           |
-|2 |└─MATERIAL                       |        |1       |24          |
-|3 |  └─SUBPLAN SCAN                 |t3      |1       |24          |
-|4 |    └─HASH INTERSECT DISTINCT    |        |1       |24          |
-|5 |      ├─MERGE INTERSECT DISTINCT |        |1       |4           |
-|6 |      │ ├─TABLE FULL SCAN        |t1      |1       |4           |
-|7 |      │ └─EXPRESSION             |        |1       |1           |
-|8 |      └─PX COORDINATOR           |        |1       |20          |
-|9 |        └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
-|10|          └─PX PARTITION ITERATOR|        |1       |19          |
-|11|            └─TABLE FULL SCAN    |t2      |1       |19          |
-=====================================================================
+===================================================================
+|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |29          |
+|1 |├─SUBPLAN SCAN                 |t3      |1       |24          |
+|2 |│ └─HASH INTERSECT DISTINCT    |        |1       |24          |
+|3 |│   ├─MERGE INTERSECT DISTINCT |        |1       |4           |
+|4 |│   │ ├─TABLE FULL SCAN        |t1      |1       |4           |
+|5 |│   │ └─EXPRESSION             |        |1       |1           |
+|6 |│   └─PX COORDINATOR           |        |1       |20          |
+|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|8 |│       └─PX PARTITION ITERATOR|        |1       |19          |
+|9 |│         └─TABLE FULL SCAN    |t2      |1       |19          |
+|10|└─TABLE FULL SCAN              |t4      |1       |4           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.a], [t4.a], [t4.b], [t4.c]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([t4.a], [t4.b], [t4.c]), filter([t4.a = 1]), rowset=16
-      access([t4.a], [t4.b], [t4.c]), partitions(p1)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t3.a]), filter(nil), rowset=16
-  3 - output([t3.a]), filter(nil), rowset=16
+  1 - output([t3.a]), filter(nil), rowset=16
       access([t3.a])
-  4 - output([INTERSECT([1])]), filter(nil), rowset=16
-  5 - output([INTERSECT([1])]), filter(nil), rowset=16
-  6 - output([cast(t1.a, BIGINT(20, 0))]), filter([cast(t1.a, BIGINT(20, 0)) = 1]), rowset=16
+  2 - output([INTERSECT([1])]), filter(nil), rowset=16
+  3 - output([INTERSECT([1])]), filter(nil), rowset=16
+  4 - output([cast(t1.a, BIGINT(20, 0))]), filter([cast(t1.a, BIGINT(20, 0)) = 1]), rowset=16
       access([t1.a]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([1]), filter(nil)
+  5 - output([1]), filter(nil)
       values({1})
-  8 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
-  9 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
+  6 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
+  7 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
       dop=1
- 10 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
+  8 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
       force partition granule
- 11 - output([cast(t2.b, BIGINT(20, 0))]), filter([cast(t2.b, BIGINT(20, 0)) = 1]), rowset=16
+  9 - output([cast(t2.b, BIGINT(20, 0))]), filter([cast(t2.b, BIGINT(20, 0)) = 1]), rowset=16
       access([t2.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([t4.a], [t4.b], [t4.c]), filter([t4.a = 1]), rowset=16
+      access([t4.a], [t4.b], [t4.c]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
 explain select * from (select a from t1 intersect select a from t2 intersect select 1 a) as t3, t1 as t4 where t3.a = t4.a;
 Query Plan
-================================================================
-|ID|OPERATOR                        |NAME|EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN      |    |1       |12          |
-|1 |├─TABLE FULL SCAN               |t4  |1       |4           |
-|2 |└─MATERIAL                      |    |1       |8           |
-|3 |  └─SUBPLAN SCAN                |t3  |1       |8           |
-|4 |    └─MERGE INTERSECT DISTINCT  |    |1       |8           |
-|5 |      ├─MERGE INTERSECT DISTINCT|    |1       |8           |
-|6 |      │ ├─TABLE FULL SCAN       |t1  |1       |4           |
-|7 |      │ └─TABLE FULL SCAN       |t2  |1       |4           |
-|8 |      └─EXPRESSION              |    |1       |1           |
-================================================================
+==============================================================
+|ID|OPERATOR                      |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN    |    |1       |13          |
+|1 |├─SUBPLAN SCAN                |t3  |1       |8           |
+|2 |│ └─MERGE INTERSECT DISTINCT  |    |1       |8           |
+|3 |│   ├─MERGE INTERSECT DISTINCT|    |1       |8           |
+|4 |│   │ ├─TABLE FULL SCAN       |t1  |1       |4           |
+|5 |│   │ └─TABLE FULL SCAN       |t2  |1       |4           |
+|6 |│   └─EXPRESSION              |    |1       |1           |
+|7 |└─TABLE FULL SCAN             |t4  |1       |4           |
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.a], [t4.a], [t4.b], [t4.c]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([t4.a], [t4.b], [t4.c]), filter([1 = t4.a]), rowset=16
-      access([t4.a], [t4.b], [t4.c]), partitions(p1)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t3.a]), filter(nil), rowset=16
-  3 - output([t3.a]), filter(nil), rowset=16
+  1 - output([t3.a]), filter(nil), rowset=16
       access([t3.a])
-  4 - output([INTERSECT([1])]), filter(nil), rowset=16
-  5 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil), rowset=16
-  6 - output([t1.a]), filter([cast(t1.a, BIGINT(20, 0)) = 1]), rowset=16
+  2 - output([INTERSECT([1])]), filter(nil), rowset=16
+  3 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil), rowset=16
+  4 - output([t1.a]), filter([cast(t1.a, BIGINT(20, 0)) = 1]), rowset=16
       access([t1.a]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([t2.a]), filter([cast(t2.a, BIGINT(20, 0)) = 1]), rowset=16
+  5 - output([t2.a]), filter([cast(t2.a, BIGINT(20, 0)) = 1]), rowset=16
       access([t2.a]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([1]), filter(nil)
+  6 - output([1]), filter(nil)
       values({1})
+  7 - output([t4.a], [t4.b], [t4.c]), filter([1 = t4.a]), rowset=16
+      access([t4.a], [t4.b], [t4.c]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
 explain select * from (select t2.a from t1, t2 where t1.a = t2.a intersect select a from t1 as t3) as t4, t2 as t5 where t4.a = t5.a;
 Query Plan
 =====================================================================
@@ -9249,50 +9243,48 @@ Outputs & filters:
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
 explain select * from (select 1 a except select a from t1 except select b from t2) as t3, t1 as t4 where t3.a = t4.a;
 Query Plan
-=====================================================================
-|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN       |        |1       |28          |
-|1 |├─TABLE FULL SCAN                |t4      |1       |4           |
-|2 |└─MATERIAL                       |        |1       |24          |
-|3 |  └─SUBPLAN SCAN                 |t3      |1       |24          |
-|4 |    └─HASH EXCEPT DISTINCT       |        |1       |24          |
-|5 |      ├─MERGE EXCEPT DISTINCT    |        |1       |4           |
-|6 |      │ ├─EXPRESSION             |        |1       |1           |
-|7 |      │ └─TABLE FULL SCAN        |t1      |1       |4           |
-|8 |      └─PX COORDINATOR           |        |1       |20          |
-|9 |        └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
-|10|          └─PX PARTITION ITERATOR|        |1       |19          |
-|11|            └─TABLE FULL SCAN    |t2      |1       |19          |
-=====================================================================
+===================================================================
+|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN     |        |1       |29          |
+|1 |├─SUBPLAN SCAN                 |t3      |1       |24          |
+|2 |│ └─HASH EXCEPT DISTINCT       |        |1       |24          |
+|3 |│   ├─MERGE EXCEPT DISTINCT    |        |1       |4           |
+|4 |│   │ ├─EXPRESSION             |        |1       |1           |
+|5 |│   │ └─TABLE FULL SCAN        |t1      |1       |4           |
+|6 |│   └─PX COORDINATOR           |        |1       |20          |
+|7 |│     └─EXCHANGE OUT DISTR     |:EX10000|1       |20          |
+|8 |│       └─PX PARTITION ITERATOR|        |1       |19          |
+|9 |│         └─TABLE FULL SCAN    |t2      |1       |19          |
+|10|└─TABLE FULL SCAN              |t4      |1       |4           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.a], [t4.a], [t4.b], [t4.c]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([t4.a], [t4.b], [t4.c]), filter([t4.a = 1]), rowset=16
-      access([t4.a], [t4.b], [t4.c]), partitions(p1)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t3.a]), filter(nil), rowset=16
-  3 - output([t3.a]), filter(nil), rowset=16
+  1 - output([t3.a]), filter(nil), rowset=16
       access([t3.a])
-  4 - output([EXCEPT([1])]), filter(nil), rowset=16
-  5 - output([EXCEPT([1])]), filter(nil), rowset=16
-  6 - output([1]), filter(nil)
+  2 - output([EXCEPT([1])]), filter(nil), rowset=16
+  3 - output([EXCEPT([1])]), filter(nil), rowset=16
+  4 - output([1]), filter(nil)
       values({1})
-  7 - output([cast(t1.a, BIGINT(20, 0))]), filter([cast(t1.a, BIGINT(20, 0)) = 1]), rowset=16
+  5 - output([cast(t1.a, BIGINT(20, 0))]), filter([cast(t1.a, BIGINT(20, 0)) = 1]), rowset=16
       access([t1.a]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
-  9 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
+  6 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
+  7 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
       dop=1
- 10 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
+  8 - output([cast(t2.b, BIGINT(20, 0))]), filter(nil), rowset=16
       force partition granule
- 11 - output([cast(t2.b, BIGINT(20, 0))]), filter([cast(t2.b, BIGINT(20, 0)) = 1]), rowset=16
+  9 - output([cast(t2.b, BIGINT(20, 0))]), filter([cast(t2.b, BIGINT(20, 0)) = 1]), rowset=16
       access([t2.b]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([t4.a], [t4.b], [t4.c]), filter([t4.a = 1]), rowset=16
+      access([t4.a], [t4.b], [t4.c]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
 explain select * from (select a from t1 except select a from t2 except select 1 a) as t3, t1 as t4 where t3.a = t4.a;
 Query Plan
 ========================================================================
@@ -9397,25 +9389,23 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |    |1       |4           |
-|1 |├─TABLE FULL SCAN          |t1  |1       |4           |
-|2 |└─MATERIAL                 |    |1       |1           |
-|3 |  └─SUBPLAN SCAN           |t2  |1       |1           |
-|4 |    └─EXPRESSION           |    |1       |1           |
+|0 |NESTED-LOOP JOIN CARTESIAN |    |1       |5           |
+|1 |├─SUBPLAN SCAN             |t2  |1       |1           |
+|2 |│ └─EXPRESSION             |    |1       |1           |
+|3 |└─TABLE FULL SCAN          |t1  |1       |4           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([t1.a], [t1.b], [t1.c]), filter([t1.a = 1]), rowset=16
+  1 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2])
+  2 - output([1], [1]), filter(nil)
+      values({1, 1})
+  3 - output([t1.a], [t1.b], [t1.c]), filter([t1.a = 1]), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-  3 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      access([t2.c1], [t2.c2])
-  4 - output([1], [1]), filter(nil)
-      values({1, 1})
 explain select * from (select 1 c1, 1 c2) t2 left join t1 on t2.c1 = t1.a;
 Query Plan
 =================================================================
@@ -9510,25 +9500,23 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |    |1       |4           |
-|1 |├─TABLE FULL SCAN          |t1  |1       |4           |
-|2 |└─MATERIAL                 |    |1       |1           |
-|3 |  └─SUBPLAN SCAN           |t2  |1       |1           |
-|4 |    └─EXPRESSION           |    |1       |1           |
+|0 |NESTED-LOOP JOIN CARTESIAN |    |1       |5           |
+|1 |├─SUBPLAN SCAN             |t2  |1       |1           |
+|2 |│ └─EXPRESSION             |    |1       |1           |
+|3 |└─TABLE FULL SCAN          |t1  |1       |4           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t2.c1], [t2.c2]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([t1.a], [t1.b], [t1.c]), filter([t1.a = 1]), rowset=16
+  1 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2])
+  2 - output([1], [1]), filter(nil)
+      values({1, 1})
+  3 - output([t1.a], [t1.b], [t1.c]), filter([t1.a = 1]), rowset=16
       access([t1.a], [t1.b], [t1.c]), partitions(p1)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-  3 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
-      access([t2.c1], [t2.c2])
-  4 - output([1], [1]), filter(nil)
-      values({1, 1})
 explain select * from t1 left join (select 1 c1, 1 c2) t2 on t2.c1 = t1.a;
 Query Plan
 ===============================================================
