@@ -1682,7 +1682,7 @@ int ObDRWorker::UnitProvider::allocate_unit(
 
 bool ObDRWorker::LATaskCmp::operator()(const LATask *left, const LATask *right)
 {
-  bool bool_ret = true;
+  bool bool_ret = false;
   if (OB_SUCCESS != ret_) {
     // bypass
   } else if (nullptr == left || nullptr == right) {

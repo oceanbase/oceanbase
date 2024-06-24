@@ -54,7 +54,7 @@ public:
     bool operator()(const share::ObUnit *left, const share::ObUnit *right) {
       bool bool_ret = true;
       if (nullptr == left && nullptr == right) {
-        bool_ret = true;
+        bool_ret = false;
       } else if (nullptr == left && nullptr != right) {
         bool_ret = true;
       } else if (nullptr != left && nullptr == right) {
