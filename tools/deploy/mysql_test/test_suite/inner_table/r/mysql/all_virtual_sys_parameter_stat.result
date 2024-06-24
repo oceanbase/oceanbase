@@ -294,6 +294,7 @@ _enable_block_file_punch_hole
 _enable_choose_migration_source_policy
 _enable_column_store
 _enable_compaction_diagnose
+_enable_compatible_monotonic
 _enable_convert_real_to_decimal
 _enable_dblink_reuse_connection
 _enable_dbms_job_package

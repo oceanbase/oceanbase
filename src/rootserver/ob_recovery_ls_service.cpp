@@ -483,8 +483,12 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
             if (OB_FAIL(process_upgrade_log_(sync_scn, node))) {
               LOG_WARN("failed to process_upgrade_log_", KR(ret), K(node));
             }
-          } else if (ObTxDataSourceType::LS_TABLE != node.get_data_source_type()
-                     && ObTxDataSourceType::TRANSFER_TASK != node.get_data_source_type()) {
+          } else if (ObTxDataSourceType::STANDBY_UPGRADE_DATA_VERSION !=
+                         node.get_data_source_type() &&
+                     ObTxDataSourceType::LS_TABLE !=
+                         node.get_data_source_type() &&
+                     ObTxDataSourceType::TRANSFER_TASK !=
+                         node.get_data_source_type()) {
             // nothing
           } else if (! trans.is_started() && OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
             LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
@@ -492,6 +496,11 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
             //can not be there;
           } else if (OB_FAIL(check_valid_to_operator_ls_(sync_scn))) {
             LOG_WARN("failed to check valid to operator ls", KR(ret), K(sync_scn));
+          } else if (ObTxDataSourceType::STANDBY_UPGRADE_DATA_VERSION ==
+                     node.get_data_source_type()) {
+            if (OB_FAIL(process_upgrade_data_version_log_(sync_scn, node, trans))) {
+              LOG_WARN("failed to process_upgrade_data_version_log_", KR(ret), K(node));
+            }
           } else if (ObTxDataSourceType::TRANSFER_TASK == node.get_data_source_type()) {
             if (OB_FAIL(process_ls_transfer_task_in_trans_(node, sync_scn, trans))) {
               LOG_WARN("failed to process ls transfer task", KR(ret), K(node));
@@ -645,6 +654,47 @@ int ObRecoveryLSService::process_upgrade_log_(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::process_upgrade_data_version_log_(
+    const share::SCN &sync_scn,
+    const ObTxBufferNode &node,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  uint64_t standby_data_version = 0;
+
+  if (!node.is_valid() || !sync_scn.is_valid() || !trans.is_started()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(node), K(sync_scn), "trans_started",
+             trans.is_started());
+  } else {
+    ObStandbyUpgrade primary_data_version;
+    int64_t pos = 0;
+    if (OB_FAIL(primary_data_version.deserialize(
+            node.get_data_buf().ptr(), node.get_data_buf().length(), pos))) {
+      LOG_WARN("failed to deserialize", KR(ret), K(node),
+               KPHEX(node.get_data_buf().ptr(), node.get_data_buf().length()));
+    } else if (OB_UNLIKELY(pos > node.get_data_buf().length())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get primary_data_version", KR(ret), K(pos),
+               K(node.get_data_buf().length()));
+    } else if (!primary_data_version.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("primary_data_version not valid", KR(ret), K(primary_data_version));
+    } else {
+      const uint64_t primary_data_version_value = primary_data_version.get_data_version();
+      uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
+      ObGlobalStatProxy stat_proxy(trans, exec_tenant_id);
+      if (OB_FAIL(stat_proxy.update_finish_data_version(primary_data_version_value, sync_scn))) {
+        LOG_WARN("fail to update finish_data_version", K(ret), K(tenant_id_), K(sync_scn),
+                  K(primary_data_version_value));
+      }
+    }
+    LOG_INFO("handle upgrade_data_version_log", KR(ret), K(tenant_id_), K(sync_scn),
+             K(primary_data_version));
   }
   return ret;
 }

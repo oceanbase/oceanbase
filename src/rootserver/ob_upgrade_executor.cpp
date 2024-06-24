@@ -1077,9 +1077,9 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(
                        start_idx, end_idx))) {
       LOG_WARN("fail to get processor by version", KR(ret), K(current_data_version));
     }
+    int64_t version = OB_INVALID_VERSION;
     for (int64_t i = start_idx + 1; OB_SUCC(ret) && i <= end_idx; i++) {
       ObBaseUpgradeProcessor *processor  = NULL;
-      int64_t version = OB_INVALID_VERSION;
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
       } else if (OB_FAIL(upgrade_processors_.get_processor_by_idx(i, processor))) {
@@ -1092,11 +1092,46 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(
         LOG_WARN("run post upgrade by version failed", KR(ret), K(tenant_id), K(version));
       } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
         LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(proxy.update_current_data_version(version))) {
-        LOG_WARN("fail to update current data version", KR(ret), K(tenant_id), K(version));
+      } else if (i < end_idx) {
+        if (OB_FAIL(proxy.update_current_data_version(version))) {
+          LOG_WARN("fail to update current data version", KR(ret), K(tenant_id), K(version));
+        }
+      } else if (OB_FAIL(update_final_current_data_version_(tenant_id, version))) {
+        LOG_WARN("fail to update final current data version", KR(ret), K(tenant_id), K(version));
       }
     } // end for
   }
+  return ret;
+}
+
+// for the final version, we need to write a data version barrier log when updating the
+// current_data_version
+int ObUpgradeExecutor::update_final_current_data_version_(const uint64_t tenant_id,
+                                                          const int64_t version)
+{
+  int ret = OB_SUCCESS;
+
+  ObMySQLTransaction trans;
+  if (OB_FAIL(trans.start(sql_proxy_, tenant_id))) {
+    LOG_WARN("fail to start trans", KR(ret), K(tenant_id));
+  } else {
+    ObGlobalStatProxy end_proxy(trans, tenant_id);
+    if (OB_FAIL(end_proxy.update_current_data_version(version))) {
+      LOG_WARN("fail to update current data version", KR(ret), K(tenant_id), K(version));
+    } else if (is_user_tenant(tenant_id) &&
+               OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.write_upgrade_data_version_barrier_log(
+                   trans, tenant_id, version))) {
+      LOG_WARN("fail to write_upgrade_data_version_barrier_log", KR(ret), K(tenant_id), K(version));
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", KR(tmp_ret), K(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+
   return ret;
 }
 

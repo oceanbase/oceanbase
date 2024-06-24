@@ -94,6 +94,7 @@ private:
   int upgrade_oracle_system_package_job_();
 #endif
   int run_upgrade_all_post_action_(const uint64_t tenant_id);
+  int update_final_current_data_version_(const uint64_t tenant_id, const int64_t version);
   int run_upgrade_end_action_(const uint64_t tenant_id);
 
   int check_schema_sync_(const uint64_t tenant_id);

@@ -16,7 +16,9 @@
 #include "lib/ob_define.h"
 #include "lib/coro/co_var.h"
 #include "common/storage/ob_sequence.h"
+#include "common/ob_tenant_data_version_mgr.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
+#include "share/ob_cluster_version.h"
 
 using namespace oceanbase::common::serialization;
 using namespace oceanbase::common;
@@ -34,7 +36,16 @@ int ObRpcPacketHeader::serialize(char* buf, const int64_t buf_len, int64_t& pos)
   int ret = OB_SUCCESS;
   if (buf_len - pos >= get_encoded_size()) {
     seq_no_ = ObSequence::get_max_seq_no();
-    LOG_DEBUG("rpc send seq_no ", K_(seq_no));
+    data_version_ = 0;
+    if (ObRpcNetHandler::is_self_cluster(dst_cluster_id_) && ODV_MGR.is_enable_compatible_monotonic()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ODV_MGR.get(tenant_id_, data_version_))) {
+        data_version_ = LAST_BARRIER_DATA_VERSION;
+        LOG_WARN("fail to get data_version", K(tmp_ret), K(tenant_id_));
+      }
+    }
+    LOG_TRACE("rpc send info", K_(tenant_id), K_(data_version), K_(seq_no), K_(dst_cluster_id),
+              K_(pcode), K(ObRpcNetHandler::CLUSTER_ID));
     if (OB_FAIL(encode_i32(buf, buf_len, pos, pcode_))) {
       LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
     } else if (OB_FAIL(encode_i8(buf, buf_len, pos, static_cast<int8_t> (get_encoded_size())))) {
@@ -82,6 +93,8 @@ int ObRpcPacketHeader::serialize(char* buf, const int64_t buf_len, int64_t& pos)
     } else if (OB_FAIL(encode_i64(buf, buf_len, pos, trace_id_[3]))) {
       LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
     } else if (OB_FAIL(encode_i64(buf, buf_len, pos, cluster_name_hash_))) {
+      LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
+    } else if (OB_FAIL(encode_i64(buf, buf_len, pos, data_version_))) {
       LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
     } else {
       //do nothing
@@ -169,6 +182,8 @@ int ObRpcPacketHeader::deserialize(const char* buf, const int64_t data_len, int6
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
     } else if (hlen_ > pos && OB_FAIL(decode_i64(buf, hlen_, pos, reinterpret_cast<int64_t*>(&cluster_name_hash_)))) {
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
+    } else if (hlen_ > pos && OB_FAIL(decode_i64(buf, data_len, pos, reinterpret_cast<int64_t*>(&data_version_)))) {
+      LOG_WARN("Decode error", K(ret), KP(buf), K(data_len), K(pos));
     } else {
 #ifdef ERRSIM
       int64_t type = 0;
@@ -182,6 +197,21 @@ int ObRpcPacketHeader::deserialize(const char* buf, const int64_t data_len, int6
     }
     ObSequence::update_max_seq_no(seq_no_);
     LOG_DEBUG("rpc receive seq_no ", K_(seq_no), K(ObSequence::get_max_seq_no()));
+    // for RPC response, if the src_cluster_id is the same as current cluster id, we set the
+    // data_version here. for RPC request, the failure of setting data_version may cause
+    // disconnection, to avoid it, we delay setting to the RPC process phase.
+    if (OB_SUCC(ret) &&
+        flags_ & ObRpcPacketHeader::RESP_FLAG &&
+        ObRpcNetHandler::is_self_cluster(src_cluster_id_) && data_version_ > 0) {
+      if (OB_FAIL(ODV_MGR.set(tenant_id_, data_version_))) {
+        LOG_WARN("fail to update data_version", K(ret), KP(tenant_id_), K(data_version_));
+      }
+      LOG_TRACE("rpc receive data version", K_(tenant_id), K_(data_version), K_(pcode),
+                K_(src_cluster_id), K(ObRpcNetHandler::CLUSTER_ID));
+    }
+    if (OB_ARB_GC_NOTIFY == pcode_ && REACH_TIME_INTERVAL(5000000)) {
+      LOG_TRACE("receive arb rpc", K_(src_cluster_id), K_(pcode));
+    }
   }
 
   return ret;

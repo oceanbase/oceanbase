@@ -349,6 +349,13 @@ private:
 private:
   int verify_config(obrpc::ObAdminSetConfigArg &arg);
   int update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new_version);
+  int update_config_for_compatible(const uint64_t tenant_id,
+                                   const obrpc::ObAdminSetConfigItem *item,
+                                   const char *svr_ip, const int64_t svr_port,
+                                   const char *table_name,
+                                   share::ObDMLSqlSplicer &dml,
+                                   const int64_t new_version);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminSetConfig);
 };

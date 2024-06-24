@@ -22,6 +22,7 @@
 #include "lib/trace/ob_trace_event.h"
 #include "lib/trace/ob_trace.h"
 #include "common/data_buffer.h"
+#include "common/ob_tenant_data_version_mgr.h"
 #include "rpc/obrpc/ob_rpc_req_context.h"
 #include "rpc/obrpc/ob_rpc_stream_cond.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
@@ -76,6 +77,11 @@ int ObRpcProcessorBase::run()
     LOG_WARN("req timeout", K(ret));
   } else if (OB_FAIL(check_cluster_id())) {
     LOG_WARN("checking cluster ID failed", K(ret));
+  } else if (OB_FAIL(update_data_version())) {
+    // update_data_version could have been called in RPC deserialization process, however, the
+    // failure of setting data_version may cause disconnection, so for normal RPC request, we do it
+    // here
+    LOG_WARN("fail to update data_version", K(ret));
   } else if (OB_FAIL(deserialize())) {
     deseri_succ = false;
     LOG_WARN("deserialize argument fail", K(ret));
@@ -134,6 +140,26 @@ int ObRpcProcessorBase::check_cluster_id()
               "pkt.dst_cluster_id", rpc_pkt_->get_dst_cluster_id(), "pkt", *rpc_pkt_);
     }
   }
+  return ret;
+}
+
+int ObRpcProcessorBase::update_data_version()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(rpc_pkt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    RPC_OBRPC_LOG(ERROR, "rpc_pkt_ should not be NULL", K(ret));
+  } else {
+    int64_t src_cluster_id = rpc_pkt_->get_src_cluster_id();
+    uint64_t data_version = rpc_pkt_->get_data_version();
+    if (ObRpcNetHandler::is_self_cluster(src_cluster_id) && data_version > 0) {
+      if (OB_FAIL(ODV_MGR.set(tenant_id_, data_version))) {
+        LOG_WARN("fail to update data_version", K(ret), KP(tenant_id_), K(data_version));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -299,6 +325,10 @@ int ObRpcProcessorBase::do_response(const Response &rsp)
         packet->set_resp();
         // The cluster_id of the response must be the src_cluster_id of the request
         packet->set_dst_cluster_id(rpc_pkt_->get_src_cluster_id());
+        // the tenant_id in response is only used to sync data_version, it has no meaning to the
+        // RPC framework
+        packet->set_tenant_id(rpc_pkt_->get_tenant_id());
+        packet->set_src_cluster_id(ObRpcNetHandler::CLUSTER_ID);
 
 #ifdef ERRSIM
         packet->set_module_type(THIS_WORKER.get_module_type());
@@ -598,6 +628,11 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout, const ObAddr *src_addr)
       req_ = NULL;
       is_stream_end_ = true;
       RPC_OBRPC_LOG(ERROR, "rpc packet is NULL in stream", K(ret));
+    } else if (OB_FAIL(update_data_version())) {
+      // update_data_version could have been called in RPC deserialization process, however, the
+      // failure of setting data_version may cause disconnection, so for stream RPC request, we do
+      // it here
+      RPC_OBRPC_LOG(WARN, "fail to update data_version", K(ret));
     } else if (rpc_pkt_->is_stream_last()) {
       ret = OB_ITER_END;
     } else {

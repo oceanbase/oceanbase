@@ -1084,6 +1084,7 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
               ObConfigItem *ci = nullptr;
               // tenant not exist in RS, use SYS instead
               omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
+              const ObString compatible_cfg(COMPATIBLE);
               if (!tenant_config.is_valid()) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("failed to get tenant config",K(tenant_id),  KR(ret));
@@ -1100,6 +1101,12 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
                             || OB_FAIL(dml.add_column("edit_level", ci->edit_level()))
                             || OB_FAIL(dml.add_column("data_type", ci->data_type()))) {
                   LOG_WARN("add column failed", KR(ret));
+                } else if (0 == compatible_cfg.case_compare(item->name_.ptr())) {
+                  if (OB_FAIL(update_config_for_compatible(
+                          tenant_id, item, svr_ip, svr_port, table_name, dml, new_version))) {
+                    LOG_WARN("fail to update compatible", KR(ret), K(tenant_id),
+                             K(svr_ip), K(svr_port), K(table_name), K(new_version));
+                  }
                 } else if (OB_FAIL(exec.exec_insert_update(table_name,
                                                           dml, affected_rows))) {
                   LOG_WARN("execute insert update failed", K(tenant_id), KR(ret), "item", *item);
@@ -1185,6 +1192,110 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
         } // else
       } // else sys config
     } // FOREACH_X
+  }
+
+  return ret;
+}
+
+int ObAdminSetConfig::update_config_for_compatible(const uint64_t tenant_id,
+                                                   const obrpc::ObAdminSetConfigItem *item,
+                                                   const char *svr_ip, const int64_t svr_port,
+                                                   const char *table_name,
+                                                   share::ObDMLSqlSplicer &dml,
+                                                   const int64_t new_version)
+{
+  int ret = OB_SUCCESS;
+  bool need_to_update = true;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  ObMySQLTransaction trans;
+  if (OB_ISNULL(item) || OB_ISNULL(svr_ip) || OB_ISNULL(table_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(tenant_id), K(item), K(svr_ip), K(svr_port),
+             K(table_name), K(new_version));
+  } else if (OB_FAIL(trans.start(ctx_.sql_proxy_, exec_tenant_id))) {
+    LOG_WARN("fail to start trans", KR(ret), K(exec_tenant_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObSqlString sql_string;
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_string.assign_fmt(
+              "SELECT value as compatible FROM %s WHERE tenant_id = %lu "
+              "and "
+              "zone = '%s' and svr_type = '%s' and svr_ip = '%s' "
+              "and "
+              "svr_port = %ld and name = '%s' FOR UPDATE",
+              table_name, tenant_id, item->zone_.ptr(),
+              print_server_role(OB_SERVER), svr_ip, svr_port, COMPATIBLE))) {
+        LOG_WARN("assign sql string failed", K(ret));
+      } else if (OB_FAIL(trans.read(res, exec_tenant_id, sql_string.ptr()))) {
+        LOG_WARN("fail to execute sql", K(ret), K(exec_tenant_id),
+                 K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("get result next failed", KR(ret), K(sql_string));
+          }
+        } else {
+          ObString old_compatible_str;
+          uint64_t old_compatible_val = 0;
+          uint64_t new_compatible_val = 0;
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "compatible",
+                                      old_compatible_str);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to get result", KR(ret), K(sql_string));
+          } else if (OB_FAIL(ObClusterVersion::get_version(
+                         old_compatible_str, old_compatible_val))) {
+            LOG_WARN("parse version failed", KR(ret), K(old_compatible_str));
+          } else if (OB_FAIL(ObClusterVersion::get_version(
+                         item->value_.ptr(), new_compatible_val))) {
+            LOG_WARN("parse version failed", KR(ret), K(item->value_.ptr()));
+          } else if (new_compatible_val <= old_compatible_val) {
+            need_to_update = false;
+            LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update",
+                     K(tenant_id), K(old_compatible_val),
+                     K(new_compatible_val));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && need_to_update) {
+    int64_t affected_rows = 0;
+    ObDMLExecHelper exec(trans, exec_tenant_id);
+    if (OB_FAIL(exec.exec_insert_update(table_name, dml, affected_rows))) {
+      LOG_WARN("execute insert update failed", K(tenant_id), KR(ret), "item",
+               *item);
+    } else if (is_zero_row(affected_rows) || affected_rows > 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected rows", K(tenant_id), K(affected_rows),
+               KR(ret));
+    } else {
+      // set config_version to config_version_map and trigger parameter update
+      if (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id) {
+      } else if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id,
+                                                           new_version))) {
+        LOG_WARN("failed to set tenant config version", K(tenant_id), KR(ret),
+                 "item", *item);
+      } else if (GCTX.omt_->has_tenant(tenant_id) &&
+                 OB_FAIL(OTC_MGR.got_version(tenant_id, new_version))) {
+        LOG_WARN("failed to got version", K(tenant_id), KR(ret), "item", *item);
+      } else {
+        LOG_INFO("got new tenant config version", K(new_version), K(tenant_id),
+                 "item", *item);
+      }
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", KR(tmp_ret), K(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
   }
 
   return ret;

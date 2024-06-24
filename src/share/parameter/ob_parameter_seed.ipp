@@ -2006,3 +2006,6 @@ DEF_CAP(lob_enable_block_cache_threshold, OB_TENANT_PARAMETER, "256K", "[0B, 512
 DEF_INT(_ob_pl_compile_max_concurrency, OB_CLUSTER_PARAMETER, "4", "[0,)",
         "The maximum number of threads that an observer node can compile PL concurrently.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_compatible_monotonic, OB_CLUSTER_PARAMETER, "True",
+        "Control whether to enable cross-server monotonic compatible(data_version) mode",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

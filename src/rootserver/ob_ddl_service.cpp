@@ -26595,6 +26595,11 @@ int ObDDLService::init_tenant_schema(
         } else if (is_user_tenant(tenant_id) && OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.write_upgrade_barrier_log(
                                                         trans, tenant_id, data_version))) {
           LOG_WARN("fail to write_upgrade_barrier_log", KR(ret), K(tenant_id), K(data_version));
+        } else if (is_user_tenant(tenant_id) &&
+                   OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.write_upgrade_data_version_barrier_log(
+                           trans, tenant_id, data_version))) {
+          LOG_WARN("fail to write_upgrade_data_version_barrier_log", KR(ret),
+                   K(tenant_id), K(data_version));
         }
       }
       if (trans.is_started()) {

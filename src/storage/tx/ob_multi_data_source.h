@@ -78,6 +78,7 @@ static const char * to_str_mds_type(const ObTxDataSourceType & mds_type )
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, DDL_BARRIER);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, DDL_TRANS);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, STANDBY_UPGRADE);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, STANDBY_UPGRADE_DATA_VERSION);
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, BEFORE_VERSION_4_1);
 
     TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TEST1);

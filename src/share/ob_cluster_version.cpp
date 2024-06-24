@@ -192,32 +192,7 @@ int64_t ObClusterVersion::print_vsn(char *buf, const int64_t buf_len, uint64_t v
 
 int64_t ObClusterVersion::print_version_str(char *buf, const int64_t buf_len, uint64_t version)
 {
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  const uint32_t major = OB_VSN_MAJOR(version);
-  const uint16_t minor = OB_VSN_MINOR(version);
-  const uint8_t major_patch = OB_VSN_MAJOR_PATCH(version);
-  const uint8_t minor_patch = OB_VSN_MINOR_PATCH(version);
-  if (OB_UNLIKELY(!check_version_valid_(version))) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(ERROR, "invalid cluster version", K(version), K(lbt()));
-  } else if (major < 3
-             || (3 == major && minor < 2)
-             || (3 == major && 2 == minor && 0 == major_patch && minor_patch < 3)) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%u.%u.%u",
-                major, minor, minor_patch))) {
-      COMMON_LOG(WARN, "fail to print version str", KR(ret), K(version));
-    }
-  } else {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%u.%u.%u.%u",
-                major, minor, major_patch, minor_patch))) {
-      COMMON_LOG(WARN, "fail to print version str", KR(ret), K(version));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    pos = OB_INVALID_INDEX;
-  }
-  return pos;
+  return VersionUtil::print_version_str(buf, buf_len, version);
 }
 
 int ObClusterVersion::refresh_cluster_version(const char *verstr)
@@ -262,6 +237,7 @@ void ObClusterVersion::update_cluster_version(const uint64_t cluster_version)
 void ObClusterVersion::update_data_version(const uint64_t data_version)
 {
   ATOMIC_SET(&data_version_, data_version);
+  ODV_MGR.set_mock_data_version(data_version);
 }
 
 int ObClusterVersion::get_tenant_data_version(
@@ -273,57 +249,12 @@ int ObClusterVersion::get_tenant_data_version(
   if (OB_UNLIKELY(0 != data_version_)) {
     // only work for unittest
     data_version = ATOMIC_LOAD(&cluster_version_);
-  } else  if (OB_ISNULL(tenant_config_mgr_)) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "tenant_config is null", KR(ret), KP(tenant_config_mgr_));
   } else {
-    // wont't fallback or retry
-    omt::ObTenantConfigGuard tenant_config(tenant_config_mgr_->get_tenant_config_with_lock(tenant_id));
-    if (tenant_config.is_valid() && tenant_config->compatible.value_updated()) {
-      data_version = tenant_config->compatible;
-    } else if (is_sys_tenant(tenant_id)
-               || is_meta_tenant(tenant_id)) {
-      // For sys/meta tenant, circular dependency problem may exist when load tenant config from inner tables.
-      // For safety, data_version will fallback to last barrier data version until actual tenant config is loaded.
-      data_version = LAST_BARRIER_DATA_VERSION;
-      if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
-        share::ObTaskController::get().allow_next_syslog();
-        COMMON_LOG(INFO, "tenant data version fallback to last barrier version", K(tenant_id), K(data_version));
-      }
-    } else {
-      // For user tenant
-      ret = OB_ENTRY_NOT_EXIST;
-      if (tenant_config.is_valid()) {
-        COMMON_LOG(WARN, "[COMPATIBLE] data_version is not refreshed",
-                  KR(ret), K(tenant_id),
-                  "version", tenant_config->compatible.version(),
-                  "value", tenant_config->compatible.str(),
-                  "value_updated", tenant_config->compatible.value_updated(),
-                  "dump_version", tenant_config->compatible.dumped_version(),
-                  "dump_value", tenant_config->compatible.spfile_str(),
-                  "dump_value_updated", tenant_config->compatible.dump_value_updated());
-      } else {
-        COMMON_LOG(WARN, "[COMPATIBLE] data_version is not refreshed",
-                   KR(ret), K(tenant_id), "valid", tenant_config.is_valid());
-      }
-    }
+    ret = ODV_MGR.get(tenant_id, data_version);
   }
   return ret;
 }
 
-int ObClusterVersion::tenant_need_upgrade(
-    const uint64_t tenant_id,
-    bool &need_upgrade)
-{
-  int ret = OB_SUCCESS;
-  uint64_t data_version = 0;
-  if (OB_FAIL(get_tenant_data_version(tenant_id, data_version))) {
-    COMMON_LOG(WARN, "fail to get tenant data version", KR(ret), K(tenant_id));
-  } else {
-    need_upgrade = (data_version < DATA_CURRENT_VERSION);
-  }
-  return ret;
-}
 
 int ObClusterVersion::is_valid(const char *verstr)
 {
@@ -371,25 +302,7 @@ int ObClusterVersion::get_version(const char *verstr, uint64_t &version)
 
 bool ObClusterVersion::check_version_valid_(const uint64_t version)
 {
-  bool bret = true;
-  const uint32_t major = OB_VSN_MAJOR(version);
-  const uint16_t minor = OB_VSN_MINOR(version);
-  const uint8_t major_patch = OB_VSN_MAJOR_PATCH(version);
-  const uint8_t minor_patch = OB_VSN_MINOR_PATCH(version);
-  if (major < 3 || (3 == major && minor < 2)) {
-    // cluster_version is less than "3.2":
-    // - should be "a.b.0.c";
-    bret = (0 == major_patch);
-  } else if (3 == major && 2 == minor)  {
-    // cluster_version's prefix is "3.2":
-    // - cluster_version == 3.2.0.0/1/2
-    // - cluster_version >= 3.2.3.x
-    bret = (0 == major_patch && minor_patch <= 2) || (major_patch >= 3);
-  } else {
-    // cluster_version is greator than "3.2"
-    bret = true;
-  }
-  return bret;
+  return VersionUtil::check_version_valid(version);
 }
 
 ObClusterVersion &ObClusterVersion::get_instance()

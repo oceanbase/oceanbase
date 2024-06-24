@@ -15,6 +15,7 @@
 #include "observer/ob_server.h"
 #include <sys/statvfs.h>
 #include "common/log/ob_log_constants.h"
+#include "common/ob_tenant_data_version_mgr.h"
 #include "lib/allocator/ob_libeasy_mem_pool.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/thread/protected_stack_allocator.h"
@@ -1892,14 +1893,20 @@ int ObServer::init_config()
   int ret = OB_SUCCESS;
   bool has_config_file = true;
 
-  // set dump path
-  const char *dump_path = "etc/observer.config.bin";
-  config_mgr_.set_dump_path(dump_path);
-  if (OB_FILE_NOT_EXIST == (ret = config_mgr_.load_config())) {
-    has_config_file = false;
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(ret)) {
-    LOG_ERROR("load config from file failed", KR(ret));
+  if (OB_FAIL(ODV_MGR.init(true /*enable_compatible_monotonic*/))) {
+    LOG_ERROR("fail to init data_version_mgr", KR(ret));
+  } else if (OB_FAIL(ODV_MGR.load_from_file())) {
+    LOG_ERROR("failed to load data_version_mgr file", KR(ret));
+  } else {
+    // set dump path
+    const char *dump_path = "etc/observer.config.bin";
+    config_mgr_.set_dump_path(dump_path);
+    if (OB_FILE_NOT_EXIST == (ret = config_mgr_.load_config())) {
+      has_config_file = false;
+      ret = OB_SUCCESS;
+    } else if (OB_FAIL(ret)) {
+      LOG_ERROR("load config from file failed", KR(ret));
+    }
   }
 
   if (OB_FAIL(ret)) {

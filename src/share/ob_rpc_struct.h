@@ -7737,12 +7737,17 @@ struct ObUpdateTenantInfoCacheArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObUpdateTenantInfoCacheArg(): tenant_id_(OB_INVALID_TENANT_ID), tenant_info_(), ora_rowscn_(0)  {}
+  ObUpdateTenantInfoCacheArg(): tenant_id_(OB_INVALID_TENANT_ID), tenant_info_(), ora_rowscn_(0), finish_data_version_(0) {
+    data_version_barrier_scn_.set_min();
+  }
   ~ObUpdateTenantInfoCacheArg() {}
   bool is_valid() const;
-  int init(const uint64_t tenant_id, const share::ObAllTenantInfo &tenant_info, const int64_t ora_rowscn);
+  int init(const uint64_t tenant_id, const share::ObAllTenantInfo &tenant_info,
+           const int64_t ora_rowscn, const uint64_t finish_data_version,
+           const share::SCN &data_version_barrier_scn);
   int assign(const ObUpdateTenantInfoCacheArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(tenant_info), K_(ora_rowscn));
+  TO_STRING_KV(K_(tenant_id), K_(tenant_info), K_(ora_rowscn), K_(finish_data_version),
+               K_(data_version_barrier_scn));
 
   uint64_t get_tenant_id() const
   {
@@ -7757,6 +7762,16 @@ public:
   int64_t get_ora_rowscn() const
   {
     return ora_rowscn_;
+  }
+
+  uint64_t get_finish_data_version() const
+  {
+    return finish_data_version_;
+  }
+
+  const share::SCN &get_data_version_barrier_scn() const
+  {
+    return data_version_barrier_scn_;
   }
 
 private:

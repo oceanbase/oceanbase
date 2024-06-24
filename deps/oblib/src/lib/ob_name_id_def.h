@@ -884,6 +884,9 @@ DEF_NAME(id, "id")
     DEF_NAME(sql_update_cost_time, "sql_update_cost_time")
     DEF_NAME(sql_update_times, "sql_update_times")
     DEF_NAME(last_sql_update_time, "last_sql_update_time")
+    DEF_NAME(is_data_version_crossed, "is_data_version_crossed")
+    DEF_NAME(finish_data_version, "finish_data_version")
+    DEF_NAME(data_version_barrier_scn, "data_version_barrier_scn")
 
     // << add pair events BEFORE this line
     DEF_NAME(NAME_COUNT, "invalid")

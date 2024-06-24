@@ -6964,24 +6964,30 @@ bool ObUpdateTenantInfoCacheArg::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
          && tenant_info_.is_valid()
-         && 0 != ora_rowscn_;
+         && 0 != ora_rowscn_
+         && data_version_barrier_scn_.is_valid();
 }
 
 int ObUpdateTenantInfoCacheArg::init(
     const uint64_t tenant_id,
     const ObAllTenantInfo &tenant_info,
-    const int64_t ora_rowscn)
+    const int64_t ora_rowscn,
+    const uint64_t finish_data_version,
+    const share::SCN &data_version_barrier_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   || !tenant_info.is_valid()
-                  || 0 == ora_rowscn)) {
+                  || 0 == ora_rowscn
+                  || !data_version_barrier_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tenant_info), K(ora_rowscn));
   } else {
     tenant_id_ = tenant_id;
     tenant_info_ = tenant_info;
     ora_rowscn_ = ora_rowscn;
+    finish_data_version_ = finish_data_version;
+    data_version_barrier_scn_ = data_version_barrier_scn;
   }
   return ret;
 }
@@ -6993,6 +6999,8 @@ int ObUpdateTenantInfoCacheArg::assign(const ObUpdateTenantInfoCacheArg &other)
     tenant_id_ = other.tenant_id_;
     tenant_info_ = other.tenant_info_;
     ora_rowscn_ = other.ora_rowscn_;
+    finish_data_version_ = other.finish_data_version_;
+    data_version_barrier_scn_ = other.data_version_barrier_scn_;
   }
   return ret;
 }
