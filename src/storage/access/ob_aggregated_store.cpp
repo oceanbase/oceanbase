@@ -239,6 +239,7 @@ ObAggregatedStore::ObAggregatedStore(const int64_t batch_size, sql::ObEvalCtx &e
     : ObBlockBatchedRowStore(batch_size, eval_ctx, context),
       agg_row_(*context_.stmt_allocator_),
       agg_flat_row_mode_(false),
+      single_count_star_mode_(false),
       row_buf_()
 {
 }
@@ -253,6 +254,7 @@ void ObAggregatedStore::reset()
   ObBlockBatchedRowStore::reset();
   agg_row_.reset();
   agg_flat_row_mode_ = false;
+  single_count_star_mode_ = false;
   row_buf_.reset();
 }
 
@@ -300,6 +302,7 @@ int ObAggregatedStore::check_agg_in_row_mode(const ObTableIterParam &iter_param)
 {
   int ret = OB_SUCCESS;
   int64_t agg_cnt = 0;
+  int64_t count_star_cnt = 0;
   ObAggCell *cell = nullptr;
   const ObITableReadInfo *read_info = nullptr;
   if (OB_ISNULL(read_info = iter_param.get_read_info())) {
@@ -311,17 +314,20 @@ int ObAggregatedStore::check_agg_in_row_mode(const ObTableIterParam &iter_param)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpecte null agg cell", K(ret), K(i));
     } else if (OB_COUNT_AGG_PD_COLUMN_ID == cell->get_col_offset()) {
+      count_star_cnt++;
     } else if (cell->get_col_offset() >= read_info->get_request_count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected col idx", K(ret), K(i), KPC(cell), K(read_info->get_request_count()));
     } else if (ObPDAggType::PD_FIRST_ROW != cell->get_type()) {
       agg_cnt++;
     }
+    LOG_DEBUG("debug check agg cell", KPC(cell));
   }
   if (OB_SUCC(ret)) {
     agg_flat_row_mode_ =
         agg_cnt > AGG_ROW_MODE_COUNT_THRESHOLD ||
         (double) agg_cnt/read_info->get_request_count() > AGG_ROW_MODE_RATIO_THRESHOLD;
+    single_count_star_mode_ = count_star_cnt == agg_row_.get_agg_count();
   }
   return ret;
 }
@@ -432,6 +438,29 @@ int ObAggregatedStore::fill_row(blocksstable::ObDatumRow &row)
         LOG_WARN("Failed to eval agg cell", K(ret), K(i), K(row), K(*cell));
       }
     }
+  }
+  return ret;
+}
+
+int ObAggregatedStore::fill_count(const int64_t row_count)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObAggregatedStore is not inited", K(ret), K(*this));
+  } else if (row_count < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to fill count", K(ret), K(row_count));
+  } else {
+    ObStorageDatum tmp_datum;
+    tmp_datum.set_nop();
+    for (int64_t i = 0; OB_SUCC(ret) && i < agg_row_.get_agg_count(); ++i) {
+      ObAggCell *cell = agg_row_.at(i);
+      if (OB_FAIL(cell->eval(tmp_datum, row_count))) {
+        LOG_WARN("Failed to eval agg cell", K(ret), K(i), K(row_count), K(*cell));
+      }
+    }
+    LOG_DEBUG("debug to fill row count", K(ret), K(row_count));
   }
   return ret;
 }

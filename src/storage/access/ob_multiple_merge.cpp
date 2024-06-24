@@ -68,6 +68,7 @@ ObMultipleMerge::ObMultipleMerge()
       stmt_iter_pool_(nullptr),
       out_project_cols_(),
       lob_reader_(),
+      single_count_star_optimize_mode_(false),
       scan_state_(ScanState::NONE)
 {
 }
@@ -194,7 +195,7 @@ int ObMultipleMerge::init(
       LOG_TRACE("succ to init multiple merge", K(*this));
     }
   }
-  LOG_DEBUG("init multiple merge", K(ret), KP(this), K(param), K(context), K(get_table_param));
+  LOG_DEBUG("init multiple merge", K(ret), KP(this), K(param), K(context), K(get_table_param), K(single_count_star_optimize_mode_));
   return ret;
 }
 
@@ -667,71 +668,80 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     }
     reuse_lob_locator();
     bool need_init_expr_header = true;
-    while (OB_SUCC(ret) && !agg_row_store->is_end()) {
-      bool can_batch = false;
-      // clear evaluated flag for every row
-      // all rows will be touched in this loop
-      if (NULL != access_param_->get_op()) {
-        access_param_->get_op()->clear_datum_eval_flag();
-      }
-      if (OB_FAIL(refresh_table_on_demand())) {
-        LOG_WARN("fail to refresh table on demand", K(ret));
-      } else if (OB_FAIL(can_batch_scan(can_batch))) {
-        LOG_WARN("fail to check can batch scan", K(ret));
-      } else if (can_batch) {
-        scan_state_ = ScanState::BATCH;
-        if (OB_FAIL(inner_get_next_rows())) {
-          if (OB_LIKELY(OB_PUSHDOWN_STATUS_CHANGED == ret || OB_ITER_END == ret)) {
-            // OB_ITER_END should use fuse to make sure no greater key in dynamic data
-            ret = OB_SUCCESS;
-            // pd_agg/pd_groupby not set in cg scanner, need reset expr format
-            need_init_expr_header = true;
-          } else {
-            LOG_WARN("fail to get next aggregate row fast", K(ret));
-          }
-        } else {
-          continue;
-        }
-      }
-
-      if (OB_FAIL(ret)) {
+    if (single_count_star_optimize_mode_) {
+      ObSSTable *major_table = reinterpret_cast<ObSSTable*>(tables_[0]);
+      if (OB_FAIL(agg_row_store->fill_count(major_table->get_row_count()))) {
+        STORAGE_LOG(WARN, "Failed to fill row count", K(ret), KPC(major_table));
       } else {
-        if (OB_FAIL(inner_get_next_row(unprojected_row_))) {
-          if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
-            ret = OB_SUCCESS;
-            scan_state_ = ScanState::BATCH;
-            continue;
-          } else if (OB_ITER_END != ret) {
-            LOG_WARN("Fail to inner get next row, ", K(ret), KP(this));
-          }
-        } else if (need_read_lob_columns(unprojected_row_)) {
-          if (OB_FAIL(handle_lob_before_fuse_row())) {
-            LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
-          }
+        ret = OB_ITER_END;
+      }
+    } else {
+      while (OB_SUCC(ret) && !agg_row_store->is_end()) {
+        bool can_batch = false;
+        // clear evaluated flag for every row
+        // all rows will be touched in this loop
+        if (NULL != access_param_->get_op()) {
+          access_param_->get_op()->clear_datum_eval_flag();
         }
-        if (OB_SUCC(ret)) {
-          scan_state_ = ScanState::SINGLE_ROW;
+        if (OB_FAIL(refresh_table_on_demand())) {
+          LOG_WARN("fail to refresh table on demand", K(ret));
+        } else if (OB_FAIL(can_batch_scan(can_batch))) {
+          LOG_WARN("fail to check can batch scan", K(ret));
+        } else if (can_batch) {
+          scan_state_ = ScanState::BATCH;
+          if (OB_FAIL(inner_get_next_rows())) {
+            if (OB_LIKELY(OB_PUSHDOWN_STATUS_CHANGED == ret || OB_ITER_END == ret)) {
+              // OB_ITER_END should use fuse to make sure no greater key in dynamic data
+              ret = OB_SUCCESS;
+              // pd_agg/pd_groupby not set in cg scanner, need reset expr format
+              need_init_expr_header = true;
+            } else {
+              LOG_WARN("fail to get next aggregate row fast", K(ret));
+            }
+          } else {
+            continue;
+          }
         }
 
-        if (OB_SUCC(ret)) {
-          ObDatumRow *out_row = nullptr;
-          if (need_init_expr_header &&
-              access_param_->get_op()->enable_rich_format_ &&
-              OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), 1))) {
-            LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
-          } else if (FALSE_IT(need_init_expr_header = false)) {
-          } else if (OB_FAIL(process_fuse_row(
-                      false,
-                      unprojected_row_,
-                      out_row))) {
-            LOG_WARN("get row from fuse failed", K(ret));
-          } else if (nullptr != out_row) {
-            if (OB_FAIL(agg_row_store->fill_row(unprojected_row_))) {
-              LOG_WARN("fail to aggregate row", K(ret));
+        if (OB_FAIL(ret)) {
+        } else {
+          if (OB_FAIL(inner_get_next_row(unprojected_row_))) {
+            if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
+              ret = OB_SUCCESS;
+              scan_state_ = ScanState::BATCH;
+              continue;
+            } else if (OB_ITER_END != ret) {
+              LOG_WARN("Fail to inner get next row, ", K(ret), KP(this));
+            }
+          } else if (need_read_lob_columns(unprojected_row_)) {
+            if (OB_FAIL(handle_lob_before_fuse_row())) {
+              LOG_WARN("Fail to handle lobs, ", K(ret), KP(this));
             }
           }
-          if (nullptr != access_ctx_->table_scan_stat_) {
-            access_ctx_->table_scan_stat_->access_row_cnt_++;
+          if (OB_SUCC(ret)) {
+            scan_state_ = ScanState::SINGLE_ROW;
+          }
+
+          if (OB_SUCC(ret)) {
+            ObDatumRow *out_row = nullptr;
+            if (need_init_expr_header &&
+                access_param_->get_op()->enable_rich_format_ &&
+                OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), 1))) {
+              LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
+            } else if (FALSE_IT(need_init_expr_header = false)) {
+            } else if (OB_FAIL(process_fuse_row(
+                    false,
+                    unprojected_row_,
+                    out_row))) {
+              LOG_WARN("get row from fuse failed", K(ret));
+            } else if (nullptr != out_row) {
+              if (OB_FAIL(agg_row_store->fill_row(unprojected_row_))) {
+                LOG_WARN("fail to aggregate row", K(ret));
+              }
+            }
+            if (nullptr != access_ctx_->table_scan_stat_) {
+              access_ctx_->table_scan_stat_->access_row_cnt_++;
+            }
           }
         }
       }
@@ -919,6 +929,7 @@ void ObMultipleMerge::inner_reset()
   range_idx_delta_ = 0;
   read_memtable_only_ = false;
   lob_reader_.reset();
+  single_count_star_optimize_mode_ = false;
   scan_state_ = ScanState::NONE;
 }
 
@@ -1054,6 +1065,8 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
   if (OB_SUCC(ret) && nullptr != block_row_store_) {
     if (OB_FAIL(block_row_store_->init(param))) {
       LOG_WARN("fail to init block row store", K(ret), K(block_row_store_));
+    } else if (param.iter_param_.enable_pd_aggregate()) {
+      single_count_star_optimize_mode_ = (reinterpret_cast<ObAggregatedStore *>(block_row_store_))->is_single_count_start_mode() && tables_.count() == 1 && tables_[0]->is_major_sstable();
     }
   }
   if (OB_SUCC(ret) && param.iter_param_.enable_pd_group_by() && !param.iter_param_.vectorized_enabled_) {

@@ -62,6 +62,7 @@ public:
       const int64_t end_index,
       const ObFilterResult &res) = 0;
   virtual int fill_rows(const int64_t group_idx, const int64_t row_count) = 0;
+  virtual int fill_count(const int64_t row_count) { UNUSED(row_count); return OB_NOT_SUPPORTED; }
   virtual int reuse_capacity(const int64_t capacity);
 
   virtual bool is_end() const override final

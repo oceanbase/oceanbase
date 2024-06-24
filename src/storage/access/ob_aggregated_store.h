@@ -103,8 +103,10 @@ public:
       const ObFilterResult &res) override;
   virtual int fill_rows(const int64_t group_idx, const int64_t row_count) override;
   virtual int fill_row(blocksstable::ObDatumRow &out_row) override;
+  virtual int fill_count(const int64_t row_count) override;
   int collect_aggregated_row(blocksstable::ObDatumRow *&row);
   int get_agg_cell(const sql::ObExpr *expr, ObAggCell *&agg_cell);
+  OB_INLINE bool is_single_count_start_mode() const { return single_count_star_mode_; }
   OB_INLINE void reuse_aggregated_row() { agg_row_.reuse(); }
   OB_INLINE bool can_agg_index_info(const blocksstable::ObMicroIndexInfo &index_info)
   {
@@ -131,6 +133,7 @@ public:
 private:
   ObAggRow agg_row_;
   bool agg_flat_row_mode_;
+  bool single_count_star_mode_;
   blocksstable::ObDatumRow row_buf_;
 };
 
