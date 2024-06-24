@@ -40,6 +40,7 @@ namespace blocksstable
 class ObBitStream;
 class ObIColumnDecoder;
 class ObIRowIndex;
+class ObNoneExistColumnDecoder;
 
 struct ObBaseDecoderCtx
 {
@@ -104,7 +105,7 @@ struct ObVectorDecodeCtx
       const int64_t vec_offset,
       sql::VectorHeader &vec_header)
     : ptr_arr_(ptr_arr), len_arr_(len_arr), row_ids_(row_ids), row_cap_(row_cap),
-      vec_offset_(vec_offset), vec_header_(vec_header) {}
+      vec_offset_(vec_offset), vec_header_(vec_header), default_datum_(NULL), expr_(NULL), eval_ctx_(NULL){}
 
   bool is_valid() const
   {
@@ -120,11 +121,20 @@ struct ObVectorDecodeCtx
       MEMSET(len_arr_, 0, sizeof(uint32_t) * row_cap_);
     }
   }
+  OB_INLINE void set_default(ObDatum *default_datum, sql::ObExpr *expr, sql::ObEvalCtx *eval_ctx)
+  {
+    default_datum_ = default_datum;
+    expr_ = expr;
+    eval_ctx_ = eval_ctx;
+  }
 
   VectorFormat get_format() const { return vec_header_.get_format(); }
   ObIVector *get_vector() { return vec_header_.get_vector(); }
+  ObDatum *get_default_datum() { return default_datum_; }
+  sql::ObExpr *get_expr() { return expr_; }
+  sql::ObEvalCtx *get_eval_ctx() { return eval_ctx_; }
 
-  TO_STRING_KV(KP_(ptr_arr), KP_(len_arr), KP_(row_ids), K_(row_cap), K_(vec_offset));
+  TO_STRING_KV(KP_(ptr_arr), KP_(len_arr), KP_(row_ids), K_(row_cap), K_(vec_offset), KP_(default_datum), KP_(expr), KP_(eval_ctx));
 
   const char **ptr_arr_; // tmp mem buf as pointer array
   uint32_t *len_arr_; // tmp mem buf as 4-byte array
@@ -132,6 +142,9 @@ struct ObVectorDecodeCtx
   const int64_t row_cap_; // batch size / array size
   const int64_t vec_offset_; // vector start projection offset
   sql::VectorHeader &vec_header_; // result
+  ObDatum *default_datum_;  //default column datum
+  sql::ObExpr *expr_;
+  sql::ObEvalCtx *eval_ctx_;
 };
 
 class ObIColumnDecoder
@@ -376,26 +389,6 @@ protected:
       ObVectorDecodeCtx &raw_vector_ctx) const;
 };
 
-// decoder for column not exist in schema
-class ObNoneExistColumnDecoder : public ObIColumnDecoder
-{
-public:
-  static const ObColumnHeader::Type type_ = ObColumnHeader::MAX_TYPE;
-
-  virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
-      const ObBitStream &bs, const char *data, const int64_t len)const override
-  {
-    datum.set_ext();
-    datum.no_cv(datum.extend_obj_)->set_ext(common::ObActionFlag::OP_NOP);
-    return common::OB_SUCCESS;
-  }
-
-  virtual ObColumnHeader::Type get_type() const { return type_; }
-
-  virtual int update_pointer(const char *, const char *) { return common::OB_SUCCESS; }
-
-  virtual bool can_vectorized() const override { return false; }
-};
 
 // Read row data offset and row length from row index
 OB_INLINE int ObIColumnDecoder::locate_row_data(

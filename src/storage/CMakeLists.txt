@@ -87,6 +87,7 @@ ob_set_subtarget(ob_storage blocksstable_encoding
   blocksstable/encoding/ob_string_prefix_encoder.cpp
   blocksstable/encoding/neon/ob_dict_decoder_neon.cpp
   blocksstable/encoding/neon/ob_raw_decoder_neon.cpp
+  blocksstable/encoding/ob_none_exist_decoder.cpp
 )
 
 ob_set_subtarget(ob_storage blocksstable_cs_encoding

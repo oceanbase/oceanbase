@@ -1559,6 +1559,7 @@ int ObMicroBlockCSDecoder::filter_black_filter_batch(
 int ObMicroBlockCSDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
     const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
@@ -1847,6 +1848,7 @@ int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
 int ObMicroBlockCSDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
     const int32_t *row_ids,
     const int64_t row_cap,
     const char **cell_datas,

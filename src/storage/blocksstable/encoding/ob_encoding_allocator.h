@@ -37,6 +37,7 @@
 #include "ob_string_prefix_decoder.h"
 #include "ob_column_equal_decoder.h"
 #include "ob_inter_column_substring_decoder.h"
+#include "ob_none_exist_decoder.h"
 
 namespace oceanbase
 {
