@@ -434,6 +434,9 @@ namespace share
   static const char* const OB_SV_SKIP_EXTERNAL_LOCKING = "skip_external_locking";
   static const char* const OB_SV_SUPER_READ_ONLY = "super_read_only";
   static const char* const OB_SV_PLSQL_OPTIMIZE_LEVEL = "plsql_optimize_level";
+  static const char* const OB_SV_GROUP_REPLICATION_GROUP_SEEDS = "group_replication_group_seeds";
+  static const char* const OB_SV_SLAVE_ROWS_SEARCH_ALGORITHMS = "slave_rows_search_algorithms";
+  static const char* const OB_SV_SLAVE_TYPE_CONVERSIONS = "slave_type_conversions";
 
 }
 }

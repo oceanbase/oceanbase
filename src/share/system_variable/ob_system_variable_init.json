@@ -7281,5 +7281,56 @@
     "background_cn": "",
     "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_tmpdir",
     "placeholder": true
+  },
+  "group_replication_group_seeds": {
+    "id": 10416,
+    "name": "group_replication_group_seeds",
+    "default_value": "",
+    "base_value": "",
+    "data_type": "varchar",
+    "info": "A list of group members to which a joining member can connect to obtain details of all the current group members",
+    "flags": "GLOBAL | SESSION",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/group-replication-system-variables.html#sysvar_group_replication_group_seeds"
+  },
+  "slave_rows_search_algorithms": {
+    "id": 10417,
+    "name": "slave_rows_search_algorithms",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "When preparing batches of rows for row-based logging and replication, this variable controls how the rows are searched for matches",
+    "flags": "GLOBAL | SESSION",
+    "enum_names": [
+      "TABLE_SCAN,INDEX_SCAN",
+      "INDEX_SCAN,HASH_SCAN",
+      "TABLE_SCAN,HASH_SCAN",
+      "TABLE_SCAN,INDEX_SCAN,HASH_SCAN"
+    ],
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-replica.html#sysvar_slave_rows_search_algorithms"
+  },
+  "slave_type_conversions": {
+    "id": 10418,
+    "name": "slave_type_conversions",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "Controls the type conversion mode in effect on the replica when using row-based replication",
+    "flags": "GLOBAL | SESSION",
+    "enum_names": [
+      "ALL_LOSSY",
+      "ALL_NON_LOSSY",
+      "ALL_SIGNED",
+      "ALL_UNSIGNED"
+    ],
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "Controls the type conversion mode in effect on the replica when using row-based replication"
   }
 }

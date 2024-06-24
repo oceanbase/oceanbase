@@ -401,6 +401,20 @@ const char *ObSysVarSlaveParallelType::SLAVE_PARALLEL_TYPE_NAMES[] = {
   "LOGICAL_CLOCK",
   0
 };
+const char *ObSysVarSlaveRowsSearchAlgorithms::SLAVE_ROWS_SEARCH_ALGORITHMS_NAMES[] = {
+  "TABLE_SCAN,INDEX_SCAN",
+  "INDEX_SCAN,HASH_SCAN",
+  "TABLE_SCAN,HASH_SCAN",
+  "TABLE_SCAN,INDEX_SCAN,HASH_SCAN",
+  0
+};
+const char *ObSysVarSlaveTypeConversions::SLAVE_TYPE_CONVERSIONS_NAMES[] = {
+  "ALL_LOSSY",
+  "ALL_NON_LOSSY",
+  "ALL_SIGNED",
+  "ALL_UNSIGNED",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -500,6 +514,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "group_replication_flow_control_mode",
   "group_replication_force_members",
   "group_replication_group_name",
+  "group_replication_group_seeds",
   "group_replication_gtid_assignment_block_size",
   "group_replication_ip_whitelist",
   "group_replication_local_address",
@@ -764,9 +779,11 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "slave_parallel_workers",
   "slave_pending_jobs_size_max",
   "slave_preserve_commit_order",
+  "slave_rows_search_algorithms",
   "slave_skip_errors",
   "slave_sql_verify_checksum",
   "slave_transaction_retries",
+  "slave_type_conversions",
   "sql_auto_is_null",
   "sql_mode",
   "sql_notes",
@@ -921,6 +938,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_MODE,
   SYS_VAR_GROUP_REPLICATION_FORCE_MEMBERS,
   SYS_VAR_GROUP_REPLICATION_GROUP_NAME,
+  SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS,
   SYS_VAR_GROUP_REPLICATION_GTID_ASSIGNMENT_BLOCK_SIZE,
   SYS_VAR_GROUP_REPLICATION_IP_WHITELIST,
   SYS_VAR_GROUP_REPLICATION_LOCAL_ADDRESS,
@@ -1185,9 +1203,11 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_SLAVE_PARALLEL_WORKERS,
   SYS_VAR_SLAVE_PENDING_JOBS_SIZE_MAX,
   SYS_VAR_SLAVE_PRESERVE_COMMIT_ORDER,
+  SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS,
   SYS_VAR_SLAVE_SKIP_ERRORS,
   SYS_VAR_SLAVE_SQL_VERIFY_CHECKSUM,
   SYS_VAR_SLAVE_TRANSACTION_RETRIES,
+  SYS_VAR_SLAVE_TYPE_CONVERSIONS,
   SYS_VAR_SQL_AUTO_IS_NULL,
   SYS_VAR_SQL_MODE,
   SYS_VAR_SQL_NOTES,
@@ -1662,7 +1682,10 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_autoinc_lock_mode",
   "skip_external_locking",
   "super_read_only",
-  "plsql_optimize_level"
+  "plsql_optimize_level",
+  "group_replication_group_seeds",
+  "slave_rows_search_algorithms",
+  "slave_type_conversions"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -2249,6 +2272,9 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarSkipExternalLocking)
         + sizeof(ObSysVarSuperReadOnly)
         + sizeof(ObSysVarPlsqlOptimizeLevel)
+        + sizeof(ObSysVarGroupReplicationGroupSeeds)
+        + sizeof(ObSysVarSlaveRowsSearchAlgorithms)
+        + sizeof(ObSysVarSlaveTypeConversions)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -6017,6 +6043,33 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLSQL_OPTIMIZE_LEVEL))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarPlsqlOptimizeLevel));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarGroupReplicationGroupSeeds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarGroupReplicationGroupSeeds", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarGroupReplicationGroupSeeds));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveRowsSearchAlgorithms())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlaveRowsSearchAlgorithms", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSlaveRowsSearchAlgorithms));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveTypeConversions())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlaveTypeConversions", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SLAVE_TYPE_CONVERSIONS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSlaveTypeConversions));
       }
     }
 
@@ -10624,6 +10677,39 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlOptimizeLevel())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPlsqlOptimizeLevel", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarGroupReplicationGroupSeeds)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarGroupReplicationGroupSeeds)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarGroupReplicationGroupSeeds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarGroupReplicationGroupSeeds", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSlaveRowsSearchAlgorithms)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSlaveRowsSearchAlgorithms)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveRowsSearchAlgorithms())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlaveRowsSearchAlgorithms", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SLAVE_TYPE_CONVERSIONS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSlaveTypeConversions)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSlaveTypeConversions)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveTypeConversions())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSlaveTypeConversions", K(ret));
       }
       break;
     }
