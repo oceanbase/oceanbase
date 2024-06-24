@@ -56,7 +56,7 @@ public:
   OB_INLINE void set_max_rowkey() { *this = MAX_ROWKEY; store_rowkey_.set_max(); }
   OB_INLINE void set_min_rowkey() { *this = MIN_ROWKEY; store_rowkey_.set_min(); }
   OB_INLINE bool is_static_rowkey() const { return datums_ == &MIN_DATUM || datums_ == &MAX_DATUM; }
-  OB_INLINE void set_group_idx(const int32_t group_idx) { group_idx_ = group_idx; }
+  OB_INLINE void set_group_idx(const int64_t group_idx) { group_idx_ = group_idx; }
   OB_INLINE int64_t get_group_idx() const { return group_idx_; }
   OB_INLINE const common::ObStoreRowkey &get_store_rowkey() const { return store_rowkey_; }
   //only for unittest
@@ -97,7 +97,7 @@ public:
   DECLARE_TO_STRING;
 public:
   int32_t datum_cnt_;
-  int32_t group_idx_;
+  int64_t group_idx_;
   mutable uint64_t hash_;
   ObStorageDatum *datums_;
   common::ObStoreRowkey store_rowkey_;

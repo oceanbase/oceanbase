@@ -155,6 +155,42 @@ int ObFtsIndexBuilderUtil::append_fts_doc_word_arg(
   return ret;
 }
 
+int ObFtsIndexBuilderUtil::fts_doc_word_schema_exist(
+    uint64_t tenant_id,
+    uint64_t database_id,
+    ObSchemaGetterGuard &schema_guard,
+    const ObString &index_name,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  const int64_t buf_size = OB_MAX_TABLE_NAME_BUF_LENGTH;
+  char buf[buf_size] = {0};
+  int64_t pos = 0;
+  ObString doc_word_index_name;
+  const ObTableSchema *fts_doc_word_schema = nullptr;
+  if (OB_FAIL(databuff_printf(buf,
+                              buf_size,
+                              pos,
+                              "%.*s_fts_doc_word",
+                              index_name.length(),
+                              index_name.ptr()))) {
+    LOG_WARN("fail to printf fts doc word name str", K(ret), K(index_name));
+  } else if (OB_FALSE_IT(doc_word_index_name.assign_ptr(buf, pos))) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                   database_id,
+                                                   doc_word_index_name,
+                                                   true/*is_index*/,
+                                                   fts_doc_word_schema,
+                                                   false/*with_hidden_flag*/,
+                                                   true/*is_built_in_index*/))) {
+    LOG_WARN("failed to get index schema", K(ret), K(tenant_id));
+  } else if (OB_NOT_NULL(fts_doc_word_schema)) {
+    is_exist = true;
+  }
+  return ret;
+}
+
 int ObFtsIndexBuilderUtil::generate_fts_aux_index_name(
     obrpc::ObCreateIndexArg &arg,
     ObIAllocator *allocator)
@@ -273,32 +309,22 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
     ObColumnSchemaV2 *generated_word_col = nullptr;
     ObColumnSchemaV2 *generated_doc_len_col = nullptr;
     ObColumnSchemaV2 *generated_word_count_col = nullptr;
-    if (is_rowkey_doc || is_doc_rowkey) {
-      if (OB_ISNULL(existing_doc_id_col)) { // need to generate doc id col
-        doc_id_col_id = available_col_id++;
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(generate_doc_id_column(&index_arg,
-                                                  doc_id_col_id,
-                                                  data_schema,
-                                                  generated_doc_id_col))) {
-          LOG_WARN("failed to generate doc id column", K(ret));
-        } else if (OB_FAIL(gen_columns.push_back(generated_doc_id_col))) {
-          LOG_WARN("failed to push back doc id col", K(ret));
-        }
-      }
+    if (OB_ISNULL(existing_doc_id_col)) { // need to generate doc id col
+      doc_id_col_id = available_col_id++;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(push_back_gen_col(tmp_cols,
-                                           existing_doc_id_col,
-                                           generated_doc_id_col))) {
+      } else if (OB_FAIL(generate_doc_id_column(&index_arg,
+                                                doc_id_col_id,
+                                                data_schema,
+                                                generated_doc_id_col))) {
+        LOG_WARN("failed to generate doc id column", K(ret));
+      } else if (OB_FAIL(gen_columns.push_back(generated_doc_id_col))) {
         LOG_WARN("failed to push back doc id col", K(ret));
-      } else if (OB_FAIL(adjust_fts_arg(&index_arg,
-                                        data_schema,
-                                        allocator,
-                                        tmp_cols))) {
-        LOG_WARN("failed to append fts_index arg", K(ret));
       }
+    }
+    if (is_rowkey_doc || is_doc_rowkey) {
     } else if (is_fts_index || is_doc_word) {
-      if (OB_ISNULL(existing_word_col)) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(existing_word_col)) {
         word_col_id = available_col_id++;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(generate_word_segment_column(&index_arg,
@@ -334,6 +360,20 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
           LOG_WARN("fail to push back generated document length", K(ret));
         }
       }
+    }
+    if (is_rowkey_doc || is_doc_rowkey) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(push_back_gen_col(tmp_cols,
+                                           existing_doc_id_col,
+                                           generated_doc_id_col))) {
+        LOG_WARN("failed to push back doc id col", K(ret));
+      } else if (OB_FAIL(adjust_fts_arg(&index_arg,
+                                        data_schema,
+                                        allocator,
+                                        tmp_cols))) {
+        LOG_WARN("failed to append fts_index arg", K(ret));
+      }
+    } else if (is_fts_index || is_doc_word) {
       if (OB_FAIL(ret)) {
       } else if (is_fts_index) {
         if (OB_FAIL(push_back_gen_col(tmp_cols,
@@ -384,6 +424,7 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
       }
     }
   }
+  FLOG_INFO("adjust fts arg finished", K(index_arg));
   return ret;
 }
 
@@ -802,8 +843,8 @@ int ObFtsIndexBuilderUtil::inner_adjust_fts_arg(
        !share::schema::is_fts_doc_word_aux(fts_arg->index_type_)) ||
       fts_cols.count() != index_column_cnt + 2) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret), KPC(fts_arg),
-        K(fts_cols.count()), K(index_column_cnt));
+    LOG_WARN("invalid argument", K(ret), KPC(fts_arg), K(fts_cols.count()),
+        K(index_column_cnt));
   } else {
     // 1. add doc id column, word column to arg->index_columns
     for (int64_t i = 0; OB_SUCC(ret) && i < index_column_cnt; ++i) {

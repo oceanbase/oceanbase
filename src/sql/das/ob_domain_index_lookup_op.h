@@ -116,44 +116,6 @@ protected:
   static const int64_t MAX_NUM_PER_BATCH = 1000;
 };
 
-class ObFullTextIndexLookupOp : public ObDomainIndexLookupOp
-{
-public:
-  explicit ObFullTextIndexLookupOp(ObIAllocator &allocator)
-    : ObDomainIndexLookupOp(allocator),
-      text_retrieval_iter_(nullptr),
-      retrieval_ctx_(nullptr) {}
-
-  virtual ~ObFullTextIndexLookupOp() {}
-
-  int init(const ObDASBaseCtDef *table_lookup_ctdef,
-           ObDASBaseRtDef *table_lookup_rtdef,
-           transaction::ObTxDesc *tx_desc,
-           transaction::ObTxReadSnapshot *snapshot,
-           storage::ObTableScanParam &scan_param);
-  void set_text_retrieval_iter(common::ObNewRowIterator *text_retrieval_iter)
-  {
-    text_retrieval_iter_ = text_retrieval_iter;
-  }
-  common::ObNewRowIterator *get_text_retrieval_iter() { return text_retrieval_iter_; }
-  virtual int reset_lookup_state() override;
-  virtual int do_aux_table_lookup();
-  virtual int revert_iter() override;
-  virtual int reuse_scan_iter();
-  virtual void do_clear_evaluated_flag() override;
-protected:
-  virtual int fetch_index_table_rowkey() override;
-  virtual int fetch_index_table_rowkeys(int64_t &count, const int64_t capacity) override;
-  virtual int get_aux_table_rowkey() override;
-  virtual int get_aux_table_rowkeys(const int64_t lookup_row_cnt) override;
-private:
-  int set_lookup_doc_id_keys(const int64_t size);
-  int set_main_table_lookup_key();
-private:
-  ObNewRowIterator *text_retrieval_iter_;
-  ObEvalCtx *retrieval_ctx_;
-};
-
 class ObMulValueIndexLookupOp : public ObDomainIndexLookupOp
 {
 public:

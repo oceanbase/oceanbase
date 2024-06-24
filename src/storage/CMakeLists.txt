@@ -177,7 +177,6 @@ ob_set_subtarget(ob_storage fts
   fts/ob_fts_stop_word.cpp
   fts/ob_ngram_ft_parser.cpp
   fts/ob_whitespace_ft_parser.cpp
-  fts/ob_text_retrieval_iterator.cpp
 )
 
 ob_set_subtarget(ob_storage high_availability

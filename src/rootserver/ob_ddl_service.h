@@ -2127,6 +2127,9 @@ private:
       ObDDLSQLTransaction &trans);
 
 public:
+  int generate_aux_index_schema(
+      const obrpc::ObGenerateAuxIndexSchemaArg &arg,
+      obrpc::ObGenerateAuxIndexSchemaRes &result);
   int check_parallel_ddl_conflict(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const obrpc::ObDDLArg &arg);
@@ -2186,6 +2189,12 @@ public:
              common::ObIAllocator *allocator = NULL);
 #endif
 private:
+  int check_schema_generated_for_aux_index_schema_(
+      const obrpc::ObGenerateAuxIndexSchemaArg &arg,
+      ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema *data_schema,
+      bool &schema_generated,
+      uint64_t &index_table_id);
   int adjust_cg_for_offline(ObTableSchema &new_table_schema);
   int add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                        const share::schema::ObTableSchema &ori_table_schema,

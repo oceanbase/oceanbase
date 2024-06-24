@@ -57,18 +57,24 @@ ob_set_subtarget(ob_sql das
   das/ob_das_id_service.cpp
   das/ob_das_id_rpc.cpp
   das/ob_das_id_cache.cpp
+  das/ob_das_ir_define.cpp
   das/ob_das_task_result.cpp
   das/ob_das_spatial_index_lookup_op.cpp
   das/ob_das_retry_ctrl.cpp
   das/ob_das_simple_op.cpp
   das/ob_das_domain_utils.cpp
-  das/ob_text_retrieval_op.cpp
   das/ob_das_attach_define.cpp
   das/ob_group_scan_iter.cpp
   das/iter/ob_das_iter.cpp
   das/iter/ob_das_merge_iter.cpp
   das/iter/ob_das_lookup_iter.cpp
   das/iter/ob_das_group_fold_iter.cpp
+  das/iter/ob_das_scan_iter.cpp
+  das/iter/ob_das_local_lookup_iter.cpp
+  das/iter/ob_das_global_lookup_iter.cpp
+  das/iter/ob_das_sort_iter.cpp
+  das/iter/ob_das_text_retrieval_iter.cpp
+  das/iter/ob_das_text_retrieval_merge_iter.cpp
   das/iter/ob_das_iter_utils.cpp
 )
 

@@ -96,6 +96,7 @@ int64_t ObNewRange::to_simple_string(char *buffer, const int64_t length) const
       databuff_printf(buffer, length, pos, "table_id:null,");
     }
     databuff_printf(buffer, length, pos, "group_idx:%d,", group_idx_);
+    databuff_printf(buffer, length, pos, "index_ordered_idx:%d,", index_ordered_idx_);
     if (border_flag_.inclusive_start()) {
       databuff_printf(buffer, length, pos, "[");
     } else {

@@ -132,7 +132,7 @@ int ObSpatialIndexLookupOp::save_rowkeys()
         ObObj tmp_obj;
         ObExpr *expr = index_ctdef_->result_output_.at(i);
         if (T_PSEUDO_GROUP_ID == expr->type_) {
-          group_idx = expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_).get_int();
+          group_idx = ObNewRange::get_group_idx(expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_).get_int());
         }
       }
       if (OB_FAIL(lookup_range.build_range(ref_table_id, *idx_row))) {

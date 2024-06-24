@@ -2700,6 +2700,64 @@ public:
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
 };
 
+struct ObGenerateAuxIndexSchemaArg : public ObDDLArg
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObGenerateAuxIndexSchemaArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      data_table_id_(OB_INVALID_ID)
+  {}
+  ~ObGenerateAuxIndexSchemaArg() {}
+  bool is_valid() const
+  {
+    return tenant_id_ != OB_INVALID_TENANT_ID &&
+           data_table_id_ != OB_INVALID_ID&&
+           create_index_arg_.is_valid();
+  }
+  int assign(const ObGenerateAuxIndexSchemaArg &other);
+  void reset()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    data_table_id_ = OB_INVALID_ID;
+    create_index_arg_.reset();
+  }
+  TO_STRING_KV(K(tenant_id_), K(data_table_id_), K(create_index_arg_));
+
+public:
+  uint64_t tenant_id_;
+  uint64_t data_table_id_;
+  ObCreateIndexArg create_index_arg_;
+};
+
+struct ObGenerateAuxIndexSchemaRes final
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObGenerateAuxIndexSchemaRes()
+    : aux_table_id_(OB_INVALID_ID),
+      schema_generated_(false)
+  {}
+  ~ObGenerateAuxIndexSchemaRes() {}
+  int assign(const ObGenerateAuxIndexSchemaRes &other)
+  {
+    int ret = OB_SUCCESS;
+    aux_table_id_ = other.aux_table_id_;
+    schema_generated_ = other.schema_generated_;
+    return ret;
+  }
+  void reset()
+  {
+    aux_table_id_ = OB_INVALID_ID;
+    schema_generated_ = false;
+  }
+  TO_STRING_KV(K(aux_table_id_), K(schema_generated_));
+
+public:
+  uint64_t aux_table_id_;
+  bool schema_generated_;
+};
+
 typedef ObCreateIndexArg ObAlterPrimaryArg;
 
 struct ObCreateMLogArg : public ObDDLArg

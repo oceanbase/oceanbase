@@ -6288,7 +6288,11 @@ int ObLogicalOperator::check_use_child_ordering(bool &used, int64_t &inherit_chi
     } else {
       used = true;
     }
-    inherit_child_ordering_index = first_child;
+    if (LOG_TEMP_TABLE_TRANSFORMATION == get_type()) {
+      inherit_child_ordering_index = get_num_of_child()-1;
+    } else {
+      inherit_child_ordering_index = first_child;
+    }
   } else {
     used = false;
     inherit_child_ordering_index = -1;
@@ -6488,35 +6492,37 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
 {
   int ret = OB_SUCCESS;
   used = true;
-  bool is_first_child = true;
   bool inherit_child_ordering = true;
   int64_t inherit_child_ordering_index = -1;
   ObLogicalOperator *parent = get_parent();
   ObLogicalOperator *child = this;
-  while (OB_SUCC(ret) && NULL != parent) {
-    if (OB_FAIL(parent->check_use_child_ordering(used, inherit_child_ordering_index))) {
-      LOG_WARN("failed to check use child ordering", K(ret));
-    } else {
-      inherit_child_ordering = child == parent->get_child(inherit_child_ordering_index);
-      if (!used && inherit_child_ordering && child->is_plan_root()) {
-        ObLogPlan *plan = child->get_plan();
-        const ObDMLStmt *stmt = NULL;
-        if (OB_ISNULL(plan) || OB_ISNULL(stmt=plan->get_stmt())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpect null param", K(ret));
-        } else if (0 == stmt->get_order_item_size()) {
-          //do nothing
-        } else {
-          used = true;
-        }
+  while (OB_SUCC(ret) && NULL != child) {
+    if (child->is_plan_root()) {
+      ObLogPlan *plan = child->get_plan();
+      const ObDMLStmt *stmt = NULL;
+      if (OB_ISNULL(plan) || OB_ISNULL(stmt=plan->get_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null param", K(ret));
+      } else if (0 == stmt->get_order_item_size()) {
+        //do nothing
+      } else {
+        used = true;
+        break;
+      }
+      if (NULL == parent) {
+        break;
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (used || !inherit_child_ordering) {
-      break;
-    } else {
-      child = parent;
-      parent = parent->get_parent();
+    if (OB_SUCC(ret) && NULL != parent) {
+      if (OB_FAIL(parent->check_use_child_ordering(used, inherit_child_ordering_index))) {
+        LOG_WARN("failed to check use child ordering", K(ret));
+      } else if (OB_FALSE_IT(inherit_child_ordering = child == parent->get_child(inherit_child_ordering_index))) {
+      } else if (used || !inherit_child_ordering) {
+        break;
+      } else {
+        child = parent;
+        parent = parent->get_parent();
+      }
     }
   }
   return ret;

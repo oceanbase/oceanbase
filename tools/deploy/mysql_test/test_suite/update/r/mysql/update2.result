@@ -338,7 +338,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.a], [t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=true, 
+      is_index_back=false, is_global_index=true, keep_ordering=true, 
       range_key([t1.b], [t1.a]), range(MIN,MIN ; MAX,MAX)always true
 select * from t1;
 +---+------+
@@ -396,7 +396,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.a], [t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=true, 
+      is_index_back=false, is_global_index=true, keep_ordering=true, 
       range_key([t1.b], [t1.a]), range(MIN,MIN ; MAX,MAX)always true
 select * from t1;
 +---+------+
@@ -3283,7 +3283,7 @@ Outputs & filters:
        [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
        [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
        [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p0)
-      is_index_back=true, is_global_index=true, 
+      is_index_back=true, is_global_index=true, keep_ordering=true, 
       range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.shadow_pk_0], [gf_ar_mthly_bill.shadow_pk_1]), range(MIN,MIN,
       MIN,MIN ; MAX,MAX,MAX,MAX)always true
 select * from gf_ar_mthly_bill;
@@ -3461,7 +3461,7 @@ Outputs & filters:
        [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
        [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
        [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p0)
-      is_index_back=true, is_global_index=true, 
+      is_index_back=true, is_global_index=true, keep_ordering=true, 
       range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.shadow_pk_0], [gf_ar_mthly_bill.shadow_pk_1]), range(MIN,MIN,
       MIN,MIN ; MAX,MAX,MAX,MAX)always true
 select * from gf_ar_mthly_bill;

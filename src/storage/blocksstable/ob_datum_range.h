@@ -212,7 +212,7 @@ OB_INLINE int ObDatumRange::from_range(const common::ObNewRange &range, ObIAlloc
     STORAGE_LOG(WARN, "Failed to from end key", K(ret));
   } else {
     border_flag_ = range.border_flag_;
-    group_idx_ = range.get_group_idx();
+    group_idx_ = range.get_group_id();
   }
 
   return ret;

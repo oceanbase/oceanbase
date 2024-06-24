@@ -24,9 +24,11 @@ namespace sql
 int ObDASIter::set_merge_status(MergeType merge_type)
 {
   int ret = OB_SUCCESS;
-  ObDASIter *child = child_;
-  for (; child != nullptr && OB_SUCC(ret); child = child->right_) {
-    if (OB_FAIL(child->set_merge_status(merge_type))) {
+  for (uint32_t i = 0; i < children_cnt_; i++) {
+    if (OB_ISNULL(children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr das iter child", K(i), K_(children_cnt), K(ret));
+    } else if (OB_FAIL(children_[i]->set_merge_status(merge_type))) {
       LOG_WARN("failed to set merge status", K(ret));
     }
   }
@@ -50,8 +52,6 @@ int ObDASIter::init(ObDASIterParam &param)
     exec_ctx_ = param.exec_ctx_;
     output_ = param.output_;
     group_id_expr_ = param.group_id_expr_;
-    child_ = param.child_;
-    right_ = param.right_;
     if (OB_FAIL(inner_init(param))) {
       LOG_WARN("failed to inner init das iter", K(param), K(ret));
     }
@@ -60,6 +60,7 @@ int ObDASIter::init(ObDASIterParam &param)
   return ret;
 }
 
+// NOTE: unlike release(), reuse() does not recursively call the reuse() of its children.
 int ObDASIter::reuse()
 {
   int ret = OB_SUCCESS;
@@ -76,15 +77,15 @@ int ObDASIter::release()
 {
   int ret = OB_SUCCESS;
   int child_ret = OB_SUCCESS;
-  ObDASIter *child = child_;
   int tmp_ret = OB_SUCCESS;
-  while (child != nullptr) {
-    ObDASIter *right = child->right_;
-    if (OB_TMP_FAIL(child->release())) {
-      LOG_WARN("failed to release child iter", K(tmp_ret), KPC(child));
-      child_ret = tmp_ret;
+  for (uint32_t i = 0; i < children_cnt_; i++) {
+    if (OB_ISNULL(children_[i])) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr das iter child", K(i), K_(children_cnt), K(tmp_ret));
+    } else if (OB_TMP_FAIL(children_[i]->release())) {
+      LOG_WARN("failed to release child iter", K(tmp_ret), KPC(children_[i]));
     }
-    child = right;
+    child_ret = tmp_ret;
   }
   if (OB_FAIL(inner_release())) {
     LOG_WARN("failed to inner release das iter", K(ret), KPC(this));
@@ -92,8 +93,8 @@ int ObDASIter::release()
     ret = child_ret;
   }
   inited_ = false;
-  right_ = nullptr;
-  child_ = nullptr;
+  children_cnt_ = 0;
+  children_ = nullptr;
   group_id_expr_ = nullptr;
   output_ = nullptr;
   exec_ctx_ = nullptr;

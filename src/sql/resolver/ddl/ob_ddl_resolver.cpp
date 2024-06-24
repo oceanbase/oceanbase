@@ -182,18 +182,19 @@ int ObDDLResolver::append_fts_args(
     LOG_WARN("allocator is null", K(ret));
   } else if (!fts_common_aux_table_exist) {
     const int64_t num_fts_args = 4;
-    if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(index_arg,
-                                                                 allocator,
-                                                                 index_arg_list))) {
+    // append fts index aux arg first, keep same logic as build fts index on existing table
+    if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_index_arg(index_arg,
+                                                            allocator,
+                                                            index_arg_list))) {
+      LOG_WARN("failed to append fts_index arg", K(ret));
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(index_arg,
+                                                                        allocator,
+                                                                        index_arg_list))) {
       LOG_WARN("failed to append fts_rowkey_doc arg", K(ret));
     } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(index_arg,
                                                                         allocator,
                                                                         index_arg_list))) {
       LOG_WARN("failed to append fts_doc_rowkey arg", K(ret));
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_index_arg(index_arg,
-                                                                   allocator,
-                                                                   index_arg_list))) {
-      LOG_WARN("failed to append fts_index arg", K(ret));
     } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_word_arg(index_arg,
                                                                       allocator,
                                                                       index_arg_list))) {

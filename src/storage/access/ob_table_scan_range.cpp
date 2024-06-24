@@ -187,7 +187,7 @@ int ObTableScanRange::init_rowkeys(const common::ObIArray<common::ObNewRange> &r
         } else if (is_false) {
         } else if (OB_FAIL(datum_rowkey.from_rowkey(rowkey, *allocator_))) {
           STORAGE_LOG(WARN, "Failed to transfer rowkey to datum rowkey", K(ret));
-        } else if (FALSE_IT(datum_rowkey.set_group_idx(ranges.at(i).get_group_idx()))) {
+        } else if (FALSE_IT(datum_rowkey.set_group_idx(ranges.at(i).get_group_id()))) {
         } else if (OB_FAIL(rowkeys_.push_back(datum_rowkey))) {
           STORAGE_LOG(WARN, "Failed to push back datum rowkey", K(ret));
         }

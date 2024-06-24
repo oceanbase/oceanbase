@@ -24,9 +24,8 @@
 #include "sql/das/ob_das_ref.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_scan_op.h"
-#include "sql/das/ob_text_retrieval_op.h"
 #include "sql/das/ob_das_attach_define.h"
-#include "sql/das/ob_text_retrieval_op.h"
+#include "sql/das/ob_das_ir_define.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
 #include "sql/das/iter/ob_das_iter.h"
@@ -147,7 +146,8 @@ public:
       allocator_(allocator),
       calc_part_id_expr_(NULL),
       global_index_rowkey_exprs_(allocator),
-      attach_spec_(allocator_, &scan_ctdef_)
+      attach_spec_(allocator_, &scan_ctdef_),
+      flags_(0)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
@@ -199,6 +199,13 @@ public:
   ExprFixedArray global_index_rowkey_exprs_;
   // end for Global Index Lookup
   ObDASAttachSpec attach_spec_;
+  union {
+    uint64_t flags_;
+    struct {
+      uint64_t is_das_keep_order_            : 1; // whether das need keep ordering
+      uint64_t reserved_                     : 63;
+    };
+  };
 };
 
 struct ObTableScanRtDef
@@ -470,7 +477,6 @@ protected:
 
   int local_iter_rescan();
   int close_and_reopen();
-  int update_output_tablet_id();
 
   int cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op);
   int can_prune_by_tablet_id(const common::ObTabletID &tablet_id,

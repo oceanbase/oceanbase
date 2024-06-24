@@ -760,14 +760,14 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
   4 - output([t2.c1]), filter(nil), rowset=16
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
+      is_index_back=false, is_global_index=false, keep_ordering=true, 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([t2.c1 = :0])
   5 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)])
   6 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false, 
+      is_index_back=false, is_global_index=false, keep_ordering=true, 
       range_key([t3.c1]), range(MIN ; MAX)always true, 
       range_cond([t3.c1 = :0])
 explain select * from t1 where t1.c1 != (select c2 from t2 where t2.c1 = (select max(c2) from t3 where t3.c1 = t1.c1) order by t2.c2 limit 1);
@@ -803,7 +803,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_MAX(t3.c2)])
   6 - output([t3.c2]), filter(nil), rowset=16
       access([t3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
+      is_index_back=false, is_global_index=false, keep_ordering=true, 
       range_key([t3.c1]), range(MIN ; MAX)always true, 
       range_cond([t3.c1 = :0])
   7 - output([t2.c1], [t2.c2]), filter(nil), rowset=16

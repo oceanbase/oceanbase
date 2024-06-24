@@ -296,6 +296,7 @@ _enable_column_store
 _enable_compaction_diagnose
 _enable_compatible_monotonic
 _enable_convert_real_to_decimal
+_enable_das_keep_order
 _enable_dblink_reuse_connection
 _enable_dbms_job_package
 _enable_dbms_lob_partial_update

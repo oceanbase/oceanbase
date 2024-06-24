@@ -6207,6 +6207,160 @@ int ObDDLService::lock_tables_of_database(const ObDatabaseSchema &database_schem
   return ret;
 }
 
+int ObDDLService::check_schema_generated_for_aux_index_schema_(
+    const obrpc::ObGenerateAuxIndexSchemaArg &arg,
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema *data_schema,
+    bool &schema_generated,
+    uint64_t &aux_index_table_id)
+{
+  int ret = OB_SUCCESS;
+  schema_generated = false;
+  aux_index_table_id = OB_INVALID_ID;
+  ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+  const uint64_t tenant_id = arg.tenant_id_;
+  ObIndexType index_type = arg.create_index_arg_.index_type_;
+  ObString index_table_name;
+  if (OB_ISNULL(data_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(data_schema));
+  } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
+                                                           data_schema->get_table_id(),
+                                                           arg.create_index_arg_.index_name_,
+                                                           index_table_name))) {
+    LOG_WARN("failed to construct index table name", K(ret),
+        K(arg.create_index_arg_.index_name_));
+  } else if (share::schema::is_fts_index(index_type)) {
+    const ObTableSchema *index_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                              data_schema->get_database_id(),
+                                              index_table_name,
+                                              true/*is_index*/,
+                                              index_schema,
+                                              false/*with_hidden_flag*/,
+                                              share::schema::is_built_in_fts_index(index_type)))) {
+      LOG_WARN("failed to get index schema", K(ret), K(tenant_id), K(index_table_name));
+    } else if (OB_NOT_NULL(index_schema)) {
+      schema_generated = true;
+      aux_index_table_id = index_schema->get_table_id();
+      LOG_INFO("fts index aux table already exist, no need to generate",
+        K(index_table_name));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index type", K(ret), K(index_type));
+  }
+  return ret;
+}
+
+int ObDDLService::generate_aux_index_schema(
+    const obrpc::ObGenerateAuxIndexSchemaArg &arg,
+    obrpc::ObGenerateAuxIndexSchemaRes &result)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.tenant_id_;
+  const uint64_t data_table_id = arg.data_table_id_;
+  SMART_VARS_2((obrpc::ObCreateIndexArg, create_index_arg),
+               (ObTableSchema, nonconst_data_schema)) {
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *data_schema = nullptr;
+    ObSEArray<ObColumnSchemaV2 *, 1> gen_columns;
+    ObArenaAllocator allocator(lib::ObLabel("DdlTaskTmp"));
+    if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(arg));
+    } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id,
+                                                                           schema_guard))) {
+      LOG_WARN("get schema guard failed", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                     data_table_id,
+                                                     data_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(data_table_id));
+    } else if (OB_ISNULL(data_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, table schema is nullptr", K(ret), K(data_table_id));
+    } else if (OB_FAIL(nonconst_data_schema.assign(*data_schema))) {
+      LOG_WARN("failed to assign to nonconst data schema", K(ret));
+    } else if (OB_FAIL(create_index_arg.assign(arg.create_index_arg_))) {
+      LOG_WARN("fail to assign create index arg", K(ret));
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(create_index_arg,
+                                                              nonconst_data_schema,
+                                                              allocator,
+                                                              gen_columns))) {
+      LOG_WARN("fail to adjust expr index args", K(ret));
+    } else {
+      if (OB_FAIL(check_schema_generated_for_aux_index_schema_(arg,
+                                                               schema_guard,
+                                                               data_schema,
+                                                               result.schema_generated_,
+                                                               result.aux_table_id_) )) {
+        LOG_WARN("failed to check if schema is generated for aux index table", K(ret), K(arg));
+      } else if (result.schema_generated_) {
+        // do nothing
+      } else {
+        ObIndexBuilder index_builder(*this);
+        ObDDLSQLTransaction trans(&get_schema_service());
+        const bool global_index_without_column_info = true;
+        int64_t refreshed_schema_version = 0;
+        uint64_t tenant_data_version = 0;
+        ObTableSchema index_schema;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get min data version failed", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id,
+                                                           refreshed_schema_version))) {
+          LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(trans.start(&get_sql_proxy(),
+                                       tenant_id,
+                                       refreshed_schema_version))) {
+          LOG_WARN("start transaction failed", KR(ret), K(tenant_id),
+              K(refreshed_schema_version));
+        } else if (OB_FAIL(index_builder.generate_schema(create_index_arg,
+                                                         nonconst_data_schema,
+                                                         global_index_without_column_info,
+                                                         true/*generate_id*/,
+                                                         index_schema))) {
+          LOG_WARN("fail to generate schema", K(ret), K(create_index_arg));
+        } else if (OB_FAIL(nonconst_data_schema.check_create_index_on_hidden_primary_key(index_schema))) {
+          LOG_WARN("failed to check create index on table", K(ret), K(index_schema));
+        } else if (gen_columns.empty()) {
+          if (OB_FAIL(create_index_table(create_index_arg,
+                                         tenant_data_version,
+                                         index_schema,
+                                         trans))) {
+            LOG_WARN("fail to create index", K(ret), K(index_schema));
+          }
+        } else {
+          if (OB_FAIL(create_inner_expr_index(trans,
+                                              *data_schema,
+                                              tenant_data_version,
+                                              nonconst_data_schema,
+                                              gen_columns,
+                                              index_schema))) {
+            LOG_WARN("fail to create inner expr index", K(ret));
+          }
+        }
+        if (trans.is_started()) {
+          int temp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+            LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+            ret = (OB_SUCC(ret)) ? temp_ret : ret;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(publish_schema(tenant_id))) {
+            LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
+          } else {
+            result.schema_generated_ = true;
+            result.aux_table_id_ = index_schema.get_table_id();
+          }
+        }
+      }
+    }
+  }
+  LOG_INFO("finish generate aux index schema", K(ret), K(arg), K(result), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
 int ObDDLService::lock_tables_in_recyclebin(const ObDatabaseSchema &database_schema,
                                             ObMySQLTransaction &trans)
 {
@@ -7642,7 +7796,6 @@ int ObDDLService::get_dropping_domain_index_invisiable_aux_table_schema(
       const share::schema::ObTableSchema *doc_word_schema = nullptr;
       const share::schema::ObTableSchema *rowkey_doc_schema = nullptr;
       const share::schema::ObTableSchema *doc_rowkey_schema = nullptr;
-
       for (int64_t i = 0; OB_SUCC(ret) && i < indexs.count(); ++i) {
         const share::schema::ObAuxTableMetaInfo &info = indexs.at(i);
         if (share::schema::is_rowkey_doc_aux(info.index_type_)) {

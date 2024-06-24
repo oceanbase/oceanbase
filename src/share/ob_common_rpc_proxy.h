@@ -76,6 +76,7 @@ public:
   RPC_S(PRD rename_table, obrpc::OB_RENAME_TABLE, (ObRenameTableArg));
   RPC_S(PRD truncate_table, obrpc::OB_TRUNCATE_TABLE, (ObTruncateTableArg), ObDDLRes);
   RPC_S(PRD truncate_table_v2, obrpc::OB_TRUNCATE_TABLE_V2, (ObTruncateTableArg), ObDDLRes);
+  RPC_S(PRD generate_aux_index_schema, obrpc::OB_GENERATE_AUX_INDEX_SCHEMA, (obrpc::ObGenerateAuxIndexSchemaArg), obrpc::ObGenerateAuxIndexSchemaRes);
   RPC_S(PRD create_index, obrpc::OB_CREATE_INDEX, (ObCreateIndexArg), ObAlterTableRes);
   RPC_S(PRD drop_index, obrpc::OB_DROP_INDEX, (ObDropIndexArg), ObDropIndexRes);
   RPC_S(PRD create_mlog, obrpc::OB_CREATE_MLOG, (ObCreateMLogArg), ObCreateMLogRes);

@@ -618,8 +618,15 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(path), K(ret));
   } else if (path->use_das_ &&
+             !path->ordering_.empty() &&
              path->table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() > 1) {
-    path->ordering_.reset();
+    if (get_plan()->get_optimizer_context().is_das_keep_order_enabled()) {
+      // when enable das keep order optimization, DAS layer can provide a guarantee of local order,
+      // otherwise the order is totally not guaranteed.
+      path->is_local_order_ = true;
+    } else {
+      path->ordering_.reset();
+    }
   } else if (path->ordering_.empty() || is_at_most_one_row_ || !path->strong_sharding_->is_distributed()) {
     path->is_local_order_ = false;
   } else if (get_plan()->get_optimizer_context().is_online_ddl()) {
@@ -1782,10 +1789,13 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
       LOG_WARN("failed to add access filters", K(*ap), K(ordering_info.get_index_keys()), K(ret));
     } else if (OB_FAIL(get_plan()->get_stmt()->get_column_items(table_id, ap->est_cost_info_.access_column_items_))) {
       LOG_WARN("failed to get column items", K(ret));
-    } else if ((!ap->is_global_index_ || !index_info_entry->is_index_back()) &&
-                OB_FAIL(ObOptimizerUtil::make_sort_keys(ordering_info.get_ordering(),
-                                                        ordering_info.get_scan_direction(),
-                                                        ap->ordering_))) {
+    } else if ((!ap->is_global_index_ ||
+                !index_info_entry->is_index_back() ||
+                get_plan()->get_optimizer_context().is_das_keep_order_enabled())
+        // for global index lookup without keep order, the ordering is wrong.
+        && OB_FAIL(ObOptimizerUtil::make_sort_keys(ordering_info.get_ordering(),
+                                                   ordering_info.get_scan_direction(),
+                                                   ap->ordering_))) {
       LOG_WARN("failed to create index keys expression array", K(index_id), K(ret));
     } else if (ordering_info.get_index_keys().count() > 0) {
       ap->pre_query_range_ = const_cast<ObQueryRange *>(range_info.get_query_range());
@@ -2153,8 +2163,8 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
     LOG_WARN("NULL pointer error", K(ret), K(table_id), K(ref_table_id), K(index_id));
   } else if (!index_schema->is_ordered()) {
     // for virtual table, we have HASH index which offers no ordering on index keys
-  } else if (index_schema->is_global_index_table() && is_index_back) {
-    // for global index lookup, the order is wrong.
+  } else if (index_schema->is_global_index_table() && is_index_back && !opt_ctx->is_das_keep_order_enabled()) {
+    // for global index lookup without keep order, the ordering is wrong.
   } else if (OB_FAIL(append(ordering, index_keys))) {
     LOG_WARN("failed to append index ordering expr", K(ret));
   } else if (OB_FAIL(get_index_scan_direction(ordering, stmt,
@@ -2616,7 +2626,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
                                            entry->get_ordering_info().get_ordering(),
                                            direction,
                                            is_index_back))) {
-        LOG_WARN("get_access_path_ordering ", K(ret));
+        LOG_WARN("get access path ordering ", K(ret));
       } else {
         entry->set_is_index_global(is_index_global);
         entry->set_is_index_geo(is_index_geo);

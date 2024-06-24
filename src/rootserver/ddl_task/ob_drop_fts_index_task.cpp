@@ -57,14 +57,11 @@ int ObDropFTSIndexTask::init(
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
                || task_id <= 0
                || OB_INVALID_ID == data_table_id
-               || !rowkey_doc.is_valid()
-               || !doc_rowkey.is_valid()
                || !domain_index.is_valid()
-               || (is_fts_task && !fts_doc_word.is_valid())
                || schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(data_table_id), K(rowkey_doc),
-        K(doc_rowkey), K(domain_index), K(fts_doc_word), K(schema_version));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(data_table_id),
+        K(domain_index), K(schema_version));
   } else if (OB_ISNULL(root_service_ = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service is null", K(ret));
@@ -377,7 +374,7 @@ int ObDropFTSIndexTask::wait_child_task_finish(
     for (int64_t i = 0; OB_SUCC(ret) && finished && i < child_task_ids.count(); ++i) {
       const ObFTSDDLChildTaskInfo &task_info = child_task_ids.at(i);
       finished = false;
-      if (-1 == task_info.task_id_) {
+      if (-1 == task_info.task_id_ || task_info.table_id_ == OB_INVALID_ID) {
         finished = true;
       } else if (OB_FAIL(check_drop_index_finish(tenant_id_, task_info.task_id_, task_info.table_id_, finished))) {
         LOG_WARN("fail to check fts index child task finish", K(ret));
@@ -434,9 +431,12 @@ int ObDropFTSIndexTask::create_drop_index_task(
   if (OB_ISNULL(root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, root service is nullptr", K(ret), KP(root_service_));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == index_tid || index_name.empty())) {
+  } else if (OB_INVALID_ID == index_tid) {
+    // nothing to do, just by pass.
+    task_id = -1;
+  } else if (OB_UNLIKELY(index_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(index_tid), K(index_name));
+    LOG_WARN("invalid arguments", K(ret), K(index_name));
   } else if (OB_FAIL(guard.check_table_exist(tenant_id_, index_tid, is_index_exist))) {
     LOG_WARN("fail to check table exist", K(ret), K(tenant_id_), K(index_tid));
   } else if (!is_index_exist) {

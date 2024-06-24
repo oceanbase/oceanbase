@@ -3175,6 +3175,26 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     exist_all_column_group_,
                     index_cgs_);
 
+int ObGenerateAuxIndexSchemaArg::assign(const ObGenerateAuxIndexSchemaArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(create_index_arg_.assign(other.create_index_arg_))) {
+    SHARE_LOG(WARN, "fail to assign arg", K(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    data_table_id_ = other.data_table_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObGenerateAuxIndexSchemaArg, ObDDLArg),
+                    tenant_id_,
+                    data_table_id_,
+                    create_index_arg_);
+OB_SERIALIZE_MEMBER(ObGenerateAuxIndexSchemaRes,
+                    aux_table_id_,
+                    schema_generated_);
+
 bool ObAlterIndexArg::is_valid() const
 {
   // store_columns_ can be empty

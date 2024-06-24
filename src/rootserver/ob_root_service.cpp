@@ -51,6 +51,7 @@
 #include "share/ob_time_zone_info_manager.h"
 #include "share/ob_server_status.h"
 #include "share/ob_index_builder_util.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/ob_server_event_history_table_operator.h"
@@ -4647,6 +4648,21 @@ int ObRootService::exchange_partition(const obrpc::ObExchangePartitionArg &arg, 
   return ret;
 }
 
+int ObRootService::generate_aux_index_schema(
+    const ObGenerateAuxIndexSchemaArg &arg,
+    ObGenerateAuxIndexSchemaRes &result)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_service_.generate_aux_index_schema(arg, result))) {
+    LOG_WARN("failed to generate aux index schema", K(ret), K(arg), K(result));
+  }
+  LOG_INFO("finish generate aux index schema", K(ret), K(arg), K(result), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
 int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -4658,8 +4674,7 @@ int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTable
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (is_fts_index(arg.index_type_) || is_multivalue_index(arg.index_type_)) {
-    // TODO hanxuan support create fulltext index
+  } else if (is_multivalue_index(arg.index_type_)) {
     // todo yunyi not dynamic create multivlaue index
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported", K(ret));

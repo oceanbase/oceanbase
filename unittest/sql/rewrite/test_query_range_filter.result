@@ -8,7 +8,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -18,7 +18,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -28,7 +28,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}]
 
 [1] a in (1,2,3) or (a = 4 and b = 4)
 
@@ -46,7 +46,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -62,7 +62,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -78,7 +78,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN,MIN;{"BIGINT":2},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN,MIN;{"BIGINT":3},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN,MIN;{"BIGINT":2},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN,MIN;{"BIGINT":3},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
 
 [2] (a, b) in ((1,2),(2,3))
 
@@ -92,7 +92,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
 
 **rowkey num = 2**  
 **filter count = 1**
@@ -104,7 +104,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}]
 
 **rowkey num = 3**  
 **filter count = 1**
@@ -116,7 +116,7 @@ end_border_flag[0] = 0
 star_border_flag[1] = 0
 end_border_flag[1] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},{"BIGINT":3},MIN;{"BIGINT":2},{"BIGINT":3},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},{"BIGINT":3},MIN;{"BIGINT":2},{"BIGINT":3},MAX)"}]
 
 [3] a > 1
 
@@ -128,7 +128,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1};MAX)"}]
 
 **rowkey num = 2**  
 **filter count = 1**
@@ -138,7 +138,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MAX;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MAX;MAX,MAX)"}]
 
 **rowkey num = 3**  
 **filter count = 1**
@@ -148,7 +148,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MAX;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MAX;MAX,MAX)"}]
 
 [4] a > 1 and b = 1
 
@@ -160,7 +160,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1};MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1};MAX)"}]
 
 **rowkey num = 2**  
 **filter count = 1**
@@ -170,7 +170,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MAX;MAX,{"BIGINT":1})"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MAX;MAX,{"BIGINT":1})"}]
 
 **rowkey num = 3**  
 **filter count = 1**
@@ -180,7 +180,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MAX,MAX;MAX,{"BIGINT":1},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MAX,MAX;MAX,{"BIGINT":1},MAX)"}]
 
 [5] a in (1,2,3)
 
@@ -196,7 +196,7 @@ end_border_flag[1] = 1
 star_border_flag[2] = 1
 end_border_flag[2] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}]
 
 **rowkey num = 2**  
 **filter count = 1**
@@ -210,7 +210,7 @@ end_border_flag[1] = 0
 star_border_flag[2] = 0
 end_border_flag[2] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}]
 
 **rowkey num = 3**  
 **filter count = 1**
@@ -224,7 +224,7 @@ end_border_flag[1] = 0
 star_border_flag[2] = 0
 end_border_flag[2] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}]
 
 [6] a in (?{1},?{2},?{3}) or (a = ?{4})
 
@@ -242,7 +242,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
 
 **rowkey num = 2**  
 **filter count = 1**
@@ -258,7 +258,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},MIN;{"BIGINT":4},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":4},MIN;{"BIGINT":4},MAX)"}]
 
 **rowkey num = 3**  
 **filter count = 1**
@@ -274,7 +274,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},MIN;{"BIGINT":4},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":4},MIN;{"BIGINT":4},MAX)"}]
 
 [7] a in (?{1},?{2},?{3}) or (a = ?{4} and b = ?{4})
 
@@ -292,7 +292,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -308,7 +308,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -324,7 +324,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN,MIN;{"BIGINT":2},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN,MIN;{"BIGINT":3},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN,MIN;{"BIGINT":2},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN,MIN;{"BIGINT":3},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
 
 [8] a in (1,2,3) and b = 2
 
@@ -340,7 +340,7 @@ end_border_flag[1] = 1
 star_border_flag[2] = 1
 end_border_flag[2] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}]
 
 **rowkey num = 2**  
 **filter count = 2**
@@ -354,7 +354,7 @@ end_border_flag[1] = 1
 star_border_flag[2] = 1
 end_border_flag[2] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":2};{"BIGINT":3},{"BIGINT":2}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3},{"BIGINT":2};{"BIGINT":3},{"BIGINT":2}]"}]
 
 **rowkey num = 3**  
 **filter count = 2**
@@ -368,7 +368,7 @@ end_border_flag[1] = 0
 star_border_flag[2] = 0
 end_border_flag[2] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},{"BIGINT":2},MIN;{"BIGINT":2},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},{"BIGINT":2},MIN;{"BIGINT":3},{"BIGINT":2},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},{"BIGINT":2},MIN;{"BIGINT":2},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},{"BIGINT":2},MIN;{"BIGINT":3},{"BIGINT":2},MAX)"}]
 
 [9] (a,b) in ((1,2),(2,3)) or (a,b) in ((3,4),(4,5))
 
@@ -386,7 +386,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
 
 **rowkey num = 2**  
 **filter count = 1**
@@ -402,7 +402,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":4};{"BIGINT":3},{"BIGINT":4}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":5};{"BIGINT":4},{"BIGINT":5}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3},{"BIGINT":4};{"BIGINT":3},{"BIGINT":4}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4},{"BIGINT":5};{"BIGINT":4},{"BIGINT":5}]"}]
 
 **rowkey num = 3**  
 **filter count = 1**
@@ -418,7 +418,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},{"BIGINT":3},MIN;{"BIGINT":2},{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},{"BIGINT":4},MIN;{"BIGINT":3},{"BIGINT":4},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},{"BIGINT":5},MIN;{"BIGINT":4},{"BIGINT":5},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},{"BIGINT":3},MIN;{"BIGINT":2},{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},{"BIGINT":4},MIN;{"BIGINT":3},{"BIGINT":4},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":4},{"BIGINT":5},MIN;{"BIGINT":4},{"BIGINT":5},MAX)"}]
 
 [10] (a,b) in ((1,2),(2,3)) and c > 1
 
@@ -432,7 +432,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
 
 **rowkey num = 2**  
 **filter count = 1**
@@ -444,7 +444,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -456,7 +456,7 @@ end_border_flag[0] = 0
 star_border_flag[1] = 0
 end_border_flag[1] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},{"BIGINT":3},{"BIGINT":1};{"BIGINT":2},{"BIGINT":3},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},{"BIGINT":3},{"BIGINT":1};{"BIGINT":2},{"BIGINT":3},MAX)"}]
 
 [11] (a,b) in ((1,2),(2,3)) and c = 1
 
@@ -470,7 +470,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
 
 **rowkey num = 2**  
 **filter count = 1**
@@ -482,7 +482,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}]
 
 **rowkey num = 3**  
 **filter count = 2**
@@ -494,7 +494,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":3},{"BIGINT":1};{"BIGINT":2},{"BIGINT":3},{"BIGINT":1}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":3},{"BIGINT":1};{"BIGINT":2},{"BIGINT":3},{"BIGINT":1}]"}]
 
 [12] a = 1 and b = 1
 
@@ -506,7 +506,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}]
 
 **rowkey num = 2**  
 **filter count = 2**
@@ -516,7 +516,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}]
 
 **rowkey num = 3**  
 **filter count = 2**
@@ -526,7 +526,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},{"BIGINT":1},MIN;{"BIGINT":1},{"BIGINT":1},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},{"BIGINT":1},MIN;{"BIGINT":1},{"BIGINT":1},MAX)"}]
 
 [13] (a, b, c) in ((?{1},?{1},?{1}),(?{2},?{2},?{2})) or (a,b) in ((?{3},?{3}),(?{4},?{4}))
 
@@ -544,7 +544,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -560,7 +560,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -576,7 +576,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},{"BIGINT":3},MIN;{"BIGINT":3},{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},{"BIGINT":3},MIN;{"BIGINT":3},{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
 
 [14] (a, b, c) in ((?{1},?{1},?{1}),(?{2},?{2},?{2})) or (a,b) in ((?{3},?{3}),(?{4},?{4})) and a = ?{1}
 
@@ -590,7 +590,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -602,7 +602,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -614,7 +614,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}]
 
 [15] (a, b, c) in ((?{1},?{1},?{1}),(?{2},?{2},?{2})) or (a,b) in ((?{3},?{3}),(?{4},?{4})) and c = ?{1}
 
@@ -632,7 +632,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -648,7 +648,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
 
 **rowkey num = 3**  
 **filter count = 1**
@@ -664,7 +664,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":3},{"BIGINT":1};{"BIGINT":3},{"BIGINT":3},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4},{"BIGINT":1};{"BIGINT":4},{"BIGINT":4},{"BIGINT":1}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3},{"BIGINT":3},{"BIGINT":1};{"BIGINT":3},{"BIGINT":3},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4},{"BIGINT":4},{"BIGINT":1};{"BIGINT":4},{"BIGINT":4},{"BIGINT":1}]"}]
 
 [16] (a, b, c) in ((?{1},?{1},?{1}),(?{2},?{2},?{2})) or (a,b) in ((?{3},?{3}),(?{4},?{4})) or a = ?{1}
 
@@ -682,7 +682,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4};{"BIGINT":4}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -698,7 +698,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -714,7 +714,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},{"BIGINT":3},MIN;{"BIGINT":3},{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},{"BIGINT":3},MIN;{"BIGINT":3},{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
 
 [17] a = 1 and c = 1 or (a = 2 and b = 2)
 
@@ -728,7 +728,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -740,7 +740,7 @@ end_border_flag[0] = 0
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -752,7 +752,7 @@ end_border_flag[0] = 0
 star_border_flag[1] = 0
 end_border_flag[1] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},{"BIGINT":2},MIN;{"BIGINT":2},{"BIGINT":2},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},{"BIGINT":2},MIN;{"BIGINT":2},{"BIGINT":2},MAX)"}]
 
 [18] a = 1 and b = 1 or (b = 2 and c = 2)
 
@@ -764,7 +764,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,(MIN;MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -774,7 +774,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -784,7 +784,7 @@ all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,(MIN,MIN,MIN;MAX,MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN,MIN;MAX,MAX,MAX)"}]
 
 [19] (a,b) in ((1,2)) or (a,c) in ((2,3),(3,4))
 
@@ -800,7 +800,7 @@ end_border_flag[1] = 1
 star_border_flag[2] = 1
 end_border_flag[2] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -814,7 +814,7 @@ end_border_flag[1] = 0
 star_border_flag[2] = 0
 end_border_flag[2] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN;{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -828,7 +828,7 @@ end_border_flag[1] = 0
 star_border_flag[2] = 0
 end_border_flag[2] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},MIN,MIN;{"BIGINT":2},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN,MIN;{"BIGINT":3},MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":2},MIN,MIN;{"BIGINT":2},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN,MIN;{"BIGINT":3},MAX,MAX)"}]
 
 [20] (a,b) in ((1,2)) or (a = 3 and c = 3)
 
@@ -842,7 +842,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":3};{"BIGINT":3}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -854,7 +854,7 @@ end_border_flag[0] = 1
 star_border_flag[1] = 0
 end_border_flag[1] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN;{"BIGINT":3},MAX)"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -866,7 +866,7 @@ end_border_flag[0] = 0
 star_border_flag[1] = 0
 end_border_flag[1] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},MIN,MIN;{"BIGINT":3},MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":3},MIN,MIN;{"BIGINT":3},MAX,MAX)"}]
 
 [21] (a,b,c) in ((1,2,3),(2,3,4)) or (a = 5 and b = 5) or (a = 7)
 
@@ -884,7 +884,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 1
 end_border_flag[3] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":5};{"BIGINT":5}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":7};{"BIGINT":7}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":5};{"BIGINT":5}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":7};{"BIGINT":7}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -900,7 +900,7 @@ end_border_flag[2] = 1
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":5},{"BIGINT":5};{"BIGINT":5},{"BIGINT":5}]"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":7},MIN;{"BIGINT":7},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":5},{"BIGINT":5};{"BIGINT":5},{"BIGINT":5}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":7},MIN;{"BIGINT":7},MAX)"}]
 
 **rowkey num = 3**  
 **filter count = 0**
@@ -916,7 +916,7 @@ end_border_flag[2] = 0
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":3},{"BIGINT":4};{"BIGINT":2},{"BIGINT":3},{"BIGINT":4}]"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":5},{"BIGINT":5},MIN;{"BIGINT":5},{"BIGINT":5},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":7},MIN,MIN;{"BIGINT":7},MAX,MAX)"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":2},{"BIGINT":3},{"BIGINT":4};{"BIGINT":2},{"BIGINT":3},{"BIGINT":4}]"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":5},{"BIGINT":5},MIN;{"BIGINT":5},{"BIGINT":5},MAX)"}, {"range":"table_id:3003,group_idx:0,index_ordered_idx:0,({"BIGINT":7},MIN,MIN;{"BIGINT":7},MAX,MAX)"}]
 
 [22] a = 8 and c = 9 and b = 1 or (a,b,c) in ((1,2,3),(2,3,4)) and (a = 10)
 
@@ -928,7 +928,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":8};{"BIGINT":8}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":8};{"BIGINT":8}]"}]
 
 **rowkey num = 2**  
 **filter count = 0**
@@ -938,7 +938,7 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":8},{"BIGINT":1};{"BIGINT":8},{"BIGINT":1}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":8},{"BIGINT":1};{"BIGINT":8},{"BIGINT":1}]"}]
 
 **rowkey num = 3**  
 **filter count = 1**
@@ -948,5 +948,5 @@ all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":8},{"BIGINT":1},{"BIGINT":9};{"BIGINT":8},{"BIGINT":1},{"BIGINT":9}]"}]
+[{"range":"table_id:3003,group_idx:0,index_ordered_idx:0,[{"BIGINT":8},{"BIGINT":1},{"BIGINT":9};{"BIGINT":8},{"BIGINT":1},{"BIGINT":9}]"}]
 

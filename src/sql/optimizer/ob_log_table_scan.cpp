@@ -196,6 +196,8 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to add lookup trans expr", K(ret));
   } else if (NULL != trans_info_expr_ && OB_FAIL(all_exprs.push_back(trans_info_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+  } else if (NULL != group_id_expr_ && OB_FAIL(all_exprs.push_back(group_id_expr_))) {
+    LOG_WARN("failed to push back expr", K(ret));
   } else if (is_text_retrieval_scan() && OB_FAIL(get_text_retrieval_calc_exprs(all_exprs))) {
     LOG_WARN("failed to get text retrieval exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
@@ -304,7 +306,7 @@ int ObLogTableScan::check_output_dependance(common::ObIArray<ObRawExpr *> &child
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append_array_no_dup(exprs, spatial_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (use_batch() && nullptr != group_id_expr_
+  } else if (use_group_id() && nullptr != group_id_expr_
              && OB_FAIL(add_var_to_array_no_dup(exprs, group_id_expr_))) {
     LOG_WARN("failed to push back group id expr", K(ret));
   } else if (index_back_ &&
@@ -435,10 +437,9 @@ int ObLogTableScan::generate_access_exprs()
     LOG_WARN("failed to copy text retrieval aggr exprs", K(ret));
   } else if (OB_FAIL(generate_necessary_rowkey_and_partkey_exprs())) {
     LOG_WARN("failed to generate rowkey and part exprs", K(ret));
-  } else if (use_batch()
-    && OB_FAIL(ObOptimizerUtil::allocate_group_id_expr(get_plan(), group_id_expr_))) {
-    LOG_WARN("allocate group id expr failed", K(ret));
-  } else if (nullptr != group_id_expr_ && OB_FAIL(access_exprs_.push_back(group_id_expr_))) {
+  } else if (OB_FAIL(allocate_group_id_expr())) {
+    LOG_WARN("failed to allocate group id expr", K(ret));
+  } else if (NULL != group_id_expr_ && use_batch_ && OB_FAIL(access_exprs_.push_back(group_id_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(append_array_no_dup(access_exprs_, rowkey_exprs_))) {
     LOG_WARN("failed to push back exprs", K(ret));
@@ -923,6 +924,23 @@ int ObLogTableScan::allocate_lookup_trans_info_expr()
   return ret;
 }
 
+int ObLogTableScan::allocate_group_id_expr()
+{
+  int ret = OB_SUCCESS;
+  // [GROUP_ID] expr is now used for group rescan and global lookup keep order, it is handled
+  // by DAS layer and transparent to TSC operator.
+  ObRawExpr *group_id_expr = nullptr;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret));
+  } else if (use_group_id() && OB_FAIL(ObOptimizerUtil::allocate_group_id_expr(get_plan(), group_id_expr))) {
+    LOG_WARN("failed to allocate group id expr", K(ret));
+  } else {
+    group_id_expr_ = group_id_expr;
+  }
+  return ret;
+}
+
 int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
 {
   int ret = OB_SUCCESS;
@@ -1370,6 +1388,12 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("is_global_index=%s", is_index_global_? "true" : "false"))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (!das_keep_ordering_) {
+      //do nothing
+    } else if (OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("keep_ordering=%s", das_keep_ordering_ ? "true" : "false"))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
     } else { /* Do nothing */ }
 
     if (OB_SUCC(ret) && (0 != filter_before_index_back_.count())) {
@@ -1379,7 +1403,6 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else { /* Do nothing */ }
     }
-
     //Print ranges
     if (OB_FAIL(ret) || is_text_retrieval_scan()) {
     } else if (OB_FAIL(BUF_PRINTF(", "))) {
@@ -2598,6 +2621,20 @@ int ObLogTableScan::get_card_without_filter(double &card)
   return ret;
 }
 
+int ObLogTableScan::check_das_need_keep_ordering()
+{
+  int ret = OB_SUCCESS;
+  das_keep_ordering_ = true;
+  bool ordering_be_used = true;
+  if (!use_das_ && !(is_index_global_ && index_back_)) {
+    das_keep_ordering_ = false;
+  } else if (OB_FAIL(check_op_orderding_used_by_parent(ordering_be_used))) {
+    LOG_WARN("failed to check op ordering used by parent", K(ret));
+  } else if (!ordering_be_used) {
+    das_keep_ordering_ = false;
+  }
+  return ret;
+}
 int ObLogTableScan::generate_filter_monotonicity()
 {
   int ret = OB_SUCCESS;

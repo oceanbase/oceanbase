@@ -736,6 +736,8 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_CREATE_INDEX:
       ddl_type_str =  "create index";
       break;
+    case DDL_CREATE_FTS_INDEX:
+      ddl_type_str =  "create fts index";
     case DDL_CREATE_PARTITIONED_LOCAL_INDEX:
       ddl_type_str =  "create partitioned local index";
       break;
