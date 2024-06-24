@@ -15556,7 +15556,9 @@ int ObTransformUtils::get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
     LOG_WARN("failed to check stmt has rownum", K(ret));
   } else if (stmt->has_limit() ||
              stmt->has_sequence() ||
-             has_rownum) {
+             has_rownum ||
+             !stmt->is_select_stmt() ||
+             static_cast<ObSelectStmt *>(stmt)->has_window_function()) {
     // do nothing
   } else if (OB_FAIL(ObTransformUtils::get_generated_table_item(*parent_stmt, stmt, table_item))) {
     LOG_WARN("failed to get table_item", K(ret));
@@ -15572,7 +15574,7 @@ int ObTransformUtils::get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
                                                                      table_item,
                                                                      all_conditions))) {
       LOG_WARN("failed to get table related condition", K(ret));
-    } else if (OB_LIKELY(stmt->is_select_stmt())) {
+    } else {
       ObSelectStmt *child_stmt = static_cast<ObSelectStmt *>(stmt);
       for (int64_t i = 0; OB_SUCC(ret) && i < table_columns.count(); ++i) {
         if (OB_ISNULL(col = table_columns.at(i))) {
