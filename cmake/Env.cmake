@@ -78,7 +78,12 @@ endif()
 
 set(BOLT_OPT "")
 if(ENABLE_BOLT)
-  set(BOLT_OPT "-Wl,--emit-relocs")
+  EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
+  if( ${ARCHITECTURE} STREQUAL "x86_64" )
+    message(STATUS "build with bolt opt")
+    set(BOLT_OPT "-Wl,--emit-relocs")
+    ob_define(OB_ENABLE_BOLT ON)
+  endif()
 endif()
 
 if(OB_DISABLE_PIE)
