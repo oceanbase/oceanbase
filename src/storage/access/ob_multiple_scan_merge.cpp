@@ -181,7 +181,10 @@ int ObMultipleScanMerge::construct_iters()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
         "table cnt", tables_.count(), KP(this));
+  } else if (single_count_star_optimize_mode_ && range_->is_whole_range()) {
+    //skip iterator init
   } else if (tables_.count() > 0) {
+    single_count_star_optimize_mode_ = false;
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
     const ObTableIterParam *iter_pram = NULL;

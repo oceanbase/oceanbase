@@ -156,6 +156,7 @@ protected:
   ObStoreRowIterPool<ObStoreRowIterator> *stmt_iter_pool_;
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;
+  bool single_count_star_optimize_mode_;
 private:
   enum ScanState
   {

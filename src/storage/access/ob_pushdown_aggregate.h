@@ -293,7 +293,7 @@ public:
   OB_INLINE void set_group_by_result_cnt(const int64_t group_by_result_cnt) { group_by_result_cnt_ = group_by_result_cnt; }
   OB_INLINE bool is_assigned_to_group_by_processor() const { return is_assigned_to_group_by_processor_; }
   OB_INLINE void set_assigned_to_group_by_processor() { is_assigned_to_group_by_processor_ = true; }
-  TO_STRING_KV(K_(agg_type), K_(basic_info), K_(result_datum), K_(def_datum), K_(is_lob_col), K_(aggregated), KP_(agg_datum_buf), KP_(agg_row_reader));
+  VIRTUAL_TO_STRING_KV(K_(agg_type), K_(basic_info), K_(result_datum), K_(def_datum), K_(is_lob_col), K_(aggregated), KP_(agg_datum_buf), KP_(agg_row_reader));
 protected:
   static const int64_t DEFAULT_DATUM_OFFSET = -1;
   int fill_default_if_need(blocksstable::ObStorageDatum &datum);
