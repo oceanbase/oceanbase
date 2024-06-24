@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from my_error import MyError
 import logging
 import time
 from actions import Cursor
