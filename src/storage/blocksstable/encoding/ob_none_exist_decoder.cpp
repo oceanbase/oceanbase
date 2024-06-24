@@ -209,18 +209,15 @@ int ObNoneExistColumnDecoder::pushdown_operator(
   sql::ObPushdownOperator &pushdown_op = black_filter->get_op();
   ObStorageDatum *default_datums = const_cast<ObStorageDatum *>(&filter.get_default_datums()[0]);
   // bool filtered = false;
-  LOG_DEBUG("ob_none_exist_decoder.184", K(filter_applied), K(*result_bitmap.get_data()), K(result_bitmap.is_all_false()));
   if (pushdown_op.enable_rich_format_ &&
       OB_FAIL(storage::init_exprs_uniform_header(black_filter->get_cg_col_exprs(), pushdown_op.get_eval_ctx(), 1))) {
     LOG_WARN("Failed to init exprs vector header", K(ret));
   } else if (OB_FAIL(black_filter->filter(default_datums, black_filter->get_col_count(), *pd_filter_info.skip_bit_, filter_applied))) {
     LOG_WARN("Failed to filter row with black filter", K(ret), K(black_filter));
   }
-  LOG_DEBUG("ob_none_exist_decoder.184", K(filter_applied), K(*result_bitmap.get_data()), K(result_bitmap.is_all_false()));
   if (OB_SUCC(ret)) {
     if(!filter_applied)
     {
-      LOG_DEBUG("ob_none_exist_decoder.187");
       result_bitmap.bit_not();
     }
   }
