@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "rpc/ob_lock_wait_node.h"
+#include "share/rc/ob_tenant_base.h"
 #define USING_LOG_PREFIX SERVER_OMT
 #include "ob_th_worker.h"
 
@@ -242,6 +244,7 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
   set_req_flag(&req);
 
   MTL(memtable::ObLockWaitMgr*)->setup(req.get_lock_wait_node(), req.get_receive_timestamp());
+  memtable::advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::EXECUTE);
   if (OB_FAIL(procor_.process(req))) {
     LOG_WARN("process request fail", K(ret));
   }

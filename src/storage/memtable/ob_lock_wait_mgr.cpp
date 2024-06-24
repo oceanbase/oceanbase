@@ -247,7 +247,11 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
           } else {
             DETECT_LOG(TRACE, "register to deadlock detector success", K(tmp_ret), K(*node));
           }
+          advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::INQUEUE);
           wait_succ = wait(node);
+          if (!wait_succ) {
+            advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::OUTQUEUE);
+          }
           if (OB_UNLIKELY(!wait_succ && (OB_SUCCESS == tmp_ret))) {
             (void) ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(self_tx_id,
                                                                                      ObTransDeadlockDetectorAdapter::
@@ -255,7 +259,11 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
                                                                                      LOCK_WAIT_MGR_WAIT_FAILED);
           }
         } else {
+          advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::INQUEUE);
           wait_succ = wait(node);
+          if (!wait_succ) {
+            advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::OUTQUEUE);
+          }
         }
         if (OB_UNLIKELY(!wait_succ)) {
           TRANS_LOG_RET(WARN, tmp_ret, "fail to wait node", KR(tmp_ret), KPC(node));
@@ -628,6 +636,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                     holder_tx_id,
                     ls_id);
           node->set_need_wait();
+          advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::CONFLICTED);
         }
       }
     }
@@ -698,6 +707,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                   ls_id);
         node->set_need_wait();
         node->set_lock_mode(lock_mode);
+        advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::CONFLICTED);
       }
     }
   }
@@ -718,6 +728,7 @@ int ObLockWaitMgr::repost(Node* node)
                                                                       ObTransDeadlockDetectorAdapter::
                                                                       UnregisterPath::
                                                                       LOCK_WAIT_MGR_REPOST);
+    node->advance_stat(rpc::RequestLockWaitStat::RequestStat::OUTQUEUE);
     if (OB_FAIL(OBSERVER.get_net_frame().get_deliver().repost((void*)node))) {
       TRANS_LOG(WARN, "report error", K(ret));
     }

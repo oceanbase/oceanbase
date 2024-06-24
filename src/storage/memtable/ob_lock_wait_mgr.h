@@ -23,6 +23,7 @@
 #include "lib/utility/utility.h"
 #include "ob_memtable_key.h"
 #include "observer/ob_server_struct.h"
+#include "rpc/ob_lock_wait_node.h"
 #include "rpc/ob_request.h"
 #include "share/deadlock/ob_deadlock_detector_common_define.h"
 #include "share/ob_thread_pool.h"
@@ -402,6 +403,13 @@ public:
   static inline
   bool is_table_lock_hash(const uint64_t hash) { return (hash & ~HASH_MASK) == TABLE_LOCK_FLAG; }
 };
+
+inline void advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat new_stat) {
+  rpc::ObLockWaitNode *node = memtable::ObLockWaitMgr::get_thread_node();
+  if (OB_NOT_NULL(node)) {
+    node->advance_stat(new_stat);
+  }
+}
 
 }; // end namespace memtable
 }; // end namespace oceanbase
