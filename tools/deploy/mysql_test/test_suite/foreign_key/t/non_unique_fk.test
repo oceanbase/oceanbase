@@ -1,0 +1,91 @@
+#### owner: fangzhou.yfz
+#### owner group: 
+#### description: foreign key update casacde cycle reference test
+
+--disable_warnings
+
+drop table if exists A, B, C, D, E;
+
+# test 1: 2 tables, one non-unique index, insert/update cascade/delete cascade
+
+create table A(a int, msg int);
+create index Aindex on A(a);
+create table B(a int, FOREIGN KEY(a) REFERENCES A(a) on update cascade on delete cascade);
+insert into A values (2, 10), (3, 11), (3, 12);
+insert into B values (2), (2), (2), (3), (3), (3);
+select * from B;
+--error ER_NO_REFERENCED_ROW_2
+insert into B values (10);
+update A set a = 4 where a = 2;
+delete A where a = 4;
+select * from A;
+drop table A, B;
+
+# test 2: 2 tables, one non-unique index, insert/non-cascade update/non-delete cascade
+
+create table A(a int, msg int);
+create index Aindex on A(a);
+create table B(a int, FOREIGN KEY(a) REFERENCES A(a));
+insert into A values (2, 10), (3, 11), (3, 12);
+insert into B values (2), (2), (2), (3), (3), (3);
+--error ER_NO_REFERENCED_ROW_2
+insert into B values (10);
+select * from B;
+--error ER_ROW_IS_REFERENCED_2
+update A set a = 4 where a = 2;
+--error ER_ROW_IS_REFERENCED_2
+delete A where a = 2;
+drop table A, B;
+
+# test 3: 4 tables, one non-unique index of multiple columns.
+
+create table A(b int, a2 int, a3 int, msg int);
+create index Aindex on A(b, a2, a3);
+create index Ai2 on A(msg);
+create index Ai3 on A(a3, a2);
+create table B(a int, FOREIGN KEY(a) REFERENCES A(b));
+--error ER_CANNOT_ADD_FOREIGN
+create table C(a2 int, FOREIGN KEY(a2) REFERENCES A(a2));
+--error ER_CANNOT_ADD_FOREIGN
+create table C(a2 int, a3 int, FOREIGN KEY(a2, a3) REFERENCES A(a2, a3));
+insert into A values (2, 100, 10, NULL), (3, 101, 11, NULL), (3, 101, 12, NULL);
+insert into B values (2), (2), (2), (3), (3), (3);
+--error ER_NO_REFERENCED_ROW_2
+insert into B values (10);
+select * from B;
+--error ER_ROW_IS_REFERENCED_2
+update A set b = 4 where b = 2;
+--error ER_ROW_IS_REFERENCED_2
+delete from A where b = 2;
+
+create table C(a2 int, b int, FOREIGN KEY(a2, b) REFERENCES A(a2, b));
+insert into C values (100, 2), (101, 3), (101, 3), (100, 2);
+select * from C;
+--error ER_NO_REFERENCED_ROW_2
+insert into C values (100, 100);
+
+create table D(a2 int, b int, FOREIGN KEY(b, a2) REFERENCES A(b, a2));
+insert into D values (100, 2), (101, 3), (101, 3), (100, 2);
+select * from D;
+
+create table E(a3 int, a2 int, b int, FOREIGN KEY(b, a2, a3) REFERENCES A(b, a2, a3));
+insert into E values (10, 100, 2), (11, 101, 3), (12, 101, 3), (10, 100, 2);
+select * from E;
+
+# Check drop index
+--error OB_ERR_ATLER_TABLE_ILLEGAL_FK
+alter table A drop index Aindex;
+alter table A drop index Ai2;
+alter table A drop index Ai3;
+drop table E;
+--error OB_ERR_ATLER_TABLE_ILLEGAL_FK
+alter table A drop index Aindex;
+drop table D;
+--error OB_ERR_ATLER_TABLE_ILLEGAL_FK
+alter table A drop index Aindex;
+drop table C;
+--error OB_ERR_ATLER_TABLE_ILLEGAL_FK
+alter table A drop index Aindex;
+drop table B;
+alter table A drop index Aindex;
+drop table A;
