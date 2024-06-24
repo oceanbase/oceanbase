@@ -1365,6 +1365,10 @@ int ObCreateTableHelper::generate_foreign_keys_()
             if (OB_FAIL(ddl_service_->get_uk_cst_id_for_self_ref(new_tables_, foreign_key_arg, foreign_key_info))) {
               LOG_WARN("failed to get uk cst id for self ref", KR(ret), K(foreign_key_arg));
             }
+          } else if (CONSTRAINT_TYPE_INVALID == foreign_key_arg.ref_cst_type_) {
+            if (OB_FAIL(ddl_service_->get_index_cst_id_for_self_ref(new_tables_, foreign_key_arg, foreign_key_info))) {
+              LOG_WARN("failed to get index cst id for self ref", K(ret), K(foreign_key_arg));
+            }
           } else {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid foreign key ref cst type", KR(ret), K(foreign_key_arg));

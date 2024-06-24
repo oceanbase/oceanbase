@@ -669,6 +669,9 @@ public:
   int get_uk_cst_id_for_self_ref(const ObIArray<share::schema::ObTableSchema> &table_schemas,
                                  const obrpc::ObCreateForeignKeyArg &foreign_key_arg,
                                  share::schema::ObForeignKeyInfo &foreign_key_info);
+  int get_index_cst_id_for_self_ref(const ObIArray<share::schema::ObTableSchema> &table_schemas,
+                                    const obrpc::ObCreateForeignKeyArg &foreign_key_arg,
+                                    share::schema::ObForeignKeyInfo &foreign_key_info);
   int check_constraint_name_is_exist(share::schema::ObSchemaGetterGuard &schema_guard,
                                      const share::schema::ObTableSchema &table_schema,
                                      const common::ObString &constraint_name,

@@ -1593,6 +1593,43 @@ int ObDDLService::get_uk_cst_id_for_self_ref(const ObIArray<ObTableSchema> &tabl
   return ret;
 }
 
+
+int ObDDLService::get_index_cst_id_for_self_ref(const ObIArray<ObTableSchema> &table_schemas,
+                                             const ObCreateForeignKeyArg &foreign_key_arg,
+                                             ObForeignKeyInfo &foreign_key_info)
+{
+  int ret = OB_SUCCESS;
+
+  bool is_match = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < table_schemas.count(); ++i) {
+    const ObTableSchema &index_table_schema = table_schemas.at(i);
+    const ObColumnSchemaV2 *index_col = NULL;
+    const ObIndexInfo &index_info = index_table_schema.get_index_info();
+    ObSEArray<ObString, 8> index_columns;
+    for (int64_t j = 0; OB_SUCC(ret) && j < index_info.get_size(); ++j) {
+      if (OB_ISNULL(index_col = index_table_schema.get_column_schema(index_info.get_column(j)->column_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get index column schema failed", K(ret));
+      } else if (index_col->is_hidden() || index_col->is_shadow_column()) { // do nothing
+      } else if (OB_FAIL(index_columns.push_back(index_col->get_column_name()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("push back index column failed", K(ret));
+      } else {} // do nothing
+    }
+    if (OB_SUCC(ret)) {
+      const ObIArray<ObString> &parent_columns = foreign_key_arg.parent_columns_;
+      if (OB_FAIL(sql::ObResolverUtils::check_partial_match_columns(parent_columns, index_columns, is_match))) {
+        LOG_WARN("Failed to check_match_columns", K(ret));
+      } else if (is_match) {
+        foreign_key_info.ref_cst_type_ = foreign_key_arg.ref_cst_type_;
+        foreign_key_info.ref_cst_id_ = index_table_schema.get_table_id();
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDDLService::check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard,
                                               const share::schema::ObTableSchema &table_schema,
                                               const uint64_t tenant_id)

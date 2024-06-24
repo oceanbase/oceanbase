@@ -1,97 +1,113 @@
-#### owner: fangzhou.yfz
-#### owner group: 
-#### description: foreign key update casacde cycle reference test
-
---disable_warnings
-
 drop table if exists A, B, C, D, E;
-
-# test 1: 2 tables, one non-unique index, insert/update cascade/delete cascade
-
 create table A(a int, msg int);
 create index Aindex on A(a);
 create table B(a int, FOREIGN KEY(a) REFERENCES A(a) on update cascade on delete cascade);
 insert into A values (2, 10), (3, 11), (3, 12);
 insert into B values (2), (2), (2), (3), (3), (3);
 select * from B;
---error ER_NO_REFERENCED_ROW_2
+a
+2
+2
+2
+3
+3
+3
 insert into B values (10);
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
 update A set a = 4 where a = 2;
 delete from A where a = 4;
 select * from A;
+a	msg
+3	11
+3	12
 drop table A, B;
-
-# test 2: 2 tables, one non-unique index, insert/non-cascade update/non-delete cascade
-
 create table A(a int, msg int);
 create index Aindex on A(a);
 create table B(a int, FOREIGN KEY(a) REFERENCES A(a));
 insert into A values (2, 10), (3, 11), (3, 12);
 insert into B values (2), (2), (2), (3), (3), (3);
---error ER_NO_REFERENCED_ROW_2
 insert into B values (10);
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
 select * from B;
---error ER_ROW_IS_REFERENCED_2
+a
+2
+2
+2
+3
+3
+3
 update A set a = 4 where a = 2;
---error ER_ROW_IS_REFERENCED_2
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
 delete from A where a = 2;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
 drop table A, B;
-
-# test 3: 4 tables, one non-unique index of multiple columns.
-
 create table A(b int, a2 int, a3 int, msg int);
 create index Aindex on A(b, a2, a3);
 create index Ai2 on A(msg);
 create index Ai3 on A(a3, msg, a2);
 create table B(a int, FOREIGN KEY(a) REFERENCES A(b));
---error ER_CANNOT_ADD_FOREIGN
 create table C(a2 int, FOREIGN KEY(a2) REFERENCES A(a2));
---error ER_CANNOT_ADD_FOREIGN
+ERROR HY000: Cannot add foreign key constraint
 create table C(a2 int, a3 int, FOREIGN KEY(a2, a3) REFERENCES A(a2, a3));
+ERROR HY000: Cannot add foreign key constraint
 insert into A values (2, 100, 10, NULL), (3, 101, 11, NULL), (3, 101, 12, NULL);
 insert into B values (2), (2), (2), (3), (3), (3);
---error ER_NO_REFERENCED_ROW_2
 insert into B values (10);
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
 select * from B;
---error ER_ROW_IS_REFERENCED_2
+a
+2
+2
+2
+3
+3
+3
 update A set b = 4 where b = 2;
---error ER_ROW_IS_REFERENCED_2
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
 delete from A where b = 2;
-
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
 create table C(a2 int, b int, FOREIGN KEY(a2, b) REFERENCES A(a2, b));
 insert into C values (100, 2), (101, 3), (101, 3), (100, 2);
 select * from C;
---error ER_NO_REFERENCED_ROW_2
+a2	b
+100	2
+101	3
+101	3
+100	2
 insert into C values (100, 100);
-
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
 create table D(a2 int, b int, FOREIGN KEY(b, a2) REFERENCES A(b, a2));
 insert into D values (100, 2), (101, 3), (101, 3), (100, 2);
 select * from D;
-
+a2	b
+100	2
+101	3
+101	3
+100	2
 create table E(a3 int, a2 int, b int, FOREIGN KEY(b, a2, a3) REFERENCES A(b, a2, a3));
 insert into E values (10, 100, 2), (11, 101, 3), (12, 101, 3), (10, 100, 2);
 select * from E;
-
-# Check drop index
---error 4714
+a3	a2	b
+10	100	2
+11	101	3
+12	101	3
+10	100	2
 alter table A drop index Aindex;
+ERROR HY000: unique/primary keys in table referenced by enabled foreign keys
 alter table A drop index Ai2;
 alter table A drop index Ai3;
 drop table E;
---error 4714
 alter table A drop index Aindex;
+ERROR HY000: unique/primary keys in table referenced by enabled foreign keys
 drop table D;
---error 4714
 alter table A drop index Aindex;
+ERROR HY000: unique/primary keys in table referenced by enabled foreign keys
 drop table C;
---error 4714
 alter table A drop index Aindex;
+ERROR HY000: unique/primary keys in table referenced by enabled foreign keys
 drop table B;
 alter table A drop index Aindex;
 drop table A;
-
-# test 4: self-reference
-
 create table A(a int, a2 int, a3 int, a4 int);
 create index Aindex on A(a, a2, a3, a4);
 alter table A add foreign key (a2) references A(a) on update cascade;
@@ -100,42 +116,52 @@ insert into A values (1, NULL, NULL, NULL);
 insert into A values (1, 1, NULL, NULL);
 insert into A values (NULL, NULL, 1, 1);
 select * from A;
---error 4714
+a	a2	a3	a4
+1	NULL	NULL	NULL
+1	1	NULL	NULL
+NULL	NULL	1	1
 alter table A drop index Aindex;
+ERROR HY000: unique/primary keys in table referenced by enabled foreign keys
 drop table A;
-
 create table A(pk1 int, pk2 int, a int, a2 int, primary key A(a, pk1, pk2), foreign key (a2) references A(a));
 insert into A values (0, 0, 1, NULL);
 insert into A values (0, 1, 1, NULL);
 insert into A values (0, 0, 2, 1);
 select * from A;
+pk1	pk2	a	a2
+0	0	1	NULL
+0	1	1	NULL
+0	0	2	1
 drop table A;
-
 create table A(a int, a2 int, a3 int, a4 int, index Aindex(a, a2, a3, a4), foreign key (a2) references A(a), foreign key (a4, a3) references A(a, a2));
---error ER_CANNOT_ADD_FOREIGN
 create table B(a varchar(20), a2 int, a3 int, a4 int, index Bindex(a, a2, a3, a4), foreign key (a2) references B(a), foreign key (a4, a3) references B(a, a2));
+ERROR HY000: Cannot add foreign key constraint
 insert into A values (1, NULL, NULL, NULL);
 insert into A values (1, 1, NULL, NULL);
 insert into A values (NULL, NULL, 1, 1);
 select * from A;
+a	a2	a3	a4
+1	NULL	NULL	NULL
+1	1	NULL	NULL
+NULL	NULL	1	1
 drop table A;
-
-
-# test 5: reference string column
-
 create table A(a varchar(20), a2 varchar(20));
 create index Aindex on A(a2, a);
 create table B(a varchar(20), foreign key (a) references A(a2));
 insert into A values ('a', 'a2'), ('a3', 'a4'), ('a', 'a2'), ('a3', 'a4');
 insert into B values ('a2'), ('a2'), ('a4'), ('a4');
 select * from B;
+a
+a2
+a2
+a4
+a4
 select * from A;
---error ER_NO_REFERENCED_ROW_2
+a	a2
+a	a2
+a3	a4
+a	a2
+a3	a4
 insert into B values ('');
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
 drop table A, B;
-
-# test 6: choose unique index rather than choosing non-unique index
-
-
-
---enable_warnings
