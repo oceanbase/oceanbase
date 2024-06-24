@@ -1810,7 +1810,7 @@ int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                tablet_id_,
                                                tablet_handle,
-                                               ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+                                               ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("get tablet handle failed", K(ret), K(tablet_id_));
   } else if (OB_FAIL(sorted_slices.reserve(sqc_build_ctx_.slice_mgr_map_.size()))) {
     LOG_WARN("reserve slice array failed", K(ret), K(sqc_build_ctx_.slice_mgr_map_.size()));
