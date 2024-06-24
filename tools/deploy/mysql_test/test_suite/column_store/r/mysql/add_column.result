@@ -1,5 +1,6 @@
 create table t1(a int, b varchar(3048), primary key (a), c int) with column group (all columns, each column);
 create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group (all columns, each column);
+create table t3(c1 int) with column group (each column);
 select count(*) from t1;
 count(*)
 150
@@ -11,6 +12,7 @@ count(*)	count(pk)	min(pk)	max(pk)	sum(pk)	min(c1)	max(c1)	sum(c1)	min(c2)	max(c
 1500	1500	11	3000	2258250	11	3000	2258250	12	3001	2259750	abcdefg1	abcdefg99
 alter system major freeze;
 alter table t1 add column c1 int default 0, add column c2 varchar(100);
+alter table t3 add column c2 char(60) default "中文";
 alter system set _pushdown_storage_level = 0;
 alter system set _rowsets_enabled = false;
 alter system flush plan cache;
@@ -179,6 +181,14 @@ count(*)	count(a)	min(a)	max(a)	sum(a)	count(b)	min(b)	max(b)	count(c)	min(c)	ma
 select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
 count(*)	count(c1)	min(c1)	max(c1)	sum(c1)	count(c2)	min(c2)	max(c2)
 250	250	0	498	39900	100	300300300300300	498498498498498
+select count(c2), min(c2), max(c2) from t3 where c1 < 256;
+count(c2)	min(c2)	max(c2)
+16384	中文                                                          	中文                                                          
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(c2), min(c2), max(c2) from t3 where c1 < 256;
+count(c2)	min(c2)	max(c2)
+16384	中文                                                          	中文                                                          
 alter system major freeze;
 alter table t2 add column c4 bigint default 10, add column c5 bigint unsigned default 20;
 alter table t2 add column c6 bigint default null;
@@ -326,7 +336,7 @@ count(*)	count(a)	min(a)	max(a)	sum(a)	count(b)	min(b)	max(b)	count(c)	min(c)	ma
 select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
 count(*)	count(c1)	min(c1)	max(c1)	sum(c1)	count(c2)	min(c2)	max(c2)
 250	250	0	498	39900	100	300300300300300	498498498498498
-drop table t1,t2;
+drop table t1,t2,t3;
 alter system flush plan cache;
 create table t1(a int, b varchar(3048), primary key (a), c int) with column group (each column);
 create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group (each column);

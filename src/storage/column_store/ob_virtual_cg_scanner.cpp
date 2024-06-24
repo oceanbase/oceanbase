@@ -314,6 +314,8 @@ int ObDefaultCGScanner::init_datum_infos_and_default_row(const ObTableIterParam 
     STORAGE_LOG(WARN, "unexpected null column_param", K(ret), K(iter_param));
   } else if (OB_FAIL(default_row_.storage_datums_[0].from_obj_enhance(column_param->get_orig_default_value()))) {
     STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
+  } else if (OB_FAIL(pad_column(column_param->get_meta_type(), column_param->get_accuracy(), *access_ctx.stmt_allocator_, default_row_.storage_datums_[0]))) {
+    LOG_WARN("Failed to pad default column", K(ret), KPC(column_param), K_(default_row));
   } else if (OB_FAIL(add_lob_header_if_need(*column_param, default_row_.local_allocator_, default_row_.storage_datums_[0]))) {
     STORAGE_LOG(WARN, "Failed to add lob header to default value", K(ret));
   } else if (iter_param.vectorized_enabled_ && !iter_param.enable_pd_aggregate()) {
