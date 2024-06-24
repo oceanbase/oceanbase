@@ -478,6 +478,8 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
   return ret;
 }
 
+static const char *InsertOverwritePrefix = "insert overwrite with ";
+static const char *EmptyPrefix = "";
 int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
                                                   const ObTableSchema *table_schema,
                                                   const ObDirectLoadMethod::Type method,
@@ -487,7 +489,8 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == table_schema ||
                   !ObDirectLoadMethod::is_type_valid(method) ||
-                  !ObDirectLoadInsertMode::is_type_valid(insert_mode))) {
+                  !ObDirectLoadInsertMode::is_type_valid(insert_mode)) ||
+                  !ObDirectLoadMode::is_type_valid(load_mode)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema), K(method), K(insert_mode));
   } else {
@@ -499,20 +502,22 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     bool has_invisible_column = false;
     bool has_unused_column = false;
     // check if it is a user table
+    const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
+
     if (!table_schema->is_user_table()) {
       ret = OB_NOT_SUPPORTED;
       if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
         LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support oracle temporary table");
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support oracle temporary table", tmp_prefix);
       } else if (table_schema->is_view_table()) {
         LOG_WARN("direct-load does not support view table", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support view table");
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support view table", tmp_prefix);
       } else if (table_schema->is_mlog_table()) {
         LOG_WARN("direct-load does not support materialized view log table", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support materialized view log table");
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support materialized view log table", tmp_prefix);
       } else {
         LOG_WARN("direct-load does not support non-user table", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support non-user table");
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support non-user table", tmp_prefix);
       }
     }
     // check if exists full-text search index
@@ -521,7 +526,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     } else if (has_fts_index) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has full-text search index", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has full-text search index");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has full-text search index", tmp_prefix);
     }
     // check if exists multi-value index
     else if (OB_FAIL(table_schema->check_has_multivalue_index(schema_guard, has_multivalue_index))) {
@@ -529,13 +534,13 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     } else if (has_multivalue_index) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has multi-value index", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has multi-value index");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has multi-value index", tmp_prefix);
     }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has generated column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has generated column");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has generated column", tmp_prefix);
     }
     // check if the trigger is enabled
     else if (OB_FAIL(table_schema->check_has_trigger_on_table(schema_guard, trigger_enabled))) {
@@ -543,7 +548,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     } else if (trigger_enabled) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table with trigger enabled", KR(ret), K(trigger_enabled));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with trigger enabled");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with trigger enabled", tmp_prefix);
     }
     // check has udt column
     else if (OB_FAIL(ObTableLoadSchema::check_has_udt_column(table_schema, has_udt_column))) {
@@ -551,7 +556,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     } else if (has_udt_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has udt column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has udt column");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has udt column", tmp_prefix);
     }
     // check has invisible column
     else if (OB_FAIL(ObTableLoadSchema::check_has_invisible_column(table_schema, has_invisible_column))) {
@@ -559,7 +564,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     } else if (has_invisible_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has invisible column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has invisible column");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has invisible column", tmp_prefix);
     }
     // check has unused column
     else if (OB_FAIL(ObTableLoadSchema::check_has_unused_column(table_schema, has_unused_column))) {
@@ -567,13 +572,13 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     } else if (has_unused_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has unused column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has unused column");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has unused column", tmp_prefix);
     }
     // check if table has mlog
     else if (table_schema->has_mlog_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with materialized view log");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with materialized view log", tmp_prefix);
     } else if (ObDirectLoadMethod::is_incremental(method)) { // incremental direct-load
       uint64_t compat_version = 0;
       if (!ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode)) {
@@ -607,6 +612,10 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("version lower than 4.3.2.0 does not support insert overwrite", KR(ret));
           FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.2.0 does not support insert overwrite");
+        } else if (table_schema->get_foreign_key_infos().count() > 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("insert overwrite with incremental direct-load does not support table with foreign keys", KR(ret));
+          FORWARD_USER_ERROR_MSG(ret, "insert overwrite with direct-load does not support table with foreign keys");
         }
       }
     }

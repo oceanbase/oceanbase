@@ -86,8 +86,17 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret) && 5 <= parse_tree.num_child_) {
     bool overwrite = false;
     if (OB_NOT_NULL(parse_tree.children_[OVERWRITE_NODE]) && 1 == parse_tree.children_[OVERWRITE_NODE]->value_) {
-      overwrite = true;
-      insert_stmt->set_overwrite(overwrite);
+      const uint64_t tenant_id = MTL_ID();
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+        LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+      } else if (DATA_VERSION_4_3_2_0 > data_version) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant data version is less than 4.3.2, and the insert overwrite statement is");
+      } else {
+        overwrite = true;
+        insert_stmt->set_overwrite(overwrite);
+      }
     }
   }
 

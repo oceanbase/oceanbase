@@ -3062,7 +3062,7 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
       LOG_WARN("check is insert overwrite failed", K(ret));
     } else if (is_insert_overwrite) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite need open pdml");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "please explain extended for why, insert overwrite need open pdml");
     }
   }
 

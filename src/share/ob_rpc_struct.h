@@ -1860,8 +1860,7 @@ public:
                K_(ddl_stmt_str),
                K_(sql_mode),
                K_(tz_info_wrap),
-               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
-               K_(is_insert_overwrite));
+               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
   ObCreateHiddenTableArg() :
     ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
@@ -1873,7 +1872,6 @@ public:
     ddl_stmt_str_(),
     sql_mode_(0),
     tz_info_wrap_(),
-    is_insert_overwrite_(false),
     nls_formats_{}
     {}
   ~ObCreateHiddenTableArg()
@@ -1889,7 +1887,6 @@ public:
     dest_tenant_id_ = common::OB_INVALID_ID;
     session_id_ = common::OB_INVALID_ID;
     ddl_type_ = share::DDL_INVALID;
-    is_insert_overwrite_ = false;
     ddl_stmt_str_.reset();
     sql_mode_ = 0;
   }
@@ -1907,7 +1904,6 @@ public:
   common::ObArenaAllocator allocator_;
   common::ObTimeZoneInfo tz_info_;
   common::ObTimeZoneInfoWrap tz_info_wrap_;
-  bool is_insert_overwrite_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
 };
 
