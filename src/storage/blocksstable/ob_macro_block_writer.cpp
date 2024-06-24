@@ -1355,7 +1355,7 @@ int ObMacroBlockWriter::wait_io_finish(ObMacroBlockHandle &macro_handle)
     STORAGE_LOG(WARN, "macro block writer fail to wait io finish", K(ret), K(io_timeout_ms));
   } else {
     if (!macro_handle.is_empty()) {
-      FLOG_INFO("wait io finish", K(macro_handle.get_macro_id()));
+      LOG_DEBUG("wait io finish", K(macro_handle.get_macro_id()));
       int64_t check_level = 0;
       if (OB_ISNULL(micro_writer_)) {
         ret = OB_ERR_UNEXPECTED;
