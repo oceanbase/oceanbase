@@ -512,7 +512,7 @@ private:
   // for scan
   int generate_column_infos(common::ObIArray<ObTableColumnInfo> &columns_infos);
   int init_index_info(const common::ObString &index_name, const uint64_t arg_table_id);
-  int generate_key_range(const common::ObIArray<common::ObNewRange> &scan_ranges);
+  int generate_key_range(const ObIArray<ObString> &scan_ranges_columns, const common::ObIArray<common::ObNewRange> &scan_ranges);
   int init_scan_index_info();
   int init_primary_index_info();
   // for dml

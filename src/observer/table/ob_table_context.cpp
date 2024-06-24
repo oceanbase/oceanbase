@@ -840,19 +840,43 @@ bool ObTableCtx::has_exist_in_columns(const ObIArray<ObString> &columns,
     1. check the legality of column obj in query range.
     2. fill primary key object when do index scan when user not filled them.
 */
-int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
+int ObTableCtx::generate_key_range(const ObIArray<ObString> &scan_ranges_columns, const ObIArray<ObNewRange> &scan_ranges)
 {
   int ret = OB_SUCCESS;
   int64_t padding_num = -1;
   ObSEArray<ObTableColumnInfo, 32> columns_infos;
   int64_t N = scan_ranges.count();
+  const uint64_t scan_ranges_columns_cnt = scan_ranges_columns.count();
 
   if (OB_FAIL(generate_column_infos(columns_infos))) {
     LOG_WARN("fail to generate columns infos", K(ret));
+  } else if (scan_ranges_columns_cnt != 0) {
+    if (scan_ranges_columns_cnt > columns_infos.count()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "scan ranges columns cnt greatter than columns_infos count");
+      LOG_WARN("scan ranges columns cnt greatter than columns_infos count",
+        K(ret), K(scan_ranges_columns_cnt), K(columns_infos.count()));
+    }
+
+    for (int i = 0; OB_SUCC(ret) && i < scan_ranges_columns_cnt; i++) {
+      if (scan_ranges_columns.at(i).case_compare(columns_infos[i].column_name_) != 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "scan ranges columns is not prefix of columns_infos");
+        LOG_WARN("scan ranges columns is not prefix of columns_infos", K(ret), K(scan_ranges_columns), K(columns_infos));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (is_index_scan_) {
+      padding_num = index_schema_->get_rowkey_column_num() - scan_ranges_columns_cnt;
+    } else {
+      padding_num = table_schema_->get_rowkey_column_num() - scan_ranges_columns_cnt;
+    }
   } else if (is_index_scan_) {
     // 索引扫描场景下用户可能没有填写rowkey的key_range，需要加上
     padding_num = index_schema_->get_rowkey_column_num() - index_col_ids_.count();
   }
+
   // check obj type in ranges
   for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) { // foreach range
     const ObNewRange &range = scan_ranges.at(i);
@@ -868,7 +892,11 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
       if (p_key->is_min_row() || p_key->is_max_row()) {
         // do nothing
       } else {
-        if (p_key->get_obj_cnt() != columns_infos.count()) {
+        if (scan_ranges_columns_cnt != 0 && p_key->get_obj_cnt() != scan_ranges_columns_cnt) {
+          ret = OB_KV_SCAN_RANGE_MISSING;
+          LOG_USER_ERROR(OB_KV_SCAN_RANGE_MISSING, p_key->get_obj_cnt(), scan_ranges_columns_cnt);
+          LOG_WARN("wrong scan range size", K(ret), K(i), K(j), K(*p_key), K(scan_ranges_columns_cnt));
+        } else if (scan_ranges_columns_cnt == 0 && p_key->get_obj_cnt() != columns_infos.count()) {
           ret = OB_KV_SCAN_RANGE_MISSING;
           LOG_USER_ERROR(OB_KV_SCAN_RANGE_MISSING, p_key->get_obj_cnt(), columns_infos.count());
           LOG_WARN("wrong rowkey size", K(ret), K(i), K(j), K(*p_key), K(columns_infos));
@@ -887,6 +915,7 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
     }
     if (OB_UNLIKELY(padding_num > 0)) {
       // index scan need fill primary key object
+      // prefix scan need fill object
       ObNewRange index_key_range = range;
       for (int64_t j = 0; OB_SUCCESS == ret && j < 2; ++j) {
         const ObRowkey *p_key = nullptr;
@@ -1010,8 +1039,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
                                             is_cache_hit,
                                             ls_id_))) {
       LOG_WARN("fail to get ls id", K(ret), K(index_tablet_id_), K(table_name_));
-    } else if (OB_FAIL(generate_key_range(query.get_scan_ranges()))) {// init key_ranges_
-
+    } else if (OB_FAIL(generate_key_range(query.get_scan_range_columns(), query.get_scan_ranges()))) {// init key_ranges_
       LOG_WARN("fail to generate key ranges", K(ret));
     } else if (query.is_aggregate_query() && OB_FAIL(init_agg_cell_proj(query.get_aggregations().count()))) {
       LOG_WARN("fail to init agg cell proj", K(ret));

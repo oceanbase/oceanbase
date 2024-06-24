@@ -858,6 +858,14 @@ public:
   int deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const;
   const common::ObIArray<ObTableAggregation> &get_aggregations() const { return aggregations_; }
   bool is_aggregate_query() const { return !aggregations_.empty(); }
+  OB_INLINE const ObIArray<common::ObString> &get_scan_range_columns() const
+  {
+    return scan_range_columns_;
+  }
+  OB_INLINE int64_t get_scan_range_columns_count() const
+  {
+    return scan_range_columns_.count();
+  }
   TO_STRING_KV(K_(key_ranges),
                K_(select_columns),
                K_(filter_string),
@@ -1211,11 +1219,6 @@ public:
   {
     return key_ranges_;
   }
-  OB_INLINE const ObIArray<common::ObString> &get_scan_range_columns() const
-  {
-    return scan_range_columns_;
-  }
-
   OB_INLINE const common::ObString &get_index_name() const
   {
     return index_name_;
@@ -1223,10 +1226,6 @@ public:
   OB_INLINE const ObString &get_filter_string() const
   {
     return filter_string_;
-  }
-  OB_INLINE int64_t get_scan_range_columns_count() const
-  {
-    return scan_range_columns_.count();
   }
   OB_INLINE void set_dictionary(const ObIArray<ObString> *all_rowkey_names)
   {

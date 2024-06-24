@@ -499,6 +499,7 @@ TEST_F(TestCreateExecutor, generate_key_range)
   fake_ctx_init_common(fake_ctx, &table_schema_);
   // prepare data
   ObArray<ObNewRange> scan_ranges;
+  ObArray<ObString> scan_ranges_columns;
   ObObj pk_objs_start[1];
   pk_objs_start[0].set_int(0);
   ObObj pk_objs_end[1];
@@ -509,7 +510,8 @@ TEST_F(TestCreateExecutor, generate_key_range)
   range.border_flag_.set_inclusive_start();
   range.border_flag_.set_inclusive_end();
   scan_ranges.push_back(range);
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.generate_key_range(scan_ranges));
+  scan_ranges_columns.push_back("C1");
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.generate_key_range(scan_ranges_columns, scan_ranges));
   // primary key range
   ASSERT_EQ(1, fake_ctx.get_key_ranges().count());
 }
