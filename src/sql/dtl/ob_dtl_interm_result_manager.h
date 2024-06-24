@@ -235,7 +235,8 @@ public:
                                   int64_t length,
                                   int64_t rows,
                                   bool is_eof,
-                                  bool append_whole_block);
+                                  bool append_whole_block,
+                                  int64_t &dir_id);
   typedef common::hash::ObHashMap<ObDTLIntermResultKey, ObDTLIntermResultInfo *> MAP;
   int get_interm_result_info(ObDTLIntermResultKey &key, ObDTLIntermResultInfo &result_info);
   int create_interm_result_info(ObMemAttr &attr, ObDTLIntermResultInfoGuard &result_info_guard,
@@ -260,12 +261,16 @@ public:
   static void inc_interm_result_ref_count(ObDTLIntermResultInfo *result_info);
   static void dec_interm_result_ref_count(ObDTLIntermResultInfo *&result_info);
 private:
+  static int init_store_dir_id(int64_t batch_id,
+                               int64_t channel_id,
+                               int64_t &dir_id,
+                               ObDTLIntermResultInfo *result_info);
+private:
   // 由于此中间结果管理器是全局结构, 基于性能考虑,减少锁冲突设置bucket_num为50w.
   static const int64_t BUCKET_NUM = 500000; //50w
 private:
   MAP map_;
   bool is_inited_;
-  int64_t dir_id_;
   ObDTLIntermResultGC gc_;
 private:
   ObDTLIntermResultManager();

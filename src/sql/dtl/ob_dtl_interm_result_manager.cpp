@@ -266,9 +266,8 @@ int ObDTLIntermResultManager::insert_interm_result_info(ObDTLIntermResultKey &ke
   if (!result_info->is_store_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row store is null", K(ret));
-  } else if (-1 == dir_id_ && OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id_))) {
+  } else if (OB_FAIL(DTL_IR_STORE_DO(*result_info, alloc_dir_id))) {
     LOG_WARN("allocate file directory failed", K(ret));
-  } else if (FALSE_IT(DTL_IR_STORE_DO(*result_info, set_dir_id, dir_id_))) {
   } else if (FALSE_IT(result_info->inc_ref_count())) {
   } else if (OB_FAIL(map_.set_refactored(key, result_info))) {
     LOG_WARN("fail to get row store in result manager", K(ret));
@@ -386,7 +385,7 @@ int ObDTLIntermResultManager::atomic_append_part_block(ObDTLIntermResultKey &key
 }
 
  ObDTLIntermResultManager::ObDTLIntermResultManager()
-  : map_(), is_inited_(false), dir_id_(-1), gc_()
+  : map_(), is_inited_(false), gc_()
 {
 }
 
@@ -436,9 +435,41 @@ int ObDTLIntermResultManager::erase_tenant_interm_result_info(int64_t tenant_id)
   return ret;
 }
 
+int ObDTLIntermResultManager::init_store_dir_id(int64_t batch_id,
+                                                int64_t channel_id,
+                                                int64_t &dir_id,
+                                                ObDTLIntermResultInfo *result_info)
+{
+  int ret = OB_SUCCESS;
+  if (dir_id != -1) {
+    DTL_IR_STORE_DO(*result_info, set_dir_id, dir_id);
+  } else if (batch_id != 0) {
+    // Retrieve the dir_id of interm result with batch_id=0 in the same channel.
+    ObDTLIntermResultKey first_key;
+    first_key.batch_id_ = 0;
+    first_key.channel_id_ = channel_id;
+    ObDTLIntermResultInfo first_result_info;
+    if (OB_FAIL(ObDTLIntermResultManager::getInstance().get_interm_result_info(first_key,
+                first_result_info))) {
+      LOG_WARN("Fail to get interm_result_info", K(ret), K(first_key));
+    } else {
+      dir_id = DTL_IR_STORE_DO(first_result_info, get_file_dir_id);
+      DTL_IR_STORE_DO(*result_info, set_dir_id, dir_id);
+    }
+  } else {  // batch_id == 0
+    if (OB_FAIL(DTL_IR_STORE_DO(*result_info, alloc_dir_id))) {
+      LOG_WARN("allocate file directory failed", K(ret));
+    } else {
+      dir_id = DTL_IR_STORE_DO(*result_info, get_file_dir_id);
+    }
+  }
+  return ret;
+}
+
 int ObDTLIntermResultManager::process_interm_result(ObDtlLinkedBuffer *buffer, int64_t channel_id)
 {
   int ret = OB_SUCCESS;
+  int64_t dir_id = -1;
   if (OB_ISNULL(buffer)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to process buffer", K(ret));
@@ -459,7 +490,8 @@ int ObDTLIntermResultManager::process_interm_result(ObDtlLinkedBuffer *buffer, i
         const int64_t length = batch_info.end_ - start_pos;
         const int64_t rows = batch_info.rows_;
         const bool is_eof = infos.count() - 1 == i ? buffer->is_eof() : true;
-        if (OB_FAIL(process_interm_result_inner(*buffer, key, start_pos, length, rows, is_eof, false))) {
+        if (OB_FAIL(process_interm_result_inner(*buffer, key, start_pos, length, rows,
+                                                is_eof, false, dir_id))) {
           LOG_WARN("process interm result inner", K(ret));
         }
       }
@@ -470,7 +502,8 @@ int ObDTLIntermResultManager::process_interm_result(ObDtlLinkedBuffer *buffer, i
       key.time_us_ = buffer->timeout_ts();
       key.batch_id_ = buffer->get_batch_id();
       key.channel_id_ = channel_id;
-      if (OB_FAIL(process_interm_result_inner(*buffer, key, 0, buffer->size(), 0, buffer->is_eof(), true))) {
+      if (OB_FAIL(process_interm_result_inner(*buffer, key, 0, buffer->size(), 0,
+                                              buffer->is_eof(), true, dir_id))) {
         LOG_WARN("process interm result inner", K(ret));
       }
     }
@@ -485,7 +518,8 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
                                                                  int64_t length,
                                                                  int64_t rows,
                                                                  bool is_eof,
-                                                                 bool append_whole_block)
+                                                                 bool append_whole_block,
+                                                                 int64_t &dir_id)
 {
   int ret = OB_SUCCESS;
   ObDTLIntermResultInfo result_info;
@@ -505,6 +539,9 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
                   *result_info_guard.result_info_, init,
                   0, buffer.tenant_id(), common::ObCtxIds::EXECUTE_CTX_ID, "DtlIntermRes"))) {
         LOG_WARN("fail to init buffer", K(ret));
+      } else if (OB_FAIL(init_store_dir_id(key.batch_id_, key.channel_id_, dir_id,
+                                            result_info_guard.result_info_))) {
+        LOG_WARN("Fail to get init store dir_id", K(key.batch_id_), K(key.channel_id_), K(ret));
       } else if (OB_FAIL(ObDTLIntermResultManager::getInstance().insert_interm_result_info(key, result_info_guard.result_info_))) {
         LOG_WARN("fail to insert row store", K(ret));
       } else {
