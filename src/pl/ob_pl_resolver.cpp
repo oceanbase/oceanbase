@@ -14272,6 +14272,11 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
     OZ (get_udt_names(resolve_ctx_.schema_guard_, user_type_id, database_name, udt_name));
     OX (access_ident.udf_info_.udf_name_ = udt_name);
     OX (access_ident.udf_info_.udf_database_ = database_name);
+    if (OB_SUCC(ret) &&
+        !access_ident.udf_info_.udf_database_.empty() &&
+        access_ident.udf_info_.udf_database_.case_compare(OB_SYS_DATABASE_NAME) != 0) {
+      OZ (q_name.access_idents_.push_back(access_ident.udf_info_.udf_database_));
+    }
   } else if (access_idxs.count() > 0) {
     OZ (get_names_by_access_ident(access_ident,
                                   access_idxs,
@@ -17031,7 +17036,7 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
         OZ (exist->get_idx(idx));
         OZ (routine_table->get_routine_ast(idx, routine_ast));
         if (OB_SUCC(ret) && OB_NOT_NULL(routine_ast)) { // 已经定义过函数体,不可以重复定义
-          ret = OB_ERR_EXIST_OBJECT;
+          ret = OB_ERR_ATTR_FUNC_CONFLICT;
           LOG_WARN("already has same routine in package", K(ret));
         }
       } else { // 已经声明过函数,不可以重复声明
