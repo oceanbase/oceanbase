@@ -150,7 +150,7 @@ protected:
   ObBlockRowStore *block_row_store_;
   ObGroupByCell *group_by_cell_;
   sql::ObBitVector *skip_bit_;
-  ObIAllocator *long_life_allocator_;
+  ObIAllocator *long_life_allocator_; // used for memory which will be chached in ObGlobalIterPool
   ObStoreRowIterPool<ObStoreRowIterator> *stmt_iter_pool_;
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;

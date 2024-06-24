@@ -84,21 +84,21 @@ ObMultipleMerge::~ObMultipleMerge()
   }
   if (nullptr != block_row_store_) {
     block_row_store_->~ObBlockRowStore();
-    if (OB_NOT_NULL(long_life_allocator_)) {
-      long_life_allocator_->free(block_row_store_);
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(block_row_store_);
     }
     block_row_store_ = nullptr;
   }
   if (nullptr != group_by_cell_) {
     group_by_cell_->~ObGroupByCell();
-    if (OB_NOT_NULL(long_life_allocator_)) {
-      long_life_allocator_->free(group_by_cell_);
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(group_by_cell_);
     }
     group_by_cell_ = nullptr;
   }
   if (nullptr != skip_bit_) {
-    if (OB_NOT_NULL(long_life_allocator_)) {
-      long_life_allocator_->free(skip_bit_);
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(skip_bit_);
     }
     skip_bit_ = nullptr;
   }
@@ -184,7 +184,7 @@ int ObMultipleMerge::init(
         OB_FAIL(access_ctx_->alloc_iter_pool(access_param_->iter_param_.is_use_column_store()))) {
       LOG_WARN("Failed to init iter pool", K(ret));
     } else if (FALSE_IT(stmt_iter_pool_ = access_ctx_->get_stmt_iter_pool())) {
-    } else if (OB_ISNULL(skip_bit_ = to_bit_vector(long_life_allocator_->alloc(ObBitVector::memory_size(batch_size))))) {
+    } else if (OB_ISNULL(skip_bit_ = to_bit_vector(access_ctx_->stmt_allocator_->alloc(ObBitVector::memory_size(batch_size))))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc skip bit", K(ret), K(batch_size));
     } else {
@@ -270,7 +270,7 @@ int ObMultipleMerge::switch_table(
       STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
     } else if (OB_FAIL(alloc_row_store(context, param))) {
       LOG_WARN("fail to alloc row store", K(ret));
-    } else if (OB_ISNULL(skip_bit_ = to_bit_vector(long_life_allocator_->alloc(ObBitVector::memory_size(batch_size))))) {
+    } else if (OB_ISNULL(skip_bit_ = to_bit_vector(access_ctx_->stmt_allocator_->alloc(ObBitVector::memory_size(batch_size))))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc skip bit", K(ret), K(batch_size));
     } else {
@@ -880,21 +880,21 @@ void ObMultipleMerge::inner_reset()
 {
   if (nullptr != block_row_store_) {
     block_row_store_->~ObBlockRowStore();
-    if (OB_NOT_NULL(long_life_allocator_)) {
-      long_life_allocator_->free(block_row_store_);
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(block_row_store_);
     }
     block_row_store_ = nullptr;
   }
   if (nullptr != group_by_cell_) {
     group_by_cell_->~ObGroupByCell();
-    if (OB_NOT_NULL(long_life_allocator_)) {
-      long_life_allocator_->free(group_by_cell_);
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(group_by_cell_);
     }
     group_by_cell_ = nullptr;
   }
   if (nullptr != skip_bit_) {
-    if (OB_NOT_NULL(long_life_allocator_)) {
-      long_life_allocator_->free(skip_bit_);
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(skip_bit_);
     }
     skip_bit_ = nullptr;
   }
