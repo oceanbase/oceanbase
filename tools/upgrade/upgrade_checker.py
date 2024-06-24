@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+from my_error import MyError
 import sys
 import os
 import mysql.connector
