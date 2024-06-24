@@ -23,7 +23,7 @@ ob_define(OB_CMAKE_RULES_CHECK ON)
 ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
 ob_define(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/hotfuncs.txt")
 ob_define(OB_BUILD_CCLS OFF)
-ob_define(LTO_JOBS 32)
+ob_define(LTO_JOBS 16)
 # get compiler from build.sh
 ob_define(OB_CC "")
 ob_define(OB_CXX "")
