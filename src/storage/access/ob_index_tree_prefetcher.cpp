@@ -1732,15 +1732,11 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
                                   need_submit_io_))) {
     LOG_WARN("Fail to prefetch data block data", K(ret));
   } else if (use_multi_block_prefetch_ && micro_handle.need_multi_io()) {
-    bool need_split = false;
-    if (multi_io_params_.add_micro_data(index_block_info, prefetch_idx, micro_handle, need_split)) {
-      if (OB_FAIL(prefetch_multi_data_block(prefetch_idx + 1))) {
-        LOG_WARN("Fail to prefetch multi block", K(ret));
-      } else if (need_split) {
-        // reused after prefetch_multi_data_block
-        if (multi_io_params_.add_micro_data(index_block_info, prefetch_idx, micro_handle, need_split)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected multi_io_params status", K(ret), K_(multi_io_params));
+    bool need_split = true;
+    while (OB_SUCC(ret) && need_split) {
+      if (multi_io_params_.add_micro_data(index_block_info, prefetch_idx, micro_handle, need_split)) {
+        if (OB_FAIL(prefetch_multi_data_block(prefetch_idx + 1))) {
+          LOG_WARN("Fail to prefetch multi block", K(ret));
         }
       }
     }

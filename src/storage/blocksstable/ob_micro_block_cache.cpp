@@ -274,8 +274,8 @@ int ObMultiBlockIOParam::init(
 {
   int ret = OB_SUCCESS;
   is_reverse_ = is_reverse;
-  io_read_batch_size_ = iter_param.get_io_read_batch_size();
-  io_read_gap_size_ = iter_param.get_io_read_gap_size();
+  io_read_batch_size_ = MAX(iter_param.get_io_read_batch_size(), 0);
+  io_read_gap_size_ = MAX(iter_param.get_io_read_gap_size(), 0);
   prefetch_idx_.set_allocator(&allocator);
   micro_infos_.set_allocator(&allocator);
   if (OB_UNLIKELY(0 >= micro_count_cap || MAX_MICRO_BLOCK_READ_COUNT < micro_count_cap)) {
