@@ -366,7 +366,7 @@ int ObTableLoadStore::pre_merge(
         LOG_WARN("unexpected committed trans count", KR(ret), K(committed_trans_id_array),
                 K(store_committed_trans_id_array));
       } else {
-        std::sort(store_committed_trans_id_array.begin(), store_committed_trans_id_array.end());
+        lib::ob_sort(store_committed_trans_id_array.begin(), store_committed_trans_id_array.end());
         for (int64_t i = 0; OB_SUCC(ret) && i < committed_trans_id_array.count(); ++i) {
           if (OB_UNLIKELY(committed_trans_id_array[i] != store_committed_trans_id_array[i])) {
             ret = OB_ITEM_NOT_MATCH;

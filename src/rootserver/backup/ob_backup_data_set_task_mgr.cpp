@@ -916,7 +916,7 @@ int ObBackupSetTaskMgr::fill_map_with_sys_tablets_(
   ObLSID sys_ls_id(ObLSID::SYS_LS_ID);
   if (OB_FAIL(get_extern_tablet_info_(sys_ls_id, tablet_ids, backup_scn))) {
     LOG_WARN("failed to get extern sys ls tablet info", K(ret));
-  } else if (OB_FALSE_IT(std::sort(tablet_ids.begin(), tablet_ids.end()))) {
+  } else if (OB_FALSE_IT(lib::ob_sort(tablet_ids.begin(), tablet_ids.end()))) {
   } else if (OB_FAIL(latest_ls_tablet_map.set_refactored(sys_ls_id, tablet_ids, 1))) {
     LOG_WARN("failed to set refactored", K(ret), K(sys_ls_id), K(tablet_ids));
   } else {
@@ -1581,7 +1581,7 @@ int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
           LOG_WARN("[DATA_BACKUP]failed to get tablet to ls", K(ret), K(ls_info.ls_id_));
         } else if (OB_FAIL(append(ls_info.tablet_id_list_, map_iter->second))) {
           LOG_WARN("[DATA_BACKUP]failed to append tablet to ls array", K(ret));
-        } else if (OB_FALSE_IT(std::sort(ls_info.tablet_id_list_.begin(), ls_info.tablet_id_list_.end()))) {
+        } else if (OB_FALSE_IT(lib::ob_sort(ls_info.tablet_id_list_.begin(), ls_info.tablet_id_list_.end()))) {
         } else if (OB_FAIL(tablet_to_ls.push_back(ls_info))) {
           LOG_WARN("[DATA_BACKUP]failed to push backup ls info", K(ret));
         } 

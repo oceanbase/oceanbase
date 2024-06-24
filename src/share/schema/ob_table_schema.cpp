@@ -3831,7 +3831,7 @@ int ObTableSchema::sort_column_array_by_column_id()
       }
     }
     if (OB_SUCC(ret)) {
-      std::sort(column_array_, column_array_ + column_cnt_, [](ObColumnSchemaV2 *&lhs, ObColumnSchemaV2 *&rhs) -> bool {
+      lib::ob_sort(column_array_, column_array_ + column_cnt_, [](ObColumnSchemaV2 *&lhs, ObColumnSchemaV2 *&rhs) -> bool {
         return lhs->get_column_id() < rhs->get_column_id();
       });
     }

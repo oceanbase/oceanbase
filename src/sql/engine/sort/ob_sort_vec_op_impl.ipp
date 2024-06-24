@@ -1399,7 +1399,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
       bucket_part_cnt++;
     }
     comp_.set_cmp_range(0, part_cnt_ + hash_expr_cnt);
-    std::sort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
+    lib::ob_sort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
     comp_.set_cmp_range(part_cnt_ + hash_expr_cnt, comp_.get_cnt());
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_part_cnt; ++i) {
       int64_t rows_last = rows_idx;
@@ -1419,10 +1419,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
           } else {
             enable_encode_sortkey_ = false;
             comp_.fallback_to_disable_encode_sortkey();
-            std::sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
+            lib::ob_sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
           }
         } else {
-          std::sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
+          lib::ob_sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
         }
       }
     }
@@ -1466,10 +1466,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort_inmem_data()
         } else {
           enable_encode_sortkey_ = false;
           comp_.fallback_to_disable_encode_sortkey();
-          std::sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
+          lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
         }
       } else {
-        std::sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
+        lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
       }
       if (OB_SUCCESS != comp_.ret_) {
         ret = comp_.ret_;

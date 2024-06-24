@@ -176,7 +176,7 @@ int64_t ObBasicTimeGuard::to_string(char *buf, const int64_t buf_len) const
     const int64_t click_count = click_count_ < MAX_CLICK_COUNT ? click_count_ : MAX_CLICK_COUNT;
     ClickInfo click_infos[click_count];
     MEMCPY(click_infos, click_infos_, sizeof(click_infos));
-    std::sort(click_infos, click_infos + click_count, ClickInfo::compare);
+    lib::ob_sort(click_infos, click_infos + click_count, ClickInfo::compare);
     ret = databuff_printf(buf, buf_len, pos,
         "owner: %s, click_count: %ld, time dist:[%s=%d",
         owner_, click_count_, click_infos[0].mod_, click_infos[0].cost_time_);

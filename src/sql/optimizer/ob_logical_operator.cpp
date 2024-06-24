@@ -2596,7 +2596,7 @@ int ObLogicalOperator::reorder_filters_exprs(common::ObIArray<ObExprSelPair> &pr
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(filter_ranks.begin(), filter_ranks.end(), ObExprRankPairCompare());
+    lib::ob_sort(filter_ranks.begin(), filter_ranks.end(), ObExprRankPairCompare());
     for(int64_t i = 0; i < filter_ranks.count(); ++i) {
       filter_exprs.at(i) = filter_ranks.at(i).second;
     }
@@ -3938,7 +3938,7 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
   }
   if (OB_SUCC(ret)) {
     Compare cmp;
-    std::sort(part_infos.begin(), part_infos.end(), CopyableComparer(cmp));
+    lib::ob_sort(part_infos.begin(), part_infos.end(), CopyableComparer(cmp));
     if (OB_FAIL(ObLogicalOperator::explain_print_partitions(part_infos, two_level,
                                                             buf, buf_len, pos))) {
       LOG_WARN("Failed to print partitions");

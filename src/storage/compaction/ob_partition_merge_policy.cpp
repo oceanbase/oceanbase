@@ -1314,7 +1314,7 @@ int ObMinorExecuteRangeMgr::get_merge_ranges(
 int ObMinorExecuteRangeMgr::sort_ranges()
 {
   int ret = OB_SUCCESS;
-  std::sort(exe_range_array_.begin(), exe_range_array_.end(), compareScnRange);
+  lib::ob_sort(exe_range_array_.begin(), exe_range_array_.end(), compareScnRange);
   for (int i = 1; OB_SUCC(ret) && i < exe_range_array_.count(); ++i) {
     if (OB_UNLIKELY(!exe_range_array_.at(i).is_valid()
         || (exe_range_array_.at(i - 1).start_scn_.get_val_for_tx() > 0 // except meta major merge range

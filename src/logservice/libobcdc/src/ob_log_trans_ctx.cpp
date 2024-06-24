@@ -408,7 +408,7 @@ int TransCtx::prepare_(
       if (OB_SUCC(ret)
           && OB_UNLIKELY(NULL != host_ && host_->need_sort_participant())
           && participant_count_ > 0) {
-        std::sort(participants_, participants_ + participant_count_, TransPartInfoCompare());
+        lib::ob_sort(participants_, participants_ + participant_count_, TransPartInfoCompare());
       }
 
       _TCTX_DSTAT("[PREPARE] TENANT_ID=%lu TRANS_ID=%ld SERVED_PARTICIPANTS=%ld/%ld",

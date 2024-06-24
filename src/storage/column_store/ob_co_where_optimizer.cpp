@@ -78,7 +78,7 @@ int ObCOWhereOptimizer::analyze_impl(sql::ObPushdownFilterExecutor &filter)
         }
 
         if (OB_SUCC(ret)) {
-          std::sort(&filter_conditions_[0], &filter_conditions_[0] + child_cnt);
+          lib::ob_sort(&filter_conditions_[0], &filter_conditions_[0] + child_cnt);
           const uint64_t best_filter_idx = filter_conditions_[0].idx_;
           best_filter = children[best_filter_idx];
           if (0 == best_filter_idx ||

@@ -1929,7 +1929,7 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
     LOG_WARN("failed to check will use column store", K(ret));
   } else if (est_cost_info.use_column_store_ || !index_back_will_use_row_store) {
     FilterCompare filter_compare(get_plan()->get_predicate_selectivities());
-    std::sort(est_cost_info.table_filters_.begin(), est_cost_info.table_filters_.end(), filter_compare);
+    lib::ob_sort(est_cost_info.table_filters_.begin(), est_cost_info.table_filters_.end(), filter_compare);
     ObSqlBitSet<> used_column_ids;
     est_cost_info.use_column_store_ = true;
     est_cost_info.index_back_with_column_store_ = !index_back_will_use_row_store;
@@ -3985,7 +3985,7 @@ int ObJoinOrder::get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
                         if (NULL != lhs && NULL != rhs)
                         { b_ret = lhs->index_ < rhs->index_; }
                         return b_ret; };
-    std::sort(sorted_predicates.begin(), sorted_predicates.end(), compare_op);
+    lib::ob_sort(sorted_predicates.begin(), sorted_predicates.end(), compare_op);
     LOG_TRACE("sort predicates and calc cost", K(min_cost), K(sorted_predicates));
   }
   //for each candi range expr, check scan cost

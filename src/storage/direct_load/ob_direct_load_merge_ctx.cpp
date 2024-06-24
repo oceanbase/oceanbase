@@ -129,7 +129,7 @@ int ObDirectLoadMergeCtx::init(ObTableLoadTableCtx *ctx,
     if (OB_FAIL(create_all_tablet_ctxs(ls_partition_ids))) {
       LOG_WARN("fail to create all tablet ctxs", KR(ret));
     } else {
-      std::sort(tablet_merge_ctx_array_.begin(), tablet_merge_ctx_array_.end(),
+      lib::ob_sort(tablet_merge_ctx_array_.begin(), tablet_merge_ctx_array_.end(),
                 [](const ObDirectLoadTabletMergeCtx *lhs, const ObDirectLoadTabletMergeCtx *rhs) {
                   return lhs->get_tablet_id().compare(rhs->get_tablet_id()) < 0;
                 });

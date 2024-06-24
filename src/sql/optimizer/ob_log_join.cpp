@@ -919,7 +919,7 @@ int ObLogJoin::print_join_tables_in_hint(const ObDMLStmt &stmt,
         return false;
       }
     };
-    std::sort(join_tables.begin(), join_tables.end(), cmp_func);
+    lib::ob_sort(join_tables.begin(), join_tables.end(), cmp_func);
     for (int64_t i = 0; OB_SUCC(ret) && i < join_tables.count(); ++i) {
       if (OB_ISNULL(table = join_tables.at(i))) {
         ret = OB_ERR_UNEXPECTED;

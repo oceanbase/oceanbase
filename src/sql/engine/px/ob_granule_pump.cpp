@@ -260,7 +260,7 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
     }
     if (OB_SUCC(ret) && random_type != GI_RANDOM_NONE) {
       auto compare_fun = [](const ObGITaskInfo &a, const ObGITaskInfo &b) -> bool { return a.hash_value_ > b.hash_value_; };
-      std::sort(gi_task_set_.begin(), gi_task_set_.end(), compare_fun);
+      lib::ob_sort(gi_task_set_.begin(), gi_task_set_.end(), compare_fun);
     }
   }
   return ret;
@@ -900,7 +900,7 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
         (some scenarios do not require order), but the logic is acceptable.
         2. If reverse order is required outside, then the reverse sorting should be done outside on its own.
       */
-      std::sort(scan_ranges.begin(), scan_ranges.end(), ObNewRangeCmp());
+      lib::ob_sort(scan_ranges.begin(), scan_ranges.end(), ObNewRangeCmp());
     }
   }
 

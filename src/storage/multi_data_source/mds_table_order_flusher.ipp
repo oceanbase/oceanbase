@@ -140,7 +140,7 @@ void MdsTableOrderFlusher<STACK_QUEUE_SIZE, true>::flush_by_order(MdsTableMap &m
   high_priority_flusher_.flush_by_order(map, limit, max_decided_scn);
   if (!array_err_) {// if array has error, just order flush STACK_QUEUE_SIZE mds tables
     try {
-      std::sort(extra_mds_tables_.begin(), extra_mds_tables_.end());
+      lib::ob_sort(extra_mds_tables_.begin(), extra_mds_tables_.end());
     } catch (std::exception e) {
       MDS_LOG(WARN, "std::sort failed", K(e.what()));
       array_err_ = OB_ERR_UNEXPECTED;

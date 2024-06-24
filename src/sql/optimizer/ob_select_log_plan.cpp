@@ -6523,7 +6523,7 @@ int ObSelectLogPlan::sort_window_functions(const ObFdItemSet &fd_item_set,
   }
   if (OB_SUCC(ret)) {
     std::pair<int64_t, int64_t> *first = &expr_entries.at(0);
-    std::sort(first, first + expr_entries.count());
+    lib::ob_sort(first, first + expr_entries.count());
     for (int64_t i = 0; OB_SUCC(ret) && i < expr_entries.count(); ++i) {
       ordering_changed |= i != expr_entries.at(i).second;
       if (OB_FAIL(ordered_win_func_exprs.push_back(win_func_exprs.at(expr_entries.at(i).second)))) {

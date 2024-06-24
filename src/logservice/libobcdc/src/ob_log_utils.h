@@ -603,7 +603,7 @@ int sort_and_unique_array(ARRAY &arr, Comparator &comparator)
 
   if (arr.count() > 1) {
     // sort lsn_arr
-    std::sort(arr.begin(), arr.end(), comparator);
+    lib::ob_sort(arr.begin(), arr.end(), comparator);
     auto prev = arr.at(0);
     // get duplicate misslog lsn idx
     for(int64_t idx = 1; OB_SUCC(ret) && idx < arr.count(); idx++) {

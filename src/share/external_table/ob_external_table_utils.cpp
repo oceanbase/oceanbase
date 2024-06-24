@@ -416,7 +416,7 @@ int ObExternalTableUtils::calc_assigned_files_to_sqcs(
     file_info.file_idx_ = i;
     OZ (sorted_files.push_back(file_info));
   }
-  std::sort(sorted_files.begin(), sorted_files.end(),
+  lib::ob_sort(sorted_files.begin(), sorted_files.end(),
             [](const FileInfoWithIdx &l, const FileInfoWithIdx &r) -> bool {
               return l.file_info_->file_size_ > r.file_info_->file_size_; });
   for (int64_t i = 0; OB_SUCC(ret) && i < sqc_count; i++) {
@@ -491,7 +491,7 @@ int ObExternalTableUtils::collect_local_files_on_servers(
   if (OB_SUCC(ret)) {
     if (is_absolute_path) {
       Functor functor;
-      std::sort(all_servers.get_data(), all_servers.get_data() + all_servers.count(),
+      lib::ob_sort(all_servers.get_data(), all_servers.get_data() + all_servers.count(),
                 functor);
       ObAddr pre_addr;
       for (int64_t i = 0; OB_SUCC(ret) && i < all_servers.count(); i++) {
@@ -603,7 +603,7 @@ int ObExternalTableUtils::sort_external_files(ObIArray<ObString> &file_urls,
       }
     }
     if (OB_SUCC(ret)) {
-      std::sort(file_urls.get_data(), file_urls.get_data() + file_urls.count());
+      lib::ob_sort(file_urls.get_data(), file_urls.get_data() + file_urls.count());
       for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
         int64_t file_size = 0;
         if (OB_FAIL(file_map.get_refactored(file_urls.at(i), file_size))) {

@@ -493,7 +493,7 @@ int ObOptimizerUtil::generate_stable_ordering(common::ObIArray<ObRawExpr *> &exp
   }
   if (OB_SUCC(ret)) {
   // do not generate stable ordering now, remove comment for this sort when need stable ordering
-  // std::sort(sort_pairs.begin(), sort_pairs.end(), stable_expr_cmp_func);
+  // lib::ob_sort(sort_pairs.begin(), sort_pairs.end(), stable_expr_cmp_func);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < sort_pairs.count(); ++i) {
     idx = sort_pairs.at(i).second;

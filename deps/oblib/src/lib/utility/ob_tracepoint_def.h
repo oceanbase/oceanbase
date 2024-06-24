@@ -555,4 +555,6 @@ GLOBAL_ERRSIM_POINT_DEF(2451, COM_STMT_PREXECUTE_PS_CURSOR_OPEN_ERROR, "inject e
 GLOBAL_ERRSIM_POINT_DEF(2452, COM_STMT_PREXECUTE_EXECUTE_ERROR, "inject error at execute stage for pr-exec protocol");
 // Protocol end
 
+GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of the compare method for std::sort");
+
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

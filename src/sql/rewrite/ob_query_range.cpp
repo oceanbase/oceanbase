@@ -384,7 +384,7 @@ int ObQueryRange::extract_valid_exprs(const ExprIArray &root_exprs, ObIArray<ObR
           LOG_WARN("failed to append array no dup", K(ret));
         } else {
           int64_t postfix_offset = -1;
-          std::sort(offsets.begin(), offsets.end());
+          lib::ob_sort(offsets.begin(), offsets.end());
           int64_t idx = 0;
           for (; idx < offsets.count(); ++idx) {
             if (postfix_offset != -1) {
@@ -4682,7 +4682,7 @@ int ObQueryRange::check_row_in_need_in_optimization(const ObOpRawExpr *b_expr,
         if (offsets.empty()) {
           use_in_optimization = false;
         } else {
-          std::sort(offsets.begin(), offsets.end());
+          lib::ob_sort(offsets.begin(), offsets.end());
           int64_t start_pos = offsets.at(0);
           for (int64_t i = 1; OB_SUCC(ret) && use_in_optimization && i < offsets.count(); ++i) {
             int64_t cur_off = offsets.at(i);

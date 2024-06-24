@@ -196,7 +196,7 @@ int ObNetEndpointIngressManager::update_ingress_plan(ObNetEndpointKVArray &updat
         if (remain_bw_limit <= 0) {
           remain_bw_limit = 0;
         }
-        std::sort(predicted_bws, predicted_bws + valid_count);
+        lib::ob_sort(predicted_bws, predicted_bws + valid_count);
         int64_t average = remain_bw_limit / valid_count;
         bool is_done = false;
         for (int i = 0; i < valid_count && !is_done; i++) {

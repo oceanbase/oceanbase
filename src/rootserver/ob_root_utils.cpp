@@ -1106,7 +1106,7 @@ int ObLocalityCheckHelp::process_pre_single_zone_locality(
   }
   if (OB_SUCC(ret)) {
     YIndexCmp cmp_operator;
-    std::sort(pre_in_cur_multi_indexes.begin(), pre_in_cur_multi_indexes.end(), cmp_operator);
+    lib::ob_sort(pre_in_cur_multi_indexes.begin(), pre_in_cur_multi_indexes.end(), cmp_operator);
   }
   return ret;
 }
@@ -1156,7 +1156,7 @@ int ObLocalityCheckHelp::process_cur_single_zone_locality(
   }
   if (OB_SUCC(ret)) {
     YIndexCmp cmp_operator;
-    std::sort(cur_in_pre_multi_indexes.begin(), cur_in_pre_multi_indexes.end(), cmp_operator);
+    lib::ob_sort(cur_in_pre_multi_indexes.begin(), cur_in_pre_multi_indexes.end(), cmp_operator);
   }
   return ret;
 }

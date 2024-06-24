@@ -1354,7 +1354,7 @@ int ObMinAggCell::eval_batch_in_group_by(
     // as there is no guarantee of the validness of the previous memory in next round
     if (OB_FAIL(ret)) {
     } else if (updated_cnt > 0) {
-      std::sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
+      lib::ob_sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
       int64_t last_ref_cnt = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < updated_cnt; ++i) {
         if (-1 == group_by_ref_array_[i]) {
@@ -1549,7 +1549,7 @@ int ObMaxAggCell::eval_batch_in_group_by(
     }
     if (OB_FAIL(ret)) {
     } else if (updated_cnt > 0) {
-      std::sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
+      lib::ob_sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
       int64_t last_ref_cnt = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < updated_cnt; ++i) {
         if (-1 == group_by_ref_array_[i]) {
@@ -3545,7 +3545,7 @@ int ObGroupByCell::init(const ObTableAccessParam &param, const ObTableAccessCont
       LOG_WARN("Failed to init agg_cells", K(ret));
     } else {
       if (agg_cells_.count() > 2) {
-        std::sort(agg_cells_.begin(), agg_cells_.end(),
+        lib::ob_sort(agg_cells_.begin(), agg_cells_.end(),
                   [](ObAggCell *a, ObAggCell *b) { return a->get_col_offset() < b->get_col_offset(); });
       }
       void *buf = nullptr;

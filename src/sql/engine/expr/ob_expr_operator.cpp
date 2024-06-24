@@ -3045,9 +3045,9 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
         };
         udtComparer uc(cmp_ctx, lt_cmp_fp);
         const ObObj **first = &c1_copy.at(0);
-        std::sort(first, first + c1_copy.count(), uc);
+        lib::ob_sort(first, first + c1_copy.count(), uc);
         first = &c2_copy.at(0);
-        std::sort(first, first + c2_copy.count(), uc);
+        lib::ob_sort(first, first + c2_copy.count(), uc);
         int cmp_res = 1;
         // 可能是等值或者不等值
         common::obj_cmp_func eq_cmp_fp;

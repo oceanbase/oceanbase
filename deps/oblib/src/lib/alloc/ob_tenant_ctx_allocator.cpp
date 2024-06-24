@@ -103,7 +103,7 @@ int ObTenantCtxAllocator::iter_label(VisitFunc func) const
         }
       }
       if (OB_SUCC(ret)) {
-        std::sort(items, items + item_cnt,
+        lib::ob_sort(items, items + item_cnt,
             [](ItemWrapper &l, ItemWrapper &r)
             {
               return (l.item_->hold_  > r.item_->hold_);

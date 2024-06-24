@@ -1960,7 +1960,7 @@ int ObWhiteFilterExecutor::init_in_eval_datums()
   if (OB_SUCC(ret)) {
     bool mock_equal = false;
     ObDatumComparator cmp(filter_.expr_->args_[1]->args_[0]->basic_funcs_->null_first_cmp_, ret, mock_equal);
-    std::sort(datum_params_.begin(), datum_params_.end(), cmp);
+    lib::ob_sort(datum_params_.begin(), datum_params_.end(), cmp);
     if (OB_FAIL(ret)) {
       LOG_WARN("Failed to sort datums", K(ret));
     } else {

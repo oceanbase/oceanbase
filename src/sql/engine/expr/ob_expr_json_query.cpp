@@ -517,7 +517,7 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
     if (OB_SUCC(ret) && OB_NOT_NULL(obj_array)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONMultivalue"));
       ObJsonObjectCompare cmp;
-      std::sort(obj_array, obj_array + element_count, cmp);
+      lib::ob_sort(obj_array, obj_array + element_count, cmp);
     }
 
     uint32_t real_store_count = 0;

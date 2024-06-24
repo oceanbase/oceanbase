@@ -7249,8 +7249,8 @@ int ObResolverUtils::check_match_columns(const ObIArray<ObString> &parent_column
     if (OB_SUCC(ret)) {
       if (tmp_parent_columns.count() == tmp_key_columns.count()
             && tmp_parent_columns.count() > 0) {
-        std::sort(tmp_parent_columns.begin(), tmp_parent_columns.end());
-        std::sort(tmp_key_columns.begin(), tmp_key_columns.end());
+        lib::ob_sort(tmp_parent_columns.begin(), tmp_parent_columns.end());
+        lib::ob_sort(tmp_key_columns.begin(), tmp_key_columns.end());
         bool is_tmp_match = true;
         for (int64_t i = 0; is_tmp_match && i < tmp_parent_columns.count(); ++i) {
           if (0 != tmp_parent_columns.at(i).case_compare(tmp_key_columns.at(i))) {
@@ -7286,8 +7286,8 @@ int ObResolverUtils::check_match_columns(
     if (OB_SUCC(ret)) {
       if (tmp_parent_columns.count() == tmp_key_columns.count()
           && tmp_parent_columns.count() > 0) {
-        std::sort(tmp_parent_columns.begin(), tmp_parent_columns.end());
-        std::sort(tmp_key_columns.begin(), tmp_key_columns.end());
+        lib::ob_sort(tmp_parent_columns.begin(), tmp_parent_columns.end());
+        lib::ob_sort(tmp_key_columns.begin(), tmp_key_columns.end());
         bool is_tmp_match = true;
         for (int64_t i = 0; is_tmp_match && i < tmp_parent_columns.count(); ++i) {
           if (tmp_parent_columns.at(i) != tmp_key_columns.at(i)) {

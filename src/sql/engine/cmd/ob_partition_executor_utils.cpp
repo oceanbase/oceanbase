@@ -378,7 +378,7 @@ int ObPartitionExecutorUtils::cast_list_expr_to_obj(
                                   ? subpartition_array[i]->list_row_values_
                                   : partition_array[i]->list_row_values_;
           InnerPartListVectorCmp part_list_vector_op;
-          std::sort(list_row_values.begin(),  list_row_values.end(), part_list_vector_op);
+          lib::ob_sort(list_row_values.begin(),  list_row_values.end(), part_list_vector_op);
           if (OB_FAIL(part_list_vector_op.get_ret())) {
             LOG_WARN("fail to sort list row values", K(ret));
           }
@@ -392,7 +392,7 @@ int ObPartitionExecutorUtils::cast_list_expr_to_obj(
     // 不在这里排序一级list分区是因为对于非模板化二级分区，排序后会导致partition array与
     // individual_subpart_values_exprs对应不上。
     if (is_subpart) {
-      std::sort(subpartition_array,
+      lib::ob_sort(subpartition_array,
                 subpartition_array + array_count,
                 ObBasePartition::list_part_func_layout);
     }
@@ -1206,7 +1206,7 @@ int ObPartitionExecutorUtils::cast_list_expr_to_obj(
                                     ? subpartition_array[i]->list_row_values_
                                     : partition_array[i]->list_row_values_;
             InnerPartListVectorCmp part_list_vector_op;
-            std::sort(list_row_values.begin(), list_row_values.end(), part_list_vector_op);
+            lib::ob_sort(list_row_values.begin(), list_row_values.end(), part_list_vector_op);
             if (OB_FAIL(part_list_vector_op.get_ret())) {
               LOG_WARN("fail to sort list row values", K(ret));
             }
@@ -1219,11 +1219,11 @@ int ObPartitionExecutorUtils::cast_list_expr_to_obj(
     const int64_t array_count = list_values_exprs.count();
     // TODO(yibo) tablegroup 支持二级分区异构后，一级分区的排序也要延迟处理
     if (is_subpart) {
-      std::sort(subpartition_array,
+      lib::ob_sort(subpartition_array,
                 subpartition_array + array_count,
                 ObBasePartition::list_part_func_layout);
     } else {
-      std::sort(partition_array,
+      lib::ob_sort(partition_array,
                 partition_array + array_count,
                 ObBasePartition::list_part_func_layout);
     }
@@ -1426,7 +1426,7 @@ int ObPartitionExecutorUtils::sort_list_paritition_if_need(ObTableSchema &table_
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else {
-      std::sort(partition_array,
+      lib::ob_sort(partition_array,
                 partition_array + array_count,
                 ObBasePartition::list_part_func_layout);
     }

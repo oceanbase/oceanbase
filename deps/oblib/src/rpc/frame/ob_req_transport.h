@@ -21,6 +21,7 @@
 #include "lib/statistic_event/ob_stat_event.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "lib/allocator/ob_malloc.h"
 
 namespace oceanbase
 {

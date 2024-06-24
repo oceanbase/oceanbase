@@ -12755,7 +12755,7 @@ int ObTransformUtils::get_sorted_table_hint(ObSEArray<TableItem *, 4> &tables,
         return a->table_id_ > b->table_id_;
       }
     };
-    std::sort(tables.begin(), tables.end(), cmp_func);
+    lib::ob_sort(tables.begin(), tables.end(), cmp_func);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
     TableItem *table = tables.at(i);

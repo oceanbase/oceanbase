@@ -181,7 +181,7 @@ int ObTabletReplayCreateHandler::init(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet count mismatch", K(ret), K(i), K(total_tablet_cnt_));
     } else {
-      std::sort(total_tablet_item_arr_, total_tablet_item_arr_ + total_tablet_cnt_);
+      lib::ob_sort(total_tablet_item_arr_, total_tablet_item_arr_ + total_tablet_cnt_);
     }
   }
 

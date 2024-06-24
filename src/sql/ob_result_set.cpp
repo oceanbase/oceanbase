@@ -1440,7 +1440,7 @@ int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
     }
   }
   if (OB_SUCC(ret) && recount_params.count() >= 2) {
-    std::sort(recount_params.begin(), recount_params.end(),
+    lib::ob_sort(recount_params.begin(), recount_params.end(),
         [](ObConstRawExpr *a, ObConstRawExpr *b) {
           return a->get_value().get_unknown() < b->get_value().get_unknown();
         });

@@ -1827,7 +1827,7 @@ int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
     }
     if (OB_SUCC(ret)) {
       SliceEndkeyCompareFunctor cmp(tablet_handle.get_obj()->get_rowkey_read_info().get_datum_utils());
-      std::sort(sorted_slices.begin(), sorted_slices.end(), cmp);
+      lib::ob_sort(sorted_slices.begin(), sorted_slices.end(), cmp);
       ret = cmp.ret_code_;
       if (OB_FAIL(ret)) {
         LOG_WARN("sort slice failed", K(ret), K(sorted_slices));

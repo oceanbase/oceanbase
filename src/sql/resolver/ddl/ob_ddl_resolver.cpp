@@ -7652,8 +7652,8 @@ bool ObDDLResolver::is_ids_match(const ObIArray<uint64_t> &src_list, const ObIAr
       tmp_src_list.push_back(src_list.at(i));
       tmp_dest_list.push_back(dest_list.at(i));
     }
-    std::sort(tmp_src_list.begin(), tmp_src_list.end());
-    std::sort(tmp_dest_list.begin(), tmp_dest_list.end());
+    lib::ob_sort(tmp_src_list.begin(), tmp_src_list.end());
+    lib::ob_sort(tmp_dest_list.begin(), tmp_dest_list.end());
     for(int64_t i = 0; is_match && i < tmp_src_list.count(); ++i) {
       if(tmp_src_list.at(i) != tmp_dest_list.at(i)) {
         is_match = false;

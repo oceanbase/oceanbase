@@ -182,7 +182,7 @@ static int record_piece_info(const ObDestRoundCheckpointer::GeneratedPiece &piec
         single_ls_desc.round_id_, single_ls_desc.piece_id_, single_ls_desc.ls_id_,
         single_ls_desc.filelist_))) {
         LOG_WARN("failed to get archive file list", K(ret), K(single_ls_desc));
-      } else if (OB_FALSE_IT(std::sort(single_ls_desc.filelist_.begin(), single_ls_desc.filelist_.end()))) {
+      } else if (OB_FALSE_IT(lib::ob_sort(single_ls_desc.filelist_.begin(), single_ls_desc.filelist_.end()))) {
       } else if (OB_FAIL(piece_info_desc.filelist_.push_back(single_ls_desc))) {
         LOG_WARN("failed to push backup single_ls_desc", K(ret), K(single_ls_desc), K(piece_info_desc));
       } else if (OB_FAIL(store.is_single_ls_info_file_exist(single_ls_desc.dest_id_, single_ls_desc.round_id_, single_ls_desc.piece_id_, single_ls_desc.ls_id_, is_exist))) {

@@ -359,7 +359,7 @@ int ObMLogBuilder::MLogColumnUtils::construct_mlog_table_columns(
       return (a->get_column_id() < b->get_column_id());
     }
   };
-  std::sort(mlog_table_column_array_.begin(), mlog_table_column_array_.end(), ColumnSchemaCmp());
+  lib::ob_sort(mlog_table_column_array_.begin(), mlog_table_column_array_.end(), ColumnSchemaCmp());
 
   for (int64_t i = 0; OB_SUCC(ret) && (i < mlog_table_column_array_.count()); ++i) {
     ObColumnSchemaV2 *column = mlog_table_column_array_.at(i);

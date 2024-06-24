@@ -1535,7 +1535,7 @@ int ObMemorySortRound<T, Compare>::build_fragment()
     STORAGE_LOG(WARN, "ObMemorySortRound has not been inited", K(ret));
   } else if (item_list_.size() > 0) {
     int64_t start = common::ObTimeUtility::current_time();
-    std::sort(item_list_.begin(), item_list_.end(), *compare_);
+    lib::ob_sort(item_list_.begin(), item_list_.end(), *compare_);
     if (OB_FAIL(compare_->result_code_)) {
       ret = compare_->result_code_;
     } else {
@@ -1576,7 +1576,7 @@ int ObMemorySortRound<T, Compare>::finish()
   } else if (0 == next_round_->get_fragment_count()) {
     is_in_memory_ = true;
     has_data_ = true;
-    std::sort(item_list_.begin(), item_list_.end(), *compare_);
+    lib::ob_sort(item_list_.begin(), item_list_.end(), *compare_);
     if (OB_FAIL(compare_->result_code_)) {
       STORAGE_LOG(WARN, "fail to sort item list", K(ret));
     }

@@ -5599,7 +5599,7 @@ int ObBasePartition::set_list_vector_values_with_hex_str(
       // Sort each point in the partition list according to the rules
       if (OB_SUCC(ret)) {
         InnerPartListVectorCmp part_list_vector_op;
-        std::sort(list_row_values_.begin(), list_row_values_.end(), part_list_vector_op);
+        lib::ob_sort(list_row_values_.begin(), list_row_values_.end(), part_list_vector_op);
         if (OB_FAIL(part_list_vector_op.get_ret())) {
           LOG_WARN("fail to sort list row values", K(ret));
         }

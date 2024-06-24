@@ -17756,7 +17756,7 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_inde
       }
     }
     if (OB_SUCC(ret)) {
-      std::sort(index_columns.begin(), index_columns.end(),
+      lib::ob_sort(index_columns.begin(), index_columns.end(),
         [](const std::pair<int64_t, obrpc::ObColumnSortItem> &lhs, const std::pair<int64_t, obrpc::ObColumnSortItem> &rhs) -> bool {
           return lhs.first < rhs.first;
         });
@@ -27341,7 +27341,7 @@ int ObDDLService::generate_zone_list_by_locality(
   }
 
   if (OB_SUCC(ret)) {
-    std::sort(tmp_zone_list.begin(), tmp_zone_list.end());
+    lib::ob_sort(tmp_zone_list.begin(), tmp_zone_list.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_zone_list.count(); ++i) {
       common::ObZone &this_zone = tmp_zone_list.at(i);
       if (0 == zone_list.count() || zone_list.at(zone_list.count() - 1) != this_zone) {
@@ -27463,7 +27463,7 @@ int ObDDLService::get_zones_of_pools(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty zone array", K(ret));
   } else {
-    std::sort(temp_zones.begin(), temp_zones.end());
+    lib::ob_sort(temp_zones.begin(), temp_zones.end());
     FOREACH_X(zone, temp_zones, OB_SUCC(ret)) {
       if (OB_ISNULL(zone)) {
         ret = OB_ERR_UNEXPECTED;
@@ -27653,8 +27653,8 @@ int ObDDLService::modify_and_cal_resource_pool_diff(
       } else {} // no more to do
     }
     if (OB_SUCC(ret)) {
-      std::sort(new_pool_name_list.begin(), new_pool_name_list.end());
-      std::sort(old_pool_name_list.begin(), old_pool_name_list.end());
+      lib::ob_sort(new_pool_name_list.begin(), new_pool_name_list.end());
+      lib::ob_sort(old_pool_name_list.begin(), old_pool_name_list.end());
       bool is_permitted = false;
       if (new_pool_name_list.count() == old_pool_name_list.count() + 1) {
         grant = true;
@@ -30118,7 +30118,7 @@ int ObDDLService::check_create_tenant_locality(
     LOG_WARN("get_zones_of_pools return empty zone array", K(ret));
   } else {
     // get zones of resource pools, remove duplicated zone
-    std::sort(temp_zones.begin(), temp_zones.end());
+    lib::ob_sort(temp_zones.begin(), temp_zones.end());
     FOREACH_X(zone, temp_zones, OB_SUCC(ret)) {
       if (OB_ISNULL(zone)) {
         ret = OB_ERR_UNEXPECTED;
@@ -35907,7 +35907,7 @@ int ObDDLService::check_schema_zone_list(
     common::ObArray<common::ObZone> &zone_list)
 {
   int ret = OB_SUCCESS;
-  std::sort(zone_list.begin(), zone_list.end());
+  lib::ob_sort(zone_list.begin(), zone_list.end());
   for (int64_t i = 0; OB_SUCC(ret) && i < zone_list.count() - 1; ++i) {
     if (zone_list.at(i) == zone_list.at(i+1)) {
       ret = OB_ZONE_DUPLICATED;
@@ -36154,7 +36154,7 @@ int ObDDLService::trim_and_set_primary_zone(
       LOG_WARN("fail to check empty primary zone locality condition", K(ret));
     } else {} // no more to do
   } else {
-    std::sort(new_zone_score_array.begin(), new_zone_score_array.end());
+    lib::ob_sort(new_zone_score_array.begin(), new_zone_score_array.end());
     char primary_zone_str[MAX_ZONE_LENGTH];
     if (OB_FAIL(format_primary_zone_from_zone_score_array(
             new_zone_score_array, primary_zone_str, MAX_ZONE_LENGTH))) {

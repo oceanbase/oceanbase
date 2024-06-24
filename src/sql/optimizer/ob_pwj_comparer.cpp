@@ -759,7 +759,7 @@ int ObStrictPwjComparer::get_subpartition_indexes_by_part_index(const PwjTable &
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(&used_subpart_indexes.at(0), &used_subpart_indexes.at(0) + used_subpart_indexes.count());
+    lib::ob_sort(&used_subpart_indexes.at(0), &used_subpart_indexes.at(0) + used_subpart_indexes.count());
   }
   return ret;
 }

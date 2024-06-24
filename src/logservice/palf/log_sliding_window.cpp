@@ -2875,7 +2875,7 @@ int LogSlidingWindow::get_majority_lsn_(const ObMemberList &member_list,
     PALF_LOG(WARN, "match_lsn_map do not reach majority", K(ret), K_(palf_id), K_(self),
         K(member_list), K(replica_num), K(valid_member_cnt));
   } else if (OB_SUCC(ret)) {
-    std::sort(lsn_array, lsn_array + valid_member_cnt, LSNCompare());
+    lib::ob_sort(lsn_array, lsn_array + valid_member_cnt, LSNCompare());
     assert(replica_num / 2 < OB_MAX_MEMBER_NUMBER);
     result_lsn = lsn_array[replica_num / 2];
     if (!result_lsn.is_valid()) {

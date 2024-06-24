@@ -263,7 +263,7 @@ int ObRDWFPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
   }
   if (OB_SUCC(ret)) {
     // order by sqc_id_, thread_id_
-    std::sort(infos_.begin(), infos_.end(), [](ObRDWFPartialInfo *l,
+    lib::ob_sort(infos_.begin(), infos_.end(), [](ObRDWFPartialInfo *l,
                                                ObRDWFPartialInfo *r) {
         return std::tie(l->sqc_id_, l->thread_id_) < std::tie(r->sqc_id_, r->thread_id_);
     });

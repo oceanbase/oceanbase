@@ -747,7 +747,7 @@ int ObTableLoadCoordinator::pre_merge_peers()
                                                             allocator))) {
         LOG_WARN("fail to get committed trans ids", KR(ret));
       } else {
-        std::sort(arg.committed_trans_id_array_.begin(), arg.committed_trans_id_array_.end());
+        lib::ob_sort(arg.committed_trans_id_array_.begin(), arg.committed_trans_id_array_.end());
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {

@@ -3514,7 +3514,7 @@ int ObLSBackupDataTask::backup_secondary_metas_(ObBackupTabletStat *tablet_stat)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
   }
-  std::sort(finished_tablet_list_.begin(), finished_tablet_list_.end());
+  lib::ob_sort(finished_tablet_list_.begin(), finished_tablet_list_.end());
   for (int64_t i = 0; OB_SUCC(ret) && i < finished_tablet_list_.count(); ++i) {
     const common::ObTabletID &tablet_id = finished_tablet_list_.at(i);
     ObBackupTabletCtx *ctx = NULL;
@@ -3600,7 +3600,7 @@ int ObLSBackupDataTask::check_and_mark_item_reused_(
       tablet_handle, *sstable_ptr, logic_id_list))) {
     LOG_WARN("failed to fetch macro block logic id list", K(ret), K(tablet_handle), KPC(sstable_ptr));
   } else {
-    std::sort(logic_id_list.begin(), logic_id_list.end());
+    lib::ob_sort(logic_id_list.begin(), logic_id_list.end());
     const ObITable::TableKey &table_key = table_ptr->get_key();
     const ObArray<ObBackupMacroBlockIDPair> &id_array = ls_backup_ctx_->backup_retry_ctx_.reused_pair_list_;
 

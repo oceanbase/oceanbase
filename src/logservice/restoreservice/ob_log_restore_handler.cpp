@@ -759,7 +759,7 @@ int ObLogRestoreHandler::submit_sorted_task(ObFetchLogTask &task)
   } else if (OB_FAIL(context_.submit_array_.push_back(&task))) {
     CLOG_LOG(WARN, "push back failed", K(ret), K(task));
   } else {
-    std::sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
+    lib::ob_sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
   }
   return ret;
 }
@@ -793,7 +793,7 @@ int ObLogRestoreHandler::get_next_sorted_task(ObFetchLogTask *&task)
     ObFetchLogTask *tmp_task = NULL;
     context_.submit_array_.pop_back(tmp_task);
     context_.submit_array_.at(0) = tmp_task;
-    std::sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
+    lib::ob_sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
     task = first;
   }
   return ret;

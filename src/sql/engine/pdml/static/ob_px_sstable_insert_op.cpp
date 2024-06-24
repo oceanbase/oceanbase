@@ -98,7 +98,7 @@ int ObPxMultiPartSSTableInsertOp::inner_open()
       LOG_WARN("get snapshot version failed", K(ret));
     } else {
       // sort in ASC order by tablet id.
-      std::sort(participants_.begin(), participants_.end(), ObLSTabletIDPairCmp());
+      lib::ob_sort(participants_.begin(), participants_.end(), ObLSTabletIDPairCmp());
       op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SSTABLE_INSERT_CG_ROW_COUNT;
       op_monitor_info_.otherstat_1_value_ = 0;
       op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::SSTABLE_INSERT_ROW_COUNT;
@@ -386,7 +386,7 @@ int ObPxMultiPartSSTableInsertOp::get_all_rows_and_count()
         }
       }
       if (OB_SUCC(ret)) {
-        std::sort(tablet_seq_caches_.begin(), tablet_seq_caches_.end());
+        lib::ob_sort(tablet_seq_caches_.begin(), tablet_seq_caches_.end());
         count_rows_finish_ = true;
       }
     }

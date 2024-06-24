@@ -558,7 +558,7 @@ int ObLobPartialData::get_ori_data_length(int64_t &len) const
 int ObLobPartialData::sort_index()
 {
   int ret = OB_SUCCESS;
-  std::sort(index_.begin(), index_.end(), ObLobChunkIndexComparator());
+  lib::ob_sort(index_.begin(), index_.end(), ObLobChunkIndexComparator());
   search_map_.reuse();
   for (int i = 0; i < index_.count(); ++i) {
     const ObLobChunkIndex &chunk_index = index_[i];

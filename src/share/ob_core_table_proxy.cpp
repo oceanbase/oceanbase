@@ -55,7 +55,7 @@ int ObCoreTableProxy::Row::init(const int64_t row_id,
         cells_[cell_cnt_++] = *c;
       }
       if (cell_cnt_ > 0) {
-        std::sort(cells_, cells_ + cell_cnt_);
+        lib::ob_sort(cells_, cells_ + cell_cnt_);
       }
       inited_ = true;
     }
@@ -698,7 +698,7 @@ int ObCoreTableProxy::incremental_update(const ObIArray<UpdateCell> &cells,
           }
         }
         if (OB_SUCC(ret)) {
-          std::sort(new_cells.begin(), new_cells.end());
+          lib::ob_sort(new_cells.begin(), new_cells.end());
           if (OB_FAIL(add_row(new_row_id, new_cells))) {
             LOG_WARN("add row failed", K(ret));
           }
@@ -764,7 +764,7 @@ int ObCoreTableProxy::update(const ObIArray<UpdateCell> &cells,
           }
         }
         if (OB_SUCC(ret)) {
-          std::sort(new_cells.begin(), new_cells.end());
+          lib::ob_sort(new_cells.begin(), new_cells.end());
           if (OB_FAIL(add_row(new_row_id, new_cells))) {
             LOG_WARN("add row failed", K(ret));
           }

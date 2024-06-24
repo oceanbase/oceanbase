@@ -424,7 +424,7 @@ int ObDDLHelper::lock_objects_in_map_(
       }
     } // end foreach
     if (OB_SUCC(ret)) {
-      std::sort(lock_pairs.begin(), lock_pairs.end(), ObLockObjPair::less_than);
+      lib::ob_sort(lock_pairs.begin(), lock_pairs.end(), ObLockObjPair::less_than);
       FOREACH_X(it, lock_pairs, OB_SUCC(ret)) {
         const int64_t timeout = ctx.get_timeout();
         if (OB_UNLIKELY(timeout <= 0)) {

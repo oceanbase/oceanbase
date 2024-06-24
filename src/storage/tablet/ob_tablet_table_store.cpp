@@ -1631,7 +1631,7 @@ int ObTabletTableStore::build_ddl_sstables(
         if (OB_FAIL(ddl_sstables.push_back(new_table))) {
           LOG_WARN("push back new ddl sstable failed", K(ret), KPC(new_table));
         } else {
-          std::sort(ddl_sstables.begin(), ddl_sstables.end(), [](ObITable *left, ObITable *right) {
+          lib::ob_sort(ddl_sstables.begin(), ddl_sstables.end(), [](ObITable *left, ObITable *right) {
               return left->get_start_scn() != right->get_start_scn() ?
               left->get_start_scn() < right->get_start_scn() : (left->get_end_scn() != right->get_end_scn() ?
                left->get_end_scn() > right->get_end_scn() : left->get_key().table_type_ < right->get_key().table_type_);
