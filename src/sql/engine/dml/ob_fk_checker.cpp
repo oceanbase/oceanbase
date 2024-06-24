@@ -57,7 +57,6 @@ int ObForeignKeyChecker::do_fk_check_batch(bool &all_has_result)
   int ret = OB_SUCCESS;
 
   int64_t get_row_count = 0;
-  FLOG_WARN("asdfasdf task cnt:", K(das_ref_.get_das_task_cnt()));
   if (0 == batch_distinct_fk_cnt_) {
     LOG_TRACE("distinct foreign key count is 0 in a batch");
     all_has_result = true;
@@ -104,7 +103,6 @@ int ObForeignKeyChecker::get_scan_result_count(int64_t &get_row_count)
       get_row_count++;
     }
   }
-  FLOG_WARN("asdfasdf the number of rows: s", K(get_row_count));
   ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
   return ret;
 }
@@ -166,7 +164,6 @@ int ObForeignKeyChecker::build_fk_check_das_task(const ObIArray<ObForeignKeyColu
     // Match simple is the ony one match method of OB, if foreign key columns has null, it will pass foreign key check;
     // Note: we need to support match partial and match full method for a more strict foreign key check in MySQL mode
     need_check = false;
-    FLOG_WARN("asdfasdf do not need to check!");
     LOG_TRACE("foreign key columns has null, pass foreign key check");
   } else if (OB_FAIL(build_table_range(columns, row, lookup_range, need_check))) {
     LOG_WARN("build data table range failed", K(ret), KPC(tablet_loc));
@@ -181,7 +178,6 @@ int ObForeignKeyChecker::build_fk_check_das_task(const ObIArray<ObForeignKeyColu
     LOG_WARN("das_scan_op should be not null", K(ret));
   } else {
     storage::ObTableScanParam &scan_param = das_scan_op->get_scan_param();
-    FLOG_WARN("asdfasdf build das task: ", K(lookup_range), K(scan_param));
     if (OB_FAIL(scan_param.key_ranges_.push_back(lookup_range))) {
       LOG_WARN("store lookup key range failed", K(ret), K(lookup_range), K(scan_param));
     } else {

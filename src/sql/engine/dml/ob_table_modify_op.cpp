@@ -165,7 +165,6 @@ int ForeignKeyHandle::check_exist(ObTableModifyOp &modify_op, const ObForeignKey
   if (fk_checker) {
     ret = check_exist_scan_task(modify_op, fk_arg, row, fk_checker);
   } else {
-    FLOG_WARN("asdfasdf check exist inner sql");
     if (OB_FAIL(check_exist_inner_sql(modify_op, fk_arg, row, expect_zero, true))) {
       LOG_WARN("check exist and iter uncommmited row meet failed", K(ret));
     } else if (OB_FAIL(check_exist_inner_sql(modify_op, fk_arg, row, expect_zero, false))) {
@@ -238,7 +237,6 @@ int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
   } else {
     stmt_buf[stmt_pos++] = 0;
   }
-  FLOG_WARN("asdfasdf sql", K(stmt_buf));
   if (OB_SUCC(ret) && stmt_pos > 0) {
     if (iter_uncommitted_row) {
       op.get_exec_ctx().get_das_ctx().iter_uncommitted_row_ = true;

@@ -2243,7 +2243,6 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
         LOG_WARN("invalid parameter for batch post row processing", K(ret));
       } else {
         ObTableModifyOp &op = *modify_row.dml_op_;
-        FLOG_WARN("asdfasdf, need fk check:", K(op.need_foreign_key_checks()));
         const ObDMLBaseCtDef &dml_ctdef = *modify_row.dml_ctdef_;
         ObDMLBaseRtDef &dml_rtdef = *modify_row.dml_rtdef_;
         const ObDmlEventType dml_event = modify_row.dml_event_;
@@ -2259,7 +2258,6 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
             LOG_DEBUG("update operation don't change any value, no need to perform foreign key check");
           } else {
             // if check foreign key in batch, build fk check tasks here
-            FLOG_WARN("asdfasdf need to build batch fk check tasks: ", K(dml_op->get_spec().check_fk_batch_));
             if (dml_op->get_spec().check_fk_batch_) {
               if (OB_FAIL(build_batch_fk_check_tasks(dml_ctdef, dml_rtdef))) {
                 LOG_WARN("failed to build batch check foreign key checks", K(ret));
@@ -2293,7 +2291,6 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
 
     // check the result of batch foreign key check results
     if (OB_SUCC(ret)) {
-      FLOG_WARN("asdfasdf yes");
       if (dml_op->get_spec().check_fk_batch_ && OB_FAIL(dml_op->perform_batch_fk_check())) {
         LOG_WARN("failed to perform batch foreign key check", K(ret));
       } else if (OB_FAIL(dml_op->last_store_row_.restore(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {
@@ -2381,7 +2378,6 @@ int ObDMLService::build_batch_fk_check_tasks(const ObDMLBaseCtDef &dml_ctdef,
     for (int i = 0; OB_SUCC(ret) && i < dml_rtdef.fk_checker_array_.count(); ++i) {
       ObForeignKeyChecker *fk_checker = dml_rtdef.fk_checker_array_.at(i);
       const ObForeignKeyArg &fk_arg = dml_ctdef.fk_args_.at(i);
-      FLOG_WARN("asdfasdf build batch fk check tasks for a fk arg: ", K(fk_arg));
       bool need_check = true;
       if (OB_ISNULL(fk_checker)) {
         ret = OB_ERR_UNEXPECTED;

@@ -342,7 +342,6 @@ int ObDASScanOp::open_op()
       LOG_WARN("do local index lookup failed", K(ret));
     }
   }
-  if (result_) FLOG_WARN("asdfasdf result iterator type: ", K(result_->get_type()));
   return ret;
 }
 
@@ -440,13 +439,6 @@ ObLocalIndexLookupOp *ObDASScanOp::get_lookup_op()
 int ObDASScanOp::do_table_scan()
 {
   int ret = OB_SUCCESS;
-  FLOG_WARN("asdfasdf DASScanOp do_table_scan: ", K(scan_param_.tablet_id_), K(scan_param_.table_param_->get_table_id()));
-  if (scan_param_.key_ranges_.count() > 0) {
-    FLOG_WARN("asdfasdf DASScanOp do_table_scan key range: ", K(scan_param_.key_ranges_.at(0).start_key_), K(scan_param_.key_ranges_.at(0).end_key_));
-  }
-  if (scan_param_.ss_key_ranges_.count() > 0) {
-    FLOG_WARN("asdfasdf DASScanOp do_table_scan ss key range: ", K(scan_param_.ss_key_ranges_.at(0).start_key_), K(scan_param_.ss_key_ranges_.at(0).end_key_));
-  }
   if (scan_param_.table_param_->is_fts_index() && attach_ctdef_ != nullptr) {
     // full text index retrieval scan
     if (OB_FAIL(do_text_retrieve(result_))) {
@@ -1355,7 +1347,6 @@ int ObLocalIndexLookupOp::init(const ObDASScanCtDef *lookup_ctdef,
   if (OB_UNLIKELY(OB_SUCCESS != simulate_error)) {
     ret = simulate_error;
   }
-  FLOG_WARN("asdfasdf local index lookup op", K(lookup_ctdef->ref_table_id_), K(index_ctdef->ref_table_id_));
   print_trans_info_and_key_range_();
   return ret;
 }

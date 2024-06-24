@@ -297,10 +297,6 @@ int ObAccessService::table_scan(
     user_specified_snapshot_scn = param.fb_snapshot_;
   }
 
-  FLOG_WARN("asdfasdf access service table scan id: ", K(vparam.index_id_), K(data_tablet_id));
-  if (vparam.key_ranges_.count() > 0) {
-    FLOG_WARN("asdfasdf access service table scan: ", K(vparam.key_ranges_.at(0).start_key_), K(vparam.key_ranges_.at(0).end_key_));
-  }
   NG_TRACE(storage_table_scan_begin);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

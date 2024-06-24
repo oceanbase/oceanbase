@@ -7023,7 +7023,6 @@ int ObResolverUtils::check_partial_match_columns(const ObIArray<ObString> &paren
   is_match = false;
   ObSEArray<ObString, 8> tmp_parent_columns;
   ObSEArray<ObString, 8> tmp_key_columns;
-  FLOG_WARN("asdfasdf cols: ", K(parent_columns), K(key_columns));
   if (parent_columns.count() <= key_columns.count() && parent_columns.count() > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < parent_columns.count(); ++i) {
       if(OB_FAIL(tmp_parent_columns.push_back(parent_columns.at(i)))) {

@@ -7930,7 +7930,6 @@ int ObTableSchema::get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, con
   int ret = OB_SUCCESS;
   scan_index_tid = OB_INVALID_ID;
   bool is_rowkey_column = false;
-  FLOG_WARN("asdfasdf get fk check index tid:", K(parent_column_ids));
   /* 优先寻找unique index/primary key, 其次是non-unique index. */
   if (0 >= parent_column_ids.count()) {
     ret = OB_ERR_UNEXPECTED;
@@ -7956,7 +7955,6 @@ int ObTableSchema::get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, con
       } else if (index_schema->get_index_column_num() >= parent_column_ids.count()) {
         const ObIndexInfo &index_info = index_schema->get_index_info();
         bool is_rowkey = true;
-        FLOG_WARN("asdfasdf index_info: ", K(index_info));
         for (int j = 0; OB_SUCC(ret) && j < parent_column_ids.count() && is_rowkey; ++j) {
           bool has_col = false;
           for (int k = 0; k < parent_column_ids.count(); k++) {
