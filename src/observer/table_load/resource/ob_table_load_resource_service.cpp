@@ -273,7 +273,7 @@ int ObTableLoadResourceService::local_apply_resource(ObDirectLoadResourceApplyAr
     ret = OB_ERR_SYS;
     LOG_WARN("null table load resource service", KR(ret));
   } else if(OB_ISNULL(service->resource_manager_)) {
-    ret = OB_ERR_SYS;
+    ret = OB_EAGAIN;
     LOG_WARN("resource_manager_ is null", KR(ret));
   } else {
     ret = service->resource_manager_->apply_resource(arg, res);
@@ -290,7 +290,7 @@ int ObTableLoadResourceService::local_release_resource(ObDirectLoadResourceRelea
     ret = OB_ERR_SYS;
     LOG_WARN("null table load resource service", KR(ret));
   } else if(OB_ISNULL(service->resource_manager_)) {
-    ret = OB_ERR_SYS;
+    ret = OB_EAGAIN;
     LOG_WARN("resource_manager_ is null", KR(ret));
   } else {
     ret = service->resource_manager_->release_resource(arg);
@@ -307,7 +307,7 @@ int ObTableLoadResourceService::local_update_resource(ObDirectLoadResourceUpdate
     ret = OB_ERR_SYS;
     LOG_WARN("null table load resource service", KR(ret));
   } else if(OB_ISNULL(service->resource_manager_)) {
-    ret = OB_ERR_SYS;
+    ret = OB_EAGAIN;
     LOG_WARN("resource_manager_ is null", KR(ret));
   } else {
     ret = service->resource_manager_->update_resource(arg);
