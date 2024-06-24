@@ -39,6 +39,189 @@ namespace sql
 {
 inline double revise_ndv(double ndv) { return ndv < 1.0 ? 1.0 : ndv; }
 
+void SimpleRange::set_whole_range()
+{
+  start_.set_min_value();
+  end_.set_max_value();
+  inclusive_start_ = false;
+  inclusive_end_ = false;
+}
+
+void SimpleRange::set_false_range()
+{
+  start_.set_max_value();
+  end_.set_min_value();
+  inclusive_start_ = false;
+  inclusive_end_ = false;
+}
+
+int SimpleRange::compare_with_end(const SimpleRange &r) const
+{
+  int cmp = 0;
+  if (end_.is_max_value()) {
+    if (!r.end_.is_max_value()) {
+      cmp = 1;
+    }
+  } else if (r.end_.is_max_value()) {
+    cmp = -1;
+  } else {
+    cmp = end_.compare(r.end_);
+    if (0 == cmp) {
+      if (inclusive_end_ && !r.inclusive_end_) {
+        cmp = 1;
+      } else if (!inclusive_end_ && r.inclusive_end_) {
+        cmp = -1;
+      }
+    }
+  }
+  return cmp;
+}
+
+int SimpleRange::compare_with_start(const SimpleRange &r) const
+{
+  int cmp = 0;
+  if (start_.is_min_value()) {
+    if (!r.start_.is_min_value()) {
+      cmp = -1;
+    }
+  } else if (r.start_.is_min_value()) {
+    cmp = 1;
+  } else {
+    cmp = start_.compare(r.start_);
+    if (0 == cmp) {
+      if (inclusive_start_ && !r.inclusive_start_) {
+        cmp = -1;
+      } else if (!inclusive_start_ && r.inclusive_start_) {
+        cmp = 1;
+      }
+    }
+  }
+  return cmp;
+}
+
+bool SimpleRange::intersect(const SimpleRange &r)
+{
+  bool bret = false;
+  if (start_.can_compare(r.start_) && end_.can_compare(r.end_)) {
+    bret = true;
+    int cmp_start = compare_with_start(r);
+    if (cmp_start == -1) {
+      start_ = r.start_;
+      inclusive_start_ = r.inclusive_start_;
+    }
+    int cmp_end = compare_with_end(r);
+    if (cmp_end == 1) {
+      end_ = r.end_;
+      inclusive_end_ = r.inclusive_end_;
+    }
+  }
+  return bret;
+}
+
+void SimpleRange::set_bound(ObItemType item_type, ObObj bound)
+{
+  if (bound.is_null()) {
+    if (T_OP_IS == item_type || T_OP_NSEQ == item_type) {
+      start_.set_null();
+      end_.set_null();
+      inclusive_start_ = true;
+      inclusive_end_ = true;
+    } else if (T_OP_IS_NOT == item_type) {
+      set_whole_range();
+    } else {
+      set_false_range();
+    }
+  } else if (T_OP_LE == item_type) {
+    end_ = bound;
+    inclusive_end_ = true;
+  } else if (T_OP_LT == item_type) {
+    end_ = bound;
+    inclusive_end_ = false;
+  } else if (T_OP_GE == item_type) {
+    start_ = bound;
+    inclusive_start_ = true;
+  } else if (T_OP_GT == item_type) {
+    start_ = bound;
+    inclusive_start_ = false;
+  } else if (T_OP_EQ == item_type || T_OP_NSEQ == item_type) {
+    start_ = bound;
+    end_ = bound;
+    inclusive_start_ = true;
+    inclusive_end_ = true;
+  }
+}
+
+void SimpleRange::set_bound(ObItemType item_type, double bound)
+{
+  ObObj obj;
+  obj.set_double(bound);
+  set_bound(item_type, obj);
+}
+
+bool SimpleRange::is_valid_range()
+{
+  bool bret = false;
+  if (!start_.can_compare(end_)) {
+    bret = false;
+  } else if (start_.is_null() && end_.is_null()) {
+    bret = true;
+  } else if (start_.is_max_value() || end_.is_min_value() ||
+             start_.is_null() || end_.is_null()) {
+    bret = false;
+  } else if (start_.is_min_value() || end_.is_max_value()) {
+    bret = true;
+  } else {
+    int cmp = start_.compare(end_);
+    if (-1 == cmp) {
+      bret = true;
+    } else if (1 == cmp) {
+      bret = false;
+    } else if (0 == cmp) {
+      if (inclusive_start_ && inclusive_end_) {
+        bret = true;
+      } else {
+        bret = false;
+      }
+    }
+  }
+  return bret;
+}
+
+bool SimpleRange::is_superset(const SimpleRange &r) const
+{
+  bool bret = false;
+  if (start_.can_compare(r.start_) && end_.can_compare(r.end_)) {
+    int cmp1 = compare_with_start(r);
+    int cmp2 = compare_with_end(r);
+    bret = cmp1 <= 0 && cmp2 >= 0;
+  }
+  return bret;
+}
+
+void SimpleRange::multiply_double(double coff)
+{
+  if (start_.is_double()) {
+    start_.set_double(start_.get_double() * coff);
+  }
+  if (end_.is_double()) {
+    end_.set_double(end_.get_double() * coff);
+  }
+  if (coff < 0) {
+    std::swap(start_, end_);
+    std::swap(inclusive_start_, inclusive_end_);
+    if (start_.is_min_value()) {
+      start_.set_max_value();
+    } else if (start_.is_max_value()) {
+      start_.set_min_value();
+    }
+    if (end_.is_min_value()) {
+      end_.set_max_value();
+    } else if (end_.is_max_value()) {
+      end_.set_min_value();
+    }
+  }
+}
+
 int ObSelEstimator::append_estimators(ObIArray<ObSelEstimator *> &sel_estimators, ObSelEstimator *new_estimator)
 {
   int ret = OB_SUCCESS;
@@ -2388,7 +2571,7 @@ int ObInequalJoinSelEstimator::extract_column_offset(const OptSelectivityCtx &ct
     } else {
       is_valid = false;
     }
-  } else if (expr->is_static_const_expr()) {
+  } else if (expr->is_static_scalar_const_expr()) {
     ObObj const_value;
     ObObj scalar_value;
     bool got_result = false;
@@ -2441,7 +2624,7 @@ int ObInequalJoinSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
       LOG_WARN("failed to create estimator ", K(ret));
     } else  {
       ineq_join_estimator->term_ = term;
-      ineq_join_estimator->set_bound(expr.get_expr_type(), -offset);
+      ineq_join_estimator->range_.set_bound(expr.get_expr_type(), -offset);
     }
   } else if (T_OP_BTW == expr.get_expr_type()) {
     Term term1;
@@ -2471,8 +2654,8 @@ int ObInequalJoinSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
       LOG_WARN("failed to create estimator ", K(ret));
     } else {
       ineq_join_estimator->term_ = term1;
-      ineq_join_estimator->set_bound(T_OP_GE, -offset1);
-      ineq_join_estimator->set_bound(T_OP_LE, -offset2);
+      ineq_join_estimator->range_.set_bound(T_OP_GE, -offset1);
+      ineq_join_estimator->range_.set_bound(T_OP_LE, -offset2);
     }
   }
   estimator = ineq_join_estimator;
@@ -2502,57 +2685,6 @@ void ObInequalJoinSelEstimator::cmp_term(const ObInequalJoinSelEstimator::Term &
   }
 }
 
-void ObInequalJoinSelEstimator::set_bound(ObItemType item_type, double bound)
-{
-  if (T_OP_LE == item_type) {
-    has_upper_bound_ = true;
-    upper_bound_ = bound;
-    include_upper_bound_ = true;
-  } else if (T_OP_LT == item_type) {
-    has_upper_bound_ = true;
-    upper_bound_ = bound;
-    include_upper_bound_ = false;
-  } else if (T_OP_GE == item_type) {
-    has_lower_bound_ = true;
-    lower_bound_ = bound;
-    include_lower_bound_ = true;
-  } else if (T_OP_GT == item_type) {
-    has_lower_bound_ = true;
-    lower_bound_ = bound;
-    include_lower_bound_ = false;
-  }
-}
-
-void ObInequalJoinSelEstimator::reverse()
-{
-  term_.coefficient1_ = -term_.coefficient1_;
-  term_.coefficient2_ = -term_.coefficient2_;
-  std::swap(has_lower_bound_, has_upper_bound_);
-  std::swap(include_lower_bound_, include_upper_bound_);
-  std::swap(lower_bound_, upper_bound_);
-  lower_bound_ = -lower_bound_;
-  upper_bound_ = -upper_bound_;
-}
-
-void ObInequalJoinSelEstimator::update_lower_bound(double bound, bool include)
-{
-  if (!has_lower_bound_ ||
-      is_higher_lower_bound(bound, include, lower_bound_, include_lower_bound_)) {
-    include_lower_bound_ = include;
-    lower_bound_ = bound;
-  }
-  has_lower_bound_ = true;
-}
-
-void ObInequalJoinSelEstimator::update_upper_bound(double bound, bool include) {
-  if (!has_upper_bound_ ||
-      is_higher_upper_bound(upper_bound_, include_upper_bound_, bound, include)) {
-    include_upper_bound_ = include;
-    upper_bound_ = bound;
-  }
-  has_upper_bound_= true;
-}
-
 int ObInequalJoinSelEstimator::merge(const ObSelEstimator &other_estmator, bool &is_success)
 {
   int ret = OB_SUCCESS;
@@ -2561,16 +2693,13 @@ int ObInequalJoinSelEstimator::merge(const ObSelEstimator &other_estmator, bool 
     const ObInequalJoinSelEstimator &other = static_cast<const ObInequalJoinSelEstimator &>(other_estmator);
     bool need_reverse = false;
     cmp_term(term_, other.term_, is_success, need_reverse);
-    if (is_success){
+    if (is_success) {
       if (need_reverse) {
-        reverse();
+        term_.coefficient1_ = -term_.coefficient1_;
+        term_.coefficient2_ = -term_.coefficient2_;
+        range_.multiply_double(-1.0);
       }
-      if (other.has_lower_bound_) {
-        update_lower_bound(other.lower_bound_, other.include_lower_bound_);
-      }
-      if (other.has_upper_bound_) {
-        update_upper_bound(other.upper_bound_, other.include_upper_bound_);
-      }
+      range_.intersect(other.range_);
     }
   }
   return ret;
@@ -2688,14 +2817,16 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
   selectivity = 1.0;
   double nns1, nns2, ndv1, ndv2;
   double min1, min2, max1, max2;
-  double lower_bound = lower_bound_;
-  double upper_bound = upper_bound_;
-  bool is_eq = include_lower_bound_ && include_upper_bound_ &&
-               upper_bound - lower_bound <= OB_DOUBLE_EPSINON &&
-               lower_bound - upper_bound <= OB_DOUBLE_EPSINON;
+  double lower_bound = range_.start_.get_double();
+  bool has_lower_bound = !range_.start_.is_min_value();
+  double upper_bound = range_.end_.get_double();
+  bool has_upper_bound = !range_.end_.is_max_value();
+  bool is_valid = range_.is_valid_range();
+  bool is_eq = range_.inclusive_start_ && range_.inclusive_end_ &&
+               !range_.start_.is_min_value() && !range_.end_.is_max_value() &&
+               fabs(range_.end_.get_double() - range_.start_.get_double()) <= OB_DOUBLE_EPSINON;
   if (OB_ISNULL(term_.col1_) ||
       OB_ISNULL(term_.col2_) ||
-      OB_UNLIKELY(!has_lower_bound_ && !has_upper_bound_) ||
       OB_UNLIKELY(fabs(term_.coefficient1_) != 1.0) ||
       OB_UNLIKELY(fabs(term_.coefficient2_) != 1.0)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2704,8 +2835,7 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
     LOG_WARN("failed to get nns");
   } else if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *term_.col2_, &ndv2, &nns2))) {
     LOG_WARN("failed to get nns");
-  } else if (has_lower_bound_ && has_upper_bound_ &&
-             lower_bound >= upper_bound && !is_eq) {
+  } else if (!range_.is_valid_range()) {
     // always false
     // e.g.  1 < c1 + c2 < 0
     selectivity = 0.0;
@@ -2713,18 +2843,9 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
              term_.col1_->get_column_id() == term_.col2_->get_column_id()) {
     // same column
     if (fabs(term_.coefficient1_ + term_.coefficient2_) <= OB_DOUBLE_EPSINON) {
-      if (has_lower_bound_ &&
-          is_higher_lower_bound(lower_bound, include_lower_bound_, 0, true)) {
-        // e.g. : c1 - c1 > 1
-        selectivity = 0.0;
-      } else if (has_upper_bound_ &&
-                 is_higher_upper_bound(0, true, upper_bound, include_upper_bound_)) {
-        // e.g. : c1 - c1 < - 1
-        selectivity = 0.0;
-      } else {
-        // e.g. : c1 - c1 < 1
-        selectivity = nns1;
-      }
+      // e.g. : c1 - c1 < 1
+      //        c1 - c1 > 1
+      selectivity = get_sel_for_point(0.0) * nns1;
     } else {
       // TODO : c1 + c1 < 1
       selectivity = DEFAULT_INEQ_JOIN_SEL;
@@ -2788,7 +2909,7 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
     } else if (fabs(max1 - min1) <= OB_DOUBLE_EPSINON && fabs(max2 - min2) <= OB_DOUBLE_EPSINON) {
       // Both c1 and c2 have only one value
       // e.g. c1 in [1,1] and c2 in [2,2]
-      selectivity = get_sel_for_point(min1, min2);
+      selectivity = get_sel_for_point(min1 + min2);
     } else if (is_eq) {
       // lower bound is the same as the upper bound
       // e.g : 1 <= c1 + c2 <= 1;
@@ -2796,29 +2917,29 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
     } else if (is_semi) {
       // calculate selectivity for semi join
       // e.g. : 0 <= c1 + c2 < 1
-      double sel1 = has_lower_bound_ ? ObInequalJoinSelEstimator::get_any_gt_sel(min1, max1, min2, max2, lower_bound) : 1.0;
-      double sel2 = has_upper_bound_ ? ObInequalJoinSelEstimator::get_all_gt_sel(min1, max1, min2, max2, upper_bound) : 0.0;
+      double sel1 = has_lower_bound ? ObInequalJoinSelEstimator::get_any_gt_sel(min1, max1, min2, max2, lower_bound) : 1.0;
+      double sel2 = has_upper_bound ? ObInequalJoinSelEstimator::get_all_gt_sel(min1, max1, min2, max2, upper_bound) : 0.0;
       // the sel of `any c2 satisfy 'a < c1 + c2 < b'` =
       // the sel of `any c2 satisfy 'c1 + c2 > a'` minus the sel of `all c2 satisfy 'c1 + c2 > b'`
       selectivity = sel1 - sel2;
-      if (include_lower_bound_ && ndv1 > 1) {
+      if (range_.inclusive_start_ && ndv1 > 1) {
         selectivity += 1 / ndv1;
       }
-      if (include_upper_bound_ && ndv1 > 1) {
+      if (range_.inclusive_end_ && ndv1 > 1) {
         selectivity += 1 / ndv1;
       }
     } else {
       // calculate selectivity for inner join
       // e.g. : 0 <= c1 + c2 < 1
-      double sel1 = has_lower_bound_ ? ObInequalJoinSelEstimator::get_gt_sel(min1, max1, min2, max2, lower_bound) : 1.0;
-      double sel2 = has_upper_bound_ ? ObInequalJoinSelEstimator::get_gt_sel(min1, max1, min2, max2, upper_bound) : 0.0;
+      double sel1 = has_lower_bound ? ObInequalJoinSelEstimator::get_gt_sel(min1, max1, min2, max2, lower_bound) : 1.0;
+      double sel2 = has_upper_bound ? ObInequalJoinSelEstimator::get_gt_sel(min1, max1, min2, max2, upper_bound) : 0.0;
       // the sel of 'a < c1 + c2 < b' =
       // the sel of 'c1 + c2 > a' minus the sel of 'c1 + c2 > b'
       selectivity = sel1 - sel2;
-      if (include_lower_bound_) {
+      if (range_.inclusive_start_) {
         selectivity += ObInequalJoinSelEstimator::get_equal_sel(min1, max1, ndv1, min2, max2, ndv2, lower_bound, is_semi);
       }
-      if (include_upper_bound_) {
+      if (range_.inclusive_end_) {
         selectivity += ObInequalJoinSelEstimator::get_equal_sel(min1, max1, ndv1, min2, max2, ndv2, upper_bound, is_semi);
       }
     }
@@ -2836,17 +2957,11 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
   return ret;
 }
 
-double ObInequalJoinSelEstimator::get_sel_for_point(double point1, double point2)
+double ObInequalJoinSelEstimator::get_sel_for_point(double point)
 {
-  bool within_interval = true;
-  double sum = point1 + point2;
-  if (has_lower_bound_) {
-    within_interval &= include_lower_bound_ ? sum >= lower_bound_ : sum > lower_bound_;
-  }
-  if (has_upper_bound_) {
-    within_interval &= include_upper_bound_ ? sum <= upper_bound_ : sum < upper_bound_;
-  }
-  return within_interval ? 1.0 : 0.0;
+  SimpleRange point_range;
+  point_range.set_bound(T_OP_EQ, point);
+  return range_.is_superset(point_range) ? 1.0 : 0.0;
 }
 
 int ObSelEstimatorFactory::create_estimator(const OptSelectivityCtx &ctx,
@@ -2871,6 +2986,7 @@ int ObSelEstimatorFactory::create_estimator(const OptSelectivityCtx &ctx,
     ObBoolOpSelEstimator::create_estimator,
     ObInSelEstimator::create_estimator,
     ObIsSelEstimator::create_estimator,
+    ObUniformRangeSelEstimator::create_estimator,
     ObCmpSelEstimator::create_estimator,
     ObBtwSelEstimator::create_estimator,
     ObDefaultSelEstimator::create_estimator,
@@ -3160,6 +3276,258 @@ int ObBtwSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
       static_cast<ObBtwSelEstimator*>(estimator)->col_expr_ = static_cast<const ObColumnRefRawExpr*>(r_expr);
     }
   }
+  return ret;
+}
+
+int ObNormalRangeSelEstimator::get_expr_range(const OptSelectivityCtx &ctx,
+                                              const ObRawExpr &qual,
+                                              const ObRawExpr *&expr,
+                                              SimpleRange &range,
+                                              bool &is_not_op,
+                                              bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  is_not_op = false;
+  expr = NULL;
+  const ObRawExpr *const_expr1 = NULL;
+  const ObRawExpr *const_expr2 = NULL;
+  ObObj const_value1;
+  ObObj const_value2;
+  bool got_result = false;
+  range.set_whole_range();
+  ObItemType type = qual.get_expr_type();
+  if (OB_FAIL(ObOptEstUtils::extract_var_op_const(&qual,
+                                                  expr,
+                                                  const_expr1,
+                                                  const_expr2,
+                                                  type,
+                                                  is_valid))) {
+    LOG_WARN("failed to extract var and const", K(ret), K(qual));
+  } else if (!is_valid) {
+    // do nothing
+  } else if (NULL == const_expr1 || !const_expr1->is_static_scalar_const_expr()) {
+    is_valid = false;
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                               const_expr1,
+                                                               const_value1,
+                                                               got_result,
+                                                               ctx.get_allocator()))) {
+    LOG_WARN("failed to calc const value", K(expr), K(ret));
+  } else if (!got_result) {
+    is_valid = false;
+  } else if (NULL == const_expr2 || !const_expr2->is_static_scalar_const_expr()) {
+    // do nothing
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                               const_expr2,
+                                                               const_value2,
+                                                               got_result,
+                                                               ctx.get_allocator()))) {
+    LOG_WARN("failed to calc const value", K(expr), K(ret));
+  } else if (!got_result) {
+    is_valid = false;
+  }
+  if (OB_SUCC(ret) && is_valid) {
+    if (IS_RANGE_CMP_OP(type) || T_OP_EQ == type || T_OP_NSEQ == type) {
+      range.set_bound(type, const_value1);
+    } else if (T_OP_NE == type) {
+      range.set_bound(T_OP_EQ, const_value1);
+      is_not_op = true;
+    } else if (T_OP_IS_NOT == type || T_OP_IS == type) {
+      if (const_value1.is_null()) {
+        range.set_bound(type, const_value1);
+      } else {
+        is_valid = false;
+      }
+    } else if (T_OP_BTW == type || T_OP_NOT_BTW == type) {
+      range.set_bound(T_OP_GE, const_value1);
+      range.set_bound(T_OP_LE, const_value2);
+      is_not_op = (T_OP_NOT_BTW == type);
+    }
+  }
+  return ret;
+}
+
+int ObNormalRangeSelEstimator::merge(const ObSelEstimator &other_estmator, bool &is_success)
+{
+  int ret = OB_SUCCESS;
+  is_success = false;
+  if (get_type() == other_estmator.get_type() && !is_not_op_) {
+    const ObNormalRangeSelEstimator &other = static_cast<const ObNormalRangeSelEstimator &>(other_estmator);
+    if (!other.is_not_op_ && expr_ == other.expr_ && range_.intersect(other.range_)) {
+      is_success = true;
+    }
+  }
+  return ret;
+}
+
+int ObUniformRangeSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
+                                                const OptSelectivityCtx &ctx,
+                                                const ObRawExpr &expr,
+                                                ObSelEstimator *&estimator)
+{
+  int ret = OB_SUCCESS;
+  estimator = NULL;
+  ObUniformRangeSelEstimator *range_estimator = NULL;
+  bool is_valid = false;
+  const ObRawExpr *param_expr = NULL;
+  SimpleRange range;
+  bool is_not_op = false;
+  if (ctx.get_compat_version() < COMPAT_VERSION_4_2_4) {
+    // do nothing
+  } else if (OB_FAIL(get_expr_range(ctx, expr, param_expr, range, is_not_op, is_valid))) {
+    LOG_WARN("failed to get the range form", K(ret), K(expr));
+  } else if (!is_valid) {
+    // do nothing
+  } else if (OB_FAIL(factory.create_estimator_inner(range_estimator))) {
+    LOG_WARN("failed to create estimator", K(ret));
+  } else {
+    estimator = range_estimator;
+    range_estimator->expr_ = param_expr;
+    range_estimator->range_ = range;
+    range_estimator->is_not_op_ = is_not_op;
+  }
+  return ret;
+}
+
+int ObUniformRangeSelEstimator::get_sel(const OptTableMetas &table_metas,
+                                        const OptSelectivityCtx &ctx,
+                                        double &selectivity,
+                                        ObIArray<ObExprSelPair> &all_predicate_sel)
+{
+  int ret = OB_SUCCESS;
+  selectivity = DEFAULT_INEQ_SEL;
+  ObObj expr_min;
+  ObObj expr_max;
+  ObObj min_scalar;
+  ObObj max_scalar;
+  ObObj start_scalar;
+  ObObj end_scalar;
+  expr_min.set_min_value();
+  expr_max.set_max_value();
+  double ndv = 1.0;
+  double not_null_sel = 1.0; // todo
+  bool dummy = false;
+  bool discrete = (expr_->get_type_class() != ObFloatTC) && (expr_->get_type_class() != ObDoubleTC);
+  ObBorderFlag border_flag;
+  if (range_.inclusive_start_){
+    border_flag.set_inclusive_start();
+  }
+  if (range_.inclusive_end_) {
+    border_flag.set_inclusive_end();
+  }
+  if (!range_.is_valid_range()) {
+    selectivity = 0.0;
+  } else if (OB_FAIL(ObOptSelectivity::calc_expr_min_max(table_metas, ctx, expr_,
+                                                         expr_min, expr_max))) {
+    LOG_WARN("failed to get min max", K(ret));
+  } else if (expr_min.is_min_value() || expr_min.is_max_value() || expr_min.is_null() ||
+             expr_max.is_min_value() || expr_max.is_max_value() || expr_max.is_null()) {
+    // do nothing
+  } else if (OB_UNLIKELY(!expr_min.can_compare(expr_max)) ||
+             OB_UNLIKELY(!expr_min.can_compare(range_.start_)) ||
+             OB_UNLIKELY(!expr_min.can_compare(range_.end_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("obj type is not consistent", K(expr_min), K(expr_max), KPC(this));
+  } else if (OB_FAIL(ObOptEstObjToScalar::convert_objs_to_scalars(&expr_min, &expr_max,
+                                                                  &range_.start_, &range_.end_,
+                                                                  &min_scalar, &max_scalar,
+                                                                  &start_scalar, &end_scalar))) {
+    LOG_WARN("failed to convert obj to scalars", K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(table_metas, ctx, *expr_, ctx.get_current_rows(), ndv))) {
+    LOG_WARN("failed to calculate distinct", K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::do_calc_range_selectivity(min_scalar.get_double(),
+                                                                 max_scalar.get_double(),
+                                                                 start_scalar,
+                                                                 end_scalar,
+                                                                 ndv,
+                                                                 discrete,
+                                                                 border_flag,
+                                                                 dummy,
+                                                                 selectivity))) {
+    LOG_WARN("failed to do calc range selectivity", K(ret));
+  } else if (!is_not_op_ &&
+             OB_FAIL(refine_out_of_bounds_sel(table_metas,
+                                              ctx,
+                                              expr_min,
+                                              expr_max,
+                                              min_scalar.get_double(),
+                                              max_scalar.get_double(),
+                                              start_scalar.get_double(),
+                                              end_scalar.get_double(),
+                                              selectivity))) {
+    LOG_WARN("failed to refine out of bounds sel", K(ret));
+  } else {
+    if (is_not_op_) {
+      selectivity = 1 - selectivity;
+    }
+    selectivity = std::max(selectivity, 1.0 / ndv);
+    selectivity *= not_null_sel;
+  }
+  LOG_DEBUG("succeed to calculate uniform range sel",
+      K(selectivity), K(discrete), K(expr_min), K(expr_max), K(range_), K(not_null_sel), K(ndv), KPC(expr_));
+  return ret;
+}
+
+int ObUniformRangeSelEstimator::refine_out_of_bounds_sel(const OptTableMetas &table_metas,
+                                                         const OptSelectivityCtx &ctx,
+                                                         const ObObj &min_val,
+                                                         const ObObj &max_val,
+                                                         const double min_scalar,
+                                                         const double max_scalar,
+                                                         const double start_scalar,
+                                                         const double end_scalar,
+                                                         double &selectivity)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 1> column_exprs;
+  const OptTableMeta *table_meta = NULL;
+  double increase_rows_ratio = 0.0;
+  bool is_half = range_.start_.is_min_value() || range_.end_.is_max_value();
+  double out_of_bounds_sel = 0.0;
+  bool need_calc = true;
+  if (OB_ISNULL(expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", KPC(this));
+  } else if (expr_->get_relation_ids().num_members() != 1 ||
+             min_val.is_min_value() || max_val.is_min_value() ||
+             min_val.is_max_value() || max_val.is_max_value() ||
+             (max_scalar - min_scalar < OB_DOUBLE_EPSINON) ||
+             fabs(selectivity - 1.0) < OB_DOUBLE_EPSINON ||
+             !range_.is_valid_range()) {
+    need_calc = false;
+  } else if (is_half) {
+    need_calc = true;
+  } else if (start_scalar >= min_scalar && end_scalar <= max_scalar) {
+    need_calc = false;
+  } else if (start_scalar <= min_scalar && end_scalar >= max_scalar) {
+    need_calc = false;
+    selectivity = 1.0;
+  } else if (start_scalar < min_scalar) {
+    need_calc = true;
+    out_of_bounds_sel = (std::min(min_scalar, end_scalar) - start_scalar) / (max_scalar - min_scalar);
+  } else if (end_scalar > max_scalar) {
+    need_calc = true;
+    out_of_bounds_sel = (end_scalar - std::max(max_scalar, start_scalar)) / (max_scalar - min_scalar);
+  }
+  if (OB_FAIL(ret) || !need_calc) {
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr_, column_exprs))) {
+    LOG_WARN("extract_column_exprs error in clause_selectivity", K(ret));
+  } else if (OB_UNLIKELY(column_exprs.count() < 1) || OB_ISNULL(column_exprs.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected column count", KPC(expr_), K(column_exprs));
+  } else if (FALSE_IT(table_meta = table_metas.get_table_meta_by_table_id(
+      static_cast<ObColumnRefRawExpr *>(column_exprs.at(0))->get_table_id()))) {
+  } else if (NULL == table_meta) {
+    // do nothing
+  } else if (OB_FAIL(table_meta->get_increase_rows_ratio(ctx.get_opt_ctx(), increase_rows_ratio))) {
+    LOG_WARN("failed to get extra rows", K(ret));
+  } else if (is_half) {
+    selectivity = std::max(selectivity, DEFAULT_OUT_OF_BOUNDS_SEL * increase_rows_ratio);
+  } else {
+    selectivity += std::min(out_of_bounds_sel, increase_rows_ratio);
+  }
+  selectivity = ObOptSelectivity::revise_between_0_1(selectivity);
   return ret;
 }
 

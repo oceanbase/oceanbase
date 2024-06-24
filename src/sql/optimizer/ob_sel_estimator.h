@@ -20,6 +20,44 @@ namespace oceanbase
 namespace sql
 {
 
+struct SimpleRange
+{
+public:
+  SimpleRange()
+  {
+    set_whole_range();
+  }
+
+  void set_whole_range();
+
+  void set_false_range();
+
+  int compare_with_end(const SimpleRange &r) const;
+
+  int compare_with_start(const SimpleRange &r) const;
+
+  bool intersect(const SimpleRange &r);
+
+  void set_bound(ObItemType item_type, ObObj bound);
+
+  void set_bound(ObItemType item_type, double bound);
+
+  bool is_valid_range();
+
+  bool is_superset(const SimpleRange &r) const;
+
+  void multiply_double(double coff);
+
+  TO_STRING_KV(K_(start), K_(end),
+               K_(inclusive_start),
+               K_(inclusive_end));
+
+  ObObj start_;
+  ObObj end_;
+  bool inclusive_start_;
+  bool inclusive_end_;
+};
+
 enum class ObSelEstType
 {
   INVALID = 0,
@@ -34,9 +72,10 @@ enum class ObSelEstType
   EQUAL,
   LIKE,
   BOOL_OP,
-  RANGE,
+  COLUMN_RANGE,
   SIMPLE_JOIN,
   INEQUAL_JOIN,
+  UNIFORM_RANGE,
 };
 
 class ObSelEstimatorFactory;
@@ -669,6 +708,7 @@ public:
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) override;
+  VIRTUAL_TO_STRING_KV(K_(type), K_(child_estimators));
 
 private:
   common::ObSEArray<ObSelEstimator *, 4, common::ModulePageAllocator, true> child_estimators_;
@@ -683,7 +723,7 @@ private:
 class ObRangeSelEstimator : public ObSelEstimator
 {
 public:
-  ObRangeSelEstimator() : ObSelEstimator(ObSelEstType::RANGE), column_expr_(NULL) {}
+  ObRangeSelEstimator() : ObSelEstimator(ObSelEstType::COLUMN_RANGE), column_expr_(NULL) {}
   virtual ~ObRangeSelEstimator() = default;
 
   static int create_estimator(ObSelEstimatorFactory &factory,
@@ -803,13 +843,7 @@ public:
 
 public:
   ObInequalJoinSelEstimator() :
-    ObSelEstimator(ObSelEstType::INEQUAL_JOIN),
-    has_lower_bound_(false),
-    has_upper_bound_(false),
-    include_lower_bound_(false),
-    include_upper_bound_(false),
-    lower_bound_(0),
-    upper_bound_(0) {}
+    ObSelEstimator(ObSelEstType::INEQUAL_JOIN) {}
   virtual ~ObInequalJoinSelEstimator() = default;
 
   static int create_estimator(ObSelEstimatorFactory &factory,
@@ -826,10 +860,7 @@ public:
 
   virtual bool tend_to_use_ds() override { return false; }
 
-  VIRTUAL_TO_STRING_KV(K_(type), K_(term),
-                       K_(has_lower_bound), K_(has_upper_bound),
-                       K_(include_lower_bound), K_(include_upper_bound),
-                       K_(lower_bound), K_(upper_bound));
+  VIRTUAL_TO_STRING_KV(K_(type), K_(term), K_(range));
 
 private:
 
@@ -846,14 +877,6 @@ private:
                                    Term &term,
                                    double &offset);
 
-  static bool is_higher_lower_bound(double bound1, bool include1, double bound2, bool include2)
-  {
-    return bound1 > bound2 || (bound1 == bound2 && !include1 && include2);
-  }
-  static bool is_higher_upper_bound(double bound1, bool include1, double bound2, bool include2)
-  {
-    return bound1 > bound2 || (bound1 == bound2 && include1 && !include2);
-  }
   // c1 in [min1, max1], c2 in [min2, max2]
   // calc the sel of `c1 + c2 > offset`;
   static double get_gt_sel(double min1,
@@ -885,23 +908,69 @@ private:
                               double offset,
                               bool is_semi);
 
-  double get_sel_for_point(double point1, double point2);
-
-  void reverse();
-  void update_lower_bound(double bound, bool include);
-  void update_upper_bound(double bound, bool include);
-  void set_bound(ObItemType item_type, double bound);
+  double get_sel_for_point(double point);
 
   Term term_;
-  bool has_lower_bound_;
-  bool has_upper_bound_;
-  bool include_lower_bound_;
-  bool include_upper_bound_;
-  double lower_bound_;
-  double upper_bound_;
+  SimpleRange range_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObInequalJoinSelEstimator);
+};
+
+class ObNormalRangeSelEstimator : public ObSelEstimator
+{
+public:
+  ObNormalRangeSelEstimator(ObSelEstType type) :
+      ObSelEstimator(type),
+      expr_(NULL),
+      is_not_op_(false) {}
+  virtual ~ObNormalRangeSelEstimator() = default;
+  static int get_expr_range(const OptSelectivityCtx &ctx,
+                            const ObRawExpr &qual,
+                            const ObRawExpr *&expr,
+                            SimpleRange &range,
+                            bool &is_not_op,
+                            bool &is_valid);
+
+  virtual int merge(const ObSelEstimator &other, bool &is_success) override;
+  virtual bool is_independent() const override { return is_not_op_; }
+  void set_is_not_op(bool is_not) { is_not_op_ = is_not; }
+
+  VIRTUAL_TO_STRING_KV(K_(type), KPC_(expr), K_(range), K_(is_not_op));
+protected:
+  const ObRawExpr *expr_;
+  SimpleRange range_;
+  bool is_not_op_; // not between
+};
+
+class ObUniformRangeSelEstimator : public ObNormalRangeSelEstimator
+{
+public:
+  ObUniformRangeSelEstimator() :
+      ObNormalRangeSelEstimator(ObSelEstType::UNIFORM_RANGE) {}
+  virtual ~ObUniformRangeSelEstimator() = default;
+
+  static int create_estimator(ObSelEstimatorFactory &factory,
+                              const OptSelectivityCtx &ctx,
+                              const ObRawExpr &expr,
+                              ObSelEstimator *&estimator);
+
+  virtual int get_sel(const OptTableMetas &table_metas,
+                      const OptSelectivityCtx &ctx,
+                      double &selectivity,
+                      ObIArray<ObExprSelPair> &all_predicate_sel) override;
+
+  int refine_out_of_bounds_sel(const OptTableMetas &table_metas,
+                               const OptSelectivityCtx &ctx,
+                               const ObObj &min_value,
+                               const ObObj &max_value,
+                               const double min_scalar,
+                               const double max_scalar,
+                               const double start_scalar,
+                               const double end_scalar,
+                               double &selectivity);
+
+  virtual bool tend_to_use_ds() override { return true; }
 };
 
 }

@@ -1515,8 +1515,8 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |22      |18          |
-|1 |└─HASH UNION DISTINCT|     |22      |15          |
+|0 |SORT                 |     |8       |16          |
+|1 |└─HASH UNION DISTINCT|     |8       |15          |
 |2 |  ├─TABLE FULL SCAN  |test1|11      |5           |
 |3 |  └─TABLE FULL SCAN  |test2|11      |5           |
 ======================================================

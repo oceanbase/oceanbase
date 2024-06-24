@@ -675,6 +675,13 @@ public:
                                                 const double cur_rows,
                                                 double &rows);
 
+  static int remove_dummy_distinct_exprs(ObIArray<OptDistinctHelper> &helpers,
+                                         ObIArray<ObRawExpr *> &exprs);
+
+  static int check_expr_in_distinct_helper(const ObRawExpr *expr,
+                                           const ObIArray<OptDistinctHelper> &helpers,
+                                           bool &is_dummy_expr);
+
   // @brief 计算一组变量的distinct
   static int calculate_distinct(const OptTableMetas &table_metas,
                                 const OptSelectivityCtx &ctx,
@@ -998,22 +1005,25 @@ public:
                                   const OptSelectivityCtx &ctx,
                                   double &special_ndv,
                                   const double origin_rows);
+  static int calculate_winfunc_ndv(const OptTableMetas &table_meta,
+                                  const ObRawExpr* expr,
+                                  const OptSelectivityCtx &ctx,
+                                  double &special_ndv,
+                                  const double origin_rows);
   static int calculate_expr_ndv(const ObIArray<ObRawExpr*>& exprs,
                                 ObIArray<double>& expr_ndv,
                                 const OptTableMetas &table_metas,
                                 const OptSelectivityCtx &ctx,
                                 const double origin_rows);
-  static bool is_special_expr(const ObRawExpr &expr);
-  static int classify_exprs(const ObIArray<ObRawExpr*>& exprs,
-                            ObIArray<ObRawExpr*>& column_exprs,
-                            ObIArray<ObRawExpr*>& special_exprs);
-  static int classify_exprs(ObRawExpr* expr,
-                            ObIArray<ObRawExpr*>& column_exprs,
-                            ObIArray<ObRawExpr*>& special_exprs);
-  static int classify_exprs(const ObIArray<ObRawExpr*>& exprs,
+  static int check_is_special_distinct_expr(const OptSelectivityCtx &ctx,
+                                            const ObRawExpr *expr,
+                                            bool &is_special);
+  static int classify_exprs(const OptSelectivityCtx &ctx,
+                            const ObIArray<ObRawExpr*>& exprs,
                             ObIArray<OptDistinctHelper> &helpers,
                             ObIArray<ObRawExpr*>& special_exprs);
-  static int classify_exprs(ObRawExpr *expr,
+  static int classify_exprs(const OptSelectivityCtx &ctx,
+                            ObRawExpr *expr,
                             ObIArray<OptDistinctHelper> &helpers,
                             ObIArray<ObRawExpr*>& special_exprs);
   static int add_expr_to_distinct_helper(ObIArray<OptDistinctHelper> &helpers,
@@ -1043,6 +1053,42 @@ public:
                                 const OptSelectivityCtx &ctx,
                                 const ObRawExpr *expr,
                                 double &nns);
+  static int calc_expr_min_max(const OptTableMetas &table_metas,
+                               const OptSelectivityCtx &ctx,
+                               const ObRawExpr *expr,
+                               ObObj &min_value,
+                               ObObj &max_value);
+  static int calc_year_min_max(const OptTableMetas &table_metas,
+                               const OptSelectivityCtx &ctx,
+                               const ObRawExpr *expr,
+                               int64_t &min_year,
+                               int64_t &max_year,
+                               bool &use_default);
+  static int calc_const_numeric_value(const OptSelectivityCtx &ctx,
+                                      const ObRawExpr *expr,
+                                      double &value,
+                                      bool &succ);
+  static int convert_obj_to_expr_type(const OptSelectivityCtx &ctx,
+                                      const ObRawExpr *expr,
+                                      ObCastMode cast_mode,
+                                      ObObj &obj);
+  static bool is_dense_time_expr_type(ObItemType type)
+  {
+    return T_FUN_SYS_YEAR == type ||
+           T_FUN_SYS_DAY == type ||
+           T_FUN_SYS_DAY_OF_MONTH == type ||
+           T_FUN_SYS_MONTH == type ||
+           T_FUN_SYS_DAY_OF_YEAR == type ||
+           T_FUN_SYS_WEEK_OF_YEAR == type ||
+           T_FUN_SYS_WEEKDAY_OF_DATE == type ||
+           T_FUN_SYS_YEARWEEK_OF_DATE == type ||
+           T_FUN_SYS_DAY_OF_WEEK == type ||
+           T_FUN_SYS_WEEK == type ||
+           T_FUN_SYS_QUARTER == type ||
+           T_FUN_SYS_HOUR == type ||
+           T_FUN_SYS_MINUTE == type ||
+           T_FUN_SYS_SECOND == type;
+  }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptSelectivity);

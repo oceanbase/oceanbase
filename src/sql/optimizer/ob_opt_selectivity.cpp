@@ -581,10 +581,8 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
           avg_len = 0;
           if (OB_FAIL(ObOptSelectivity::calculate_expr_avg_len(child_table_metas, child_ctx, select_expr, avg_len))) {
             LOG_WARN("failed to get avg len", K(ret));
-          } else if (select_expr->is_column_ref_expr()) {
-            if (OB_FAIL(ObOptSelectivity::get_column_min_max(child_table_metas, child_ctx, *select_expr, minobj, maxobj))) {
-              LOG_WARN("failed to get column min max", K(ret));
-            }
+          } else if (OB_FAIL(ObOptSelectivity::calc_expr_min_max(child_table_metas, child_ctx, select_expr, minobj, maxobj))) {
+            LOG_WARN("failed to calc expr min max", KPC(select_expr));
           }
 
           if (OB_SUCC(ret)) {
@@ -888,7 +886,7 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
       LOG_WARN("failed to get sel", K(ret), KPC(estimator));
     } else {
       selectivities.at(i) = revise_between_0_1(tmp_selectivity);
-      if (ObSelEstType::RANGE == estimator->get_type()) {
+      if (ObSelEstType::COLUMN_RANGE == estimator->get_type()) {
         ObRangeSelEstimator *range_estimator = static_cast<ObRangeSelEstimator *>(estimator);
         if (OB_FAIL(add_var_to_array_no_dup(all_predicate_sel,
                                             ObExprSelPair(range_estimator->get_column_expr(), tmp_selectivity, true)))) {
@@ -2319,21 +2317,8 @@ int ObOptSelectivity::get_compare_value(const OptSelectivityCtx &ctx,
     can_cmp = false;
   } else if (expr_value.get_type() != col->get_result_type().get_type() ||
              expr_value.get_collation_type() != col->get_result_type().get_collation_type()) {
-    const ObDataTypeCastParams dtc_params =
-        ObBasicSessionInfo::create_dtc_params(ctx.get_session_info());
-    ObObj dest_value;
-    ObCastCtx cast_ctx(&ctx.get_allocator(),
-                       &dtc_params,
-                       CM_NONE,
-                       col->get_result_type().get_collation_type());
-    if (OB_FAIL(ObObjCaster::to_type(col->get_result_type().get_type(),
-                                     col->get_result_type().get_collation_type(),
-                                     cast_ctx,
-                                     expr_value,
-                                     dest_value))) {
-      LOG_WARN("failed to cast value", K(ret));
-    } else {
-      expr_value = dest_value;
+    if (OB_FAIL(convert_obj_to_expr_type(ctx, col, CM_NONE, expr_value))) {
+      LOG_WARN("failed to convert obj", K(ret), K(expr_value));
     }
   }
   return ret;
@@ -2794,6 +2779,67 @@ int ObOptSelectivity::calculate_distinct_in_single_table(const OptTableMetas &ta
   return ret;
 }
 
+int ObOptSelectivity::remove_dummy_distinct_exprs(ObIArray<OptDistinctHelper> &helpers,
+                                                  ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> new_exprs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i ++) {
+    ObRawExpr *expr = exprs.at(i);
+    bool is_dummy = false;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(exprs));
+    } else if (expr->has_flag(CNT_WINDOW_FUNC) ||
+               expr->is_column_ref_expr()) {
+      // do nothing
+    } else if (OB_FAIL(check_expr_in_distinct_helper(expr, helpers, is_dummy))) {
+      LOG_WARN("failed to check expr", K(ret));
+    }
+    if (OB_SUCC(ret) && !is_dummy) {
+      if (OB_FAIL(new_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back");
+      }
+    }
+  }
+  if (OB_SUCC(ret) && new_exprs.count() != exprs.count()) {
+    LOG_DEBUG("remove dummy distinct exprs", K(exprs), K(new_exprs));
+    if (OB_FAIL(exprs.assign(new_exprs))) {
+      LOG_WARN("failed to assign exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptSelectivity::check_expr_in_distinct_helper(const ObRawExpr *expr,
+                                                    const ObIArray<OptDistinctHelper> &helpers,
+                                                    bool &is_dummy_expr)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> column_exprs;
+  bool found = false;
+  is_dummy_expr = true;
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, column_exprs))) {
+    LOG_WARN("failed to extract column exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_dummy_expr && i < column_exprs.count(); i ++) {
+    ObRawExpr *col_expr = column_exprs.at(i);
+    if (OB_ISNULL(col_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(column_exprs));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && !found && j < helpers.count(); j ++) {
+      if (col_expr->get_relation_ids() == helpers.at(j).rel_id_) {
+        found = ObOptimizerUtil::find_item(helpers.at(j).exprs_, col_expr);
+      }
+    }
+    if (!found) {
+      is_dummy_expr = false;
+    }
+  }
+  return ret;
+}
+
 int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
                                          const OptSelectivityCtx &ctx,
                                          const ObIArray<ObRawExpr*>& exprs,
@@ -2810,15 +2856,19 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
    * 1. 将 exprs 根据基表分组，sepcial exprs 中保存不在基表计算的表达式，例如 window function 等
    * 2. 基表内计算 NDV 后（每张表的 NDV 最大值受基表行数限制），再根据当前行数计算联合 NDV
   */
-  if (OB_FAIL(classify_exprs(exprs, helpers, special_exprs))) {
+  if (OB_FAIL(classify_exprs(ctx, exprs, helpers, special_exprs))) {
     LOG_WARN("failed to classify_exprs", K(ret));
+  } else if (OB_FAIL(remove_dummy_distinct_exprs(helpers, special_exprs))) {
+    LOG_WARN("failed to remove dummy exprs", K(ret));
   } else if (OB_FAIL(calculate_expr_ndv(special_exprs, single_ndvs, table_metas, ctx, origin_rows))) {
     LOG_WARN("fail to calculate expr ndv", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < helpers.count(); i ++) {
     OptDistinctHelper &helper = helpers.at(i);
     double single_table_ndv = 1.0;
-    if (OB_FAIL(calculate_distinct_in_single_table(
+    if (OB_FAIL(remove_dummy_distinct_exprs(helpers, helper.exprs_))) {
+      LOG_WARN("failed to remove dummy exprs", K(ret));
+    } else if (OB_FAIL(calculate_distinct_in_single_table(
         table_metas, ctx, helper.rel_id_, helper.exprs_, need_refine ? origin_rows : -1, single_table_ndv))) {
       LOG_WARN("failed to calculate distinct in single table", K(helper.exprs_));
     } else if (OB_FAIL(single_ndvs.push_back(single_table_ndv))) {
@@ -2896,86 +2946,42 @@ double ObOptSelectivity::combine_ndvs(double ambient_card, ObIArray<double> &ndv
   return ndv;
 }
 
-int ObOptSelectivity::classify_exprs(const ObIArray<ObRawExpr*>& exprs,
-                                     ObIArray<ObRawExpr*>& column_exprs,
+int ObOptSelectivity::classify_exprs(const OptSelectivityCtx &ctx,
+                                     const ObIArray<ObRawExpr*>& exprs,
+                                     ObIArray<OptDistinctHelper> &helpers,
                                      ObIArray<ObRawExpr*>& special_exprs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    ObRawExpr *child_expr = NULL;
-    if (OB_ISNULL(child_expr = exprs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null expr", K(ret), K(i));
-    } else if (OB_FAIL(classify_exprs(child_expr, column_exprs, special_exprs))) {
+    if (OB_FAIL(classify_exprs(ctx, exprs.at(i), helpers, special_exprs))) {
       LOG_WARN("failed to classify_exprs", K(ret));
     }
   }
   return ret;
 }
 
-int ObOptSelectivity::classify_exprs(ObRawExpr* expr,
-                                     ObIArray<ObRawExpr*>& column_exprs,
+int ObOptSelectivity::classify_exprs(const OptSelectivityCtx &ctx,
+                                     ObRawExpr *expr,
+                                     ObIArray<OptDistinctHelper> &helpers,
                                      ObIArray<ObRawExpr*>& special_exprs)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null pointer", K(expr), K(ret));
-  } else if (is_special_expr(*expr)) {
-    if (OB_FAIL(add_var_to_array_no_dup(special_exprs, expr))) {
-      LOG_WARN("fail to add expr to array", K(ret));
-    }
-  } else if (expr->is_column_ref_expr()) {
-    if (OB_FAIL(add_var_to_array_no_dup(column_exprs, expr))) {
-      LOG_WARN("fail to add expr to array", K(ret));
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      ObRawExpr *child_expr = NULL;
-      if (OB_ISNULL(child_expr = expr->get_param_expr(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get null expr", K(ret), K(i));
-      } else if (OB_FAIL(classify_exprs(child_expr, column_exprs, special_exprs))) {
-        LOG_WARN("failed to classify_exprs", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-bool ObOptSelectivity::is_special_expr(const ObRawExpr &expr) {
   bool is_special = false;
-  if (expr.is_win_func_expr()) {
-    is_special = true;
-  }
-  return is_special;
-}
-
-int ObOptSelectivity::classify_exprs(const ObIArray<ObRawExpr*>& exprs,
-                                     ObIArray<OptDistinctHelper> &helpers,
-                                     ObIArray<ObRawExpr*>& special_exprs)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    if (OB_FAIL(classify_exprs(exprs.at(i), helpers, special_exprs))) {
-      LOG_WARN("failed to classify_exprs", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObOptSelectivity::classify_exprs(ObRawExpr *expr,
-                                     ObIArray<OptDistinctHelper> &helpers,
-                                     ObIArray<ObRawExpr*>& special_exprs)
-{
-  int ret = OB_SUCCESS;
-  ObRelIds rel_ids;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(expr), K(ret));
-  } else if (expr->is_win_func_expr()) {
-    if (OB_FAIL(add_var_to_array_no_dup(special_exprs, expr))) {
-      LOG_WARN("failed to push back", K(ret));
+  } else if (OB_FAIL(check_is_special_distinct_expr(ctx, expr, is_special))) {
+    LOG_WARN("failed to check expr", K(ret));
+  } else if (is_special) {
+    if (expr->has_flag(CNT_WINDOW_FUNC) ||
+        expr->get_relation_ids().num_members() != 1) {
+      if (OB_FAIL(add_var_to_array_no_dup(special_exprs, expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    } else {
+      if (OB_FAIL(add_expr_to_distinct_helper(helpers, expr->get_relation_ids(), expr))) {
+        LOG_WARN("failed to add expr to helper", K(ret));
+      }
     }
   } else if (expr->is_column_ref_expr()) {
     if (OB_FAIL(add_expr_to_distinct_helper(helpers, expr->get_relation_ids(), expr))) {
@@ -2983,11 +2989,12 @@ int ObOptSelectivity::classify_exprs(ObRawExpr *expr,
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(classify_exprs(expr->get_param_expr(i), helpers, special_exprs)))) {
+      if (OB_FAIL(SMART_CALL(classify_exprs(ctx, expr->get_param_expr(i), helpers, special_exprs)))) {
         LOG_WARN("failed to classify_exprs", K(ret));
       }
     }
   }
+  LOG_DEBUG("succeed to classify distinct exprs", K(helpers), K(special_exprs));
   return ret;
 }
 
@@ -3047,6 +3054,55 @@ int ObOptSelectivity::calculate_expr_ndv(const ObIArray<ObRawExpr*>& exprs,
   return ret;
 }
 
+int ObOptSelectivity::check_is_special_distinct_expr(const OptSelectivityCtx &ctx,
+                                                     const ObRawExpr *expr,
+                                                     bool &is_special)
+{
+  int ret = OB_SUCCESS;
+  is_special = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(expr), K(ret));
+  } else if (expr->is_win_func_expr()) {
+    is_special = true;
+  } else if (ctx.get_compat_version() < COMPAT_VERSION_4_2_4) {
+    is_special = false;
+  } else if (expr->is_const_expr()) {
+    is_special = false;
+  } else if (T_OP_MOD == expr->get_expr_type()) {
+    is_special = expr->get_param_count() == 2 &&
+                 OB_NOT_NULL(expr->get_param_expr(1)) &&
+                 expr->get_param_expr(1)->is_static_scalar_const_expr();
+  } else if (T_FUN_SYS_SUBSTR == expr->get_expr_type() || T_FUN_SYS_SUBSTRB == expr->get_expr_type()) {
+    if (expr->get_param_count() == 2) {
+      is_special = OB_NOT_NULL(expr->get_param_expr(1)) && expr->get_param_expr(1)->is_static_scalar_const_expr();
+    } else if (expr->get_param_count() == 3) {
+      is_special = OB_NOT_NULL(expr->get_param_expr(2)) && expr->get_param_expr(2)->is_static_scalar_const_expr();
+    }
+  } else if (is_dense_time_expr_type(expr->get_expr_type()) ||
+             T_FUN_SYS_MONTH_NAME == expr->get_expr_type() ||
+             T_FUN_SYS_DAY_NAME == expr->get_expr_type()) {
+    is_special = expr->get_param_count() == 1;
+  } else if (T_FUN_SYS_EXTRACT == expr->get_expr_type()) {
+    is_special = expr->get_param_count() == 2 &&
+                 OB_NOT_NULL(expr->get_param_expr(0)) &&
+                 expr->get_param_expr(0)->is_static_scalar_const_expr();
+  } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
+    const ObRawExpr *param_expr = NULL;
+    bool is_monotonic = false;
+    if (OB_UNLIKELY(expr->get_param_count() < 2) ||
+        OB_ISNULL(param_expr = expr->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected expr", KPC(expr));
+    } else if (expr->get_data_type() != ObDateType) {
+      is_special = false;
+    } else if (OB_FAIL(ObObjCaster::is_cast_monotonic(param_expr->get_data_type(), expr->get_data_type(), is_special))) {
+      LOG_WARN("check cast monotonic error", KPC(expr), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
                                             const ObRawExpr* expr,
                                             const OptSelectivityCtx &ctx,
@@ -3054,10 +3110,129 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
                                             const double origin_rows)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
+  const ObRawExpr *param_expr = NULL;
+  special_ndv = std::max(origin_rows, 1.0);
+  bool is_special = false;
+  bool need_refine_by_param_expr = true;
+  if (OB_FAIL(check_is_special_distinct_expr(ctx, expr, is_special))) {
+    LOG_WARN("failed to check expr", K(ret));
+  } else if (OB_UNLIKELY(!is_special)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected expr", KPC(expr), K(ret));
+  } else if (expr->is_win_func_expr()) {
+    if (OB_FAIL(calculate_winfunc_ndv(table_metas, expr, ctx, special_ndv, origin_rows))) {
+      LOG_WARN("failed to calculate windown function ndv", K(ret));
+    }
+    need_refine_by_param_expr = false;
+  } else if (T_OP_MOD == expr->get_expr_type()) {
+    param_expr = expr->get_param_expr(0);
+    const ObRawExpr *const_expr = expr->get_param_expr(1);
+    bool valid = false;
+    if (OB_FAIL(calc_const_numeric_value(ctx, const_expr, special_ndv, valid))) {
+      LOG_WARN("failed to calc const value", K(ret));
+    } else {
+      special_ndv = std::abs(special_ndv);
+    }
+  } else if (T_FUN_SYS_SUBSTR == expr->get_expr_type() || T_FUN_SYS_SUBSTRB == expr->get_expr_type()) {
+    double substr_len = 0.0;
+    double dummy = 0.0;
+    need_refine_by_param_expr = false; // substr ndv will not be greater than its param
+    if (OB_FAIL(calculate_expr_avg_len(table_metas, ctx, expr, substr_len))) {
+      LOG_WARN("failed to calc expr length", K(ret));
+    } else if (OB_FAIL(calculate_substrb_info(table_metas,
+                                              ctx,
+                                              expr->get_param_expr(0),
+                                              substr_len - ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH,
+                                              origin_rows,
+                                              special_ndv,
+                                              dummy))) {
+      LOG_WARN("failed to calculate substr ndv", K(ret));
+    }
+  } else if (is_dense_time_expr_type(expr->get_expr_type()) ||
+             (T_FUN_SYS_CAST == expr->get_expr_type() && expr->get_data_type() == ObDateType) ||
+             T_FUN_SYS_EXTRACT == expr->get_expr_type()) {
+    if (T_FUN_SYS_EXTRACT == expr->get_expr_type()) {
+      param_expr = expr->get_param_expr(1);
+    } else {
+      param_expr = expr->get_param_expr(0);
+    }
+    ObObj min_value;
+    ObObj max_value;
+    bool use_default = false;
+    double min_scalar = 0.0;
+    double max_scalar = 0.0;
+    if (OB_FAIL(calc_expr_min_max(table_metas,
+                                  ctx,
+                                  expr,
+                                  min_value,
+                                  max_value))) {
+      LOG_WARN("failed to calculate expr min max", K(ret));
+    } else if (min_value.is_min_value() || max_value.is_max_value() ||
+               !(min_value.is_integer_type() || min_value.is_number() || min_value.is_date()) ||
+               !(max_value.is_integer_type() || max_value.is_number() || max_value.is_date())) {
+      use_default = true;
+    } else if (OB_FAIL(ObOptEstObjToScalar::convert_obj_to_double(&min_value, min_scalar)) ||
+               OB_FAIL(ObOptEstObjToScalar::convert_obj_to_double(&max_value, max_scalar))) {
+      LOG_WARN("failed to convert obj to double", K(ret), K(min_value), K(max_value));
+    } else {
+      special_ndv = max_scalar - min_scalar + 1;
+    }
+    if (OB_SUCC(ret) && !use_default) {
+      if (T_FUN_SYS_YEARWEEK_OF_DATE == expr->get_expr_type()) {
+        special_ndv *= 54.0 / 100.0;
+      } else if (T_FUN_SYS_EXTRACT == expr->get_expr_type()) {
+        ObObj result;
+        bool got_result = false;
+        if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                              expr->get_param_expr(0),
+                                                              result,
+                                                              got_result,
+                                                              ctx.get_allocator()))) {
+          LOG_WARN("fail to calc_const_or_calculable_expr", K(ret));
+        } else if (!got_result || result.is_null() || !result.is_int()) {
+          // do nothing
+        } else if (DATE_UNIT_YEAR_MONTH == result.get_int()) {
+          special_ndv *= 12.0 / 100.0;
+        }
+      }
+    }
+  } else if (T_FUN_SYS_MONTH_NAME == expr->get_expr_type()) {
+    special_ndv = 12;
+    param_expr = expr->get_param_expr(0);
+  } else if (T_FUN_SYS_DAY_NAME == expr->get_expr_type()) {
+    special_ndv = 7;
+    param_expr = expr->get_param_expr(0);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected special expr", KPC(expr));
+  }
+  if (OB_SUCC(ret) && need_refine_by_param_expr && NULL != param_expr) {
+    double ndv_upper_bound = 1.0;
+    if (OB_FAIL(SMART_CALL(calculate_distinct(table_metas,
+                                              ctx,
+                                              *param_expr,
+                                              origin_rows,
+                                              ndv_upper_bound)))) {
+      LOG_WARN("failed to calculate distinct", K(ret), KPC(param_expr));
+    } else {
+      special_ndv = std::min(special_ndv, ndv_upper_bound);
+    }
+  }
+  special_ndv = revise_ndv(special_ndv);
+  return ret;
+}
+
+int ObOptSelectivity::calculate_winfunc_ndv(const OptTableMetas &table_metas,
+                                            const ObRawExpr* expr,
+                                            const OptSelectivityCtx &ctx,
+                                            double &special_ndv,
+                                            const double origin_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || OB_UNLIKELY(!expr->is_win_func_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer", K(expr), K(ret));
-  } else if (expr->is_win_func_expr()) {
+  } else {
     double part_order_ndv = 1.0;
     double order_ndv = 1.0;
     double part_ndv = 1.0;
@@ -3476,7 +3651,7 @@ int ObOptSelectivity::classify_quals_deprecated(const OptSelectivityCtx &ctx,
     ObObj obj_min;
     ObObj obj_max;
     if (OB_ISNULL(range_estimator = static_cast<ObRangeSelEstimator *>(range_estimators.at(i))) ||
-        OB_UNLIKELY(ObSelEstType::RANGE != range_estimator->get_type()) ||
+        OB_UNLIKELY(ObSelEstType::COLUMN_RANGE != range_estimator->get_type()) ||
         OB_ISNULL(column_expr = range_estimator->get_column_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected expr", K(ret));
@@ -3564,7 +3739,7 @@ int ObOptSelectivity::classify_quals(const OptTableMetas &table_metas,
       if (OB_ISNULL(estimators.at(j))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(sel_info), K(estimators));
-      } else if (ObSelEstType::RANGE == estimators.at(j)->get_type()) {
+      } else if (ObSelEstType::COLUMN_RANGE == estimators.at(j)->get_type()) {
         range_estimator = static_cast<ObRangeSelEstimator *>(estimators.at(j));
         if (OB_FAIL(ObOptSelectivity::get_column_range_min_max(
             ctx, range_estimator->get_column_expr(), range_estimator->get_range_exprs(), obj_min, obj_max))) {
@@ -3943,7 +4118,7 @@ int ObOptSelectivity::calculate_expr_avg_len(const OptTableMetas &table_metas,
     if (OB_FAIL(get_column_avg_len(table_metas, ctx, expr, avg_len))) {
       LOG_WARN("failed to get avg len", K(ret));
     }
-  } else if (expr->is_static_const_expr()) {
+  } else if (expr->is_static_scalar_const_expr()) {
     ObObj value;
     bool get_value = false;
     if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
@@ -3987,7 +4162,7 @@ int ObOptSelectivity::calculate_expr_avg_len(const OptTableMetas &table_metas,
         LOG_WARN("unexpected expr param", KPC(expr));
       } else if (OB_FAIL(SMART_CALL(calculate_expr_avg_len(table_metas, ctx, expr->get_param_expr(0), child_len)))) {
         LOG_WARN("failed to calc child avg len", K(ret), KPC(expr));
-      } else if (expr->get_param_expr(1)->is_static_const_expr()) {
+      } else if (expr->get_param_expr(1)->is_static_scalar_const_expr()) {
         if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
                                                               expr->get_param_expr(1),
                                                               value,
@@ -4001,7 +4176,7 @@ int ObOptSelectivity::calculate_expr_avg_len(const OptTableMetas &table_metas,
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (3 == expr->get_param_count() && expr->get_param_expr(2)->is_static_const_expr()) {
+      } else if (3 == expr->get_param_count() && expr->get_param_expr(2)->is_static_scalar_const_expr()) {
         if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
                                                               expr->get_param_expr(2),
                                                               value,
@@ -4133,6 +4308,278 @@ int ObOptSelectivity::calculate_expr_nns(const OptTableMetas &table_metas,
   } else {
     // todo: wuyuming.wym null propagate expr
     nns = 1.0;
+  }
+  return ret;
+}
+
+int ObOptSelectivity::calc_expr_min_max(const OptTableMetas &table_metas,
+                                        const OptSelectivityCtx &ctx,
+                                        const ObRawExpr *expr,
+                                        ObObj &min_value,
+                                        ObObj &max_value)
+{
+  int ret = OB_SUCCESS;
+  min_value.set_min_value();
+  max_value.set_max_value();
+  if (OB_ISNULL(expr) || OB_ISNULL(ctx.get_opt_ctx().get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (expr->get_result_type().is_ext()) {
+    // do nothing
+  } else if (expr->is_column_ref_expr()) {
+    if (OB_FAIL(ObOptSelectivity::get_column_min_max(table_metas, ctx, *expr,
+                                                     min_value, max_value))) {
+      LOG_WARN("failed to get min max", K(ret));
+    }
+  } else if (expr->is_static_scalar_const_expr()) {
+    ObObj result;
+    bool got_result = false;
+    if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                          expr,
+                                                          result,
+                                                          got_result,
+                                                          ctx.get_allocator()))) {
+      LOG_WARN("fail to calc_const_or_calculable_expr", K(ret));
+    } else if (!got_result || result.is_null()) {
+      // do nothing
+    } else {
+      min_value = result;
+      max_value = result;
+    }
+  } else if (expr->get_param_count() < 1) {
+    // do nothing
+  } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
+    bool is_monotonic = false;
+    const ObRawExpr *param_expr = expr->get_param_expr(0);
+    if (OB_FAIL(ObObjCaster::is_cast_monotonic(param_expr->get_data_type(), expr->get_data_type(), is_monotonic))) {
+      LOG_WARN("check cast monotonic error", KPC(expr), K(ret));
+    } else if (!is_monotonic) {
+      // do nothing
+    } else if (OB_FAIL(SMART_CALL(calc_expr_min_max(table_metas, ctx, param_expr,
+                                                    min_value, max_value)))) {
+      LOG_WARN("failed to calc date min max", KPC(expr));
+    } else if (min_value.is_min_value() || max_value.is_min_value() ||
+               min_value.is_max_value() || max_value.is_max_value() ||
+               min_value.is_null() || max_value.is_null()) {
+      // do nothing
+    } else if (OB_FAIL(convert_obj_to_expr_type(ctx, expr, expr->get_extra(), min_value))) {
+      ret = OB_SUCCESS;
+      min_value.set_min_value();
+    } else if (OB_FAIL(convert_obj_to_expr_type(ctx, expr, expr->get_extra(), max_value))) {
+      ret = OB_SUCCESS;
+      max_value.set_max_value();
+    }
+  } else if (T_FUN_SYS_DATE == expr->get_expr_type()) {
+    if (OB_FAIL(SMART_CALL(calc_expr_min_max(table_metas, ctx, expr->get_param_expr(0),
+                                             min_value, max_value)))) {
+      LOG_WARN("failed to calc date min max", KPC(expr));
+    }
+  } else if (is_dense_time_expr_type(expr->get_expr_type()) ||
+             T_FUN_SYS_EXTRACT == expr->get_expr_type()) {
+    const ObRawExpr *param_expr = NULL;
+    ObItemType est_type = expr->get_expr_type();
+    int64_t extract_type = DATE_UNIT_MAX;
+    if (T_FUN_SYS_EXTRACT == expr->get_expr_type()) {
+      bool valid = false;
+      ObObj result;
+      param_expr = expr->get_param_expr(1);
+      if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                            expr->get_param_expr(0),
+                                                            result,
+                                                            valid,
+                                                            ctx.get_allocator()))) {
+        LOG_WARN("fail to calc_const_or_calculable_expr", K(ret));
+      } else if (valid && result.is_int()) {
+        extract_type = result.get_int();
+        switch (extract_type) {
+          case DATE_UNIT_DAY: est_type = T_FUN_SYS_DAY; break;
+          case DATE_UNIT_WEEK: est_type = T_FUN_SYS_WEEK; break;
+          case DATE_UNIT_MONTH: est_type = T_FUN_SYS_MONTH; break;
+          case DATE_UNIT_QUARTER: est_type = T_FUN_SYS_QUARTER; break;
+          case DATE_UNIT_SECOND: est_type = T_FUN_SYS_SECOND; break;
+          case DATE_UNIT_MINUTE: est_type = T_FUN_SYS_MINUTE; break;
+          case DATE_UNIT_HOUR: est_type = T_FUN_SYS_HOUR; break;
+          case DATE_UNIT_YEAR: est_type = T_FUN_SYS_YEAR; break;
+           // we only estimate the min/max value by year, so yearmonth is similar with yearweek
+          case DATE_UNIT_YEAR_MONTH: est_type = T_FUN_SYS_YEARWEEK_OF_DATE; break;
+          default: break;
+        }
+      }
+    } else {
+      param_expr = expr->get_param_expr(0);
+    }
+    if (OB_SUCC(ret)) {
+      bool use_default = false;
+      int64_t min_int_value = 0;
+      int64_t max_int_value = 0;
+      switch (est_type) {
+        case T_FUN_SYS_MONTH:           min_int_value = 1; max_int_value = 12;  break;
+        case T_FUN_SYS_DAY_OF_MONTH:
+        case T_FUN_SYS_DAY:             min_int_value = 1; max_int_value = 31;  break;
+        case T_FUN_SYS_DAY_OF_YEAR:     min_int_value = 1; max_int_value = 366; break;
+        case T_FUN_SYS_WEEK_OF_YEAR:
+        case T_FUN_SYS_WEEK:            min_int_value = 0; max_int_value = 53;  break;
+        case T_FUN_SYS_WEEKDAY_OF_DATE: min_int_value = 0; max_int_value = 6;   break;
+        case T_FUN_SYS_DAY_OF_WEEK:     min_int_value = 1; max_int_value = 7;   break;
+        case T_FUN_SYS_QUARTER:         min_int_value = 1; max_int_value = 4;   break;
+        case T_FUN_SYS_HOUR:            min_int_value = 0; max_int_value = 23;  break;
+        case T_FUN_SYS_MINUTE:          min_int_value = 0; max_int_value = 59;  break;
+        case T_FUN_SYS_SECOND:          min_int_value = 0; max_int_value = 59;  break;
+        case T_FUN_SYS_YEAR:
+        case T_FUN_SYS_YEARWEEK_OF_DATE: {
+          if (OB_FAIL(calc_year_min_max(table_metas,
+                                        ctx,
+                                        param_expr,
+                                        min_int_value,
+                                        max_int_value,
+                                        use_default))) {
+            LOG_WARN("failed to calculate expr min max", K(ret));
+          } else if (!use_default && T_FUN_SYS_YEARWEEK_OF_DATE == est_type) {
+            // approximately
+            min_int_value = min_int_value * 100;
+            max_int_value = max_int_value * 100 + 100;
+          }
+          break;
+        }
+        default: use_default = true;  break;
+      }
+      if (OB_SUCC(ret) && !use_default) {
+        min_value.set_int(min_int_value);
+        max_value.set_int(max_int_value);
+        if (OB_FAIL(convert_obj_to_expr_type(ctx, expr, CM_NONE, min_value))) {
+          LOG_WARN("failed to convert obj", K(ret), K(min_value));
+        } else if (OB_FAIL(convert_obj_to_expr_type(ctx, expr, CM_NONE, min_value))) {
+          LOG_WARN("failed to convert obj", K(ret), K(max_value));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int cmp_result = 0;
+    bool can_cmp = min_value.can_compare(max_value);
+    if (min_value.is_min_value() || max_value.is_max_value()) {
+      // do nothing
+    } else if (can_cmp &&
+        OB_FAIL(min_value.compare(max_value, cmp_result))) {
+      LOG_WARN("failed to compare", K(ret));
+    } else if (!can_cmp || 1 == cmp_result ||
+               min_value.is_null() || max_value.is_null()) {
+      min_value.set_min_value();
+      max_value.set_max_value();
+    }
+  }
+  return ret;
+}
+
+int ObOptSelectivity::calc_year_min_max(const OptTableMetas &table_metas,
+                                        const OptSelectivityCtx &ctx,
+                                        const ObRawExpr *expr,
+                                        int64_t &min_year,
+                                        int64_t &max_year,
+                                        bool &use_default)
+{
+  int ret = OB_SUCCESS;
+  ObObj min_value;
+  ObObj max_value;
+  ObObj min_year_obj;
+  ObObj max_year_obj;
+  ObTime min_time;
+  ObTime max_time;
+  use_default = false;
+  ObDateSqlMode date_sql_mode;
+  if (OB_ISNULL(expr) || OB_ISNULL(ctx.get_session_info()) || OB_ISNULL(ctx.get_opt_ctx().get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (ObDateTimeTC != expr->get_type_class() &&
+             ObDateTC != expr->get_type_class() &&
+             ObOTimestampTC != expr->get_type_class()) {
+    use_default = true;
+  } else if (OB_FAIL(SMART_CALL(calc_expr_min_max(table_metas,
+                                                  ctx,
+                                                  expr,
+                                                  min_value,
+                                                  max_value)) )) {
+    LOG_WARN("failed to calculate expr min max", K(ret));
+  } else if (min_value.is_min_value() || max_value.is_max_value()) {
+    use_default = true;
+  } else if (FALSE_IT(date_sql_mode.init(ctx.get_session_info()->get_sql_mode()))) {
+  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(min_value,
+                                                 get_timezone_info(ctx.get_session_info()),
+                                                 min_time,
+                                                 get_cur_time(ctx.get_opt_ctx().get_exec_ctx()->get_physical_plan_ctx()),
+                                                 date_sql_mode))) {
+    ret = OB_SUCCESS;
+    use_default = true;
+  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(max_value,
+                                                 get_timezone_info(ctx.get_session_info()),
+                                                 max_time,
+                                                 get_cur_time(ctx.get_opt_ctx().get_exec_ctx()->get_physical_plan_ctx()),
+                                                 date_sql_mode))) {
+    ret = OB_SUCCESS;
+    use_default = true;
+  } else {
+    min_year = min_time.parts_[DT_YEAR];
+    max_year = max_time.parts_[DT_YEAR];
+  }
+  return ret;
+}
+
+int ObOptSelectivity::calc_const_numeric_value(const OptSelectivityCtx &ctx,
+                                               const ObRawExpr *expr,
+                                               double &value,
+                                               bool &succ)
+{
+  int ret = OB_SUCCESS;
+  ObObj result;
+  bool got_result = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!expr->is_static_scalar_const_expr()) {
+    succ = false;
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                               expr,
+                                                               result,
+                                                               got_result,
+                                                               ctx.get_allocator()))) {
+    LOG_WARN("fail to calc_const_or_calculable_expr", K(ret));
+  } else if (!got_result || result.is_null() || !ob_is_numeric_type(result.get_type())) {
+    succ = false;
+  } else if (OB_FAIL(ObOptEstObjToScalar::convert_obj_to_double(&result, value))) {
+    LOG_WARN("Failed to convert obj using old method", K(ret));
+  } else {
+    succ = true;
+  }
+  return ret;
+}
+
+int ObOptSelectivity::convert_obj_to_expr_type(const OptSelectivityCtx &ctx,
+                                               const ObRawExpr *expr,
+                                               ObCastMode cast_mode,
+                                               ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || OB_ISNULL(ctx.get_opt_ctx().get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", KPC(expr));
+  } else {
+    ObObj tmp;
+    const ObDataTypeCastParams dtc_params =
+        ObBasicSessionInfo::create_dtc_params(ctx.get_session_info());
+    ObCastCtx cast_ctx(&ctx.get_allocator(),
+                       &dtc_params,
+                       get_cur_time(ctx.get_opt_ctx().get_exec_ctx()->get_physical_plan_ctx()),
+                       cast_mode,
+                       expr->get_result_type().get_collation_type());
+    if (OB_FAIL(ObObjCaster::to_type(expr->get_result_type().get_type(),
+                                     expr->get_result_type().get_collation_type(),
+                                     cast_ctx,
+                                     obj,
+                                     tmp))) {
+      LOG_WARN("failed to cast value", K(ret));
+    } else {
+      obj = tmp;
+    }
   }
   return ret;
 }

@@ -75,26 +75,103 @@ int ObOptEstUtils::extract_column_exprs_with_op_check(
 }
 
 
-int ObOptEstUtils::is_range_expr(const ObRawExpr *qual, bool &is_simple_filter, const int64_t level)
+int ObOptEstUtils::is_range_expr(const ObRawExpr *qual, bool &is_simple_filter)
 {
   int ret = OB_SUCCESS;
-  if (0 == level) {
-    is_simple_filter = true;
-  }
+  is_simple_filter = true;
   if (OB_ISNULL(qual)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("qual is null", K(ret));
-  } else if (IS_RANGE_CMP_OP(qual->get_expr_type()) && qual->has_flag(IS_RANGE_COND)) {
-    // c1 > 1 , 1 < c1 do nothing
+  } else if (IS_RANGE_CMP_OP(qual->get_expr_type()) ||
+             T_OP_BTW == qual->get_expr_type() ||
+             T_OP_NOT_BTW == qual->get_expr_type()) {
+    // c1 > 1 , 1 < c1, c1 (not) between 1 and '2'
+    const ObRawExpr *var = NULL;
+    const ObRawExpr *const_expr1 = NULL;
+    const ObRawExpr *const_expr2 = NULL;
+    ObItemType dummy = T_INVALID;
+    if (OB_FAIL(extract_var_op_const(qual, var, const_expr1, const_expr2, dummy, is_simple_filter))) {
+      LOG_WARN("failed to extract var", K(ret));
+    } else if (!is_simple_filter) {
+      // do nothing
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(var, var))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (!var->is_column_ref_expr()) {
+      is_simple_filter = false;
+    }
   } else if (T_OP_AND == qual->get_expr_type() || T_OP_OR == qual->get_expr_type()) {
     const ObOpRawExpr *op_expr = static_cast<const ObOpRawExpr *>(qual);
     for (int idx = 0 ; idx < op_expr->get_param_count() && is_simple_filter && OB_SUCC(ret); ++idx) {
-      if (OB_FAIL(is_range_expr(op_expr->get_param_expr(idx), is_simple_filter, level + 1))) {
+      if (OB_FAIL(is_range_expr(op_expr->get_param_expr(idx), is_simple_filter))) {
         LOG_WARN("failed to judge if expr is range", K(ret));
       }
     }
   } else {
     is_simple_filter = false;
+  }
+  return ret;
+}
+
+int ObOptEstUtils::extract_var_op_const(const ObRawExpr *qual,
+                                        const ObRawExpr *&var_expr,
+                                        const ObRawExpr *&const_expr1,
+                                        const ObRawExpr *&const_expr2,
+                                        ObItemType &type,
+                                        bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  type = T_INVALID;
+  is_valid = false;
+  var_expr = NULL;
+  const_expr1 = NULL;
+  const_expr2 = NULL;
+  if (OB_ISNULL(qual)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (FALSE_IT(type = qual->get_expr_type())) {
+  } else if (IS_RANGE_CMP_OP(type) || T_OP_EQ == type || T_OP_NSEQ == type || T_OP_NE == type) {
+    if (OB_UNLIKELY(qual->get_param_count() != 2) ||
+        OB_ISNULL(qual->get_param_expr(0)) ||
+        OB_ISNULL(qual->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param", KPC(qual));
+    } else if (!qual->get_param_expr(0)->is_const_expr() &&
+               qual->get_param_expr(1)->is_const_expr()) {
+      var_expr = qual->get_param_expr(0);
+      const_expr1 = qual->get_param_expr(1);
+      is_valid = true;
+    } else if (!qual->get_param_expr(1)->is_const_expr() &&
+               qual->get_param_expr(0)->is_const_expr()) {
+      var_expr = qual->get_param_expr(1);
+      const_expr1 = qual->get_param_expr(0);
+      is_valid = true;
+      type = get_opposite_compare_type(type);
+    }
+  } else if (T_OP_IS == type || T_OP_IS_NOT == type) {
+    if (OB_UNLIKELY(qual->get_param_count() != 2) ||
+        OB_ISNULL(qual->get_param_expr(0)) ||
+        OB_ISNULL(qual->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param", KPC(qual));
+    } else if (!qual->get_param_expr(0)->is_const_expr() &&
+               qual->get_param_expr(1)->is_const_expr()) {
+      var_expr = qual->get_param_expr(0);
+      const_expr1 = qual->get_param_expr(1);
+      is_valid = true;
+    }
+  } else if (T_OP_BTW == type || T_OP_NOT_BTW == type) {
+    if (OB_UNLIKELY(3 != qual->get_param_count()) || OB_ISNULL(qual->get_param_expr(0)) ||
+        OB_ISNULL(qual->get_param_expr(1)) || OB_ISNULL(qual->get_param_expr(2))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param", K(ret), KPC(qual));
+    } else if (!qual->get_param_expr(0)->is_const_expr() &&
+               qual->get_param_expr(1)->is_const_expr() &&
+               qual->get_param_expr(2)->is_const_expr()) {
+      var_expr = qual->get_param_expr(0);
+      const_expr1 = qual->get_param_expr(1);
+      const_expr2 = qual->get_param_expr(2);
+      is_valid = true;
+    }
   }
   return ret;
 }
