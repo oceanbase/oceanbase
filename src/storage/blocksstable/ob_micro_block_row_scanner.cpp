@@ -585,7 +585,7 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
                                              pd_filter_info.cell_data_ptrs_,
                                              pd_filter_info.len_array_,
                                              filter.get_filter_node().column_exprs_,
-                                             const_cast<common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &>(filter.get_default_datums())))){
+                                             &(const_cast<common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &>(filter.get_default_datums()))))){
           LOG_WARN("Failed to get rows for rich format", K(ret), K(cur_row_index));
         }
       } else if (OB_FAIL(get_rows_for_old_format(col_offsets,
@@ -596,7 +596,7 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
                                                  pd_filter_info.cell_data_ptrs_,
                                                  filter.get_filter_node().column_exprs_,
                                                  datum_infos,
-                                                 const_cast<common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &>(filter.get_default_datums())))){
+                                                 &(const_cast<common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &>(filter.get_default_datums()))))){
         LOG_WARN("Failed to get rows for old format", K(ret), K(cur_row_index));
       }
 
@@ -624,7 +624,7 @@ int ObIMicroBlockRowScanner::get_rows_for_old_format(
     const char **cell_datas,
     sql::ObExprPtrIArray &exprs,
     common::ObIArray<ObSqlDatumInfo> &datum_infos,
-    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums)
+    common::ObIArray<blocksstable::ObStorageDatum> *default_datums)
 {
   int ret = OB_SUCCESS;
   sql::ObEvalCtx &eval_ctx = param_->op_->get_eval_ctx();
@@ -691,7 +691,7 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
     const char **cell_datas,
     uint32_t *len_array,
     sql::ObExprPtrIArray &exprs,
-    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums)
+    common::ObIArray<blocksstable::ObStorageDatum> *default_datums)
 {
   int ret = OB_SUCCESS;
   sql::ObEvalCtx &eval_ctx = param_->op_->get_eval_ctx();
@@ -914,15 +914,6 @@ int ObIMicroBlockRowScanner::get_next_rows(
     const int64_t datum_offset,
     uint32_t *len_array)
 {
-  common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> default_datums;
-  default_datums.init(col_params.count());
-  for(int i=0;i<col_params.count();i++)
-  {
-    ObObj def_cell(col_params.at(i)->get_orig_default_value());
-    blocksstable::ObStorageDatum default_datum;
-    default_datum.from_obj(def_cell);
-    default_datums.push_back(default_datum);
-  }
   int ret = OB_SUCCESS;
   sql::ObExprPtrIArray &exprs = *(const_cast<sql::ObExprPtrIArray *>(param_->output_exprs_));
   if (OB_UNLIKELY(nullptr == row_ids || nullptr == cell_datas || 0 == row_cap)) {
@@ -938,7 +929,7 @@ int ObIMicroBlockRowScanner::get_next_rows(
                                          cell_datas,
                                          len_array,
                                          exprs,
-                                         default_datums))){
+                                         nullptr))){
       LOG_WARN("Failed to get rows for rich format", K(ret));
     }
   // cg scanner use major sstable only, no need default row
@@ -950,7 +941,7 @@ int ObIMicroBlockRowScanner::get_next_rows(
                                              cell_datas,
                                              exprs,
                                              datum_infos,
-                                             default_datums))){
+                                             nullptr))){
     LOG_WARN("Failed to get rows for old format", K(ret));
   }
   return ret;

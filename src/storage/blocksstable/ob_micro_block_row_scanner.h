@@ -131,7 +131,7 @@ public:
       const char **cell_datas,
       sql::ObExprPtrIArray &exprs,
       common::ObIArray<ObSqlDatumInfo> &datum_infos,
-      common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums);
+      common::ObIArray<blocksstable::ObStorageDatum> *default_datums);
   int get_rows_for_rich_format(
       const common::ObIArray<int32_t> &col_offsets,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
@@ -141,7 +141,7 @@ public:
       const char **cell_datas,
       uint32_t *len_array,
       sql::ObExprPtrIArray &exprs,
-      common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums);
+      common::ObIArray<blocksstable::ObStorageDatum> *default_datums);
   int64_t get_current_pos() const
   { return current_; }
   OB_INLINE int64_t get_last_pos() const

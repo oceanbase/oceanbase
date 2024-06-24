@@ -12,16 +12,13 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "ob_none_exist_decoder.h"
-
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "ob_bit_stream.h"
-#include "ob_integer_array.h"
-#include "ob_row_index.h"
-#include "ob_vector_decode_util.h"
-#include "common/ob_target_specific.h"
-#include "lib/hash/ob_hashset.h"
-#include "sql/engine/expr/ob_expr_cmp_func.h"
+#include "ob_none_exist_cs_decoder.h"
+#include "ob_string_column_decoder.h"
+#include "ob_string_stream_decoder.h"
+#include "ob_integer_stream_decoder.h"
+#include "ob_cs_encoding_util.h"
+#include "ob_cs_decoding_util.h"
+#include "ob_string_stream_vector_decoder.h"
 
 namespace oceanbase
 {
@@ -31,8 +28,8 @@ namespace blocksstable
 class ObIRowIndex;
 using namespace common;
 
-int ObNoneExistColumnDecoder::get_null_count(
-    const ObColumnDecoderCtx &ctx,
+int ObNoneExistColumnCSDecoder::get_null_count(
+    const ObColumnCSDecoderCtx &ctx,
     const ObIRowIndex *row_index,
     const int64_t *row_ids,
     const int64_t row_cap,
@@ -41,21 +38,21 @@ int ObNoneExistColumnDecoder::get_null_count(
   return OB_NOT_SUPPORTED;
 }
 
-int ObNoneExistColumnDecoder::get_distinct_count(int64_t &distinct_count) const
+int ObNoneExistColumnCSDecoder::get_distinct_count(int64_t &distinct_count) const
 {
   return OB_NOT_SUPPORTED;
 }
 
-int ObNoneExistColumnDecoder::read_distinct(
-    const ObColumnDecoderCtx &ctx,
+int ObNoneExistColumnCSDecoder::read_distinct(
+    const ObColumnCSDecoderCtx &ctx,
     const char **cell_datas,
     storage::ObGroupByCell &group_by_cell)  const
 {
   return OB_NOT_SUPPORTED;
 }
 
-int ObNoneExistColumnDecoder::read_reference(
-    const ObColumnDecoderCtx &ctx,
+int ObNoneExistColumnCSDecoder::read_reference(
+    const ObColumnCSDecoderCtx &ctx,
     const int64_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
@@ -63,10 +60,9 @@ int ObNoneExistColumnDecoder::read_reference(
   return OB_NOT_SUPPORTED;
 }
 
-int ObNoneExistColumnDecoder::decode_vector(
-      const ObColumnDecoderCtx &decoder_ctx,
-      const ObIRowIndex *row_index,
-      ObVectorDecodeCtx &vector_ctx) const
+int ObNoneExistColumnCSDecoder::decode_vector(
+    const ObColumnCSDecoderCtx &decoder_ctx,
+    ObVectorDecodeCtx &vector_ctx) const
 {
   int ret = OB_SUCCESS;
   ObDatum *col_datum = nullptr;
@@ -92,27 +88,22 @@ int ObNoneExistColumnDecoder::decode_vector(
   return ret;
 }
 
-int ObNoneExistColumnDecoder::decode(
-    const ObColumnDecoderCtx &ctx, 
-    common::ObDatum &datum, 
-    const int64_t row_id,
-    const ObBitStream &bs, 
-    const char *data, 
-    const int64_t len) const
+int ObNoneExistColumnCSDecoder::decode(
+    const ObColumnCSDecoderCtx &ctx, 
+    const int32_t row_id, 
+    common::ObDatum &datum) const
 {
   datum.set_ext();
   datum.no_cv(datum.extend_obj_)->set_ext(common::ObActionFlag::OP_NOP);
   return common::OB_SUCCESS;
 }
 
-int ObNoneExistColumnDecoder::pushdown_operator(
-      const sql::ObPushdownFilterExecutor *parent,
-      const ObColumnDecoderCtx &col_ctx,
-      const sql::ObWhiteFilterExecutor &filter,
-      const char* meta_data,
-      const ObIRowIndex* row_index,
-      const sql::PushdownFilterInfo &pd_filter_info,
-      ObBitmap &result_bitmap) const
+int ObNoneExistColumnCSDecoder::pushdown_operator(
+    const sql::ObPushdownFilterExecutor *parent,
+    const ObColumnCSDecoderCtx &col_ctx,
+    const sql::ObWhiteFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    ObBitmap &result_bitmap) const
 {
   int ret = OB_SUCCESS;
   const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
@@ -193,12 +184,10 @@ int ObNoneExistColumnDecoder::pushdown_operator(
   return ret;
 }
 
-int ObNoneExistColumnDecoder::pushdown_operator(
+int ObNoneExistColumnCSDecoder::pushdown_operator(
     const sql::ObPushdownFilterExecutor *parent,
-    const ObColumnDecoderCtx &col_ctx,
+    const ObColumnCSDecoderCtx &col_ctx,
     sql::ObBlackFilterExecutor &filter,
-    const char* meta_data,
-    const ObIRowIndex* row_index,
     sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap,
     bool &filter_applied) const

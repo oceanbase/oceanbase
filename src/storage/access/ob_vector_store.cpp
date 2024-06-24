@@ -87,8 +87,8 @@ int ObVectorStore::init(const ObTableAccessParam &param)
     const bool use_new_format = param.iter_param_.use_new_format();
     if (OB_FAIL(exprs_.init(expr_count))) {
       LOG_WARN("Failed to init exprs", K(ret));
-    } else if (OB_FAIL(default_datums_.init(expr_count))) {
-      STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
+    } else if (OB_FAIL(default_datums_.init(out_cols_param->count()))) {
+      STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(out_cols_param->count()));
     } else if (OB_FAIL(cols_projector_.init(expr_count))) {
       LOG_WARN("Failed to init cols", K(ret));
     } else if (OB_FAIL(datum_infos_.init(expr_count))) {
@@ -136,7 +136,7 @@ int ObVectorStore::init(const ObTableAccessParam &param)
           }
           ObObj def_cell(out_cols_param->at(out_cols_projector.at(i))->get_orig_default_value());
           blocksstable::ObStorageDatum default_datum;
-          default_datum.from_obj(def_cell);
+          default_datum.from_obj(def_cell, expr->obj_datum_map_);
           if (def_cell.is_nop_value()) {
             default_datums_[col_params_.count()].set_nop();
           } else if (OB_FAIL(default_datums_.push_back(default_datum))) {
@@ -286,7 +286,7 @@ int ObVectorStore::fill_output_rows(
                                                   cell_data_ptrs_,
                                                   len_array_,
                                                   exprs_,
-                                                  default_datums_))){
+                                                  &default_datums_))){
       LOG_WARN("Failed to get rows for rich format", K(ret));
     }
   } else if (OB_FAIL(scanner->get_rows_for_old_format(cols_projector_,
@@ -297,7 +297,7 @@ int ObVectorStore::fill_output_rows(
                                                       cell_data_ptrs_,
                                                       exprs_,
                                                       datum_infos_,
-                                                      default_datums_))){
+                                                      &default_datums_))){
     LOG_WARN("Failed to get rows for old format", K(ret));
   }
   if (OB_SUCC(ret)) {

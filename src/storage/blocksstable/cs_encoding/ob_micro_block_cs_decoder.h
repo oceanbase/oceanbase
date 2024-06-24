@@ -212,7 +212,7 @@ public:
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
+      common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
@@ -261,7 +261,7 @@ public:
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
+      common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
       const int32_t *row_ids,
       const int64_t row_cap,
       const char **cell_datas,

@@ -22,6 +22,7 @@
 #include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/access/ob_table_access_context.h"
 #include "ob_cs_encoding_util.h"
+#include "ob_none_exist_cs_decoder.h"
 
 namespace oceanbase
 {
@@ -1559,7 +1560,7 @@ int ObMicroBlockCSDecoder::filter_black_filter_batch(
 int ObMicroBlockCSDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
+    common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
     const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
@@ -1848,7 +1849,7 @@ int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
 int ObMicroBlockCSDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
+    common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
     const int32_t *row_ids,
     const int64_t row_cap,
     const char **cell_datas,
@@ -1880,6 +1881,7 @@ int ObMicroBlockCSDecoder::get_rows(
       if (OB_SUCC(ret)) {
         ObVectorDecodeCtx vector_decode_ctx(
             cell_datas, len_array, row_ids, row_cap, vec_offset, expr.get_vector_header(eval_ctx));
+        vector_decode_ctx.set_default(&default_datums->at(i), &expr, &eval_ctx);
         if (OB_FAIL(get_col_data(col_id, vector_decode_ctx))) {
           LOG_WARN("Failed to get col datums", K(ret), K(i), K(col_id), K(vector_decode_ctx));
         } else if (need_padding && OB_FAIL(storage::pad_on_rich_format_columns(
@@ -1901,10 +1903,7 @@ int ObMicroBlockCSDecoder::get_rows(
 int ObMicroBlockCSDecoder::get_col_data(const int32_t col_id, ObVectorDecodeCtx &vector_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(col_id >= column_count_)) {
-    ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("Vector store col id greate than store cnt", KR(ret), K(column_count_), K(col_id));
-  } else if (OB_FAIL(decoders_[col_id].decode_vector(vector_ctx))) {
+  if (OB_FAIL(decoders_[col_id].decode_vector(vector_ctx))) {
     LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(vector_ctx));
   }
   return ret;

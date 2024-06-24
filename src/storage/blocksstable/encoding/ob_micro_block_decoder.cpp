@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/access/ob_table_access_context.h"
+#include "ob_none_exist_decoder.h"
 
 namespace oceanbase
 {
@@ -1923,8 +1924,8 @@ int ObMicroBlockDecoder::filter_black_filter_batch(
   } else {
     const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
     const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
-    if (decoders_[col_offsets.at(0)].ctx_->col_header_ == NULL)
-    {
+    if (1 == col_offsets.count() &&
+      OB_ISNULL(decoders_[col_offsets.at(0)].ctx_->col_header_)){
       ObColumnDecoder* column_decoder = decoders_ + col_offsets.at(0);
       if (OB_FAIL(column_decoder->decoder_->pushdown_operator(
                     parent,
@@ -1962,7 +1963,7 @@ int ObMicroBlockDecoder::filter_black_filter_batch(
 int ObMicroBlockDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
+    common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
     const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
@@ -2231,7 +2232,7 @@ int ObMicroBlockDecoder::get_group_by_aggregate_result(
 int ObMicroBlockDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
+    common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
     const int32_t *row_ids,
     const int64_t row_cap,
     const char **cell_datas,
@@ -2264,7 +2265,7 @@ int ObMicroBlockDecoder::get_rows(
       if (OB_SUCC(ret)) {
         ObVectorDecodeCtx vector_decode_ctx(
             cell_datas, len_array, row_ids, row_cap, vec_offset, expr.get_vector_header(eval_ctx));
-        vector_decode_ctx.set_default(&default_datums[i], &expr, &eval_ctx);
+        vector_decode_ctx.set_default(&default_datums->at(i), &expr, &eval_ctx);
         if (OB_FAIL(get_col_data(col_id, vector_decode_ctx))) {
           LOG_WARN("Failed to get col datums", K(ret), K(i), K(col_id), K(vector_decode_ctx));
         } else if (need_padding && OB_FAIL(storage::pad_on_rich_format_columns(
