@@ -8143,6 +8143,133 @@ int ObDMLResolver::add_additional_function_according_to_type(const ColumnItem *c
   return ret;
 }
 
+int search_parquet_expr(ObRawExpr *root, ObRawExpr *file_row_expr, ObRawExpr *&pattern_expr) {
+  int ret = OB_SUCCESS;
+  ObRawExpr *get_path_expr = NULL;
+  pattern_expr = NULL;
+  if (OB_ISNULL(root) || OB_ISNULL(file_row_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (T_FUN_SYS_CAST == root->get_expr_type()) {
+    if (root->get_param_count() <= 0 || OB_ISNULL(get_path_expr = root->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      if (T_FUN_SYS_GET_PATH == get_path_expr->get_expr_type()) {
+        if (get_path_expr->get_param_count() > 0 && get_path_expr->get_param_expr(0) == file_row_expr) {
+          pattern_expr = root;
+        }
+      }
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && NULL == pattern_expr && i < root->get_param_count(); i++) {
+    if (OB_FAIL(SMART_CALL(search_parquet_expr(root->get_param_expr(i), file_row_expr, pattern_expr)))) {
+      LOG_WARN("fail to search parquet column expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_external_table_generated_column(
+    ObQualifiedName &col,
+    const TableItem &table_item,
+    const ObTableSchema *table_schema,
+    const ObColumnSchemaV2 *column_schema,
+    ObRawExpr *&real_ref_expr,
+    ObRawExpr *&ref_expr)
+{
+  int ret = OB_SUCCESS;
+  uint64_t file_column_idx = UINT64_MAX;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(column_schema) || OB_ISNULL(ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected arg", KP(table_schema), KP(column_schema), KP(ref_expr));
+  } else if (0 == col.col_name_.case_compare(N_EXTERNAL_FILE_URL)) {
+    if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_file_url(
+                                    *params_.expr_factory_, *params_.session_info_,
+                                    table_item.table_id_, table_item.table_name_,
+                                    col.col_name_, real_ref_expr))) {
+      LOG_WARN("fail to build external table file column expr", K(ret));
+    }
+  } else if (col.col_name_.prefix_match_ci(N_PARTITION_LIST_COL)) {
+    if (OB_FAIL(ObResolverUtils::calc_file_column_idx(col.col_name_, file_column_idx))) {
+      LOG_WARN("fail to calc file column idx", K(ret));
+    } else if (nullptr == (real_ref_expr = ObResolverUtils::find_file_column_expr(
+                pseudo_external_file_col_exprs_, table_item.table_id_, file_column_idx, col.col_name_))) {
+      if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_partition_list_col(
+                                      *params_.expr_factory_, *params_.session_info_,
+                                      table_item.table_id_, table_item.table_name_,
+                                      col.col_name_, file_column_idx, real_ref_expr,
+                                      column_schema))) {
+        LOG_WARN("fail to build external table file column expr", K(ret));
+      }
+    }
+  } else {
+    ObExternalFileFormat format;
+    if (OB_FAIL(format.load_from_string(table_schema->get_external_file_format(), *params_.allocator_))) {
+      LOG_WARN("load from string failed", K(ret));
+    } else if (format.format_type_ != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
+      ret = OB_WRONG_COLUMN_NAME;
+      LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, col.col_name_.length(), col.col_name_.ptr());
+    } else if (ObExternalFileFormat::CSV_FORMAT == format.format_type_) {
+      if (OB_FAIL(ObResolverUtils::calc_file_column_idx(col.col_name_, file_column_idx))) {
+        LOG_WARN("fail to calc file column idx", K(ret));
+      } else if (nullptr == (real_ref_expr = ObResolverUtils::find_file_column_expr(
+                              pseudo_external_file_col_exprs_, table_item.table_id_, file_column_idx, col.col_name_))) {
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_csv(
+                                        *params_.expr_factory_, *params_.session_info_,
+                                        table_item.table_id_, table_item.table_name_,
+                                        col.col_name_, file_column_idx,
+                                        real_ref_expr, format))) {
+          LOG_WARN("fail to build external table file column expr", K(ret));
+        }
+      }
+    } else if (ObExternalFileFormat::PARQUET_FORMAT == format.format_type_) {
+      ObRawExpr *cast_expr = NULL;
+      ObRawExpr *get_path_expr = NULL;
+      ObRawExpr *cast_type_expr = NULL;
+      if (T_FUN_SYS_GET_PATH == ref_expr->get_expr_type()) {
+        // GET_PATH(N_EXTERNAL_FILE_ROW, 'xxx')
+        if (ref_expr->get_param_count() > 0 && ref_expr->get_param_expr(0) == col.ref_expr_) {
+          get_path_expr = ref_expr;
+          cast_type_expr = NULL; //using column type as result type
+        }
+      } else {
+        // search pattern: cast(GET_PATH(N_EXTERNAL_FILE_ROW, 'xxx') as xxx)
+        if (OB_FAIL(search_parquet_expr(ref_expr, col.ref_expr_, cast_expr))) {
+          LOG_WARN("fail to serach parquet path expr", K(ret));
+        } else if (OB_NOT_NULL(cast_expr)) {
+          if (cast_expr->get_param_count() != 2
+              || OB_ISNULL(get_path_expr = cast_expr->get_param_expr(0))
+              || OB_ISNULL(cast_type_expr = cast_expr->get_param_expr(1))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected cast expr", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObRawExpr *pattern_expr = OB_NOT_NULL(cast_expr) ? cast_expr : get_path_expr;
+        if (OB_ISNULL(pattern_expr)) {
+          ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+          LOG_WARN("invalid generated column define for external table", K(ret));
+        } else if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_parquet(
+                             *params_.expr_factory_, *params_.session_info_,
+                             table_item.table_id_, table_item.table_name_,
+                             col.col_name_, get_path_expr,
+                             cast_expr, column_schema, real_ref_expr))) {
+          LOG_WARN("fail to build file column expr", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(ref_expr, pattern_expr, real_ref_expr))) {
+          LOG_WARN("replace column reference expr failed", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(pseudo_external_file_col_exprs_.push_back(real_ref_expr))) {
+      LOG_WARN("fail to push back to array", K(ret));
+    }
+  }
+  LOG_TRACE("add external file column", KPC(real_ref_expr), K(col.col_name_));
+  return ret;
+}
+
 int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
     const TableItem &table_item, const ObColumnSchemaV2 *column_schema,
     const ObColumnRefRawExpr &column, ObRawExpr *&ref_expr,
@@ -8265,28 +8392,11 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
         }
       }
     } else if (table_schema->is_external_table()
-               && ObResolverUtils::is_external_file_column_name(columns.at(i).col_name_)) {
-      uint64_t file_column_idx = UINT64_MAX;
-      if (OB_ISNULL(stmt)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret));
-      } else if (OB_FAIL(ObResolverUtils::calc_file_column_idx(columns.at(i).col_name_, file_column_idx))) {
-        LOG_WARN("fail to calc file column idx", K(ret));
-      } else if (nullptr == (real_ref_expr = ObResolverUtils::find_file_column_expr(
-                               pseudo_external_file_col_exprs_, table_item.table_id_, file_column_idx, columns.at(i).col_name_))) {
-        ObExternalFileFormat format;
-        if (OB_FAIL(format.load_from_string(table_schema->get_external_file_format(), *params_.allocator_))) {
-          LOG_WARN("load from string failed", K(ret));
-        } else if (OB_FAIL(ObResolverUtils::build_file_column_expr(*params_.expr_factory_, *params_.session_info_,
-                                                            table_item.table_id_, table_item.alias_name_,
-                                                            columns.at(i).col_name_, file_column_idx, real_ref_expr,
-                                                            format.csv_format_.cs_type_, column_schema))) {
-          LOG_WARN("fail to build external table file column expr", K(ret));
-        } else if (OB_FAIL(pseudo_external_file_col_exprs_.push_back(real_ref_expr))) {
-          LOG_WARN("fail to push back to array", K(ret));
-        }
+               && ObResolverUtils::is_external_pseudo_column_name(columns.at(i).col_name_)) {
+      if (OB_FAIL(resolve_external_table_generated_column(columns.at(i), table_item, table_schema,
+                                                          column_schema, real_ref_expr, ref_expr))) {
+        LOG_WARN("fail to resolve external table generated column", K(ret));
       }
-      LOG_TRACE("add external file column", KPC(real_ref_expr), K(columns.at(i).col_name_), K(table_item));
     } else {
       if (OB_FAIL(resolve_basic_column_item(table_item, columns.at(i).col_name_,
                                             include_hidden, col_item, stmt))) {
@@ -13198,10 +13308,10 @@ int ObDMLResolver::resolve_pseudo_column(
     } else if (NULL != (real_ref_expr = ObResolverUtils::find_file_column_expr(
                               pseudo_external_file_col_exprs_, table_item->table_id_, UINT64_MAX, q_name.col_name_))) {
       LOG_TRACE("find file name pseudo column", K(*real_ref_expr));
-    } else if (OB_FAIL(ObResolverUtils::build_file_column_expr(*params_.expr_factory_, *params_.session_info_,
-                                                        table_item->table_id_, table_item->alias_name_,
-                                                        q_name.col_name_, UINT64_MAX, real_ref_expr,
-                                                        CHARSET_UTF8MB4))) {
+    } else if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_file_url(
+                                          *params_.expr_factory_, *params_.session_info_,
+                                          table_item->table_id_, table_item->alias_name_,
+                                          q_name.col_name_, real_ref_expr))) {
       LOG_WARN("fail to build external table file column expr", K(ret));
     } else if (OB_FAIL(pseudo_external_file_col_exprs_.push_back(real_ref_expr))) {
       LOG_WARN("fail to push back to array", K(ret));

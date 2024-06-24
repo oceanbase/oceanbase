@@ -614,7 +614,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
 int ObExprCast::get_cast_type(const bool enable_decimal_int,
                               const ObExprResType param_type2,
                               const ObCastMode cast_mode,
-                              ObExprResType &dst_type) const
+                              ObExprResType &dst_type)
 {
   int ret = OB_SUCCESS;
   if (!param_type2.is_int() && !param_type2.get_param().is_int()) {

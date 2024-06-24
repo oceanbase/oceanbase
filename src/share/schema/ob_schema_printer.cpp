@@ -5350,16 +5350,19 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     ObExternalFileFormat format;
     if (OB_FAIL(format.load_from_string(table_schema.get_external_file_format(), allocator))) {
       SHARE_SCHEMA_LOG(WARN, "fail to load from json string", K(ret));
-    } else if (format.format_type_ != ObExternalFileFormat::CSV_FORMAT) {
+    } else if (!(format.format_type_ > ObExternalFileFormat::INVALID_FORMAT
+                 && format.format_type_ < ObExternalFileFormat::MAX_FORMAT)) {
+      ret = OB_NOT_SUPPORTED;
       SHARE_SCHEMA_LOG(WARN, "unsupported to print file format", K(ret), K(format.format_type_));
-    } else {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nFORMAT (\n"))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print FORMAT (", K(ret));
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  TYPE = '%s',", ObExternalFileFormat::FORMAT_TYPE_STR[format.format_type_]))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print TYPE", K(ret));
+    }
+    if (OB_SUCC(ret) && ObExternalFileFormat::CSV_FORMAT == format.format_type_) {
       const ObCSVGeneralFormat &csv = format.csv_format_;
       const ObOriginFileFormat &origin_format = format.origin_file_format_str_;
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nFORMAT (\n"))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to print FORMAT (", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  TYPE = 'CSV',"))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to print TYPE", K(ret));
-      } else if (OB_FAIL(0 != csv.line_term_str_.case_compare(ObDataInFileStruct::DEFAULT_LINE_TERM_STR) &&
+      if (OB_FAIL(0 != csv.line_term_str_.case_compare(ObDataInFileStruct::DEFAULT_LINE_TERM_STR) &&
                         databuff_printf(buf, buf_len, pos, "\n  LINE_DELIMITER = %.*s,", origin_format.origin_line_term_str_.length(), origin_format.origin_line_term_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print LINE_DELIMITER", K(ret));
       } else if (OB_FAIL(0 != csv.field_term_str_.case_compare(ObDataInFileStruct::DEFAULT_FIELD_TERM_STR) &&
@@ -5388,11 +5391,12 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       } else if (OB_FAIL(0 != csv.null_if_.count() &&
                         databuff_printf(buf, buf_len, pos, "\n  NULL_IF = (%.*s),", origin_format.origin_null_if_str_.length(), origin_format.origin_null_if_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print NULL_IF", K(ret));
-      } else {
-        --pos;
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n) "))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print )", K(ret));
-        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      --pos;
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n) "))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print )", K(ret));
       }
     }
   }

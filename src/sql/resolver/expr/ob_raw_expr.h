@@ -4741,18 +4741,22 @@ public:
   uint64_t get_table_id() const { return table_id_; }
   void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
   const common::ObString & get_table_name() const { return table_name_; }
+  void set_data_access_path(const common::ObString &data_access_path) { data_access_path_ = data_access_path; }
+  const common::ObString & get_data_access_path() const { return data_access_path_; }
 
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
                        N_REL_ID, rel_ids_,
                        N_TABLE_ID, table_id_,
-                       N_TABLE_NAME, table_name_);
+                       N_TABLE_NAME, table_name_,
+                       K_(data_access_path));
 private:
   ObRawExpr *cte_cycle_value_;
   ObRawExpr *cte_cycle_default_value_;
   uint64_t table_id_;
   common::ObString table_name_;
+  common::ObString data_access_path_; //for external table column
   DISALLOW_COPY_AND_ASSIGN(ObPseudoColumnRawExpr);
 };
 

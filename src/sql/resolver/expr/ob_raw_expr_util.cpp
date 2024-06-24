@@ -2460,7 +2460,7 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory &expr_factory,
         && true == need_check_simple_column
         && T_REF_COLUMN == expr->get_expr_type()
         && !(columns.count() == 1
-             && ObResolverUtils::is_external_file_column_name(columns.at(0).col_name_))) {
+             && ObResolverUtils::is_external_pseudo_column_name(columns.at(0).col_name_))) {
       ret = OB_ERR_INVALID_COLUMN_EXPRESSION;
       LOG_WARN("simple column is not allowed in Oracle mode", K(ret), K(*expr));
     }

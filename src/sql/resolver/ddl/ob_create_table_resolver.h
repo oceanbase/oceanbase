@@ -90,6 +90,7 @@ private:
   int set_temp_table_info(share::schema::ObTableSchema &table_schema, ParseNode *commit_option_node);
 
   int resolve_table_charset_info(const ParseNode *node);
+  int resolve_external_table_format_early(const ParseNode *node);
   //index
   int add_sort_column(const obrpc::ObColumnSortItem &sort_column);
   int generate_index_arg();

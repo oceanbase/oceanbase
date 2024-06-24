@@ -118,7 +118,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     have_generate_fts_arg_(false),
     is_set_lob_inrow_threshold_(false),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
-    auto_increment_cache_size_(0)
+    auto_increment_cache_size_(0),
+    external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT)
 {
   table_mode_.reset();
 }
@@ -2661,9 +2662,13 @@ int ObDDLResolver::resolve_file_format(const ParseNode *node, ObExternalFileForm
     switch (node->type_) {
       case T_EXTERNAL_FILE_FORMAT_TYPE: {
         ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        if (0 == string_v.case_compare("CSV")) {
-          format.format_type_ = ObExternalFileFormat::CSV_FORMAT;
-        } else {
+        for (int i = 0; i < ObExternalFileFormat::MAX_FORMAT; i++) {
+          if (0 == string_v.case_compare(ObExternalFileFormat::FORMAT_TYPE_STR[i])) {
+            format.format_type_ = static_cast<ObExternalFileFormat::FormatType>(i);
+            break;
+          }
+        }
+        if (ObExternalFileFormat::INVALID_FORMAT == format.format_type_) {
           ObSqlString err_msg;
           err_msg.append_fmt("format '%.*s'", string_v.length(), string_v.ptr());
           ret = OB_NOT_SUPPORTED;
@@ -3021,12 +3026,13 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
                                              ObColumnResolveStat &resolve_stat,
                                              bool &is_modify_column_visibility,
                                              common::ObString &pk_name,
+                                             const ObTableSchema &table_schema,
                                              const bool is_oracle_temp_table,
                                              const bool is_create_table_as,
-                                             const bool is_external_table,
                                              const bool allow_has_default)
 {
   int ret = OB_SUCCESS;
+  bool is_external_table = table_schema.is_external_table();
   bool is_modify_column = stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
                   && OB_DDL_MODIFY_COLUMN == (static_cast<AlterColumnSchema &>(column)).alter_type_;
   ParseNode *column_definition_ref_node = NULL;
@@ -3331,15 +3337,13 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       }
     } else if (is_external_table) {
       //mock generated column
-      uint64_t file_column_idx = column.get_column_id() - OB_APP_MIN_COLUMN_ID + 1;
-      ObSqlString temp_str;
+      ObExternalFileFormat format;
+      format.format_type_ = external_table_format_type_;
       ObString mock_gen_column_str;
-      ObObj default_value;
-      if (OB_FAIL(temp_str.append_fmt("%s%lu", N_EXTERNAL_FILE_COLUMN_PREFIX, file_column_idx))) {
-        LOG_WARN("fail to append sql str", K(ret));
-      } else if (OB_FAIL(ob_write_string(*allocator_, temp_str.string(), mock_gen_column_str))) {
-        LOG_WARN("fail to write string", K(ret));
+      if (OB_FAIL(format.mock_gen_column_def(column, *allocator_, mock_gen_column_str))) {
+        LOG_WARN("fail to mock gen column def", K(ret));
       } else {
+        ObObj default_value;
         default_value.set_varchar(mock_gen_column_str);
         default_value.set_collation_type(ObCharset::get_system_collation());
         if (OB_FAIL(column.set_cur_default_value(default_value))) {

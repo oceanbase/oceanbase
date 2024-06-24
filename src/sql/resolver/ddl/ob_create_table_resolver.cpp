@@ -598,6 +598,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           // do nothing
         }
 
+        if (OB_SUCC(ret) && is_external_table_) {
+          //before resolve table elements
+          if (OB_FAIL(resolve_external_table_format_early(create_table_node->children_[4]))) {
+            LOG_WARN("fail to resolve external file format", K(ret));
+          }
+        }
+
         // 1、 resolve table_id first for check whether is inner_table
         if (OB_SUCC(ret) && OB_FAIL(resolve_table_id_pre(create_table_node->children_[4]))) {
           SQL_RESV_LOG(WARN, "resolve_table_id_pre failed", K(ret));
@@ -1445,9 +1452,9 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
           if (OB_FAIL(resolve_column_definition(column, element, stat,
                                                 is_modify_column_visibility,
                                                 pk_name,
+                                                table_schema,
                                                 is_oracle_temp_table_,
-                                                is_create_table_as,
-                                                table_schema.is_external_table()))) {
+                                                is_create_table_as))) {
             SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
           } else if (!column.is_udt_related_column(lib::is_oracle_mode()) && // udt column will check after hidden column generated
                      OB_FAIL(check_default_value(column.get_cur_default_value(),
@@ -3100,6 +3107,43 @@ int ObCreateTableResolver::resolve_index_name(
     }
   }
 
+  return ret;
+}
+
+int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(node)) {
+    if (T_TABLE_OPTION_LIST != node->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid argument.", K(ret));
+    } else {
+      ParseNode *option_node = NULL;
+      int32_t num = node->num_child_;
+      for (int32_t i = 0; OB_SUCC(ret) && i < num; ++i) {
+        option_node = node->children_[i];
+        if (OB_NOT_NULL(option_node) && T_EXTERNAL_FILE_FORMAT == option_node->type_) {
+          ObExternalFileFormat format;
+          for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
+            if (OB_NOT_NULL(option_node->children_[j])
+                && T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[j]->type_) {
+              if (OB_FAIL(resolve_file_format(option_node->children_[j], format))) {
+                LOG_WARN("fail to resolve file format", K(ret));
+              } else {
+                external_table_format_type_ = format.format_type_;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && external_table_format_type_ >= ObExternalFileFormat::PARQUET_FORMAT) {
+    uint64_t data_version = 0;
+    CK (OB_NOT_NULL(session_info_));
+    OZ (GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version));
+    OV (DATA_VERSION_4_3_2_0 <= data_version, OB_NOT_SUPPORTED, data_version);
+  }
   return ret;
 }
 

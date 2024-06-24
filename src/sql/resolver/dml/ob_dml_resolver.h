@@ -213,6 +213,13 @@ public:
   int fill_same_column_to_using(JoinedTable* &joined_table);
   int get_columns_from_table_item(const TableItem *table_item, common::ObIArray<common::ObString> &column_names);
 
+  int resolve_external_table_generated_column(
+      ObQualifiedName &col,
+      const TableItem &table_item,
+      const share::schema::ObTableSchema *table_schema,
+      const share::schema::ObColumnSchemaV2 *column_schema,
+      ObRawExpr *&real_ref_expr,
+      ObRawExpr *&ref_expr);
   int resolve_using_columns(const ParseNode &using_node, common::ObIArray<common::ObString> &column_names);
   int transfer_using_to_on_expr(JoinedTable *&joined_table);
   int resolve_table_column_expr(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);

@@ -5468,9 +5468,8 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
   } else if (OB_FAIL(tmp_table_schema.assign(*table_schema_))) {
     LOG_WARN("failed to assign a table schema", K(ret));
   } else if (OB_FAIL(resolve_column_definition(column, node, stat,
-              is_modify_column_visibility, pk_name,
+              is_modify_column_visibility, pk_name, *table_schema_,
               is_oracle_temp_table,
-              false,
               false,
               allow_has_default))) {
     SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));

@@ -394,6 +394,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_func_round.cpp
   engine/expr/ob_expr_func_sleep.cpp
   engine/expr/ob_expr_get_package_var.cpp
+  engine/expr/ob_expr_get_path.cpp
   engine/expr/ob_expr_get_subprogram_var.cpp
   engine/expr/ob_expr_get_sys_var.cpp
   engine/expr/ob_expr_get_user_var.cpp
@@ -877,6 +878,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_index_lookup_op_impl.cpp
   engine/table/ob_table_scan_with_index_back_op.cpp
   engine/table/ob_external_table_access_service.cpp
+  engine/table/ob_parquet_table_row_iter.cpp
 )
 
 ob_set_subtarget(ob_sql executor

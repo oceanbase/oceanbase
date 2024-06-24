@@ -37,6 +37,7 @@ devdeps-cos-c-sdk-5.0.16-52023070517.el8.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-272023061419.el8.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.x86_64.rpm
 devdeps-protobuf-c-1.4.1-100000062023102016.el8.x86_64.rpm
+devdeps-apache-arrow-9.0.0-172024052218.el8.x86_64.rpm
 
 [deps-el9]
 devdeps-apr-1.6.5-232023090616.el9.x86_64.rpm target=el9

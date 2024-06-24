@@ -22,6 +22,7 @@ target_include_directories(
   ${DEP_3RD_DIR}/usr/include/
   ${DEP_DIR}/include/apr-1/
   ${DEP_DIR}/include/icu/common
+  ${DEP_DIR}/include/apache-arrow
   ${USSL_INCLUDE_DIRS}
 )
 
@@ -200,6 +201,9 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
+  ${DEP_DIR}/lib64/libarrow.a
+  ${DEP_DIR}/lib64/libparquet.a
+  ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib
@@ -226,6 +230,9 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
+  ${DEP_DIR}/lib64/libarrow.a
+  ${DEP_DIR}/lib64/libparquet.a
+  ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib

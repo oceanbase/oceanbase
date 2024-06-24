@@ -453,6 +453,7 @@
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
+#include "sql/engine/expr/ob_expr_get_path.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1114,6 +1115,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRbAndnotNull2empty);
     REG_OP(ObExprRbToString);
     REG_OP(ObExprRbFromString);
+    REG_OP(ObExprGetPath);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1440,6 +1442,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprInnerTableSequenceGetter);
   // REG_OP_ORCL(ObExprTopNFilter);
   REG_OP_ORCL(ObExprSdoRelate);
+  REG_OP_ORCL(ObExprGetPath);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

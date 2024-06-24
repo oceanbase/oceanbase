@@ -34,6 +34,7 @@ devdeps-cloud-qpl-1.1.0-272023061419.el8.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.x86_64.rpm
 devdeps-protobuf-c-1.4.1-100000062023102016.el8.x86_64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.x86_64.rpm
+devdeps-apache-arrow-9.0.0-172024052218.el8.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.x86_64.rpm

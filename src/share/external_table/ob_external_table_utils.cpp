@@ -263,6 +263,8 @@ int ObExternalTableUtils::make_external_table_scan_range(const common::ObString 
     obj_start[FILE_ID].set_int(file_id);
     obj_end[FILE_ID] = ObObj();
     obj_end[FILE_ID].set_int(file_id);
+    obj_start[ROW_GROUP_NUMBER].set_min_value();
+    obj_end[ROW_GROUP_NUMBER].set_max_value();
     obj_start[LINE_NUMBER] = ObObj();
     obj_start[LINE_NUMBER].set_int(first_lineno);
     obj_end[LINE_NUMBER] = ObObj();
@@ -576,7 +578,7 @@ int ObExternalTableUtils::collect_local_files_on_servers(
       context.get_cb_list().at(i)->~ObRpcAsyncLoadExternalTableFileCallBack();
     }
   }
-  LOG_TRACE("update external table file list", K(ret), K(file_urls));
+  LOG_TRACE("update external table file list", K(ret), K(file_urls), K(location), K(pattern), K(all_servers));
   return ret;
 }
 

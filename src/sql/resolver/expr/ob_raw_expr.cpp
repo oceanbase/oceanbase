@@ -6179,6 +6179,7 @@ int ObPseudoColumnRawExpr::assign(const ObRawExpr &other)
       cte_cycle_default_value_ = tmp.cte_cycle_default_value_;
       table_id_ = tmp.table_id_;
       table_name_ = tmp.table_name_;
+      data_access_path_ = tmp.data_access_path_;
     }
   }
   return ret;
@@ -6199,7 +6200,8 @@ bool ObPseudoColumnRawExpr::inner_same_as(const ObRawExpr &expr,
 {
   UNUSED(check_context);
   return type_ == expr.get_expr_type() &&
-         table_id_ == static_cast<const ObPseudoColumnRawExpr&>(expr).get_table_id();
+         table_id_ == static_cast<const ObPseudoColumnRawExpr&>(expr).get_table_id() &&
+         0 == data_access_path_.compare(static_cast<const ObPseudoColumnRawExpr&>(expr).get_data_access_path());
 }
 
 int ObPseudoColumnRawExpr::do_visit(ObRawExprVisitor &visitor)
@@ -6259,6 +6261,7 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
     case T_PSEUDO_EXTERNAL_FILE_URL:
     case T_PSEUDO_PARTITION_LIST_COL:
     case T_PSEUDO_EXTERNAL_FILE_COL:
+    case T_PSEUDO_EXTERNAL_FILE_ROW:
       if (!table_name_.empty() && OB_FAIL(BUF_PRINTF("%.*s.", table_name_.length(), table_name_.ptr()))) {
         LOG_WARN("failed to print table name", K(ret));
       } else if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, expr_name_))) {

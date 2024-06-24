@@ -570,9 +570,9 @@ protected:
       ObColumnResolveStat &reslove_stat,
       bool &is_modify_column_visibility,
       common::ObString &pk_name,
+      const ObTableSchema &table_schema,
       const bool is_oracle_temp_table = false,
       const bool is_create_table_as = false,
-      const bool is_external_table = false,
       const bool allow_has_default = true);
   int resolve_file_prefix(ObString &url, ObSqlString &prefix_str, common::ObStorageType &device_type);
   int resolve_uk_name_from_column_attribute(
@@ -1030,6 +1030,7 @@ protected:
   bool is_set_lob_inrow_threshold_;
   int64_t lob_inrow_threshold_;
   int64_t auto_increment_cache_size_;
+  ObExternalFileFormat::FormatType external_table_format_type_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

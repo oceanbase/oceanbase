@@ -1068,6 +1068,8 @@
 #define N_EXTERNAL_FILE_COLUMN_PREFIX       "metadata$filecol"
 #define N_PARTITION_LIST_COL                "metadata$partition_list_col"
 #define N_EXTERNAL_FILE_URL                 "metadata$fileurl"
+#define N_EXTERNAL_FILE_ROW                 "external$filerow"
+
 #define N_PREFIX_PATTERN                    "prefix_pattern"
 #define N_PRIV_XML_BINARY                   "_make_xml_binary"
 #define N_SYS_MAKEXML                       "sys_makexml"
@@ -1148,4 +1150,5 @@
 #define N_RB_ANDNOT_NULL2EMPTY              "rb_andnot_null2empty"
 #define N_RB_TO_STRING                      "rb_to_string"
 #define N_RB_FROM_STRING                    "rb_from_string"
+#define N_GET_PATH                          "get_path"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_
