@@ -3359,6 +3359,8 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   const ObIArray<uint64_t> &name_column_ids = check_parent_table ? fk_info.parent_column_ids_ : fk_info.child_column_ids_;
   uint64_t name_table_id = check_parent_table ? fk_info.parent_table_id_ : fk_info.child_table_id_;
 
+  
+
   if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, column_ids))) {
     LOG_WARN("add column ids failed", K(ret));
   } else if (OB_FAIL(generate_updated_column_ids(op, index_dml_info.assignments_, column_ids, das_ctdef, updated_column_ids))) {
@@ -3442,6 +3444,12 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (need_handle) {
+    /* For non-unique indexes, we do not use das scan, and use inner SQL. */
+    if (fk_info.ref_cst_type_ != CONSTRAINT_TYPE_PRIMARY_KEY 
+      && fk_info.ref_cst_type_ != CONSTRAINT_TYPE_UNIQUE_KEY) {
+      fk_arg.use_das_scan_ = false;
+      cg_.phy_plan_->set_has_nested_sql(true);
+    }
     if (check_parent_table) {
       ObDMLCtDefAllocator<ObForeignKeyCheckerCtdef> fk_allocator(cg_.phy_plan_->get_allocator());
       if (OB_ISNULL(fk_arg.fk_ctdef_ = fk_allocator.alloc())) {

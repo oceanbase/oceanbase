@@ -613,7 +613,7 @@ public:
               const common::ObIArray<uint64_t> &parent_column_ids_1,
               const common::ObIArray<uint64_t> &child_column_ids_2,
               const common::ObIArray<uint64_t> &parent_column_ids_2);
-  static int foreign_key_column_match_uk_pk_column(const share::schema::ObTableSchema &parent_table_schema,
+  static int foreign_key_column_match_index_column(const share::schema::ObTableSchema &parent_table_schema,
                                                    ObSchemaChecker &schema_checker,
                                                    const common::ObIArray<common::ObString> &parent_columns,
                                                    const common::ObSArray<obrpc::ObCreateIndexArg> &index_arg_list,
@@ -639,6 +639,9 @@ public:
   static int check_match_columns_strict_with_order(const share::schema::ObTableSchema *index_table_schema,
                                                    const obrpc::ObCreateIndexArg &create_index_arg,
                                                    bool &is_match);
+  static int check_partial_match_columns(const common::ObIArray<ObString> &parent_columns,
+                                         const common::ObIArray<ObString> &key_columns,
+                                         bool &is_match);
   static int check_pk_idx_duplicate(const share::schema::ObTableSchema &table_schema,
                                     const obrpc::ObCreateIndexArg &create_index_arg,
                                     const ObIArray<ObString> &input_index_columns_name,

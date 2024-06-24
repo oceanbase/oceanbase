@@ -19443,7 +19443,7 @@ int ObDDLService::check_rebuild_foreign_key_satisfy(
                                                                      create_fk_arg.parent_columns_,
                                                                      nullptr))) {
     LOG_WARN("Failed to check_foreign_key_columns_type", K(ret));
-  } else if (OB_FAIL(ObResolverUtils::foreign_key_column_match_uk_pk_column(
+  } else if (OB_FAIL(ObResolverUtils::foreign_key_column_match_index_column(
       parent_table_schema, schema_checker, create_fk_arg.parent_columns_, index_arg_list/*without initialization is expected*/,
       is_oracle_mode, create_fk_arg.ref_cst_type_, create_fk_arg.ref_cst_id_, is_matched))) {
     LOG_WARN("Failed to check reference columns in parent table");

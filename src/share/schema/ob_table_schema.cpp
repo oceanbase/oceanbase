@@ -7930,6 +7930,8 @@ int ObTableSchema::get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, con
   int ret = OB_SUCCESS;
   scan_index_tid = OB_INVALID_ID;
   bool is_rowkey_column = false;
+  FLOG_WARN("asdfasdf get fk check index tid:", K(parent_column_ids));
+  /* 优先寻找unique index/primary key, 其次是non-unique index. */
   if (0 >= parent_column_ids.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column number in parent key is zero", K(ret), K(parent_column_ids.count()));
@@ -7938,8 +7940,9 @@ int ObTableSchema::get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, con
   } else if (is_rowkey_column) {
     scan_index_tid = table_id_;
   } else {
-    bool find = false;
-    for (int i = 0; OB_SUCC(ret) && i < simple_index_infos_.count() && !find; ++i) {
+    /* 和primary key不匹配则尝试其他index，优先寻找unique index */
+    bool find_pk_uk = false;
+    for (int i = 0; OB_SUCC(ret) && i < simple_index_infos_.count() && !find_pk_uk; ++i) {
       const ObAuxTableMetaInfo &index_info = simple_index_infos_.at(i);
       const uint64_t index_tid = index_info.table_id_;
       const ObTableSchema *index_schema = NULL;
@@ -7950,19 +7953,51 @@ int ObTableSchema::get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, con
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
-      } else if (parent_column_ids.count() == index_schema->get_index_column_num()) {
+      } else if (index_schema->get_index_column_num() >= parent_column_ids.count()) {
         const ObIndexInfo &index_info = index_schema->get_index_info();
         bool is_rowkey = true;
-        int j = 0;
-        for (; OB_SUCC(ret) && j < parent_column_ids.count() && is_rowkey; ++j) {
-          if (OB_FAIL(index_info.is_rowkey_column(parent_column_ids.at(j), is_rowkey))) {
-            LOG_WARN("failed to check parent column is unique index column", K(ret));
+        FLOG_WARN("asdfasdf index_info: ", K(index_info));
+        for (int j = 0; OB_SUCC(ret) && j < parent_column_ids.count() && is_rowkey; ++j) {
+          bool has_col = false;
+          for (int k = 0; k < parent_column_ids.count(); k++) {
+            uint64_t col_id;
+            if (OB_FAIL(index_info.get_column_id(j, col_id))) {
+              LOG_WARN("failed to get column id", K(ret));
+            } else if (col_id == parent_column_ids.at(k)) {
+              has_col = true;
+            }
+          }
+          if (!has_col) {
+            is_rowkey = false;
           }
         }
         if (OB_SUCC(ret) && is_rowkey) {
-          find = true;
+          if (index_schema->is_unique_index() && parent_column_ids.count() == index_schema->get_index_column_num()) {
+            find_pk_uk = true;
+          }
           scan_index_tid = index_tid;
         }
+      }
+    }
+    if (OB_SUCC(ret) && scan_index_tid == OB_INVALID_ID) {
+      /* 没有找到合适的index就尝试部分匹配pk */
+      bool is_rowkey = true;
+      for (int j = 0; OB_SUCC(ret) && j < parent_column_ids.count() && is_rowkey; ++j) {
+        bool has_col = false;
+        for (int k = 0; k < parent_column_ids.count(); k++) {
+          uint64_t col_id;
+          if (OB_FAIL(rowkey_info_.get_column_id(j, col_id))) {
+            LOG_WARN("failed to get column id", K(ret));
+          } else if (col_id == parent_column_ids.at(k)) {
+            has_col = true;
+          }
+        }
+        if (!has_col) {
+          is_rowkey = false;
+        }
+      }
+      if (OB_SUCC(ret) && is_rowkey) {
+        scan_index_tid = table_id_;
       }
     }
   }

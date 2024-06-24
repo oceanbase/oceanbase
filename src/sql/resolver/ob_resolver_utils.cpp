@@ -6633,16 +6633,16 @@ int ObResolverUtils::check_dup_foreign_keys_exist(
   return ret;
 }
 
-// description: 检查主表的外键列是否满足唯一约束或者主键约束
+// description: 检查主表的外键列是否满足存在对应index的约束
 //
 // @param [in] parent_table_schema  父表 schema
 // @param [in] schema_checker       ObSchemaChecker
 // @param [in] parent_columns       父表外键列的列名
 // @param [in] index_arg_list       子表所有索引的 arg 构成的数组（注意：只有自引用的时候，index_arg_list 里才会有子表的索引信息）
-// @param [out] is_match            主表的外键列是否满足唯一约束或者主键约束的检查结果
+// @param [out] is_match            主表的外键列是否满足存在对应index的约束的检查结果
 //
 // @return oceanbase error code defined in lib/ob_errno.def
-int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &parent_table_schema,
+int ObResolverUtils::foreign_key_column_match_index_column(const ObTableSchema &parent_table_schema,
                                                            ObSchemaChecker &schema_checker,
                                                            const ObIArray<ObString> &parent_columns,
                                                            const ObSArray<ObCreateIndexArg> &index_arg_list,
@@ -6675,47 +6675,63 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
       LOG_WARN("push back index column failed", K(ret));
     } else { } // do nothing
   }
+  // 优先match pk, uk, 如果两者都没有再match non-unique index.
+  // match这两个的话ref_cst_type会是PRIMARY_KEY或UNIQUE，match non-unique index的话是INVALID。
+  bool is_pk_uk_match = false;
+  bool tmp_is_match = false;
   if (OB_SUCC(ret)) {
     // 检查父表外键列是否和主键列匹配
-    if (OB_FAIL(check_match_columns(parent_columns, pk_columns, is_match))) {
-      LOG_WARN("Failed to check_match_columns", K(ret));
-    } else if (is_match) {
-      // 不需要再对 uk 列进行配对检查，因为 parent columns 已经和父表的主键列相匹配
-      ref_cst_type = CONSTRAINT_TYPE_PRIMARY_KEY;
-      if (is_oracle_mode) {
-        for (ObTableSchema::const_constraint_iterator iter = parent_table_schema.constraint_begin(); iter != parent_table_schema.constraint_end(); ++iter) {
-          if (CONSTRAINT_TYPE_PRIMARY_KEY == (*iter)->get_constraint_type()) {
-            ref_cst_id = (*iter)->get_constraint_id();
-            break;
+    if (OB_FAIL(check_partial_match_columns(parent_columns, pk_columns, tmp_is_match))) {
+      LOG_WARN("Failed to check_partial_match_columns", K(ret));
+    } else if (tmp_is_match) {
+      is_match = true;
+      if (parent_columns.count() == pk_columns.count()) {
+        ref_cst_type = CONSTRAINT_TYPE_PRIMARY_KEY;
+        is_pk_uk_match = true;
+        if (is_oracle_mode) {
+          for (ObTableSchema::const_constraint_iterator iter = parent_table_schema.constraint_begin(); iter != parent_table_schema.constraint_end(); ++iter) {
+            if (CONSTRAINT_TYPE_PRIMARY_KEY == (*iter)->get_constraint_type()) {
+              ref_cst_id = (*iter)->get_constraint_id();
+              break;
+            }
           }
         }
+      } else {
+        ref_cst_type = CONSTRAINT_TYPE_INVALID;
       }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (index_arg_list.count() > 0) {
       // 只有 create table 时创建自引用外键的时候， index_arg_list 里才会有子表的索引信息
       // 当出现自依赖的情况, 父表的 index 信息需要从子表的 CreateTableArg 中获取,
       // 因为父表和子表为同一张表，所以父表信息此时还没有 publish 到 table schema 中
       // 现在把子表里的所有索引依次拿出来和父表的外键列作比较，查看是否满足自引用
-      // *允许匹配非unique index
-      for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < index_arg_list.count(); ++i) {
+      // *允许匹配non-unique index
+      for (int64_t i = 0; OB_SUCC(ret) && !is_pk_uk_match && i < index_arg_list.count(); ++i) {
         SMART_VAR(ObCreateIndexArg, index_arg) {
           if (OB_FAIL(index_arg.assign(index_arg_list.at(i)))) {
             LOG_WARN("fail to assign schema", K(ret));
           } else {
-            ObSEArray<ObString, 8> uk_columns;
-            // 通过 index_arg 把子表有唯一约束的列的列名拿出来，然后放到 uk_columns 里面
+            ObSEArray<ObString, 8> key_columns;
+            // 通过 index_arg 把子表有唯一约束的列的列名拿出来，然后放到 key_columns 里面
             for (int64_t j = 0; OB_SUCC(ret) && j < index_arg.index_columns_.count(); ++j) {
               const ObColumnSortItem &sort_item = index_arg.index_columns_.at(j);
-              if(OB_FAIL(uk_columns.push_back(sort_item.column_name_))) {
+              if(OB_FAIL(key_columns.push_back(sort_item.column_name_))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("push back index column failed", K(ret), K(sort_item.column_name_));
               }
             }
-            if (OB_FAIL(check_match_columns(parent_columns, uk_columns, is_match))) {
-              LOG_WARN("Failed to check_match_columns", K(ret));
-            } else if (is_match) {
-              if (INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
-              || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {
+            if (OB_FAIL(check_partial_match_columns(parent_columns, key_columns, tmp_is_match))) {
+              LOG_WARN("Failed to check_partial_match_columns", K(ret));
+            } else if (tmp_is_match) {
+              is_match = true;
+              /* unique当且仅当index是unique index而且所有的列都match */
+              if ((INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
+              || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) && parent_columns.count() == key_columns.count()) {
                 ref_cst_type = CONSTRAINT_TYPE_UNIQUE_KEY;
+                is_pk_uk_match = true;
               } else {
                 ref_cst_type = CONSTRAINT_TYPE_INVALID;
               }
@@ -6727,12 +6743,12 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
     } else {
       // 如果外键列不是参考父表的 pk 列，那么还需要继续比较是否是父表的 uk 列
       // 检查 parent columns 是否和父表的 key columns 匹配
-      // *允许匹配非unique key columns
+      // *允许匹配non-unique index key columns
       ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
       if (OB_FAIL(parent_table_schema.get_simple_index_infos(simple_index_infos))) {
         LOG_WARN("get simple_index_infos failed", K(ret));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < simple_index_infos.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && !is_pk_uk_match && i < simple_index_infos.count(); ++i) {
         const ObTableSchema *index_table_schema = NULL;
         if (OB_FAIL(schema_checker.get_table_schema(parent_table_schema.get_tenant_id(), simple_index_infos.at(i).table_id_, index_table_schema))) {
           LOG_WARN("get_table_schema failed", K(ret), "table id", simple_index_infos.at(i).table_id_);
@@ -6742,24 +6758,26 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
         } else {
           const ObColumnSchemaV2 *index_col = NULL;
           const ObIndexInfo &index_info = index_table_schema->get_index_info();
-          ObSEArray<ObString, 8> uk_columns;
+          ObSEArray<ObString, 8> key_columns;
           for (int64_t i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {
             if (OB_ISNULL(index_col = index_table_schema->get_column_schema(index_info.get_column(i)->column_id_))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get index column schema failed", K(ret));
             } else if (index_col->is_hidden() || index_col->is_shadow_column()) {
               // do nothing
-            } else if(OB_FAIL(uk_columns.push_back(index_col->get_column_name()))) {
+            } else if(OB_FAIL(key_columns.push_back(index_col->get_column_name()))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("push back index column failed", K(ret));
             } else { } // do nothing
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(check_match_columns(parent_columns, uk_columns, is_match))) {
+            if (OB_FAIL(check_partial_match_columns(parent_columns, key_columns, tmp_is_match))) {
               LOG_WARN("Failed to check_match_columns", K(ret));
-            } else if (is_match) {
-              if (index_table_schema->is_unique_index()) {
+            } else if (tmp_is_match) {
+              is_match = true;
+              if (index_table_schema->is_unique_index() && parent_columns.count() == key_columns.count()) {
                 ref_cst_type = CONSTRAINT_TYPE_UNIQUE_KEY;
+                is_pk_uk_match = true;
               } else {
                 ref_cst_type = CONSTRAINT_TYPE_INVALID;
               }
@@ -6979,6 +6997,57 @@ int ObResolverUtils::check_match_columns(
           }
         }
         if (is_tmp_match) {
+          is_match = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
+// description: 检查子表中的外键列是否和父表的一个index的列的一个前缀匹配, 顺序可以不一致
+//              index可以是non-unique
+//              eg: parent table: create index t1_index on t1(a1, a2, a3)
+//                  child table: references t1(a2, a1)
+//
+// @param [in] parent_columns  子表中的外键列名
+// @param [in] key_columns     父表中的主键列名或者唯一索引列名
+//
+// @return oceanbase error code defined in lib/ob_errno.def
+int ObResolverUtils::check_partial_match_columns(const ObIArray<ObString> &parent_columns,
+                                         const ObIArray<ObString> &key_columns,
+                                         bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  ObSEArray<ObString, 8> tmp_parent_columns;
+  ObSEArray<ObString, 8> tmp_key_columns;
+  FLOG_WARN("asdfasdf cols: ", K(parent_columns), K(key_columns));
+  if (parent_columns.count() <= key_columns.count() && parent_columns.count() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < parent_columns.count(); ++i) {
+      if(OB_FAIL(tmp_parent_columns.push_back(parent_columns.at(i)))) {
+        LOG_WARN("fail to push back", K(ret));
+      } else if(OB_FAIL(tmp_key_columns.push_back(key_columns.at(i)))) {
+        LOG_WARN("fail to push back", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (tmp_parent_columns.count() <= tmp_key_columns.count()
+            && tmp_parent_columns.count() > 0) {
+        bool tmp_is_match = true;
+        for (int64_t i = 0; tmp_is_match && i < tmp_parent_columns.count(); ++i) {
+          bool has_col = false;
+          for (int64_t j = 0; !has_col && j < tmp_parent_columns.count(); j++) {
+            if (0 == tmp_key_columns.at(i).case_compare(tmp_parent_columns.at(j))) {
+              has_col = true;
+            }  
+          }
+          if (!has_col) {
+            tmp_is_match = false;
+          }
+        }
+        if (tmp_is_match) {
           is_match = true;
         }
       }
