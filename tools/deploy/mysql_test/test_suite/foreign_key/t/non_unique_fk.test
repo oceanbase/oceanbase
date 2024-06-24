@@ -114,6 +114,10 @@ drop table A;
 create table A(a int, a2 int, a3 int, a4 int, index Aindex(a, a2, a3, a4), foreign key (a2) references A(a), foreign key (a4, a3) references A(a, a2));
 --error ER_CANNOT_ADD_FOREIGN
 create table B(a varchar(20), a2 int, a3 int, a4 int, index Bindex(a, a2, a3, a4), foreign key (a2) references B(a), foreign key (a4, a3) references B(a, a2));
+--error ER_CANNOT_ADD_FOREIGN
+create table B(a int, a2 int, a3 int, a4 int, index Bindex(a, a2, a4), foreign key (a2) references B(a), foreign key (a3, a4) references B(a4, a2));
+--error ER_CANNOT_ADD_FOREIGN
+create table B(a int, a2 int, a3 int, a4 int, index Bindex(a4, a2, a), foreign key (a2) references B(a), foreign key (a3, a4) references B(a, a2));
 insert into A values (1, NULL, NULL, NULL);
 insert into A values (1, 1, NULL, NULL);
 insert into A values (NULL, NULL, 1, 1);
@@ -136,6 +140,15 @@ drop table A, B;
 
 # test 6: choose unique index rather than choosing non-unique index
 
-
+create table A(a int, a2 int);
+create index Ai on A(a);
+create unique index Aui on A(a);
+create index Ai2 on A(a);
+create table B(a int, foreign key (a) references A(a));
+--error 4714
+alter table A drop index Aui;
+alter table A drop index Ai;
+alter table A drop index Ai2;
+drop table A, B;
 
 --enable_warnings
