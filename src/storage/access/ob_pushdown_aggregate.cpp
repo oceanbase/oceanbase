@@ -810,10 +810,6 @@ int ObAggCell::read_agg_datum(
       LOG_WARN("Fail to init aggregate row reader", K(ret));
     } else if (OB_FAIL(agg_row_reader_->read(meta, skip_index_datum_))) {
       LOG_WARN("Failed read aggregate row", K(ret), K(meta));
-    } else if ((ObPDAggType::PD_COUNT == agg_type_ || ObPDAggType::PD_SUM_OP_SIZE == agg_type_) &&
-               skip_index_datum_.is_null()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected, skip index datum is null", K(ret), K(meta), K(index_info));
     }
   }
   return ret;
