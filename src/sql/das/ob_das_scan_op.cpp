@@ -1347,7 +1347,6 @@ int ObLocalIndexLookupOp::init(const ObDASScanCtDef *lookup_ctdef,
   if (OB_UNLIKELY(OB_SUCCESS != simulate_error)) {
     ret = simulate_error;
   }
-  print_trans_info_and_key_range_();
   return ret;
 }
 

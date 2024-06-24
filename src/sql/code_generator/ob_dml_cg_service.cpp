@@ -3359,8 +3359,6 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   const ObIArray<uint64_t> &name_column_ids = check_parent_table ? fk_info.parent_column_ids_ : fk_info.child_column_ids_;
   uint64_t name_table_id = check_parent_table ? fk_info.parent_table_id_ : fk_info.child_table_id_;
 
-  
-
   if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, column_ids))) {
     LOG_WARN("add column ids failed", K(ret));
   } else if (OB_FAIL(generate_updated_column_ids(op, index_dml_info.assignments_, column_ids, das_ctdef, updated_column_ids))) {

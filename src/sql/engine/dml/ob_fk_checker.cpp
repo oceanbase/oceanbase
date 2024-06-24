@@ -475,8 +475,6 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
   int ret = OB_SUCCESS;
   ObObj *obj_ptr = nullptr;
   void *buf = nullptr;
-  ObObj *obj_ptr2 = nullptr;
-  void *buf2 = nullptr;
   int64_t rowkey_cnt = checker_ctdef_.rowkey_count_;
   int64_t fk_cnt = columns.count();
   if (fk_cnt != checker_ctdef_.rowkey_ids_.count()) {
@@ -485,12 +483,8 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
   } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObObj) * rowkey_cnt))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate buffer failed", K(ret), K(rowkey_cnt));
-  } else if (OB_ISNULL(buf2 = allocator_->alloc(sizeof(ObObj) * rowkey_cnt))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate buffer failed", K(ret), K(rowkey_cnt));
   } else {
     obj_ptr = new(buf) ObObj[rowkey_cnt];
-    obj_ptr2 = new(buf2) ObObj[rowkey_cnt];
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
@@ -536,20 +530,16 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
       // 这里需要做深拷贝
       } else if (OB_FAIL(ob_write_obj(*allocator_, tmp_obj, obj_ptr[rowkey_index]))) {
         LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
-      } else if (OB_FAIL(ob_write_obj(*allocator_, tmp_obj, obj_ptr2[rowkey_index]))) {
-        LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
-      } 
+      }
     } else {
       // is parent key is unique key, the store key of the unique index is unique key + optional primary key
       // if unique key is not null, the column of optional primary key is null
-      obj_ptr[i].set_min_value();
-      obj_ptr2[i].set_max_value();
+      obj_ptr[i].set_null();
     }
   }
 
   if (OB_SUCC(ret)) {
     ObRowkey table_rowkey(obj_ptr, rowkey_cnt);
-    ObRowkey table_rowkey2(obj_ptr2, rowkey_cnt);
     // check if the foreign key has been checked before
     ret = se_rowkey_dist_ctx_->exist_refactored(table_rowkey); // check if the foreign key has been check before
     if (OB_HASH_EXIST == ret) {
@@ -560,13 +550,9 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
       ret = OB_SUCCESS;
       need_check = true;
       uint64_t ref_table_id = checker_ctdef_.das_scan_ctdef_.ref_table_id_;
-      lookup_range.table_id_ = ref_table_id;
-      lookup_range.start_key_ = table_rowkey;
-      lookup_range.end_key_ = table_rowkey2;
-      lookup_range.border_flag_.set_inclusive_start();
-      lookup_range.border_flag_.set_inclusive_end();
-      lookup_range.flag_ = 0; 
-      if (OB_FAIL(se_rowkey_dist_ctx_->set_refactored(table_rowkey))) { // add the foreign key that has not been checked before to the cached hash-set
+      if (OB_FAIL(lookup_range.build_range(ref_table_id, table_rowkey))) {
+        LOG_WARN("build lookup range failed", K(ret), K(ref_table_id), K(table_rowkey));
+      } else if (OB_FAIL(se_rowkey_dist_ctx_->set_refactored(table_rowkey))) {// add the foreign key that has not been checked before to the cached hash-set
         LOG_WARN("failed to add foreign key to cached hash_set", K(ret));
       }
     } else {
