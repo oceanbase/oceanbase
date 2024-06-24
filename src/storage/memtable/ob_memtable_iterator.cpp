@@ -815,7 +815,7 @@ int ObMemtableMultiVersionScanIterator::init(
     } else if (OB_FAIL(row_.init(*context.allocator_, read_info_->get_request_count()))) {
       TRANS_LOG(WARN, "Failed to init datum row", K(ret));
     } else {
-      TRANS_LOG(INFO, "multi version scan iterator init succ", K(param.table_id_), K(range), KPC(read_info_), K(row_));
+      TRANS_LOG(TRACE, "multi version scan iterator init succ", K(param.table_id_), K(range), KPC(read_info_), K(row_));
       trans_version_col_idx_ = param.get_schema_rowkey_count();
       sql_sequence_col_idx_ = param.get_schema_rowkey_count() + 1;
       context_ = &context;
