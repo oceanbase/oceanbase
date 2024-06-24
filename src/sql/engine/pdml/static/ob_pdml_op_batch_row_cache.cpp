@@ -165,6 +165,10 @@ int ObPDMLOpBatchRowCache::create_new_bucket(ObTabletID tablet_id, ObChunkDatumS
     LOG_WARN("fail init row store", K(ret), K(tablet_id));
   } else if (OB_FAIL(pstore_map_.set_refactored(tablet_id, chunk_row_store))) {
     LOG_WARN("fail set part id to map", K(ret), K(tablet_id));
+    if (OB_NOT_NULL(chunk_row_store)) {
+      chunk_row_store->reset();
+      mem_context_->get_malloc_allocator().free(chunk_row_store);
+    }
   }
   return ret;
 }
