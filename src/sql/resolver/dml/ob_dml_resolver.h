@@ -385,6 +385,7 @@ protected:
                                                 ObIArray<ObRawExpr*> &and_exprs);
   int resolve_where_clause(const ParseNode *node);
   int resolve_order_clause(const ParseNode *node, bool is_for_set_query = false);
+  int resolve_approx_clause(const ParseNode *node);
   int resolve_limit_clause(const ParseNode *node);
   int resolve_into_clause(const ParseNode *node);
   int resolve_hints(const ParseNode *node);

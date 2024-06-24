@@ -3029,6 +3029,8 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(exist_all_column_group),
        K_(index_cgs),
        K_(container_table_id),
+       K_(vector_hnsw_m),
+       K_(vector_hnsw_ef_construction),
        K_(vector_help_schema));
   J_OBJ_END();
   return pos;
@@ -3057,6 +3059,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     exist_all_column_group_,
                     index_cgs_,
                     container_table_id_,
+                    vector_hnsw_m_,
+                    vector_hnsw_ef_construction_,
                     vector_help_schema_);
 
 bool ObAlterIndexArg::is_valid() const

@@ -960,6 +960,8 @@ class SqlKeywords:
          DUMPFILE
          DUPLICATE
          DYNAMIC
+         EF_CONSTRUCTION
+         EF_SEARCH
          ENABLE
          END
          ENDS
@@ -1033,6 +1035,7 @@ class SqlKeywords:
          LOCKS
          LOGFILE
          LOGS
+         M
          MASTER
          MASTER_AUTO_POSITION
          MASTER_CONNECT_RETRY
@@ -1238,6 +1241,9 @@ class SqlKeywords:
          USE_FRM
          VARIABLES
          VECTOR
+         VECTOR_L2_OPS
+         VECTOR_COSINE_OPS
+         VECTOR_IP_OPS
          VIEW
          WAIT
          WARNINGS
@@ -1592,6 +1598,8 @@ class SqlKeywords:
          DUPLICATE
          DYNAMIC
          EFFECTIVE
+         EF_CONSTRUCTION
+         EF_SEARCH
          ENABLE
          END
          ENDS
@@ -1682,6 +1690,7 @@ class SqlKeywords:
          LOCKS
          LOGFILE
          LOGS
+         M
          MAJOR
          MASTER
          MASTER_AUTO_POSITION
@@ -1958,6 +1967,9 @@ class SqlKeywords:
          VALUE
          VARIABLES
          VECTOR
+         VECTOR_L2_OPS
+         VECTOR_COSINE_OPS
+         VECTOR_IP_OPS
          VERBOSE
          VIEW
          WAIT

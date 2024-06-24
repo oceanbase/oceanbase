@@ -6445,6 +6445,20 @@ int ObDMLResolver::check_column_with_res_mapping_rule(const ObColumnRefRawExpr *
   return ret;
 }
 
+int ObDMLResolver::resolve_approx_clause(const ParseNode *approx_node)
+{
+  int ret = OB_SUCCESS;
+  ObDMLStmt *stmt = get_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer", KPC(stmt), K(ret));
+  } else if (OB_NOT_NULL(approx_node)) {
+    stmt->set_vector_approx(); // just for syntax compatibility
+  }
+  return ret;
+}
+
+
 int ObDMLResolver::resolve_order_clause(const ParseNode *order_by_node, bool is_for_set_query  /*default false*/)
 {
   int ret = OB_SUCCESS;

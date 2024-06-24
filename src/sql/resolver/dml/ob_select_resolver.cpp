@@ -1110,6 +1110,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
     OZ( resolve_field_list(*(parse_tree.children_[PARSE_SELECT_SELECT])) );
   }
   OZ( resolve_order_clause(parse_tree.children_[PARSE_SELECT_ORDER]) );
+  OZ( resolve_approx_clause(parse_tree.children_[PARSE_SELECT_APPROX]) );
   OZ( resolve_limit_clause(parse_tree.children_[PARSE_SELECT_LIMIT]) );
   OZ( resolve_fetch_clause(parse_tree.children_[PARSE_SELECT_FETCH]) );
   OZ( resolve_check_option_clause(parse_tree.children_[PARSE_SELECT_WITH_CHECK_OPTION]) );

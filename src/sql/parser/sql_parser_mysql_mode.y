@@ -125,7 +125,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 %left   '+' '-'
 %left   '*' '/' '%' MOD DIV POW
 %left   '^'
-%left   VECTOR_L2_DISTANCE VECTOR_INNER_PRODUCT VECTOR_COSINE_DISTANCE
+%left   L2_DISTANCE INNER_PRODUCT COSINE_DISTANCE
 %nonassoc LOWER_THAN_NEG SAMPLE/* for simple_expr conflict*/
 %left CNNOP
 %left   NEG '~'
@@ -258,7 +258,7 @@ END_P SET_VAR DELIMITER
 
 %token <non_reserved_keyword>
         ACCESS ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ANALYSE ANY
-        APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
+        APPROX APPROXIMATE APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRATION ASCII AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
         ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT
 
@@ -271,7 +271,7 @@ END_P SET_VAR DELIMITER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_STAT
         CODE COLLATION COLUMN_FORMAT COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
         COMPRESSED COMPRESSION COMPUTE CONCURRENT CONDENSED CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
-        CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP
+        CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE_DISTANCE COUNT CPU CREATE_TIMESTAMP
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
         DAG DATA DATAFILE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPTION
@@ -290,10 +290,10 @@ END_P SET_VAR DELIMITER
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
-        HANDLER HASH HELP HISTOGRAM HNSW HOST HOSTS HOUR HIDDEN HYBRID_HIST
+        HANDLER HASH HELP HISTOGRAM HOST HOSTS HOUR HIDDEN HYBRID_HIST
 
         ID IDC IDENTIFIED IGNORE_SERVER_IDS ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
-        INNER_PRODUCT INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER IVFFLAT
+        INNER_PRODUCT INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
         INCREMENT IS_TENANT_SYS_POOL INVISIBLE MERGE ISNULL INTERSECT INCREMENTAL INNER_PARSE ILOGCACHE INPUT INDEXED
 
         JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_VALUE JSON_TABLE
@@ -301,9 +301,9 @@ END_P SET_VAR DELIMITER
         KEY_BLOCK_SIZE KEY_VERSION KVCACHE KV_ATTRIBUTES
 
         LAG LANGUAGE LAST LAST_VALUE LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
-        LISTAGG LISTS LOB_INROW_THRESHOLD LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
+        LISTAGG LOB_INROW_THRESHOLD LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
 
-        L2 LEVEL LN LOG LS LINK LOG_RESTORE_SOURCE LINE_DELIMITER
+        L2_DISTANCE LEVEL LN LOG LS LINK LOG_RESTORE_SOURCE LINE_DELIMITER
 
         MAJOR MANUAL MASTER MASTER_AUTO_POSITION MASTER_CONNECT_RETRY MASTER_DELAY MASTER_HEARTBEAT_PERIOD
         MASTER_HOST MASTER_LOG_FILE MASTER_LOG_POS MASTER_PASSWORD MASTER_PORT MASTER_RETRY_COUNT
@@ -358,7 +358,7 @@ END_P SET_VAR DELIMITER
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED
 
-        VALID VALUE VARIANCE VARIABLES VECTOR VERBOSE VERIFY VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
+        VALID VALUE VARIANCE VARIABLES VECTOR VECTOR_L2_OPS VECTOR_COSINE_OPS VECTOR_IP_OPS VERBOSE VERIFY VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
         VAR_SAMP
 
         WAIT WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WORK WRAPPER WINDOW WEAK WITH_COLUMN_GROUP
@@ -407,7 +407,7 @@ END_P SET_VAR DELIMITER
 %type <node> replace_with_opt_hint insert_with_opt_hint column_list opt_on_duplicate_key_clause opt_into opt_replace opt_temporary opt_algorithm opt_sql_security opt_definer view_algorithm no_param_column_ref
 %type <node> insert_vals_list insert_vals value_or_values opt_insert_row_alias
 %type <node> select_with_parens select_no_parens select_clause select_into no_table_select_with_order_and_limit simple_select_with_order_and_limit select_with_parens_with_order_and_limit select_clause_set select_clause_set_left select_clause_set_right  select_clause_set_with_order_and_limit
-%type <node> simple_select no_table_select limit_clause select_expr_list
+%type <node> simple_select no_table_select limit_clause select_expr_list opt_approx
 %type <node> with_select with_clause with_list common_table_expr opt_column_alias_name_list alias_name_list column_alias_name
 %type <node> opt_where opt_hint_value opt_groupby opt_rollup opt_order_by order_by opt_having groupby_clause
 %type <node> opt_limit_clause limit_expr opt_lock_type opt_for_update opt_for_update_wait opt_lock_in_share_mode
@@ -457,7 +457,7 @@ END_P SET_VAR DELIMITER
 %type <node> column_name relation_name function_name column_label var_name relation_name_or_string row_format_option
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
-%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint opt_distance_function opt_vector_index_parameter_list opt_vector_index_parameter
+%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint opt_distance_function opt_vector_index_parameter_list opt_vector_index_parameter opt_vector_index_parameter_value
 %type <node> opt_when check_state constraint_definition
 %type <node> create_mlog_stmt opt_mlog_option_list opt_mlog_options mlog_option opt_mlog_with mlog_with_values mlog_with_special_columns mlog_with_reference_columns mlog_with_special_column_list mlog_with_reference_column_list mlog_with_special_column mlog_with_reference_column opt_mlog_new_values mlog_including_or_excluding opt_mlog_purge mlog_purge_values mlog_purge_immediate_sync_or_async mlog_purge_start mlog_purge_next
 %type <node> drop_mlog_stmt
@@ -1452,24 +1452,6 @@ bit_expr '|' bit_expr %prec '|'
 | bit_expr SHIFT_RIGHT bit_expr %prec SHIFT_RIGHT
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_OP_BIT_RIGHT_SHIFT, 2, $1, $3);
-  check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @3.last_column),
-            &@1, result);
-}
-| bit_expr VECTOR_L2_DISTANCE bit_expr %prec VECTOR_L2_DISTANCE
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_VECTOR_L2_DISTANCE, 2, $1, $3);
-  check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @3.last_column),
-            &@1, result);
-}
-| bit_expr VECTOR_INNER_PRODUCT bit_expr %prec VECTOR_INNER_PRODUCT
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_VECTOR_INNER_PRODUCT, 2, $1, $3);
-  check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @3.last_column),
-            &@1, result);
-}
-| bit_expr VECTOR_COSINE_DISTANCE bit_expr %prec VECTOR_COSINE_DISTANCE
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_VECTOR_COSINE_DISTANCE, 2, $1, $3);
   check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @3.last_column),
             &@1, result);
 }
@@ -3063,6 +3045,18 @@ MOD '(' expr ',' expr ')'
 | GEOMCOLLECTION '(' ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, NULL);
+}
+| L2_DISTANCE '(' expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_VECTOR_L2_DISTANCE, 2, $3, $5);
+}
+| INNER_PRODUCT '(' expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_VECTOR_INNER_PRODUCT, 2, $3, $5);
+}
+| COSINE_DISTANCE '(' expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_VECTOR_COSINE_DISTANCE, 2, $3, $5);
 }
 ;
 
@@ -8349,6 +8343,7 @@ ALTER {$$ = NULL;}
 opt_index_keyname:
 SPATIAL { $$[0] = 2; }
 | UNIQUE { $$[0] = 1; }
+| VECTOR { $$[0] = 0; }
 | /*EMPTY*/ { $$[0] = 0; }
 ;
 
@@ -8466,15 +8461,15 @@ opt_sort_column_key_length:
 ;
 
 opt_distance_function:
-L2
+VECTOR_L2_OPS
 {
   malloc_terminal_node($$, result->malloc_pool_, T_DISTANCE_L2);
 }
-| INNER_PRODUCT
+| VECTOR_IP_OPS
 {
   malloc_terminal_node($$, result->malloc_pool_, T_DISTANCE_INNER_PRODUCT);
 }
-| COSINE
+| VECTOR_COSINE_OPS
 {
   malloc_terminal_node($$, result->malloc_pool_, T_DISTANCE_COSINE);
 }
@@ -8591,9 +8586,10 @@ GLOBAL
 {
   $$ = $1;
 }
-| opt_vector_index_parameter_list
+| WITH '(' opt_vector_index_parameter_list ')'
 {
-  $$ = $1;
+  merge_nodes($$, result, T_VECTOR_INDEX_PARAMS, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
 }
 ;
 
@@ -8616,14 +8612,6 @@ USING BTREE
 | USING HASH
 {
   malloc_terminal_node($$, result->malloc_pool_, T_USING_HASH);
-}
-| USING HNSW
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_USING_HNSW);
-}
-| USING IVFFLAT
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_USING_IVFFLAT);
 }
 ;
 
@@ -8835,16 +8823,30 @@ DROP MATERIALIZED VIEW LOG ON relation_factor
 ;
 
 opt_vector_index_parameter_list:
-WITH '(' opt_vector_index_parameter ')'
+opt_vector_index_parameter
 {
-  $$ = $3
+  $$ = $1;
 }
-;
+| opt_vector_index_parameter_list ',' opt_vector_index_parameter
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
 
 opt_vector_index_parameter:
-LISTS COMP_EQ INTNUM
+relation_name COMP_EQ opt_vector_index_parameter_value
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_VECTOR_IVFFLAT_LISTS, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+};
+
+opt_vector_index_parameter_value:
+INTNUM
+{
+  $1->type_ = T_NUMBER;
+  $$ = $1;
+}
+| relation_name
+{
+  $$ = $1;
 }
 ;
 
@@ -9017,8 +9019,8 @@ dml_table_name values_clause
     malloc_non_terminal_node(into_node, result->malloc_pool_, T_INSERT_INTO_CLAUSE, 2, $1, column_list_node);
     malloc_non_terminal_node(values_list_node, result->malloc_pool_, T_VALUES_ROW_LIST, 1, value_vector_node);
     malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, values_list_node);
-    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL);
-    malloc_select_values_stmt(select_node, result, subquery_node, NULL, NULL);
+    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL, NULL);
+    malloc_select_values_stmt(select_node, result, subquery_node, NULL, NULL, NULL);
     select_node->children_[PARSE_SELECT_FROM]->children_[0]->children_[1] = $4;
     val_list = select_node;
     val_list->reserved_ = 1;
@@ -9047,8 +9049,8 @@ value_or_values insert_vals_list opt_insert_row_alias
       malloc_non_terminal_node(values_list_node, result->malloc_pool_, T_VALUES_ROW_LIST, 1, $2);
     }
     malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, values_list_node);
-    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL);
-    malloc_select_values_stmt($$, result, subquery_node, NULL, NULL);
+    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL, NULL);
+    malloc_select_values_stmt($$, result, subquery_node, NULL, NULL, NULL);
     $$->children_[PARSE_SELECT_FROM]->children_[0]->children_[1] = $3;
     $$->reserved_ = 1;
   } else {
@@ -9549,6 +9551,17 @@ no_table_select order_by
 }
 ;
 
+opt_approx:
+APPROX
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VECTOR_APPROX);
+}
+| APPROXIMATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VECTOR_APPROX);
+}
+;
+
 simple_select_with_order_and_limit:
 simple_select order_by
 {
@@ -9561,6 +9574,14 @@ simple_select order_by
   $$->children_[PARSE_SELECT_ORDER] = $2;
   $$->children_[PARSE_SELECT_LIMIT] = $3;
 }
+| simple_select order_by opt_approx limit_clause
+{
+  $$ = $1;
+  $$->children_[PARSE_SELECT_ORDER] = $2;
+  $$->children_[PARSE_SELECT_APPROX] = $3;
+  $$->children_[PARSE_SELECT_LIMIT] = $4;
+}
+
 ;
 
 select_with_parens_with_order_and_limit:
@@ -12559,7 +12580,7 @@ VALUES values_row_list
   ParseNode *value_list = NULL;
   merge_nodes(value_list, result, T_VALUES_ROW_LIST, $2);
   malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, value_list);
-  malloc_select_values_stmt($$, result, values_node, NULL, NULL);
+  malloc_select_values_stmt($$, result, values_node, NULL, NULL, NULL);
 }
 ;
 
@@ -12570,7 +12591,7 @@ VALUES values_row_list order_by
   ParseNode *value_list = NULL;
   merge_nodes(value_list, result, T_VALUES_ROW_LIST, $2);
   malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, value_list);
-  malloc_select_values_stmt($$, result, values_node, $3, NULL);
+  malloc_select_values_stmt($$, result, values_node, $3, NULL, NULL);
 }
 | VALUES values_row_list opt_order_by limit_clause
 {
@@ -12578,7 +12599,7 @@ VALUES values_row_list order_by
   ParseNode *value_list = NULL;
   merge_nodes(value_list, result, T_VALUES_ROW_LIST, $2);
   malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, value_list);
-  malloc_select_values_stmt($$, result, values_node, $3, $4);
+  malloc_select_values_stmt($$, result, values_node, $3, NULL, $4);
 }
 ;
 
@@ -19726,6 +19747,8 @@ ACCOUNT
 |       ALWAYS
 |       ANALYSE
 |       ANY
+|       APPROX
+|       APPROXIMATE
 |       APPROX_COUNT_DISTINCT
 |       APPROX_COUNT_DISTINCT_SYNOPSIS
 |       APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
@@ -19826,7 +19849,7 @@ ACCOUNT
 |       CONTEXT
 |       CONTRIBUTORS
 |       COPY
-|       COSINE
+|       COSINE_DISTANCE
 |       COUNT
 |       CPU
 |       CREATE_TIMESTAMP
@@ -19953,7 +19976,6 @@ ACCOUNT
 |       HASH
 |       HELP
 |       HISTOGRAM
-|       HNSW
 |       HOST
 |       HOSTS
 |       HOUR
@@ -19988,7 +20010,6 @@ ACCOUNT
 |       ISOLATION
 |       ISOLATE
 |       ISSUER
-|       IVFFLAT
 |       JOB
 |       JSON
 |       JSON_VALUE
@@ -19997,7 +20018,7 @@ ACCOUNT
 |       JSON_TABLE
 |       KEY_BLOCK_SIZE
 |       KEY_VERSION
-|       L2
+|       L2_DISTANCE
 |       LAG
 |       LANGUAGE
 |       LAST
@@ -20014,7 +20035,6 @@ ACCOUNT
 |       LINESTRING
 |       LIST_
 |       LISTAGG
-|       LISTS
 |       LN
 |       LOB_INROW_THRESHOLD
 |       LOCAL
@@ -20423,6 +20443,9 @@ ACCOUNT
 |       VARIABLES
 |       VAR_POP
 |       VAR_SAMP
+|       VECTOR_L2_OPS
+|       VECTOR_IP_OPS
+|       VECTOR_COSINE_OPS
 |       VERBOSE
 |       VIRTUAL_COLUMN_ID
 |       MATERIALIZED

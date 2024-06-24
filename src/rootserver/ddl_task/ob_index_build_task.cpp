@@ -209,13 +209,8 @@ int ObIndexSSTableBuildTask::inner_hnsw_process(
       } else if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
         LOG_WARN("fail to start transaction", K(ret), K(tenant_id_));
       } else {
-        int64_t hnsw_m = 16;
-        int64_t hnsw_ef_construction = 200;
-        {
-          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-          hnsw_m = tenant_config->vector_hnsw_m;
-          hnsw_ef_construction = tenant_config->vector_hnsw_ef_construction;
-        }
+        const int64_t hnsw_m = vector_hnsw_m_;
+        const int64_t hnsw_ef_construction = vector_hnsw_ef_construction_;
         lib::ObMemAttr mattr(tenant_id_, "HNSW");
         ObArenaAllocator allocator(mattr);
         ObArenaAllocator unsafe_in_ring_allocator1(mattr);
@@ -584,6 +579,8 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         is_vector_index_);
     task->set_vector_index_using_type(vector_index_using_type_);
     task->set_vd_type(vd_type_);
+    task->set_vector_hnsw_m(vector_hnsw_m_);
+    task->set_vector_hnsw_ef_construction(vector_hnsw_ef_construction_);
     task->set_container_table_id(container_table_id_);
     if (OB_SUCCESS != (task->set_nls_format(nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_))) {
       task->~ObIndexSSTableBuildTask();
@@ -1263,6 +1260,8 @@ int ObIndexBuildTask::send_build_single_replica_request()
     if (create_index_arg_.is_vector_index()) {
       task.set_vector_index_using_type(create_index_arg_.index_using_type_);
       task.set_vd_type(create_index_arg_.index_columns_.at(0).vd_type_);
+      task.set_vector_hnsw_m(create_index_arg_.vector_hnsw_m_);
+      task.set_vector_hnsw_ef_construction(create_index_arg_.vector_hnsw_ef_construction_);
       if (USING_IVFFLAT == create_index_arg_.index_using_type_) {
         if (create_index_arg_.vector_help_schema_.empty()) {
           ret = OB_ERR_UNEXPECTED;

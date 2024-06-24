@@ -1160,7 +1160,7 @@ do {\
     }                                                                           \
   } while(0);                                                                   \
 
-#define malloc_select_values_stmt(node, result, values_node, order_by_node, limit_node)\
+#define malloc_select_values_stmt(node, result, values_node, order_by_node, approx_node, limit_node)\
   do {\
     /*gen select list*/\
     ParseNode *star_node = NULL;\
@@ -1180,6 +1180,7 @@ do {\
     node->children_[PARSE_SELECT_SELECT] = project_list_node;\
     node->children_[PARSE_SELECT_FROM] = from_list;\
     node->children_[PARSE_SELECT_ORDER] = order_by_node;\
+    node->children_[PARSE_SELECT_APPROX] = approx_node;\
     node->children_[PARSE_SELECT_LIMIT] = limit_node;\
   } while(0);\
 

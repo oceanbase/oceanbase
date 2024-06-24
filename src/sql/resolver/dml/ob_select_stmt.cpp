@@ -723,7 +723,8 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
            K_(is_hierarchical_query),
            K_(check_option),
            K_(dblink_id),
-           K_(is_reverse_link)
+           K_(is_reverse_link),
+           K_(has_vector_approx)
              );
     }
   } else {
@@ -737,7 +738,8 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
          N_SELECT, select_items_,
          K(child_stmts),
          K_(dblink_id),
-         K_(is_reverse_link));
+         K_(is_reverse_link),
+         K_(has_vector_approx));
   }
   J_OBJ_END();
   return ret;

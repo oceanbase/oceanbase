@@ -221,8 +221,10 @@ typedef enum ObItemType
   T_OP_VECTOR_COSINE_DISTANCE = 190,
 
   // vector parameter
-  T_VECTOR_IVFFLAT_LISTS = 191,
-  T_VECTOR_IVFFLAT_PROBES = 192,
+  T_VECTOR_IVFFLAT_PROBES = 191,
+  T_VECTOR_INDEX_PARAMS = 192,
+
+  T_VECTOR_APPROX = 193,
   ///< @note add new operator before this line
 
   // system functions
@@ -1130,8 +1132,6 @@ typedef enum ObItemType
   T_ENABLE_EXTENDED_ROWID,
   T_USING_HASH,
   T_USING_BTREE,
-  T_USING_HNSW,
-  T_USING_IVFFLAT,
   T_WITH_CLAUSE_AS,
   T_WITH_CLAUSE_LIST,
   T_CYCLE_NODE,
