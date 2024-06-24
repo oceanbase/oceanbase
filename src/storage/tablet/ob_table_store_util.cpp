@@ -723,7 +723,7 @@ int ObMemtableArray::rebuild(const common::ObIArray<ObITable *> &table_array)
       FLOG_INFO("Empty memtable discarded", KPC(memtable));
     } else if (table->get_end_scn() < endscn) {
     } else if (exist_memtable_with_end_scn(table, endscn)) {
-      FLOG_INFO("duplicated memtable with same end_scn discarded", KPC(table), K(endscn));
+      LOG_DEBUG("duplicated memtable with same end_scn discarded", KPC(table), K(endscn));
     } else if (OB_UNLIKELY(count_ == MAX_MEMSTORE_CNT)) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("too many elements for memtable array", K(ret));
