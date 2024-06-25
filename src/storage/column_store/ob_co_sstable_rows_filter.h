@@ -33,8 +33,8 @@ public:
   static constexpr uint32_t MAX_NUM_OF_CG_ITER_TO_LOCATE_IN_ADVANCE = 2;
   static constexpr uint8_t filter_tree_merge_status[sql::ObCommonFilterTreeStatus::MAX_STATUS][sql::ObCommonFilterTreeStatus::MAX_STATUS] =
   { {0, 0, 0, 0}, \
-    {0, 1, 2, 0}, \
-    {0, 2, 2, 3}, \
+    {0, 1, 0, 0}, \
+    {0, 0, 2, 3}, \
     {0, 0, 3, 3}
   };
 
