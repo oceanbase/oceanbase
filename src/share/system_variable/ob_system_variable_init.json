@@ -7332,5 +7332,19 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": "Controls the type conversion mode in effect on the replica when using row-based replication"
+  },
+  "ob_hnsw_ef_search": {
+    "id": 10419,
+      "name": "ob_hnsw_ef_search",
+      "default_value": "40",
+      "base_value": "40",
+      "data_type": "uint",
+      "info": "The number of neighbor nodes considered during any HNSW vector index search on the session",
+      "flags": "SESSION",
+      "publish_version": "433",
+      "info_cn": "",
+      "background_cn": "",
+      "ref_url": "",
+      "placeholder": true
   }
 }

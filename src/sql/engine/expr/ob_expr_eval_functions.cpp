@@ -1223,6 +1223,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprSm3::eval_sm3,                                       /* 730 */
   NULL, // ObExprSm4Encrypt::eval_sm4_encrypt,                        /* 731 */
   NULL, // ObExprSm4Decrypt::eval_sm4_decrypt,                        /* 732 */
+  NULL, // ObExprAdd::add_vec_vec,                                    /* 733 */
+  NULL, // ObExprMinus::minus_vec_vec,                                /* 734 */
+  NULL, // ObExprMul::mul_vec_vec,                                    /* 735 */
+  NULL, // ObExprDiv::div_vec,                                        /* 736 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1359,6 +1363,10 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprTopNFilter::eval_topn_filter_batch,                           /* 130 */
   NULL,//ObRelationalExprOperator::eval_batch_min_max_compare,        /* 131 */
   NULL,//ObExprBM25::eval_batch_bm25_relevance_expr,                  /* 132 */
+  NULL, // ObExprAdd::add_vec_vec_batch,                              /* 133 */
+  NULL, // ObExprMinus::minus_vec_vec_batch,                          /* 134 */
+  NULL, // ObExprMul::mul_vec_vec_batch,                              /* 135 */
+  NULL, // ObExprDiv::div_vec_batch,                                  /* 136 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
