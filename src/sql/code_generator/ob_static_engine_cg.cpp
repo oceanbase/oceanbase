@@ -5231,7 +5231,8 @@ int ObStaticEngineCG::generate_spec(
           }
         }
       }
-      OX(spec.exec_param_idxs_inited_ = true);
+      //REOPEN after solve issue 54402390
+      OX(spec.exec_param_idxs_inited_ = false);
     }
   }
 
