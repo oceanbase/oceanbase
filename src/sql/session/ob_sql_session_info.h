@@ -1363,6 +1363,7 @@ public:
   bool is_spf_mlj_group_rescan_enabled() const;
   bool enable_parallel_das_dml() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
+  int get_spm_mode(int64_t &spm_mode) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }

@@ -812,6 +812,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigSQLTlsVersionChecker);
 };
 
+class ObSqlPlanManagementModeChecker
+  : public ObConfigChecker
+{
+public:
+  ObSqlPlanManagementModeChecker() {}
+  virtual ~ObSqlPlanManagementModeChecker() {}
+  bool check(const ObConfigItem &t) const;
+  static int64_t get_spm_mode_by_string(const common::ObString &string);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSqlPlanManagementModeChecker);
+};
+
 class ObModeConfigParserUitl
 {
 public:

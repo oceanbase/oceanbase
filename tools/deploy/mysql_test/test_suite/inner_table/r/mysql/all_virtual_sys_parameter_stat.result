@@ -225,6 +225,7 @@ server_cpu_quota_min
 server_permanent_offline_time
 sql_login_thread_count
 sql_net_thread_count
+sql_plan_management_mode
 sql_protocol_min_tls_version
 sql_work_area
 ssl_client_authentication

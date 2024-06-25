@@ -62,6 +62,7 @@
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
+#include "share/config/ob_config_helper.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -650,6 +651,26 @@ bool ObSQLSessionInfo::enable_parallel_das_dml() const
     bret = tenant_config->_enable_parallel_das_dml;
   }
   return bret;
+}
+
+int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode) const
+{
+  int ret = OB_SUCCESS;
+  spm_mode = 0;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    spm_mode = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
+        tenant_config->sql_plan_management_mode.get_value_string());
+    if (0 == spm_mode) {
+      bool sysvar_use_baseline = false;
+      get_use_plan_baseline(sysvar_use_baseline);
+      if (sysvar_use_baseline) {
+        spm_mode = 1;
+      }
+    }
+  }
+  return ret;
 }
 
 void ObSQLSessionInfo::destroy(bool skip_sys_var)

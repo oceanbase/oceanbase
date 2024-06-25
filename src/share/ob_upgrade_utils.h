@@ -257,6 +257,7 @@ private:
   int post_upgrade_for_optimizer_stats();
   int post_upgrade_for_service_name();
   int post_upgrade_for_scheduled_trigger_partition_balance();
+  int post_upgrade_for_spm();
 };
 /* =========== special upgrade processor end   ============= */
 /* =========== upgrade processor end ============= */
