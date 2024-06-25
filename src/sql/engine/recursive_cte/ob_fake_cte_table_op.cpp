@@ -23,7 +23,8 @@ OB_SERIALIZE_MEMBER((ObFakeCTETableSpec, ObOpSpec),
                       column_involved_offset_,
                       column_involved_exprs_,
                       is_bulk_search_,
-                      identify_seq_expr_);
+                      identify_seq_expr_,
+                      is_union_distinct_);
 
 int ObFakeCTETableOp::inner_get_next_row()
 {
