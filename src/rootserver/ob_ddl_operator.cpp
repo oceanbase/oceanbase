@@ -1007,6 +1007,11 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
             OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
                                       ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id)),
                                       udt_info->get_database_id()));
+            if (OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id))) {
+              OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                          ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id)),
+                          udt_info->get_database_id()));
+            }
           }
         }
       }
