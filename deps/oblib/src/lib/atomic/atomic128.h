@@ -107,8 +107,8 @@ inline bool cas128_lf(types::uint128_t  *dst, types::uint128_t & expected, types
 
 #define CAS128_ASM(src, cmp, with) __atomic_compare_exchange(((types::uint128_t*)(src)), ((types::uint128_t*)(&(cmp))), ((types::uint128_t*)&(with)),false,__ATOMIC_SEQ_CST,__ATOMIC_SEQ_CST)
 #define LOAD128_ASM(dest, src) load128_lf((types::uint128_t&)(dest), (types::uint128_t*)(src))
-#define CAS128(src, cmp, with) __atomic_compare_exchange(((types::uint128_t*)(src)), ((types::uint128_t*)(&(cmp))), ((types::uint128_t*)&(with)),false,__ATOMIC_ACQ_REL, __ATOMIC_RELAXED)
-#define LOAD128(dest, src) __atomic_load(((types::uint128_t*)(src)), ((types::uint128_t*)(&(dest))), __ATOMIC_ACQUIRE)
+#define CAS128(src, cmp, with) cas128_lf(((types::uint128_t*)(src)), *((types::uint128_t*)&(cmp)), *((types::uint128_t*)&(with)))
+#define LOAD128(dest, src) load128_lf((types::uint128_t&)(dest), (types::uint128_t*)(src))
 
 #elif defined(__powerpc64__)
 //#define CAS128_ASM(src, cmp, with) __atomic_compare_exchange(((types::uint128_t*)(src)), ((types::uint128_t*)(&(cmp))), ((types::uint128_t*)&(with)),false,__ATOMIC_SEQ_CST,__ATOMIC_SEQ_CST)
