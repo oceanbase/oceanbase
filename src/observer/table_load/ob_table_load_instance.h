@@ -54,6 +54,8 @@ private:
   int start_trans();
   int check_merged();
 public:
+  static const int64_t DEFAULT_SEGMENT_ID = 1;
+
   struct TransCtx
   {
   public:

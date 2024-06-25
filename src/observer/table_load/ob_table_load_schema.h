@@ -45,10 +45,11 @@ public:
                                  common::ObIArray<int64_t> &column_ids);
   static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_lob_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
-                                       ObCompressorType &compressor_type);
   static int check_has_invisible_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_unused_column(const share::schema::ObTableSchema *table_schema, bool &bret);
+  static int get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
+                                       ObCompressorType &compressor_type);
+  static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();

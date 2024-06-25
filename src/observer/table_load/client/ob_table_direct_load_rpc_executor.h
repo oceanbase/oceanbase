@@ -60,23 +60,16 @@ class ObTableDirectLoadBeginExecutor
 public:
   ObTableDirectLoadBeginExecutor(ObTableDirectLoadExecContext &ctx,
                                  const table::ObTableDirectLoadRequest &request,
-                                 table::ObTableDirectLoadResult &result);
-  virtual ~ObTableDirectLoadBeginExecutor();
+                                 table::ObTableDirectLoadResult &result)
+    : ParentType(ctx, request, result)
+  {
+  }
+  virtual ~ObTableDirectLoadBeginExecutor() = default;
 
 protected:
   int check_args() override;
   int set_result_header() override;
   int process() override;
-
-private:
-  int create_table_ctx();
-  int do_begin();
-  int check_need_online_gather(const uint64_t tenant_id, bool &online_opt_stat_gather);
-  int get_compressor_type(const uint64_t tenant_id, const uint64_t table_id, const int64_t parallel,
-                          ObCompressorType &compressor_type);
-private:
-  ObTableLoadClientTask *client_task_;
-  ObTableLoadTableCtx *table_ctx_;
 };
 
 // commit
@@ -162,7 +155,6 @@ protected:
 private:
   static int decode_payload(const common::ObString &payload,
                             table::ObTableLoadObjRowArray &obj_row_array);
-  int set_batch_seq_no(int64_t batch_id, table::ObTableLoadObjRowArray &obj_row_array);
 };
 
 // heart_beat

@@ -22,6 +22,7 @@ namespace oceanbase
 namespace observer
 {
 using namespace common;
+using namespace share;
 using namespace share::schema;
 using namespace table;
 using namespace blocksstable;
@@ -215,20 +216,6 @@ int ObTableLoadSchema::check_has_lob_column(const ObTableSchema *table_schema, b
   return ret;
 }
 
-int ObTableLoadSchema::get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
-                                                 ObCompressorType &compressor_type)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  const share::schema::ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else {
-    compressor_type = table_schema->get_compressor_type();
-  }
-  return ret;
-}
-
 int ObTableLoadSchema::check_has_invisible_column(const ObTableSchema *table_schema, bool &bret)
 {
   int ret = OB_SUCCESS;
@@ -261,6 +248,64 @@ int ObTableLoadSchema::check_has_unused_column(const ObTableSchema *table_schema
     // } else if (column_schema->is_unused()) {
     //   bret = true;
     //   break;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
+                                                 ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else {
+    compressor_type = table_schema->get_compressor_type();
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id,
+                                                                 bool &value)
+{
+  int ret = OB_SUCCESS;
+  value = false;
+  ObSqlString sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    sqlclient::ObMySQLResult *result = nullptr;
+    // TODO(suzhi.yt) 这里为啥是带zone纬度的? 如果查询结果中有多个zone的, 选哪个作为返回值呢?
+    if (OB_FAIL(sql.assign_fmt(
+          "SELECT value FROM %s WHERE tenant_id = %ld and (zone, name, schema_version) in (select "
+          "zone, name, max(schema_version) FROM %s group by zone, name) and name = '%s'",
+          OB_ALL_SYS_VARIABLE_HISTORY_TNAME,
+          ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+          OB_ALL_SYS_VARIABLE_HISTORY_TNAME, OB_SV__OPTIMIZER_GATHER_STATS_ON_LOAD))) {
+      LOG_WARN("fail to append sql", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to execute sql", KR(ret), K(sql), K(tenant_id));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get sql result", KR(ret), K(sql), K(tenant_id));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to get next row", KR(ret), K(tenant_id));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else {
+          ObString data;
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", data);
+          if (0 == strcmp(data.ptr(), "1")) {
+            value = true;
+          }
+        }
+      }
     }
   }
   return ret;

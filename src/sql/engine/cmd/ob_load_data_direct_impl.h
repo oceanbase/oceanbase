@@ -320,7 +320,6 @@ private:
 
   class FileLoadExecutor
   {
-    static const int64_t DEFAULT_SEGMENT_ID = 1;
   public:
     FileLoadExecutor();
     virtual ~FileLoadExecutor();

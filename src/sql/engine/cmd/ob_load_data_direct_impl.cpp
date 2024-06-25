@@ -1024,7 +1024,8 @@ int ObLoadDataDirectImpl::FileLoadExecutor::execute()
   } else {
     if (OB_FAIL(prepare_execute())) {
       LOG_WARN("fail to prepare execute", KR(ret));
-    } else if (OB_FAIL(execute_ctx_->direct_loader_->start_trans(trans_ctx_, DEFAULT_SEGMENT_ID,
+    } else if (OB_FAIL(execute_ctx_->direct_loader_->start_trans(trans_ctx_,
+                                                                 ObTableLoadInstance::DEFAULT_SEGMENT_ID,
                                                                  allocator_))) {
       LOG_WARN("fail to start trans", KR(ret));
     }

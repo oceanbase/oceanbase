@@ -390,6 +390,8 @@ enum class ObTableLoadClientStatus : int64_t
   COMMIT = 2,
   ERROR = 3,
   ABORT = 4,
+  INITIALIZING = 5, // 初始化中
+  WAITTING = 6, // 排队等待资源中
   MAX_STATUS
 };
 
@@ -412,6 +414,12 @@ static int table_load_client_status_to_string(ObTableLoadClientStatus client_sta
       break;
     case ObTableLoadClientStatus::ABORT:
       status_str = "ABORT";
+      break;
+    case ObTableLoadClientStatus::INITIALIZING:
+      status_str = "INITIALIZING";
+      break;
+    case ObTableLoadClientStatus::WAITTING:
+      status_str = "WAITTING";
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
