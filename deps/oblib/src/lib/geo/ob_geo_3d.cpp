@@ -55,7 +55,7 @@ ObGeoType ObGeometry3D::type(uint64_t pos) const
   return geo_type;
 }
 
-int ObGeometry3D::to_2d_geo(ObIAllocator &allocator, ObGeometry *&res)
+int ObGeometry3D::to_2d_geo(ObIAllocator &allocator, ObGeometry *&res, uint32_t srid)
 {
   int ret = OB_SUCCESS;
   ObString wkb_2d;
@@ -83,7 +83,7 @@ int ObGeometry3D::to_2d_geo(ObIAllocator &allocator, ObGeometry *&res)
   }
   if (OB_SUCC(ret)) {
     bool is_geog = (crs_ == ObGeoCRS::Geographic) ? true : false;
-    if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(*allocator_, geo_type, is_geog, true, res))) {
+    if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(*allocator_, geo_type, is_geog, true, res, srid))) {
       LOG_WARN("fail to create 2d geo obj", K(ret), K(geo_type), K(is_geog));
     } else {
       res->set_data(wkb_2d);

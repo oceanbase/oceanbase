@@ -2122,6 +2122,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_SUPPORT_OPERATION, -7430, -1, "42000", "XML n
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_DUP_DEF_NAMESPACE, -7431, -1, "42000", "XQST0066 - duplicate default namespace definition - string", "XQST0066 - duplicate default namespace definition - %s.", 19118, "XQST0066 - duplicate default namespace definition - string.", "XQST0066 - duplicate default namespace definition - %s.");
 DEFINE_ORACLE_ERROR(OB_ERR_COMPARE_VARRAY_LOB_ATTR, -7432, -1, "42000", "cannot compare VARRAY or LOB attributes of an object type", 22901, "cannot compare VARRAY or LOB attributes of an object type");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, -7433, -1, "42000", "Parent %.*s already contains child entry %s%.*s", 31003, "Parent %.*s already contains child entry %s%.*s");
+DEFINE_ORACLE_ERROR(OB_ERR_CONVERSION_OF_UNIT, -7434, -1, "42000", "conversion error between the specified unit and standard unit", 13291, "conversion error between the specified unit and standard unit");
+DEFINE_ORACLE_ERROR(OB_ERR_PARAM_OUT_OF_RANGE, -7435, -1, "42000", "value is out of range", 13011, "value is out of range");
 
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

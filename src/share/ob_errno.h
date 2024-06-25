@@ -1497,6 +1497,8 @@ constexpr int OB_ERR_INVALID_XML_CHILD_NAME = -7429;
 constexpr int OB_ERR_XML_NOT_SUPPORT_OPERATION = -7430;
 constexpr int OB_ERR_COMPARE_VARRAY_LOB_ATTR = -7432;
 constexpr int OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD = -7433;
+constexpr int OB_ERR_CONVERSION_OF_UNIT = -7434;
+constexpr int OB_ERR_PARAM_OUT_OF_RANGE = -7435;
 constexpr int OB_ERR_BAD_VEC_INDEX_COLUMN = -7601;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
@@ -3735,6 +3737,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DUP_DEF_NAMESPACE__USER_ERROR_MSG "XQST0066 - duplicate default namespace definition - %s."
 #define OB_ERR_COMPARE_VARRAY_LOB_ATTR__USER_ERROR_MSG "cannot compare VARRAY or LOB attributes of an object type"
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__USER_ERROR_MSG "Parent %.*s already contains child entry %s%.*s"
+#define OB_ERR_CONVERSION_OF_UNIT__USER_ERROR_MSG "conversion error between the specified unit and standard unit"
+#define OB_ERR_PARAM_OUT_OF_RANGE__USER_ERROR_MSG "value is out of range"
 #define OB_ERR_INVALID_VECTOR_DIM__USER_ERROR_MSG "inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__USER_ERROR_MSG "Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__USER_ERROR_MSG "array type mismatch found between definition(%.*s) and data(%.*s)"
@@ -6046,6 +6050,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DUP_DEF_NAMESPACE__ORA_USER_ERROR_MSG "ORA-19118: XQST0066 - duplicate default namespace definition - %s."
 #define OB_ERR_COMPARE_VARRAY_LOB_ATTR__ORA_USER_ERROR_MSG "ORA-22901: cannot compare VARRAY or LOB attributes of an object type"
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__ORA_USER_ERROR_MSG "ORA-31003: Parent %.*s already contains child entry %s%.*s"
+#define OB_ERR_CONVERSION_OF_UNIT__ORA_USER_ERROR_MSG "ORA-13291: conversion error between the specified unit and standard unit"
+#define OB_ERR_PARAM_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-13011: value is out of range"
 #define OB_ERR_INVALID_VECTOR_DIM__ORA_USER_ERROR_MSG "ORA-00932: inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7601, Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__ORA_USER_ERROR_MSG "ORA-00932: array type mismatch found between definition(%.*s) and data(%.*s)"
@@ -6528,7 +6534,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2307];
+extern int g_all_ob_errnos[2309];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

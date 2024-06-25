@@ -474,7 +474,8 @@ int ObGeoTypeUtil::convert_geometry_3D_to_2D(
     }
     ObString wkb_data;
     ObGeometry3D *geo_3d = static_cast<ObGeometry3D *>(g3d);
-    if (OB_FAIL(geo_3d->to_2d_geo(allocator, geo))) {
+    uint32_t srid = (g3d == geo) ? geo->get_srid() : 0;
+    if (OB_FAIL(geo_3d->to_2d_geo(allocator, geo, srid))) {
       LOG_WARN("fail to convert 3d to 2d geo", K(ret), K(geo_3d->type()));
     } else {
       // geo has been transform to 2d

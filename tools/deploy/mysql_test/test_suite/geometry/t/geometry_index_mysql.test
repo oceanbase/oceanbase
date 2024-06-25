@@ -267,3 +267,21 @@ CREATE INDEX idx ON spatial_index_dml (g);
 alter table spatial_index_dml drop column i2;
 select i1, st_astext(g)  from spatial_index_dml;
 drop table spatial_index_dml;
+
+# bugfix:57353081
+drop table if exists t1;
+create table t1 (c1 int primary key,j json, g GEOMETRY NOT NULL SRID 4326, SPATIAL INDEX(g));
+
+insert into t1 values (1,'{"b":2}', ST_GeomFromText('POINT(1 1)', 4326));
+insert into t1 values (2, '{"b":2}', ST_GeomFromText('POINT(-1 1)', 4326));
+insert into t1 values (3,'{"b":2}',  ST_GeomFromText('POINT(-1 -1)', 4326));
+insert into t1 values (4, '{"b":2}', ST_GeomFromText('POINT(1 -1)', 4326));
+insert into t1 values (5,'{"b":2}',  ST_GeomFromText('POLYGON((0 0, 1 0, 1 -1, 0 -1, 0 0))', 4326));
+insert into t1 values (6, '{"b":2}', ST_GeomFromText('LINESTRING(-1 -1, 3 3)', 4326));
+insert into t1 values (7, '{"b":2}', ST_GeomFromText('POLYGON((1 1, -1 1, -1 -1, 1 -1, 1 1))', 4326));
+insert into t1 values (8,'{"b":2}',  ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))', 4326));
+
+explain SELECT /*+ index(t1 g) */ * from t1 where  ST_INTERSECTS(g,ST_GeomFromText('POINT(-1 -1)', 4326));
+alter table t1 drop column j;
+explain SELECT /*+ index(t1 g) */ * from t1 where  ST_INTERSECTS(g,ST_GeomFromText('POINT(-1 -1)', 4326));
+drop table t1;
