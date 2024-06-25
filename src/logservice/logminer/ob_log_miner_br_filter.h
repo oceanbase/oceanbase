@@ -34,6 +34,7 @@ class IBRFilterPlugin
 {
 public:
   virtual int filter(ObLogMinerBR &br, bool &need_filter) = 0;
+  virtual int init(const char *filter_cond) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -41,11 +42,11 @@ class ColumnBRFilterPlugin: public IBRFilterPlugin
 {
 public:
   virtual int filter(ObLogMinerBR &br, bool &need_filter) override;
+  virtual int init(const char *filter_cond) override;
   TO_STRING_KV(K_(multi_table_column_cond));
 public:
   ColumnBRFilterPlugin(ObIAllocator *alloc);
   ~ColumnBRFilterPlugin() { destroy(); };
-  int init(const char *table_cond_str);
   void destroy();
 
 
@@ -73,15 +74,33 @@ class OperationBRFilterPlugin: public IBRFilterPlugin
 {
 public:
   virtual int filter(ObLogMinerBR &br, bool &need_filter) override;
+  virtual int init(const char *filter_cond) override;
   TO_STRING_KV(K_(op_cond));
 public:
   OperationBRFilterPlugin();
   ~OperationBRFilterPlugin() { destroy(); }
-  int init(const char *op_cond_str);
   void destroy();
 
 private:
   ObLogMinerOpCond op_cond_;
+};
+
+class TransBRFilterPlugin: public IBRFilterPlugin
+{
+public:
+  virtual int filter(ObLogMinerBR &br, bool &need_filter) override;
+  virtual int init(const char *filter_cond) override;
+  TO_STRING_KV(K_(trans_id_cond));
+public:
+  TransBRFilterPlugin();
+  ~TransBRFilterPlugin() { destroy(); }
+  void destroy();
+
+private:
+  bool need_process_(const RecordType type);
+  
+private:
+  const char *trans_id_cond_;
 };
 
 class ILogMinerBRFilter {
@@ -116,6 +135,7 @@ public:
   ObLogMinerBRFilter();
   ~ObLogMinerBRFilter();
   int init(const char *table_cond,
+      const char *trans_id_cond,
       const char *op_cond,
       ILogMinerDataManager *data_manager,
       ILogMinerResourceCollector *resource_collector,
@@ -124,6 +144,7 @@ public:
 
 private:
   int filter_br_(ObLogMinerBR &br, bool &need_filter);
+  int add_filter_(IBRFilterPlugin *br_filter_plugin, const char *filter_cond);
 
 private:
   bool is_inited_;
