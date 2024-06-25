@@ -21,6 +21,7 @@
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"

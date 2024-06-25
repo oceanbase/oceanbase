@@ -56,9 +56,17 @@ public:
       const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count);
   static int check_tenant_will_be_deleted(
       bool &is_deleted);
+  static int get_sstable_read_info(
+      const ObTablet &tablet,
+      const ObITable::TableType &table_type,
+      const bool is_normal_cg_sstable,
+      const storage::ObITableReadInfo *&index_read_info);
 
   static int check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info);
-  static int check_log_need_rebuild(const uint64_t tenant_id, const share::ObLSID &ls_id, bool &need_rebuild);
+  static int check_log_status(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      int32_t &result);
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);

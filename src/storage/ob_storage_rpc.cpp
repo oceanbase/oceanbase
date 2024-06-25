@@ -2191,7 +2191,11 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_out_tablets_()
   ObLSService *ls_service = nullptr;
   ObLS *ls = nullptr;
   ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+  if (arg_.data_version_ != CLUSTER_CURRENT_VERSION) {
+    ret = OB_VERSION_NOT_MATCH;
+    LOG_WARN("transfer data version is not match with cluster current version, cannot do transfer", K(ret), K(arg_),
+        K(CLUSTER_CURRENT_VERSION));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
   } else if (OB_FAIL(ls_service->get_ls(arg_.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {

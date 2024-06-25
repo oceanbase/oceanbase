@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "lib/utility/ob_print_utils.h"
+#include "lib/utility/ob_sort.h"
 #include "ob_window_function_vec_op.h"
 #include "share/aggregate/iaggregate.h"
 #include "share/aggregate/processor.h"

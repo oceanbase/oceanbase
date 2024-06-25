@@ -1650,6 +1650,9 @@ ERRSIM_DEF_INT(errsim_max_ddl_block_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
 ERRSIM_DEF_STR(errsim_migration_src_server_addr, OB_CLUSTER_PARAMETER, "",
         "the server dest ls choose as src when in errsim mode",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_STR(errsim_migration_dest_server_addr, OB_CLUSTER_PARAMETER, "",
+        "the migration dest in errsim mode",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(enable_cgroup, OB_CLUSTER_PARAMETER, "True",
          "when set to false, cgroup will not init; when set to true but cgroup root dir is not ready, print ERROR",

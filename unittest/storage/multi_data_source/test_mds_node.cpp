@@ -27,14 +27,23 @@
 #include "storage/multi_data_source/mds_node.h"
 #include "common/meta_programming/ob_type_traits.h"
 #include "storage/multi_data_source/mds_row.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 namespace oceanbase {
-namespace storage
-{
-namespace mds
-{
-void *MdsAllocator::alloc(const int64_t size)
-{
-  void *ptr = ob_malloc(size, "MDS");
+namespace storage {
+namespace mds {
+void *DefaultAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void DefaultAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+void *MdsAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
   ATOMIC_INC(&alloc_times_);
   MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
   return ptr;
@@ -42,10 +51,10 @@ void *MdsAllocator::alloc(const int64_t size)
 void MdsAllocator::free(void *ptr) {
   ATOMIC_INC(&free_times_);
   MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
-  ob_free(ptr);
+  std::free(ptr);// ob_free(ptr);
 }
-}
-}
+}}}
+namespace oceanbase {
 namespace unittest {
 
 using namespace common;
@@ -56,7 +65,7 @@ using namespace mds;
 class TestMdsNode: public ::testing::Test
 {
 public:
-  TestMdsNode() {};
+  TestMdsNode() { ObMdsSchemaHelper::get_instance().init(); };
   virtual ~TestMdsNode() {};
   virtual void SetUp() {
   };
@@ -99,7 +108,7 @@ struct UserDataWithCallBack
 
 TEST_F(TestMdsNode, call_user_method) {
   MdsRow<DummyKey, UserDataWithCallBack> row;
-  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)));// commit finally
+  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)), transaction::ObTxSEQ::mk_v0(1));// commit finally
   ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {share::ObLSID(0), 0}));
   ctx.on_redo(mock_scn(1));
   ctx.before_prepare();
@@ -113,7 +122,7 @@ TEST_F(TestMdsNode, call_user_method) {
 
 TEST_F(TestMdsNode, release_node_while_node_in_ctx) {
   MdsRow<DummyKey, UserDataWithCallBack> row;
-  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)));// commit finally
+  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)), transaction::ObTxSEQ::mk_v0(1));// commit finally
   ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {share::ObLSID(0), 0}));
   ctx.on_redo(mock_scn(1));
   ctx.before_prepare();
@@ -129,7 +138,7 @@ TEST_F(TestMdsNode, release_node_while_node_in_ctx_concurrent) {
   call_try_on_commit = 0;
   call_try_on_abort = 0;
   MdsRow<DummyKey, UserDataWithCallBack> row;
-  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)));// commit finally
+  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)), transaction::ObTxSEQ::mk_v0(1));// commit finally
   // 提交这些node将会耗时50ms
   ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {share::ObLSID(0), 0}));
   ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(2), ctx, {share::ObLSID(0), 0}));
@@ -209,9 +218,10 @@ TEST_F(TestMdsNode, release_node_while_node_in_ctx_concurrent) {
 // }
 
 TEST_F(TestMdsNode, test_node_print) {
-  UserMdsNode<DummyKey, UserDataWithCallBack> node0(nullptr, MdsNodeType::SET, WriterType::TRANSACTION, 1);
-  UserMdsNode<DummyKey, UserDataWithCallBack> node1(nullptr, MdsNodeType::SET, WriterType::TRANSACTION, 1);
+  UserMdsNode<DummyKey, UserDataWithCallBack> node0(nullptr, MdsNodeType::SET, WriterType::TRANSACTION, 1, transaction::ObTxSEQ::mk_v0(100));
+  UserMdsNode<DummyKey, UserDataWithCallBack> node1(nullptr, MdsNodeType::SET, WriterType::TRANSACTION, 1, transaction::ObTxSEQ::mk_v0(100));
 }
+
 
 }
 }

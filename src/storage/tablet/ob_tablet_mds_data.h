@@ -71,7 +71,7 @@ public:
   ObTabletMdsData &operator=(const ObTabletMdsData&) = delete;
 public:
   void reset();
-  int init_for_first_creation(common::ObIAllocator &allocator);
+  int init_for_first_creation();
   int init_with_tablet_status(
       common::ObIAllocator &allocator,
       const ObTabletStatus::Status &tablet_status,
@@ -101,6 +101,9 @@ public:
       const ObTabletCreateDeleteMdsUserData &tablet_status);
   bool is_valid() const;
   void set_mem_addr();
+  int int_with_tablet_status(
+      const ObTabletCreateDeleteMdsUserData &tablet_status);
+
 public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
@@ -126,9 +129,6 @@ public:
       common::ObIAllocator &allocator,
       const ObTabletComplexAddr<share::ObTabletAutoincSeq> &complex_addr,
       share::ObTabletAutoincSeq *&auto_inc_seq);
-  static int load_aux_tablet_info(
-      const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
-      ObTabletBindingMdsUserData &aux_tablet_info);
   static int build_tablet_status(
       common::ObArenaAllocator &allocator,
       const ObTabletTxMultiSourceDataUnit &tx_data,

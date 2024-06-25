@@ -251,6 +251,8 @@ int ObDatumRow::init(ObIAllocator &allocator, const int64_t capacity, char *tran
     // trans_info_ptr maybe is nullptr,
     // ObDatumRow does not care about the free of trans_info_ptr's memory
     trans_info_ = trans_info_ptr;
+
+    STORAGE_LOG(DEBUG, "succeed to init datum row", K(ret), K_(count));
   }
 
   return ret;
@@ -504,9 +506,12 @@ DEF_TO_STRING(ObDatumRow)
       J_COLON();
       J_ARRAY_START();
       for (int64_t i = 0; i < count_; ++i) {
-        databuff_printf(buf, buf_len, pos, "col_id=%ld:", i);
+        if (0 == i) {
+          databuff_printf(buf, buf_len, pos, "col_id=%ld:", i);
+        } else {
+          databuff_printf(buf, buf_len, pos, ", col_id=%ld:", i);
+        }
         pos += storage_datums_[i].storage_to_string(buf + pos, buf_len - pos);
-        databuff_printf(buf, buf_len, pos, ",");
       }
       J_ARRAY_END();
     }

@@ -198,6 +198,7 @@ public:
   virtual int offline() = 0;
   virtual int online(const palf::LSN &lsn, const share::SCN &scn) = 0;
   virtual bool is_offline() const = 0;
+  virtual int is_replay_fatal_error(bool &has_fatal_error) = 0;
 };
 
 class ObLogHandler : public ObILogHandler, public ObLogHandlerBase
@@ -752,6 +753,13 @@ public:
   int offline() override final;
   int online(const palf::LSN &lsn, const share::SCN &scn) override final;
   bool is_offline() const override final;
+  // @brief: check there's a fatal error in replay service.
+  // @param[out] has_fatal_error.
+  // @return:
+  // OB_NOT_INIT: not inited
+  // OB_NOT_RUNNING: in stop state
+  // OB_EAGAIN: try lock failed, need retry.
+  int is_replay_fatal_error(bool &has_fatal_error);
 private:
   static constexpr int64_t MIN_CONN_TIMEOUT_US = 5 * 1000 * 1000;     // 5s
   const int64_t MAX_APPEND_RETRY_INTERNAL = 500 * 1000L;

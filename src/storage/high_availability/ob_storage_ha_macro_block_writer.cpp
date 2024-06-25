@@ -26,6 +26,7 @@ namespace storage
 ObStorageHAMacroBlockWriter::ObStorageHAMacroBlockWriter()
  : is_inited_(false),
    tenant_id_(OB_INVALID_ID),
+   ls_id_(),
    dag_id_(),
    reader_(NULL),
    macro_checker_(),
@@ -35,6 +36,7 @@ ObStorageHAMacroBlockWriter::ObStorageHAMacroBlockWriter()
 
 int ObStorageHAMacroBlockWriter::init(
     const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
     const ObDagId &dag_id,
     ObICopyMacroBlockReader *reader,
     ObIndexBlockRebuilder *index_block_rebuilder)
@@ -45,13 +47,15 @@ int ObStorageHAMacroBlockWriter::init(
     LOG_WARN("writer should not be init twice", K(ret));
   } else if (OB_ISNULL(reader)
             || OB_INVALID_ID == tenant_id
+            || !ls_id.is_valid()
             || dag_id.is_invalid()
             || OB_ISNULL(index_block_rebuilder)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(reader), KP(index_block_rebuilder), K(dag_id));
+    LOG_WARN("invalid argument", K(ret), KP(reader), KP(index_block_rebuilder), K(dag_id), K(ls_id));
   } else {
     reader_ = reader;
     tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
     dag_id_.set(dag_id);
     index_block_rebuilder_ = index_block_rebuilder;
     is_inited_ = true;
@@ -109,7 +113,9 @@ int ObStorageHAMacroBlockWriter::check_macro_block_(
   return ret;
 }
 
-int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &copied_ctx)
+int ObStorageHAMacroBlockWriter::process(
+    blocksstable::ObMacroBlocksWriteCtx &copied_ctx,
+    ObIHADagNetCtx &ha_dag_net_ctx)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -129,6 +135,7 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
   write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   write_info.io_desc_.set_sys_module_id(ObIOModule::HA_MACRO_BLOCK_WRITER_IO);
+  int32_t result = OB_SUCCESS;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -141,13 +148,22 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
         break;
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(dag_id_, is_cancel))) {
         STORAGE_LOG(WARN, "failed to check is task canceled", K(ret), K_(dag_id));
-      } else if (is_cancel){
+      } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "copy task has been canceled, skip remaining macro blocks",
           K(ret), K_(dag_id), "finished_macro_block_count", copied_ctx.macro_block_list_.count());
         break;
-      }
-      if (OB_FAIL(dag_yield())) {
+      } else if (OB_FAIL(ObStorageHAUtils::check_log_status(tenant_id_, ls_id_, result))) {
+        LOG_WARN("failed to check log status", K(ret), K(tenant_id_), K(ls_id_));
+      } else if (OB_SUCCESS != result) {
+        LOG_INFO("can not replay log, it will retry", K(result), K(ha_dag_net_ctx));
+        if (OB_FAIL(ha_dag_net_ctx.set_result(result/*result*/, true/*need_retry*/))) {
+          LOG_WARN("failed to set result", K(ret), K(ha_dag_net_ctx));
+        } else {
+          ret = result;
+          LOG_WARN("log sync or replay error, need retry", K(ret), K(tenant_id_), K(ls_id_), K(ha_dag_net_ctx));
+        }
+      } else if (OB_FAIL(dag_yield())) {
         STORAGE_LOG(WARN, "fail to yield dag", KR(ret));
       } else if (OB_FAIL(reader_->get_next_macro_block(header, data))) {
         if (OB_ITER_END != ret) {

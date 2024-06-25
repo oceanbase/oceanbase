@@ -230,7 +230,8 @@ public:
                            const char *buf,
                            const int64_t buf_len,
                            const int64_t request_id = 0,
-                           const ObRegisterMdsFlag &register_flag = ObRegisterMdsFlag());
+                           const ObRegisterMdsFlag &register_flag = ObRegisterMdsFlag(),
+                           const transaction::ObTxSEQ seq_no = transaction::ObTxSEQ());
   ObTxELRUtil &get_tx_elr_util() { return elr_util_; }
   int create_tablet(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id)
   {
@@ -261,6 +262,7 @@ private:
                              const ObTxDataSourceType &type,
                              const char *buf,
                              const int64_t buf_len,
+                             const transaction::ObTxSEQ seq_no,
                              const ObRegisterMdsFlag &register_flag);
 private:
   int handle_redo_sync_task_(ObDupTableRedoSyncTask *task, bool &need_release_task);

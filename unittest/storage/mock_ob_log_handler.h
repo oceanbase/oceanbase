@@ -521,6 +521,7 @@ public:
   bool is_offline() const {return false;};
   int offline() {return OB_SUCCESS;};
   int online(const LSN &lsn, const share::SCN &scn) { UNUSED(lsn); UNUSED(scn); return OB_SUCCESS;};
+  int is_replay_fatal_error(bool &has_fatal_error) {has_fatal_error = false; return OB_SUCCESS;}
 };
 
 }  // namespace storage

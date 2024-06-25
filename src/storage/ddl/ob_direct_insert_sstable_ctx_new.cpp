@@ -132,9 +132,12 @@ int ObTenantDirectLoadMgr::create_tablet_direct_load(
     const int64_t context_id,
     const int64_t execution_id,
     const ObTabletDirectLoadInsertParam &build_param,
-    const share::SCN checkpoint_scn)
+    const share::SCN checkpoint_scn,
+    const bool only_persisted_ddl_data)
 {
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = build_param.common_param_.ls_id_;
+  const common::ObTabletID &tablet_id = build_param.common_param_.tablet_id_;
   ObLSService *ls_service = nullptr;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
@@ -148,14 +151,26 @@ int ObTenantDirectLoadMgr::create_tablet_direct_load(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
-  } else if (OB_FAIL(ls_service->get_ls(build_param.common_param_.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(build_param));
-  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, build_param.common_param_.tablet_id_,
-    tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("get tablet handle failed", K(ret), K(build_param));
-  } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
-    LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
-  } else {
+  } else if (!only_persisted_ddl_data && OB_FAIL(tablet_handle.get_obj()->get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+    LOG_WARN("failed to get ddl data from tablet", K(ret), K(ls_id), K(tablet_id));
+  } else if (only_persisted_ddl_data && OB_FAIL((tablet_handle.get_obj()->get_mds_data_from_tablet<mds::DummyKey, ObTabletBindingMdsUserData>(
+      mds::DummyKey(),
+      share::SCN::max_scn(),
+      ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+      ReadBindingInfoOp(ddl_data))))) {
+    if (OB_SNAPSHOT_DISCARDED == ret) {
+      ddl_data.set_default_value();
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get ddl data from tablet", K(ret), K(ls_id), K(tablet_id));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ObTabletHandle lob_tablet_handle;
     ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
     ObTabletMemberWrapper<ObTabletTableStore> lob_store_wrapper;
@@ -167,11 +182,11 @@ int ObTenantDirectLoadMgr::create_tablet_direct_load(
     const ObTabletID &lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
     if (!lob_meta_tablet_id.is_valid() || checkpoint_scn.is_valid_and_not_min()) {
       // has no lob, or recover from checkpoint.
-      LOG_DEBUG("do not create lob mgr handle when create data tablet mgr", K(ret), K(lob_meta_tablet_id), K(checkpoint_scn),
-        K(build_param));
+      LOG_DEBUG("do not create lob mgr handle when create data tablet mgr", K(ret), K(ls_id), K(lob_meta_tablet_id),
+          K(checkpoint_scn), K(build_param));
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, lob_meta_tablet_id,
-      lob_tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id));
+        lob_tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+      LOG_WARN("get tablet handle failed", K(ret), K(ls_id), K(lob_meta_tablet_id));
     } else if (OB_FAIL(lob_tablet_handle.get_obj()->fetch_table_store(lob_store_wrapper))) {
       LOG_WARN("fail to fetch table store", K(ret));
     } else if (OB_FAIL(try_create_tablet_direct_load_mgr(context_id, execution_id,

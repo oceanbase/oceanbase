@@ -21,6 +21,7 @@
 #include "src/share/ob_errno.h"
 #include "common/meta_programming/ob_type_traits.h"
 #include "mds_tenant_service.h"
+#include "common_define.h"
 
 namespace oceanbase
 {
@@ -33,37 +34,6 @@ namespace storage
 {
 namespace mds
 {
-
-struct DefaultAllocator : public ObIAllocator
-{
-  void *alloc(const int64_t size)  { return ob_malloc(size, "MDS"); }
-  void *alloc(const int64_t size, const ObMemAttr &attr) { return ob_malloc(size, attr); }
-  void free(void *ptr) { ob_free(ptr); }
-  void set_label(const lib::ObLabel &) {}
-  static DefaultAllocator &get_instance() { static DefaultAllocator alloc; return alloc; }
-  static int64_t get_alloc_times() { return ATOMIC_LOAD(&get_instance().alloc_times_); }
-  static int64_t get_free_times() { return ATOMIC_LOAD(&get_instance().free_times_); }
-private:
-  DefaultAllocator() : alloc_times_(0), free_times_(0) {}
-  int64_t alloc_times_;
-  int64_t free_times_;
-};
-
-class BufferCtx;
-struct MdsAllocator : public ObIAllocator
-{
-  void *alloc(const int64_t size);
-  void *alloc(const int64_t size, const ObMemAttr &attr);
-  void free(void *ptr);
-  void set_label(const lib::ObLabel &);
-  static MdsAllocator &get_instance();
-  static int64_t get_alloc_times() { return ATOMIC_LOAD(&get_instance().alloc_times_); }
-  static int64_t get_free_times() { return ATOMIC_LOAD(&get_instance().free_times_); }
-private:
-  MdsAllocator() : alloc_times_(0), free_times_(0) {}
-  int64_t alloc_times_;
-  int64_t free_times_;
-};
 
 struct MdsFactory
 {

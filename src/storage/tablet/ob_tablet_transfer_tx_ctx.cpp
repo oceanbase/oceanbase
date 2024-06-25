@@ -343,7 +343,7 @@ int ObStartTransferMoveTxHelper::on_register(const char* buf, const int64_t len,
     }
   }
   LOG_INFO("[TRANSFER] TransferMoveTx on_register", KR(ret), K(len), K(tx_id),
-          "tx_count", collect_tx_info.args_.count());
+          "tx_count", collect_tx_info.args_.count(), KP(&transfer_move_tx_ctx), K(collect_tx_info));
   return ret;
 }
 
@@ -391,7 +391,7 @@ int ObStartTransferMoveTxHelper::on_replay(const char* buf, const int64_t len, c
   ObTransferMoveTxCtx &transfer_move_tx_ctx = static_cast<ObTransferMoveTxCtx&>(ctx);
   CollectTxCtxInfo &collect_tx_info = transfer_move_tx_ctx.get_collect_tx_info();
   transaction::ObTransID tx_id = transfer_move_tx_ctx.get_writer().writer_id_;
-  LOG_INFO("TransferMoveTx on_replay", K(tx_id));
+  LOG_INFO("TransferMoveTx on_replay", K(tx_id), KP(&collect_tx_info), K(collect_tx_info));
 
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;

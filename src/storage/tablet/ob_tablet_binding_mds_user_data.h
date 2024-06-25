@@ -48,7 +48,6 @@ public:
 
 public:
   bool is_valid() const;
-  int set_allocator(common::ObIAllocator &allocator);
   int assign(const ObTabletBindingMdsUserData &other);
   int assign_from_tablet_meta(const ObTabletBindingInfo &other);
   int dump_to_tablet_meta(ObTabletBindingInfo &other);

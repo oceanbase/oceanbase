@@ -55,7 +55,7 @@ int ObTabletDeleteMdsHelper::on_commit_for_old_mds(
     const int64_t len,
     const transaction::ObMulSourceDataNotifyArg &notify_arg)
 {
-  mds::TLOCAL_MDS_TRANS_NOTIFY_TYPE = NotifyType::UNKNOWN;// disable runtime check
+  mds::TLOCAL_MDS_INFO.reset();// disable runtime check
   return ObTabletCreateDeleteHelper::process_for_old_mds<obrpc::ObBatchRemoveTabletArg, ObTabletDeleteMdsHelper>(buf, len, notify_arg);
 }
 
@@ -98,7 +98,7 @@ int ObTabletDeleteMdsHelper::replay_process(
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(arg.id_))) {
     LOG_WARN("failed to set_tablet_empty_shell_trigger", K(ret), K(arg));
   } else {
-    LOG_INFO("delete tablet replay", KR(ret), K(arg));
+    LOG_INFO("delete tablet replay", KR(ret), K(scn), K(arg));
   }
 
   return ret;

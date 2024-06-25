@@ -21,14 +21,11 @@
 #include "storage/multi_data_source/mds_table_mgr.h"
 #include "observer/virtual_table/ob_mds_event_buffer.h"
 #include "storage/multi_data_source/runtime_utility/list_helper.h"
+#include "storage/multi_data_source/runtime_utility/mds_tlocal_info.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
-namespace transaction
-{
-enum class NotifyType : int64_t;
-}
 namespace share
 {
 class SCN;
@@ -38,7 +35,7 @@ namespace storage
 class ObTabletPointer;
 namespace mds
 {
-extern TLOCAL(transaction::NotifyType, TLOCAL_MDS_TRANS_NOTIFY_TYPE);
+extern TLOCAL(MdsTLocalInfo, TLOCAL_MDS_INFO);
 template <typename K, typename V>
 class MdsRow;
 template <typename K, typename V>
@@ -141,31 +138,30 @@ public:
   virtual int get_latest(int64_t unit_id,
                          void *key,
                          ObFunction<int(void *)> &op,
-                         bool &is_committed,
-                         const int64_t read_seq) const = 0;
+                         bool &is_committed) const = 0;
   virtual int get_tablet_status_node(ObFunction<int(void *)> &op,
                                      const int64_t read_seq) const = 0;
   virtual int get_snapshot(int64_t unit_id,
                            void *key,
                            ObFunction<int(void *)> &op,
                            const share::SCN &snapshot,
-                           const int64_t read_seq,
                            const int64_t timeout_us) const = 0;
   virtual int get_by_writer(int64_t unit_id,
                             void *key,
                             ObFunction<int(void *)> &op,
                             const MdsWriter &writer,
                             const share::SCN &snapshot,
-                            const int64_t read_seq,
+                            const transaction::ObTxSEQ read_seq,
                             const int64_t timeout_us) const = 0;
   virtual int is_locked_by_others(int64_t unit_id,
                                   void *key,
                                   bool &is_locked,
                                   const MdsWriter &self) const = 0;
-  virtual int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
-                                  ObFunction<int(const MdsDumpKV&)> &for_each_op,
-                                  const int64_t mds_construct_sequence,
-                                  const bool for_flush) const = 0;
+  virtual int scan_all_nodes_to_dump(ObFunction<int(const MdsDumpKV&)> &for_each_op,
+                                     const int64_t mds_construct_sequence,
+                                     const bool for_flush,
+                                     const ScanRowOrder scan_row_order,
+                                     const ScanNodeOrder scan_node_order) const = 0;
   virtual void on_flush(const share::SCN &flushed_scn, const int flush_ret) = 0;
   virtual int try_recycle(const share::SCN recycle_scn) = 0;
   share::ObLSID get_ls_id() const;

@@ -217,7 +217,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
       // 1.normal minor merge merge scn equal to end scn
       // 2.backfill may merge scn is bigger than end scn
       access_context_.merge_scn_ = merge_param.merge_scn_;
-      if (static_param.get_merge_type() != BACKFILL_TX_MERGE) {
+      if (!static_param.is_backfill_) {
         if (OB_UNLIKELY(access_context_.merge_scn_ != static_param.scn_range_.end_scn_)) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(ERROR, "Unexpected merge scn", K(ret), K(merge_param), K(static_param));

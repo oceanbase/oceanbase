@@ -217,6 +217,7 @@ public:
     TASK_TYPE_DDL_SPLIT_PREPARE = 61,
     TASK_TYPE_DDL_SPLIT_WRITE = 62,
     TASK_TYPE_DDL_SPLIT_MERGE = 63,
+    TASK_TYPE_TABLE_FINISH_BACKFILL = 64,
     TASK_TYPE_MAX,
   };
 
@@ -1433,6 +1434,11 @@ inline bool is_compaction_dag(ObDagType::ObDagTypeEnum dag_type)
          ObDagType::DAG_TYPE_TX_TABLE_MERGE == dag_type ||
          ObDagType::DAG_TYPE_MDS_MINI_MERGE == dag_type ||
          ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == dag_type;
+}
+
+inline bool is_ha_backfill_dag(const ObDagType::ObDagTypeEnum dag_type)
+{
+  return ObDagType::DAG_TYPE_TABLET_BACKFILL_TX == dag_type;
 }
 
 inline int dag_yield()

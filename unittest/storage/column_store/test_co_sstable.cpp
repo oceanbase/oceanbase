@@ -410,6 +410,45 @@ TEST_F(TestCOSSTable, empty_co_table_test)
   EXPECT_EQ(storage_schema.get_column_group_count(), co_table->get_cs_meta().column_group_cnt_);
 }
 
+TEST_F(TestCOSSTable, copy_from_old_sstable_test)
+{
+  int ret = OB_SUCCESS;
+
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
+  ASSERT_NE(nullptr, t3m);
+
+  // create co sstable
+  const int64_t base_version = 0;
+  const int64_t snapshot_version = 100;
+  ObTableHandleV2 co_handle;
+  ret = TestCOSSTable::mock_major_sstable(ObITable::COLUMN_ORIENTED_SSTABLE, allocator_, base_version, snapshot_version, 2, co_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObITable *co_table = co_handle.get_table();
+  ASSERT_EQ(true, co_table->is_co_sstable());
+
+  // create cg sstable
+  ObTableHandleV2 cg_handle;
+  ret = TestCOSSTable::mock_major_sstable(ObITable::NORMAL_COLUMN_GROUP_SSTABLE, allocator_, base_version, snapshot_version, 1, cg_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObITable *cg_table = cg_handle.get_table();
+  ASSERT_EQ(true, cg_table->is_cg_sstable());
+
+  // add cg table to co sstable
+  ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(co_table);
+  ObSEArray<ObITable *, 1> cg_sstables;
+  ret = cg_sstables.push_back(cg_table);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = co_sstable->fill_cg_sstables(cg_sstables);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  EXPECT_EQ(true, co_sstable->valid_for_cs_reading_);
+
+  // copy old sstable and test
+  ObSSTable *copied_sstable = nullptr;
+  ObSSTable::copy_from_old_sstable(*co_sstable, allocator_, copied_sstable);
+  ASSERT_TRUE(copied_sstable->is_tmp_sstable_);
+  ASSERT_EQ(1, copied_sstable->meta_->cg_sstables_.count());
+  ASSERT_TRUE(static_cast<ObSSTable *>(copied_sstable->meta_->cg_sstables_.at(0))->is_tmp_sstable_);
+}
 
 } //namespace unittest
 } //namespace oceanbase

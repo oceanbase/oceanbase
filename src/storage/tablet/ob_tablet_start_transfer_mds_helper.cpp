@@ -1425,7 +1425,8 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
     for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
       MDS_TG(10_ms);
       const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.tablet_meta_list_.at(i);
-      if (CLICK_FAIL(create_transfer_in_tablet_(scn, for_replay, tablet_meta, dest_ls, ctx, tablet_id_array))) {
+      if (CLICK_FAIL(create_transfer_in_tablet_(scn, for_replay, tablet_meta,
+          tx_start_transfer_in_info.src_ls_id_, dest_ls, ctx, tablet_id_array))) {
         LOG_WARN("failed to create transfer in tablet", K(ret), K(tablet_meta));
       }
     }
@@ -1444,11 +1445,11 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
   return ret;
 }
 
-
 int ObTabletStartTransferInHelper::create_transfer_in_tablet_(
     const share::SCN &scn,
     const bool for_replay,
     const ObMigrationTabletParam &tablet_meta,
+    const share::ObLSID &src_ls_id,
     ObLS *dest_ls,
     mds::BufferCtx &ctx,
     common::ObIArray<common::ObTabletID> &tablet_id_array)
@@ -1493,38 +1494,24 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablet_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
   } else {
-    const mds::MdsDumpKV &kv = tablet_meta.mds_data_.tablet_status_uncommitted_kv_;
-    const common::ObString &str = kv.v_.user_data_;
-    ObTabletCreateDeleteMdsUserData user_data;
-    int64_t pos = 0;
-    if (OB_FAIL(user_data.deserialize(str.ptr(), str.length(), pos))) {
-      LOG_WARN("failed to deserialize user data", K(ret));
-    } else if (OB_UNLIKELY(ObTabletStatus::TRANSFER_IN != user_data.tablet_status_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet status is not TRANSFER_IN", K(ret), K(key), K(user_data));
-    } else {
-      user_data.transfer_scn_ = tablet_meta.transfer_info_.transfer_start_scn_;
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (for_replay) {
-      if (OB_FAIL(do_for_replay_(scn, user_data, dest_ls->get_ls_id(), tablet_meta.transfer_info_.transfer_start_scn_,
+    if (for_replay) {
+      if (OB_FAIL(do_for_replay_(scn, tablet_meta.last_persisted_committed_tablet_status_, dest_ls->get_ls_id(), tablet_meta.transfer_info_.transfer_start_scn_,
           tablet_handle, ctx))) {
-        LOG_WARN("failed to do for replay", K(ret), K(scn), K(user_data));
+        LOG_WARN("failed to do for replay", K(ret), K(scn), K(tablet_meta.last_persisted_committed_tablet_status_));
       }
     } else {
-      if (OB_FAIL(dest_ls->get_tablet_svr()->set_tablet_status(tablet_id, user_data, user_ctx))) {
-        LOG_WARN("failed to set mds data", K(ret), K(user_data));
+      if (OB_FAIL(dest_ls->get_tablet_svr()->set_tablet_status(tablet_id, tablet_meta.last_persisted_committed_tablet_status_, user_ctx))) {
+        LOG_WARN("failed to set mds data", K(ret), K(tablet_meta.last_persisted_committed_tablet_status_));
       }
     }
 
     if (OB_SUCC(ret)) {
-      LOG_INFO("succeeded to create transfer in tablet", K(key), "ls_id", dest_ls->get_ls_id(), K(user_data));
+      LOG_INFO("succeeded to create transfer in tablet", K(key), "ls_id", dest_ls->get_ls_id(), K(tablet_meta), K(for_replay));
     }
 #ifdef ERRSIM
     ObTransferEventRecorder::record_tablet_transfer_event("tx_start_transfer_in",
         dest_ls->get_ls_id(), tablet->get_tablet_meta().tablet_id_,
-        tablet->get_tablet_meta().transfer_info_.transfer_seq_, user_data.tablet_status_,
+        tablet->get_tablet_meta().transfer_info_.transfer_seq_, tablet_meta.last_persisted_committed_tablet_status_.tablet_status_,
         ret);
 #endif
   }

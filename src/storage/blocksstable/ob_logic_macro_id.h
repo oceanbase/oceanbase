@@ -144,7 +144,7 @@ public:
     return data_seq_.is_valid() && logic_version_ > 0 && tablet_id_ > 0;
   }
 
-  TO_STRING_KV(K_(data_seq), K_(logic_version), K_(tablet_id), K_(column_group_idx));
+  TO_STRING_KV(K_(data_seq), K_(logic_version), K_(tablet_id), K_(column_group_idx), K_(is_mds));
 
 public:
   ObMacroDataSeq data_seq_;
@@ -155,7 +155,8 @@ public:
     uint64_t info_;
     struct {
       uint64_t column_group_idx_ : 16;
-      uint64_t reserved_         : 48;
+      bool is_mds_               :  1;
+      uint64_t reserved_         : 47;
     };
   };
   OB_UNIS_VERSION(LOGIC_BLOCK_ID_VERSION);

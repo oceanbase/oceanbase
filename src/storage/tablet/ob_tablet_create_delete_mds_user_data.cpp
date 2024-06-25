@@ -28,7 +28,7 @@ namespace oceanbase
 namespace storage
 {
 ObTabletCreateDeleteMdsUserData::ObTabletCreateDeleteMdsUserData()
-  : tablet_status_(),
+  : tablet_status_(ObTabletStatus::NONE),
     transfer_scn_(share::SCN::invalid_scn()),
     transfer_ls_id_(),
     data_type_(ObTabletMdsUserDataType::NONE),
@@ -70,7 +70,7 @@ int ObTabletCreateDeleteMdsUserData::assign(const ObTabletCreateDeleteMdsUserDat
 
 void ObTabletCreateDeleteMdsUserData::reset()
 {
-  tablet_status_ = ObTabletStatus::MAX;
+  tablet_status_ = ObTabletStatus::NONE;
   transfer_scn_.set_invalid();
   transfer_ls_id_.reset();
   data_type_ = ObTabletMdsUserDataType::NONE;
@@ -79,6 +79,13 @@ void ObTabletCreateDeleteMdsUserData::reset()
   delete_commit_scn_.set_invalid();
   create_commit_version_ = ObTransVersion::INVALID_TRANS_VERSION;
   transfer_out_commit_version_ = ObTransVersion::INVALID_TRANS_VERSION;
+}
+
+void ObTabletCreateDeleteMdsUserData::on_init()
+{
+  reset();
+  tablet_status_ = ObTabletStatus::NONE;
+  data_type_ = ObTabletMdsUserDataType::NONE;
 }
 
 void ObTabletCreateDeleteMdsUserData::on_redo(const share::SCN &redo_scn)
@@ -229,7 +236,7 @@ int ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(
     LOG_WARN("ls is null", K(ret), K(ls_id), K(ls_handle));
   } else {
     ls->get_tablet_empty_shell_handler()->set_empty_shell_trigger(true);
-    LOG_INFO("set_tablet_empty_shell_trigger", K(ls_id), "handler", ls->get_tablet_empty_shell_handler());
+    LOG_INFO("set tablet empty shell trigger", K(ret), K(ls_id), "handler", ls->get_tablet_empty_shell_handler());
   }
   return ret;
 }

@@ -13,27 +13,24 @@
 #ifndef OCEANBASE_STORAGE_OB_TABLET_MEDIUM_INFO_READER
 #define OCEANBASE_STORAGE_OB_TABLET_MEDIUM_INFO_READER
 
-#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/tablet/ob_tablet_dumped_medium_info.h"
+#include "storage/tablet/ob_mds_range_query_iterator.h"
 #include "storage/multi_data_source/mds_table_iterator.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-class ObTabletDumpedMediumInfo;
-
 class ObTabletMediumInfoReader
 {
 public:
-  ObTabletMediumInfoReader(const ObTablet &tablet);
+  ObTabletMediumInfoReader();
   ~ObTabletMediumInfoReader();
 public:
-  int init(common::ObArenaAllocator &allocator);
-  void reset();
-
-  // TODO(@bowen.gbw): filter uncommitted node
+  int init(
+      const ObTablet &tablet,
+      ObTableScanParam &scan_param);
   int get_next_medium_info(
       common::ObIAllocator &allocator,
       compaction::ObMediumCompactionInfoKey &key,
@@ -44,34 +41,13 @@ public:
       compaction::ObMediumCompactionInfo &medium_info);
 
   int get_min_medium_snapshot(
-    const int64_t last_major_snapshot_version,
-    int64_t &min_medium_snapshot);
-  int get_max_medium_snapshot(int64_t &max_medium_snapshot);
-private:
-  int advance_mds_iter();
-  int advance_dump_iter();
-  int output_medium_info_from_mds_iter(
-      common::ObIAllocator &allocator,
-      compaction::ObMediumCompactionInfoKey &key,
-      compaction::ObMediumCompactionInfo &medium_info);
-  int output_medium_info_from_dump_iter(
-      common::ObIAllocator &allocator,
-      compaction::ObMediumCompactionInfoKey &key,
-      compaction::ObMediumCompactionInfo &medium_info);
+      const int64_t last_major_snapshot_version,
+      int64_t &min_medium_snapshot);
 private:
   bool is_inited_;
-  const ObTablet &tablet_;
-  common::ObArenaAllocator *allocator_;
-
-  // mds iter will hold mds table handle
-  mds::ObMdsUnitRowNodeScanIterator<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> mds_iter_;
-  ObTabletDumpedMediumInfoIterator dump_iter_;
-  compaction::ObMediumCompactionInfoKey mds_key_;
-  mds::UserMdsNode<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> *mds_node_;
-  compaction::ObMediumCompactionInfoKey dump_key_;
-  const compaction::ObMediumCompactionInfo *dump_medium_info_;
-  bool mds_end_;
-  bool dump_end_;
+  common::ObArenaAllocator allocator_;
+  ObStoreCtx store_ctx_;
+  ObMdsRangeQueryIterator<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo> iter_;
 };
 } // namespace storage
 } // namespace oceanbase

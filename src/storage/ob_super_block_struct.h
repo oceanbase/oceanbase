@@ -126,7 +126,8 @@ public:
   static const int64_t MAX_SNAPSHOT_NUM = 32;
   static const int64_t MIN_SUPER_BLOCK_VERSION = 0;
   static const int64_t TENANT_SUPER_BLOCK_VERSION_V1 = 1;
-  static const int64_t TENANT_SUPER_BLOCK_VERSION = 3;
+  static const int64_t TENANT_SUPER_BLOCK_VERSION_V3 = 3;
+  static const int64_t TENANT_SUPER_BLOCK_VERSION = 4;
   ObTenantSuperBlock();
   ObTenantSuperBlock(const uint64_t tenant_id, const bool is_hidden = false);
   ~ObTenantSuperBlock() = default;

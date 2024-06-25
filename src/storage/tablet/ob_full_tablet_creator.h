@@ -31,9 +31,6 @@ namespace storage
 
 class ObFullTabletCreator final
 {
-  static const int64_t ONE_ROUND_PERSIST_COUNT_THRESHOLD = 200L;
-  static const int64_t FIFO_START_OFFSET =
-      sizeof(ObFIFOAllocator::NormalPageHeader) + sizeof(ObFIFOAllocator::AllocHeader) + 16 - 1;
 public:
   ObFullTabletCreator();
   ~ObFullTabletCreator() = default;

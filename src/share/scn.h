@@ -12,6 +12,7 @@
 
 #ifndef OCEABASE_SHARE_SCN_
 #define OCEABASE_SHARE_SCN_
+#include <iostream>
 #include "lib/ob_define.h"                      // Serialization
 #include "lib/utility/ob_print_utils.h"         // Print*
 namespace oceanbase {
@@ -119,6 +120,12 @@ public:
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
   int64_t get_serialize_size(void) const;
   int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const;
+
+  friend std::ostream &operator<<(std::ostream &os, const SCN &scn)
+  {
+    os << "ts_ns: " << scn.ts_ns_ << ", v: " << scn.v_;
+    return os;
+  }
 
   TO_STRING_KV(K_(val), K_(v));
 private:

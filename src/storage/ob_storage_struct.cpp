@@ -251,7 +251,9 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
     is_simplified_(false),
     scn_range_(),
     error_location_(nullptr),
-    snapshot_info_()
+    snapshot_info_(),
+    is_backfill_(false),
+    backfill_scn_()
 {
 }
 
@@ -259,7 +261,8 @@ bool ObGetMergeTablesResult::is_valid() const
 {
   return scn_range_.is_valid()
       && (is_simplified_ || handle_.get_count() >= 1)
-      && merge_version_ >= 0;
+      && merge_version_ >= 0
+      && (!is_backfill_ || backfill_scn_.is_valid());
 }
 
 void ObGetMergeTablesResult::reset_handle_and_range()
@@ -285,6 +288,8 @@ void ObGetMergeTablesResult::reset()
   error_location_ = nullptr;
   is_simplified_ = false;
   snapshot_info_.reset();
+  is_backfill_ = false;
+  backfill_scn_.reset();
 }
 
 int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
@@ -300,6 +305,8 @@ int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
     scn_range_ = src.scn_range_;
     error_location_ = src.error_location_;
     is_simplified_ = src.is_simplified_;
+    is_backfill_ = src.is_backfill_;
+    backfill_scn_ = src.backfill_scn_;
   }
   return ret;
 }
@@ -317,6 +324,12 @@ int ObGetMergeTablesResult::assign(const ObGetMergeTablesResult &src)
   }
   return ret;
 }
+
+share::SCN ObGetMergeTablesResult::get_merge_scn() const
+{
+  return is_backfill_ ? backfill_scn_ : scn_range_.end_scn_;
+}
+
 ObDDLTableStoreParam::ObDDLTableStoreParam()
   : keep_old_ddl_sstable_(true),
     ddl_start_scn_(SCN::min_scn()),
@@ -491,7 +504,6 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     is_transfer_replace_(false),
     start_scn_(SCN::min_scn()),
     tablet_meta_(nullptr),
-    update_ddl_sstable_(false),
     restore_status_(ObTabletRestoreStatus::FULL)
 {
 }
@@ -503,7 +515,6 @@ void ObBatchUpdateTableStoreParam::reset()
   is_transfer_replace_ = false;
   start_scn_.set_min();
   tablet_meta_ = nullptr;
-  update_ddl_sstable_ = false;
   restore_status_ = ObTabletRestoreStatus::FULL;
 }
 
@@ -527,7 +538,6 @@ int ObBatchUpdateTableStoreParam::assign(
     is_transfer_replace_ = param.is_transfer_replace_;
     start_scn_ = param.start_scn_;
     tablet_meta_ = param.tablet_meta_;
-    update_ddl_sstable_ = param.update_ddl_sstable_;
     restore_status_ = param.restore_status_;
 #ifdef ERRSIM
     errsim_point_info_ = param.errsim_point_info_;

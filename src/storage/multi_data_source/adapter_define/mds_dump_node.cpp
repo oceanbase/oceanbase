@@ -16,6 +16,10 @@
 #include "lib/oblog/ob_log_module.h"
 #include <type_traits>
 #include "storage/multi_data_source/mds_table_handle.h"
+#include "meta_programming/ob_meta_swap.h"
+#include "mds_dump_obj_printer.h"
+
+using namespace oceanbase::transaction;
 
 namespace oceanbase
 {
@@ -23,6 +27,11 @@ namespace storage
 {
 namespace mds
 {
+
+void MdsDumpKey::swap(MdsDumpKey &other) noexcept
+{
+  meta::swap(*this, other, mds_table_id_, mds_unit_id_, crc_check_number_, allocator_, key_);
+}
 
 uint32_t MdsDumpKey::generate_hash() const
 {
@@ -51,200 +60,6 @@ void MdsDumpKey::reset()
   new (this) MdsDumpKey();
 }
 
-struct DeserializeCompareHelper
-{
-  template <typename MdsTableType>
-  struct InnerDeserializeCompareHelper
-  {
-    template <int IDX>
-    int help_compare_key(const MdsDumpKey &lhs,
-                         const MdsDumpKey &rhs,
-                         int &result)
-    {
-      #define PRINT_WRAPPER KR(ret), K(lhs.mds_table_id_), K(lhs.mds_unit_id_), K(result)
-      int ret = OB_SUCCESS;
-      MDS_TG(1_ms);
-      if (IDX == lhs.mds_unit_id_) {
-        using UnitType = typename std::decay<
-                         decltype(std::declval<MdsTableType>().template element<IDX>())>::type;
-        using KeyType = typename UnitType::key_type;
-        KeyType lhs_key;
-        KeyType rhs_key;
-        int64_t pos = 0;
-        if (MDS_FAIL(lhs_key.deserialize(lhs.key_.ptr(), lhs.key_.length(), pos))) {
-          MDS_LOG_NONE(ERROR, "fail to deseialize lhs key");
-        } else if (FALSE_IT(pos = 0)) {
-        } else if (MDS_FAIL(rhs_key.deserialize(rhs.key_.ptr(), rhs.key_.length(), pos))) {
-          MDS_LOG_NONE(ERROR, "fail to deseialize rhs key");
-        } else {
-          if (lhs_key < rhs_key) {
-            result = -1;
-          } else if (lhs_key == rhs_key) {
-            result = 0;
-          } else {
-            result = 1;
-          }
-          MDS_LOG_NONE(DEBUG, "success to compare non dummy key");
-        }
-      } else if (MDS_FAIL(help_compare_key<IDX + 1>(lhs, rhs, result))) {
-      }
-      return ret;
-      #undef PRINT_WRAPPER
-    }
-    template <>
-    int help_compare_key<MdsTableType::get_element_size()>(const MdsDumpKey &lhs,
-                                                        const MdsDumpKey &rhs,
-                                                        int &result)
-    {
-      int ret = OB_ERR_UNEXPECTED;
-      MDS_LOG(ERROR, "no this mds_unit_id", K(lhs.mds_unit_id_), KR(ret));
-      return ret;
-    }
-  };
-  template <int IDX>
-  int help_compare(const MdsDumpKey &lhs, const MdsDumpKey &rhs, int &result)
-  {
-    MDS_TG(1_ms);
-    int ret = OB_SUCCESS;
-    if (IDX == lhs.mds_table_id_) {
-      using MdsTableType = typename std::decay<
-                        decltype(std::declval<MdsTableTypeTuple>().element<IDX>())>::type;
-      InnerDeserializeCompareHelper<MdsTableType> inner_helper;
-      inner_helper.template help_compare_key<0>(lhs, rhs, result);
-    } else if (MDS_FAIL(help_compare<IDX + 1>(lhs, rhs, result))) {
-    }
-    return ret;
-  }
-  template <>
-  int help_compare<MdsTableTypeTuple::get_element_size()>(const MdsDumpKey &lhs,
-                                                          const MdsDumpKey &rhs,
-                                                          int &result)
-  {
-    int ret = OB_ERR_UNEXPECTED;
-    MDS_LOG(ERROR, "no this mds_table_id", K(lhs.mds_table_id_), KR(ret));
-    return ret;
-  }
-};
-
-struct DeserializePrintHelper
-{
-  template <typename MdsTableType>
-  struct InnerDeserializePrintHelper
-  {
-    template <int IDX>
-    void help_print_key(const uint8_t mds_unit_id,
-                        const ObString &data_buf,
-                        char *buf,
-                        const int64_t buf_len,
-                        int64_t &pos)
-    {
-      int ret = OB_SUCCESS;
-      MDS_TG(1_ms);
-      if (IDX == mds_unit_id) {
-        using UnitType = typename std::decay<
-                         decltype(std::declval<MdsTableType>().template element<IDX>())>::type;
-        using KeyType = typename UnitType::key_type;
-        char stack_buffer[sizeof(KeyType)];
-        KeyType *user_key = (KeyType *)stack_buffer;
-        new (user_key) KeyType();
-        int64_t des_pos = 0;
-        if (MDS_FAIL(user_key->deserialize(data_buf.ptr(), data_buf.length(), des_pos))) {
-          databuff_printf(buf, buf_len, pos, "user_key:ERROR:%d", ret);
-        } else {
-          databuff_printf(buf, buf_len, pos, "%s", to_cstring(*user_key));
-        }
-        user_key->~KeyType();
-      } else {
-        help_print_key<IDX + 1>(mds_unit_id, data_buf, buf, buf_len, pos);
-      }
-    }
-    template <>
-    void help_print_key<MdsTableType::get_element_size()>(const uint8_t mds_unit_id,
-                                                       const ObString &data_buf,
-                                                       char *buf,
-                                                       const int64_t buf_len,
-                                                       int64_t &pos)
-    {
-      databuff_printf(buf, buf_len, pos,
-                      "user_key:ERROR:unit_id not in tuple(%ld)", (int64_t)mds_unit_id);
-    }
-    template <int IDX>
-    void help_print_data(const uint8_t mds_unit_id,
-                         const ObString &data_buf,
-                         char *buf,
-                         const int64_t buf_len,
-                         int64_t &pos)
-    {
-      int ret = OB_SUCCESS;
-      MDS_TG(1_ms);
-      if (IDX == mds_unit_id) {
-        using UnitType = typename std::decay<
-                         decltype(std::declval<MdsTableType>().template element<IDX>())>::type;
-        using ValueType = typename UnitType::value_type;
-        char stack_buffer[sizeof(ValueType)];
-        ValueType *user_data = (ValueType *)stack_buffer;
-        new (user_data) ValueType();
-        int64_t des_pos = 0;
-        meta::MetaSerializer<ValueType> serializer(DefaultAllocator::get_instance(), *user_data);
-        if (MDS_FAIL(serializer.deserialize(data_buf.ptr(), data_buf.length(), des_pos))) {
-          databuff_printf(buf, buf_len, pos, "user_data:ERROR:%d", ret);
-        } else {
-          databuff_printf(buf, buf_len, pos, "user_data:%s", to_cstring(*user_data));
-        }
-        user_data->~ValueType();
-      } else {
-        help_print_data<IDX + 1>(mds_unit_id, data_buf, buf, buf_len, pos);
-      }
-    }
-    template <>
-    void help_print_data<MdsTableType::get_element_size()>(const uint8_t mds_unit_id,
-                                                        const ObString &data_buf,
-                                                        char *buf,
-                                                        const int64_t buf_len,
-                                                        int64_t &pos)
-    {
-      databuff_printf(buf, buf_len, pos,
-                      "user_data:ERROR:mds_unit_id not in tuple(%ld)", (int64_t)mds_unit_id);
-    }
-  };
-  template <int IDX>
-  void help_print(const bool need_print_key,
-                  const uint8_t mds_table_id,
-                  const uint8_t mds_unit_id,
-                  const ObString &data_buf,
-                  char *buf,
-                  const int64_t buf_len,
-                  int64_t &pos)
-  {
-    MDS_TG(1_ms);
-    int ret = OB_SUCCESS;
-    if (IDX == mds_table_id) {
-      using MdsTableType = typename std::decay<
-                        decltype(std::declval<MdsTableTypeTuple>().element<IDX>())>::type;
-      InnerDeserializePrintHelper<MdsTableType> inner_helper;
-      if (need_print_key) {
-        inner_helper.template help_print_key<0>(mds_unit_id, data_buf, buf, buf_len, pos);
-      } else {
-        inner_helper.template help_print_data<0>(mds_unit_id, data_buf, buf, buf_len, pos);
-      }
-    } else {
-      help_print<IDX + 1>(need_print_key, mds_table_id, mds_unit_id, data_buf, buf, buf_len, pos);
-    }
-  }
-  template <>
-  void help_print<MdsTableTypeTuple::get_element_size()>(const bool need_print_key,
-                                                         const uint8_t mds_table_id,
-                                                         const uint8_t mds_unit_id,
-                                                         const ObString &data_buf,
-                                                         char *buf,
-                                                         const int64_t buf_len,
-                                                         int64_t &pos)
-  {
-    databuff_printf(buf, buf_len, pos,
-                    "user_data:ERROR:table_id not in tuple(%ld)", (int64_t)mds_table_id);
-  }
-};
-
 bool MdsDumpKey::is_valid() const
 {
   return mds_table_id_ != UINT8_MAX && mds_unit_id_ != UINT8_MAX;
@@ -255,7 +70,7 @@ int MdsDumpKey::compare(const MdsDumpKey &rhs, int &result) const
   #define PRINT_WRAPPER KR(ret), K(*this), K(rhs), K(result)
   MDS_TG(1_ms);
   int ret = OB_SUCCESS;
-  DeserializeCompareHelper helper;
+  MdsDumpObjComparer helper;
   if (rhs.mds_table_id_ != mds_table_id_) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_NONE(ERROR, "can not compare in different mds table");
@@ -267,6 +82,37 @@ int MdsDumpKey::compare(const MdsDumpKey &rhs, int &result) const
   }
   return ret;
   #undef PRINT_WRAPPER
+}
+
+MdsDumpNode::MdsDumpNode()
+  : mds_table_id_(UINT8_MAX),
+    mds_unit_id_(UINT8_MAX),
+    crc_check_number_(UINT32_MAX),
+    status_(),
+    allocator_(nullptr),
+    writer_id_(INVALID_VALUE),
+    seq_no_(),
+    redo_scn_(),
+    end_scn_(),
+    trans_version_(),
+    user_data_()
+{
+}
+
+void MdsDumpNode::swap(MdsDumpNode &other) noexcept
+{
+  meta::swap(*this, other,
+             mds_table_id_,
+             mds_unit_id_,
+             crc_check_number_,
+             status_,
+             allocator_,
+             writer_id_,
+             seq_no_,
+             redo_scn_,
+             end_scn_,
+             trans_version_,
+             user_data_);
 }
 
 bool MdsDumpNode::is_valid() const
@@ -312,8 +158,14 @@ uint32_t MdsDumpNode::generate_hash() const
 int64_t MdsDumpKey::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  DeserializePrintHelper print_helper;
+  databuff_printf(buf, buf_len, pos, "{");
+  databuff_printf(buf, buf_len, pos, "mds_table_id:%ld, ", (int64_t)mds_table_id_);
+  databuff_printf(buf, buf_len, pos, "mds_unit_id:%ld, ", (int64_t)mds_unit_id_);
+  databuff_printf(buf, buf_len, pos, "crc_check_number:0x%lx, ", (int64_t)crc_check_number_);
+  databuff_printf(buf, buf_len, pos, "allocator:%p, ", (void*)allocator_);
+  MdsDumpObjPrinter print_helper;
   print_helper.help_print<0>(true, mds_table_id_, mds_unit_id_, key_, buf, buf_len, pos);
+  databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }
 
@@ -323,15 +175,15 @@ int64_t MdsDumpNode::to_string(char *buf, const int64_t buf_len) const
   databuff_printf(buf, buf_len, pos, "{");
   databuff_printf(buf, buf_len, pos, "mds_table_id:%ld, ", (int64_t)mds_table_id_);
   databuff_printf(buf, buf_len, pos, "mds_unit_id:%ld, ", (int64_t)mds_unit_id_);
-  databuff_printf(buf, buf_len, pos, "crc:0x%lx, ", (int64_t)crc_check_number_);
+  databuff_printf(buf, buf_len, pos, "crc_check_number:0x%lx, ", (int64_t)crc_check_number_);
   databuff_printf(buf, buf_len, pos, "allocator:%p, ", (void*)allocator_);
   databuff_printf(buf, buf_len, pos, "writer_id:%ld, ", writer_id_);
-  databuff_printf(buf, buf_len, pos, "seq_no:%ld, ", seq_no_);
+  databuff_printf(buf, buf_len, pos, "seq_no:%s, ", to_cstring(seq_no_));
   databuff_printf(buf, buf_len, pos, "redo_scn:%s, ", obj_to_string(redo_scn_));
   databuff_printf(buf, buf_len, pos, "end_scn:%s, ", obj_to_string(end_scn_));
   databuff_printf(buf, buf_len, pos, "trans_version:%s, ", obj_to_string(trans_version_));
   databuff_printf(buf, buf_len, pos, "status:%s, ", to_cstring(status_));
-  DeserializePrintHelper print_helper;
+  MdsDumpObjPrinter print_helper;
   if (user_data_.empty()) {
     databuff_printf(buf, buf_len, pos, "user_data:null");
   } else {
@@ -344,7 +196,7 @@ int64_t MdsDumpNode::to_string(char *buf, const int64_t buf_len) const
 int64_t MdsDumpNode::simple_to_string(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   databuff_printf(buf, buf_len, pos, "{status:%s, ", to_cstring(status_));
-  DeserializePrintHelper print_helper;
+  MdsDumpObjPrinter print_helper;
   if (user_data_.empty()) {
     databuff_printf(buf, buf_len, pos, "user_data:null");
   } else {
@@ -378,6 +230,7 @@ int MdsDumpKey::assign(const MdsDumpKey &rhs, ObIAllocator &alloc)
       mds_table_id_ = rhs.mds_table_id_;
       mds_unit_id_ = rhs.mds_unit_id_;
       crc_check_number_ = rhs.crc_check_number_;
+      allocator_ = &alloc;
     }
   }
 
@@ -430,6 +283,75 @@ MdsDumpKV::MdsDumpKV()
   : k_(),
     v_()
 {
+}
+
+void MdsDumpKV::swap(MdsDumpKV &other)
+{
+  meta::swap(*this, other, k_, v_);
+}
+
+// strong exception safety : if any exception happens, like this action never happened
+int MdsDumpKV::convert_from_adapter(common::ObIAllocator &allocator, MdsDumpKVStorageAdapter &adapter)
+{
+  #define PRINT_WRAPPER KR(ret), K(temp_kv), K(adapter)
+  int ret = OB_SUCCESS;
+  MdsDumpKV temp_kv;// RAII to ensure exception safty
+  if (!adapter.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    MDS_LOG_NONE(ERROR, "invalid argument");
+  } else {
+    // copy key
+    char *p_key = nullptr;
+    if (adapter.key_.empty() || (p_key = (char *)allocator.alloc(adapter.key_.length()))) {
+      MdsDumpKey &key = temp_kv.k_;
+      key.mds_table_id_ = adapter.meta_info_.mds_table_id_;
+      key.mds_unit_id_ = adapter.type_;
+      key.crc_check_number_ = adapter.meta_info_.key_crc_check_number_;
+      key.allocator_ = &allocator;
+      if (!adapter.key_.empty()) {
+        memcpy(p_key, adapter.key_.ptr(), adapter.key_.length());
+        key.key_.assign(p_key, adapter.key_.length());
+      }
+    } else {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    }
+    // copy data
+    if (OB_FAIL(ret)) {
+    } else if (char *p_data = (char *)allocator.alloc(adapter.user_data_.length())) {
+      MdsDumpNode &value = temp_kv.v_;
+      value.mds_table_id_ = adapter.meta_info_.mds_table_id_;
+      value.mds_unit_id_ = adapter.type_;
+      value.crc_check_number_ = adapter.meta_info_.data_crc_check_number_;
+      value.status_ = adapter.meta_info_.status_;
+      value.allocator_ = &allocator;
+      value.writer_id_ = adapter.meta_info_.writer_id_;
+      value.seq_no_ = adapter.meta_info_.seq_no_;
+      value.redo_scn_ = adapter.meta_info_.redo_scn_;
+      value.end_scn_ = adapter.meta_info_.end_scn_;
+      value.trans_version_ = adapter.meta_info_.trans_version_;
+      memcpy(p_data, adapter.user_data_.ptr(), adapter.user_data_.length());
+      value.user_data_.assign(p_data, adapter.user_data_.length());
+    } else {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    }
+    // check CRC number
+    if (OB_FAIL(ret)) {
+    } else {
+      uint32_t key_hash = temp_kv.k_.generate_hash();
+      uint32_t val_hash = temp_kv.v_.generate_hash();
+      if (OB_UNLIKELY(key_hash != temp_kv.k_.crc_check_number_)) {
+        ret = OB_CHECKSUM_ERROR;
+        MDS_LOG_NONE(ERROR, "key's crc check number is not equal", K(key_hash));
+      } else if (OB_UNLIKELY(val_hash != temp_kv.v_.crc_check_number_)) {
+        ret = OB_CHECKSUM_ERROR;
+        MDS_LOG_NONE(ERROR, "value's crc check number is not equal", K(val_hash));
+      } else {
+        swap(temp_kv);
+      }
+    }
+  }
+  return ret;
+  #undef PRINT_WRAPPER
 }
 
 void MdsDumpKV::reset()
@@ -549,8 +471,22 @@ int MdsDumpNode::deserialize(common::ObIAllocator &allocator, const char *buf, c
               version,
               mds_table_id_,
               mds_unit_id_,
-              writer_id_,
-              seq_no_,
+              writer_id_);
+
+
+  if (OB_FAIL(ret)) {
+  } else if (UNIS_VERSION_V1 == version) {
+    int64_t seq_no = 0;
+    LST_DO_CODE(OB_UNIS_DECODE, seq_no);
+    if (OB_SUCC(ret)) {
+      // compat logic
+      seq_no_ = (0 == seq_no ? ObTxSEQ::MIN_VAL() : ObTxSEQ::mk_v0(seq_no));
+    }
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE, seq_no_);
+  }
+
+  LST_DO_CODE(OB_UNIS_DECODE,
               redo_scn_,
               end_scn_,
               trans_version_,
@@ -569,6 +505,13 @@ int MdsDumpNode::deserialize(common::ObIAllocator &allocator, const char *buf, c
     } else {
       MEMCPY(buffer, user_data.ptr(), len);
       user_data_.assign(buffer, len);
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (UNIS_VERSION_V1 == version) {
+    if (seq_no_.is_min()) {
+      crc_check_number_ = generate_hash();
     }
   }
 

@@ -136,6 +136,7 @@ public:
         allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
         need_scn_(false),
         need_switch_param_(false),
+        is_mds_query_(false),
         is_thread_scope_(true)
   {}
   virtual ~ObTableScanParam() {}
@@ -150,6 +151,7 @@ public:
   common::SampleInfo sample_info_;
   bool need_scn_;
   bool need_switch_param_;
+  bool is_mds_query_;
   OB_INLINE virtual bool is_valid() const {
     return  snapshot_.valid_ && ObVTableScanParam::is_valid();
   }

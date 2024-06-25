@@ -247,10 +247,11 @@ TEST_F(TestMdsTransactionTest, test_mds_table_gc_and_recycle)
     std::this_thread::sleep_for(std::chrono::seconds(15));
     ASSERT_EQ(false, static_cast<ObTabletPointer*>(tablet_handle.get_obj()->pointer_hdl_.get_resource_ptr())->mds_table_handler_.mds_table_handle_.is_valid());
     ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));// 重新获取一下tablet handle
-    ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_mds_data_from_tablet<ObTabletBindingMdsUserData>([&data_to_write](const ObTabletBindingMdsUserData &data_to_read) -> int {
-      OB_ASSERT(data_to_write.schema_version_ == data_to_read.schema_version_);
-      return OB_SUCCESS;
-    }));
+    ASSERT_EQ(OB_SUCCESS, (tablet_handle.get_obj()->get_mds_data_from_tablet<mds::DummyKey, ObTabletBindingMdsUserData>(mds::DummyKey(), share::SCN::max_scn(), 1_s,
+      [&data_to_write](const ObTabletBindingMdsUserData &data_to_read) -> int {
+        OB_ASSERT(data_to_write.schema_version_ == data_to_read.schema_version_);
+        return OB_SUCCESS;
+      })));
     mock_tablet_oldest_scn = unittest::mock_scn(1000);
   }
 }
@@ -293,19 +294,19 @@ TEST_F(TestMdsTransactionTest, test_mds_table_get_tablet_status_transfer_in_writ
     storage::ObTabletHandle tablet_handle;
     ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
     // 6. 调用tablet接口写入多源数据，提交
+    share::SCN max_decided_scn;
+    ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_max_decided_scn(max_decided_scn));
     MdsCtx ctx1(mds::MdsWriter(ObTransID(1)));
     share::SCN rec_scn;
     ASSERT_EQ(OB_STATE_NOT_MATCH, tablet_handle.get_obj()->check_transfer_in_redo_written(written));// 这个时候因为tablet status不是TRANSFER IN所以查不出来
     ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->set(data_to_write, ctx1));
     ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->check_transfer_in_redo_written(written));// 这个时候tablet status是TRANSFER IN, 但事务还没写日志，所以可以查出结果，但结果是false
     ASSERT_EQ(false, written);
-    ctx1.single_log_commit(mock_scn(10), mock_scn(10000000));
+    ctx1.single_log_commit(max_decided_scn, max_decided_scn);
     ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->check_transfer_in_redo_written(written));// 这个时候tablet status是TRANSFER IN, 并且事务已经提交，所以可以查出结果，并且结果是true
     ASSERT_EQ(true, written);
     ASSERT_EQ(true, static_cast<ObTabletPointer*>(tablet_handle.get_obj()->pointer_hdl_.get_resource_ptr())->mds_table_handler_.mds_table_handle_.is_valid());
     std::this_thread::sleep_for(std::chrono::seconds(5));
-    share::SCN max_decided_scn;
-    ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_max_decided_scn(max_decided_scn));
     ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->mds_table_flush(max_decided_scn));
     // 7. 检查mds table的存在情况
     std::this_thread::sleep_for(std::chrono::seconds(5));

@@ -13,6 +13,7 @@
 #ifndef OB_STORAGE_COMPACTION_MEDIUM_COMPACTION_INFO_H_
 #define OB_STORAGE_COMPACTION_MEDIUM_COMPACTION_INFO_H_
 
+#include "lib/ob_errno.h"
 #include "storage/ob_storage_schema.h"
 #include "lib/container/ob_array_array.h"
 #include "observer/ob_server_struct.h"
@@ -102,11 +103,11 @@ private:
   ObIAllocator *allocator_;
 };
 
-
 struct ObMediumCompactionInfoKey final
 {
 public:
   OB_UNIS_VERSION(1);
+  static constexpr uint8_t MAGIC_NUMBER = 0xFF; // if meet compat case, abort directly for now
 public:
   ObMediumCompactionInfoKey()
     : medium_snapshot_(0)
@@ -132,31 +133,51 @@ public:
     return *this;
   }
 
-  bool operator<(const ObMediumCompactionInfoKey& rhs) const
-  {
-    return medium_snapshot_ < rhs.medium_snapshot_;
-  }
-  bool operator<=(const ObMediumCompactionInfoKey& rhs) const
-  {
-    return medium_snapshot_ <= rhs.medium_snapshot_;
-  }
-  bool operator>(const ObMediumCompactionInfoKey& rhs) const
-  {
-    return medium_snapshot_ > rhs.medium_snapshot_;
-  }
-  bool operator>=(const ObMediumCompactionInfoKey& rhs) const
-  {
-    return medium_snapshot_ >= rhs.medium_snapshot_;
-  }
-  bool operator==(const ObMediumCompactionInfoKey& rhs) const
-  {
-    return medium_snapshot_ == rhs.medium_snapshot_;
-  }
-  bool operator!=(const ObMediumCompactionInfoKey& rhs) const
-  {
-    return medium_snapshot_ != rhs.medium_snapshot_;
-  }
   int64_t get_medium_snapshot() const { return medium_snapshot_; }
+
+  int mds_serialize(char *buf, const int64_t buf_len, int64_t &pos) const {
+    int ret = OB_SUCCESS;
+    int64_t tmp = medium_snapshot_;
+    if (pos >= buf_len) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else {
+      buf[pos++] = MAGIC_NUMBER;
+      for (int64_t idx = 0; idx < 8 && OB_SUCC(ret); ++idx) {
+        if (pos >= buf_len) {
+          ret = OB_BUF_NOT_ENOUGH;
+        } else {
+          buf[pos++] = ((tmp >> (56 - 8 * idx)) & 0x00000000000000FF);
+        }
+      }
+    }
+    return ret;
+  }
+  int mds_deserialize(const char *buf, const int64_t buf_len, int64_t &pos) {
+    int ret = OB_SUCCESS;
+    int64_t tmp = 0;
+    uint8_t magic_number = 0;
+    if (pos >= buf_len) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else {
+      magic_number = buf[pos++];
+      if (magic_number != MAGIC_NUMBER) {
+        ob_abort();// compat case, just abort for fast fail
+      }
+      for (int64_t idx = 0; idx < 8 && OB_SUCC(ret); ++idx) {
+        if (pos >= buf_len) {
+          ret = OB_BUF_NOT_ENOUGH;
+        } else {
+          tmp <<= 8;
+          tmp |= (0x00000000000000FF & buf[pos++]);
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      medium_snapshot_ = tmp;
+    }
+    return ret;
+  }
+  int64_t mds_get_serialize_size() const { return sizeof(MAGIC_NUMBER) + sizeof(medium_snapshot_); }
 
   TO_STRING_KV(K_(medium_snapshot));
 private:

@@ -132,7 +132,6 @@ private:
       ObTabletHandle &local_tablet_hdl,
       ObTablesHandleArray &tables_handle,
       ObStorageSchema &storage_schema,
-      compaction::ObMediumCompactionInfoList &medium_info_list,
       common::ObIAllocator &allocator);
   int hold_local_complete_tablet_sstable_(
       ObTablet *tablet,
@@ -146,8 +145,7 @@ private:
       ObLS *ls,
       const obrpc::ObCopyTabletInfo &tablet_info,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema,
-      const compaction::ObMediumCompactionInfoList &medium_info_list);
+      const ObStorageSchema &storage_schema);
   int hold_local_tablet_(
       common::ObIArray<ObTabletHandle> &tablet_handle_array);
 private:
@@ -286,18 +284,15 @@ public:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema,
-      const compaction::ObMediumCompactionInfoList &medium_info_list);
+      const ObStorageSchema &storage_schema);
   static int build_table_with_minor_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObMigrationTabletParam *src_tablet_meta,
+      const ObTablesHandleArray &mds_tables,
       const ObTablesHandleArray &minor_tables,
+      const ObTablesHandleArray &ddl_tables,
       const ObTabletRestoreAction::ACTION &restore_action);
-  static int build_tablet_with_ddl_tables(
-      ObLS *ls,
-      const common::ObTabletID &tablet_id,
-      const ObTablesHandleArray &ddl_tables);
   static int check_remote_logical_sstable_exist(
       ObTablet *tablet,
       bool &is_exist);
@@ -306,15 +301,13 @@ private:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema,
-      const compaction::ObMediumCompactionInfoList &medium_info_list);
+      const ObStorageSchema &storage_schema);
   // for column store
   static int build_tablet_for_column_store_(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema,
-      const compaction::ObMediumCompactionInfoList &medium_info_list);
+      const ObStorageSchema &storage_schema);
 
   static int get_tablet_(
       const common::ObTabletID &tablet_id,
@@ -336,8 +329,7 @@ private:
       ObTablet *tablet,
       const bool &need_tablet_meta_merge,
       const ObMigrationTabletParam *src_tablet_meta,
-      const ObTablesHandleArray &tables_handle,
-      const bool update_ddl_sstable);
+      const ObTablesHandleArray &tables_handle);
   static int check_need_merge_tablet_meta_(
       const ObMigrationTabletParam *src_tablet_meta,
       ObTablet *tablet,
@@ -355,6 +347,7 @@ private:
       const ObStorageSchema &storage_schema,
       const int64_t multi_version_start,
       const ObTablesHandleArray &co_tables);
+  static int append_sstable_array_(ObTablesHandleArray &dest_array, const ObTablesHandleArray &src_array);
 };
 
 

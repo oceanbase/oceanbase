@@ -2465,9 +2465,14 @@ int ObRegisterTxDataP::process()
   if (OB_ISNULL(tx_svc)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null tx service ptr", KR(ret), K(arg_));
-  } else if (OB_FAIL(tx_svc->register_mds_into_tx(*(arg_.tx_desc_), arg_.ls_id_, arg_.type_,
-                                                  arg_.buf_.ptr(), arg_.buf_.length(),
-                                                  arg_.request_id_, arg_.register_flag_))) {
+  } else if (OB_FAIL(tx_svc->register_mds_into_tx(*(arg_.tx_desc_),
+                                                  arg_.ls_id_,
+                                                  arg_.type_,
+                                                  arg_.buf_.ptr(),
+                                                  arg_.buf_.length(),
+                                                  arg_.request_id_,
+                                                  arg_.register_flag_,
+                                                  arg_.seq_no_))) {
     LOG_WARN("register into tx failed", KR(ret), K(arg_));
   } else if (OB_FAIL(tx_svc->collect_tx_exec_result(*(arg_.tx_desc_), result_.tx_result_))) {
     LOG_WARN("collect tx result failed", KR(ret), K(result_));

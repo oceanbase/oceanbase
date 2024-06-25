@@ -161,7 +161,7 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
   if (OB_UNLIKELY(tablet.is_empty_shell())) {
     ret = OB_TABLET_NOT_EXIST;
     LOG_WARN("tablet is empty shell", K(ret), K(ls_id), K(tablet_id), K(user_data));
-  } else if (OB_FAIL(tablet.get_latest<ObTabletCreateDeleteMdsUserData>(ReadMdsFunctor(user_data), is_committed, 0))) {
+  } else if (OB_FAIL(tablet.get_latest<ObTabletCreateDeleteMdsUserData>(ReadMdsFunctor(user_data), is_committed))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
@@ -276,7 +276,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal(
   } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
   } else if (OB_FAIL(tablet.get_snapshot<ObTabletCreateDeleteMdsUserData>(
-      DummyReadMdsFunctor(), read_snapshot, 0/*read_seq*/, timeout_us))) {
+      DummyReadMdsFunctor(), read_snapshot, timeout_us))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
@@ -455,24 +455,6 @@ int ObTabletCreateDeleteHelper::create_msd_tablet(
     LOG_WARN("fail to get ls", K(ret), "ls_id", key.ls_id_);
   } else if (OB_FAIL(t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle))) {
     LOG_WARN("fail to create multi source data tablet", K(ret), K(key));
-  } else if (OB_ISNULL(handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("new tablet is null", K(ret), K(handle));
-  }
-  return ret;
-}
-
-int ObTabletCreateDeleteHelper::acquire_msd_tablet(
-    const ObTabletMapKey &key,
-    ObTabletHandle &handle)
-{
-  int ret = OB_SUCCESS;
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  if (OB_UNLIKELY(!key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(key));
-  } else if (OB_FAIL(t3m->acquire_msd_tablet(WashTabletPriority::WTP_HIGH, key, handle))) {
-    LOG_WARN("fail to acquire multi source data tablet", K(ret), K(key));
   } else if (OB_ISNULL(handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("new tablet is null", K(ret), K(handle));

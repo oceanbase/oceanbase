@@ -487,6 +487,7 @@ public:
                                  const char *buf,
                                  const int64_t len,
                                  const bool try_lock,
+                                 const ObTxSEQ seq_no,
                                  const ObRegisterMdsFlag &register_flag);
 
   int dup_table_tx_redo_sync(const bool need_retry_by_task);

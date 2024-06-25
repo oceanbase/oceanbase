@@ -15,19 +15,15 @@
 
 #include "lib/lock/ob_spin_rwlock.h"
 #include "lib/lock/ob_qsync_lock.h"
-#include "ob_tablet_id.h"
+#include "common/ob_tablet_id.h"
 #include "storage/ob_i_table.h"
-// #include "storage/memtable/ob_multi_source_data.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
 namespace logservice
 {
 class ObLogHandler;
-}
-namespace memtable
-{
-class ObIMultiSourceDataUnit;
 }
 
 namespace storage

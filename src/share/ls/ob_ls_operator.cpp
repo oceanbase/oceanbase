@@ -495,9 +495,11 @@ int ObLSAttrOperator::process_sub_trans_(const ObLSAttr &ls_attr, ObMySQLTransac
       } else if (OB_UNLIKELY(pos > length)) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("serialize error", KR(ret), K(pos), K(length));
-      } else if (OB_FAIL(txs->register_mds_into_tx(
-                     *trans_desc, SYS_LS,
-                     transaction::ObTxDataSourceType::LS_TABLE, buf, length))) {
+      } else if (OB_FAIL(txs->register_mds_into_tx(*trans_desc,
+                                                   SYS_LS,
+                                                   transaction::ObTxDataSourceType::LS_TABLE,
+                                                   buf,
+                                                   length))) {
         LOG_WARN("failed to register tx data", KR(ret), KPC(trans_desc), K(expire_ts));
       }
       LOG_INFO("process sub trans", KR(ret), K(ls_attr));

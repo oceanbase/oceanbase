@@ -904,6 +904,11 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
           if (cur_row_version < last_row_version) {
             ret = OB_ROWKEY_ORDER_ERROR;
             STORAGE_LOG(ERROR, "cur row version is less than last row version, ", K(ret), K(cur_row_version), K(last_row_version));
+            // TODO: @luhaopeng.lhp must delete before merge in master.
+            dump_micro_block(*micro_writer_); // print micro block have output
+            sleep(2);
+
+            ob_abort();
           } else if (cur_row_version == last_row_version) {
             int64_t last_row_sql_seq = last_key_.datums_[sql_sequence_col_idx].get_int();
             if (cur_sql_sequence == last_row_sql_seq) {
@@ -1389,6 +1394,7 @@ int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
   cur_logic_id.column_group_idx_ = data_store_desc_->get_table_cg_idx();
   cur_logic_id.data_seq_.macro_data_seq_ = current_macro_seq_;
   cur_logic_id.tablet_id_ = data_store_desc_->get_tablet_id().id();
+  cur_logic_id.is_mds_ = is_mds_merge(data_store_desc_->get_merge_type());
 
   ObMacroBlockHandle &macro_handle = macro_handles_[current_index_];
   ObMacroBlockHandle &prev_handle = macro_handles_[(current_index_ + 1) % 2];

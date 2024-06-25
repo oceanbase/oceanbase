@@ -132,8 +132,12 @@ REGISTER_FUNCTION_TRAIT(serialize)
 REGISTER_FUNCTION_TRAIT(deserialize)
 REGISTER_FUNCTION_TRAIT(get_serialize_size)
 REGISTER_FUNCTION_TRAIT(compare)
+REGISTER_FUNCTION_TRAIT(swap)
 REGISTER_FUNCTION_TRAIT(check_can_replay_commit)
 REGISTER_FUNCTION_TRAIT(on_commit_for_old_mds)
+REGISTER_FUNCTION_TRAIT(mds_serialize)
+REGISTER_FUNCTION_TRAIT(mds_deserialize)
+REGISTER_FUNCTION_TRAIT(mds_get_serialize_size)
 
 REGISTER_FUNCTION_TRAIT(on_set)
 REGISTER_FUNCTION_TRAIT(on_redo)
@@ -186,6 +190,18 @@ typename std::enable_if<OB_TRAIT_DEEP_SERIALIZEABLE(CLASS), bool>::type = true
 #define ENABLE_IF_NOT_DEEP_SERIALIZEABLE(CLASS) \
 typename std::enable_if<!OB_TRAIT_DEEP_SERIALIZEABLE(CLASS), bool>::type = true
 
+// define MDS serialize trait and enable_if macro
+#define OB_TRAIT_MDS_SERIALIZEABLE(CLASS) \
+(::oceanbase::common::meta::has_mds_serialize<DECAY(CLASS),\
+                                              int(char*, const int64_t, int64_t &)>::value &&\
+::oceanbase::common::meta::has_mds_deserialize<DECAY(CLASS),\
+                                               int(const char*, const int64_t, int64_t &)>::value &&\
+::oceanbase::common::meta::has_mds_get_serialize_size<DECAY(CLASS), int64_t()>::value)
+#define ENABLE_IF_MDS_SERIALIZEABLE(CLASS) \
+typename std::enable_if<OB_TRAIT_MDS_SERIALIZEABLE(CLASS), bool>::type = true
+#define ENABLE_IF_NOT_MDS_SERIALIZEABLE(CLASS) \
+typename std::enable_if<!OB_TRAIT_MDS_SERIALIZEABLE(CLASS), bool>::type = true
+
 // define assign trait and enable_if macro
 #define OB_TRAIT_HAS_ASSIGN(CLASS) \
 ::oceanbase::common::meta::has_assign<DECAY(CLASS), int(const CLASS &)>::value
@@ -226,15 +242,23 @@ typename std::enable_if<!::oceanbase::common::meta::has_##FUNCTION<DECAY(CLASS),
 #define OB_TRAIT_HAS_EQUAL_OPERATOR(CLASS) \
 ::oceanbase::common::meta::has_equal_operator<DECAY(CLASS)>::value
 #define OB_TRAIT_IS_ORIGIN_COMPAREABLE(CLASS) \
-OB_TRAIT_HAS_LESS_OPERATOR(CLASS) && OB_TRAIT_HAS_EQUAL_OPERATOR(CLASS)
+(OB_TRAIT_HAS_LESS_OPERATOR(CLASS) && OB_TRAIT_HAS_EQUAL_OPERATOR(CLASS))
 #define OB_TRAIT_IS_METHOD_COMPAREABLE(CLASS) \
 ::oceanbase::common::meta::has_compare<DECAY(CLASS), int(const CLASS &)>::value
 #define OB_TRAIT_IS_COMPAREABLE(CLASS) \
-OB_TRAIT_IS_ORIGIN_COMPAREABLE(CLASS) || OB_TRAIT_IS_METHOD_COMPAREABLE(CLASS)
+(OB_TRAIT_IS_ORIGIN_COMPAREABLE(CLASS) || OB_TRAIT_IS_METHOD_COMPAREABLE(CLASS))
 #define ENABLE_IF_COMPAREABLE(CLASS) \
 typename std::enable_if<OB_TRAIT_IS_COMPAREABLE(CLASS), bool>::type = true
 #define ENABLE_IF_NOT_COMPAREABLE(CLASS) \
 typename std::enable_if<!OB_TRAIT_IS_COMPAREABLE(CLASS), bool>::type = true
+
+// define swap trait and enable_if macro
+#define OB_TRAIT_IS_SWAPABLE(CLASS) \
+::oceanbase::common::meta::has_swap<DECAY(CLASS), void(CLASS &)>::value
+#define ENABLE_IF_SWAPABLE(CLASS) \
+typename std::enable_if<OB_TRAIT_IS_SWAPABLE(CLASS), bool>::type = true
+#define ENABLE_IF_NOT_SWAPABLE(CLASS) \
+typename std::enable_if<!OB_TRAIT_IS_SWAPABLE(CLASS), bool>::type = true
 
 // define copy and move trait and enable_if macro
 #define OB_TRAIT_IS_MOVEABLE(CLASS) \
@@ -244,7 +268,7 @@ OB_TRAIT_HAS_ASSIGN(T) ||\
 std::is_copy_assignable<DECAY(T)>::value ||\
 std::is_copy_constructible<DECAY(T)>::value
 #define OB_TRAIT_IS_MOVE_OR_COPIABLE(CLASS) \
-OB_TRAIT_IS_MOVEABLE(CLASS) || OB_TRAIT_IS_COPIABLE(CLASS)
+(OB_TRAIT_IS_MOVEABLE(CLASS) || OB_TRAIT_IS_COPIABLE(CLASS))
 #define ENABLE_IF_MOVEABLE(CLASS, FUNCTION, DECLEARATION) \
 typename std::enable_if<OB_TRAIT_IS_MOVEABLE(CLASS), bool>::type = true
 #define ENABLE_IF_NOT_MOVEABLE(CLASS, FUNCTION, DECLEARATION) \

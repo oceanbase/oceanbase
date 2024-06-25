@@ -2023,6 +2023,7 @@ int ObStartCompleteMigrationTask::check_ls_and_task_status_(
   int ret = OB_SUCCESS;
   bool is_cancel = false;
   bool is_ls_deleted = true;
+  int32_t result = OB_SUCCESS;
 
   if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2043,6 +2044,16 @@ int ObStartCompleteMigrationTask::check_ls_and_task_status_(
   } else if (is_ls_deleted) {
     ret = OB_CANCELED;
     LOG_WARN("ls will be removed, no need run migration", K(ret), KPC(ls), K(is_ls_deleted));
+  } else if (OB_FAIL(ObStorageHAUtils::check_log_status(ls->get_tenant_id(), ls->get_ls_id(), result))) {
+    LOG_WARN("failed to check log status", K(ret), KPC(ls));
+  } else if (OB_SUCCESS != result) {
+    LOG_INFO("can not replay log, it will retry", K(result));
+    if (OB_FAIL(ctx_->set_result(result/*result*/, false/*need_retry*/, this->get_dag()->get_type()))) {
+      LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+    } else {
+      ret = result;
+      LOG_WARN("log sync or replay error, need retry", K(ret), KPC(ls));
+    }
   }
   return ret;
 }

@@ -198,6 +198,21 @@ public:
              const int64_t schema_version,
              const bool skip_consensus);
 
+  // Use to check if the column of sys table (exclude core table) does exist
+  // by querying __all_column when the column is not accessible.
+  // (attention: the func contains an inner sql)
+  //
+  // @param[in] tenant_id:  target tenant_id
+  // @param[in] table_id:   sys table_id (exclude core table)
+  // @param[in] column_name:   target column name
+  // @param[out] exist:  whether the column really exists
+  // @return: OB_SUCCESS if success
+  static int check_whether_column_exist(
+      const uint64_t tenant_id,
+      const ObObjectID &table_id,
+      const ObString &column_name,
+      bool &exist);
+
   // Use to check if the sys table (exclude core table) does exist
   // by querying __all_table when the table is not accessible.
   //

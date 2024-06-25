@@ -88,6 +88,7 @@
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/ob_tenant_mem_limit_getter.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
@@ -914,6 +915,12 @@ int ObServer::start()
       LOG_ERROR("start block manager fail", KR(ret));
     } else {
       FLOG_INFO("success to start block manager");
+    }
+
+    if (FAILEDx(ObMdsSchemaHelper::get_instance().init())) {
+      LOG_ERROR("fail to init mds schema helper", K(ret));
+    } else {
+      FLOG_INFO("success to init mds schema helper");
     }
 
     if (FAILEDx(ObIOManager::get_instance().start())) {

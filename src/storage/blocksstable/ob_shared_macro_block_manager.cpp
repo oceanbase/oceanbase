@@ -26,6 +26,7 @@
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/ls/ob_ls.h"
 #include "share/ob_ls_id.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -766,27 +767,48 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
     ObWholeDataStoreDesc &data_desc) const
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_arena("ShrBlkMgrTmp");
-  ObStorageSchema *storage_schema = nullptr;
   data_desc.reset();
-  if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
-  LOG_WARN("fail to load storage schema", K(ret), K(tablet));
-  } else if (OB_FAIL(data_desc.init(
-        *storage_schema,
-        tablet.get_tablet_meta().ls_id_,
-        tablet.get_tablet_meta().tablet_id_,
-        merge_type,
-        snapshot_version,
-        cluster_version,
-        end_scn))) {
-    LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema),
-      K(tablet), "merge_type", merge_type_to_str(merge_type), K(snapshot_version), K(cluster_version));
-  } else if (OB_FAIL(data_desc.get_desc().update_basic_info_from_macro_meta(basic_meta))) {
-    // overwrite the encryption related memberships, otherwise these memberships of new sstable may differ
-    // from that of old sstable, since the encryption method of one tablet may change before defragmentation
-    LOG_WARN("failed to update basic info from macro_meta", KR(ret), K(basic_meta));
+  if (is_mds_merge(merge_type)) {
+    const ObStorageSchema *storage_schema = ObMdsSchemaHelper::get_instance().get_storage_schema();
+    if (OB_ISNULL(storage_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("storage schema is null", K(ret), KP(storage_schema));
+    } else if (OB_UNLIKELY(!storage_schema->is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mds storage schema is invalid", K(ret), KP(storage_schema), KPC(storage_schema));
+    } else if (OB_FAIL(data_desc.init(
+          *storage_schema,
+          tablet.get_tablet_meta().ls_id_,
+          tablet.get_tablet_meta().tablet_id_,
+          merge_type,
+          snapshot_version,
+          cluster_version,
+          end_scn))) {
+      LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema),
+        K(tablet), "merge_type", merge_type_to_str(merge_type), K(snapshot_version), K(cluster_version));
+    }
+  } else {
+    ObArenaAllocator tmp_arena("ShrBlkMgrTmp");
+    ObStorageSchema *storage_schema = nullptr;
+    if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
+    LOG_WARN("fail to load storage schema", K(ret), K(tablet));
+    } else if (OB_FAIL(data_desc.init(
+          *storage_schema,
+          tablet.get_tablet_meta().ls_id_,
+          tablet.get_tablet_meta().tablet_id_,
+          merge_type,
+          snapshot_version,
+          cluster_version,
+          end_scn))) {
+      LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema),
+        K(tablet), "merge_type", merge_type_to_str(merge_type), K(snapshot_version), K(cluster_version));
+    } else if (OB_FAIL(data_desc.get_desc().update_basic_info_from_macro_meta(basic_meta))) {
+      // overwrite the encryption related memberships, otherwise these memberships of new sstable may differ
+      // from that of old sstable, since the encryption method of one tablet may change before defragmentation
+      LOG_WARN("failed to update basic info from macro_meta", KR(ret), K(basic_meta));
+    }
+    ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   }
-  ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   return ret;
 }
 
@@ -801,6 +823,10 @@ int ObSharedMacroBlockMgr::parse_merge_type(const ObSSTable &sstable, ObMergeTyp
                : ObMergeType::MAJOR_MERGE;
   } else if (sstable.is_minor_sstable()) {
     merge_type = ObMergeType::MINOR_MERGE;
+  } else if (sstable.is_mds_mini_sstable()) {
+    merge_type = ObMergeType::MDS_MINI_MERGE;
+  } else if (sstable.is_mds_minor_sstable()) {
+    merge_type = ObMergeType::MDS_MINOR_MERGE;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable type is unexpected", K(ret), K(sstable));

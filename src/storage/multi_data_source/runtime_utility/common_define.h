@@ -23,7 +23,14 @@
 #include "src/share/ob_occam_time_guard.h"
 
 #ifdef OB_BUILD_PACKAGE
-  #define MDS_ASSERT(x) (void)(x)
+  #define MDS_ASSERT(x) \
+    do{                                                   \
+    bool v=(x);                                         \
+    if(OB_UNLIKELY(!(v))) {                             \
+      _OB_LOG_RET(ERROR, oceanbase::common::OB_ERROR, "assert fail, exp=%s", #x);        \
+      BACKTRACE_RET(ERROR, oceanbase::common::OB_ERROR, 1, "assert fail");               \
+    }                                                   \
+  } while(false)
 #else
   #define MDS_ASSERT(x) \
     do{                                                   \
@@ -59,6 +66,16 @@ enum class FowEachRowAction {
   CALCULATE_REC_SCN,
   RECYCLE,
   RESET,
+};
+
+enum class ScanRowOrder {
+  ASC,
+  DESC,
+};
+
+enum class ScanNodeOrder {
+  FROM_OLD_TO_NEW,
+  FROM_NEW_TO_OLD,
 };
 
 inline const char *obj_to_string(NodePosition pos) {
@@ -281,6 +298,81 @@ do {\
 #define MDS_FAIL_FLAG(stmt, flag) (CLICK_FAIL(stmt) || FALSE_IT(flag = true))
 #define MDS_FAIL(stmt) (CLICK_FAIL(stmt))
 #define MDS_TMP_FAIL(stmt) (CLICK_TMP_FAIL(stmt))
+
+struct DefaultAllocator : public ObIAllocator
+{
+  void *alloc(const int64_t size);
+  void *alloc(const int64_t size, const ObMemAttr &attr);
+  void free(void *ptr);
+  void set_label(const lib::ObLabel &);
+  static DefaultAllocator &get_instance();
+  static int64_t get_alloc_times();
+  static int64_t get_free_times();
+private:
+  DefaultAllocator() : alloc_times_(0), free_times_(0) {}
+  int64_t alloc_times_;
+  int64_t free_times_;
+};
+
+class BufferCtx;
+struct MdsAllocator : public ObIAllocator
+{
+  void *alloc(const int64_t size);
+  void *alloc(const int64_t size, const ObMemAttr &attr);
+  void free(void *ptr);
+  void set_label(const lib::ObLabel &);
+  static MdsAllocator &get_instance();
+  static int64_t get_alloc_times();
+  static int64_t get_free_times();
+private:
+  MdsAllocator() : alloc_times_(0), free_times_(0) {}
+  int64_t alloc_times_;
+  int64_t free_times_;
+};
+
+extern int compare_mds_serialized_buffer(const char *lhs_buffer,
+                                         const int64_t lhs_buffer_len,
+                                         const char *rhs_buffer,
+                                         const int64_t rhs_buffer_len,
+                                         int &compare_result);
+
+template <typename UnitKey>
+inline int compare_binary_key(const UnitKey &lhs, const UnitKey &rhs, int &compare_result) {
+  #define PRINT_WRAPPER KR(ret), K(lhs), K(rhs), K(compare_result), K(pos), KP(buffer), K(buffer_size), \
+          K(lhs_serialize_size), K(rhs_serialize_size)
+  int ret = OB_SUCCESS;
+  char *buffer = nullptr;
+  int64_t lhs_serialize_size = lhs.mds_get_serialize_size();
+  int64_t rhs_serialize_size = rhs.mds_get_serialize_size();
+  int64_t buffer_size = lhs_serialize_size + rhs_serialize_size;
+  int64_t pos = 0;
+  if (OB_ISNULL(buffer = (char *)MdsAllocator::get_instance().alloc(buffer_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    MDS_LOG(WARN, "fail to alloc buffer", PRINT_WRAPPER);
+  } else {
+    if (OB_FAIL(lhs.mds_serialize((char *)buffer, buffer_size, pos))) {
+      MDS_LOG(WARN, "fail to serialize lhs", PRINT_WRAPPER);
+    } else if (pos != lhs_serialize_size) {
+      ret = OB_ERR_UNEXPECTED;
+      MDS_LOG(WARN, "serialize size is not as same as calculated", PRINT_WRAPPER);
+    } else if (OB_FAIL(rhs.mds_serialize((char *)buffer, buffer_size, pos))) {
+      MDS_LOG(WARN, "fail to serialize rhs", PRINT_WRAPPER);
+    } else if (pos != buffer_size) {
+      MDS_LOG(WARN, "serialize size is not as same as calculated", PRINT_WRAPPER);
+    } else if (OB_FAIL(compare_mds_serialized_buffer(buffer,
+                                                    lhs_serialize_size,
+                                                    buffer + lhs_serialize_size,
+                                                    rhs_serialize_size,
+                                                    compare_result))) {
+      MDS_LOG(WARN, "serialize size is not as same as calculated", PRINT_WRAPPER);
+    } else {
+      MDS_LOG(DEBUG, "compare binary key", PRINT_WRAPPER);
+    }
+    MdsAllocator::get_instance().free(buffer);
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
 
 }
 }

@@ -67,38 +67,20 @@ public:
   ObTabletTransformArg &operator=(const ObTabletTransformArg &) = delete;
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(KP_(auto_inc_seq_ptr),
-               KP_(rowkey_read_info_ptr),
+  TO_STRING_KV(KP_(rowkey_read_info_ptr),
                K_(tablet_meta),
                K_(table_store_addr),
                K_(storage_schema_addr),
-               K_(tablet_status_uncommitted_kv_addr),
-               K_(tablet_status_committed_kv_addr),
-               K_(aux_tablet_info_uncommitted_kv_addr),
-               K_(aux_tablet_info_committed_kv_addr),
-               K_(extra_medium_info),
-               K_(medium_info_list_addr),
-               K_(auto_inc_seq_addr),
                K_(tablet_macro_info_addr),
                KP_(tablet_macro_info_ptr),
-               K_(tablet_status_cache),
                K_(is_row_store));
 public:
-  const share::ObTabletAutoincSeq *auto_inc_seq_ptr_;
   const ObRowkeyReadInfo *rowkey_read_info_ptr_;
   const ObTabletMacroInfo *tablet_macro_info_ptr_;
   ObTabletMeta tablet_meta_;
   ObMetaDiskAddr table_store_addr_;
   ObMetaDiskAddr storage_schema_addr_;
-  ObMetaDiskAddr tablet_status_uncommitted_kv_addr_;
-  ObMetaDiskAddr tablet_status_committed_kv_addr_;
-  ObMetaDiskAddr aux_tablet_info_uncommitted_kv_addr_;
-  ObMetaDiskAddr aux_tablet_info_committed_kv_addr_;
-  compaction::ObExtraMediumInfo extra_medium_info_;
-  ObMetaDiskAddr medium_info_list_addr_;
-  ObMetaDiskAddr auto_inc_seq_addr_;
   ObMetaDiskAddr tablet_macro_info_addr_;
-  ObTabletCreateDeleteMdsUserData tablet_status_cache_;
   bool is_row_store_;
   ObDDLKV **ddl_kvs_;
   int64_t ddl_kv_count_;
@@ -240,7 +222,6 @@ private:
       ObTabletHandle &new_handle);
   static int convert_tablet_to_mem_arg(
       const ObTablet &tablet,
-      ObTabletMemberWrapper<share::ObTabletAutoincSeq> &auto_inc_seq,
       ObTabletTransformArg &arg);
   int convert_tablet_to_disk_arg(
       const ObTablet &tablet,
@@ -288,12 +269,6 @@ private:
     common::ObIArray<ObMetaDiskAddr> &addrs,
     common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
     ObBlockInfoSet &block_info_set);
-  static int load_auto_inc_seq_and_write_info(
-      common::ObArenaAllocator &allocator,
-      const ObTabletComplexAddr<share::ObTabletAutoincSeq> &complex_addr,
-      const share::ObTabletAutoincSeq *&auto_inc_seq,
-      common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
-      ObMetaDiskAddr &addr);
   int fetch_table_store_and_write_info(
       const ObTablet &tablet,
       ObTabletMemberWrapper<ObTabletTableStore> &wrapper,
@@ -305,32 +280,10 @@ private:
       const ObTablet &tablet,
       common::ObArenaAllocator &allocator,
       common::ObIArray<ObSharedBlockWriteInfo> &write_infos);
-  static int load_dump_kv_and_fill_write_info(
-      common::ObArenaAllocator &allocator,
-      const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
-      common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
-      ObMetaDiskAddr &addr);
-  static int load_medium_info_list_and_write(
-      common::ObArenaAllocator &allocator,
-      const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr,
-      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
-      ObMetaDiskAddr &addr,
-      int64_t &total_tablet_meta_size,
-      ObBlockInfoSet::TabletMacroSet &meta_block_id_set);
-  static int link_write_medium_info_list(
-      const ObTabletDumpedMediumInfo *medium_info_list,
-      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
-      ObMetaDiskAddr &addr,
-      int64_t &total_tablet_meta_size,
-      ObBlockInfoSet::TabletMacroSet &meta_block_id_set);
   template <typename T>
   static int fill_write_info(
       common::ObArenaAllocator &allocator,
       const T *t,
-      common::ObIArray<ObSharedBlockWriteInfo> &write_infos);
-  static int fill_write_info(
-      common::ObArenaAllocator &allocator,
-      const common::ObIArray<compaction::ObMediumCompactionInfo> &medium_info_list,
       common::ObIArray<ObSharedBlockWriteInfo> &write_infos);
   static int write_and_fill_args(
       const common::ObIArray<ObSharedBlockWriteInfo> &write_infos,

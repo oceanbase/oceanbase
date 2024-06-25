@@ -2419,7 +2419,7 @@ int ObTabletMigrationTask::process()
   LOG_INFO("start do tablet migration task", KPC(copy_tablet_ctx_));
   const int64_t start_ts = ObTimeUtility::current_time();
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
-  bool need_rebuild = false;
+  int32_t result = OB_SUCCESS;
 
   if (OB_NOT_NULL(copy_tablet_ctx_)) {
     if (copy_tablet_ctx_->tablet_id_.is_inner_tablet() || copy_tablet_ctx_->tablet_id_.is_ls_inner_tablet()) {
@@ -2441,12 +2441,15 @@ int ObTabletMigrationTask::process()
   } else if (ctx_->is_failed()) {
     //do nothing
   } else if (!copy_tablet_ctx_->tablet_id_.is_ls_inner_tablet()
-      && OB_FAIL(ObStorageHAUtils::check_log_need_rebuild(ctx_->tenant_id_, ctx_->arg_.ls_id_, need_rebuild))) {
+      && OB_FAIL(ObStorageHAUtils::check_log_status(ctx_->tenant_id_, ctx_->arg_.ls_id_, result))) {
     LOG_WARN("failed to check if can replay log", K(ret), KPC(ctx_));
-  } else if (need_rebuild) {
-    LOG_INFO("can not replay log, it will retry", K(need_rebuild), KPC(ctx_));
-    if (OB_FAIL(ctx_->set_result(OB_LS_NEED_REBUILD/*result*/, true/*need_retry*/, this->get_dag()->get_type()))) {
-      LOG_WARN("failed to set result", K(ret), K(tmp_ret), KPC(ctx_));
+  } else if (OB_SUCCESS != result) {
+    LOG_INFO("can not replay log, it will retry", K(result), KPC(ctx_));
+    if (OB_FAIL(ctx_->set_result(result/*result*/, true/*need_retry*/, this->get_dag()->get_type()))) {
+      LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+    } else {
+      ret = result;
+      LOG_WARN("log sync or replay error, need retry", K(ret), KPC(ctx_));
     }
   } else if (OB_FAIL(check_tablet_replica_validity_(copy_tablet_ctx_->tablet_id_))) {
     LOG_WARN("failed to check tablet replica validity", K(ret), KPC(copy_tablet_ctx_));
@@ -2517,6 +2520,8 @@ int ObTabletMigrationTask::generate_migration_tasks_()
     LOG_WARN("no need to generate minor task", K(ret), K(ctx_->arg_));
   } else if (OB_FAIL(generate_tablet_copy_finish_task_(tablet_copy_finish_task))) {
     LOG_WARN("failed to generate tablet copy finish task", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(generate_mds_copy_tasks_(tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate migrate mds tasks", K(ret), K(*ctx_));
   } else if (OB_FAIL(generate_minor_copy_tasks_(tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate migrate minor tasks", K(ret), K(*ctx_));
   } else if (OB_FAIL(generate_major_copy_tasks_(tablet_copy_finish_task, parent_task))) {
@@ -3023,12 +3028,31 @@ int ObTabletMigrationTask::check_tablet_replica_validity_(const common::ObTablet
   return ret;
 }
 
+int ObTabletMigrationTask::generate_mds_copy_tasks_(
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    share::ObITask *&parent_task)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration task do not init", K(ret));
+  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
+  } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_mds_sstable, tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate copy minor tasks", K(ret), KPC(copy_tablet_ctx_));
+  }
+  return ret;
+}
+
 /******************ObTabletFinishMigrationTask*********************/
 ObTabletFinishMigrationTask::ObTabletFinishMigrationTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     task_gen_time_(0),
     copy_table_count_(0),
+    ha_dag_net_ctx_(nullptr),
     copy_tablet_ctx_(nullptr),
     ls_(nullptr)
 {
@@ -3327,7 +3351,7 @@ int ObDataTabletsMigrationTask::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  bool need_rebuild = false;
+  int32_t result = OB_SUCCESS;
   LOG_INFO("start do data tablets migration task", K(ret), KPC(ctx_));
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("storage_ha", "before_data_tablets_migration_task",
@@ -3347,12 +3371,15 @@ int ObDataTabletsMigrationTask::process()
     LOG_WARN("failed to add to learner list", K(ret));
   } else if (OB_FAIL(ls_online_())) {
     LOG_WARN("failed to start replay log", K(ret), K(*ctx_));
-  } else if (OB_FAIL(ObStorageHAUtils::check_log_need_rebuild(ctx_->tenant_id_, ctx_->arg_.ls_id_, need_rebuild))) {
+  } else if (OB_FAIL(ObStorageHAUtils::check_log_status(ctx_->tenant_id_, ctx_->arg_.ls_id_, result))) {
     LOG_WARN("failed to check log need rebuild", K(ret), KPC(ctx_));
-  } else if (need_rebuild) {
-    LOG_INFO("can not replay log, it will retry", K(need_rebuild), KPC(ctx_));
-    if (OB_FAIL(ctx_->set_result(OB_LS_NEED_REBUILD/*result*/, true/*need_retry*/, this->get_dag()->get_type()))) {
+  } else if (OB_SUCCESS != result) {
+    LOG_INFO("can not replay log, it will retry", K(result), KPC(ctx_));
+    if (OB_FAIL(ctx_->set_result(result/*result*/, true/*need_retry*/, this->get_dag()->get_type()))) {
       LOG_WARN("failed to set result", K(ret), KPC(ctx_));
+    } else {
+      ret = result;
+      LOG_WARN("log sync or replay error, need retry", K(ret), KPC(ctx_));
     }
   } else if (OB_FAIL(build_tablet_group_info_())) {
     LOG_WARN("failed to build tablet group info", K(ret), KPC(ctx_));

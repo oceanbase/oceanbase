@@ -10184,13 +10184,26 @@ DEF_TO_STRING(ObCheckLSCanOfflineArg)
 
 OB_SERIALIZE_MEMBER(ObCheckLSCanOfflineArg, tenant_id_, id_, current_ls_status_);
 
+ObRegisterTxDataArg::ObRegisterTxDataArg()
+  : tenant_id_(OB_INVALID_TENANT_ID),
+    tx_desc_(nullptr),
+    ls_id_(),
+    type_(transaction::ObTxDataSourceType::UNKNOWN),
+    buf_(),
+    seq_no_(),
+    request_id_(0),
+    register_flag_()
+{
+}
+
 bool ObRegisterTxDataArg::is_valid() const
 {
   return tenant_id_ != OB_INVALID_TENANT_ID &&
          OB_NOT_NULL(tx_desc_) &&
          tx_desc_->is_valid() &&
          ls_id_.is_valid() &&
-         type_ != ObTxDataSourceType::UNKNOWN;
+         type_ != ObTxDataSourceType::UNKNOWN &&
+         seq_no_.is_valid();
 }
 
 int ObRegisterTxDataArg::init(const uint64_t tenant_id,
@@ -10198,20 +10211,22 @@ int ObRegisterTxDataArg::init(const uint64_t tenant_id,
                               const ObLSID &ls_id,
                               const ObTxDataSourceType &type,
                               const ObString &buf,
+                              const transaction::ObTxSEQ seq_no,
                               const int64_t base_request_id,
                               const transaction::ObRegisterMdsFlag &register_flag)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID || !tx_desc.is_valid() || !ls_id.is_valid()
-                  || type == ObTxDataSourceType::UNKNOWN)) {
+                  || type == ObTxDataSourceType::UNKNOWN || !seq_no.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tx_desc), K(ls_id), K(type));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tx_desc), K(ls_id), K(type), K(seq_no));
   } else {
     tenant_id_ = tenant_id;
     tx_desc_ = const_cast<ObTxDesc *>(&tx_desc);
     ls_id_ = ls_id;
     type_ = type;
     buf_ = buf;
+    seq_no_ = seq_no;
     request_id_ = base_request_id;
     register_flag_ = register_flag;
   }
@@ -10225,6 +10240,7 @@ void ObRegisterTxDataArg::reset()
   ls_id_.reset();
   type_ = ObTxDataSourceType::UNKNOWN;
   buf_.reset();
+  seq_no_.reset();
   request_id_ = 0;
   register_flag_.reset();
   return;
@@ -10244,7 +10260,7 @@ OB_DEF_SERIALIZE(ObRegisterTxDataArg)
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(tenant_id_);
   OB_UNIS_ENCODE(*tx_desc_);
-  LST_DO_CODE(OB_UNIS_ENCODE, ls_id_, type_, buf_, request_id_, register_flag_);
+  LST_DO_CODE(OB_UNIS_ENCODE, ls_id_, type_, buf_, request_id_, register_flag_, seq_no_);
   return ret;
 }
 OB_DEF_DESERIALIZE(ObRegisterTxDataArg)
@@ -10259,7 +10275,7 @@ OB_DEF_DESERIALIZE(ObRegisterTxDataArg)
     } else if (OB_FAIL(tx_svc->acquire_tx(buf, data_len, pos, tx_desc_))) {
       LOG_WARN("acquire tx by deserialize fail", K(data_len), K(pos), KR(ret));
     } else {
-      LST_DO_CODE(OB_UNIS_DECODE, ls_id_, type_, buf_, request_id_, register_flag_);
+      LST_DO_CODE(OB_UNIS_DECODE, ls_id_, type_, buf_, request_id_, register_flag_, seq_no_);
       LOG_INFO("deserialize txDesc from session", KPC_(tx_desc), KPC(this));
     }
   }
@@ -10270,7 +10286,7 @@ OB_DEF_SERIALIZE_SIZE(ObRegisterTxDataArg)
   int64_t len = 0;
   OB_UNIS_ADD_LEN(tenant_id_);
   OB_UNIS_ADD_LEN(*tx_desc_);
-  LST_DO_CODE(OB_UNIS_ADD_LEN, ls_id_, type_, buf_, request_id_, register_flag_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, ls_id_, type_, buf_, request_id_, register_flag_, seq_no_);
   return len;
 }
 

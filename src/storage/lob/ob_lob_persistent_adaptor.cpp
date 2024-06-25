@@ -745,11 +745,16 @@ int ObPersistentLobApator::get_lob_tablets(
 {
   int ret = OB_SUCCESS;
   ObTabletBindingMdsUserData ddl_data;
-  if (OB_FAIL(inner_get_tablet(param, param.tablet_id_, data_tablet))) {
+  const int64_t cur_time = ObClockGenerator::getClock();
+  const int64_t timeout = param.timeout_ - cur_time;
+  if (OB_UNLIKELY(timeout <= 0)) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("timeout has reached", K(ret), "abs_timeout", param.timeout_, K(cur_time));
+  } else if (OB_FAIL(inner_get_tablet(param, param.tablet_id_, data_tablet))) {
     LOG_WARN("failed to get data tablet", K(ret), K(param.ls_id_), K(param.tablet_id_));
   } else {
     if (!param.lob_meta_tablet_id_.is_valid() || !param.lob_piece_tablet_id_.is_valid()) {
-      if (OB_FAIL(data_tablet.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+      if (OB_FAIL(data_tablet.get_obj()->get_ddl_data(share::SCN::max_scn(), ddl_data, timeout))) {
         LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet));
       } else {
         param.lob_meta_tablet_id_ = ddl_data.lob_meta_tablet_id_;

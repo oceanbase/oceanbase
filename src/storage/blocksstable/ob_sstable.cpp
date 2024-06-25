@@ -306,6 +306,65 @@ int ObSSTable::init(const ObTabletCreateSSTableParam &param, common::ObArenaAllo
   return ret;
 }
 
+int ObSSTable::copy_from_old_sstable(const ObSSTable &src, common::ObArenaAllocator &allocator, ObSSTable *&dst)
+{
+  int ret = OB_SUCCESS;
+  ObSSTable *sstable = nullptr;
+  if (OB_UNLIKELY(!src.is_valid() || !src.is_loaded())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(src));
+  } else if (OB_FAIL(src.inner_deep_copy_and_inc_macro_ref(allocator, sstable))) {
+    LOG_WARN("fail to inner copy and inc macro ref", K(ret), K(src));
+  } else if (!sstable->is_co_sstable() || sstable->meta_->cg_sstables_.count() == 0) {
+    // nothing to do and skip it.
+  } else {
+    ObSEArray<ObITable *, 64> cg_sstables;
+    for (int64_t i = 0; OB_SUCC(ret) && i < sstable->meta_->cg_sstables_.count(); ++i) {
+      ObSSTable *table = sstable->meta_->cg_sstables_.at(i);
+      ObSSTable *loaded_table = nullptr;
+      ObSSTable *copied_table = nullptr;
+      ObStorageMetaHandle handle;
+      if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_cg_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, cg table is nullptr", K(ret), K(i), KPC(table), KPC(sstable));
+      } else if (table->is_loaded()) {
+        loaded_table = table;
+      } else if (OB_FAIL(ObTabletTableStore::load_sstable(table->get_addr(), false/*is_co_sstable*/, handle))) {
+        LOG_WARN("fail to load cg sstable", K(ret), KPC(table));
+      } else if (OB_FAIL(handle.get_sstable(loaded_table))) {
+        LOG_WARN("fail to get sstable", K(ret), K(handle));
+      }
+      if (FAILEDx(loaded_table->inner_deep_copy_and_inc_macro_ref(allocator, copied_table))) {
+        LOG_WARN("fail to inner copy and inc macro ref", K(ret), KPC(loaded_table));
+      } else if (OB_FAIL(cg_sstables.push_back(copied_table))) {
+        LOG_WARN("fail to push back", K(ret), KPC(copied_table));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      sstable->meta_->cg_sstables_.reset();
+      if (OB_FAIL(sstable->meta_->cg_sstables_.init_empty_array_for_cg(allocator, cg_sstables.count()))) {
+        LOG_WARN("fail to init cg sstables", K(ret), K(cg_sstables));
+      } else if (OB_FAIL(sstable->meta_->cg_sstables_.add_tables_for_cg_without_deep_copy(cg_sstables))) {
+        LOG_WARN("fail to add tables for cg without deep copy", K(ret), K(cg_sstables));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < cg_sstables.count(); ++i) {// ingore error code
+        cg_sstables.at(i)->~ObITable();
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(sstable)) {
+      sstable->reset();
+    }
+  } else {
+    dst = sstable;
+    FLOG_INFO("succeeded to init sstable", K(ret), KPC(dst));
+  }
+  return ret;
+}
+
 void ObSSTable::reset()
 {
   LOG_DEBUG("reset sstable.", KP(this), K(key_), K(is_tmp_sstable_));
@@ -2031,6 +2090,48 @@ int ObSSTable::init_sstable_meta(
   return ret;
 }
 
+
+int ObSSTable::inner_deep_copy_and_inc_macro_ref(
+    common::ObIAllocator &allocator,
+    ObSSTable *&sstable) const
+{
+  int ret = OB_SUCCESS;
+  bool inc_success = false;
+  const int64_t deep_copy_size = get_deep_copy_size();
+  char *buf = nullptr;
+  ObIStorageMetaObj *meta_obj = nullptr;
+  ObSSTable *table = nullptr;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(deep_copy_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory for deep copy sstable", K(ret), K(deep_copy_size));
+  } else if (OB_FAIL(deep_copy(buf, deep_copy_size, meta_obj))) {
+    LOG_WARN("fail to inner deep copy sstable", K(ret));
+  } else {
+    table = static_cast<ObSSTable *>(meta_obj);
+    table->addr_.set_mem_addr(0, deep_copy_size);
+    if (OB_FAIL(table->inc_macro_ref(inc_success))) {
+      LOG_WARN("fail to add macro ref", K(ret), K(inc_success));
+    } else if (!inc_success) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, increase macro ref failed", K(ret), K(inc_success));
+    } else {
+      table->is_tmp_sstable_ = true;
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(table)) {
+      table->reset();
+    }
+    if (OB_NOT_NULL(buf)) {
+      allocator.free(buf);
+    }
+  } else {
+    sstable = table;
+    LOG_INFO("succeeded to copy sstable and increase macro reference count", K(ret), KPC(sstable));
+  }
+
+  return ret;
+}
 
 } // namespace blocksstable
 } // namespace oceanbase

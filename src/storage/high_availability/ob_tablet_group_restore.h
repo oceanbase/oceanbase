@@ -424,7 +424,9 @@ private:
       bool &need_copy);
   int record_server_event_();
   int check_src_sstable_exist_();
-
+  int generate_mds_restore_tasks_(
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      share::ObITask *&parent_task);
 private:
   bool is_inited_;
   ObIHADagNetCtx *ha_dag_net_ctx_;

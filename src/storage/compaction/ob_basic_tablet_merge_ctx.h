@@ -60,7 +60,7 @@ public:
       K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed), K_(is_tenant_major_merge),
       K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
       K_(progressive_merge_round), K_(progressive_merge_step), K_(progressive_merge_num),
-      K_(schema_version), KP_(schema), K_(multi_version_column_descs), K_(ls_handle), K_(snapshot_info), KP_(report));
+      K_(schema_version), KP_(schema), K_(multi_version_column_descs), K_(ls_handle), K_(snapshot_info), KP_(report), K_(is_backfill));
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
@@ -94,6 +94,7 @@ public:
   ObStorageSnapshotInfo snapshot_info_;
   int64_t tx_id_;
   common::ObSEArray<share::schema::ObColDesc, 2 * OB_ROW_DEFAULT_COLUMNS_COUNT> multi_version_column_descs_;
+  bool is_backfill_;
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
@@ -141,7 +142,7 @@ public:
     const ObITableReadInfo *index_read_info,
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
     const uint16_t table_cg_idx = 0);
-  int get_ls_and_tablet();
+  virtual int get_ls_and_tablet();
   void init_time_guard(const int64_t time) {
     info_collector_.time_guard_.set_last_click_ts(time);
   }
@@ -222,6 +223,7 @@ protected:
     return OB_SUCCESS;
   }
   virtual int prepare_schema();
+  virtual void free_schema();
   virtual int cal_merge_param() { return static_param_.cal_minor_merge_param(false/*has_compaction_filter*/); }
   int init_parallel_merge_ctx();
   int init_static_param_and_desc();

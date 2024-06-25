@@ -342,10 +342,10 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObBasicTablet
       STORAGE_LOG(WARN, "Failed to get all sstables from merge ctx", K(ret), K(merge_ctx));
     } else if (OB_FAIL(range_spliter.get_range_split_info(tables, rowkey_read_info, whole_range, range_info))) {
       STORAGE_LOG(WARN, "Failed to init range spliter", K(ret));
-    } else if (OB_UNLIKELY(tablet_size <= 0 || range_info.total_size_ < 0 || tables.count() <= 1)) {
+    } else if (OB_UNLIKELY(tablet_size <= 0 || range_info.total_size_ < 0 || (tables.count() <= 1 && !merge_ctx.static_param_.is_backfill_))) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "Invalid argument to calc mini minor parallel degree", K(ret), K(tablet_size),
-                K(range_info), K(tables.count()));
+                K(range_info), K(tables.count()), K(merge_ctx));
     } else {
       calc_adaptive_parallel_degree(ObDagPrio::DAG_PRIO_COMPACTION_MID,
                                     ObCompactionEstimator::MINOR_MEM_PER_THREAD,

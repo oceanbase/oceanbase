@@ -382,16 +382,13 @@ int ObTabletGCHandler::check_tablet_need_persist_(
 
   if (OB_FAIL(ret)) {
   } else if (tablet->is_empty_shell()) {
-  } else if (OB_FAIL(tablet->get_mds_table_rec_log_scn(rec_scn))) {
-    STORAGE_LOG(WARN, "failed to get_mds_table_rec_log_scn", KR(ret), KPC(tablet));
-  } else if (!rec_scn.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "rec_scn is invalid", KR(ret), KPC(tablet));
+  } else if (OB_FAIL(tablet->get_mds_table_rec_scn(rec_scn))) {
+    STORAGE_LOG(WARN, "failed to get mds table rec scn", KR(ret), KPC(tablet));
   } else if (rec_scn > decided_scn) {
     // todo check tablet_status and binding_info scn to mds_checkpoint_scn
   } else {
     need_persist = true;
-    STORAGE_LOG(INFO, "[tabletgc] get tablet for persist", K(rec_scn), KPC(tablet));
+    STORAGE_LOG(INFO, "[tabletgc] get tablet for persist", K(ret), K(rec_scn), KPC(tablet));
   }
 
   return ret;
@@ -606,8 +603,8 @@ int ObTabletGCHandler::wait_unpersist_tablet_ids_flushed(const common::ObTabletI
       } else if (OB_ISNULL(tablet = handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "tablet is NULL", KR(ret), K(i), KPC(this->ls_), K(unpersist_tablet_ids));
-      } else if (OB_FAIL(tablet->get_mds_table_rec_log_scn(rec_scn))) {
-        STORAGE_LOG(WARN, "fail to get rec log scn", KR(ret), K(handle));
+      } else if (OB_FAIL(tablet->get_mds_table_rec_scn(rec_scn))) {
+        STORAGE_LOG(WARN, "fail to get mds table rec scn", KR(ret), K(handle));
       }
 
       if (OB_FAIL(ret)) {

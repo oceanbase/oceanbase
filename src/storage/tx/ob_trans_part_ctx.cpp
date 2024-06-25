@@ -35,6 +35,7 @@
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_leak_checker.h"
+#include "storage/tx/ob_multi_data_source_printer.h"
 #include "share/ob_alive_server_tracer.h"
 #include "storage/multi_data_source/runtime_utility/mds_factory.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
@@ -43,6 +44,7 @@
 #undef NEED_MDS_REGISTER_DEFINE
 #include "storage/tablet/ob_tablet_transfer_tx_ctx.h"
 #include "storage/tx/ob_ctx_tx_data.h"
+#include "storage/multi_data_source/runtime_utility/mds_tlocal_info.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "logservice/ob_log_service.h"
 #include "storage/ddl/ob_ddl_inc_clog_callback.h"
@@ -7127,7 +7129,7 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
           }
           TRANS_LOG(WARN, "process_with_buffer_ctx failed", KR(ret), K(*this));
         } else if (OB_FAIL(new_node.init(node.get_data_source_type(), tmp_data, node.mds_base_scn_,
-                                         new_ctx))) {
+                                         node.seq_no_, new_ctx))) {
           mds_cache_.free_mds_node(tmp_data, node.get_register_no());
           if (OB_NOT_NULL(new_ctx)) {
             MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(new_ctx);
@@ -7635,8 +7637,9 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
       TRANS_LOG(WARN, "notify data source failed", K(ret), K(arg));
     }
     if (notify_array.count() > 0) {
-      TRANS_LOG(INFO, "notify MDS", K(ret), K(trans_id_), K(ls_id_), "notify_type",
-                to_str_notify_type(notify_type), K(log_ts), K(notify_array.count()), K(notify_array),
+      TRANS_LOG(INFO, "notify MDS", K(ret), K(trans_id_), K(ls_id_),
+                "notify_type", ObMultiDataSourcePrinter::to_str_notify_type(notify_type),
+                K(log_ts), K(notify_array.count()), K(notify_array),
                 K(total_time));
     }
   }
@@ -7647,6 +7650,7 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
                                                const char *buf,
                                                const int64_t len,
                                                const bool try_lock,
+                                               const ObTxSEQ seq_no,
                                                const ObRegisterMdsFlag &register_flag)
 {
   int ret = OB_SUCCESS;
@@ -7710,8 +7714,7 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
       if (OB_FAIL(ret)) {
         TRANS_LOG(WARN, "execute MDS frame code failed, execution interruped", KR(ret),
                   K(data_source_type), K(*this));
-      } else if (OB_FAIL(
-                     node.init(data_source_type, data, register_flag.mds_base_scn_, buffer_ctx))) {
+      } else if (OB_FAIL(node.init(data_source_type, data, register_flag.mds_base_scn_, seq_no, buffer_ctx))) {
         TRANS_LOG(WARN, "init tx buffer node failed", KR(ret), K(data_source_type), K(*this));
       } else if (OB_FAIL(tmp_array.push_back(node))) {
         TRANS_LOG(WARN, "push back notify node  failed", KR(ret));

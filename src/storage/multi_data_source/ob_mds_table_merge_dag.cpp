@@ -50,7 +50,7 @@ int ObMdsTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
     LOG_WARN("invalid args", K(ret), KP(param));
   } else {
     const ObMdsTableMergeDagParam *mds_param = static_cast<const ObMdsTableMergeDagParam*>(param);
-    if (OB_UNLIKELY(!is_mds_table_merge(mds_param->merge_type_))) {
+    if (OB_UNLIKELY(!is_mds_mini_merge(mds_param->merge_type_))) {
       ret = OB_ERR_SYS;
       LOG_WARN("param type is not mds table merge type", K(ret), KPC(mds_param));
     } else if (OB_UNLIKELY(!mds_param->flush_scn_.is_valid())) {

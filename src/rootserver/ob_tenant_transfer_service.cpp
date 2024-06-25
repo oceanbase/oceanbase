@@ -25,6 +25,7 @@
 #include "share/ob_balance_define.h" // ObBalanceTaskID
 #include "share/location_cache/ob_location_service.h"   // location_service_
 #include "share/ob_srv_rpc_proxy.h" // srv_rpc_proxy_
+#include "share/ob_share_util.h" // ObShareUtil
 #include "storage/ob_common_id_utils.h" // ObCommonIDUtils
 #include "storage/tablelock/ob_table_lock_service.h" // ObTableLockService
 #include "observer/ob_inner_sql_connection.h" // ObInnerSQLConnection
@@ -1142,9 +1143,9 @@ int ObTenantTransferService::generate_transfer_task(
 {
   int ret = OB_SUCCESS;
 
-  if (IS_NOT_INIT) {
+  if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+    LOG_WARN("not init", KR(ret), KP(sql_proxy_));
   } else if (OB_UNLIKELY(!src_ls.is_valid()
       || !dest_ls.is_valid()
       || part_list.empty()
@@ -1159,8 +1160,11 @@ int ObTenantTransferService::generate_transfer_task(
     ObTransferStatus status(ObTransferStatus::INIT);
     ObTransferPartList transfer_part_list;
     const int64_t part_count = min(get_tablet_count_threshold_(), part_list.count());
+    uint64_t data_version = 0;
     if (OB_FAIL(transfer_part_list.reserve(part_count))) {
       LOG_WARN("reserve failed", KR(ret), K(part_count));
+    } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*sql_proxy_, tenant_id_, data_version))) { // can not use trans
+      LOG_WARN("fetch current data version failed", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(ObTransferTaskOperator::generate_transfer_task_id(trans, tenant_id_, task_id))) {
       LOG_WARN("fail to generate transfer task id", KR(ret), K_(tenant_id));
     } else {
@@ -1170,9 +1174,18 @@ int ObTenantTransferService::generate_transfer_task(
           LOG_WARN("push back failed", KR(ret), K(i), K(part_list), K(transfer_part_list));
         }
       }
-      if (FAILEDx(task.init(task_id, src_ls, dest_ls, transfer_part_list, status, trace_id, balance_task_id))) {
+      if (FAILEDx(task.init(
+          task_id,
+          src_ls,
+          dest_ls,
+          transfer_part_list,
+          status,
+          trace_id,
+          balance_task_id,
+          data_version))) {
         LOG_WARN("init transfer task failed", KR(ret), K(task_id), K(src_ls),
-          K(dest_ls), K(transfer_part_list), K(status), K(trace_id), K(balance_task_id));
+          K(dest_ls), K(transfer_part_list), K(status), K(trace_id),
+          K(balance_task_id), K(data_version));
       } else if (OB_FAIL(ObTransferTaskOperator::insert(trans, tenant_id_, task))) {
         LOG_WARN("insert failed", KR(ret), K_(tenant_id), K(task));
       }

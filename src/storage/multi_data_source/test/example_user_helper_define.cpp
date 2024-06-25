@@ -61,7 +61,7 @@ int ExampleUserHelperFunction2::on_register(const char* buf,
     MDS_LOG(ERROR, "[UNITTEST] ExampleUserHelperFunction2 fail to deserialize", KR(ret));
   } else {
     ExampleUserData1 data(test_value);
-    MdsCtx &mds_ctx = dynamic_cast<MdsCtx &>(ctx);
+    MdsCtx &mds_ctx = static_cast<MdsCtx &>(ctx);
     if (OB_FAIL(TestMdsTable.set(data, mds_ctx))) {
       MDS_LOG(ERROR, "[UNITTEST] ExampleUserHelperFunction2 fail to set mdstable", KR(ret));
     } else {

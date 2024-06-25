@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
+#include "lib/utility/ob_sort.h"
 #include "sql/engine/px/datahub/components/ob_dh_range_dist_wf.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/window_function/ob_window_function_op.h"

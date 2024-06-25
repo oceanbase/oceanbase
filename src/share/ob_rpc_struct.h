@@ -58,6 +58,7 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/tx/ob_multi_data_source.h"
 #include "share/unit/ob_unit_info.h" //ObUnit*
 #include "share/backup/ob_backup_clean_struct.h"
 #include "logservice/palf/palf_options.h"//access mode
@@ -10306,11 +10307,8 @@ struct ObRegisterTxDataArg
   OB_UNIS_VERSION(1);
 
 public:
-  ObRegisterTxDataArg()
-      : tenant_id_(OB_INVALID_TENANT_ID), tx_desc_(nullptr), ls_id_(),
-        type_(transaction::ObTxDataSourceType::UNKNOWN), buf_(), request_id_(0),register_flag_()
-  {}
-  ~ObRegisterTxDataArg() {}
+  ObRegisterTxDataArg();
+  ~ObRegisterTxDataArg() = default;
   bool is_valid() const;
   void reset();
   void inc_request_id(const int64_t base_request_id);
@@ -10319,6 +10317,7 @@ public:
            const share::ObLSID &ls_id,
            const transaction::ObTxDataSourceType &type,
            const common::ObString &buf,
+           const transaction::ObTxSEQ seq_no,
            const int64_t base_request_id,
            const transaction::ObRegisterMdsFlag &register_flag);
   TO_STRING_KV(K_(tenant_id),
@@ -10326,6 +10325,7 @@ public:
                K_(ls_id),
                K_(type),
                KP(buf_.length()),
+               K_(seq_no),
                K_(request_id),
                K_(register_flag));
 
@@ -10335,6 +10335,7 @@ public:
   share::ObLSID ls_id_;
   transaction::ObTxDataSourceType type_;
   common::ObString buf_;
+  transaction::ObTxSEQ seq_no_;
   int64_t request_id_;
 
   transaction::ObRegisterMdsFlag register_flag_;

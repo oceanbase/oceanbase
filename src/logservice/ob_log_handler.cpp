@@ -1776,5 +1776,22 @@ bool ObLogHandler::is_offline() const
   return true == ATOMIC_LOAD(&is_offline_);
 }
 
+int ObLogHandler::is_replay_fatal_error(bool &has_fatal_error)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (true == is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    RLockGuard guard(lock_);
+    ObLSID ls_id(id_);
+    if (OB_FAIL(replay_service_->has_fatal_error(ls_id, has_fatal_error))) {
+      CLOG_LOG(WARN, "has_fatal_error failed", KR(ret), K(ls_id));
+    }
+  }
+  return ret;
+}
+
 } // end namespace logservice
 } // end napespace oceanbase

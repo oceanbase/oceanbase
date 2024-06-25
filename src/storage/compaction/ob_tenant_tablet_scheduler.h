@@ -229,6 +229,11 @@ public:
   static int schedule_tablet_minor_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
+  template <class T>
+  static int schedule_tablet_minor_merge(
+      const ObMergeType &merge_type,
+      ObLSHandle &ls_handle,
+      ObTabletHandle &tablet_handle);
   static int schedule_tablet_meta_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle,
@@ -347,7 +352,7 @@ public:
   typedef common::ObSEArray<ObGetMergeTablesResult, compaction::ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
 private:
   static const int64_t BLOOM_FILTER_LOAD_BUILD_THREAD_CNT = 1;
-  static const int64_t NO_MAJOR_MERGE_TYPE_CNT = 2;
+  static const int64_t NO_MAJOR_MERGE_TYPE_CNT = 3;
   static const int64_t TX_TABLE_NO_MAJOR_MERGE_TYPE_CNT = 1;
   static const int64_t BF_TASK_QUEUE_SIZE = 10L * 1000;
   static const int64_t BF_TASK_MAP_SIZE = 10L * 1000;
@@ -355,7 +360,7 @@ private:
   static const int64_t BF_TASK_HOLD_LIMIT = 256L * 1024L * 1024L;
   static const int64_t BF_TASK_PAGE_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE; //64K
 
-  static constexpr ObMergeType MERGE_TYPES[] = {MINOR_MERGE, HISTORY_MINOR_MERGE};
+  static constexpr ObMergeType MERGE_TYPES[] = {MINOR_MERGE, HISTORY_MINOR_MERGE, MDS_MINOR_MERGE};
   static const int64_t ADD_LOOP_EVENT_INTERVAL = 120 * 1000 * 1000L; // 120s
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
   static const int64_t WAIT_MEDIUM_CHECK_THRESHOLD = 10 * 60 * 1000 * 1000 * 1000L; // 10m

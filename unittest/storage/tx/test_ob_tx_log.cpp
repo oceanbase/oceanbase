@@ -178,7 +178,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
   ObTxBufferNodeArray TEST_TX_BUFFER_NODE_ARRAY;
   ObString str("TEST CASE");
   ObTxBufferNode node;
-  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), transaction::ObTxSEQ::mk_v0(100), nullptr);
   TEST_TX_BUFFER_NODE_ARRAY.push_back(node);
 
   ObTxCommitInfoLog fill_commit_state(TEST_ADDR,
@@ -326,7 +326,7 @@ TEST_F(TestObTxLog, tx_log_body_redo)
   ObTxBufferNodeArray TEST_TX_BUFFER_NODE_ARRAY;
   ObString str("TEST CASE");
   ObTxBufferNode node;
-  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), transaction::ObTxSEQ::mk_v0(100), nullptr);
   TEST_TX_BUFFER_NODE_ARRAY.push_back(node);
 
   ObTxCommitInfoLog fill_commit_state(TEST_ADDR,
@@ -448,7 +448,7 @@ TEST_F(TestObTxLog, test_compat_bytes)
   ObTxBufferNodeArray TEST_TX_BUFFER_NODE_ARRAY;
   ObString str("TEST CASE");
   ObTxBufferNode node;
-  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), transaction::ObTxSEQ::mk_v0(100), nullptr);
   TEST_TX_BUFFER_NODE_ARRAY.push_back(node);
 
   ObTxCommitInfoLog fill_commit_info(TEST_ADDR,
@@ -864,7 +864,7 @@ TEST_F(TestObTxLog, test_commit_log_with_checksum_signature)
   ObTxBufferNodeArray tx_buffer_node_array;
   ObTxBufferNode node;
   ObString str("hello,world");
-  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), nullptr);
+  node.init(ObTxDataSourceType::LS_TABLE, str, share::SCN(), transaction::ObTxSEQ::mk_v0(100), nullptr);
   tx_buffer_node_array.push_back(node);
   ObLSLogInfoArray ls_info_array;
   ls_info_array.push_back(ObLSLogInfo());

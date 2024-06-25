@@ -35,7 +35,7 @@ class ObSSTableArray
 public:
   friend class ObTabletTableStore;
   ObSSTableArray() : cnt_(0), sstable_array_(nullptr), serialize_table_type_(false), is_inited_(false) {}
-  virtual ~ObSSTableArray() {}
+  virtual ~ObSSTableArray() { reset(); }
 
   void reset();
   int init(
@@ -56,6 +56,7 @@ public:
   // Attention ! should only be called by COSSTable
   int init_empty_array_for_cg(common::ObArenaAllocator &allocator, const int64_t count);
   int add_tables_for_cg(common::ObArenaAllocator &allocator, const ObIArray<ObITable *> &tables);
+  int add_tables_for_cg_without_deep_copy(const ObIArray<ObITable *> &tables);
 
   int64_t get_deep_copy_size() const;
   int deep_copy(char *dst_buf, const int64_t buf_size, int64_t &pos, ObSSTableArray &dst_array) const;

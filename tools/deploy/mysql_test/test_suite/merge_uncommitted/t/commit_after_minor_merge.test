@@ -53,7 +53,7 @@ connection conn1;
 commit;
 select * from test_commit_after_minor_merge_t;
 
-let $count = query_get_value(select count(1) as c from oceanbase.__all_virtual_table_mgr where tablet_id = $__tablet_id__  and size > 0 group by svr_port order by svr_port limit 1, c, 1);
+let $count = query_get_value(select count(1) as c from oceanbase.__all_virtual_table_mgr where tablet_id = $__tablet_id__ and table_type != 26 and table_type != 27 and size > 0 group by svr_port order by svr_port limit 1, c, 1);
 # one minor sstable
 echo $count;
 
@@ -70,7 +70,7 @@ insert into test_commit_after_minor_merge_t values (2,2);
 connection conn1;
 commit;
 
-let $count = query_get_value(select count(1) as c from oceanbase.__all_virtual_table_mgr where tablet_id = $__tablet_id__  and size > 0 group by svr_port order by svr_port limit 1, c, 1);
+let $count = query_get_value(select count(1) as c from oceanbase.__all_virtual_table_mgr where tablet_id = $__tablet_id__ and table_type != 26 and table_type != 27 and size > 0 group by svr_port order by svr_port limit 1, c, 1);
 # two minor sstable
 echo $count;
 

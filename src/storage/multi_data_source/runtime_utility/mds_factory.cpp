@@ -13,7 +13,6 @@
 #include "mds_factory.h"
 #include "lib/ob_errno.h"
 #include "share/rc/ob_tenant_base.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/multi_data_source/buffer_ctx.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
@@ -28,31 +27,6 @@ namespace storage
 {
 namespace mds
 {
-
-void *MdsAllocator::alloc(const int64_t size)
-{
-  void *ptr = MTL(share::ObSharedMemAllocMgr *)->mds_allocator().alloc(size);
-  if (OB_NOT_NULL(ptr)) {
-    ATOMIC_INC(&alloc_times_);
-  }
-  return ptr;
-}
-
-void *MdsAllocator::alloc(const int64_t size, const ObMemAttr &attr)
-{
-  return MTL(share::ObSharedMemAllocMgr *)->mds_allocator().alloc(size, attr);
-}
-
-void MdsAllocator::free(void *ptr) {
-  if (OB_NOT_NULL(ptr)) {
-    ATOMIC_INC(&free_times_);
-    MTL(share::ObSharedMemAllocMgr *)->mds_allocator().free(ptr);
-  }
-}
-
-void MdsAllocator::set_label(const lib::ObLabel &) {}
-
-MdsAllocator &MdsAllocator::get_instance() { static MdsAllocator alloc; return alloc; }
 
 template <int IDX>
 int deepcopy(const transaction::ObTransID &trans_id,
@@ -71,7 +45,7 @@ int deepcopy(const transaction::ObTransID &trans_id,
   } else if (IDX == old_ctx.get_binding_type_id()) {
     using ImplType = GET_CTX_TYPE_BY_TUPLE_IDX(IDX);
     ImplType *p_impl = nullptr;
-    const ImplType *p_old_impl_ctx = dynamic_cast<const ImplType *>(&old_ctx);
+    const ImplType *p_old_impl_ctx = static_cast<const ImplType *>(&old_ctx);
     MDS_ASSERT(OB_NOT_NULL(p_old_impl_ctx));
     const ImplType &old_impl_ctx = *p_old_impl_ctx;
     set_mds_mem_check_thread_local_info(MdsWriter(trans_id), typeid(ImplType).name(), alloc_file, alloc_func, line);

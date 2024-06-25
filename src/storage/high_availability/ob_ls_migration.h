@@ -377,6 +377,9 @@ private:
       bool &need_copy);
   int check_transfer_seq_equal_(
       const ObMigrationTabletParam *src_tablet_meta);
+  int generate_mds_copy_tasks_(
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      share::ObITask *&parent_task);
 
 private:
   bool is_inited_;

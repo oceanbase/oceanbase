@@ -27,7 +27,6 @@
 #include "ob_table_access_context.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/lob/ob_lob_data_reader.h"
-#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {
@@ -104,6 +103,7 @@ private:
   // project to output expressions
   int project2output_exprs(blocksstable::ObDatumRow &unprojected_row, blocksstable::ObDatumRow &cur_row);
   int prepare_read_tables(bool refresh = false);
+  int prepare_mds_tables(bool refresh);
   int prepare_tables_from_iterator(ObTableStoreIterator &table_iter, const common::SampleInfo *sample_info = nullptr);
   int refresh_table_on_demand();
   int refresh_tablet_iter();
@@ -123,7 +123,7 @@ private:
   int handle_lob_before_fuse_row();
   void reuse_lob_locator();
   void report_tablet_stat();
-  OB_INLINE int update_and_report_tablet_stat();
+  int update_and_report_tablet_stat();
   void inner_reset();
 
 protected:
@@ -169,7 +169,12 @@ private:
 OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
 {
   int ret = OB_SUCCESS;
-  need_refresh = get_table_param_->tablet_iter_.table_iter()->check_store_expire();
+
+  if (access_param_->iter_param_.is_mds_query_) {
+    need_refresh = false;
+  } else {
+    need_refresh = get_table_param_->tablet_iter_.table_iter()->check_store_expire();
+  }
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_FORCE_REFRESH_TABLE) ret;
   if (OB_FAIL(ret)) {
@@ -177,30 +182,6 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
     need_refresh = true;
   }
 #endif
-  return ret;
-}
-
-OB_INLINE int ObMultipleMerge::update_and_report_tablet_stat()
-{
-  int ret = OB_SUCCESS;
-  EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
-  if (NULL != access_ctx_->table_scan_stat_) {
-    access_ctx_->table_scan_stat_->access_row_cnt_ += access_ctx_->table_store_stat_.logical_read_cnt_;
-    access_ctx_->table_scan_stat_->rowkey_prefix_ = access_ctx_->table_store_stat_.rowkey_prefix_;
-    access_ctx_->table_scan_stat_->bf_filter_cnt_ += access_ctx_->table_store_stat_.bf_filter_cnt_;
-    access_ctx_->table_scan_stat_->bf_access_cnt_ += access_ctx_->table_store_stat_.bf_access_cnt_;
-    access_ctx_->table_scan_stat_->empty_read_cnt_ += access_ctx_->table_store_stat_.empty_read_cnt_;
-    access_ctx_->table_scan_stat_->fuse_row_cache_hit_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_hit_cnt_;
-    access_ctx_->table_scan_stat_->fuse_row_cache_miss_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_miss_cnt_;
-    access_ctx_->table_scan_stat_->block_cache_hit_cnt_ += access_ctx_->table_store_stat_.block_cache_hit_cnt_;
-    access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
-    access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
-    access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
-  }
-  if (MTL(compaction::ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
-    report_tablet_stat();
-  }
-  access_ctx_->table_store_stat_.reuse();
   return ret;
 }
 

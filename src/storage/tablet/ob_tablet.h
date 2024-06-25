@@ -52,11 +52,6 @@ namespace logservice
 class ObLogHandler;
 }
 
-namespace compaction
-{
-class ObExtraMediumInfo;
-}
-
 namespace transaction
 {
 class ObTransID;
@@ -81,7 +76,6 @@ class ObFreezer;
 class ObTabletDDLInfo;
 class ObTabletDDLKvMgr;
 class ObDDLKVHandle;
-class ObStorageSchema;
 class ObTabletTableIterator;
 class ObMetaDiskAddr;
 class ObUpdateTabletPointerParam;
@@ -90,6 +84,8 @@ class ObTabletBindingMdsUserData;
 class ObMemtableArray;
 class ObCOSSTableV2;
 class ObMacroInfoIterator;
+class ObMdsRowIterator;
+class ObMdsMiniMergeOperator;
 
 struct ObTableStoreCache
 {
@@ -159,9 +155,13 @@ public:
   inline share::ObLSID get_ls_id() const { return tablet_meta_.ls_id_; }
   inline common::ObTabletID get_tablet_id() const { return tablet_meta_.tablet_id_; }
   inline common::ObTabletID get_data_tablet_id() const { return tablet_meta_.data_tablet_id_; }
+  inline int64_t get_last_compaction_scn() const { return tablet_meta_.extra_medium_info_.last_medium_scn_; }
   inline bool is_row_store() const { return table_store_cache_.is_row_store_; }
-  int get_mds_table_rec_log_scn(share::SCN &rec_scn);
+  int get_mds_table_rec_scn(share::SCN &rec_scn);
   int mds_table_flush(const share::SCN &decided_scn);
+  int scan_mds_table_with_op(
+      const int64_t mds_construct_sequence,
+      ObMdsMiniMergeOperator &op) const;
 
 public:
   // first time create tablet
@@ -180,19 +180,13 @@ public:
       common::ObArenaAllocator &allocator,
       const ObUpdateTableStoreParam &param,
       const ObTablet &old_tablet);
-  // dump/merge mds table to tablet_meta
-  int init_for_mds_table_dump(
-      common::ObArenaAllocator &allocator,
-      const ObTablet &old_tablet,
-      const share::SCN &flush_scn,
-      const ObTabletMdsData &mds_table_data,
-      const ObTabletMdsData &base_data);
   // transfer build new tablet
   int init_with_migrate_param(
       common::ObArenaAllocator &allocator,
       const ObMigrationTabletParam &param,
       const bool is_update,
-      ObFreezer *freezer);
+      ObFreezer *freezer,
+      const bool is_transfer);
   //batch update table store with range cut
   int init_for_sstable_replace(
       common::ObArenaAllocator &allocator,
@@ -208,6 +202,18 @@ public:
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet,
       const int64_t snapshot_version);
+  // init for mds table mini merge
+  int init_with_mds_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObTablet &old_tablet,
+      const share::SCN &flush_scn,
+      const ObUpdateTableStoreParam &param);
+
+  // init for compat
+  int init_for_compat(
+      common::ObArenaAllocator &allocator,
+      const ObTablet &old_tablet,
+      ObTableHandleV2 &mds_mini_sstable);
 
   // batch replace sstables without data modification
   int init_for_defragment(
@@ -223,7 +229,7 @@ public:
   bool is_valid() const;
   // refresh memtable and update tablet_addr_ and table_store_addr_ sequence, only used by slog ckpt
   int refresh_memtable_and_update_seq(const uint64_t seq);
-  bool is_old_tablet() { return version_ < ObTabletBlockHeader::TABLET_VERSION_V3; }
+  int32_t get_version() const { return version_; }
   void dec_macro_ref_cnt();
   int inc_macro_ref_cnt();
   // these interfaces is only for tiny mode
@@ -243,7 +249,7 @@ public:
   void set_allocator(ObArenaAllocator *allocator) { allocator_ = allocator; }
   void set_next_tablet(ObTablet* tablet) { next_tablet_ = tablet; }
   ObTablet *get_next_tablet() { return next_tablet_; }
-  ObArenaAllocator *get_allocator() { return allocator_;}
+  ObArenaAllocator *get_allocator() const { return allocator_; }
   bool is_empty_shell() const;
   // major merge or medium merge call
   bool is_data_complete() const;
@@ -369,13 +375,9 @@ public:
 
   int wait_release_memtables();
 
-  // multi-source data operation
   int get_storage_schema_for_transfer_in(
       common::ObArenaAllocator &allocator,
       ObStorageSchema &storage_schema) const;
-  int get_medium_info_list(
-      common::ObArenaAllocator &allocator,
-      compaction::ObMediumCompactionInfoList &medium_info_list) const;
 
   int get_restore_status(ObTabletRestoreStatus::STATUS &restore_status);
 
@@ -410,22 +412,20 @@ public:
   int get_ha_sstable_size(int64_t &data_size);
   //transfer
   int build_transfer_tablet_param(
+      const int64_t data_version,
       const share::ObLSID &dest_ls_id,
       ObMigrationTabletParam &mig_tablet_param);
-  int build_transfer_in_tablet_status_(
-      const ObTabletCreateDeleteMdsUserData &user_data,
-      ObTabletMdsData &mds_data,
-      common::ObIAllocator &allocator);
-
-  // for restore
-  // check whether we have dumped a sstable or not.
-  int check_has_sstable(bool &has_sstable) const;
+  int build_transfer_backfill_tablet_param(
+      const ObTabletMeta &src_tablet_meta,
+      const ObStorageSchema &src_storage_schema,
+      ObMigrationTabletParam &param) const;
 
   int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_create = false);
   int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int start_direct_load_task_if_need();
   int get_ddl_sstables(ObTableStoreIterator &table_store_iter) const;
+  int get_mds_sstables(ObTableStoreIterator &table_store_iter) const;
   int get_mini_minor_sstables(ObTableStoreIterator &table_store_iter) const;
   int get_table(const ObITable::TableKey &table_key, ObTableHandleV2 &handle) const;
   int get_recycle_version(const int64_t multi_version_start, int64_t &recycle_version) const;
@@ -493,36 +493,12 @@ public:
       common::ObIAllocator &allocator,
       ObTabletMdsData &mds_data,
       const bool for_flush,
-      const int64_t mds_construct_sequence = 0);
+      const int64_t mds_construct_sequence = 0) const;
+  int get_mds_table_for_dump(mds::MdsTableHandle &mds_table) const;
   int notify_mds_table_flush_ret(
       const share::SCN &flush_scn,
       const int flush_ret);
   int64_t get_memtable_count() const { return memtable_count_; }
-
-  // tablet mds data read interface
-  int get_tablet_status_uncommitted_mds_dump_kv(
-      common::ObIAllocator &allocator,
-      mds::MdsDumpKV *&kv);
-  int get_tablet_status_committed_mds_dump_kv(
-      common::ObIAllocator &allocator,
-      mds::MdsDumpKV *&kv);
-  int get_aux_tablet_info_uncommitted_mds_dump_kv(
-      common::ObIAllocator &allocator,
-      mds::MdsDumpKV *&kv);
-  int get_aux_tablet_info_committed_mds_dump_kv(
-      common::ObIAllocator &allocator,
-      mds::MdsDumpKV *&kv);
-  int get_auto_inc_seq_mds_dump_kv(
-      common::ObIAllocator &allocator,
-      mds::MdsDumpKV *&kv);
-  int get_medium_info_mds_dump_kv_by_key(
-      common::ObIAllocator &allocator,
-      const compaction::ObMediumCompactionInfoKey &key,
-      mds::MdsDumpKV *&kv);
-  int get_medium_info_mds_dump_kv(
-      common::ObIAllocator &allocator,
-      const int64_t idx,
-      mds::MdsDumpKV *&kv);
 
   int check_new_mds_with_cache(const int64_t snapshot_version, const int64_t timeout);
   int check_tablet_status_for_read_all_committed();
@@ -553,26 +529,35 @@ public:
   // typically used for check valid for migration or restore
   int check_valid(const bool ignore_ha_status = false) const;
 
-  int get_fused_medium_info_list(
-      common::ObArenaAllocator &allocator,
-      ObTabletFullMemoryMdsData &mds_data);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
-  static int get_tablet_version(const char *buf, const int64_t len, int32_t &version);
+  static int get_tablet_block_header_version(const char *buf, const int64_t len, int32_t &version);
   int get_all_minor_sstables(ObTableStoreIterator &table_store_iter) const;
-  int set_macro_block(const ObDDLMacroBlock &macro_block,
-                      const int64_t snapshot_version,
-                      const uint64_t data_format_version);
+  int get_sstable_read_info(
+      const blocksstable::ObSSTable *sstable,
+      const storage::ObITableReadInfo *&index_read_info) const;
+  int build_full_memory_mds_data(
+      common::ObArenaAllocator &allocator,
+      ObTabletFullMemoryMdsData &data) const;
+  int get_memtables(
+      common::ObIArray<ObTableHandleV2> &memtables,
+      const bool need_active) const;
+
+  int set_macro_block(
+      const ObDDLMacroBlock &macro_block,
+      const int64_t snapshot_version,
+      const uint64_t data_format_version);
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
-  virtual const ObTabletMdsData &get_mds_data_() const override final { return mds_data_; }
   virtual const ObTabletMeta &get_tablet_meta_() const override final { return tablet_meta_; }
   virtual int get_mds_table_handle_(mds::MdsTableHandle &handle,
                                     const bool create_if_not_exist) const override final;
-  virtual ObTabletPointer *get_tablet_pointer_() const override final {
-    return static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
-  }
+  virtual ObTabletPointer *get_tablet_pointer_() const override final;
 private:
+  int update_meta_last_persisted_committed_tablet_status_from_sstable(
+      const ObUpdateTableStoreParam &param,
+      const ObTabletCreateDeleteMdsUserData &last_tablet_status);
+  int update_tablet_status_from_sstable();
   int partial_deserialize(
       common::ObArenaAllocator &allocator,
       const char *buf,
@@ -690,6 +675,9 @@ private:
       ObTableStoreIterator &iter,
       ObStorageMetaHandle &table_store_handle,
       const bool allow_no_ready_read);
+  int get_mds_tables(
+      const int64_t snapshot_version,
+      ObTableStoreIterator &iter) const;
   int get_read_major_sstable(
       const int64_t &major_snapshot_version,
       ObTableStoreIterator &iter) const;
@@ -698,22 +686,16 @@ private:
   int check_medium_list() const;
   int check_sstable_column_checksum() const;
   int get_finish_medium_scn(int64_t &finish_medium_scn) const;
-  int read_mds_table_medium_info_list(
-      common::ObIAllocator &allocator,
-      ObTabletDumpedMediumInfo &medium_info_list) const;
 
   int inner_get_mds_table(
       mds::MdsTableHandle &mds_table,
       bool not_exist_create = false) const;
-
-  static int load_medium_info_list(
-      common::ObArenaAllocator &allocator,
-      const ObTabletComplexAddr<oceanbase::storage::ObTabletDumpedMediumInfo> &complex_addr,
-      const compaction::ObExtraMediumInfo &extra_info,
-      compaction::ObMediumCompactionInfoList &medium_info_list);
   int validate_medium_info_list(
       const int64_t finish_medium_scn,
       const ObTabletMdsData &mds_data) const;
+  int read_medium_array(
+      common::ObArenaAllocator &allocator,
+      common::ObIArray<compaction::ObMediumCompactionInfo*> &medium_info_array) const;
   int set_initial_state(const bool initial_state);
   int set_macro_info_addr(
       const blocksstable::MacroBlockId &macro_id,
@@ -748,21 +730,11 @@ private:
       int64_t &pos,
       const bool prepare_memtable);
 
-  static int convert_to_mds_dump_kv(
-      common::ObIAllocator &allocator,
-      const share::ObTabletAutoincSeq &auto_inc_seq,
-      mds::MdsDumpKV &kv);
-  static int convert_to_mds_dump_kv(
-      common::ObIAllocator &allocator,
-      const compaction::ObMediumCompactionInfo &info,
-      mds::MdsDumpKV &kv);
-
   int get_src_tablet_read_tables_(
       const int64_t snapshot_version,
       const bool allow_no_ready_read,
       ObTabletTableIterator &iter,
       bool &succ_get_src_tables);
-  int get_max_data_scn_(share::SCN &scn) const;
 
   int prepare_param(ObRelativeTable &relative_table, ObTableIterParam &param);
   int prepare_param_ctx(
@@ -796,7 +768,6 @@ private:
   void reset_ddl_memtables();
   int wait_release_memtables_();
   int mark_mds_table_switched_to_empty_shell_();
-  int fetch_autoinc_seq(ObTabletMemberWrapper<share::ObTabletAutoincSeq> &wrapper) const;
   int handle_transfer_replace_(const ObBatchUpdateTableStoreParam &param);
   // NOTICE:
   // - Because the `calc_tablet_attr()` may has I/O operations, you can bypass it if wantn't to update it.
@@ -805,6 +776,21 @@ private:
       const bool need_tablet_attr = true) const;
   int calc_tablet_attr(ObTabletAttr &attr) const;
   int check_ready_for_read_if_need(const ObTablet &old_tablet);
+
+  // mds mvs
+  int build_mds_mini_sstable_for_migration(
+      common::ObArenaAllocator &allocator,
+      const ObMigrationTabletParam &param,
+      ObTableHandleV2 &mds_mini_sstable);
+  int build_migration_tablet_param_storage_schema(
+      ObMigrationTabletParam &mig_tablet_param) const;
+  int build_migration_tablet_param_last_tablet_status(
+      ObMigrationTabletParam &mig_tablet_param) const;
+
+  int build_transfer_tablet_param_current_(
+      const share::ObLSID &dest_ls_id,
+      ObMigrationTabletParam &mig_tablet_param);
+
   int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
@@ -817,7 +803,7 @@ private:
   int32_t version_;
   int32_t length_;
   volatile int64_t wash_score_;
-  ObTabletMdsData mds_data_;                                 // size: 384B, alignment: 8B
+  ObTabletMdsData *mds_data_;
   volatile int64_t ref_cnt_;
   ObTabletHandle next_tablet_guard_;                         // size: 56B, alignment: 8B
   ObTabletMeta tablet_meta_;                                 // size: 248, alignment: 8B
@@ -826,7 +812,7 @@ private:
   ObTabletComplexAddr<ObTabletTableStore> table_store_addr_; // size: 48B, alignment: 8B
   // always in disk
   ObTabletComplexAddr<ObStorageSchema> storage_schema_addr_; // size: 48B, alignment: 8B
-  ObTabletComplexAddr<ObTabletMacroInfo> macro_info_addr_;     // size: 48B, alignment: 8B
+  ObTabletComplexAddr<ObTabletMacroInfo> macro_info_addr_;   // size: 48B, alignment: 8B
   int64_t memtable_count_;
   ObDDLKV **ddl_kvs_;
   int64_t ddl_kv_count_;
@@ -891,7 +877,6 @@ inline bool ObTablet::is_valid() const
           || (is_empty_shell()
           && table_store_addr_.addr_.is_none()
           && storage_schema_addr_.addr_.is_none()
-          && mds_data_.auto_inc_seq_.addr_.is_none()
           && nullptr == rowkey_read_info_);
 }
 

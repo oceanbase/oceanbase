@@ -491,5 +491,61 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   return ret;
 }
 
+int ObTabletCreateSSTableParam::init_for_mds(
+    const compaction::ObBasicTabletMergeCtx &ctx,
+    const blocksstable::ObSSTableMergeRes &res,
+    const ObStorageSchema &mds_schema)
+{
+  // TODO: @luhaopeng.lhp check ctx valid for mds
+  // reference to merge info
+  int ret = OB_SUCCESS;
+  const compaction::ObStaticMergeParam &static_param = ctx.static_param_;
+
+  ObITable::TableKey table_key;
+  table_key.table_type_ = ctx.get_merged_table_type(nullptr, false);
+  table_key.tablet_id_ = ctx.get_tablet_id();
+  table_key.column_group_idx_ = 0;
+  table_key.scn_range_ = static_param.scn_range_;
+
+  table_key_ = table_key;
+  sstable_logic_seq_ = static_param.sstable_logic_seq_;
+  filled_tx_scn_ = ctx.get_merge_scn();
+
+
+  table_mode_ = mds_schema.get_table_mode_struct();
+  index_type_ = mds_schema.get_index_type();
+  column_group_cnt_ = 1; // for row store;
+  rowkey_column_cnt_ = mds_schema.get_rowkey_column_num()
+      + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  latest_row_store_type_ = mds_schema.get_row_store_type();
+  recycle_version_ = 0;
+  schema_version_ = mds_schema.get_schema_version();
+  create_snapshot_version_ = static_param.create_snapshot_version_;
+  progressive_merge_round_ = static_param.progressive_merge_round_;
+  progressive_merge_step_ = std::min(
+          static_param.progressive_merge_num_, static_param.progressive_merge_step_ + 1);
+
+  column_cnt_ = res.data_column_cnt_;
+  if (0 == res.row_count_ && 0 == res.max_merged_trans_version_) {
+    // empty mini table merged forcely
+    max_merged_trans_version_ = static_param.version_range_.snapshot_version_;
+  } else {
+    max_merged_trans_version_ = res.max_merged_trans_version_;
+  }
+  nested_size_ = res.nested_size_;
+  nested_offset_ = res.nested_offset_;
+  ddl_scn_.set_min();
+
+  if (OB_FAIL(inner_init_with_merge_res(res))) {
+    LOG_WARN("fail to init with merge res", K(ret), K(res.data_block_ids_));
+  } else if (is_major_or_meta_merge_type(static_param.get_merge_type())) {
+    if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
+      LOG_WARN("fail to fill column checksum", K(ret), K(res.data_column_checksums_));
+    }
+  }
+
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

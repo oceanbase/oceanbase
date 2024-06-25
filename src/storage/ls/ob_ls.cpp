@@ -1646,10 +1646,12 @@ int ObLS::build_ha_tablet_new_table_store(
 }
 
 int ObLS::build_new_tablet_from_mds_table(
+    compaction::ObTabletMergeCtx &ctx,
     const int64_t ls_rebuild_seq,
     const common::ObTabletID &tablet_id,
-    const int64_t mds_construct_sequence,
-    const share::SCN &flush_scn)
+    const ObTableHandleV2 &mds_mini_sstable_handle,
+    const share::SCN &flush_scn,
+    ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
   RDLockGuard guard(meta_rwlock_);
@@ -1665,7 +1667,7 @@ int ObLS::build_new_tablet_from_mds_table(
     ret = OB_EAGAIN;
     LOG_WARN("rebuild seq is not the same with current ls, need retry",
         K(ret), K(ls_id), K(tablet_id), K(ls_rebuild_seq), K(rebuild_seq), K(flush_scn));
-  } else if (OB_FAIL(ls_tablet_svr_.build_new_tablet_from_mds_table(tablet_id, mds_construct_sequence, flush_scn))) {
+  } else if (OB_FAIL(ls_tablet_svr_.build_new_tablet_from_mds_table(ctx, tablet_id, mds_mini_sstable_handle, flush_scn, handle))) {
     LOG_WARN("failed to build new tablet from mds table", K(ret), K(ls_id), K(tablet_id), K(flush_scn));
   }
   return ret;

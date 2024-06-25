@@ -116,31 +116,30 @@ public:
   virtual int get_latest(int64_t unit_id,
                          void *key,
                          ObFunction<int(void *)> &op,
-                         bool &is_committed,
-                         const int64_t read_seq) const override;
+                         bool &is_committed) const override;
   virtual int get_tablet_status_node(ObFunction<int(void *)> &op,
                                      const int64_t read_seq) const override;
   virtual int get_snapshot(int64_t unit_id,
                            void *key,
                            ObFunction<int(void *)> &op,
                            const share::SCN &snapshot,
-                           const int64_t read_seq,
                            const int64_t timeout_us) const override;
   virtual int get_by_writer(int64_t unit_id,
                             void *key,
                             ObFunction<int(void *)> &op,
                             const MdsWriter &writer,
                             const share::SCN &snapshot,
-                            const int64_t read_seq,
+                            const transaction::ObTxSEQ read_seq,
                             const int64_t timeout_us) const override;
   virtual int is_locked_by_others(int64_t unit_id,
                                   void *key,
                                   bool &is_locked,
                                   const MdsWriter &self = MdsWriter()) const override;
-  virtual int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
-                                  ObFunction<int(const MdsDumpKV&)> &for_each_op,
-                                  const int64_t mds_construct_sequence,
-                                  const bool for_flush) const override;
+  virtual int scan_all_nodes_to_dump(ObFunction<int(const MdsDumpKV&)> &for_each_op,
+                                     const int64_t mds_construct_sequence,
+                                     const bool for_flush,
+                                     const ScanRowOrder scan_row_order,
+                                     const ScanNodeOrder scan_node_order) const override;
   virtual int operate(const ObFunction<int(MdsTableBase &)> &operation) override;
   int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN &flush_scn, int64_t &need_dumped_nodes_cnt);
   virtual int flush(share::SCN need_advanced_rec_scn_lower_limit, share::SCN max_decided_scn) override;
@@ -163,18 +162,16 @@ public:
              const share::SCN &scn);
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_latest(OP &&read_op,
-                 bool &is_committed,
-                 const int64_t read_seq = 0) const;
+                 bool &is_committed) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_snapshot(OP &&read_op,
                    const share::SCN snapshot = share::SCN::max_scn(),
-                   const int64_t read_seq = 0,
                    const int64_t timeout_us = 0) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_by_writer(OP &&read_op,
                     const MdsWriter &writer,
                     const share::SCN snapshot,
-                    const int64_t read_seq = 0,
+                    const transaction::ObTxSEQ read_seq = transaction::ObTxSEQ::MAX_VAL(),
                     const int64_t timeout_us = 0) const;
   template <typename T>
   int is_locked_by_others(bool &is_locked, const MdsWriter &self = MdsWriter()) const;
@@ -202,20 +199,18 @@ public:
   template <typename Key, typename Value, typename OP>
   int get_latest(const Key &key,
                  OP &&read_op,
-                 bool &is_committed,
-                 const int64_t read_seq = 0) const;
+                 bool &is_committed) const;
   template <typename Key, typename Value, typename OP>
   int get_snapshot(const Key &key,
                    OP &&read_op,
                    const share::SCN snapshot = share::SCN::max_scn(),
-                   const int64_t read_seq = 0,
                    const int64_t timeout_us = 0) const;
   template <typename Key, typename Value, typename OP>
   int get_by_writer(const Key &key,
                     OP &&read_op,
                     const MdsWriter &writer,
                     const share::SCN snapshot = share::SCN::max_scn(),
-                    const int64_t read_seq = 0,
+                    const transaction::ObTxSEQ read_seq = transaction::ObTxSEQ::MAX_VAL(),
                     const int64_t timeout_us = 0) const;
   template <typename Key, typename Value>
   int is_locked_by_others(const Key &key,
@@ -223,7 +218,11 @@ public:
                           const MdsWriter &self = MdsWriter()) const;
   /************************************************************************************************/
   template <typename DUMP_OP, ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
-  int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op, const int64_t mds_construct_sequence, const bool for_flush);
+  int scan_all_nodes_to_dump(DUMP_OP &&for_each_op,
+                             const int64_t mds_construct_sequence,
+                             const bool for_flush,
+                             const ScanRowOrder scan_row_order,
+                             const ScanNodeOrder scan_node_order);
   TO_STRING_KV(KP(this), K_(ls_id), K_(tablet_id), K_(flushing_scn),
                K_(rec_scn), K_(last_inner_recycled_scn), K_(total_node_cnt), K_(construct_sequence), K_(debug_info));
   template <typename SCAN_OP>
@@ -242,20 +241,34 @@ private:// helper define
   };
   template <typename DUMP_OP, ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
   struct ForEachUnitDumpHelper {// this operator applied on all row in units
-    ForEachUnitDumpHelper(DUMP_OP &op, share::SCN flusing_scn, bool for_flush)
+    ForEachUnitDumpHelper(DUMP_OP &op,
+                          const share::SCN flusing_scn,
+                          const bool for_flush,
+                          const ScanRowOrder scan_row_order,
+                          const ScanNodeOrder scan_node_order)
     : op_(op),
     flusing_scn_(flusing_scn),
-    for_flush_(for_flush) {}
+    for_flush_(for_flush),
+    scan_row_order_(scan_row_order),
+    scan_node_order_(scan_node_order) {}
     template <typename K, typename V>
     int operator()(MdsUnit<K, V> &unit) {
       uint8_t mds_table_id = GET_MDS_TABLE_ID<MdsTableType>::value;
       uint8_t mds_unit_id = GET_MDS_UNIT_ID<MdsTableType, K, V>::value;
-      return unit.scan_KV_row(op_, flusing_scn_, mds_table_id, mds_unit_id, for_flush_);
+      return unit.scan_KV_row(op_,
+                              flusing_scn_,
+                              mds_table_id,
+                              mds_unit_id,
+                              for_flush_,
+                              scan_row_order_,
+                              scan_node_order_);
     }
   private:
     DUMP_OP &op_;
-    share::SCN flusing_scn_;
-    bool for_flush_;
+    const share::SCN flusing_scn_;
+    const bool for_flush_;
+    const ScanRowOrder scan_row_order_;
+    const ScanNodeOrder scan_node_order_;
   };
   template <typename SCAN_OP>
   struct ForEachUnitScanRowHelper {
@@ -267,8 +280,12 @@ private:// helper define
     FowEachRowAction action_type_;
   };
   template <typename DUMP_OP, ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
-  int for_each_to_dump_node_(DUMP_OP &&op, share::SCN &flushing_scn, const bool for_flush) {
-    ForEachUnitDumpHelper<DUMP_OP> for_each_op(op, flushing_scn, for_flush);
+  int for_each_to_dump_node_(DUMP_OP &&op,
+                             const share::SCN flushing_scn,
+                             const bool for_flush,
+                             const ScanRowOrder scan_row_order,
+                             const ScanNodeOrder scan_node_order) {
+    ForEachUnitDumpHelper<DUMP_OP> for_each_op(op, flushing_scn, for_flush, scan_row_order, scan_node_order);
     return unit_tuple_.for_each(for_each_op);
   }
   MdsTableType unit_tuple_;

@@ -116,9 +116,10 @@ int TestTenantTransferService::gen_mock_data(const ObTransferTaskID task_id, con
   finish_scn.convert_for_inner_table_field(1666844202208490);
   ObCurTraceId::TraceId trace_id;
   trace_id.init(GCONF.self_addr_);
+  uint64_t data_version = 0;
   ret = task.init(task_id, src_ls, dest_ls, ObString::make_string("500016:500014"), ObString("500030:500031"), ObString("500016:500015"),
                   ObString::make_string("1152921504606846983"), ObString::make_string("1152921504606846983:0"), start_scn, finish_scn, status, trace_id, OB_SUCCESS,
-                  ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), owner_id);
+                  ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), owner_id, data_version);
   return ret;
 }
 
@@ -186,6 +187,7 @@ TEST_F(TestTenantTransferService, test_service)
   ARRAY_FOREACH(g_part_list, idx) {
     ASSERT_TRUE(is_contain(task.get_part_list(), g_part_list.at(idx)));
   }
+  ASSERT_TRUE(task.get_data_version() > 0);
   LOG_INFO("generate transfer task", K(task));
 
   // generate tablet_list
@@ -252,7 +254,6 @@ TEST_F(TestTenantTransferService, test_service)
   ObTransferTask history_task;
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_history_task(inner_sql_proxy, g_tenant_id, task_id, history_task, create_time, finish_time));
   ASSERT_TRUE(history_task.get_status().is_completed_status());
-
   // test retry task with interval
   sql.reset();
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _transfer_task_retry_interval = '1h'"));
@@ -277,6 +278,9 @@ TEST_F(TestTenantTransferService, test_service)
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _transfer_task_retry_interval = '0'"));
   ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(g_tenant_id, sql.ptr(), affected_rows));
   ASSERT_TRUE(OB_NEED_RETRY != tenant_transfer->process_init_task_(retry_task_id));
+  uint64_t data_version = 0;
+  ASSERT_EQ(OB_SUCCESS, ObShareUtil::fetch_current_data_version(inner_sql_proxy, g_tenant_id, data_version));
+  ASSERT_TRUE(data_version == history_task.get_data_version());
 }
 
 TEST_F(TestTenantTransferService, test_batch_part_list)

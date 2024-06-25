@@ -112,9 +112,6 @@ public:
   static int create_msd_tablet(
       const ObTabletMapKey &key,
       ObTabletHandle &handle);
-  static int acquire_msd_tablet(
-      const ObTabletMapKey &key,
-      ObTabletHandle &handle);
   static int acquire_tmp_tablet(
       const ObTabletMapKey &key,
       common::ObArenaAllocator &allocator,
@@ -221,9 +218,8 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "arg is not old mds, but buf is old mds", K(ret), K(arg));
     } else {
-      mds::MdsCtx mds_ctx;
+      mds::MdsCtx mds_ctx{mds::MdsWriter{notify_arg.tx_id_}};
       mds_ctx.set_binding_type_id(mds::TupleTypeIdx<mds::BufferCtxTupleHelper, mds::MdsCtx>::value);
-      mds_ctx.set_writer(mds::MdsWriter(notify_arg.tx_id_));
 
       if (notify_arg.for_replay_) {
         if (OB_FAIL(Helper::replay_process(arg, notify_arg.scn_, mds_ctx))) {

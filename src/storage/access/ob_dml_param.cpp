@@ -297,6 +297,7 @@ DEF_TO_STRING(ObTableScanParam)
        K_(sample_info),
        K_(need_scn),
        K_(need_switch_param),
+       K_(is_mds_query),
        K_(fb_read_tx_uncommitted),
        K_(external_file_format),
        K_(external_file_location));

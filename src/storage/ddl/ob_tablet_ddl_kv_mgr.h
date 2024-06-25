@@ -21,12 +21,12 @@
 #include "share/ob_ls_id.h"
 #include "storage/ob_i_table.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
-#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+class ObTablet;
 
 // ddl kv: create, get, freeze, dump, release
 // checkpoint manage

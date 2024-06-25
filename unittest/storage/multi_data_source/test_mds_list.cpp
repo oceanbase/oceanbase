@@ -27,14 +27,23 @@
 #include "storage/multi_data_source/mds_node.h"
 #include "common/meta_programming/ob_type_traits.h"
 #include "storage/multi_data_source/mds_row.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 namespace oceanbase {
-namespace storage
-{
-namespace mds
-{
-void *MdsAllocator::alloc(const int64_t size)
-{
-  void *ptr = ob_malloc(size, "MDS");
+namespace storage {
+namespace mds {
+void *DefaultAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void DefaultAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+void *MdsAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
   ATOMIC_INC(&alloc_times_);
   MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
   return ptr;
@@ -42,10 +51,10 @@ void *MdsAllocator::alloc(const int64_t size)
 void MdsAllocator::free(void *ptr) {
   ATOMIC_INC(&free_times_);
   MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
-  ob_free(ptr);
+  std::free(ptr);// ob_free(ptr);
 }
-}
-}
+}}}
+namespace oceanbase {
 namespace unittest {
 
 using namespace common;
@@ -56,7 +65,7 @@ using namespace mds;
 class TestMdsList: public ::testing::Test
 {
 public:
-  TestMdsList() {};
+  TestMdsList() { ObMdsSchemaHelper::get_instance().init(); };
   virtual ~TestMdsList() {};
   virtual void SetUp() {
   };

@@ -939,6 +939,19 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     dli_batch_set_  // FARM COMPAT WHITELIST
                     );
 
+void ObMulSourceDataNotifyArg::reset()
+{
+  tx_id_.reset();
+  scn_.reset();
+  trans_version_.reset();
+  for_replay_ = false;
+  notify_type_ = NotifyType::ON_ABORT;
+  redo_submitted_ = false;
+  redo_synced_ = false;
+  is_force_kill_ = false;
+  is_incomplete_replay_ = false;
+}
+
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 
 bool ObMulSourceDataNotifyArg::is_redo_confirmed() const

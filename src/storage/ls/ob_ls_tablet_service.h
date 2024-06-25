@@ -59,14 +59,13 @@ class ObMigrationSSTableParam;
 struct ObDatumRowkey;
 }
 
-namespace transaction
+namespace compaction
 {
-struct ObMulSourceDataNotifyArg;
+class ObTabletMergeCtx;
 }
 
 namespace storage
 {
-enum class ObDiskReportFileType : uint8_t;
 class ObLS;
 struct ObMetaDiskAddr;
 class ObRowReshape;
@@ -218,9 +217,11 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version);
   int build_new_tablet_from_mds_table(
+      compaction::ObTabletMergeCtx &ctx,
       const common::ObTabletID &tablet_id,
-      const int64_t mds_construct_sequence,
-      const share::SCN &flush_scn);
+      const ObTableHandleV2 &mds_mini_sstable_handle,
+      const share::SCN &flush_scn,
+      ObTabletHandle &handle);
   int update_tablet_release_memtable_for_offline(
       const common::ObTabletID &tablet_id,
       const SCN scn);
@@ -251,11 +252,6 @@ public:
       const ObTabletMapKey &key,
       common::ObArenaAllocator &allocator,
       ObTabletHandle &handle);
-  int update_tablet_mstx(
-      const ObTabletMapKey &key,
-      const ObMetaDiskAddr &old_addr,
-      const ObTabletHandle &old_tablet_handle,
-      ObTabletHandle &new_tablet_handle);
   int update_tablet_to_empty_shell(const common::ObTabletID &tablet_id);
   int replay_create_tablet(
       const ObMetaDiskAddr &disk_addr,

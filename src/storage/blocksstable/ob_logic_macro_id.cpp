@@ -77,7 +77,7 @@ bool ObLogicMacroBlockId::operator==(const ObLogicMacroBlockId &other) const
   return data_seq_         == other.data_seq_
       && logic_version_    == other.logic_version_
       && tablet_id_        == other.tablet_id_
-      && column_group_idx_ == other.column_group_idx_;
+      && info_             == other.info_;
 }
 
 bool ObLogicMacroBlockId::operator!=(const ObLogicMacroBlockId &other) const
@@ -104,6 +104,10 @@ bool ObLogicMacroBlockId::operator<(const ObLogicMacroBlockId &other) const
     bool_ret = true;
   } else if (column_group_idx_ > other.column_group_idx_) {
     bool_ret = false;
+  } else if (!is_mds_ && other.is_mds_) {
+    bool_ret = true;
+  } else if (is_mds_ && !other.is_mds_) {
+    bool_ret = false;
   }
   return bool_ret;
 }
@@ -127,6 +131,10 @@ bool ObLogicMacroBlockId::operator>(const ObLogicMacroBlockId &other) const
     bool_ret = false;
   } else if (column_group_idx_ > other.column_group_idx_) {
     bool_ret = true;
+  } else if (!is_mds_ && other.is_mds_) {
+    bool_ret = false;
+  } else if (is_mds_ && !other.is_mds_) {
+    bool_ret = true;
   }
   return bool_ret;
 }
@@ -135,7 +143,7 @@ void ObLogicMacroBlockId::reset() {
   logic_version_ = 0;
   data_seq_.reset();
   tablet_id_ = 0;
-  column_group_idx_ = 0;
+  info_ = 0;
 }
 
 OB_SERIALIZE_MEMBER(ObLogicMacroBlockId,

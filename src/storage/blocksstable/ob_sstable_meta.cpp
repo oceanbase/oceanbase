@@ -588,6 +588,7 @@ void ObSSTableMeta::reset()
   basic_meta_.reset();
   column_checksums_ = nullptr;
   column_checksum_count_ = 0;
+  cg_sstables_.reset();
   tx_ctx_.reset();
   is_inited_ = false;
 }

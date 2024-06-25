@@ -121,8 +121,8 @@ int ObSyncTabletSeqMdsLogCb::init(const ObLSID &ls_id, const ObTabletID &tablet_
                                                     0,
                                                     ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("failed to get tablet", K(ls_id), K(tablet_id));
-  } else {
-    mds_ctx_.set_writer(mds::MdsWriter(mds::WriterType::AUTO_INC_SEQ, writer_id));
+  } else if (OB_FAIL(mds_ctx_.set_writer(mds::MdsWriter{mds::WriterType::AUTO_INC_SEQ, writer_id}))) {
+    LOG_WARN("fail to set writer", K(ret), K(writer_id));
   }
   return ret;
 }

@@ -702,6 +702,30 @@ void ObLogReplayService::free_replay_task_log_buf(ObLogReplayTask *task)
   }
 }
 
+int ObLogReplayService::has_fatal_error(const ObLSID &ls_id,
+                                        bool &bool_ret)
+{
+  int ret = OB_SUCCESS;
+  ObReplayStatus *replay_status = NULL;
+  ObReplayStatusGuard guard;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "replay service not init", K(ret));
+  } else if (OB_FAIL(get_replay_status_(ls_id, guard))) {
+    CLOG_LOG(WARN, "guard get replay status failed", K(ret), K(ls_id));
+  } else if (NULL == (replay_status = guard.get_replay_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "replay status is not exist", K(ret), K(ls_id));
+  } else if (replay_status->try_rdlock()){
+    bool_ret  = replay_status->has_fatal_error();
+    replay_status->unlock();
+  } else {
+    ret = OB_EAGAIN;
+    CLOG_LOG(WARN, "try_rdlock failed", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
 void ObLogReplayService::free_replay_log_buf_(ObLogReplayBuffer *&replay_log_buf)
 {
   allocator_->free_replay_log_buf(replay_log_buf);

@@ -37,6 +37,7 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/multi_data_source/ob_tablet_mds_merge_ctx.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
@@ -129,7 +130,7 @@ int ObMergeParameter::init(
     }
 
     if (OB_SUCC(ret) & merge_scn_ > static_param_.scn_range_.end_scn_) {
-      if (ObMergeType::BACKFILL_TX_MERGE != static_param_.get_merge_type()) {
+      if (!static_param_.is_backfill_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("merge scn is bigger than scn range but merge type is not backfill, unexpected",
             K(ret), K(merge_scn_), K(static_param_.scn_range_), K(static_param_.get_merge_type()));
@@ -663,7 +664,8 @@ int ObTabletMergeExecuteDag::prepare_init(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY((!is_minor_merge_type(param.merge_type_)
-      && !is_meta_major_merge(param.merge_type_)) || !result.is_valid())) {
+      && !is_meta_major_merge(param.merge_type_) && !is_mds_minor_merge(param.merge_type_))
+      || !result.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("result is invalid", K(ret), K(result));
   } else {
@@ -771,10 +773,12 @@ int ObTabletMergeDag::alloc_merge_ctx()
     ctx_ = NEW_CTX(ObTabletMiniMergeCtx);
   } else if (is_major_or_meta_merge_type(merge_type)) {
     ctx_ = NEW_CTX(ObTabletMajorMergeCtx);
-  } else if (is_multi_version_merge(merge_type)) {
+  } else if (is_multi_version_merge(merge_type) && !is_mds_minor_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletExeMergeCtx);
-  } else if (is_mds_table_merge(merge_type) || is_backfill_tx_merge(merge_type)) {
+  } else if (is_mds_mini_merge(merge_type) || is_backfill_tx_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletMergeCtx);
+  } else if (is_mds_minor_merge(merge_type)) {
+    ctx_ = NEW_CTX(ObTabletMdsMinorMergeCtx);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid merge type", KR(ret), K(merge_type), KP(ctx_));
@@ -1041,7 +1045,7 @@ int ObTabletMergeTask::generate_next_task(ObITask *&next_task)
     LOG_WARN("not init", K(ret));
   } else if (idx_ + 1 == ctx_->get_concurrent_cnt()) {
     ret = OB_ITER_END;
-  } else if (!is_compaction_dag(dag_->get_type())) {
+  } else if (!is_compaction_dag(dag_->get_type()) && !is_ha_backfill_dag(dag_->get_type())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {

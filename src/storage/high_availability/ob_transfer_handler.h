@@ -302,7 +302,7 @@ private:
   int clear_prohibit_medium_flag_(const ObIArray<ObTabletID> &tablet_ids);
   int stop_tablets_schedule_medium_(const ObIArray<ObTabletID> &tablet_ids, bool &succ_stop);
   int get_next_tablet_info_(
-      const share::ObLSID &dest_ls_id,
+      const share::ObTransferTaskInfo &task_info,
       const ObTransferTabletInfo &transfer_tablet_info,
       ObTabletHandle &tablet_handle,
       obrpc::ObCopyTabletInfo &tablet_info);

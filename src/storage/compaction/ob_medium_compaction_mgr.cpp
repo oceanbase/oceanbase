@@ -473,7 +473,7 @@ int ObMediumCompactionInfoList::init(
 int ObMediumCompactionInfoList::init(
     common::ObIAllocator &allocator,
     const ObExtraMediumInfo &extra_medium_info,
-    const ObTabletDumpedMediumInfo *medium_info_list)
+    const common::ObIArray<ObMediumCompactionInfo*> &medium_info_array)
 {
   int ret = OB_SUCCESS;
 
@@ -482,32 +482,24 @@ int ObMediumCompactionInfoList::init(
     LOG_WARN("init twice", K(ret));
   } else {
     allocator_ = &allocator;
-    if (nullptr == medium_info_list) {
-      // medium info is null, no need to copy
-    } else {
-      const common::ObIArray<ObMediumCompactionInfo*> &array = medium_info_list->medium_info_list_;
-      ObMediumCompactionInfo *medium_info = nullptr;
-      for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); ++i) {
-        medium_info = nullptr;
-        const ObMediumCompactionInfo *src_medium_info = array.at(i);
-        if (OB_ISNULL(src_medium_info)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, medium info is null", K(ret), K(i), KP(src_medium_info));
-        } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info))) {
-          LOG_WARN("failed to alloc and new", K(ret));
-        } else if (OB_FAIL(medium_info->init(allocator, *src_medium_info))) {
-          LOG_WARN("failed to copy medium info", K(ret), KPC(src_medium_info));
-        } else if (OB_UNLIKELY(!medium_info_list_.add_last(medium_info))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to add last", K(ret), KPC(medium_info));
-        }
+    ObMediumCompactionInfo *medium_info = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < medium_info_array.count(); ++i) {
+      medium_info = nullptr;
+      const ObMediumCompactionInfo *src_medium_info = medium_info_array.at(i);
+      if (OB_ISNULL(src_medium_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, medium info is null", K(ret), K(i), KP(src_medium_info));
+      } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info))) {
+        LOG_WARN("failed to alloc and new", K(ret));
+      } else if (OB_FAIL(medium_info->init(allocator, *src_medium_info))) {
+        LOG_WARN("failed to copy medium info", K(ret), KPC(src_medium_info));
+      } else if (OB_UNLIKELY(!medium_info_list_.add_last(medium_info))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to add last", K(ret), KPC(medium_info));
+      }
 
-        if (OB_FAIL(ret)) {
-          if (OB_NOT_NULL(medium_info)) {
-            medium_info->~ObMediumCompactionInfo();
-            allocator.free(medium_info);
-          }
-        }
+      if (OB_FAIL(ret)) {
+        ObTabletObjLoadHelper::free(allocator, medium_info);
       }
     }
 
@@ -521,6 +513,7 @@ int ObMediumCompactionInfoList::init(
 
   return ret;
 }
+
 void ObMediumCompactionInfoList::reset_list()
 {
   DLIST_REMOVE_ALL_NORET(info, medium_info_list_) {

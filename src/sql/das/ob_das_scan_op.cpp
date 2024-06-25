@@ -266,6 +266,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.table_scan_opt_ = scan_ctdef_->table_scan_opt_;
   scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
   scan_param_.fb_read_tx_uncommitted_ = scan_rtdef_->fb_read_tx_uncommitted_;
+  scan_param_.is_mds_query_ = false;
   if (scan_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = trans_desc_;
   }
@@ -310,7 +311,7 @@ int ObDASScanOp::init_scan_param()
       scan_param_.external_file_format_.csv_format_.file_column_nums_ = static_cast<int64_t>(max_idx);
     }
   }
-  LOG_DEBUG("init scan param", K(scan_param_));
+  LOG_DEBUG("init scan param", K(ret), K(scan_param_));
   return ret;
 }
 

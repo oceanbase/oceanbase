@@ -134,10 +134,13 @@ void ObTableScanIterator::reuse_row_iters()
 int ObTableScanIterator::prepare_table_param(const ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  if (nullptr == scan_param_ || nullptr == scan_param_->table_param_) {
+  const ObTablet *tablet = tablet_handle.get_obj();
+  if (OB_ISNULL(scan_param_)
+      || OB_ISNULL(scan_param_->table_param_)
+      || OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(scan_param_));
-  } else if (OB_FAIL(main_table_param_.init(*scan_param_, tablet_handle))) {
+    STORAGE_LOG(WARN, "invalid args", K(ret), KP(scan_param_), K(tablet_handle));
+  } else if (OB_FAIL(main_table_param_.init(*scan_param_, &tablet_handle))) {
     STORAGE_LOG(WARN, "failed to init main table param", K(ret));
   } else if (nullptr != cached_iter_node_) {
     main_table_param_.set_use_global_iter_pool();
@@ -207,9 +210,9 @@ void ObTableScanIterator::try_release_cached_iter_node(const ObQRIterType rescan
 int ObTableScanIterator::prepare_table_context()
 {
   int ret = OB_SUCCESS;
-  if (nullptr == scan_param_ || nullptr == scan_param_->table_param_) {
+  if (OB_ISNULL(scan_param_) || OB_ISNULL(scan_param_->table_param_)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(scan_param_));
+    STORAGE_LOG(WARN, "invalid args", K(ret), KP(scan_param_));
   } else {
     ObVersionRange trans_version_range;
     trans_version_range.multi_version_start_ = 0;
@@ -629,7 +632,6 @@ int ObTableScanIterator::get_next_row(blocksstable::ObDatumRow *&row)
   } else if (OB_ISNULL(main_iter_)) {
     ret = OB_ITER_END;
   } else {
-    ObDatum *trans_info_datums = nullptr;
     if (scan_param_->op_ != nullptr) {
       scan_param_->op_->clear_datum_eval_flag();
       scan_param_->op_->reset_trans_info_datum();
@@ -662,7 +664,6 @@ int ObTableScanIterator::get_next_rows(int64_t &count, int64_t capacity)
   } else if (OB_ISNULL(main_iter_)) {
     ret = OB_ITER_END;
   } else {
-    ObDatum *trans_info_datums = nullptr;
     if (scan_param_->op_ != nullptr) {
       scan_param_->op_->clear_datum_eval_flag();
       scan_param_->op_->reset_trans_info_datum();

@@ -48,10 +48,10 @@ private:
   int init_ranges(const common::ObIArray<common::ObNewRange> &ranges,
                   const common::ObQueryFlag &scan_flag,
                   const blocksstable::ObStorageDatumUtils *datum_utils);
-int init_ranges_in_skip_scan(const common::ObIArray<common::ObNewRange> &ranges,
-                             const common::ObIArray<common::ObNewRange> &skip_scan_ranges,
-                             const common::ObQueryFlag &scan_flag,
-                             const blocksstable::ObStorageDatumUtils *datum_utils);
+  int init_ranges_in_skip_scan(const common::ObIArray<common::ObNewRange> &ranges,
+                               const common::ObIArray<common::ObNewRange> &skip_scan_ranges,
+                               const common::ObQueryFlag &scan_flag,
+                               const blocksstable::ObStorageDatumUtils *datum_utils);
   int always_false(const common::ObNewRange &range, bool &is_false);
 private:
   struct ObSkipScanWrappedRange

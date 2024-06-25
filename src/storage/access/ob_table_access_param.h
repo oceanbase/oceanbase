@@ -215,6 +215,7 @@ public:
   bool has_lob_column_out_;
   bool is_for_foreign_check_;
   bool limit_prefetch_;
+  bool is_mds_query_;
   bool is_non_unique_local_index_;
   int64_t ss_rowkey_prefix_cnt_;
   sql::ObStoragePushdownFlag pd_storage_flag_;
@@ -229,8 +230,11 @@ public:
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_ && iter_param_.is_valid(); }
   // used for query
-  int init(const ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
-    // used for merge
+  int init(
+      const ObTableScanParam &scan_param,
+      const ObTabletHandle *tablet_handle,
+      const ObITableReadInfo *rowkey_read_info = nullptr);
+  // used for merge
   int init_merge_param(const uint64_t table_id,
                        const common::ObTabletID &tablet_id,
                        const ObITableReadInfo &read_info,

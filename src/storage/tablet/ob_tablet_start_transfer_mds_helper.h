@@ -184,6 +184,7 @@ private:
       const share::SCN &scn,
       const bool for_replay,
       const ObMigrationTabletParam &tablet_meta,
+      const share::ObLSID &src_ls_id,
       ObLS *dest_ls,
       mds::BufferCtx &ctx,
       common::ObIArray<common::ObTabletID> &tablet_id_array);

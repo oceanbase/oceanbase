@@ -296,6 +296,7 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   int64_t round_;
   share::ObStorageHACostItemName diagnose_result_msg_;
+  uint64_t data_version_;
   DISALLOW_COPY_AND_ASSIGN(ObTxFinishTransfer);
 };
 

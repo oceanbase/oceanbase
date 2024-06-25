@@ -25,6 +25,33 @@
 #include "common/ob_clock_generator.h"
 #include "storage/multi_data_source/mds_row.h"
 #include "example_user_helper_define.cpp"
+#include "storage/tablet/ob_mds_schema_helper.h"
+namespace oceanbase {
+namespace storage {
+namespace mds {
+void *DefaultAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void DefaultAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+void *MdsAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void MdsAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+}}}
 namespace oceanbase {
 namespace unittest {
 
@@ -36,7 +63,7 @@ using namespace mds;
 class TestMdsRowAndMdsCtx: public ::testing::Test
 {
 public:
-  TestMdsRowAndMdsCtx() {};
+  TestMdsRowAndMdsCtx() { ObMdsSchemaHelper::get_instance().init(); };
   virtual ~TestMdsRowAndMdsCtx() {};
   virtual void SetUp() {
   };
@@ -61,11 +88,11 @@ void TestMdsRowAndMdsCtx::mds_row_set_element() {
   ExampleUserData2 data1(1);
   MdsCtx ctx1(1);
   ASSERT_EQ(OB_SUCCESS, row_.set(data1, ctx1, 0));// copy user data
-  UserMdsNode<ExampleUserData2> *user_node = dynamic_cast<UserMdsNode<ExampleUserData2> *>(row_.sorted_list_.list_.list_head_);
+  UserMdsNode<ExampleUserData2> *user_node = static_cast<UserMdsNode<ExampleUserData2> *>(row_.sorted_list_.list_.list_head_);
   ASSERT_NE(user_node->user_data_.data_.ptr(), data1.data_.ptr());
   auto p_data = data1.data_.ptr();
   ASSERT_EQ(OB_SUCCESS, row_.set(std::move(data1), ctx1, 0));// move user data
-  user_node = dynamic_cast<UserMdsNode<ExampleUserData2> *>(row_.sorted_list_.list_.list_head_);
+  user_node = static_cast<UserMdsNode<ExampleUserData2> *>(row_.sorted_list_.list_.list_head_);
   ASSERT_EQ(user_node->user_data_.data_.ptr(), p_data);
   MdsCtx ctx2(2);
   ExampleUserData2 data2(2);
@@ -130,14 +157,14 @@ void TestMdsRowAndMdsCtx::get_latest() {
   ASSERT_EQ(OB_SUCCESS, row_.get_snapshot([&data_size](const ExampleUserData2 &data) {
     data_size = data.data_.length();
     return OB_SUCCESS;
-  }, share::SCN::max_scn(), 0, 0));
+  }, share::SCN::max_scn(), 0));
   ExampleUserData2 data(13);
   MdsCtx ctx(7);
   ASSERT_EQ(OB_SUCCESS, row_.set(data, ctx, 0));
   ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, row_.get_snapshot([&data_size](const ExampleUserData2 &data) {
     data_size = data.data_.length();
     return OB_SUCCESS;
-  }, share::SCN::max_scn(), 0, 0));
+  }, share::SCN::max_scn(), 0));
   ASSERT_EQ(12, data_size);
 }
 
@@ -172,7 +199,7 @@ void TestMdsRowAndMdsCtx::get_snapshop_until_timeout() {
   ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, row_.get_snapshot([&data_size](const ExampleUserData2 &data) {
     data_size = data.data_.length();
     return OB_SUCCESS;
-  }, mock_scn(6), 0, 500_ms));// read snapshot timeout
+  }, mock_scn(6), 500_ms));// read snapshot timeout
 
   ctx.on_redo(mock_scn(20));
   ctx.on_prepare(mock_scn(20));
@@ -181,19 +208,19 @@ void TestMdsRowAndMdsCtx::get_snapshop_until_timeout() {
   ASSERT_EQ(OB_SUCCESS, row_.get_snapshot([&data_size](const ExampleUserData2 &data) {
     data_size = data.data_.length();
     return OB_SUCCESS;
-  }, mock_scn(6), 0, 500_ms));// read snapshot
+  }, mock_scn(6), 500_ms));// read snapshot
   ASSERT_EQ(6, data_size);
   ASSERT_EQ(OB_SUCCESS, row_.get_snapshot([&data_size](const ExampleUserData2 &data) {
     data_size = data.data_.length();
     return OB_SUCCESS;
-  }, mock_scn(21), 0, 500_ms));// read snapshot
+  }, mock_scn(21), 500_ms));// read snapshot
   ASSERT_EQ(20, data_size);
 }
 
 void TestMdsRowAndMdsCtx::get_snapshop_disgard() {
    ASSERT_EQ(OB_SNAPSHOT_DISCARDED, row_.get_snapshot([](const ExampleUserData2 &data) {
     return OB_SUCCESS;
-  }, mock_scn(1), 0, 500_ms));// read snapshot timeout
+  }, mock_scn(1), 500_ms));// read snapshot timeout
 }
 
 TEST_F(TestMdsRowAndMdsCtx, mds_row_set_element) { TestMdsRowAndMdsCtx::mds_row_set_element(); }

@@ -25,6 +25,33 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/multi_data_source/mds_table_order_flusher.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
+namespace oceanbase {
+namespace storage {
+namespace mds {
+void *DefaultAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void DefaultAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+void *MdsAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void MdsAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+}}}
 using namespace std;
 
 oceanbase::common::ObPromise<void> PROMISE1, PROMISE2;
@@ -50,18 +77,6 @@ template <>
 int MdsTableImpl<UnitTestMdsTable>::flush(share::SCN need_advanced_rec_scn_lower_limit, share::SCN max_decided_scn) {
   V_ActualDoFlushKey.push_back({tablet_id_, rec_scn_});
   return OB_SUCCESS;
-}
-void *MdsAllocator::alloc(const int64_t size)
-{
-  void *ptr = ob_malloc(size, "MDS");
-  ATOMIC_INC(&alloc_times_);
-  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
-  return ptr;
-}
-void MdsAllocator::free(void *ptr) {
-  ATOMIC_INC(&free_times_);
-  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
-  ob_free(ptr);
 }
 void *MdsFlusherModulePageAllocator::alloc(const int64_t size, const ObMemAttr &attr) {
   void *ret = nullptr;
@@ -106,7 +121,7 @@ static constexpr int64_t TEST_ALL_SIZE = FLUSH_FOR_ALL_SIZE * 10;
 class TestMdsTableFlush: public ::testing::Test
 {
 public:
-  TestMdsTableFlush() {}
+  TestMdsTableFlush() { ObMdsSchemaHelper::get_instance().init(); }
   virtual ~TestMdsTableFlush() {}
   virtual void SetUp() { V_ActualDoFlushKey.clear(); NEED_ALLOC_FAIL = false; NEED_ALLOC_FAIL_AFTER_RESERVE = false; }
   virtual void TearDown() { }

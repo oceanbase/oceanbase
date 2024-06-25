@@ -20,6 +20,8 @@ namespace oceanbase
 namespace logservice
 {
 
+ERRSIM_POINT_DEF(EN_REPLAY_FATAL_ERROR);
+
 #ifdef CLOG_LOG_LIMIT
 #undef CLOG_LOG_LIMIT
 #endif
@@ -110,6 +112,28 @@ int ObTabletReplayExecutor::execute(const share::SCN &scn, const share::ObLSID &
       CLOG_LOG(WARN, "failed to replay", K(ret), K(ls_id), K(scn));
     }
   }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      const int64_t errsim_migration_ls_id = GCONF.errsim_migration_ls_id;
+      const ObLSID errsim_ls_id(errsim_migration_ls_id);
+      const ObString &errsim_migration_dest_server_addr = GCONF.errsim_migration_dest_server_addr.str();
+      common::ObAddr addr;
+      const ObAddr &my_addr = GCONF.self_addr_;
+
+      if (!errsim_migration_dest_server_addr.empty() && OB_FAIL(addr.parse_from_string(errsim_migration_dest_server_addr))) {
+        CLOG_LOG(WARN, "failed to parse from string to addr", K(ret), K(errsim_migration_dest_server_addr));
+      } else {
+        if (ls_id == errsim_ls_id && my_addr == addr) {
+          ret = EN_REPLAY_FATAL_ERROR ? : OB_SUCCESS;
+          if (OB_FAIL(ret)) {
+            STORAGE_LOG(ERROR, "fake EN_REPLAY_FATAL_ERROR", K(ret));
+          }
+        }
+      }
+
+    }
+#endif
 
   return ret;
 }

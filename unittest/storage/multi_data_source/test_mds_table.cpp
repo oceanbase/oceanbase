@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#include "storage/multi_data_source/test/example_user_data_define.h"
 #define UNITTEST_DEBUG
 #include "lib/utility/utility.h"
 #include <gtest/gtest.h>
@@ -37,14 +38,23 @@
 #include "storage/multi_data_source/runtime_utility/mds_lock.h"
 #include "storage/tablet/ob_tablet_meta.h"
 #include "storage/multi_data_source/mds_table_iterator.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 namespace oceanbase {
-namespace storage
-{
-namespace mds
-{
-void *MdsAllocator::alloc(const int64_t size)
-{
-  void *ptr = ob_malloc(size, "MDS");
+namespace storage {
+namespace mds {
+void *DefaultAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void DefaultAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+void *MdsAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
   ATOMIC_INC(&alloc_times_);
   MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
   return ptr;
@@ -52,10 +62,10 @@ void *MdsAllocator::alloc(const int64_t size)
 void MdsAllocator::free(void *ptr) {
   ATOMIC_INC(&free_times_);
   MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
-  ob_free(ptr);
+  std::free(ptr);// ob_free(ptr);
 }
-}
-}
+}}}
+namespace oceanbase {
 namespace unittest {
 
 using namespace common;
@@ -67,12 +77,15 @@ using namespace transaction;
 class TestMdsTable: public ::testing::Test
 {
 public:
-  TestMdsTable() {}
+  TestMdsTable() {
+    ObMdsSchemaHelper::get_instance().init();
+  }
   virtual ~TestMdsTable() {}
   virtual void SetUp() {
   }
   virtual void TearDown() {
   }
+  static void compare_binary_key();
   static void set();
   static void replay();
   static void get_latest();
@@ -99,7 +112,59 @@ MdsTableHandle &mds_table_ = mds_table_hanlder.mds_table_handle_;
 struct A { ObSpinLock lock_; };
 struct B { MdsLock lock_; };
 
-#define GET_REAL_MDS_TABLE(mds_table) (*((MdsTableImpl<UnitTestMdsTable>*)(dynamic_cast<guard::LightDataBlock<MdsTableImpl<UnitTestMdsTable>>*>((mds_table.p_mds_table_base_.ctrl_ptr_->p_data_block_))->data_)))
+#define GET_REAL_MDS_TABLE(mds_table) (*((MdsTableImpl<UnitTestMdsTable>*)(static_cast<guard::LightDataBlock<MdsTableImpl<UnitTestMdsTable>>*>((mds_table.p_mds_table_base_.ctrl_ptr_->p_data_block_))->data_)))
+
+static constexpr int64_t MAX_KEY_SERIALIZE_SIZE = 8;
+template <typename UnitKey>
+inline int test_compare_binary_key(const UnitKey &lhs, const UnitKey &rhs, int &compare_result) {
+  int ret = OB_SUCCESS;
+  uint8_t lhs_buffer[MAX_KEY_SERIALIZE_SIZE];
+  uint8_t rhs_buffer[MAX_KEY_SERIALIZE_SIZE];
+  memset(lhs_buffer, 0, MAX_KEY_SERIALIZE_SIZE);
+  memset(rhs_buffer, 0, MAX_KEY_SERIALIZE_SIZE);
+  int64_t pos1 = 0;
+  int64_t pos2 = 0;
+  if (OB_FAIL(lhs.mds_serialize((char *)lhs_buffer, MAX_KEY_SERIALIZE_SIZE, pos1))) {
+    MDS_LOG(WARN, "fail to serialize lhs buffer", K(lhs), K(rhs));
+  } else if (OB_FAIL(rhs.mds_serialize((char *)rhs_buffer, MAX_KEY_SERIALIZE_SIZE, pos2))) {
+    MDS_LOG(WARN, "fail to serialize rhs buffer", K(lhs), K(rhs));
+  } else {
+    int64_t max_pos = std::max(pos1, pos2);
+    int64_t idx = 0;
+    for (; idx < max_pos && OB_SUCC(ret); ++idx) {
+      if (lhs_buffer[idx] > rhs_buffer[idx]) {
+        compare_result = 1;
+        break;
+      } else if (lhs_buffer[idx] < rhs_buffer[idx]) {
+        compare_result = -1;
+        break;
+      } else {
+        continue;
+      }
+    }
+    if (idx == max_pos) {
+      compare_result = 0;
+    }
+    MDS_LOG(DEBUG, "compare binary key", K(lhs), K(rhs), K(compare_result), K(lhs_buffer), K(rhs_buffer));
+  }
+  return ret;
+}
+void TestMdsTable::compare_binary_key() {
+  ExampleUserKey key1(0x1000000000000001);
+  ExampleUserKey key2(0x1000000000000002);
+  int comare_result = 0;
+  ASSERT_EQ(OB_SUCCESS, unittest::test_compare_binary_key(key1, key2, comare_result));
+  ASSERT_EQ(true, comare_result < 0);
+  ASSERT_EQ(OB_SUCCESS, unittest::test_compare_binary_key(key2, key1, comare_result));
+  ASSERT_EQ(true, comare_result > 0);
+
+  int64_t pos = 0;
+  char buffer[8] = {0};
+  key1.mds_serialize(buffer, 8, pos);
+  pos = 0;
+  key1.mds_deserialize(buffer, 8, pos);
+  ASSERT_EQ(key1.value_, 0x1000000000000001);
+}
 
 void TestMdsTable::set() {
   ASSERT_EQ(OB_SUCCESS, mds_table_.init<UnitTestMdsTable>(MdsAllocator::get_instance(), ObTabletID(1), share::ObLSID(1), (ObTabletPointer*)0x111));
@@ -190,7 +255,7 @@ void TestMdsTable::get_snapshot_hung_1s()
     ASSERT_EQ(OB_SUCCESS, mds_table_.get_snapshot<ExampleUserData1>([&data](const ExampleUserData1 &node_data) {
       data = node_data;
       return OB_SUCCESS;
-    }, share::SCN::max_scn(), 0, 2_s));
+    }, share::SCN::max_scn(), 2_s));
     ASSERT_LE(1_s, ObClockGenerator::getRealClock() - start_ts);
     ASSERT_EQ(1, data.value_);// read snapshot
   });
@@ -303,7 +368,7 @@ void TestMdsTable::standard_iterator() {
     for (auto &kv_row : *p_mds_unit) {
       MdsRLockGuard lg(kv_row.v_.lock_);// lock row
       for (auto &mds_node : kv_row.v_) {
-        MDS_LOG(INFO, "print iter mds node", K(mds_node));
+        MDS_LOG(INFO, "print iter mds node", K(kv_row.k_), K(mds_node));
       }
     }
   }
@@ -337,7 +402,7 @@ void TestMdsTable::OB_iterator() {
   ASSERT_EQ(OB_SUCCESS, iter.init(mds_table_));
   ASSERT_EQ(OB_SUCCESS, iter.get_next(key, p_node));
   MDS_LOG(INFO, "print iter kv", K(key), K(*p_node));
-  ASSERT_EQ(ExampleUserKey(1), key);
+  ASSERT_EQ(ExampleUserKey(1).value_ == key.value_, true);
   {
     ASSERT_EQ(ExampleUserData1(2), p_node->user_data_);
     ASSERT_EQ(true, p_node->is_committed_());
@@ -345,14 +410,14 @@ void TestMdsTable::OB_iterator() {
   }
   ASSERT_EQ(OB_SUCCESS, iter.get_next(key, p_node));
   MDS_LOG(INFO, "print iter kv", K(key), K(*p_node));
-  ASSERT_EQ(ExampleUserKey(1), key);
+  ASSERT_EQ(ExampleUserKey(1).value_ == key.value_, true);
   {
     ASSERT_EQ(ExampleUserData1(1), p_node->user_data_);
     ASSERT_EQ(true, p_node->is_committed_());
     ASSERT_EQ(mock_scn(1), p_node->get_commit_version_());
   }
   ASSERT_EQ(OB_SUCCESS, iter.get_next(key, p_node));
-  ASSERT_EQ(ExampleUserKey(2), key);
+  ASSERT_EQ(ExampleUserKey(2).value_ == key.value_, true);
   ASSERT_EQ(OB_ITER_END, iter.get_next(key, p_node));
 }
 
@@ -379,14 +444,14 @@ void TestMdsTable::test_flush() {
   int idx = 0;
   ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(300), mock_scn(500)));// 1. 以300为版本号进行flush动作
   ASSERT_EQ(mock_scn(199), mds_table_.p_mds_table_base_->flushing_scn_);// 2. 实际上以199为版本号进行flush动作
-  ASSERT_EQ(OB_SUCCESS, mds_table_.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
+  ASSERT_EQ(OB_SUCCESS, (mds_table_.scan_all_nodes_to_dump<ScanRowOrder::ASC, ScanNodeOrder::FROM_OLD_TO_NEW>(
     [&idx](const MdsDumpKV &kv) -> int {// 2. 转储时扫描mds table
       MDS_ASSERT(kv.v_.end_scn_ < mock_scn(199));// 扫描时看不到199版本以上的提交
       MDS_ASSERT(idx < 10);
       MDS_LOG(INFO, "print dump node kv", K(kv));
       return OB_SUCCESS;
     }, 0, true)
-  );
+  ));
   mds_table_.on_flush(mock_scn(199), OB_SUCCESS);// 3. 推大rec_scn【至少】到200
   share::SCN rec_scn;
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_rec_scn(rec_scn));
@@ -448,6 +513,7 @@ void TestMdsTable::test_multi_key_remove() {
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
 }
 
+TEST_F(TestMdsTable, compare_binary_key) { TestMdsTable::compare_binary_key(); }
 TEST_F(TestMdsTable, set) { TestMdsTable::set(); }
 TEST_F(TestMdsTable, replay) { TestMdsTable::replay(); }
 TEST_F(TestMdsTable, get_latest) { TestMdsTable::get_latest(); }
@@ -514,7 +580,7 @@ TEST_F(TestMdsTable, test_recycle) {
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_node_cnt(valid_cnt));
   ASSERT_EQ(1, valid_cnt);// 此时还有一个19001版本的已提交数据，因为rec_scn没有推上去
   ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(20000), mock_scn(40000)));
-  mds_table_.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump([](const MdsDumpKV &){
+  mds_table_.scan_all_nodes_to_dump<ScanRowOrder::ASC, ScanNodeOrder::FROM_OLD_TO_NEW>([](const MdsDumpKV &){
     return OB_SUCCESS;
   }, 0, true);
   mds_table_.on_flush(mock_scn(40000), OB_SUCCESS);

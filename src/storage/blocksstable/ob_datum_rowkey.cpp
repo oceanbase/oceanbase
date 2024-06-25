@@ -200,15 +200,18 @@ DEF_TO_STRING(ObDatumRowkey)
   if (nullptr != buf && buf_len >= 0) {
     if (nullptr != datums_) {
       for (int64_t i = 0; i < datum_cnt_; ++i) {
+        if (i > 0) {
+          databuff_printf(buf, buf_len, pos, ", ");
+        }
         databuff_printf(buf, buf_len, pos, "idx=%ld:", i);
         pos += datums_[i].storage_to_string(buf + pos, buf_len - pos);
-        databuff_printf(buf, buf_len, pos, ",");
       }
     } else {
       J_EMPTY_OBJ();
     }
   }
   J_ARRAY_END();
+  J_COMMA();
   J_KV(K_(store_rowkey));
   J_OBJ_END();
   return pos;

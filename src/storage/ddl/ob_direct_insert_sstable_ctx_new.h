@@ -84,7 +84,8 @@ public:
       const int64_t context_id,
       const int64_t execution_id,
       const ObTabletDirectLoadInsertParam &param,
-      const share::SCN checkpoint_scn = share::SCN::min_scn());
+      const share::SCN checkpoint_scn = share::SCN::min_scn(),
+      const bool only_persisted_ddl_data = false);
 
   int replay_create_tablet_direct_load(
       const ObTabletHandle &tablet_handle,

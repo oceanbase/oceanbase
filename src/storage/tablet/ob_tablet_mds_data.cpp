@@ -146,10 +146,9 @@ bool ObTabletMdsData::is_valid() const
   return is_inited_;
 }
 
-int ObTabletMdsData::init_for_first_creation(common::ObIAllocator &allocator)
+int ObTabletMdsData::init_for_first_creation()
 {
   int ret = OB_SUCCESS;
-
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K_(is_inited));
@@ -412,7 +411,8 @@ int ObTabletMdsData::init_for_evict_medium_info(
       LOG_INFO("succeeded to init mds data", K(ret), K(finish_medium_scn),
           "src_medium_info_list", other.medium_info_list_,
           "src_extra_medium_info", other.extra_medium_info_,
-          K_(medium_info_list), K_(extra_medium_info));
+          K_(medium_info_list), K_(extra_medium_info),
+          K(other), KPC(this));
     }
   }
 
@@ -707,6 +707,7 @@ int ObTabletMdsData::init_for_merge_with_full_mds_data(
     const ObTabletFullMediumInfo &full_memory_medium_info_list,
     const int64_t finish_medium_scn)
 {
+  //TODO(xianzhi)/(muwei.ym) check it for migration/transfer
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(is_inited_)) {
@@ -749,7 +750,6 @@ int ObTabletMdsData::init_for_merge_with_full_mds_data(
           K_(medium_info_list), K_(extra_medium_info));
     }
   }
-
   return ret;
 }
 
@@ -800,7 +800,7 @@ int ObTabletMdsData::init_empty_shell(
     const ObTabletCreateDeleteMdsUserData &tablet_status)
 {
   int ret = OB_SUCCESS;
-
+  LOG_WARN("unlikely to use this");
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K_(is_inited));
@@ -1116,26 +1116,19 @@ int ObTabletMdsData::load_auto_inc_seq(
       LOG_WARN("failed to copy auto inc seq", K(ret));
     }
   } else if (complex_addr.is_disk_object()) {
-    ObTabletMemberWrapper<share::ObTabletAutoincSeq> wrapper;
-    ObStorageMetaHandle handle;
-    ObStorageMetaKey meta_key(MTL_ID(), complex_addr.addr_);
-    const ObTablet *tablet = nullptr; // no use here
-    const share::ObTabletAutoincSeq *auto_inc_seq_cache = nullptr;
-    if (OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().get_meta(ObStorageMetaValue::MetaType::AUTO_INC_SEQ,
-        meta_key, handle, tablet))) {
-      LOG_WARN("get meta failed", K(ret), K(meta_key));
-    } else if (OB_FAIL(wrapper.set_cache_handle(handle))) {
-      LOG_WARN("wrapper set cache handle failed", K(ret), K(meta_key), K(complex_addr));
-    } else if (OB_ISNULL(auto_inc_seq_cache = wrapper.get_member())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null member", K(ret));
-    } else if (!auto_inc_seq_cache->is_valid()) {
+    ObArenaAllocator io_allocator(common::ObMemAttr(MTL_ID(), "TmpIO"));
+    char *io_buf = nullptr;
+    int64_t buf_len = -1;
+    int64_t io_pos = 0;
+    if (OB_FAIL(ObTabletObjLoadHelper::read_from_addr(io_allocator, complex_addr.addr_, io_buf, buf_len))) {
+      LOG_WARN("read meta addr failed", K(ret));
+    } else if (OB_FAIL(ptr->deserialize(allocator, io_buf, buf_len, io_pos))) {
+      LOG_WARN("deserialize ObTabletAutoincSeq", K(ret), K(buf_len), K(io_pos));
+    } else if (!ptr->is_valid()) {
       // no need to copy
       ObTabletObjLoadHelper::free(allocator, ptr);
       ptr = nullptr;
       LOG_INFO("empty auto inc seq", K(ret));
-    } else if (OB_FAIL(ptr->assign(allocator, *auto_inc_seq_cache))) {
-      LOG_WARN("failed to copy", K(ret));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -1148,55 +1141,6 @@ int ObTabletMdsData::load_auto_inc_seq(
     }
   } else {
     auto_inc_seq = ptr;
-  }
-
-  return ret;
-}
-
-int ObTabletMdsData::load_aux_tablet_info(
-    const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
-    ObTabletBindingMdsUserData &aux_tablet_info)
-{
-  int ret = OB_SUCCESS;
-  aux_tablet_info.reset();
-
-  if (OB_UNLIKELY(!complex_addr.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid addr", K(ret), K(complex_addr));
-  } else if (complex_addr.is_none_object()) {
-    // do nothing
-  } else if (complex_addr.is_memory_object()) {
-    const mds::MdsDumpKV *dump_kv = complex_addr.ptr_;
-    const common::ObString &str = dump_kv->v_.user_data_;
-    int64_t pos = 0;
-    if (!dump_kv->is_valid() || str.empty()) {
-      LOG_INFO("read empty aux tablet info", K(ret), K(complex_addr));
-    } else if (OB_FAIL(aux_tablet_info.deserialize(str.ptr(), str.length(), pos))) {
-      LOG_WARN("failed to deserialize aux tablet info", K(ret), K(str));
-    }
-  } else if (complex_addr.is_disk_object()) {
-    ObTabletMemberWrapper<ObTabletBindingMdsUserData> wrapper;
-    ObStorageMetaHandle handle;
-    ObStorageMetaKey meta_key(MTL_ID(), complex_addr.addr_);
-    const ObTablet *tablet = nullptr; // no use here
-    const ObTabletBindingMdsUserData *aux_tablet_info_cache = nullptr;
-    if (OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().get_meta(ObStorageMetaValue::MetaType::AUX_TABLET_INFO,
-        meta_key, handle, tablet))) {
-      LOG_WARN("get meta failed", K(ret), K(meta_key));
-    } else if (OB_FAIL(wrapper.set_cache_handle(handle))) {
-      LOG_WARN("wrapper set cache handle failed", K(ret), K(meta_key), K(complex_addr));
-    } else if (OB_ISNULL(aux_tablet_info_cache = wrapper.get_member())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null member", K(ret));
-    } else if (!aux_tablet_info_cache->is_valid()) {
-      // no need to copy
-      LOG_INFO("empty aux tablet info", K(ret));
-    } else if (OB_FAIL(aux_tablet_info.assign(*aux_tablet_info_cache))) {
-      LOG_WARN("failed to copy", K(ret));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected complex addr type", K(ret), K(complex_addr));
   }
 
   return ret;
@@ -1621,5 +1565,36 @@ int64_t ObTabletMdsData::get_serialize_size() const
 
   return len;
 }
+
+int ObTabletMdsData::int_with_tablet_status(
+    const ObTabletCreateDeleteMdsUserData &tablet_status)
+{
+  //TODO(xianzhi) reconsider abort tablet status cache
+  //TODO(muwei.ym) transfer commited tablet should be included
+  int ret = OB_SUCCESS;
+  LOG_WARN("unlikely to use this");
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K_(is_inited));
+  //} else if (!tablet_status.is_valid()) {
+  //  ret = OB_INVALID_ARGUMENT;
+  //  LOG_WARN("init with tablet status get invalid argument", K(ret), K(tablet_status));
+  } else if (OB_FAIL(tablet_status_cache_.assign(tablet_status))) {
+    LOG_WARN("failed to copy", K(ret), K(tablet_status));
+  } else {
+    tablet_status_.uncommitted_kv_.addr_.set_none_addr();
+    tablet_status_.committed_kv_.addr_.set_none_addr();
+    aux_tablet_info_.uncommitted_kv_.addr_.set_none_addr();
+    aux_tablet_info_.committed_kv_.addr_.set_none_addr();
+    extra_medium_info_.reset();
+    medium_info_list_.addr_.set_none_addr();
+    auto_inc_seq_.addr_.set_none_addr();
+
+    is_inited_ = true;
+  }
+
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase
