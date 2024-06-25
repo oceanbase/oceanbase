@@ -27,6 +27,5 @@ format = (
   field_optionally_enclosed_by = '"'
 )
 pattern = 'alert.log[.0-9]*'
-auto_refresh = immediate
 ;
 //
