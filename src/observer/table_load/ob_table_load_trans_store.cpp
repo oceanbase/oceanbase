@@ -23,6 +23,7 @@
 #include "observer/table_load/ob_table_load_utils.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/ob_sql_utils.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/sequence/ob_sequence_cache.h"
 
@@ -119,6 +120,7 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     param_(trans_ctx_->ctx_->param_),
     allocator_("TLD_TSWriter"),
     table_data_desc_(nullptr),
+    cast_mode_(CM_NONE),
     lob_inrow_threshold_(0),
     ref_count_(0),
     is_incremental_(false),
@@ -159,7 +161,9 @@ int ObTableLoadTransStoreWriter::init()
   } else {
     table_data_desc_ = &store_ctx_->table_data_desc_;
     collation_type_ = trans_ctx_->ctx_->schema_.collation_type_;
-    if (OB_FAIL(init_session_ctx_array())) {
+    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(store_ctx_->ctx_->session_info_, cast_mode_))) {
+      LOG_WARN("fail to get_default_cast_mode", KR(ret));
+    } else if (OB_FAIL(init_session_ctx_array())) {
       LOG_WARN("fail to init session ctx array", KR(ret));
     } else if (OB_FAIL(init_column_schemas_and_lob_info())) {
       LOG_WARN("fail to init column schemas and lob info", KR(ret));
@@ -436,7 +440,7 @@ int ObTableLoadTransStoreWriter::cast_column(
     int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  ObCastCtx cast_ctx(&cast_allocator, &cast_params, CM_NONE, column_schema->get_collation_type());
+  ObCastCtx cast_ctx(&cast_allocator, &cast_params, cast_mode_, column_schema->get_collation_type());
   ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
   const bool is_null_autoinc =
     (column_schema->is_autoincrement() || column_schema->is_identity_column()) &&
