@@ -1652,7 +1652,7 @@ DEF_TEXT_FUNCS(ObRoaringBitmapType, string, ObString);
       res = 0;                                                                       \
       common::ObString str = param.get_string();                                     \
       common::ObString wkb;                                                          \
-      ObLobLocatorV2 lob(str, false);                                                \
+      ObLobLocatorV2 lob(str, param.has_lob_header());                               \
       if (!lob.is_valid()) {                                                         \
         COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
       } else if (!lob.has_inrow_data()) {                                            \
@@ -1726,7 +1726,7 @@ DEF_GEO_FUNCS(ObGeometryType, string, ObString);
       res = 0;                                                                       \
       common::ObString str = param.get_string();                                     \
       common::ObString j_bin_str;                                                    \
-      ObLobLocatorV2 lob(str, false);                                                \
+      ObLobLocatorV2 lob(str, param.has_lob_header());                               \
       if (!lob.is_valid()) {                                                         \
         COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
       } else if (!lob.has_inrow_data()) {                                            \
