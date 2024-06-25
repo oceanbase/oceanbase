@@ -6671,13 +6671,54 @@ static struct VarsInit{
     ObSysVars[476].alias_ = "OB_SV_MAX_INSERT_DELAYED_THREADS" ;
     }();
 
+    [&] (){
+      ObSysVars[477].default_value_ = "" ;
+      ObSysVars[477].info_ = "A list of group members to which a joining member can connect to obtain details of all the current group members" ;
+      ObSysVars[477].name_ = "group_replication_group_seeds" ;
+      ObSysVars[477].data_type_ = ObVarcharType ;
+      ObSysVars[477].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[477].id_ = SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS] = 477 ;
+      ObSysVars[477].base_value_ = "" ;
+    ObSysVars[477].alias_ = "OB_SV_GROUP_REPLICATION_GROUP_SEEDS" ;
+    }();
+
+    [&] (){
+      ObSysVars[478].default_value_ = "0" ;
+      ObSysVars[478].info_ = "When preparing batches of rows for row-based logging and replication, this variable controls how the rows are searched for matches" ;
+      ObSysVars[478].name_ = "slave_rows_search_algorithms" ;
+      ObSysVars[478].data_type_ = ObIntType ;
+      ObSysVars[478].enum_names_ = "[u'TABLE_SCAN,INDEX_SCAN', u'INDEX_SCAN,HASH_SCAN', u'TABLE_SCAN,HASH_SCAN', u'TABLE_SCAN,INDEX_SCAN,HASH_SCAN']" ;
+      ObSysVars[478].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[478].id_ = SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS] = 478 ;
+      ObSysVars[478].base_value_ = "0" ;
+    ObSysVars[478].alias_ = "OB_SV_SLAVE_ROWS_SEARCH_ALGORITHMS" ;
+    }();
+
+    [&] (){
+      ObSysVars[479].default_value_ = "0" ;
+      ObSysVars[479].info_ = "Controls the type conversion mode in effect on the replica when using row-based replication" ;
+      ObSysVars[479].name_ = "slave_type_conversions" ;
+      ObSysVars[479].data_type_ = ObIntType ;
+      ObSysVars[479].enum_names_ = "[u'ALL_LOSSY', u'ALL_NON_LOSSY', u'ALL_SIGNED', u'ALL_UNSIGNED']" ;
+      ObSysVars[479].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[479].id_ = SYS_VAR_SLAVE_TYPE_CONVERSIONS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_TYPE_CONVERSIONS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_TYPE_CONVERSIONS] = 479 ;
+      ObSysVars[479].base_value_ = "0" ;
+    ObSysVars[479].alias_ = "OB_SV_SLAVE_TYPE_CONVERSIONS" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 477;
+static int64_t var_amount = 480;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

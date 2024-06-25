@@ -493,6 +493,9 @@ namespace share
   static const char* const OB_SV_LOW_PRIORITY_UPDATES = "low_priority_updates";
   static const char* const OB_SV_MAX_ERROR_COUNT = "max_error_count";
   static const char* const OB_SV_MAX_INSERT_DELAYED_THREADS = "max_insert_delayed_threads";
+  static const char* const OB_SV_GROUP_REPLICATION_GROUP_SEEDS = "group_replication_group_seeds";
+  static const char* const OB_SV_SLAVE_ROWS_SEARCH_ALGORITHMS = "slave_rows_search_algorithms";
+  static const char* const OB_SV_SLAVE_TYPE_CONVERSIONS = "slave_type_conversions";
 
 }
 }
