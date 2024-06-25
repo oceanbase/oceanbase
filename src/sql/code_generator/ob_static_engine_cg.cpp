@@ -303,6 +303,7 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL operator spec returned", K(ret));
   } else {
+    spec->compress_type_ = compress_type;
     for (int64_t i = 0; i < children.count() && OB_SUCC(ret); i++) {
       if (OB_FAIL(spec->set_child(i, children.at(i)))) {
         LOG_WARN("set child failed", K(ret));
@@ -332,8 +333,7 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
   } else if (OB_FAIL(ObOperatorFactory::generate_spec(*this, op, *spec, in_root_job))) {
     LOG_WARN("generate operator spec failed",
              K(ret), KP(phy_plan_), K(ob_phy_operator_type_str(type)));
-  } else if (OB_FAIL(generate_spec_basic(op, *spec, check_eval_once, need_check_output_datum,
-                                         compress_type))) {
+  } else if (OB_FAIL(generate_spec_basic(op, *spec, check_eval_once, need_check_output_datum))) {
     LOG_WARN("generate operator spec basic failed", K(ret));
   } else if (OB_FAIL(generate_spec_final(op, *spec))) {
     LOG_WARN("generate operator spec final failed", K(ret));
@@ -787,8 +787,7 @@ int ObStaticEngineCG::generate_rt_exprs(const ObIArray<ObRawExpr *> &src,
 int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
                                           ObOpSpec &spec,
                                           const bool check_eval_once,
-                                          const bool need_check_output_datum,
-                                          const common::ObCompressorType compress_type)
+                                          const bool need_check_output_datum)
 {
   int ret = OB_SUCCESS;
   if (0 == spec.rows_) {
@@ -798,7 +797,6 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
   spec.width_ = op.get_width();
   spec.plan_depth_ = op.get_plan_depth();
   spec.px_est_size_factor_ = op.get_px_est_size_factor();
-  spec.compress_type_ = compress_type;
 
   OZ(generate_rt_exprs(op.get_startup_exprs(), spec.startup_filters_));
 

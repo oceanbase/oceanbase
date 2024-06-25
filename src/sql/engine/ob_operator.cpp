@@ -166,7 +166,8 @@ DEF_TO_STRING(ObOpSpec)
        K_(rows),
        K_(max_batch_size),
        K_(filters),
-       K_(use_rich_format));
+       K_(use_rich_format),
+       K_(compress_type));
   J_OBJ_END();
   return pos;
 }
