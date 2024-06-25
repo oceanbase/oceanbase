@@ -472,7 +472,7 @@ int ObTabletMergeDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%ld tablet_id=%ld", ls_id_.id(), tablet_id_.id()))) {
-    LOG_WARN("failed to fill dag key", K(ret), K(ctx_));
+    LOG_WARN("failed to fill dag key", K(ret), K_(ls_id), K_(tablet_id));
   }
   return ret;
 }
@@ -534,9 +534,9 @@ void ObTabletMergeDag::fill_compaction_progress(
 
   if (OB_NOT_NULL(input_progress)
       && OB_UNLIKELY(OB_SUCCESS != (tmp_ret = input_progress->get_progress_info(progress)))) {
-    LOG_WARN_RET(tmp_ret, "failed to get progress info", K(tmp_ret), K(ctx));
+    LOG_WARN_RET(tmp_ret, "failed to get progress info", K(tmp_ret));
   } else {
-    LOG_INFO("success to get progress info", K(tmp_ret), K(ctx), K(input_progress));
+    LOG_TRACE("success to get progress info", K(tmp_ret), K(input_progress));
   }
 
   if (DAG_STATUS_FINISH == progress.status_) { // fix merge_progress
@@ -585,7 +585,7 @@ void ObTabletMergeDag::fill_diagnose_compaction_progress(
       } else if (OB_TMP_FAIL(input_progress->diagnose_progress(progress))) {
         LOG_WARN_RET(tmp_ret, "failed to diagnose progress info", K(tmp_ret), KPC(ctx), K(progress));
       } else {
-        LOG_INFO("success to diagnose progress", K(tmp_ret), K(ctx), K(progress));
+        LOG_TRACE("success to diagnose progress", K(tmp_ret), K(progress));
       }
     }
   }
