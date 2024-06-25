@@ -109,7 +109,10 @@ public:
     virtual bool get_cloned() = 0;
 
     // invoke when get a valid packet on protocol level, but can't decode it.
-    virtual void on_invalid() { RPC_FRAME_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid packet"); }
+    virtual void on_invalid() {
+      int ret = err_;
+      RPC_FRAME_LOG(ERROR, "rpc response decode failed, tenant oom or deserialization failed", K_(pcode), K_(tenant_id), K_(dst));
+    }
     // invoke when can't get a valid or completed packet.
     virtual void on_timeout() { RPC_FRAME_LOG(DEBUG, "packet timeout"); }
     virtual int on_error(int err);

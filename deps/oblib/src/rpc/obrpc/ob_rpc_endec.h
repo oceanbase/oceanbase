@@ -175,7 +175,7 @@ int rpc_decode_resp(const char* resp_buf, int64_t resp_sz, T& result, ObRpcPacke
   return ret;
 }
 
-int rpc_decode_ob_packet(ObRpcMemPool& pool, const char* buf, int64_t sz, ObRpcPacket*& ret_pkt);
+int rpc_decode_ob_packet(const char* buf, int64_t sz, ObRpcPacket& ret_pkt);
 int rpc_encode_ob_packet(ObRpcMemPool& pool, ObRpcPacket* pkt, char*& buf, int64_t& sz, int64_t reserve_buf_size);
 
 }; // end namespace obrpc

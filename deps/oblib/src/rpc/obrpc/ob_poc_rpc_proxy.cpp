@@ -128,7 +128,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
   int64_t after_decode_time = 0;
   int64_t after_process_time = 0;
   ObRpcPacketCode pcode = OB_INVALID_RPC_CODE;
-  ObRpcPacket* ret_pkt = NULL;
+  ObRpcPacket ret_pkt;
   if (buf != NULL && sz > easy_head_size) {
     EVENT_INC(RPC_PACKET_IN);
     EVENT_ADD(RPC_PACKET_IN_BYTES, sz);
@@ -151,22 +151,24 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
       }
     } else if (NULL == buf) {
       ucb_->on_timeout();
-    } else if (OB_FAIL(rpc_decode_ob_packet(pool_, buf, sz, ret_pkt))) {
+    } else if (OB_FAIL(rpc_decode_ob_packet(buf, sz, ret_pkt))) {
+      ucb_->set_error(ret);
       ucb_->on_invalid();
       RPC_LOG(WARN, "rpc_decode_ob_packet fail", K(ret));
-    } else if (OB_FALSE_IT(ObCurTraceId::set(ret_pkt->get_trace_id()))) {
+    } else if (OB_FALSE_IT(ObCurTraceId::set(ret_pkt.get_trace_id()))) {
     }
 #ifdef ERRSIM
     else if (OB_FALSE_IT(THIS_WORKER.set_module_type(ret_pkt->get_module_type()))) {
     }
 #endif
-    else if (OB_FAIL(ucb_->decode(ret_pkt))) {
+    else if (OB_FAIL(ucb_->decode(&ret_pkt))) {
+      ucb_->set_error(ret);
       ucb_->on_invalid();
       RPC_LOG(WARN, "ucb.decode fail", K(ret));
     } else {
       after_decode_time = ObTimeUtility::current_time();
       int tmp_ret = OB_SUCCESS;
-      pcode = ret_pkt->get_pcode();
+      pcode = ret_pkt.get_pcode();
       if (OB_SUCCESS != (tmp_ret = ucb_->process())) {
         RPC_LOG(WARN, "ucb.process fail", K(tmp_ret));
       }

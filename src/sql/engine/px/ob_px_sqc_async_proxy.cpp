@@ -190,7 +190,9 @@ int ObPxSqcAsyncProxy::wait_all() {
       } else if (!callback.is_visited() && callback.is_invalid()) {
         // rpc解析pack失败，callback调用on_invalid方法，不需要重试
         return_cb_count_++;
-        ret = OB_RPC_PACKET_INVALID;
+        ret = callback.get_error() == OB_ALLOCATE_MEMORY_FAILED ?
+              OB_ALLOCATE_MEMORY_FAILED : OB_RPC_PACKET_INVALID;
+        LOG_WARN("callback invalid", K(ret), K(callback.get_error()));
         callback.set_visited(true);
       } else if (!callback.is_visited() && callback.is_processed()) {
         return_cb_count_++;
