@@ -34,7 +34,7 @@ namespace storage
 ObMdsMergeMultiVersionRowStore::ObMdsMergeMultiVersionRowStore()
   : data_store_desc_(nullptr),
     macro_writer_(nullptr),
-    row_queue_allocator_(),
+    row_queue_allocator_(common::ObMemAttr(MTL_ID(), "MdsMVRowStore")),
     shadow_row_(),
     cur_key_(),
     last_key_(),
@@ -234,7 +234,7 @@ int ObMdsMergeMultiVersionRowStore::dump_shadow_row()
 ObMdsMiniMergeOperator::ObMdsMiniMergeOperator()
   : is_inited_(false),
     row_store_(),
-    cur_allocator_(),
+    cur_allocator_(common::ObMemAttr(MTL_ID(), "MdsMiniOP")),
     cur_row_()
 {
 }
