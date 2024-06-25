@@ -36,6 +36,7 @@ devdeps-cos-c-sdk-5.0.16-52023070517.el8.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.aarch64.rpm
 devdeps-protobuf-c-1.4.1-100000072023102410.el8.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.aarch64.rpm
+devdeps-apache-arrow-9.0.0-322024052923.el8.aarch64.rpm
 
 [deps-el9]
 devdeps-apr-1.6.5-232023090616.el9.aarch64.rpm target=el9
