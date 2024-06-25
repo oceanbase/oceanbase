@@ -3047,6 +3047,9 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
               }
             }
             CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
+            if (OB_FAIL(ret)) {
+              ObUserDefinedType::destruct_obj(dst, session);
+            }
             OZ (ctx_.exec_ctx_->get_pl_ctx()->add(dst));
             OX (param = dst);
             OX (param.set_param_meta());
