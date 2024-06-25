@@ -3677,7 +3677,7 @@ private:
 int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, ObEvalCtx &eval_ctx) const
 {
   int ret = OB_SUCCESS;
-  std::sort(msg_ctx.infos_.begin(), msg_ctx.infos_.end(), __pby_oby_sort_op(*this));
+  lib::ob_sort(msg_ctx.infos_.begin(), msg_ctx.infos_.end(), __pby_oby_sort_op(*this));
 #ifndef NDEBUG
   for (int i = 0; i < msg_ctx.infos_.count(); i++) {
     RDWinFuncPXPartialInfo *info = msg_ctx.infos_.at(i);

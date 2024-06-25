@@ -566,7 +566,7 @@ int RDWinFuncPXPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs
     if (OB_FAIL(wf->rd_generate_patch(*this, eval_ctx))) {
       LOG_WARN("generate patch failed", K(ret));
     } else {
-      std::sort(infos_.begin(), infos_.end(), __part_info_cmp_op());
+      lib::ob_sort(infos_.begin(), infos_.end(), __part_info_cmp_op());
     }
     RDWinFuncPXWholeMsg *responses = nullptr;
     if (OB_SUCC(ret)) {

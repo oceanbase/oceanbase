@@ -316,7 +316,7 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString 
         offset += RB_VALUE_COUNT_SIZE;
         if (value_count > 0) {
           uint32_t *value_ptr = reinterpret_cast<uint32_t *>(rb_bin.ptr() + offset);
-          std::sort(value_ptr, value_ptr + value_count);
+          lib::ob_sort(value_ptr, value_ptr + value_count);
           for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
             uint32_t value_32 = *reinterpret_cast<const uint32_t*>(rb_bin.ptr() + offset);
             offset += sizeof(uint32_t);
@@ -337,7 +337,7 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString 
         offset += RB_VALUE_COUNT_SIZE;
         if (value_count > 0) {
           uint64_t *value_ptr = reinterpret_cast<uint64_t *>(rb_bin.ptr() + offset);
-          std::sort(value_ptr, value_ptr + value_count);
+          lib::ob_sort(value_ptr, value_ptr + value_count);
           for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
             uint64_t value_64 = *reinterpret_cast<const uint64_t*>(rb_bin.ptr() + offset);
             offset += sizeof(uint64_t);
