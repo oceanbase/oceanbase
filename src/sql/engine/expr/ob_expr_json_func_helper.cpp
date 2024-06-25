@@ -166,11 +166,10 @@ int ObJsonExprHelper::get_json_schema(const ObExpr &expr, ObEvalCtx &ctx,
     } else if (OB_FALSE_IT(allocator.add_baseline_size(j_str.length()))) {
     } else {
       ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
-      ObJsonSchemaCache ctx_cache(&allocator);
       ObJsonSchemaCache* schema_cache = ObJsonExprHelper::get_schema_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
-      schema_cache = ((schema_cache != nullptr) ? schema_cache : &ctx_cache);
 
-      if (OB_SUCC(ret) && OB_FAIL(ObJsonExprHelper::find_and_add_schema_cache(schema_cache, j_schema, j_str, 1, j_in_type))) {
+      if (OB_SUCC(ret) && OB_NOT_NULL(schema_cache)
+          && OB_FAIL(ObJsonExprHelper::find_and_add_schema_cache(schema_cache, j_schema, j_str, 1, j_in_type))) {
         LOG_WARN("invalid json schema", K(ret));
       }
     }
