@@ -29,8 +29,15 @@ LogMinerLogger &LogMinerLogger::get_logminer_logger_instance()
   static LogMinerLogger logger_instance;
   return logger_instance;
 }
+
 LogMinerLogger::LogMinerLogger():
-    verbose_(false) { memset(pb_str_, '>', sizeof(pb_str_)); }
+    verbose_(false),
+    begin_ts_(0),
+    last_ts_(0),
+    last_record_num_(0)
+{ 
+  memset(pb_str_, '>', sizeof(pb_str_)); 
+}
 
 void LogMinerLogger::log_stdout(const char *format, ...)
 {
