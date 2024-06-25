@@ -85,7 +85,6 @@ public:
   ObExtInfoCallback() :
       ObITransCallback(),
       allocator_(nullptr),
-      data_(),
       seq_no_cur_(),
       dml_flag_(blocksstable::ObDmlFlag::DF_MAX),
       key_obj_(),
@@ -99,7 +98,10 @@ public:
 
   virtual memtable::MutatorType get_mutator_type() const override;
   virtual transaction::ObTxSEQ get_seq_no() const override { return seq_no_cur_; }
-  virtual int64_t get_data_size() override { return data_.length(); };
+  virtual int64_t get_data_size() override { return mutator_row_len_; };
+
+  virtual int log_submitted(const SCN scn, storage::ObIMemtable *&last_mt);
+  virtual int release_resource();
 
   int get_redo(memtable::RedoDataNode &redo_node);
   int set(
@@ -109,11 +111,10 @@ public:
       ObString &data);
 
 public:
-  TO_STRING_KV(K(seq_no_cur_), K(dml_flag_), K(data_), K(mutator_row_len_), KP(mutator_row_buf_));
+  TO_STRING_KV(K(seq_no_cur_), K(dml_flag_), K(mutator_row_len_), KP(mutator_row_buf_));
 
 private:
   ObIAllocator *allocator_;
-  ObString data_;
   transaction::ObTxSEQ seq_no_cur_;
   blocksstable::ObDmlFlag dml_flag_;
   ObObj key_obj_;
