@@ -185,18 +185,19 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir)
 class RemoveProccessor : public ObCgroupCtrl::DirProcessor
 {
 public:
-  int handle_dir(const char *curr_path)
+  int handle_dir(const char *curr_path, bool is_top_dir)
   {
+    UNUSED(is_top_dir);
     return ObCgroupCtrl::remove_dir_(curr_path);
   }
 };
 int ObCgroupCtrl::recursion_remove_group_(const char *curr_path)
 {
   RemoveProccessor remove_process;
-  return recursion_process_group_(curr_path, &remove_process);
+  return recursion_process_group_(curr_path, &remove_process, true /* is_top_dir */);
 }
 
-int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr)
+int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr, bool is_top_dir)
 {
   int ret = OB_SUCCESS;
   int type = NOT_DIR;
@@ -204,32 +205,34 @@ int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *
     LOG_WARN("check dir type failed", K(ret), K(curr_path));
   } else if (NOT_DIR == type) {
     // not directory, skip
-  } else if (LEAF_DIR == type) {
-    if (OB_FAIL(processor_ptr->handle_dir(curr_path))) {
-      LOG_WARN("process sub group directory failed", K(ret), K(curr_path));
-    }
   } else {
-    DIR *dir = nullptr;
-    if (NULL == (dir = opendir(curr_path))){
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("open dir failed", K(curr_path));
+    if (LEAF_DIR == type) {
+      // no sub directory to handle
     } else {
-      struct dirent *subdir = nullptr;
-      char sub_path[PATH_BUFSIZE];
-      int tmp_ret = OB_SUCCESS;
-      while (OB_SUCCESS == tmp_ret && (NULL != (subdir = readdir(dir)))) {
-        if (0 == strcmp(subdir->d_name, ".") || 0 == strcmp(subdir->d_name, "..")) {
-          // skip . and ..
-        } else if (PATH_BUFSIZE <= snprintf(sub_path, PATH_BUFSIZE, "%s/%s", curr_path, subdir->d_name)) { // to prevent infinite recursion when path string is over size and cut off
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("sub_path is oversize has been cut off", K(ret), K(sub_path), K(curr_path));
-        } else if (OB_TMP_FAIL(recursion_process_group_(sub_path, processor_ptr))) {
+      DIR *dir = nullptr;
+      if (NULL == (dir = opendir(curr_path))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("open dir failed", K(ret), K(curr_path));
+      } else {
+        struct dirent *subdir = nullptr;
+        char sub_path[PATH_BUFSIZE];
+        int tmp_ret = OB_SUCCESS;
+        while (OB_SUCCESS == tmp_ret && (NULL != (subdir = readdir(dir)))) {
+          if (0 == strcmp(subdir->d_name, ".") || 0 == strcmp(subdir->d_name, "..")) {
+            // skip . and ..
+          } else if (PATH_BUFSIZE <= snprintf(sub_path, PATH_BUFSIZE, "%s/%s", curr_path, subdir->d_name)) {
+            // to prevent infinite recursion when path string is over size and cut off
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("sub_path is oversize has been cut off", K(ret), K(sub_path), K(curr_path));
+          } else if (OB_TMP_FAIL(recursion_process_group_(sub_path, processor_ptr))) {
             LOG_WARN("process path failed", K(sub_path));
+          }
         }
       }
-      if (0 != strcmp(root_cgroup_, curr_path) && OB_FAIL(processor_ptr->handle_dir(curr_path))) {
-        LOG_WARN("process sub group directory failed", K(ret), K(curr_path));
-      }
+    }
+    if (OB_SUCC(ret) && 0 != strcmp(root_cgroup_, curr_path) &&
+        OB_FAIL(processor_ptr->handle_dir(curr_path, is_top_dir))) {
+      LOG_WARN("process group directory failed", K(ret), K(curr_path));
     }
   }
   return ret;
@@ -493,25 +496,32 @@ int ObCgroupCtrl::set_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, 
 
   double target_cpu = cpu;
   double base_cpu = -1;
-  if (is_valid_tenant_id(tenant_id) &&
-             OB_FAIL(get_cpu_cfs_quota(OB_INVALID_TENANT_ID, base_cpu, OB_INVALID_GROUP_ID, base_path))) {
-    LOG_WARN("get background cpu cfs quota failed", K(ret), K(tenant_id));
-  } else {
+
+  // background quota limit
+  if (is_valid_tenant_id(tenant_id) && OB_NOT_NULL(base_path) && 0 != STRLEN(base_path)) {
     int compare_ret = 0;
-    if (OB_FAIL(compare_cpu(target_cpu, base_cpu, compare_ret))){
+    if (OB_FAIL(get_cpu_cfs_quota(OB_INVALID_TENANT_ID, base_cpu, OB_INVALID_GROUP_ID, base_path))) {
+      LOG_WARN("get background cpu cfs quota failed", K(ret), K(tenant_id));
+    } else if (OB_FAIL(compare_cpu(target_cpu, base_cpu, compare_ret))) {
       LOG_WARN("compare cpu failed", K(ret), K(target_cpu), K(base_cpu));
-    } else if(compare_ret > 0) {
+    } else if (compare_ret > 0) {
       target_cpu = base_cpu;
     }
-    double tenant_cpu = -1;
-    if (OB_SUCC(ret) && is_valid_id(group_id) && OB_FAIL(get_cpu_cfs_quota(tenant_id, tenant_cpu, OB_INVALID_GROUP_ID, base_path))) {
+  }
+
+  // tenant quota limit
+  double tenant_cpu = -1;
+  if (OB_SUCC(ret) && OB_INVALID_GROUP_ID != group_id) {
+    int compare_ret = 0;
+    if (OB_FAIL(get_cpu_cfs_quota(tenant_id, tenant_cpu, OB_INVALID_GROUP_ID, base_path))) {
       LOG_WARN("get tenant cpu cfs quota failed", K(ret), K(tenant_id));
     } else if (OB_FAIL(compare_cpu(target_cpu, tenant_cpu, compare_ret))) {
       LOG_WARN("compare cpu failed", K(ret), K(target_cpu), K(tenant_cpu));
-    } else if(compare_ret > 0) {
+    } else if (compare_ret > 0) {
       target_cpu = tenant_cpu;
     }
   }
+
   if (OB_SUCC(ret)) {
     double current_cpu = -1;
     char group_path[PATH_BUFSIZE];
@@ -524,12 +534,10 @@ int ObCgroupCtrl::set_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, 
       LOG_WARN("compare cpu failed", K(ret), K(target_cpu), K(current_cpu));
     } else if (0 == compare_ret) {
       // no need to change
+    } else if (compare_ret < 0) {
+      ret = recursion_dec_cpu_cfs_quota_(group_path, target_cpu);
     } else {
-      if (compare_ret < 0) {
-        ret = recursion_dec_cpu_cfs_quota_(group_path, target_cpu);
-      } else {
-        ret = set_cpu_cfs_quota_by_path_(group_path, target_cpu);
-      }
+      ret = set_cpu_cfs_quota_by_path_(group_path, target_cpu);
     }
     if (OB_FAIL(ret)) {
       LOG_WARN("set cpu cfs quota failed",
@@ -550,14 +558,15 @@ class DecQuotaProcessor : public ObCgroupCtrl::DirProcessor
 public:
   DecQuotaProcessor(const double cpu) : cpu_(cpu)
   {}
-  int handle_dir(const char *curr_path)
+  int handle_dir(const char *curr_path, bool is_top_dir)
   {
     int ret = OB_SUCCESS;
     double current_cpu = -1;
     int compare_ret = 0;
     if (OB_FAIL(ObCgroupCtrl::get_cpu_cfs_quota_by_path_(curr_path, current_cpu))) {
       LOG_WARN("get cpu cfs quota failed", K(ret), K(curr_path));
-    } else if (OB_SUCC(ObCgroupCtrl::compare_cpu(cpu_, current_cpu, compare_ret)) && compare_ret >= 0) {
+    } else if ((!is_top_dir && -1 == current_cpu) ||
+               (OB_SUCC(ObCgroupCtrl::compare_cpu(cpu_, current_cpu, compare_ret)) && compare_ret >= 0)) {
       // do nothing
     } else if (OB_FAIL(ObCgroupCtrl::set_cpu_cfs_quota_by_path_(curr_path, cpu_))) {
       LOG_WARN("set cpu cfs quota failed", K(curr_path), K(cpu_));
@@ -572,7 +581,7 @@ private:
 int ObCgroupCtrl::recursion_dec_cpu_cfs_quota_(const char *group_path, const double cpu)
 {
   DecQuotaProcessor dec_quota_process(cpu);
-  return recursion_process_group_(group_path, &dec_quota_process);
+  return recursion_process_group_(group_path, &dec_quota_process, true /* is_top_dir */);
 }
 
 int ObCgroupCtrl::set_cpu_cfs_quota_by_path_(const char *group_path, const double cpu)
@@ -653,7 +662,7 @@ int ObCgroupCtrl::set_both_cpu_cfs_quota(const uint64_t tenant_id, const double 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(set_cpu_cfs_quota(tenant_id, cpu, group_id))) {
-    LOG_WARN("set background tenant cpu cfs quota failed", K(ret), K(tenant_id), K(group_id), K(cpu));
+    LOG_WARN("set tenant cpu cfs quota failed", K(ret), K(tenant_id), K(group_id), K(cpu));
   } else if (OB_NOT_NULL(base_path) && 0 != STRLEN(base_path) && OB_FAIL(set_cpu_cfs_quota(tenant_id, cpu, group_id, base_path))) {
     LOG_WARN("set background tenant cpu cfs quota failed", K(ret), K(tenant_id), K(group_id), K(cpu));
   }
