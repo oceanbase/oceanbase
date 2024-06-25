@@ -8948,6 +8948,7 @@ int ObRawExprUtils::build_inner_row_cmp_expr(ObRawExprFactory &expr_factory,
                                              ObSysFunRawExpr *&new_expr)
 {
   int ret = OB_SUCCESS;
+  bool is_implicit_cast_input = false;
   if (OB_ISNULL(session_info) || OB_ISNULL(cast_expr) ||
         OB_ISNULL(input_expr) || OB_ISNULL(next_expr)) {
     ret = OB_INVALID_ARGUMENT;
@@ -8964,11 +8965,24 @@ int ObRawExprUtils::build_inner_row_cmp_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("fail to add param expr", K(ret));
   } else if (OB_FAIL(new_expr->add_param_expr(next_expr))) {
     LOG_WARN("fail to add param expr", K(ret));
+  } else if (T_FUN_SYS_CAST == input_expr->get_expr_type()
+      && input_expr->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
+    // The inner_row_cmp_expr will add one-sided cast to the second parameter. If the second
+    // parameter itself is already a cast expr, the following formalize will report duplicate cast
+    // error, so temporarily clear the flag here and restore it after formalize is completed.
+    is_implicit_cast_input = true;
+    input_expr->clear_flag(IS_OP_OPERAND_IMPLICIT_CAST);
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(new_expr->formalize(session_info))) {
     LOG_WARN("fail to formalize expr", K(*new_expr), K(ret));
   } else {
     new_expr->set_func_name("INTERNAL_FUNCTION");
     new_expr->set_extra(ret_code);
+    if (is_implicit_cast_input) {
+      // restore input expr flag after formalize is finished.
+      input_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST);
+    }
   }
   return ret;
 }
