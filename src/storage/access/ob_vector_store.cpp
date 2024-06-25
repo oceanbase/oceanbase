@@ -187,6 +187,7 @@ int ObVectorStore::fill_rows(
 {
   int ret = OB_SUCCESS;
   int64_t row_capacity = 0;
+  const int64_t prev_begin_index = begin_index;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector store is not inited", K(ret));
@@ -223,7 +224,7 @@ int ObVectorStore::fill_rows(
     if (OB_UNLIKELY(IterEndState::LIMIT_ITER_END == iter_end_flag_)) {
       ret = OB_ITER_END;
     }
-    EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, row_capacity);
+    EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, std::abs(begin_index - prev_begin_index));
   }
   LOG_TRACE("[Vectorized] vector store copy rows", K(ret),
             K(begin_index), K(end_index), K(row_capacity), KP(bitmap),

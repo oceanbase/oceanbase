@@ -778,6 +778,7 @@ int ObAggregatedStore::fill_rows(
           }
         }
       }
+      EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, covered_row_count);
     }
   }
   return ret;
