@@ -2031,7 +2031,7 @@ int ObHashJoinVecOp::prepare_hash_table()
     LOG_DEBUG("debug build hash table", K(need_build_hash_table),
               K(build_ht_thread_ptr), K(reinterpret_cast<uint64_t>(this)));
   }
-  if (need_build_hash_table) {
+  if (OB_SUCC(ret) && need_build_hash_table) {
     if (OB_FAIL(cur_join_table_->build_prepare(jt_ctx_, profile_.get_row_count(), profile_.get_bucket_size()))) {
       LOG_WARN("trace failed to  prepare hash table",
                K(profile_.get_expect_size()), K(profile_.get_bucket_size()), K(profile_.get_row_count()),
