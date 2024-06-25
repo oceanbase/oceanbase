@@ -208,7 +208,6 @@ int ObNoneExistColumnDecoder::pushdown_operator(
   sql::ObPhysicalFilterExecutor *black_filter = static_cast<sql::ObPhysicalFilterExecutor *>(&filter);
   sql::ObPushdownOperator &pushdown_op = black_filter->get_op();
   ObStorageDatum *default_datums = const_cast<ObStorageDatum *>(&filter.get_default_datums()[0]);
-  // bool filtered = false;
   if (pushdown_op.enable_rich_format_ &&
       OB_FAIL(storage::init_exprs_uniform_header(black_filter->get_cg_col_exprs(), pushdown_op.get_eval_ctx(), 1))) {
     LOG_WARN("Failed to init exprs vector header", K(ret));
