@@ -145,7 +145,8 @@ enum class ObTableEntityType
 {
   ET_DYNAMIC = 0,
   ET_KV = 1,
-  ET_HKV = 2
+  ET_HKV = 2,
+  ET_REDIS = 3
 };
 
 // @note not thread-safe
