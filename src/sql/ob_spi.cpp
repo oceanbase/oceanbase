@@ -3686,7 +3686,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
             }
           }
             // 处理监控统计项
-            if (OB_NOT_NULL(spi_result->get_result_set())) {
+            if (OB_NOT_NULL(spi_result) && OB_NOT_NULL(spi_result->get_result_set())) {
               if (spi_result->get_result_set()->is_inited()) {
                 ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
                 int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
@@ -4030,7 +4030,9 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         exec_record.record_end();
       }
 
-      if (OB_NOT_NULL(spi_result->get_result_set()) && spi_result->get_result_set()->is_inited()) {
+      if (OB_NOT_NULL(spi_result) &&
+          OB_NOT_NULL(spi_result->get_result_set()) &&
+          spi_result->get_result_set()->is_inited()) {
         ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
         int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
         ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
