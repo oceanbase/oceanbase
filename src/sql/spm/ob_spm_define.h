@@ -267,22 +267,17 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       handle_cache_mode_(MODE_INVALID),
       plan_hash_value_(0),
       offset_(-1),
-      check_execute_status_(false),
-      is_retry_for_spm_(false),
       new_plan_hash_(0),
       baseline_guard_(PLAN_BASELINE_HANDLE),
       spm_stat_(STAT_INVALID),
-      cache_node_empty_(true),
-      spm_force_disable_(false),
-      has_fixed_plan_to_check_(false),
       evolution_plan_type_(OB_PHY_PLAN_UNINITIALIZED),
       select_plan_type_(INVALID_TYPE),
-      cur_baseline_not_enable_(false),
-      need_spm_timeout_(false),
       baseline_exec_time_(0),
-      evolution_task_in_two_plan_set_(false),
-      force_evo_(false)
-  {}
+      force_evo_(false),
+      flags_(0)
+  {
+    cache_node_empty_ = true;
+  }
   enum SpmMode {
     MODE_INVALID,
     // for get cache obj
@@ -335,23 +330,30 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   SpmMode handle_cache_mode_;
   uint64_t plan_hash_value_;
   int64_t offset_;
-  bool check_execute_status_;
-  bool is_retry_for_spm_;
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t new_plan_hash_;
   ObCacheObjGuard baseline_guard_;
   SpmStat spm_stat_;
-  bool cache_node_empty_;
-  bool spm_force_disable_;
-  bool has_fixed_plan_to_check_;
   ObPhyPlanType evolution_plan_type_;
   SpmSelectPlanType select_plan_type_; // for retry
-  bool cur_baseline_not_enable_;
-  bool need_spm_timeout_;
   int64_t baseline_exec_time_;
-  bool evolution_task_in_two_plan_set_;
   // for testing
   bool force_evo_;
+  union {
+    uint64_t flags_;
+    struct {
+      uint64_t check_execute_status_:           1;
+      uint64_t is_retry_for_spm_:               1;
+      uint64_t cache_node_empty_:               1;
+      uint64_t spm_force_disable_:              1;
+      uint64_t has_fixed_plan_to_check_:        1;
+      uint64_t cur_baseline_not_enable_:        1;
+      uint64_t need_spm_timeout_:               1;
+      uint64_t evolution_task_in_two_plan_set_: 1;
+      uint64_t baseline_exists_:                1;
+      uint64_t reserved_:                      55;
+    };
+  };
 };
 
 struct EvolutionTaskResult

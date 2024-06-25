@@ -5098,15 +5098,25 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
           // constrain. In this situation, we can't compare two plan. So just keep try next baseline.
           spm_ctx.evolution_task_in_two_plan_set_ = false;
           need_get_baseline = true;
+        } else if (spm_ctx.baseline_exists_) {
+          // When adding baseline plan and find other session alerady added. Then stop searching next
+          // baseline and execute this plan directly.
+          need_get_baseline = false;
+          spm_ctx.baseline_exists_ = false;
         } else {
           // add baseline plan failed, need evict unaccepted baseline in baseline cache.
           (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
         }
       } else if (plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
-        spm_ctx.spm_force_disable_ = true;
-        spm_ctx.spm_stat_ = ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN;
-        spm_ctx.is_retry_for_spm_ = false;
-        ret = OB_SQL_RETRY_SPM;
+        if (nullptr != spm_ctx.baseline_guard_.get_cache_obj() &&
+            static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj())->get_fixed()) {
+          // fixed baseline plan, use is directly
+        } else {
+          spm_ctx.spm_force_disable_ = true;
+          spm_ctx.spm_stat_ = ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN;
+          spm_ctx.is_retry_for_spm_ = false;
+          ret = OB_SQL_RETRY_SPM;
+        }
       }
     } else {
       LOG_TRACE("spm need get baseline due to plan hash value not equal");
