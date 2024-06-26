@@ -441,7 +441,7 @@ private:
   bool is_first_child_;
   bool is_last_child_;
   ObObjMeta val_meta_;
-  DynamicFilterType dynamic_filter_type_;
+  DynamicFilterType dynamic_filter_type_; // FARM COMPAT WHITELIST for prepare_data_func_type_
 };
 
 class ObPushdownFilterExecutor;

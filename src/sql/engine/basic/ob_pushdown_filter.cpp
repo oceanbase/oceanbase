@@ -119,7 +119,9 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownWhiteFilterNode)
 }
 
 OB_SERIALIZE_MEMBER((ObPushdownDynamicFilterNode, ObPushdownWhiteFilterNode), col_idx_,
-                    is_first_child_, is_last_child_, val_meta_, dynamic_filter_type_);
+                    is_first_child_, is_last_child_, val_meta_,
+                    dynamic_filter_type_ // FARM COMPAT WHITELIST for prepare_data_func_type_
+);
 
 int ObPushdownBlackFilterNode::merge(ObIArray<ObPushdownFilterNode*> &merged_node)
 {
