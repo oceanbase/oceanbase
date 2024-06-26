@@ -1317,7 +1317,7 @@ bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t le
       OB_LOG_RET(WARN, tmp_ret, "fail to get kv list", K(str));
     } else {
       for (int64_t i = 0; bret && i < kv_list.count(); ++i) {
-        uint8_t mode = MODE_ON;
+        uint8_t mode = MODE_DEFAULT;
         if (kv_list.at(i).second.case_compare("on") == 0) {
           mode = MODE_ON;
         } else if (kv_list.at(i).second.case_compare("off") == 0) {

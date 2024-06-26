@@ -2753,6 +2753,13 @@ private:
       const share::schema::ObTenantSchema &orig_tenant_schema,
       const share::schema::ObTenantSchema &new_tenant_schema);
 
+  // this function is used for add extra tenant config init during create excepet data version
+  // The addition of new configuration items requires the addition or modification of related test cases to ensure their effectiveness.
+  int add_extra_tenant_init_config_(
+      const uint64_t tenant_id,
+      common::ObIArray<common::ObConfigPairs> &init_configs);
+
+private:
   int check_locality_compatible_(ObTenantSchema &schema);
 
   int pre_rename_mysql_columns_online(const ObTableSchema &origin_table_schema,

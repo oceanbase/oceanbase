@@ -849,8 +849,9 @@ public:
   virtual ~ObParallelDDLControlParser() {}
   virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
 public:
-  static const uint8_t MODE_ON = 0b00;
+  static const uint8_t MODE_DEFAULT = 0b00;
   static const uint8_t MODE_OFF = 0b01;
+  static const uint8_t MODE_ON = 0b10;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlParser);
 };
