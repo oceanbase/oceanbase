@@ -3434,9 +3434,11 @@ int ObOptSelectivity::get_min_ndv_by_equal_set(const OptTableMetas &table_metas,
   ObBitSet<> col_added;
   find = false;
   const EqualSets *eq_sets = ctx.get_equal_sets();
-  if (OB_ISNULL(eq_sets)) {
+  if (OB_ISNULL(eq_sets) || OB_ISNULL(col_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (!col_expr->is_column_ref_expr()) {
+    // do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !find && i < eq_sets->count(); i++) {
       const ObRawExprSet *equal_set = eq_sets->at(i);

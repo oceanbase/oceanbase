@@ -1054,7 +1054,7 @@ Query Plan
 -------------------------------------------------------------
 |0 |SCALAR GROUP BY              |    |1       |58          |
 |1 |└─HASH JOIN                  |    |1       |58          |
-|2 |  ├─HASH JOIN                |    |1       |54          |
+|2 |  ├─HASH JOIN                |    |1       |53          |
 |3 |  │ ├─HASH JOIN              |    |1       |43          |
 |4 |  │ │ ├─TABLE FULL SCAN      |t9  |11      |5           |
 |5 |  │ │ └─HASH JOIN            |    |1       |36          |
@@ -1124,7 +1124,7 @@ Outputs & filters:
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
- 17 - output([t2.d2], [t2.d1], [t2.d2 % 2], [t2.d1 % 5]), filter([t2.d2 % 2 = t2.d1 % 3], [t2.d1 % 5 = t2.d1 % 4], [t2.d2 % 2 = t2.d2 % 7]), rowset=16
+ 17 - output([t2.d2], [t2.d1], [t2.d1 % 5], [t2.d2 % 2]), filter([t2.d1 % 5 = t2.d1 % 4], [t2.d2 % 2 = t2.d2 % 7], [t2.d2 % 2 = t2.d1 % 3]), rowset=16
       access([t2.d2], [t2.d1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
