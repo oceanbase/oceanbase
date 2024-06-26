@@ -102,6 +102,7 @@ public:
   RPC_S(PR5 bootstrap, OB_BOOTSTRAP, (ObBootstrapArg));
   RPC_S(PR5 is_empty_server, OB_IS_EMPTY_SERVER, (ObCheckServerEmptyArg), Bool);
   RPC_S(PR5 check_server_for_adding_server, OB_CHECK_SERVER_FOR_ADDING_SERVER, (ObCheckServerForAddingServerArg), ObCheckServerForAddingServerResult);
+  RPC_S(PR5 check_server_machine_status, OB_CHECK_SERVER_MACHINE_STATUS, (ObCheckServerMachineStatusArg), ObCheckServerMachineStatusResult);
   RPC_S(PR5 check_deployment_mode_match, OB_CHECK_DEPLOYMENT_MODE, (ObCheckDeploymentModeArg), Bool);
 #ifdef OB_BUILD_TDE_SECURITY
   RPC_S(PR5 wait_master_key_in_sync, OB_WAIT_MASTER_KEY_IN_SYNC, (ObWaitMasterKeyInSyncArg));
