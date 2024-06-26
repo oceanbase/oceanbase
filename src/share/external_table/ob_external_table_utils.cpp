@@ -395,7 +395,7 @@ int ObExternalTableUtils::calc_assigned_files_to_sqcs(
 
   struct SqcFileSetCmp {
     bool operator()(const SqcFileSet &l, const SqcFileSet &r) {
-      return l.total_file_size_ < r.total_file_size_;
+      return l.total_file_size_ > r.total_file_size_;
     }
     int get_error_code() { return OB_SUCCESS; }
   };

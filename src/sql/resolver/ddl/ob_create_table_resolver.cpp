@@ -3113,7 +3113,10 @@ int ObCreateTableResolver::resolve_index_name(
 int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(node)) {
+  if (OB_ISNULL(node)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "format");
+  } else {
     if (T_TABLE_OPTION_LIST != node->type_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid argument.", K(ret));
