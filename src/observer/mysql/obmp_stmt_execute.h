@@ -250,7 +250,7 @@ private:
     sql::ObSQLSessionInfo *session_info, sql::ParamTypeInfoArray &param_type_infos);
   int check_param_value_for_arraybinding(ObObjParam &param);
   int construct_execute_param_for_arraybinding(int64_t pos);
-  void reset_complex_param_memory(ParamStore *params, sql::ObSQLSessionInfo &session_info);
+  void reset_complex_param_memory(ParamStore *params, sql::ObSQLSessionInfo *session_info = nullptr);
   int save_exception_for_arraybinding(
     int64_t pos, int error_code, ObIArray<ObSavedException> &exception_array);
   //int after_do_process_for_arraybinding(ObMySQLResultSet &result);
@@ -331,6 +331,7 @@ private:
   bool is_contain_complex_element(const sql::ParamTypeArray &param_types) const;
 
   virtual int before_process();
+  virtual int after_process(int error_code);
   int response_query_header(sql::ObSQLSessionInfo &session, pl::ObDbmsCursorInfo &cursor);
   //重载response，在response中不去调用flush_buffer(true)；flush_buffer(true)在需要回包时显示调用
 
