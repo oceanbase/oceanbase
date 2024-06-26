@@ -29,9 +29,10 @@ public:
 private:
   static const int OB_EVENT_NAME_MAX_LENGTH = 128;
   static const int OB_EVENT_REPEAT_MAX_LENGTH = 128;
-  static const int OB_EVENT_SQL_MAX_LENGTH = 4096;
+  static const int OB_EVENT_SQL_MAX_LENGTH = 16 * 1024;
   static const int OB_EVENT_COMMENT_MAX_LENGTH = 4096;
   static const int OB_EVENT_BODY_MAX_LENGTH = 64 * 1024;
+  static const int OB_EVEX_MAX_INTERVAL_VALUE = 1000000000L;
   int resolve_alter_event_(const ParseNode *alter_event_node);
   int get_time_us_(const ParseNode *time_node, int64_t &time_us);
   int get_time_us_from_sql_(const char *sql, int64_t &time_us);

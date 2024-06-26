@@ -312,17 +312,55 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job(
       || OB_FAIL(dml.add_column("what", job_action)))) {
       LOG_WARN("add column failed", KR(ret), K(job_action));
     } else {
-
       ObDMLExecHelper exec(sql_client, exec_tenant_id);
       int64_t affected_rows = 0;
       if (OB_FAIL(exec.exec_update(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, dml, affected_rows))) {
         LOG_WARN("execute update failed", KR(ret));
       } else if (is_zero_row(affected_rows)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("affected_rows unexpected to be zero", KR(ret), K(affected_rows));
+        ret = OB_SUCCESS;
+        LOG_WARN("not change", KR(ret), K(affected_rows));
       } else if (!is_double_row(affected_rows)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("affected_rows unexpected to be two", KR(ret), K(affected_rows));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::check_dbms_sched_job_exist(common::ObISQLClient &sql_client,
+                                                    const uint64_t tenant_id,
+                                                    const ObString &job_name,
+                                                    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  exist = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
+  } else {
+    if (OB_FAIL(sql.append_fmt("select job from %s where job_name = \'%.*s\' and job > 0",
+                                                     OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                                                     job_name.length(), job_name.ptr()))) {
+        LOG_WARN("failed to assign sql", K(ret));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+          LOG_WARN("execute query failed", K(ret), K(sql));
+        } else {
+          if (res.get_result() != NULL && OB_SUCCESS == (ret = res.get_result()->next())) {
+            exist = true;
+          }
+          if (OB_FAIL(ret)) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              exist = false;
+            } else {
+              LOG_WARN("next failed", K(ret));
+            }
+          }
+        }
       }
     }
   }

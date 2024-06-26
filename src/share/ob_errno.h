@@ -1815,6 +1815,19 @@ constexpr int OB_ERR_CLIENT_LOCAL_FILES_DISABLED = -9762;
 constexpr int OB_ERR_NOT_FUNC_NAME = -9765;
 constexpr int OB_ERR_INVALID_CURSOR_EXPR = -9766;
 constexpr int OB_APPLICATION_ERROR_FROM_REMOTE = -9767;
+constexpr int OB_ERR_EVENT_EXIST = -9768;
+constexpr int OB_ERR_EVENT_NOT_EXIST = -9769;
+constexpr int OB_ERR_EVENT_CANT_ALTER = -9770;
+constexpr int OB_ERR_EVENT_DROP_FAILED = -9771;
+constexpr int OB_ERR_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG = -9772;
+constexpr int OB_ERR_EVENT_ENDS_BEFORE_STARTS = -9773;
+constexpr int OB_ERR_EVENT_EXEC_TIME_IN_THE_PAST = -9774;
+constexpr int OB_ERR_EVENT_CANNOT_DELETE = -9775;
+constexpr int OB_ERR_EVENT_SAME_NAME = -9776;
+constexpr int OB_ERR_EVENT_DATA_TOO_LONG = -9777;
+constexpr int OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST = -9778;
+constexpr int OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST = -9779;
+constexpr int OB_ERR_EVENT_RECURSION_FORBIDDEN = -9780;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4044,6 +4057,19 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NOT_FUNC_NAME__USER_ERROR_MSG "object '%.*s' must be of type function or array to be used this way"
 #define OB_ERR_INVALID_CURSOR_EXPR__USER_ERROR_MSG "CURSOR expression not allowed"
 #define OB_APPLICATION_ERROR_FROM_REMOTE__USER_ERROR_MSG "%.*s"
+#define OB_ERR_EVENT_EXIST__USER_ERROR_MSG "Event '%.*s' already exists"
+#define OB_ERR_EVENT_NOT_EXIST__USER_ERROR_MSG "Unknown '%.*s' event"
+#define OB_ERR_EVENT_CANT_ALTER__USER_ERROR_MSG "Failed to alter event '%.*s'"
+#define OB_ERR_EVENT_DROP_FAILED__USER_ERROR_MSG "Failed to drop %.*s"
+#define OB_ERR_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG__USER_ERROR_MSG "INTERVAL is either not positive or too big"
+#define OB_ERR_EVENT_ENDS_BEFORE_STARTS__USER_ERROR_MSG "ENDS is either invalid or before STARTS"
+#define OB_ERR_EVENT_EXEC_TIME_IN_THE_PAST__USER_ERROR_MSG "Event execution time is in the past. Event has been disabled"
+#define OB_ERR_EVENT_CANNOT_DELETE__USER_ERROR_MSG "Failed to delete the event from mysql.event"
+#define OB_ERR_EVENT_SAME_NAME__USER_ERROR_MSG "Same old and new event name"
+#define OB_ERR_EVENT_DATA_TOO_LONG__USER_ERROR_MSG "Data for column '%.*s' too long"
+#define OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST__USER_ERROR_MSG "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation."
+#define OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST__USER_ERROR_MSG "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future."
+#define OB_ERR_EVENT_RECURSION_FORBIDDEN__USER_ERROR_MSG "Recursion of EVENT DDL statements is forbidden when body is present"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -6273,6 +6299,19 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NOT_FUNC_NAME__ORA_USER_ERROR_MSG "PLS-00224: object '%.*s' must be of type function or array to be used this way"
 #define OB_ERR_INVALID_CURSOR_EXPR__ORA_USER_ERROR_MSG "ORA-22902: CURSOR expression not allowed"
 #define OB_APPLICATION_ERROR_FROM_REMOTE__ORA_USER_ERROR_MSG "%.*s"
+#define OB_ERR_EVENT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9768, Event '%.*s' already exists"
+#define OB_ERR_EVENT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9769, Unknown '%.*s' event"
+#define OB_ERR_EVENT_CANT_ALTER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9770, Failed to alter event '%.*s'"
+#define OB_ERR_EVENT_DROP_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9771, Failed to drop %.*s"
+#define OB_ERR_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9772, INTERVAL is either not positive or too big"
+#define OB_ERR_EVENT_ENDS_BEFORE_STARTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9773, ENDS is either invalid or before STARTS"
+#define OB_ERR_EVENT_EXEC_TIME_IN_THE_PAST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9774, Event execution time is in the past. Event has been disabled"
+#define OB_ERR_EVENT_CANNOT_DELETE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9775, Failed to delete the event from mysql.event"
+#define OB_ERR_EVENT_SAME_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9776, Same old and new event name"
+#define OB_ERR_EVENT_DATA_TOO_LONG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9777, Data for column '%.*s' too long"
+#define OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9778, Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation."
+#define OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9779, Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future."
+#define OB_ERR_EVENT_RECURSION_FORBIDDEN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9780, Recursion of EVENT DDL statements is forbidden when body is present"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10502, TTL column '%.*s' not exists"
@@ -6316,7 +6355,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2225];
+extern int g_all_ob_errnos[2238];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

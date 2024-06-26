@@ -120,6 +120,9 @@ int ObAlterEventResolver::resolve_alter_event_(const ParseNode *alter_event_node
             stmt.set_repeat_ts(0);
             if (OB_FAIL(get_time_us_(event_schedule_node, start_time_us))) {
               LOG_WARN("alter event get time str failed", K(ret), KP(event_schedule_node));
+            } else if (start_time_us < ObTimeUtility::current_time()) {
+              ret = OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST;
+              LOG_WARN("alter event get time str failed", K(ret), K(start_time_us), K(ObTimeUtility::current_time()));
             } else {
               stmt.set_start_time(start_time_us);
               stmt.set_end_time(64060560000000000);
@@ -172,7 +175,10 @@ int ObAlterEventResolver::resolve_alter_event_(const ParseNode *alter_event_node
             }
           }
         }
-
+        if (OB_SUCC(ret) && OB_INVALID_TIMESTAMP != stmt.get_end_time() && stmt.get_end_time() < stmt.get_start_time()) {
+          ret = OB_ERR_EVENT_ENDS_BEFORE_STARTS;
+          LOG_WARN("ends before starts", K(ret), K(stmt.get_end_time()), K(stmt.get_start_time()));
+        }
         //Only when specified as "preserve" will it be false.
         if (OB_ISNULL(event_preserve_node)) {
           stmt.set_auto_drop(-1);
@@ -214,6 +220,9 @@ int ObAlterEventResolver::resolve_alter_event_(const ParseNode *alter_event_node
         if (OB_SUCC(ret)) {
           snprintf(event_name_buf, OB_EVENT_NAME_MAX_LENGTH, "%lu.%s",session_info_->get_database_id(), rename_node->str_value_);
           stmt.set_event_rename(event_name_buf);
+          if (0 == stmt.get_event_name().case_compare(stmt.get_event_rename())) {
+            ret = OB_ERR_EVENT_SAME_NAME;
+          }
         }
       }
     }
@@ -232,7 +241,8 @@ int ObAlterEventResolver::resolve_alter_event_(const ParseNode *alter_event_node
 
     if (OB_SUCC(ret) && OB_NOT_NULL(event_body_node)) {
       char *event_body_buf = static_cast<char*>(allocator_->alloc(OB_EVENT_BODY_MAX_LENGTH));
-      if (OB_ISNULL(event_body_buf)) {
+      char *sql_buf = static_cast<char*>(allocator_->alloc(OB_EVENT_SQL_MAX_LENGTH));
+      if (OB_ISNULL(event_body_buf) || OB_ISNULL(sql_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
@@ -240,26 +250,27 @@ int ObAlterEventResolver::resolve_alter_event_(const ParseNode *alter_event_node
         int available_space = OB_EVENT_BODY_MAX_LENGTH;
         for (int sql_index = 0; sql_index <  event_body_node->num_child_ && OB_SUCC(ret); sql_index++) {
           if (OB_EVENT_SQL_MAX_LENGTH - 1 < event_body_node->children_[sql_index]->str_len_) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "event body single SQL statements length");
+            ret = OB_ERR_EVENT_DATA_TOO_LONG;
+            ObString error_string("event body single SQL");
+            LOG_USER_ERROR(OB_ERR_EVENT_DATA_TOO_LONG, error_string.length(), error_string.ptr());
             LOG_WARN("single sql too long", K(ret), K(event_body_node->children_[sql_index]->str_len_), K(sql_index));
           } else {
-            char sql[OB_EVENT_SQL_MAX_LENGTH];
-            memset(sql, 0, OB_EVENT_SQL_MAX_LENGTH);
-            snprintf(sql, OB_EVENT_SQL_MAX_LENGTH, "%.*s;", (int)event_body_node->children_[sql_index]->str_len_, event_body_node->children_[sql_index]->str_value_);
+            memset(sql_buf, 0, OB_EVENT_SQL_MAX_LENGTH);
+            snprintf(sql_buf, OB_EVENT_SQL_MAX_LENGTH, "%.*s;", (int)event_body_node->children_[sql_index]->str_len_, event_body_node->children_[sql_index]->str_value_);
             if (event_body_node->children_[sql_index]->str_len_ + 1 > available_space) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "event body length");
+              ret = OB_ERR_EVENT_DATA_TOO_LONG;
+              ObString error_string("event body");
+              LOG_USER_ERROR(OB_ERR_EVENT_DATA_TOO_LONG, error_string.length(), error_string.ptr());
               LOG_WARN("out of max length", K(ret), K(event_body_node->children_[sql_index]->str_len_), K(available_space));
             } else {
-              strncat(event_body_buf, sql, available_space);
+              strncat(event_body_buf, sql_buf, available_space);
               available_space = available_space - (event_body_node->children_[sql_index]->str_len_ + 1);
             }
           }
         }
-      }
-      if (OB_SUCC(ret)) {
-        stmt.set_event_body(event_body_buf);
+        if (OB_SUCC(ret)) {
+          stmt.set_event_body(event_body_buf);
+        }
       }
     }
   }
@@ -336,7 +347,11 @@ int ObAlterEventResolver::get_repeat_interval_(const ParseNode *repeat_num_node,
   } else {
     int64_t date_unit_interval = repeat_num_node->value_;
     const char *date_unit_type = repeat_type_node->str_value_;
-    if (OB_ISNULL(date_unit_type)) {
+    if (0 == date_unit_interval || OB_EVEX_MAX_INTERVAL_VALUE < date_unit_interval) {
+      ret = OB_ERR_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG;
+      LOG_WARN("date_unit_interval error",
+             K(ret), K(date_unit_interval));
+    } else if (OB_ISNULL(date_unit_type)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("interval type is null",
              K(ret), KP(date_unit_type));

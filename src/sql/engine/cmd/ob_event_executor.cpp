@@ -10,6 +10,7 @@
 #include "sql/resolver/cmd/ob_drop_event_stmt.h"
 #include "sql/resolver/cmd/ob_alter_event_stmt.h"
 #include "sql/engine/ob_exec_context.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 namespace oceanbase
 {
 using namespace common;
@@ -59,7 +60,7 @@ int ObCreateEventExecutor::execute(ObExecContext &ctx, ObCreateEventStmt &stmt)
           job_info.repeat_interval_ = stmt.get_repeat_interval();
           job_info.enabled_ = stmt.get_is_enable();
           job_info.auto_drop_ = stmt.get_auto_drop();
-          job_info.max_run_duration_ = stmt.get_repeat_ts() > 0 ? stmt.get_repeat_ts() / 1000000 : 1 * 60 * 60;
+          job_info.max_run_duration_ = stmt.get_repeat_ts() > 0 ? stmt.get_repeat_ts() / 1000000 : 24 * 60 * 60;
           job_info.interval_ts_ = stmt.get_repeat_ts();
           job_info.exec_env_ = stmt.get_exec_env();
           job_info.comments_ = stmt.get_event_comment();
@@ -77,8 +78,12 @@ int ObCreateEventExecutor::execute(ObExecContext &ctx, ObCreateEventStmt &stmt)
               ret = OB_SUCC(ret) ? tmp_ret : ret;
             }
           }
-          if (ret == OB_ERR_PRIMARY_KEY_DUPLICATE && stmt.get_if_not_exists()) {
-            ret = OB_SUCCESS;
+          if (ret == OB_ERR_PRIMARY_KEY_DUPLICATE) {
+            if (stmt.get_if_not_exists()) {
+              ret = OB_SUCCESS;
+            } else {
+              ret = OB_ERR_EVENT_EXIST;
+            }
           }
         }
       }
@@ -93,6 +98,7 @@ int ObAlterEventExecutor::execute(ObExecContext &ctx, ObAlterEventStmt &stmt)
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed");
@@ -100,24 +106,49 @@ int ObAlterEventExecutor::execute(ObExecContext &ctx, ObAlterEventStmt &stmt)
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed");
   } else {
-
     uint64_t tenant_id = stmt.get_tenant_id();
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job(
-        *GCTX.sql_proxy_,
-        stmt.get_tenant_id(),
-        stmt.get_event_name(),
-        stmt.get_auto_drop(),
-        stmt.get_is_enable(),
-        stmt.get_start_time(),
-        stmt.get_end_time(),
-        stmt.get_repeat_ts(),
-        stmt.get_repeat_interval(),
-        stmt.get_event_definer(),
-        stmt.get_event_rename(),
-        stmt.get_event_comment(),
-        stmt.get_event_body()))) {
-      LOG_WARN("failed to update dbms scheduler job", KR(ret));
+    bool exist = false;
+    ObMySQLTransaction trans;
+    if (OB_FAIL(trans.start(GCTX.sql_proxy_, stmt.get_tenant_id()))) {
+      LOG_WARN("failed to start trans", KR(ret), K(stmt.get_tenant_id()));
+    } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::check_dbms_sched_job_exist(
+      trans,
+      stmt.get_tenant_id(),
+      stmt.get_event_name(),
+      exist
+    ))) {
+      LOG_WARN("check job exist failed", K(stmt.get_event_name()));
+    } else if (exist) {
+      if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job(
+          trans,
+          stmt.get_tenant_id(),
+          stmt.get_event_name(),
+          stmt.get_auto_drop(),
+          stmt.get_is_enable(),
+          stmt.get_start_time(),
+          stmt.get_end_time(),
+          stmt.get_repeat_ts(),
+          stmt.get_repeat_interval(),
+          stmt.get_event_definer(),
+          stmt.get_event_rename(),
+          stmt.get_event_comment(),
+          stmt.get_event_body()))) {
+        LOG_WARN("failed to update dbms scheduler job", KR(ret));
+        if (ret == OB_ERR_PRIMARY_KEY_DUPLICATE) {
+            ret = OB_ERR_EVENT_EXIST;
+        }
+      }
+    } else {
+      ret = OB_ERR_EVENT_NOT_EXIST;
+      LOG_WARN("alter not exist event", KR(ret));
+    }
+
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
     }
   }
   return ret;
@@ -144,6 +175,9 @@ int ObDropEventExecutor::execute(ObExecContext &ctx, ObDropEventStmt &stmt)
         stmt.get_event_name(),
         stmt.get_if_exists())
     )) {
+      if (ret == OB_INVALID_ARGUMENT) {
+        ret = OB_ERR_EVENT_NOT_EXIST;
+      }
       LOG_WARN("failed to remove dbms scheduler job", KR(ret));
     }
   }
