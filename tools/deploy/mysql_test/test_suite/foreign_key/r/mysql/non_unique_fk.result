@@ -2,8 +2,8 @@ drop table if exists A, B, C, D, E;
 create table A(a int, msg int);
 create index Aindex on A(a);
 create table B(a int, FOREIGN KEY(a) REFERENCES A(a) on update cascade on delete cascade);
-insert into A values (2, 10), (3, 11), (3, 12);
-insert into B values (2), (2), (2), (3), (3), (3);
+insert into A values (2, 10), (3, 11), (3, 12), (NULL, 10), (NULL, 11);
+insert into B values (2), (2), (2), (3), (3), (3), (NULL);
 select * from B;
 a
 2
@@ -12,6 +12,7 @@ a
 3
 3
 3
+NULL
 insert into B values (10);
 ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
 update A set a = 4 where a = 2;
@@ -20,6 +21,8 @@ select * from A;
 a	msg
 3	11
 3	12
+NULL	10
+NULL	11
 drop table A, B;
 create table A(a int, msg int);
 create index Aindex on A(a);
@@ -178,4 +181,12 @@ alter table A drop index Aui;
 ERROR HY000: unique/primary keys in table referenced by enabled foreign keys
 alter table A drop index Ai;
 alter table A drop index Ai2;
+insert into A values (1, 10), (2, 20);
+insert into B values (1), (1), (2), (2);
+select * from B;
+a
+1
+1
+2
+2
 drop table A, B;

@@ -11,8 +11,8 @@ drop table if exists A, B, C, D, E;
 create table A(a int, msg int);
 create index Aindex on A(a);
 create table B(a int, FOREIGN KEY(a) REFERENCES A(a) on update cascade on delete cascade);
-insert into A values (2, 10), (3, 11), (3, 12);
-insert into B values (2), (2), (2), (3), (3), (3);
+insert into A values (2, 10), (3, 11), (3, 12), (NULL, 10), (NULL, 11);
+insert into B values (2), (2), (2), (3), (3), (3), (NULL);
 select * from B;
 --error ER_NO_REFERENCED_ROW_2
 insert into B values (10);
@@ -149,6 +149,44 @@ create table B(a int, foreign key (a) references A(a));
 alter table A drop index Aui;
 alter table A drop index Ai;
 alter table A drop index Ai2;
+insert into A values (1, 10), (2, 20);
+insert into B values (1), (1), (2), (2);
+select * from A;
+select * from B;
+drop table A, B;
+
+create table A(a int, a2 int, primary key (a, a2));
+create unique index Aui on A(a2);
+create table B(a2 int, foreign key (a2) references A(a2));
+--error 4714
+alter table A drop index Aui;
+insert into A values (1, 10), (2, 11);
+insert into B values (10), (10), (11), (11);
+select * from A;
+select * from B;
+drop table A, B;
+
+create table A(a int, a2 int, primary key (a));
+create unique index Aui on A(a);
+create table B(a int, foreign key (a) references A(a));
+alter table A drop index Aui;
+insert into A values (1, 10), (2, 11);
+insert into B values (1), (1), (2), (2);
+select * from A;
+select * from B;
+drop table A, B;
+
+create table A(a int, a2 int);
+create index Aindex on A(a);
+create table B(a int, foreign key (a) references A(a));
+create unique index Aui on A(a);
+insert into A values (1, 10), (2, 11);
+insert into B values (1), (1), (2), (2);
+select * from A;
+select * from B;
+alter table A drop index Aui;
+insert into B values (1), (1), (2), (2);
+select * from B;
 drop table A, B;
 
 --enable_warnings
