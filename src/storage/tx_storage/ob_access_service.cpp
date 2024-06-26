@@ -296,7 +296,6 @@ int ObAccessService::table_scan(
     //todo lixinze:后续会判断是否有效
     user_specified_snapshot_scn = param.fb_snapshot_;
   }
-
   NG_TRACE(storage_table_scan_begin);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
