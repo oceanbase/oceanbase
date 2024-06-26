@@ -81,6 +81,7 @@ const char *ObPrivMgr::priv_names_[] = {
     "CREATE ROLE",
     "DROP ROLE",
     "TRIGGER",
+    "LOCK TABLES",                // index 45
 };
 
 ObPrivMgr::ObPrivMgr()
