@@ -736,6 +736,8 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_CREATE_INDEX:
       ddl_type_str =  "create index";
       break;
+    case DDL_CREATE_FTS_INDEX:
+      ddl_type_str =  "create fts index";
     case DDL_CREATE_PARTITIONED_LOCAL_INDEX:
       ddl_type_str =  "create partitioned local index";
       break;
@@ -1930,7 +1932,7 @@ int check_trans_end(const ObArray<SendItem> &send_array,
     LOG_WARN("create return code map failed", K(ret));
   } else {
     // group by leader addr and send batch rpc
-    std::sort(tmp_send_array.begin(), tmp_send_array.end());
+    lib::ob_sort(tmp_send_array.begin(), tmp_send_array.end());
     ObAddr last_addr;
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_send_array.count(); ++i) {
       const SendItem &send_item = tmp_send_array.at(i);
@@ -2629,7 +2631,7 @@ int ObDDLWaitColumnChecksumCtx::send_calc_rpc(int64_t &send_succ_count)
 
     if (OB_SUCC(ret)) {
       // group by leader addr and send batch rpc
-      std::sort(send_array.begin(), send_array.end());
+      lib::ob_sort(send_array.begin(), send_array.end());
 
       ObAddr last_addr;
       int64_t group_start_idx = 0;

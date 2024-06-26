@@ -646,7 +646,7 @@ int ObSSTableRowScanner<PrefetchType>::forward_blockscan(
         // 1. There are more undetected rows in current range for columnar scan.
         // 2. The number of detected rows is less than defualt batch size.
         if ((IN_END_OF_RANGE != state && PENDING_BLOCK_SCAN != state)
-              || (end - begin + 1) >= OB_CS_SCAN_GROUP_SIZE) {
+              || (end - begin + 1) >= iter_param_->get_storage_rowsets_size()) {
           break;
         }
       }

@@ -176,7 +176,6 @@ public:
     OB_ASSERT(range.is_valid() && range.end_row_id_ >= start_row_id_);
     return bitmap_.is_all_false(MAX(range.start_row_id_ - start_row_id_, 0),
                                 MIN(range.end_row_id_ - start_row_id_, bitmap_.size() - 1));
-
   }
 
   OB_INLINE void set_all_true()
@@ -197,13 +196,13 @@ public:
 
   int set_bitmap(const ObCSRowId start, const int64_t row_count, const bool is_reverse, ObBitmap &bitmap) const;
   int get_first_valid_idx(const ObCSRange &range, const bool is_reverse_scan, ObCSRowId &row_idx) const;
-  int get_row_ids(int64_t *row_ids,
+  int get_row_ids(int32_t *row_ids,
                   int64_t &row_cap,
                   ObCSRowId &current,
                   const ObCSRange &query_range,
                   const ObCSRange &data_range,
                   const int64_t batch_size,
-                  const bool is_reverse) const;
+                  const bool is_reverse);
   TO_STRING_KV(K_(bitmap), K_(start_row_id));
 
 private:
@@ -211,7 +210,7 @@ private:
   ObCSRowId start_row_id_;
 };
 
-int convert_bitmap_to_cs_index(int64_t *row_ids,
+int convert_bitmap_to_cs_index(int32_t *row_ids,
                                int64_t &row_cap,
                                ObCSRowId &current,
                                const ObCSRange &query_range,

@@ -375,10 +375,20 @@
 #include "ob_expr_st_symdifference.h"
 #include "ob_expr_priv_st_asmvtgeom.h"
 #include "ob_expr_priv_st_makevalid.h"
+#include "ob_expr_func_ceil.h"
+#include "ob_expr_topn_filter.h"
 #include "ob_expr_sdo_relate.h"
 #include "ob_expr_inner_table_option_printer.h"
 #include "ob_expr_password.h"
-
+#include "ob_expr_rb_build_empty.h"
+#include "ob_expr_rb_is_empty.h"
+#include "ob_expr_rb_build_varbinary.h"
+#include "ob_expr_rb_to_varbinary.h"
+#include "ob_expr_rb_cardinality.h"
+#include "ob_expr_rb_calc_cardinality.h"
+#include "ob_expr_rb_calc.h"
+#include "ob_expr_rb_to_string.h"
+#include "ob_expr_rb_from_string.h"
 
 namespace oceanbase
 {
@@ -1172,33 +1182,33 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids /* 689 */
   ObExprLastRefreshScn::eval_last_refresh_scn,                        /* 690 */
   ObExprDocLength::generate_doc_length,                               /* 691 */
-  NULL, // ObExprTopNFilter::eval_topn_filter,                        /* 692 */
+  ObExprTopNFilter::eval_topn_filter,                                 /* 692 */
   NULL, // ObExprIsEnabledRole::eval_is_enabled_role,                 /* 693 */
   NULL, // ObExprCanAccessTrigger::can_access_trigger,                /* 694 */
   NULL, //ObRelationalExprOperator::eval_min_max_compare,             /* 695 */
   NULL, //ObRelationalExprOperator::min_max_row_eval,                 /* 696 */
-  NULL, // ObExprRbBuildEmpty::eval_rb_build_empty,                   /* 697 */
-  NULL, // ObExprRbIsEmpty::eval_rb_is_empty,                         /* 698 */
-  NULL, // ObExprRbBuildVarbinary::eval_rb_build_varbinary,           /* 699 */
-  NULL, // ObExprRbToVarbinary::eval_rb_to_varbinary,                 /* 700 */
-  NULL, // ObExprRbCardinality::eval_rb_cardinality,                  /* 701 */
-  NULL, // ObExprRbAndCardinality::eval_rb_and_cardinality,           /* 702 */
-  NULL, // ObExprRbOrCardinality::eval_rb_or_cardinality,             /* 703 */
-  NULL, // ObExprRbXorCardinality::eval_rb_xor_cardinality,           /* 704 */
-  NULL, // ObExprRbAndnotCardinality::eval_rb_andnot_cardinality,     /* 705 */
-  NULL, // ObExprRbAndNull2emptyCardinality::eval_rb_and_null2empty_cardinality, /* 706 */
-  NULL, // ObExprRbOrNull2emptyCardinality::eval_rb_or_null2empty_cardinality, /* 707 */
-  NULL, // ObExprRbAndnotNull2emptyCardinality::eval_rb_andnot_null2empty_cardinality, /* 708 */
-  NULL, // ObExprRbAnd::eval_rb_and,                                  /* 709 */
-  NULL, // ObExprRbOr::eval_rb_or,                                    /* 710 */
-  NULL, // ObExprRbXor::eval_rb_xor,                                  /* 711 */
-  NULL, // ObExprRbAndnot::eval_rb_andnot,                            /* 712 */
-  NULL, // ObExprRbAndNull2empty::eval_rb_and_null2empty,             /* 713 */
-  NULL, // ObExprRbOrNull2empty::eval_rb_or_null2empty,               /* 714 */
-  NULL, // ObExprRbAndnotNull2empty::eval_rb_andnot_null2empty,       /* 715 */
+  ObExprRbBuildEmpty::eval_rb_build_empty,                            /* 697 */
+  ObExprRbIsEmpty::eval_rb_is_empty,                                  /* 698 */
+  ObExprRbBuildVarbinary::eval_rb_build_varbinary,                    /* 699 */
+  ObExprRbToVarbinary::eval_rb_to_varbinary,                          /* 700 */
+  ObExprRbCardinality::eval_rb_cardinality,                           /* 701 */
+  ObExprRbAndCardinality::eval_rb_and_cardinality,                    /* 702 */
+  ObExprRbOrCardinality::eval_rb_or_cardinality,                      /* 703 */
+  ObExprRbXorCardinality::eval_rb_xor_cardinality,                    /* 704 */
+  ObExprRbAndnotCardinality::eval_rb_andnot_cardinality,              /* 705 */
+  ObExprRbAndNull2emptyCardinality::eval_rb_and_null2empty_cardinality, /* 706 */
+  ObExprRbOrNull2emptyCardinality::eval_rb_or_null2empty_cardinality, /* 707 */
+  ObExprRbAndnotNull2emptyCardinality::eval_rb_andnot_null2empty_cardinality, /* 708 */
+  ObExprRbAnd::eval_rb_and,                                           /* 709 */
+  ObExprRbOr::eval_rb_or,                                             /* 710 */
+  ObExprRbXor::eval_rb_xor,                                           /* 711 */
+  ObExprRbAndnot::eval_rb_andnot,                                     /* 712 */
+  ObExprRbAndNull2empty::eval_rb_and_null2empty,                      /* 713 */
+  ObExprRbOrNull2empty::eval_rb_or_null2empty,                        /* 714 */
+  ObExprRbAndnotNull2empty::eval_rb_andnot_null2empty,                /* 715 */
   ObExprSdoRelate::eval_sdo_relate,                                   /* 716 */
-  NULL, // ObExprRbToString::eval_rb_to_string,                       /* 717 */
-  NULL, // ObExprRbFromString::eval_rb_from_string,                   /* 718 */
+  ObExprRbToString::eval_rb_to_string,                                /* 717 */
+  ObExprRbFromString::eval_rb_from_string,                            /* 718 */
   NULL, // ObExprRbIterate::eval_rb_iterate,                          /* 719 */
   NULL, // ObExprArray::eval_array,                                   /* 720 */
   NULL, // ObExprVectorL1Distance::calc_l1_distance,                  /* 721 */
@@ -1346,7 +1356,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 127 */
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,        /* 129 */
-  NULL,//ObExprTopNFilter::eval_topn_filter_batch,                    /* 130 */
+  ObExprTopNFilter::eval_topn_filter_batch,                           /* 130 */
   NULL,//ObRelationalExprOperator::eval_batch_min_max_compare,        /* 131 */
   NULL,//ObExprBM25::eval_batch_bm25_relevance_expr,                  /* 132 */
 };
@@ -1464,10 +1474,10 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprInOrNotIn::eval_vector_in_without_row_fallback,         /* 109 */
   ObExprInOrNotIn::eval_vector_in_without_row,                  /* 110 */
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_vector  /* 111 */
-  NULL,//ObExprTopNFilter::eval_topn_filter_vector,             /* 112 */
+  ObExprTopNFilter::eval_topn_filter_vector,                    /* 112 */
   NULL,//ObRelationalExprOperator::eval_vector_min_max_compare, /* 113 */
-  NULL,//ObExprCeilFloor::calc_ceil_floor_vector,               /* 114 */
-  NULL,//ObExprRepeat::eval_repeat_vector,                      /* 115 */
+  ObExprCeilFloor::calc_ceil_floor_vector,                      /* 114 */
+  ObExprRepeat::eval_repeat_vector,                             /* 115 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

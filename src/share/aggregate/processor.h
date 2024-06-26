@@ -33,10 +33,10 @@ public:
     support_fast_single_row_agg_(false), has_distinct_(false), has_order_by_(false), dir_id_(-1),
     op_eval_infos_(nullptr),
     allocator_(label, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id, ObCtxIds::WORK_AREA),
-    agg_ctx_(eval_ctx, tenant_id, aggr_infos, label, allocator_),
+    agg_ctx_(eval_ctx, tenant_id, aggr_infos, label),
     aggregates_(allocator_, aggr_infos.count()),
     fast_single_row_aggregates_(allocator_, aggr_infos.count()), extra_rt_info_buf_(nullptr),
-    cur_extra_rt_info_idx_(0), add_one_row_fns_(allocator_, aggr_infos.count())
+    cur_extra_rt_info_idx_(0), add_one_row_fns_(allocator_, aggr_infos.count()), row_selector_(nullptr)
   {}
   ~Processor() { destroy(); }
   int init();
@@ -65,6 +65,29 @@ public:
       if (OB_FAIL(
             fn(aggregates_.at(col_id), agg_ctx_, col_id, row, aggr_vectors[col_id], batch_idx, batch_size))) {
         SQL_LOG(WARN, "add one row failed", K(ret));
+      }
+    }
+    return ret;
+  }
+
+  inline int add_batch_for_multi_groups(const int32_t start_agg_id, const int32_t end_agg_id,
+                                        AggrRowPtr *agg_rows, const int64_t batch_size)
+  {
+    int ret = OB_SUCCESS;
+    int size = 0;
+    OB_ASSERT(batch_size <= agg_ctx_.eval_ctx_.max_batch_size_);
+    if (OB_ISNULL(row_selector_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "unexpected null selector", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
+      if (OB_NOT_NULL(agg_rows[i])) { row_selector_[size++] = i; }
+    }
+    RowSelector iter(row_selector_, size);
+    for (int col_id = start_agg_id; OB_SUCC(ret) && col_id < end_agg_id; col_id++) {
+      if (OB_FAIL(aggregates_.at(col_id)->add_batch_for_multi_groups(agg_ctx_, agg_rows, iter,
+                                                                     batch_size, col_id))) {
+        SQL_LOG(WARN, "add batch for multi groups failed", K(ret));
       }
     }
     return ret;
@@ -189,9 +212,14 @@ public:
   int init_scalar_aggregate_row(ObCompactRow *&row, RowMeta &row_meta, ObIAllocator &allocator);
 
   int init_fast_single_row_aggs();
-private:
-  int setup_rt_info(AggrRowPtr data, const int32_t row_size);
 
+  RuntimeContext *get_rt_ctx() { return &agg_ctx_; }
+
+  static int setup_rt_info(AggrRowPtr data, RuntimeContext &agg_ctx);
+
+  ObIArray<IAggregate *> &get_aggregates() { return aggregates_; }
+
+private:
   int setup_bypass_rt_infos(const int64_t batch_size);
 
   int llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx) const;
@@ -220,6 +248,7 @@ private:
   char *extra_rt_info_buf_;
   int32_t cur_extra_rt_info_idx_;
   ObFixedArray<add_one_row_fn, ObIAllocator> add_one_row_fns_;
+  uint16_t *row_selector_;
   // ObFixedArray<typename T>
 };
 } // end aggregate

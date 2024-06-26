@@ -46,7 +46,7 @@ public:
       const ObTableAccessContext &context,
       const int32_t col_idx,
       blocksstable::ObIMicroBlockReader *reader,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_count);
   int process(blocksstable::ObStorageDatum &datum, const uint64_t row_count);
   int process(const blocksstable::ObMicroIndexInfo &index_info);

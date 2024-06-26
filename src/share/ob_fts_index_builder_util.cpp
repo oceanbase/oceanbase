@@ -155,6 +155,42 @@ int ObFtsIndexBuilderUtil::append_fts_doc_word_arg(
   return ret;
 }
 
+int ObFtsIndexBuilderUtil::fts_doc_word_schema_exist(
+    uint64_t tenant_id,
+    uint64_t database_id,
+    ObSchemaGetterGuard &schema_guard,
+    const ObString &index_name,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  const int64_t buf_size = OB_MAX_TABLE_NAME_BUF_LENGTH;
+  char buf[buf_size] = {0};
+  int64_t pos = 0;
+  ObString doc_word_index_name;
+  const ObTableSchema *fts_doc_word_schema = nullptr;
+  if (OB_FAIL(databuff_printf(buf,
+                              buf_size,
+                              pos,
+                              "%.*s_fts_doc_word",
+                              index_name.length(),
+                              index_name.ptr()))) {
+    LOG_WARN("fail to printf fts doc word name str", K(ret), K(index_name));
+  } else if (OB_FALSE_IT(doc_word_index_name.assign_ptr(buf, pos))) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                   database_id,
+                                                   doc_word_index_name,
+                                                   true/*is_index*/,
+                                                   fts_doc_word_schema,
+                                                   false/*with_hidden_flag*/,
+                                                   true/*is_built_in_index*/))) {
+    LOG_WARN("failed to get index schema", K(ret), K(tenant_id));
+  } else if (OB_NOT_NULL(fts_doc_word_schema)) {
+    is_exist = true;
+  }
+  return ret;
+}
+
 int ObFtsIndexBuilderUtil::generate_fts_aux_index_name(
     obrpc::ObCreateIndexArg &arg,
     ObIAllocator *allocator)
@@ -273,32 +309,22 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
     ObColumnSchemaV2 *generated_word_col = nullptr;
     ObColumnSchemaV2 *generated_doc_len_col = nullptr;
     ObColumnSchemaV2 *generated_word_count_col = nullptr;
-    if (is_rowkey_doc || is_doc_rowkey) {
-      if (OB_ISNULL(existing_doc_id_col)) { // need to generate doc id col
-        doc_id_col_id = available_col_id++;
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(generate_doc_id_column(&index_arg,
-                                                  doc_id_col_id,
-                                                  data_schema,
-                                                  generated_doc_id_col))) {
-          LOG_WARN("failed to generate doc id column", K(ret));
-        } else if (OB_FAIL(gen_columns.push_back(generated_doc_id_col))) {
-          LOG_WARN("failed to push back doc id col", K(ret));
-        }
-      }
+    if (OB_ISNULL(existing_doc_id_col)) { // need to generate doc id col
+      doc_id_col_id = available_col_id++;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(push_back_gen_col(tmp_cols,
-                                           existing_doc_id_col,
-                                           generated_doc_id_col))) {
+      } else if (OB_FAIL(generate_doc_id_column(&index_arg,
+                                                doc_id_col_id,
+                                                data_schema,
+                                                generated_doc_id_col))) {
+        LOG_WARN("failed to generate doc id column", K(ret));
+      } else if (OB_FAIL(gen_columns.push_back(generated_doc_id_col))) {
         LOG_WARN("failed to push back doc id col", K(ret));
-      } else if (OB_FAIL(adjust_fts_arg(&index_arg,
-                                        data_schema,
-                                        allocator,
-                                        tmp_cols))) {
-        LOG_WARN("failed to append fts_index arg", K(ret));
       }
+    }
+    if (is_rowkey_doc || is_doc_rowkey) {
     } else if (is_fts_index || is_doc_word) {
-      if (OB_ISNULL(existing_word_col)) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(existing_word_col)) {
         word_col_id = available_col_id++;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(generate_word_segment_column(&index_arg,
@@ -334,6 +360,20 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
           LOG_WARN("fail to push back generated document length", K(ret));
         }
       }
+    }
+    if (is_rowkey_doc || is_doc_rowkey) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(push_back_gen_col(tmp_cols,
+                                           existing_doc_id_col,
+                                           generated_doc_id_col))) {
+        LOG_WARN("failed to push back doc id col", K(ret));
+      } else if (OB_FAIL(adjust_fts_arg(&index_arg,
+                                        data_schema,
+                                        allocator,
+                                        tmp_cols))) {
+        LOG_WARN("failed to append fts_index arg", K(ret));
+      }
+    } else if (is_fts_index || is_doc_word) {
       if (OB_FAIL(ret)) {
       } else if (is_fts_index) {
         if (OB_FAIL(push_back_gen_col(tmp_cols,
@@ -384,6 +424,7 @@ int ObFtsIndexBuilderUtil::adjust_fts_args(
       }
     }
   }
+  FLOG_INFO("adjust fts arg finished", K(index_arg));
   return ret;
 }
 
@@ -802,8 +843,8 @@ int ObFtsIndexBuilderUtil::inner_adjust_fts_arg(
        !share::schema::is_fts_doc_word_aux(fts_arg->index_type_)) ||
       fts_cols.count() != index_column_cnt + 2) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret), KPC(fts_arg),
-        K(fts_cols.count()), K(index_column_cnt));
+    LOG_WARN("invalid argument", K(ret), KPC(fts_arg), K(fts_cols.count()),
+        K(index_column_cnt));
   } else {
     // 1. add doc id column, word column to arg->index_columns
     for (int64_t i = 0; OB_SUCC(ret) && i < index_column_cnt; ++i) {
@@ -1866,6 +1907,7 @@ int ObMulValueIndexBuilderUtil::is_multivalue_index_type(
       if (std::regex_match(buf, pattern)) {
         is_multi_value_index = true;
       } else {
+        is_multi_value_index = false;
         std::regex pattern1(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*MULTIVALUE\s*\))", std::regex_constants::icase);
         if (std::regex_match(buf, pattern1)) {
           is_multi_value_index = true;
@@ -2052,6 +2094,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
       ObRawExpr *expr = nullptr;
       ObColumnSchemaV2 *gen_col = nullptr;
       budy_mulvalue_col = nullptr;
+      bool force_rebuild = false;
 
       if (OB_FAIL(session.init(0 /*default session id*/,
                                 0 /*default proxy id*/,
@@ -2076,6 +2119,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column_raw(
                                                               session,
                                                               data_schema,
                                                               &schema_checker,
+                                                              force_rebuild,
                                                               gen_col,
                                                               budy_mulvalue_col))) {
         LOG_WARN("session load default configs failed", K(ret));
@@ -2109,6 +2153,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
     const ObSQLSessionInfo &session_info,
     ObTableSchema &table_schema,
     sql::ObSchemaChecker *schema_checker,
+    bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&budy_col)
 {
@@ -2131,7 +2176,7 @@ int ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
     LOG_WARN("multivalue generated expr should be function, not column ref.", K(ret));
   } else {
     //real index expr, so generate hidden generated column in data table schema
-    if (OB_FAIL(generate_multivalue_column(*expr, table_schema, schema_checker->get_schema_guard(), gen_col, budy_col))) {
+    if (OB_FAIL(generate_multivalue_column(*expr, table_schema, schema_checker->get_schema_guard(), force_rebuild, gen_col, budy_col))) {
       LOG_WARN("generate ordinary generated column failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::check_generated_column_expr_str(
         gen_col->get_cur_default_value().get_string(), session_info, table_schema))) {
@@ -2149,6 +2194,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
     sql::ObRawExpr &expr,
     ObTableSchema &data_schema,
     ObSchemaGetterGuard *schema_guard,
+    bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&gen_budy_col)
 {
@@ -2168,7 +2214,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
       size_t expr_str_len = strlen(expr_def_buf);
       expr_def.assign_ptr(expr_def_buf, expr_str_len);
 
-      if (OB_FAIL(data_schema.get_generated_column_by_define(expr_def,
+      if (!force_rebuild && OB_FAIL(data_schema.get_generated_column_by_define(expr_def,
                                                              true/*only hidden column*/,
                                                              old_gen_col))) {
         LOG_WARN("get generated column by define failed", K(ret), K(expr_def));
@@ -2391,6 +2437,9 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
     common::ObOrderType order_type;
     const ObColumnSchemaV2 *mvi_array_column = nullptr;
     int32_t multi_column_cnt = 0;
+    // 2 means : multivalue column, multivalue array column
+    bool is_complex_index = arg.index_columns_.count() > 2;
+    bool is_real_unique = index_schema.is_unique_index() && !is_complex_index;
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.index_columns_.count(); ++i) {
       const ObColumnSchemaV2 *mvi_column = nullptr;
       const ObColumnSortItem &mvi_col_item = arg.index_columns_.at(i);
@@ -2431,13 +2480,13 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
     } else if (OB_ISNULL(mvi_array_column)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get multivalue array column", K(ret));
-    } else if (index_schema.is_unique_index()) {
+    } else if (is_real_unique) {
       // json-array column is not index coumn, not rowkey column
       index_schema.set_rowkey_column_num(row_desc.get_column_num());
       index_schema.set_index_column_num(row_desc.get_column_num());
     }
 
-    bool is_rowkey = !index_schema.is_unique_index();
+    bool is_rowkey = !is_real_unique;
     bool is_index_column = is_rowkey;
 
     const ObColumnSchemaV2 *rowkey_column = nullptr;
@@ -2489,7 +2538,7 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
       LOG_WARN("add column failed", "mvi_array_column", *mvi_array_column, K(row_desc), K(ret));
     }
 
-    if (OB_SUCC(ret) && !index_schema.is_unique_index()) {
+    if (OB_SUCC(ret) && !is_real_unique) {
       // json-array column is not index coumn, not rowkey column
       index_schema.set_rowkey_column_num(row_desc.get_column_num() - 1);
       index_schema.set_index_column_num(row_desc.get_column_num() - 1);

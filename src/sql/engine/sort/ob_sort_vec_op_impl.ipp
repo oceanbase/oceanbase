@@ -176,7 +176,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_temp_row_store(
   const bool reorder_fixed_expr = true;
   ObMemAttr mem_attr(tenant_id_, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA);
   if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, mem_limit, enable_dump,
-                             extra_size /* row_extra_size */, reorder_fixed_expr, enable_trunc, compress_type))) {
+                             extra_size /* row_extra_size */, compress_type, reorder_fixed_expr,
+                             enable_trunc))) {
     SQL_ENG_LOG(WARN, "init row store failed", K(ret));
   } else {
     row_store.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -299,6 +300,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
                                                  comp_, &mem_context_->get_malloc_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_ENG_LOG(WARN, "allocate memory failed", K(ret));
+    } else if (is_topn_sort() && ctx.enable_pd_topn_filter_
+               && OB_FAIL(pd_topn_filter_.init(ctx, mem_context_))) {
+      SQL_ENG_LOG(WARN, "failed to init pushdown topn filter", K(ret));
     } else if (batch_size > 0
                && OB_ISNULL(sk_rows_ = SK_DOWNCAST_PP(mem_context_->get_malloc_allocator().alloc(
                               sizeof(*sk_rows_) * batch_size)))) {
@@ -591,6 +595,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::adjust_topn_heap(const Store
         SQL_ENG_LOG(WARN, "failed to replace top", K(ret));
       } else {
         store_row = new_row;
+        if (pd_topn_filter_.enabled()) {
+          pd_topn_filter_.set_need_update(true);
+        }
       }
     } else {
       ret = comp_.ret_;
@@ -932,6 +939,12 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_heap_sort_row(const Stor
       store_row = new_sk_row;
       SQL_ENG_LOG(DEBUG, "in memory topn sort check add row", KPC(new_sk_row));
     }
+    if (OB_SUCC(ret) && topn_heap_->count() == topn_cnt_) {
+      // the first time reach heap capacity, set_need_update to update topn filter data;
+      if (pd_topn_filter_.enabled()) {
+        pd_topn_filter_.set_need_update(true);
+      }
+    }
   }
   return ret;
 }
@@ -989,6 +1002,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_heap_sort_batch(
       }
       row_count++;
     }
+    if (OB_SUCC(ret) && pd_topn_filter_.need_update()) {
+      if (OB_FAIL(pd_topn_filter_.update_filter_data(topn_heap_->top(), sk_row_meta_))) {
+        LOG_WARN("failed to update filter data", K(ret));
+      }
+    }
     if (OB_NOT_NULL(append_row_count)) {
       *append_row_count = row_count;
     }
@@ -1026,6 +1044,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_heap_sort_batch(
     } else {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "failed to add heap sort batch", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && pd_topn_filter_.need_update()) {
+    if (OB_FAIL(pd_topn_filter_.update_filter_data(topn_heap_->top(), sk_row_meta_))) {
+      LOG_WARN("failed to update filter data", K(ret));
     }
   }
   return ret;
@@ -1376,7 +1399,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
       bucket_part_cnt++;
     }
     comp_.set_cmp_range(0, part_cnt_ + hash_expr_cnt);
-    std::sort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
+    lib::ob_sort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
     comp_.set_cmp_range(part_cnt_ + hash_expr_cnt, comp_.get_cnt());
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_part_cnt; ++i) {
       int64_t rows_last = rows_idx;
@@ -1396,10 +1419,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
           } else {
             enable_encode_sortkey_ = false;
             comp_.fallback_to_disable_encode_sortkey();
-            std::sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
+            lib::ob_sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
           }
         } else {
-          std::sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
+          lib::ob_sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
         }
       }
     }
@@ -1443,10 +1466,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort_inmem_data()
         } else {
           enable_encode_sortkey_ = false;
           comp_.fallback_to_disable_encode_sortkey();
-          std::sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
+          lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
         }
       } else {
-        std::sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
+        lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
       }
       if (OB_SUCCESS != comp_.ret_) {
         ret = comp_.ret_;
@@ -1488,6 +1511,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort_inmem_data()
           op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
           op_monitor_info_.otherstat_1_value_ += 1;
           prev = &rows_->at(i);
+        }
+        if (OB_FAIL(ret)) {
+        } else if (pd_topn_filter_.enabled()
+            && OB_FAIL(pd_topn_filter_.update_filter_data(*imms_heap_->top(), sk_row_meta_))) {
+          LOG_WARN("failed to update filter data", K(ret));
         }
         heap_iter_begin_ = false;
       }

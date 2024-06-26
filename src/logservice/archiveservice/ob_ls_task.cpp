@@ -664,7 +664,7 @@ int ObLSArchiveTask::ArchiveDest::pop_fetch_log(ObArchiveLogFetchTask *&task)
   } else {
     wait_send_task_array_[0] = wait_send_task_array_[wait_send_task_count_ - 1];
     wait_send_task_count_--;
-    std::sort(wait_send_task_array_, wait_send_task_array_ + wait_send_task_count_, LogFetchTaskCompare());
+    lib::ob_sort(wait_send_task_array_, wait_send_task_array_ + wait_send_task_count_, LogFetchTaskCompare());
   }
   return ret;
 }
@@ -744,7 +744,7 @@ int ObLSArchiveTask::ArchiveDest::push_fetch_log(ObArchiveLogFetchTask &task)
   } else {
     wait_send_task_array_[wait_send_task_count_] = &task;
     wait_send_task_count_++;
-    std::sort(wait_send_task_array_, wait_send_task_array_ + wait_send_task_count_, LogFetchTaskCompare());
+    lib::ob_sort(wait_send_task_array_, wait_send_task_array_ + wait_send_task_count_, LogFetchTaskCompare());
   }
   ARCHIVE_LOG(INFO, "print push_fetch_log", K(task), KPC(this));
   return ret;

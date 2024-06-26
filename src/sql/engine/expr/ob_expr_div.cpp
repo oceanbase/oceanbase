@@ -578,7 +578,9 @@ int ObExprDiv::div_float_batch(BATCH_EVAL_FUNC_ARG_DECL)
 int ObExprDiv::div_float_vector(VECTOR_EVAL_FUNC_ARG_DECL)
 {
   const bool is_oracle = lib::is_oracle_mode();
-  return def_fixed_len_vector_arith_op_func<ObFloatVectorDivFunc>(VECTOR_EVAL_FUNC_ARG_LIST, is_oracle);
+  return def_fixed_len_vector_arith_op_func<ObFloatVectorDivFunc,
+                                            ObArithTypedBase<float, float, float>>(
+    VECTOR_EVAL_FUNC_ARG_LIST, is_oracle);
 }
 
 
@@ -677,8 +679,8 @@ int ObExprDiv::div_double_batch(BATCH_EVAL_FUNC_ARG_DECL)
 int ObExprDiv::div_double_vector(VECTOR_EVAL_FUNC_ARG_DECL)
 {
   const bool is_oracle = lib::is_oracle_mode();
-  return def_fixed_len_vector_arith_op_func<ObDoubleVectorDivFunc>(VECTOR_EVAL_FUNC_ARG_LIST, expr,
-                                                         is_oracle);
+  return def_fixed_len_vector_arith_op_func<ObDoubleVectorDivFunc, ObArithTypedBase<double, double, double>>(
+    VECTOR_EVAL_FUNC_ARG_LIST, expr, is_oracle);
 }
 
 struct ObNumberDivFunc
@@ -806,8 +808,8 @@ int ObExprDiv::div_number_batch(BATCH_EVAL_FUNC_ARG_DECL)
 int ObExprDiv::div_number_vector(VECTOR_EVAL_FUNC_ARG_DECL)
 {
   const bool is_oracle = lib::is_oracle_mode();
-  return def_variable_len_vector_arith_op_func<ObNumberVectorDivFunc>(VECTOR_EVAL_FUNC_ARG_LIST, expr, ctx,
-                                                         is_oracle);
+  return def_variable_len_vector_arith_op_func<ObNumberVectorDivFunc, ObArithOpBase>(
+    VECTOR_EVAL_FUNC_ARG_LIST, expr, ctx, is_oracle);
 }
 
 

@@ -25,6 +25,11 @@ const char* build_flags();
 
 int so_main()
 {
+  #ifndef ENABLE_SANITY
+    const char *extra_flags = "";
+  #else
+    const char *extra_flags = "|Sanity";
+  #endif
   fprintf(stdout, "\n");
 
   fprintf(stdout, "libobcdc (%s %s)\n",   PACKAGE_STRING, RELEASEID);
@@ -32,7 +37,7 @@ int so_main()
 
   fprintf(stdout, "BUILD_VERSION: %s\n",    build_version());
   fprintf(stdout, "BUILD_TIME: %s %s\n",  build_date(), build_time());
-  fprintf(stdout, "BUILD_FLAGS: %s\n",    build_flags());
+  fprintf(stdout, "BUILD_FLAGS: %s%s\n",    build_flags(), extra_flags);
   exit(0);
 }
 

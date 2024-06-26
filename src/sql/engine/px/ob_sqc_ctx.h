@@ -110,6 +110,8 @@ public:
   // 超过一个算子会使用 datahub，所以大小默认为 1 即可
   common::ObSEArray<ObPxDatahubDataProvider *, 1> whole_msg_provider_list_;
   common::ObSEArray<std::pair<int64_t, int64_t>, 1> init_channel_msg_cnts_; // <op_id, piece_cnt>
+  ObSPWinFuncPXWholeMsgP sp_winfunc_whole_msg_proc_;
+  ObRDWinFuncPXWholeMsgP rd_winfunc_whole_msg_proc_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqcCtx);
 };

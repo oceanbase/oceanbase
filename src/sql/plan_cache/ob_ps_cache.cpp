@@ -763,7 +763,7 @@ int ObPsCache::inner_cache_evict(bool is_evict_all)
           }
       } else {
         if (op.get_used_size() > get_mem_high()) {
-          std::sort(closed_stmt_ids.begin(), closed_stmt_ids.end(), PsTimeCmp());
+          lib::ob_sort(closed_stmt_ids.begin(), closed_stmt_ids.end(), PsTimeCmp());
           for (int64_t i = 0; i < closed_stmt_ids.count() / 2; ++i) { //ignore ret
             LOG_TRACE("ps close time", K(i), K(closed_stmt_ids.at(i).first), K(closed_stmt_ids.at(i).second));
             if (OB_FAIL(destroy_cached_ps(closed_stmt_ids.at(i).first))) {

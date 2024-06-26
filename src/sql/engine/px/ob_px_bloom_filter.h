@@ -19,6 +19,13 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
+#include "common/ob_target_specific.h"
+
+#if OB_USE_MULTITARGET_CODE
+#include <emmintrin.h>
+#include <immintrin.h>
+#endif
+
 #ifndef __SQL_ENG_PX_BLOOM_FILTER_H__
 #define __SQL_ENG_PX_BLOOM_FILTER_H__
 
@@ -26,6 +33,8 @@ namespace oceanbase
 {
 namespace sql
 {
+
+#define LOG_HASH_COUNT 2        // = log2(FIXED_HASH_COUNT)
 
 typedef common::ObSEArray<uint64_t, 128> ObPxBFHashArray;
 
@@ -66,8 +75,12 @@ public:
   inline int might_contain(uint64_t hash, bool &is_match) {
     return (this->*might_contain_)(hash, is_match);
   }
+  int might_contain_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                           const EvalBound &bound, uint64_t *hash_values, int64_t &total_count,
+                           int64_t &filter_count);
   int put(uint64_t hash);
   int put_batch(ObPxBFHashArray &hash_val_array);
+  int put_batch(uint64_t *batch_hash_values, const EvalBound &bound, const ObBitVector &skip, bool &is_empty);
   int merge_filter(ObPxBloomFilter *filter);
   int64_t get_value_true_count() const { return true_count_; };
   void dump_filter();      //for debug
@@ -88,13 +101,18 @@ public:
   void set_end_idx(int64_t idx) { end_idx_ = idx; }
   int64_t get_begin_idx() const { return begin_idx_; }
   int64_t get_end_idx() const { return end_idx_; }
-  void prefetch_bits_block(uint64_t hash);
+  inline void prefetch_bits_block(uint64_t hash)
+  {
+    uint64_t block_begin = (hash & block_mask_) << LOG_HASH_COUNT;
+    __builtin_prefetch(&bits_array_[block_begin], 0);
+  }
   typedef int (ObPxBloomFilter::*GetFunc)(uint64_t hash, bool &is_match);
   int generate_receive_count_array(int64_t piece_size);
   void reset();
   int assign(const ObPxBloomFilter &filter, int64_t tenant_id);
   int regenerate();
   void set_allocator_attr(int64_t tenant_id);
+  int might_contain_nonsimd(uint64_t hash, bool &is_match);
   TO_STRING_KV(K_(data_length), K_(bits_count), K_(fpp), K_(hash_func_count), K_(is_inited),
       K_(bits_array_length), K_(true_count));
 private:
@@ -103,8 +121,11 @@ private:
   void calc_num_of_hash_func();
   void calc_num_of_bits();
   void align_max_bit_count(int64_t max_filter_size);
-  int might_contain_nonsimd(uint64_t hash, bool &is_match);
   int might_contain_simd(uint64_t hash, bool &is_match);
+
+#ifdef unittest_bloom_filter
+  int might_contain_batch(uint64_t *hash_values, int64_t batch_size);
+#endif
 
 private:
   int64_t data_length_;          //原始数据长度
@@ -127,6 +148,7 @@ public:
    int64_t px_bf_recieve_size_;   // 预期应该收到的个数
    volatile int64_t px_bf_merge_filter_count_; // 当前持有filter, 做merge filter操作的线程个数
    ObArray<BloomFilterReceiveCount> receive_count_array_;
+   int64_t block_mask_;          // for locating block
 DISALLOW_COPY_AND_ASSIGN(ObPxBloomFilter);
 };
 
@@ -307,7 +329,58 @@ private:
   int process_px_bloom_filter_data();
 };
 
+} // namespace sql
+
+namespace common
+{
+OB_DECLARE_AVX512_SPECIFIC_CODE(OB_INLINE void inline_might_contain_simd(
+    int64_t *bits_array, int64_t block_mask, uint64_t hash, bool &is_match) {
+  static const __m256i HASH_VALUES_MASK = _mm256_set_epi64x(24, 16, 8, 0);
+  uint32_t hash_high = (uint32_t)(hash >> 32);
+  uint64_t block_begin = (hash & block_mask) << LOG_HASH_COUNT;
+  __m256i bit_ones = _mm256_set1_epi64x(1);
+  __m256i hash_values = _mm256_set1_epi64x(hash_high);
+  hash_values = _mm256_srlv_epi64(hash_values, HASH_VALUES_MASK);
+  hash_values = _mm256_rolv_epi64(bit_ones, hash_values);
+  __m256i bf_values = _mm256_load_si256(reinterpret_cast<__m256i *>(&bits_array[block_begin]));
+  is_match = 1 == _mm256_testz_si256(~bf_values, hash_values);
+})
+
+#ifdef unittest_bloom_filter
+OB_DECLARE_AVX512_SPECIFIC_CODE(void might_contain_batch_simd(
+    sql::ObPxBloomFilter *bloom_filter, int64_t *bits_array, int64_t block_mask, uint64_t *hash_values,
+    const int64_t &batch_size) {
+  bool is_match;
+  for (int64_t i = 0; i < batch_size; ++i) {
+    common::specific::avx512::inline_might_contain_simd(bits_array, block_mask, hash_values[i],
+                                                        is_match);
+  }
+})
+#endif
+} // namespace common
+
+namespace sql {
+#ifdef unittest_bloom_filter
+int ObPxBloomFilter::might_contain_batch(uint64_t *hash_values, int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  bool is_match;
+#if OB_USE_MULTITARGET_CODE
+  if (common::is_arch_supported(ObTargetArch::AVX512)) {
+    common::specific::avx512::might_contain_batch_simd(this, bits_array_, block_mask_, hash_values,
+                                                       batch_size);
+  } else {
+#endif
+    for (int64_t i = 0; i < batch_size; ++i) {
+      might_contain_nonsimd(hash_values[i], is_match);
+    }
+#if OB_USE_MULTITARGET_CODE
+  }
+#endif
+  return ret;
 }
+#endif
+} // namespace sql
 
 } //end oceanbase
 #endif

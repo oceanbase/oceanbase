@@ -12,6 +12,17 @@ Variable_name	Value
 ob_max_read_stale_time	-1
 alter system set weak_read_version_refresh_interval="6s";
 alter system set weak_read_version_refresh_interval="3s";
+use oceanbase;
+set ob_read_consistency = 'weak';
+show variables like 'ob_read_consistency';
+Variable_name	Value
+ob_read_consistency	WEAK
+select count(1) > 0 from __all_server;
+count(1) > 0
+1
+select count(1) from gv$ob_sql_audit where consistency_level=3 and query_sql = 'select count(1) > 0 from __all_server' and query_sql not like '%sql_audit%';
+count(1)
+1
 set global ob_max_read_stale_time = -1;
 show global variables like '%stale_time%';
 Variable_name	Value

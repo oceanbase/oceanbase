@@ -199,7 +199,7 @@ private:
     int ret = OB_SUCCESS;
     // sort heap table array
     ObTableLoadMultipleHeapTableCompactCompare compare;
-    std::sort(curr_round->begin(), curr_round->end(), compare);
+    lib::ob_sort(curr_round->begin(), curr_round->end(), compare);
     // compact top merge_count_per_round heap table
     for (int64_t i = 0; OB_SUCC(ret) && i < mem_ctx_->table_data_desc_.merge_count_per_round_;
          ++i) {

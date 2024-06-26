@@ -2880,6 +2880,7 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
     }
   }
   if (OB_SUCC(ret)) {
+    int saved_ret = OB_SUCCESS;
     ObAddr unused_leader_addr;
     const int64_t timeout_us = ObDDLUtil::get_default_ddl_rpc_timeout();
     common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> ::const_iterator iter =
@@ -2911,7 +2912,7 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
         arg.dest_schema_id_ = target_object_id_;
         arg.schema_version_ = schema_version_;
         arg.dest_schema_version_ = dst_schema_version_;
-        arg.snapshot_version_ = snapshot_version_;
+        arg.snapshot_version_ = 1; // to ensure arg valid only.
         arg.ddl_type_ = task_type_;
         arg.task_id_ = task_id_;
         arg.parallelism_ = 1; // to ensure arg valid only.
@@ -2925,6 +2926,7 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
           if (OB_TMP_FAIL(root_service->get_rpc_proxy().to(paxos_server_list.at(j))
             .by(dst_tenant_id_).timeout(timeout_us).check_and_cancel_ddl_complement_dag(arg, is_replica_dag_exist))) {
             // consider as dag does exist in this server.
+            saved_ret = OB_SUCC(saved_ret) ? tmp_ret : saved_ret;
             is_tablet_dag_exist = true;
             LOG_WARN("check and cancel ddl complement dag failed", K(ret), K(tmp_ret), K(arg));
           } else if (is_replica_dag_exist) {
@@ -2947,6 +2949,7 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
           LOG_WARN("erase failed", K(ret));
         }
       }
+      ret = OB_SUCC(ret) ? saved_ret : ret;
     }
   }
   if (OB_SUCC(ret)) {

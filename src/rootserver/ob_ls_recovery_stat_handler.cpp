@@ -196,7 +196,7 @@ int ObLSRecoveryStatHandler::increase_ls_replica_readable_scn_(SCN &readable_scn
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(readable_scn));
   // scn get order: read_scn before replayable_scn before sync_scn
-  } else if (OB_FAIL(tenant_info_loader->get_replayable_scn(replayable_scn))) {
+  } else if (OB_FAIL(tenant_info_loader->get_global_replayable_scn(replayable_scn))) {
     LOG_WARN("failed to get replayable_scn", KR(ret));
   } else if (OB_FAIL(ObLSServiceHelper::get_ls_replica_sync_scn(MTL_ID(), ls_->get_ls_id(), sync_scn))) {
     LOG_WARN("failed to get ls sync scn", KR(ret), "tenant_id", MTL_ID());
@@ -834,7 +834,7 @@ int ObLSRecoveryStatHandler::calc_majority_min_readable_scn_(
     LOG_WARN("can not get majority readable_scn count", KR(ret),
              K(majority_cnt), K(readable_scn_list));
   } else {
-    (void)std::sort(readable_scn_list.begin(), readable_scn_list.end(),
+    (void)lib::ob_sort(readable_scn_list.begin(), readable_scn_list.end(),
                     std::greater<share::SCN>());
     for (int64_t i = 0;
          OB_SUCC(ret) && i < readable_scn_list.count() && i < majority_cnt;

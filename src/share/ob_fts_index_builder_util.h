@@ -46,6 +46,12 @@ public:
       const obrpc::ObCreateIndexArg &index_arg,
       ObIAllocator *allocator,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
+  static int fts_doc_word_schema_exist(
+      uint64_t tenant_id,
+      uint64_t database_id,
+      ObSchemaGetterGuard &schema_guard,
+      const ObString &index_name,
+      bool &is_exist);
   static int generate_fts_aux_index_name(
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator *allocator);
@@ -206,12 +212,14 @@ public:
    const sql::ObSQLSessionInfo &session_info,
    ObTableSchema &table_schema,
    sql::ObSchemaChecker *schema_checker,
+   bool force_rebuild,
    ObColumnSchemaV2 *&gen_col,
    ObColumnSchemaV2 *&budy_col);
  static int generate_multivalue_column(
     sql::ObRawExpr &expr,
     ObTableSchema &data_schema,
     ObSchemaGetterGuard *schema_guard,
+    bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&gen_budy_col);
  static int inner_adjust_multivalue_arg(

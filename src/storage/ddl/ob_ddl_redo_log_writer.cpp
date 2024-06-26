@@ -1574,7 +1574,7 @@ bool ObDDLRedoLogWriterCallback::is_column_group_info_valid() const
   return table_key_.is_column_store_sstable() && row_id_offset_ >= 0;
 }
 
-int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
+int ObDDLRedoLogWriterCallback::write(ObMacroBlockHandle &macro_handle,
                                       const ObLogicMacroBlockId &logic_id,
                                       char *buf,
                                       const int64_t buf_len,

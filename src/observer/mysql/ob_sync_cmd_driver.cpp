@@ -337,7 +337,7 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
         LOG_WARN("convert text value charset failed", K(ret));
       }
       if (OB_FAIL(ret)) {
-      } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
+      } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry() || value.is_roaringbitmap())
                   && OB_FAIL(process_lob_locator_results(value, result))) {
         LOG_WARN("convert lob locator to longtext failed", K(ret));
       } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type() || value.is_geometry()) &&

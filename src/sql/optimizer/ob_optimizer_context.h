@@ -234,6 +234,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     nested_loop_join_enabled_(true),
     system_stat_(),
     storage_estimation_enabled_(false),
+    das_keep_order_enabled_(true),
     generate_random_plan_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
@@ -311,6 +312,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
 
   inline bool is_storage_estimation_enabled() const { return storage_estimation_enabled_; }
   void set_storage_estimation_enabled(bool storage_estimation_enabled) { storage_estimation_enabled_ = storage_estimation_enabled; }
+  inline bool is_das_keep_order_enabled() const { return das_keep_order_enabled_; }
+  void set_das_keep_order_enabled(bool das_keep_order_enabled) { das_keep_order_enabled_ = das_keep_order_enabled; }
   inline int64_t get_parallel() const { return parallel_; }
   inline int64_t get_max_parallel() const { return max_parallel_; }
   inline int64_t get_parallel_degree_limit(const int64_t server_cnt) const { return auto_dop_params_.get_parallel_degree_limit(server_cnt); }
@@ -690,6 +693,7 @@ private:
   bool nested_loop_join_enabled_;
   OptSystemStat system_stat_;
   bool storage_estimation_enabled_;
+  bool das_keep_order_enabled_;
 
   bool generate_random_plan_;
 };

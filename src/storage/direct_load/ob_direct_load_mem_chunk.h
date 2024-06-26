@@ -109,7 +109,7 @@ int ObDirectLoadMemChunk<T, Compare>::sort(Compare &compare)
   int ret = common::OB_SUCCESS;
   if (item_list_.size() > 1) {
     OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, memory_sort_item_time_us);
-    std::sort(item_list_.begin(), item_list_.end(), compare);
+    lib::ob_sort(item_list_.begin(), item_list_.end(), compare);
     if (OB_FAIL(compare.get_error_code())) {
       ret = compare.get_error_code();
       STORAGE_LOG(WARN, "fail to sort memory item list", KR(ret));

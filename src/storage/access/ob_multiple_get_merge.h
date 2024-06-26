@@ -64,7 +64,6 @@ protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
-  virtual void collect_merge_stat(ObTableStoreStat &stat) const override;
 private:
   const common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;
   common::ObSEArray<blocksstable::ObDatumRowkey, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> cow_rowkeys_;

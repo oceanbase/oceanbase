@@ -133,6 +133,8 @@ public:
   int64_t &get_extra_size() { return extra_size_; }
 
   int64_t total_size() const { return size_ + extra_size_; }
+
+  bool is_normal_block() const { return INDEX_BLOCK == type_ || DATA_BLOCK == type_; }
   bool is_index_block() const { return INDEX_BLOCK == type_ || DDL_BLOCK_TREE == type_ || DDL_MERGE_INDEX_BLOCK == type_;}
 
   void reset() { *this = ObMicroBlockData(); }
@@ -160,6 +162,9 @@ public:
   const char *extra_buf_;
   int64_t extra_size_;
   Type type_;
+
+  static const uint64_t ALIGN_SIZE = 8;
+  static const int64_t ALIGN_REDUNDANCY_SIZE = ALIGN_SIZE - 1;
 };
 
 class ObMicroBlock
@@ -294,7 +299,7 @@ public:
       const bool is_index_block = false);
   virtual int get_row_count(
       int32_t col_id,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool contains_null,
       const share::schema::ObColumnParam *col_param,
@@ -328,7 +333,7 @@ public:
       const ObTableAccessContext &context,
       const int32_t col_offset,
       const share::schema::ObColumnParam &col_param,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObAggDatumBuf &datum_buf,
       storage::ObAggCell &agg_cell)
@@ -352,7 +357,7 @@ public:
   }
   virtual int read_reference(
       const int32_t group_by_col,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const
   {
@@ -360,7 +365,7 @@ public:
     return OB_NOT_SUPPORTED;
   }
   virtual int get_group_by_aggregate_result(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell)

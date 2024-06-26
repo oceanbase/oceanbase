@@ -257,7 +257,7 @@ ObPushdownFilterExecutor* TestCOSSTableRowsFilter::create_physical_filter(
     column_exprs->push_back(nullptr);
     cg_idxes.push_back(_cg_idxes.at(i));
   }
-  filter->cg_col_exprs_ = cg_col_exprs;
+  filter->cg_col_exprs_.assign(*cg_col_exprs);
   return filter;
 }
 

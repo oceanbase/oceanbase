@@ -139,7 +139,7 @@ int ObMergeParameter::init(
     }
   }
   if (OB_SUCC(ret)) {
-    STORAGE_LOG(INFO, "success to init ObMergeParameter", K(ret), KPC(this));
+    FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), KPC(this));
   }
   return ret;
 }

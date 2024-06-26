@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX LIB
 #include "lib/utility/ob_print_utils.h"
 #include "lib/string/ob_string.h"
+#include "lib/thread_local/ob_tsi_factory.h"
 namespace oceanbase
 {
 namespace common
@@ -460,6 +461,42 @@ int databuff_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const
         key, std::min(static_cast<int32_t>(buf_len - pos), obj.length()), obj.ptr());
   }
   return ret;
+}
+
+int64_t CStringBufMgr::acquire(char *&buffer)
+{
+  int64_t buf_len = 0;
+  if (0 == level_) {
+    buffer = local_buf_ + pos_;
+    buf_len = BUF_SIZE - pos_;
+  } else {
+    BufNode *node = NULL;
+    node = list_.head_;
+    if (NULL != node) {
+      list_.head_ = node->pre_;
+    }
+    if ((NULL != node)
+      || (NULL != (node = OB_NEW(BufNode, ObModIds::OB_THREAD_BUFFER)))) {
+      buffer = node->buf_ + node->pos_;
+      node->pre_ = curr_;
+      curr_ = node;
+      buf_len = BUF_SIZE - node->pos_;
+    } else {
+      buffer = NULL;
+    }
+  }
+  return buf_len;
+}
+
+void CStringBufMgr::try_clear_list()
+{
+  if (0 == level_) {
+    while (NULL != list_.head_) {
+      BufNode *node = list_.head_;
+      list_.head_ = node->pre_;
+      OB_DELETE(BufNode, ObModIds::OB_THREAD_BUFFER, node);
+    }
+  }
 }
 
 } // end namespace common

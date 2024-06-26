@@ -2694,7 +2694,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       }
       trig_ctdef.tg_event_ = dml_event;
       ObTriggerInfo::ActionOrderComparator action_order_com;
-      std::sort(trigger_infos.begin(), trigger_infos.end(), action_order_com);
+      lib::ob_sort(trigger_infos.begin(), trigger_infos.end(), action_order_com);
       if (OB_FAIL(action_order_com.get_ret())) {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("sort error", K(ret));

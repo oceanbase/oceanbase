@@ -11,6 +11,8 @@
  */
 
 #define USING_LOG_PREFIX LIB
+#include "lib/utility/ob_hang_fatal_error.h"
+#include "common/ob_smart_call.h"
 #include "lib/json/ob_json.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/utility.h"
@@ -256,12 +258,12 @@ int Parser::parse_value(const char *&begin, const char *end, Value *&value)
         } else {}
         break;
       case '{':
-        if (OB_FAIL(parse_object(begin, end, value))) {
+        if (OB_FAIL(SMART_CALL(parse_object(begin, end, value)))) {
           LOG_WARN("fail to parse object", K(ret));
         } else {}
         break;
       case '[':
-        if (OB_FAIL(parse_array(begin, end, value))) {
+        if (OB_FAIL(SMART_CALL(parse_array(begin, end, value)))) {
           LOG_WARN("fail to parse array", K(ret));
         } else {}
         break;
@@ -284,7 +286,7 @@ int Parser::parse_array(const char *&begin, const char *end, Value *&arr)
   } else if (OB_ISNULL(arr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("succ to alloc value, but value is NULL", K(ret));
-  } else if (OB_FAIL(parse_value(begin, end, value))) {
+  } else if (OB_FAIL(SMART_CALL(parse_value(begin, end, value)))) {
     if (cur_token_.type_ == ']') {
       ret = OB_SUCCESS;
       // empty array
@@ -299,7 +301,7 @@ int Parser::parse_array(const char *&begin, const char *end, Value *&arr)
            && OB_SUCC(token(begin, end, cur_token_))) {
       switch (cur_token_.type_) {
         case ',':
-          if (OB_SUCC(parse_value(begin, end, value))) {
+          if (OB_SUCC(SMART_CALL(parse_value(begin, end, value)))) {
             arr->array_add(value);
           }
           break;
@@ -338,7 +340,7 @@ int Parser::parse_pair(const char *&begin, const char *end, Pair *&pair)
       } else if (':' != cur_token_.type_) {
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("invalid pair", K(cur_token_.type_));
-      } else if (OB_FAIL(parse_value(begin, end, pair->value_))) {
+      } else if (OB_FAIL(SMART_CALL(parse_value(begin, end, pair->value_)))) {
         if (cur_token_.type_ != '}' && begin != end) {
           LOG_WARN("lack of member value", K(ret), K(pair->name_), KCSTRING(begin));
         } else {}
@@ -359,7 +361,7 @@ int Parser::parse_object(const char *&begin, const char *end, Value *&obj)
   } else if (OB_ISNULL(obj)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("succ to alloc value, but value is NULL", K(ret));
-  } else if (OB_FAIL(parse_pair(begin, end, pair))) {
+  } else if (OB_FAIL(SMART_CALL(parse_pair(begin, end, pair)))) {
     if ('}' == cur_token_.type_) {
       // empty object
       ret = OB_SUCCESS;
@@ -374,7 +376,7 @@ int Parser::parse_object(const char *&begin, const char *end, Value *&obj)
            && OB_SUCC(token(begin, end, cur_token_))) {
       switch (cur_token_.type_) {
         case ',':
-          if (OB_SUCC(parse_pair(begin, end, pair))) {
+          if (OB_SUCC(SMART_CALL(parse_pair(begin, end, pair)))) {
             obj->object_add(pair);
           } else {}
           break;
@@ -399,12 +401,12 @@ int Parser::parse(const char *buf, const int64_t buf_len, Value *&root)
   if (OB_SUCC(token(begin, end, tok))) {
     switch (tok.type_) {
       case '{':
-        if (OB_FAIL(parse_object(begin, end, root))) {
+        if (OB_FAIL(SMART_CALL(parse_object(begin, end, root)))) {
           LOG_WARN("fail to parse object", K(ret));
         } else {}
         break;
       case '[':
-        if (OB_FAIL(parse_array(begin, end, root))) {
+        if (OB_FAIL(SMART_CALL(parse_array(begin, end, root)))) {
           LOG_WARN("fail to parse array", K(ret));
         } else {}
         break;

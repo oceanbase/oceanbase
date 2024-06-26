@@ -18,7 +18,7 @@ namespace rpc
 {
 
 ObLockWaitNode::ObLockWaitNode() :
-  hold_key_(0), need_wait_(false), addr_(NULL), recv_ts_(0), lock_ts_(0), lock_seq_(0),
+  hold_key_(0), need_wait_(false), request_stat_(), addr_(NULL), recv_ts_(0), lock_ts_(0), lock_seq_(0),
   abs_timeout_(0), tablet_id_(common::OB_INVALID_ID), try_lock_times_(0), sessid_(0),
   holder_sessid_(0), block_sessid_(0), tx_id_(0), holder_tx_id_(0), run_ts_(0),
   is_standalone_task_(false), last_compact_cnt_(0), total_update_cnt_(0) {}

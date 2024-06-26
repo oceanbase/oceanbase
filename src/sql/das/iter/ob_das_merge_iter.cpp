@@ -91,7 +91,7 @@ int MergeStoreRows::to_expr(bool is_vectorized, int64_t size)
 int64_t MergeStoreRows::get_group_idx(int64_t idx)
 {
   OB_ASSERT(idx < saved_size_);
-  return store_rows_[idx].store_row_->cells()[group_id_idx_].get_int();
+  return ObNewRange::get_group_idx(store_rows_[idx].store_row_->cells()[group_id_idx_].get_int());
 }
 
 int64_t MergeStoreRows::cur_group_idx()
@@ -109,6 +109,12 @@ int64_t MergeStoreRows::row_cnt_with_cur_group_idx()
      end_idx++;
   }
   return end_idx - cur_idx_;
+}
+
+const ObDatum *MergeStoreRows::cur_datums()
+{
+  OB_ASSERT(cur_idx_ < saved_size_);
+  return store_rows_[cur_idx_].store_row_->cells();
 }
 
 void MergeStoreRows::reuse()
@@ -136,7 +142,7 @@ void MergeStoreRows::reset()
 int ObDASMergeIter::set_merge_status(MergeType merge_type)
 {
   int ret = OB_SUCCESS;
-  merge_type_ = merge_type;
+  merge_type_ = used_for_keep_order_ ? MergeType::SORT_MERGE : merge_type;
   if (merge_type == MergeType::SEQUENTIAL_MERGE) {
     get_next_row_ = &ObDASMergeIter::get_next_seq_row;
     get_next_rows_ = &ObDASMergeIter::get_next_seq_rows;
@@ -270,7 +276,7 @@ int ObDASMergeIter::inner_init(ObDASIterParam &param)
   int ret = OB_SUCCESS;
   if (param.type_ != ObDASIterType::DAS_ITER_MERGE) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inner init das iter with bad param type", K(param));
+    LOG_WARN("inner init das iter with bad param type", K(param), K(ret));
   } else {
     ObDASMergeIterParam &merge_param = static_cast<ObDASMergeIterParam&>(param);
     eval_infos_ = merge_param.eval_infos_;
@@ -287,6 +293,8 @@ int ObDASMergeIter::inner_init(ObDASIterParam &param)
     das_ref_->set_expr_frame_info(merge_param.frame_info_);
     das_ref_->set_execute_directly(merge_param.execute_das_directly_);
     das_ref_->set_enable_rich_format(merge_param.enable_rich_format_);
+    used_for_keep_order_ = merge_param.used_for_keep_order_;
+    merge_type_ = used_for_keep_order_ ? SORT_MERGE : SEQUENTIAL_MERGE;
 
     if (group_id_expr_ != nullptr) {
       for (int64_t i = 0; i < output_->count(); i++) {
@@ -589,7 +597,9 @@ int ObDASMergeIter::get_next_sorted_row()
             LOG_WARN("failed to save store row", K(ret));
           } else {
             merge_state_arr_[i].row_store_have_data_ = true;
-            compare(i, output_idx);
+            if (OB_FAIL(compare(i, output_idx))) {
+              LOG_WARN("failed to compare two rows", K(ret));
+            }
           }
         } else if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -597,8 +607,8 @@ int ObDASMergeIter::get_next_sorted_row()
         } else {
           LOG_WARN("das iter failed to get next row", K(ret));
         }
-      } else {
-        compare(i, output_idx);
+      } else if (OB_FAIL(compare(i, output_idx))) {
+        LOG_WARN("failed to compare two rows", K(ret));
       }
     }
   } // for end
@@ -679,7 +689,9 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
                 LOG_WARN("failed to save store row", K(ret));
               } else {
                 merge_state_arr_[i].row_store_have_data_ = true;
-                compare(i, output_idx);
+                if (OB_FAIL(compare(i, output_idx))) {
+                  LOG_WARN("failed to compare two rows", K(ret));
+                }
               }
             } else if (OB_ITER_END == ret) {
               ret = OB_SUCCESS;
@@ -689,7 +701,9 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
             }
           }
         } else {
-          compare(i, output_idx);
+          if (OB_FAIL(compare(i, output_idx))) {
+            LOG_WARN("failed to compare two rows", K(ret));
+          }
         }
       }
     }
@@ -708,7 +722,7 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
           }
         }
         MergeStoreRows &store_rows = merge_store_rows_arr_.at(output_idx);
-        int64_t ret_count = store_rows.row_cnt_with_cur_group_idx();
+        int64_t ret_count = used_for_keep_order_ ? 1 : store_rows.row_cnt_with_cur_group_idx();
         ret = store_rows.to_expr(true, ret_count);
         if (OB_SUCC(ret)) {
           count = ret_count;
@@ -719,7 +733,6 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
       }
     }
   }
-
   return ret;
 }
 
@@ -770,18 +783,34 @@ int ObDASMergeIter::prepare_sort_merge_info()
   return ret;
 }
 
-void ObDASMergeIter::compare(int64_t cur_idx, int64_t &output_idx)
+
+// [GROUP_ID] is composed of group_idx and index_ordered_idx now,
+// we should compare group_idx first and then index_ordered_idx,
+// group_idx and index_ordered_idx should always be sorted in ascending order.
+int ObDASMergeIter::compare(int64_t cur_idx, int64_t &output_idx)
 {
+  int ret = OB_SUCCESS;
   if (OB_INVALID_INDEX == output_idx) {
     output_idx = cur_idx;
   } else {
-    // compare the values of group_idx.
-    int64_t output_group_idx = merge_store_rows_arr_[output_idx].cur_group_idx();
-    int64_t cur_group_idx = merge_store_rows_arr_[cur_idx].cur_group_idx();
-    if (output_group_idx > cur_group_idx) {
-      output_idx = cur_idx;
+    const ObDatum *cur_datums = merge_store_rows_arr_[cur_idx].cur_datums();
+    const ObDatum *output_datums = merge_store_rows_arr_[output_idx].cur_datums();
+    if (nullptr != group_id_expr_) {
+      int64_t cur_group_idx = ObNewRange::get_group_idx(cur_datums[group_id_idx_].get_int());
+      int64_t output_group_idx = ObNewRange::get_group_idx(output_datums[group_id_idx_].get_int());
+      if (cur_group_idx != output_group_idx) {
+        output_idx = cur_group_idx < output_group_idx ? cur_idx : output_idx;
+      } else {
+        int64_t cur_order_idx = ObNewRange::get_index_ordered_idx(cur_datums[group_id_idx_].get_int());
+        int64_t output_order_idx = ObNewRange::get_index_ordered_idx(output_datums[group_id_idx_].get_int());
+        if (cur_order_idx != output_order_idx) {
+          output_idx = cur_order_idx < output_order_idx ? cur_idx : output_idx;
+        }
+      }
     }
   }
+  LOG_DEBUG("das merge iter compare finished", K(cur_idx), K(output_idx), K(used_for_keep_order_));
+  return ret;
 }
 
 }//end namespace sql

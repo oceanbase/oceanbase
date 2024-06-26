@@ -1150,7 +1150,7 @@ int ObLSBackupCtx::check_and_sort_retry_list_(
   }
   if (OB_SUCC(ret)) {
     BackupRetryCmp cmp;
-    std::sort(retry_list.begin(), retry_list.end(), cmp);
+    lib::ob_sort(retry_list.begin(), retry_list.end(), cmp);
   }
   return ret;
 }
@@ -1416,7 +1416,7 @@ int ObLSBackupCtx::inner_recover_need_reuse_macro_block_(const ObBackupRetryDesc
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(backup_retry_ctx_.reused_pair_list_.begin(), backup_retry_ctx_.reused_pair_list_.end());
+    lib::ob_sort(backup_retry_ctx_.reused_pair_list_.begin(), backup_retry_ctx_.reused_pair_list_.end());
   }
   return ret;
 }

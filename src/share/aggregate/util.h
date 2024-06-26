@@ -21,6 +21,12 @@
 #include "sql/engine/ob_bit_vector.h"
 #include "share/vector/ob_vector_define.h"
 
+#define EXTRACT_MEM_ADDR(ptr) (reinterpret_cast<char *>(*reinterpret_cast<int64_t *>((ptr))))
+#define STORE_MEM_ADDR(addr, dst)                                                                  \
+  do {                                                                                             \
+    *reinterpret_cast<int64_t *>((dst)) = reinterpret_cast<int64_t>((addr));                       \
+  } while (false)
+
 namespace oceanbase
 {
 namespace sql
@@ -112,6 +118,37 @@ struct add_param_batch<T, false>
   inline static int do_op(T &v, Args&&... args)
   {
     return OB_SUCCESS;
+  }
+};
+
+template <typename T, typename = std::void_t<>>
+struct defined_removal_func: std::false_type {};
+
+template <typename T>
+struct defined_removal_func<
+  T, std::void_t<decltype(&T::template add_or_sub_row<ObVectorBase>)>>
+  : std::true_type
+{};
+
+template<typename T, bool defined = defined_removal_func<T>::value>
+struct removal_opt
+{
+  template<typename... Args>
+  inline static int add_or_sub_row(T &v, Args&&... args)
+  {
+    return v.add_or_sub_row(std::forward<Args>(args)...);
+  }
+};
+
+template<typename T>
+struct removal_opt<T, false>
+{
+  template<typename... Args>
+  inline static int add_or_sub_row(T &v, Args&&... args)
+  {
+    int ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "removal opt not suppported", K(ret));
+    return ret;
   }
 };
 
@@ -409,6 +446,15 @@ inline int add_values(const int32_t &l, const number::ObCompactNumber &r, char *
   return ret;
 }
 
+template<typename L, typename R>
+inline int sub_values(const L &l, const R &r, char *res_buf, const int32_t res_len)
+{
+  int ret = OB_SUCCESS;
+  L &res = *reinterpret_cast<L *>(res_buf) ;
+  res = l - r;
+  return ret;
+}
+
 template<typename Input, typename Output>
 struct Caster
 {
@@ -555,12 +601,35 @@ inline bool supported_aggregate_function(const ObItemType agg_op)
   case T_FUN_MIN:
   case T_FUN_MAX:
   case T_FUN_COUNT_SUM:
-  case T_FUN_SUM: {
+  case T_FUN_SUM:
+  case T_FUN_APPROX_COUNT_DISTINCT:
+  case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
+  case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
+  case T_FUN_SYS_BIT_OR:
+  case T_FUN_SYS_BIT_AND:
+  case T_FUN_SYS_BIT_XOR: {
     return true;
   }
   default:
     return false;
   }
+}
+
+inline bool agg_res_not_null(const ObItemType agg_op)
+{
+  // TODO: add other functions
+  bool ret = false;
+  switch (agg_op) {
+  case T_FUN_COUNT:
+  case T_FUN_COUNT_SUM: {
+    ret = true;
+    break;
+  }
+  default: {
+    break;
+  }
+  }
+  return ret;
 }
 
 #define AGG_FIXED_TC_LIST     \
@@ -598,6 +667,7 @@ inline bool supported_aggregate_function(const ObItemType agg_op)
   VEC_TC_TIME,                \
   VEC_TC_YEAR,                \
   VEC_TC_STRING,              \
+  VEC_TC_EXTEND,              \
   VEC_TC_BIT,                 \
   VEC_TC_ENUM_SET,            \
   VEC_TC_ENUM_SET_INNER,      \
@@ -615,7 +685,8 @@ inline bool supported_aggregate_function(const ObItemType agg_op)
   VEC_TC_DEC_INT64,           \
   VEC_TC_DEC_INT128,          \
   VEC_TC_DEC_INT256,          \
-  VEC_TC_DEC_INT512
+  VEC_TC_DEC_INT512,          \
+  VEC_TC_ROARINGBITMAP
 
 } // end namespace aggregate
 } // end namespace share

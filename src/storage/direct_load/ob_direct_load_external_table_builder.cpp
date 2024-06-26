@@ -145,6 +145,8 @@ int ObDirectLoadExternalTableBuilder::get_tables(
   } else if (OB_UNLIKELY(!is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("direct load external table not closed", KR(ret));
+  } else if (row_count_ == 0) {
+    // do nothing
   } else {
     ObDirectLoadExternalTableCreateParam create_param;
     create_param.tablet_id_ = build_param_.tablet_id_;

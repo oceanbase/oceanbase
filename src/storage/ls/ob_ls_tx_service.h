@@ -97,6 +97,7 @@ public:
                               const int64_t lock_timeout) const;
   int get_tx_scheduler(const transaction::ObTransID &tx_id,
                        ObAddr &scheduler) const;
+  int get_tx_start_session_id(const transaction::ObTransID &tx_id, uint32_t &session_id) const;
   int revert_tx_ctx(transaction::ObTransCtx *ctx) const;
   int get_read_store_ctx(const transaction::ObTxReadSnapshot &snapshot,
                          const bool read_latest,

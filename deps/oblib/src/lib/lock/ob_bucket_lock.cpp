@@ -372,7 +372,7 @@ int ObMultiBucketLockGuard::lock_multi_buckets(ObIArray<uint64_t> &hash_array)
   }
 
   if (OB_SUCC(ret)) {
-    std::sort(&latch_array_[0], &latch_array_[0] + latch_array_.count());
+    lib::ob_sort(&latch_array_[0], &latch_array_[0] + latch_array_.count());
     for (; OB_SUCC(ret) && next_lock_idx < latch_array_.count(); ++next_lock_idx) {
       const uint64_t latch_idx = latch_array_.at(next_lock_idx);
       if (is_write_lock_) {

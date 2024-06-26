@@ -40,7 +40,7 @@ struct ConvertUintToDatum_T
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {
@@ -63,7 +63,7 @@ struct ConvertUintToDatum_T<store_len_V,
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {
@@ -109,7 +109,7 @@ struct ConvertUintToDatum_T<store_len_V,
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {
@@ -147,7 +147,7 @@ struct ConvertUintToDatum_T<store_len_V,
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {
@@ -190,7 +190,7 @@ struct ConvertUintToDatum_T<store_len_V,
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {
@@ -227,7 +227,7 @@ struct ConvertUintToDatum_T<store_len_V,
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {
@@ -269,7 +269,7 @@ struct ConvertUintToDatum_T<store_len_V,
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {
@@ -310,7 +310,7 @@ struct ConvertUintToDatum_T<store_len_V,
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {

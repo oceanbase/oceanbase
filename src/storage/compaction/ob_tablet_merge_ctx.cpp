@@ -347,7 +347,8 @@ int ObTabletExeMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_tabl
 int ObTabletExeMergeCtx::cal_merge_param()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(static_param_.cal_minor_merge_param())) {
+  const bool has_compaction_filter = nullptr != info_collector_.compaction_filter_;
+  if (OB_FAIL(static_param_.cal_minor_merge_param(has_compaction_filter))) {
     LOG_WARN("failed to cal_major_merge_param", KR(ret));
   } else if (is_minor_merge(static_param_.get_merge_type())) {
     if (OB_FAIL(init_static_param_tx_id())) {
@@ -482,10 +483,7 @@ int ObTabletExeMergeCtx::prepare_compaction_filter()
       FLOG_INFO("success to init compaction filter", K(tmp_ret), K(recycle_scn));
     }
 
-    if (OB_SUCCESS == tmp_ret) {
-      static_param_.read_base_version_ = 0;
-      static_param_.set_full_merge_and_level(true/*is_full_merge*/);
-    } else if (OB_NOT_NULL(buf)) {
+    if (OB_SUCCESS != tmp_ret && OB_NOT_NULL(buf)) {
       mem_ctx_.free(buf);
       buf = nullptr;
     }

@@ -59,7 +59,7 @@ int function(Args &&...args) \
     ret = OB_SUCCESS; \
   } else { \
     ret = OB_ENTRY_NOT_EXIST; \
-    STORAGE_LOG(INFO, "ObMemtableMgr is not exist, there is no memtable", KR(ret)); \
+    STORAGE_LOG(DEBUG, "ObMemtableMgr is not exist, there is no memtable", KR(ret)); \
   } \
   return ret; \
 }

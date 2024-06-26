@@ -121,8 +121,6 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     table_data_desc_(nullptr),
     lob_inrow_threshold_(0),
     ref_count_(0),
-    is_incremental_(false),
-    is_inc_replace_(false),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -164,8 +162,6 @@ int ObTableLoadTransStoreWriter::init()
     } else if (OB_FAIL(init_column_schemas_and_lob_info())) {
       LOG_WARN("fail to init column schemas and lob info", KR(ret));
     } else {
-      is_incremental_ = ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
-      is_inc_replace_ = (ObDirectLoadInsertMode::INC_REPLACE == store_ctx_->ctx_->param_.insert_mode_);
       is_inited_ = true;
     }
   }
@@ -333,9 +329,7 @@ int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id, const ObN
     for (int64_t i = 0; OB_SUCC(ret) && i < table_data_desc_->column_count_; ++i) {
       ObStorageDatum &datum = session_ctx.datum_row_.storage_datums_[i];
       const ObObj &obj = row.cells_[i];
-      if (OB_FAIL(check_support_obj(obj))) {
-        LOG_WARN("failed to check support obj", KR(ret), K(obj));
-      } else if (OB_FAIL(datum.from_obj_enhance(obj))) {
+      if (OB_FAIL(datum.from_obj_enhance(obj))) {
         LOG_WARN("fail to from obj enhance", KR(ret), K(obj));
       }
     }
@@ -401,30 +395,16 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
                                           ObDatumRow &datum_row, int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  ObObj out_obj;
+  if (OB_UNLIKELY(row.count_ != table_data_desc_->column_count_)) {
+    ret = OB_ERR_INVALID_COLUMN_NUM;
+    LOG_WARN("column count not match", KR(ret), K(row.count_), K(table_data_desc_->column_count_));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_data_desc_->column_count_; ++i) {
-    out_obj.set_null();
     const ObColumnSchemaV2 *column_schema = column_schemas_.at(i);
-    ObCastCtx cast_ctx(&cast_allocator, &cast_params, CM_NONE, column_schema->get_collation_type());
-    ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
-    const bool is_null_autoinc =
-      (column_schema->is_autoincrement() || column_schema->is_identity_column()) &&
-      row.cells_[i].is_null();
-    if (!is_null_autoinc && OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema,
-                                                                   row.cells_[i], out_obj))) {
-      LOG_WARN("fail to cast obj and check", KR(ret), K(i), K(row.cells_[i]));
-    } else if (OB_FAIL(check_support_obj(out_obj))) {
-      LOG_WARN("failed to check support obj", KR(ret), K(out_obj));
-    } else if (OB_FAIL(datum_row.storage_datums_[i].from_obj_enhance(out_obj))) {
-      LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
-    } else if (column_schema->is_autoincrement() &&
-               OB_FAIL(handle_autoinc_column(column_schema, datum_row.storage_datums_[i],
-                                             column_schema->get_meta_type().get_type_class(),
-                                             session_id))) {
-      LOG_WARN("fail to handle autoinc column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
-    } else if (column_schema->is_identity_column() && !column_schema->is_tbl_part_key_column() &&
-               OB_FAIL(handle_identity_column(column_schema, datum_row.storage_datums_[i], cast_allocator))) {
-      LOG_WARN("fail to handle identity column", KR(ret), K(i), K(datum_row.storage_datums_[i]));
+    const ObObj &obj = row.cells_[i];
+    ObStorageDatum &datum = datum_row.storage_datums_[i];
+    if (OB_FAIL(cast_column(cast_allocator, cast_params, column_schema, obj, datum, session_id))) {
+      LOG_WARN("fail to cast column", KR(ret), K(i), K(obj), KPC(column_schema));
     }
   }
   if (OB_FAIL(ret)) {
@@ -434,6 +414,50 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
       LOG_WARN("failed to handle error row", K(ret), K(row));
     } else {
       ret = OB_EAGAIN;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadTransStoreWriter::cast_column(
+    ObArenaAllocator &cast_allocator,
+    ObDataTypeCastParams cast_params,
+    const ObColumnSchemaV2 *column_schema,
+    const ObObj &obj,
+    ObStorageDatum &datum,
+    int32_t session_id)
+{
+  int ret = OB_SUCCESS;
+  ObCastCtx cast_ctx(&cast_allocator, &cast_params, CM_NONE, column_schema->get_collation_type());
+  ObTableLoadCastObjCtx cast_obj_ctx(param_, &time_cvrt_, &cast_ctx, true);
+  const bool is_null_autoinc =
+    (column_schema->is_autoincrement() || column_schema->is_identity_column()) &&
+    (obj.is_null() || obj.is_nop_value());
+  ObObj out_obj;
+  if (is_null_autoinc) {
+    out_obj.set_null();
+  } else if (obj.is_nop_value()) {
+    if (OB_UNLIKELY(column_schema->is_not_null_for_write())) {
+      ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+      LOG_WARN("column can not be null", KR(ret), KPC(column_schema));
+    } else {
+      out_obj = column_schema->get_cur_default_value();
+    }
+  } else if (OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema, obj, out_obj))) {
+    LOG_WARN("fail to cast obj and check", KR(ret), K(obj));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(datum.from_obj_enhance(out_obj))) {
+    LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
+  } else if (column_schema->is_autoincrement()) {
+    if (OB_FAIL(handle_autoinc_column(
+          column_schema, datum, column_schema->get_meta_type().get_type_class(), session_id))) {
+      LOG_WARN("fail to handle autoinc column", KR(ret), K(datum));
+    }
+  } else if (column_schema->is_identity_column() && !column_schema->is_tbl_part_key_column()) {
+    // if identity column is part key column, the value is determined before partition calculation
+    if (OB_FAIL(handle_identity_column(column_schema, datum, cast_allocator))) {
+      LOG_WARN("fail to handle identity column", KR(ret), K(datum));
     }
   }
   return ret;
@@ -495,51 +519,6 @@ int ObTableLoadTransStoreWriter::write_row_to_table_store(ObDirectLoadTableStore
     } else if (OB_LIKELY(OB_ROWKEY_ORDER_ERROR == ret)) {
       if (OB_FAIL(error_row_handler->handle_error_row(ret, datum_row))) {
         LOG_WARN("fail to handle error row", KR(ret), K(tablet_id), K(datum_row));
-      }
-    }
-  }
-  return ret;
-}
-
-static int check_lob_is_inrow(const ObObj &obj, const int64_t lob_inrow_threshold, bool &is_inrow)
-{
-  int ret = OB_SUCCESS;
-  is_inrow = false;
-  ObLobManager *lob_mngr = MTL(ObLobManager*);
-  if (OB_UNLIKELY(!obj.is_lob_storage() || lob_inrow_threshold < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(obj), K(lob_inrow_threshold));
-  } else if (OB_ISNULL(lob_mngr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get lob manager handle.", K(ret));
-  } else {
-    ObString data = obj.get_string();
-    const bool set_has_lob_header = data.length() > 0;
-    ObLobLocatorV2 src(data, set_has_lob_header);
-    int64_t byte_len = 0;
-    if (OB_FAIL(src.get_lob_data_byte_len(byte_len))) {
-      LOG_WARN("fail to get lob data byte len", K(ret), K(src));
-    } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(byte_len, lob_inrow_threshold)) {
-      is_inrow = true;
-    } else {
-      is_inrow = false;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadTransStoreWriter::check_support_obj(const ObObj &obj)
-{
-  int ret = OB_SUCCESS;
-  if (is_incremental_ && is_inc_replace_) {
-    if (obj.is_lob_storage()) {
-      bool is_inrow = false;
-      if (OB_FAIL(check_lob_is_inrow(obj, lob_inrow_threshold_, is_inrow))) {
-        LOG_WARN("fail to check lob is inrow", KR(ret));
-      } else if (OB_UNLIKELY(!is_inrow)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("incremental direct-load does not support outrow lob", KR(ret), K(obj));
-        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support outrow lob");
       }
     }
   }

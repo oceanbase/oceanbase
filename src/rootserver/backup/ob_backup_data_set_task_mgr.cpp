@@ -916,7 +916,7 @@ int ObBackupSetTaskMgr::fill_map_with_sys_tablets_(
   ObLSID sys_ls_id(ObLSID::SYS_LS_ID);
   if (OB_FAIL(get_extern_tablet_info_(sys_ls_id, tablet_ids, backup_scn))) {
     LOG_WARN("failed to get extern sys ls tablet info", K(ret));
-  } else if (OB_FALSE_IT(std::sort(tablet_ids.begin(), tablet_ids.end()))) {
+  } else if (OB_FALSE_IT(lib::ob_sort(tablet_ids.begin(), tablet_ids.end()))) {
   } else if (OB_FAIL(latest_ls_tablet_map.set_refactored(sys_ls_id, tablet_ids, 1))) {
     LOG_WARN("failed to set refactored", K(ret), K(sys_ls_id), K(tablet_ids));
   } else {
@@ -1581,7 +1581,7 @@ int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
           LOG_WARN("[DATA_BACKUP]failed to get tablet to ls", K(ret), K(ls_info.ls_id_));
         } else if (OB_FAIL(append(ls_info.tablet_id_list_, map_iter->second))) {
           LOG_WARN("[DATA_BACKUP]failed to append tablet to ls array", K(ret));
-        } else if (OB_FALSE_IT(std::sort(ls_info.tablet_id_list_.begin(), ls_info.tablet_id_list_.end()))) {
+        } else if (OB_FALSE_IT(lib::ob_sort(ls_info.tablet_id_list_.begin(), ls_info.tablet_id_list_.end()))) {
         } else if (OB_FAIL(tablet_to_ls.push_back(ls_info))) {
           LOG_WARN("[DATA_BACKUP]failed to push backup ls info", K(ret));
         } 
@@ -2052,6 +2052,9 @@ int ObBackupSetTaskMgr::write_log_format_file_()
     LOG_WARN("failed to get_tenant_schema_guard", KR(ret), "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(schema_guard.get_tenant_info(job_attr_->tenant_id_, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), "tenant_id", job_attr_->tenant_id_);
+  } else if (OB_ISNULL(tenant_info)) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(format_desc.cluster_name_.assign(GCONF.cluster.str()))) {
     LOG_WARN("failed to assign cluster name", K(ret));
   } else if (OB_FAIL(format_desc.tenant_name_.assign(tenant_info->get_tenant_name()))) {
@@ -2201,6 +2204,9 @@ int ObBackupSetTaskMgr::write_extern_locality_info_(ObExternTenantLocalityInfoDe
     LOG_WARN("[DATA_BACKUP]failed to get_tenant_schema_guard", KR(ret), "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(schema_guard.get_tenant_info(job_attr_->tenant_id_, tenant_info))) {
     LOG_WARN("[DATA_BACKUP]failed to get tenant info", K(ret), "tenant_id", job_attr_->tenant_id_);
+  } else if (OB_ISNULL(tenant_info)) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(locality_info.tenant_name_.assign(tenant_info->get_tenant_name()))) {
     LOG_WARN("[DATA_BACKUP]failed to assign tenant name", K(ret), K(tenant_info));
   } else if (OB_FAIL(locality_info.locality_.assign(tenant_info->get_locality()))) {

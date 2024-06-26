@@ -130,7 +130,7 @@ int ObIntegerBaseDiffDecoder::update_pointer(const char *old_block, const char *
 
 int ObIntegerBaseDiffDecoder::batch_get_bitpacked_values(
     const ObColumnDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const int64_t datum_len,
     const int64_t data_offset,
@@ -163,7 +163,7 @@ int ObIntegerBaseDiffDecoder::batch_get_bitpacked_values(
 int ObIntegerBaseDiffDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -763,7 +763,7 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
 int ObIntegerBaseDiffDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {

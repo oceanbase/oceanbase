@@ -108,6 +108,9 @@ public:
   OB_INLINE int to_row(const sql::RowMeta &row_meta, sql::ObCompactRow *stored_row,
                        const uint64_t row_idx, const int64_t col_idx, const int64_t remain_size,
                        const bool is_fixed_length_data, int64_t &row_size) const override final;
+
+  DEF_VEC_READ_INTERFACES(ObUniformFormat<IS_CONST>);
+  DEF_VEC_WRITE_INTERFACES(ObUniformFormat<IS_CONST>);
 };
 
 template<bool IS_CONST>

@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include "lib/random/ob_random.h"
 #include "src/sql/engine/ob_bit_vector.h"
 #include "src/sql/ob_eval_bound.h"
 

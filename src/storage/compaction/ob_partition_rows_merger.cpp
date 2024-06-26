@@ -923,8 +923,8 @@ ObPartitionMergeIter *ObPartitionMajorMergeHelper::alloc_merge_iter(const ObMerg
                                                                     const ObITable *table)
 {
   ObPartitionMergeIter *merge_iter = nullptr;
-  if (is_base_iter && !merge_param.is_full_merge()) {
-    if (MICRO_BLOCK_MERGE_LEVEL == merge_param.static_param_.merge_level_ && !is_small_sstable) {
+  if (is_base_iter && !merge_param.is_full_merge() && !is_small_sstable) {
+    if (MICRO_BLOCK_MERGE_LEVEL == merge_param.static_param_.merge_level_) {
       merge_iter = alloc_helper<ObPartitionMicroMergeIter>(allocator_, allocator_);
     } else {
       merge_iter = alloc_helper<ObPartitionMacroMergeIter>(allocator_, allocator_);

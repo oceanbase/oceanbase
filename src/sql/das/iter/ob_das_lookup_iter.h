@@ -21,47 +21,64 @@ using namespace common;
 namespace sql
 {
 
+class ObDASBaseCtDef;
+class ObDASBaseRtDef;
+class ObDASScanCtDef;
+class ObDASScanRtDef;
 struct ObDASLookupIterParam : public ObDASIterParam
 {
+public:
+  ObDASLookupIterParam(bool is_global_index)
+    : ObDASIterParam(is_global_index ? DAS_ITER_GLOBAL_LOOKUP : DAS_ITER_LOCAL_LOOKUP),
+      default_batch_row_count_(0),
+      index_ctdef_(nullptr),
+      index_rtdef_(nullptr),
+      lookup_ctdef_(nullptr),
+      lookup_rtdef_(nullptr),
+      index_table_iter_(nullptr),
+      data_table_iter_(nullptr),
+      rowkey_exprs_(nullptr)
+  {}
   int64_t default_batch_row_count_;
-  bool can_retry_;
-  const ObExpr *calc_part_id_;
+  const ObDASBaseCtDef *index_ctdef_;
+  ObDASBaseRtDef *index_rtdef_;
   const ObDASScanCtDef *lookup_ctdef_;
   ObDASScanRtDef *lookup_rtdef_;
-  const ExprFixedArray *rowkey_exprs_;
-  ObTableID ref_table_id_;
   ObDASIter *index_table_iter_;
   ObDASIter *data_table_iter_;
+  const ExprFixedArray *rowkey_exprs_;
 
   virtual bool is_valid() const override
   {
-    return ObDASIterParam::is_valid() &&
-        index_table_iter_ != nullptr && data_table_iter_ != nullptr && calc_part_id_ != nullptr &&
-        lookup_ctdef_ != nullptr && lookup_rtdef_ != nullptr && rowkey_exprs_ != nullptr;
+    return ObDASIterParam::is_valid()
+        && index_table_iter_ != nullptr && data_table_iter_ != nullptr
+        && index_ctdef_ != nullptr && index_rtdef_ != nullptr
+        && lookup_ctdef_ != nullptr && lookup_rtdef_ != nullptr && rowkey_exprs_ != nullptr;
   }
 };
 
 class ObDASLookupIter : public ObDASIter
 {
 public:
-  ObDASLookupIter()
-    : calc_part_id_(nullptr),
+  ObDASLookupIter(const ObDASIterType type = ObDASIterType::DAS_ITER_INVALID)
+    : ObDASIter(type),
+      index_ctdef_(nullptr),
+      index_rtdef_(nullptr),
       lookup_ctdef_(nullptr),
       lookup_rtdef_(nullptr),
-      rowkey_exprs_(nullptr),
+      rowkey_exprs_(),
       index_table_iter_(nullptr),
       data_table_iter_(nullptr),
       lookup_rowkey_cnt_(0),
       lookup_row_cnt_(0),
-      can_retry_(false),
       state_(INDEX_SCAN),
       index_end_(false),
       default_batch_row_count_(0),
-      iter_alloc_(nullptr)
+      lookup_memctx_()
   {}
   virtual ~ObDASLookupIter() {}
 
-  INHERIT_TO_STRING_KV("ObDASIter", ObDASIter, K_(state), K_(index_end), K(lookup_ctdef_->ref_table_id_));
+  INHERIT_TO_STRING_KV("ObDASIter", ObDASIter, K_(state), K_(index_end), K_(default_batch_row_count));
 
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
@@ -70,24 +87,24 @@ protected:
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
   virtual void reset_lookup_state();
-
   virtual int add_rowkey() = 0;
   virtual int add_rowkeys(int64_t count) = 0;
   virtual int do_index_lookup() = 0;
   virtual int check_index_lookup() = 0;
 
 protected:
-  const ObExpr *calc_part_id_;
+  const ObDASBaseCtDef *index_ctdef_;
+  ObDASBaseRtDef *index_rtdef_;
   const ObDASScanCtDef *lookup_ctdef_;
   ObDASScanRtDef *lookup_rtdef_;
-  const ExprFixedArray *rowkey_exprs_;
+  common::ObSEArray<ObExpr*, 2>  rowkey_exprs_;
   ObDASIter *index_table_iter_;
   ObDASIter *data_table_iter_;
   int64_t lookup_rowkey_cnt_;
   int64_t lookup_row_cnt_;
-  bool can_retry_;
   int build_lookup_range(ObNewRange &range);
   int build_trans_info_datum(const ObExpr *trans_info_expr, ObDatum *&datum_ptr);
+  common::ObArenaAllocator &get_arena_allocator() { return lookup_memctx_->get_arena_allocator(); }
 
 private:
   enum LookupState : uint32_t
@@ -101,28 +118,10 @@ private:
   LookupState state_;
   bool index_end_;
   int64_t default_batch_row_count_;
-  common::ObArenaAllocator *iter_alloc_;
-  char iter_alloc_buf_[sizeof(common::ObArenaAllocator)];
-};
-
-class ObDASGlobalLookupIter : public ObDASLookupIter
-{
-public:
-  ObDASGlobalLookupIter()
-    : ObDASLookupIter()
-  {}
-  virtual ~ObDASGlobalLookupIter() {}
-
-protected:
-  virtual int add_rowkey() override;
-  virtual int add_rowkeys(int64_t count) override;
-  virtual int do_index_lookup() override;
-  virtual int check_index_lookup() override;
+  lib::MemoryContext lookup_memctx_;
 };
 
 }  // namespace sql
 }  // namespace oceanbase
-
-
 
 #endif /* OBDEV_SRC_SQL_DAS_ITER_OB_DAS_LOOKUP_ITER_H_ */

@@ -53,7 +53,8 @@ int ObMaterialVecOp::inner_open()
                                    mem_attr,
                                    0 /*mem_limit*/,
                                    true /*enable_dump*/,
-                                   true /*reuse_vector_array*/))) {
+                                   true /*reuse_vector_array*/,
+                                   MY_SPEC.compress_type_))) {
       LOG_WARN("init row store failed");
     } else {
       const int64_t size = OB_INVALID_ID == row_count ? 0 : row_count * MY_SPEC.width_;

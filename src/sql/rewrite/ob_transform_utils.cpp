@@ -8013,73 +8013,6 @@ int ObTransformUtils::find_hashset(ObRawExpr *expr,
   return ret;
 }
 
-int ObTransformUtils::generate_col_exprs(ObDMLStmt *stmt,
-                                         const ObIArray<TableItem *> &tables,
-                                         const ObIArray<ObRawExpr *> &tmp_select_exprs,
-                                         const ObIArray<ObRawExpr *> &tmp_column_exprs,
-                                         ObIArray<ObRawExpr *> &old_column_exprs,
-                                         ObIArray<ObRawExpr *> &new_column_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || (tmp_column_exprs.count() != tmp_select_exprs.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected input", K(ret), K(stmt));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_select_exprs.count(); ++i) {
-      ObRawExpr *tmp_select_expr = NULL;
-      ObRawExpr *tmp_column_expr = NULL;
-      if (OB_ISNULL(tmp_select_expr = tmp_select_exprs.at(i)) ||
-          OB_ISNULL(tmp_column_expr = tmp_column_exprs.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected NULL", K(ret), K(tmp_select_expr), K(tmp_column_expr));
-      } else {
-        if (ob_is_enumset_tc(tmp_select_expr->get_data_type())) {
-          OZ(tmp_column_expr->set_enum_set_values(tmp_select_expr->get_enum_set_values()));
-        }
-        for (int64_t j = 0; OB_SUCC(ret) && j < tables.count(); ++j) {
-          ObColumnRefRawExpr *col_expr = NULL;
-          TableItem *table = tables.at(j);
-          uint64_t table_id = OB_INVALID_INDEX;
-          ObRawExpr *tmp_raw_expr = NULL;
-          if (OB_ISNULL(table)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null table", K(ret));
-          } else if (!tmp_select_expr->is_column_ref_expr()) {
-            ObSEArray<uint64_t, 8> table_ids;
-            // joined table allows non-column ref exprs
-            if (!table->is_joined_table()) {
-            } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(tmp_select_expr, table_ids))) {
-              LOG_WARN("failed to extract table ids", K(ret));
-            } else if (ObOptimizerUtil::is_subset(table_ids,
-                                                  static_cast<JoinedTable *>(table)->single_table_ids_)) {
-              if (OB_FAIL(add_var_to_array_no_dup(old_column_exprs, tmp_select_expr))) {
-                LOG_WARN("failed to add select expr", K(ret));
-              } else if (OB_FAIL(add_var_to_array_no_dup(new_column_exprs, tmp_column_expr))) {
-                LOG_WARN("failed to add column expr", K(ret));
-              }
-            }
-          } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(tmp_select_expr))) {
-          } else if (OB_FALSE_IT(table_id = table->is_generated_table() ? table->table_id_ :
-                                                            col_expr->get_table_id())) {
-          } else if (OB_ISNULL(col_expr = stmt->get_column_expr_by_id(table_id,
-                                                                  col_expr->get_column_id()))) {
-            // do nothing
-          } else if (OB_FALSE_IT(tmp_raw_expr = col_expr)) {
-          } else if (is_contain(old_column_exprs, tmp_raw_expr) ||
-                     is_contain(old_column_exprs, tmp_select_expr)) {
-            // since we have multi tables, the iteration here may contain redundant columns
-          } else if (OB_FAIL(old_column_exprs.push_back(col_expr))) {
-            LOG_WARN("failed to push back expr", K(ret));
-          } else if (OB_FAIL(new_column_exprs.push_back(tmp_column_expr))) {
-            LOG_WARN("failed to push back new column expr", K(ret));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTransformUtils::extract_right_tables_from_semi_infos(ObDMLStmt *stmt,
                                                            const ObIArray<SemiInfo *> &semi_infos, 
                                                            ObIArray<TableItem *> &tables)
@@ -12822,7 +12755,7 @@ int ObTransformUtils::get_sorted_table_hint(ObSEArray<TableItem *, 4> &tables,
         return a->table_id_ > b->table_id_;
       }
     };
-    std::sort(tables.begin(), tables.end(), cmp_func);
+    lib::ob_sort(tables.begin(), tables.end(), cmp_func);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
     TableItem *table = tables.at(i);

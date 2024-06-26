@@ -117,7 +117,7 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
   } else {
     ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
     const bool need_binary_hash =
-        (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC || store_class == ObGeometrySC);
+        (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC || store_class == ObGeometrySC || store_class == ObRoaringBitmapSC);
     bool has_lob_header = col_desc.col_type_.is_lob_storage();
     ObPrecision precision = PRECISION_UNKNOWN_YET;
     if (col_desc.col_type_.is_decimal_int()) {
@@ -283,7 +283,7 @@ int ObEncodingHashTableFactory::create(const int64_t bucket_num, const int64_t n
   return ret;
 }
 
-int ObEncodingHashTableFactory::recycle(ObEncodingHashTable *hashtable)
+int ObEncodingHashTableFactory::recycle(const bool force_cache, ObEncodingHashTable *hashtable)
 {
   int ret = OB_SUCCESS;
   if (NULL == hashtable) {
@@ -292,7 +292,7 @@ int ObEncodingHashTableFactory::recycle(ObEncodingHashTable *hashtable)
   } else if (!hashtable->created()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("hashtable not created", K(ret));
-  } else if (hashtable->get_node_cnt() >= MAX_CACHED_HASHTABLE_SIZE) {
+  } else if (!force_cache && hashtable->get_node_cnt() >= MAX_CACHED_HASHTABLE_SIZE) {
     allocator_.free(hashtable);
   } else {
     if (OB_FAIL(hashtables_.push_back(hashtable))) {
@@ -363,7 +363,8 @@ int build_column_encoding_ctx(ObEncodingHashTable *ht,
       case ObStringSC:
       case ObTextSC:
       case ObJsonSC:
-      case ObGeometrySC: { // geometry, json and text storage class have the same behavior currently
+      case ObGeometrySC:
+      case ObRoaringBitmapSC: { // geometry, json and text storage class have the same behavior currently
         col_ctx.fix_data_size_ = -1;
         col_ctx.max_string_size_ = -1;
         bool var_store = false;

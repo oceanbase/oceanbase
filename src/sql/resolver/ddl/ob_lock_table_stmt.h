@@ -37,6 +37,10 @@ public:
   void set_wait_lock_seconds(const int64_t wait_lock_seconds) { wait_lock_seconds_ = wait_lock_seconds; }
   int64_t get_lock_mode() const { return lock_mode_; }
   int64_t get_wait_lock_seconds() const { return wait_lock_seconds_; }
+  virtual int check_is_simple_lock_stmt(bool &is_valid) const override {
+    is_valid = true;
+    return common::OB_SUCCESS;
+  };
 private:
   int64_t lock_mode_;
   int64_t wait_lock_seconds_;

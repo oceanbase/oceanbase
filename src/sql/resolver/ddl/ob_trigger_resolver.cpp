@@ -278,6 +278,9 @@ int ObTriggerResolver::resolve_trigger_source(const ParseNode &parse_node,
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "default collation in create trigger");
   }
+  if (OB_SUCC(ret) && parse_node.value_ != 0 && is_mysql_mode()) {
+    OX (trigger_arg.with_if_not_exist_ = parse_node.value_);
+  }
   return ret;
 }
 

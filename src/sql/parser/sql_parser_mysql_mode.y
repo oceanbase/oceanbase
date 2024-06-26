@@ -338,11 +338,11 @@ END_P SET_VAR DELIMITER
 
         QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK
 
-        REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
+        RB_AND_AGG RB_BUILD_AGG RB_OR_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
-        ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROWS RTREE RUN
+        ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
         RANK READ_ONLY RECOVERY REJECT ROLE
 
@@ -2649,23 +2649,40 @@ MOD '(' expr ',' expr ')'
     ParseNode *path = NULL;
     ParseNode *data = NULL;
 
-    if (OB_NOT_NULL($3) && $3->num_child_ == 2 && $3->type_ == T_FUN_SYS) {
-      ParseNode* expr_param = $3->children_[1];
-      ParseNode* expr_name = $3->children_[0];
-      if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
-           && expr_param->num_child_ == 2) {
-        path = expr_param->children_[1];
-        data = expr_param->children_[0];
-      } else if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0)
-                  && expr_param->num_child_ == 1
-                  && OB_NOT_NULL(expr_param->children_[0])
-                  && expr_param->children_[0]->num_child_ == 2) {
-        expr_name = expr_param->children_[0]->children_[0];
-        expr_param = expr_param->children_[0]->children_[1];
+    if (OB_NOT_NULL($3)) {
+      if ($3->type_ == T_COLUMN_REF) {
+        data = $3;
+
+        malloc_terminal_node(path, result->malloc_pool_, T_VARCHAR);
+        path->str_value_ = "";
+        path->str_len_ = 0;
+        path->is_hidden_const_ = 1;
+      } else if ($3->type_ == T_FUN_SYS_JSON_VALUE) {
+        path = $3->children_[1];
+        data = $3->children_[0];
+      } else if ($3->num_child_ == 2) {
+        ParseNode* expr_param = $3->children_[1];
+        ParseNode* expr_name = $3->children_[0];
         if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
-           && expr_param->num_child_ == 2) {
+            && expr_param->num_child_ == 2) {
           path = expr_param->children_[1];
           data = expr_param->children_[0];
+        } else if ((OB_NOT_NULL(expr_name->str_value_)
+                   && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0)
+                   && OB_NOT_NULL(expr_param->children_[0])) {
+          ParseNode* param = expr_param->children_[0];
+          if (param->type_ == T_FUN_SYS_JSON_VALUE) {
+            path = param->children_[1];
+            data = param->children_[0];
+          } else if (expr_param->children_[0]->num_child_ >= 2) {
+            expr_name = expr_param->children_[0]->children_[0];
+            expr_param = expr_param->children_[0]->children_[1];
+            if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
+              && expr_param->num_child_ == 2) {
+              path = expr_param->children_[1];
+              data = expr_param->children_[0];
+            }
+          }
         }
       }
     }
@@ -3215,6 +3232,21 @@ MOD '(' expr ',' expr ')'
 | SUM_OPNSIZE '(' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SUM_OPNSIZE, 2, NULL, $3);
+}
+| RB_BUILD_AGG '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_BUILD_AGG, 1, $3);
+  $$->reserved_ = 0;
+}
+| RB_OR_AGG '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_OR_AGG, 1, $3);
+  $$->reserved_ = 0;
+}
+| RB_AND_AGG '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_AND_AGG, 1, $3);
+  $$->reserved_ = 0;
 }
 ;
 
@@ -6315,6 +6347,11 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 7; /* geometrycollection, geometry uses collation type value convey sub geometry type. */
 }
+| ROARINGBITMAP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ROARINGBITMAP);
+  $$->int32_values_[0] = 0; /* length */
+}
 ;
 
 string_list:
@@ -6872,7 +6909,11 @@ table_option
 }
 | table_option  table_option_list_space_seperated
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+  if ($1 != NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+  } else {
+    $$ = $2;
+  }
 }
 ;
 
@@ -6883,7 +6924,11 @@ table_option_list_space_seperated
 }
 | table_option ',' table_option_list
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  if ($1 != NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  } else {
+    $$ = $3;
+  }
 }
 ;
 
@@ -12660,7 +12705,7 @@ index_hint_definition
 }
 ;
 
-/* diff normal_relation_facotr and dot_relation_factor for relation_factor_in_hint*/
+/* diff normal_relation_factor and dot_relation_factor for relation_factor_in_hint*/
 relation_factor:
 normal_relation_factor
 {
@@ -13913,6 +13958,10 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_PROCEDURE_STATUS, 2, $4, $5); }
 | SHOW FUNCTION STATUS opt_from_or_in_database_clause opt_show_condition
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_FUNCTION_STATUS, 2, $4, $5); }
+| SHOW PROCEDURE CODE relation_factor
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_PROCEDURE_CODE, 1, $4); }
+| SHOW FUNCTION CODE relation_factor
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_FUNCTION_CODE, 1, $4); }
 | SHOW TRIGGERS opt_from_or_in_database_clause opt_show_condition
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_TRIGGERS, 2, $3, $4); }
 | SHOW SERVER STATUS opt_show_condition
@@ -16773,7 +16822,11 @@ alter_table_action
 }
 | alter_table_actions ',' alter_table_action
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  if ($3 != NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  } else {
+    $$ = $1;
+  }
 }
 ;
 
@@ -22163,6 +22216,7 @@ ACCOUNT
 |       RETURNS
 |       REVERSE
 |       REWRITE
+|       ROARINGBITMAP
 |       ROLE
 |       ROLLBACK
 |       ROLLING
@@ -22412,6 +22466,9 @@ ACCOUNT
 |       TRANSFER
 |       SUM_OPNSIZE
 |       VALIDATION
+|       RB_BUILD_AGG
+|       RB_OR_AGG
+|       RB_AND_AGG
 |       OVERWRITE
 ;
 

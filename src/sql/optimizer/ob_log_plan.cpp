@@ -7455,7 +7455,18 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         (NULL == table_scan->get_limit_expr() ||
          ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr())) &&
          table_scan->get_text_retrieval_info().topk_limit_expr_ == NULL) {
-      if (!top->is_distributed()) {
+      bool das_multi_partition = false;
+      if (table_scan->use_das() && NULL != table_scan->get_table_partition_info()) {
+        int64_t partition_count = table_scan->get_table_partition_info()->
+                                  get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
+        if (1 != partition_count) {
+          das_multi_partition = true;
+        }
+      }
+
+      if (das_multi_partition) {
+        new_limit_expr = pushed_expr;
+      } else if (!top->is_distributed()) {
         new_limit_expr = limit_expr;
         new_offset_expr = offset_expr;
       } else {
@@ -7468,6 +7479,9 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         LOG_WARN("failed to construct startup filter", KPC(limit_expr));
       } else {
         is_pushed = true;
+      }
+      if (das_multi_partition) {
+        is_pushed = false;
       }
     } else if (OB_NOT_NULL(table_scan->get_text_retrieval_info().topk_limit_expr_)) {
       is_pushed = true;
@@ -9964,7 +9978,7 @@ int ObLogPlan::sort_pwj_constraint(ObLocationConstraintContext &location_constra
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i));
     } else {
-      std::sort(&cur_cons->at(0), &cur_cons->at(0) + cur_cons->count());
+      lib::ob_sort(&cur_cons->at(0), &cur_cons->at(0) + cur_cons->count());
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < non_strict_pwj_cons.count(); ++i) {
@@ -9972,7 +9986,7 @@ int ObLogPlan::sort_pwj_constraint(ObLocationConstraintContext &location_constra
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i));
     } else {
-      std::sort(&cur_cons->at(0), &cur_cons->at(0) + cur_cons->count());
+      lib::ob_sort(&cur_cons->at(0), &cur_cons->at(0) + cur_cons->count());
     }
   }
   return ret;
@@ -10664,6 +10678,8 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("failed to collect table location", K(ret));
   } else if (OB_FAIL(build_location_related_tablet_ids())) {
     LOG_WARN("build location related tablet ids failed", K(ret));
+  } else if (OB_FAIL(check_das_need_keep_ordering(root))) {
+    LOG_WARN("failed to check das need keep ordering", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -11350,6 +11366,26 @@ int ObLogPlan::build_location_related_tablet_ids()
                OB_FAIL(ObPhyLocationGetter::build_related_tablet_info(
                        table_part_info->get_table_location(), *optimizer_context_.get_exec_ctx(), map))) {
       LOG_WARN("rebuild related tablet info failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_das_need_keep_ordering(ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret));
+  } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
+    ObLogTableScan *scan = static_cast<ObLogTableScan*>(op);
+    if (OB_FAIL(scan->check_das_need_keep_ordering())) {
+      LOG_WARN("failed to check das need keep ordering", K(ret));
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
+    if (OB_FAIL(SMART_CALL(check_das_need_keep_ordering(op->get_child(i))))) {
+      LOG_WARN("failed to check das need keep ordering", K(ret));
     }
   }
   return ret;

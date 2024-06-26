@@ -36,6 +36,15 @@ namespace sql
 class ObHashPartItem : public ObCompactRow
 {
 public:
+  // used for hash set.
+  const static int64_t HASH_VAL_BIT = 63;
+  const static int64_t HASH_VAL_MASK = UINT64_MAX >> (64 - HASH_VAL_BIT);
+  struct ExtraInfo
+  {
+    uint64_t hash_val_:HASH_VAL_BIT;
+    uint64_t is_match_:1;
+  };
+  // end.
   ObHashPartItem() : ObCompactRow() {}
   ~ObHashPartItem() {}
   ObHashPartItem *next(const RowMeta &row_meta)
@@ -54,9 +63,20 @@ public:
   }
   void set_hash_value(const uint64_t hash_val, const RowMeta &row_meta)
   {
-    *reinterpret_cast<uint64_t *>(this->get_extra_payload(row_meta)) = hash_val;
+    *reinterpret_cast<uint64_t *>(this->get_extra_payload(row_meta)) = hash_val & HASH_VAL_MASK;
   }
   static int64_t get_extra_size() { return sizeof(uint64_t) + sizeof(ObHashPartItem *); }
+  ExtraInfo &get_extra_info(const RowMeta &row_meta)
+  {
+    static_assert(sizeof(ObHashPartItem) == sizeof(ObCompactRow),
+        "sizeof ObHashPartItem must be the save with ObCompactRow");
+    return *reinterpret_cast<ExtraInfo *>(get_extra_payload(row_meta));
+  }
+  const ExtraInfo &get_extra_info(const RowMeta &row_meta) const
+  { return *reinterpret_cast<const ExtraInfo *>(get_extra_payload(row_meta)); }
+
+  bool is_match(const RowMeta &row_meta) const { return get_extra_info(row_meta).is_match_; }
+  void set_is_match(const RowMeta &row_meta, bool is_match) { get_extra_info(row_meta).is_match_ = is_match; }
 };
 
 template<typename CompactRowItem>
@@ -131,7 +151,8 @@ public:
     has_cur_part_dumped_(false), has_create_part_map_(false),
     est_part_cnt_(INT64_MAX), cur_level_(0), part_shift_(0), period_row_cnt_(0),
     left_part_cur_id_(0), right_part_cur_id_(0), my_skip_(nullptr),
-    is_push_down_(false), exprs_(nullptr), is_inited_vec_(false), max_batch_size_(0)
+    is_push_down_(false), exprs_(nullptr), is_inited_vec_(false), max_batch_size_(0),
+    compressor_type_(NONE_COMPRESSOR)
   {}
   virtual ~ObIHashPartInfrastructure();
 public:
@@ -223,9 +244,11 @@ public:
   virtual int init_hash_table(int64_t bucket_cnt,
                               int64_t min_bucket = MIN_BUCKET_NUM,
                               int64_t max_bucket = MAX_BUCKET_NUM) = 0;
+  virtual int exists_batch(const common::ObIArray<ObExpr*> &exprs, const ObBatchRows &brs, ObBitVector *skip,
+              uint64_t *hash_values_for_batch) = 0;
   int init(uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part,
     int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-    ObSqlMemMgrProcessor *sql_mem_processor);
+    ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type);
   void switch_left()
   { cur_side_ = InputSide::LEFT; }
   void switch_right()
@@ -384,6 +407,7 @@ public:
     return ret;
   }
   int64_t get_hash_store_mem_used() const { return preprocess_part_.store_.get_mem_used(); }
+  const RowMeta &get_hash_store_row_meta() const { return preprocess_part_.store_.get_row_meta(); }
   void set_push_down() { is_push_down_ = true; }
   int process_dump(bool is_block, bool &full_by_pass);
   bool hash_table_full() { return get_hash_table_size() >= 0.8 * get_hash_bucket_num(); }
@@ -429,6 +453,14 @@ protected:
     if (INT64_MAX == est_part_cnt_) {
       est_partition_count();
     }
+
+    // test for dump once
+    bool force_dump = !(EVENT_CALL(EventTable::EN_SQL_FORCE_DUMP) == OB_SUCCESS);
+    if (force_dump && is_test_for_dump_ == true) {
+      is_test_for_dump_ = false;
+      return true;
+    }
+
     return (sql_mem_processor_->get_mem_bound() <= est_part_cnt_ * BLOCK_SIZE + get_mem_used());
   }
 
@@ -502,6 +534,8 @@ protected:
   bool is_inited_vec_;
   common::ObFixedArray<ObIVector *, common::ObIAllocator> vector_ptrs_;
   int64_t max_batch_size_;
+  common::ObCompressorType compressor_type_;
+  bool is_test_for_dump_ = true; // tracepoint for dump once.
 };
 
 template<typename HashBucket>
@@ -534,6 +568,9 @@ public:
   int init_hash_table(int64_t bucket_cnt,
                       int64_t min_bucket = MIN_BUCKET_NUM,
                       int64_t max_bucket = MAX_BUCKET_NUM) override;
+  int exists_batch(const common::ObIArray<ObExpr*> &exprs,
+                  const ObBatchRows &brs, ObBitVector *skip,
+                uint64_t *hash_values_for_batch) override;
 private:
   int set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
                          uint64_t *hash_values_for_batch,
@@ -581,15 +618,6 @@ private:
       int64_t bkt_idx = (hash_values_for_batch[i] & num_cnt);
       const auto &curr_bkt = buckets->at(bkt_idx);
       __builtin_prefetch(&curr_bkt, 0/* read */, 2 /*high temp locality*/);
-    }
-    for (int i = 0; i < batch_size; ++i) {
-      int64_t bkt_idx = (hash_values_for_batch[i] & num_cnt);
-      const auto &curr_bkt = buckets->at(bkt_idx);
-      if ((OB_NOT_NULL(skip) && skip->at(i))
-          || !curr_bkt.check_hash(hash_values_for_batch[i])) {
-        continue;
-      }
-      __builtin_prefetch(&curr_bkt.item_, 0/* read */, 2 /*high temp locality*/);
     }
     return ret;
   }
@@ -642,7 +670,7 @@ public:
   bool is_inited() const { return is_inited_; }
   int init(uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part,
     int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-    ObSqlMemMgrProcessor *sql_mem_processor);
+    ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type);
   int init_mem_context(uint64_t tenant_id);
   int decide_hp_infras_type(const common::ObIArray<ObExpr*> &exprs, BucketType &bkt_type, uint64_t &payload_len);
   template<typename BktType>
@@ -662,6 +690,16 @@ public:
                 ObEvalCtx *eval_ctx);
   int start_round();
   int end_round();
+  void switch_left();
+  void switch_right();
+  bool has_cur_part(InputSide input_side);
+  int get_right_next_batch(const common::ObIArray<ObExpr *> &exprs,
+                          const int64_t max_row_cnt,
+                          int64_t &read_rows);
+  int exists_batch(const common::ObIArray<ObExpr*> &exprs,
+              const ObBatchRows &brs, ObBitVector *skip,
+                  uint64_t *hash_values_for_batch);
+  const RowMeta &get_hash_store_row_meta() const;
   int init_hash_table(int64_t bucket_cnt,
                       int64_t min_bucket = MIN_BUCKET_NUM,
                       int64_t max_bucket = MAX_BUCKET_NUM);
@@ -831,6 +869,69 @@ set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
   } else if (OB_FAIL(hash_table_.set_distinct_batch(preprocess_part_.store_.get_row_meta(), batch_size, skip,
                                              my_skip, hash_values_for_batch, sf))) {
     LOG_WARN("failed to set batch", K(ret));
+  }
+  return ret;
+}
+
+template <typename HashBucket>
+int ObHashPartInfrastructureVec<HashBucket>::exists_batch(
+                const common::ObIArray<ObExpr*> &exprs,
+                const ObBatchRows &brs, ObBitVector *skip,
+                uint64_t *hash_values_for_batch)
+{
+ int ret = OB_SUCCESS;
+  if (OB_ISNULL(hash_values_for_batch)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "hash values vector is not init", K(ret));
+  } else if (OB_ISNULL(skip)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "skip vector is null", K(ret));
+  } else if (OB_FAIL(calc_hash_value_for_batch(exprs, brs, hash_values_for_batch))) {
+    SQL_ENG_LOG(WARN, "failed to calc hash values", K(ret));
+  } else {
+    const ObHashPartItem *exists_item = nullptr;
+    ObBitVector &skip_for_dump = *my_skip_;
+    skip_for_dump.reset(brs.size_);
+    if (OB_FAIL(prefetch<HashBucket>(hash_values_for_batch, brs.size_, brs.skip_))) {
+      SQL_ENG_LOG(WARN, "failed to prefetch", K(ret));
+    } else {
+      ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx_);
+      for (int64_t i = 0; OB_SUCC(ret) && i < brs.size_; ++i) {
+        //if nullptr, data is from dumped partition
+        if (OB_NOT_NULL(brs.skip_) && brs.skip_->at(i)) {
+          skip->set(i); //skip indicates rows need to return, only useful for intersect
+          skip_for_dump.set(i); //skip_for_dump indicates rows need to dump
+          continue;
+        }
+        guard.set_batch_idx(i);
+        if (OB_FAIL(hash_table_.get(preprocess_part_.store_.get_row_meta(),
+                                i, hash_values_for_batch[i],
+                                exists_item))) {
+          SQL_ENG_LOG(WARN, "failed to get item", K(ret));
+        } else if (OB_ISNULL(exists_item)) {
+          skip->set(i);
+        } else if (exists_item->is_match(preprocess_part_.store_.get_row_meta())) {
+          skip->set(i);
+          //we dont need dumped this row
+          skip_for_dump.set(i);
+        } else {
+          const_cast<ObHashPartItem*>(exists_item)->set_is_match(preprocess_part_.store_.get_row_meta(), true);
+          //we dont need dumped this row
+          skip_for_dump.set(i);
+        }
+      }
+    }
+    if (OB_SUCC(ret) && has_left_dumped()) {
+      // dump right row if left is dumped
+      if (!has_right_dumped()
+          && OB_FAIL(create_dumped_partitions(InputSide::RIGHT))) {
+        SQL_ENG_LOG(WARN, "failed to create dump partitions", K(ret));
+      } else if (OB_FAIL(insert_batch_on_partitions(exprs, skip_for_dump,
+                                                    brs.size_, hash_values_for_batch))) {
+        SQL_ENG_LOG(WARN, "failed to insert row into partitions", K(ret));
+      }
+    }
+    my_skip_->reset(brs.size_);
   }
   return ret;
 }

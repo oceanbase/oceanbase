@@ -333,9 +333,10 @@ int ObDASTaskResultMgr::save_task_result_by_vector(int64_t &read_rows,
                                          max_batch_size,
                                          mem_attr,
                                          4 * 1024 * 1024, // 4MB
-                                         true,
-                                         0,
-                                         false))) {
+                                         true, /*enable_dump*/
+                                         0, /*row_extra_size*/
+                                         NONE_COMPRESSOR,
+                                         false/*reorder_fixed_expr*/))) {
     LOG_WARN("init vec row store failed", K(ret));
   } else if (OB_FAIL(vec_row_store.alloc_dir_id())) {
     LOG_WARN("datum store alloc dir id failed", KR(ret));
@@ -602,8 +603,9 @@ int ObDASTaskResultMgr::fetch_result_by_vector(ObDASTCB *tcb,
       && OB_FAIL(vec_row_store.init(tcb->vec_row_store_.get_row_meta(),
                                     tcb->vec_row_store_.get_max_batch_size(),
                                     mem_attr,
-                                    INT64_MAX,
-                                    false))) {
+                                    INT64_MAX, /* mem_limit */
+                                    false, /* enable_dump */
+                                    NONE_COMPRESSOR /* compressor_type */))) {
     LOG_WARN("init datum store failed", KR(ret));
   } else {
     bool added = false;

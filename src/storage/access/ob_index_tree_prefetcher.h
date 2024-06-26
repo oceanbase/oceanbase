@@ -22,7 +22,6 @@
 #include "storage/blocksstable/ob_row_cache.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/access/ob_micro_block_handle_mgr.h"
-#include "storage/ob_table_store_stat_mgr.h"
 #include "storage/access/ob_rows_info.h"
 
 namespace oceanbase {
@@ -175,7 +174,9 @@ protected:
   int prefetch_block_data(
       ObMicroIndexInfo &index_block_info,
       ObMicroBlockDataHandle &micro_handle,
-      const bool is_data = true);
+      const bool is_data = true,
+      const bool use_multi_block_prefetch = false,
+      const bool need_submit_io = true);
   int lookup_in_cache(ObSSTableReadHandle &read_handle);
   int init_basic_info(
       const int iter_type,
@@ -387,6 +388,8 @@ public:
       agg_row_store_(nullptr),
       can_blockscan_(false),
       need_check_prefetch_depth_(false),
+      use_multi_block_prefetch_(false),
+      need_submit_io_(true),
       tree_handle_cap_(0),
       prefetch_depth_(1),
       max_range_prefetching_cnt_(0),
@@ -395,7 +398,8 @@ public:
       query_range_(nullptr),
       border_rowkey_(),
       read_handles_(),
-      tree_handles_(nullptr)
+      tree_handles_(nullptr),
+      multi_io_params_()
   {}
   virtual ~ObIndexTreeMultiPassPrefetcher();
   virtual void reset() override;
@@ -476,6 +480,7 @@ public:
     return DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT;
   }
 
+  static const int16_t MIN_DATA_READ_BATCH_COUNT = 4;
   static const int16_t MAX_INDEX_TREE_HEIGHT = 16;
   static const int32_t MAX_DATA_PREFETCH_DEPTH = 32;
   static const int32_t MAX_INDEX_PREFETCH_DEPTH = 3;
@@ -485,8 +490,8 @@ public:
                        K_(cur_micro_data_fetch_idx), K_(micro_data_prefetch_idx), K_(max_micro_handle_cnt),
                        K_(iter_type), K_(cur_level), K_(index_tree_height), K_(max_rescan_height), KP_(long_life_allocator), K_(prefetch_depth),
                        K_(total_micro_data_cnt), KP_(query_range), K_(tree_handle_cap),
-                       K_(can_blockscan), K_(need_check_prefetch_depth),
-                       K(ObArrayWrap<ObIndexTreeLevelHandle>(tree_handles_, index_tree_height_)));
+                       K_(can_blockscan), K_(need_check_prefetch_depth), K_(use_multi_block_prefetch), K_(need_submit_io),
+                       K(ObArrayWrap<ObIndexTreeLevelHandle>(tree_handles_, index_tree_height_)), K_(multi_io_params));
 protected:
   int init_basic_info(
       const int iter_type,
@@ -520,6 +525,11 @@ protected:
   void inner_reset();
   virtual int init_tree_handles(const int64_t count);
   int get_prefetch_depth(int64_t &depth);
+  int prefetch_data_block(
+      const int64_t prefetch_idx,
+      ObMicroIndexInfo &index_block_info,
+      ObMicroBlockDataHandle &micro_handle);
+  int prefetch_multi_data_block(const int64_t max_prefetch_idx);
 
   static const int32_t DEFAULT_SCAN_RANGE_PREFETCH_CNT = 4;
   static const int32_t DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT = DATA_PREFETCH_DEPTH;
@@ -694,6 +704,8 @@ public:
 protected:
   bool can_blockscan_;
   bool need_check_prefetch_depth_;
+  bool use_multi_block_prefetch_;
+  bool need_submit_io_;
   int16_t tree_handle_cap_;
   int16_t prefetch_depth_;
   int32_t max_range_prefetching_cnt_;
@@ -711,6 +723,7 @@ protected:
   ObIndexTreeLevelHandle *tree_handles_;
   ObMicroIndexInfo micro_data_infos_[DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT];
   ObMicroBlockDataHandle micro_data_handles_[DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT];
+  ObMultiBlockIOParam multi_io_params_;
 };
 
 }

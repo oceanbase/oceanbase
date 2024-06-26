@@ -195,7 +195,7 @@ public:
   public:
     DirProcessor() = default;
     ~DirProcessor() = default;
-    virtual int handle_dir(const char *group_path) = 0;
+    virtual int handle_dir(const char *group_path, bool is_top_dir=false) = 0;
   };
 
 private:
@@ -228,7 +228,7 @@ private:
   enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
   int which_type_dir_(const char *curr_path, int &result);
   int recursion_remove_group_(const char *curr_path);
-  int recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr);
+  int recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr, bool is_top_dir = false);
 };
 
 }  // share

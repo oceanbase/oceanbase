@@ -129,6 +129,7 @@ protected:
                           const common::ObIArray<ObExpr*> &exprs,
                           ObEvalCtx &ctx);
   int check_row_null(const ObExprPtrIArray &row, const ColContentIArray &column_infos);
+  void reset_new_row_datum(const ObExprPtrIArray &new_row_exprs);
 protected:
   sql::ObDMLRtCtx dml_rtctx_;
   int64_t affected_rows_;

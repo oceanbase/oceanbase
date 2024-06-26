@@ -33,6 +33,19 @@ using namespace blocksstable;
 
 namespace compaction
 {
+
+const char * ObMacroBlockOp::block_op_str_[] = {
+    "BLOCK_OP_NONE",
+    "BLOCK_OP_REORG",
+    "BLOCK_OP_REWRITE"
+};
+
+const char* ObMacroBlockOp::get_block_op_str() const
+{
+  STATIC_ASSERT(static_cast<int64_t>(OP_REWRITE) + 1 == ARRAYSIZEOF(block_op_str_), "block op array is mismatch");
+  return is_valid() ? block_op_str_[block_op_] : "OP_INVALID";
+}
+
 /*
  *ObDataDescHelper
  */
@@ -74,6 +87,7 @@ void ObProgressiveMergeHelper::reset()
   progressive_merge_round_ = 0;
   rewrite_block_cnt_ = 0;
   need_rewrite_block_cnt_ = 0;
+  data_version_ = 0;
   full_merge_ = false;
   check_macro_need_merge_ = false;
   is_inited_ = false;
@@ -94,80 +108,77 @@ int ObProgressiveMergeHelper::init(const ObSSTable &sstable, const ObMergeParame
     bool last_is_small_data_macro = false;
     const bool is_major = is_major_merge_type(static_param.get_merge_type());
     const bool need_calc_progressive_merge = is_major && static_param.progressive_merge_step_ < static_param.progressive_merge_num_;
-    const bool need_check_macro_merge = !is_major || static_param.data_version_ >= DATA_VERSION_4_1_0_0;
 
     progressive_merge_round_ = static_param.progressive_merge_round_;
 
-    if (need_calc_progressive_merge || need_check_macro_merge) {
-      ObSSTableSecMetaIterator *sec_meta_iter = nullptr;
-      ObDataMacroBlockMeta macro_meta;
-      const storage::ObITableReadInfo *index_read_info = nullptr;
-      if (sstable.is_normal_cg_sstable()) {
-        if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
-          STORAGE_LOG(WARN, "failed to get index read info from ObTenantCGReadInfoMgr", KR(ret));
-        }
-      } else {
-        index_read_info = static_param.rowkey_read_info_;
+    ObSSTableSecMetaIterator *sec_meta_iter = nullptr;
+    ObDataMacroBlockMeta macro_meta;
+    const storage::ObITableReadInfo *index_read_info = nullptr;
+    if (sstable.is_normal_cg_sstable()) {
+      if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
+        STORAGE_LOG(WARN, "failed to get index read info from ObTenantCGReadInfoMgr", KR(ret));
       }
-      const ObDatumRange &merge_range = sstable.is_normal_cg_sstable() ? merge_param.merge_rowid_range_ : merge_param.merge_range_;
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(index_read_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "index read info is unexpected null", KR(ret), KP(index_read_info), K(sstable), K(merge_param));
-      } else if (OB_FAIL(sstable.scan_secondary_meta(
-          allocator,
-          merge_range,
-          *index_read_info,
-          blocksstable::DATA_BLOCK_META,
-          sec_meta_iter))) {
-        STORAGE_LOG(WARN, "Fail to scan secondary meta", K(ret), K(merge_param.merge_range_));
-      }
+    } else {
+      index_read_info = static_param.rowkey_read_info_;
+    }
+    const ObDatumRange &merge_range = sstable.is_normal_cg_sstable() ? merge_param.merge_rowid_range_ : merge_param.merge_range_;
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(index_read_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "index read info is unexpected null", KR(ret), KP(index_read_info), K(sstable), K(merge_param));
+    } else if (OB_FAIL(sstable.scan_secondary_meta(
+            allocator,
+            merge_range,
+            *index_read_info,
+            blocksstable::DATA_BLOCK_META,
+            sec_meta_iter))) {
+      STORAGE_LOG(WARN, "Fail to scan secondary meta", K(ret), K(merge_range));
+    }
 
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(sec_meta_iter->get_next(macro_meta))) {
-          if (OB_ITER_END != ret) {
-            STORAGE_LOG(WARN, "Failed to get next macro block", K(ret));
-          } else {
-            ret = OB_SUCCESS;
-            break;
-          }
-        } else if (macro_meta.val_.progressive_merge_round_ < progressive_merge_round_) {
-          ++rewrite_block_cnt_for_progressive;
-        }
-        if (macro_meta.val_.data_zsize_ < OB_DEFAULT_MACRO_BLOCK_SIZE *
-            ObMacroBlockWriter::DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD / 100) {
-          rewrite_macro_cnt++;
-          if (last_is_small_data_macro) {
-            reduce_macro_cnt++;
-          }
-          last_is_small_data_macro = true;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(sec_meta_iter->get_next(macro_meta))) {
+        if (OB_ITER_END != ret) {
+          STORAGE_LOG(WARN, "Failed to get next macro block", K(ret));
         } else {
-          last_is_small_data_macro = false;
+          ret = OB_SUCCESS;
+          break;
         }
+      } else if (macro_meta.val_.progressive_merge_round_ < progressive_merge_round_) {
+        ++rewrite_block_cnt_for_progressive;
       }
-      if (OB_NOT_NULL(sec_meta_iter)) {
-        sec_meta_iter->~ObSSTableSecMetaIterator();
-        allocator.free(sec_meta_iter);
-      }
-      if (OB_SUCC(ret)) {
-        if (need_calc_progressive_merge) {
-          need_rewrite_block_cnt_ = MAX(rewrite_block_cnt_for_progressive /
-              (static_param.progressive_merge_num_ - static_param.progressive_merge_step_), 1L);
-          STORAGE_LOG(INFO, "There are some macro block need rewrite", "tablet_id", static_param.get_tablet_id(),
-                      K(need_rewrite_block_cnt_), K(static_param.progressive_merge_step_),
-                      K(static_param.progressive_merge_num_), K(progressive_merge_round_), K(table_idx_));
+      if (macro_meta.val_.data_zsize_ < OB_DEFAULT_MACRO_BLOCK_SIZE *
+          ObMacroBlockWriter::DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD / 100) {
+        rewrite_macro_cnt++;
+        if (last_is_small_data_macro) {
+          reduce_macro_cnt++;
         }
-        if (need_check_macro_merge) {
-          check_macro_need_merge_ = rewrite_macro_cnt <= (reduce_macro_cnt * 2);
-          if (sstable.is_normal_cg_sstable() && rewrite_macro_cnt < CG_TABLE_CHECK_REWRITE_CNT_) {
-            check_macro_need_merge_ = true;
-          }
-          STORAGE_LOG(INFO, "finish macro block need merge check", K(check_macro_need_merge_), K(rewrite_macro_cnt), K(reduce_macro_cnt), K(table_idx_));
-        }
+        last_is_small_data_macro = true;
+      } else {
+        last_is_small_data_macro = false;
       }
+    }
+    if (OB_NOT_NULL(sec_meta_iter)) {
+      sec_meta_iter->~ObSSTableSecMetaIterator();
+      allocator.free(sec_meta_iter);
+    }
+    if (OB_SUCC(ret)) {
+      if (need_calc_progressive_merge) {
+        need_rewrite_block_cnt_ = MAX(rewrite_block_cnt_for_progressive /
+            (static_param.progressive_merge_num_ - static_param.progressive_merge_step_), 1L);
+        STORAGE_LOG(INFO, "There are some macro block need rewrite", "tablet_id", static_param.get_tablet_id(),
+            K(need_rewrite_block_cnt_), K(static_param.progressive_merge_step_),
+            K(static_param.progressive_merge_num_), K(progressive_merge_round_), K(table_idx_));
+      }
+      check_macro_need_merge_ = rewrite_macro_cnt <= (reduce_macro_cnt * 2);
+      if (static_param.data_version_ < DATA_VERSION_4_3_2_0
+          && sstable.is_normal_cg_sstable() && rewrite_macro_cnt < CG_TABLE_CHECK_REWRITE_CNT_) {
+        check_macro_need_merge_ = true;
+      }
+      STORAGE_LOG(INFO, "finish macro block need merge check", K(check_macro_need_merge_), K(rewrite_macro_cnt), K(reduce_macro_cnt), K(table_idx_));
     }
 
     if (OB_SUCC(ret)) {
+      data_version_ = static_param.data_version_;
       is_inited_ = true;
     }
   }
@@ -175,23 +186,43 @@ int ObProgressiveMergeHelper::init(const ObSSTable &sstable, const ObMergeParame
   return ret;
 }
 
-int ObProgressiveMergeHelper::need_rewrite_macro_block(const ObMacroBlockDesc &macro_desc, bool &need_rewrite) const
+int ObProgressiveMergeHelper::check_macro_block_op(const ObMacroBlockDesc &macro_desc,
+                                                   ObMacroBlockOp &block_op) const
 {
   int ret = OB_SUCCESS;
-  need_rewrite = false;
 
+  block_op.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObProgressiveMergeHelper not init", K(ret));
+  } else if (!macro_desc.is_valid_with_macro_meta()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid macro desc", K(ret), K(macro_desc));
   } else if (full_merge_) {
-    need_rewrite = true;
-  } else if (need_rewrite_block_cnt_ == 0) {
-  } else if (macro_desc.is_valid_with_macro_meta()) {
-    const int64_t block_merge_round = macro_desc.macro_meta_->val_.progressive_merge_round_;
-    need_rewrite = need_rewrite_block_cnt_ > rewrite_block_cnt_ && block_merge_round < progressive_merge_round_;
+    block_op.set_rewrite();
+  } else {
+    if (need_rewrite_block_cnt_ > 0) {
+      const int64_t block_merge_round = macro_desc.macro_meta_->val_.progressive_merge_round_;
+      if(need_rewrite_block_cnt_ > rewrite_block_cnt_ && block_merge_round < progressive_merge_round_) {
+        block_op.set_rewrite();
+      }
+    }
+    if (block_op.is_none()) {
+      if (!check_macro_need_merge_) {
+      } else if (macro_desc.macro_meta_->val_.data_zsize_
+          < OB_SERVER_BLOCK_MGR.get_macro_block_size() * DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD / 100) {
+        // before 432 we need rewrite theis macro block
+        if (data_version_ < DATA_VERSION_4_3_2_0) {
+          block_op.set_rewrite();
+        } else {
+          block_op.set_reorg();
+        }
+      }
+    }
   }
 
   return ret;
+
 }
 
 /*
@@ -522,18 +553,20 @@ int ObPartitionMerger::merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, i
     STORAGE_LOG(WARN, "iter macro_block_opened", K(ret), KPC(iter));
   } else {
     const ObMacroBlockDesc *macro_desc = nullptr;
+    ObMacroBlockOp block_op;
     if (OB_FAIL(iter->get_curr_macro_block(macro_desc))) {
       STORAGE_LOG(WARN, "Failed to get current micro block", K(ret), KPC(iter));
     } else if (OB_ISNULL(macro_desc) || OB_UNLIKELY(!macro_desc->is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected null macro block", K(ret), KPC(macro_desc), KPC(iter));
-    } else if (OB_FAIL(try_rewrite_macro_block(*macro_desc, rewrite))) {
+    } else if (OB_FAIL(check_macro_block_op(*macro_desc, block_op))) {
       STORAGE_LOG(WARN, "Failed to try_rewrite_macro_block", K(ret));
-    } else if (OB_UNLIKELY(!iter->is_sstable_iter())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "this is not sstable iter", K(ret), KPC(iter));
-    } else if (rewrite || reinterpret_cast<const ObSSTable*>(iter->get_table())->is_small_sstable()) {
+    } else if (block_op.is_rewrite()) {
       if (OB_FAIL(rewrite_macro_block(minimum_iters))) {
+        STORAGE_LOG(WARN, "Failed to rewrite macro block", K(ret));
+      }
+    } else if (block_op.is_reorg()) {
+      if (OB_FAIL(iter->open_curr_range(false /* rewrite */))) {
         STORAGE_LOG(WARN, "Failed to open_curr_range", K(ret));
       }
     } else if (OB_FAIL(process(*macro_desc))) {
@@ -550,15 +583,16 @@ int ObPartitionMerger::merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, i
   return ret;
 }
 
-int ObPartitionMerger::try_rewrite_macro_block(const ObMacroBlockDesc &macro_desc, bool &rewrite)
+int ObPartitionMerger::check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op)
 {
   int ret = OB_SUCCESS;
 
-  rewrite = false;
+  block_op.reset();
   if (!progressive_merge_helper_.is_valid()) {
-  } else if (progressive_merge_helper_.need_check_macro_merge()
-      && OB_FAIL(macro_writer_->check_data_macro_block_need_merge(macro_desc, rewrite))) {
-    STORAGE_LOG(WARN, "Failed to check data macro block need merge", K(ret), K(macro_desc));
+  } else if (OB_FAIL(progressive_merge_helper_.check_macro_block_op(macro_desc, block_op))) {
+    STORAGE_LOG(WARN, "failed to check macro operation", K(ret), K(macro_desc));
+  } else if (block_op.is_rewrite()) {
+    progressive_merge_helper_.inc_rewrite_block_cnt();
   }
 
   return ret;
@@ -793,23 +827,7 @@ int ObPartitionMajorMerger::merge_micro_block_iter(ObPartitionMergeIter &iter, i
   return ret;
 }
 
-int ObPartitionMajorMerger::try_rewrite_macro_block(const ObMacroBlockDesc &macro_desc, bool &rewrite)
-{
-  int ret = OB_SUCCESS;
-
-  rewrite = false;
-  if (!progressive_merge_helper_.is_valid()) {
-  } else if (OB_FAIL(progressive_merge_helper_.need_rewrite_macro_block(macro_desc, rewrite))) {
-    STORAGE_LOG(WARN, "failed to check need_rewrite_macro_block", K(ret), K(macro_desc));
-  } else if (rewrite) {
-    progressive_merge_helper_.inc_rewrite_block_cnt();
-  } else if (OB_FAIL(ObPartitionMerger::try_rewrite_macro_block(macro_desc, rewrite))) {
-    STORAGE_LOG(WARN, "fail to try_rewrite_macro_block", K(ret));
-  }
-
-  return ret;
-}
-
+//TODO this func should be replaced with ObPartitionMinorMerger:::rewrite_macro_block
 int ObPartitionMajorMerger::rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters)
 {
   int ret = OB_SUCCESS;

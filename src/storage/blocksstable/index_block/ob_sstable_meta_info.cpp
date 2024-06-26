@@ -462,7 +462,7 @@ int ObRootBlockInfo::deep_copy(
   const int64_t variable_size = get_variable_size();
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < variable_size + pos)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(variable_size), K(pos));
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(variable_size), K(pos), K(block_data_));
   } else if (ObMicroBlockData::DDL_BLOCK_TREE == block_data_.type_) {
     dest.block_data_ = block_data_;
     dest.addr_ = addr_;

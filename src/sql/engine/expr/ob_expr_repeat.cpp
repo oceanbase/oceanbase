@@ -277,6 +277,9 @@ int ObExprRepeat::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) con
   int ret = OB_SUCCESS;
   CK(2 == rt_expr.arg_cnt_);
   rt_expr.eval_func_ = eval_repeat;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) {
+    rt_expr.eval_vector_func_ = eval_repeat_vector;
+  }
   return ret;
 }
 
@@ -319,6 +322,117 @@ int ObExprRepeat::eval_repeat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
       } else {
         expr_datum.set_string(output);
       }
+    }
+  }
+  return ret;
+}
+
+template <typename Arg0Vec, typename Arg1Vec, typename ResVec>
+int ObExprRepeat::repeat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+
+  int64_t max_size = 0; // used for limit size of result
+
+  if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_max_allowed_packet(max_size))) {
+    LOG_WARN("get max size failed", K(ret));
+  } else {
+    const Arg0Vec *arg0_vec = static_cast<const Arg0Vec *>(expr.args_[0]->get_vector(ctx));
+    const Arg1Vec *arg1_vec = static_cast<const Arg1Vec *>(expr.args_[1]->get_vector(ctx));
+
+    // the count may be a variable number, repeat expr support the
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+    batch_info_guard.set_batch_size(bound.batch_size());
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      }
+
+      batch_info_guard.set_batch_idx(idx);
+      if (arg0_vec->is_null(idx) || arg1_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+        eval_flags.set(idx);
+      } else {
+        // prepare & init needed params
+        ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+        common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+
+        int64_t count = arg1_vec->get_int(idx);
+        bool is_null = false;
+        ObString text;
+        ObString output;
+
+        ObExprStrResAlloc calc_alloc(expr, ctx);
+
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                tmp_allocator, arg0_vec, expr.args_[0]->datum_meta_,
+                expr.args_[0]->obj_meta_.has_lob_header(), text, idx))) {
+          LOG_WARN("failed to read text", K(ret), K(text));
+        } else if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+          // 2.1 deal with string tc
+          ret = repeat(output, is_null, text, count, calc_alloc, max_size);
+        } else {
+          // 2.2 deal with text tc
+          ret = repeat_text(expr.datum_meta_.type_,
+                            expr.obj_meta_.has_lob_header(), output, is_null,
+                            text, count, calc_alloc, max_size);
+        }
+        if (OB_FAIL(ret)) {
+          LOG_WARN("do repeat in vector failed", K(ret));
+        } else {
+          if (is_null) {
+            res_vec->set_null(idx);
+          } else {
+            res_vec->set_string(idx, output);
+          }
+        }
+        eval_flags.set(idx);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprRepeat::eval_repeat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  // make sure that `repeat` operand should have 2 params.
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound)) ||
+      OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to evaluate `repeat` parameters", K(ret));
+  } else {
+    VectorFormat arg0_format = expr.args_[0]->get_format(ctx);
+    VectorFormat arg1_format = expr.args_[1]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_DISCRETE == arg0_format && VEC_UNIFORM_CONST == arg1_format &&
+        VEC_DISCRETE == res_format) {
+      ret = repeat_vector<StrDiscVec, IntegerUniCVec, StrDiscVec>(
+          VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg0_format && VEC_UNIFORM_CONST == arg1_format &&
+               VEC_DISCRETE == res_format) {
+      ret = repeat_vector<StrUniVec, IntegerUniCVec, StrDiscVec>(
+          VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_CONTINUOUS == arg0_format &&
+               VEC_UNIFORM_CONST == arg1_format && VEC_DISCRETE == res_format) {
+      ret = repeat_vector<StrContVec, IntegerUniCVec, StrDiscVec>(
+          VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_DISCRETE == arg0_format &&
+               VEC_UNIFORM_CONST == arg1_format && VEC_UNIFORM == res_format) {
+      ret = repeat_vector<StrDiscVec, IntegerUniCVec, StrUniVec>(
+          VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg0_format && VEC_UNIFORM_CONST == arg1_format &&
+               VEC_UNIFORM == res_format) {
+      ret = repeat_vector<StrUniVec, IntegerUniCVec, StrUniVec>(
+          VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_CONTINUOUS == arg0_format &&
+               VEC_UNIFORM_CONST == arg1_format && VEC_UNIFORM == res_format) {
+      ret = repeat_vector<StrContVec, IntegerUniCVec, StrUniVec>(
+          VECTOR_EVAL_FUNC_ARG_LIST);
+    } else {
+      ret = repeat_vector<ObVectorBase, ObVectorBase, ObVectorBase>(
+          VECTOR_EVAL_FUNC_ARG_LIST);
     }
   }
   return ret;

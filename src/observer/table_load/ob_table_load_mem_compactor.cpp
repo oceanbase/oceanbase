@@ -276,11 +276,20 @@ int ObTableLoadMemCompactor::inner_init()
     if (mem_ctx_.mem_dump_task_count_ == 0)  {
       mem_ctx_.mem_dump_task_count_ = 1;
     }
-    mem_ctx_.table_data_desc_ = store_ctx_->table_data_desc_;
-    mem_ctx_.datum_utils_ = &(store_ctx_->ctx_->schema_.datum_utils_);
-    mem_ctx_.need_sort_ = param_->need_sort_;
+
+    if (compact_ctx_->compact_config_->is_sort_lobid_) {
+      mem_ctx_.table_data_desc_ = store_ctx_->lob_id_table_data_desc_;
+      mem_ctx_.datum_utils_ = &(store_ctx_->ctx_->schema_.lob_meta_datum_utils_);
+      mem_ctx_.need_sort_ = true;
+      mem_ctx_.column_count_ = 1;
+    } else {
+      mem_ctx_.table_data_desc_ = store_ctx_->table_data_desc_;
+      mem_ctx_.datum_utils_ = &(store_ctx_->ctx_->schema_.datum_utils_);
+      mem_ctx_.need_sort_ = param_->need_sort_;
+      mem_ctx_.column_count_ = param_->column_count_;
+    }
+
     mem_ctx_.mem_load_task_count_ = param_->session_count_;
-    mem_ctx_.column_count_ = param_->column_count_;
     mem_ctx_.dml_row_handler_ = store_ctx_->error_row_handler_;
     mem_ctx_.file_mgr_ = store_ctx_->tmp_file_mgr_;
     mem_ctx_.dup_action_ = param_->dup_action_;
@@ -331,26 +340,27 @@ int ObTableLoadMemCompactor::start()
 int ObTableLoadMemCompactor::construct_compactors()
 {
   int ret = OB_SUCCESS;
-  ObArray<ObTableLoadTransStore *> trans_store_array;
-  trans_store_array.set_tenant_id(MTL_ID());
-  if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
-    LOG_WARN("fail to get committed trans stores", KR(ret));
+  ObArenaAllocator allocator("TLD_CompTables");
+  ObArray<ObIDirectLoadPartitionTable *> table_array;
+  allocator.set_tenant_id(MTL_ID());
+  table_array.set_block_allocator(ModulePageAllocator(allocator));
+  if (OB_FAIL(compact_ctx_->compact_config_->get_tables(table_array, allocator))) {
+    LOG_WARN("fail to get tables", KR(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < trans_store_array.count(); ++i) {
-    ObTableLoadTransStore *trans_store = trans_store_array.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && j < trans_store->session_store_array_.count(); ++j) {
-      const ObTableLoadTransStore::SessionStore *session_store = trans_store->session_store_array_.at(j);
-      for (int64_t k = 0; OB_SUCC(ret) && k < session_store->partition_table_array_.count(); ++k) {
-        ObIDirectLoadPartitionTable *table = session_store->partition_table_array_.at(k);
-        if (OB_FAIL(add_tablet_table(table))) {
-          LOG_WARN("fail to add tablet table", KR(ret));
-        }
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_array.count(); ++i) {
+    ObIDirectLoadPartitionTable *table = table_array.at(i);
+    if (OB_FAIL(add_tablet_table(table))) {
+      LOG_WARN("fail to add tablet table", KR(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    store_ctx_->clear_committed_trans_stores();
+  // release tables
+  for (int64_t i = 0; i < table_array.count(); ++i) {
+    ObIDirectLoadPartitionTable *table = table_array.at(i);
+    table->~ObIDirectLoadPartitionTable();
+    allocator.free(table);
+    table = nullptr;
   }
+  table_array.reset();
   return ret;
 }
 
@@ -585,7 +595,7 @@ int ObTableLoadMemCompactor::build_result_for_heap_table()
     ObIDirectLoadPartitionTable *table = mem_ctx_.tables_.at(i);
     ObDirectLoadExternalTable *external_table = nullptr;
     ObDirectLoadExternalTable *copied_external_table = nullptr;
-    if (OB_ISNULL(external_table = dynamic_cast<ObDirectLoadExternalTable *>(table))) {
+    if (OB_ISNULL(external_table = static_cast<ObDirectLoadExternalTable *>(table))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table", KR(ret), K(i), KPC(table));
     } else if (OB_ISNULL(copied_external_table =
@@ -617,7 +627,7 @@ int ObTableLoadMemCompactor::add_table_to_parallel_merge_ctx()
   for (int64_t i = 0; OB_SUCC(ret) && i < mem_ctx_.tables_.count(); i++) {
     ObIDirectLoadPartitionTable *table = mem_ctx_.tables_.at(i);
     ObDirectLoadMultipleSSTable *sstable = nullptr;
-    if (OB_ISNULL(sstable = dynamic_cast<ObDirectLoadMultipleSSTable *>(table))) {
+    if (OB_ISNULL(sstable = static_cast<ObDirectLoadMultipleSSTable *>(table))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table", KR(ret), K(i), KPC(table));
     } else if (OB_FAIL(parallel_merge_ctx_.add_tablet_sstable(sstable))) {

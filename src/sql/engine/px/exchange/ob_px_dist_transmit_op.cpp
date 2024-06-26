@@ -312,7 +312,7 @@ int ObPxDistTransmitOp::do_bc2host_dist()
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(channel_idx.begin(), channel_idx.end(), [&channels](int64_t l, int64_t r) {
+    lib::ob_sort(channel_idx.begin(), channel_idx.end(), [&channels](int64_t l, int64_t r) {
         return channels.at(l)->get_peer() < channels.at(r)->get_peer(); });
   }
   ObBc2HostSliceIdCalc::HostIndex hi;
@@ -965,7 +965,7 @@ int ObPxDistTransmitOp::setup_sampled_rows_output()
       OZ(sampled_rows2transmit_.push_back(std::make_pair(i, nrand48(rand48_buf_))));
     }
     if (OB_SUCC(ret)) {
-      std::sort(sampled_rows2transmit_.begin(), sampled_rows2transmit_.end(),
+      lib::ob_sort(sampled_rows2transmit_.begin(), sampled_rows2transmit_.end(),
                 [](const  std::pair<int64_t, int64_t> &l, const std::pair<int64_t, int64_t> &r)
                 { return l.second < r.second; });
       FOREACH(range, sampled_rows2transmit_) {

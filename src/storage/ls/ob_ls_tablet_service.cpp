@@ -1966,8 +1966,8 @@ int ObLSTabletService::inner_table_scan(
     if (OB_UNLIKELY(timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("table scan timeout", K(ret), K(current_time), "table_scan_param_timeout", param.timeout_, K(lbt()));
-    } else if (OB_FAIL(tablet_handle.get_obj()->check_snapshot_readable_with_cache(snapshot_version, timeout))) {
-      LOG_WARN("failed to check snapshot readable", K(ret), K(snapshot_version), K(timeout));
+    } else if (OB_FAIL(tablet_handle.get_obj()->check_snapshot_readable_with_cache(snapshot_version, param.schema_version_, timeout))) {
+      LOG_WARN("failed to check snapshot readable", K(ret), K(snapshot_version), K(param.schema_version_), K(timeout));
     } else if (param.need_switch_param_) {
       if (OB_FAIL(iter.switch_param(param, tablet_handle))) {
         LOG_WARN("failed to init table scan iterator, ", K(ret));
@@ -2631,6 +2631,7 @@ int ObLSTabletService::insert_rows(
   } else if (dml_param.is_direct_insert()) { // direct-insert mode
     if (OB_FAIL(direct_insert_rows(dml_param.table_param_->get_data_table().get_table_id(),
                                    dml_param.direct_insert_task_id_,
+                                   dml_param.ddl_task_id_,
                                    ctx.tablet_id_,
                                    column_ids,
                                    row_iter,
@@ -2638,6 +2639,7 @@ int ObLSTabletService::insert_rows(
       LOG_WARN("failed to insert rows direct", KR(ret),
           K(dml_param.table_param_->get_data_table().get_table_id()),
           K(dml_param.direct_insert_task_id_),
+          K(dml_param.ddl_task_id_),
           K(ctx.tablet_id_),
           K(column_ids));
     }
@@ -2732,7 +2734,8 @@ int ObLSTabletService::insert_rows(
 
 int ObLSTabletService::direct_insert_rows(
     const uint64_t table_id,
-    const int64_t task_id,
+    const int64_t px_task_id,
+    const int64_t ddl_task_id,
     const ObTabletID &tablet_id,
     const ObIArray<uint64_t> &column_ids,
     ObNewRowIterator *row_iter,
@@ -2740,14 +2743,14 @@ int ObLSTabletService::direct_insert_rows(
 {
   int ret = OB_SUCCESS;
   ObTableLoadTableCtx *table_ctx = nullptr;
-  ObTableLoadKey key(MTL_ID(), table_id);
+  ObTableLoadUniqueKey key(table_id, ddl_task_id);
   if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
     LOG_WARN("fail to get table ctx", KR(ret), K(key));
   } else {
     int64_t row_count = 0;
     ObNewRow *rows = nullptr;
     table::ObTableLoadTransId trans_id;
-    trans_id.segment_id_ = task_id;
+    trans_id.segment_id_ = px_task_id;
     trans_id.trans_gid_ = 1;
     ObTableLoadStore store(table_ctx);
     ObTableLoadStoreTransPXWriter writer;
@@ -4334,7 +4337,7 @@ int ObLSTabletService::construct_update_idx(
       }
     }
     if (OB_SUCC(ret) && update_idx.count() > 1) {
-      std::sort(update_idx.begin(), update_idx.end());
+      lib::ob_sort(update_idx.begin(), update_idx.end());
     }
   }
 

@@ -54,7 +54,7 @@ public:
   virtual int batch_decode(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex* row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums) const override;
@@ -66,7 +66,7 @@ public:
   virtual int get_null_count(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex *row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const override;
 
@@ -88,7 +88,7 @@ public:
 
   virtual int read_reference(
       const ObColumnDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const override;
 protected:
@@ -149,7 +149,7 @@ private:
 
   template<typename T = ObDatum *>
   int extract_ref_and_null_count(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       T len_arr,
       int64_t &null_count,

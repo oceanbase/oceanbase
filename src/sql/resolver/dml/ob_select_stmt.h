@@ -686,6 +686,7 @@ public:
   inline common::ObIArray<ForUpdateDMLInfo*>& get_for_update_dml_infos() { return for_update_dml_info_; }
   void set_select_straight_join(bool flag) { is_select_straight_join_ = flag; }
   bool is_select_straight_join() const { return is_select_straight_join_; }
+  virtual int check_is_simple_lock_stmt(bool &is_valid) const override;
 
 private:
   SetOperator set_op_;

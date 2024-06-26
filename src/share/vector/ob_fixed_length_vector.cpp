@@ -66,6 +66,12 @@ int ObFixedLengthVector<ValueType, BasicOp>::null_last_cmp(VECTOR_ONE_COMPARE_AR
   return VecOpUtil::template ns_cmp<false>(expr.obj_meta_, *this, row_idx, r_null, r_v, r_len, cmp_ret);
 }
 
+template<typename ValueType, typename BasicOp>
+int ObFixedLengthVector<ValueType, BasicOp>::no_null_cmp(VECTOR_NOT_NULL_COMPARE_ARGS) const
+{
+  return VecOpUtil::Op::cmp(expr.obj_meta_, this->get_payload(row_idx1), this->get_length(row_idx1), this->get_payload(row_idx2), this->get_length(row_idx2), cmp_ret);
+}
+
 template class ObFixedLengthVector<int64_t, VectorBasicOp<VEC_TC_INTEGER>>;
 template class ObFixedLengthVector<uint64_t, VectorBasicOp<VEC_TC_UINTEGER>>;
 template class ObFixedLengthVector<float, VectorBasicOp<VEC_TC_FLOAT>>;

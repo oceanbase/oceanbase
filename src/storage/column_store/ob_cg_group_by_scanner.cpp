@@ -20,12 +20,19 @@ ObCGGroupByScanner::ObCGGroupByScanner()
     : ObCGRowScanner(),
     output_exprs_(nullptr),
     group_by_agg_idxs_(),
-    group_by_cell_(nullptr)
+    group_by_cell_(nullptr),
+    index_prefetcher_()
 {}
 
 ObCGGroupByScanner::~ObCGGroupByScanner()
 {
   reset();
+}
+
+void ObCGGroupByScanner::reuse()
+{
+  ObCGRowScanner::reuse();
+  index_prefetcher_.reuse();
 }
 
 void ObCGGroupByScanner::reset()
@@ -34,6 +41,7 @@ void ObCGGroupByScanner::reset()
   output_exprs_ = nullptr;
   group_by_agg_idxs_.reset();
   group_by_cell_ = nullptr;
+  index_prefetcher_.reset();
 }
 
 int ObCGGroupByScanner::init(
@@ -44,6 +52,8 @@ int ObCGGroupByScanner::init(
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObCGRowScanner::init(iter_param, access_ctx, wrapper))) {
     LOG_WARN("Failed to init ObCGRowScanner", K(ret));
+  } else if (OB_FAIL(index_prefetcher_.init(get_type(), *sstable_, iter_param, access_ctx))) {
+    LOG_WARN("fail to init index prefetcher, ", K(ret));
   } else if (OB_UNLIKELY(nullptr == iter_param.output_exprs_ ||
                          0 == iter_param.output_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -53,6 +63,24 @@ int ObCGGroupByScanner::init(
     group_by_cell_ = (static_cast<ObVectorStore*>(access_ctx.block_row_store_))->get_group_by_cell();
     set_cg_idx(iter_param.cg_idx_);
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObCGGroupByScanner::switch_context(
+    const ObTableIterParam &iter_param,
+    ObTableAccessContext &access_ctx,
+    ObSSTableWrapper &wrapper)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObCGRowScanner::switch_context(iter_param, access_ctx, wrapper))) {
+    LOG_WARN("Fail to switch context for cg row scanner", K(ret));
+  } else if (!index_prefetcher_.is_valid()) {
+    if (OB_FAIL(index_prefetcher_.init(get_type(), *sstable_, iter_param, access_ctx))) {
+      LOG_WARN("fail to init prefetcher, ", K(ret));
+    }
+  } else if (OB_FAIL(index_prefetcher_.switch_context(get_type(), *sstable_, iter_param, access_ctx))) {
+    LOG_WARN("Fail to switch context for prefetcher", K(ret));
   }
   return ret;
 }
@@ -87,20 +115,20 @@ int ObCGGroupByScanner::decide_group_size(int64_t &group_size)
   while (OB_SUCC(ret) && -1 == group_size) {
     if (end_of_scan()) {
       ret = OB_ITER_END;
-    } else if (OB_FAIL(prefetcher_.prefetch())) {
-      LOG_WARN("Fail to prefetch micro block", K(ret), K_(prefetcher));
-    } else if (prefetcher_.read_wait()) {
+    } else if (OB_FAIL(index_prefetcher_.prefetch())) {
+      LOG_WARN("Fail to prefetch micro block", K(ret), K_(index_prefetcher));
+    } else if (index_prefetcher_.read_wait()) {
       continue;
     } else {
-      prefetcher_.cur_micro_data_fetch_idx_++;
-      prefetcher_.cur_micro_data_read_idx_++;
+      index_prefetcher_.cur_micro_data_fetch_idx_++;
+      index_prefetcher_.cur_micro_data_read_idx_++;
       is_new_range_ = false;
-      const ObCSRange &micro_data_range = prefetcher_.current_micro_info().get_row_range();
+      const ObCSRange &micro_data_range = index_prefetcher_.current_micro_info().get_row_range();
       group_size = MIN(query_index_range_.end_row_id_, micro_data_range.end_row_id_) -
-                   MAX(query_index_range_.start_row_id_, micro_data_range.start_row_id_) + 1;
+          MAX(query_index_range_.start_row_id_, micro_data_range.start_row_id_) + 1;
     }
   }
-  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(group_size), K(query_index_range_), K(prefetcher_));
+  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(group_size), K_(query_index_range), K_(index_prefetcher));
   return ret;
 }
 
@@ -112,19 +140,31 @@ int ObCGGroupByScanner::decide_can_group_by(const int32_t group_by_col, bool &ca
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state, should be new range", K(ret));
   } else {
-    prefetcher_.cur_micro_data_fetch_idx_++;
-    prefetcher_.cur_micro_data_read_idx_++;
-    is_new_range_ = false;
-    int64_t row_cnt = 0;
-    int64_t read_cnt = 0;
-    int64_t distinct_cnt = 0;
-    if (OB_FAIL(open_cur_data_block())) {
-      LOG_WARN("Failed to open data block", K(ret));
-    } else if (OB_FAIL(micro_scanner_->check_can_group_by(group_by_col, row_cnt, read_cnt, distinct_cnt, can_group_by))) {
-      LOG_WARN("Failed to check group by", K(ret));
-    } else if (can_group_by && OB_FAIL(group_by_cell_->decide_use_group_by(
-        row_cnt, read_cnt, distinct_cnt, filter_bitmap_, can_group_by))) {
-      LOG_WARN("Failed to decide use group by", K(ret));
+    while (OB_SUCC(ret)) {
+      if (end_of_scan()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected end of scan", K(ret), KPC(this));
+      } else if (OB_FAIL(prefetcher_.prefetch())) {
+        LOG_WARN("Fail to prefetch micro block", K(ret), K_(prefetcher));
+      } else if (prefetcher_.read_wait()) {
+        continue;
+      } else {
+        prefetcher_.cur_micro_data_fetch_idx_++;
+        prefetcher_.cur_micro_data_read_idx_++;
+        is_new_range_ = false;
+        int64_t row_cnt = 0;
+        int64_t read_cnt = 0;
+        int64_t distinct_cnt = 0;
+        if (OB_FAIL(open_cur_data_block())) {
+          LOG_WARN("Failed to open data block", K(ret));
+        } else if (OB_FAIL(micro_scanner_->check_can_group_by(group_by_col, row_cnt, read_cnt, distinct_cnt, can_group_by))) {
+          LOG_WARN("Failed to check group by", K(ret));
+        } else if (can_group_by && OB_FAIL(group_by_cell_->decide_use_group_by(
+                    row_cnt, read_cnt, distinct_cnt, filter_bitmap_, can_group_by))) {
+          LOG_WARN("Failed to decide use group by", K(ret));
+        }
+        break;
+      }
     }
   }
   return ret;
@@ -207,6 +247,35 @@ int ObCGGroupByScanner::do_group_by_aggregate(const uint64_t count, const bool i
       }
     }
   }
+  return ret;
+}
+
+int ObCGGroupByScanner::locate_micro_index(const ObCSRange &range)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObCGGroupByScanner not init", K(ret));
+  } else if (OB_UNLIKELY(!range.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(range));
+  } else if (range.start_row_id_ >= sstable_row_cnt_) {
+    ret = OB_ITER_END;
+  } else {
+    is_new_range_ = true;
+    query_index_range_.start_row_id_ = range.start_row_id_;
+    query_index_range_.end_row_id_ = MIN(range.end_row_id_, sstable_row_cnt_ - 1);
+    current_ = is_reverse_scan_ ? query_index_range_.end_row_id_ : query_index_range_.start_row_id_;
+
+    if (OB_FAIL(ret) || end_of_scan()) {
+    } else if (OB_FAIL(index_prefetcher_.locate(query_index_range_, nullptr))) {
+      LOG_WARN("Fail to locate range", K(ret), K_(query_index_range), K_(current));
+    } else if (OB_FAIL(index_prefetcher_.prefetch())) {
+      LOG_WARN("Fail to prefetch", K(ret));
+    }
+  }
+  LOG_TRACE("[COLUMNSTORE] CGGroupByScanner locate micro index", K(ret), "tablet_id", iter_param_->tablet_id_, "cg_idx", iter_param_->cg_idx_,
+            "type", get_type(), K(range));
   return ret;
 }
 

@@ -2480,7 +2480,7 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
         K_(palf_id), K_(self), K(new_paxos_replica_num), K(paxos_resp_cnt),
         K(new_log_sync_replica_num), K(log_sync_resp_cnt), K(conn_timeout_us));
   } else {
-    std::sort(lsn_array, lsn_array + log_sync_resp_cnt, LSNCompare());
+    lib::ob_sort(lsn_array, lsn_array + log_sync_resp_cnt, LSNCompare());
     committed_end_lsn = lsn_array[new_log_sync_replica_num / 2];
   }
   PALF_LOG(INFO, "sync_get_committed_end_lsn_ finish", K(ret), K_(palf_id), K_(self), K(args),

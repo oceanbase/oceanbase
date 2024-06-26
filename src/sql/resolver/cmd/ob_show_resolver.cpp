@@ -105,8 +105,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         K(params_.allocator_),
         K(schema_checker_));
   } else if (OB_UNLIKELY(parse_tree.type_ < T_SHOW_TABLES || parse_tree.type_ > T_SHOW_GRANTS)
-                        && (parse_tree.type_ != T_SHOW_TRIGGERS) && (parse_tree.type_ != T_SHOW_PROFILE)
-                        && (parse_tree.type_ != T_SHOW_ENGINE) && (parse_tree.type_ != T_SHOW_OPEN_TABLES)) {
+             && (parse_tree.type_ != T_SHOW_TRIGGERS) && (parse_tree.type_ != T_SHOW_PROFILE)
+             && (parse_tree.type_ != T_SHOW_PROCEDURE_CODE) && (parse_tree.type_ != T_SHOW_FUNCTION_CODE)
+             && (parse_tree.type_ != T_SHOW_ENGINE) && (parse_tree.type_ != T_SHOW_OPEN_TABLES)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parse tree type", K(ret), K(parse_tree.type_));
   } else {
@@ -564,12 +565,12 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             if (OB_FAIL(resolve_show_from_routine(parse_tree.children_[0], NULL, database_name.empty(),
                                                     parse_tree.type_, real_tenant_id, show_db_name,
                                                     show_db_id, show_routine_name, show_routine_id, proc_type))) {
-              LOG_WARN("fail to resolve show from table", K(ret));
+              LOG_WARN("fail to resolve show from routine", K(ret));
             }
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(schema_checker_->check_routine_show(
                               session_priv, show_db_name, show_routine_name, allow_show))) {
-              LOG_WARN("Check table show error", K(ret));
+              LOG_WARN("Check routine show error", K(ret));
             } else if (!allow_show) {
               ret = OB_ERR_NO_TABLE_PRIVILEGE;
               LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, static_cast<int>(strlen("SHOW")), "SHOW",
@@ -585,6 +586,54 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               } else {
                 GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_FUNCTION);
                 GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_FUNCTION,  REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_TNAME, OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_ORA_TNAME), show_routine_id, proc_type);
+              }
+            }
+          }
+        }();
+        break;
+      }
+      case T_SHOW_PROCEDURE_CODE:
+      case T_SHOW_FUNCTION_CODE: {
+        [&] {
+          if (is_oracle_mode) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "show procedure/function code in oracle mode is");
+          } else if (OB_UNLIKELY(parse_tree.num_child_ != 1 || NULL == parse_tree.children_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
+          } else {
+            ObString show_db_name;
+            uint64_t show_db_id = OB_INVALID_ID;
+            ObString show_routine_name;
+            uint64_t show_routine_id = OB_INVALID_ID;
+            int64_t proc_type = -1;
+            bool allow_show = false;
+            if (OB_FAIL(resolve_show_from_routine(parse_tree.children_[0], NULL, database_name.empty(),
+                                                    parse_tree.type_, real_tenant_id, show_db_name,
+                                                    show_db_id, show_routine_name, show_routine_id, proc_type))) {
+              LOG_WARN("fail to resolve show from routine", K(ret));
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(schema_checker_->check_routine_show(
+                              session_priv, show_db_name, show_routine_name, allow_show))) {
+              LOG_WARN("Check routine show error", K(ret));
+            } else if (!allow_show) {
+              ret = OB_ERR_NO_TABLE_PRIVILEGE;
+              LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, static_cast<int>(strlen("SHOW")), "SHOW",
+                            session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                            session_priv.host_name_.length(), session_priv.host_name_.ptr(),
+                            show_routine_name.length(), show_routine_name.ptr());
+            } else { }//do nothing
+            if (OB_SUCC(ret)) {
+              show_resv_ctx.stmt_type_ = (parse_tree.type_ == T_SHOW_PROCEDURE_CODE) ? stmt::T_SHOW_PROCEDURE_CODE : stmt::T_SHOW_FUNCTION_CODE;
+              if (parse_tree.type_ == T_SHOW_PROCEDURE_CODE) {
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_PROCEDURE_CODE);
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_PROCEDURE_CODE);
+                LOG_USER_WARN(OB_NOT_SUPPORTED, "show procedure code statement is currently implemented as mock,");
+              } else {
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FUNCTION_CODE);
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FUNCTION_CODE);
+                LOG_USER_WARN(OB_NOT_SUPPORTED, "show function code statement is currently implemented as mock,");
               }
             }
           }
@@ -2090,7 +2139,7 @@ int ObShowResolver::resolve_show_from_routine(const ParseNode *from_routine_node
     if (OB_FAIL(ret)) {
       // do nothing
     } else {
-      if (T_SHOW_CREATE_PROCEDURE == node_type) {
+      if (T_SHOW_CREATE_PROCEDURE == node_type || T_SHOW_PROCEDURE_CODE == node_type) {
         if (OB_FAIL(schema_checker_->get_standalone_procedure_info(real_tenant_id,
             show_database_name, show_routine_name, routine_info))) {
           LOG_WARN("get procedure info failed", K(ret),
@@ -2408,6 +2457,7 @@ int ObShowResolver::replace_where_clause(ParseNode* node, const ObShowResolverCo
       case T_LOB:
       case T_JSON:
       case T_GEOMETRY:
+      case T_ROARINGBITMAP:
       case T_IEEE754_NAN:
       case T_IEEE754_INFINITE: {
         break;//do nothing
@@ -3178,6 +3228,16 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_FUNCTION,
                        NULL,
                        "SELECT routine_name AS `Function`, sql_mode, create_routine AS `Create Function`, character_set_client, collation_connection, collation_database AS `Database Collation` FROM %s.%s  WHERE routine_id = %ld and proc_type = %ld",
                        R"(SELECT "ROUTINE_NAME" AS "FUNCTION", "SQL_MODE", "CREATE_ROUTINE" AS "CREATE FUNCTION", "CHARACTER_SET_CLIENT", "COLLATION_CONNECTION", "COLLATION_DATABASE" AS "DATABASE COLLATION" FROM %s.%s  WHERE ROUTINE_ID = %ld AND PROC_TYPE = %ld)",
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_PROCEDURE_CODE,
+                       NULL,
+                       "SELECT 1 `Pos`, 1 `Instruction` FROM (SELECT 1 FROM DUAL) tmp_table WHERE 1 != 1",
+                       NULL,
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_FUNCTION_CODE,
+                       NULL,
+                       "SELECT 1 `Pos`, 1 `Instruction` FROM (SELECT 1 FROM DUAL) tmp_table WHERE 1 != 1",
+                       NULL,
                        NULL);
 DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_TRIGGER,
                        NULL,

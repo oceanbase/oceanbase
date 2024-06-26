@@ -1376,11 +1376,12 @@ int ObDtlVectorRowMsgWriter::init(ObDtlLinkedBuffer *buffer, uint64_t tenant_id)
   } else {
     reset();
     ObTempBlockStore::Block *blk = NULL;
-    if (OB_FAIL(ObTempBlockStore::init_block_buffer(buffer->buf(), buffer->size(), blk))) {
+    if (OB_FAIL(ObTempBlockStore::init_dtl_block_buffer(buffer->buf(), buffer->size(), blk))) {
       LOG_WARN("fail to init block buffer", K(ret));
     } else {
-      block_ = static_cast<ObTempRowStore::RowBlock*>(blk);
-      block_buffer_ = block_->get_buffer();
+      block_ = static_cast<ObTempRowStore::DtlRowBlock *>(blk);
+      block_buffer_ = static_cast<ObTempBlockStore::ShrinkBuffer *>(
+        static_cast<void *>(reinterpret_cast<char *>(blk) + blk->buf_off_));
       write_buffer_ = buffer;
     }
   }
@@ -1398,13 +1399,13 @@ int ObDtlVectorRowMsgWriter::need_new_buffer(
     const ObPxNewRow &px_row = static_cast<const ObPxNewRow&>(msg);
     const ObIArray<ObExpr *> *row = px_row.get_exprs();
     if (nullptr == row) {
-      serialize_need_size = ObTempRowStore::Block::min_blk_size(0);
+      serialize_need_size = ObTempRowStore::Block::min_blk_size<true>(0);
       need_size = serialize_need_size;
     } else {
       if (OB_FAIL(ObTempRowStore::RowBlock::calc_row_size(*row, row_meta_, *ctx, serialize_need_size))) {
         LOG_WARN("failed to calc row store size", K(ret));
       }
-      need_size = ObTempRowStore::Block::min_blk_size(serialize_need_size);
+      need_size = ObTempRowStore::Block::min_blk_size<true>(serialize_need_size);
     }
     need_new = nullptr == write_buffer_ || (remain() < serialize_need_size);
     if(need_new && nullptr != write_buffer_) {

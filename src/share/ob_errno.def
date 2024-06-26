@@ -2621,6 +2621,19 @@ DEFINE_PLS_ERROR_EXT(OB_ERR_NOT_FUNC_NAME, -9765, -1, "HY000", "object 'string' 
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CURSOR_EXPR, -9766, -1, "HY000", "CURSOR expression not allowed", 22902, "CURSOR expression not allowed");
 DEFINE_ORACLE_ERROR_V2_EXT(OB_APPLICATION_ERROR_FROM_REMOTE, -9767, -1, "HY000", "application error from remote", "%.*s", 20000, "application error from remote", "%.*s");
 
+DEFINE_ERROR_EXT(OB_ERR_EVENT_EXIST, -9768, ER_EVENT_ALREADY_EXISTS, "HY000", "Event already exists", "Event '%.*s' already exists");
+DEFINE_ERROR_EXT(OB_ERR_EVENT_NOT_EXIST, -9769, ER_EVENT_DOES_NOT_EXIST, "HY000", "Unknown event", "Unknown '%.*s' event");
+DEFINE_ERROR_EXT(OB_ERR_EVENT_CANT_ALTER, -9770, ER_EVENT_CANT_ALTER, "HY000", "Failed to alter event", "Failed to alter event '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_EVENT_DROP_FAILED, -9771, ER_EVENT_DROP_FAILED, "HY000", "Failed to drop event", "Failed to drop %.*s");
+DEFINE_ERROR(OB_ERR_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG, -9772, ER_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG, "HY000", "INTERVAL is either not positive or too big");
+DEFINE_ERROR(OB_ERR_EVENT_ENDS_BEFORE_STARTS, -9773, ER_EVENT_ENDS_BEFORE_STARTS, "HY000", "ENDS is either invalid or before STARTS");
+DEFINE_ERROR(OB_ERR_EVENT_EXEC_TIME_IN_THE_PAST, -9774, ER_EVENT_EXEC_TIME_IN_THE_PAST, "HY000", "Event execution time is in the past. Event has been disabled");
+DEFINE_ERROR(OB_ERR_EVENT_CANNOT_DELETE, -9775, ER_EVENT_CANNOT_DELETE, "HY000", "Failed to delete the event from mysql.event");
+DEFINE_ERROR(OB_ERR_EVENT_SAME_NAME, -9776, ER_EVENT_SAME_NAME, "HY000", "Same old and new event name");
+DEFINE_ERROR_EXT(OB_ERR_EVENT_DATA_TOO_LONG, -9777, ER_EVENT_DATA_TOO_LONG, "HY000", "Data for column too long", "Data for column '%.*s' too long");
+DEFINE_ERROR(OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST, -9778, ER_EVENT_CANNOT_CREATE_IN_THE_PAST, "HY000", "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation.");
+DEFINE_ERROR(OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST, -9779, ER_EVENT_CANNOT_ALTER_IN_THE_PAST, "HY000", "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future.");
+DEFINE_ERROR(OB_ERR_EVENT_RECURSION_FORBIDDEN, -9780, ER_EVENT_RECURSION_FORBIDDEN, "HY000", "Recursion of EVENT DDL statements is forbidden when body is present");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)

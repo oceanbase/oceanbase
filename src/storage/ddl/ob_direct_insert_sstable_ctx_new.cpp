@@ -1551,7 +1551,8 @@ int ObTabletDirectLoadMgr::fill_lob_sstable_slice(
     ObDirectLoadSliceWriter *slice_writer = nullptr;
     const int64_t trans_version = is_full_direct_load(direct_load_type_) ? table_key_.get_snapshot_version() : INT64_MAX;
     ObBatchSliceWriteInfo info(tablet_id_, ls_id_, trans_version, direct_load_type_, sqc_build_ctx_.build_param_.runtime_only_param_.trans_id_,
-        sqc_build_ctx_.build_param_.runtime_only_param_.seq_no_, slice_info.src_tenant_id_);
+        sqc_build_ctx_.build_param_.runtime_only_param_.seq_no_, slice_info.src_tenant_id_,
+        sqc_build_ctx_.build_param_.runtime_only_param_.tx_desc_);
 
     if (OB_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.get_refactored(slice_info.slice_id_, slice_writer))) {
       LOG_WARN("get refactored failed", K(ret), K(slice_info), K(sqc_build_ctx_.slice_mgr_map_.size()));
@@ -1611,7 +1612,8 @@ int ObTabletDirectLoadMgr::fill_lob_sstable_slice(
     ObDirectLoadSliceWriter *slice_writer = nullptr;
     const int64_t trans_version = is_full_direct_load(direct_load_type_) ? table_key_.get_snapshot_version() : INT64_MAX;
     ObBatchSliceWriteInfo info(tablet_id_, ls_id_, trans_version, direct_load_type_, sqc_build_ctx_.build_param_.runtime_only_param_.trans_id_,
-        sqc_build_ctx_.build_param_.runtime_only_param_.seq_no_, slice_info.src_tenant_id_);
+        sqc_build_ctx_.build_param_.runtime_only_param_.seq_no_, slice_info.src_tenant_id_,
+        sqc_build_ctx_.build_param_.runtime_only_param_.tx_desc_);
 
     if (OB_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.get_refactored(slice_info.slice_id_, slice_writer))) {
       LOG_WARN("get refactored failed", K(ret), K(slice_info), K(sqc_build_ctx_.slice_mgr_map_.size()));
@@ -1622,6 +1624,56 @@ int ObTabletDirectLoadMgr::fill_lob_sstable_slice(
         allocator, sqc_build_ctx_.allocator_, start_scn, info,
         pk_interval, lob_column_idxs, col_types, schema_item_.lob_inrow_threshold_, datum_row))) {
       LOG_WARN("fail to fill batch sstable slice", K(ret), K(start_scn), K(tablet_id_), K(pk_interval));
+    }
+  }
+  if (OB_FAIL(ret) && lob_mgr_handle_.is_valid()) {
+    // cleanup when failed.
+    int tmp_ret = OB_SUCCESS;
+    ObDirectLoadSliceWriter *slice_writer = nullptr;
+    if (OB_TMP_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.erase_refactored(slice_info.slice_id_, &slice_writer))) {
+      LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
+    } else {
+      LOG_INFO("erase a slice writer", KP(slice_writer), "slice_id", slice_info.slice_id_, K(sqc_build_ctx_.slice_mgr_map_.size()));
+      slice_writer->~ObDirectLoadSliceWriter();
+      lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_writer_allocator_.free(slice_writer);
+      slice_writer = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObTabletDirectLoadMgr::fill_lob_meta_sstable_slice(
+    const ObDirectLoadSliceInfo &slice_info,
+    const share::SCN &start_scn,
+    ObIStoreRowIterator *iter,
+    int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  share::SCN commit_scn;
+  affected_rows = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!slice_info.is_valid() || !sqc_build_ctx_.is_valid() || !start_scn.is_valid_and_not_min() ||
+      !lob_mgr_handle_.is_valid() || !lob_mgr_handle_.get_obj()->get_sqc_build_ctx().is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(slice_info), "lob_direct_load_mgr is valid", lob_mgr_handle_.is_valid(), KPC(this), K(start_scn));
+  } else if (OB_UNLIKELY(!is_incremental_direct_load(direct_load_type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected direct load type", K(ret), K(direct_load_type_));
+  } else {
+    ObDirectLoadSliceWriter *slice_writer = nullptr;
+    if (OB_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.get_refactored(slice_info.slice_id_, slice_writer))) {
+      LOG_WARN("get refactored failed", K(ret), K(slice_info), K(sqc_build_ctx_.slice_mgr_map_.size()));
+    } else if (OB_ISNULL(slice_writer) || OB_UNLIKELY(!ATOMIC_LOAD(&(lob_mgr_handle_.get_obj()->is_schema_item_ready_)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(slice_info), K(lob_mgr_handle_.get_obj()->is_schema_item_ready_));
+    } else if (OB_FAIL(slice_writer->fill_lob_meta_sstable_slice(start_scn,
+                                                                 lob_mgr_handle_.get_obj()->sqc_build_ctx_.build_param_.runtime_only_param_.table_id_,
+                                                                 lob_mgr_handle_.get_obj()->tablet_id_,
+                                                                 iter,
+                                                                 affected_rows))) {
+      LOG_WARN("fail to fill lob meta sstable slice", K(ret), K(start_scn), K(tablet_id_));
     }
   }
   if (OB_FAIL(ret) && lob_mgr_handle_.is_valid()) {
@@ -1758,7 +1810,7 @@ int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                tablet_id_,
                                                tablet_handle,
-                                               ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+                                               ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("get tablet handle failed", K(ret), K(tablet_id_));
   } else if (OB_FAIL(sorted_slices.reserve(sqc_build_ctx_.slice_mgr_map_.size()))) {
     LOG_WARN("reserve slice array failed", K(ret), K(sqc_build_ctx_.slice_mgr_map_.size()));
@@ -1775,7 +1827,7 @@ int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
     }
     if (OB_SUCC(ret)) {
       SliceEndkeyCompareFunctor cmp(tablet_handle.get_obj()->get_rowkey_read_info().get_datum_utils());
-      std::sort(sorted_slices.begin(), sorted_slices.end(), cmp);
+      lib::ob_sort(sorted_slices.begin(), sorted_slices.end(), cmp);
       ret = cmp.ret_code_;
       if (OB_FAIL(ret)) {
         LOG_WARN("sort slice failed", K(ret), K(sorted_slices));

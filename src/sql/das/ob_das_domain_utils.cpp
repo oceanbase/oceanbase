@@ -320,29 +320,30 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   bool is_save_rowkey = true;
-
+  bool is_unique_index = das_ctdef.table_param_.get_data_table().get_index_type() == ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
   const int64_t data_table_rowkey_cnt = das_ctdef.table_param_.get_data_table().get_data_table_rowkey_column_num();
   const char* data = nullptr;
   int64_t data_len = 0;
   uint32_t record_num = 0;
 
+  bool is_none_unique_done = false;
+  uint64_t column_num = das_ctdef.column_ids_.count();
+  // -1 : doc id column
+  uint64_t rowkey_column_start = column_num - 1 - data_table_rowkey_cnt;
+  uint64_t rowkey_column_end = column_num - 1;
+
   if (OB_FAIL(get_pure_mutivalue_data(json_str, data, data_len, record_num))) {
     LOG_WARN("failed to parse binary.", K(ret), K(json_str));
-  } else if (record_num == 0) {
+  } else if (record_num == 0 && (is_unique_index && rowkey_column_start == 1)) {
   } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector,
     dml_row, record_num, is_save_rowkey))) {
     LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
   } else {
 
-    uint64_t column_num = das_ctdef.column_ids_.count();
-    // -1 : doc id column
-    uint64_t rowkey_column_start = column_num - 1 - data_table_rowkey_cnt;
-    uint64_t rowkey_column_end = column_num - 1;
-
     ObObj *obj_arr = nullptr;
     int64_t pos = sizeof(uint32_t);
 
-    for (int i = 0; OB_SUCC(ret) && i < record_num ; ++i) {
+    for (int i = 0; OB_SUCC(ret) && (i < record_num || !is_none_unique_done) ; ++i) {
       if (OB_ISNULL(obj_arr = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * column_num)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory for multivalue index row cells", K(ret));
@@ -352,11 +353,12 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
         ObObjMeta col_type = das_ctdef.column_types_.at(j);
         const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
         int64_t projector_idx = row_projector.at(j);
+
         if (multivalue_idx == projector_idx) {
           if (OB_FAIL(obj_arr[j].deserialize(data, data_len, pos))) {
             LOG_WARN("failed to deserialize datum.", K(ret), K(json_str));
           } else {
-            if (ob_is_numeric_type(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
+            if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
               col_type.set_collation_level(CS_LEVEL_NUMERIC);
             } else {
               col_type.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -365,6 +367,7 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
             obj_arr[j].set_collation_level(col_type.get_collation_level());
             obj_arr[j].set_collation_type(col_type.get_collation_type());
             obj_arr[j].set_type(col_type.get_type());
+            is_none_unique_done = true;
           }
         } else if (!is_save_rowkey && (rowkey_column_start >= j && j < rowkey_column_end)) {
           obj_arr[j].set_null();

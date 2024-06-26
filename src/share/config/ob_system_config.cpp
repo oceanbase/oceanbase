@@ -14,6 +14,8 @@
 #include "share/config/ob_config.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_task_define.h"
+#include "share/ob_cluster_version.h"
+#include "common/ob_tenant_data_version_mgr.h"
 
 namespace oceanbase
 {
@@ -346,25 +348,46 @@ int ObSystemConfig::read_config(
           item.set_version(version);
         }
       }
-
       const ObString compatible_cfg(COMPATIBLE);
-      if (compatible_cfg.case_compare(key.name()) == 0) {
-        if (!item.set_dump_value(pvalue->value())) {
+      const ObString enable_compatible_monotonic_cfg(ENABLE_COMPATIBLE_MONOTONIC);
+      if (0 == compatible_cfg.case_compare(key.name())) {
+        uint64_t new_data_version = 0;
+        uint64_t old_data_version = 0;
+        bool value_updated = item.value_updated();
+        if (OB_FAIL(ObClusterVersion::get_version(pvalue->value(), new_data_version))) {
+          SHARE_LOG(ERROR, "parse data_version failed", KR(ret), K(pvalue->value()));
+        } else if (OB_FAIL(ObClusterVersion::get_version(item.spfile_str(), old_data_version))) {
+          SHARE_LOG(ERROR, "parse data_version failed", KR(ret), K(item.spfile_str()));
+        } else if (!value_updated && old_data_version != DATA_CURRENT_VERSION) {
           ret = OB_ERR_UNEXPECTED;
-          SHARE_LOG(WARN, "set config item dump value failed",
-                    K(ret), K(key.name()), K(pvalue->value()), K(version));
+          SHARE_LOG(ERROR, "unexpected data_version", KR(ret), K(old_data_version));
+        } else if (value_updated && new_data_version <= old_data_version) {
+          // do nothing
+          SHARE_LOG(INFO, "[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id),
+                    K(old_data_version), K(new_data_version));
         } else {
-          item.set_dump_value_updated();
-          item.set_version(version);
-          share::ObTaskController::get().allow_next_syslog();
-          SHARE_LOG(INFO, "[COMPATIBLE] read data_version",
-                    KR(ret), K(tenant_id),
-                    "version", item.version(),
-                    "value", item.str(),
-                    "value_updated", item.value_updated(),
-                    "dump_version", item.dumped_version(),
-                    "dump_value", item.spfile_str(),
-                    "dump_value_updated", item.dump_value_updated());
+          if (!item.set_dump_value(pvalue->value())) {
+            ret = OB_ERR_UNEXPECTED;
+            SHARE_LOG(WARN, "set config item dump value failed", K(ret),
+                      K(key.name()), K(pvalue->value()), K(version));
+          } else {
+            item.set_dump_value_updated();
+            item.set_version(version);
+            share::ObTaskController::get().allow_next_syslog();
+            int tmp_ret = 0;
+            if (OB_TMP_FAIL(ODV_MGR.set(tenant_id, new_data_version))) {
+              SHARE_LOG(WARN, "fail to set data_version", KR(tmp_ret),
+                        K(tenant_id), K(new_data_version));
+            }
+            SHARE_LOG(INFO, "[COMPATIBLE] [DATA_VERSION] read data_version",
+                  KR(ret), K(tenant_id),
+                  "version", item.version(),
+                  "value", item.str(),
+                  "value_updated", item.value_updated(),
+                  "dump_version", item.dumped_version(),
+                  "dump_value", item.spfile_str(),
+                  "dump_value_updated", item.dump_value_updated());
+          }
         }
       } else if (item.reboot_effective()) {
         // 以 STATIC_EFFECTIVE 的 stack_size 举例说明：
@@ -390,6 +413,10 @@ int ObSystemConfig::read_config(
                     K(key.name()), K(pvalue->value()), K(version));
         } else {
           item.set_value_updated();
+          if (0 == enable_compatible_monotonic_cfg.case_compare(key.name())) {
+            ObString v_str(item.str());
+            ODV_MGR.set_enable_compatible_monotonic(0 == v_str.case_compare("True") ? true : false);
+          }
         }
       }
 

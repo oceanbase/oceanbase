@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "storage/column_store/ob_column_store_util.h"
 #include "storage/lob/ob_lob_manager.h"
+#include "sql/engine/expr/ob_expr_topn_filter.h"
 
 namespace oceanbase
 {
@@ -52,8 +53,15 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
 };
 
 ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPARE_PD_DATA_FUNCS
-    [PreparePushdownDataFuncType::MAX_PREPARE_DATA_FUNC_TYPE] = {
+    [DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE] = {
   ObExprJoinFilter::prepare_storage_white_filter_data,
+  ObExprTopNFilter::prepare_storage_white_filter_data,
+};
+
+ObDynamicFilterExecutor::UpdatePushdownDataFunc ObDynamicFilterExecutor::UPDATE_PD_DATA_FUNCS
+    [DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE] = {
+  nullptr,
+  ObExprTopNFilter::update_storage_white_filter_data,
 };
 
 OB_SERIALIZE_MEMBER(ObPushdownFilterNode, type_, n_child_, col_ids_);
@@ -111,7 +119,7 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownWhiteFilterNode)
 }
 
 OB_SERIALIZE_MEMBER((ObPushdownDynamicFilterNode, ObPushdownWhiteFilterNode), col_idx_,
-                    is_first_child_, is_last_child_, val_meta_, prepare_data_func_type_);
+                    is_first_child_, is_last_child_, val_meta_, dynamic_filter_type_);
 
 int ObPushdownBlackFilterNode::merge(ObIArray<ObPushdownFilterNode*> &merged_node)
 {
@@ -223,19 +231,25 @@ int ObPushdownWhiteFilterNode::set_op_type(const ObRawExpr &raw_expr)
 int ObPushdownDynamicFilterNode::set_op_type(const ObRawExpr &raw_expr)
 {
   int ret = OB_SUCCESS;
-  const RuntimeFilterType type = raw_expr.get_runtime_filter_type();
-  switch (type) {
-    case RANGE:
-      op_type_ = WHITE_OP_BT;
-      prepare_data_func_type_ = RUNTIME_FILTER_PREPARE_DATA;
-      break;
-    case IN:
-      op_type_ = WHITE_OP_IN;
-      prepare_data_func_type_ = RUNTIME_FILTER_PREPARE_DATA;
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      break;
+  if (T_OP_RUNTIME_FILTER == raw_expr.get_expr_type()) {
+    const RuntimeFilterType type = raw_expr.get_runtime_filter_type();
+    switch (type) {
+      case RANGE:
+        op_type_ = WHITE_OP_BT;
+        dynamic_filter_type_ = JOIN_RUNTIME_FILTER;
+        break;
+      case IN:
+        op_type_ = WHITE_OP_IN;
+        dynamic_filter_type_ = JOIN_RUNTIME_FILTER;
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        break;
+    }
+  } else if (T_OP_PUSHDOWN_TOPN_FILTER == raw_expr.get_expr_type()) {
+    // for topn pushdown filter, we can not sure whether is ascding or not
+    // so we set the real optype in ObExprTopNFilter::prepare_storage_white_filter_data
+    dynamic_filter_type_ = PD_TOPN_FILTER;
   }
   return ret;
 }
@@ -714,7 +728,10 @@ int ObPushdownFilterConstructor::generate(ObRawExpr *raw_expr, ObPushdownFilterN
   if (OB_ISNULL(raw_expr) || OB_ISNULL(alloc_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid null parameter", K(ret), KP(raw_expr), KP(alloc_));
-  } else if (use_column_store_ && raw_expr->is_white_runtime_filter_expr()) {
+  // join runtime filter only in column store can be pushdown as white filter
+  // topn runtime filter can be pushdown as white filter both in row store and column store
+  } else if ((use_column_store_ || T_OP_PUSHDOWN_TOPN_FILTER == raw_expr->get_expr_type())
+             && raw_expr->is_white_runtime_filter_expr()) {
     // only in column store, the runtime filter can be pushdown as white filter
     ObOpRawExpr *op_raw_expr = static_cast<ObOpRawExpr *>(raw_expr);
     if (op_raw_expr->get_children_count() > 1) {
@@ -1220,6 +1237,7 @@ int ObPushdownFilterExecutor::init_co_filter_param(const ObTableIterParam &iter_
   int ret = OB_SUCCESS;
   const ObITableReadInfo *read_info =  nullptr;
   const common::ObIArray<int32_t> *access_cgs = nullptr;
+  const common::ObIArray<ObExpr *> *cg_exprs = nullptr;
   const ObIArray<uint64_t> &col_ids = get_col_ids();
   const int64_t col_count = col_ids.count();
   if (OB_UNLIKELY(!iter_param.is_valid() || nullptr == (read_info = iter_param.get_read_info())
@@ -1229,7 +1247,7 @@ int ObPushdownFilterExecutor::init_co_filter_param(const ObTableIterParam &iter_
   } else if (is_filter_node()) {
     if (0 == col_count) {
       if (OB_FAIL(init_array_param(cg_idxs_, 1))) {
-        LOG_WARN("Fail to init col offsets", K(ret), K(col_count));
+        LOG_WARN("Fail to init cg idxs", K(ret), K(col_count));
       } else if (OB_FAIL(cg_idxs_.push_back(OB_CS_VIRTUAL_CG_IDX))) {
         LOG_WARN("Failed to push back cg idx", K(ret));
       }
@@ -1243,10 +1261,10 @@ int ObPushdownFilterExecutor::init_co_filter_param(const ObTableIterParam &iter_
       LOG_WARN("Fail to init col offsets", K(ret), K(col_count));
     } else if (OB_FAIL(init_array_param(default_datums_, col_count))) {
       LOG_WARN("Fail to init default datums", K(ret), K(col_count));
+    } else if (FALSE_IT(cg_exprs = get_cg_col_exprs())) {
+    } else if (nullptr != cg_exprs && OB_FAIL(cg_col_exprs_.assign(*cg_exprs))) {
+      LOG_WARN("Fail to assign cg exprs", K(ret), KPC(cg_exprs));
     } else {
-      if (nullptr == cg_col_exprs_) {
-        cg_col_exprs_ = get_cg_col_exprs();
-      }
       access_cgs = read_info->get_cg_idxs();
       for (int64_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
         int32_t col_pos = -1;
@@ -1325,13 +1343,13 @@ int ObPushdownFilterExecutor::init_co_filter_param(const ObTableIterParam &iter_
   return ret;
 }
 
-int ObPushdownFilterExecutor::set_cg_param(const common::ObIArray<uint32_t> &cg_idxs, common::ObIArray<ObExpr *> *exprs)
+int ObPushdownFilterExecutor::set_cg_param(const common::ObIArray<uint32_t> &cg_idxs, const common::ObIArray<ObExpr *> &exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL((cg_idxs_.assign(cg_idxs)))) {
     LOG_WARN("Failed to assign cg_idxs", K(ret), K(cg_idxs), K(cg_idxs_));
-  } else {
-    cg_col_exprs_ = exprs;
+  } else if (!exprs.empty() && OB_FAIL(cg_col_exprs_.assign(exprs))) {
+    LOG_WARN("Failed to assign cg_exprs", K(ret), K(exprs));
   }
   return ret;
 }
@@ -1468,8 +1486,9 @@ int ObPushdownFilterExecutor::do_filter(
   int ret = OB_SUCCESS;
   bool is_needed_to_do_filter = check_sstable_index_filter();
   if (!is_needed_to_do_filter) {
-  } else if (is_filter_dynamic_node() &&
-             OB_FAIL(static_cast<ObDynamicFilterExecutor *>(this)->check_runtime_filter(is_needed_to_do_filter))) {
+  } else if (is_filter_dynamic_node()
+             && OB_FAIL(static_cast<ObDynamicFilterExecutor *>(this)->check_runtime_filter(
+                    parent, is_needed_to_do_filter))) {
     LOG_WARN("Failed to check runtime filter", K(ret), KPC(this));
   } else if (is_filter_dynamic_node() && !is_needed_to_do_filter) {
     ObDynamicFilterExecutor *dynamic_filter = static_cast<ObDynamicFilterExecutor *>(this);
@@ -1616,7 +1635,7 @@ ObPushdownFilterExecutor::ObPushdownFilterExecutor(common::ObIAllocator &alloc,
   : type_(type), need_check_row_filter_(false), filter_tree_status_(ObCommonFilterTreeStatus::NONE_FILTER),
     n_cols_(0), n_child_(0), cg_iter_idx_(INVALID_CG_ITER_IDX), skipped_rows_(0), childs_(nullptr),
     filter_bitmap_(nullptr), col_params_(alloc), col_offsets_(alloc), cg_col_offsets_(alloc), default_datums_(alloc),
-    cg_idxs_(alloc), cg_col_exprs_(nullptr), allocator_(alloc), op_(op), is_rewrited_(false), filter_bool_mask_()
+    cg_idxs_(alloc), cg_col_exprs_(alloc), allocator_(alloc), op_(op), is_rewrited_(false), filter_bool_mask_()
 {}
 
 ObPushdownFilterExecutor::~ObPushdownFilterExecutor()
@@ -1631,7 +1650,7 @@ ObPushdownFilterExecutor::~ObPushdownFilterExecutor()
   cg_col_offsets_.reset();
   default_datums_.reset();
   cg_idxs_.reset();
-  cg_col_exprs_ = nullptr;
+  cg_col_exprs_.reset();
   for (uint32_t i = 0; i < n_child_; i++) {
     if (OB_NOT_NULL(childs_[i])) {
       childs_[i]->~ObPushdownFilterExecutor();
@@ -1651,7 +1670,7 @@ DEF_TO_STRING(ObPushdownFilterExecutor)
   J_KV(K_(type), K_(need_check_row_filter), K_(n_cols),
        K_(n_child), KP_(childs), KP_(filter_bitmap),
        K_(col_params), K_(default_datums), K_(col_offsets),
-       K_(cg_col_offsets), K_(cg_idxs), KP_(cg_col_exprs),
+       K_(cg_col_offsets), K_(cg_idxs), K_(cg_col_exprs),
        K_(is_rewrited), K_(filter_bool_mask));
   J_OBJ_END();
   return pos;
@@ -1941,7 +1960,7 @@ int ObWhiteFilterExecutor::init_in_eval_datums()
   if (OB_SUCC(ret)) {
     bool mock_equal = false;
     ObDatumComparator cmp(filter_.expr_->args_[1]->args_[0]->basic_funcs_->null_first_cmp_, ret, mock_equal);
-    std::sort(datum_params_.begin(), datum_params_.end(), cmp);
+    lib::ob_sort(datum_params_.begin(), datum_params_.end(), cmp);
     if (OB_FAIL(ret)) {
       LOG_WARN("Failed to sort datums", K(ret));
     } else {
@@ -2297,65 +2316,35 @@ int ObBlackFilterExecutor::filter_batch(
   return ret;
 }
 
-void ObDynamicFilterExecutor::update_rf_slide_window()
-{
-  int ret = OB_SUCCESS;
-  sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-        static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
-  if (OB_NOT_NULL(join_filter_ctx)) {
-    if (join_filter_ctx->cur_pos_ >= join_filter_ctx->next_check_start_pos_
-        && join_filter_ctx->need_reset_sample_info_) {
-      join_filter_ctx->partial_total_count_ = 0;
-      join_filter_ctx->partial_filter_count_ = 0;
-      join_filter_ctx->need_reset_sample_info_ = false;
-      if (join_filter_ctx->dynamic_disable()) {
-        join_filter_ctx->dynamic_disable_ = false;
-      }
-    } else if (join_filter_ctx->cur_pos_ >=
-              join_filter_ctx->next_check_start_pos_ + join_filter_ctx->window_size_) {
-      if (join_filter_ctx->partial_total_count_ -
-            join_filter_ctx->partial_filter_count_ <
-            join_filter_ctx->partial_filter_count_) {
-        // partial_filter_count_ / partial_total_count_ > 0.5
-        // The optimizer choose the bloom filter when the filter threshold is larger than 0.6
-        // 0.5 is a acceptable value
-        // if enabled, the slide window not needs to expand
-        join_filter_ctx->window_cnt_ = 0;
-        join_filter_ctx->next_check_start_pos_ = join_filter_ctx->cur_pos_;
-      } else {
-        // if enabled, the slide window needs to expand
-        join_filter_ctx->window_cnt_++;
-        join_filter_ctx->next_check_start_pos_ = join_filter_ctx->cur_pos_ +
-            (join_filter_ctx->window_size_ * join_filter_ctx->window_cnt_);
-        join_filter_ctx->dynamic_disable_ = true;
-      }
-      join_filter_ctx->partial_total_count_ = 0;
-      join_filter_ctx->partial_filter_count_ = 0;
-      join_filter_ctx->need_reset_sample_info_ = true;
-    }
-  }
-}
 
 void ObDynamicFilterExecutor::filter_on_bypass(ObPushdownFilterExecutor* parent_filter)
 {
   ObPushdownDynamicFilterNode &dynamic_filter_node =
       static_cast<ObPushdownDynamicFilterNode &>(filter_);
+  int64_t total_rows_count = 0;
+  int64_t filter_count = 0;
+  int64_t check_count = 0;
+
   if (!dynamic_filter_node.is_first_child()) {
   } else {
-    int64_t total_rows_count = filter_bitmap_->size();
+    total_rows_count = filter_bitmap_->size();
     if (parent_filter) {
       total_rows_count = parent_filter->get_result()->popcnt();
     }
-    sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-        static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
-
-    if (OB_NOT_NULL(join_filter_ctx)) {
-      join_filter_ctx->inc_partial_rows_count(0, total_rows_count);
-      join_filter_ctx->collect_monitor_info(0, 0, total_rows_count);
+    if (is_filter_always_false() || DynamicFilterAction::FILTER_ALL == filter_action_) {
+      // is_filter_always_false is set by skip index
+      // filter_action_ is set by runtime filter msg
+      filter_count = total_rows_count;
+      check_count = total_rows_count;
+    }
+    if (OB_NOT_NULL(runtime_filter_ctx_)) {
+      runtime_filter_ctx_->collect_monitor_info(filter_count, check_count, total_rows_count);
     }
   }
   if (dynamic_filter_node.is_last_child()) {
-    update_rf_slide_window();
+    if (OB_NOT_NULL(runtime_filter_ctx_)) {
+      runtime_filter_ctx_->collect_sample_info(filter_count, total_rows_count);
+    }
   }
 }
 
@@ -2363,8 +2352,6 @@ void ObDynamicFilterExecutor::filter_on_success(ObPushdownFilterExecutor* parent
 {
   int64_t total_rows_count = filter_bitmap_->size();
   int64_t filtered_rows_count = total_rows_count - filter_bitmap_->popcnt();
-  sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-      static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
   if (parent_filter) {
     const int64_t skipped_rows_count = parent_filter->get_skipped_rows();
     total_rows_count -= skipped_rows_count;
@@ -2377,21 +2364,20 @@ void ObDynamicFilterExecutor::filter_on_success(ObPushdownFilterExecutor* parent
   if (!dynamic_filter_node.is_first_child()) {
     total_rows_count = 0;
   }
-  if (OB_NOT_NULL(join_filter_ctx)) {
-    join_filter_ctx->inc_partial_rows_count(filtered_rows_count, total_rows_count);
-    join_filter_ctx->collect_monitor_info(filtered_rows_count, total_rows_count, total_rows_count);
-  }
-  if (dynamic_filter_node.is_last_child()) {
-    update_rf_slide_window();
+  if (OB_NOT_NULL(runtime_filter_ctx_)) {
+    runtime_filter_ctx_->collect_monitor_info(filtered_rows_count, total_rows_count,
+                                              total_rows_count);
+    if (dynamic_filter_node.is_last_child()) {
+      runtime_filter_ctx_->collect_sample_info(filtered_rows_count, total_rows_count);
+    }
   }
 }
 
 int ObDynamicFilterExecutor::init_evaluated_datums()
 {
   int ret = OB_SUCCESS;
-  sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-      static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
-  if (is_data_prepared_ && OB_NOT_NULL(join_filter_ctx) && join_filter_ctx->is_partition_wise_jf_) {
+  if (is_data_prepared_ && OB_NOT_NULL(runtime_filter_ctx_)
+      && runtime_filter_ctx_->need_reset_in_rescan()) {
     is_data_prepared_ = false;
     batch_cnt_ = 0;
     datum_params_.clear();
@@ -2399,30 +2385,34 @@ int ObDynamicFilterExecutor::init_evaluated_datums()
   return ret;
 }
 
-int ObDynamicFilterExecutor::check_runtime_filter(bool &is_needed)
+int ObDynamicFilterExecutor::check_runtime_filter(ObPushdownFilterExecutor *parent_filter,
+                                                  bool &is_needed)
 {
   int ret = OB_SUCCESS;
   is_needed = false;
   if (is_first_check_) {
-    locate_join_filter_ctx();
+    locate_runtime_filter_ctx();
     is_first_check_ = false;
   }
-  if (!is_data_prepared() && (0 == ((batch_cnt_++) % DEFAULT_CHECK_INTERVAL)) &&
+  // If data has prepared, and need continuous update(such as topn runtime filter)
+  // we check whether the data in runtime filter has a new version and then update it.
+  // If the data has not prepared, we check whether the runtime filter is ready and
+  // get data from it.
+  if (is_data_prepared() && is_data_version_updated() && OB_FAIL(try_updating_data())) {
+    LOG_WARN("Failed to updating data");
+  } else if (!is_data_prepared() /*&& (0 == ((batch_cnt_++) % DEFAULT_CHECK_INTERVAL))*/ &&
       OB_FAIL(try_preparing_data())) {
     LOG_WARN("Failed to try preparing data", K_(is_data_prepared));
-  }
-  if (OB_SUCC(ret)) {
+  } else {
     if (!is_data_prepared()) {
       filter_bitmap_->reuse(true);
     } else {
       if (DynamicFilterAction::PASS_ALL == filter_action_) {
         filter_bitmap_->reuse(true);
       } else if (DynamicFilterAction::FILTER_ALL == filter_action_) {
-        filter_bitmap_->reuse(false);
-      } else if (OB_NOT_NULL(join_filter_ctx_)) {
-        sql::ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx =
-            static_cast<sql::ObExprJoinFilter::ObExprJoinFilterContext *>(join_filter_ctx_);
-        is_needed = !join_filter_ctx->dynamic_disable();
+        // bitmap is inited as all false, do not fill false again
+      } else if (DynamicFilterAction::DO_FILTER == filter_action_) {
+        is_needed = !runtime_filter_ctx_->dynamic_disable();
         if (!is_needed) {
           filter_bitmap_->reuse(true);
         }
@@ -2432,24 +2422,24 @@ int ObDynamicFilterExecutor::check_runtime_filter(bool &is_needed)
   return ret;
 }
 
-void ObDynamicFilterExecutor::locate_join_filter_ctx()
+void ObDynamicFilterExecutor::locate_runtime_filter_ctx()
 {
   const uint64_t op_id = get_filter_node().expr_->expr_ctx_id_;
   ObEvalCtx &eval_ctx = op_.get_eval_ctx();
-  join_filter_ctx_ = eval_ctx.exec_ctx_.get_expr_op_ctx(op_id);
+  runtime_filter_ctx_ = static_cast<ObExprOperatorCtx *>(eval_ctx.exec_ctx_.get_expr_op_ctx(op_id));
 }
 
 int ObDynamicFilterExecutor::try_preparing_data()
 {
   int ret = OB_SUCCESS;
   ObRuntimeFilterParams runtime_filter_params;
-  PreparePushdownDataFuncType prepare_data_func_type =
-      static_cast<ObPushdownDynamicFilterNode &>(filter_).get_prepare_data_func_type();
-  if (prepare_data_func_type >= PreparePushdownDataFuncType::MAX_PREPARE_DATA_FUNC_TYPE) {
+  DynamicFilterType dynamic_filter_type =
+      static_cast<ObPushdownDynamicFilterNode &>(filter_).get_dynamic_filter_type();
+  if (dynamic_filter_type >= DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid func type", K(ret), K(prepare_data_func_type));
+    LOG_WARN("invalid func type", K(ret), K(dynamic_filter_type));
   } else {
-    ret = PREPARE_PD_DATA_FUNCS[prepare_data_func_type](
+    ret = PREPARE_PD_DATA_FUNCS[dynamic_filter_type](
         *filter_.expr_, *this, op_.get_eval_ctx(), runtime_filter_params, is_data_prepared_);
   }
   if (OB_FAIL(ret)) {
@@ -2463,6 +2453,39 @@ int ObDynamicFilterExecutor::try_preparing_data()
     }
   }
   return ret;
+}
+
+int ObDynamicFilterExecutor::try_updating_data()
+{
+  int ret = OB_SUCCESS;
+  bool is_update = false;
+  ObRuntimeFilterParams runtime_filter_params;
+  DynamicFilterType dynamic_filter_type =
+      static_cast<ObPushdownDynamicFilterNode &>(filter_).get_dynamic_filter_type();
+  if (dynamic_filter_type >= DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid func type", K(ret), K(dynamic_filter_type));
+  } else {
+    ret = UPDATE_PD_DATA_FUNCS[dynamic_filter_type](
+        *filter_.expr_, *this, op_.get_eval_ctx(), runtime_filter_params, is_update);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_update) {
+    if (OB_FAIL(datum_params_.assign(runtime_filter_params))) {
+      LOG_WARN("Failed to assing params for white filter", K(runtime_filter_params));
+    }
+  }
+  return ret;
+}
+
+inline bool ObDynamicFilterExecutor::is_data_version_updated()
+{
+  bool bool_ret = false;
+  if (!get_filter_node().need_continuous_update()) {
+  } else if (OB_NOT_NULL(runtime_filter_ctx_)) {
+    bool_ret = runtime_filter_ctx_->is_data_version_updated(stored_data_version_);
+  }
+  return bool_ret;
 }
 
 //--------------------- end filter executor ----------------------------
@@ -2861,7 +2884,7 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param, common
     } else if (OB_ISNULL(skip_bit_ = to_bit_vector(alloc.alloc(ObBitVector::memory_size(batch_size_))))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc skip bit", K(ret), K_(batch_size));
-    } else if (OB_ISNULL(buf = alloc.alloc(sizeof(int64_t) * batch_size_))) {
+    } else if (OB_ISNULL(buf = alloc.alloc(sizeof(int32_t) * batch_size_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc row_ids", K(ret), K(batch_size_));
     } else if (OB_ISNULL(len_array_buf = alloc.alloc(sizeof(uint32_t) * batch_size_))) {
@@ -2869,7 +2892,7 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param, common
       LOG_WARN("fail to alloc len_array_buf", K(ret), K_(batch_size));
     } else {
       skip_bit_->init(batch_size_);
-      row_ids_ = reinterpret_cast<int64_t *>(buf);
+      row_ids_ = reinterpret_cast<int32_t *>(buf);
       len_array_ = reinterpret_cast<uint32_t *>(len_array_buf);
     }
   }

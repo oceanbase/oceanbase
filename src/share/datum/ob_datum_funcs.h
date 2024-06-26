@@ -68,6 +68,7 @@ public:
   ObCmpFunc() : cmp_func_(NULL) {}
   union {
     common::ObDatumCmpFuncType cmp_func_;
+    sql::NullSafeRowCmpFunc row_cmp_func_;
     sql::serializable_function ser_cmp_func_;
   };
   TO_STRING_KV(KP_(cmp_func));

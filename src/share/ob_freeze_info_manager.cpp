@@ -209,7 +209,7 @@ int ObFreezeInfoManager::update_freeze_info(
   } else if (OB_FAIL(freeze_info_.frozen_statuses_.assign(freeze_infos))) {
     LOG_WARN("fail to assign", KR(ret), K(freeze_infos));
   } else if (freeze_info_.frozen_statuses_.count() > 1) {
-    std::sort(freeze_info_.frozen_statuses_.begin(), freeze_info_.frozen_statuses_.end(),
+    lib::ob_sort(freeze_info_.frozen_statuses_.begin(), freeze_info_.frozen_statuses_.end(),
               [](const ObFreezeInfo &a, const ObFreezeInfo &b)
                 { return a.frozen_scn_ < b.frozen_scn_; } );
   }

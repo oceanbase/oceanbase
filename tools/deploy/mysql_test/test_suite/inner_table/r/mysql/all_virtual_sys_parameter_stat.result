@@ -213,6 +213,7 @@ server_check_interval
 server_cpu_quota_max
 server_cpu_quota_min
 server_permanent_offline_time
+spill_compression_codec
 sql_login_thread_count
 sql_net_thread_count
 sql_protocol_min_tls_version
@@ -224,6 +225,7 @@ standby_db_fetch_log_rpc_timeout
 standby_db_preferred_upstream_log_region
 standby_fetch_log_bandwidth_limit
 storage_meta_cache_priority
+storage_rowsets_size
 strict_check_os_params
 syslog_compress_func
 syslog_disk_size
@@ -292,7 +294,9 @@ _enable_block_file_punch_hole
 _enable_choose_migration_source_policy
 _enable_column_store
 _enable_compaction_diagnose
+_enable_compatible_monotonic
 _enable_convert_real_to_decimal
+_enable_das_keep_order
 _enable_dblink_reuse_connection
 _enable_dbms_job_package
 _enable_dbms_lob_partial_update
@@ -354,6 +358,8 @@ _hidden_sys_tenant_memory
 _ignore_system_memory_over_limit_error
 _inlist_rewrite_threshold
 _io_callback_thread_count
+_io_read_batch_size
+_io_read_redundant_limit_percentage
 _iut_enable
 _iut_max_entries
 _iut_stat_collection_type
@@ -398,6 +404,7 @@ _optimizer_better_inlist_costing
 _optimizer_group_by_placement
 _optimizer_skip_scan_enabled
 _optimizer_sortmerge_join_enabled
+_parallel_ddl_control
 _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_redo_logging_trigger

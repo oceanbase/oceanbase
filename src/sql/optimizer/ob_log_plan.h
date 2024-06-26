@@ -262,6 +262,7 @@ public:
 
   int collect_location_related_info(ObLogicalOperator &op);
   int build_location_related_tablet_ids();
+  int check_das_need_keep_ordering(ObLogicalOperator *op);
 
   int gen_das_table_location_info(ObLogTableScan *table_scan,
                                   ObTablePartitionInfo *&table_partition_info);

@@ -98,7 +98,7 @@ int ObDDLRedoLogRowIterator::get_next_row(const ObDatumRow *&row,
         LOG_WARN("fail to assign rowkey", KR(ret));
       } else {
         rowkey = &rowkey_;
-        seq_no = ObTxSEQ::cast_from_int(datums[schema_rowkey_column_count_ + 1].get_int());
+        seq_no = ObTxSEQ::cast_from_int(-datums[schema_rowkey_column_count_ + 1].get_int());
         row_flag = row->row_flag_;
       }
     }

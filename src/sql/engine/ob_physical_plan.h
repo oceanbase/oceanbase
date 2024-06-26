@@ -379,6 +379,8 @@ public:
   {
     enable_replace_ = enable_replace;
   }
+  inline double get_online_sample_percent() const { return online_sample_percent_; }
+  inline void set_online_sample_percent(double v) { online_sample_percent_ = v; }
 
 public:
   int inc_concurrent_num();
@@ -705,6 +707,7 @@ private:
   bool enable_inc_direct_load_; // for incremental direct load
   bool enable_replace_; // for incremental direct load
   bool insert_overwrite_; // for insert overwrite
+  double online_sample_percent_; // for incremental direct load
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

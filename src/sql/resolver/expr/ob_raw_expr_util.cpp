@@ -2460,7 +2460,7 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory &expr_factory,
         && true == need_check_simple_column
         && T_REF_COLUMN == expr->get_expr_type()
         && !(columns.count() == 1
-             && ObResolverUtils::is_external_file_column_name(columns.at(0).col_name_))) {
+             && ObResolverUtils::is_external_pseudo_column_name(columns.at(0).col_name_))) {
       ret = OB_ERR_INVALID_COLUMN_EXPRESSION;
       LOG_WARN("simple column is not allowed in Oracle mode", K(ret), K(*expr));
     }
@@ -4638,6 +4638,7 @@ int ObRawExprUtils::replace_json_wrapper_expr_if_need(ObRawExpr* qual,
 }
 
 int ObRawExprUtils::replace_qual_param_if_need(ObRawExpr* qual,
+                                               int64_t qual_idx,
                                                ObColumnRefRawExpr *col_expr)
 {
   INIT_SUCC(ret);
@@ -4645,7 +4646,8 @@ int ObRawExprUtils::replace_qual_param_if_need(ObRawExpr* qual,
   const ObRawExpr* param_expr = nullptr;
   int32_t idx = 0;
 
-  if (qual->get_expr_type() == T_OP_BOOL
+  if ((qual->get_expr_type() == T_OP_BOOL
+      || (OB_NOT_NULL(qual = qual->get_param_expr(qual_idx)) && qual->get_expr_type() == T_OP_BOOL))
       && OB_NOT_NULL(qual_expr = qual->get_param_expr(0))
       && qual_expr->is_domain_json_expr()) {
     if (qual_expr->get_expr_type() == T_FUN_SYS_JSON_MEMBER_OF) {
@@ -4701,7 +4703,10 @@ int ObRawExprUtils::replace_domain_wrapper_expr(ObRawExpr *depend_expr,
   ObSEArray<ObRawExpr *, 4> column_exprs;
   bool need_specific_replace = false;
 
-  if (OB_FAIL(replace_json_wrapper_expr_if_need(
+  if (OB_ISNULL(qual)) {
+  } else if (qual->get_expr_type() != T_OP_BOOL &&
+    qual->get_param_expr(qual_idx)->get_expr_type() != T_OP_BOOL) {
+  } else if (OB_FAIL(replace_json_wrapper_expr_if_need(
       qual, qual_idx, depend_expr, factory, session_info, need_specific_replace))) {
     LOG_WARN("failed to replace expr", K(ret));
   } else if (OB_FAIL(extract_column_exprs(qual, column_exprs))) {
@@ -4715,7 +4720,7 @@ int ObRawExprUtils::replace_domain_wrapper_expr(ObRawExpr *depend_expr,
              && OB_FAIL(static_cast<ObOpRawExpr *>(new_qual)->replace_param_expr(qual_idx, col_expr))) {
     LOG_WARN("replace failed", K(ret));
   } else if (need_specific_replace
-             && OB_FAIL(replace_qual_param_if_need(new_qual, col_expr))) {
+             && OB_FAIL(replace_qual_param_if_need(new_qual, qual_idx, col_expr))) {
     LOG_WARN("specific replace failed", K(ret));
   }
 
@@ -9348,6 +9353,26 @@ int ObRawExprUtils::check_contain_case_when_exprs(const ObRawExpr *raw_expr, boo
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !contain && i < raw_expr->get_param_count(); i++) {
       if (OB_FAIL(SMART_CALL(check_contain_case_when_exprs(raw_expr->get_param_expr(i), contain)))) {
+        LOG_WARN("failed to replace_ref_column", KPC(raw_expr), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::check_contain_lock_exprs(const ObRawExpr *raw_expr, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(raw_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr passed in is NULL", K(ret));
+  } else if (T_FUN_SYS_GET_LOCK == raw_expr->get_expr_type() ||
+             T_FUN_SYS_RELEASE_LOCK == raw_expr->get_expr_type() ||
+             T_FUN_SYS_RELEASE_ALL_LOCKS == raw_expr->get_expr_type()) {
+    contain = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !contain && i < raw_expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(check_contain_lock_exprs(raw_expr->get_param_expr(i), contain)))) {
         LOG_WARN("failed to replace_ref_column", KPC(raw_expr), K(i));
       }
     }

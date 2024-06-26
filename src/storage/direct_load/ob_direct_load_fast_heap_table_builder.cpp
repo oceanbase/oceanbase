@@ -261,6 +261,8 @@ int ObDirectLoadFastHeapTableBuilder::get_tables(
   } else if (OB_UNLIKELY(!is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fast heap table builder not closed", KR(ret));
+  } else if (row_count_ == 0) {
+    // do nothing
   } else {
     ObDirectLoadFastHeapTableCreateParam create_param;
     create_param.tablet_id_ = param_.tablet_id_;

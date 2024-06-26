@@ -1165,7 +1165,7 @@ int ObDbmsWorkloadRepository::print_ash_top_exec_phase(const AshReportParams &as
               LOG_WARN("failed to push pair into phase array",K(ret));
             }
 
-            std::sort(phase_array.begin(), phase_array.end(), phase_cmp_func);
+            lib::ob_sort(phase_array.begin(), phase_array.end(), phase_cmp_func);
             for (int64_t i = 0; OB_SUCC(ret) && i < phase_array.count(); i++) {
               const char *phase_name = phase_array.at(i).first;
               int64_t phase_cnt = phase_array.at(i).second;

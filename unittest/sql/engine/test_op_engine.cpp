@@ -293,7 +293,7 @@ ObOperator *TestOpEngine::subtitude_table_scan_to_fake(ObOperator *root)
 }
 
 int TestOpEngine::get_tested_op_from_string(const std::string &sql, bool vector_2, ObOperator *&op,
-                                            ObExecutor &executor)
+                                            ObExecutor &executor, bool use_old_ctx)
 {
   int ret = OB_SUCCESS;
   ObStmt *stmt = NULL;
@@ -302,7 +302,7 @@ int TestOpEngine::get_tested_op_from_string(const std::string &sql, bool vector_
   ObArenaAllocator *p_alloc = NULL;
   ObExecContext *p_exec_ctx = NULL;
 
-  if (vector_2) {
+  if (vector_2 || !use_old_ctx) {
     p_alloc = &vec_2_alloc_;
     p_exec_ctx = &vec_2_exec_ctx_;
   } else {

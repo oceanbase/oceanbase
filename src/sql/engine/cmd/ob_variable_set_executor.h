@@ -121,6 +121,7 @@ private:
                                     common::ObIAllocator &calc_buf,
                                     common::ObMySQLProxy &sql_proxy,
                                     const ObValidatePasswordCtx &password_ctx);
+  int is_support(const share::ObSetVar &set_var);
   int do_set_names(ObExecContext &ctx, ObSetNamesStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetExecutor);

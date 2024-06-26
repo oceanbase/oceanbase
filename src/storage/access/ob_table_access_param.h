@@ -97,6 +97,10 @@ public:
   {
     return (read_info_ != nullptr) ? &read_info_->get_columns_desc() : nullptr;
   }
+  OB_INLINE const ObColDescIArray *get_rowkey_col_descs() const
+  {
+    return (rowkey_read_info_ != nullptr) ? &rowkey_read_info_->get_columns_desc() : nullptr;
+  }
   OB_INLINE bool read_with_same_schema() const
   {
     return is_same_schema_column_;
@@ -171,6 +175,12 @@ public:
         !pd_storage_flag_.is_group_by_pushdown() &&
         !pd_storage_flag_.is_aggregate_pushdown();
   }
+  OB_INLINE int64_t get_io_read_batch_size() const
+  { return table_scan_opt_.io_read_batch_size_; }
+  OB_INLINE int64_t get_io_read_gap_size() const
+  { return table_scan_opt_.io_read_gap_size_; }
+  OB_INLINE int64_t get_storage_rowsets_size() const
+  { return table_scan_opt_.storage_rowsets_size_; }
   DECLARE_TO_STRING;
 public:
   uint64_t table_id_;
@@ -208,6 +218,7 @@ public:
   bool is_non_unique_local_index_;
   int64_t ss_rowkey_prefix_cnt_;
   sql::ObStoragePushdownFlag pd_storage_flag_;
+  ObTableScanOption table_scan_opt_;
 };
 
 struct ObTableAccessParam
@@ -219,7 +230,7 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_ && iter_param_.is_valid(); }
   // used for query
   int init(const ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
-  // used for merge
+    // used for merge
   int init_merge_param(const uint64_t table_id,
                        const common::ObTabletID &tablet_id,
                        const ObITableReadInfo &read_info,

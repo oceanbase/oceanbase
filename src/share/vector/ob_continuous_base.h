@@ -36,13 +36,13 @@ public:
                                      uint32_t *offsets, const int64_t start_idx,
                                      const int64_t read_rows, char *data)
   {
-    has_null_ = has_null;
+    UNUSED(has_null);
+    has_null_ = false;
     nulls_->reset(read_rows);
-    if (has_null) {
-      for (int64_t i = 0; i < read_rows; ++i) {
-        if (nulls.at(start_idx + i)) {
-          nulls_->set(i);
-        }
+    for (int64_t i = 0; i < read_rows; ++i) {
+      if (nulls.at(start_idx + i)) {
+        nulls_->set(i);
+        has_null_ = true;
       }
     }
     offsets_ = offsets + start_idx;
@@ -53,6 +53,9 @@ public:
                        const uint16_t selector[],
                        const int64_t size,
                        const int64_t col_idx) const override final;
+
+  virtual void to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+                       const int64_t size, const int64_t col_idx) const override final;
   inline void from(uint32_t *offsets, char *data)
   {
     offsets_ = offsets;

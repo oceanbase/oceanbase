@@ -1287,7 +1287,7 @@ int ObUserTenantBackupDeleteMgr::get_delete_obsolete_backup_set_infos_(
   } else if (OB_FAIL(ObBackupSetFileOperator::get_candidate_obsolete_backup_sets(*sql_proxy_, job_attr_->tenant_id_,
       job_attr_->expired_time_, backup_path_str.ptr(), backup_set_infos))) {
     LOG_WARN("failed to get candidate obsolete backup sets", K(ret)); 
-  } else if (FALSE_IT(std::sort(backup_set_infos.begin(), backup_set_infos.end(), backup_set_info_cmp))) {
+  } else if (FALSE_IT(lib::ob_sort(backup_set_infos.begin(), backup_set_infos.end(), backup_set_info_cmp))) {
   } else {
     for (int64_t i = backup_set_infos.count() - 1 ; OB_SUCC(ret) && i >= 0; i--) {
       bool need_deleted = false;
@@ -1380,7 +1380,7 @@ int ObUserTenantBackupDeleteMgr::get_delete_obsolete_backup_piece_infos_(const O
   ObArray<ObTenantArchivePieceAttr> backup_piece_infos;
   if (OB_FAIL(get_all_dest_backup_piece_infos_(clog_data_clean_point, backup_piece_infos))) {
     LOG_WARN("failed to get all dest backup piece infos", K(ret), K(clog_data_clean_point)); 
-  } else if (FALSE_IT(std::sort(backup_piece_infos.begin(), backup_piece_infos.end(), backup_piece_info_cmp))) {
+  } else if (FALSE_IT(lib::ob_sort(backup_piece_infos.begin(), backup_piece_infos.end(), backup_piece_info_cmp))) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_piece_infos.count(); i++) {
       const ObTenantArchivePieceAttr &backup_piece_info = backup_piece_infos.at(i);
@@ -1991,6 +1991,9 @@ int ObBackupCleanCommon::check_tenant_status(
     LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    is_valid = false;
+    LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), K(tenant_id));
   } else if (tenant_schema->is_normal()) {
     is_valid = true;
   } else if (tenant_schema->is_creating()) {

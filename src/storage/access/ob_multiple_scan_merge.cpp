@@ -164,12 +164,6 @@ int ObMultipleScanMerge::prepare()
   return ret;
 }
 
-void ObMultipleScanMerge::collect_merge_stat(ObTableStoreStat &stat) const
-{
-  stat.single_scan_stat_.call_cnt_++;
-  stat.single_scan_stat_.output_row_cnt_ += access_ctx_->table_store_stat_.output_row_cnt_;
-}
-
 int ObMultipleScanMerge::construct_iters()
 {
   int ret = OB_SUCCESS;

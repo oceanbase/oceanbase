@@ -14,6 +14,8 @@
 #define OBDEV_SRC_SQL_DAS_ITER_OB_DAS_MERGE_ITER_H_
 #include "sql/das/ob_das_utils.h"
 #include "sql/das/iter/ob_das_iter.h"
+#include "sql/das/ob_das_ref.h"
+#include "sql/das/ob_das_scan_op.h"
 
 namespace oceanbase
 {
@@ -21,9 +23,12 @@ using namespace common;
 namespace sql
 {
 
-class ObDASMergeIterParam : public ObDASIterParam
+struct ObDASMergeIterParam : public ObDASIterParam
 {
 public:
+  ObDASMergeIterParam()
+    : ObDASIterParam(ObDASIterType::DAS_ITER_MERGE)
+  {}
   ObFixedArray<ObEvalInfo*, ObIAllocator> *eval_infos_;
   bool need_update_partition_id_;
   ObExpr *pdml_partition_id_;
@@ -34,6 +39,7 @@ public:
   const ObExprFrameInfo *frame_info_;
   bool execute_das_directly_;
   bool enable_rich_format_;
+  bool used_for_keep_order_;
 
   virtual bool is_valid() const override
   {
@@ -73,6 +79,8 @@ public:
   int64_t get_group_idx(int64_t idx);
   int64_t cur_group_idx();
   int64_t row_cnt_with_cur_group_idx();
+
+  const ObDatum *cur_datums();
   void reuse();
   void reset();
   TO_STRING_KV(K_(saved_size),
@@ -93,7 +101,8 @@ class ObDASMergeIter : public ObDASIter
 {
 public:
   ObDASMergeIter()
-    : wild_datum_info_(),
+    : ObDASIter(ObDASIterType::DAS_ITER_MERGE),
+      wild_datum_info_(),
       merge_type_(SEQUENTIAL_MERGE),
       eval_infos_(nullptr),
       need_update_partition_id_(false),
@@ -111,11 +120,13 @@ public:
       group_id_idx_(OB_INVALID_INDEX),
       need_prepare_sort_merge_info_(false),
       merge_state_arr_(),
-      merge_store_rows_arr_()
+      merge_store_rows_arr_(),
+      used_for_keep_order_(false)
   {}
   virtual ~ObDASMergeIter() {}
 
   virtual int set_merge_status(MergeType merge_type) override;
+  virtual int do_table_scan() override;
   MergeType get_merge_type() const { return merge_type_; }
   void set_global_lookup_iter(ObDASMergeIter *global_lookup_iter);
   INHERIT_TO_STRING_KV("ObDASIter", ObDASIter, K_(merge_type), K_(ref_table_id));
@@ -128,8 +139,6 @@ public:
   DASTaskIter begin_task_iter();
   bool is_all_local_task() const;
   int rescan_das_task(ObDASScanOp *scan_op);
-  // do_table_scan() need be called before get_next_row(s).
-  int do_table_scan();
   /********* DAS REF END *********/
 
 protected:
@@ -151,7 +160,7 @@ private:
   int get_next_sorted_row();
   int get_next_sorted_rows(int64_t &count, int64_t capacity);
   int prepare_sort_merge_info();
-  void compare(int64_t cur_idx, int64_t &output_idx);
+  int compare(int64_t cur_idx, int64_t &output_idx);
 
 private:
 
@@ -218,6 +227,7 @@ private:
   typedef common::ObSEArray<MergeStoreRows, 8> MergeStoreRowsArray;
   MergeStateArray merge_state_arr_;
   MergeStoreRowsArray merge_store_rows_arr_;
+  bool used_for_keep_order_;
   /********* SORT MERGE END *********/
 };
 

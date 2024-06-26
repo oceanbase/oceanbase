@@ -166,6 +166,10 @@ DEF_STR_WITH_CHECKER(default_table_store_format, OB_TENANT_PARAMETER, "row",
                      "values: row, column, compound",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(storage_rowsets_size, OB_TENANT_PARAMETER, "8192", "(0,1048576]",
+        "the row number processed by vectorized storage engine within one batch in column storage. Range: (0,1048576]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(weak_read_version_refresh_interval, OB_CLUSTER_PARAMETER, "100ms", "[50ms,)",
          "the time interval to refresh cluster weak read version "
          "Range: [50ms, +∞)",
@@ -299,6 +303,16 @@ DEF_INT(_max_malloc_sample_interval, OB_CLUSTER_PARAMETER, "256", "[1, 10000]",
 DEF_BOOL(_enable_values_table_folding, OB_CLUSTER_PARAMETER, "True",
          "whether enable values statement folds self params",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+//
+DEF_STR_WITH_CHECKER(spill_compression_codec, OB_TENANT_PARAMETER, "NONE",
+        common::ObConfigSQLSpillCompressionCodecChecker,
+        "specific the compression algorithm type to compress the spilled data in temp block store "\
+        "during the sql execution phase. "\
+        "The supported compression codecs are: ZSTD, LZ4, SNAPPY, ZLIB. NONE means no compression."\
+        "The default value is NONE.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 //// tenant config
 DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, "5s",
                       common::ObConfigStaleTimeChecker,
@@ -584,6 +598,10 @@ DEF_TIME(recyclebin_object_expire_time, OB_CLUSTER_PARAMETER, "0s", "[0s,)",
          "default 0 that means auto purge recyclebin off. Range: [0s, +∞)",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_MODE_WITH_PARSER(_parallel_ddl_control, OB_TENANT_PARAMETER, "",
+        common::ObParallelDDLControlParser,
+        "switch for parallel capability of parallel DDL",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // ========================= LogService Config Begin =====================
 
 DEF_CAP(log_disk_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
@@ -1067,6 +1085,12 @@ DEF_INT(_max_ls_cnt_per_server, OB_TENANT_PARAMETER, "0", "[0, 1024]",
         "0: the cluster will adapt the max ls number according to the memory size of tenant itself",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_CAP(_io_read_batch_size, OB_TENANT_PARAMETER, "0K", "[0K,16M]", "Maximum batch size in one read io request. Range:[0K,16M]",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_io_read_redundant_limit_percentage, OB_TENANT_PARAMETER, "0", "[0, 99]",
+        "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read. Range:[0,99]",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // TODO bin.lb: to be remove
 DEF_CAP(dtl_buffer_size, OB_CLUSTER_PARAMETER, "64K", "[4K,2M]", "to be removed",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1307,7 +1331,7 @@ DEF_BOOL(plsql_debug, OB_TENANT_PARAMETER, "False",
          "specifies whether or not PL/SQL library units will be compiled for debugging",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(plsql_v2_compatibility, OB_TENANT_PARAMETER, "False",
-         "allows some abnormal behavior that Version 8 disallows, not available",
+         "allows to control store routine compile action at DDL stage",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // for bloom filter
 DEF_BOOL(_bloom_filter_enabled, OB_TENANT_PARAMETER, "True",
@@ -1374,6 +1398,9 @@ DEF_BOOL(_enable_px_batch_rescan, OB_TENANT_PARAMETER, "True",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_spf_batch_rescan, OB_TENANT_PARAMETER, "False",
          "enable das batch rescan for subplan filter",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_das_keep_order, OB_TENANT_PARAMETER, "True",
+         "enable das keep order optimization",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_parallel_max_active_sessions, OB_TENANT_PARAMETER, "0", "[0,]",
@@ -1981,4 +2008,7 @@ DEF_CAP(lob_enable_block_cache_threshold, OB_TENANT_PARAMETER, "256K", "[0B, 512
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_ob_pl_compile_max_concurrency, OB_CLUSTER_PARAMETER, "4", "[0,)",
         "The maximum number of threads that an observer node can compile PL concurrently.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_compatible_monotonic, OB_CLUSTER_PARAMETER, "True",
+        "Control whether to enable cross-server monotonic compatible(data_version) mode",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

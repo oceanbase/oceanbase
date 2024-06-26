@@ -334,6 +334,8 @@ public:
     other.mb_handle_ = nullptr;
     other.reset();
   }
+  inline ObKVMemBlockHandle* get_mb_handle() const { return mb_handle_; }
+  inline void set_mb_handle(ObKVMemBlockHandle *mb_handle) { mb_handle_ = mb_handle; }
   TO_STRING_KV(KP_(mb_handle));
 private:
   template<class Key, class Value> friend class ObIKVCache;

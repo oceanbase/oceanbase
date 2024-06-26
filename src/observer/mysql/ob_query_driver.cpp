@@ -256,7 +256,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
           LOG_WARN("convert text value charset failed", K(ret));
         }
         if (OB_FAIL(ret)){
-        } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
+        } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry() || value.is_roaringbitmap())
                   && OB_FAIL(process_lob_locator_results(value, result))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
         } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type() || value.is_geometry()) &&
@@ -634,8 +634,10 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
   // 2. if client is_use_lob_locator, but not support outrow lob, return lob locator with inrow data
   //    refer to sz/aibo1m
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
-  bool is_lob_type = value.is_lob() || value.is_json() || value.is_geometry() || value.is_lob_locator();
-  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json() && !value.is_geometry();
+  bool is_lob_type = value.is_lob() || value.is_lob_locator()
+                     || value.is_json() || value.is_geometry() || value.is_roaringbitmap() ;
+  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json()
+                                      && !value.is_geometry() && !value.is_roaringbitmap();
   if (!is_lob_type) {
     // not lob types, do nothing
   } else if (value.is_null() || value.is_nop_value()) {
@@ -711,6 +713,8 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
           dst_type = ObJsonType;
         } else if (value.is_geometry()) {
           dst_type = ObGeometryType;
+        } else if (value.is_roaringbitmap()) {
+          dst_type = ObRoaringBitmapType;
         }
         // remove has lob header flag
         value.set_lob_value(dst_type, data.ptr(), static_cast<int32_t>(data.length()));

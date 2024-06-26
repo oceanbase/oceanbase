@@ -216,7 +216,8 @@ int ObTempTableInsertVecOp::create_interm_result_info(ObDTLIntermResultInfo *&in
                                                  mem_attr,
                                                  0 /*mem_limit*/,
                                                  true /*enable_dump*/,
-                                                 false /*reuse_vector_array*/))) {
+                                                 false /*reuse_vector_array*/,
+                                                 MY_SPEC.compress_type_))) {
       LOG_WARN("failed to init the chunk row store.", K(ret));
     } else if (OB_FAIL(all_interm_res_info_.push_back(interm_res_info))) {
       LOG_WARN("failed to push back row store", K(ret));
@@ -383,7 +384,7 @@ int ObTempTableInsertVecOp::process_dump(dtl::ObDTLIntermResultInfo &interm_res_
     for (int64_t i = 0; OB_SUCC(ret) && i < all_interm_res_info_.count(); ++i) {
       // The last block of the last chunk may still need to insert data and should not be dumped.
       bool dump_last_block = i < all_interm_res_info_.count() - 1;
-      if (OB_FAIL(all_interm_res_info_.at(i)->col_store_->dump(false, dump_last_block))) {
+      if (OB_FAIL(all_interm_res_info_.at(i)->col_store_->dump(dump_last_block))) {
         LOG_WARN("failed to dump row store", K(ret));
       } else {
         dump_end_time = oceanbase::common::ObTimeUtility::current_time();

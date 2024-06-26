@@ -259,7 +259,7 @@ int ObLSRecoveryReportor::update_ls_recovery_stat_()
           LOG_ERROR("ls is null", KR(ret), KP(ls));
         } else {
           share::SCN replayable_scn = SCN::base_scn();
-          if (OB_TMP_FAIL(tenant_info_loader->get_replayable_scn(replayable_scn))) {
+          if (OB_TMP_FAIL(tenant_info_loader->get_local_replayable_scn(replayable_scn))) {
             LOG_WARN("failed to get replayable_scn", KR(ret), KPC(ls));
           } else if (OB_TMP_FAIL(ls->update_ls_replayable_point(replayable_scn))) {
             LOG_WARN("failed to update_ls_replayable_point", KR(tmp_ret), KPC(ls), K(replayable_scn));
@@ -432,7 +432,7 @@ int ObLSRecoveryReportor::update_replayable_point_from_tenant_info_()
   if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl pointer is null", KR(ret), KP(tenant_info_loader));
-  } else if (OB_FAIL(tenant_info_loader->get_replayable_scn(replayable_scn))) {
+  } else if (OB_FAIL(tenant_info_loader->get_local_replayable_scn(replayable_scn))) {
     LOG_WARN("failed to get replayable_scn", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(log_service->update_replayable_point(replayable_scn))) {
     LOG_WARN("logservice update_replayable_point failed", KR(ret), K(replayable_scn));

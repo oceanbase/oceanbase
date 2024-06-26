@@ -46,17 +46,17 @@ public:
   int quick_compare(const ObStorageDatum &left, const ObStorageDatumCmpFunc &cmp_func,
     const int64_t row_id, int32_t &cmp_ret);
 
-  int batch_decode(const int64_t *row_ids, const int64_t row_cap, common::ObDatum *datums);
+  int batch_decode(const int32_t *row_ids, const int64_t row_cap, common::ObDatum *datums);
   int decode_vector(ObVectorDecodeCtx &vector_ctx);
   int get_row_count(
-    const int64_t *row_ids, const int64_t row_cap, const bool contains_null, int64_t &count);
+    const int32_t *row_ids, const int64_t row_cap, const bool contains_null, int64_t &count);
   OB_INLINE int get_distinct_count(int64_t &distinct_cnt) const
   { return decoder_->get_distinct_count(*ctx_, distinct_cnt); }
   OB_INLINE int read_distinct(
       storage::ObGroupByCell &group_by_cell) const
   { return decoder_->read_distinct(*ctx_, group_by_cell); }
   OB_INLINE int read_reference(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const
   { return decoder_->read_reference(*ctx_, row_ids, row_cap, group_by_cell); }
@@ -212,12 +212,12 @@ public:
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObIArray<ObSqlDatumInfo> &datum_infos,
       const int64_t datum_offset = 0) override;
-  virtual int get_row_count(int32_t col_id, const int64_t *row_ids, const int64_t row_cap,
+  virtual int get_row_count(int32_t col_id, const int32_t *row_ids, const int64_t row_cap,
     const bool contains_null, const share::schema::ObColumnParam *col_param, int64_t &count) override final;
   virtual int64_t get_column_count() const override
   {
@@ -246,21 +246,21 @@ public:
       const ObTableAccessContext &context,
       const int32_t col_offset,
       const share::schema::ObColumnParam &col_param,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObAggDatumBuf &agg_datum_buf,
       ObAggCell &agg_cell) override;
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const override;
   virtual int read_distinct(const int32_t group_by_col, const char **cell_datas,
     storage::ObGroupByCell &group_by_cell) const override;
-  virtual int read_reference(const int32_t group_by_col, const int64_t *row_ids,
+  virtual int read_reference(const int32_t group_by_col, const int32_t *row_ids,
     const int64_t row_cap, storage::ObGroupByCell &group_by_cell) const override;
-  virtual int get_group_by_aggregate_result(const int64_t *row_ids, const char **cell_datas,
+  virtual int get_group_by_aggregate_result(const int32_t *row_ids, const char **cell_datas,
     const int64_t row_cap, storage::ObGroupByCell &group_by_cell) override;
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const char **cell_datas,
       const int64_t vec_offset,
@@ -284,7 +284,7 @@ private:
   int get_row_impl(int64_t index, ObDatumRow &row);
   bool can_pushdown_decoder(
       const ObColumnCSDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const ObAggCell &agg_cell) const;
   OB_INLINE static const ObRowHeader &get_major_store_row_header()
@@ -304,7 +304,7 @@ private:
     sql::ObWhiteFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
     const int32_t col_offset, const share::schema::ObColumnParam *col_param,
     ObStorageDatum &decoded_datum, common::ObBitmap &result_bitmap);
-  int get_col_datums(int32_t col_id, const int64_t *row_ids, const int64_t row_cap, common::ObDatum *col_datums);
+  int get_col_datums(int32_t col_id, const int32_t *row_ids, const int64_t row_cap, common::ObDatum *col_datums);
   int get_col_data(int32_t col_id, ObVectorDecodeCtx &ctx);
 
 private:

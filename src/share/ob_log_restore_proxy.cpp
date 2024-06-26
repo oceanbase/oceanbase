@@ -19,6 +19,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/net/ob_addr.h"
 #include "observer/ob_sql_client_decorator.h"  //ObSQLClientRetryWeak
+#include "observer/ob_server_struct.h"
 #include "common/ob_smart_var.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
@@ -27,6 +28,7 @@
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/backup/ob_backup_struct.h"     // COMPATIBILITY_MODE
 #include "share/ob_thread_mgr.h"
+#include "share/config/ob_server_config.h"
 #include "logservice/palf/palf_options.h"
 #include "share/oracle_errno.h"
 #include <mysql.h>
@@ -408,6 +410,56 @@ int ObLogRestoreProxyUtil::get_cluster_id(uint64_t tenant_id, int64_t &cluster_i
     LOG_WARN("fail to get cluster id result");
     RESTORE_PROXY_USER_ERROR("cluster id");
   }
+  return ret;
+}
+
+int ObLogRestoreProxyUtil::check_different_cluster_with_same_cluster_id(
+    const int64_t source_cluster_id, bool &res)
+{
+  int ret = OB_SUCCESS;
+  res = false;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+  } else if (GCONF.cluster_id == source_cluster_id) {
+    // get one machine ip from the source cluster, then check if that machine is in current
+    // cluster's __all_server table
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      ObSqlString sql;
+      char svr_ip_buf[common::OB_IP_STR_BUFF] = {0};
+      common::ObAddr primary_server;
+      if (OB_FAIL(server_prover_.get_server(0, primary_server))) {
+        LOG_WARN("fail to get primary server", K(ret));
+      } else if (!primary_server.ip_to_string(svr_ip_buf, common::OB_IP_STR_BUFF)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to convert ip to string", K(ret));
+      } else if (OB_FAIL(sql.assign_fmt(
+                     "SELECT COUNT(*) AS cnt FROM %s WHERE svr_ip='%s' AND inner_port=%d",
+                     OB_ALL_SERVER_TNAME, svr_ip_buf, primary_server.get_port()))) {
+        LOG_WARN("fail to generate sql", K(ret));
+      } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql proxy is null", K(ret));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(result, sql.ptr()))) {
+        LOG_WARN("fail to get __all_server", K(ret), K(sql));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query result is null", K(sql));
+      } else if (OB_FAIL(result.get_result()->next())) {
+        LOG_WARN("get result next failed", K(sql));
+      } else {
+        int64_t cnt = 0;
+        EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "cnt", cnt, int64_t);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("fail to get sql result", K(ret), K(sql));
+        } else if (0 == cnt) {
+          res = true;
+        }
+        LOG_INFO("check if cluster_id duplicated", K(res), K(cnt), K(sql));
+      }
+    }
+  }
+
   return ret;
 }
 

@@ -78,7 +78,7 @@ int ObCOWhereOptimizer::analyze_impl(sql::ObPushdownFilterExecutor &filter)
         }
 
         if (OB_SUCC(ret)) {
-          std::sort(&filter_conditions_[0], &filter_conditions_[0] + child_cnt);
+          lib::ob_sort(&filter_conditions_[0], &filter_conditions_[0] + child_cnt);
           const uint64_t best_filter_idx = filter_conditions_[0].idx_;
           best_filter = children[best_filter_idx];
           if (0 == best_filter_idx ||
@@ -137,6 +137,14 @@ uint64_t ObCOWhereOptimizer::estimate_execution_cost(sql::ObPushdownFilterExecut
   uint64_t execution_cost;
   if (!filter.is_filter_white_node()) {
     execution_cost = UINT64_MAX;
+  } else if (filter.is_filter_dynamic_node()) {
+    ObDynamicFilterExecutor &dynamic_filter = static_cast<ObDynamicFilterExecutor &>(filter);
+    if (dynamic_filter.get_filter_node().get_dynamic_filter_type()
+        == DynamicFilterType::PD_TOPN_FILTER) {
+      execution_cost = 1;
+    } else {
+      execution_cost = UINT64_MAX;
+    }
   } else {
     ObWhiteFilterExecutor &white_filter = static_cast<ObWhiteFilterExecutor &>(filter);
     switch (white_filter.get_op_type()) {

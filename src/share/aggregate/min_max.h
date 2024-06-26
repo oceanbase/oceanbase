@@ -28,19 +28,30 @@ using namespace sql;
 struct CmpCalcInfo
 {
   CmpCalcInfo(ObObjMeta obj_meta, int16_t cell_len) :
-    obj_meta_(obj_meta), agg_cell_len_(cell_len), calculated_(0) {}
-  CmpCalcInfo() : obj_meta_(), agg_cell_len_(0), calculated_(0) {}
+    obj_meta_(obj_meta), agg_cell_len_(cell_len), calc_flags_(0) {}
+  CmpCalcInfo() : obj_meta_(), agg_cell_len_(0), calc_flags_(0) {}
   operator int64_t() const { return flags_; }
   inline void set_calculated()
   {
-    calculated_ = static_cast<int16_t>(1);
+    calculated_ = true;
+  }
+  inline void set_min_max_idx_changed()
+  {
+    min_max_idx_changed_ = true;
   }
   inline bool calculated() const { return calculated_ == 1; }
   union {
     struct {
       ObObjMeta obj_meta_;
       int16_t agg_cell_len_; // for fixed length type only
-      int16_t calculated_;
+      union {
+        struct {
+        uint16_t calculated_: 1;
+        uint16_t min_max_idx_changed_: 1;
+        uint16_t reserved_: 14;
+        };
+        uint16_t calc_flags_;
+      };
     };
     int64_t flags_;
   };
@@ -157,10 +168,12 @@ public:
           SQL_LOG(WARN, "compare failed", K(ret));
         } else if ((is_min && cmp_ret > 0) || (!is_min && cmp_ret < 0)) {
           MEMCPY(agg_cell, row_data, row_len);
+          cmp_info.set_min_max_idx_changed();
         }
       } else {
         MEMCPY(agg_cell, row_data, row_len);
         cmp_info.set_calculated();
+        cmp_info.set_min_max_idx_changed();
       }
     } else {
       int32_t agg_cell_len = *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *));
@@ -173,11 +186,13 @@ public:
         } else if ((is_min && cmp_ret > 0) || (!is_min && cmp_ret < 0)) {
            *reinterpret_cast<int64_t *>(agg_cell) = reinterpret_cast<int64_t>(row_data);
            *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = row_len;
+           cmp_info.set_min_max_idx_changed();
         }
       } else {
         *reinterpret_cast<int64_t *>(agg_cell) = reinterpret_cast<int64_t>(row_data);
         *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = row_len;
         cmp_info.set_calculated();
+        cmp_info.set_min_max_idx_changed();
       }
     }
     return ret;
@@ -237,7 +252,10 @@ public:
     NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
     // if result value has variable result length, e.g. string value,
     // we need copy value to tmp buffer in case value ptr stored was changed after next batch loop.
-    if (not_nulls.at(agg_col_id) && helper::is_var_len_agg_cell(vec_tc)) {
+
+    if (agg_ctx.win_func_agg_) {
+      // do nothing
+    } else if (not_nulls.at(agg_col_id) && helper::is_var_len_agg_cell(vec_tc)) {
       if (OB_FAIL(set_tmp_var_agg_data(agg_ctx, agg_col_id, agg_cell))) {
         SQL_LOG(WARN, "set variable aggregate data failed", K(ret));
       }
@@ -268,6 +286,31 @@ public:
   }
 
   TO_STRING_KV("aggregate", (is_min ? "min" : "max"), K(vec_tc));
+
+  template <typename ColumnFmt>
+  int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    bool is_trans = !agg_ctx.removal_info_.is_inverse_agg_;
+    if (!columns.is_null(row_num)) {
+      CmpCalcInfo &cmp_info = reinterpret_cast<CmpCalcInfo &>(calc_info);
+      cmp_info.min_max_idx_changed_ = 0;
+      if (OB_FAIL(add_row(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info))) {
+        SQL_LOG(WARN, "add row failed", K(ret));
+      } else if (cmp_info.min_max_idx_changed_) {
+        agg_ctx.removal_info_.max_min_index_ = row_num;
+        agg_ctx.removal_info_.is_max_min_idx_changed_ = true;
+      }
+      agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell).set(0);
+    } else if (is_trans) {
+      agg_ctx.removal_info_.null_cnt_++;
+    } else {
+      agg_ctx.removal_info_.null_cnt_--;
+    }
+    // do nothing
+    return ret;
+  }
 private:
   int set_tmp_var_agg_data(RuntimeContext &agg_ctx, const int32_t agg_col_id, char *agg_cell)
   {

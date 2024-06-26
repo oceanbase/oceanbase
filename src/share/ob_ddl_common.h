@@ -164,10 +164,10 @@ enum ObDDLTaskStatus {
   WAIT_LOCAL_INDEX_SPLIT_END = 22,
   WAIT_LOB_TABLE_SPLIT_END = 23,
   WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH = 24,
-  //GENERATE_ROWKEY_DOC_SCHEMA = 25,
-  //WAIT_ROWKEY_DOC_TABLE_COMPLEMENT = 26,
-  //GENERATE_DOC_AUX_SCHEMA = 27,
-  //WAIT_AUX_TABLE_COMPLEMENT = 28,
+  GENERATE_ROWKEY_DOC_SCHEMA = 25,
+  WAIT_ROWKEY_DOC_TABLE_COMPLEMENT = 26,
+  GENERATE_DOC_AUX_SCHEMA = 27,
+  WAIT_AUX_TABLE_COMPLEMENT = 28,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -188,6 +188,13 @@ enum SortCompactLevel
   SORT_COMPRESSION_LEVEL = 3,
   SORT_COMPRESSION_COMPACT_LEVEL = 4,
   SORT_COMPRESSION_ENCODE_LEVEL = 5
+};
+
+enum ObSplitSSTableType
+{
+  SPLIT_BOTH = 0, // Major and Minor
+  SPLIT_MAJOR = 1,
+  SPLIT_MINOR = 2
 };
 
 static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
@@ -267,6 +274,18 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH:
       str = "WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH";
+      break;
+    case ObDDLTaskStatus::GENERATE_ROWKEY_DOC_SCHEMA:
+      str = "GENERATE_ROWKEY_DOC_SCHEMA";
+      break;
+    case ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA:
+      str = "GENERATE_DOC_AUX_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT:
+      str = "WAIT_ROWKEY_DOC_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::WAIT_AUX_TABLE_COMPLEMENT:
+      str = "WAIT_AUX_TABLE_COMPLEMENT";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
@@ -666,6 +685,12 @@ public:
       share::schema::ObSchemaGetterGuard &hold_buf_dst_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
+
+  static int check_table_empty_in_oracle_mode(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      bool &is_table_empty);
 
   static int check_tenant_status_normal(
       ObISQLClient *proxy,

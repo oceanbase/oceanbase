@@ -28,43 +28,6 @@ class ObObj;
 namespace observer
 {
 
-struct ObTableLoadKey
-{
-public:
-  ObTableLoadKey() : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID) {}
-  ObTableLoadKey(uint64_t tenant_id, uint64_t table_id) : tenant_id_(tenant_id), table_id_(table_id) {}
-  bool is_valid() const
-  {
-    return common::OB_INVALID_ID != tenant_id_ && common::OB_INVALID_ID != table_id_;
-  }
-  bool operator==(const ObTableLoadKey &other) const
-  {
-    return (tenant_id_ == other.tenant_id_ && table_id_ == other.table_id_);
-  }
-  bool operator!=(const ObTableLoadKey &other) const
-  {
-    return !(*this == other);
-  }
-  uint64_t hash() const
-  {
-    uint64_t hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
-    hash_val = common::murmurhash(&table_id_, sizeof(table_id_), hash_val);
-    return hash_val;
-  }
-  int compare(const ObTableLoadKey &other) const
-  {
-    if (tenant_id_ != other.tenant_id_) {
-      return (tenant_id_ > other.tenant_id_ ? 1 : -1);
-    } else {
-      return (table_id_ != other.table_id_ ? (table_id_ > other.table_id_ ? 1 : -1) : 0);
-    }
-  }
-  TO_STRING_KV(K_(tenant_id), K_(table_id));
-public:
-  uint64_t tenant_id_;
-  uint64_t table_id_;
-};
-
 struct ObTableLoadUniqueKey
 {
   OB_UNIS_VERSION(1);

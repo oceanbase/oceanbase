@@ -260,6 +260,7 @@ enum EMySQLFieldType
   MYSQL_TYPE_OB_UROWID = 209,
   MYSQL_TYPE_ORA_BLOB = 210,
   MYSQL_TYPE_ORA_CLOB = 211,
+  MYSQL_TYPE_ROARINGBITMAP = 215,
   MYSQL_TYPE_JSON = 245,
   MYSQL_TYPE_NEWDECIMAL = 246,
   MYSQL_TYPE_ENUM = 247,
@@ -354,6 +355,9 @@ inline const char *get_emysql_field_type_str(const obmysql::EMySQLFieldType &typ
       break;
     case obmysql::MYSQL_TYPE_OB_RAW:
       str = "MYSQL_TYPE_OB_RAW";
+      break;
+    case obmysql::MYSQL_TYPE_ROARINGBITMAP:
+      str = "MYSQL_TYPE_ROARINGBITMAP";
       break;
     case obmysql::MYSQL_TYPE_NEWDECIMAL:
       str = "MYSQL_TYPE_NEWDECIMAL";

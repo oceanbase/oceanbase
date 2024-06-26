@@ -1593,6 +1593,28 @@ bool ObObjAccessIdx::is_table_column(const common::ObIArray<ObObjAccessIdx> &acc
               && ObObjAccessIdx::IS_TABLE_COL == access_idxs.at(2).access_type_));
 }
 
+bool ObObjAccessIdx::is_dblink_table(const common::ObIArray<ObObjAccessIdx> &access_idxs)
+{
+  return !access_idxs.empty()
+         && ((1 == access_idxs.count()
+              && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(0).access_type_)
+            || (2 == access_idxs.count()
+               && ObObjAccessIdx::IS_DB_NS == access_idxs.at(0).access_type_
+               && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(1).access_type_));
+}
+
+bool ObObjAccessIdx::is_dblink_table_column(const common::ObIArray<ObObjAccessIdx> &access_idxs)
+{
+  return !access_idxs.empty()
+         && ((2 == access_idxs.count()
+              && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(0).access_type_
+              && ObObjAccessIdx::IS_TABLE_COL == access_idxs.at(1).access_type_)
+            || (3 == access_idxs.count()
+              && ObObjAccessIdx::IS_DB_NS == access_idxs.at(0).access_type_
+              && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(1).access_type_
+              && ObObjAccessIdx::IS_TABLE_COL == access_idxs.at(2).access_type_));
+}
+
 bool ObObjAccessIdx::is_local_variable(const common::ObIArray<ObObjAccessIdx> &access_idxs)
 {
   bool is_local = false;

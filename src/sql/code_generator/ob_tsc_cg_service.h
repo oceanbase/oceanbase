@@ -53,7 +53,7 @@ private:
   int generate_access_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef, bool &has_rowscn);
   int generate_pushdown_aggr_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef);
   int generate_das_scan_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef, bool &has_rowscn);
-  int generate_table_param(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef);
+  int generate_table_param(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef, common::ObIArray<uint64_t> &tsc_out_cols);
   int extract_das_output_column_ids(const ObLogTableScan &op,
                                     ObDASScanCtDef &scan_ctdef,
                                     const ObTableSchema &index_schema,
@@ -79,6 +79,7 @@ private:
   int generate_doc_id_lookup_ctdef(const ObLogTableScan &op,
                                    ObTableScanCtDef &tsc_ctdef,
                                    ObDASBaseCtDef *ir_scan_ctdef,
+                                   ObExpr *doc_id_expr,
                                    ObDASIRAuxLookupCtDef *&aux_lookup_ctdef);
   int generate_table_lookup_ctdef(const ObLogTableScan &op,
                                   ObTableScanCtDef &tsc_ctdef,
@@ -98,6 +99,9 @@ private:
                               ObRawExpr *topk_offset_expr,
                               ObDASBaseCtDef *child_ctdef,
                               ObDASSortCtDef *&sort_ctdef);
+  int mapping_oracle_real_agent_virtual_exprs(const ObLogTableScan &op,
+                                              common::ObIArray<ObRawExpr*> &access_exprs);
+
 private:
   ObStaticEngineCG &cg_;
 };

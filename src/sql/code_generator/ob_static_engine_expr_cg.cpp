@@ -21,6 +21,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/vector/ob_vector_define.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_get_path.h"
 
 namespace oceanbase
 {
@@ -499,6 +500,25 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
           } else {
             rt_expr->eval_func_ = eval_questionmark_decint2decint_normalcast;
           }
+        }
+      }
+    } else if (T_PSEUDO_EXTERNAL_FILE_COL == raw_expr->get_expr_type()) {
+      ObIExprExtraInfo *extra_info = nullptr;
+      ObPseudoColumnRawExpr *column_expr = static_cast<ObPseudoColumnRawExpr*>(raw_expr);
+      if (OB_FAIL(ObExprExtraInfoFactory::alloc(*op_cg_ctx_.allocator_, rt_expr->type_, extra_info))) {
+        LOG_WARN("Failed to allocate memory for ObExprOracleLRpadInfo", K(ret));
+      } else if (OB_ISNULL(extra_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("extra_info should not be nullptr", K(ret));
+      } else {
+        ObDataAccessPathExtraInfo *data_access_info = static_cast<ObDataAccessPathExtraInfo *>(extra_info);
+        if (OB_FAIL(ob_write_string(*op_cg_ctx_.allocator_,
+                                    column_expr->get_data_access_path(),
+                                    data_access_info->data_access_path_))) {
+          LOG_WARN("fail to write string", K(ret));
+        } else {
+          rt_expr->extra_info_ = extra_info;
+          LOG_DEBUG("external file col expr", K(ret), "path", data_access_info->data_access_path_);
         }
       }
     } else if (!IS_EXPR_OP(rt_expr->type_) || IS_AGGR_FUN(rt_expr->type_)) {

@@ -1775,6 +1775,10 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       }
     }
   }
+  // generate sql_id using paramiterized sql, and overwrite privious sql_id
+  OZ (ObSQLUtils::md5(pc_key, ctx.get_sql_ctx()->sql_id_,
+                      (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_)));
+  OX (ctx.get_my_session()->set_cur_sql_id(ctx.get_sql_ctx()->sql_id_));
   OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
   return ret;
 }
@@ -3457,8 +3461,9 @@ do {                                                                  \
             ObObjMeta null_meta = get_params().at(i).get_meta();
             get_params().at(i) = params->at(i); // 空值不做cast
             params->at(i).is_null() ? get_params().at(i).set_null_meta(null_meta) : (void)NULL;
-          } else if (params->at(i).get_meta().get_type() == get_params().at(i).get_meta().get_type()
-                     && params->at(i).get_meta().is_numeric_type()) {
+          } else if (lib::is_oracle_mode()
+                       && params->at(i).get_meta().get_type() == get_params().at(i).get_meta().get_type()
+                       && params->at(i).get_meta().is_numeric_type()) {
             ObObj tmp;
             if (pl_type.is_pl_integer_type()) {
               OZ (ObExprPLIntegerChecker::calc(tmp,

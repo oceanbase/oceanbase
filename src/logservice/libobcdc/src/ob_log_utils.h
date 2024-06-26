@@ -250,6 +250,7 @@ bool is_string_type(const int ctype);
 bool is_json_type(const int ctype);
 bool is_geometry_type(const int ctype);
 bool is_xml_type(const int ctype);
+bool is_roaringbitmap_type(const int ctype);
 int64_t get_non_hidden_column_count(const oceanbase::share::schema::ObTableSchema &table_schema);
 
 double get_delay_sec(const int64_t tstamp);
@@ -602,7 +603,7 @@ int sort_and_unique_array(ARRAY &arr, Comparator &comparator)
 
   if (arr.count() > 1) {
     // sort lsn_arr
-    std::sort(arr.begin(), arr.end(), comparator);
+    lib::ob_sort(arr.begin(), arr.end(), comparator);
     auto prev = arr.at(0);
     // get duplicate misslog lsn idx
     for(int64_t idx = 1; OB_SUCC(ret) && idx < arr.count(); idx++) {

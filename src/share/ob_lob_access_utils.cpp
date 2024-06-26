@@ -1112,7 +1112,11 @@ int ObTextStringResult::calc_buffer_len(int64_t res_len)
       bool has_extern = lib::is_oracle_mode(); // even oracle may not need extern for temp data
       ObMemLobExternFlags extern_flags(has_extern);
       res_len += sizeof(ObLobCommon);
-      buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), false);
+      if (has_extern) {
+        buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), false);
+      } else {
+        buff_len_ = res_len; // for mysql mode temp lob, we can mock it as disk inrow lob
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("Lob: out row temp lob not implemented, not support length bigger than 512M",
@@ -1193,7 +1197,10 @@ int ObTextStringResult::fill_temp_lob_header(const int64_t res_len)
     ObString rowkey_str;
     ObString empty_str;
     ObLobCommon lob_common;
-    if (OB_FAIL(locator.fill(TEMP_FULL_LOB,
+    if (lib::is_mysql_mode()) {
+      // for mysql mode temp lob, we can mock it as disk inrow lob
+      MEMCPY(buffer_, &lob_common, sizeof(ObLobCommon));
+    } else if (OB_FAIL(locator.fill(TEMP_FULL_LOB,
                              extern_flags,
                              rowkey_str,
                              &lob_common,

@@ -34,7 +34,6 @@ protected:
   virtual int construct_iters() override;
   virtual int is_range_valid() const override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
-  virtual void collect_merge_stat(ObTableStoreStat &stat) const override;
 private:
   virtual int get_table_row(const int64_t table_idx,
                             const common::ObIArray<ObITable *> &tables,

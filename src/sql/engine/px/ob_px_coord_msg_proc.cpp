@@ -147,3 +147,15 @@ int ObPxSubCoordMsgProc::on_whole_msg(
   ObDhWholeeMsgProc<ObOptStatsGatherWholeMsg> proc;
   return proc.on_whole_msg(sqc_ctx_, dtl::DH_OPT_STATS_GATHER_WHOLE_MSG, pkt);
 }
+
+int ObPxSubCoordMsgProc::on_whole_msg(const SPWinFuncPXWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<SPWinFuncPXWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_SP_WINFUNC_PX_WHOLE_MSG, pkt);
+}
+
+int ObPxSubCoordMsgProc::on_whole_msg(const RDWinFuncPXWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<RDWinFuncPXWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_RD_WINFUNC_PX_WHOLE_MSG, pkt);
+}

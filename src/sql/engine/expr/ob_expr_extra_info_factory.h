@@ -26,6 +26,7 @@ struct ObIExprExtraInfo;
 struct ObExprExtraInfoFactory
 {
 public:
+  static constexpr int64_t MAX_ITEM_ID = T_DEFAULT;
   typedef int (*AllocExtraInfoFunc) (common::ObIAllocator &alloc, ObIExprExtraInfo *&extra_info,
                                      const ObExprOperatorType type);
   // allocate extra info
@@ -35,9 +36,13 @@ public:
 
   static void register_expr_extra_infos();
 
+  inline static constexpr bool is_valid_item_type(const ObExprOperatorType &type) {
+    return (type > T_INVALID && type < MAX_ITEM_ID);
+  }
+
   inline static bool is_registered(const ObExprOperatorType &type)
   {
-    return type > T_INVALID && type < T_MAX_OP
+    return is_valid_item_type(type)
            && NULL != ALLOC_FUNS_[type];
   }
 
@@ -47,7 +52,7 @@ private:
                    const ObExprOperatorType type);
 
 private:
-  static AllocExtraInfoFunc ALLOC_FUNS_[T_MAX_OP];
+  static AllocExtraInfoFunc ALLOC_FUNS_[MAX_ITEM_ID];
 };
 
 template <typename T>

@@ -8,6 +8,7 @@ ob_set_subtarget(ob_share ALONE
   aggregate/sum.cpp
   aggregate/processor.cpp
   aggregate/single_row.cpp
+  aggregate/approx_count_distinct.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -65,6 +66,7 @@ ob_set_subtarget(ob_share cache
   cache/ob_working_set_mgr.cpp
   cache/ob_kvcache_hazard_version.cpp
   cache/ob_kvcache_pre_warmer.cpp
+  cache/ob_kvcache_pointer_swizzle.cpp
 )
 
 ob_set_subtarget(ob_share common
@@ -566,6 +568,7 @@ ob_set_subtarget(ob_share aggregate
   aggregate/iaggregate.cpp
   aggregate/count.cpp
   aggregate/min_max.cpp
+  aggregate/sys_bit.cpp
 )
 
 ob_add_new_object_target(ob_share ob_share)

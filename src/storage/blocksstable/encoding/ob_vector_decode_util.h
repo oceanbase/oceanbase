@@ -151,7 +151,7 @@ struct DataDiscreteLocator
 
 struct DataFixedLocator
 {
-  explicit DataFixedLocator(const int64_t *&row_ids, const char *&fixed_buf, const int64_t len, const void *null_bitmap)
+  explicit DataFixedLocator(const int32_t *&row_ids, const char *&fixed_buf, const int64_t len, const void *null_bitmap)
     : row_ids_(row_ids), fixed_buf_(fixed_buf), len_(len)
   {
     null_bitmap_ = nullptr == null_bitmap ? nullptr : sql::to_bit_vector(null_bitmap);
@@ -168,7 +168,7 @@ struct DataFixedLocator
     is_null = null_bitmap_->contain(row_ids_[idx]);
   }
 
-  const int64_t *__restrict row_ids_;
+  const int32_t *__restrict row_ids_;
   const char *__restrict fixed_buf_;
   const int64_t len_;
   const sql::ObBitVector *__restrict null_bitmap_;

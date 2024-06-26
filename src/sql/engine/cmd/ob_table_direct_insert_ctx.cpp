@@ -19,6 +19,7 @@
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_struct.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -37,6 +38,7 @@ ObTableDirectInsertCtx::~ObTableDirectInsertCtx()
 
 int ObTableDirectInsertCtx::init(
     ObExecContext *exec_ctx,
+    ObPhysicalPlan &phy_plan,
     const uint64_t table_id,
     const int64_t parallel,
     const bool is_incremental,
@@ -113,12 +115,11 @@ int ObTableDirectInsertCtx::init(
         param.session_count_ = parallel;
         param.column_count_ = column_ids.count();
         param.px_mode_ = true;
-        param.online_opt_stat_gather_ = true;
+        param.online_opt_stat_gather_ = is_online_gather_statistics_;
         param.need_sort_ = true;
         param.max_error_row_count_ = 0;
         param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE
                                                 : sql::ObLoadDupActionType::LOAD_STOP_ON_DUP);
-        param.online_opt_stat_gather_ = is_online_gather_statistics_;
         param.method_ = method;
         param.insert_mode_ = insert_mode;
         param.load_mode_ = load_mode;
@@ -126,6 +127,7 @@ int ObTableDirectInsertCtx::init(
         if (OB_FAIL(table_load_instance_->init(param, column_ids, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret));
         } else {
+          phy_plan.set_ddl_task_id(table_load_instance_->get_table_ctx()->ddl_param_.task_id_);
           is_inited_ = true;
           LOG_DEBUG("succeeded to init direct loader", K(param));
         }

@@ -212,7 +212,7 @@ int ObStaticMergeParam::get_basic_info_from_result(
   return ret;
 }
 
-int ObStaticMergeParam::cal_minor_merge_param()
+int ObStaticMergeParam::cal_minor_merge_param(const bool has_compaction_filter)
 {
   int ret = OB_SUCCESS;
   //some input param check
@@ -221,11 +221,13 @@ int ObStaticMergeParam::cal_minor_merge_param()
     LOG_WARN("tables handle is invalid", K(ret), K(tables_handle_));
   } else {
     read_base_version_ = 0;
-    if (get_tablet_id().is_ls_inner_tablet() && !is_mini_merge(get_merge_type())) {
+    if (get_tablet_id().is_ls_inner_tablet() && has_compaction_filter) {
       // full merge has been setted when preparing compaction filter
+      set_full_merge_and_level(true/*is_full_merge*/);
     } else {
       set_full_merge_and_level(false/*is_full_merge*/);
     }
+    data_version_ = DATA_CURRENT_VERSION;
   }
   return ret;
 }

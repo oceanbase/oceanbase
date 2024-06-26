@@ -10,21 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OBDEV_SRC_SQL_DAS_OB_TEXT_RETRIEVAL_OP_H_
-#define OBDEV_SRC_SQL_DAS_OB_TEXT_RETRIEVAL_OP_H_
+#ifndef OB_DAS_IR_DEFINE_H_
+#define OB_DAS_IR_DEFINE_H_
 
-#include "lib/container/ob_loser_tree.h"
-#include "sql/das/ob_das_task.h"
-#include "sql/das/ob_das_scan_op.h"
-#include "sql/das/ob_das_attach_define.h"
-#include "sql/engine/sort/ob_sort_op_impl.h"
-#include "storage/fts/ob_text_retrieval_iterator.h"
+#include "ob_das_attach_define.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-static const int64_t OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT = 256;
 
 struct ObDASIRScanCtDef : ObDASAttachCtDef
 {
@@ -44,6 +38,8 @@ public:
   }
   bool need_calc_relevance() const { return nullptr != relevance_expr_; }
   bool need_proj_relevance_score() const { return nullptr != relevance_proj_col_; }
+  bool need_fwd_idx_agg() const { return has_fwd_agg_ && need_calc_relevance(); }
+  bool need_inv_idx_agg() const { return has_inv_agg_ && need_calc_relevance(); }
   const ObDASScanCtDef *get_inv_idx_scan_ctdef() const
   {
     const ObDASScanCtDef *idx_scan_ctdef = nullptr;
@@ -92,7 +88,7 @@ public:
   int64_t get_inv_agg_idx() const { return has_inv_agg_ ? 1 : -1; }
   int64_t get_doc_agg_idx() const { return has_doc_id_agg_ ? (1 + has_inv_agg_) : -1; }
   int64_t get_fwd_agg_idx() const { return has_fwd_agg_ ? (1 + has_inv_agg_ + has_doc_id_agg_) : -1; }
-  bool need_do_total_doc_cnt() const { return 0 == estimated_total_doc_cnt_; }
+  bool need_do_total_doc_cnt() const { return need_calc_relevance() && 0 == estimated_total_doc_cnt_; }
 
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        K_(flags),
@@ -219,180 +215,6 @@ public:
     return static_cast<ObDASScanRtDef*>(children_[1]);
   }
 };
-
-struct ObIRIterLoserTreeItem
-{
-  ObIRIterLoserTreeItem();
-  ~ObIRIterLoserTreeItem() = default;
-
-  TO_STRING_KV(K_(iter_idx), K_(relevance), K_(doc_id), K(doc_id_.get_string()));
-
-  double relevance_;
-  ObDocId doc_id_;
-  int64_t iter_idx_;
-};
-
-struct ObIRIterLoserTreeCmp
-{
-  ObIRIterLoserTreeCmp();
-  virtual ~ObIRIterLoserTreeCmp();
-
-  int init();
-  int cmp(const ObIRIterLoserTreeItem &l, const ObIRIterLoserTreeItem &r, int64_t &cmp_ret);
-private:
-  common::ObDatumCmpFuncType cmp_func_;
-  bool is_inited_;
-};
-
-typedef common::ObLoserTree<ObIRIterLoserTreeItem, ObIRIterLoserTreeCmp, OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT> ObIRIterLoserTree;
-
-class ObTextRetrievalMerge : public common::ObNewRowIterator
-{
-public:
-  enum TokenRelationType
-  {
-    DISJUNCTIVE = 0,
-    // CONJUNCTIVE = 1,
-    // BOOLEAN = 2,
-    MAX_RELATION_TYPE
-  };
-  enum RetrievalProcType
-  {
-    DAAT = 0,
-    // TAAT = 1,
-    // VAAT = 2,
-    MAX_PROC_TYPE
-  };
-public:
-  ObTextRetrievalMerge();
-  virtual ~ObTextRetrievalMerge();
-
-  int init(
-      const share::ObLSID &ls_id,
-      const ObTabletID &inv_idx_tablet_id,
-      const ObTabletID &fwd_idx_tablet_id,
-      const ObTabletID &doc_id_idx_tablet_id,
-      const ObDASIRScanCtDef *ir_ctdef,
-      ObDASIRScanRtDef *ir_rtdef,
-      transaction::ObTxDesc *tx_desc,
-      transaction::ObTxReadSnapshot *snapshot,
-      ObIAllocator &allocator);
-  int rescan(
-      const share::ObLSID &ls_id,
-      const ObTabletID &inv_idx_tablet_id,
-      const ObTabletID &fwd_idx_tablet_id,
-      const ObTabletID &doc_id_idx_tablet_id,
-      const ObDASIRScanCtDef *ir_ctdef,
-      ObDASIRScanRtDef *ir_rtdef,
-      transaction::ObTxDesc *tx_desc,
-      transaction::ObTxReadSnapshot *snapshot,
-      ObIAllocator &allocator);
-
-  virtual int get_next_row(ObNewRow *&row) override;
-  virtual int get_next_row() override { ObNewRow *r = nullptr; return get_next_row(r); }
-  virtual int get_next_rows(int64_t &count, int64_t capacity) override;
-  virtual void reset() override;
-private:
-  int init_iter_params(
-      const share::ObLSID &ls_id,
-      const ObTabletID &inv_idx_tablet_id,
-      const ObTabletID &fwd_idx_tablet_id,
-      const ObTabletID &doc_id_idx_tablet_id,
-      const ObDASIRScanCtDef *ir_ctdef,
-      ObDASIRScanRtDef *ir_rtdef);
-  int init_iters(
-      transaction::ObTxDesc *tx_desc,
-      transaction::ObTxReadSnapshot *snapshot,
-      const ObIArray<ObString> &query_tokens);
-  int init_query_tokens(const ObDASIRScanCtDef *ir_ctdef, ObDASIRScanRtDef *ir_rtdef);
-  void release_iters();
-  int pull_next_batch_rows();
-  int fill_loser_tree_item(
-      storage::ObTextRetrievalIterator &iter,
-      const int64_t iter_idx,
-      ObIRIterLoserTreeItem &item);
-  int next_disjunctive_document();
-  int init_total_doc_cnt_param(transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot *snapshot);
-  int do_total_doc_cnt();
-  int project_result(const ObIRIterLoserTreeItem &item, const double relevance);
-  void clear_evaluated_infos();
-private:
-  static const int64_t OB_DEFAULT_QUERY_TOKEN_ITER_CNT = 4;
-  typedef ObSEArray<storage::ObTextRetrievalIterator *, OB_DEFAULT_QUERY_TOKEN_ITER_CNT> ObTokenRetrievalIterArray;
-  TokenRelationType relation_type_;
-  RetrievalProcType processing_type_;
-  ObIAllocator *allocator_;
-  ObTokenRetrievalParam retrieval_param_;
-  ObArray<ObString> query_tokens_;
-  ObTokenRetrievalIterArray token_iters_;
-  ObIRIterLoserTreeCmp loser_tree_cmp_;
-  ObIRIterLoserTree *iter_row_heap_;
-  ObFixedArray<int64_t, ObIAllocator> next_batch_iter_idxes_;
-  int64_t next_batch_cnt_;
-  common::ObNewRowIterator *whole_doc_cnt_iter_;
-  ObTableScanParam whole_doc_agg_param_;
-  bool doc_cnt_calculated_;
-  bool is_inited_;
-};
-
-
-class ObTextRetrievalOp : public common::ObNewRowIterator
-{
-public:
-  ObTextRetrievalOp();
-  virtual ~ObTextRetrievalOp();
-
-  int init(
-      const share::ObLSID &ls_id,
-      const ObTabletID &inv_idx_tablet_id,
-      const ObTabletID &fwd_idx_tablet_id,
-      const ObTabletID &doc_id_idx_tablet_id,
-      const ObDASIRScanCtDef *ir_ctdef,
-      ObDASIRScanRtDef *ir_rtdef,
-      const ObDASSortCtDef *sort_ctdef,
-      ObDASSortRtDef *sort_rtdef,
-      transaction::ObTxDesc *tx_desc,
-      transaction::ObTxReadSnapshot *snapshot);
-  int rescan(
-      const share::ObLSID &ls_id,
-      const ObTabletID &inv_idx_tablet_id,
-      const ObTabletID &fwd_idx_tablet_id,
-      const ObTabletID &doc_id_idx_tablet_id,
-      const ObDASIRScanCtDef *ir_ctdef,
-      ObDASIRScanRtDef *ir_rtdef,
-      const ObDASSortCtDef *sort_ctdef,
-      ObDASSortRtDef *sort_rtdef,
-      transaction::ObTxDesc *tx_desc,
-      transaction::ObTxReadSnapshot *snapshot);
-
-  virtual int get_next_row(ObNewRow *&row) override;
-  virtual int get_next_row() override { ObNewRow *r = nullptr; return get_next_row(r); }
-  virtual int get_next_rows(int64_t &count, int64_t capacity) override;
-  virtual void reset() override;
-private:
-  int inner_get_next_row_for_output();
-  int init_sort(
-      const ObDASIRScanCtDef *ir_ctdef,
-      const ObDASSortCtDef *sort_ctdef,
-      ObDASSortRtDef *sort_rtdef);
-  int init_limit(
-      const ObDASIRScanCtDef *ir_ctdef,
-      ObDASIRScanRtDef *ir_rtdef,
-      const ObDASSortCtDef *sort_ctdef,
-      ObDASSortRtDef *sort_rtdef);
-  int do_sort();
-private:
-  lib::MemoryContext mem_context_;
-  ObTextRetrievalMerge token_merge_;
-  common::ObLimitParam limit_param_;
-  int64_t input_row_cnt_;
-  int64_t output_row_cnt_;
-  ObSortOpImpl *sort_impl_;
-  ObSEArray<ObExpr *, 2> sort_row_;
-  bool sort_finished_;
-  bool is_inited_;
-};
-
 
 } // namespace sql
 } // namespace oceanbase

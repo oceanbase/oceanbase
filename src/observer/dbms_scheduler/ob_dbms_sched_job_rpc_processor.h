@@ -70,6 +70,20 @@ private:
   const observer::ObGlobalContext &gctx_;
 };
 
+class ObRpcStopDBMSSchedJobP
+  : public obrpc::ObRpcProcessor<obrpc::ObDBMSSchedJobRpcProxy::ObRpc<obrpc::OB_STOP_DBMS_SCHED_JOB> >
+{
+public:
+  ObRpcStopDBMSSchedJobP(const observer::ObGlobalContext &gctx) : gctx_(gctx) {}
+
+protected:
+  int process();
+
+private:
+  const observer::ObGlobalContext &gctx_;
+};
+
+
 }
 }
 #endif /* SRC_OBSERVER_DBMS_SCHED_JOB_RPC_PROCESSOR_H_ */

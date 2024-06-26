@@ -548,7 +548,10 @@ public:
       max_batch_size_(0),
       locate_buckets_(nullptr),
       new_row_selector_(),
+      old_row_selector_(),
+      col_has_null_(),
       new_row_selector_cnt_(0),
+      old_row_selector_cnt_(),
       change_valid_idx_(),
       change_valid_idx_cnt_(0),
       srows_(nullptr),
@@ -706,7 +709,27 @@ public:
                           int64_t &agg_row_cnt,
                           int64_t &agg_group_cnt,
                           BatchAggrRowsTable *batch_aggr_rows,
-                          bool need_reinit_vectors);
+                          bool need_reinit_vectors,
+                          const bool probe_by_col,
+                          const int64_t start_idx,
+                          int64_t &processed_idx);
+  int inner_process_batch(const RowMeta &row_meta,
+                          const int64_t batch_size,
+                          const ObBitVector *child_skip,
+                          ObBitVector &my_skip,
+                          uint64_t *hash_values,
+                          StoreRowFunc sf,
+                          const bool probe_by_col,
+                          const int64_t start_idx,
+                          int64_t &processed_idx);
+  int inner_process_column(const common::ObIArray<ObExpr *> &gby_exprs,
+                           const RowMeta &row_meta,
+                           const int64_t col_idx,
+                           bool &need_fallback);
+  int inner_process_column_not_null(const common::ObIArray<ObExpr *> &gby_exprs,
+                                    const RowMeta &row_meta,
+                                    const int64_t col_idx,
+                                    bool &need_fallback);
   void prefetch(const ObBatchRows &brs, uint64_t *hash_vals) const;
   // Link item to hash table, extend buckets if needed.
   // (Do not check item is exist or not)
@@ -720,7 +743,8 @@ public:
     group_store_.set_io_event_observer(observer);
     ObMemAttr attr(tenant_id_, ObModIds::OB_HASH_NODE_GROUP_ROWS, ObCtxIds::WORK_AREA);
     int64_t extra_size = calc_extra_size(agg_row_size);
-    return group_store_.init(*gby_exprs_, max_batch_size, attr, 0, false, extra_size);
+    return group_store_.init(*gby_exprs_, max_batch_size, attr, 0/*mem_limit*/,
+                             false/* enable_dump*/, extra_size, NONE_COMPRESSOR);
   }
 
   int get_next_batch(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows)
@@ -750,6 +774,9 @@ public:
       if (OB_FAIL(buckets_->init(bucket_num))) {
         SQL_ENG_LOG(ERROR, "resize bucket array failed", K(size_), K(bucket_num), K(get_bucket_num()));
       }
+    }
+    if (col_has_null_.count() > 0) {
+      MEMSET(&col_has_null_.at(0), 0, col_has_null_.count());
     }
     size_ = 0;
     group_store_.reset();
@@ -781,6 +808,8 @@ public:
     sstr_aggr_.destroy();
     vector_ptrs_.destroy();
     new_row_selector_.destroy();
+    old_row_selector_.destroy();
+    col_has_null_.destroy();
     change_valid_idx_.destroy();
     size_ = 0;
     initial_bucket_num_ = 0;
@@ -907,7 +936,10 @@ protected:
   int64_t max_batch_size_;
   GroupRowBucket **locate_buckets_;
   common::ObFixedArray<uint16_t, common::ObIAllocator> new_row_selector_;
+  common::ObFixedArray<uint16_t, common::ObIAllocator> old_row_selector_;
+  common::ObFixedArray<bool, common::ObIAllocator> col_has_null_;
   int64_t new_row_selector_cnt_;
+  int64_t old_row_selector_cnt_;
   common::ObFixedArray<uint16_t, common::ObIAllocator> change_valid_idx_;
   int64_t change_valid_idx_cnt_;
   ObCompactRow **srows_;
@@ -1140,7 +1172,7 @@ public:
     return ret;
   }
 
-  bool exist(const uint64_t hash_val) const
+  OB_INLINE bool exist(const uint64_t hash_val) const
   {
     return bits_.has_member(h1(hash_val) & (cnt_ - 1))
         && bits_.has_member(h2(hash_val) & (cnt_ - 1));

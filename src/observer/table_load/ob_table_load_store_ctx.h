@@ -145,6 +145,7 @@ public:
   common::ObArray<table::ObTableLoadLSIdAndPartitionId> ls_partition_ids_;
   common::ObArray<table::ObTableLoadLSIdAndPartitionId> target_ls_partition_ids_;
   storage::ObDirectLoadTableDataDesc table_data_desc_;
+  storage::ObDirectLoadTableDataDesc lob_id_table_data_desc_;
   table::ObTableLoadResultInfo result_info_;
   ObITableLoadTaskScheduler *task_scheduler_;
   ObTableLoadMerger *merger_;

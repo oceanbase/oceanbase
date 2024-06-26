@@ -34,7 +34,7 @@ struct DictFixBatchDecodeFunc_T
       const char *ref_data, const char *base_data,
       const int64_t fixed_len,
       const int64_t dict_cnt,
-      const int64_t *row_ids, const int64_t row_cap,
+      const int32_t *row_ids, const int64_t row_cap,
       common::ObDatum *datums)
   {
     typedef typename ObEncodingTypeInference<false, REF_BYTE_TAG>::Type RefType;
@@ -63,7 +63,7 @@ struct DictFixBatchDecodeFunc_T<REF_BYTE_TAG, IS_SIGNED_SC, STORE_LEN_TAG, DATUM
       const char *ref_data, const char *base_data,
       const int64_t fixed_len,
       const int64_t dict_cnt,
-      const int64_t *row_ids, const int64_t row_cap,
+      const int32_t *row_ids, const int64_t row_cap,
       common::ObDatum *datums)
   {
     UNUSED(fixed_len);
@@ -93,7 +93,7 @@ struct DictVarBatchDecodeFunc_T
                               const char *base_data,
                               const char *base_data_end,
                               const int64_t dict_cnt,
-                              const int64_t *row_ids, const int64_t row_cap,
+                              const int32_t *row_ids, const int64_t row_cap,
                               common::ObDatum *datums)
   {
     typedef typename ObEncodingByteLenMap<false, REF_BYTE>::Type RefType;
@@ -339,7 +339,7 @@ int ObDictDecoder::decode(const common::ObObjType &obj_type, common::ObDatum &da
   }
 
 int ObDictDecoder::batch_get_bitpacked_refs(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const unsigned char *col_data,
     common::ObDatum *datums) const
@@ -363,7 +363,7 @@ int ObDictDecoder::batch_get_bitpacked_refs(
 }
 
 int ObDictDecoder::batch_get_null_count(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const unsigned char *col_data,
     int64_t &null_count) const
@@ -394,7 +394,7 @@ int ObDictDecoder::batch_get_null_count(
 int ObDictDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -758,7 +758,7 @@ bool ObDictDecoder::fast_string_equal_valid(
 int ObDictDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {
@@ -1745,7 +1745,7 @@ int ObDictDecoder::batch_read_distinct(
 
 int ObDictDecoder::read_reference(
     const ObColumnDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
 {

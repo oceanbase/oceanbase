@@ -38,6 +38,10 @@ struct ObMicroBlockInfo
   };
   ObMicroBlockInfo() : offset_(0), size_(0), mark_deletion_(false), reserved_(0) {}
 
+  int64_t get_block_size() const
+  { return size_; }
+  int64_t get_block_offset() const
+  { return  offset_; }
   void reset() { offset_ = 0; size_ = 0; mark_deletion_ = false; reserved_ = 0; }
   int set(const int32_t offset, const int32_t size, bool mark_deletion = false)
   {

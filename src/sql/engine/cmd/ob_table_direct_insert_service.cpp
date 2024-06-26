@@ -62,7 +62,7 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
       ObTableDirectInsertCtx &table_direct_insert_ctx = ctx.get_table_direct_insert_ctx();
       uint64_t table_id = phy_plan.get_append_table_id();
       int64_t parallel = phy_plan.get_px_dop();
-      if (OB_FAIL(table_direct_insert_ctx.init(&ctx, table_id, parallel, is_inc_direct_load, is_inc_replace, is_insert_overwrite))) {
+      if (OB_FAIL(table_direct_insert_ctx.init(&ctx, phy_plan, table_id, parallel, is_inc_direct_load, is_inc_replace, is_insert_overwrite))) {
         LOG_WARN("failed to init table direct insert ctx",
             KR(ret), K(table_id), K(parallel), K(is_inc_direct_load), K(is_inc_replace), K(is_insert_overwrite));
       }
@@ -95,11 +95,12 @@ int ObTableDirectInsertService::finish_direct_insert(ObExecContext &ctx,
 }
 
 int ObTableDirectInsertService::open_task(const uint64_t table_id,
-                                          const int64_t task_id,
+                                          const int64_t px_task_id,
+                                          const int64_t ddl_task_id,
                                           ObTableLoadTableCtx *&table_ctx)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadKey key(MTL_ID(), table_id);
+  ObTableLoadUniqueKey key(table_id, ddl_task_id);
   if (OB_NOT_NULL(table_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_ctx should be null", KR(ret), KP(table_ctx));
@@ -115,7 +116,7 @@ int ObTableDirectInsertService::open_task(const uint64_t table_id,
     LOG_WARN("not the master of store", KR(ret), K(key));
   } else {
     table::ObTableLoadTransId trans_id;
-    trans_id.segment_id_ = task_id;
+    trans_id.segment_id_ = px_task_id;
     trans_id.trans_gid_ = 1;
     ObTableLoadStore store(table_ctx);
     if (OB_FAIL(store.init())) {
@@ -132,14 +133,15 @@ int ObTableDirectInsertService::open_task(const uint64_t table_id,
 }
 
 int ObTableDirectInsertService::close_task(const uint64_t table_id,
-                                           const int64_t task_id,
+                                           const int64_t px_task_id,
+                                           const int64_t ddl_task_id,
                                            ObTableLoadTableCtx *table_ctx,
                                            const int error_code)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(table_ctx)) {
     table::ObTableLoadTransId trans_id;
-    trans_id.segment_id_ = task_id;
+    trans_id.segment_id_ = px_task_id;
     trans_id.trans_gid_ = 1;
     if (OB_SUCC(error_code)) {
       ObTableLoadStore store(table_ctx);

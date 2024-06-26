@@ -82,7 +82,7 @@ typedef enum ObItemType
   T_GEOMETRY    = 48,
   T_UDT_SQL     = 49,
   T_COLLECTION  = 51,
-  T_ROARINGBITMAP = 52,
+  T_ROARINGBITMAP = 54,
 
   T_IEEE754_NAN = 61,
   T_IEEE754_INFINITE = 62,
@@ -2481,6 +2481,7 @@ typedef enum ObItemType
   T_ALTER_TABLE_FORCE,
   T_SHOW_PROCEDURE_CODE,
   T_SHOW_FUNCTION_CODE,
+
   T_CHANGE_EXTERNAL_STORAGE_DEST,
   T_ALTER_USER_PROXY,
   T_PARALLEL_DAS_DML,
@@ -2536,7 +2537,12 @@ typedef enum ObItemType
   // for tablelock
   T_MYSQL_LOCK_LIST,
   T_MYSQL_LOCK_NODE,
+  // for vector index
+  T_APPROX,
 
+  // select into outfile
+  T_BUFFER_SIZE,
+  T_PARTITION_EXPR,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2688,6 +2694,9 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_ORA_XMLAGG || \
                          (op) == T_FUN_SYS_ST_ASMVT || \
                          (op) == T_FUN_SUM_OPNSIZE ||\
+                         (op) == T_FUN_SYS_RB_BUILD_AGG ||\
+                         (op) == T_FUN_SYS_RB_OR_AGG ||\
+                         (op) == T_FUN_SYS_RB_AND_AGG ||\
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \

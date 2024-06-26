@@ -113,7 +113,8 @@ int ObLobLocatorHelper::init(const ObTableScanParam &scan_param,
   return ret;
 }
 
-int ObLobLocatorHelper::init(const ObTableStoreStat &table_store_stat,
+int ObLobLocatorHelper::init(const uint64_t table_id,
+                             const uint64_t tablet_id,
                              const ObStoreCtx &ctx,
                              const share::ObLSID &ls_id,
                              const int64_t snapshot_version)
@@ -129,8 +130,8 @@ int ObLobLocatorHelper::init(const ObTableStoreStat &table_store_stat,
     rowid_version_ = ObURowIDData::INVALID_ROWID_VERSION;
     rowid_project_ = NULL;
     // table id只用来判断是不是systable, 这个接口创建的locator不会构造真正的rowid
-    table_id_ = table_store_stat.table_id_;
-    tablet_id_ = table_store_stat.tablet_id_.id();
+    table_id_ = table_id;
+    tablet_id_ = tablet_id;
     ls_id_ = ls_id.id();
     read_snapshot_ = ctx.mvcc_acc_ctx_.snapshot_;
     enable_locator_v2_ = true; // must be called en locator v2 enabled

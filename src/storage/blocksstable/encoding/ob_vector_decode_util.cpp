@@ -141,7 +141,7 @@ struct LoadVectorDataFunc_T<common::ObDiscreteFormat, ValueType, DataFixedLocato
     int ret = OB_SUCCESS;
     const int64_t fix_len = data_locator.len_;
     const char *__restrict fixed_buf = data_locator.fixed_buf_;
-    const int64_t *__restrict row_ids = data_locator.row_ids_;
+    const int32_t *__restrict row_ids = data_locator.row_ids_;
     char **__restrict ptr_arr = vector.get_ptrs();
     uint32_t *__restrict len_arr = reinterpret_cast<uint32_t *>(vector.get_lens());
     if (NULL_TYPE == ObVecDecodeUtils::NOT_HAS_NULL) {
@@ -180,7 +180,7 @@ struct LoadVectorDataFunc_T<common::ObDiscreteFormat, ValueType, ObFixedDictData
   {
     int ret = OB_SUCCESS;
     const int64_t fix_len = data_locator.dict_len_;
-    const int64_t *__restrict row_ids = data_locator.row_ids_;
+    const int32_t *__restrict row_ids = data_locator.row_ids_;
     const RefType *__restrict ref_arr = data_locator.ref_arr_;
     const char *__restrict dict_data = data_locator.dict_payload_;
     char **__restrict ptr_arr = vector.get_ptrs();
@@ -340,7 +340,7 @@ struct LoadVectorDataFromFixedFunc_T
     char *vec_ptr = vector.get_data() + (vec_offset * vec_store_size);
     VecType *__restrict vec_arr = reinterpret_cast<VecType *>(vec_ptr);
     const StoreType *__restrict store_arr = reinterpret_cast<const StoreType *>(data_locator.fixed_buf_);
-    const int64_t *__restrict row_ids = data_locator.row_ids_;
+    const int32_t *__restrict row_ids = data_locator.row_ids_;
     if (NULL_TYPE == ObVecDecodeUtils::NOT_HAS_NULL) {
       for (int64_t i = 0; i < row_cap; ++i) {
         const int64_t row_id = row_ids[i];
@@ -382,7 +382,7 @@ struct LoadVectorDataFromFixDictFunc_T
     char *vec_ptr = vector.get_data() + (vec_offset * vec_store_size);
     VecType *__restrict vec_arr = reinterpret_cast<VecType *>(vec_ptr);
     const StoreType *__restrict store_arr = reinterpret_cast<const StoreType *>(data_locator.dict_payload_);
-    const int64_t *__restrict row_ids = data_locator.row_ids_;
+    const int32_t *__restrict row_ids = data_locator.row_ids_;
     const RefType *__restrict ref_arr = data_locator.ref_arr_;
     if (NULL_TYPE == ObVecDecodeUtils::NOT_HAS_NULL) {
       for (int64_t i = 0; i < row_cap; ++i) {
@@ -666,7 +666,8 @@ int ObLoadVarByteAlignedVecDataDispatcher<VectorType, ValueType, DataLocator>::l
   case ObStringSC:
   case ObTextSC:
   case ObJsonSC:
-  case ObGeometrySC: {
+  case ObGeometrySC:
+  case ObRoaringBitmapSC: {
     decode_method_type = D_SHALLOW_COPY;
     break;
   }

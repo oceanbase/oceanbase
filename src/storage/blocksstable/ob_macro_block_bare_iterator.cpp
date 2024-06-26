@@ -273,7 +273,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
     micro_block_desc.max_merged_trans_version_ = header->max_merged_trans_version_; // do not get from index
     micro_block_desc.is_last_row_last_flag_ = header->is_last_row_last_flag_;
     micro_block_desc.original_size_ = header->original_length_;
-    micro_index_info.endkey_ = &micro_block_desc.last_rowkey_;
+    micro_index_info.endkey_.set_compact_rowkey(&micro_block_desc.last_rowkey_);
     micro_block_desc.has_string_out_row_ = micro_index_info.has_string_out_row();
     micro_block_desc.has_lob_out_row_ = micro_index_info.has_lob_out_row();
 

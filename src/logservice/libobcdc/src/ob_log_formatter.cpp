@@ -1322,7 +1322,7 @@ int ObLogFormatter::fill_normal_cols_(
                   ret = OB_ERR_UNEXPECTED;
                   LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
                 }
-              } else if (cv->is_json() || cv->is_geometry()) {
+              } else if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap()) {
                 const common::ObObjType obj_type = cv->get_obj_type();
                 cv->value_.set_string(obj_type, *new_col_str);
 
@@ -1375,7 +1375,7 @@ int ObLogFormatter::fill_normal_cols_(
                   ret = OB_ERR_UNEXPECTED;
                   LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
                 }
-              } else if (cv->is_json() || cv->is_geometry()) {
+              } else if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap()) {
                 const common::ObObjType obj_type = cv->get_obj_type();
                 cv->value_.set_string(obj_type, *old_col_str);
 
@@ -2167,6 +2167,7 @@ int ObLogFormatter::parse_aux_lob_meta_table_(
     LOG_ERROR("get_cols fail", KR(ret), K(stmt_task));
   } else {
     const uint64_t tenant_id = log_entry_task->get_tenant_id();
+    const DmlRedoLogNode *redo_log_node = log_entry_task->get_redo_log_node();
 
     if (stmt_task.is_insert()) {
       if (OB_FAIL(parse_aux_lob_meta_table_insert_(*log_entry_task, stmt_task, *new_cols))) {
@@ -2174,6 +2175,11 @@ int ObLogFormatter::parse_aux_lob_meta_table_(
       }
     } else if (stmt_task.is_update()) {
       // lob meta update data isn't used, just skip
+    } else if (OB_ISNULL(redo_log_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("redo_log_node is NULL", KR(ret));
+    } else if (redo_log_node->is_direct_load_inc_log() && stmt_task.is_delete()) {
+      // lob meta delete isn't used in direct load inc case, just skip
     } else if (stmt_task.is_delete()) {
       if (OB_FAIL(parse_aux_lob_meta_table_delete_(*log_entry_task, stmt_task, *old_cols))) {
         LOG_ERROR("parse_aux_lob_meta_table_delete_ failed", KR(ret));

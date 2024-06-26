@@ -203,7 +203,7 @@ int ObPlanCacheValue::assign_udr_infos(ObPlanCacheCtx &pc_ctx)
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tpl_sql_const_cons_.count(); ++i) {
       NotParamInfoList &not_param_list = tpl_sql_const_cons_.at(i);
-      std::sort(not_param_list.begin(), not_param_list.end(),
+      lib::ob_sort(not_param_list.begin(), not_param_list.end(),
               [](NotParamInfo &l, NotParamInfo &r) { return (l.idx_  < r.idx_); });
       for (int64_t j = 0; OB_SUCC(ret) && j < not_param_list.count(); ++j) {
         if (OB_FAIL(ob_write_string(*pc_alloc_,
@@ -315,7 +315,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
           }
         } //for end
         if (OB_SUCC(ret)) {
-          std::sort(not_param_info_.begin(), not_param_info_.end(),
+          lib::ob_sort(not_param_info_.begin(), not_param_info_.end(),
               [](NotParamInfo &l, NotParamInfo &r) { return (l.idx_  < r.idx_); });
         }
       }

@@ -136,7 +136,7 @@ int ObTableLoadStoreCtx::init(
         if (OB_SUCC(ret)) {
           if (table_data_desc_.is_heap_table_) {
             int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE);
-            if (ls_partition_ids_.count() <= bucket_cnt) {
+            if ((ls_partition_ids_.count() <= bucket_cnt) || !ctx_->param_.need_sort_) {
               is_fast_heap_table_ = true;
             } else {
               is_multiple_mode_ = true;
@@ -158,6 +158,12 @@ int ObTableLoadStoreCtx::init(
         table_data_desc_.merge_count_per_round_ = min(wa_mem_limit / table_data_desc_.sstable_data_block_size_ / ctx_->param_.session_count_,
                                                       ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
         table_data_desc_.max_mem_chunk_count_ = wa_mem_limit / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
+      }
+      if (OB_SUCC(ret)) {
+        lob_id_table_data_desc_ = table_data_desc_;
+        lob_id_table_data_desc_.rowkey_column_num_ = 1;
+        lob_id_table_data_desc_.column_count_ = 1;
+        lob_id_table_data_desc_.is_heap_table_ = false;
       }
     }
     if (OB_FAIL(ret)) {
@@ -209,7 +215,7 @@ int ObTableLoadStoreCtx::init(
       insert_table_param.reserved_parallel_ = is_fast_heap_table_ ? ctx_->param_.session_count_ : 0;
       insert_table_param.rowkey_column_count_ = ctx_->schema_.rowkey_column_count_;
       insert_table_param.column_count_ = ctx_->schema_.store_column_count_;
-      insert_table_param.lob_column_count_ = ctx_->schema_.lob_column_cnt_;
+      insert_table_param.lob_column_count_ = ctx_->schema_.lob_column_idxs_.count();
       insert_table_param.is_partitioned_table_ = ctx_->schema_.is_partitioned_table_;
       insert_table_param.is_heap_table_ = ctx_->schema_.is_heap_table_;
       insert_table_param.is_column_store_ = ctx_->schema_.is_column_store_;
@@ -220,10 +226,6 @@ int ObTableLoadStoreCtx::init(
       insert_table_param.cmp_funcs_ = &(ctx_->schema_.cmp_funcs_);
       if (insert_table_param.is_incremental_ && OB_FAIL(init_trans_param(insert_table_param.trans_param_))) {
         LOG_WARN("fail to init trans param", KR(ret));
-      } else if (OB_FAIL(ObTableLoadSchema::get_lob_meta_tid(ctx_->param_.tenant_id_,
-          insert_table_param.table_id_, insert_table_param.lob_meta_tid_))) {
-        LOG_WARN("fail to get lob meta tid", KR(ret),
-            K(ctx_->param_.tenant_id_), K(insert_table_param.table_id_));
       } else if (OB_ISNULL(insert_table_ctx_ =
                          OB_NEWx(ObDirectLoadInsertTableContext, (&allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

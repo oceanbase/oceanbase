@@ -77,6 +77,8 @@ public:
                        const uint64_t row_idx, const int64_t col_idx, const int64_t remain_size,
                        const bool is_fixed_length_data, int64_t &row_size) const override final;
   OB_INLINE int32_t type_size() const { return sizeof(ValueType); }
+  DEF_VEC_READ_INTERFACES(ObFixedLengthFormat<ValueType>);
+  DEF_VEC_WRITE_INTERFACES(ObFixedLengthFormat<ValueType>);
 };
 
 template<typename ValueType>

@@ -276,6 +276,7 @@ static ObSysPackageFile oracle_sys_package_file_table[] = {
   {"dbms_mview_stats", "dbms_mview_stats.sql", "dbms_mview_stats_body.sql"},
   {"json_array_t", "json_array_type.sql", "json_array_type_body.sql"},
   {"xmlsequence", "xml_sequence_type.sql", "xml_sequence_type_body.sql"},
+  {"utl_recomp", "utl_recomp.sql", "utl_recomp_body.sql"},
   {"sdo_geometry", "sdo_geometry.sql", "sdo_geometry_body.sql"},
   {"sdo_geom", "sdo_geom.sql", "sdo_geom_body.sql"},
   {"dbms_external_table", "dbms_external_table.sql", "dbms_external_table_body.sql"},
@@ -1004,7 +1005,7 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
       OZ (ObTriggerInfo::gen_package_source(package_spec_info.get_tenant_id(),
                                             package_spec_info.get_package_id(),
                                             source,
-                                            PACKAGE_TYPE,
+                                            share::schema::PACKAGE_TYPE,
                                             resolve_ctx.schema_guard_,
                                             resolve_ctx.allocator_));
     } else {
@@ -1123,12 +1124,12 @@ int ObPLPackageManager::get_package_schema_info(ObSchemaGetterGuard &schema_guar
       ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
       LOG_WARN("package info is NULL", K(package_id), K(ret));
     } else {
-      if (PACKAGE_TYPE == tmp_package_info->get_type()) {
+      if (share::schema::PACKAGE_TYPE == tmp_package_info->get_type()) {
         package_spec_info = tmp_package_info;
         if (OB_FAIL(schema_guard.get_package_info(tmp_package_info->get_tenant_id(),
                                                   tmp_package_info->get_database_id(),
                                                   tmp_package_info->get_package_name(),
-                                                  PACKAGE_BODY_TYPE,
+                                                  share::schema::PACKAGE_BODY_TYPE,
                                                   compatible_mode,
                                                   package_body_info))) {
           LOG_WARN("failed to get package body info", "package name", package_spec_info->get_package_name(), K(ret));
@@ -1138,7 +1139,7 @@ int ObPLPackageManager::get_package_schema_info(ObSchemaGetterGuard &schema_guar
         if (OB_FAIL(schema_guard.get_package_info(tmp_package_info->get_tenant_id(),
                                                   tmp_package_info->get_database_id(),
                                                   tmp_package_info->get_package_name(),
-                                                  PACKAGE_TYPE,
+                                                  share::schema::PACKAGE_TYPE,
                                                   compatible_mode,
                                                   package_spec_info))) {
           LOG_WARN("failed to get package info", "package name", package_body_info->get_package_name(), K(ret));

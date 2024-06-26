@@ -26,8 +26,14 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObMicroBlockDataHandle;
+}
+
 namespace blocksstable
 {
+
 class ObIMicroBlockIOCallback;
 class ObMicroBlockCacheKey : public common::ObIKVCacheKey
 {
@@ -96,6 +102,10 @@ public:
   { return is_valid() ? &(micro_block_->get_block_data()) : NULL; }
   int64_t get_block_size() const { return is_valid() ? micro_block_->get_block_data().total_size() : 0; }
   inline bool is_valid() const { return NULL != micro_block_ && handle_.is_valid(); }
+  inline ObKVMemBlockHandle* get_mb_handle() const { return handle_.get_mb_handle(); }
+  inline const ObMicroBlockCacheValue* get_micro_block() const { return micro_block_; }
+  inline void set_mb_handle(ObKVMemBlockHandle *mb_handle) { handle_.set_mb_handle(mb_handle); }
+  inline void set_micro_block(const ObMicroBlockCacheValue *micro_block) { micro_block_ = micro_block; }
   TO_STRING_KV(K_(handle), KP_(micro_block));
 private:
   friend class ObIMicroBlockCache;
@@ -108,39 +118,85 @@ struct ObMultiBlockIOResult
   ObMultiBlockIOResult();
   virtual ~ObMultiBlockIOResult();
 
-  int get_block_data(const int64_t index, ObMicroBlockData &block_data) const;
-  void reset();
+  int get_block_data(const int64_t index, const ObMicroBlockInfo &micro_info, ObMicroBlockData &block_data) const;
   const ObMicroBlockCacheValue **micro_blocks_;
   common::ObKVCacheHandle *handles_;
+  ObMicroBlockInfo *micro_infos_;
   int64_t block_count_;
   int ret_code_;
 };
 
 struct ObMultiBlockIOParam
 {
-  ObMultiBlockIOParam() { reset(); }
+public:
+  static const int64_t MAX_MICRO_BLOCK_READ_COUNT = 1 << 12;
+  ObMultiBlockIOParam() :
+      is_reverse_(false),
+      data_cache_size_(0),
+      micro_block_count_(0),
+      io_read_batch_size_(0),
+      io_read_gap_size_(0),
+      row_header_(nullptr),
+      prefetch_idx_(),
+      micro_infos_()
+  {}
   virtual ~ObMultiBlockIOParam() {}
   void reset();
+  void reuse();
   bool is_valid() const;
-  inline void get_io_range(int64_t &offset, int64_t &size) const;
-  inline int get_block_des_info(ObIMicroBlockIOCallback &des_meta) const;
-  TO_STRING_KV(KPC(micro_index_infos_), K_(start_index), K_(block_count));
-  common::ObIArray<ObMicroIndexInfo> *micro_index_infos_;
-  int64_t start_index_;
-  int64_t block_count_;
+  int init(
+      const ObTableIterParam &iter_param,
+      const int64_t micro_count_cap,
+      const bool is_reverse,
+      common::ObIAllocator &allocator);
+  int64_t count() const
+  { return micro_block_count_; }
+  bool add_micro_data(
+      const ObMicroIndexInfo &index_info,
+      const int64_t micro_data_prefetch_idx,
+      storage::ObMicroBlockDataHandle &micro_handle,
+      bool &need_split);
+  inline void get_io_range(int64_t &offset, int64_t &size) const
+  {
+    offset = 0;
+    size = 0;
+    if (1 == micro_block_count_) {
+      offset = micro_infos_[0].offset_;
+      size = micro_infos_[0].size_;
+    } else if (!is_reverse_) {
+      offset = micro_infos_[0].offset_;
+      size = micro_infos_[micro_block_count_ - 1].offset_ + micro_infos_[micro_block_count_ - 1].size_ - offset;
+    } else {
+      offset = micro_infos_[micro_block_count_ - 1].offset_;
+      size = micro_infos_[0].offset_ + micro_infos_[0].size_ - offset;
+    }
+  }
+  inline int64_t get_data_cache_size() const
+  { return data_cache_size_; }
+  TO_STRING_KV(K_(is_reverse), K_(data_cache_size), K_(io_read_batch_size),
+               K_(io_read_gap_size), K_(micro_block_count));
+
+  bool is_reverse_;
+  int64_t data_cache_size_;
+  int64_t micro_block_count_;
+  int64_t io_read_batch_size_;
+  int64_t io_read_gap_size_;
+  const ObIndexBlockRowHeader *row_header_;
+  ObReallocatedFixedArray<int64_t> prefetch_idx_;
+  ObReallocatedFixedArray<ObMicroBlockInfo> micro_infos_;
 };
 
 struct ObMultiBlockIOCtx
 {
   ObMultiBlockIOCtx()
-    : micro_index_infos_(nullptr), hit_cache_bitmap_(nullptr), block_count_(0) {}
+      : micro_block_count_(0), micro_infos_(nullptr) {}
   virtual ~ObMultiBlockIOCtx() {}
-  void reset();
-  bool is_valid() const;
-  ObMicroIndexInfo *micro_index_infos_;
-  bool *hit_cache_bitmap_;
-  int64_t block_count_;
-  TO_STRING_KV(KP_(micro_index_infos), KP_(hit_cache_bitmap), K_(block_count));
+  bool is_valid() const
+  { return micro_block_count_ > 0; }
+  int64_t micro_block_count_;
+  ObMicroBlockInfo *micro_infos_;
+
+  TO_STRING_KV(K_(micro_block_count), KP_(micro_infos));
 };
 
 class ObIPutSizeStat
@@ -160,6 +216,10 @@ public:
   virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size);
   virtual ObIAllocator *get_allocator() { return allocator_; }
   void set_micro_des_meta(const ObIndexBlockRowHeader *idx_row_header);
+  OB_INLINE void set_rowkey_col_descs(const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
+  {
+    rowkey_col_descs_ = rowkey_col_descs;
+  }
 protected:
   friend class ObIMicroBlockCache;
   friend class ObDataMicroBlockCache;
@@ -192,6 +252,7 @@ protected:
   ObMicroBlockDesMeta block_des_meta_;
   bool use_block_cache_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
+  const ObIArray<share::schema::ObColDesc> *rowkey_col_descs_;
   DISALLOW_COPY_AND_ASSIGN(ObIMicroBlockIOCallback);
 };
 
@@ -224,8 +285,6 @@ public:
 private:
   friend class ObDataMicroBlockCache;
   int set_io_ctx(const ObMultiBlockIOParam &io_param);
-  void reset_io_ctx() { io_ctx_.reset(); }
-  int deep_copy_ctx(const ObMultiBlockIOCtx &io_ctx);
   int alloc_result();
   void free_result();
   DISALLOW_COPY_AND_ASSIGN(ObMultiDataBlockIOCallback);
@@ -310,7 +369,8 @@ public:
       ObMacroBlockReader &reader,
       ObIAllocator &allocator,
       const ObMicroBlockCacheValue *&micro_block,
-      common::ObKVCacheHandle &cache_handle) = 0;
+      common::ObKVCacheHandle &cache_handle,
+      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr) = 0;
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
       ObKVCacheInstHandle &inst_handle,
@@ -319,6 +379,9 @@ public:
       int64_t &kvpair_size) = 0;
   virtual ObMicroBlockData::Type get_type() = 0;
   virtual int add_put_size(const int64_t put_size) override;
+  virtual void cache_bypass() = 0;
+  virtual void cache_hit(int64_t &hit_cnt) = 0;
+  virtual void cache_miss(int64_t &miss_cnt) = 0;
 
 protected:
   int prefetch(
@@ -346,7 +409,7 @@ public:
   int init(const char *cache_name, const int64_t priority = 1);
   virtual void destroy() override;
   using ObIMicroBlockCache::prefetch;
-  int prefetch(
+  int prefetch_multi_block(
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
       const ObMultiBlockIOParam &io_param,
@@ -367,7 +430,8 @@ public:
       ObMacroBlockReader &reader,
       ObIAllocator &allocator,
       const ObMicroBlockCacheValue *&micro_block,
-      common::ObKVCacheHandle &cache_handle) override;
+      common::ObKVCacheHandle &cache_handle,
+      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr) override;
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
       ObKVCacheInstHandle &inst_handle,
@@ -375,6 +439,9 @@ public:
       ObKVCachePair *&kvpair,
       int64_t &kvpair_size) override;
   virtual ObMicroBlockData::Type get_type() override;
+  virtual void cache_bypass();
+  virtual void cache_hit(int64_t &hit_cnt);
+  virtual void cache_miss(int64_t &miss_cnt);
 private:
   int64_t calc_value_size(const int64_t data_length, const ObRowStoreType &type, bool &need_decoder);
   int write_extra_buf(
@@ -407,7 +474,8 @@ public:
       ObMacroBlockReader &reader,
       ObIAllocator &allocator,
       const ObMicroBlockCacheValue *&micro_block,
-      common::ObKVCacheHandle &cache_handle) override;
+      common::ObKVCacheHandle &cache_handle,
+      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr) override;
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
       ObKVCacheInstHandle &inst_handle,
@@ -419,6 +487,9 @@ public:
     return OB_NOT_SUPPORTED;
   }
   virtual ObMicroBlockData::Type get_type() override;
+  virtual void cache_bypass();
+  virtual void cache_hit(int64_t &hit_cnt);
+  virtual void cache_miss(int64_t &miss_cnt);
 };
 
 

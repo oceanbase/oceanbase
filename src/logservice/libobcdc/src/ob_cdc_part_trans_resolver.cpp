@@ -1130,7 +1130,7 @@ int ObCDCPartTransResolver::check_redo_log_list_(
   }
 
   if (OB_SUCC(ret)) {
-    std::sort(
+    lib::ob_sort(
         sorted_redo_lsn_arr_in_trans_log.begin(),
         sorted_redo_lsn_arr_in_trans_log.end(),
         CDCLSNComparator());

@@ -518,6 +518,18 @@ int ObPxMsgProc::on_piece_msg(
   return proc.on_piece_msg(coord_info_, ctx, pkt);
 }
 
+int ObPxMsgProc::on_piece_msg(ObExecContext &ctx, const SPWinFuncPXPieceMsg &pkt)
+{
+  ObDhPieceMsgProc<SPWinFuncPXPieceMsg> proc;
+  return proc.on_piece_msg(coord_info_, ctx, pkt);
+}
+
+int ObPxMsgProc::on_piece_msg(ObExecContext &ctx, const RDWinFuncPXPieceMsg &pkt)
+{
+  ObDhPieceMsgProc<RDWinFuncPXPieceMsg> proc;
+  return proc.on_piece_msg(coord_info_, ctx, pkt);
+}
+
 int ObPxMsgProc::on_eof_row(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;

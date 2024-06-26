@@ -546,7 +546,7 @@ int ObColumnSchemaV2::get_byte_length(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("collation type is invalid", K(ret));
   } else if (ob_is_text_tc(meta_type_.get_type()) || ob_is_json(meta_type_.get_type())
-             || ob_is_geometry(meta_type_.get_type())) {
+             || ob_is_geometry(meta_type_.get_type()) || ob_is_roaringbitmap(meta_type_.get_type())) {
     if (for_check_length) {
       // when check row length, a lob will occupy at most 2KB
       length = min(get_data_length(), OB_MAX_LOB_HANDLE_LENGTH);

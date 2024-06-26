@@ -69,6 +69,7 @@ ob_unittest(test_geo_func_difference)
 ob_unittest(test_geo_func_union)
 ob_unittest(test_geo_func_box)
 ob_unittest(test_throttling_utils)
+ob_unittest(test_roaringbitmap)
 
 ob_unittest(test_json_base)
 ob_unittest(test_json_bin)

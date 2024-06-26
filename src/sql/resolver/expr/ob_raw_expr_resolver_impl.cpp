@@ -784,7 +784,10 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_ORA_JSON_OBJECTAGG:
       case T_FUN_ORA_XMLAGG:
       case T_FUN_SUM_OPNSIZE:
-      case T_FUN_SYS_ST_ASMVT: {
+      case T_FUN_SYS_ST_ASMVT:
+      case T_FUN_SYS_RB_BUILD_AGG:
+      case T_FUN_SYS_RB_OR_AGG:
+      case T_FUN_SYS_RB_AND_AGG: {
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
         }
@@ -4802,6 +4805,19 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
         }
       } // end for
     } else if (T_FUN_SYS_ST_ASMVT == node->type_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+        sub_expr = NULL;
+        if (OB_ISNULL(node->children_[i])) {
+          // do nothing
+        } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[i], sub_expr)))) {
+          LOG_WARN("fail to recursive resolve expr list item", K(ret));
+        } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
+          LOG_WARN("fail to add param expr to agg expr", K(ret));
+        }
+      } // end for
+    } else if (T_FUN_SYS_RB_BUILD_AGG == node->type_
+                || T_FUN_SYS_RB_OR_AGG == node->type_
+                || T_FUN_SYS_RB_AND_AGG == node->type_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
         sub_expr = NULL;
         if (OB_ISNULL(node->children_[i])) {

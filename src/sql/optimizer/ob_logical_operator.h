@@ -1773,6 +1773,19 @@ protected:
   void clear_dist_flag(uint64_t &flags) const {
     flags = 0;
   }
+
+  int find_table_scan(ObLogicalOperator* root_op,
+                    uint64_t table_id,
+                    ObLogicalOperator* &scan_op,
+                    bool& table_scan_has_exchange,
+                    bool &has_px_coord);
+
+  int check_sort_key_can_pushdown_to_tsc(
+      ObLogicalOperator *op,
+      common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> &effective_sk_exprs,
+      uint64_t table_id, ObLogicalOperator *&scan_op, bool &table_scan_has_exchange,
+      bool &has_px_coord, int64_t &effective_sk_cnt);
+
 protected:
 
   log_op_def::ObLogOpType type_;
@@ -1821,11 +1834,6 @@ private:
     ObLogicalOperator *op_sort,
     bool &need_remove,
     bool global_order);
-  int find_table_scan(ObLogicalOperator* root_op,
-                      uint64_t table_id,
-                      ObLogicalOperator* &scan_op,
-                      bool& table_scan_has_exchange,
-                      bool &has_px_coord);
   //private function, just used for allocating join filter node.
   int allocate_partition_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                      int64_t &filter_id);
@@ -1865,6 +1873,23 @@ private:
     ObLogicalOperator *join_filter_use_op,
     ObLogicalOperator *scan_node,
     const JoinFilterInfo &info);
+
+  int check_sort_key_can_pushdown_to_tsc_detail(ObLogicalOperator *op,
+                                                ObRawExpr *candidate_sk_expr, uint64_t table_id,
+                                                ObLogicalOperator *&scan_op, bool &find_table_scan,
+                                                bool &table_scan_has_exchange, bool &has_px_coord);
+  int check_sort_key_can_pushdown_to_tsc_for_gby(ObLogicalOperator *op,
+                                                ObRawExpr *candidate_sk_expr, uint64_t table_id,
+                                                ObLogicalOperator *&scan_op, bool &find_table_scan,
+                                                bool &table_scan_has_exchange, bool &has_px_coord);
+  int check_sort_key_can_pushdown_to_tsc_for_winfunc(ObLogicalOperator *op,
+                                                 ObRawExpr *candidate_sk_expr, uint64_t table_id,
+                                                 ObLogicalOperator *&scan_op, bool &find_table_scan,
+                                                 bool &table_scan_has_exchange, bool &has_px_coord);
+  int check_sort_key_can_pushdown_to_tsc_for_join(ObLogicalOperator *op,
+                                                ObRawExpr *candidate_sk_expr, uint64_t table_id,
+                                                ObLogicalOperator *&scan_op, bool &find_table_scan,
+                                                bool &table_scan_has_exchange, bool &has_px_coord);
 
 
   /* manual set dop for each dfo */

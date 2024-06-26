@@ -92,7 +92,7 @@ void ObBaseConfig::get_sorted_config_items(ConfigItemArray &configs) const
     ConfigItem item(it->first.str(), NULL == it->second ? "" : it->second->str());
     (void)configs.push_back(item);
   }
-  std::sort(configs.begin(), configs.end());
+  lib::ob_sort(configs.begin(), configs.end());
 }
 int ObBaseConfig::load_from_buffer(const char *config_str, const int64_t config_str_len,
                               const int64_t version, const bool check_name)
@@ -317,6 +317,7 @@ int ObCommonConfig::add_extra_config(const char *config_str,
     const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
     const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
     const ObString compatible_cfg(COMPATIBLE);
+    const ObString enable_compatible_monotonic_cfg(ENABLE_COMPATIBLE_MONOTONIC);
     auto func = [&]() {
       char *saveptr_one = NULL;
       const char *name = NULL;
@@ -369,7 +370,15 @@ int ObCommonConfig::add_extra_config(const char *config_str,
           (*pp_item)->set_version(version);
           LOG_INFO("Load config succ", K(name), K(value));
           if (0 == compatible_cfg.case_compare(name)) {
-            FLOG_INFO("[COMPATIBLE] load data_version from config file",
+            const uint64_t tenant_id = get_tenant_id();
+            uint64_t data_version = 0;
+            int tmp_ret = 0;
+            if (OB_TMP_FAIL(ObClusterVersion::get_version(value, data_version))) {
+              LOG_ERROR("parse data_version failed", KR(tmp_ret), K(value));
+            } else if (OB_TMP_FAIL(ODV_MGR.set(tenant_id, data_version))) {
+              LOG_WARN("fail to set data_version", KR(tmp_ret), K(tenant_id), K(data_version));
+            }
+            FLOG_INFO("[COMPATIBLE] [DATA_VERSION] load data_version from config file",
                       KR(ret), "tenant_id", get_tenant_id(),
                       "version", (*pp_item)->version(),
                       "value", (*pp_item)->str(),
@@ -377,6 +386,9 @@ int ObCommonConfig::add_extra_config(const char *config_str,
                       "dump_version", (*pp_item)->dumped_version(),
                       "dump_value", (*pp_item)->spfile_str(),
                       "dump_value_updated", (*pp_item)->dump_value_updated());
+          } else if (0 == enable_compatible_monotonic_cfg.case_compare(name)) {
+            ObString v_str((*pp_item)->str());
+            ODV_MGR.set_enable_compatible_monotonic(0 == v_str.case_compare("True") ? true : false);
           }
         }
       }
@@ -445,7 +457,7 @@ OB_DEF_SERIALIZE(ObCommonConfig)
               it->first.str(), it->second->spfile_str());
         }
         if (OB_SUCC(ret) && 0 == compatible_cfg.case_compare(it->first.str())) {
-          FLOG_INFO("[COMPATIBLE] dump data_version",
+          FLOG_INFO("[COMPATIBLE] [DATA_VERSION] dump data_version",
                     KR(ret), "tenant_id", get_tenant_id(),
                     "version", it->second->version(),
                     "value", it->second->str(),

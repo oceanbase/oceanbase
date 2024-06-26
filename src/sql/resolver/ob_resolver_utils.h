@@ -774,15 +774,50 @@ public:
                                           int64_t column_idx,
                                           const ObString &expr_name);
   static int calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx);
-  static int build_file_column_expr(ObRawExprFactory &expr_factory,
-                                    const ObSQLSessionInfo &session_info,
-                                    const uint64_t table_id,
-                                    const common::ObString &table_name,
-                                    const common::ObString &column_name,
-                                    int64_t column_idx,
-                                    ObRawExpr *&expr,
-                                    ObCharsetType cs_type,
-                                    const ObColumnSchemaV2 *generated_column = NULL);
+  static int build_file_column_expr_for_csv(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const common::ObString &table_name,
+    const common::ObString &column_name,
+    int64_t column_idx,
+    ObRawExpr *&expr,
+    const ObExternalFileFormat &format);
+  static int build_file_column_expr_for_partition_list_col(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const common::ObString &table_name,
+    const common::ObString &column_name,
+    int64_t column_idx,
+    ObRawExpr *&expr,
+    const ObColumnSchemaV2 *generated_column);
+  static int build_file_column_expr_for_file_url(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const common::ObString &table_name,
+    const common::ObString &column_name,
+    ObRawExpr *&expr);
+
+  static int build_file_row_expr_for_parquet(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const common::ObString &table_name,
+    const common::ObString &column_name,
+    ObRawExpr *&expr);
+  static int build_file_column_expr_for_parquet(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const common::ObString &table_name,
+    const common::ObString &column_name,
+    ObRawExpr *get_path_expr,
+    ObRawExpr *cast_expr,
+    const ObColumnSchemaV2 *generated_column,
+    ObRawExpr *&expr);
+  //only used for DDL resolver, resolve a PSEUDO column expr for validation and printer not for execution
   static int resolve_external_table_column_def(ObRawExprFactory &expr_factory,
                                                const ObSQLSessionInfo &session_info,
                                                const ObQualifiedName &q_name,
@@ -790,6 +825,8 @@ public:
                                                ObRawExpr *&expr,
                                                const ObColumnSchemaV2 *gen_col_schema = NULL);
   static bool is_external_file_column_name(const common::ObString &name);
+  static bool is_external_pseudo_column_name(const common::ObString &name);
+  static ObExternalFileFormat::FormatType resolve_external_file_column_type(const common::ObString &name);
 
   static int resolve_file_format_string_value(const ParseNode *node,
                                               const ObCharsetType &format_charset,

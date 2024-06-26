@@ -33,11 +33,11 @@ using AggregateExtras = ObAggregateProcessor::ExtraResult **;
 //  ---------------------------------------------------------------------------------------------------------------------------------
 //  | int64  | <ob_number, int64_tmp_res>|      int64          |  <char *, in32_t> |   <char *, int32>   | int32 (idx) |   bits     |
 //  ---------------------------------------------------------------------------------------------------------------------------------
-//                                                                                               |
-//                                                                                               |
-//                                               |               ...                   |         |
-//                                               |-------------------------------------|         |
-//                   extra_info array      | <distinct_extra *, concat_extra*>   |<---------
+//                                                                                                              |
+//                                                                                                              |
+//                                               |               ...                   |                        |
+//                                               |-------------------------------------|                        |
+//                   extra_info array            | <distinct_extra *, concat_extra*>   |<------------------------
 //                                               |-------------------------------------|
 //                                               |               ...                   |
 //
@@ -110,6 +110,11 @@ struct AggrRowMeta
     return *reinterpret_cast<NotNullBitVector *>(agg_row + nullbits_offset_);
   }
 
+  inline bool is_var_len(const int32_t col_id) const
+  {
+    return (use_var_len_ != nullptr && use_var_len_->at(col_id));
+  }
+
   TO_STRING_KV(K_(row_size), K_(col_cnt), K_(extra_cnt), K_(nullbits_offset), K_(extra_idx_offset));
   int32_t row_size_;
   int32_t col_cnt_;
@@ -159,16 +164,49 @@ struct RowSelector
   const int32_t size_;
 };
 
+struct RemovalInfo
+{
+  RemovalInfo() :
+    enable_removal_opt_(false), is_max_min_idx_changed_(false), max_min_index_(-1),
+    is_inverse_agg_(false), null_cnt_(0)
+  {}
+  bool enable_removal_opt_;
+  bool is_max_min_idx_changed_;
+  int64_t max_min_index_; // used to record index of min/max value
+  bool is_inverse_agg_; // used to determine which interface is called: add_batch_rows/remove_batch_rows
+  int32_t null_cnt_;
+  TO_STRING_KV(K_(enable_removal_opt), K_(is_max_min_idx_changed), K_(max_min_index),
+               K_(is_inverse_agg), K_(null_cnt));
+
+  void reset()
+  {
+    enable_removal_opt_ = false;
+    max_min_index_ = -1;
+    is_inverse_agg_ = false;
+    null_cnt_ = 0;
+    is_max_min_idx_changed_ = false;
+  }
+
+  void reset_for_new_frame()
+  {
+    max_min_index_ = -1;
+    is_inverse_agg_ = false;
+    null_cnt_ = 0;
+    is_max_min_idx_changed_ = false;
+  }
+};
+
 struct RuntimeContext
 {
   RuntimeContext(sql::ObEvalCtx &eval_ctx, uint64_t tenant_id, ObIArray<ObAggrInfo> &aggr_infos,
-                 const lib::ObLabel &label, ObIAllocator &struct_allocator) :
+                 const lib::ObLabel &label) :
     eval_ctx_(eval_ctx),
     aggr_infos_(aggr_infos),
     allocator_(label, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id, ObCtxIds::WORK_AREA),
     op_monitor_info_(nullptr), io_event_observer_(nullptr), agg_row_meta_(),
     agg_rows_(ModulePageAllocator(label, tenant_id, ObCtxIds::WORK_AREA)),
-    agg_extras_(ModulePageAllocator(label, tenant_id, ObCtxIds::WORK_AREA))
+    agg_extras_(ModulePageAllocator(label, tenant_id, ObCtxIds::WORK_AREA)),
+    removal_info_(), win_func_agg_(false)
   {}
 
   inline const AggrRowMeta &row_meta() const
@@ -276,6 +314,7 @@ struct RuntimeContext
     } // end for
     agg_extras_.reuse();
     allocator_.reset_remain_one_page();
+    removal_info_.reset();
   }
   void destroy()
   {
@@ -294,6 +333,22 @@ struct RuntimeContext
     op_monitor_info_ = nullptr;
     io_event_observer_ = nullptr;
     agg_row_meta_.reset();
+    removal_info_.reset();
+    win_func_agg_ = false;
+  }
+
+  inline void enable_removal_opt()
+  {
+    removal_info_.enable_removal_opt_ = true;
+  }
+  inline void set_inverse_agg(bool is_inverse)
+  {
+    removal_info_.is_inverse_agg_ = is_inverse;
+  }
+
+  inline void disable_inverse_agg()
+  {
+    removal_info_.reset();
   }
 
   int init_row_meta(ObIArray<ObAggrInfo> &aggr_infos, ObIAllocator &alloc);
@@ -308,6 +363,8 @@ struct RuntimeContext
     agg_rows_;
   ObSegmentArray<AggregateExtras, OB_MALLOC_MIDDLE_BLOCK_SIZE, common::ModulePageAllocator>
     agg_extras_;
+  RemovalInfo removal_info_;
+  bool win_func_agg_;
 };
 
 /*
@@ -380,6 +437,10 @@ public:
                                     const sql::ObBitVector &skip, const sql::EvalBound &bound,
                                     char *agg_cell,
                                     const RowSelector row_sel = RowSelector{}) = 0;
+
+  inline virtual int add_batch_for_multi_groups(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
+                                                RowSelector &row_sel, const int64_t batch_size,
+                                                const int32_t agg_col_id) = 0;
   inline virtual int add_one_row(RuntimeContext &agg_ctx, const int64_t batch_idx,
                                  const int64_t batch_size, const bool is_null, const char *data,
                                  const int32_t data_len, int32_t agg_col_idx, char *agg_cell) = 0;

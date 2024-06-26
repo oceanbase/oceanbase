@@ -769,6 +769,14 @@ int ObSrvDeliver::repost(void* p)
 int ObSrvDeliver::deliver(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
+  RequestLockWaitStat::RequestStat req_stat = req.lock_wait_node_.request_stat_.state_;
+  if (OB_UNLIKELY(req_stat == RequestLockWaitStat::RequestStat::INQUEUE)) {
+#ifdef OB_BUILD_PACKAGE // serious env, just WARN
+    LOG_WARN("deliver rpc request in unexpected state", KP(&req), K(req_stat));
+#else
+    LOG_WARN("deliver rpc request in unexpected state", KP(&req), K(req_stat), K(lbt()));
+#endif
+  }
   LOG_DEBUG("deliver ob_request:", K(req));
   if (ObRequest::OB_RPC == req.get_type()) {
     if (OB_FAIL(deliver_rpc_request(req))) {

@@ -560,6 +560,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
   bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
   ctx_.set_is_online_ddl(session.get_ddl_info().is_ddl());  // set is online ddl first, is used by other extract operations
+  bool das_keep_order_enabled = tenant_config.is_valid() && tenant_config->_enable_das_keep_order;
+  const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   if (OB_FAIL(check_whether_contain_nested_sql(stmt))) {
     LOG_WARN("check whether contain nested sql failed", K(ret));
   } else if (OB_FAIL(stmt.check_has_subquery_in_function_table(has_subquery_in_function_table))) {
@@ -582,6 +584,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("fail to check cursor expression info", K(ret));
   } else if (OB_FAIL(session.is_storage_estimation_enabled(storage_estimation_enabled))) {
     LOG_WARN("fail to get storage_estimation_enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_DAS_KEEP_ORDER, das_keep_order_enabled))) {
+    LOG_WARN("failed to check das keep order enabled", K(ret));
   } else {
     ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
@@ -592,6 +596,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_has_dblink(has_dblink);
     ctx_.set_cost_model_type(rowsets_enabled ? ObOptEstCost::VECTOR_MODEL : ObOptEstCost::NORMAL_MODEL);
     ctx_.set_has_cursor_expression(has_cursor_expr);
+    ctx_.set_das_keep_order_enabled(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? false : das_keep_order_enabled);
     if (!tenant_config.is_valid() ||
         (!tenant_config->_hash_join_enabled &&
          !tenant_config->_optimizer_sortmerge_join_enabled &&

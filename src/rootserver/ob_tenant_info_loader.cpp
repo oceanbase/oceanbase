@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"    // MTL_ID
 #include "share/scn.h"//SCN
 #include "share/ob_all_server_tracer.h"       // ObAllServerTracer
+#include "share/ob_global_stat_proxy.h"
 #include "observer/ob_server_struct.h"          // GCTX
 #include "rootserver/ob_tenant_info_loader.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
@@ -312,6 +313,8 @@ void ObTenantInfoLoader::broadcast_tenant_info_content_()
   share::ObAllTenantInfo tenant_info;
   int64_t last_sql_update_time = OB_INVALID_TIMESTAMP;
   int64_t ora_rowscn = 0;
+  uint64_t finish_data_version = 0;
+  share::SCN data_version_barrier_scn;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -324,28 +327,53 @@ void ObTenantInfoLoader::broadcast_tenant_info_content_()
       *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::update_tenant_info_cache);
     int64_t rpc_count = 0;
 
-    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info, last_sql_update_time, ora_rowscn))) {
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info, last_sql_update_time, ora_rowscn, finish_data_version, data_version_barrier_scn))) {
       LOG_WARN("failed to get tenant info", KR(ret));
-    } else if (OB_FAIL(share::ObAllServerTracer::get_instance().for_each_server_info(
-                  [&rpc_count, &tenant_info, &proxy, ora_rowscn](const share::ObServerInfoInTable &server_info) -> int {
-                    int ret = OB_SUCCESS;
-                    obrpc::ObUpdateTenantInfoCacheArg arg;
-                    if (!server_info.is_valid()) {
-                      LOG_WARN("skip invalid server_info", KR(ret), K(server_info));
-                    } else if (!server_info.is_alive()) {
-                      //not send to alive
-                    } else if (OB_FAIL(arg.init(tenant_info.get_tenant_id(), tenant_info, ora_rowscn))) {
-                      LOG_WARN("failed to init arg", KR(ret), K(tenant_info), K(ora_rowscn));
-                    // use meta rpc process thread
-                    } else if (OB_FAIL(proxy.call(server_info.get_server(), DEFAULT_TIMEOUT_US, gen_meta_tenant_id(tenant_info.get_tenant_id()), arg))) {
-                      LOG_WARN("failed to send rpc", KR(ret), K(server_info), K(tenant_info), K(arg));
-                    } else {
-                      rpc_count++;
-                    }
+    } else {
+      struct UpdateTenantInfoCacheFunc {
+        int64_t &rpc_count;
+        share::ObAllTenantInfo &tenant_info;
+        ObUpdateTenantInfoCacheProxy &proxy;
+        int64_t ora_rowscn;
+        uint64_t finish_data_version;
+        share::SCN data_version_barrier_scn;
 
-                    return ret;
-                  }))) {
-      LOG_WARN("for each server_info failed", KR(ret));
+        UpdateTenantInfoCacheFunc(int64_t &rpc_count, share::ObAllTenantInfo &tenant_info,
+                                  ObUpdateTenantInfoCacheProxy &proxy, int64_t ora_rowscn,
+                                  uint64_t finish_data_version, share::SCN data_version_barrier_scn)
+            : rpc_count(rpc_count), tenant_info(tenant_info), proxy(proxy), ora_rowscn(ora_rowscn),
+              finish_data_version(finish_data_version),
+              data_version_barrier_scn(data_version_barrier_scn)
+        {
+        }
+
+        int operator()(const share::ObServerInfoInTable &server_info)
+        {
+          int ret = OB_SUCCESS;
+          obrpc::ObUpdateTenantInfoCacheArg arg;
+          if (!server_info.is_valid()) {
+            LOG_WARN("skip invalid server_info", KR(ret), K(server_info));
+          } else if (!server_info.is_alive()) {
+            // not send to alive
+          } else if (OB_FAIL(arg.init(tenant_info.get_tenant_id(), tenant_info, ora_rowscn,
+                                      finish_data_version, data_version_barrier_scn))) {
+            LOG_WARN("failed to init arg", KR(ret), K(tenant_info), K(ora_rowscn));
+            // use meta rpc process thread
+          } else if (OB_FAIL(proxy.call(server_info.get_server(), DEFAULT_TIMEOUT_US,
+                                        gen_meta_tenant_id(tenant_info.get_tenant_id()), arg))) {
+            LOG_WARN("failed to send rpc", KR(ret), K(server_info), K(tenant_info), K(arg));
+          } else {
+            rpc_count++;
+          }
+          return ret;
+        }
+      };
+      ObFunction<int(const ObServerInfoInTable &server_info)> functor(
+          UpdateTenantInfoCacheFunc(rpc_count, tenant_info, proxy, ora_rowscn, finish_data_version,
+                                    data_version_barrier_scn));
+      if (OB_FAIL(share::ObAllServerTracer::get_instance().for_each_server_info(functor))) {
+        LOG_WARN("for each server_info failed", KR(ret));
+      }
     }
 
     int tmp_ret = OB_SUCCESS;
@@ -467,7 +495,7 @@ int ObTenantInfoLoader::check_is_primary_normal_status(bool &is_primary_normal_s
   return ret;
 }
 
-int ObTenantInfoLoader::get_replayable_scn(share::SCN &replayable_scn)
+int ObTenantInfoLoader::get_global_replayable_scn(share::SCN &replayable_scn)
 {
   int ret = OB_SUCCESS;
   replayable_scn.set_min();
@@ -485,6 +513,33 @@ int ObTenantInfoLoader::get_replayable_scn(share::SCN &replayable_scn)
       replayable_scn = tenant_info.get_replayable_scn();
     }
   }
+  return ret;
+}
+
+int ObTenantInfoLoader::get_local_replayable_scn(share::SCN &replayable_scn)
+{
+  int ret = OB_SUCCESS;
+  replayable_scn.set_min();
+  share::ObTenantRole::Role tenant_role = MTL_GET_TENANT_ROLE_CACHE();
+
+  if (OB_FAIL(get_global_replayable_scn(replayable_scn))) {
+    LOG_WARN("failed to get replayable scn", KR(ret));
+  } else if (!is_primary_tenant(tenant_role)) {
+    bool is_data_version_crossed = false;
+    share::SCN data_version_barrier_scn;
+    if (OB_FAIL(tenant_info_cache_.is_data_version_crossed(is_data_version_crossed,
+                                                           data_version_barrier_scn))) {
+      LOG_WARN("failed to get is_data_version_crossed", KR(ret));
+    } else if (is_data_version_crossed) {
+
+    } else if (!data_version_barrier_scn.is_valid_and_not_min()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("data_version_barrier_scn is invalid", K(ret), K(data_version_barrier_scn));
+    } else {
+      replayable_scn = data_version_barrier_scn;
+    }
+  }
+
   return ret;
 }
 
@@ -546,14 +601,19 @@ int ObTenantInfoLoader::refresh_tenant_info()
   return ret;
 }
 
-int ObTenantInfoLoader::update_tenant_info_cache(const int64_t new_ora_rowscn, const ObAllTenantInfo &new_tenant_info)
+int ObTenantInfoLoader::update_tenant_info_cache(const int64_t new_ora_rowscn,
+                                                 const ObAllTenantInfo &new_tenant_info,
+                                                 const uint64_t new_finish_data_version,
+                                                 const share::SCN &new_data_version_barrier_scn)
 {
   int ret = OB_SUCCESS;
   bool refreshed = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(tenant_info_cache_.update_tenant_info_cache(new_ora_rowscn, new_tenant_info, refreshed))) {
+  } else if (OB_FAIL(tenant_info_cache_.update_tenant_info_cache(
+                 new_ora_rowscn, new_tenant_info, new_finish_data_version,
+                 new_data_version_barrier_scn, refreshed))) {
     LOG_WARN("failed to update_tenant_info_cache", KR(ret), K(new_ora_rowscn), K(new_tenant_info));
   } else if (refreshed) {
     (void)ATOMIC_AAF(&rpc_update_times_, 1);
@@ -565,7 +625,10 @@ int ObTenantInfoLoader::update_tenant_info_cache(const int64_t new_ora_rowscn, c
 DEFINE_TO_YSON_KV(ObAllTenantInfoCache,
                   OB_ID(tenant_info), tenant_info_,
                   OB_ID(last_sql_update_time), last_sql_update_time_,
-                  OB_ID(ora_rowscn), ora_rowscn_);
+                  OB_ID(ora_rowscn), ora_rowscn_,
+                  OB_ID(is_data_version_crossed), is_data_version_crossed_,
+                  OB_ID(finish_data_version), finish_data_version_,
+                  OB_ID(data_version_barrier_scn), data_version_barrier_scn_);
 
 void ObAllTenantInfoCache::reset()
 {
@@ -573,6 +636,11 @@ void ObAllTenantInfoCache::reset()
   tenant_info_.reset();
   last_sql_update_time_ = OB_INVALID_TIMESTAMP;
   ora_rowscn_ = 0;
+  is_data_version_crossed_ = false;
+  // finish_data_version and data_version_barrier_scn_ may be 0 and min_value for a long time,
+  // until the data_version barrier log is iterated
+  finish_data_version_ = 0;
+  data_version_barrier_scn_.set_min();
 }
 
 ERRSIM_POINT_DEF(ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR);
@@ -583,6 +651,8 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObAllTenantInfo new_tenant_info;
   int64_t ora_rowscn = 0;
+  uint64_t finish_data_version = 0;
+  share::SCN data_version_barrier_scn;
   const int64_t new_refresh_time_us = ObClockGenerator::getClock();
   content_changed = false;
   if (OB_ISNULL(sql_proxy) || !is_user_tenant(tenant_id)) {
@@ -594,6 +664,8 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
   } else if (INT64_MAX == ora_rowscn || 0 == ora_rowscn) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid ora_rowscn", KR(ret), K(ora_rowscn), K(tenant_id), K(new_tenant_info), K(lbt()));
+  } else if (OB_FAIL(query_new_finish_data_version_(tenant_id, sql_proxy, finish_data_version, data_version_barrier_scn))) {
+    LOG_WARN("failed to query new finish data version", KR(ret), K(tenant_id));
   } else {
     /**
     * Only need to refer to tenant role, no need to refer to switchover status.
@@ -606,11 +678,10 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
     if (OB_UNLIKELY(ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR)) {
       ret = ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR;
     } else if (ora_rowscn >= ora_rowscn_) {
-      if (ora_rowscn > ora_rowscn_) {
-        MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
-        (void)tenant_info_.assign(new_tenant_info);
-        ora_rowscn_ = ora_rowscn;
-        content_changed = true;
+      if (OB_FAIL(assign_new_tenant_info_(ora_rowscn, new_tenant_info, finish_data_version,
+                                          data_version_barrier_scn, content_changed))) {
+        LOG_WARN("failed to assign new tenant info", KR(ret), K(ora_rowscn), K(new_tenant_info),
+                 K(finish_data_version), K(data_version_barrier_scn));
       }
       // In order to provide sts an accurate time of tenant info refresh time, it is necessary to
       // update last_sql_update_time_ after sql refresh
@@ -624,38 +695,168 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
 
   if (dump_tenant_info_interval_.reach()) {
     LOG_INFO("refresh tenant info", KR(ret), K(new_tenant_info), K(new_refresh_time_us),
-                                    K(tenant_id), K(tenant_info_), K(last_sql_update_time_), K(ora_rowscn_));
+                                    K(tenant_id), K(tenant_info_), K(last_sql_update_time_),
+                                    K(ora_rowscn_), K(content_changed));
   }
 
   return ret;
 }
 
-int ObAllTenantInfoCache::update_tenant_info_cache(
-    const int64_t new_ora_rowscn,
-    const ObAllTenantInfo &new_tenant_info,
-    bool &refreshed)
+int ObAllTenantInfoCache::update_tenant_info_cache(const int64_t new_ora_rowscn,
+                                                   const ObAllTenantInfo &new_tenant_info,
+                                                   const uint64_t new_finish_data_version,
+                                                   const share::SCN &new_data_version_barrier_scn,
+                                                   bool &refreshed)
 {
   int ret = OB_SUCCESS;
   refreshed = false;
-  if (!new_tenant_info.is_valid() || 0 == new_ora_rowscn || INT64_MAX == new_ora_rowscn) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(new_tenant_info), K(new_ora_rowscn));
+  SpinWLockGuard guard(lock_);
+  if (!is_tenant_info_valid_()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("my tenant_info is invalid, don't refresh", KR(ret), K_(tenant_info), K_(ora_rowscn));
   } else if (OB_UNLIKELY(ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR)) {
     ret = ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR;
-  } else {
-    SpinWLockGuard guard(lock_);
-    if (!tenant_info_.is_valid() || 0 == ora_rowscn_) {
-      ret = OB_EAGAIN;
-      LOG_WARN("my tenant_info is invalid, don't refresh", KR(ret), K_(tenant_info), K_(ora_rowscn));
-    } else if (new_ora_rowscn > ora_rowscn_) {
-      MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
-      (void)tenant_info_.assign(new_tenant_info);
-      ora_rowscn_ = new_ora_rowscn;
-      refreshed = true;
-      LOG_TRACE("refresh_tenant_info_content", K(new_tenant_info), K(new_ora_rowscn), K(tenant_info_), K(ora_rowscn_));
+  } else if (OB_FAIL(assign_new_tenant_info_(new_ora_rowscn, new_tenant_info,
+                                             new_finish_data_version, new_data_version_barrier_scn,
+                                             refreshed))) {
+    LOG_WARN("failed to assign new tenant info", KR(ret), K(new_ora_rowscn), K(new_tenant_info),
+             K(new_finish_data_version), K(new_data_version_barrier_scn));
+  }
+
+  return ret;
+}
+
+// caller should acquire lock before call this function
+bool ObAllTenantInfoCache::is_tenant_info_valid_()
+{
+  return tenant_info_.is_valid() && OB_INVALID_TIMESTAMP != last_sql_update_time_ &&
+      0 != ora_rowscn_;
+}
+
+// caller should acquire lock before call this function
+int ObAllTenantInfoCache::assign_new_tenant_info_(
+    const int64_t new_ora_rowscn,
+    const ObAllTenantInfo &new_tenant_info,
+    const uint64_t new_finish_data_version,
+    const share::SCN &new_data_version_barrier_scn,
+    bool &assigned)
+{
+  int ret = OB_SUCCESS;
+  assigned = false;
+
+  if (0 == new_ora_rowscn || INT64_MAX == new_ora_rowscn || !new_tenant_info.is_valid() ||
+      !new_data_version_barrier_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(new_ora_rowscn), K(new_tenant_info),
+             K(new_finish_data_version), K(new_data_version_barrier_scn));
+  } else if (new_ora_rowscn > ora_rowscn_) {
+    MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
+    (void)tenant_info_.assign(new_tenant_info);
+    ora_rowscn_ = new_ora_rowscn;
+    assigned = true;
+    LOG_TRACE("assign new tenant info", K(new_tenant_info), K(new_ora_rowscn), K(tenant_info_),
+              K(ora_rowscn_));
+    if (new_finish_data_version > finish_data_version_) {
+      finish_data_version_ = new_finish_data_version;
+      data_version_barrier_scn_ = new_data_version_barrier_scn;
+      is_data_version_crossed_ = false;
+      LOG_INFO("update finish data version cache", K(finish_data_version_),
+               K(data_version_barrier_scn_));
     }
   }
 
+  return ret;
+}
+
+int ObAllTenantInfoCache::query_new_finish_data_version_(const uint64_t tenant_id,
+                                                         common::ObMySQLProxy *sql_proxy,
+                                                         uint64_t &finish_data_version,
+                                                         share::SCN &data_version_barrier_scn)
+{
+  int ret = OB_SUCCESS;
+  uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  finish_data_version = 0;
+  data_version_barrier_scn.set_min();
+
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql proxy is null", KR(ret), K(tenant_id), K(sql_proxy));
+  } else {
+    ObGlobalStatProxy proxy(*sql_proxy, exec_tenant_id);
+    if (OB_FAIL(proxy.get_finish_data_version(finish_data_version, data_version_barrier_scn))) {
+      if (OB_ERR_NULL_VALUE == ret) {
+        // have not iterated over the barrier log
+        finish_data_version = 0;
+        data_version_barrier_scn.set_min();
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get finish data version", KR(ret), K(exec_tenant_id));
+      }
+    }
+  }
+
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_DATA_VERSION_BARRIER_ERROR);
+int ObAllTenantInfoCache::is_data_version_crossed(bool &result,
+                                                  share::SCN &data_version_barrier_scn)
+{
+  int ret = OB_SUCCESS;
+  uint64_t current_data_version = 0;
+  result = false;
+  data_version_barrier_scn.set_min();
+  SpinRLockGuard guard(lock_);
+
+  if (!is_tenant_info_valid_()) {
+    ret = OB_NEED_WAIT;
+    const int64_t PRINT_INTERVAL = 1 * 1000 * 1000L;
+    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+      LOG_WARN("finish_data_version is invalid, need wait", KR(ret), K(*this));
+    }
+  } else if (is_data_version_crossed_) {
+    result = true;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), current_data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret));
+  } else if (current_data_version < finish_data_version_ || ERRSIM_DATA_VERSION_BARRIER_ERROR) {
+    result = false;
+    data_version_barrier_scn = data_version_barrier_scn_;
+    LOG_INFO("local data version has not crossed", KR(ret), K(data_version_barrier_scn),
+             "has_injected_error", ERRSIM_DATA_VERSION_BARRIER_ERROR);
+  } else {
+    result = true;
+    is_data_version_crossed_ = true;
+  }
+
+  return ret;
+}
+
+int ObAllTenantInfoCache::get_tenant_info(share::ObAllTenantInfo &tenant_info,
+                                          int64_t &last_sql_update_time,
+                                          int64_t &ora_rowscn,
+                                          uint64_t &finish_data_version,
+                                          share::SCN &data_version_barrier_scn)
+{
+  int ret = OB_SUCCESS;
+  tenant_info.reset();
+  last_sql_update_time = OB_INVALID_TIMESTAMP;
+  ora_rowscn = 0;
+  SpinRLockGuard guard(lock_);
+
+  if (!is_tenant_info_valid_()) {
+    ret = OB_NEED_WAIT;
+    const int64_t PRINT_INTERVAL = 1 * 1000 * 1000L;
+    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+      LOG_WARN("tenant info is invalid, need wait", KR(ret), K(last_sql_update_time_),
+               K(tenant_info_), K(ora_rowscn_), K(data_version_barrier_scn_));
+    }
+  } else {
+    (void)tenant_info.assign(tenant_info_);
+    last_sql_update_time = last_sql_update_time_;
+    ora_rowscn = ora_rowscn_;
+    finish_data_version = finish_data_version_;
+    data_version_barrier_scn = data_version_barrier_scn_;
+  }
   return ret;
 }
 
@@ -668,18 +869,12 @@ int ObAllTenantInfoCache::get_tenant_info(
   tenant_info.reset();
   last_sql_update_time = OB_INVALID_TIMESTAMP;
   ora_rowscn = 0;
-  SpinRLockGuard guard(lock_);
+  uint64_t finish_data_version = 0;
+  share::SCN data_version_barrier_scn;
 
-  if (!tenant_info_.is_valid() || OB_INVALID_TIMESTAMP == last_sql_update_time_ || 0 == ora_rowscn_) {
-    ret = OB_NEED_WAIT;
-    const int64_t PRINT_INTERVAL = 1 * 1000 * 1000L;
-    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
-      LOG_WARN("tenant info is invalid, need wait", KR(ret), K(last_sql_update_time_), K(tenant_info_), K(ora_rowscn_));
-    }
-  } else {
-    (void)tenant_info.assign(tenant_info_);
-    last_sql_update_time = last_sql_update_time_;
-    ora_rowscn = ora_rowscn_;
+  if (OB_FAIL(get_tenant_info(tenant_info, last_sql_update_time, ora_rowscn, finish_data_version,
+                              data_version_barrier_scn))) {
+    LOG_WARN("failed to get tenant info", KR(ret));
   }
   return ret;
 }
@@ -690,8 +885,11 @@ int ObAllTenantInfoCache::get_tenant_info(share::ObAllTenantInfo &tenant_info)
   tenant_info.reset();
   int64_t last_sql_update_time = OB_INVALID_TIMESTAMP;
   int64_t ora_rowscn = 0;
+  uint64_t finish_data_version = 0;
+  share::SCN data_version_barrier_scn;
 
-  if (OB_FAIL(get_tenant_info(tenant_info, last_sql_update_time, ora_rowscn))) {
+  if (OB_FAIL(get_tenant_info(tenant_info, last_sql_update_time, ora_rowscn, finish_data_version,
+                              data_version_barrier_scn))) {
     LOG_WARN("failed to get tenant info", KR(ret));
   }
   return ret;

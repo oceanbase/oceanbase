@@ -78,6 +78,13 @@ int ObExprSubstrb::calc_result_length_in_byte(const ObExprResType &type,
       pos_val = 1;
     } else {
       if (OB_FAIL(ObExprUtil::get_trunc_int64(pos_obj, expr_ctx, pos_val))) {
+        if(lib::is_oracle_mode()) {
+          if (0 == pos_val) {
+            pos_val = 1;
+          }
+          ret = OB_SUCCESS;
+          LOG_WARN("ignore failure when calc pos_val oracle mode", K(ret));
+        }
         LOG_WARN("get int64 failed", K(pos_obj), K(ret));
       }
     }
@@ -87,8 +94,16 @@ int ObExprSubstrb::calc_result_length_in_byte(const ObExprResType &type,
       if (param_num == 3 && !types_array[2].get_param().is_null()) {
         const ObObj &len_obj = types_array[2].get_param();
         if (OB_FAIL(ObExprUtil::get_trunc_int64(len_obj, expr_ctx, len_val))) {
+          if(lib::is_oracle_mode()) {
+            if (0 == len_val) {
+              len_val = str_len_in_byte;
+            }
+            ret = OB_SUCCESS;
+            LOG_WARN("ignore failure when calc len_val oracle mode", K(ret));
+          }
           LOG_WARN("get int64 failed", K(len_obj), K(ret));
-        } else if (type.is_nchar() || type.is_nvarchar2()) {
+        }
+        if (OB_SUCC(ret) && (type.is_nchar() || type.is_nvarchar2())) {
           len_val /= mbminlen;
         }
       }

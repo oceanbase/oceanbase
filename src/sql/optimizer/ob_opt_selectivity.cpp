@@ -3277,7 +3277,7 @@ double ObOptSelectivity::get_filters_selectivity(ObIArray<double> &selectivities
     selectivity = 1.0;
     if (!selectivities.empty()) {
       double exp = 1.0;
-      std::sort(&selectivities.at(0), &selectivities.at(0) + selectivities.count());
+      lib::ob_sort(&selectivities.at(0), &selectivities.at(0) + selectivities.count());
       for (int64_t i = 0; i < selectivities.count(); i ++) {
         selectivity *= std::pow(selectivities.at(i), exp);
         exp /= 2;

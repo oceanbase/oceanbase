@@ -3665,7 +3665,7 @@ int64_t ObIOTracer::to_string(char *buf, const int64_t len) const
     } else if (OB_FAIL(counter.bt_count_.foreach_refactored(store_fn))) {
       LOG_WARN("get max backtrace count failed", K(ret));
     } else {
-      std::sort(trace_array.begin(), trace_array.end(), sort_fn);
+      lib::ob_sort(trace_array.begin(), trace_array.end(), sort_fn);
       databuff_printf(buf, len, pos, "trace_request_count: %ld, distinct_backtrace_count: %ld; ", counter.req_count_, trace_array.count());
       const int64_t print_count = min(5, trace_array.count());
       for (int64_t i = 0; OB_SUCC(ret) && i < print_count; ++i) {

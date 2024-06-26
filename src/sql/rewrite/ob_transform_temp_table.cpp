@@ -2202,7 +2202,7 @@ int ObTransformTempTable::sort_materialize_stmts(Ob2DArray<MaterializeStmts *> &
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null stmts", K(ret));
     } else {
-      std::sort(subqueries->begin(), subqueries->end(), cmp_func1);
+      lib::ob_sort(subqueries->begin(), subqueries->end(), cmp_func1);
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < materialize_stmts.count(); ++i) {
@@ -2217,7 +2217,7 @@ int ObTransformTempTable::sort_materialize_stmts(Ob2DArray<MaterializeStmts *> &
       LOG_WARN("failed to push back index", K(ret));
     }
   }
-  std::sort(index_map.begin(), index_map.end(), cmp_func2);
+  lib::ob_sort(index_map.begin(), index_map.end(), cmp_func2);
   for (int64_t i = 0; OB_SUCC(ret) && i < index_map.count(); ++i) {
     int index = index_map.at(i).first;
     if (index < 0 || index >= materialize_stmts.count()) {

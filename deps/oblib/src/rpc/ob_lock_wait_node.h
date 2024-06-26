@@ -14,8 +14,11 @@
 #define OCEANBASE_RPC_OB_LOCK_WAIT_NODE_
 
 #include "lib/hash/ob_fixed_hash2.h"
+#include "lib/list/ob_dlist.h"
+#include "lib/ob_errno.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/time/ob_time_utility.h"
+#include <cstring>
 
 namespace oceanbase
 {
@@ -25,6 +28,79 @@ class ObLSID;
 }
 namespace rpc
 {
+
+struct RequestLockWaitStat {
+  enum RequestStat : uint8_t {
+    DEFAULT = 0,
+    EXECUTE = 1,
+    START = 2,
+    CONFLICTED = 3,
+    END = 4,
+    INQUEUE = 5,
+    OUTQUEUE = 6,
+    SIZE
+  };
+  const char *stat_to_string(RequestStat stat) const {
+    const char *ret = nullptr;
+    switch (state_) {
+    case RequestStat::DEFAULT:
+      ret = "DEFAULT";
+      break;
+    case RequestStat::EXECUTE:
+      ret = "EXECUTE";
+      break;
+    case RequestStat::START:
+      ret = "START";
+      break;
+    case RequestStat::CONFLICTED:
+      ret = "CONFLICTED";
+      break;
+    case RequestStat::END:
+      ret = "END";
+      break;
+    case RequestStat::INQUEUE:
+      ret = "INQUEUE";
+      break;
+    case RequestStat::OUTQUEUE:
+      ret = "OUTQUEUE";
+      break;
+    default:
+      ret = "UNKNOWN";
+      break;
+    }
+    return ret;
+  }
+  static constexpr bool ConvertMap[RequestStat::SIZE][RequestStat::SIZE] = {
+                  /*DEFAULT*/ /*EXECUTE*/ /*START*/ /*CONFLICTED*/  /*END*/  /*INQUEUE*/ /*OUTQUEUE*/
+  /*DEFAULT*/     {       1,          1,        0,             0,       0,           0,           0},// from DEFAULT, only allowed to EXECUTE
+  /*EXECUTE*/     {       0,          1,        1,             1,       0,           0,           0},// from EXECUTE, only allowed to START, there maybe switch to CONFLICTED without START in test for some unknown reason
+  /*START*/       {       0,          1,        1,             1,       1,           0,           0},// from START, only allowed to CONFLICTED/END, there maybe switch to START in test for some unknown reason
+  /*CONFLICTED*/  {       0,          0,        0,             1,       1,           1,           0},// from CONFLICTED, only allowed to END, there maybe switch to INQUEUE in test for some unknown reason
+  /*END*/         {       0,          1,        1,             1,       1,           1,           0},// from END, allowed to EXECUTE/START/INQUEUE, there maybe switch to CONFLICTED without START in test for some unknown reason
+  /*INQUEUE*/     {       0,          0,        0,             0,       0,           1,           1},// from INQUEUE, only allowed to OUTQUEUE
+  /*OUTQUEUE*/    {       0,          1,        0,             0,       0,           0,           1},// from UTQUEUE, only allowed to EXECUTE
+  };
+  RequestLockWaitStat() : state_(RequestStat::DEFAULT) {}
+  void advance_to(RequestStat new_stat) {
+    if (OB_UNLIKELY(!ConvertMap[state_][new_stat])) {
+#ifdef OB_BUILD_PACKAGE // serious env, just WARN
+      DETECT_LOG_RET(WARN, OB_ERR_UNEXPECTED, "stat advance unexpected", K(state_), K(new_stat), KP(this));
+#else // test env, print ERROR and abort if necessary
+      DETECT_LOG_RET(WARN, OB_ERR_UNEXPECTED, "stat advance unexpected", K(state_), K(new_stat), KP(this), K(lbt()));
+      if (RequestStat::INQUEUE == state_) {
+        ob_abort();// this is not expectecd, something is beyond control and break important assumption.
+      }
+#endif
+    }
+    state_ = new_stat;
+  }
+  int64_t to_string(char *buffer, const int64_t buffer_len) const {
+    int64_t pos = 0;
+    databuff_printf(buffer, buffer_len, pos, "%ld(%s)", (int64_t)state_, stat_to_string(state_));
+    return pos;
+  }
+  RequestStat state_;
+};
 
 struct ObLockWaitNode: public common::SpHashNode
 {
@@ -66,8 +142,12 @@ struct ObLockWaitNode: public common::SpHashNode
     UNUSED(ret);
   }
   void set_block_sessid(const uint32_t block_sessid) { block_sessid_ = block_sessid; }
+  void advance_stat(RequestLockWaitStat::RequestStat new_stat) {
+    request_stat_.advance_to(new_stat);
+  }
 
   TO_STRING_KV(KP(this),
+               K_(request_stat),
                KP_(addr),
                K_(hash),
                K_(lock_ts),
@@ -91,6 +171,7 @@ struct ObLockWaitNode: public common::SpHashNode
   uint64_t hold_key_;
   ObLink retire_link_;
   bool need_wait_;
+  RequestLockWaitStat request_stat_;
   void* addr_;
   int64_t recv_ts_;
   int64_t lock_ts_;

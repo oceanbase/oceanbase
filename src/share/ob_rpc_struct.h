@@ -1860,8 +1860,7 @@ public:
                K_(ddl_stmt_str),
                K_(sql_mode),
                K_(tz_info_wrap),
-               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
-               K_(is_insert_overwrite));
+               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
   ObCreateHiddenTableArg() :
     ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
@@ -1873,7 +1872,6 @@ public:
     ddl_stmt_str_(),
     sql_mode_(0),
     tz_info_wrap_(),
-    is_insert_overwrite_(false),
     nls_formats_{}
     {}
   ~ObCreateHiddenTableArg()
@@ -1889,7 +1887,6 @@ public:
     dest_tenant_id_ = common::OB_INVALID_ID;
     session_id_ = common::OB_INVALID_ID;
     ddl_type_ = share::DDL_INVALID;
-    is_insert_overwrite_ = false;
     ddl_stmt_str_.reset();
     sql_mode_ = 0;
   }
@@ -1907,7 +1904,6 @@ public:
   common::ObArenaAllocator allocator_;
   common::ObTimeZoneInfo tz_info_;
   common::ObTimeZoneInfoWrap tz_info_wrap_;
-  bool is_insert_overwrite_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
 };
 
@@ -2702,6 +2698,64 @@ public:
   ObLocalSessionVar local_session_var_;
   bool exist_all_column_group_;
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
+};
+
+struct ObGenerateAuxIndexSchemaArg : public ObDDLArg
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObGenerateAuxIndexSchemaArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      data_table_id_(OB_INVALID_ID)
+  {}
+  ~ObGenerateAuxIndexSchemaArg() {}
+  bool is_valid() const
+  {
+    return tenant_id_ != OB_INVALID_TENANT_ID &&
+           data_table_id_ != OB_INVALID_ID&&
+           create_index_arg_.is_valid();
+  }
+  int assign(const ObGenerateAuxIndexSchemaArg &other);
+  void reset()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    data_table_id_ = OB_INVALID_ID;
+    create_index_arg_.reset();
+  }
+  TO_STRING_KV(K(tenant_id_), K(data_table_id_), K(create_index_arg_));
+
+public:
+  uint64_t tenant_id_;
+  uint64_t data_table_id_;
+  ObCreateIndexArg create_index_arg_;
+};
+
+struct ObGenerateAuxIndexSchemaRes final
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObGenerateAuxIndexSchemaRes()
+    : aux_table_id_(OB_INVALID_ID),
+      schema_generated_(false)
+  {}
+  ~ObGenerateAuxIndexSchemaRes() {}
+  int assign(const ObGenerateAuxIndexSchemaRes &other)
+  {
+    int ret = OB_SUCCESS;
+    aux_table_id_ = other.aux_table_id_;
+    schema_generated_ = other.schema_generated_;
+    return ret;
+  }
+  void reset()
+  {
+    aux_table_id_ = OB_INVALID_ID;
+    schema_generated_ = false;
+  }
+  TO_STRING_KV(K(aux_table_id_), K(schema_generated_));
+
+public:
+  uint64_t aux_table_id_;
+  bool schema_generated_;
 };
 
 typedef ObCreateIndexArg ObAlterPrimaryArg;
@@ -6927,7 +6981,7 @@ public:
   bool is_or_replace_;
   bool is_need_alter_; // used in mysql mode
   share::schema::ObErrorInfo error_info_;
-  common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
+  common::ObSArray<oceanbase::share::schema::ObDependencyInfo> dependency_infos_;
   bool with_if_not_exist_;
 };
 
@@ -7083,6 +7137,22 @@ public:
   };
   share::schema::ObErrorInfo error_info_;
   common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
+};
+
+struct ObRoutineDDLRes
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObRoutineDDLRes() :
+    store_routine_schema_version_(OB_INVALID_VERSION)
+  {}
+  int assign(const ObRoutineDDLRes &other) {
+    store_routine_schema_version_ = other.store_routine_schema_version_;
+    return common::OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(store_routine_schema_version));
+  int64_t store_routine_schema_version_;
 };
 
 struct ObCreateTriggerRes
@@ -7725,12 +7795,17 @@ struct ObUpdateTenantInfoCacheArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObUpdateTenantInfoCacheArg(): tenant_id_(OB_INVALID_TENANT_ID), tenant_info_(), ora_rowscn_(0)  {}
+  ObUpdateTenantInfoCacheArg(): tenant_id_(OB_INVALID_TENANT_ID), tenant_info_(), ora_rowscn_(0), finish_data_version_(0) {
+    data_version_barrier_scn_.set_min();
+  }
   ~ObUpdateTenantInfoCacheArg() {}
   bool is_valid() const;
-  int init(const uint64_t tenant_id, const share::ObAllTenantInfo &tenant_info, const int64_t ora_rowscn);
+  int init(const uint64_t tenant_id, const share::ObAllTenantInfo &tenant_info,
+           const int64_t ora_rowscn, const uint64_t finish_data_version,
+           const share::SCN &data_version_barrier_scn);
   int assign(const ObUpdateTenantInfoCacheArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(tenant_info), K_(ora_rowscn));
+  TO_STRING_KV(K_(tenant_id), K_(tenant_info), K_(ora_rowscn), K_(finish_data_version),
+               K_(data_version_barrier_scn));
 
   uint64_t get_tenant_id() const
   {
@@ -7747,12 +7822,24 @@ public:
     return ora_rowscn_;
   }
 
+  uint64_t get_finish_data_version() const
+  {
+    return finish_data_version_;
+  }
+
+  const share::SCN &get_data_version_barrier_scn() const
+  {
+    return data_version_barrier_scn_;
+  }
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUpdateTenantInfoCacheArg);
 private:
   uint64_t tenant_id_;
   share::ObAllTenantInfo tenant_info_;
   int64_t ora_rowscn_;
+  uint64_t finish_data_version_;
+  share::SCN data_version_barrier_scn_;
 };
 
 struct ObUpdateTenantInfoCacheRes
@@ -9738,7 +9825,9 @@ public:
   ObDDLBuildSingleReplicaRequestArg() : tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(),
                                         source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
                                         schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(-1), tablet_task_id_(0),
-                                        data_format_version_(0), consumer_group_id_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0)
+                                        data_format_version_(0), consumer_group_id_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0),
+                                        compaction_scn_(0), can_reuse_macro_block_(false), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH),
+                                        lob_col_idxs_(), data_split_ranges_()
   {}
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
@@ -9750,7 +9839,9 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ls_id), K_(dest_ls_id), K_(source_tablet_id),
     K_(dest_tablet_id), K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(dest_schema_version),
     K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(data_format_version),
-    K_(consumer_group_id));
+    K_(consumer_group_id),
+    K_(compaction_scn), K_(can_reuse_macro_block), K_(split_sstable_type),
+    K_(lob_col_idxs), K_(data_split_ranges));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -9770,6 +9861,11 @@ public:
   uint64_t dest_tenant_id_;
   share::ObLSID dest_ls_id_;
   int64_t dest_schema_version_;
+  int64_t compaction_scn_;
+  bool can_reuse_macro_block_;
+  share::ObSplitSSTableType split_sstable_type_;
+  ObSArray<uint64_t> lob_col_idxs_;
+  common::ObSEArray<common::ObNewRange, 16> data_split_ranges_;
 };
 
 struct ObDDLBuildSingleReplicaRequestResult final

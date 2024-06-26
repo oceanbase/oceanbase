@@ -201,7 +201,7 @@ int ObPartTransCtx::init_for_transfer_move(const ObTxCtxMoveArg &arg)
   } else {
     exec_info_.is_sub2pc_ = arg.is_sub2pc_;
     mt_ctx_.set_trans_version(arg.trans_version_);
-    exec_info_.trans_type_ = TransType::DIST_TRANS;
+    exec_info_.trans_type_ = (arg.tx_state_ == ObTxState::INIT) ? TransType::SP_TRANS : TransType::DIST_TRANS;
     if (arg.tx_state_ >= ObTxState::PREPARE) {
       exec_info_.prepare_version_ = arg.prepare_version_;
       ctx_tx_data_.set_commit_version(arg.commit_version_);
@@ -660,7 +660,7 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       if (!is_follower_() && is_committing_()) {
         if (is_local_tx_()) {
           try_submit_next_log_();
-        } else if (ObTxState::PREPARE > get_upstream_state() ) {
+        } else if (ObTxState::PREPARE > get_upstream_state()) {
           ObTxState next_state = (is_sub2pc() || exec_info_.is_dup_tx_) ?
                                     ObTxState::REDO_COMPLETE :
                                     ObTxState::PREPARE;
@@ -675,9 +675,12 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       }
 
       // retry submit abort log for local tx abort
-      if (!is_follower_() && is_local_tx_()
-        && get_upstream_state() == ObTxState::ABORT
-        && get_upstream_state() != get_downstream_state()) {
+      //
+      // NOTE: due to some local tx may set to dist-trans if it request 2pc msg
+      //       while choose abort itself forcedly, hence need add the second condition
+      if (!is_follower_() && (is_local_tx_() || sub_state_.is_force_abort())
+          && get_upstream_state() == ObTxState::ABORT
+          && get_upstream_state() != get_downstream_state()) {
         if (OB_FAIL(compensate_abort_log_())) {
           TRANS_LOG(WARN, "compensate abort log failed", KR(ret), KPC(this));
         }

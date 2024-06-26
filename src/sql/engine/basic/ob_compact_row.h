@@ -86,6 +86,11 @@ public:
   {
     return fixed_expr_reordered() ? (project_idx(col_idx) - fixed_cnt_) : col_idx;
   }
+  //make sure column is fixed reordered
+  inline int64_t get_fixed_cell_offset(const int64_t col_idx) const
+  {
+    return fixed_offsets_[project_idx(col_idx)];
+  }
   static int32_t get_row_fixed_size(const int64_t col_cnt,
                                     const int64_t fixed_payload_len,
                                     const int64_t extra_size,
@@ -238,6 +243,11 @@ struct ObCompactRow
     }
     MEMCPY(payload_ + off, payload, len);
   }
+  //make sure column is fixed reordered
+  inline void set_fixed_cell_payload(const char *payload, const int64_t offset, const ObLength len)
+  {
+    MEMCPY(payload_ + offset, payload, len);
+  }
 
   inline void get_cell_payload(const RowMeta &meta,
                                const int64_t col_idx,
@@ -280,6 +290,11 @@ struct ObCompactRow
       payload = var_data(meta) + var_offset_arr[col_idx];
     }
     return payload;
+  }
+  //make sure column is fixed reordered
+  inline const char *get_fixed_cell_payload(const int64_t offset) const
+  {
+    return payload_ + offset;
   }
 
   inline int64_t get_row_size() const {
@@ -382,7 +397,8 @@ public:
   int save_store_row(const common::ObIArray<ObExpr*> &exprs,
                      const ObBatchRows &brs,
                      ObEvalCtx &ctx,
-                     const int32_t extra_size = 0)
+                     const int32_t extra_size = 0,
+                     const bool reorder_fixed_expr = true)
   {
     int ret = OB_SUCCESS;
     int64_t row_size = 0;
@@ -390,7 +406,7 @@ public:
     } else if (OB_UNLIKELY(extra_size < 0 || extra_size > INT32_MAX)) {
       ret = OB_INVALID_ARGUMENT;
       SQL_ENG_LOG(ERROR, "invalid extra size", K(ret), K(extra_size));
-    } else if (OB_FAIL(init_row_meta(exprs, extra_size))) {
+    } else if (OB_FAIL(init_row_meta(exprs, extra_size, reorder_fixed_expr))) {
       SQL_ENG_LOG(WARN, "fail to init row meta", K(ret));
     } else if (OB_FAIL(ObCompactRow::calc_row_size(row_meta_, exprs, brs, ctx, row_size))) {
       SQL_ENG_LOG(WARN, "failed to calc copy size", K(ret));
@@ -432,7 +448,11 @@ public:
     int ret = OB_SUCCESS;
     bool reuse = reuse_;
     const int64_t row_size = row.get_row_size();
-    if (OB_FAIL(ensure_compact_row_buffer(row_size))) {
+    if (is_first_row_) {
+      // row meta is not inited
+      ret = OB_NOT_INIT;
+      SQL_ENG_LOG(WARN, "row meta not inited", K(ret));
+    } else if (OB_FAIL(ensure_compact_row_buffer(row_size))) {
       SQL_ENG_LOG(WARN, "fail to ensure compact row buffer", K(ret));
     } else {
       MEMCPY(compact_row_, reinterpret_cast<const char *>(&row), row_size);
@@ -457,17 +477,18 @@ public:
   }
   ObDatum get_datum(const int64_t col_idx) const { return compact_row_->get_datum(row_meta_, col_idx); }
 
-private:
-  inline int init_row_meta(const common::ObIArray<ObExpr*> &exprs, const int32_t extra_size)
+  inline int init_row_meta(const common::ObIArray<ObExpr *> &exprs, const int32_t extra_size,
+                           const bool reorder_fixed_expr)
   {
     int ret = OB_SUCCESS;
     if (is_first_row_) {
-      ret = row_meta_.init(exprs, extra_size);
+      ret = row_meta_.init(exprs, extra_size, reorder_fixed_expr);
       is_first_row_ = false;
     }
     return ret;
   }
 
+private:
   inline int ensure_compact_row_buffer(const int64_t row_size) {
     int ret = OB_SUCCESS;
     bool reuse = reuse_;

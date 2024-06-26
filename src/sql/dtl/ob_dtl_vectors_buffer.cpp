@@ -450,15 +450,31 @@ int ObDtlVectors::append_batch(const ObIArray<ObExpr*> &exprs, const ObIArray<Ob
       switch (exprs.at(col_idx)->get_format(ctx)) {
         case VEC_FIXED : {
           ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *> (vectors.at(col_idx));
-          for (int64_t i = 0; i < size; ++i) {
-            int64_t row_idx = selector[i];
-            if (fixed_vec->get_nulls()->at(row_idx)) {
-              get_nulls(col_idx)->set(virtual_row_cnt);
-            } else {
-              memcpy(dst_data + fixed_len * (virtual_row_cnt),
-                     fixed_vec->get_data() + fixed_len * row_idx, fixed_len);
+          if (0 == fixed_len % 8) {
+            for (int64_t i = 0; i < size; ++i) {
+              int64_t row_idx = selector[i];
+              if (fixed_vec->get_nulls()->at(row_idx)) {
+                get_nulls(col_idx)->set(virtual_row_cnt);
+              } else {
+                int64_t base_offset = fixed_len * (virtual_row_cnt);
+                for (int64_t i = 0; i < fixed_len / 8; ++i) {
+                  *(reinterpret_cast<int64_t *> (dst_data + sizeof(int64_t) * i + base_offset))
+                  = *(reinterpret_cast<int64_t *> (fixed_vec->get_data() + sizeof(int64_t) * i + fixed_len * row_idx));
+                }
+              }
+              ++virtual_row_cnt;
             }
-            ++virtual_row_cnt;
+          } else {
+            for (int64_t i = 0; i < size; ++i) {
+              int64_t row_idx = selector[i];
+              if (fixed_vec->get_nulls()->at(row_idx)) {
+                get_nulls(col_idx)->set(virtual_row_cnt);
+              } else {
+                memcpy(dst_data + fixed_len * (virtual_row_cnt),
+                      fixed_vec->get_data() + fixed_len * row_idx, fixed_len);
+              }
+              ++virtual_row_cnt;
+            }
           }
           break;
         }
@@ -493,15 +509,32 @@ int ObDtlVectors::append_batch(const ObIArray<ObExpr*> &exprs, const ObIArray<Ob
         }
         case VEC_UNIFORM : {
           ObUniformBase *uniform_vec = static_cast<ObUniformBase *> (vectors.at(col_idx));
-          for (int64_t i = 0; i < size; ++i) {
-            int64_t row_idx = selector[i];
-            ObDatum &cell = uniform_vec->get_datums()[row_idx];
-            if (cell.is_null()) {
-              get_nulls(col_idx)->set(virtual_row_cnt);
-            } else {
-              memcpy(dst_data + fixed_len * (virtual_row_cnt), cell.ptr_, fixed_len);
+          if (0 == fixed_len % 8) {
+            for (int64_t i = 0; i < size; ++i) {
+              int64_t row_idx = selector[i];
+              ObDatum &cell = uniform_vec->get_datums()[row_idx];
+              if (cell.is_null()) {
+                get_nulls(col_idx)->set(virtual_row_cnt);
+              } else {
+                int64_t base_offset = fixed_len * (virtual_row_cnt);
+                for (int64_t i = 0; i < fixed_len / 8; ++i) {
+                  *(reinterpret_cast<int64_t *> (dst_data + base_offset + sizeof(int64_t) * i))
+                  = *(reinterpret_cast<const int64_t *> (cell.ptr_ + sizeof(int64_t) * i));
+                }
+              }
+              ++virtual_row_cnt;
             }
-            ++virtual_row_cnt;
+          } else {
+            for (int64_t i = 0; i < size; ++i) {
+              int64_t row_idx = selector[i];
+              ObDatum &cell = uniform_vec->get_datums()[row_idx];
+              if (cell.is_null()) {
+                get_nulls(col_idx)->set(virtual_row_cnt);
+              } else {
+                memcpy(dst_data + fixed_len * (virtual_row_cnt), cell.ptr_, fixed_len);
+              }
+              ++virtual_row_cnt;
+            }
           }
           break;
         }

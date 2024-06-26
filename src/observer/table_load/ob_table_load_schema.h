@@ -59,9 +59,6 @@ public:
                             bool contain_hidden_pk_column = false);
   static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
-  static int get_lob_meta_tid(const uint64_t tenant_id,
-                              const uint64_t data_table_id,
-                              uint64_t &lob_meta_table_id);
   static int check_has_invisible_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_unused_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
@@ -84,6 +81,7 @@ private:
                                    common::ObIArray<share::schema::ObColDesc> &cols_desc);
 
   int prepare_col_desc(const ObTableSchema *table_schema, common::ObIArray<share::schema::ObColDesc> &col_descs);
+  int gen_lob_meta_datum_utils();
 public:
   common::ObArenaAllocator allocator_;
   common::ObString table_name_;
@@ -95,15 +93,18 @@ public:
   int64_t rowkey_column_count_;
   // column count in store, does not contain virtual generated columns
   int64_t store_column_count_;
-  int64_t lob_column_cnt_;
   common::ObCollationType collation_type_;
   share::schema::ObPartitionLevel part_level_;
   int64_t schema_version_;
+  uint64_t lob_meta_table_id_;
+  common::ObArray<int64_t> lob_column_idxs_;
   // if it is a heap table, it contains hidden primary key column
   // does not contain virtual generated columns
   common::ObArray<share::schema::ObColDesc> column_descs_;
   common::ObArray<share::schema::ObColDesc> multi_version_column_descs_;
   blocksstable::ObStorageDatumUtils datum_utils_;
+  common::ObArray<share::schema::ObColDesc> lob_meta_column_descs_;
+  blocksstable::ObStorageDatumUtils lob_meta_datum_utils_;
   blocksstable::ObStoreCmpFuncs cmp_funcs_; // for sql statistics
   table::ObTableLoadArray<table::ObTableLoadPartitionId> partition_ids_;
   bool is_inited_;

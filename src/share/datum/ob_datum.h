@@ -864,7 +864,8 @@ inline int ObDatum::from_obj(const ObObj &obj)
       case ObJsonType:
       case ObGeometryType:
       case ObUserDefinedSQLType:
-      case ObCollectionSQLType: {
+      case ObCollectionSQLType:
+      case ObRoaringBitmapType: {
         obj2datum<OBJ_DATUM_STRING>(obj);
         break;
       }
@@ -1012,7 +1013,8 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       case ObJsonType:
       case ObGeometryType:
       case ObUserDefinedSQLType:
-      case ObCollectionSQLType: {
+      case ObCollectionSQLType:
+      case ObRoaringBitmapType: {
         datum2obj<OBJ_DATUM_STRING>(obj);
         break;
       }

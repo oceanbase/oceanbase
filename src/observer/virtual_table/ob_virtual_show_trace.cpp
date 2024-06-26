@@ -332,7 +332,7 @@ int ObVirtualShowTrace::merge_span_info() {
     // do nothing
   } else {
     ObSEArray<sql::ObFLTShowTraceRec*, 16> tmp_arr;
-    std::sort(&show_trace_arr_.at(0), &show_trace_arr_.at(0) + show_trace_arr_.count(),
+    lib::ob_sort(&show_trace_arr_.at(0), &show_trace_arr_.at(0) + show_trace_arr_.count(),
         [](const sql::ObFLTShowTraceRec* rec1, const sql::ObFLTShowTraceRec* rec2) {
           if (NULL == rec1) {
             return true;
@@ -570,7 +570,7 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
   if (tmp_arr.count() == 0) {
     // skipp sort
   } else {
-    std::sort(&tmp_arr.at(0), &tmp_arr.at(0) + tmp_arr.count(),
+    lib::ob_sort(&tmp_arr.at(0), &tmp_arr.at(0) + tmp_arr.count(),
         [](const sql::ObFLTShowTraceRec *rec1, const sql::ObFLTShowTraceRec *rec2) {
           if (NULL == rec1) {
             return true;

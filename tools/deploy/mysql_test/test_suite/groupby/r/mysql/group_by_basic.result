@@ -449,9 +449,9 @@ Outputs & filters:
       range_key([t29_25.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t29_25.c1]), filter(nil), rowset=256
       sort_keys([t29_25.c1, DESC]), topn(1)
-  4 - output([t29_25.c1]), filter(nil), rowset=256
+  4 - output([t29_25.c1]), filter([TOPN_FILTER(t29_25.c1)]), rowset=256
       access([t29_25.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t29_25.__pk_increment]), range(MIN ; MAX)always true
 create table t2 as SELECT t29_25.c1, t29_25.c8
 FROM   (SELECT (SELECT t29_25.c1

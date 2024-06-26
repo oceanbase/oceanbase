@@ -3274,7 +3274,9 @@ int ObService::update_tenant_info_cache(
     if (OB_ISNULL(tenant_info_loader)) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "tenant_info_loader should not be null", KR(ret));
-    } else if (OB_FAIL(tenant_info_loader->update_tenant_info_cache(arg.get_ora_rowscn(), arg.get_tenant_info()))) {
+    } else if (OB_FAIL(tenant_info_loader->update_tenant_info_cache(
+                   arg.get_ora_rowscn(), arg.get_tenant_info(), arg.get_finish_data_version(),
+                   arg.get_data_version_barrier_scn()))) {
       COMMON_LOG(WARN, "update_tenant_info_cache failed", KR(ret), K(arg));
     } else if (OB_FAIL(result.init(arg.get_tenant_id()))) {
       LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()));

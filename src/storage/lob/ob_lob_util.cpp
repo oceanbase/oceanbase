@@ -339,10 +339,8 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       }
     } else {
       ObTransService *txs = MTL(transaction::ObTransService*);
-      ObTxReadSnapshot snapshot;
-      // 4.0 text tc compatiable
       ObLobAccessParam lob_param;
-      // lob_param.tx_desc_ = tx_desc;
+      lob_param.tx_desc_ = tx_desc;
       // lob_param.snapshot_ = snapshot;
       lob_param.sql_mode_ = SMO_DEFAULT;
       lob_param.ls_id_ = ls_id;
@@ -560,7 +558,7 @@ int ObLobPartialData::get_ori_data_length(int64_t &len) const
 int ObLobPartialData::sort_index()
 {
   int ret = OB_SUCCESS;
-  std::sort(index_.begin(), index_.end(), ObLobChunkIndexComparator());
+  lib::ob_sort(index_.begin(), index_.end(), ObLobChunkIndexComparator());
   search_map_.reuse();
   for (int i = 0; i < index_.count(); ++i) {
     const ObLobChunkIndex &chunk_index = index_[i];

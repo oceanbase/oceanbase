@@ -99,6 +99,67 @@ private:
   uint32_t flag_;
 };
 
+// Adaptive filter:
+// In every slide window with window_size_, we check the realtime filter rate of the filter,
+// if the realtime filter rate is too low, we disable it in the following slide window.
+//
+// 1.The slide window start to work once the filter is ready(see function 'start_to_work').
+// 2.When data is checked by the filter, we use 'update_slide_window_info' to update the statistic
+//   info and decide whether to disable it or not.
+// 3.If the filter is disabled in this window, we will enable it in the next window. However, if the
+//   filter rate is too low for several windows continuously, we will punish it with expanding
+//   window_size(by adding window_cnt_), the filter will be disabled for a more long time.
+class ObAdaptiveFilterSlideWindow
+{
+public:
+  explicit ObAdaptiveFilterSlideWindow(int64_t &total_count)
+      : next_check_start_pos_(0), window_cnt_(0), window_size_(4096), partial_filter_count_(0),
+        partial_total_count_(0), adptive_ratio_thresheld_(0.5), cur_pos_(total_count),
+        dynamic_disable_(false), ready_to_work_(false)
+  {}
+  ~ObAdaptiveFilterSlideWindow() = default;
+  inline bool dynamic_disable() { return dynamic_disable_; }
+  inline void start_to_work() {
+    next_check_start_pos_ = cur_pos_;
+    ready_to_work_ = true;
+  }
+  int update_slide_window_info(const int64_t filtered_rows_count, const int64_t total_rows_count);
+  inline void reset_for_rescan() {
+    dynamic_disable_ = false;
+    next_check_start_pos_ = 0;
+    window_cnt_ = 0;
+    partial_filter_count_ = 0;
+    partial_total_count_ = 0;
+    ready_to_work_ = false;
+  }
+
+  inline void set_window_size(int64_t window_size) { window_size_ = window_size; }
+  inline void set_adptive_ratio_thresheld(double thresheld) { adptive_ratio_thresheld_ = thresheld; }
+  TO_STRING_KV(K(next_check_start_pos_), K(window_cnt_), K(partial_filter_count_),
+               K(partial_total_count_), K(cur_pos_), K(dynamic_disable_), K(ready_to_work_));
+
+private:
+  // the start posistion of slide window we check next
+  int64_t next_check_start_pos_;
+  // if the filter rate is too low for several slide windows continuously, we punish it with expanding
+  // the window_size, window_cnt_ implicts the window size now we maintain
+  int64_t window_cnt_;
+  // the original window_size, we default value = 4096
+  int64_t window_size_;
+  // filtered data count in a slide window
+  int64_t partial_filter_count_;
+  // total data count in a slide window
+  int64_t partial_total_count_;
+  // if the realtime filter ratio is smaller than thresheld_, the filter will be disabled,
+  // default=0.5
+  double adptive_ratio_thresheld_;
+  // an reference of total_count, mark the real position now
+  int64_t &cur_pos_;
+  bool dynamic_disable_;
+  // when the filter msg are not ready, skip the update process
+  bool ready_to_work_;
+};
+
 class ObExprOperatorCtx
 {
 public:
@@ -112,6 +173,23 @@ public:
     UNUSED(buf_len);
     return 0;
   }
+  virtual inline bool dynamic_disable()
+  {
+    return false;
+  }
+  // This interface is used to collect the filter statistic info
+  // when runtime filter is pushdown as white filter in storage layer,
+  // override by ObExprJoinFilterContext and ObExprTopNFilterContext now.
+  virtual void collect_monitor_info(const int64_t filtered_rows_count,
+                                    const int64_t check_rows_count, const int64_t total_rows_count)
+  {}
+
+  virtual inline void collect_sample_info(const int64_t filter_count, const int64_t total_count)
+  {}
+
+  virtual inline bool need_reset_in_rescan() { return false; }
+  virtual inline bool is_data_version_updated(int64_t old_version) { return false; }
+
 };
 
 typedef common::ObIArray<common::ObNewRowIterator*> RowIterIArray;

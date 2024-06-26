@@ -3079,6 +3079,31 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PLSQL_OPTIMIZE_LEVEL; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(417); }
 };
+class ObSysVarGroupReplicationGroupSeeds : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationGroupSeeds() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(418); }
+};
+class ObSysVarSlaveRowsSearchAlgorithms : public ObEnumSysVar
+{
+public:
+  const static char * SLAVE_ROWS_SEARCH_ALGORITHMS_NAMES[];
+public:
+  ObSysVarSlaveRowsSearchAlgorithms() : ObEnumSysVar(SLAVE_ROWS_SEARCH_ALGORITHMS_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(419); }
+};
+class ObSysVarSlaveTypeConversions : public ObEnumSysVar
+{
+public:
+  const static char * SLAVE_TYPE_CONVERSIONS_NAMES[];
+public:
+  ObSysVarSlaveTypeConversions() : ObEnumSysVar(SLAVE_TYPE_CONVERSIONS_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_TYPE_CONVERSIONS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(420); }
+};
 
 
 class ObSysVarFactory
@@ -3099,7 +3124,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 319;
+  const static int64_t OB_SYS_VARS_COUNT = 322;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

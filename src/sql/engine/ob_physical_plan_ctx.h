@@ -174,6 +174,15 @@ public:
   {
     return consistency_level_;
   }
+  bool check_consistency_level_validation(const bool contain_inner_table)
+  {
+    bool bool_ret = true;
+    if (contain_inner_table) {
+      // Statement which contain inner tables should be strong read;
+      bool_ret = (consistency_level_ == ObConsistencyLevel::STRONG);
+    }
+    return bool_ret;
+  }
   void restore_param_store(const int64_t param_count);
   // param store
   int reserve_param_space(int64_t param_count);

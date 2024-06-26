@@ -30,13 +30,13 @@ public:
   ObIntegerColumnDecoder &operator=(const ObIntegerColumnDecoder&) = delete;
 
   virtual int decode(const ObColumnCSDecoderCtx &ctx,
-      const int64_t row_id, common::ObDatum &datum) const override;
-  virtual int batch_decode(const ObColumnCSDecoderCtx &ctx, const int64_t *row_ids,
+      const int32_t row_id, common::ObDatum &datum) const override;
+  virtual int batch_decode(const ObColumnCSDecoderCtx &ctx, const int32_t *row_ids,
       const int64_t row_cap, common::ObDatum *datums) const override;
   virtual int decode_vector(const ObColumnCSDecoderCtx &ctx, ObVectorDecodeCtx &vector_ctx) const override;
 
   virtual int get_null_count(const ObColumnCSDecoderCtx &ctx,
-     const int64_t *row_ids, const int64_t row_cap, int64_t &null_count) const override;
+     const int32_t *row_ids, const int64_t row_cap, int64_t &null_count) const override;
 
   virtual ObCSColumnHeader::Type get_type() const override { return type_; }
 
@@ -49,7 +49,7 @@ public:
 
   virtual int get_aggregate_result(
       const ObColumnCSDecoderCtx &ctx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObAggCell &agg_cell) const override;
 

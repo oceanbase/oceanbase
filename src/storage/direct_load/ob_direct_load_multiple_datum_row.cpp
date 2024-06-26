@@ -97,25 +97,35 @@ int ObDirectLoadMultipleDatumRow::from_datums(const ObTabletID &tablet_id, ObSto
              K(rowkey_column_count));
   } else {
     reuse();
+    seq_no_ = seq_no;
     ObDirectLoadDatumArray serialize_datum_array;
     if (OB_FAIL(rowkey_.assign(tablet_id, datums, rowkey_column_count))) {
       LOG_WARN("fail to assign rowkey", KR(ret));
-    } else if (OB_FAIL(serialize_datum_array.assign(datums + rowkey_column_count,
-                                                    column_count - rowkey_column_count))) {
-      LOG_WARN("fail to assign datum array", KR(ret));
-    } else {
-      const int64_t buf_size = serialize_datum_array.get_serialize_size();
-      char *buf = nullptr;
-      int64_t pos = 0;
-      if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory", KR(ret), K(buf_size));
-      } else if (OB_FAIL(serialize_datum_array.serialize(buf, buf_size, pos))) {
-        LOG_WARN("fail to serialize datum array", KR(ret));
+    } else if (column_count > rowkey_column_count) {
+      // to deserialize datum array
+      if (OB_FAIL(serialize_datum_array.assign(datums + rowkey_column_count,
+                                                      column_count - rowkey_column_count))) {
+        LOG_WARN("fail to assign datum array", KR(ret));
       } else {
-        buf_ = buf;
-        buf_size_ = buf_size;
-        seq_no_ = seq_no;
+        const int64_t buf_size = serialize_datum_array.get_serialize_size();
+        char *buf = nullptr;
+        int64_t pos = 0;
+        if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory", KR(ret), K(buf_size));
+        } else if (OB_FAIL(serialize_datum_array.serialize(buf, buf_size, pos))) {
+          LOG_WARN("fail to serialize datum array", KR(ret));
+        } else {
+          if (OB_NOT_NULL(buf_)) {
+            allocator_.free(buf);
+            buf_ = nullptr;
+          }
+          buf_ = buf;
+          buf_size_ = buf_size;
+        }
+        if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
+          allocator_.free(buf);
+        }
       }
     }
   }
@@ -137,19 +147,21 @@ int ObDirectLoadMultipleDatumRow::to_datums(ObStorageDatum *datums, int64_t colu
     for (int64_t i = 0; i < rowkey_.datum_array_.count_; ++i) {
       datums[i] = rowkey_.datum_array_.datums_[i];
     }
-    // from deserialize datum array
-    ObDirectLoadDatumArray deserialize_datum_array;
-    int64_t pos = 0;
-    if (OB_FAIL(deserialize_datum_array.assign(datums + rowkey_.datum_array_.count_,
-                                               column_count - rowkey_.datum_array_.count_))) {
-      LOG_WARN("fail to assign datum array", KR(ret));
-    } else if (OB_FAIL(deserialize_datum_array.deserialize(buf_, buf_size_, pos))) {
-      LOG_WARN("fail to deserialize datum array", KR(ret));
-    } else if (OB_UNLIKELY(rowkey_.datum_array_.count_ + deserialize_datum_array.count_ !=
-                           column_count)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected column count", KR(ret), K(rowkey_.datum_array_.count_),
-               K(deserialize_datum_array.count_), K(column_count));
+    if (column_count > rowkey_.datum_array_.count_) {
+      // from deserialize datum array
+      ObDirectLoadDatumArray deserialize_datum_array;
+      int64_t pos = 0;
+      if (OB_FAIL(deserialize_datum_array.assign(datums + rowkey_.datum_array_.count_,
+                                                 column_count - rowkey_.datum_array_.count_))) {
+        LOG_WARN("fail to assign datum array", KR(ret));
+      } else if (OB_FAIL(deserialize_datum_array.deserialize(buf_, buf_size_, pos))) {
+        LOG_WARN("fail to deserialize datum array", KR(ret));
+      } else if (OB_UNLIKELY(rowkey_.datum_array_.count_ + deserialize_datum_array.count_ !=
+                             column_count)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected column count", KR(ret), K(rowkey_.datum_array_.count_),
+                 K(deserialize_datum_array.count_), K(column_count));
+      }
     }
   }
   return ret;

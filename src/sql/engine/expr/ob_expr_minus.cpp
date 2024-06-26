@@ -138,6 +138,15 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
       type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
       type.set_precision(PRECISION_UNKNOWN_YET);
     }
+    if ((ob_is_double_tc(type.get_type()) || ob_is_float_tc(type.get_type())) && type.get_scale() > 0) {
+      // if result is fixed double/float, calc type's of params should also be fixed double/float
+      if (ob_is_double_tc(type1.get_calc_type()) || ob_is_float_tc(type1.get_calc_type())) {
+        type1.set_calc_scale(type.get_scale());
+      }
+      if (ob_is_double_tc(type2.get_calc_type()) || ob_is_float_tc(type2.get_calc_type())) {
+        type2.set_calc_scale(type.get_scale());
+      }
+    }
     LOG_DEBUG("calc_result_type2", K(scale), K(type1), K(type2), K(type), K(precision));
   }
   return ret;
@@ -1793,7 +1802,8 @@ int ObExprMinus::minus_decimal##TYPE##_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL) 
 {                                            \
   ObNumStackOnceAlloc tmp_alloc;                                \
   const int64_t scale = expr.args_[0]->datum_meta_.scale_;      \
-  return def_fixed_len_vector_arith_op_func<ObDecimalOracleVectorMinusFunc<TYPE##_t>>(VECTOR_EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
+  return def_fixed_len_vector_arith_op_func<ObDecimalOracleVectorMinusFunc<TYPE##_t>,\
+                                            ObArithTypedBase<TYPE##_t, TYPE##_t, TYPE##_t>>(VECTOR_EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
 }
 
 DECINC_MINUS_EVAL_FUNC_ORA_DECL(int32)

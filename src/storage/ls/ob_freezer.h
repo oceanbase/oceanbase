@@ -282,12 +282,14 @@ private:
     bool need_release_;
     ObFreezer &parent_;
   };
-  class PendTenantReplayGuard
-  {
+  class PendTenantReplayGuard {
   public:
     PendTenantReplayGuard();
     ~PendTenantReplayGuard();
+  public:
+    ObSEArray<ObLSHandle, 16> ls_handle_array_;
   };
+
 private:
   /* freeze_flag */
   int set_freeze_flag();

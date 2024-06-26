@@ -79,6 +79,8 @@ public:
     share::SCN &target_data_version_ora_rowscn);
   int update_target_data_version(const uint64_t target_data_version);
   int get_target_data_version(const bool for_update, uint64_t &target_data_version);
+  int update_finish_data_version(const uint64_t finish_data_version, const share::SCN &scn);
+  int get_finish_data_version(uint64_t &finish_data_version, share::SCN &scn);
 
   virtual int get_snapshot_info(int64_t &snapshot_gc_scn,
                                 int64_t &gc_schema_version);

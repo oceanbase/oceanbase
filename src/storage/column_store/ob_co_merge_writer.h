@@ -154,9 +154,9 @@ protected:
         const bool only_use_row_table = false);
   void dump_info() const;
   int process_macro_rewrite();
+  int append_iter_curr_row_or_range();
 private:
   int compare(const ObMergeLog &mergelog, int64_t &cmp_ret, const blocksstable::ObDatumRow &row, bool &skip_curr_row) const;
-  int append_iter_curr_row_or_range();
   int process_mergelog_row(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row);
   virtual int process(const ObMacroBlockDesc &macro_desc) = 0;
   virtual int process(const blocksstable::ObMicroBlock &micro_block) = 0;
@@ -164,13 +164,11 @@ private:
   virtual bool is_cg() const { return false; } //temp code
 protected:
   compaction::ObLocalArena allocator_;
-private:
   ObDefaultMergeFuser fuser_;
   ObMergeIter *iter_;
   blocksstable::ObDatumRow default_row_;
   bool is_inited_;
   bool iter_co_build_row_store_;
-protected:
   share::ObDiagnoseLocation *error_location_;
 };
 

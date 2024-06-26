@@ -35,42 +35,66 @@ using ObRuntimeFilterParams = common::ObSEArray<common::ObDatum, 4>;
 class ObExprJoinFilter : public ObExprOperator
 {
 public:
-  class ObExprJoinFilterContext : public ObExprOperatorCtx
+  class ObExprJoinFilterContext final: public ObExprOperatorCtx
   {
     public:
       ObExprJoinFilterContext() : ObExprOperatorCtx(),
           rf_msg_(nullptr), rf_key_(), hash_funcs_(), cmp_funcs_(), start_time_(0),
           filter_count_(0), total_count_(0), check_count_(0),
-          n_times_(0), ready_ts_(0), next_check_start_pos_(0),
-          window_cnt_(0), window_size_(0),
-          partial_filter_count_(0), partial_total_count_(0),
-          cur_pos_(total_count_), need_reset_sample_info_(false), flag_(0),
-          cur_row_(), cur_row_with_hash_(nullptr), skip_vector_(nullptr),
-          is_partition_wise_jf_(false)
+          n_times_(0), ready_ts_(0), slide_window_(total_count_), flag_(0),
+          cur_row_(), cur_row_with_hash_(nullptr), skip_vector_(nullptr)
         {
           cur_row_.set_attr(ObMemAttr(MTL_ID(), "RfCurRow"));
           need_wait_rf_ = true;
+          need_check_ready_ = true;
           is_first_ = true;
+          is_partition_wise_jf_ = false;
         }
       virtual ~ObExprJoinFilterContext();
     public:
-      bool is_ready() { return is_ready_; }
-      bool need_wait_ready() { return need_wait_rf_; }
-      bool dynamic_disable() {  return dynamic_disable_; }
-      void collect_monitor_info(
-          const int64_t filtered_rows_count,
-          const int64_t check_rows_count,
-          const int64_t total_rows_count);
-      void inc_partial_rows_count(
-          const int64_t filtered_rows_count,
-          const int64_t total_rows_count)
+      inline bool need_wait_ready() { return need_wait_rf_; }
+      inline bool need_check_ready() { return need_check_ready_; }
+      inline bool dynamic_disable() override final
       {
-        if (!dynamic_disable()) {
-          partial_filter_count_ += filtered_rows_count;
-          partial_total_count_ += total_rows_count;
+        return slide_window_.dynamic_disable();
+      }
+      inline bool need_reset_in_rescan() override final
+      {
+        // for runtime filter pushdown, if is partition wise join, we need to reset
+        // pushdown filter parameters
+        return is_partition_wise_jf_;
+      }
+      inline void collect_monitor_info(const int64_t filtered_rows_count,
+                                       const int64_t check_rows_count,
+                                       const int64_t total_rows_count) override final
+      {
+        filter_count_ += filtered_rows_count;
+        check_count_ += check_rows_count;
+        total_count_ += total_rows_count;
+        if (!is_ready_) {
+          n_times_ += total_rows_count;
+          if (n_times_ > CHECK_TIMES) {
+            need_check_ready_ = true;
+            n_times_ = 0;
+          }
         }
       }
-      void reset_monitor_info();
+      inline void reset_monitor_info()
+      {
+        filter_count_ = 0;
+        total_count_ = 0;
+        check_count_ = 0;
+        n_times_ = 0;
+        ready_ts_ = 0;
+        is_ready_ = false;
+      }
+
+      inline void collect_sample_info(const int64_t filter_count,
+                                      const int64_t total_count) override final
+      {
+        (void)slide_window_.update_slide_window_info(filter_count, total_count);
+      }
+
     public:
       ObP2PDatahubMsgBase *rf_msg_;
       ObP2PDhKey rf_key_;
@@ -83,23 +107,22 @@ public:
       int64_t n_times_;
       int64_t ready_ts_;
 
-      // for adaptive bloom filter
-      int64_t next_check_start_pos_;
-      int64_t window_cnt_;
-      int64_t window_size_;
-      int64_t partial_filter_count_;
-      int64_t partial_total_count_;
-      int64_t &cur_pos_;
-      bool need_reset_sample_info_;
+      ObAdaptiveFilterSlideWindow slide_window_;
+
       union {
         uint64_t flag_;
         struct {
-          bool need_wait_rf_:1;
           bool is_ready_:1;
-          bool dynamic_disable_:1;
           bool is_first_:1;
+          // whether need to sync wait
+          bool need_wait_rf_:1;
+          // check ready every CHECK_TIMES
+          bool need_check_ready_:1;
+          // for runtime filter pushdown, if is partition wise join, we need to reset
+          // pushdown filter parameters
+          bool is_partition_wise_jf_ : 1;
           int32_t max_wait_time_ms_:32;
-          int32_t reserved_:28;
+          int32_t reserved_:27;
         };
       };
       ObTMArray<ObDatum> cur_row_;
@@ -108,10 +131,6 @@ public:
       ObBitVector *skip_vector_;
       // used in ObRFInFilterVecMsg/ObRFBloomFilterMsg, cal probe data's hash value
       uint64_t *right_hash_vals_;
-
-      // for runtime filter pushdown, if is partition wise join, we need to reset
-      // pushdown filter parameters
-      bool is_partition_wise_jf_;
   };
   ObExprJoinFilter();
   explicit ObExprJoinFilter(common::ObIAllocator& alloc);
@@ -161,12 +180,6 @@ public:
   virtual bool need_rt_ctx() const override { return true; }
   // hard code seed, 32 bit max prime number
   static const int64_t JOIN_FILTER_SEED = 4294967279;
-  static void collect_sample_info(
-    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx,
-    bool is_match);
-  static void collect_sample_info_batch(
-    ObExprJoinFilter::ObExprJoinFilterContext &join_filter_ctx,
-    int64_t filter_count, int64_t total_count);
   static int prepare_storage_white_filter_data(
       const ObExpr &expr,
       ObDynamicFilterExecutor &dynamic_filter,
@@ -178,10 +191,6 @@ private:
     ObExecContext &exec_ctx,
     ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx);
 
-  static void check_need_dynamic_diable_bf(
-      ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx);
-  static void check_need_dynamic_diable_bf_batch(
-      ObExprJoinFilter::ObExprJoinFilterContext &join_filter_ctx);
 private:
   static const int64_t CHECK_TIMES = 127;
 private:

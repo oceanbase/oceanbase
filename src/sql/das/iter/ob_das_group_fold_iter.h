@@ -75,6 +75,10 @@ public:
 
 struct ObDASGroupFoldIterParam : public ObDASIterParam
 {
+public:
+  ObDASGroupFoldIterParam()
+    : ObDASIterParam(ObDASIterType::DAS_ITER_GROUP_FOLD)
+  {}
   bool need_check_output_datum_;
   ObDASIter *iter_tree_;
 
@@ -88,7 +92,8 @@ class ObDASGroupFoldIter : public ObDASIter
 {
 public:
   ObDASGroupFoldIter()
-    : cur_group_idx_(0),
+    : ObDASIter(ObDASIterType::DAS_ITER_GROUP_FOLD),
+      cur_group_idx_(0),
       available_group_idx_(MIN_GROUP_INDEX),
       group_size_(0),
       need_check_output_datum_(false),

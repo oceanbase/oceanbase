@@ -88,12 +88,6 @@ using nullsafe_cmp_initer = InitCmpSet<
 static bool g_init_cmp_set =
   Ob2DArrayConstIniter<MAX_VEC_TC, MAX_VEC_TC, nullsafe_cmp_initer>::init();
 
-static bool init_row_cmp_double_func() {
-  ROW_CMP_FUNCS[VEC_TC_DOUBLE][VEC_TC_FIXED_DOUBLE] = VecTCCmpCalc<VEC_TC_DOUBLE, VEC_TC_DOUBLE>::cmp;
-  ROW_CMP_FUNCS[VEC_TC_FIXED_DOUBLE][VEC_TC_DOUBLE] = VecTCCmpCalc<VEC_TC_DOUBLE, VEC_TC_DOUBLE>::cmp;
-  return true;
-}
-static bool g_init_row_cmp_double_func = init_row_cmp_double_func();
 
 void VectorCmpExprFuncsHelper::get_cmp_set(const sql::ObDatumMeta &l_meta,
                                            const sql::ObDatumMeta &r_meta,
@@ -316,7 +310,6 @@ struct EvalVectorCmp
     return ret;
   }
 
-#undef VECTOR_CMP_CASE
 };
 
 struct EvalVectorCmpWithNull
@@ -371,8 +364,6 @@ struct EvalVectorCmp<VEC_TC_NULL, r_tc, cmp_op>: public EvalVectorCmpWithNull {}
 template<ObCmpOp cmp_op>
 struct EvalVectorCmp<VEC_TC_NULL, VEC_TC_NULL, cmp_op>: public EvalVectorCmpWithNull {};
 
-#undef CALC_FORMAT
-
 static sql::ObExpr::EvalVectorFunc EVAL_VECTOR_EXPR_CMP_FUNCS[MAX_VEC_TC][MAX_VEC_TC][CO_MAX];
 
 template<int X, int Y, bool defined>
@@ -406,10 +397,21 @@ struct VectorExprCmpFuncIniter<X, Y, true>
 template <int X, int Y>
 using cmp_initer = VectorExprCmpFuncIniter<
   X, Y,
-  VecTCCmpCalc<static_cast<VecValueTypeClass>(X), static_cast<VecValueTypeClass>(Y)>::defined_>;
+  VecTCCmpCalc<static_cast<VecValueTypeClass>(X), static_cast<VecValueTypeClass>(Y)>::defined_
+    && (!is_fixed_length_vec(static_cast<VecValueTypeClass>(X))
+        || !is_fixed_length_vec(static_cast<VecValueTypeClass>(Y)))>;
 
 static int g_init_eval_vector_expr_cmp_funcs =
   Ob2DArrayConstIniter<MAX_VEC_TC, MAX_VEC_TC, cmp_initer>::init();
+} // end namespace common
+} // end namespace oceanbase
+
+#include "expr_cmp_func_simd.ipp"
+
+namespace oceanbase
+{
+namespace common
+{
 
 sql::ObExpr::EvalVectorFunc VectorCmpExprFuncsHelper::get_eval_vector_expr_cmp_func(
   const sql::ObDatumMeta &l_meta, const sql::ObDatumMeta &r_meta, const common::ObCmpOp cmp_op)

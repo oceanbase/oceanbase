@@ -45,6 +45,9 @@ public:
                        const int64_t size,
                        const int64_t col_idx) const override final;
 
+  virtual void to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+                       const int64_t size, const int64_t col_idx) const override final;
+
 protected:
   ObDatum *datums_;
   sql::ObEvalInfo *eval_info_; // just used for maintain has_null flag in uniform vector

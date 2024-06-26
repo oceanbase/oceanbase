@@ -232,6 +232,7 @@ private:
       ObIArray<ObMicroIndexInfo> &micro_index_infos,
       ObIArray<ObDatumRowkey> &end_keys);
   int check_reach_target_depth(const MoveDepth target_depth, bool &reach_target_depth);
+  int init_curr_endkey(ObDatumRow &row_buf, const int64_t datum_cnt);
 
 private:
   static const int64_t OB_INDEX_BLOCK_MAX_COL_CNT =
@@ -250,6 +251,7 @@ private:
   ObIndexBlockTreePathItem *curr_path_item_;
 
   ObDatumRow row_;
+  ObDatumRowkey vector_endkey_;
   ObIndexBlockRowParser idx_row_parser_;
   const ObITableReadInfo *read_info_;
   ObSSTableMetaHandle sstable_meta_handle_;

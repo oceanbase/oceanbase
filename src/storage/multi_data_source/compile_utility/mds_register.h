@@ -71,6 +71,7 @@
   #include "src/storage/multi_data_source/ob_tablet_create_mds_ctx.h"
   #include "src/storage/multi_data_source/ob_start_transfer_in_mds_ctx.h"
   #include "src/storage/multi_data_source/ob_finish_transfer_in_mds_ctx.h"
+  #include "src/share/ob_standby_upgrade.h"
 #endif
 /**************************************************************************************************/
 
@@ -176,6 +177,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
   //                                         33,\
   //                                         STANDBY_UPGRADE_DATA_VERSION)
   // # 余留位置（此行之前占位）
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::share::ObUpgradeDataVersionMDSHelper, \
+                                          ::oceanbase::storage::mds::MdsCtx, \
+                                          33,\
+                                          STANDBY_UPGRADE_DATA_VERSION)
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
 /**************************************************************************************************/

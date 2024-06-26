@@ -451,8 +451,9 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
         || T_SP_TYPE == type_node->type_) { // %Type %RowType
       ObArray<ObObjAccessIdx> access_idxs;
       ObArray<ObObjAccessIdent> obj_access_idents;
-      CK (OB_LIKELY(1 == type_node->num_child_),
+      CK (OB_LIKELY(2 == type_node->num_child_),
           OB_NOT_NULL(type_node->children_[0]),
+          OB_ISNULL(type_node->children_[1]),
           OB_LIKELY(T_SP_OBJ_ACCESS_REF == type_node->children_[0]->type_),
           OB_NOT_NULL(schema_checker_),
           OB_NOT_NULL(schema_checker_->get_schema_guard()),
@@ -993,14 +994,16 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
       LOG_WARN("fail to get database schema", K(ret));
       LOG_USER_ERROR(OB_ERR_BAD_DATABASE, crt_routine_arg->db_name_.length(), crt_routine_arg->db_name_.ptr());
     }
-    if (OB_SUCC(ret)
-        && database_schema->get_database_name_str() != session_info_->get_database_name()) {
+    if (OB_FAIL(ret)) {
+    }else if (database_schema->get_database_name_str() != session_info_->get_database_name()) {
       OZ (old_database_name.append(session_info_->get_database_name()));
       OX (old_database_id = session_info_->get_database_id());
       OZ (session_info_->set_default_database(database_schema->get_database_name_str()));
       OX (session_info_->set_database_id(database_id));
       OX (crt_routine_arg->routine_info_.set_database_id(database_id));
       OX (need_reset_default_database = true);
+    } else {
+      OX (crt_routine_arg->routine_info_.set_database_id(database_id));
     }
   }
   OZ (resolve_sp_body(body_node, crt_routine_arg->routine_info_));
@@ -1073,7 +1076,11 @@ int ObCreateRoutineResolver::resolve(const ParseNode &parse_tree,
                                     clause_list,
                                     crt_routine_arg))) {
       LOG_WARN("failed to resolve routine info", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      if (parse_tree.value_ != 0 && is_mysql_mode()) {
+        OX (crt_routine_arg->with_if_not_exist_ = parse_tree.value_);
+      }
+    }
   }
   return ret;
 }

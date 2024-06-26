@@ -27,7 +27,7 @@ class ObIMacroBlockFlushCallback
 public:
   ObIMacroBlockFlushCallback() {}
   virtual ~ObIMacroBlockFlushCallback() {}
-  virtual int write(const ObMacroBlockHandle &macro_handle,
+  virtual int write(ObMacroBlockHandle &macro_handle,
                     const ObLogicMacroBlockId &logic_id,
                     char *buf,
                     const int64_t buf_len,

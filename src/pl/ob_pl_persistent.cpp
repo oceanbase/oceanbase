@@ -368,6 +368,9 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
       }
     }
   }
+  if (OB_SUCC(ret) && !match) {
+    LOG_INFO("not match schema", K(merge_version), K(dep_schema_objs));
+  }
 
   return ret;
 }

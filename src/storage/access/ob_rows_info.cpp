@@ -204,7 +204,7 @@ int ObRowsInfo::check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRel
     if (OB_SUCC(ret)) {
       if (row_count > 1) {
         RowsCompare rows_cmp(*datum_utils_, min_key_, true, ret);
-        std::sort(rowkeys_.begin(), rowkeys_.end(), rows_cmp);
+        lib::ob_sort(rowkeys_.begin(), rowkeys_.end(), rows_cmp);
       }
       if (OB_SUCC(ret)) {
         for (int64_t i = 0; i < row_count; i++) {

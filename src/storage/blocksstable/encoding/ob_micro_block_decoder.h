@@ -52,7 +52,7 @@ public:
 
   int batch_decode(
       const ObIRowIndex *row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums);
@@ -63,7 +63,7 @@ public:
 
   int get_row_count(
       const ObIRowIndex *row_index,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool contains_null,
       int64_t &count);
@@ -75,7 +75,7 @@ public:
       storage::ObGroupByCell &group_by_cell) const
   { return decoder_->read_distinct(*ctx_, cell_datas, group_by_cell); }
   OB_INLINE int read_reference(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const
   { return decoder_->read_reference(*ctx_, row_ids, row_cap, group_by_cell); }
@@ -299,14 +299,14 @@ public:
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObIArray<ObSqlDatumInfo> &datum_infos,
       const int64_t datum_offset = 0) override;
   virtual int get_row_count(
       int32_t col_id,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const bool contains_null,
       const share::schema::ObColumnParam *col_param,
@@ -316,7 +316,7 @@ public:
       const ObTableAccessContext &context,
       const int32_t col_offset,
       const share::schema::ObColumnParam &col_param,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObAggDatumBuf &agg_datum_buf,
       storage::ObAggCell &agg_cell) override;
@@ -350,18 +350,18 @@ public:
       storage::ObGroupByCell &group_by_cell) const override;
   virtual int read_reference(
       const int32_t group_by_col,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const override;
   virtual int get_group_by_aggregate_result(
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) override;
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const char **cell_datas,
       const int64_t vec_offset,
@@ -389,7 +389,7 @@ private:
                    ObStorageDatum *datums);
 
   int get_col_datums(int32_t col_id,
-                     const int64_t *row_ids,
+                     const int32_t *row_ids,
                      const char **cell_datas,
                      const int64_t row_cap,
                      common::ObDatum *col_datums);

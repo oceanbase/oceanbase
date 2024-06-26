@@ -87,6 +87,24 @@ public:
     return ret;
   }
 
+  template<typename ColumnFmt>
+  int sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+              const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    const char* param_payload = nullptr;
+    int32_t param_len = 0;
+    columns.get_payload(row_num, param_payload, param_len);
+    const ParamType *lparam = reinterpret_cast<const ParamType *>(param_payload);
+    const ResultType &rparam = *reinterpret_cast<const ResultType *>(agg_cell);
+    SQL_LOG(DEBUG, "sum sub row", K(agg_col_id));
+    ret = sub_values(rparam, *lparam, agg_cell, sizeof(ResultType));
+    if (OB_FAIL(ret)) {
+      SQL_LOG(WARN, "sub value failed", K(ret));
+    }
+    return ret;
+  }
+
   template <typename ColumnFmt>
   int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                        const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
@@ -105,6 +123,31 @@ public:
   }
 
   template <typename ColumnFmt>
+  int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    bool is_trans = !agg_ctx.removal_info_.is_inverse_agg_;
+    if (!columns.is_null(row_num)) {
+      if (is_trans) {
+        if (OB_FAIL(add_row(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info))) {
+          SQL_LOG(WARN, "add row failed", K(ret));
+        }
+      } else if (OB_FAIL(
+                   sub_row(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info))) {
+        SQL_LOG(WARN, "sub row failed", K(ret));
+      }
+    } else {
+      if (is_trans) {
+        agg_ctx.removal_info_.null_cnt_++;
+      } else {
+        agg_ctx.removal_info_.null_cnt_--;
+      }
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
   int collect_group_result(RuntimeContext &agg_ctx, const sql::ObExpr &agg_expr,
                            const int32_t agg_col_id, const char *agg_cell,
                            const int32_t agg_cell_len)
@@ -116,7 +159,7 @@ public:
     ColumnFmt *res_vec = static_cast<ColumnFmt *>(agg_expr.get_vector(agg_ctx.eval_ctx_));
     if (OB_LIKELY(not_nulls.at(agg_col_id))) {
       CellWriter<ResultType>::set(agg_cell, agg_cell_len, res_vec, output_idx, nullptr);
-    } else if (agg_expr.type_ == T_FUN_COUNT_SUM) {
+    } else if (agg_ctx.locate_aggr_info(agg_col_id).get_expr_type() == T_FUN_COUNT_SUM) {
       if (VEC_TC_INTEGER == out_tc) {
         int64_t res = 0;
         res_vec->set_payload(output_idx, &res, sizeof(int64_t));
@@ -243,21 +286,49 @@ public:
     int ret = OB_SUCCESS;
     TmpStore &tmp_res = *reinterpret_cast<TmpStore *>(get_tmp_res(agg_ctx, agg_col_id, agg_cell));
     if (OB_LIKELY(tmp_res != 0)) {
-      ResultType &res = *reinterpret_cast<ResultType *>(agg_cell);
-      const int32_t agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_cell);
-      ObScale scale = agg_ctx.get_first_param_scale(agg_col_id);
-      if (out_tc == VEC_TC_NUMBER) {
-        if (OB_FAIL(add_value_to_nmb(tmp_res, scale, agg_cell))) {
-          SQL_LOG(WARN, "add value to nmb failed", K(ret));
+      if (OB_LIKELY(!agg_ctx.removal_info_.enable_removal_opt_)
+          || !agg_ctx.removal_info_.is_inverse_agg_) {
+        ResultType &res = *reinterpret_cast<ResultType *>(agg_cell);
+        const int32_t agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_cell);
+        ObScale scale = agg_ctx.get_first_param_scale(agg_col_id);
+        if (out_tc == VEC_TC_NUMBER) {
+          if (OB_FAIL(add_value_to_nmb(tmp_res, scale, agg_cell))) {
+            SQL_LOG(WARN, "add value to nmb failed", K(ret));
+          }
+        } else {
+          ResultType *res_val = reinterpret_cast<ResultType *>(agg_cell);
+          ret = add_values(tmp_res, *res_val, agg_cell, agg_ctx.get_cell_len(agg_col_id, agg_cell));
+        }
+        if (OB_FAIL(ret)) {
+          SQL_LOG(WARN, "do op failed", K(ret));
+        } else {
+          tmp_res = 0;
         }
       } else {
-        ResultType *res_val = reinterpret_cast<ResultType *>(agg_cell);
-        ret = add_values(tmp_res, *res_val, agg_cell, agg_ctx.get_cell_len(agg_col_id, agg_cell));
-      }
-      if (OB_FAIL(ret)) {
-        SQL_LOG(WARN, "do op failed", K(ret));
-      } else {
-        tmp_res = 0;
+        if (out_tc == VEC_TC_NUMBER) {
+          ObScale scale = agg_ctx.get_first_param_scale(agg_col_id);
+          number::ObNumber param_nmb, res_nmb;
+          number::ObNumber cur_nmb(*reinterpret_cast<number::ObCompactNumber *>(agg_cell));
+          number::ObCompactNumber *res_cnum = reinterpret_cast<number::ObCompactNumber *>(agg_cell);
+          ObNumStackAllocator<3> tmp_alloc;
+          if (OB_FAIL(to_nmb(tmp_res, scale, tmp_alloc, param_nmb))) {
+            SQL_LOG(WARN, "to number failed", K(ret));
+          } else if (OB_FAIL(cur_nmb.sub(param_nmb, res_nmb, tmp_alloc))) {
+            SQL_LOG(WARN, "number::sub failed", K(ret));
+          } else {
+            res_cnum->desc_ = res_nmb.d_;
+            MEMCPY(&(res_cnum->digits_[0]), res_nmb.get_digits(), sizeof(uint32_t) * res_nmb.d_.len_);
+            tmp_res = 0;
+          }
+        } else {
+          constexpr unsigned res_bits =
+            (out_tc == VEC_TC_NUMBER ? 128 : sizeof(ResultType) * CHAR_BIT);
+          using res_int_type = wide::ObWideInteger<res_bits>;
+          res_int_type &res_val = *reinterpret_cast<res_int_type *>(agg_cell);
+          // overflow is impossible
+          sub_values(res_val, tmp_res, agg_cell, sizeof(res_int_type));
+          tmp_res = 0;
+        }
       }
     }
     return ret;
@@ -271,14 +342,16 @@ public:
     if (!is_null) {
       const ParamType *row_param = reinterpret_cast<const ParamType *>(data);
       TmpStore *tmp_res = reinterpret_cast<TmpStore *>(get_tmp_res(agg_ctx, agg_col_idx, agg_cell));
+      TmpStore copied_tmp_res = *tmp_res;
       SQL_LOG(DEBUG, "sum with tmp::add_one_row ", K(*row_param), K(*tmp_res), K(batch_idx));
-      ret = add_overflow(*row_param, *tmp_res, reinterpret_cast<char *>(tmp_res), sizeof(TmpStore));
+      ret = add_overflow(*row_param, copied_tmp_res, reinterpret_cast<char *>(tmp_res),
+                         sizeof(TmpStore));
       if (OB_FAIL(ret)) {
         if (OB_LIKELY(OB_OPERATE_OVERFLOW == ret)) {
           ret = OB_SUCCESS;
           if (out_tc == VEC_TC_NUMBER) {
             ObScale scale = agg_ctx.get_first_param_scale(agg_col_idx);
-            if (OB_FAIL(add_value_to_nmb(*tmp_res, scale, agg_cell))) {
+            if (OB_FAIL(add_value_to_nmb(copied_tmp_res, scale, agg_cell))) {
               SQL_LOG(WARN, "add value to nmb failed", K(ret));
             } else if (OB_FAIL(add_value_to_nmb(*row_param, scale, agg_cell))) {
               SQL_LOG(WARN, "add value to nmb failed", K(ret));
@@ -315,16 +388,19 @@ public:
     int32_t param_len = 0;
     columns.get_payload(row_num, param_payload, param_len);
     const ParamType *row_param = reinterpret_cast<const ParamType *>(param_payload);
+    // add_overflow may overwrite `tmp_res`, deep copy is needed
     TmpStore &tmp_res = *reinterpret_cast<TmpStore *>(tmp_res_ptr);
+    TmpStore copied_tmp_res = tmp_res;
 
     SQL_LOG(DEBUG, "sum add row", K(row_param), K(row_num), K(tmp_res));
-    ret = add_overflow(*row_param, tmp_res, reinterpret_cast<char *>(&tmp_res), sizeof(TmpStore));
+    ret = add_overflow(*row_param, copied_tmp_res, reinterpret_cast<char *>(&tmp_res),
+                       sizeof(TmpStore));
     if (OB_FAIL(ret)) {
       if (OB_LIKELY(ret == OB_OPERATE_OVERFLOW)) {
         ret = OB_SUCCESS;
         if (out_tc == VEC_TC_NUMBER) {
           ObScale in_scale = agg_ctx.get_first_param_scale(agg_col_id);
-          if (OB_FAIL(add_value_to_nmb(tmp_res, in_scale, agg_cell))) {
+          if (OB_FAIL(add_value_to_nmb(copied_tmp_res, in_scale, agg_cell))) {
             SQL_LOG(WARN, "add_value_to_nmb failed", K(ret));
           } else if (OB_FAIL(add_value_to_nmb(*row_param, in_scale, agg_cell))) {
             SQL_LOG(WARN, "add_value_to_nmb failed", K(ret));
@@ -333,7 +409,7 @@ public:
           }
         } else {
           ResultType &res_val = *reinterpret_cast<ResultType *>(agg_cell);
-          if (OB_FAIL(add_values(tmp_res, res_val, agg_cell, sizeof(ResultType)))) {
+          if (OB_FAIL(add_values(copied_tmp_res, res_val, agg_cell, sizeof(ResultType)))) {
             SQL_LOG(WARN, "add values failed", K(ret));
           } else if (OB_FAIL(add_values(*row_param, res_val, agg_cell, sizeof(ResultType)))) {
             SQL_LOG(WARN, "add values failed", K(ret));
@@ -367,6 +443,87 @@ public:
     return ret;
   }
 
+  template<typename ColumnFmt>
+  int sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    // for substraction with tmp result, we added all substractions in tmp results
+    // and do substraction when overflow or tmp result collecting happended.
+    const char *payload = columns.get_payload(row_num);
+    const ParamType &param = *reinterpret_cast<const ParamType *>(payload);
+    TmpStore &tmp_val = *reinterpret_cast<TmpStore *>(tmp_res);
+    TmpStore copied_tmp_val = tmp_val;
+    ret = add_overflow(param, copied_tmp_val, (char *)tmp_res, sizeof(TmpStore));
+    if (OB_FAIL(ret)) {
+      if (OB_LIKELY(ret == OB_OPERATE_OVERFLOW)) {
+        ret = OB_SUCCESS;
+        if (out_tc == VEC_TC_NUMBER) {
+          ObNumStackAllocator<4> tmp_alloc;
+          number::ObNumber sub1, sub2, tmp_sum, res_nmb;
+          number::ObNumber cur_nmb(*reinterpret_cast<number::ObCompactNumber *>(agg_cell));
+          ObScale scale = agg_ctx.get_first_param_scale(agg_col_id);
+          if (OB_FAIL(to_nmb(tmp_val, scale, tmp_alloc, sub1))) {
+            SQL_LOG(WARN, "to number failed", K(ret));
+          } else if (OB_FAIL(to_nmb(param, scale, tmp_alloc, sub2))) {
+            SQL_LOG(WARN, "to number failed", K(ret));
+          } else if (OB_FAIL(sub1.add(sub2, tmp_sum, tmp_alloc))) {
+            SQL_LOG(WARN, "number::add failed", K(ret));
+          } else if (OB_FAIL(cur_nmb.sub(tmp_sum, res_nmb, tmp_alloc))) {
+            SQL_LOG(WARN, "number::sub failed", K(ret));
+          } else {
+            number::ObCompactNumber *res_cnum = reinterpret_cast<number::ObCompactNumber *>(agg_cell);
+            res_cnum->desc_ = res_nmb.d_;
+            MEMCPY(&(res_cnum->digits_[0]), res_nmb.get_digits(), res_nmb.d_.len_ * sizeof(uint32_t));
+            tmp_val = 0;
+          }
+        } else {
+          constexpr unsigned res_bits =
+            (out_tc == VEC_TC_NUMBER ? 128 : sizeof(ResultType) * CHAR_BIT);
+          using res_int_type = wide::ObWideInteger<res_bits>;
+          res_int_type &res_val = *reinterpret_cast<res_int_type *>(agg_cell);
+          if (OB_FAIL(sub_values(res_val, tmp_val, agg_cell, sizeof(ResultType)))) {
+            SQL_LOG(WARN, "sub values failed", K(ret));
+          } else if (OB_FAIL(sub_values(res_val, param, agg_cell, sizeof(ResultType)))) {
+            SQL_LOG(WARN, "sub values failed", K(ret));
+          } else {
+            tmp_val = 0;
+          }
+        }
+      } else {
+        SQL_LOG(WARN, "add overflow", K(ret));
+      }
+    }
+    return ret;
+  }
+
+  template <typename ColumnFmt>
+  int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    bool is_trans = !agg_ctx.removal_info_.is_inverse_agg_;
+    if (!columns.is_null(row_num)) {
+      if (is_trans) {
+        ret = add_row(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info);
+        if (OB_FAIL(ret)) {
+          SQL_LOG(WARN, "add row failed", K(ret));
+        }
+      } else {
+        if (OB_FAIL(sub_row(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info))) {
+          SQL_LOG(WARN, "sub row failed", K(ret));
+        }
+      }
+    } else {
+      if (is_trans) {
+        agg_ctx.removal_info_.null_cnt_++;
+      } else {
+        agg_ctx.removal_info_.null_cnt_--;
+      }
+    }
+    return ret;
+  }
+
   template <typename ColumnFmt>
   int collect_group_result(RuntimeContext &agg_ctx, const sql::ObExpr &agg_expr,
                            const int32_t agg_col_id, const char *agg_cell, const int32_t agg_len)
@@ -395,7 +552,7 @@ public:
           CellWriter<ResultType>::set(agg_cell, agg_len, res_vec, output_idx, nullptr);
         }
       }
-    } else if (agg_expr.type_ == T_FUN_COUNT_SUM) {
+    } else if (agg_ctx.locate_aggr_info(agg_col_id).get_expr_type() == T_FUN_COUNT_SUM) {
       if (lib::is_oracle_mode() || out_tc == VEC_TC_NUMBER) {
         number::ObNumber res_nmb;
         res_nmb.set_zero();
@@ -483,6 +640,27 @@ private:
     }
     }
   }
+
+  template<typename T>
+  int to_nmb(const T &v, ObScale in_scale, ObIAllocator &alloc, number::ObNumber &res_nmb)
+  {
+    int ret = OB_SUCCESS;
+    if (sizeof(T) > sizeof(int64_t)) {
+      if (OB_FAIL(wide::to_number(v, in_scale, alloc, res_nmb))) {
+        SQL_LOG(WARN, "wide::to_number failed", K(ret));
+      }
+    } else if (sizeof(T) <= sizeof(int32_t) || std::is_same<T, int64_t>::value) {
+      int64_t tmp_v = v;
+      if (OB_FAIL(wide::to_number(tmp_v, in_scale, alloc, res_nmb))) {
+        SQL_LOG(WARN, "wide::to_number failed", K(ret));
+      }
+    } else if (std::is_same<T, uint64_t>::value) {
+      if (OB_FAIL(wide::to_number(static_cast<uint64_t>(v), in_scale, alloc, res_nmb))) {
+        SQL_LOG(WARN, "wide::to_number failed", K(ret));
+      }
+    }
+    return ret;
+  }
   template<typename T>
   int add_value_to_nmb(const T &v, const ObScale in_scale, char *agg_cell)
   {
@@ -490,23 +668,8 @@ private:
     ObNumStackAllocator<2> tmp_alloc;
     number::ObNumber res_nmb, param_nmb;
     number::ObNumber tmp(*reinterpret_cast<number::ObCompactNumber *>(agg_cell));
-    if (sizeof(T) > sizeof(int64_t)) {
-      if (OB_FAIL(wide::to_number(v, in_scale, tmp_alloc, param_nmb))) {
-        SQL_LOG(WARN, "to_number failed", K(ret));
-      }
-    } else if (sizeof(T) <= sizeof(int32_t)) {
-      int64_t tmp_v = v;
-      if (OB_FAIL(wide::to_number(tmp_v, in_scale, tmp_alloc, param_nmb))) {
-        SQL_LOG(WARN, "wide::to_number failed", K(ret));
-      }
-    } else if (std::is_same<T, uint64_t>::value
-               && OB_FAIL(
-                 wide::to_number(static_cast<uint64_t>(v), in_scale, tmp_alloc, param_nmb))) {
-      SQL_LOG(WARN, "wide::to_number failed", K(ret));
-    } else if (OB_FAIL(wide::to_number(static_cast<int64_t>(v), in_scale, tmp_alloc, param_nmb))) {
-      SQL_LOG(WARN, "wide::to_number failed", K(ret));
-    }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(to_nmb(v, in_scale, tmp_alloc, param_nmb))) {
+      SQL_LOG(WARN, "to_nmb failed", K(ret));
     } else if (OB_FAIL(tmp.add_v3(param_nmb, res_nmb, tmp_alloc))) {
       SQL_LOG(WARN, "ObNumber::add_v3 failed", K(ret));
     } else {

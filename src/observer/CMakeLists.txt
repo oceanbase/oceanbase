@@ -432,6 +432,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_storage_ha_error_diagnose.cpp
   virtual_table/ob_all_virtual_storage_ha_perf_diagnose.cpp
   virtual_table/ob_all_virtual_sys_variable_default_value.cpp
+  virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
   virtual_table/ob_all_virtual_compatibility_control.cpp
 )
 

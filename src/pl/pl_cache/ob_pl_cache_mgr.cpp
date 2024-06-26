@@ -116,6 +116,10 @@ int ObPLCacheMgr::add_pl_object(ObPlanCache *lib_cache,
     LOG_WARN("lib cache is null");
   } else {
     pc_ctx.key_.sys_vars_str_ = pc_ctx.session_info_->get_sys_var_in_pc_str();
+    pl::PLCacheObjStat *stat = NULL;
+    pl::ObPLCacheObject* pl_object = static_cast<pl::ObPLCacheObject*>(cache_obj);
+    stat = &pl_object->get_stat_for_update();
+    ATOMIC_STORE(&(stat->db_id_), pc_ctx.key_.db_id_);
     do {
       if (OB_FAIL(lib_cache->add_cache_obj(ctx, &pc_ctx.key_, cache_obj)) && OB_OLD_SCHEMA_VERSION == ret) {
         PL_CACHE_LOG(INFO, "schema in pl cache value is old, start to remove pl object", K(ret), K(pc_ctx.key_));

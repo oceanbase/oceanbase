@@ -96,6 +96,8 @@ ObPxMSCoordVecOp::ObPxMSCoordVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec
   init_channel_piece_msg_proc_(exec_ctx, msg_proc_),
   reporting_wf_piece_msg_proc_(exec_ctx, msg_proc_),
   opt_stats_gather_piece_msg_proc_(exec_ctx, msg_proc_),
+  rd_winfunc_px_piece_msg_proc_(exec_ctx, msg_proc_),
+  sp_winfunc_px_piece_msg_proc_(exec_ctx, msg_proc_),
   store_rows_(),
   last_pop_row_(nullptr),
   row_heap_(),
@@ -150,7 +152,8 @@ int ObPxMSCoordVecOp::inner_open()
     ObMemAttr attr(ctx_.get_my_session()->get_effective_tenant_id(),
                     "PxMsOutputStore", ObCtxIds::EXECUTE_CTX_ID);
     if (OB_FAIL(output_store_.init(MY_SPEC.all_exprs_, get_spec().max_batch_size_,
-                                    attr, 0 /*mem_limit*/, false/*enable_dump*/, 0 /*row_extra_size*/))) {
+                                    attr, 0 /*mem_limit*/, false/*enable_dump*/,
+                                    0 /*row_extra_size*/, NONE_COMPRESSOR))) {
       LOG_WARN("init output store failed", K(ret));
     } else if (OB_ISNULL(mem = ctx_.get_allocator().alloc(
             ObBitVector::memory_size(1)))) {
@@ -198,6 +201,8 @@ int ObPxMSCoordVecOp::setup_loop_proc()
       .register_processor(init_channel_piece_msg_proc_)
       .register_processor(reporting_wf_piece_msg_proc_)
       .register_processor(opt_stats_gather_piece_msg_proc_)
+      .register_processor(rd_winfunc_px_piece_msg_proc_)
+      .register_processor(sp_winfunc_px_piece_msg_proc_)
       .register_interrupt_processor(interrupt_proc_);
   msg_loop_.set_tenant_id(ctx_.get_my_session()->get_effective_tenant_id());
   return ret;
@@ -473,6 +478,8 @@ int ObPxMSCoordVecOp::next_row(const bool need_store_output)
         case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
         case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
         case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
+        case ObDtlMsgType::DH_RD_WINFUNC_PX_PIECE_MSG:
+        case ObDtlMsgType::DH_SP_WINFUNC_PX_PIECE_MSG:
           // 这几种消息都在 process 回调函数里处理了
           break;
         default:

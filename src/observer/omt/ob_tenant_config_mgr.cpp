@@ -21,6 +21,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "common/ob_tenant_data_version_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -199,6 +200,22 @@ int ObTenantConfigMgr::refresh_tenants(const ObIArray<uint64_t> &tenants)
           if (OB_FAIL(new_tenants.push_back(tenant_id))) {
             LOG_WARN("fail add tenant config", K(tenant_id), K(ret));
           }
+        } else if (OB_ISNULL((*config))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant config is null", K(ret), K(tenant_id), K(config));
+        } else {
+          // periodically(10s) check that ObTenantDataVersionMgr doesn't fall behind ObTenantConfigMgr
+          bool value_updated = (*config)->compatible.value_updated();
+          if (value_updated) {
+            int tmp_ret = OB_SUCCESS;
+            const uint64_t data_version = (*config)->compatible;
+            if (OB_TMP_FAIL(ODV_MGR.set(tenant_id, data_version))) {
+              LOG_WARN("fail to set data_version in refresh_tenants", KR(tmp_ret), K(tenant_id),
+                       K(data_version));
+            }
+            LOG_INFO("[DATA_VERSION] periodically update data_version", KR(tmp_ret), K(tenant_id),
+                     K(data_version));
+          }
         }
       }
     }
@@ -336,6 +353,10 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
     } else {
       ob_delete(config);
       LOG_INFO("tenant config deleted", K(tenant_id), K(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ODV_MGR.remove(tenant_id))) {
+        LOG_WARN("fail to remove data_version", K(tmp_ret), K(tenant_id));
+      }
     }
   }
   return ret;
@@ -508,21 +529,38 @@ void ObTenantConfigMgr::get_lease_request(share::ObLeaseRequest &lease_request)
 }
 
 // for __all_virtual_tenant_parameter_info
-int ObTenantConfigMgr::get_all_tenant_config_info(common::ObArray<TenantConfigInfo> &all_config)
+int ObTenantConfigMgr::get_all_tenant_config_info(
+    common::ObArray<TenantConfigInfo> &all_config,
+    common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   DRWLock::RDLockGuard guard(rwlock_);
   TenantConfigMap::const_iterator it = config_map_.begin();
   for (; OB_SUCC(ret) && it != config_map_.end(); ++it) {
-    uint64_t tenant_id = it->first.tenant_id_;
+    const uint64_t tenant_id = it->first.tenant_id_;
     ObTenantConfig *tenant_config = it->second;
     for (ObConfigContainer::const_iterator iter = tenant_config->get_container().begin();
          iter != tenant_config->get_container().end(); iter++) {
       TenantConfigInfo config_info(tenant_id);
-      if (0 == ObString("compatible").case_compare(iter->first.str())
-          && !iter->second->value_updated()) {
-        if (OB_FAIL(config_info.set_value("0.0.0.0"))) {
-          LOG_WARN("set value fail", K(iter->second->str()), K(ret));
+      if (0 == ObString("compatible").case_compare(iter->first.str())) {
+        uint64_t data_version = 0;
+        char *dv_buf = NULL;
+        if (GET_MIN_DATA_VERSION(tenant_id, data_version) != OB_SUCCESS) {
+          if (OB_FAIL(config_info.set_value("0.0.0.0"))) {
+            LOG_WARN("set value fail", K(ret), K(tenant_id));
+          }
+        } else if (OB_ISNULL(dv_buf = (char *)allocator->alloc(OB_SERVER_VERSION_LENGTH))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("fail to alloc buf", K(ret), K(tenant_id), K(OB_SERVER_VERSION_LENGTH));
+        } else if (OB_INVALID_INDEX ==
+                   VersionUtil::print_version_str(
+                       dv_buf, OB_SERVER_VERSION_LENGTH, data_version)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_ERROR("fail to print data_version", K(ret), K(tenant_id), K(data_version));
+        } else {
+          if (OB_FAIL(config_info.set_value(dv_buf))) {
+            LOG_WARN("set value fail", K(ret), K(tenant_id), K(data_version), K(dv_buf));
+          }
         }
       } else {
         if (OB_FAIL(config_info.set_value(iter->second->str()))) {
@@ -628,6 +666,10 @@ int ObTenantConfigMgr::add_config_to_existing_tenant(const char *config_str)
         if (OB_FAIL(it->second->add_extra_config(config_str, version))) {
           LOG_WARN("add tenant extra config failed", "tenant_id", it->second->get_tenant_id(),
                    "config_str", config_str, KR(ret));
+        } else if (OB_FAIL(dump2file())) {
+          LOG_WARN("fail to dump config to file", KR(ret), K(config_str));
+        } else if (OB_FAIL(it->second->publish_special_config_after_dump())) {
+          LOG_WARN("fail to publish config after dump", KR(ret), K(config_str));
         }
       }
     }

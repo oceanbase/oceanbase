@@ -218,7 +218,8 @@ int ObConstEncoder::get_cell_len(const ObDatum &datum, int64_t &length) const
       case ObJsonSC:
       case ObOTimestampSC:
       case ObIntervalSC:
-      case ObGeometrySC: {
+      case ObGeometrySC:
+      case ObRoaringBitmapSC: {
         length = datum.len_;
         break;
       }
@@ -253,7 +254,8 @@ int ObConstEncoder::store_value(const ObDatum &datum, char *buf)
       case ObJsonSC:
       case ObOTimestampSC:
       case ObIntervalSC:
-      case ObGeometrySC: {
+      case ObGeometrySC:
+      case ObRoaringBitmapSC: {
         MEMCPY(buf, datum.ptr_, datum.len_);
         break;
       }

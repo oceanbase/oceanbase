@@ -786,6 +786,7 @@
   // start of dbms_external_table
   INTERFACE_DEF(INTERFACE_DBMS_EXTERNAL_TABLE_AUTO_REFRESH_EXTERNAL_TABLE, "AUTO_REFRESH_EXTERNAL_TABLE", (ObDBMSExternalTable::auto_refresh_external_table))
   //end of dbms_external_table
+
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif
 

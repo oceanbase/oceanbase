@@ -340,7 +340,7 @@ int ObTransferPartitionHelper::batch_get_table_schema_in_order_(
     } else {
       //按照table_id的顺序对table_schema_array进行排序
       ObBootstrap::TableIdCompare compare;
-      std::sort(table_schema_array.begin(), table_schema_array.end(), compare);
+      lib::ob_sort(table_schema_array.begin(), table_schema_array.end(), compare);
       if (OB_FAIL(compare.get_ret())) {
         LOG_WARN("failed to sort table schema", KR(ret), K(table_schema_array));
       }

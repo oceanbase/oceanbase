@@ -911,7 +911,7 @@ int ObBackupDataStore::get_max_backup_set_file_info(const common::ObString &pass
     } else {
       ObBackupSetDescComparator cmp;
       storage::ObExternBackupSetInfoDesc backup_set_info;
-      std::sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
+      lib::ob_sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
       for (int64_t i = backup_set_desc_array.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
         const share::ObBackupSetDesc &backup_set_desc = backup_set_desc_array.at(i);
         backup_desc_.backup_set_id_ = backup_set_desc.backup_set_id_;
@@ -970,7 +970,7 @@ int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap 
       ObBackupSetDescComparator cmp;
       HEAP_VARS_2((storage::ObExternTenantLocalityInfoDesc, locality_info),
                   (storage::ObExternBackupSetInfoDesc, backup_set_info)) {
-        std::sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
+        lib::ob_sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
         for (int64_t i = backup_set_desc_array.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
           const share::ObBackupSetDesc &backup_set_desc = backup_set_desc_array.at(i);
           backup_desc_.backup_set_id_ = backup_set_desc.backup_set_id_;
@@ -1073,7 +1073,7 @@ int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_a
     LOG_WARN("fail to get backup set name array", K(ret), K(op));
   } else {
     ObBackupSetDescComparator cmp;
-    std::sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
+    lib::ob_sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_desc_array.count(); ++i) {

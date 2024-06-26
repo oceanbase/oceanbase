@@ -344,6 +344,12 @@ public:
       const ObArray<int64_t> &lob_column_idxs,
       const ObArray<common::ObObjMeta> &col_types,
       blocksstable::ObDatumRow &datum_row);
+  // for delete lob in incremental direct load only
+  virtual int fill_lob_meta_sstable_slice(
+      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
+      const share::SCN &start_scn,
+      ObIStoreRowIterator *iter,
+      int64_t &affected_rows);
   virtual int close_sstable_slice(
       const bool is_data_tablet_process_for_lob,
       const ObDirectLoadSliceInfo &slice_info,

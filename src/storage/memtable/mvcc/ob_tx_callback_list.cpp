@@ -127,12 +127,14 @@ int ObTxCallbackList::append_callback(ObITransCallback *callback,
       }
       ++appended_;
       ATOMIC_INC(&length_);
-      data_size_ += callback->get_data_size();
+      int64_t data_size = callback->get_data_size();
+      data_size_ += data_size;
       if (repos_lc) {
         log_cursor_ = get_tail();
       }
       if (for_replay) {
         ++logged_;
+        logged_data_size_ += data_size;
         ++synced_;
       }
       // Once callback is appended into callback lists, we can not handle the

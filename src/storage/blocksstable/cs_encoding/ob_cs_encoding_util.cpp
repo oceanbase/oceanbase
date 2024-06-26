@@ -175,7 +175,8 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
     case ObStringSC:
     case ObTextSC:
     case ObJsonSC:
-    case ObGeometrySC: { // geometry, json and text storage class have the same behavior currently
+    case ObGeometrySC:
+    case ObRoaringBitmapSC: { // geometry, json and text storage class have the same behavior currently
       col_ctx.fix_data_size_ = -1;
       col_ctx.max_string_size_ = -1;
       bool var_store = false;

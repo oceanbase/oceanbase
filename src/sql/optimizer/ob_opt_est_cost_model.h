@@ -244,6 +244,8 @@ struct ObCostTableScanInfo
   { }
 
   int assign(const ObCostTableScanInfo &other_est_cost_info);
+  int has_exec_param(bool &bool_ret) const;
+  int has_exec_param(const ObIArray<ObRawExpr *> &exprs, bool &bool_ret) const;
 
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(index_id),
                K_(table_meta_info), K_(index_meta_info),

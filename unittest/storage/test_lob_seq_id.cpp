@@ -233,6 +233,11 @@ TEST_F(TestLobSeqId, test_chunk_size_v1_to_v0)
   ASSERT_EQ(ctx_v0.first_meta_offset_ & 0xffffff, ctx_v1.first_meta_offset_ );
 }
 
+TEST_F(TestLobSeqId, test_lob_outrow_locator_size)
+{
+  ASSERT_EQ(84, sizeof(ObLobCommon) + sizeof(ObLobData)  + sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t));
+}
+
 
 }  // end namespace unittest
 }  // end namespace oceanbase

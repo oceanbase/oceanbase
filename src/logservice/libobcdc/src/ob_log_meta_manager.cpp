@@ -1178,6 +1178,8 @@ int ObLogMetaManager::set_column_meta_(
         col_meta->setPrecision(column_schema.get_data_precision());
       } else if (column_schema.is_xmltype()) {
         mysql_type = obmysql::MYSQL_TYPE_ORA_XML;
+      } else if (ObRoaringBitmapType == col_type) {
+        mysql_type = obmysql::MYSQL_TYPE_ROARINGBITMAP;
       }
 
       col_meta->setScale(column_schema.get_data_scale());

@@ -266,6 +266,7 @@ ObVTableScanParam() :
       pd_storage_filters_(nullptr),
       pd_storage_flag_(false),
       row2exprs_projector_(NULL),
+      table_scan_opt_(),
       ext_file_column_exprs_(NULL),
       ext_column_convert_exprs_(NULL),
       schema_guard_(NULL)
@@ -340,6 +341,7 @@ ObVTableScanParam() :
   int32_t pd_storage_flag_;
   // project storage output row to %output_exprs_
   storage::ObRow2ExprsProjector *row2exprs_projector_;
+  ObTableScanOption table_scan_opt_;
 
   // external table
   const sql::ExprFixedArray *ext_file_column_exprs_;

@@ -47,7 +47,7 @@ int ObTempBlockStore::ShrinkBuffer::init(char *buf, const int64_t buf_size)
 }
 
 ObTempBlockStore::ObTempBlockStore(common::ObIAllocator *alloc /* = NULL */)
-  : inited_(false), allocator_(NULL == alloc ? &inner_allocator_ : alloc), blk_(NULL),
+  : inited_(false), allocator_(NULL == alloc ? &inner_allocator_ : alloc), blk_(NULL), blk_buf_(),
     block_id_cnt_(0), saved_block_id_cnt_(0), dumped_block_id_cnt_(0), enable_dump_(true),
     enable_trunc_(false), last_trunc_offset_(0),
     tenant_id_(0), label_(), ctx_id_(0), mem_limit_(0), mem_hold_(0), mem_used_(0),
@@ -90,6 +90,7 @@ void ObTempBlockStore::reset()
   LOG_TRACE("reset temp block store", KP(this), K(*this));
 
   blk_ = NULL;
+  blk_buf_.reset();
   // the last index block may not be linked to `blk_mem_list_` and needs to be released manually
   if (NULL != idx_blk_) {
     free_blk_mem(idx_blk_);
@@ -104,7 +105,7 @@ void ObTempBlockStore::reset()
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(io_.fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(io_.fd));
     } else {
-      LOG_INFO("close file success", K(ret), K_(io_.fd));
+      LOG_INFO("close file success", K(ret), K_(io_.fd), K_(file_size));
     }
     io_.fd_ = -1;
   }
@@ -127,7 +128,7 @@ void ObTempBlockStore::reuse()
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(io_.fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(io_.fd));
     } else {
-      LOG_INFO("close file success", K(ret), K_(io_.fd));
+      LOG_INFO("close file success", K(ret), K_(io_.fd), K_(file_size));
     }
     io_.fd_ = -1;
   }
@@ -138,7 +139,7 @@ void ObTempBlockStore::reuse()
   }
   free_mem_list(alloced_mem_list_);
   DLIST_FOREACH_REMOVESAFE_NORET(node, blk_mem_list_) {
-    if (&(*node) + 1 != static_cast<LinkNode *>(static_cast<void *>(blk_->get_buffer()->data()))) {
+    if (&(*node) + 1 != static_cast<LinkNode *>(static_cast<void *>(blk_buf_.data()))) {
       node->unlink();
       node->~LinkNode();
       allocator_->free(node);
@@ -147,13 +148,12 @@ void ObTempBlockStore::reuse()
   set_mem_hold(0);
   set_mem_used(0);
   if (NULL != blk_) {
-    if (OB_FAIL(setup_block(blk_->get_buffer(), blk_))) {
+    if (OB_FAIL(setup_block(blk_buf_, blk_))) {
       LOG_WARN("setup block failed", K(ret));
     }
     block_cnt_ = 1;
-    const ShrinkBuffer *buf = blk_->get_buffer();
-    set_mem_hold(buf->capacity() + sizeof(LinkNode));
-    max_block_size_ = buf->capacity();
+    set_mem_hold(blk_buf_.capacity() + sizeof(LinkNode));
+    max_block_size_ = blk_buf_.capacity();
     max_hold_mem_ = mem_hold_;
   }
   blocks_.reset();
@@ -216,14 +216,14 @@ int ObTempBlockStore::finish_add_row(bool need_dump /*true*/)
   return ret;
 }
 
-int ObTempBlockStore::init_block_buffer(void* mem, const int64_t size, Block *&block)
+int ObTempBlockStore::init_dtl_block_buffer(void* mem, const int64_t size, Block *&block)
 {
   int ret = OB_SUCCESS;
   ShrinkBuffer *buf = NULL;
   if (OB_ISNULL(mem)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("mem is null", KP(mem));
-  } else if (OB_UNLIKELY(size <= Block::min_blk_size(0))) {
+  } else if (OB_UNLIKELY(size <= Block::min_blk_size<true>(0))) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("buffer is not enough", K(size));
   } else if (OB_ISNULL(buf = new (Block::buffer_position(mem, size))ShrinkBuffer)) {
@@ -240,7 +240,7 @@ int ObTempBlockStore::init_block_buffer(void* mem, const int64_t size, Block *&b
     } else {
       block->block_id_ = 0; // unused
       block->cnt_ = 0;
-      block->buf_off_ = buf->remain();
+      block->buf_off_ = buf->capacity() - buf->tail_size();
     }
   }
   return ret;
@@ -280,14 +280,14 @@ int ObTempBlockStore::append_block_payload(const char *buf, const int64_t size, 
     LOG_WARN("buf is null", K(ret), KP(buf), K(size), K(cnt));
   } else if (OB_FAIL(new_block(size, blk_, true))) {
     LOG_WARN("fail to new block", K(ret));
-  } else if (OB_UNLIKELY(size > blk_->remain())) {
+  } else if (OB_UNLIKELY(size > blk_buf_.remain())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("blk size is not enough", K(ret), K(size), K(blk_->remain()));
+    LOG_WARN("blk size is not enough", K(ret), K(size), K(blk_buf_.remain()));
   } else {
     blk_->cnt_ = static_cast<uint32_t>(cnt);
     MEMCPY(blk_->payload_, buf, size);
     block_id_cnt_ = blk_->end();
-    blk_->get_buffer()->fast_advance(size);
+    blk_buf_.fast_advance(size);
     LOG_DEBUG("append block payload", K(*this), K(*blk_), K(mem_used_), K(mem_hold_));
   }
   // dump data if mem used > 16MB
@@ -305,7 +305,7 @@ int ObTempBlockStore::new_block(const int64_t mem_size,
                                 const bool strict_mem_size /* false*/)
 {
   int ret = OB_SUCCESS;
-  const int64_t min_blk_size = Block::min_blk_size(mem_size);
+  const int64_t min_blk_size = Block::min_blk_size<false>(mem_size);
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -544,20 +544,16 @@ int ObTempBlockStore::alloc_block(Block *&blk, const int64_t min_size, const boo
     size -= sizeof(LinkNode);
   }
   void *mem = alloc_blk_mem(size, &blk_mem_list_);
-  ShrinkBuffer *buf = NULL;
   if (OB_ISNULL(mem)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", K(ret), K(size));
-  } else if (OB_ISNULL(buf = new (Block::buffer_position(mem, size))ShrinkBuffer)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc buffer failed", K(ret));
-  } else if (OB_FAIL(buf->init(static_cast<char *>(mem), size))) {
+  } else if (OB_FAIL(blk_buf_.init(static_cast<char *>(mem), size))) {
     LOG_WARN("init shrink buffer failed", K(ret));
-  } else if (OB_FAIL(setup_block(buf, blk))) {
+  } else if (OB_FAIL(setup_block(blk_buf_, blk))) {
     LOG_WARN("setup block buffer fail", K(ret));
   } else {
     ++block_cnt_;
-    LOG_TRACE("succ to alloc new block", KP(this), KP(mem), K(*buf), K(*blk));
+    LOG_TRACE("succ to alloc new block", KP(this), KP(mem), K_(blk_buf), K(*blk));
   }
   if (OB_FAIL(ret) && !OB_ISNULL(mem)) {
     free_blk_mem(mem, size);
@@ -597,23 +593,24 @@ void *ObTempBlockStore::alloc_blk_mem(const int64_t size, ObDList<LinkNode> *lis
   return blk;
 }
 
-int ObTempBlockStore::setup_block(ShrinkBuffer *buf, Block *&blk)
+int ObTempBlockStore::setup_block(ShrinkBuffer &buf, Block *&blk)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!buf->is_inited())) {
+  if (OB_UNLIKELY(!buf.is_inited())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("block buffer not inited", K(ret));
   } else {
-    buf->reuse();
-    blk = new (buf->head()) Block;
+    buf.reuse();
+    blk = new (buf.head()) Block;
     blk->block_id_ = block_id_cnt_;
-    if (OB_FAIL(buf->fill_head(sizeof(Block)))) {
+    blk->raw_size_ = buf.capacity();
+    if (OB_FAIL(buf.fill_head(sizeof(Block)))) {
       LOG_WARN("fill buffer head failed", K(ret), K(buf), K(sizeof(Block)));
-    } else if (OB_FAIL(buf->fill_tail(sizeof(ShrinkBuffer)))) {
-      LOG_WARN("fill buffer tail failed", K(ret), K(buf), K(sizeof(ShrinkBuffer)));
     } else {
-      blk->buf_off_ = buf->remain();
-      inc_mem_used(sizeof(Block) + sizeof(ShrinkBuffer));
+      inc_mem_used(sizeof(Block));
+    }
+    if (OB_SUCC(ret) && OB_FAIL(prepare_setup_blk(blk))) {
+      LOG_WARN("fail to prepare setup blk", K(ret));
     }
   }
   return ret;
@@ -627,18 +624,20 @@ int ObTempBlockStore::switch_block(const int64_t min_size, const bool strict_mem
   } else if (OB_UNLIKELY(min_size < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(min_size));
+  } else if (OB_FAIL(prepare_blk_for_switch(blk_))) {
+    LOG_WARN("block compact failed", K(ret));
   } else {
     const bool finish_add = (0 == min_size);
     Block *new_blk = NULL;
-    const ShrinkBuffer *buf = blk_->get_buffer();
     BlockIndex bi;
     bi.is_idx_block_ = false;
     bi.on_disk_ = false;
     bi.block_id_ = ~(0b11UL << 62) & saved_block_id_cnt_;
     bi.blk_ = blk_;
-    bi.length_ = static_cast<int32_t>(buf->head_size());
-    bi.capacity_ = static_cast<int32_t>(buf->capacity());
+    bi.length_ = static_cast<int32_t>(blk_buf_.head_size());
+    bi.capacity_ = static_cast<int32_t>(blk_buf_.capacity());
     blk_->raw_size_ = bi.length_;
+    blk_buf_.reset();
     if (OB_FAIL(add_block_idx(bi))) {
       LOG_WARN("add block index failed", K(ret));
     } else if (!finish_add && OB_FAIL(alloc_block(new_blk, min_size, strict_mem_size))) {
@@ -649,7 +648,7 @@ int ObTempBlockStore::switch_block(const int64_t min_size, const bool strict_mem
       blk_ = new_blk;
     }
     if (OB_FAIL(ret) && NULL != new_blk) {
-      free_blk_mem(new_blk, new_blk->get_buffer()->capacity());
+      free_blk_mem(new_blk, blk_buf_.capacity());
     }
   }
   return ret;
@@ -1004,6 +1003,10 @@ int ObTempBlockStore::ensure_reader_buffer(BlockReader &reader, ShrinkBuffer &bu
         p->next_ = reader.try_free_list_;
         reader.try_free_list_ = p;
       }
+      if (buf.data() == reader.buf_.data()) {
+        // reset `buf_` of reader if the buffers share common memory ptr.
+        reader.buf_.reset();
+      }
       buf.reset();
     }
 
@@ -1076,7 +1079,7 @@ int ObTempBlockStore::write_file(BlockIndex &bi, void *buf, int64_t size)
         io_.tenant_id_ = tenant_id_;
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
         io_.io_timeout_ms_ = timeout_ms;
-        LOG_INFO("open file success", K_(io_.fd), K_(io_.dir_id));
+        LOG_INFO("open file success", K_(io_.fd), K_(io_.dir_id), K(get_compressor_type()));
       }
     }
     ret = OB_E(EventTable::EN_8) ret;
@@ -1310,7 +1313,7 @@ int ObTempBlockStore::dump_block(Block *blk, int64_t &dumped_size)
     ++block_cnt_on_disk_;
     dumped_block_id_cnt_ += blk->cnt_;
     inc_mem_hold(-(bi->capacity_ + sizeof(LinkNode)));
-    inc_mem_used(-(dumped_size + sizeof(ShrinkBuffer)));
+    inc_mem_used(-(dumped_size));
     LOG_TRACE("succ to dump block", KP(this), K(*blk), K(*bi), K(dumped_size));
   }
   return ret;
@@ -1458,9 +1461,10 @@ void ObTempBlockStore::BlockHolder::release()
 OB_DEF_SERIALIZE(ObTempBlockStore)
 {
   int ret = OB_SUCCESS;
-  if (inited_ && enable_dump_) {
+  if (inited_ && (enable_dump_ || need_compress())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("block store not support serialize if enable dump", K(ret));
+    LOG_WARN("block store not support serialize if enable dump", K(ret), K_(enable_dump),
+             K(get_compressor_type()));
   }
   LST_DO_CODE(OB_UNIS_ENCODE,
               tenant_id_,
@@ -1518,7 +1522,8 @@ OB_DEF_DESERIALIZE(ObTempBlockStore)
               mem_limit_,
               label);
   if (!is_inited()) {
-    if (OB_FAIL(init(mem_limit_, false/*enable_dump*/, tenant_id_, ctx_id_, label))) {
+    if (OB_FAIL(init(mem_limit_, false/*enable_dump*/, tenant_id_, ctx_id_, label,
+                     NONE_COMPRESSOR))) {
       LOG_WARN("fail to init Block row store", K(ret));
     }
   }

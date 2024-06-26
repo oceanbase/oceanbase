@@ -1973,7 +1973,7 @@ int ObPathVarObject::add(const common::ObString &key, ObDatum *value, bool with_
       LOG_WARN("fail to push back", K(ret));
     } else { // sort again.
       ObPathKeyCompare cmp;
-      std::sort(object_array_.begin(), object_array_.end(), cmp);
+      lib::ob_sort(object_array_.begin(), object_array_.end(), cmp);
     }
   }
   return ret;

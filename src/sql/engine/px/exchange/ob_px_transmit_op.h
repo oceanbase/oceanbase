@@ -31,6 +31,7 @@
 #include "sql/engine/px/ob_px_basic_info.h"
 #include "sql/engine/basic/ob_ra_datum_store.h"
 #include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
+#include "sql/engine/basic/ob_compact_row.h"
 
 namespace oceanbase
 {
@@ -176,6 +177,7 @@ private:
   int set_expect_range_count();
   int wait_channel_ready_msg();
   int hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard);
+  int keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard, const int64_t *indexes);
   int64_t get_random_seq()
   {
     return nrand48(rand48_buf_) % INT16_MAX;
@@ -189,6 +191,7 @@ private:
                                                                     && !proxy.get_transmit_use_interm_result(); }
   int try_wait_channel();
   void init_data_msg_type(const common::ObIArray<ObExpr *> &output);
+  void fill_batch_ptrs(const int64_t *indexes);
   dtl::ObDtlMsgType get_data_msg_type() const { return data_msg_type_; }
 protected:
   ObArray<ObChunkDatumStore::Block *> ch_blocks_;
@@ -226,15 +229,24 @@ protected:
   unsigned short rand48_buf_[3];
   bool receive_channel_ready_;
   dtl::ObDtlMsgType data_msg_type_;
-  bool disable_fast_append_;
   //slice_idx, batch_idx
   uint16_t **slice_info_bkts_;
   uint16_t *slice_bkt_item_cnts_;
   ObFixedArray<ObIVector *, common::ObIAllocator> vectors_;
   uint16_t *selector_array_;
+  int64_t selector_cnt_;
   uint32_t *row_size_array_;
   ObCompactRow **return_rows_;
   bool use_hash_reorder_;
+  RowMeta meta_;
+  uint16_t *fallback_array_;
+  int64_t fallback_cnt_;
+  ObTempRowStore::DtlRowBlock **blocks_;
+  int64_t *heads_;
+  int64_t *tails_;
+  int64_t *init_pos_; //memset from this pos
+  bool *channel_unobstructeds_;
+  bool init_hash_reorder_struct_;
 };
 
 inline void ObPxTransmitOp::update_row(const ObExpr *expr, int64_t tablet_id)

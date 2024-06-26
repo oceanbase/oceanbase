@@ -1051,67 +1051,73 @@ bool ObIndexBuildTask::is_create_partitioned_local_index()
 int ObIndexBuildTask::wait_data_complement()
 {
   int ret = OB_SUCCESS;
-  bool state_finished = false;
-  bool is_request_end = false;
-  share::ObLSID ls_id;
-  common::ObAddr leader_addr;
-  ObArray<ObTabletID> index_partition_ids;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
-    LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected snapshot", K(ret), KPC(this));
-  }
-  // submit a job to complete sstable for the index table on snapshot_version
-  if (OB_SUCC(ret) && !state_finished && !is_sstable_complete_task_submitted()) {
-    bool need_exec_new_inner_sql = false;
-    if (OB_FAIL(reap_old_replica_build_task(need_exec_new_inner_sql))) {
-      if (OB_EAGAIN == ret) {
-        ret = OB_SUCCESS; // retry
-      } else {
-        LOG_WARN("failed to reap old task", K(ret));
-      }
-    } else if (!need_exec_new_inner_sql) {
-      state_finished = true;
-    } else if (OB_FAIL(send_build_single_replica_request(false, parallelism_, 0, ls_id, leader_addr, index_partition_ids))) {
-      LOG_WARN("fail to send build single replica request", K(ret), K(parallelism_), K(index_partition_ids));
-    }
-  }
-
-  DEBUG_SYNC(CREATE_INDEX_REPLICA_BUILD);
-
-  if (OB_SUCC(ret) && !state_finished && is_sstable_complete_task_submitted()) {
-    if (OB_FAIL(check_build_single_replica(is_request_end))) {
-      LOG_WARN("fail to check build single replica", K(ret));
-    } else if (OB_UNLIKELY(is_request_end)) {
-      ret = complete_sstable_job_ret_code_;
-      state_finished = true;
-    }
-  }
-  if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index()) {
-    bool dummy_equal = false;
-    bool need_verify_checksum = true;
-#ifdef ERRSIM
-    // when the major compaction is delayed, skip verify column checksum
-    need_verify_checksum = 0 == GCONF.errsim_ddl_major_delay_time;
-#endif
-    if (need_verify_checksum && OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
-            tenant_id_, get_execution_id(), object_id_, index_table_id_, task_id_, false/*index build*/, dummy_equal, root_service_->get_sql_proxy()))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fail to check column checksum", K(ret), K(index_table_id_), K(object_id_), K(task_id_));
-        state_finished = true;
-      } else if (REACH_TIME_INTERVAL(1000L * 1000L)) {
-        LOG_INFO("index checksum has not been reported", K(ret), K(index_table_id_), K(object_id_), K(task_id_));
-      }
-    }
-  }
-
-  if (state_finished || OB_FAIL(ret)) {
+    // temporary bypass data complement for fts index
+  if (share::schema::is_fts_index(create_index_arg_.index_type_)) {
     (void)switch_status(ObDDLTaskStatus::VALIDATE_CHECKSUM, true, ret);
     LOG_INFO("wait data complement finished", K(ret), K(*this));
+  } else {
+    bool state_finished = false;
+    bool is_request_end = false;
+    share::ObLSID ls_id;
+    common::ObAddr leader_addr;
+    ObArray<ObTabletID> index_partition_ids;
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", K(ret));
+    } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
+      LOG_WARN("task status not match", K(ret), K(task_status_));
+    } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected snapshot", K(ret), KPC(this));
+    }
+    // submit a job to complete sstable for the index table on snapshot_version
+    if (OB_SUCC(ret) && !state_finished && !is_sstable_complete_task_submitted()) {
+      bool need_exec_new_inner_sql = false;
+      if (OB_FAIL(reap_old_replica_build_task(need_exec_new_inner_sql))) {
+        if (OB_EAGAIN == ret) {
+          ret = OB_SUCCESS; // retry
+        } else {
+          LOG_WARN("failed to reap old task", K(ret));
+        }
+      } else if (!need_exec_new_inner_sql) {
+        state_finished = true;
+      } else if (OB_FAIL(send_build_single_replica_request(false, parallelism_, 0, ls_id, leader_addr, index_partition_ids))) {
+        LOG_WARN("fail to send build single replica request", K(ret), K(parallelism_), K(index_partition_ids));
+      }
+    }
+
+    DEBUG_SYNC(CREATE_INDEX_REPLICA_BUILD);
+
+    if (OB_SUCC(ret) && !state_finished && is_sstable_complete_task_submitted()) {
+      if (OB_FAIL(check_build_single_replica(is_request_end))) {
+        LOG_WARN("fail to check build single replica", K(ret));
+      } else if (is_request_end) {
+        ret = complete_sstable_job_ret_code_;
+        state_finished = true;
+      }
+    }
+    if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index()) {
+      bool dummy_equal = false;
+      bool need_verify_checksum = true;
+  #ifdef ERRSIM
+      // when the major compaction is delayed, skip verify column checksum
+      need_verify_checksum = 0 == GCONF.errsim_ddl_major_delay_time;
+  #endif
+      if (need_verify_checksum && OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
+              tenant_id_, get_execution_id(), object_id_, index_table_id_, task_id_, false/*index build*/, dummy_equal, root_service_->get_sql_proxy()))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to check column checksum", K(ret), K(index_table_id_), K(object_id_), K(task_id_));
+          state_finished = true;
+        } else if (REACH_TIME_INTERVAL(1000L * 1000L)) {
+          LOG_INFO("index checksum has not been reported", K(ret), K(index_table_id_), K(object_id_), K(task_id_));
+        }
+      }
+    }
+
+    if (state_finished || OB_FAIL(ret)) {
+      (void)switch_status(ObDDLTaskStatus::VALIDATE_CHECKSUM, true, ret);
+      LOG_INFO("wait data complement finished", K(ret), K(*this));
+    }
   }
   return ret;
 }

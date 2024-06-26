@@ -24,7 +24,7 @@ using namespace common;
 
 int ObIColumnCSDecoder::get_null_count(
     const ObColumnCSDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {

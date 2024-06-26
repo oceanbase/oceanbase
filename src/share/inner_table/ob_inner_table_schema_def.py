@@ -7255,7 +7255,45 @@ def_table_schema(
   ]
 )
 
-# 519 : __all_scheduler_job_run_detail_v2
+def_table_schema(
+  owner = 'fyy280124',
+  table_name     = '__all_scheduler_job_run_detail_v2',
+  table_id       = '519',
+  table_type     = 'SYSTEM_TABLE',
+  gm_columns     = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('job_name', 'varchar:128', 'false'),
+    ('time', 'timestamp', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+    ('job', 'int', 'true', '0'),
+    ('log_id', 'int', 'true', '0'),
+    ('log_date', 'timestamp', 'true'),
+    ('owner', 'varchar:128', 'true'),
+    ('job_subname', 'varchar:128', 'true'),
+    ('job_class', 'varchar:128', 'true'),
+    ('operation', 'varchar:128', 'true'),
+    ('status', 'varchar:128', 'true'),
+    ('code', 'int', 'true', '0'),
+    ('req_start_date', 'timestamp', 'true'),
+    ('actual_start_date', 'timestamp', 'true'),
+    ('run_duration', 'int', 'true'),
+    ('instance_id', 'varchar:128', 'true'),
+    ('session_id', 'uint', 'true'),
+    ('slave_pid', 'varchar:128', 'true'),
+    ('cpu_used', 'int', 'true'),
+    ('user_name', 'varchar:128', 'true'),
+    ('client_id', 'varchar:128', 'true'),
+    ('global_uid', 'varchar:128', 'true'),
+    ('credential_owner', 'varchar:128', 'true'),
+    ('credential_name', 'varchar:128', 'true'),
+    ('destination_owner', 'varchar:128', 'true'),
+    ('destination', 'varchar:128', 'true'),
+    ('message', 'varchar:4000'),
+  ],
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14179,7 +14217,39 @@ def_table_schema(
 
 # 12440: __all_virtual_wr_system_event
 # 12441: __all_virtual_wr_event_name
-# 12442: __all_virtual_tenant_scheduler_running_job
+
+def_table_schema(
+  owner = 'fyy280124',
+  table_name     = '__all_virtual_tenant_scheduler_running_job',
+  table_id       = '12442',
+  table_type     = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('owner', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true'),
+    ('job_name', 'varchar:128'),
+    ('job_subname', 'varchar:30', 'true'),
+    ('job_style', 'varchar:11', 'true'),
+    ('detached', 'varchar:5', 'true'),
+    ('session_id', 'uint', 'true'),
+    ('slave_process_id', 'uint', 'true'),
+    ('slave_os_process_id', 'uint', 'true'),
+    ('resource_consumer_group', 'varchar:30', 'true'),
+    ('running_instance', 'varchar:30', 'true'),
+    ('elapsed_time', 'int', 'true'),
+    ('cpu_used', 'int', 'true'),
+    ('destination_owner', 'varchar:128', 'true'),
+    ('destination', 'varchar:128', 'true'),
+    ('credential_owner', 'varchar:30', 'true'),
+    ('credential_name', 'varchar:30', 'true'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12443',
   table_name = '__all_virtual_routine_privilege',
@@ -14462,12 +14532,18 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12488: __all_virtual_scheduler_job_run_detail_v2
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12488',
+  table_name = '__all_virtual_scheduler_job_run_detail_v2',
+  keywords = all_def_keywords['__all_scheduler_job_run_detail_v2']))
+
 # 12489: __all_virtual_deadlock_detector_stat
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12490',
   table_name = '__all_virtual_spatial_reference_systems',
   keywords = all_def_keywords['__all_spatial_reference_systems']))
+
+# 12491: __all_virtual_log_transport_dest_stat
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14843,6 +14919,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keyword
 # 15374: idx_rls_group_table_id_real_agent
 # 15375: idx_rls_context_table_id_real_agent
 
+
 #######################################################################
 # end for oracle agent table index
 #######################################################################
@@ -14948,9 +15025,10 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451'
 # 15455: __all_zone_storage
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15456', all_def_keywords['__all_virtual_nic_info'])))
 # 15457: __all_virtual_query_response_time
-# 15458: __all_scheduler_job_run_detail_v2
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15458', all_def_keywords['__all_scheduler_job_run_detail_v2']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15459', all_def_keywords['__all_spatial_reference_systems'])))
 # 15460: idx_scheduler_job_run_detail_v2_time_real_agent
+# 15461: __all_virtual_log_transport_dest_stat
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -15838,6 +15916,11 @@ def_table_schema(
     FROM DUAL limit 0;
 """.replace("\n", " ")
 )
+
+# 20020: INNODB_FT_BEING_DELETED
+# 20021: INNODB_FT_CONFIG
+# 20022: INNODB_FT_DELETED
+# 20023: INNODB_FT_INDEX_CACHE
 
 def_table_schema(
   owner = 'yuzhong.zhao',
@@ -20812,6 +20895,7 @@ SELECT/*+leading(DB,TC,STAT)*/
         WHEN 46 THEN (CASE TC.COLLATION_TYPE WHEN 63 THEN 'BLOB' ELSE 'CLOB' END)
         WHEN 47 THEN 'JSON'
         WHEN 50 THEN 'NUMBER'
+        WHEN 54 THEN 'ROARINGBITMAP'
         ELSE 'UNDEFINED' END AS CHAR(128)) AS  DATA_TYPE,
   CAST(NULL AS CHAR(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS CHAR(128)) AS  DATA_TYPE_OWNER,
@@ -20831,11 +20915,11 @@ SELECT/*+leading(DB,TC,STAT)*/
                                   ELSE 1 END)
                             ELSE 1 END
                             AS SIGNED) AS  DATA_LENGTH,
-  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
+  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44,54)
             THEN NULL
             ELSE CASE WHEN TC.DATA_PRECISION < 0 THEN NULL ELSE TC.DATA_PRECISION END
        END AS SIGNED) AS  DATA_PRECISION,
-  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,19,22,23,27,28,29,30,42,43,44)
+  CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,19,22,23,27,28,29,30,42,43,44,54)
             THEN NULL
             ELSE CASE WHEN TC.DATA_SCALE < -84 THEN NULL ELSE TC.DATA_SCALE END
        END AS SIGNED) AS  DATA_SCALE,
@@ -31456,13 +31540,14 @@ def_table_schema(
     SELECT
       B.TABLE_NAME AS TABLE_NAME,
       C.DATABASE_NAME AS TABLE_SCHEMA,
-      'P0' AS PARTITION_NAME,
+      P.PART_NAME AS PARTITION_NAME,
       A.FILE_URL AS FILE_URL,
       A.FILE_SIZE AS FILE_SIZE
     FROM
        OCEANBASE.__ALL_EXTERNAL_TABLE_FILE A
        INNER JOIN OCEANBASE.__ALL_TABLE B ON A.TABLE_ID = B.TABLE_ID AND B.TENANT_ID = 0
        INNER JOIN OCEANBASE.__ALL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND C.TENANT_ID = 0
+       LEFT JOIN OCEANBASE.__ALL_PART P ON A.PART_ID = P.PART_ID AND P.TENANT_ID = 0
     WHERE B.TABLE_TYPE = 14 AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
     AND B.TABLE_MODE >> 12 & 15 in (0,1)
 """.replace("\n", " ")
@@ -31481,13 +31566,14 @@ def_table_schema(
     SELECT
       B.TABLE_NAME AS TABLE_NAME,
       C.DATABASE_NAME AS TABLE_SCHEMA,
-      'P0' AS PARTITION_NAME,
+      P.PART_NAME AS PARTITION_NAME,
       A.FILE_URL AS FILE_URL,
       A.FILE_SIZE AS FILE_SIZE
     FROM
        OCEANBASE.__ALL_EXTERNAL_TABLE_FILE A
        INNER JOIN OCEANBASE.__ALL_TABLE B ON A.TABLE_ID = B.TABLE_ID AND B.TENANT_ID = 0
        INNER JOIN OCEANBASE.__ALL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND C.TENANT_ID = 0
+       LEFT JOIN OCEANBASE.__ALL_PART P ON A.PART_ID = P.PART_ID AND P.TENANT_ID = 0
     WHERE  B.TABLE_TYPE = 14
           AND B.TABLE_MODE >> 12 & 15 in (0,1)
           AND 0 = sys_privilege_check('table_acc', EFFECTIVE_TENANT_ID(), C.DATABASE_NAME, B.TABLE_NAME)
@@ -31787,13 +31873,14 @@ def_table_schema(
       A.TENANT_ID AS TENANT_ID,
       B.TABLE_NAME AS TABLE_NAME,
       C.DATABASE_NAME AS TABLE_SCHEMA,
-      'P0' AS PARTITION_NAME,
+      P.PART_NAME AS PARTITION_NAME,
       A.FILE_URL AS FILE_URL,
       A.FILE_SIZE AS FILE_SIZE
     FROM
        OCEANBASE.__ALL_VIRTUAL_EXTERNAL_TABLE_FILE A
        INNER JOIN OCEANBASE.__ALL_VIRTUAL_TABLE B ON A.TABLE_ID = B.TABLE_ID AND A.TENANT_ID=B.TENANT_ID AND B.TABLE_MODE >> 12 & 15 in (0,1)
        INNER JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID=C.TENANT_ID
+       LEFT JOIN OCEANBASE.__ALL_VIRTUAL_PART P ON A.PART_ID = P.PART_ID AND C.TENANT_ID = P.TENANT_ID
     WHERE B.TABLE_TYPE = 14 AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
 """.replace("\n", " ")
 )
@@ -32159,7 +32246,8 @@ def_table_schema(
            PL_SCHEMA_ID AS OBJECT_ID,
            COMPILE_TIME,
            SCHEMA_VERSION,
-           PS_STMT_ID
+           PS_STMT_ID,
+           DB_ID
     FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
 """.replace("\n", " "),
     normal_columns = [
@@ -32194,7 +32282,8 @@ def_table_schema(
            OBJECT_ID,
            COMPILE_TIME,
            SCHEMA_VERSION,
-           PS_STMT_ID
+           PS_STMT_ID,
+           DB_ID
     FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
@@ -35088,8 +35177,148 @@ def_table_schema(
 )
 # 21587: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 # 21588: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
-# 21589: DBA_SCHEDULER_JOB_RUN_DETAILS
-# 21590: CDB_SCHEDULER_JOB_RUN_DETAILS
+
+def_table_schema(
+  owner = 'fyy280124',
+  table_name      = 'DBA_SCHEDULER_JOB_RUN_DETAILS',
+  table_id        = '21589',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  (
+  SELECT
+                        CAST(NULL AS NUMBER) AS LOG_ID,
+                        CAST(NULL AS DATETIME) AS LOG_DATE,
+                        CAST(NULL AS CHAR(128)) AS OWNER,
+                        CAST(NULL AS CHAR(128)) AS JOB_NAME,
+                        CAST(NULL AS CHAR(128)) AS JOB_SUBNAME,
+                        CAST(NULL AS CHAR(128)) AS STATUS,
+                        CODE,
+                        CAST(NULL AS DATETIME) AS REQ_START_DATE,
+                        CAST(NULL AS DATETIME) AS ACTUAL_START_DATE,
+                        CAST(NULL AS NUMBER) AS RUN_DURATION,
+                        CAST(NULL AS CHAR(128)) AS INSTANCE_ID,
+                        CAST(NULL AS NUMBER) AS SESSION_ID,
+                        CAST(NULL AS CHAR(128)) AS SLAVE_PID,
+                        CAST(NULL AS NUMBER) AS CPU_USED,
+                        CAST(NULL AS CHAR(128)) AS CREDENTIAL_OWNER,
+                        CAST(NULL AS CHAR(128)) AS CREDENTIAL_NAME,
+                        CAST(NULL AS CHAR(128)) AS DESTINATION_OWNER,
+                        CAST(NULL AS CHAR(128)) AS DESTINATION,
+                        MESSAGE,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM OCEANBASE.__ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL
+)
+UNION ALL
+(
+SELECT
+                        LOG_ID,
+                        LOG_DATE,
+                        OWNER,
+                        JOB_NAME,
+                        JOB_SUBNAME,
+                        STATUS,
+                        CODE,
+                        REQ_START_DATE,
+                        ACTUAL_START_DATE,
+                        RUN_DURATION,
+                        INSTANCE_ID,
+                        SESSION_ID,
+                        SLAVE_PID,
+                        CPU_USED,
+                        CREDENTIAL_OWNER,
+                        CREDENTIAL_NAME,
+                        DESTINATION_OWNER,
+                        DESTINATION,
+                        MESSAGE,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM OCEANBASE.__ALL_SCHEDULER_JOB_RUN_DETAIL_V2
+)
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'fyy280124',
+  table_name      = 'CDB_SCHEDULER_JOB_RUN_DETAILS',
+  table_id        = '21590',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  (
+  SELECT
+                        CAST(NULL AS NUMBER) AS LOG_ID,
+                        CAST(NULL AS DATETIME) AS LOG_DATE,
+                        CAST(NULL AS CHAR(128)) AS OWNER,
+                        CAST(NULL AS CHAR(128)) AS JOB_NAME,
+                        CAST(NULL AS CHAR(128)) AS JOB_SUBNAME,
+                        CAST(NULL AS CHAR(128)) AS STATUS,
+                        CODE,
+                        CAST(NULL AS DATETIME) AS REQ_START_DATE,
+                        CAST(NULL AS DATETIME) AS ACTUAL_START_DATE,
+                        CAST(NULL AS NUMBER) AS RUN_DURATION,
+                        CAST(NULL AS CHAR(128)) AS INSTANCE_ID,
+                        CAST(NULL AS NUMBER) AS SESSION_ID,
+                        CAST(NULL AS CHAR(128)) AS SLAVE_PID,
+                        CAST(NULL AS NUMBER) AS CPU_USED,
+                        CAST(NULL AS CHAR(128)) AS CREDENTIAL_OWNER,
+                        CAST(NULL AS CHAR(128)) AS CREDENTIAL_NAME,
+                        CAST(NULL AS CHAR(128)) AS DESTINATION_OWNER,
+                        CAST(NULL AS CHAR(128)) AS DESTINATION,
+                        MESSAGE,
+                        TENANT_ID,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM OCEANBASE.__ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL
+)
+UNION ALL
+(
+SELECT
+                        LOG_ID,
+                        LOG_DATE,
+                        OWNER,
+                        JOB_NAME,
+                        JOB_SUBNAME,
+                        STATUS,
+                        CODE,
+                        REQ_START_DATE,
+                        ACTUAL_START_DATE,
+                        RUN_DURATION,
+                        INSTANCE_ID,
+                        SESSION_ID,
+                        SLAVE_PID,
+                        CPU_USED,
+                        CREDENTIAL_OWNER,
+                        CREDENTIAL_NAME,
+                        DESTINATION_OWNER,
+                        DESTINATION,
+                        MESSAGE,
+                        TENANT_ID,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM OCEANBASE.__ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2
+)
+""".replace("\n", " ")
+)
+
 #
 # 21591 - 21596 placeholder by gaishun.gs
 # 21591: DBA_OB_SERVER_SPACE_USAGE
@@ -35098,6 +35327,9 @@ def_table_schema(
 # 21594: CDB_OB_SPACE_USAGE
 # 21595: DBA_OB_TABLE_SPACE_USAGE
 # 21596: CDB_OB_TABLE_SPACE_USAGE
+# 21597: GV$OB_LOG_TRANSPORT_DEST_STAT
+# 21598: V$OB_LOG_TRANSPORT_DEST_STAT
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -52987,13 +53219,14 @@ def_table_schema(
     SELECT
           B.TABLE_NAME AS TABLE_NAME,
           C.DATABASE_NAME AS OWNER,
-          'P0' AS PARTITION_NAME,
+          P.PART_NAME AS PARTITION_NAME,
           A.FILE_URL AS FILE_URL,
           A.FILE_SIZE AS FILE_SIZE
         FROM
           SYS.ALL_VIRTUAL_EXTERNAL_TABLE_FILE_REAL_AGENT A
           INNER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON A.TABLE_ID = B.TABLE_ID AND bitand((B.TABLE_MODE / 4096), 15) IN (0,1)
           INNER JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID = C.TENANT_ID
+          LEFT JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON A.PART_ID = P.PART_ID AND P.TENANT_ID = C.TENANT_ID
         WHERE B.TENANT_ID = EFFECTIVE_TENANT_ID() AND B.TABLE_TYPE = 14 AND
               (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
     """.replace("\n", " ")
@@ -53014,13 +53247,14 @@ def_table_schema(
     SELECT
       B.TABLE_NAME AS TABLE_NAME,
       C.DATABASE_NAME AS OWNER,
-      'P0' AS PARTITION_NAME,
+      P.PART_NAME AS PARTITION_NAME,
       A.FILE_URL AS FILE_URL,
       A.FILE_SIZE AS FILE_SIZE
     FROM
        SYS.ALL_VIRTUAL_EXTERNAL_TABLE_FILE_REAL_AGENT A
        INNER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON A.TABLE_ID = B.TABLE_ID  AND bitand((B.TABLE_MODE / 4096), 15) IN (0,1)
        INNER JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID = C.TENANT_ID
+       LEFT JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON A.PART_ID = P.PART_ID AND P.TENANT_ID = C.TENANT_ID
     WHERE B.TENANT_ID = EFFECTIVE_TENANT_ID() AND B.TABLE_TYPE = 14 AND
           (C.DATABASE_ID = USERENV('SCHEMAID') OR USER_CAN_ACCESS_OBJ(1, B.TABLE_ID, C.DATABASE_ID) = 1) AND
           (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
@@ -53642,15 +53876,64 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT TENANT_ID,
-                              JOB,
-                              TIME,
-                              CODE,
-                              MESSAGE,
-                              JOB_CLASS,
-                              GMT_CREATE,
-                              GMT_MODIFIED
-                       FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T
+  view_definition = """
+  (
+  SELECT
+                        CAST(NULL AS NUMBER) AS LOG_ID,
+                        CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS LOG_DATE,
+                        CAST(NULL AS VARCHAR(128)) AS OWNER,
+                        CAST(NULL AS VARCHAR(128)) AS JOB_NAME,
+                        CAST(NULL AS VARCHAR(128)) AS JOB_SUBNAME,
+                        CAST(NULL AS VARCHAR(128)) AS STATUS,
+                        CODE,
+                        CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS REQ_START_DATE,
+                        CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS ACTUAL_START_DATE,
+                        CAST(NULL AS NUMBER) AS RUN_DURATION,
+                        CAST(NULL AS VARCHAR(128)) AS INSTANCE_ID,
+                        CAST(NULL AS NUMBER) AS SESSION_ID,
+                        CAST(NULL AS VARCHAR(128)) AS SLAVE_PID,
+                        CAST(NULL AS NUMBER) AS CPU_USED,
+                        CAST(NULL AS VARCHAR(128)) AS CREDENTIAL_OWNER,
+                        CAST(NULL AS VARCHAR(128)) AS CREDENTIAL_NAME,
+                        CAST(NULL AS VARCHAR(128)) AS DESTINATION_OWNER,
+                        CAST(NULL AS VARCHAR(128)) AS DESTINATION,
+                        MESSAGE,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT
+)
+UNION ALL
+(
+SELECT
+                        LOG_ID,
+                        LOG_DATE,
+                        OWNER,
+                        JOB_NAME,
+                        JOB_SUBNAME,
+                        STATUS,
+                        CODE,
+                        REQ_START_DATE,
+                        ACTUAL_START_DATE,
+                        RUN_DURATION,
+                        INSTANCE_ID,
+                        SESSION_ID,
+                        SLAVE_PID,
+                        CPU_USED,
+                        CREDENTIAL_OWNER,
+                        CREDENTIAL_NAME,
+                        DESTINATION_OWNER,
+                        DESTINATION,
+                        MESSAGE,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM SYS.ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT
+)
 """.replace("\n", " ")
 )
 
@@ -62283,7 +62566,8 @@ def_table_schema(
            PL_SCHEMA_ID AS OBJECT_ID,
            COMPILE_TIME AS COMPILE_TIME,
            SCHEMA_VERSION AS SCHEMA_VERSION,
-           PS_STMT_ID AS PS_STMT_ID
+           PS_STMT_ID AS PS_STMT_ID,
+           DB_ID AS DB_ID
     FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
 """.replace("\n", " "),
     normal_columns = [
@@ -62319,7 +62603,8 @@ def_table_schema(
            OBJECT_ID AS OBJECT_ID,
            COMPILE_TIME AS COMPILE_TIME,
            SCHEMA_VERSION AS SCHEMA_VERSION,
-           PS_STMT_ID AS PS_STMT_ID
+           PS_STMT_ID AS PS_STMT_ID,
+           DB_ID AS DB_ID
     FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
     normal_columns = [
@@ -62848,6 +63133,8 @@ left join
 # 28235: DBA_OB_SERVER_SPACE_USAGE_ORA
 # 28236: DBA_OB_SPACE_USAGE_ORA
 # 28237: DBA_OB_TABLE_SPACE_USAGE_ORA
+# 28238: GV$OB_LOG_TRANSPORT_DEST_STAT
+# 28239: V$OB_LOG_TRANSPORT_DEST_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -63768,6 +64055,14 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_user_proxy_role_info_history'])
 
+def_sys_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_time',
+  index_table_id = 101105,
+  index_columns = ['time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_scheduler_job_run_detail_v2'])
+
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################
@@ -64545,6 +64840,15 @@ def_agent_index_table(
   real_index_name = 'idx_user_proxy_info_proxy_user_id',
   keywords = all_def_keywords['ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT_ORA'])
 
+def_agent_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_time_real_agent',
+  index_table_id = 15460,
+  index_columns = ['time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_scheduler_job_run_detail_v2' ,
+  real_index_name = 'idx_scheduler_job_run_detail_v2_time',
+  keywords = all_def_keywords['ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA'])
 
 # End Oracle Agent table Index
 ################################################################################

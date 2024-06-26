@@ -902,10 +902,8 @@ int ObExternalTableFileManager::get_external_file_list_on_device(
   sql::ObExternalDataAccessDriver driver;
   if (OB_FAIL(driver.init(location, access_info))) {
     LOG_WARN("init external data access driver failed", K(ret));
-  } else if (OB_FAIL(driver.get_file_list(location, pattern, regexp_vars, file_urls, allocator))) {
+  } else if (OB_FAIL(driver.get_file_list(location, pattern, regexp_vars, file_urls, file_sizes, allocator))) {
     LOG_WARN("get file urls failed", K(ret));
-  } else if (OB_FAIL(driver.get_file_sizes(location, file_urls, file_sizes))) {
-    LOG_WARN("get file sizes failed", K(ret));
   }
   if (driver.is_opened()) {
     driver.close();

@@ -33,6 +33,8 @@ devdeps-cos-c-sdk-5.0.16-52023070517.el8.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-272023061419.el8.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.x86_64.rpm
 devdeps-protobuf-c-1.4.1-100000062023102016.el8.x86_64.rpm
+devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.x86_64.rpm
+devdeps-apache-arrow-9.0.0-172024052218.el8.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.x86_64.rpm
@@ -44,7 +46,7 @@ obdevtools-gcc9-9.3.0-52022092914.el8.x86_64.rpm
 obdevtools-llvm-11.0.1-312022092921.el8.x86_64.rpm
 
 [tools-deps]
-devdeps-oblogmsg-1.0-192024032014.el8.x86_64.rpm
+devdeps-oblogmsg-1.1-52024052811.el8.x86_64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el8.x86_64.rpm
 obshell-4.2.3.1-52024053020.el8.x86_64.rpm target=community
 

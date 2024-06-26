@@ -202,16 +202,21 @@ extern ObRawExpr *USELESS_POINTER;
    || ((op) == T_FUN_SYS_JSON_CONTAINS_PATH) \
    || ((op) == T_FUN_SYS_JSON_QUOTE) \
    || ((op) == T_FUN_SYS_JSON_UNQUOTE) \
+   || ((op) == T_FUN_SYS_JSON_QUERY) \
    || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
    || ((op) == T_FUN_SYS_JSON_MEMBER_OF) \
    || ((op) == T_FUN_SYS_JSON_VALUE))
 
 // JSON_CONTAINS & JSON_OVERLAPS not support yet
 #define IS_JSON_DOMAIN_OP(op) \
-  (((op) == T_FUN_SYS_JSON_MEMBER_OF) /*\
-    || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
-    || ((op) == T_FUN_SYS_JSON_CONTAINS)*/) \
+  ((op) == T_FUN_SYS_JSON_MEMBER_OF \
+  || (op) == T_FUN_SYS_JSON_OVERLAPS \
+  || (op) == T_FUN_SYS_JSON_CONTAINS)
 
+#define IS_MULTIVALUE_EXPR(op) \
+  (((op) == T_FUN_SYS_JSON_MEMBER_OF) \
+   || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
+   || ((op) == T_FUN_SYS_JSON_CONTAINS))
 
 // ObSqlBitSet is a simple bitset, in order to avoid memory exposure
 // ObBitSet is too large just for a simple bitset
@@ -1966,6 +1971,7 @@ public:
   bool is_spatial_expr() const;
   bool is_oracle_spatial_expr() const;
   bool is_json_domain_expr() const;
+  bool is_multivalue_expr() const;
   ObRawExpr* get_json_domain_param_expr();
   bool is_geo_expr() const;
   bool is_domain_expr() const;
@@ -1985,7 +1991,10 @@ public:
     may_add_interval_part_ = flag;
   }
   bool is_wrappered_json_extract() const {
-   return (type_ == T_FUN_SYS_JSON_UNQUOTE && OB_NOT_NULL(get_param_expr(0)) && get_param_expr(0)->type_ == T_FUN_SYS_JSON_EXTRACT);
+   return (type_ == T_FUN_SYS_JSON_UNQUOTE &&
+           OB_NOT_NULL(get_param_expr(0)) &&
+           (get_param_expr(0)->type_ == T_FUN_SYS_JSON_EXTRACT ||
+            get_param_expr(0)->type_ == T_FUN_SYS_JSON_VALUE));
   }
   bool extract_multivalue_json_expr(const ObRawExpr*& json_expr) const;
   bool is_multivalue_define_json_expr() const;
@@ -2019,6 +2028,8 @@ public:
   int extract_local_session_vars_recursively(ObIArray<const share::schema::ObSessionSysVar *> &var_array);
   void set_local_session_var_id(int64_t idx) { local_session_var_id_ = idx; }
   int64_t get_local_session_var_id() { return local_session_var_id_; }
+
+  int has_exec_param(bool &bool_ret) const;
 
 private:
   const ObRawExpr *get_same_identify(const ObRawExpr *e,
@@ -4730,18 +4741,22 @@ public:
   uint64_t get_table_id() const { return table_id_; }
   void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
   const common::ObString & get_table_name() const { return table_name_; }
+  void set_data_access_path(const common::ObString &data_access_path) { data_access_path_ = data_access_path; }
+  const common::ObString & get_data_access_path() const { return data_access_path_; }
 
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
                        N_REL_ID, rel_ids_,
                        N_TABLE_ID, table_id_,
-                       N_TABLE_NAME, table_name_);
+                       N_TABLE_NAME, table_name_,
+                       K_(data_access_path));
 private:
   ObRawExpr *cte_cycle_value_;
   ObRawExpr *cte_cycle_default_value_;
   uint64_t table_id_;
   common::ObString table_name_;
+  common::ObString data_access_path_; //for external table column
   DISALLOW_COPY_AND_ASSIGN(ObPseudoColumnRawExpr);
 };
 

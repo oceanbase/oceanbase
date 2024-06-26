@@ -15,6 +15,7 @@
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
 #include "storage/ob_sstable_struct.h"
+#include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 
 namespace oceanbase
 {
@@ -170,7 +171,7 @@ int ObSSTableBuilder::prepare_index_builder()
 }
 
 int ObSSTableBuilder::build_sstable_merge_res(
-    const share::SCN end_scn,
+    const ObStaticMergeParam &merge_param,
     ObSSTableMergeInfo &sstable_merge_info,
     blocksstable::ObSSTableMergeRes &res)
 {
@@ -179,14 +180,13 @@ int ObSSTableBuilder::build_sstable_merge_res(
   macro_id_array.set_attr(ObMemAttr(MTL_ID(), "sstBuilder", ObCtxIds::MERGE_NORMAL_CTX_ID));
   blocksstable::ObSSTableIndexBuilder::ObMacroMetaIter iter;
   int64_t multiplexed_macro_block_count = 0;
-
   if (OB_FAIL(rebuild_index_builder_.init(data_store_desc_.get_desc()))) {
     STORAGE_LOG(WARN, "fail to init", K(ret), K(data_store_desc_));
   } else if (OB_FAIL(open_macro_writer())) {
     STORAGE_LOG(WARN, "fail to open macro writer", K(ret));
   } else if (OB_FAIL(index_builder_.init_meta_iter(iter))) {
     STORAGE_LOG(WARN, "fail to init meta iter", K(ret), K(index_builder_));
-  } else if (OB_FAIL(check_need_rebuild(end_scn, macro_id_array, iter, multiplexed_macro_block_count))) {
+  } else if (OB_FAIL(check_need_rebuild(merge_param, macro_id_array, iter, multiplexed_macro_block_count))) {
     STORAGE_LOG(WARN, "failed to check need rebuild", K(ret));
   } else if (macro_id_array.count() != 0) {
     iter.reuse();
@@ -208,8 +208,8 @@ int ObSSTableBuilder::build_sstable_merge_res(
 
 int ObSSTableBuilder::open_macro_writer()
 {
-	int ret = OB_SUCCESS;
-	blocksstable::ObMacroDataSeq macro_start_seq(0);
+  int ret = OB_SUCCESS;
+  blocksstable::ObMacroDataSeq macro_start_seq(0);
   data_store_desc_.get_desc().sstable_index_builder_ = &rebuild_index_builder_;
   macro_start_seq.set_rebuild_merge_type();
 
@@ -220,7 +220,22 @@ int ObSSTableBuilder::open_macro_writer()
   return ret;
 }
 
-int ObSSTableBuilder::check_need_rebuild(const share::SCN end_scn,
+int ObSSTableBuilder::pre_check_rebuild(const ObStaticMergeParam &merge_param, bool &need_check_rebuild)
+{
+  int ret = OB_SUCCESS;
+  need_check_rebuild = true;
+  const int64_t data_version = data_store_desc_.get_desc().get_major_working_cluster_version();
+  if (data_version < DATA_VERSION_4_3_0_0) {
+    need_check_rebuild = false;
+  } else if (data_version >= DATA_VERSION_4_3_2_0) {
+    if (merge_param.concurrent_cnt_ <= 1) {
+      need_check_rebuild = false;
+    }
+  }
+  return ret;
+}
+
+int ObSSTableBuilder::check_need_rebuild(const ObStaticMergeParam &merge_param,
                                          ObIArray<blocksstable::MacroBlockId> &macro_id_array,
                                          MetaIter &iter,
                                          int64_t &multiplexed_macro_block_count)
@@ -228,15 +243,17 @@ int ObSSTableBuilder::check_need_rebuild(const share::SCN end_scn,
   int ret = OB_SUCCESS;
   macro_id_array.reset();
   multiplexed_macro_block_count = 0;
-  const int64_t snapshot_version = end_scn.get_val_for_tx();
-  if (data_store_desc_.get_desc().get_major_working_cluster_version() < DATA_VERSION_4_3_0_0) {
-  } else {
-    const blocksstable::ObDataMacroBlockMeta *macro_meta;
-    blocksstable::MacroBlockId last_macro_id;
-    int64_t last_macro_block_sum = 0;
-    int64_t reduce_macro_block_cnt = 0;
-    bool last_macro_is_first = false;
+  const int64_t snapshot_version = merge_param.scn_range_.end_scn_.get_val_for_tx();
+  const blocksstable::ObDataMacroBlockMeta *macro_meta;
+  blocksstable::MacroBlockId last_macro_id;
+  int64_t last_macro_block_sum = 0;
+  int64_t reduce_macro_block_cnt = 0;
+  bool last_macro_is_first = false;
+  bool need_check_rebuild = true;
 
+  if (OB_FAIL(pre_check_rebuild(merge_param, need_check_rebuild))) {
+    STORAGE_LOG(WARN, "Fail to pre check need rebuild", K(ret));
+  } else if (need_check_rebuild) {
     while (OB_SUCC(ret) && OB_SUCC(iter.get_next_macro_block(macro_meta))) {
       if (OB_ISNULL(macro_meta)) {
         ret = OB_ERR_UNEXPECTED;
@@ -252,7 +269,7 @@ int ObSSTableBuilder::check_need_rebuild(const share::SCN end_scn,
           last_macro_is_first = true;
           last_macro_block_sum = macro_block_sum;
           multiplexed_macro_block_count = snapshot_version != macro_meta->val_.snapshot_version_ ?
-                                      multiplexed_macro_block_count + 1 : multiplexed_macro_block_count;
+            multiplexed_macro_block_count + 1 : multiplexed_macro_block_count;
         } else {
           if (last_macro_is_first && OB_FAIL(macro_id_array.push_back(last_macro_id))) {
             STORAGE_LOG(WARN, "failed to push back macro id", K(ret), K(last_macro_id));

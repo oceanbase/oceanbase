@@ -559,7 +559,7 @@ int ObKeyPart::merge_two_in_keys(ObKeyPart *other, const SameValIdxMap &lr_idx)
     LOG_WARN("failed to append right offsets", K(ret));
   } else {
     int64_t offsets_cnt = in_keypart_->offsets_.count();
-    // std::sort(left_in->in_keypart_->offsets_.begin(), left_in->in_keypart_->offsets_.end());
+    // lib::ob_sort(left_in->in_keypart_->offsets_.begin(), left_in->in_keypart_->offsets_.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < offsets_cnt; ++i) {
       InParamMeta *cur_param = NULL;
       InParamMeta *new_param = NULL;
@@ -1272,8 +1272,8 @@ int ObKeyPart::formalize_keypart(bool contain_row)
       }
     }
   } else if (is_in_key()) {
-    std::sort(in_keypart_->offsets_.begin(), in_keypart_->offsets_.end());
-    std::sort(in_keypart_->in_params_.begin(),
+    lib::ob_sort(in_keypart_->offsets_.begin(), in_keypart_->offsets_.end());
+    lib::ob_sort(in_keypart_->in_params_.begin(),
               in_keypart_->in_params_.end(),
               [] (const InParamMeta *e1, const InParamMeta *e2) {
                 return e1->pos_.offset_ <= e2->pos_.offset_;

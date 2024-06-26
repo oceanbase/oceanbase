@@ -44,6 +44,17 @@ int ObExprJsonOverlaps::calc_result_type2(ObExprResType &type,
   type.set_int32();
   type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
   type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
+
+  if (!ob_is_string_type(type1.get_type())) {
+  } else if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(type1, 1, N_JSON_OVERLAPS))) {
+    LOG_WARN("wrong type for json doc.", K(ret), K(type1.get_type()));
+  }
+
+  if (OB_FAIL(ret))  {
+  } else if (!ob_is_string_type(type2.get_type())) {
+  } else if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(type2, 2, N_JSON_OVERLAPS))) {
+    LOG_WARN("wrong type for json doc.", K(ret), K(type2.get_type()));
+  }
   
   return ret;
 }
@@ -56,7 +67,14 @@ int ObExprJsonOverlaps::eval_json_overlaps(const ObExpr &expr, ObEvalCtx &ctx, O
   bool is_null_result = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0, json_a, is_null_result, false))) {
+
+  if (!ObJsonExprHelper::is_convertible_to_json(expr.args_[0]->datum_meta_.type_)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_JSON;
+    LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_JSON, 1, N_JSON_OVERLAPS);
+  } else if (!ObJsonExprHelper::is_convertible_to_json(expr.args_[1]->datum_meta_.type_)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_JSON;
+    LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_JSON, 2, N_JSON_OVERLAPS);
+  } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0, json_a, is_null_result, false))) {
     LOG_WARN("get_json_doc failed", K(ret));
   } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 1, json_b, is_null_result, false))) {
     LOG_WARN("get_json_doc failed", K(ret));

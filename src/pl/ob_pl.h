@@ -1128,6 +1128,7 @@ public:
   int check_exec_priv(sql::ObExecContext &ctx,
                       const ObString &database_name,
                       ObPLFunction *routine);
+
 private:
   // for normal routine
   int get_pl_function(sql::ObExecContext &ctx,
@@ -1154,11 +1155,6 @@ private:
                            const uint64_t stmt_id,
                            bool is_anonymous_text = false);
 
-  // for normal routine
-  int generate_pl_function(sql::ObExecContext &ctx,
-                           uint64_t proc_id,
-                           ObCacheObjGuard& cacheobj_guard);
-
   // for inner common execute
   int execute(sql::ObExecContext &ctx,
               ObIAllocator &allocator,
@@ -1175,10 +1171,13 @@ private:
               uint64_t loc = 0,
               bool is_called_from_sql = false);
 
-  // add pl to cache
-  int add_pl_lib_cache(ObPLFunction *pl_func, ObPLCacheCtx &pc_ctx);
-
 public:
+  // for normal routine
+  static int generate_pl_function(sql::ObExecContext &ctx,
+                           uint64_t proc_id,
+                           ObCacheObjGuard& cacheobj_guard);
+  // add pl to cache
+  static int add_pl_lib_cache(ObPLFunction *pl_func, ObPLCacheCtx &pc_ctx);
   static int execute_proc(ObPLExecCtx &ctx,
                           uint64_t package_id,
                           uint64_t proc_id,
