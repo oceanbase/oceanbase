@@ -279,7 +279,7 @@ protected:
   union {
     common::ObArenaAllocator retry_alloc_buf_;
   };
-  ObDASObsoletedObj ir_param_; // obsoleted attribute, please gc me at next barrier version
+  ObDASObsoletedObj ir_param_;   // FARM COMPAT WHITELIST: obsoleted attribute, please gc me at next barrier version
 };
 
 class ObDASScanResult : public ObIDASTaskResult, public common::ObNewRowIterator
