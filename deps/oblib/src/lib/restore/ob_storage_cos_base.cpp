@@ -514,9 +514,7 @@ ObStorageCosBase::~ObStorageCosBase()
 
 void ObStorageCosBase::reset()
 {
-  if (is_opened_) {
-    handle_.reset();
-  }
+  handle_.reset();
   is_opened_ = false;
 }
 
