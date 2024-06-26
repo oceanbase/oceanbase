@@ -268,8 +268,8 @@ int ObTxDataMemtableMgr::freeze_()
     STORAGE_LOG(WARN, "trying to freeze an inactive tx data memtable.", KR(ret),
                 KPC(freeze_memtable));
   } else if (0 == freeze_memtable->get_tx_data_count()) {
-    ret = OB_NO_NEED_MERGE;
-    STORAGE_LOG(INFO, "tx data memtable is empty. do not need freeze.", KR(ret), KPC(freeze_memtable));
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "tx data memtable is empty. do not need freeze.", KR(ret), KPC(freeze_memtable));
   } else if (OB_FAIL(calc_new_memtable_buckets_cnt_(
                  freeze_memtable->load_factory(), freeze_memtable->get_buckets_cnt(), new_buckets_cnt))) {
     STORAGE_LOG(WARN,
@@ -499,8 +499,7 @@ int ObTxDataMemtableMgr::flush(SCN recycle_scn, bool need_freeze)
     TxDataMemtableMgrFreezeGuard freeze_guard;
     SCN rec_scn = get_rec_scn();
     if (rec_scn >= recycle_scn) {
-      ret = OB_NO_NEED_MERGE;
-      STORAGE_LOG(INFO, "no need freeze", KR(ret), K(recycle_scn), K(rec_scn));
+      STORAGE_LOG(INFO, "no need freeze", K(recycle_scn), K(rec_scn));
     } else if (OB_FAIL(freeze_guard.init(this))) {
       STORAGE_LOG(WARN, "init tx data memtable mgr freeze guard failed", KR(ret), K(recycle_scn),
                   K(rec_scn));

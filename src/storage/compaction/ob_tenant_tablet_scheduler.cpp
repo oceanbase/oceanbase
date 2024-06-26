@@ -113,7 +113,7 @@ int ObFastFreezeChecker::check_need_fast_freeze(
     check_hotspot_need_fast_freeze(*memtable, need_fast_freeze);
     if (need_fast_freeze) {
       FLOG_INFO("[FastFreeze] tablet detects hotspot row, need fast freeze", K(ls_id), K(tablet_id));
-    } else {
+    } else if (is_queuing_table_mode(queuing_mode)) {
       // only queuing table need tombstone fast freeze
       check_tombstone_need_fast_freeze(tablet, *memtable, queuing_mode, need_fast_freeze);
       if (need_fast_freeze) {
@@ -1443,14 +1443,6 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
           } else if (need_fast_freeze) {
             if (OB_TMP_FAIL(ls.tablet_freeze(tablet_id, true/*is_sync*/))) {
               LOG_WARN("failt to freeze tablet", K(tmp_ret), K(tablet_id));
-            }
-
-            ObTxTableGuard tx_table_guard;
-            LOG_INFO("Trigger tx data freeze by fast freeze", K(ls_id), K(tablet_id));
-            if (OB_TMP_FAIL(ls.get_tx_table()->get_tx_table_guard(tx_table_guard))) {
-              LOG_WARN("get tx table guard failed", KR(tmp_ret), K(tx_table_guard));
-            } else {
-              (void)tx_table_guard.self_freeze_task();
             }
           }
         }
