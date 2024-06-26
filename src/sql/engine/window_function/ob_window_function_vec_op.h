@@ -41,6 +41,8 @@ class ObWindowFunctionVecSpec: public ObWindowFunctionSpec
 {
   OB_UNIS_VERSION_V(1);
 public:
+  static const int64_t RD_MIN_BATCH_SIZE = 4;
+public:
   ObWindowFunctionVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type) :
     ObWindowFunctionSpec(alloc, type)
   {}

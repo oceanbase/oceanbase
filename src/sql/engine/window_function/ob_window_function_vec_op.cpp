@@ -3741,6 +3741,7 @@ int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, 
   // but expr data are filled with datums, unexpected errors will happen.
   for (int i = 0; OB_SUCC(ret) && i < rd_coord_exprs_.count(); i++) {
     VectorFormat default_fmt = rd_coord_exprs_.at(i)->get_default_res_format();
+    // TODO: @zongmei.zzm support batch_size < 4 for range distribution
     if (OB_FAIL(rd_coord_exprs_.at(i)->init_vector_for_write(
           eval_ctx, rd_coord_exprs_.at(i)->is_const_expr() ? VEC_UNIFORM_CONST : VEC_UNIFORM, 4))) {
       LOG_WARN("init vector failed", K(ret));

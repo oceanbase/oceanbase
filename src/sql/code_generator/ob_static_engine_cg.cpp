@@ -9042,10 +9042,23 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       int tmp_ret = OB_SUCCESS;
       tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_WINDOW_FUNCTION) OB_SUCCESS;
       bool use_vec2_winfunc = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0);
-      if (use_rich_format && use_vec2_winfunc && tmp_ret == OB_SUCCESS
+      int batch_size = 0;
+      if (OB_ISNULL(log_op.get_plan())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null plan", K(ret));
+      } else {
+        batch_size = log_op.get_plan()->get_optimizer_context().get_batch_size();
+      }
+      if (OB_FAIL(ret)) {
+      } else if (use_rich_format && use_vec2_winfunc && tmp_ret == OB_SUCCESS
           && ObWindowFunctionVecOp::all_supported_winfuncs(
             static_cast<ObLogWindowFunction *>(&log_op)->get_window_exprs())) {
-        type = PHY_VEC_WINDOW_FUNCTION;
+        if (static_cast<ObLogWindowFunction *>(&log_op)->is_range_dist_parallel()
+            && batch_size < ObWindowFunctionVecSpec::RD_MIN_BATCH_SIZE) {
+          type = PHY_WINDOW_FUNCTION;
+        } else {
+          type = PHY_VEC_WINDOW_FUNCTION;
+        }
       } else {
         type = PHY_WINDOW_FUNCTION;
       }
