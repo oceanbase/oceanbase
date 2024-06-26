@@ -1178,8 +1178,8 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                 LOG_WARN("unexpected error", K(ret));
               }
             } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unknown alter external table type", K(ret), K(alter_table_arg.alter_part_type_), K(stmt.get_alter_external_table_type()));
+              // ret = OB_ERR_UNEXPECTED;
+              // LOG_WARN("unknown alter external table type", K(ret), K(alter_table_arg.alter_part_type_), K(stmt.get_alter_external_table_type()));
             }
           }
         }

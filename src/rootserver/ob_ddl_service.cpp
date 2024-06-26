@@ -12701,6 +12701,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                     need_update_index_table, alter_locality_op))) {
           LOG_WARN("failed to set new table options", K(ret), K(new_table_schema),
           K(*orig_table_schema), K(ret));
+        } else {
+          new_table_schema.set_table_flags(alter_table_schema.get_table_flags());
         }
       }
 

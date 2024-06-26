@@ -2620,10 +2620,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         break;
       }
       case T_EXTERNAL_TABLE_AUTO_REFRESH: {
-         if (stmt::T_CREATE_TABLE != stmt_->get_stmt_type()) {
-           ret = OB_ERR_UNEXPECTED; //TODO-EXTERNAL-TABLE add new error code
-           LOG_WARN("invalid file format option", K(ret));
-         } else {
+         if (stmt_->get_stmt_type() == stmt::T_CREATE_TABLE) {
            ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
            if (!arg.schema_.is_external_table()) {
              ret = OB_NOT_SUPPORTED;
@@ -2637,6 +2634,22 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
            } else {
              arg.schema_.set_external_table_auto_refresh(option_node->children_[0]->value_);
            }
+         } else if (stmt_->get_stmt_type() == stmt::T_ALTER_TABLE) {
+           ObAlterTableArg &arg = static_cast<ObAlterTableStmt*>(stmt_)->get_alter_table_arg();
+           if (!arg.alter_table_schema_.is_external_table()) {
+             ret = OB_NOT_SUPPORTED;
+             ObSqlString err_msg;
+             err_msg.append_fmt("Using ALTER AUTO REFRESH as a ALTER TABLE option");
+             LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+             LOG_WARN("using ALTER AUTO REFRESH as a table option is support in external table only", K(ret));
+           } else if (option_node->num_child_ != 1 || OB_ISNULL(option_node->children_[0])) {
+             ret = OB_ERR_UNEXPECTED;
+             LOG_WARN("unexpected child num", K(option_node->num_child_));
+           } else {
+             arg.alter_table_schema_.set_external_table_auto_refresh(option_node->children_[0]->value_);
+           }
+         } else {
+           ret = OB_ERR_UNEXPECTED;
          }
          break;
        }
