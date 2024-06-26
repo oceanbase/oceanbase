@@ -107,6 +107,11 @@ private:
     ASSERT_EQ(OB_SUCCESS, ret);
     cb->set(mt_key, lock_op_node);
   }
+  void free_callback(ObOBJLockCallback *&cb)
+  {
+    mt_ctx_.free_table_lock_callback(cb);
+    cb = nullptr;
+  }
 
 private:
   ObLSID ls_id_;
@@ -159,6 +164,7 @@ TEST_F(TestLockTableCallback, callback)
   ASSERT_EQ(lock_exist, true);
   ret = cb->trans_commit();
   ASSERT_EQ(OB_SUCCESS, ret);
+  free_callback(cb);
   ret = mt_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
@@ -178,6 +184,7 @@ TEST_F(TestLockTableCallback, callback)
   ASSERT_EQ(lock_exist, true);
   ret = cb->trans_abort();
   ASSERT_EQ(OB_SUCCESS, ret);
+  free_callback(cb);
   ret = mt_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
@@ -197,6 +204,7 @@ TEST_F(TestLockTableCallback, callback)
   ASSERT_EQ(lock_exist, true);
   ret = cb->rollback_callback();
   ASSERT_EQ(OB_SUCCESS, ret);
+  free_callback(cb);
   ret = mt_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                  DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
@@ -229,6 +237,9 @@ TEST_F(TestLockTableCallback, basic)
   ret = cb->get_redo(redo_node);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(redo_node.lock_id_, DEFAULT_IN_TRANS_LOCK_OP.lock_id_);
+  ret = cb->rollback_callback();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  free_callback(cb);
 }
 
 } // tablelock
