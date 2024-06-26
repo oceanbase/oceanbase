@@ -1296,7 +1296,7 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_checksum(
     } else if (OB_SUCCESS == check_ret) {
       ObLSHandle ls_handle;
       ObTabletHandle unused_handle;
-      if (OB_TMP_FAIL((MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD)))) {
+      if (OB_TMP_FAIL((MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE)))) {
         if (OB_LS_NOT_EXIST == tmp_ret) {
           LOG_TRACE("ls not exist", K(tmp_ret), K(ls_id));
         } else {

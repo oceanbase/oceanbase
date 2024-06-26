@@ -1105,7 +1105,7 @@ int ObTransferHandler::do_trans_transfer_start_prepare_(
     LOG_WARN("failed to do transfer dest prepare", K(ret), K(task_info));
   } else if (FALSE_IT(addr_info.src_addr_ = dest_ls_leader)) {
   // submit active tx redo log before block tablet write to optimise system interrupt time
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_, src_ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(task_info));
   } else if (OB_FAIL(src_ls_handle.get_ls()->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
     LOG_WARN("failed to submit tx log", K(ret), K(task_info));
@@ -1136,7 +1136,7 @@ int ObTransferHandler::wait_tablet_write_end_(
   if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls srv should not be NULL", K(ret), KP(ls_srv));
-  } else if (OB_FAIL(ls_srv->get_ls(src_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls(src_ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("ls_srv->get_ls() fail", K(ret), K(src_ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1705,7 +1705,7 @@ int ObTransferHandler::get_max_decided_scn_(
     if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
       LOG_WARN("fail to get log stream", KR(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2692,7 +2692,7 @@ int ObTransferHandler::do_move_tx_to_dest_ls_(const share::ObTransferTaskInfo &t
   int64_t tx_count = 0;
   int64_t buf_len = 0;
   int64_t collect_count = 0;
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_,src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_,src_ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("get ls failed", KR(ret), K(task_info));
   } else if (OB_FAIL(src_ls_handle.get_ls()->collect_tx_ctx(task_info.dest_ls_id_,
                                                             data_end_scn,

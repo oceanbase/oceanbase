@@ -10421,7 +10421,7 @@ int ObPartTransCtx::recover_ls_transfer_status_()
   ObLSHandle ls_handle;
   share::SCN op_scn;
   bool need_recover = false;
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::TRANS_MOD))) {
     LOG_WARN("get ls failed", KR(ret), K(ls_id_));
   } else {
      // recover mds type transfer_dest_prepare and move_tx_ctx

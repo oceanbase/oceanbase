@@ -1571,7 +1571,7 @@ int ObTenantTabletScheduler::get_ls_tablet_medium_list(
     share::SCN &weak_read_ts)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL((MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD)))) {
+  if (OB_FAIL((MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE)))) {
     if (OB_LS_NOT_EXIST == ret) {
       LOG_TRACE("ls not exist", K(ret), K(ls_id));
     } else {
@@ -2207,7 +2207,7 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
   } else if (!could_major_merge_start()) {
     ret = OB_MAJOR_FREEZE_NOT_ALLOW;
     LOG_WARN("major compaction is suspended", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_FAIL(ObTabletMergeChecker::check_ls_state_in_major(*ls_handle.get_ls(), can_merge))) {
     LOG_WARN("failed to check ls can schedule medium", K(ret), K(ls_handle));

@@ -709,7 +709,7 @@ int ObTenantFreezeInfoMgr::try_update_reserved_snapshot()
   ObSharedGuard<ObLSIterator> ls_iter_guard;
   ObLS *ls = nullptr;
   if (OB_FAIL(ret) || reserved_snapshot <= 0) {
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::COMPACT_MODE))) {
     LOG_WARN("failed to get ls iterator", K(ret));
   } else {
     int tmp_ret = OB_SUCCESS;
