@@ -572,7 +572,9 @@ int ObQueryEngine::inner_loop_find_level_(const ObMemtableKey *start_key,
     }
   }
 
-  STORAGE_LOG(INFO, "finish find split level", KR(ret), K(top_level), K(btree_node_count), K(total_rows));
+  if (OB_ENTRY_NOT_EXIST != ret) {
+    STORAGE_LOG(INFO, "finish find split level", KR(ret), K(top_level), K(btree_node_count), K(total_rows));
+  }
 
   return ret;
 }
