@@ -173,6 +173,7 @@ ob_set_subtarget(ob_server table
   table/ttl/ob_table_ttl_executor.cpp
   table/ob_table_move_response.cpp
   table/ob_table_connection_mgr.cpp
+  table/redis/ob_redis_meta.cpp
 )
 
 ob_set_subtarget(ob_server table_load
