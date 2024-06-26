@@ -2201,10 +2201,10 @@ static int float_number(const ObObjType expect_type, ObObjCastParams &params,
     MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
     int64_t length = 0;
     if (lib::is_oracle_mode()) {
-      length = ob_gcvt_opt(in.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(sizeof(buf) - 1),
+      length = ob_gcvt_opt(value, OB_GCVT_ARG_FLOAT, static_cast<int32_t>(sizeof(buf) - 1),
                            buf, NULL, TRUE, TRUE);
     } else {
-      length = ob_gcvt(in.get_float(), OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL);
+      length = ob_gcvt(value, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL);
     }
     ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
     number::ObNumber nmb;
@@ -2634,7 +2634,7 @@ static int double_number(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
     MEMSET(buf, 0, MAX_DOUBLE_STRICT_PRINT_SIZE);
-    int64_t length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1),
+    int64_t length = ob_gcvt_opt(value, OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1),
                                  buf, NULL, lib::is_oracle_mode(), TRUE);
     ObString str(sizeof(buf), static_cast<int32_t>(length), buf);
     number::ObNumber nmb;
@@ -13727,7 +13727,10 @@ int float_range_check(ObObjCastParams &params, const ObAccuracy &accuracy,
   int ret = OB_SUCCESS;
   float value = obj.get_float();
   res_obj = &obj;
-  if (lib::is_oracle_mode() && 0.0 == value) {
+  if (obj.is_ufloat() && 0.0 > value) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsiged type with negative value", K(ret), K(obj), K(value));
+  } else if (lib::is_oracle_mode() && 0.0 == value) {
     value = 0.0;
     buf_obj.set_float(obj.get_type(), value);
     res_obj = &buf_obj;
@@ -13754,7 +13757,10 @@ int double_check_precision(ObObjCastParams &params, const ObAccuracy &accuracy,
   int ret = OB_SUCCESS;
   double value = obj.get_double();
   res_obj = &obj;
-  if (lib::is_oracle_mode() && 0.0 == value) {
+  if (obj.is_udouble() && 0.0 > value) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsiged type with negative value", K(ret), K(obj), K(value));
+  } else if (lib::is_oracle_mode() && 0.0 == value) {
     value = 0.0;
     buf_obj.set_double(obj.get_type(), value);
     res_obj = &buf_obj;
@@ -13978,7 +13984,10 @@ int number_range_check_v2(ObObjCastParams &params, const ObAccuracy &accuracy,
     const number::ObNumber *max_num_mysql = NULL;
     number::ObNumber out_val;
     bool is_finish = false;
-    if (obj.is_number_float()) {
+    if (obj.is_unumber() && in_val.is_negative()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unsiged type with negative value", K(ret), K(in_val));
+    } else if (obj.is_number_float()) {
       if (OB_MIN_NUMBER_FLOAT_PRECISION <= precision
           && precision <= OB_MAX_NUMBER_FLOAT_PRECISION) {
         const int64_t number_precision = static_cast<int64_t>(floor(precision * OB_PRECISION_BINARY_TO_DECIMAL_FACTOR));
