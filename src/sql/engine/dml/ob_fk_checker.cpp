@@ -552,7 +552,8 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
       uint64_t ref_table_id = checker_ctdef_.das_scan_ctdef_.ref_table_id_;
       if (OB_FAIL(lookup_range.build_range(ref_table_id, table_rowkey))) {
         LOG_WARN("build lookup range failed", K(ret), K(ref_table_id), K(table_rowkey));
-      } else if (OB_FAIL(se_rowkey_dist_ctx_->set_refactored(table_rowkey))) {// add the foreign key that has not been checked before to the cached hash-set
+      } else if (OB_FAIL(se_rowkey_dist_ctx_->set_refactored(table_rowkey))) {
+        // add the foreign key that has not been checked before to the cached hash-set
         LOG_WARN("failed to add foreign key to cached hash_set", K(ret));
       }
     } else {
