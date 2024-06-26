@@ -183,8 +183,76 @@ alter table A drop index Ai;
 alter table A drop index Ai2;
 insert into A values (1, 10), (2, 20);
 insert into B values (1), (1), (2), (2);
+select * from A;
+a	a2
+1	10
+2	20
 select * from B;
 a
+1
+1
+2
+2
+drop table A, B;
+create table A(a int, a2 int, primary key (a, a2));
+create unique index Aui on A(a2);
+create table B(a2 int, foreign key (a2) references A(a2));
+alter table A drop index Aui;
+ERROR HY000: unique/primary keys in table referenced by enabled foreign keys
+insert into A values (1, 10), (2, 11);
+insert into B values (10), (10), (11), (11);
+select * from A;
+a	a2
+1	10
+2	11
+select * from B;
+a2
+10
+10
+11
+11
+drop table A, B;
+create table A(a int, a2 int, primary key (a));
+create unique index Aui on A(a);
+create table B(a int, foreign key (a) references A(a));
+alter table A drop index Aui;
+insert into A values (1, 10), (2, 11);
+insert into B values (1), (1), (2), (2);
+select * from A;
+a	a2
+1	10
+2	11
+select * from B;
+a
+1
+1
+2
+2
+drop table A, B;
+create table A(a int, a2 int);
+create index Aindex on A(a);
+create table B(a int, foreign key (a) references A(a));
+create unique index Aui on A(a);
+insert into A values (1, 10), (2, 11);
+insert into B values (1), (1), (2), (2);
+select * from A;
+a	a2
+1	10
+2	11
+select * from B;
+a
+1
+1
+2
+2
+alter table A drop index Aui;
+insert into B values (1), (1), (2), (2);
+select * from B;
+a
+1
+1
+2
+2
 1
 1
 2
