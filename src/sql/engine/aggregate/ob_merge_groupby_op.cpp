@@ -37,7 +37,9 @@ OB_SERIALIZE_MEMBER((ObMergeGroupBySpec, ObGroupBySpec),
                     sort_exprs_,
                     sort_collations_,
                     sort_cmp_funcs_,
-                    enable_encode_sort_
+                    enable_encode_sort_,
+                    est_rows_per_group_,
+                    enable_hash_base_distinct_
 );
 
 DEF_TO_STRING(ObMergeGroupBySpec)

@@ -229,7 +229,8 @@ public:
       role_type_(0),
       wf_aggr_status_expr_(NULL),
       input_rows_mem_bound_ratio_(0.5),
-      estimated_part_cnt_(1)
+      estimated_part_cnt_(1),
+      enable_hash_base_distinct_(false)
   {
   }
   DECLARE_VIRTUAL_TO_STRING;
@@ -293,6 +294,7 @@ public:
   // The percentage of memory used by input_rows to the total memory used by input_rows and res_rows
   double input_rows_mem_bound_ratio_;
   int64_t estimated_part_cnt_;
+  bool enable_hash_base_distinct_;
 
 private:
   // disallow copy
