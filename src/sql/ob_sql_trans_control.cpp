@@ -648,17 +648,28 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
     }
   }
 
-  // check isolation with consistency type
   if (OB_SUCC(ret) && session->is_in_transaction()) {
+    // check consistency type volatile
+    auto current_consist_level = plan_ctx->get_consistency_level();
+    if (current_consist_level == ObConsistencyLevel::WEAK) {
+      // read write transaction
+      if (!session->get_tx_desc()->is_clean()) {
+        plan_ctx->set_consistency_level(ObConsistencyLevel::STRONG);
+      }
+    }
+
+    // check isolation with consistency type
     auto iso = session->get_tx_desc()->get_isolation_level();
     auto cl = plan_ctx->get_consistency_level();
-    if (ObConsistencyLevel::WEAK == cl && (iso == ObTxIsolationLevel::SERIAL || iso == ObTxIsolationLevel::RR)) {
+    if (ObConsistencyLevel::WEAK == cl &&
+      (iso == ObTxIsolationLevel::SERIAL || iso == ObTxIsolationLevel::RR)) {
       ret = OB_NOT_SUPPORTED;
       TRANS_LOG(ERROR, "statement of weak consistency is not allowed under SERIALIZABLE isolation",
                 KR(ret), "trans_id", session->get_tx_id(), "consistency_level", cl);
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE and REPEATABLE-READ isolation level");
     }
   }
+
   return ret;
 }
 
