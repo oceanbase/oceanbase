@@ -2015,3 +2015,9 @@ DEF_INT(_ob_pl_compile_max_concurrency, OB_CLUSTER_PARAMETER, "4", "[0,)",
 DEF_BOOL(_enable_compatible_monotonic, OB_CLUSTER_PARAMETER, "True",
         "Control whether to enable cross-server monotonic compatible(data_version) mode",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
+                     common::ObSqlPlanManagementModeChecker,
+                     "Specifies how spm work."
+                     "\"Disable\" represent disable spm (default value)."
+                     "\"OnlineEvolve\" represent evolve plan online.",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

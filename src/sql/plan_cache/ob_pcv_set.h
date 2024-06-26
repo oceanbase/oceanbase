@@ -68,12 +68,7 @@ public:
       normal_parse_const_cnt_(0),
       min_cluster_version_(0),
       plan_num_(0),
-#ifndef OB_BUILD_SPM
       need_check_gen_tbl_col_(false)
-#else
-      need_check_gen_tbl_col_(false),
-      is_spm_closed_(false)
-#endif
   {
   }
   virtual ~ObPCVSet()
@@ -102,7 +97,6 @@ public:
   int deep_copy_sql(const common::ObString &sql);
   int check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains);
 #ifdef OB_BUILD_SPM
-  bool get_spm_closed() const { return is_spm_closed_; }
   int get_evolving_evolution_task(EvolutionPlanList &evo_task_list);
 #endif
 
@@ -137,9 +131,6 @@ private:
   int64_t plan_num_;
   common::ObSEArray<common::ObString, 4> sql_ids_;
   bool need_check_gen_tbl_col_;
-#ifdef OB_BUILD_SPM
-  bool is_spm_closed_;
-#endif
   common::ObFixedArray<PCColStruct, common::ObIAllocator> col_field_arr_;
 };
 

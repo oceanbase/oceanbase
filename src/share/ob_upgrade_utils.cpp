@@ -25,6 +25,7 @@
 #include "share/ls/ob_ls_status_operator.h"//get max ls id
 #include "share/ob_tenant_info_proxy.h"//update max ls id
 #include "ob_upgrade_utils.h"
+#include "share/config/ob_config_helper.h"
 
 namespace oceanbase
 {
@@ -1307,6 +1308,8 @@ int ObUpgradeFor4320Processor::post_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_reset_compat_version())) {
     LOG_WARN("fail to reset compat version", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_spm())) {
+    LOG_WARN("failed to post upgrade for spm", KR(ret));
   }
   return ret;
 }
@@ -1357,6 +1360,58 @@ int ObUpgradeFor4320Processor::try_reset_version(const uint64_t tenant_id, const
       LOG_WARN("failed to write sql", K(ret), K(set_sql));
     }
   }
+  return ret;
+}
+
+int ObUpgradeFor4320Processor::post_upgrade_for_spm()
+{
+  int ret = OB_SUCCESS;
+  int64_t start = ObTimeUtility::current_time();
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVariableSchema *var_schema = NULL;
+  const ObSysVarSchema *spm_var = NULL;
+  common::ObObj var_value;
+  ObString sql("alter system set sql_plan_management_mode = 'OnlineEvolve';");
+  int64_t affected_rows = 0;
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (tenant_config.is_valid()) {
+    int64_t spm_mode = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
+        tenant_config->sql_plan_management_mode.get_value_string());
+    if (0 == spm_mode) {
+      if (OB_ISNULL(schema_service_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+        LOG_WARN("failed to get schema guard", K(ret));
+      } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, var_schema))) {
+        LOG_WARN("fail to get sys variable schema", KR(ret), K_(tenant_id));
+      } else if (OB_NOT_NULL(var_schema)) {
+        ObArenaAllocator alloc("UpgradeAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+        if (OB_FAIL(var_schema->get_sysvar_schema(ObSysVarClassType::SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES,
+                                                  spm_var))) {
+          LOG_WARN("failed to get sysvar schema", K(ret));
+        } else if (OB_ISNULL(spm_var)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null sysvar schema", K(ret));
+        } else if (OB_FAIL(spm_var->get_value(&alloc, NULL, var_value))) {
+          LOG_WARN("failed to get sys variable value", K(ret));
+        } else if (!var_value.get_bool()) {
+          // do nothing
+        } else if (OB_ISNULL(sql_proxy_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null ptr", K(ret));
+        } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+          LOG_WARN("execute sql failed", K(ret), K(sql));
+        } else {
+          LOG_TRACE("execute sql", KR(ret), K(tenant_id_), K(sql), K(affected_rows));
+        }
+      }
+    }
+  }
+
+  LOG_INFO("set spm parameter based on sys variable", K(tenant_id_), K(var_value), "cost", ObTimeUtility::current_time() - start);
+
   return ret;
 }
 /* =========== 4310 upgrade processor end ============= */

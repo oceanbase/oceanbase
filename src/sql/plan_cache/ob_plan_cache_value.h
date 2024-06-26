@@ -407,9 +407,6 @@ private:
   uint64_t sess_create_time_;
   // wether this pcv's plans contains sys table (oracle mode)
   bool contain_sys_name_table_;
-#ifdef OB_BUILD_SPM
-  bool is_spm_closed_;
-#endif
 
   bool need_param_;
   //at present, if a SQL is in nested sql, it is forced to use DAS plan
