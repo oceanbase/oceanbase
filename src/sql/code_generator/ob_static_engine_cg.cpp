@@ -2729,7 +2729,6 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
       }
     }
   } // for index_dml_infos end
-  
   return ret;
 }
 
