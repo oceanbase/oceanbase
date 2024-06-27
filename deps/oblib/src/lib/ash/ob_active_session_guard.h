@@ -294,7 +294,7 @@ private:
 class ObAshBuffer
 {
 public:
-  ObAshBuffer() : write_pos_(0), buffer_() {}
+  ObAshBuffer() : write_pos_(0), read_pos_(0), buffer_() {}
   ~ObAshBuffer()
   {
     OB_LOG(INFO, "successfully released one ash buffer", K(buffer_.count()), "size", buffer_.count() * sizeof(sizeof(ObActiveSessionStatItem)), K(this));
@@ -303,14 +303,19 @@ public:
   int64_t copy_from_ash_buffer(const ObActiveSessionStatItem &stat);
   int64_t append(const ObActiveSessionStatItem &stat);
   void fixup_stat(int64_t index, const ObWaitEventDesc &desc);
-  int64_t write_pos() const { return write_pos_; };
-  int64_t size() const { return buffer_.size(); };
+  int64_t write_pos() const { return write_pos_; }
+  int64_t read_pos() const { return read_pos_; }
+  int64_t size() const { return buffer_.size(); }
+  int64_t free_slots_num() const { return (write_pos_ - read_pos_) <= buffer_.size() ? (buffer_.size() - write_pos_ + read_pos_) : 0; }
   inline void set_label(const lib::ObLabel &label) { return buffer_.set_label(label); }
   inline void set_tenant_id(const uint64_t &tenant_id) { return buffer_.set_tenant_id(tenant_id); }
+  void set_read_pos(int64_t pos);
   int prepare_allocate(int64_t capacity) { return buffer_.prepare_allocate(capacity); }
   TO_STRING_KV(K_(write_pos), K(buffer_.count()));
 private:
   int64_t write_pos_; // current write index for ash stat item. Not written yet.
+  // When copy one ash buffer to another, read_pos_ will not be copied.
+  int64_t read_pos_;  // current read index for wr snapshot. Not read yet.
   common::ObArray<ObActiveSessionStatItem> buffer_;
 };
 
