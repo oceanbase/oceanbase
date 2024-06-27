@@ -1227,7 +1227,6 @@ int ObTableStoreUtil::compare_table_by_scn_range(const ObITable *ltable, const O
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid rtable type", K(ret), KPC(rtable));
   } else if (ltable->get_end_scn() == rtable->get_end_scn()) {
-    bret = true;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table end log ts shouldn't be equal", KPC(ltable), KPC(rtable));
   } else if (is_ascend) {
