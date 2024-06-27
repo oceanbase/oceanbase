@@ -43,6 +43,7 @@ public:
   static const int HEADER_LEN = 3;  // "*\r\n"
   static const int FLAG_LEN = 1;    // "*"
   static const int CRLF_LEN = 2;    // "\r\n"
+  static const int ROWKEY_IS_DATA_IDX = 2;
 
   static const ObString FMT_OK;
   static const ObString FMT_SYNTAX_ERR;
@@ -62,6 +63,9 @@ public:
   static const ObString REDIS_PROPERTY_NAME;
   static const ObString DB_PROPERTY_NAME;
   static const ObString RKEY_PROPERTY_NAME;
+  static const ObString INSERT_TS_PROPERTY_NAME;
+  static const ObString SCORE_PROPERTY_NAME;
+  static const int COMPLEX_ROWKEY_NUM = 4;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisUtil);
 };
@@ -121,6 +125,15 @@ enum RedisCommandType {
   REDIS_COMMAND_DECRBY,
   // append new redis cmd_name type here
   REDIS_COMMAND_MAX
+};
+
+enum ObRedisModel {
+  STRING,
+  HASH,
+  SET,
+  ZSET,
+  LIST,
+  INVALID
 };
 
 // Format conversion in redis protocol and obtable

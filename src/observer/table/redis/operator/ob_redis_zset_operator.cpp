@@ -19,7 +19,6 @@ namespace oceanbase
 using namespace common;
 namespace table
 {
-const ObString ZSetCommandOperator::SCORE_PROPERTY_NAME = ObString::make_string("score");
 const ObString ZSetCommandOperator::SCORE_INDEX_NAME = ObString::make_string("index_score");
 
 void ZSetScoreUpdater::operator()(common::hash::HashMapPair<common::ObString, double> &entry)
@@ -60,12 +59,13 @@ int ZSetCommandOperator::do_zadd(int64_t db, const ObString &key,
   const ObITableEntity &req_entity = redis_ctx_.get_entity();
   ObTableBatchOperation ops;
   ops.set_entity_factory(redis_ctx_.entity_factory_);
+  int64_t cur_time = ObTimeUtility::current_time();
 
   for (ZSetCommand::MemberScoreMap::const_iterator iter = mem_score_map.begin();
        OB_SUCC(ret) && iter != mem_score_map.end();
        ++iter) {
     ObITableEntity *value_entity = nullptr;
-    if (OB_FAIL(build_score_entity(db, key, iter->first, iter->second, value_entity))) {
+    if (OB_FAIL(build_score_entity(db, key, iter->first, iter->second, cur_time, value_entity))) {
       LOG_WARN(
           "fail to build score entity", K(ret), K(iter->first), K(iter->second), K(db), K(key));
     } else if (OB_FAIL(ops.insert_or_update(*value_entity))) {
@@ -101,7 +101,7 @@ int ZSetCommandOperator::do_zcard_inner(int64_t db, const ObString &key, int64_t
   int ret = OB_SUCCESS;
   ObTableQuery query;
   ObTableAggregation cnt_agg(ObTableAggregationType::COUNT, "*");
-  if (OB_FAIL(add_member_scan_range(db, key, query))) {
+  if (OB_FAIL(add_member_scan_range(db, key, true/*is_data*/, query))) {
     LOG_WARN("fail to add scan query", K(ret));
   } else if (OB_FAIL(query.add_aggregation(cnt_agg))) {
     LOG_WARN("fail to add count aggregation", K(ret), K(cnt_agg));
@@ -163,7 +163,7 @@ int ZSetCommandOperator::do_zrem_inner(int64_t db, const ObString &key,
 
   for (int i = 0; OB_SUCC(ret) && i < members.count(); ++i) {
     ObITableEntity *value_entity = nullptr;
-    if (OB_FAIL(build_hash_set_rowkey_entity(db, key, members.at(i), value_entity))) {
+    if (OB_FAIL(build_hash_set_rowkey_entity(db, key, true /*not meta*/, members.at(i), value_entity))) {
       LOG_WARN("fail to get rowkey entity", K(ret), K(db), K(key), K(i), K(members.at(i)));
     } else if (OB_FAIL(ops.del(*value_entity))) {
       LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));
@@ -210,8 +210,10 @@ int ZSetCommandOperator::do_zincrby(int64_t db, const ObString &key, const ObStr
   ObObj score_obj;
   score_obj.set_double(increment);
   double ret_score = 0.0;
-  if (OB_FAIL(build_score_entity(db, key, member, increment, entity))) {
-    LOG_WARN("fail to build score entity", K(ret), K(member), K(increment), K(db), K(key));
+  if (OB_FAIL(build_hash_set_rowkey_entity(db, key, true /*not meta*/, member, entity))) {
+    LOG_WARN("fail to build rowkey entity", K(ret), K(member), K(db), K(key));
+  } else if (OB_FAIL(entity->set_property(ObRedisUtil::SCORE_PROPERTY_NAME, score_obj))) {
+    LOG_WARN("fail to set row key value", K(ret), K(score_obj));
   } else {
     ObTableOperation op = ObTableOperation::increment(*entity);
     ObTableOperationResult result;
@@ -251,7 +253,7 @@ int ZSetCommandOperator::do_zscore_inner(int64_t db, const ObString &key, const 
   int ret = OB_SUCCESS;
   ObTableOperationResult result;
   ObITableEntity *req_entity = nullptr;
-  if (OB_FAIL(build_hash_set_rowkey_entity(db, key, member, req_entity))) {
+  if (OB_FAIL(build_hash_set_rowkey_entity(db, key, true /*not meta*/, member, req_entity))) {
     LOG_WARN("fail to build rowkey entity", K(ret), K(member), K(db), K(key));
   } else if (OB_FAIL(process_table_single_op(ObTableOperation::retrieve(*req_entity), result))) {
     if (ret != OB_ITER_END) {
@@ -401,14 +403,18 @@ int ZSetCommandOperator::do_zrank(int64_t db, const ObString &member, ZRangeCtx 
 }
 
 int ZSetCommandOperator::build_score_entity(int64_t db, const ObString &key, const ObString &member,
-                                            double score, ObITableEntity *&entity)
+                                            double score, int64_t time, ObITableEntity *&entity)
 {
   int ret = OB_SUCCESS;
   ObObj score_obj;
   score_obj.set_double(score);
-  if (OB_FAIL(build_hash_set_rowkey_entity(db, key, member, entity))) {
+  ObObj insert_ts_obj;
+  insert_ts_obj.set_timestamp(time);
+  if (OB_FAIL(build_hash_set_rowkey_entity(db, key, true /*not meta*/, member, entity))) {
     LOG_WARN("fail to build rowkey entity", K(ret), K(member), K(db), K(key));
-  } else if (OB_FAIL(entity->set_property(SCORE_PROPERTY_NAME, score_obj))) {
+  } else if (OB_FAIL(entity->set_property(ObRedisUtil::SCORE_PROPERTY_NAME, score_obj))) {
+    LOG_WARN("fail to set row key value", K(ret), K(score_obj));
+  } else if (OB_FAIL(entity->set_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, insert_ts_obj))) {
     LOG_WARN("fail to set row key value", K(ret), K(score_obj));
   }
   return ret;
@@ -418,7 +424,7 @@ int ZSetCommandOperator::get_score_from_entity(const ObITableEntity &entity, dou
 {
   int ret = OB_SUCCESS;
   ObObj score_obj;
-  if (OB_FAIL(entity.get_property(SCORE_PROPERTY_NAME, score_obj))) {
+  if (OB_FAIL(entity.get_property(ObRedisUtil::SCORE_PROPERTY_NAME, score_obj))) {
     LOG_WARN("fail to get score obj", K(ret), K(entity));
   } else if (OB_FAIL(score_obj.get_double(score))) {
     LOG_WARN("fail to get score from obj", K(ret), K(score_obj));
@@ -487,7 +493,7 @@ int ZSetCommandOperator::build_rank_scan_query(ObIAllocator &allocator, int64_t 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(query.add_select_column(MEMBER_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
-  } else if (OB_FAIL(query.add_select_column(SCORE_PROPERTY_NAME))) {
+  } else if (OB_FAIL(query.add_select_column(ObRedisUtil::SCORE_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
   } else if (OB_FAIL(query.set_scan_index(SCORE_INDEX_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
@@ -694,7 +700,7 @@ int ZSetCommandOperator::do_zrange_by_score_inner(int64_t db, const ZRangeCtx &z
     LOG_WARN("fail to build score scan query", K(ret), K(zrange_ctx));
   } else if (OB_FAIL(query.add_select_column(MEMBER_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
-  } else if (OB_FAIL(query.add_select_column(SCORE_PROPERTY_NAME))) {
+  } else if (OB_FAIL(query.add_select_column(ObRedisUtil::SCORE_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
   } else if (OB_FAIL(exec_member_score_query(query, zrange_ctx.with_scores_, ret_arr))) {
     LOG_WARN("fail to execute query", K(ret));
@@ -756,7 +762,7 @@ int ZSetCommandOperator::do_zcount(int64_t db, const ObString &key, double min, 
              K(max_inclusive));
   } else if (OB_FAIL(query.add_select_column(MEMBER_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
-  } else if (OB_FAIL(query.add_select_column(SCORE_PROPERTY_NAME))) {
+  } else if (OB_FAIL(query.add_select_column(ObRedisUtil::SCORE_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
   } else if (OB_FAIL(process_table_query_count(op_temp_allocator_, query, count))) {
     LOG_WARN("fail to process table query count", K(ret), K(query));
@@ -778,11 +784,11 @@ int ZSetCommandOperator::union_zset(int64_t db, const ObString &key, double weig
 {
   int ret = OB_SUCCESS;
   ObTableQuery query;
-  if (OB_FAIL(add_member_scan_range(db, key, query))) {
+  if (OB_FAIL(add_member_scan_range(db, key, true/*is_data*/, query))) {
     LOG_WARN("fail to build scan query", K(ret));
   } else if (OB_FAIL(query.add_select_column(MEMBER_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
-  } else if (OB_FAIL(query.add_select_column(SCORE_PROPERTY_NAME))) {
+  } else if (OB_FAIL(query.add_select_column(ObRedisUtil::SCORE_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
   } else {
     SMART_VAR(ObTableCtx, tb_ctx, op_temp_allocator_)
@@ -884,7 +890,7 @@ int ZSetCommandOperator::aggregate_scores_in_all_keys(int64_t db, const ObIArray
     ObTableOperation get_op;
     ObITableEntity *entity = nullptr;
     ObRowkey rowkey;
-    if (OB_FAIL(build_hash_set_rowkey_entity(db, keys.at(i), member, entity))) {
+    if (OB_FAIL(build_hash_set_rowkey_entity(db, keys.at(i), true /*not meta*/, member, entity))) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("invalid null entity_factory_", K(ret));
     } else {
@@ -937,11 +943,11 @@ int ZSetCommandOperator::do_zinter_store(int64_t db, const ObString &dest,
     ObString first_key = keys.at(0);
     double first_weight = weights.at(0);
     ObTableQuery query;
-    if (OB_FAIL(add_member_scan_range(db, first_key, query))) {
+    if (OB_FAIL(add_member_scan_range(db, first_key, true/*is_data*/, query))) {
       LOG_WARN("fail to build scan query", K(ret));
     } else if (OB_FAIL(query.add_select_column(MEMBER_PROPERTY_NAME))) {
       LOG_WARN("fail to add select member column", K(ret), K(query));
-    } else if (OB_FAIL(query.add_select_column(SCORE_PROPERTY_NAME))) {
+    } else if (OB_FAIL(query.add_select_column(ObRedisUtil::SCORE_PROPERTY_NAME))) {
       LOG_WARN("fail to add select member column", K(ret), K(query));
     } else {
       SMART_VAR(ObTableCtx, tb_ctx, op_temp_allocator_)

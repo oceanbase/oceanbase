@@ -813,7 +813,7 @@ int ObTenantTabletTTLMgr::get_ttl_para_from_schema(const schema::ObTableSchema *
       LOG_WARN("fail to check htable schema", KR(ret), K(table_schema->get_table_name()));
     } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), param.max_version_, param.ttl_))) {
       LOG_WARN("fail to parse kv attributes", KR(ret), K(table_schema->get_kv_attributes()));
-    } else {
+    } else if (param.max_version_ != INT32_MIN && param.ttl_ != INT32_MIN) {
       param.is_htable_ = true;
       LOG_DEBUG("success to find a hbase ttl partition", KR(ret), K(param));
     }

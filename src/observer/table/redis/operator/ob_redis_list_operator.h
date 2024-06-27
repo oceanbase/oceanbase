@@ -53,7 +53,7 @@ public:
   static const int64_t INIT_INDEX = 0;
   static const int64_t INDEX_STEP = 1 << 20;
   static const int64_t META_INDEX = INT64_MIN;
-  static const int64_t INDEX_SEQNUM_IN_ROWKEY = 2;
+  static const int64_t INDEX_SEQNUM_IN_ROWKEY = 3;
   static const char META_SPLIT_FLAG = ObRedisUtil::INT_FLAG;
 
   int64_t count_;
@@ -142,15 +142,16 @@ private:
   OB_INLINE bool idx_overflowed(int64_t idx);
   // gen err_msg which need return to redis client
   void gen_fmt_redis_err(const common::ObString &err_msg);
-  int build_index_scan_range(
+  int build_scan_range(
       int64_t db,
       const ObString &key,
+      bool is_data,
       const int64_t *less_index,
       const int64_t *max_index,
       ObTableQuery &query);
   int query_index_result(const ObTableQuery &query, ObString &res_value);
-  int build_rowkey(int64_t db, const ObString &key, const int64_t *index, bool is_min, ObRowkey &rowkey);
-  int gen_entity_with_rowkey(int64_t idx, ObITableEntity *&entity);
+  int build_rowkey(int64_t db, const ObString &key, bool is_data, const int64_t *index, bool is_min, ObRowkey &rowkey);
+  int gen_entity_with_rowkey(int64_t idx, bool is_data, ObITableEntity *&entity);
   int pop_single_count_list(ListMetaData &list_meta, const bool pop_left, common::ObString &res_value);
   int pop_multi_count_list(
       const common::ObString &key,

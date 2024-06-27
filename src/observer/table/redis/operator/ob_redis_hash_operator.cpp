@@ -31,12 +31,13 @@ int HashCommandOperator::do_hset_inner(int64_t db, const ObString &key,
   const ObITableEntity &req_entity = redis_ctx_.get_entity();
   ObTableBatchOperation ops;
   ops.set_entity_factory(redis_ctx_.entity_factory_);
+  int64_t cur_ts = ObTimeUtility::current_time();
 
   for (HashCommand::FieldValMap::const_iterator iter = field_val_map.begin();
        OB_SUCC(ret) && iter != field_val_map.end();
        ++iter) {
     ObITableEntity *value_entity = nullptr;
-    if (OB_FAIL(build_value_entity(db, key, iter->first, iter->second, value_entity))) {
+    if (OB_FAIL(build_value_entity(db, key, iter->first, iter->second, cur_ts, value_entity))) {
       LOG_WARN(
           "fail to build score entity", K(ret), K(iter->first), K(iter->second), K(db), K(key));
     } else if (OB_FAIL(ops.insert_or_update(*value_entity))) {
@@ -100,15 +101,20 @@ int HashCommandOperator::do_hmset(int64_t db, const ObString &key,
 }
 
 int HashCommandOperator::build_value_entity(int64_t db, const ObString &key, const ObString &field,
-                                            const ObString &value, ObITableEntity *&entity)
+                                            const ObString &value, int64_t insert_ts,
+                                            ObITableEntity *&entity)
 {
   int ret = OB_SUCCESS;
   ObObj value_obj;
   value_obj.set_varbinary(value);
-  if (OB_FAIL(build_hash_set_rowkey_entity(db, key, field, entity))) {
+  ObObj ts_obj;
+  ts_obj.set_timestamp(insert_ts);
+  if (OB_FAIL(build_hash_set_rowkey_entity(db, key, true /*not meta*/, field, entity))) {
     LOG_WARN("fail to build rowkey entity", K(ret), K(field), K(db), K(key));
   } else if (OB_FAIL(entity->set_property(VALUE_PROPERTY_NAME, value_obj))) {
     LOG_WARN("fail to set row key value", K(ret), K(value_obj));
+  } else if (OB_FAIL(entity->set_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, ts_obj))) {
+    LOG_WARN("fail to set row key value", K(ret), K(ts_obj));
   }
   return ret;
 }

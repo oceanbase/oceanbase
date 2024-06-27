@@ -35,7 +35,7 @@ protected:
   static const int64_t MEMBER_IDX = 2;
   static const ObString MEMBER_PROPERTY_NAME;
 
-  int add_member_scan_range(int64_t db, const ObString &key, ObTableQuery &query);
+  int add_member_scan_range(int64_t db, const ObString &key, bool is_data, ObTableQuery &query);
   int build_range(const common::ObRowkey &start_key, const common::ObRowkey &end_key,
                   ObNewRange *&range, bool inclusive_start = true, bool inclusive_end = true);
   int is_member_in_one_key(int64_t db, const ObIArray<ObString> &keys, int start_idx, int end_idx,

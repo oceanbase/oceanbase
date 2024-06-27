@@ -96,11 +96,12 @@ protected:
   ObRedisCtx &redis_ctx_;
   common::ObArenaAllocator op_temp_allocator_;
 
-  int build_hash_set_rowkey(int64_t db, const ObString &key, bool is_min, common::ObRowkey &rowkey);
-  int build_hash_set_rowkey(int64_t db, const ObString &key, const ObString &member,
+  int build_hash_set_rowkey(int64_t db, const ObString &key, bool is_data, bool is_min,
                             common::ObRowkey &rowkey);
-  int build_hash_set_rowkey_entity(int64_t db, const ObString &key, const ObString &member,
-                                   ObITableEntity *&entity);
+  int build_hash_set_rowkey(int64_t db, const ObString &key, bool is_data, const ObString &member,
+                            common::ObRowkey &rowkey);
+  int build_hash_set_rowkey_entity(int64_t db, const ObString &key, bool is_data,
+                                   const ObString &member, ObITableEntity *&entity);
   int build_range(const common::ObRowkey &start_key, const common::ObRowkey &end_key,
                   ObNewRange *&range, bool inclusive_start = true, bool inclusive_end = true);
   int init_table_ctx(const ObTableOperation &op, ObTableCtx &tb_ctx,

@@ -129,6 +129,8 @@ int ListMetaData::put_meta_into_entity(ObIAllocator &allocator, ObITableEntity &
   int ret = OB_SUCCESS;
   ObObj meta_value_obj;
   ObObj ttl_obj;
+  ObObj insert_ts_obj;
+  insert_ts_obj.set_timestamp(ObTimeUtility::current_time());
   if (OB_FAIL(encode_meta_value(allocator, meta_value_obj))) {
     LOG_WARN("fail to encode meta value", K(ret));
   } else if (OB_FAIL(meta_entity.set_property(ObRedisUtil::REDIS_VALUE_NAME, meta_value_obj))) {
@@ -136,6 +138,8 @@ int ListMetaData::put_meta_into_entity(ObIAllocator &allocator, ObITableEntity &
   } else if (OB_FALSE_IT(get_ttl_obj(ttl_obj))) {
   } else if (OB_FAIL(meta_entity.set_property(ObRedisUtil::REDIS_EXPIRE_NAME, ttl_obj))) {
     LOG_WARN("fail to convert datetime to timestamp", K(ret), K(ttl_));
+  } else if (OB_FAIL(meta_entity.set_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, insert_ts_obj))) {
+    LOG_WARN("fail to set value property", K(ret), K(insert_ts_obj));
   }
 
   return ret;
@@ -153,7 +157,7 @@ int ListCommandOperator::get_list_meta(ListMetaData &list_meta)
   ObITableEntity *get_meta_entity = nullptr;
   ObITableEntity *res_meta_entity = nullptr;
   ObObj null_obj;
-  if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, get_meta_entity))) {
+  if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, false/*is_data*/, get_meta_entity))) {
     LOG_WARN("fail to gen entity with rowkey", K(ret));
   } else if (OB_FAIL(get_meta_entity->set_property(ObRedisUtil::REDIS_VALUE_NAME, null_obj))) {
     LOG_WARN("fail to set property", K(ret), K(null_obj));
@@ -181,7 +185,7 @@ int ListCommandOperator::get_list_meta(ListMetaData &list_meta)
   return ret;
 }
 
-int ListCommandOperator::gen_entity_with_rowkey(int64_t idx, ObITableEntity *&entity)
+int ListCommandOperator::gen_entity_with_rowkey(int64_t idx, bool is_data, ObITableEntity *&entity)
 {
   int ret = OB_SUCCESS;
   const ObITableEntity &req_entity = redis_ctx_.request_.get_request().table_operation_.entity();
@@ -196,10 +200,14 @@ int ListCommandOperator::gen_entity_with_rowkey(int64_t idx, ObITableEntity *&en
   } else {
     ObObj idx_obj;
     idx_obj.set_int(idx);
+    ObObj is_data_obj;
+    is_data_obj.set_bool(is_data);
     if (OB_FAIL(tmp_entity->set_rowkey(req_entity.get_rowkey()))) {
       LOG_WARN("fail to set rowkey", K(ret), K(req_entity));
     } else if (OB_FAIL(tmp_entity->set_rowkey_value(ListMetaData::INDEX_SEQNUM_IN_ROWKEY, idx_obj))) {
       LOG_WARN("fail to set index seqnum in rowkey", K(ret), K(idx_obj));
+    } else if (OB_FAIL(tmp_entity->set_rowkey_value(ObRedisUtil::ROWKEY_IS_DATA_IDX, is_data_obj))) {
+      LOG_WARN("fail to set is_data in rowkey", K(ret), K(is_data_obj));
     } else {
       entity = tmp_entity;
     }
@@ -247,6 +255,9 @@ int ListCommandOperator::put_data_to_table(ListMetaData &list_meta, const ObIArr
     }
   }
 
+  int64_t cur_ts = ObTimeUtility::current_time();
+  ObObj insert_ts_obj;
+  insert_ts_obj.set_timestamp(cur_ts);
   for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
     ObITableEntity *value_entity = nullptr;
     ObObj value_obj;
@@ -255,10 +266,12 @@ int ListCommandOperator::put_data_to_table(ListMetaData &list_meta, const ObIArr
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("index overflow", K(ret), K(idx), K(list_meta));
       gen_fmt_redis_err(ObString::make_string("index overflow"));
-    } else if (OB_FAIL(gen_entity_with_rowkey(idx, value_entity))) {
+    } else if (OB_FAIL(gen_entity_with_rowkey(idx, true/*is_data*/, value_entity))) {
       LOG_WARN("fail to gen entity with rowkey", K(ret));
     } else if (OB_FAIL(value_entity->set_property(ObRedisUtil::REDIS_VALUE_NAME, value_obj))) {
       LOG_WARN("fail to set value property", K(ret), K(value_obj));
+    } else if (OB_FAIL(value_entity->set_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, insert_ts_obj))) {
+      LOG_WARN("fail to set value property", K(ret), K(insert_ts_obj));
     } else if (OB_FAIL(push_value_ops.insert_or_update(*value_entity))) {
       LOG_WARN("fail to push back", K(ret));
     } else {
@@ -278,7 +291,7 @@ int ListCommandOperator::put_data_to_table(ListMetaData &list_meta, const ObIArr
     list_meta.right_idx_ = push_left ? right_idx : right_idx - ListMetaData::INDEX_STEP;
 
     ObITableEntity *meta_entity = nullptr;
-    if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, meta_entity))) {
+    if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, false/*is_data*/, meta_entity))) {
       LOG_WARN("fail to gen entity with rowkey", K(ret));
     } else if (OB_FAIL(list_meta.put_meta_into_entity(op_temp_allocator_, *meta_entity))) {
       LOG_WARN("fail to encode meta value", K(ret), K(list_meta));
@@ -350,7 +363,7 @@ int ListCommandOperator::pop_single_count_list(ListMetaData &list_meta, const bo
   if (list_meta.left_idx_ != list_meta.right_idx_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("list count is 1 but left_idx != right_idx", K(list_meta));
-  } else if (OB_FAIL(gen_entity_with_rowkey(list_meta.left_idx_, data_req_entity))) {
+  } else if (OB_FAIL(gen_entity_with_rowkey(list_meta.left_idx_, true/*is_data*/, data_req_entity))) {
     LOG_WARN("fail to gen entity with rowkey", K(ret));
   } else if (OB_FAIL(data_req_entity->set_property(ObRedisUtil::REDIS_VALUE_NAME, null_obj))) {
     LOG_WARN("fail to set value property", K(ret), K(null_obj));
@@ -393,7 +406,7 @@ int ListCommandOperator::update_list_after_pop(
   ResultFixedArray results(op_temp_allocator_);
   ObITableEntity *del_data_entity = nullptr;
   // delete old borderd
-  if (OB_FAIL(gen_entity_with_rowkey(old_borded.first, del_data_entity))) {
+  if (OB_FAIL(gen_entity_with_rowkey(old_borded.first, true/*is_data*/, del_data_entity))) {
     LOG_WARN("fail to gen entity with rowkey", K(ret));
   } else if (OB_FAIL(batch_ops.del(*del_data_entity))) {
     LOG_WARN("fail to push back", K(ret));
@@ -407,7 +420,7 @@ int ListCommandOperator::update_list_after_pop(
         list_meta.right_idx_ = new_borded.first;
       }
       ObITableEntity *new_meta_entity = nullptr;
-      if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, new_meta_entity))) {
+      if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, false/*is_data*/, new_meta_entity))) {
         LOG_WARN("fail to gen entity with rowkey", K(ret));
       } else if (OB_FAIL(list_meta.put_meta_into_entity(op_temp_allocator_, *new_meta_entity))) {
         LOG_WARN("fail to encode meta value", K(ret), K(list_meta));
@@ -417,7 +430,7 @@ int ListCommandOperator::update_list_after_pop(
     } else {
       // delete meta
       ObITableEntity *new_meta_entity = nullptr;
-      if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, new_meta_entity))) {
+      if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, false/*is_data*/, new_meta_entity))) {
         LOG_WARN("fail to gen entity with rowkey", K(ret));
       } else if (OB_FAIL(batch_ops.del(*new_meta_entity))) {
         LOG_WARN("fail to push back data_req_entity", K(ret));
@@ -555,9 +568,10 @@ int ListCommandOperator::do_pop(const ObString &key, bool pop_left)
   return ret;
 }
 
-int ListCommandOperator::build_index_scan_range(
+int ListCommandOperator::build_scan_range(
     int64_t db,
     const ObString &key,
+    bool is_data,
     const int64_t *less_index,
     const int64_t *max_index,
     ObTableQuery &query)
@@ -566,9 +580,9 @@ int ListCommandOperator::build_index_scan_range(
   ObRowkey start_key;
   ObRowkey end_key;
   ObNewRange *range = nullptr;
-  if (OB_FAIL(build_rowkey(db, key, less_index, true, start_key))) {
+  if (OB_FAIL(build_rowkey(db, key, true/*is data*/, less_index, true/*is_min*/, start_key))) {
     LOG_WARN("fail to build start key", K(ret), K(db), K(key));
-  } else if (OB_FAIL(build_rowkey(db, key, max_index, false, end_key))) {
+  } else if (OB_FAIL(build_rowkey(db, key, true/*is data*/, max_index, false/*is_min*/, end_key))) {
     LOG_WARN("fail to build start key", K(ret), K(db), K(key));
   } else if (OB_FAIL(build_range(start_key, end_key, range))) {
     LOG_WARN("fail to build range", K(ret), K(start_key), K(end_key));
@@ -582,6 +596,7 @@ int ListCommandOperator::build_index_scan_range(
 int ListCommandOperator::build_rowkey(
     int64_t db,
     const ObString &key,
+    bool is_data,
     const int64_t *index,
     bool is_min,
     ObRowkey &rowkey)
@@ -589,23 +604,24 @@ int ListCommandOperator::build_rowkey(
   int ret = OB_SUCCESS;
   ObObj *obj_ptr = nullptr;
   if (OB_ISNULL(
-          obj_ptr = static_cast<ObObj *>(op_temp_allocator_.alloc(sizeof(ObObj) * ObRedisUtil::LIST_ROWKEY_NUM)))) {
+          obj_ptr = static_cast<ObObj *>(op_temp_allocator_.alloc(sizeof(ObObj) * ObRedisUtil::COMPLEX_ROWKEY_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("ArgNodeContent cast to string invalid value", K(ret));
   } else {
     obj_ptr[0].set_int(db);
     obj_ptr[1].set_varbinary(key);
+    obj_ptr[2].set_bool(is_data);
     if (OB_ISNULL(index)) {
       if (is_min) {
-        obj_ptr[2].set_min_value();
+        obj_ptr[3].set_min_value();
       } else {
-        obj_ptr[2].set_max_value();
+        obj_ptr[3].set_max_value();
       }
     } else {
-      obj_ptr[2].set_int(*index);
+      obj_ptr[3].set_int(*index);
     }
 
-    rowkey.assign(obj_ptr, ObRedisUtil::LIST_ROWKEY_NUM);
+    rowkey.assign(obj_ptr, ObRedisUtil::COMPLEX_ROWKEY_NUM);
   }
   return ret;
 }
@@ -771,7 +787,7 @@ int ListCommandOperator::update_element(int64_t index, const ObString &value)
   ObITableEntity *req_entity;
   ObObj value_obj;
   value_obj.set_varbinary(value);
-  if (OB_FAIL(gen_entity_with_rowkey(index, req_entity))) {
+  if (OB_FAIL(gen_entity_with_rowkey(index, true/*is_data*/, req_entity))) {
     LOG_WARN("fail to gen entity with rowkey", K(ret));
   } else if (OB_FAIL(req_entity->set_property(ObRedisUtil::REDIS_VALUE_NAME, value_obj))) {
     LOG_WARN("fail to set property", K(ret), K(ObRedisUtil::REDIS_VALUE_NAME), K(value_obj));
@@ -1009,8 +1025,8 @@ int ListCommandOperator::build_list_query(const ListQueryCond &query_cond, ObTab
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(build_index_scan_range(
-          query_cond.db_, query_cond.key_, &query_cond.left_border_, &query_cond.right_border_, query))) {
+  if (OB_FAIL(build_scan_range(
+          query_cond.db_, query_cond.key_, true/*is data*/, &query_cond.left_border_, &query_cond.right_border_, query))) {
     LOG_WARN("fail to build member scan range", K(ret), K(query_cond));
   } else if (OB_FAIL(query.add_select_column(ObRedisUtil::REDIS_INDEX_NAME))) {
     LOG_WARN("fail to add select column", K(ret), K(query_cond));
@@ -1126,7 +1142,7 @@ int ListCommandOperator::update_meta_after_trim(
 
   ObITableEntity *new_meta_entity = nullptr;
   // update meta
-  if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, new_meta_entity))) {
+  if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, false/*is_data*/, new_meta_entity))) {
     LOG_WARN("fail to gen entity with rowkey", K(ret));
   } else if (OB_FAIL(list_meta.put_meta_into_entity(op_temp_allocator_, *new_meta_entity))) {
     LOG_WARN("fail to encode meta value", K(ret), K(list_meta));
@@ -1186,7 +1202,7 @@ int ListCommandOperator::build_trim_ops(
             }
           } else {
             ObITableEntity *del_data_entity = nullptr;
-            if (OB_FAIL(gen_entity_with_rowkey(index, del_data_entity))) {
+            if (OB_FAIL(gen_entity_with_rowkey(index, true/*is_data*/, del_data_entity))) {
               LOG_WARN("fail to gen entity with rowkey", K(ret));
             } else if (OB_FAIL(del_ops.del(*del_data_entity))) {
               LOG_WARN("fail to push back", K(ret));
@@ -1492,17 +1508,21 @@ int ListCommandOperator::do_insert(
     ObITableEntity *meta_entity = nullptr;
     ObITableEntity *new_data_entity;
     ObObj value_obj;
-    if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, meta_entity))) {
+    ObObj insert_ts_obj;
+    insert_ts_obj.set_timestamp(ObTimeUtility::current_time());
+    if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, false/*is_data*/, meta_entity))) {
       LOG_WARN("fail to gen entity with rowkey", K(ret));
     } else if (OB_FAIL(list_meta.put_meta_into_entity(op_temp_allocator_, *meta_entity))) {
       LOG_WARN("fail to encode meta value", K(ret), K(list_meta));
     } else if (OB_FAIL(put_value_ops.insert_or_update(*meta_entity))) {
       LOG_WARN("fail to push back", K(ret));
     } else if (OB_FALSE_IT(value_obj.set_varbinary(value))) {
-    } else if (OB_FAIL(gen_entity_with_rowkey(insert_idx, new_data_entity))) {
+    } else if (OB_FAIL(gen_entity_with_rowkey(insert_idx, true/*is_data*/, new_data_entity))) {
       LOG_WARN("fail to gen entity with rowkey", K(ret));
     } else if (OB_FAIL(new_data_entity->set_property(ObRedisUtil::REDIS_VALUE_NAME, value_obj))) {
       LOG_WARN("fail to add column", K(ret), K(value));
+    } else if (OB_FAIL(new_data_entity->set_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, insert_ts_obj))) {
+      LOG_WARN("fail to set value property", K(ret), K(insert_ts_obj));
     } else if (OB_FAIL(put_value_ops.insert_or_update(*new_data_entity))) {
       LOG_WARN("fail to push back", K(ret));
     } else if (OB_FAIL(process_table_batch_op(put_value_ops, results, false, false))) {
@@ -1666,7 +1686,7 @@ int ListCommandOperator::update_meta_after_rem(
   ResultFixedArray results(op_temp_allocator_);
   if (rem_count == list_meta.count_) {
     ObITableEntity *meta_entity = nullptr;
-    if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, meta_entity))) {
+    if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, false/*is_data*/, meta_entity))) {
       LOG_WARN("fail to gen entity with rowkey", K(ret));
     } else if (OB_FAIL(batch_ops.del(*meta_entity))) {
       LOG_WARN("fail to push back data_req_entity", K(ret));
@@ -1692,7 +1712,7 @@ int ListCommandOperator::update_meta_after_rem(
     }
     if (OB_SUCC(ret)) {
       ObITableEntity *meta_entity = nullptr;
-      if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, meta_entity))) {
+      if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, false/*is_data*/, meta_entity))) {
         LOG_WARN("fail to gen entity with rowkey", K(ret));
       } else if (OB_FAIL(list_meta.put_meta_into_entity(op_temp_allocator_, *meta_entity))) {
         LOG_WARN("fail to encode meta value", K(ret), K(list_meta));
@@ -1804,7 +1824,7 @@ int ListCommandOperator::do_rem(const ObString &key, int64_t count, const ObStri
             LOG_WARN("fail to get index from obj", K(ret), K(index_obj));
           } else {
             ObITableEntity *del_data_entity = nullptr;
-            if (OB_FAIL(gen_entity_with_rowkey(index, del_data_entity))) {
+            if (OB_FAIL(gen_entity_with_rowkey(index, true/*is_data*/, del_data_entity))) {
               LOG_WARN("fail to gen entity with rowkey", K(ret));
             } else if (OB_FAIL(del_ops.del(*del_data_entity))) {
               LOG_WARN("fail to push back", K(ret));
@@ -1886,7 +1906,7 @@ int ListCommandOperator::build_del_ops(const ObTableQuery &query, ObTableBatchOp
           LOG_WARN("fail to get index from obj", K(ret), K(index_obj));
         } else {
           ObITableEntity *del_data_entity = nullptr;
-          if (OB_FAIL(gen_entity_with_rowkey(index, del_data_entity))) {
+          if (OB_FAIL(gen_entity_with_rowkey(index, true/*is_data*/, del_data_entity))) {
             LOG_WARN("fail to gen entity with rowkey", K(ret));
           } else if (OB_FAIL(del_ops.del(*del_data_entity))) {
             LOG_WARN("fail to push back", K(ret));
@@ -1926,7 +1946,7 @@ int ListCommandOperator::do_del(const ObString &key)
   } else {
     ObITableEntity *new_meta_entity = nullptr;
     // update meta
-    if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, new_meta_entity))) {
+    if (OB_FAIL(gen_entity_with_rowkey(ListMetaData::META_INDEX, false/*is_data*/, new_meta_entity))) {
       LOG_WARN("fail to gen entity with rowkey", K(ret));
     } else if (OB_FAIL(del_ops.del(*new_meta_entity))) {
       LOG_WARN("fail to push back", K(ret));

@@ -40,6 +40,8 @@ const char *const ObRedisUtil::REDIS_CODE_PROPERTY_CNAME = "REDIS_CODE_STR";
 const ObString ObRedisUtil::REDIS_PROPERTY_NAME = REDIS_CODE_PROPERTY_CNAME;
 const ObString ObRedisUtil::DB_PROPERTY_NAME = "db";
 const ObString ObRedisUtil::RKEY_PROPERTY_NAME = "rkey";
+const ObString ObRedisUtil::INSERT_TS_PROPERTY_NAME = "insert_ts";
+const ObString ObRedisUtil::SCORE_PROPERTY_NAME = "score";
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 

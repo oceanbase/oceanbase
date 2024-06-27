@@ -694,6 +694,105 @@ int ObTTLUtil::replace_ttl_task(uint64_t tenant_id,
 }
 
 // example: kv_attributes = {hbase: {maxversions: 3}}
+int ObTTLUtil::parse_kv_attributes_hbase(json::Value *ast, int32_t &max_versions, int32_t &time_to_live)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == ast) {
+    // do nothing
+  } else if (ast->get_type() == json::JT_OBJECT) {
+    DLIST_FOREACH(elem, ast->get_object()) {
+      if (elem->name_.case_compare("TimeToLive") == 0) {
+        json::Value *ttl_val = elem->value_;
+        if (NULL != ttl_val && ttl_val->get_type() == json::JT_NUMBER) {
+          if (ttl_val->get_number() <= 0) {
+            ret = OB_TTL_INVALID_HBASE_TTL;
+            LOG_WARN("time to live should greater than 0", K(ret), K(ttl_val));
+            LOG_USER_ERROR(OB_TTL_INVALID_HBASE_TTL);
+          } else {
+            time_to_live = static_cast<int32_t>(ttl_val->get_number());
+          }
+        }
+      } else if (elem->name_.case_compare("MaxVersions") == 0) {
+        json::Value *max_versions_val = elem->value_;
+        if (NULL != max_versions_val && max_versions_val->get_type() == json::JT_NUMBER) {
+          if (max_versions_val->get_number() <= 0) {
+            ret = OB_TTL_INVALID_HBASE_MAXVERSIONS;
+            LOG_WARN("max versions should greater than 0", K(ret), K(max_versions_val));
+            LOG_USER_ERROR(OB_TTL_INVALID_HBASE_MAXVERSIONS);
+          } else {
+            max_versions = static_cast<int32_t>(max_versions_val->get_number());
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported kv attribute", K(ret), KPC(max_versions_val));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported kv attribute", K(ret), K(ast->get_type()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
+      }
+    }  // end foreach
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported kv attribute", K(ret), K(ast->get_type()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
+  }
+  return ret;
+}
+
+// "Redis": {"is_ttl": true, "model": "hash"}
+int ObTTLUtil::parse_kv_attributes_redis(json::Value *ast,
+                                         bool &is_redis_ttl_,
+                                         table::ObRedisModel &redis_model_)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == ast) {
+    // do nothing
+  } else if (ast->get_type() == json::JT_OBJECT) {
+    DLIST_FOREACH(elem, ast->get_object()) {
+      if (elem->name_.case_compare("IsTTL") == 0) {
+        json::Value *ttl_val = elem->value_;
+        if (NULL != ttl_val) {
+          is_redis_ttl_ = (ttl_val->get_type() == json::JT_TRUE);
+        }
+      } else if (elem->name_.case_compare("Model") == 0) {
+        json::Value *model_val = elem->value_;
+        if (NULL != model_val && model_val->get_type() == json::JT_STRING) {
+          ObString model_str = model_val->get_string();
+          if (model_str.case_compare("HASH") == 0) {
+            redis_model_ = table::ObRedisModel::HASH;
+          } else if (model_str.case_compare("LIST") == 0) {
+            redis_model_ = table::ObRedisModel::LIST;
+          } else if (model_str.case_compare("SET") == 0) {
+            redis_model_ = table::ObRedisModel::SET;
+          } else if (model_str.case_compare("ZSET") == 0) {
+            redis_model_ = table::ObRedisModel::ZSET;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not supported kv attribute", K(ret), K(model_str));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported kv attribute", K(ret), KPC(model_val));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported kv attribute", K(ret), K(elem->name_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
+      }
+    }  // end foreach
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported kv attribute", K(ret), K(ast->get_type()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
+  }
+  return ret;
+}
+
+// example: kv_attributes = {hbase: {maxversions: 3}}
 int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, int32_t &max_versions, int32_t &time_to_live)
 {
   int ret = OB_SUCCESS;
@@ -712,51 +811,21 @@ int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, int32_t &max_v
     json::Pair *kv = ast->get_object().get_first();
     if (NULL != kv && kv != ast->get_object().get_header()) {
       if (kv->name_.case_compare("HBASE") == 0) {
-        ast = kv->value_;
-        if (NULL == ast) {
-          // do nothing
-        } else if (ast->get_type() == json::JT_OBJECT) {
-          DLIST_FOREACH(elem, ast->get_object()) {
-            if (elem->name_.case_compare("TimeToLive") == 0) {
-              json::Value *ttl_val = elem->value_;
-              if (NULL != ttl_val && ttl_val->get_type() == json::JT_NUMBER) {
-                if (ttl_val->get_number() <= 0) {
-                  ret = OB_TTL_INVALID_HBASE_TTL;
-                  LOG_WARN("time to live should greater than 0", K(ret), K(ttl_val));
-                  LOG_USER_ERROR(OB_TTL_INVALID_HBASE_TTL);
-                } else {
-                  time_to_live = static_cast<int32_t>(ttl_val->get_number());
-                }
-              }
-            } else if (elem->name_.case_compare("MaxVersions") == 0) {
-              json::Value *max_versions_val = elem->value_;
-              if (NULL != max_versions_val && max_versions_val->get_type() == json::JT_NUMBER) {
-                if (max_versions_val->get_number() <= 0) {
-                  ret = OB_TTL_INVALID_HBASE_MAXVERSIONS;
-                  LOG_WARN("max versions should greater than 0", K(ret), K(max_versions_val));
-                  LOG_USER_ERROR(OB_TTL_INVALID_HBASE_MAXVERSIONS);
-                } else {
-                  max_versions = static_cast<int32_t>(max_versions_val->get_number());
-                }
-              } else {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("not supported kv attribute", K(ret));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
-              }
-            } else {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not supported kv attribute", K(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
-            }
-          }  // end foreach
+        if (OB_FAIL(parse_kv_attributes_hbase(kv->value_, max_versions, time_to_live))) {
+          LOG_WARN("fail to parse hbase kv attributes");
+        }
+      } else if (kv->name_.case_compare("REDIS") == 0) {
+        bool is_redis_ttl_ = false;
+        table::ObRedisModel redis_model_ = table::ObRedisModel::INVALID;
+        if (OB_FAIL(parse_kv_attributes_redis(kv->value_, is_redis_ttl_, redis_model_))) {
+          LOG_WARN("fail to parse redis kv attributes");
         } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not supported kv attribute", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
+          max_versions = INT32_MIN;
+          time_to_live = INT32_MIN;
         }
       } else {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("only hbase mode is supported currently", K(ret));
+        LOG_WARN("not supported kv attribute", K(ret), K(kv->name_));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
       }
     }

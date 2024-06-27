@@ -74,7 +74,7 @@ int SetCommandOperator::do_union(int64_t db, const ObString &key, SetCommand::Me
   int ret = OB_SUCCESS;
 
   ObTableQuery query;
-  if (OB_FAIL(add_member_scan_range(db, key, query))) {
+  if (OB_FAIL(add_member_scan_range(db, key, true/*is_data*/, query))) {
     LOG_WARN("fail to build scan query", K(ret));
   } else if (OB_FAIL(query.add_select_column(MEMBER_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
@@ -123,7 +123,7 @@ int SetCommandOperator::do_aggregate_inner(int64_t db, const ObIArray<ObString> 
 
   ObString first_key = keys.at(0);
   ObTableQuery query;
-  if (OB_FAIL(add_member_scan_range(db, first_key, query))) {
+  if (OB_FAIL(add_member_scan_range(db, first_key, true/*is_data*/, query))) {
     LOG_WARN("fail to build scan query", K(ret));
   } else if (OB_FAIL(query.add_select_column(MEMBER_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
@@ -257,7 +257,7 @@ int SetCommandOperator::is_key_member(int64_t db, const ObString &key, const ObS
   ObITableEntity *entity = nullptr;
   ObRowkey rowkey;
   is_member = false;
-  if (OB_FAIL(build_hash_set_rowkey_entity(db, key, member, entity))) {
+  if (OB_FAIL(build_hash_set_rowkey_entity(db, key, true /*not meta*/, member, entity))) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null entity_factory_", K(ret));
   } else {
@@ -277,15 +277,15 @@ int SetCommandOperator::is_key_member(int64_t db, const ObString &key, const ObS
   return ret;
 }
 
-int SetCommandOperator::add_member_scan_range(int64_t db, const ObString &key, ObTableQuery &query)
+int SetCommandOperator::add_member_scan_range(int64_t db, const ObString &key, bool is_data, ObTableQuery &query)
 {
   int ret = OB_SUCCESS;
   ObRowkey start_key;
   ObRowkey end_key;
   ObNewRange *range = nullptr;
-  if (OB_FAIL(build_hash_set_rowkey(db, key, true, start_key))) {
+  if (OB_FAIL(build_hash_set_rowkey(db, key, is_data, true, start_key))) {
     LOG_WARN("fail to build start key", K(ret), K(db), K(key));
-  } else if (OB_FAIL(build_hash_set_rowkey(db, key, false, end_key))) {
+  } else if (OB_FAIL(build_hash_set_rowkey(db, key, is_data, false, end_key))) {
     LOG_WARN("fail to build start key", K(ret), K(db), K(key));
   } else if (OB_FAIL(build_range(start_key, end_key, range))) {
     LOG_WARN("fail to build range", K(ret), K(start_key), K(end_key));
@@ -326,6 +326,7 @@ int SetCommandOperator::do_sadd_inner(int64_t db, const ObString &key,
   const ObITableEntity &req_entity = redis_ctx_.get_entity();
   ObTableBatchOperation ops;
   ops.set_entity_factory(redis_ctx_.entity_factory_);
+  int64_t cur_time = ObTimeUtility::current_time();
 
   for (SetCommand::MemberSet::const_iterator iter = members.begin();
        OB_SUCC(ret) && iter != members.end();
@@ -333,10 +334,14 @@ int SetCommandOperator::do_sadd_inner(int64_t db, const ObString &key,
     ObITableEntity *value_entity = nullptr;
     ObObj expire_obj;
     expire_obj.set_null();
-    if (OB_FAIL(build_hash_set_rowkey_entity(db, key, iter->first, value_entity))) {
+    ObObj insert_obj;
+    insert_obj.set_timestamp(cur_time);
+    if (OB_FAIL(build_hash_set_rowkey_entity(db, key, true /*not meta*/, iter->first, value_entity))) {
       LOG_WARN("fail to build rowkey entity", K(ret), K(iter->first), K(db), K(key));
     } else if (OB_FAIL(value_entity->set_property(ObRedisUtil::REDIS_EXPIRE_NAME, expire_obj))) {
       LOG_WARN("fail to set member property", K(ret), K(expire_obj));
+    } else if (OB_FAIL(value_entity->set_property(ObRedisUtil::INSERT_TS_PROPERTY_NAME, insert_obj))) {
+      LOG_WARN("fail to set member property", K(ret), K(insert_obj));
     } else if (OB_FAIL(ops.insert_or_update(*value_entity))) {
       LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));
     }
@@ -418,7 +423,7 @@ int SetCommandOperator::delete_set(int db, const ObString &key)
   ObTableQuery query;
   ObTableBatchOperation ops;
   ops.set_entity_factory(redis_ctx_.entity_factory_);
-  if (OB_FAIL(add_member_scan_range(db, key, query))) {
+  if (OB_FAIL(add_member_scan_range(db, key, true/*is_data*/, query))) {
     LOG_WARN("fail to build scan query", K(ret));
   } else if (OB_FAIL(query.add_select_column(MEMBER_PROPERTY_NAME))) {
     LOG_WARN("fail to add select member column", K(ret), K(query));
@@ -444,7 +449,7 @@ int SetCommandOperator::delete_set(int db, const ObString &key)
             }
           } else if (OB_FAIL(get_member_from_entity(op_temp_allocator_, *result_entity, member))) {
             LOG_WARN("fail to get member from entity", K(ret), KPC(result_entity));
-          } else if (OB_FAIL(build_hash_set_rowkey_entity(db, key, member, value_entity))) {
+          } else if (OB_FAIL(build_hash_set_rowkey_entity(db, key, true /*not meta*/, member, value_entity))) {
             LOG_WARN("fail to build rowkey entity", K(ret), K(member), K(db), K(key));
           } else if (OB_FAIL(ops.del(*value_entity))) {
             LOG_WARN("fail to push back insert or update op", K(ret), KPC(value_entity));

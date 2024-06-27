@@ -64,12 +64,11 @@ public:
                       const ObIArray<double> &weights, ZSetAggCommand::AggType agg_type);
 
 private:
-  static const ObString SCORE_PROPERTY_NAME;
   static const ObString SCORE_INDEX_NAME;
   static const int64_t SCORE_INDEX_COL_NUM = 3;
 
   int build_score_entity(int64_t db, const ObString &key, const ObString &member, double score,
-                         ObITableEntity *&entity);
+                         int64_t time, ObITableEntity *&entity);
   int do_zscore_inner(int64_t db, const ObString &key, const ObString &member, double &score);
   int do_zcard_inner(int64_t db, const ObString &key, int64_t &card);
   int do_zrange_inner(int64_t db, const ZRangeCtx &zrange_ctx, ObIArray<ObString> &ret_arr);

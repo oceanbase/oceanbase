@@ -18,6 +18,7 @@
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_unit_manager.h"
+#include "share/table/ob_redis_common.h"
 
 namespace oceanbase
 {
@@ -356,6 +357,8 @@ private:
                                      const rpc::frame::ObReqTransport &transport,
                                      const ObSimpleTTLInfo &ttl_info);
   static int get_all_user_tenant_ttl(common::ObIArray<ObSimpleTTLInfo> &ttl_info_array);
+  static int parse_kv_attributes_hbase(json::Value *ast, int32_t &max_versions, int32_t &time_to_live);
+  static int parse_kv_attributes_redis(json::Value *ast, bool &is_redis_ttl_, table::ObRedisModel &redis_model_);
   DISALLOW_COPY_AND_ASSIGN(ObTTLUtil);
 };
 

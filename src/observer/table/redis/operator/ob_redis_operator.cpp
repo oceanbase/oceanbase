@@ -217,7 +217,7 @@ int CommandOperator::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard, const O
 }
 
 // add member to request entity
-int CommandOperator::build_hash_set_rowkey_entity(int64_t db, const ObString &key,
+int CommandOperator::build_hash_set_rowkey_entity(int64_t db, const ObString &key, bool is_data,
                                                   const ObString &member, ObITableEntity *&entity)
 {
   int ret = OB_SUCCESS;
@@ -229,7 +229,7 @@ int CommandOperator::build_hash_set_rowkey_entity(int64_t db, const ObString &ke
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null entity_factory_", K(ret));
   } else if (FALSE_IT(entity->set_allocator(&op_temp_allocator_))) {
-  } else if (OB_FAIL(build_hash_set_rowkey(db, key, member, rowkey))) {
+  } else if (OB_FAIL(build_hash_set_rowkey(db, key, is_data, member, rowkey))) {
     LOG_WARN("fail to build start key", K(ret), K(db), K(key));
   } else if (OB_FAIL(entity->set_rowkey(rowkey))) {
     LOG_WARN("fail to set rowkey", K(ret));
@@ -237,40 +237,45 @@ int CommandOperator::build_hash_set_rowkey_entity(int64_t db, const ObString &ke
   return ret;
 }
 
-int CommandOperator::build_hash_set_rowkey(int64_t db, const ObString &key, bool is_min,
-                                           common::ObRowkey &rowkey)
+int CommandOperator::build_hash_set_rowkey(int64_t db, const ObString &key, bool is_data,
+                                           bool is_min, common::ObRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
   ObObj *obj_ptr = nullptr;
-  if (OB_ISNULL(obj_ptr = static_cast<ObObj *>(redis_ctx_.allocator_.alloc(sizeof(ObObj) * 3)))) {
+  if (OB_ISNULL(obj_ptr = static_cast<ObObj *>(redis_ctx_.allocator_.alloc(
+                    sizeof(ObObj) * ObRedisUtil::COMPLEX_ROWKEY_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
   } else {
+    // rowkey: [db, rkey, is_data, member]
     obj_ptr[0].set_int(db);
     obj_ptr[1].set_varbinary(key);
+    obj_ptr[2].set_tinyint(is_data);
     if (is_min) {
-      obj_ptr[2].set_min_value();
+      obj_ptr[3].set_min_value();
     } else {
-      obj_ptr[2].set_max_value();
+      obj_ptr[3].set_max_value();
     }
-    rowkey.assign(obj_ptr, HASH_SET_ROWKEY_SIZE);
+    rowkey.assign(obj_ptr, ObRedisUtil::COMPLEX_ROWKEY_NUM);
   }
   return ret;
 }
 
-int CommandOperator::build_hash_set_rowkey(int64_t db, const ObString &key, const ObString &member,
-                                           common::ObRowkey &rowkey)
+int CommandOperator::build_hash_set_rowkey(int64_t db, const ObString &key, bool is_data,
+                                           const ObString &member, common::ObRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
   ObObj *obj_ptr = nullptr;
-  if (OB_ISNULL(obj_ptr = static_cast<ObObj *>(redis_ctx_.allocator_.alloc(sizeof(ObObj) * 3)))) {
+  if (OB_ISNULL(obj_ptr = static_cast<ObObj *>(redis_ctx_.allocator_.alloc(
+                    sizeof(ObObj) * ObRedisUtil::COMPLEX_ROWKEY_NUM)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObObj", K(ret));
   } else {
     obj_ptr[0].set_int(db);
     obj_ptr[1].set_varbinary(key);
-    obj_ptr[2].set_varbinary(member);
-    rowkey.assign(obj_ptr, HASH_SET_ROWKEY_SIZE);
+    obj_ptr[2].set_tinyint(is_data ? 1 : 0);
+    obj_ptr[3].set_varbinary(member);
+    rowkey.assign(obj_ptr, ObRedisUtil::COMPLEX_ROWKEY_NUM);
   }
   return ret;
 }

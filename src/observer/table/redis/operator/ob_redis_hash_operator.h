@@ -36,7 +36,7 @@ private:
 
   int do_hset_inner(int64_t db, const ObString &key, const HashCommand::FieldValMap &field_val_map, int64_t &insert_num);
   int build_value_entity(int64_t db, const ObString &key, const ObString &field,
-                         const ObString &value, ObITableEntity *&entity);
+                         const ObString &value, int64_t insert_ts, ObITableEntity *&entity);
   DISALLOW_COPY_AND_ASSIGN(HashCommandOperator);
 };
 
