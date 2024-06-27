@@ -25,6 +25,7 @@
 #include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/sequence/ob_sequence_cache.h"
+#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -64,6 +65,7 @@ ObTableLoadTransBucketWriter::ObTableLoadTransBucketWriter(ObTableLoadTransCtx *
     param_(trans_ctx_->ctx_->param_),
     allocator_("TLD_TBWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_),
     is_partitioned_(false),
+    cast_mode_(CM_NONE),
     session_ctx_array_(nullptr),
     ref_count_(0),
     is_flush_(false),
@@ -94,7 +96,9 @@ int ObTableLoadTransBucketWriter::init()
     LOG_WARN("unexpected null coordinator ctx", KR(ret));
   } else {
     is_partitioned_ = coordinator_ctx_->ctx_->schema_.is_partitioned_table_;
-    if (OB_FAIL(init_session_ctx_array())) {
+    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(coordinator_ctx_->ctx_->session_info_, cast_mode_))) {
+      LOG_WARN("fail to get_default_cast_mode", KR(ret));
+    } else if (OB_FAIL(init_session_ctx_array())) {
       LOG_WARN("fail to init session ctx array", KR(ret));
     } else {
       is_inited_ = true;
@@ -214,7 +218,7 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
   const int64_t row_count = obj_rows.count();
   ObArenaAllocator autoinc_allocator("TLD_Autoinc", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_);
   ObDataTypeCastParams cast_params(coordinator_ctx_->partition_calc_.session_info_->get_timezone_info());
-  ObCastCtx cast_ctx(&autoinc_allocator, &cast_params, CM_NONE,
+  ObCastCtx cast_ctx(&autoinc_allocator, &cast_params, cast_mode_,
                       ObCharset::get_system_collation());
   ObTableLoadCastObjCtx cast_obj_ctx(param_, &(coordinator_ctx_->partition_calc_.time_cvrt_), &cast_ctx,
                                       true);

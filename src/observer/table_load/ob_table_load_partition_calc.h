@@ -55,6 +55,7 @@ public:
   table::ObTableLoadArray<IndexAndType> part_key_obj_index_;
   sql::ObSQLSessionInfo *session_info_;
   ObTableLoadTimeConverter time_cvrt_;
+  common::ObCastMode cast_mode_;
   bool is_partition_with_autoinc_;
   int64_t partition_with_autoinc_idx_;
 private:

@@ -265,6 +265,20 @@ private:
     }
     return ret;
   }
+  // copy from `ob_obj_cast.cpp`
+  static int get_cast_ret(const ObCastMode &cast_mode, int ret, int &warning)
+  {
+    // compatibility for old ob
+    if (OB_UNLIKELY(OB_ERR_UNEXPECTED_TZ_TRANSITION == ret)
+        || OB_UNLIKELY(OB_ERR_UNKNOWN_TIME_ZONE == ret)) {
+      ret = OB_INVALID_DATE_VALUE;
+    } else if (OB_SUCCESS != ret && CM_IS_WARN_ON_FAIL(cast_mode)) {
+      LOG_INFO("static int get_cast_ret", K(CM_IS_WARN_ON_FAIL(cast_mode)), K(cast_mode));
+      warning = ret;
+      ret = OB_SUCCESS;
+    }
+    return ret;
+  }
 };
 
 } // namespace observer
