@@ -54,7 +54,9 @@ private:
       const ObLSReplica &ls_replica,
       const ObIArray<common::ObZone> &zone_list);
   int inner_refresh_ls_locality();
-
+  int build_member_list_set(
+    const ObLSReplica &tmp_replica,
+    ObIArray<common::ObAddr> &member_list_set);
 private:
   bool is_inited_;
   uint64_t tenant_id_;

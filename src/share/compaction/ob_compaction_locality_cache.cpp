@@ -143,6 +143,54 @@ int ObCompactionLocalityCache::get_ls_info(const share::ObLSID &ls_id, share::Ob
   return ret;
 }
 
+struct ObMemberListInfo
+{
+  ObMemberListInfo(const uint64_t tenant_id)
+    : member_list_array_()
+  {
+    member_list_array_.set_attr(ObMemAttr(tenant_id, "MemListInfo"));
+  }
+  ~ObMemberListInfo() {}
+  int build(const ObLSReplica &tmp_replica);
+  bool check_exist(const common::ObAddr &addr);
+  bool empty() { return member_list_array_.empty(); }
+  TO_STRING_KV("member_list_cnt", member_list_array_.count(), K(member_list_array_));
+  ObSEArray<common::ObAddr, 6> member_list_array_; // including member_list & learner_list
+};
+
+int ObMemberListInfo::build(
+  const ObLSReplica &tmp_replica)
+{
+  int ret = OB_SUCCESS;
+  const ObLSReplica::MemberList *member_list = &tmp_replica.get_member_list();
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < member_list->count(); ++idx) {
+    if (OB_FAIL(member_list_array_.push_back(member_list->at(idx)))) {
+      LOG_WARN("failed to push addr", KR(ret));
+    }
+  } // for
+  const common::GlobalLearnerList &learner_list = tmp_replica.get_learner_list();
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < learner_list.get_member_number(); ++idx) {
+    common::ObAddr addr;
+    if (OB_FAIL(learner_list.get_server_by_index(idx, addr))) {
+      LOG_WARN("failed to push addr", KR(ret), K(idx));
+    } else if (OB_FAIL(member_list_array_.push_back(addr))) {
+      LOG_WARN("failed to push addr", KR(ret), K(addr));
+    }
+  } // for
+  return ret;
+}
+
+bool ObMemberListInfo::check_exist(const common::ObAddr &addr)
+{
+  bool found = false;
+  for (int64_t idx = 0; !found && idx < member_list_array_.count(); ++idx) {
+    if (member_list_array_.at(idx) == addr) {
+      found = true;
+    }
+  }
+  return found;
+}
+
 int ObCompactionLocalityCache::refresh_by_zone(
     const share::ObLSInfo &ls_info,
     const ObIArray<common::ObZone> &zone_list)
@@ -156,22 +204,24 @@ int ObCompactionLocalityCache::refresh_by_zone(
     // create with tenant_id to set_attr for ObSArray<ObLSReplica> in ObLSInfo
     ObLSInfo tmp_ls_info(tenant_id_, ls_id);
     const ObLSInfo::ReplicaArray &all_replicas = ls_info.get_replicas();
-    const ObLSReplica::MemberList *member_list = nullptr;
+    ObMemberListInfo member_list_array(tenant_id_); // including member_list & learner_list
     for (int64_t i = 0; OB_SUCC(ret) && i < all_replicas.count(); ++i) {
       const ObLSReplica &tmp_replica = all_replicas.at(i);
       if (ObRole::LEADER == tmp_replica.get_role()) {
-        member_list = &tmp_replica.get_member_list();
+        if (OB_FAIL(member_list_array.build(tmp_replica))) {
+          LOG_WARN("failed to build member list", KR(ret), K(tmp_replica));
+        }
         break;
       }
     }
-    if (OB_SUCC(ret) && OB_ISNULL(member_list)) {
+    if (OB_SUCC(ret) && member_list_array.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("no leader in ls replica", KR(ret), K(all_replicas));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < all_replicas.count(); ++i) {
       const ObLSReplica &tmp_replica = all_replicas.at(i);
       if (replica_in_zone_list(tmp_replica, zone_list) // replica in zone list
-          && ObLSReplica::server_is_in_member_list(*member_list, tmp_replica.get_server())) { // replica in member list
+          && member_list_array.check_exist(tmp_replica.get_server())) { // replica in member list
         if (tmp_ls_info.is_valid()) {
           if (OB_FAIL(tmp_ls_info.add_replica(tmp_replica))) {
             LOG_WARN("fail to add replica", KR(ret), K(tmp_replica));
@@ -184,7 +234,7 @@ int ObCompactionLocalityCache::refresh_by_zone(
     if (FAILEDx(ls_infos_map_.set_refactored(ls_id, tmp_ls_info, 1/*overwrite*/))) {
       LOG_WARN("fail to set refactored", KR(ret), K(ls_id), K(tmp_ls_info));
     } else {
-      FLOG_INFO("success to refresh cached ls_info", K(ret), K(tmp_ls_info), K(zone_list));
+      FLOG_INFO("success to refresh cached ls_info", K(ret), K(tmp_ls_info), K(zone_list), K(member_list_array));
     }
   }
   return ret;
