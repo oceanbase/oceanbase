@@ -966,7 +966,11 @@ protected:
                              const uint64_t mv_container_table_id,
                              const share::schema::ObTableSchema *&mv_container_table_schema,
                              common::ObString &mv_container_table_name);
-  static int trim_space_for_default_value(const bool is_mysql_mode, const ObCollationType &collation_type, ObObj &default_value, ObString &str);
+  static int trim_space_for_default_value(
+      const bool is_mysql_mode,
+      const bool is_char_type,
+      const ObCollationType &collation_type,
+      ObObj &default_value, ObString &str);
   int64_t block_size_;
   int64_t consistency_level_;
   INDEX_TYPE index_scope_;
