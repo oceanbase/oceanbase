@@ -6187,6 +6187,7 @@ int ObResolverUtils::unique_idx_covered_partition_columns(
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *column_schema = NULL;
   const ObPartitionKeyColumn *column = NULL;
+  bool is_oracle_mode = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < partition_info.get_size(); i++) {
     column = partition_info.get_column(i);
     if (OB_ISNULL(column)) {
@@ -6196,7 +6197,9 @@ int ObResolverUtils::unique_idx_covered_partition_columns(
       if (OB_ISNULL(column_schema = table_schema.get_column_schema(column->column_id_))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Column schema is NULL", K(ret));
-      } else if (column_schema->is_generated_column()) {
+      } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+        LOG_WARN("failed to check if oralce compat mode", K(ret));
+      } else if (is_oracle_mode && column_schema->is_generated_column()) {
         ObSEArray<uint64_t, 5> cascaded_columns;
         if (OB_FAIL(column_schema->get_cascaded_column_ids(cascaded_columns))) {
           LOG_WARN("Failed to get cascaded column ids", K(ret));
