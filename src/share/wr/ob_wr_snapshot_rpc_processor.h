@@ -214,13 +214,15 @@ public:
       : ObWrSnapshotArg(WrTaskType::USER_MODIFY_SETTINGS),
         tenant_id_(tenant_id),
         retention_(retention),
-        interval_(interval)
+        interval_(interval),
+        topnsql_(0)
   {}
   ObWrUserModifySettingsArg()
       : ObWrSnapshotArg(WrTaskType::USER_MODIFY_SETTINGS),
         tenant_id_(0),
         retention_(0),
-        interval_(0)
+        interval_(0),
+        topnsql_(0)
   {}
   ~ObWrUserModifySettingsArg() = default;
   inline int64_t get_tenant_id() const
@@ -241,6 +243,7 @@ public:
     tenant_id_ = other.tenant_id_;
     retention_ = other.retention_;
     interval_ = other.interval_;
+    topnsql_ = topnsql_;
     if (OB_FAIL(ObWrSnapshotArg::assign(other))) {
       SHARE_LOG(WARN, "fail to assign wr snapshot arg", KR(ret));
     } else { /*do nothing*/
@@ -254,6 +257,7 @@ private:
   int64_t tenant_id_;
   int64_t retention_;
   int64_t interval_;
+  int64_t topnsql_;
 };
 
 class ObWrUserSubmitSnapResp {

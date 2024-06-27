@@ -89,12 +89,12 @@ DEF_TO_STRING(ObWrUserModifySettingsArg)
   J_COLON();
   pos += ObWrSnapshotArg::to_string(buf + pos, buf_len - pos);
   J_COMMA();
-  J_KV(K_(tenant_id), K_(retention), K_(interval));
+  J_KV(K_(tenant_id), K_(retention), K_(interval), K_(topnsql));
   J_OBJ_END();
   return pos;
 }
 OB_SERIALIZE_MEMBER(
-    (ObWrUserModifySettingsArg, ObWrSnapshotArg), tenant_id_, retention_, interval_);
+    (ObWrUserModifySettingsArg, ObWrSnapshotArg), tenant_id_, retention_, interval_, topnsql_);
 
 template <obrpc::ObRpcPacketCode pcode>
 int ObWrBaseSnapshotTaskP<pcode>::init()
