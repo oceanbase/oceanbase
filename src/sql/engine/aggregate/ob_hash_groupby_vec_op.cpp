@@ -2140,7 +2140,7 @@ int ObHashGroupByVecOp::by_pass_get_next_permutation_batch(int64_t &nth_group, b
                                                      insert_group_ht))) {
     LOG_WARN("failed to get next permutation", K(ret));
   } else if (no_non_distinct_aggr_ && last_group) {
-    my_brs.size_ = 0;
+    my_brs.skip_->set_all(child_brs->size_);
   } else {
     CK (dup_groupby_exprs_.count() == all_groupby_exprs_.count());
     LOG_DEBUG("next duplicate data permutation", K(all_groupby_exprs_), K(dup_groupby_exprs_));
