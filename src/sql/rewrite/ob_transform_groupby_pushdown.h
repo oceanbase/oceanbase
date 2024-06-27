@@ -76,6 +76,87 @@ private:
     ObSqlBitSet<> new_table_relids_;
   };
 
+  struct NewColumnDesc {
+    uint64_t col_id_;
+    ObItemType aggr_func_type_;
+    TO_STRING_KV(K_(col_id), K_(aggr_func_type));
+  };
+
+  int transform_one_stmt_groupby_pushdown(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                          ObDMLStmt *&stmt,
+                                          bool &trans_happened);
+
+  int transform_one_stmt_groupby_pushdown_to_union(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                                   ObDMLStmt *&stmt,
+                                                   bool &trans_happened);
+
+  int check_groupby_push_down_to_union_validity(ObSelectStmt *stmt,
+                                                ObSelectStmt *&union_stmt,
+                                                ObIArray<ObSelectStmt *> &child_stmts_of_union,
+                                                bool &is_valid);
+
+  int is_basic_select_stmt(ObSelectStmt *stmt, bool &is_basic);
+
+  int get_new_columns(ObSelectStmt *stmt, ObIArray<uint64_t> &groupby_col_ids,
+                      ObIArray<NewColumnDesc> &new_columns);
+
+  int do_groupby_push_down_to_union(ObSelectStmt *stmt,
+                                    ObSelectStmt *union_stmt,
+                                    ObIArray<ObSelectStmt *> &child_stmts_of_union,
+                                    ObIArray<uint64_t> &groupby_col_ids,
+                                    ObIArray<NewColumnDesc> &new_colomns,
+                                    bool &trans_happend);
+
+  int transform_basic_child_stmt_of_union(ObSelectStmt *stmt,
+                                          ObIArray<uint64_t> &groupby_col_ids,
+                                          ObIArray<NewColumnDesc> &new_colomns,
+                                          bool &trans_happend);
+
+  int get_select_item_of_basic_child(NewColumnDesc &new_column,
+                                     ObIArray<ObRawExpr *> &old_exprs,
+                                     ObIArray<SelectItem> &old_select_items,
+                                     SelectItem &new_select_item);
+
+  int get_select_item_of_non_basic_child(NewColumnDesc &new_column,
+                                         ObIArray<ObRawExpr *> &old_exprs,
+                                         ObIArray<SelectItem> &old_select_items,
+                                         SelectItem &new_select_item);
+
+  int transform_non_basic_child_stmt_of_union(ObSelectStmt *stmt,
+                                              ObIArray<NewColumnDesc> &new_colomns,
+                                              bool &trans_happend);
+
+  int get_new_aggr_exprs(ObIArray<NewColumnDesc> &new_columns,
+                        ObIArray<ObRawExpr *> &new_column_exprs,
+                        ObIArray<ObAggFunRawExpr *> &aggr_exprs,
+                        ObIArray<ObRawExpr *> &new_aggr_exprs);
+
+  int get_new_aggr_expr(ObIArray<NewColumnDesc> &new_columns,
+                        ObIArray<ObRawExpr *> &new_column_exprs,
+                        ObAggFunRawExpr *aggr_expr,
+                        ObAggFunRawExpr *&new_aggr_expr);
+
+  int get_new_aggr_col_exprs(ObIArray<ObRawExpr *> &aggr_col_exprs,
+                             ObIArray<NewColumnDesc> &new_columns,
+                             ObIArray<ObRawExpr *> &new_column_exprs,
+                             ObIArray<ObRawExpr *> &new_aggr_col_exprs);
+
+  int replace_aggr_and_aggr_col_exprs(
+      ObSelectStmt *stmt, ObIArray<ObRawExpr *> &old_aggr_exprs,
+      ObIArray<ObRawExpr *> &new_aggr_exprs,
+      ObIArray<ObRawExpr *> &old_aggr_col_exprs,
+      ObIArray<ObRawExpr *> &new_aggr_col_exprs);
+
+  int transform_parent_stmt_of_union(ObSelectStmt *stmt,
+                                     ObSelectStmt *union_stmt,
+                                     ObIArray<NewColumnDesc> &new_colomns,
+                                     bool &trans_happend);
+
+  int find_new_column_expr(ObIArray<NewColumnDesc> &new_columns,
+                           ObIArray<ObRawExpr *> &new_column_exprs,
+                           ObItemType type, uint64_t col_id,
+                           ObColumnRefRawExpr *&col_ref_exp);
+
   int check_groupby_push_down_validity(ObSelectStmt *stmt, bool &is_valid);
 
   int compute_push_down_param(ObSelectStmt *stmt,
@@ -210,6 +291,11 @@ private:
     }
     return num;
   }
+
+  // TODO 这个函数在更新的版本中已经存在于ObTransformUtils里面了，但是这个版本还没有
+  // 所以先自己写一个，合并的时候再处理
+  int create_aggr_expr(ObTransformerCtx *ctx, ObItemType type,
+                       ObAggFunRawExpr *&agg_expr, ObRawExpr *child_expr);
 
 };
 
