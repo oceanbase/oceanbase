@@ -17913,7 +17913,7 @@ int ObDMLResolver::try_update_column_expr_for_fts(
   const ObTableSchema *table_schema = nullptr;
   const uint64_t table_id = table_item.ref_id_;
   uint64_t rowkey_doc_tid = OB_INVALID_ID;
-  if (OB_UNLIKELY(TableItem::BASE_TABLE != table_item.type_ || OB_ISNULL(rowkey_doc_table))) {
+  if (OB_UNLIKELY(!table_item.is_basic_table() || OB_ISNULL(rowkey_doc_table))) {
     // There is a fulltext index in only base table. So, not base table, just skip.
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
