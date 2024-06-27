@@ -62,12 +62,12 @@ int ObTableLoadCoordinatorCtx::init_partition_location()
   int retry = 0;
   bool flag = false;
   while (retry < 3 && OB_SUCC(ret)) {
+    partition_location_.reset();
+    target_partition_location_.reset();
     // init partition_location_
-    if (OB_FAIL(partition_location_.init(ctx_->param_.tenant_id_, ctx_->schema_.partition_ids_,
-                                         allocator_))) {
+    if (OB_FAIL(partition_location_.init(ctx_->param_.tenant_id_, ctx_->schema_.partition_ids_))) {
       LOG_WARN("fail to init partition location", KR(ret));
-    } else if (OB_FAIL(target_partition_location_.init(ctx_->param_.tenant_id_,
-        target_schema_.partition_ids_, allocator_))) {
+    } else if (OB_FAIL(target_partition_location_.init(ctx_->param_.tenant_id_, target_schema_.partition_ids_))) {
       LOG_WARN("fail to init origin partition location", KR(ret));
     } else if (OB_FAIL(partition_location_.check_tablet_has_same_leader(target_partition_location_, flag))) {
       LOG_WARN("fail to check_tablet_has_same_leader", KR(ret));
@@ -79,14 +79,12 @@ int ObTableLoadCoordinatorCtx::init_partition_location()
         LOG_WARN("invalid leader info, maybe change master");
       }
     }
-    partition_location_.reset();
-    target_partition_location_.reset();
     retry ++;
   }
 
   if (OB_SUCC(ret)) {
     if (!flag) {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_EAGAIN;
       LOG_WARN("invalid leader info", KR(ret));
     }
   }
