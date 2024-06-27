@@ -581,7 +581,7 @@ private:
 int ObCgroupCtrl::recursion_dec_cpu_cfs_quota_(const char *group_path, const double cpu)
 {
   DecQuotaProcessor dec_quota_process(cpu);
-  return recursion_process_group_(group_path, &dec_quota_process);
+  return recursion_process_group_(group_path, &dec_quota_process, true /* is_top_dir */);
 }
 
 int ObCgroupCtrl::set_cpu_cfs_quota_by_path_(const char *group_path, const double cpu)
