@@ -3254,6 +3254,19 @@ int ObSPIService::dbms_dynamic_open(ObPLExecCtx *pl_ctx,
         cursor);
   } else {
     OZ (dbms_cursor_execute(pl_ctx, ps_sql, stmt_type, cursor, is_dbms_sql), cursor);
+    if (OB_SUCC(ret) && cursor.get_exec_params().count() > 0) {
+      ObIAllocator &alloc = cursor.get_dbms_entity()->get_arena_allocator();
+      for (int64_t i = 0; i < cursor.get_exec_params().count(); ++i) {
+        ObObjParam &obj = cursor.get_exec_params().at(i);
+        if (obj.is_pl_extend()
+            && obj.get_meta().get_extend_type() != PL_CURSOR_TYPE
+            && obj.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
+          OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, obj, obj, true));
+        } else {
+          OZ (deep_copy_obj(alloc, obj, obj));
+        }
+      }
+    }
     OX (cursor.set_affected_rows(pl_ctx->exec_ctx_->get_my_session()->get_affected_rows()));
   }
   return ret;
