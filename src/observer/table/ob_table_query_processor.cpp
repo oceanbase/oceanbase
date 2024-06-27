@@ -161,9 +161,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
   ObTableApiScanRowIterator row_iter;
   ObCompressorType compressor_type = INVALID_COMPRESSOR;
   OB_TABLE_START_AUDIT(credential_,
-                       sess_guard_.get_user_name(),
-                       sess_guard_.get_tenant_name(),
-                       sess_guard_.get_database_name(),
+                       sess_guard_,
                        arg_.table_name_,
                        &audit_ctx_,
                        arg_.query_);

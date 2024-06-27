@@ -577,9 +577,7 @@ int ObTableQueryAsyncP::query_scan_without_init()
   ObTableCtx &tb_ctx = query_ctx.tb_ctx_;
   ObCompressorType compressor_type = INVALID_COMPRESSOR;
   OB_TABLE_START_AUDIT(credential_,
-                       sess_guard_.get_user_name(),
-                       sess_guard_.get_tenant_name(),
-                       sess_guard_.get_database_name(),
+                       sess_guard_,
                        arg_.table_name_,
                        &audit_ctx_,
                        query_session_->get_query());
@@ -680,9 +678,7 @@ int ObTableQueryAsyncP::process_query_start()
 {
   int ret = OB_SUCCESS;
   OB_TABLE_START_AUDIT(credential_,
-                       sess_guard_.get_user_name(),
-                       sess_guard_.get_tenant_name(),
-                       sess_guard_.get_database_name(),
+                       sess_guard_,
                        arg_.table_name_,
                        &audit_ctx_,
                        arg_.query_);

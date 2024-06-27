@@ -788,6 +788,40 @@ TEST_F(TestTableAudit, ObTableAuditMultiOp)
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, multi_op.generate_stmt(table_name, buf, 7, pos));
 }
 
+// 测试: ObTableAuditRedisOp
+TEST_F(TestTableAudit, ObTableAuditRedisOp)
+{
+  const int64_t buf_len = 128;
+  char buf[buf_len] = {0};
+  int64_t pos = 0;
+  ObString table_name = ObString::make_string("test");
+  ObString cmd_name = ObString::make_string("set");
+  ObTableAuditRedisOp redis_op(cmd_name);
+  // test1: empty table name
+  table_name = ObString::make_empty_string();
+  ASSERT_EQ(OB_SUCCESS, redis_op.generate_stmt(table_name, buf, buf_len, pos));
+  const char *result = "set";
+  ASSERT_STRCASEEQ(result, buf);
+  ASSERT_EQ(strlen(result), pos);
+  ASSERT_EQ(redis_op.get_stmt_length(table_name), pos);
+  // test2: empty cmd name
+  MEMSET(buf, 0, buf_len);
+  pos = 0;
+  cmd_name = ObString::make_empty_string();
+  ObTableAuditRedisOp redis_op1(cmd_name);
+  ASSERT_EQ(OB_SUCCESS, redis_op.generate_stmt(table_name, buf, buf_len, pos));
+  result = "(null)";
+  ASSERT_STRCASEEQ(result, buf);
+  ASSERT_EQ(strlen(result), pos);
+  ASSERT_EQ(redis_op.get_stmt_length(table_name), pos);
+  // test3: buf not enough
+  ASSERT_EQ(OB_BUF_NOT_ENOUGH, redis_op.generate_stmt(table_name, buf, 0, pos));
+  // test4: buf is null
+  ASSERT_EQ(OB_INVALID_ARGUMENT, redis_op.generate_stmt(table_name, nullptr, buf_len, pos));
+  // test5: bug length too short
+  ASSERT_EQ(OB_BUF_NOT_ENOUGH, redis_op.generate_stmt(table_name, buf, 7, pos));
+}
+
 int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");

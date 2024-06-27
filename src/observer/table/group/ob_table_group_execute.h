@@ -30,7 +30,7 @@ struct ObTableGroupCtx
 public:
   ObTableGroupCtx()
       : retry_count_(0),
-        audit_ctx_(retry_count_, user_client_addr_)
+        audit_ctx_(retry_count_, user_client_addr_, false/* need_audit */)
   {
     reset();
   }

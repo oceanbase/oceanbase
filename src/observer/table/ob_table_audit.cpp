@@ -143,3 +143,37 @@ int ObTableAuditMultiOp::generate_stmt(const ObString &table_name, char *buf, in
 
   return ret;
 }
+
+// statement is "$cmd_name"
+int64_t ObTableAuditRedisOp::get_stmt_length(const ObString &table_name) const
+{
+  UNUSED(table_name);
+  ObString tmp_cmd_name = cmd_name_.empty() ? ObString::make_string("(null)") : cmd_name_;
+  return tmp_cmd_name.length();
+}
+
+// statement is "$cmd_name"
+int ObTableAuditRedisOp::generate_stmt(const ObString &table_name, char *buf, int64_t buf_len, int64_t &pos) const
+{
+  UNUSED(table_name);
+  int ret = OB_SUCCESS;
+  ObString tmp_cmd_name = cmd_name_.empty() ? ObString::make_string("(null)") : cmd_name_;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else if (buf_len < tmp_cmd_name.length()) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("buffer not enough", K(ret), K(buf_len), K(tmp_cmd_name));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "%s", tmp_cmd_name.ptr());
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
+}

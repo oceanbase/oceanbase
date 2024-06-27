@@ -372,9 +372,7 @@ int ObTableApiExecuteP::try_process()
   table_id_ = arg_.table_id_; // init move response need
   tablet_id_ = arg_.tablet_id_;
   OB_TABLE_START_AUDIT(credential_,
-                       sess_guard_.get_user_name(),
-                       sess_guard_.get_tenant_name(),
-                       sess_guard_.get_database_name(),
+                       sess_guard_,
                        arg_.table_name_,
                        &audit_ctx_,
                        table_operation);

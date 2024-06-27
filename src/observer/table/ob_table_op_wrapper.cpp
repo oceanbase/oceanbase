@@ -490,10 +490,8 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
   ObTableQueryResult tmp_result;
   ObTableQueryResult *one_result = nullptr;
   ObTableApiExecutor *child = nullptr;
-  OB_TABLE_START_AUDIT((*tb_ctx_.get_credential()),
-                       tb_ctx_.get_user_name(),
-                       tb_ctx_.get_tenant_name(),
-                       tb_ctx_.get_database_name(),
+  OB_TABLE_START_AUDIT(*tb_ctx_.get_credential(),
+                       *tb_ctx_.get_sess_guard(),
                        tb_ctx_.get_table_name(),
                        &audit_ctx_, query);
 
@@ -555,10 +553,8 @@ int ObHTableDeleteExecutor::delete_rows(ObTableQueryResult &result)
     ObTableOperation op;
     op.set_type(ObTableOperationType::Type::DEL);
     op.set_entity(entity);
-    OB_TABLE_START_AUDIT((*tb_ctx_.get_credential()),
-                         tb_ctx_.get_user_name(),
-                         tb_ctx_.get_tenant_name(),
-                         tb_ctx_.get_database_name(),
+    OB_TABLE_START_AUDIT(*tb_ctx_.get_credential(),
+                         *tb_ctx_.get_sess_guard(),
                          tb_ctx_.get_table_name(),
                          &audit_ctx_,
                          op);

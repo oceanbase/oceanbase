@@ -114,13 +114,18 @@ void ObRedisExecuteP::init_tb_ctx_common(ObTableCtx &ctx)
   ctx.set_schema_guard(&schema_guard_);
   ctx.set_simple_table_schema(simple_table_schema_);
   ctx.set_sess_guard(&sess_guard_);
-  audit_ctx_.need_audit_ = false;
   ctx.set_audit_ctx(&audit_ctx_);
 }
 
 int ObRedisExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
+  table::ObTableAuditRedisOp op(redis_ctx_.request_.get_cmd_name());
+  OB_TABLE_START_AUDIT(credential_,
+                       sess_guard_,
+                       arg_.table_name_,
+                       &audit_ctx_,
+                       op);
   table_id_ = arg_.table_id_;
   tablet_id_ = arg_.tablet_id_;
   // note: use single get tmp
@@ -159,6 +164,9 @@ int ObRedisExecuteP::try_process()
   LOG_TRACE(
       "[TABLE] execute redis operation", K(ret), K_(result), K_(retry_count), "receive_ts", get_receive_timestamp());
 #endif
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, ObTableAuditUtils::get_stmt_type(arg_.table_operation_.type()));
   return ret;
 }
 

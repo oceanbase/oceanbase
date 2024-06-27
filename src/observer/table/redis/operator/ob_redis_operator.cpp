@@ -185,7 +185,7 @@ int CommandOperator::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard, const O
   tb_ctx.set_simple_table_schema(redis_ctx_.tb_ctx_.get_simple_table_schema());
   tb_ctx.set_sess_guard(redis_ctx_.tb_ctx_.get_sess_guard());
   tb_ctx.set_need_dist_das(redis_ctx_.tb_ctx_.need_dist_das());
-  tb_ctx.set_audit_ctx(redis_ctx_.tb_ctx_.get_audit_ctx());
+  tb_ctx.set_audit_ctx(&redis_ctx_.audit_ctx_);
   ObTabletID tablet_id = redis_ctx_.tablet_id_;
   ObNewRange range;
 
@@ -285,7 +285,7 @@ int CommandOperator::init_table_ctx(const ObTableOperation &op, ObTableCtx &tb_c
   tb_ctx.set_schema_guard(redis_ctx_.tb_ctx_.get_schema_guard());
   tb_ctx.set_simple_table_schema(redis_ctx_.tb_ctx_.get_simple_table_schema());
   tb_ctx.set_sess_guard(redis_ctx_.tb_ctx_.get_sess_guard());
-  tb_ctx.set_audit_ctx(redis_ctx_.tb_ctx_.get_audit_ctx());
+  tb_ctx.set_audit_ctx(&redis_ctx_.audit_ctx_);
   tb_ctx.set_entity(&op.entity());
   tb_ctx.set_entity_type(ObTableEntityType::ET_KV);
   tb_ctx.set_operation_type(op_type);

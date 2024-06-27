@@ -33,7 +33,9 @@ public:
       : allocator_(allocator),
         tb_ctx_(allocator_),
         request_(allocator_, table_request),
-        response_(allocator_, table_result)
+        response_(allocator_, table_result),
+        retry_count_(0),
+        audit_ctx_(retry_count_, user_client_addr_, false/* need_audit */)
   {
     reset();
   }
@@ -63,6 +65,7 @@ public:
     timeout_ts_ = 0;
     tb_ctx_.reset();
     rpc_req_ = nullptr;
+    retry_count_ = 0;
   }
   int decode_request();
 
@@ -94,7 +97,11 @@ public:
   ObRedisRequest request_;
   ObRedisResponse response_;
   rpc::ObRequest *rpc_req_;  // rpc request
-
+  // for sql audit start
+  int32_t retry_count_;
+  common::ObAddr user_client_addr_;
+  ObTableAuditCtx audit_ctx_;
+  // for sql audit end
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRedisCtx);
 };

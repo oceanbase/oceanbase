@@ -215,9 +215,7 @@ int QueryAndMutateHelper::execute_htable_put()
   int64_t N = mutations.count();
   ObTableAuditMultiOp multi_op(ObTableOperationType::Type::PUT, mutations.get_table_operations());
   OB_TABLE_START_AUDIT(credential_,
-                       sess_guard_->get_user_name(),
-                       sess_guard_->get_tenant_name(),
-                       sess_guard_->get_database_name(),
+                       *sess_guard_,
                        simple_table_schema_->get_table_name_str(),
                        &audit_ctx_, multi_op);
 
@@ -319,9 +317,7 @@ int QueryAndMutateHelper::get_old_row(ObTableApiSpec &scan_spec, ObNewRow *&row)
   ObTableApiExecutor *executor = nullptr;
   ObTableApiScanRowIterator row_iter;
   OB_TABLE_START_AUDIT(credential_,
-                       tb_ctx_.get_user_name(),
-                       tb_ctx_.get_tenant_name(),
-                       tb_ctx_.get_database_name(),
+                       *tb_ctx_.get_sess_guard(),
                        tb_ctx_.get_table_name(),
                        &audit_ctx_,
                        query_and_mutate_.get_query());
@@ -567,9 +563,7 @@ int QueryAndMutateHelper::execute_htable_insert(const ObITableEntity &new_entity
   op.set_type(ObTableOperationType::Type::INSERT);
   op.set_entity(new_entity);
   OB_TABLE_START_AUDIT(credential_,
-                       sess_guard_->get_user_name(),
-                       sess_guard_->get_tenant_name(),
-                       sess_guard_->get_database_name(),
+                       *sess_guard_,
                        simple_table_schema_->get_table_name_str(),
                        &audit_ctx_,
                        op);
@@ -600,9 +594,7 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
   const ObTableOperation &mutation = mutations.at(0);
   uint64_t table_id = tb_ctx_.get_ref_table_id();
   OB_TABLE_START_AUDIT(credential_,
-                       tb_ctx_.get_user_name(),
-                       tb_ctx_.get_tenant_name(),
-                       tb_ctx_.get_database_name(),
+                       *tb_ctx_.get_sess_guard(),
                        tb_ctx_.get_table_name(),
                        &audit_ctx_,
                        query_and_mutate_.get_query());
@@ -850,9 +842,7 @@ int QueryAndMutateHelper::execute_table_mutation(ObTableQueryResultIterator *res
     bool end_in_advance = false;
     while (OB_SUCC(ret) && !end_in_advance) { // 在check and insert 情境下会有提前终止
       OB_TABLE_START_AUDIT(credential_,
-                           tb_ctx_.get_user_name(),
-                           tb_ctx_.get_tenant_name(),
-                           tb_ctx_.get_database_name(),
+                           *tb_ctx_.get_sess_guard(),
                            tb_ctx_.get_table_name(),
                            &audit_ctx_,
                            query_and_mutate_.get_query());
@@ -990,9 +980,7 @@ int QueryAndMutateHelper::check_and_execute(ObTableQueryResultIterator *result_i
   bool check_passed = false;
   int64_t affected_rows = 0;
   OB_TABLE_START_AUDIT(credential_,
-                       tb_ctx_.get_user_name(),
-                       tb_ctx_.get_tenant_name(),
-                       tb_ctx_.get_database_name(),
+                       *tb_ctx_.get_sess_guard(),
                        tb_ctx_.get_table_name(),
                        &audit_ctx_,
                        query_and_mutate_.get_query());

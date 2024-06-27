@@ -148,9 +148,7 @@ private:
     const table::ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
     const table::ObTableOperation &mutation = mutations.at(0);
     OB_TABLE_START_AUDIT(credential_,
-                         sess_guard_->get_user_name(),
-                         sess_guard_->get_tenant_name(),
-                         sess_guard_->get_database_name(),
+                         *sess_guard_,
                          simple_table_schema_->get_table_name_str(),
                          &audit_ctx_, mutation);
 
@@ -184,9 +182,7 @@ private:
     const table::ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
     const table::ObTableOperation &mutation = mutations.at(0);
     OB_TABLE_START_AUDIT(credential_,
-                         sess_guard_->get_user_name(),
-                         sess_guard_->get_tenant_name(),
-                         sess_guard_->get_database_name(),
+                         *sess_guard_,
                          simple_table_schema_->get_table_name_str(),
                          &audit_ctx_, mutation);
 

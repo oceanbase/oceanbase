@@ -14,6 +14,7 @@
 #define OCEANBASE_OBSERVER_OB_TABLE_AUDIT_H_
 
 #include "ob_htable_filters.h"
+#include "ob_table_session_pool.h"
 #include "sql/monitor/ob_exec_stat.h"
 #include "share/table/ob_table.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -29,14 +30,14 @@ namespace table
 struct ObTableAuditCtx
 {
 public:
-  ObTableAuditCtx(const int32_t &retry_count, const common::ObAddr &user_client_addr)
+  ObTableAuditCtx(const int32_t &retry_count, const common::ObAddr &user_client_addr, bool need_audit = true)
       : allocator_("TableAuditCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         req_buf_(nullptr),
         req_buf_len_(0),
         retry_count_(retry_count),
         user_client_addr_(user_client_addr)
   {
-    need_audit_ = GCONF.enable_sql_audit;
+    need_audit_ = GCONF.enable_sql_audit && need_audit;
   }
   virtual ~ObTableAuditCtx() {};
   TO_STRING_KV(K_(need_audit),
@@ -87,28 +88,30 @@ struct ObTableAudit
 public:
   static const int64_t DEFUALT_STMT_BUF_SIZE = 256;
 public:
-  ObTableAudit(const T &op, const common::ObString &table_name)
+  ObTableAudit(const T &op,
+               const common::ObString &table_name,
+               ObTableApiSessGuard &sess_guard,
+               ObTableAuditCtx *audit_ctx)
       : allocator_("ObTableAudit", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+        need_audit_(false),
         request_string_(nullptr),
         request_string_len_(0),
         start_ts_(0),
         table_name_(table_name),
         op_(op),
         filter_(nullptr),
-        audit_ctx_(nullptr),
+        audit_ctx_(audit_ctx),
         op_stmt_ptr_(nullptr),
         op_stmt_length_(0),
-        op_stmt_pos_(0)
+        op_stmt_pos_(0),
+        sess_guard_(sess_guard)
   {
-    need_audit_ = GCONF.enable_sql_audit;
+    bool is_ctx_enable_audit = OB_NOT_NULL(audit_ctx_) ? audit_ctx_->need_audit_ : true; // default enable
+    need_audit_ = GCONF.enable_sql_audit && is_ctx_enable_audit;
   }
   ~ObTableAudit() {};
 public:
-  void start_audit(const ObTableApiCredential &credential,
-                   const common::ObString &sql_str,
-                   const common::ObString &user_name,
-                   const common::ObString &tenant_name,
-                   const common::ObString &db_name)
+  void start_audit(const ObTableApiCredential &credential, const common::ObString &sql_str)
   {
     if (!need_audit_) {
       // do nothing
@@ -130,12 +133,12 @@ public:
       record_.db_id_ = database_id;
 
       // tenant name、user name、database name
-      record_.tenant_name_ = const_cast<char *>(tenant_name.ptr());
-      record_.tenant_name_len_ = tenant_name.length();
-      record_.user_name_ = const_cast<char *>(user_name.ptr());
-      record_.user_name_len_ = user_name.length();
-      record_.db_name_ = const_cast<char *>(db_name.ptr());
-      record_.db_name_len_ = db_name.length();
+      record_.tenant_name_ = const_cast<char *>(sess_guard_.get_tenant_name().ptr());
+      record_.tenant_name_len_ = sess_guard_.get_tenant_name().length();
+      record_.user_name_ = const_cast<char *>(sess_guard_.get_user_name().ptr());
+      record_.user_name_len_ = sess_guard_.get_user_name().length();
+      record_.db_name_ = const_cast<char *>(sess_guard_.get_database_name().ptr());
+      record_.db_name_len_ = sess_guard_.get_database_name().length();
 
       record_.sql_cs_type_ = ObCharset::get_system_collation();
       record_.plan_id_ = 0;
@@ -178,7 +181,13 @@ public:
       if (OB_NOT_NULL(audit_ctx_)) {
         record_.try_cnt_ = audit_ctx_->retry_count_;
         record_.user_client_addr_ = audit_ctx_->user_client_addr_;
-        record_.exec_timestamp_ = audit_ctx_->exec_timestamp_;
+        record_.exec_timestamp_.process_executor_ts_ = audit_ctx_->exec_timestamp_.process_executor_ts_;
+        record_.exec_timestamp_.run_ts_ = audit_ctx_->exec_timestamp_.run_ts_;
+        record_.exec_timestamp_.before_process_ts_ = audit_ctx_->exec_timestamp_.before_process_ts_;
+        record_.exec_timestamp_.rpc_send_ts_ = audit_ctx_->exec_timestamp_.rpc_send_ts_;
+        record_.exec_timestamp_.receive_ts_ = audit_ctx_->exec_timestamp_.receive_ts_;
+        record_.exec_timestamp_.enter_queue_ts_ = audit_ctx_->exec_timestamp_.enter_queue_ts_;
+        record_.exec_timestamp_.single_process_ts_ = audit_ctx_->exec_timestamp_.single_process_ts_;
       }
       // exec_timestamp
       record_.exec_timestamp_.exec_type_ = ExecType::RpcProcessor;
@@ -239,13 +248,14 @@ public:
       }
 
       if (OB_SUCC(ret)) {
+        const bool enable_stats = sess_guard_.get_sess_info().enable_query_response_time_stats();
+        const int64_t record_limit = sess_guard_.get_sess_info().get_tenant_query_record_size_limit();
         MTL_SWITCH(record_.tenant_id_) {
           obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
           if (OB_ISNULL(req_manager)) {
             ret = OB_ERR_UNEXPECTED;
             COMMON_LOG(WARN, "fail to get request manager", K(ret), K(record_.tenant_id_));
-          } else if (OB_FAIL(req_manager->record_request(record_, true,
-              ObSQLUtils::get_query_record_size_limit(record_.tenant_id_)))) {
+          } else if (OB_FAIL(req_manager->record_request(record_, enable_stats, record_limit))) {
             if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
               COMMON_LOG(DEBUG, "cannot allocate mem for record", K(ret));
               ret = OB_SUCCESS;
@@ -288,6 +298,7 @@ public:
   char *op_stmt_ptr_;
   int64_t op_stmt_length_;
   int64_t op_stmt_pos_;
+  ObTableApiSessGuard &sess_guard_;
 };
 
 class ObTableAuditUtils
@@ -309,6 +320,19 @@ public:
 public:
   ObTableOperationType::Type op_type_;
   const common::ObIArray<ObTableOperation> &ops_;
+};
+
+struct ObTableAuditRedisOp
+{
+public:
+  ObTableAuditRedisOp(const common::ObString &cmd_name)
+      : cmd_name_(cmd_name)
+  {}
+  virtual ~ObTableAuditRedisOp() = default;
+  int64_t get_stmt_length(const common::ObString &table_name) const;
+  int generate_stmt(const common::ObString &table_name, char *buf, int64_t buf_len, int64_t &pos) const;
+public:
+  const common::ObString &cmd_name_;
 };
 
 /*
@@ -376,26 +400,26 @@ The following macro definition is used to record sql audit, how to use:
 #define OB_TABLE_END_AUDIT(...) OB_TABLE_END_AUDIT_true(__VA_ARGS__)
 #define OB_TABLE_END_AUDIT_SWITCH(enable, ...) OB_TABLE_END_AUDIT_##enable(__VA_ARGS__)
 
-#define OB_TABLE_START_AUDIT_true(credential, user_name, tenant_name, db_name, table_name, audit_ctx, op) \
-  table::ObTableAudit<decltype(op)> audit(op, table_name);                                                \
-  common::ObMaxWaitGuard max_wait_guard(&audit.record_.exec_record_.max_wait_event_);                     \
-  common::ObTotalWaitGuard total_wait_guard(&audit.total_wait_desc_);                                     \
-  common::ObTenantStatEstGuard stat_guard(credential.tenant_id_);                                         \
-  observer::ObProcessMallocCallback pmcb(0, audit.record_.request_memory_used_);                          \
-  lib::ObMallocCallbackGuard malloc_guard_(pmcb);                                                         \
-  if (audit.need_audit_ && OB_NOT_NULL(audit_ctx)) {                                                      \
-    if (lib::is_diagnose_info_enabled()) {                                                                \
-      audit.record_.exec_record_.record_start();                                                          \
-    }                                                                                                     \
-    audit.audit_ctx_ = audit_ctx;                                                                         \
-    audit.start_audit(credential, (audit_ctx)->get_request_string(), user_name, tenant_name, db_name);    \
+#define OB_TABLE_START_AUDIT_true(credential, sess_guard, table_name, audit_ctx, op)      \
+  table::ObTableAudit<decltype(op)> audit(op, table_name, sess_guard, audit_ctx);         \
+  common::ObMaxWaitGuard max_wait_guard(&audit.record_.exec_record_.max_wait_event_);     \
+  common::ObTotalWaitGuard total_wait_guard(&audit.total_wait_desc_);                     \
+  common::ObTenantStatEstGuard stat_guard((credential).tenant_id_);                       \
+  observer::ObProcessMallocCallback pmcb(0, audit.record_.request_memory_used_);          \
+  lib::ObMallocCallbackGuard malloc_guard_(pmcb);                                         \
+  if (audit.need_audit_ && OB_NOT_NULL(audit_ctx)) {                                      \
+    if (lib::is_diagnose_info_enabled()) {                                                \
+      audit.record_.exec_record_.record_start();                                          \
+    }                                                                                     \
+    audit.audit_ctx_ = audit_ctx;                                                         \
+    audit.start_audit(credential, (audit_ctx)->get_request_string());                     \
   }
 
-#define OB_TABLE_START_AUDIT_false(credential, user_name, tenant_name, db_name, table_name, audit_ctx, op)
-#define OB_TABLE_START_AUDIT(credential, user_name, tenant_name, db_name, table_name, audit_ctx, op) \
-  OB_TABLE_START_AUDIT_true(credential, user_name, tenant_name, db_name, table_name, audit_ctx, op)
-#define OB_TABLE_START_AUDIT_SWITCH(enable, credential, table_name, audit_ctx, op) \
-  OB_TABLE_START_AUDIT_##enable(credential, table_name, audit_ctx, op)
+#define OB_TABLE_START_AUDIT_false(credential, sess_guard, table_name, audit_ctx, op)
+#define OB_TABLE_START_AUDIT(credential, sess_guard, table_name, audit_ctx, op) \
+  OB_TABLE_START_AUDIT_true(credential, sess_guard, table_name, audit_ctx, op)
+#define OB_TABLE_START_AUDIT_SWITCH(enable, credential, sess_guard, table_name, audit_ctx, op) \
+  OB_TABLE_START_AUDIT_##enable(credential, sess_guard, table_name, audit_ctx, op)
 
 } // end namespace table
 } // end namespace oceanbase
