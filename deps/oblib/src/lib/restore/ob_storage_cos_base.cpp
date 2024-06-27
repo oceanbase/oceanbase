@@ -834,6 +834,9 @@ int ObStorageCosReader::pread(
             KP(buf), K(buf_size), K(offset), K(get_data_size), K_(has_meta));
       }
     }
+    if (OB_NOT_NULL(tmp_cos_handle)) {
+      qcloud_cos::ObCosWrapper::destroy_cos_handle(tmp_cos_handle);
+    }
   }
   return ret;
 }
