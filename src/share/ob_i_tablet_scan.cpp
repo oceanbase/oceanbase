@@ -65,7 +65,10 @@ DEF_TO_STRING(ObVTableScanParam)
        KPC_(op_filters),
        K_(table_scan_opt),
        K_(external_file_format),
-       K_(external_file_location));
+       K_(external_file_location),
+       K_(auto_split_filter),
+       K_(auto_split_params),
+       K_(is_tablet_spliting));
   J_OBJ_END();
   return pos;
 }

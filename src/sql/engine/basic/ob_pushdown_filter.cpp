@@ -2592,7 +2592,10 @@ ObPushdownExprSpec::ObPushdownExprSpec(ObIAllocator &alloc)
     pd_storage_aggregate_output_(alloc),
     ext_file_column_exprs_(alloc),
     ext_column_convert_exprs_(alloc),
-    trans_info_expr_(nullptr)
+    trans_info_expr_(nullptr),
+    auto_split_filter_type_(OB_INVALID_ID),
+    auto_split_expr_(nullptr),
+    auto_split_params_(alloc)
 {
 }
 
@@ -2613,7 +2616,10 @@ OB_DEF_SERIALIZE(ObPushdownExprSpec)
               pd_storage_aggregate_output_,
               ext_file_column_exprs_,
               ext_column_convert_exprs_,
-              trans_info_expr_);
+              trans_info_expr_,
+              auto_split_filter_type_,
+              auto_split_expr_,
+              auto_split_params_);
   return ret;
 }
 
@@ -2634,7 +2640,10 @@ OB_DEF_DESERIALIZE(ObPushdownExprSpec)
               pd_storage_aggregate_output_,
               ext_file_column_exprs_,
               ext_column_convert_exprs_,
-              trans_info_expr_);
+              trans_info_expr_,
+              auto_split_filter_type_,
+              auto_split_expr_,
+              auto_split_params_);
   return ret;
 }
 
@@ -2655,7 +2664,10 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownExprSpec)
               pd_storage_aggregate_output_,
               ext_file_column_exprs_,
               ext_column_convert_exprs_,
-              trans_info_expr_);
+              trans_info_expr_,
+              auto_split_filter_type_,
+              auto_split_expr_,
+              auto_split_params_);
   return len;
 }
 

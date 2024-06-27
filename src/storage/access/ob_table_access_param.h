@@ -149,6 +149,8 @@ public:
   { pd_storage_flag_.set_use_stmt_iter_pool(true);}
   OB_INLINE bool has_lob_column_out() const
   { return has_lob_column_out_; }
+  OB_INLINE bool is_tablet_spliting() const
+  { return is_tablet_spliting_; }
   bool need_trans_info() const;
   OB_INLINE bool is_use_column_store() const
   { return !(get_read_info()->has_all_column_group()) || pd_storage_flag_.is_use_column_store(); }
@@ -220,6 +222,10 @@ public:
   int64_t ss_rowkey_prefix_cnt_;
   sql::ObStoragePushdownFlag pd_storage_flag_;
   ObTableScanOption table_scan_opt_;
+  uint64_t auto_split_filter_type_;
+  const sql::ObExpr *auto_split_filter_;
+  sql::ExprFixedArray *auto_split_params_;
+  bool is_tablet_spliting_;
 };
 
 struct ObTableAccessParam
