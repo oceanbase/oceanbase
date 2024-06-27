@@ -569,7 +569,7 @@ int ObLSBackupDataDagNet::inner_init_before_run_()
   if (OB_FAIL(param_.convert_to(backup_param))) {
     LOG_WARN("failed to convert param", K(param_));
   } else if (OB_FAIL(ls_backup_ctx_.open(backup_param, backup_data_type_,
-      *param_.report_ctx_.sql_proxy_, OB_BACKUP_INDEX_CACHE))) {
+      *param_.report_ctx_.sql_proxy_, OB_BACKUP_INDEX_CACHE, *GCTX.bandwidth_throttle_))) {
     LOG_WARN("failed to open log stream backup ctx", K(ret), K(backup_param));
   } else if (OB_FAIL(prepare_backup_tablet_provider_(backup_param, backup_data_type_, ls_backup_ctx_,
       OB_BACKUP_INDEX_CACHE, *param_.report_ctx_.sql_proxy_, provider_))) {
@@ -1030,8 +1030,9 @@ int ObLSBackupComplementLogDagNet::start_running()
                  param_.retry_id_,
                  compl_start_scn_,
                  compl_end_scn_,
+                 report_ctx_,
                  is_only_calc_stat_,
-                 report_ctx_))) {
+                 *GCTX.bandwidth_throttle_))) {
     LOG_WARN("failed to init child dag", K(ret), K_(param), K_(compl_start_scn), K_(compl_end_scn));
   } else if (OB_FAIL(complement_dag->create_first_task())) {
     LOG_WARN("failed to create first task for child dag", K(ret), KPC(complement_dag));
@@ -1843,7 +1844,8 @@ ObLSBackupComplementLogDag::ObLSBackupComplementLogDag()
       compl_start_scn_(),
       compl_end_scn_(),
       is_only_calc_stat_(false),
-      report_ctx_()
+      report_ctx_(),
+      bandwidth_throttle_(NULL)
 {}
 
 ObLSBackupComplementLogDag::~ObLSBackupComplementLogDag()
@@ -1852,7 +1854,7 @@ ObLSBackupComplementLogDag::~ObLSBackupComplementLogDag()
 int ObLSBackupComplementLogDag::init(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
     const int64_t turn_id, const int64_t retry_id, const SCN &start_scn, const SCN &end_scn,
-    const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx)
+    const ObBackupReportCtx &report_ctx, const bool is_only_calc_stat, common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -1884,6 +1886,7 @@ int ObLSBackupComplementLogDag::init(const ObBackupJobDesc &job_desc, const ObBa
     compl_end_scn_ = end_scn;
     report_ctx_ = report_ctx;
     is_only_calc_stat_ = is_only_calc_stat;
+    bandwidth_throttle_ = &bandwidth_throttle;
     is_inited_ = true;
   }
   return ret;
@@ -1896,7 +1899,7 @@ int ObLSBackupComplementLogDag::create_first_task()
   if (OB_FAIL(alloc_task(task))) {
     LOG_WARN("failed to alloc task", K(ret));
   } else if (OB_FAIL(task->init(job_desc_, backup_dest_, tenant_id_, dest_id_, backup_set_desc_, ls_id_, compl_start_scn_,
-      compl_end_scn_, turn_id_, retry_id_, is_only_calc_stat_, report_ctx_))) {
+      compl_end_scn_, turn_id_, retry_id_, report_ctx_, is_only_calc_stat_, *bandwidth_throttle_))) {
     LOG_WARN("failed to init task", K(ret), K_(tenant_id), K_(backup_set_desc), K_(ls_id), K_(compl_start_scn), K_(compl_end_scn));
   } else if (OB_FAIL(add_task(*task))) {
     LOG_WARN("failed to add task", K(ret));
@@ -2576,8 +2579,8 @@ int ObLSBackupDataTask::init(const int64_t task_id, const share::ObBackupDataTyp
     LOG_WARN("get invalid args", K(ret), K(task_id), K(param), K(report_ctx));
   } else if (OB_FAIL(backup_items_.assign(backup_items))) {
     LOG_WARN("failed to assign", K(ret));
-  } else if (OB_FAIL(backup_data_ctx_.open(param, backup_data_type, task_id))) {
-    LOG_WARN("failed to open backup data ctx", K(ret), K(param), K(backup_data_type));
+  } else if (OB_FAIL(backup_data_ctx_.open(param, backup_data_type, task_id, *ls_backup_ctx.bandwidth_throttle_))) {
+    LOG_WARN("failed to open backup data ctx", K(ret), K(param), K(backup_data_type), KP(ls_backup_ctx.bandwidth_throttle_));
   } else if (OB_FAIL(disk_checker_.init(ls_backup_ctx.get_tablet_holder()))) {
     LOG_WARN("failed to init disk checker", K(ret));
   } else if (OB_FAIL(param_.assign(param))) {
@@ -3851,7 +3854,7 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
     LOG_WARN("log stream not exist", K(ret), K(ls_id));
   } else if (OB_FAIL(share::ObBackupPathUtil::construct_backup_set_dest(param_.backup_dest_, param_.backup_set_desc_, backup_set_dest))) {
     LOG_WARN("failed to construct backup set dest", K(ret), K(param_));
-  } else if (OB_FAIL(writer.init(backup_set_dest, param_.ls_id_, param_.turn_id_, param_.retry_id_))) {
+  } else if (OB_FAIL(writer.init(backup_set_dest, param_.ls_id_, param_.turn_id_, param_.retry_id_, *ls_backup_ctx_->bandwidth_throttle_))) {
     LOG_WARN("failed to init tablet info writer", K(ret));
   } else {
     const int64_t WAIT_GC_LOCK_TIMEOUT = 30 * 60 * 1000 * 1000; // 30 min TODO(zeyong) optimization timeout later 4.3
@@ -4712,7 +4715,7 @@ int ObBackupIndexRebuildTask::merge_macro_index_()
     ObBackupMacroBlockIndexMerger macro_index_merger;
     if (OB_FAIL(param_.convert_to(index_level_, merge_param))) {
       LOG_WARN("failed to convert param", K(ret), K_(param), K_(index_level));
-    } else if (OB_FAIL(macro_index_merger.init(merge_param, *report_ctx_.sql_proxy_))) {
+    } else if (OB_FAIL(macro_index_merger.init(merge_param, *report_ctx_.sql_proxy_, *GCTX.bandwidth_throttle_))) {
       LOG_WARN("failed to init index merger", K(ret), K(merge_param));
     } else if (OB_FAIL(macro_index_merger.merge_index())) {
       LOG_WARN("failed to merge macro index", K(ret), K_(param));
@@ -4729,7 +4732,7 @@ int ObBackupIndexRebuildTask::merge_meta_index_(const bool is_sec_meta)
     ObBackupMetaIndexMerger meta_index_merger;
     if (OB_FAIL(param_.convert_to(index_level_, merge_param))) {
       LOG_WARN("failed to convert param", K(ret), K_(param), K_(index_level));
-    } else if (OB_FAIL(meta_index_merger.init(merge_param, is_sec_meta, *report_ctx_.sql_proxy_))) {
+    } else if (OB_FAIL(meta_index_merger.init(merge_param, is_sec_meta, *report_ctx_.sql_proxy_, *GCTX.bandwidth_throttle_))) {
       LOG_WARN("failed to init index merger", K(ret), K(merge_param));
     } else if (OB_FAIL(meta_index_merger.merge_index())) {
       LOG_WARN("failed to merge meta index", K(ret), K_(param));
@@ -4950,7 +4953,9 @@ ObLSBackupComplementLogTask::ObLSBackupComplementLogTask()
       turn_id_(0),
       retry_id_(-1),
       archive_dest_(),
-      report_ctx_()
+      report_ctx_(),
+      bandwidth_throttle_(NULL),
+      last_active_time_(0)
 {}
 
 ObLSBackupComplementLogTask::~ObLSBackupComplementLogTask()
@@ -4959,7 +4964,7 @@ ObLSBackupComplementLogTask::~ObLSBackupComplementLogTask()
 int ObLSBackupComplementLogTask::init(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
     const SCN &start_scn, const SCN &end_scn, const int64_t turn_id, const int64_t retry_id,
-    const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx)
+    const ObBackupReportCtx &report_ctx, const bool is_only_calc_stat, common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -4991,6 +4996,7 @@ int ObLSBackupComplementLogTask::init(const ObBackupJobDesc &job_desc, const ObB
     retry_id_ = retry_id;
     is_only_calc_stat_ = is_only_calc_stat;
     report_ctx_ = report_ctx;
+    bandwidth_throttle_ = &bandwidth_throttle;
     is_inited_ = true;
   }
   return ret;
@@ -5814,6 +5820,10 @@ int ObLSBackupComplementLogTask::inner_transfer_clog_file_(const ObBackupPath &s
     LOG_WARN("read len not expected", K(ret), K(read_len), K(transfer_len));
   } else if (OB_FAIL(device_handle->pwrite(fd, dst_len, transfer_len, buf, write_size))) {
     LOG_WARN("failed to write multipart upload file", K(ret));
+  } else if (OB_FAIL(bandwidth_throttle_->limit_out_and_sleep(write_size, last_active_time_, INT64_MAX))) {
+    LOG_WARN("failed to limit out and sleep", K(ret));
+  } else {
+    last_active_time_ = ObTimeUtility::current_time();
   }
   return ret;
 }

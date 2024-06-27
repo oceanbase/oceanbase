@@ -165,7 +165,7 @@ protected:
   virtual int get_all_retries_(const int64_t task_id, const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type,
       const share::ObLSID &ls_id, common::ObISQLClient &sql_proxy, common::ObIArray<ObBackupRetryDesc> &retry_list);
   int open_file_writer_(const share::ObBackupPath &backup_path, const share::ObBackupStorageInfo *storage_info);
-  int prepare_file_write_ctx_(ObBackupFileWriteCtx &write_ctx);
+  int prepare_file_write_ctx_(common::ObInOutBandwidthThrottle &bandwidth_throttle, ObBackupFileWriteCtx &write_ctx);
   template <class IndexType>
   int encode_index_to_buffer_(const common::ObIArray<IndexType> &index_list, blocksstable::ObBufferWriter &buffer_writer);
   template <class IndexType, class IndexIndexType>
@@ -196,7 +196,8 @@ class ObBackupMacroBlockIndexMerger : public ObIBackupIndexMerger {
 public:
   ObBackupMacroBlockIndexMerger();
   virtual ~ObBackupMacroBlockIndexMerger();
-  int init(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy);
+  int init(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   void reset();
   virtual int merge_index() override;
 
@@ -205,7 +206,8 @@ protected:
       const ObBackupRetryDesc &desc, ObIMacroBlockIndexIterator *&iter);
 
 private:
-  int prepare_merge_ctx_(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy);
+  int prepare_merge_ctx_(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int prepare_merge_iters_(const ObBackupIndexMergeParam &merge_param,
       const common::ObIArray<ObBackupRetryDesc> &retry_list, common::ObISQLClient &sql_proxy,
       MERGE_ITER_ARRAY &merge_iters);
@@ -243,7 +245,8 @@ class ObBackupMetaIndexMerger : public ObIBackupIndexMerger {
 public:
   ObBackupMetaIndexMerger();
   virtual ~ObBackupMetaIndexMerger();
-  int init(const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta, common::ObISQLClient &sql_proxy);
+  int init(const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta, common::ObISQLClient &sql_proxy,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   void reset();
   virtual int merge_index() override;
 
@@ -253,7 +256,8 @@ protected:
 
 private:
   int prepare_merge_ctx_(
-      const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta, common::ObISQLClient &sql_proxy);
+      const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta, common::ObISQLClient &sql_proxy,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int prepare_merge_iters_(const ObBackupIndexMergeParam &merge_param,
       const common::ObIArray<ObBackupRetryDesc> &retry_list, const bool is_sec_meta, MERGE_ITER_ARRAY &merge_iters);
   int get_unfinished_iters_(const MERGE_ITER_ARRAY &merge_iters, MERGE_ITER_ARRAY &unfinished_iters);
