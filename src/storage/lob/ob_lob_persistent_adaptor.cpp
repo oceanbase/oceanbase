@@ -364,6 +364,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.store_ctx_guard_ = store_ctx_guard;
   dml_base_param.write_flag_.set_is_insert_up();
   dml_base_param.write_flag_.set_lob_aux();
+  dml_base_param.dml_allocator_ = param.allocator_;
   {
     for (int i = 0; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
       if (OB_FAIL(column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
