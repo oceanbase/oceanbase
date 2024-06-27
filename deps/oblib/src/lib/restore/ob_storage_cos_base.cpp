@@ -514,9 +514,7 @@ ObStorageCosBase::~ObStorageCosBase()
 
 void ObStorageCosBase::reset()
 {
-  if (is_opened_) {
-    handle_.reset();
-  }
+  handle_.reset();
   is_opened_ = false;
 }
 
@@ -835,6 +833,9 @@ int ObStorageCosReader::pread(
         OB_LOG(WARN, "fail to read object from cos", K(ret), K(is_range_read),
             KP(buf), K(buf_size), K(offset), K(get_data_size), K_(has_meta));
       }
+    }
+    if (OB_NOT_NULL(tmp_cos_handle)) {
+      qcloud_cos::ObCosWrapper::destroy_cos_handle(tmp_cos_handle);
     }
   }
   return ret;
