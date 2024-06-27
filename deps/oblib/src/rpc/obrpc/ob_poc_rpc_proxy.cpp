@@ -158,7 +158,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
     } else if (OB_FALSE_IT(ObCurTraceId::set(ret_pkt.get_trace_id()))) {
     }
 #ifdef ERRSIM
-    else if (OB_FALSE_IT(THIS_WORKER.set_module_type(ret_pkt->get_module_type()))) {
+    else if (OB_FALSE_IT(THIS_WORKER.set_module_type(ret_pkt.get_module_type()))) {
     }
 #endif
     else if (OB_FAIL(ucb_->decode(&ret_pkt))) {
