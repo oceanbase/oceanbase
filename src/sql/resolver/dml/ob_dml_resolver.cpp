@@ -8182,11 +8182,14 @@ int ObDMLResolver::resolve_external_table_generated_column(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected arg", KP(table_schema), KP(column_schema), KP(ref_expr));
   } else if (0 == col.col_name_.case_compare(N_EXTERNAL_FILE_URL)) {
-    if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_file_url(
-                                    *params_.expr_factory_, *params_.session_info_,
-                                    table_item.table_id_, table_item.table_name_,
-                                    col.col_name_, real_ref_expr))) {
-      LOG_WARN("fail to build external table file column expr", K(ret));
+    if (nullptr == (real_ref_expr = ObResolverUtils::find_file_column_expr(
+                pseudo_external_file_col_exprs_, table_item.table_id_, UINT64_MAX, col.col_name_))) {
+      if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_file_url(
+                                      *params_.expr_factory_, *params_.session_info_,
+                                      table_item.table_id_, table_item.table_name_,
+                                      col.col_name_, real_ref_expr))) {
+        LOG_WARN("fail to build external table file column expr", K(ret));
+      }
     }
   } else if (col.col_name_.prefix_match_ci(N_PARTITION_LIST_COL)) {
     if (OB_FAIL(ObResolverUtils::calc_file_column_idx(col.col_name_, file_column_idx))) {
@@ -8266,7 +8269,7 @@ int ObDMLResolver::resolve_external_table_generated_column(
       LOG_WARN("fail to push back to array", K(ret));
     }
   }
-  LOG_TRACE("add external file column", KPC(real_ref_expr), K(col.col_name_));
+  LOG_TRACE("add external file column", K(real_ref_expr), KPC(real_ref_expr), K(col.col_name_));
   return ret;
 }
 

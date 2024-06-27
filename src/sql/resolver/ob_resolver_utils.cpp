@@ -4820,9 +4820,12 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
                    scope_name.length(), scope_name.ptr());
   } else {
     if (0 == q_name.col_name_.case_compare(N_EXTERNAL_FILE_URL)) {
-      if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_file_url(expr_factory, session_info,
-                                  OB_INVALID_ID, ObString(), q_name.col_name_, file_column_expr))) {
-        LOG_WARN("fail to build external table file column expr", K(ret));
+      if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
+                               real_exprs, OB_INVALID_ID, UINT64_MAX, q_name.col_name_))) {
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_file_url(expr_factory, session_info,
+                                    OB_INVALID_ID, ObString(), q_name.col_name_, file_column_expr))) {
+          LOG_WARN("fail to build external table file column expr", K(ret));
+        }
       }
     } else if (q_name.col_name_.prefix_match_ci(N_PARTITION_LIST_COL)) {
       if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
@@ -4866,7 +4869,7 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
       LOG_WARN("fail replace expr", K(ret));
     }
   }
-  LOG_TRACE("resolve external table column ref", K(q_name.col_name_), KPC(expr));
+  LOG_TRACE("resolve external table column ref", K(q_name.col_name_), KP(expr), KPC(expr));
   return ret;
 }
 

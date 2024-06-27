@@ -1898,6 +1898,8 @@ constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
 constexpr int OB_ERR_PS_NO_RECURSION = -11016;
 constexpr int OB_ERR_PARTITION_EXCHANGE_PART_TABLE = -11017;
 constexpr int OB_INVALID_EXTERNAL_FILE = -11018;
+constexpr int OB_INVALID_EXTERNAL_FILE_COLUMN_PATH = -11046;
+constexpr int OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH = -11047;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4211,6 +4213,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_HDFS_INVALID_ARGUMENT__USER_ERROR_MSG "HDFS: invalid argument"
 #define OB_HDFS_NOT_IMPLEMENT__USER_ERROR_MSG "HDFS: not implementation"
 #define OB_HDFS_ERROR__USER_ERROR_MSG "HDFS error"
+#define OB_INVALID_EXTERNAL_FILE_COLUMN_PATH__USER_ERROR_MSG "Invalid path: %.*s"
+#define OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH__USER_ERROR_MSG "Column type mismatch between the file and the table: FileColumnType=%s TableColumnType=%s"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -6524,6 +6528,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_HDFS_INVALID_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11043, HDFS: invalid argument"
 #define OB_HDFS_NOT_IMPLEMENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11044, HDFS: not implementation"
 #define OB_HDFS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11045, HDFS error"
+#define OB_INVALID_EXTERNAL_FILE_COLUMN_PATH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11046, Invalid path: %.*s"
+#define OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11047, Column type mismatch between the file and the table: FileColumnType=%s TableColumnType=%s"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6534,7 +6540,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2309];
+extern int g_all_ob_errnos[2311];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

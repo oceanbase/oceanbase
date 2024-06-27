@@ -202,6 +202,10 @@ public:                                                                         
   {                                                                                                \
     return *(reinterpret_cast<const ObOTimestampData *>(derived_this().get_payload(idx)));         \
   }                                                                                                \
+  OB_INLINE const ObOTimestampTinyData &get_otimestamp_tiny(const int64_t idx) const                     \
+  {                                                                                                \
+    return *(reinterpret_cast<const ObOTimestampTinyData *>(derived_this().get_payload(idx)));         \
+  }                                                                                                \
   OB_INLINE ObString get_string(const int64_t idx) const                                           \
   {                                                                                                \
     const char *str = NULL;                                                                        \
@@ -335,9 +339,9 @@ public:                                                                         
   {                                                                                                \
     *(reinterpret_cast<ObOTimestampData *>(no_cv(derived_this().get_payload(idx)))) = v;           \
   }                                                                                                \
-  OB_INLINE void set_otimestamp(const int64_t idx, const ObOTimestampData &v)                      \
+  OB_INLINE void set_otimestamp_tiny(const int64_t idx, const ObOTimestampTinyData &v)             \
   {                                                                                                \
-    *(reinterpret_cast<ObOTimestampData *>(no_cv(derived_this().get_payload(idx)))) = v;           \
+    *(reinterpret_cast<ObOTimestampTinyData *>(no_cv(derived_this().get_payload(idx)))) = v;       \
   }                                                                                                \
   OB_INLINE void set_number(const int64_t idx, const number::ObNumber &num)                        \
   {                                                                                                \

@@ -331,14 +331,16 @@ int ObParquetTableRowIterator::next_file()
                                                           data_access_info->data_access_path_.length()));
         const parquet::ColumnDescriptor *col_desc = NULL;
         if (column_index < 0) {
-          ret = OB_ERR_INVALID_JSON_PATH;
-          LOG_WARN("invalid path", K(data_access_info->data_access_path_));
+          ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
+          LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
+                         data_access_info->data_access_path_.length(),
+                         data_access_info->data_access_path_.ptr());
         } else {
           col_desc = file_meta_->schema()->Column(column_index);
           load_funcs_.at(i) = DataLoader::select_load_function(file_column_exprs_.at(i)->datum_meta_, col_desc);
           if (OB_ISNULL(load_funcs_.at(i))
               || col_desc->max_repetition_level() != 0) {
-            ret = OB_ERR_INVALID_TYPE_FOR_OP;
+            ret = OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH;
             std::string p_type = col_desc->logical_type()->ToString();
             int64_t pos = 0;
             ObArrayWrap<char> buf;
@@ -354,7 +356,7 @@ int ObParquetTableRowIterator::next_file()
             }
             LOG_WARN("not supported type", K(ret), K(file_column_exprs_.at(i)->datum_meta_),
                      K(ObString(p_type.length(), p_type.data())), "rep_level", col_desc->max_repetition_level());
-            LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, p_type.c_str(), ob_type);
+            LOG_USER_ERROR(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, p_type.c_str(), ob_type);
           } else {
             column_indexs_.at(i) = column_index;
             LOG_DEBUG("mapped ob type", K(column_index), "column type",
@@ -867,21 +869,26 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("repeated data not support");
     } else {
+      bool is_oracle_mode = lib::is_oracle_mode();
       bool is_byte_length = is_oracle_byte_length(
-            lib::is_oracle_mode(), file_col_expr_->datum_meta_.length_semantics_);
+            is_oracle_mode, file_col_expr_->datum_meta_.length_semantics_);
       int j = 0;
       for (int i = 0; i < row_count_; i++) {
         if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
           text_vec->set_null(i);
         } else {
           parquet::ByteArray &cur_v = values.at(j++);
-          text_vec->set_string(i, pointer_cast<const char *>(cur_v.ptr), cur_v.len);
-          if (OB_UNLIKELY(cur_v.len > file_col_expr_->max_length_
-                          && (is_byte_length || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
-                                                                       pointer_cast<const char *>(cur_v.ptr),
-                                                                       cur_v.len) > file_col_expr_->max_length_))) {
-            ret = OB_ERR_DATA_TOO_LONG;
-            LOG_WARN("data too long", K(ret));
+          if (is_oracle_mode && 0 == cur_v.len) {
+            text_vec->set_null(i);
+          } else {
+            text_vec->set_string(i, pointer_cast<const char *>(cur_v.ptr), cur_v.len);
+            if (OB_UNLIKELY(cur_v.len > file_col_expr_->max_length_
+                            && (is_byte_length || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
+                                                                        pointer_cast<const char *>(cur_v.ptr),
+                                                                        cur_v.len) > file_col_expr_->max_length_))) {
+              ret = OB_ERR_DATA_TOO_LONG;
+              LOG_WARN("data too long", K(ret));
+            }
           }
         }
       }
@@ -1085,7 +1092,7 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_millis_col()
         } else {
           ObOTimestampData data;
           data.time_us_ = adjusted_value;
-          dec_vec->set_otimestamp(i, data);
+          dec_vec->set_otimestamp_tiny(i, ObOTimestampTinyData().from_timestamp_data(data));
         }
       }
     }
@@ -1118,7 +1125,7 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_micros_col()
         } else {
           ObOTimestampData data;
           data.time_us_ = adjusted_value;
-          dec_vec->set_otimestamp(i, data);
+          dec_vec->set_otimestamp_tiny(i, ObOTimestampTinyData().from_timestamp_data(data));
         }
       }
     }
@@ -1152,7 +1159,7 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_nanos_col()
           int64_t cur_value = values.at(j++);
           data.time_us_ = cur_value / NSECS_PER_USEC + adjust_us;
           data.time_ctx_.set_tail_nsec(cur_value % NSECS_PER_USEC);
-          dec_vec->set_otimestamp(i, data);
+          dec_vec->set_otimestamp_tiny(i, ObOTimestampTinyData().from_timestamp_data(data));
         }
       }
     }
@@ -1189,7 +1196,7 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_hive()
           ObOTimestampData data;
           data.time_us_ = utc_timestamp + adjust_us;
           data.time_ctx_.set_tail_nsec((int32_t)(nsec_time_value % NSECS_PER_USEC));
-          dec_vec->set_otimestamp(i, data);
+          dec_vec->set_otimestamp_tiny(i, ObOTimestampTinyData().from_timestamp_data(data));
         }
       }
     }

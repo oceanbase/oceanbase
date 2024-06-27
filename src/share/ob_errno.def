@@ -2740,6 +2740,8 @@ DEFINE_ERROR_DEP(OB_HDFS_MALFORMED_URI, -11042, -1, "HY000", "HDFS: malformed ur
 DEFINE_ERROR_DEP(OB_HDFS_INVALID_ARGUMENT, -11043, -1, "HY000", "HDFS: invalid argument");
 DEFINE_ERROR_DEP(OB_HDFS_NOT_IMPLEMENT, -11044, -1, "HY000", "HDFS: not implementation");
 DEFINE_ERROR_DEP(OB_HDFS_ERROR, -11045, -1, "HY000", "HDFS error");
+DEFINE_ERROR_EXT(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH, -11046, -1, "HY000", "Invalid path", "Invalid path: %.*s");
+DEFINE_ERROR_EXT(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, -11047, -1, "HY000", "Column type mismatch between the file and the table", "Column type mismatch between the file and the table: FileColumnType=%s TableColumnType=%s");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
