@@ -18,6 +18,7 @@
 #include "log_define.h"                   // LOG_READ_FLAG
 #include "log_define.h"                   // LOG_DIO_ALIGN_SIZE...
 #include "log_reader_utils.h"             // ReadBuf
+#include "lib/stat/ob_session_stat.h"     // Session
 
 namespace oceanbase
 {
@@ -87,6 +88,7 @@ int LogReader::pread(const block_id_t block_id,
     ret = convert_sys_errno();
     PALF_LOG(WARN, "LogReader open block failed", K(ret), K(errno), K(block_path), K(read_io_fd));
   } else {
+    const int64_t start_ts = ObTimeUtility::fast_current_time();
     int64_t remained_read_size = in_read_size;
     int64_t remained_read_buf_len = read_buf.buf_len_;
     int64_t step = MAX_LOG_BUFFER_SIZE;
@@ -106,6 +108,25 @@ int LogReader::pread(const block_id_t block_id,
         PALF_LOG(TRACE, "inner_pread_ success", K(ret), K(read_io_fd), K(block_id), K(offset), K(in_read_size),
             K(out_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_offset), K(curr_out_read_size),
             K(remained_read_size), K(block_path));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
+      iterator_info->inc_read_disk_cost_ts(cost_ts);
+      EVENT_TENANT_INC(ObStatEventIds::PALF_READ_IO_COUNT_FROM_DISK, MTL_ID());
+      EVENT_ADD(ObStatEventIds::PALF_READ_SIZE_FROM_DISK, out_read_size);
+      EVENT_ADD(ObStatEventIds::PALF_READ_TIME_FROM_DISK, cost_ts);
+      ATOMIC_INC(&accum_read_io_count_);
+      ATOMIC_AAF(&accum_read_log_size_, out_read_size);
+      ATOMIC_AAF(&accum_read_cost_ts_, cost_ts);
+      if (palf_reach_time_interval(PALF_IO_STAT_PRINT_INTERVAL_US, last_accum_read_statistic_time_)) {
+        const int64_t avg_pread_cost = accum_read_cost_ts_ / accum_read_io_count_;
+        PALF_LOG(INFO, "[PALF STAT READ LOG INFO FROM DISK]", K_(accum_read_io_count),
+                 K_(accum_read_log_size), K(avg_pread_cost));
+        ATOMIC_STORE(&accum_read_io_count_, 0);
+        ATOMIC_STORE(&accum_read_log_size_, 0);
+        ATOMIC_STORE(&accum_read_cost_ts_, 0);
       }
     }
   }

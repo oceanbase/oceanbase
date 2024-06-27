@@ -956,6 +956,7 @@ int LogCache::read(const int64_t flashback_version,
                    LogIteratorInfo *iterator_info)
 {
   int ret = OB_SUCCESS;
+  const bool is_cold_cache = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogCache is not inited!", K(ret));
@@ -964,6 +965,9 @@ int LogCache::read(const int64_t flashback_version,
     PALF_LOG(WARN, "Invalid argument!!!", K(ret), K(lsn), K(in_read_size), K(read_buf));
   } else if (OB_SUCC(read_hot_cache_(lsn, in_read_size, read_buf.buf_, out_read_size))) {
     // read data from hot_cache successfully
+    iterator_info->inc_hit_cnt(is_cold_cache);
+    iterator_info->inc_cache_read_size(out_read_size, is_cold_cache);
+  } else if (FALSE_IT(iterator_info->inc_miss_cnt(is_cold_cache))) {
   } else if (OB_FAIL(read_cold_cache_(flashback_version, lsn, in_read_size,
                                       read_buf, out_read_size, iterator_info))) {
     PALF_LOG(WARN, "fail to read from cold cache", K(ret), K(lsn), K(in_read_size), K(read_buf), K(out_read_size));

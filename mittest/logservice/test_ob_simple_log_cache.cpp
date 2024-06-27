@@ -245,7 +245,7 @@ TEST_F(TestObSimpleLogCache, DISABLED_fill_cache_when_slide)
     PALF_LOG(INFO, "start to read log");
     EXPECT_EQ(OB_ITER_END, read_log(leader, iterator));
     // all hit cache, no read disk
-    EXPECT_EQ(0, iterator.io_ctx_.iterator_info_.miss_cnt_);
+    EXPECT_EQ(0, iterator.io_ctx_.iterator_info_.cold_cache_stat_.miss_cnt_);
   }
 
   {
@@ -269,7 +269,7 @@ TEST_F(TestObSimpleLogCache, DISABLED_fill_cache_when_slide)
 
     EXPECT_EQ(OB_ITER_END, read_log(leader, read_lsn, iterator));
     // miss, have to read disk at lease once
-    EXPECT_LT(0, iterator.io_ctx_.iterator_info_.miss_cnt_);
+    EXPECT_LT(0, iterator.io_ctx_.iterator_info_.cold_cache_stat_.miss_cnt_);
   }
 
 
