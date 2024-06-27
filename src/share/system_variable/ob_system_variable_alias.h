@@ -447,6 +447,7 @@ namespace share
   static const char* const OB_SV_TABLE_DEFINITION_CACHE = "table_definition_cache";
   static const char* const OB_SV_INNODB_SORT_BUFFER_SIZE = "innodb_sort_buffer_size";
   static const char* const OB_SV_KEY_CACHE_BLOCK_SIZE = "key_cache_block_size";
+  static const char* const OB_SV_KV_MODE = "ob_kv_mode";
 
 }
 }
