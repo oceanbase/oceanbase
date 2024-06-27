@@ -33,6 +33,13 @@ enum class FeedbackType
                                 // to palf because ls not exists in current server
 };
 
+enum ObCdcClientType: uint8_t
+{
+  CLIENT_TYPE_UNKNOWN = 0,
+  CLIENT_TYPE_CDC = 1,
+  CLIENT_TYPE_STANDBY = 2,
+};
+
 class ObCdcRpcTestFlag {
 public:
   // rpc request flag bit
