@@ -365,6 +365,10 @@ int ObDirectLoadInsertTableContext::add_sstable_slice(const ObTabletID &tablet_i
                                                           affected_rows))) {
     LOG_WARN("fail to add sstable slice", KR(ret));
   }
+
+  if (OB_NOT_MASTER == ret) { //incase write start log -4038, todo jianming write start log at very beginning
+    ret = OB_EAGAIN;
+  }
   return ret;
 }
 
@@ -395,6 +399,10 @@ int ObDirectLoadInsertTableContext::construct_sstable_slice_writer(
                  tablet_insert_param, start_seq, slice_writer, allocator))) {
       LOG_WARN("fail to construct sstable slice writer", KR(ret));
     }
+  }
+
+  if (OB_NOT_MASTER == ret) { //incase write start log -4038, todo jianming write start log at very beginning
+    ret = OB_EAGAIN;
   }
   return ret;
 }

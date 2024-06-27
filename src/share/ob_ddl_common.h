@@ -267,6 +267,20 @@ static inline bool is_ddl_stmt_packet_retry_err(const int ret)
       ;
 }
 
+static inline bool is_direct_load_retry_err(const int ret)
+{
+  return is_ddl_stmt_packet_retry_err(ret) || ret == OB_TABLET_NOT_EXIST || ret == OB_LS_NOT_EXIST
+    || ret == OB_NOT_MASTER
+    || ret == OB_TASK_EXPIRED
+    || ret == OB_REPLICA_NOT_READABLE
+    || ret == OB_SCHEMA_ERROR
+    || ret == OB_SCHEMA_EAGAIN
+    || ret == OB_SCHEMA_NOT_UPTODATE
+    || ret == OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
+    || ret == OB_ERR_REMOTE_SCHEMA_NOT_FULL
+    ;
+}
+
 enum ObCheckExistedDDLMode
 {
   INVALID_DDL_MODE          = 0,

@@ -45,6 +45,7 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("exec_ctx cannot be null", KR(ret));
   } else {
+    is_direct_ = true;
     if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadSqlExecCtx, &exec_ctx->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadSqlExecCtx", KR(ret));
