@@ -1690,7 +1690,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.connection_charset_ = character_set_connection;
     ctx.param_list_ = params_.param_list_;
     ctx.is_extract_param_type_ = !params_.is_prepare_protocol_; //when prepare do not extract
-    ctx.external_param_info_ = &params_.external_param_info_;
+    ctx.external_param_info_ = params_.external_param_info_.need_clear_ ? nullptr : &params_.external_param_info_;
     ctx.current_scope_ = current_scope_;
     ctx.stmt_ = static_cast<ObStmt*>(get_stmt());
     ctx.schema_checker_ = schema_checker_;
@@ -11468,6 +11468,10 @@ int ObDMLResolver::expand_transpose(const ObSqlString &transpose_def,
   int ret = OB_SUCCESS;
   ObParser parser(*params_.allocator_, session_info_->get_sql_mode());
   ParseResult transpose_result;
+
+  params_.external_param_info_.need_clear_ = true;
+  DEFER(params_.external_param_info_.need_clear_ = false);
+
   if (OB_FAIL(parser.parse(transpose_def.string(), transpose_result))) {
     LOG_WARN("parse view defination failed", K(transpose_def.string()), K(ret));
   } else if (OB_ISNULL(transpose_result.result_tree_)
