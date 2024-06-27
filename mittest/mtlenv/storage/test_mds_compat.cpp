@@ -448,6 +448,11 @@ TEST_F(TestMdsCompat, compat)
   ASSERT_EQ(OB_SUCCESS, table_handle.get_sstable(sstable));
   ASSERT_NE(nullptr, sstable);
   ASSERT_TRUE(sstable->is_valid());
+
+  // free memory for mds data
+  tablet->mds_data_->~ObTabletMdsData();
+  ObTabletObjLoadHelper::free(allocator_, tablet->mds_data_);
+  ASSERT_EQ(nullptr, tablet->mds_data_);
 }
 
 } // namespace storage
