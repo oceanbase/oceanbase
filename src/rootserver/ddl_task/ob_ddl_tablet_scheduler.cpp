@@ -101,6 +101,8 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
     LOG_WARN("fail to create column checksum map", K(ret), K(ref_data_table_tablets.count()));
   } else if (OB_FAIL(tablet_id_to_data_row_cnt_.create(ref_data_table_tablets.count(), ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create column checksum map", K(ret), K(ref_data_table_tablets.count()));
+  } else if (OB_FAIL(tablet_scheduled_times_statistic_.create(ref_data_table_tablets.count(), ObModIds::OB_SSTABLE_CREATE_INDEX))) {
+    LOG_WARN("fail to create tablet scheduled count statistic map", K(ret), K(ref_data_table_tablets.count()));
   } else if (OB_FAIL(ObDDLChecksumOperator::get_tablet_checksum_record_without_execution_id(
     tenant_id,
     table_id,
@@ -295,6 +297,29 @@ int ObDDLTabletScheduler::confirm_batch_tablets_status(const int64_t execution_i
     }
   }
   LOG_INFO("confirm batch tablets status", K(ret), K(execution_id), K(finish_status), K(ls_id), K(tablets));
+  return ret;
+}
+
+int ObDDLTabletScheduler::refresh_ls_location_map() {
+  int ret = OB_SUCCESS;
+  TCRLockGuard guard(lock_);
+  common::hash::ObHashMap<share::ObLSID, common::ObAddr>::iterator iter;
+  for (iter = ls_location_map_.begin(); iter != ls_location_map_.end() && OB_SUCC(ret); ++iter) {
+    const ObLSID ls_id = iter->first;
+    common::ObAddr leader_addr;
+    share::ObLocationService *location_service = nullptr;
+    int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
+    const int64_t retry_interval_us = 200 * 1000; // 200ms
+    if (OB_ISNULL(location_service = GCTX.location_service_)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("location_cache is null", K(ret), KP(location_service));
+    } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+      tenant_id_, ls_id, leader_addr, rpc_timeout, retry_interval_us))) {
+      LOG_WARN("fail to get ls locaiton leader", K(ret), K(tenant_id_), K(ls_id));
+    } else if (OB_FAIL(ls_location_map_.set_refactored(ls_id, leader_addr, true /* overwrite */))) {
+      LOG_WARN("ls location map set fail", K(ret), K(ls_id), K(leader_addr));
+    }
+  }
   return ret;
 }
 
@@ -511,6 +536,26 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
                 pre_data_size = pre_data_size + tablet_data_size;
                 pre_data_row_cnt = pre_data_row_cnt + tablet_data_row_cnt;
               }
+              if (OB_SUCC(ret)) {
+                int64_t has_scheduled_times = 0;
+                if (OB_FAIL(tablet_scheduled_times_statistic_.get_refactored(in_tablets.at(i).id(), has_scheduled_times))) {
+                  if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
+                    has_scheduled_times = 0;
+                    ret = OB_SUCCESS;
+                  }
+                } else {
+                  LOG_WARN("tablet scheduled times exceed 1, need to refresh ls location map", K(ret), K(in_tablets.at(i).id()), K(has_scheduled_times));
+                  if (OB_FAIL(refresh_ls_location_map())) {
+                    LOG_WARN("fail to refresh ls location map", K(ret));
+                  }
+                }
+                if (OB_SUCC(ret)) {
+                  has_scheduled_times = has_scheduled_times + 1;
+                  if (OB_FAIL(tablet_scheduled_times_statistic_.set_refactored(in_tablets.at(i).id(), has_scheduled_times, true /* overwrite */))) {
+                    LOG_WARN("tablet scheduled times statistic map set fail", K(ret), K(in_tablets.at(i).id()), K(has_scheduled_times));
+                  }
+                }
+              }
             } else {
               break;
             }
@@ -708,6 +753,7 @@ void ObDDLTabletScheduler::destroy()
   running_ls_to_execution_id_.destroy();
   tablet_id_to_data_size_.destroy();
   tablet_id_to_data_row_cnt_.destroy();
+  tablet_scheduled_times_statistic_.destroy();
 }
 
 int ObTabletIdUpdater::operator() (common::hash::HashMapPair<share::ObLSID, ObArray<ObTabletID>> &entry) {
