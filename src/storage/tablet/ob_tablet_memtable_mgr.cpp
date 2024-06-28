@@ -665,7 +665,6 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
     const int64_t idx = get_memtable_idx(memtable_head_);
     int64_t occupy_size = 0;
     if (nullptr != tables_[idx] && memtable == tables_[idx]) {
-      LOG_INFO("release head memtable", K(ret), K(ls_id), KPC(memtable));
       ObMtStat& mt_stat = memtable->get_mt_stat();
       occupy_size = memtable->get_occupied_size();
       if (0 == mt_stat.release_time_) {
@@ -692,7 +691,7 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
         FLOG_INFO("allow active memtable to be freezed", K(ls_id), KPC(active_memtable));
       }
 
-      FLOG_INFO("succeed to release head data memtable", K(ret), K(ls_id), K(tablet_id_), K(occupy_size));
+      FLOG_INFO("succeed to release head data memtable", K(ret), K(occupy_size), KPC(memtable));
     }
   }
 
