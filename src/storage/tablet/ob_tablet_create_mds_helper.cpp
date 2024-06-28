@@ -69,7 +69,7 @@ int ObTabletCreateMdsHelper::register_process(
     LOG_WARN("unexpected error, arg is not valid", K(ret), K(arg));
   } else if (CLICK_FAIL(create_tablets(arg, false/*for_replay*/, share::SCN::invalid_scn(), ctx, tablet_id_array))) {
     LOG_WARN("failed to create tablets", K(ret), K(arg));
-  } else if (CLICK_FAIL(ObTabletBindingHelper::modify_tablet_binding_for_new_mds_create(arg, SCN::invalid_scn(), ctx))) {
+  } else if (!arg.set_binding_info_outside_create() && CLICK_FAIL(ObTabletBindingHelper::modify_tablet_binding_for_new_mds_create(arg, SCN::invalid_scn(), ctx))) {
     LOG_WARN("failed to modify tablet binding", K(ret));
   }
 
@@ -144,7 +144,7 @@ int ObTabletCreateMdsHelper::replay_process(
         K(ret), K(scn), K(tablet_change_checkpoint_scn));
   } else if (CLICK_FAIL(create_tablets(arg, true/*for_replay*/, scn, ctx, tablet_id_array))) {
     LOG_WARN("failed to create tablets", K(ret), K(arg), K(scn));
-  } else if (CLICK_FAIL(ObTabletBindingHelper::modify_tablet_binding_for_new_mds_create(arg, scn, ctx))) {
+  } else if (!arg.set_binding_info_outside_create() && CLICK_FAIL(ObTabletBindingHelper::modify_tablet_binding_for_new_mds_create(arg, scn, ctx))) {
     LOG_WARN("failed to modify tablet binding", K(ret));
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_gc_trigger(ls_id))) {
     LOG_WARN("failed to trigger tablet gc task", K(ret));

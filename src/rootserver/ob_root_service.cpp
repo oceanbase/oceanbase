@@ -4614,7 +4614,6 @@ int ObRootService::exchange_partition(const obrpc::ObExchangePartitionArg &arg, 
   int ret = OB_SUCCESS;
   uint64_t compat_version = 0;
   ObSchemaGetterGuard schema_guard;
-  ObPartitionExchange partition_exchange(ddl_service_);
   schema_guard.set_session_id(arg.session_id_);
   LOG_DEBUG("receive exchange partition arg", K(ret), K(arg));
   if (!inited_) {
@@ -4632,8 +4631,11 @@ int ObRootService::exchange_partition(const obrpc::ObExchangePartitionArg &arg, 
     LOG_WARN("get schema guard in inner table failed", K(ret));
   } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
     LOG_WARN("check parallel ddl conflict failed", K(ret));
-  } else if (OB_FAIL(partition_exchange.check_and_exchange_partition(arg, res, schema_guard))) {
-    LOG_WARN("fail to check and exchange partition", K(ret), K(arg), K(res));
+  } else {
+    ObPartitionExchange partition_exchange(ddl_service_, compat_version);
+    if (OB_FAIL(partition_exchange.check_and_exchange_partition(arg, res, schema_guard))) {
+      LOG_WARN("fail to check and exchange partition", K(ret), K(arg), K(res));
+    }
   }
   char table_id_buffer[256];
   snprintf(table_id_buffer, sizeof(table_id_buffer), "table_id:%ld, exchange_table_id:%ld",

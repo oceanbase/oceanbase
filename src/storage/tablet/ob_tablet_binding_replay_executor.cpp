@@ -26,7 +26,7 @@ ObTabletBindingReplayExecutor::ObTabletBindingReplayExecutor()
 
 int ObTabletBindingReplayExecutor::init(
     mds::BufferCtx &user_ctx,
-    ObTabletBindingMdsUserData &user_data,
+    const ObTabletBindingMdsUserData &user_data,
     const share::SCN &scn,
     const bool for_old_mds)
 {

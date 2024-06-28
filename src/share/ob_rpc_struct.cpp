@@ -9224,6 +9224,19 @@ int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
   return ret;
 }
 
+bool ObBatchCreateTabletArg::set_binding_info_outside_create() const
+{
+  int bool_ret = false;
+  uint64_t min_data_version = UINT64_MAX;
+  for (int64_t i = 0; i < tablet_extra_infos_.count(); i++) {
+    min_data_version = std::min(min_data_version, tablet_extra_infos_.at(i).tenant_data_version_);
+  }
+  if (UINT64_MAX != min_data_version && DATA_VERSION_4_3_2_0 <= min_data_version) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
 OB_SERIALIZE_MEMBER((ObContextDDLArg, ObDDLArg),
                     stmt_type_,
                     ctx_schema_,
@@ -10587,6 +10600,43 @@ OB_SERIALIZE_MEMBER(ObBatchSetTabletAutoincSeqRes, autoinc_params_);
 int ObBatchSetTabletAutoincSeqRes::assign(const ObBatchSetTabletAutoincSeqRes &other)
 {
   return autoinc_params_.assign(other.autoinc_params_);
+}
+
+OB_SERIALIZE_MEMBER(ObBatchGetTabletBindingArg, tenant_id_, ls_id_, tablet_ids_, check_committed_);
+
+int ObBatchGetTabletBindingArg::assign(const ObBatchGetTabletBindingArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  ls_id_ = other.ls_id_;
+  check_committed_ = other.check_committed_;
+  if (OB_FAIL(tablet_ids_.assign(other.tablet_ids_))) {
+    LOG_WARN("failed to assign", K(ret));
+  }
+  return ret;
+}
+
+int ObBatchGetTabletBindingArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id, const ObIArray<ObTabletID> &tablet_ids, const bool check_committed)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = tenant_id;
+  ls_id_ = ls_id;
+  check_committed_ = check_committed;
+  if (OB_FAIL(tablet_ids_.assign(tablet_ids))) {
+    LOG_WARN("failed to assign", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(*this));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBatchGetTabletBindingRes, binding_datas_);
+
+int ObBatchGetTabletBindingRes::assign(const ObBatchGetTabletBindingRes &other)
+{
+  return binding_datas_.assign(other.binding_datas_);
 }
 
 OB_SERIALIZE_MEMBER(ObFetchLocationResult, servers_);

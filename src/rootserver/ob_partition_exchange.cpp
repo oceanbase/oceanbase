@@ -36,8 +36,8 @@ using namespace share;
 using namespace share::schema;
 namespace rootserver
 {
-ObPartitionExchange::ObPartitionExchange(ObDDLService &ddl_service)
-  : ddl_service_(ddl_service)
+ObPartitionExchange::ObPartitionExchange(ObDDLService &ddl_service, const uint64_t data_version)
+  : ddl_service_(ddl_service), data_version_(data_version)
 {
 }
 
@@ -2199,30 +2199,38 @@ int ObPartitionExchange::build_single_table_rw_defensive_(const uint64_t tenant_
                                                           ObDDLSQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObBatchUnbindTabletArg> args;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || tablet_ids.empty() || schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tenant_id), K(tablet_ids), K(schema_version));
   } else if (OB_UNLIKELY(!ddl_service_.is_inited())) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ddl_service not init", K(ret));
-  } else if (OB_FAIL(build_modify_tablet_binding_args_v1_(
-    tenant_id, tablet_ids, schema_version, args, trans))) {
-    LOG_WARN("failed to build reuse index args", K(ret));
-  }
-  ObArenaAllocator allocator("DDLRWDefens");
-  for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); i++) {
-    int64_t pos = 0;
-    int64_t size = args[i].get_serialize_size();
-    char *buf = nullptr;
-    allocator.reuse();
-    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate", K(ret));
-    } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
-      LOG_WARN("failed to serialize arg", K(ret));
-    } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_TABLET_NEW_MDS, buf, pos))) {
-      LOG_WARN("failed to register tx data", K(ret));
+  } else if (OB_LIKELY(data_version_ >= DATA_VERSION_4_3_2_0)) {
+    const int64_t abs_timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_ts()
+                                                                     : ObTimeUtility::current_time() + GCONF.rpc_timeout;
+    if (OB_FAIL(ObTabletBindingMdsHelper::modify_tablet_binding_for_rw_defensive(tenant_id, tablet_ids, schema_version, abs_timeout_us, trans))) {
+      LOG_WARN("failed to modify tablet binding", K(ret), K(abs_timeout_us));
+    }
+  } else {
+    ObArray<ObBatchUnbindTabletArg> args;
+    if (OB_FAIL(build_modify_tablet_binding_args_v1_(
+      tenant_id, tablet_ids, schema_version, args, trans))) {
+      LOG_WARN("failed to build reuse index args", K(ret));
+    }
+    ObArenaAllocator allocator("DDLRWDefens");
+    for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); i++) {
+      int64_t pos = 0;
+      int64_t size = args[i].get_serialize_size();
+      char *buf = nullptr;
+      allocator.reuse();
+      if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate", K(ret));
+      } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
+        LOG_WARN("failed to serialize arg", K(ret));
+      } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_TABLET_NEW_MDS, buf, pos))) {
+        LOG_WARN("failed to register tx data", K(ret));
+      }
     }
   }
   return ret;

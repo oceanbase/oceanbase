@@ -57,6 +57,7 @@
 #include "share/ob_alive_server_tracer.h"//ServerAddr
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/ddl/ob_ddl_struct.h"
+#include "storage/tablet/ob_tablet_binding_mds_user_data.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_multi_data_source.h"
 #include "share/unit/ob_unit_info.h" //ObUnit*
@@ -3966,6 +3967,7 @@ public:
   static int skip_unis_array_len(const char *buf,
       int64_t data_len,
       int64_t &pos);
+  bool set_binding_info_outside_create() const;
   DECLARE_TO_STRING;
 
 public:
@@ -10771,6 +10773,40 @@ public:
   TO_STRING_KV(K_(autoinc_params));
 public:
   common::ObSEArray<share::ObMigrateTabletAutoincSeqParam, 1> autoinc_params_;
+};
+
+struct ObBatchGetTabletBindingArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBatchGetTabletBindingArg()
+    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_ids_(), check_committed_(false)
+  {}
+  ~ObBatchGetTabletBindingArg() {}
+public:
+  int assign(const ObBatchGetTabletBindingArg &other);
+  bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_ids_.count() > 0; }
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObIArray<common::ObTabletID> &tablet_ids, const bool check_committed);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_ids), K_(check_committed));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObSArray<common::ObTabletID> tablet_ids_;
+  bool check_committed_;
+};
+
+struct ObBatchGetTabletBindingRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBatchGetTabletBindingRes() : binding_datas_() {}
+  ~ObBatchGetTabletBindingRes() {}
+public:
+  int assign(const ObBatchGetTabletBindingRes &other);
+  bool is_valid() const { return binding_datas_.count() > 0; }
+  TO_STRING_KV(K_(binding_datas));
+public:
+  common::ObSArray<ObTabletBindingMdsUserData> binding_datas_;
 };
 
 struct ObFetchLocationResult

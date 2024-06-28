@@ -12775,6 +12775,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           LOG_WARN("failed to alter table options,", K(origin_table_name), K(new_table_schema), K(ret));
         } else if (is_rename_and_need_table_lock &&
             OB_FAIL(build_rw_defense_for_table_(
+                tenant_data_version,
                 new_table_schema,
                 new_table_schema.get_schema_version(),
                 idx_schema_versions,
@@ -16445,7 +16446,9 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                                                              idx_schema_versions))) {
                   LOG_WARN("failed to rename table!", K(rename_item), K(table_id), K(ret));
                 } else if (need_table_lock_and_defense &&
+                           !in_new_table_set && // to avoid defense twice on the same table
                            OB_FAIL(build_rw_defense_for_table_(
+                              tenant_data_version,
                               *from_table_schema,
                               new_table_schema_version,
                               idx_schema_versions,
@@ -16498,6 +16501,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                       LOG_WARN("failed to rename table!", K(ret), K(rename_item), K(table_id));
                     } else if (need_table_lock_and_defense &&
                               OB_FAIL(build_rw_defense_for_table_(
+                                  tenant_data_version,
                                   *from_table_schema,
                                   new_table_schema_version,
                                   idx_schema_versions,
@@ -16635,32 +16639,41 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
 
 int ObDDLService::build_single_table_rw_defensive_(
     const uint64_t tenant_id,
+    const uint64_t tenant_data_version,
     const ObArray<ObTabletID> &tablet_ids,
     const int64_t schema_version,
     ObDDLSQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObBatchUnbindTabletArg> args;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || tablet_ids.empty() || schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tenant_id), K(tablet_ids), K(schema_version));
-  } else if (OB_FAIL(build_modify_tablet_binding_args(
-      tenant_id, tablet_ids, true/*is_hidden_tablets*/, schema_version, args, trans))) {
-    LOG_WARN("failed to build reuse index args", K(ret));
-  }
-  ObArenaAllocator allocator("DDLRWDefens");
-  for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); i++) {
-    int64_t pos = 0;
-    int64_t size = args[i].get_serialize_size();
-    char *buf = nullptr;
-    allocator.reuse();
-    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate", K(ret));
-    } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
-      LOG_WARN("failed to serialize arg", K(ret));
-    } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_TABLET_NEW_MDS, buf, pos))) {
-      LOG_WARN("failed to register tx data", K(ret));
+  } else if (OB_LIKELY(tenant_data_version >= DATA_VERSION_4_3_2_0)) {
+    const int64_t abs_timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_ts()
+                                                                     : ObTimeUtility::current_time() + GCONF.rpc_timeout;
+    if (OB_FAIL(ObTabletBindingMdsHelper::modify_tablet_binding_for_rw_defensive(tenant_id, tablet_ids, schema_version, abs_timeout_us, trans))) {
+      LOG_WARN("failed to modify tablet binding", K(ret), K(abs_timeout_us));
+    }
+  } else {
+    ObArray<ObBatchUnbindTabletArg> args;
+    if (OB_FAIL(build_modify_tablet_binding_args(
+        tenant_id, tablet_ids, true/*is_hidden_tablets*/, schema_version, args, trans))) {
+      LOG_WARN("failed to build reuse index args", K(ret));
+    }
+    ObArenaAllocator allocator("DDLRWDefens");
+    for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); i++) {
+      int64_t pos = 0;
+      int64_t size = args[i].get_serialize_size();
+      char *buf = nullptr;
+      allocator.reuse();
+      if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate", K(ret));
+      } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
+        LOG_WARN("failed to serialize arg", K(ret));
+      } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_TABLET_NEW_MDS, buf, pos))) {
+        LOG_WARN("failed to register tx data", K(ret));
+      }
     }
   }
   return ret;
@@ -16673,6 +16686,7 @@ int ObDDLService::build_single_table_rw_defensive_(
  * (An origin_table_schema has no updated tablet info compared to a new table schema, e.g. tablet split)
 */
 int ObDDLService::build_rw_defense_for_table_(
+      const uint64_t tenant_data_version,
       const ObTableSchema &table_schema,
       const int64_t new_data_table_schema_version,
       const ObIArray<std::pair<uint64_t, int64_t>> &aux_schema_versions, // pair: table_id, schema_version
@@ -16711,7 +16725,7 @@ int ObDDLService::build_rw_defense_for_table_(
     LOG_WARN("get schema guard failed", K(ret));
   } else if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
     LOG_WARN("failed to get tablet_ids", K(ret), K(table_schema));
-  } else if (OB_FAIL(build_single_table_rw_defensive_(tenant_id, tablet_ids, new_data_table_schema_version, trans))) {
+  } else if (OB_FAIL(build_single_table_rw_defensive_(tenant_id, tenant_data_version, tablet_ids, new_data_table_schema_version, trans))) {
     LOG_WARN("failed to build defense ", K(ret), K(table_schema), K(tablet_ids));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < aux_schema_versions.count(); ++i) {
@@ -16726,7 +16740,7 @@ int ObDDLService::build_rw_defense_for_table_(
         LOG_WARN("table schema should not be null", K(ret));
       } else if (OB_FAIL(aux_table_schema->get_tablet_ids(tablet_ids))) {
         LOG_WARN("failed to get tablet_ids", K(ret), KPC(aux_table_schema));
-      } else if (OB_FAIL(build_single_table_rw_defensive_(tenant_id, tablet_ids, schema_version, trans))) {
+      } else if (OB_FAIL(build_single_table_rw_defensive_(tenant_id, tenant_data_version, tablet_ids, schema_version, trans))) {
         LOG_WARN("failed to build defense ", K(ret), KPC(aux_table_schema), K(i), K(schema_version));
       }
     }
@@ -19548,32 +19562,43 @@ int ObDDLService::unbind_hidden_tablets(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  uint64_t tenant_data_version = 0;
   ObArray<ObTabletID> orig_tablet_ids;
   ObArray<ObTabletID> hidden_tablet_ids;
-  ObArray<ObBatchUnbindTabletArg> args;
   if (OB_FAIL(orig_table_schema.get_tablet_ids(orig_tablet_ids))) {
     LOG_WARN("get tablet ids failed", K(ret));
   } else if (OB_FAIL(hidden_table_schema.get_tablet_ids(hidden_tablet_ids))) {
     LOG_WARN("get tablet ids failed", K(ret));
-  } else if (OB_FAIL(build_modify_tablet_binding_args(
-      tenant_id, orig_tablet_ids, false/*is_hidden_tablets*/, schema_version, args, trans))) {
-    LOG_WARN("failed to build reuse index args", K(ret));
-  } else if (OB_FAIL(build_modify_tablet_binding_args(
-      tenant_id, hidden_tablet_ids, true/*is_hidden_tablets*/, schema_version, args, trans))) {
-    LOG_WARN("failed to build reuse index args", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); i++) {
-    int64_t pos = 0;
-    int64_t size = args[i].get_serialize_size();
-    ObArenaAllocator allocator;
-    char *buf = nullptr;
-    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate", K(ret));
-    } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
-      LOG_WARN("failed to serialize arg", K(ret));
-    } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_TABLET_NEW_MDS, buf, pos))) {
-      LOG_WARN("failed to register tx data", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
+  } else if (OB_LIKELY(tenant_data_version >= DATA_VERSION_4_3_2_0)) {
+    const int64_t abs_timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_ts()
+                                                                     : ObTimeUtility::current_time() + GCONF.rpc_timeout;
+    if (OB_FAIL(ObTabletBindingMdsHelper::modify_tablet_binding_for_unbind(tenant_id, orig_tablet_ids, hidden_tablet_ids, schema_version, abs_timeout_us, trans))) {
+      LOG_WARN("failed to modify tablet binding", K(ret), K(abs_timeout_us));
+    }
+  } else {
+    ObArray<ObBatchUnbindTabletArg> args;
+    if (OB_FAIL(build_modify_tablet_binding_args(
+        tenant_id, orig_tablet_ids, false/*is_hidden_tablets*/, schema_version, args, trans))) {
+      LOG_WARN("failed to build reuse index args", K(ret));
+    } else if (OB_FAIL(build_modify_tablet_binding_args(
+        tenant_id, hidden_tablet_ids, true/*is_hidden_tablets*/, schema_version, args, trans))) {
+      LOG_WARN("failed to build reuse index args", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); i++) {
+      int64_t pos = 0;
+      int64_t size = args[i].get_serialize_size();
+      ObArenaAllocator allocator;
+      char *buf = nullptr;
+      if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate", K(ret));
+      } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
+        LOG_WARN("failed to serialize arg", K(ret));
+      } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_TABLET_NEW_MDS, buf, pos))) {
+        LOG_WARN("failed to register tx data", K(ret));
+      }
     }
   }
   return ret;

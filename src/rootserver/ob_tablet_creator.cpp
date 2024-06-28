@@ -414,6 +414,16 @@ int ObTabletCreator::execute()
               LOG_INFO("generate create arg", KR(ret), K(buf_len), K(batch_arg->batch_arg_.tablets_.count()),
                                               K(batch_arg->batch_arg_), "cost_ts", end_time - start_time);
             } while (need_retry(ret));
+            if (OB_SUCC(ret) && batch_arg->batch_arg_.set_binding_info_outside_create()) {
+              const int64_t start_time = ObTimeUtility::current_time();
+              if (OB_FAIL(ObTabletBindingMdsHelper::modify_tablet_binding_for_create(tenant_id_,
+                      batch_arg->batch_arg_, ctx.get_abs_timeout(), trans_))) {
+                LOG_WARN("failed to modify tablet binding for create", K(ret));
+              }
+              const int64_t end_time = ObTimeUtility::current_time();
+              LOG_INFO("modify binding for create", KR(ret), K(buf_len), K(batch_arg->batch_arg_.tablets_.count()),
+                                                    "cost_ts", end_time - start_time);
+            }
           }
           batch_arg = batch_arg->next_;
         } // end while

@@ -2120,10 +2120,12 @@ private:
       common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
   int build_single_table_rw_defensive_(
     const uint64_t tenant_id,
+    const uint64_t tenant_data_version,
     const ObArray<ObTabletID> &tablet_ids,
     const int64_t schema_version,
     ObDDLSQLTransaction &trans);
   int build_rw_defense_for_table_(
+      const uint64_t tenant_data_version,
       const ObTableSchema &table_schema,
       const int64_t new_data_table_schema_version,
       const ObIArray<std::pair<uint64_t, int64_t>> &aux_schema_versions,
