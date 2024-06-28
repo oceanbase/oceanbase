@@ -18,6 +18,7 @@
 #include "observer/table_load/ob_table_load_struct.h"
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
+#include "share/table/ob_table_load_dml_stat.h"
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "storage/direct_load/ob_direct_load_struct.h"
@@ -254,11 +255,15 @@ class ObDirectLoadControlCommitRes final
 
 public:
   ObDirectLoadControlCommitRes() {}
-  TO_STRING_KV(K_(result_info), K_(sql_statistics))
+  TO_STRING_KV(K_(result_info),
+               K_(sql_statistics),
+               K_(trans_result),
+               K_(dml_stats));
 public:
   table::ObTableLoadResultInfo result_info_;
   table::ObTableLoadSqlStatistics sql_statistics_;
   transaction::ObTxExecResult trans_result_;
+  table::ObTableLoadDmlStat dml_stats_;
 };
 
 class ObDirectLoadControlAbortArg final

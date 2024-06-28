@@ -203,7 +203,8 @@ OB_SERIALIZE_MEMBER(ObDirectLoadControlCommitArg,
 OB_SERIALIZE_MEMBER(ObDirectLoadControlCommitRes,
                     result_info_,
                     sql_statistics_,
-                    trans_result_);
+                    trans_result_,
+                    dml_stats_);
 
 // abort
 OB_SERIALIZE_MEMBER(ObDirectLoadControlAbortArg,

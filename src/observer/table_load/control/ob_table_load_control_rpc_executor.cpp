@@ -275,6 +275,7 @@ int ObDirectLoadControlCommitExecutor::process()
         LOG_WARN("fail to init store", KR(ret));
       } else if (OB_FAIL(store.commit(res_.result_info_,
                                       res_.sql_statistics_,
+                                      res_.dml_stats_,
                                       res_.trans_result_))) {
         LOG_WARN("fail to store commit", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {

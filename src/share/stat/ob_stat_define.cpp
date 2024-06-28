@@ -306,5 +306,13 @@ int64_t ObOptStatGatherParam::get_need_gather_column() const
   return valid_column;
 }
 
+OB_SERIALIZE_MEMBER(ObOptDmlStat,
+                    tenant_id_,
+                    table_id_,
+                    tablet_id_,
+                    insert_row_count_,
+                    update_row_count_,
+                    delete_row_count_);
+
 }
 }

@@ -16,6 +16,7 @@
 #include "observer/table_load/ob_table_load_struct.h"
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
+#include "share/table/ob_table_load_dml_stat.h"
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "share/table/ob_table_load_row_array.h"
 #include "observer/table_load/resource/ob_table_load_resource_rpc_struct.h"
@@ -65,6 +66,13 @@ private:
   int gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg);
   int pre_begin_peers(ObDirectLoadResourceApplyArg &apply_arg);
   int confirm_begin_peers();
+  int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics,
+                   table::ObTableLoadDmlStat &dml_stats);
+  int build_table_stat_param(ObTableStatParam &param,
+                             common::ObIAllocator &allocator);
+  int write_sql_stat(table::ObTableLoadSqlStatistics &sql_statistics,
+                     table::ObTableLoadDmlStat &dml_stats);
+  int heart_beat_peer();
 private:
   int add_check_begin_result_task();
   int check_peers_begin_result(bool &is_finish);
@@ -73,9 +81,6 @@ private:
 public:
   int pre_merge_peers();
   int start_merge_peers();
-  int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);
-  int write_sql_stat(table::ObTableLoadSqlStatistics &sql_statistics);
-  int heart_beat_peer();
 private:
   int add_check_merge_result_task();
   int check_peers_merge_result(bool &is_finish);

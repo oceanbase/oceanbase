@@ -23,6 +23,7 @@ namespace oceanbase
 namespace table
 {
 class ObTableLoadSqlStatistics;
+class ObTableLoadDmlStat;
 } // namespace table
 namespace observer
 {
@@ -57,6 +58,7 @@ public:
   int start_merge();
   int commit(table::ObTableLoadResultInfo &result_info,
              table::ObTableLoadSqlStatistics &sql_statistics,
+             table::ObTableLoadDmlStat &dml_stats,
              transaction::ObTxExecResult &trans_result);
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
   int heart_beat();

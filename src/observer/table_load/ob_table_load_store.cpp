@@ -420,10 +420,12 @@ int ObTableLoadStore::start_merge()
 
 int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
                              ObTableLoadSqlStatistics &sql_statistics,
+                             ObTableLoadDmlStat &dml_stats,
                              ObTxExecResult &trans_result)
 {
   int ret = OB_SUCCESS;
   sql_statistics.reset();
+  dml_stats.reset();
   trans_result.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -432,7 +434,6 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
     LOG_INFO("store commit");
     ObTransService *txs = nullptr;
     ObMutexGuard guard(store_ctx_->get_op_lock());
-    ObTableLoadDmlStat dml_stats;
     if (OB_ISNULL(MTL(ObTransService *))) {
       ret = OB_ERR_SYS;
       LOG_WARN("trans service is null", KR(ret));
@@ -442,11 +443,15 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
       LOG_WARN("fail to commit insert table", KR(ret));
     } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
       LOG_WARN("fail to commit sync auto increment value", KR(ret));
-    } else if (OB_FAIL(ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
+    }
+    // 全量旁路导入的dml_stat在执行节点更新
+    // 增量旁路导入的dml_stat收集到协调节点在事务中更新
+    else if (ObDirectLoadMethod::is_full(param_.method_) &&
+               OB_FAIL(ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
       LOG_WARN("fail to update dml stat info", KR(ret));
+    } else if (ObDirectLoadMethod::is_full(param_.method_) && FALSE_IT(dml_stats.reset())) {
     } else if (ObDirectLoadMethod::is_incremental(param_.method_) &&
-               txs->get_tx_exec_result(*ctx_->session_info_->get_tx_desc(), trans_result)) {
-      LOG_WARN("fail to get tx exec result", KR(ret));
+               OB_FAIL(txs->get_tx_exec_result(*ctx_->session_info_->get_tx_desc(), trans_result))) {
     } else if (OB_FAIL(store_ctx_->set_status_commit())) {
       LOG_WARN("fail to set store status commit", KR(ret));
     } else {

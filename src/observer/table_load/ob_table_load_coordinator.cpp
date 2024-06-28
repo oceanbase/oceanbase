@@ -977,7 +977,8 @@ int ObTableLoadCoordinator::add_check_merge_result_task()
  * commit
  */
 
-int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistics)
+int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistics,
+                                         ObTableLoadDmlStat &dml_stats)
 {
   int ret = OB_SUCCESS;
   ObTransService *txs = nullptr;
@@ -1001,6 +1002,7 @@ int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistic
           LOG_WARN("fail to init store", KR(ret));
         } else if (OB_FAIL(store.commit(res.result_info_,
                                         res.sql_statistics_,
+                                        res.dml_stats_,
                                         res.trans_result_))) {
           LOG_WARN("fail to commit store", KR(ret));
         }
@@ -1014,6 +1016,8 @@ int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistic
         ATOMIC_AAF(&coordinator_ctx_->result_info_.warnings_, res.result_info_.warnings_);
         if (OB_FAIL(sql_statistics.merge(res.sql_statistics_))) {
           LOG_WARN("fail to add result sql stats", KR(ret), K(addr), K(res));
+        } else if (OB_FAIL(dml_stats.merge(res.dml_stats_))) {
+          LOG_WARN("fail to add result dml stats", KR(ret), K(addr), K(res));
         } else if (ObDirectLoadMethod::is_incremental(param_.method_) &&
                    txs->add_tx_exec_result(*ctx_->session_info_->get_tx_desc(), res.trans_result_)) {
           LOG_WARN("fail to add tx exec result", KR(ret));
@@ -1024,23 +1028,54 @@ int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistic
   return ret;
 }
 
-int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statistics)
+int ObTableLoadCoordinator::build_table_stat_param(ObTableStatParam &param, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
+  param.tenant_id_ = tenant_id;
+  param.table_id_ = table_id;
+  param.part_level_ = ctx_->schema_.part_level_;
+  param.allocator_ = &allocator;
+  param.global_stat_param_.need_modify_ = true;
+  param.part_stat_param_.need_modify_ = false;
+  param.subpart_stat_param_.need_modify_ = false;
+  if (!ctx_->schema_.is_partitioned_table_) {
+    param.global_part_id_ = table_id;
+    param.global_tablet_id_ = table_id;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->schema_.column_descs_.count(); ++i) {
+    const ObColDesc &col_desc = ctx_->schema_.column_descs_.at(i);
+    ObColumnStatParam col_param;
+    col_param.column_id_ = col_desc.col_id_;
+    col_param.cs_type_ = col_desc.col_type_.get_collation_type();
+    if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == col_param.column_id_) {
+      // skip hidden pk
+    } else if (OB_FAIL(param.column_params_.push_back(col_param))) {
+      LOG_WARN("fail to push back column param", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statistics,
+                                           ObTableLoadDmlStat &dml_stats)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
   ObSchemaGetterGuard schema_guard;
-  if (OB_UNLIKELY(sql_statistics.is_empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(sql_statistics));
-  } else if (OB_FAIL(ObTableLoadSchema::get_schema_guard(tenant_id, schema_guard))) {
+  if (OB_FAIL(ObTableLoadSchema::get_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
   } else if (ObDirectLoadMethod::is_full(ctx_->param_.method_)) { // full direct load
     ObArray<ObOptColumnStat *> global_column_stats;
     ObArray<ObOptTableStat *> global_table_stats;
     global_column_stats.set_tenant_id(MTL_ID());
     global_table_stats.set_tenant_id(MTL_ID());
-    if (OB_FAIL(sql_statistics.get_table_stat_array(global_table_stats))) {
+    if (OB_UNLIKELY(sql_statistics.is_empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", KR(ret), K(sql_statistics));
+    } else if (OB_FAIL(sql_statistics.get_table_stat_array(global_table_stats))) {
       LOG_WARN("fail to get table stat array", KR(ret));
     } else if (OB_FAIL(sql_statistics.get_col_stat_array(global_column_stats))) {
       LOG_WARN("fail to get column stat array", KR(ret));
@@ -1061,29 +1096,9 @@ int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statist
     TabStatIndMap inc_table_stats;
     ColStatIndMap inc_column_stats;
     allocator.set_tenant_id(MTL_ID());
-    param.tenant_id_ = tenant_id;
-    param.table_id_ = table_id;
-    param.part_level_ = ctx_->schema_.part_level_;
-    param.allocator_ = &allocator;
-    param.global_stat_param_.need_modify_ = true;
-    param.part_stat_param_.need_modify_ = false;
-    param.subpart_stat_param_.need_modify_ = false;
-    if (!ctx_->schema_.is_partitioned_table_) {
-      param.global_part_id_ = table_id;
-      param.global_tablet_id_ = table_id;
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->schema_.column_descs_.count(); ++i) {
-      const ObColDesc &col_desc = ctx_->schema_.column_descs_.at(i);
-      ObColumnStatParam col_param;
-      col_param.column_id_ = col_desc.col_id_;
-      col_param.cs_type_ = col_desc.col_type_.get_collation_type();
-      if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == col_param.column_id_) {
-        // skip hidden pk
-      } else if (OB_FAIL(param.column_params_.push_back(col_param))) {
-        LOG_WARN("fail to push back column param", KR(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
+    if (OB_UNLIKELY(sql_statistics.is_empty() || dml_stats.is_empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", KR(ret), K(sql_statistics), K(dml_stats));
     } else if (OB_ISNULL(exec_ctx = coordinator_ctx_->exec_ctx_->get_exec_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected exec ctx is null", KR(ret));
@@ -1101,11 +1116,14 @@ int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statist
       LOG_WARN("fail to get table stat array", KR(ret));
     } else if (OB_FAIL(sql_statistics.get_col_stats(inc_column_stats))) {
       LOG_WARN("fail to get column stat array", KR(ret));
+    } else if (OB_FAIL(build_table_stat_param(param, allocator))) {
+      LOG_WARN("fail to build table stat param", KR(ret));
     } else if (OB_FAIL(ObDbmsStatsExecutor::update_online_stat(*exec_ctx,
                                                                param,
                                                                &schema_guard,
                                                                inc_table_stats,
-                                                               inc_column_stats))) {
+                                                               inc_column_stats,
+                                                               &dml_stats.dml_stat_array_))) {
       LOG_WARN("fail to update online stat", KR(ret));
     }
   }
@@ -1122,12 +1140,14 @@ int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
     LOG_INFO("coordinator commit");
     ObMutexGuard guard(coordinator_ctx_->get_op_lock());
     ObTableLoadSqlStatistics sql_statistics;
+    ObTableLoadDmlStat dml_stats;
     if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check coordinator status", KR(ret));
-    } else if (OB_FAIL(commit_peers(sql_statistics))) {
+    } else if (OB_FAIL(commit_peers(sql_statistics, dml_stats))) {
       LOG_WARN("fail to commit peers", KR(ret));
     } else if (FALSE_IT(coordinator_ctx_->set_enable_heart_beat(false))) {
-    } else if (param_.online_opt_stat_gather_ && OB_FAIL(write_sql_stat(sql_statistics))) {
+    } else if (param_.online_opt_stat_gather_ &&
+               OB_FAIL(write_sql_stat(sql_statistics, dml_stats))) {
       LOG_WARN("fail to write sql stat", KR(ret));
     } else if (OB_FAIL(coordinator_ctx_->set_status_commit())) {
       LOG_WARN("fail to set coordinator status commit", KR(ret));

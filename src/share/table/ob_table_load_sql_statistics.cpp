@@ -301,13 +301,21 @@ OB_DEF_SERIALIZE(ObTableLoadSqlStatistics)
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(table_stat_array_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < table_stat_array_.count(); i++) {
-    if (table_stat_array_.at(i) != nullptr) {
-      OB_UNIS_ENCODE(*table_stat_array_.at(i));
+    ObOptTableStat *table_stat = table_stat_array_.at(i);
+    if (OB_ISNULL(table_stat)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "unexpected table stat is null", KR(ret));
+    } else {
+      OB_UNIS_ENCODE(*table_stat);
     }
   }
   OB_UNIS_ENCODE(col_stat_array_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < col_stat_array_.count(); i++) {
-    if (col_stat_array_.at(i) != nullptr) {
+    ObOptOSGColumnStat *col_stat = col_stat_array_.at(i);
+    if (OB_ISNULL(col_stat)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "unexpected col stat is null", KR(ret));
+    } else {
       OB_UNIS_ENCODE(*col_stat_array_.at(i));
     }
   }
@@ -379,14 +387,22 @@ OB_DEF_SERIALIZE_SIZE(ObTableLoadSqlStatistics)
   int64_t len = 0;
   OB_UNIS_ADD_LEN(table_stat_array_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < table_stat_array_.count(); i++) {
-    if (table_stat_array_.at(i) != nullptr) {
-      OB_UNIS_ADD_LEN(*table_stat_array_.at(i));
+    ObOptTableStat *table_stat = table_stat_array_.at(i);
+    if (OB_ISNULL(table_stat)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "unexpected table stat is null", KR(ret));
+    } else {
+      OB_UNIS_ADD_LEN(*table_stat);
     }
   }
   OB_UNIS_ADD_LEN(col_stat_array_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < col_stat_array_.count(); i++) {
-    if (col_stat_array_.at(i) != nullptr) {
-      OB_UNIS_ADD_LEN(*col_stat_array_.at(i));
+    ObOptOSGColumnStat *col_stat = col_stat_array_.at(i);
+    if (OB_ISNULL(col_stat)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "unexpected col stat is null", KR(ret));
+    } else {
+      OB_UNIS_ADD_LEN(*col_stat);
     }
   }
   return len;
