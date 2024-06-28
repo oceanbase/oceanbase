@@ -328,8 +328,8 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         if (OB_FAIL(partitions.push_back(all_leader_info_array[i].partition_id_array_.count()))) {
           LOG_WARN("fail to push back", KR(ret));
         } else {
-          unit.thread_count_ = MAX((ctx_->param_.need_sort_ && ctx_->param_.px_mode_ == false ? 2 : 1),
-                                   MIN(max_session_count, total_session_count * partitions[i] / total_partitions));
+          unit.thread_count_ = MAX((!ctx_->schema_.is_heap_table_ && ctx_->param_.need_sort_ ? 2 : 1),
+                                     MIN(max_session_count, total_session_count * partitions[i] / total_partitions));
           if (OB_FAIL(apply_arg.apply_array_.push_back(unit))) {
             LOG_WARN("fail to push back", KR(ret));
           } else {
