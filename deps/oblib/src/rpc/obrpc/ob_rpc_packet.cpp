@@ -204,7 +204,7 @@ int ObRpcPacketHeader::deserialize(const char* buf, const int64_t data_len, int6
         flags_ & ObRpcPacketHeader::RESP_FLAG &&
         ObRpcNetHandler::is_self_cluster(src_cluster_id_) && data_version_ > 0) {
       if (OB_FAIL(ODV_MGR.set(tenant_id_, data_version_))) {
-        LOG_WARN("fail to update data_version", K(ret), KP(tenant_id_), K(data_version_));
+        LOG_WARN("fail to update data_version", K(ret), KP(tenant_id_), KDV(data_version_));
       }
       LOG_TRACE("rpc receive data version", K_(tenant_id), K_(data_version), K_(pcode),
                 K_(src_cluster_id), K(ObRpcNetHandler::CLUSTER_ID));

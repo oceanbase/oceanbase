@@ -1256,9 +1256,9 @@ int ObAdminSetConfig::update_config_for_compatible(const uint64_t tenant_id,
             LOG_WARN("parse version failed", KR(ret), K(item->value_.ptr()));
           } else if (new_compatible_val <= old_compatible_val) {
             need_to_update = false;
-            LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update",
-                     K(tenant_id), K(old_compatible_val),
-                     K(new_compatible_val));
+            LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id),
+                     "old_data_version", DVP(old_compatible_val),
+                     "new_data_version", DVP(new_compatible_val));
           }
         }
       }

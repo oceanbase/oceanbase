@@ -335,7 +335,8 @@ int ObTenantConfig::publish_special_config_after_dump()
       SHARE_LOG(ERROR, "unexpected data_version", KR(ret), K(old_data_version));
     } else if (value_updated && new_data_version <= old_data_version) {
       LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id_),
-               K(old_data_version), K(new_data_version));
+               "old_data_version", DVP(old_data_version),
+               "new_data_version", DVP(new_data_version));
       // do nothing
     } else {
       if (!(*pp_item)->set_value((*pp_item)->spfile_str())) {

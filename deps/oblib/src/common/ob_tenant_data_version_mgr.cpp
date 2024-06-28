@@ -52,7 +52,7 @@ int ObTenantDataVersionMgr::get(const uint64_t tenant_id, uint64_t &data_version
 
   if (OB_UNLIKELY(mock_data_version_ != 0)) {
     data_version = ATOMIC_LOAD(&mock_data_version_);
-    DV_TLOG("mock_data_version is set", K(tenant_id), K(data_version));
+    DV_TLOG("mock_data_version is set", K(tenant_id), KDV(data_version));
   } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDataVersionMgr doesn't init", K(ret), K(tenant_id));
@@ -62,7 +62,7 @@ int ObTenantDataVersionMgr::get(const uint64_t tenant_id, uint64_t &data_version
         data_version = LAST_BARRIER_DATA_VERSION;
         ret = OB_SUCCESS;
         COMMON_LOG(WARN, "data_version fallback to LAST_BARRIER_DATA_VERSION",
-                   K(tenant_id), K(data_version));
+                   K(tenant_id), KDV(data_version));
       } else {
         ret = OB_ENTRY_NOT_EXIST;
       }
@@ -89,7 +89,7 @@ int ObTenantDataVersionMgr::set(const uint64_t tenant_id, const uint64_t data_ve
 
   if (OB_UNLIKELY(mock_data_version_ != 0)) {
     // do nothing
-    DV_TLOG("mock_data_version is set", K(tenant_id), K(data_version), K(mock_data_version_));
+    DV_TLOG("mock_data_version is set", K(tenant_id), KDV(data_version), K(mock_data_version_));
   } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDataVersionMgr doesn't init", K(ret),
@@ -114,7 +114,7 @@ int ObTenantDataVersionMgr::set(const uint64_t tenant_id, const uint64_t data_ve
   if (OB_SUCC(ret) && need_to_set) {
     SpinWLockGuard guard(lock_);
     if (OB_FAIL(set_(tenant_id, data_version))) {
-      COMMON_LOG(WARN, "fail to set data_version", K(ret), K(tenant_id), K(data_version));
+      COMMON_LOG(WARN, "fail to set data_version", K(ret), K(tenant_id), KDV(data_version));
     }
   }
 
@@ -248,7 +248,7 @@ int ObTenantDataVersionMgr::set_(const uint64_t tenant_id,
       ret = OB_SUCCESS;
     } else {
       COMMON_LOG(WARN, "fail to get result from data_version_map", K(ret),
-                 K(tenant_id), K(data_version));
+                 K(tenant_id), KDV(data_version));
     }
   } else if (NULL == version) {
     ret = OB_ERR_UNEXPECTED;
@@ -283,8 +283,9 @@ int ObTenantDataVersionMgr::set_(const uint64_t tenant_id,
         version->set_version(data_version);
       }
 
-      DV_ILOG_F("Tenant DATA_VERSION is changed", K(ret), K(tenant_id), "old_version", old_version,
-                "new_version", data_version);
+      DV_ILOG_F("Tenant DATA_VERSION is changed", K(ret), K(tenant_id),
+                "old_version", DVP(old_version),
+                "new_version", DVP(data_version));
     }
   }
 
@@ -323,7 +324,7 @@ int ObTenantDataVersionMgr::set_and_dump_to_file_(const uint64_t tenant_id,
                 iter_version->get_remove_timestamp(),
                 data_version))) {
           COMMON_LOG(WARN, "fail to dump data_version", K(ret),
-                     K(iter_tenant_id), K(data_version), K(*iter_version));
+                     K(iter_tenant_id), KDV(data_version), K(*iter_version));
         }
       } else {
         if (OB_FAIL(dump_data_version_(dump_buf, buf_length, pos, iter_tenant_id,
@@ -339,7 +340,7 @@ int ObTenantDataVersionMgr::set_and_dump_to_file_(const uint64_t tenant_id,
       if (OB_FAIL(dump_data_version_(dump_buf, buf_length, pos, tenant_id,
                                      false /*removed*/, 0 /*remove_ts*/,
                                      data_version))) {
-        COMMON_LOG(WARN, "fail to dump data_version", K(ret), K(tenant_id), K(data_version));
+        COMMON_LOG(WARN, "fail to dump data_version", K(ret), K(tenant_id), KDV(data_version));
       }
     }
     if (OB_FAIL(ret)) {
@@ -425,7 +426,7 @@ int ObTenantDataVersionMgr::dump_data_version_(char *buf, int64_t buf_length, in
   if (OB_INVALID_INDEX ==
       VersionUtil::print_version_str(version_str, OB_SERVER_VERSION_LENGTH, data_version)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "fail to print data_version str", K(ret), K(data_version));
+    COMMON_LOG(WARN, "fail to print data_version str", K(ret), KDV(data_version));
   } else if (OB_FAIL(databuff_printf(
                  buf, buf_length, pos, ObTenantDataVersion::DUMP_BUF_FORMAT,
                  tenant_id, version_str, data_version, removed, remove_ts))) {
@@ -566,6 +567,15 @@ int ObTenantDataVersionMgr::write_to_file_(char *buf, int64_t buf_length, int64_
   }
 
   return ret;
+}
+
+ObDataVersionPrinter::ObDataVersionPrinter(const uint64_t data_version)
+    : version_val_(data_version), version_str_{0}
+{
+  if (OB_INVALID_INDEX ==
+      VersionUtil::print_version_str(version_str_, OB_SERVER_VERSION_LENGTH, data_version)) {
+    MEMSET(version_str_, 0, OB_SERVER_VERSION_LENGTH);
+  }
 }
 
 } // namespace common

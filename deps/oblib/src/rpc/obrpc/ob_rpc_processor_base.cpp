@@ -155,7 +155,7 @@ int ObRpcProcessorBase::update_data_version()
     uint64_t data_version = rpc_pkt_->get_data_version();
     if (ObRpcNetHandler::is_self_cluster(src_cluster_id) && data_version > 0) {
       if (OB_FAIL(ODV_MGR.set(tenant_id_, data_version))) {
-        LOG_WARN("fail to update data_version", K(ret), KP(tenant_id_), K(data_version));
+        LOG_WARN("fail to update data_version", K(ret), KP(tenant_id_), KDV(data_version));
       }
     }
   }
