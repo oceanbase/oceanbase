@@ -1169,55 +1169,61 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
         sql::RowCmpFunc row_cmp_func = VectorCmpExprFuncsHelper::get_row_cmp_func(
                                                   expr.args_[0]->datum_meta_,
                                                   expr.args_[1]->args_[0]->datum_meta_);
-        if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
-          fixed_base_l_payload = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_data();
-          l_len = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_length();
-        }
-        for (; OB_SUCC(ret) && idx < bound.end(); ++idx) {
-          if (my_skip.at(idx) || eval_flags.at(idx)) {
-            continue;
-          }
-          // The situation "input_left_vec->is_null(idx)" has already been handled previously.
+        if (OB_ISNULL(row_cmp_func)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("row_cmp_func is null", K(ret), K(expr.args_[0]->datum_meta_),
+                    K(expr.args_[1]->args_[0]->datum_meta_), K(expr.args_[1]->arg_cnt_));
+        } else {
           if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
-            l_payload = fixed_base_l_payload + l_len * idx;
-          } else {
-            input_left_vec->get_payload(idx, l_payload, l_len);
+            fixed_base_l_payload = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_data();
+            l_len = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_length();
           }
-          bool left_hit = false;
-          if (right_has_null) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < expr.inner_func_cnt_; ++i) {
-              right = right_store[i];
-              if (right->is_null()) {
-                // do nothing
-              } else if (OB_FAIL((row_cmp_func)(expr.args_[0]->obj_meta_,
-                                    expr.args_[1]->args_[i]->obj_meta_,
-                                    (const void *)l_payload, l_len,
-                                    (const void *)right->ptr_, right->len_, cmp_ret))) {
-                LOG_WARN("row_cmp_func failed!", K(ret), K(expr.args_[0]->obj_meta_),
-                                            K(expr.args_[1]->args_[i]->obj_meta_));
-              } else if (cmp_ret == 0) {
-                left_hit = true;
-                break;
+          for (; OB_SUCC(ret) && idx < bound.end(); ++idx) {
+            if (my_skip.at(idx) || eval_flags.at(idx)) {
+              continue;
+            }
+            // The situation "input_left_vec->is_null(idx)" has already been handled previously.
+            if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
+              l_payload = fixed_base_l_payload + l_len * idx;
+            } else {
+              input_left_vec->get_payload(idx, l_payload, l_len);
+            }
+            bool left_hit = false;
+            if (right_has_null) {
+              for (int64_t i = 0; OB_SUCC(ret) && i < expr.inner_func_cnt_; ++i) {
+                right = right_store[i];
+                if (right->is_null()) {
+                  // do nothing
+                } else if (OB_FAIL((row_cmp_func)(expr.args_[0]->obj_meta_,
+                                      expr.args_[1]->args_[i]->obj_meta_,
+                                      (const void *)l_payload, l_len,
+                                      (const void *)right->ptr_, right->len_, cmp_ret))) {
+                  LOG_WARN("row_cmp_func failed!", K(ret), K(expr.args_[0]->obj_meta_),
+                                              K(expr.args_[1]->args_[i]->obj_meta_));
+                } else if (cmp_ret == 0) {
+                  left_hit = true;
+                  break;
+                }
+              }
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < expr.inner_func_cnt_; ++i) {
+                right = right_store[i];
+                if (OB_FAIL((row_cmp_func)(expr.args_[0]->obj_meta_,
+                                      expr.args_[1]->args_[i]->obj_meta_,
+                                      (const void *)l_payload, l_len,
+                                      (const void *)right->ptr_, right->len_, cmp_ret))) {
+                  LOG_WARN("row_cmp_func failed!", K(ret), K(expr.args_[0]->obj_meta_),
+                                              K(expr.args_[1]->args_[i]->obj_meta_));
+                } else if (cmp_ret == 0) {
+                  left_hit = true;
+                  break;
+                }
               }
             }
-          } else {
-            for (int64_t i = 0; OB_SUCC(ret) && i < expr.inner_func_cnt_; ++i) {
-              right = right_store[i];
-              if (OB_FAIL((row_cmp_func)(expr.args_[0]->obj_meta_,
-                                    expr.args_[1]->args_[i]->obj_meta_,
-                                    (const void *)l_payload, l_len,
-                                    (const void *)right->ptr_, right->len_, cmp_ret))) {
-                LOG_WARN("row_cmp_func failed!", K(ret), K(expr.args_[0]->obj_meta_),
-                                            K(expr.args_[1]->args_[i]->obj_meta_));
-              } else if (cmp_ret == 0) {
-                left_hit = true;
-                break;
-              }
+            if (OB_SUCC(ret)) {
+              set_vector_result<ResVec>(T_OP_IN == expr.type_, left_hit, right_has_null, res_vec, idx);
+              eval_flags.set(idx);
             }
-          }
-          if (OB_SUCC(ret)) {
-            set_vector_result<ResVec>(T_OP_IN == expr.type_, left_hit, right_has_null, res_vec, idx);
-            eval_flags.set(idx);
           }
         }
       }
