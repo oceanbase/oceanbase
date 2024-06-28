@@ -3460,7 +3460,11 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
     } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
     spi_result->end_cursor_stmt(ctx, ret);
     cursor.set_last_execute_time(ObTimeUtility::current_time());
-    if (OB_FAIL(ret)) {
+    // only care about end_cursor_stmt failed.
+    // if cursor already open, spi_result will released by cursor close.
+    // there is not a situation like '!cursor.is_open && spi_result not close'.
+    // so do not need call spi_result.close_result_set.
+    if (OB_FAIL(ret) && !cursor.isopen()) {
       spi_result->~ObSPIResultSet();
     }
   }
