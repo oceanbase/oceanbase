@@ -441,9 +441,15 @@ int ObTableLoadTransStoreWriter::cast_column(
   if (is_null_autoinc) {
     out_obj.set_null();
   } else if (obj.is_nop_value()) {
-    if (OB_UNLIKELY(column_schema->is_not_null_for_write())) {
-      ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
-      LOG_WARN("column can not be null", KR(ret), KPC(column_schema));
+    if (column_schema->is_not_null_for_write() &&
+        column_schema->get_cur_default_value().is_null()) {
+      if (column_schema->get_meta_type().is_enum()) {
+        const uint64_t ENUM_FIRST_VAL = 1;
+        out_obj.set_enum(ENUM_FIRST_VAL);
+      } else {
+        ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+        LOG_WARN("column can not be null", KR(ret), KPC(column_schema));
+      }
     } else {
       out_obj = column_schema->get_cur_default_value();
     }
