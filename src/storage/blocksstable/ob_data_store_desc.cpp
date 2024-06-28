@@ -97,7 +97,7 @@ int ObStaticDataStoreDesc::init_encryption_info(const ObMergeSchema &merge_schem
     STORAGE_LOG(WARN, "fail to get encrypt id from table schema", K(ret), K(merge_schema));
   } else if (merge_schema.need_encrypt() && merge_schema.get_encrypt_key_len() > 0) {
     const int64_t key_str_len = share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH;
-    if (OB_UNLIKELY(merge_schema.get_encrypt_key_len() >= key_str_len)) {
+    if (OB_UNLIKELY(merge_schema.get_encrypt_key_len() > key_str_len)) {
       ret = OB_SIZE_OVERFLOW;
       STORAGE_LOG(WARN, "encrypt key length overflow", KR(ret),
         K(merge_schema.get_encrypt_key_len()), K(key_str_len));
