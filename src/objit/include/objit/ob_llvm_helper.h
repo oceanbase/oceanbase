@@ -364,7 +364,6 @@ public:
   int compile_module(jit::ObPLOptLevel optimization);
   void dump_module();
   void dump_debuginfo();
-  int verify_function(ObLLVMFunction &function);
   int verify_module();
   int get_function_address(const common::ObString &name, uint64_t &addr);
   static void add_symbol(const common::ObString &name, void *value);
