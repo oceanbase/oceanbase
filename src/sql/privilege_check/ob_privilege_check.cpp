@@ -2010,6 +2010,16 @@ int get_revoke_stmt_need_privs(
       need_priv.priv_set_ = stmt->get_priv_set() | OB_PRIV_GRANT;
       need_priv.priv_level_ = stmt->get_grant_level();
       need_priv.obj_type_ = stmt->get_object_type();
+      bool check_revoke_all_with_pl_priv = false;
+      if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(session_priv,
+                          ObCompatFeatureType::MYSQL_USER_REVOKE_ALL_WITH_PL_PRIV_CHECK, check_revoke_all_with_pl_priv))) {
+        LOG_WARN("failed to get priv need check", K(ret));
+      } else if (check_revoke_all_with_pl_priv) {
+        //do nothing
+      } else {
+        need_priv.priv_set_ &= ~(OB_PRIV_EXECUTE | OB_PRIV_ALTER_ROUTINE | OB_PRIV_CREATE_ROUTINE);
+      }
+
       ADD_NEED_PRIV(need_priv);
       #define DEF_COLUM_NEED_PRIV(priv_prefix, priv_type) \
         ObNeedPriv priv_prefix##_need_priv;  \
