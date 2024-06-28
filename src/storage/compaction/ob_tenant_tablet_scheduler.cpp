@@ -1213,7 +1213,7 @@ int ObTenantTabletScheduler::schedule_tablet_medium_merge(
             LOG_WARN("failed to try schedule tablet medium", K(ret), K(ls_handle), K(ls_id), K(tablet_handle),
                 K(weak_read_ts), K(medium_param), K(unused_tablet_merge_finish));
         } else if (schedule_pair.need_force_freeze()) {
-          if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(tablet_id, true/*force_freeze*/, true/*is_sync*/))) {
+          if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(tablet_id, true/*force_freeze*/, false/*is_sync*/))) {
             LOG_WARN("failed to force freeze tablet", K(tmp_ret), K(ls_id), K(tablet_id));
           }
         }

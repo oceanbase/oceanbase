@@ -384,7 +384,7 @@ public:
       diagnose_type = ObDiagnoseTabletType::TYPE_TX_TABLE_MERGE;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINI_MERGE == type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MDS_MINI_MERGE;
-    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_BATCH_FREEZE_TABLETS) {
+    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_BATCH_FREEZE_TABLETS == type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_BATCH_FREEZE;
     }
     return diagnose_type;
