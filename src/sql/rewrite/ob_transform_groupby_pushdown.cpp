@@ -176,8 +176,7 @@ int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *s
     is_valid = false;
     OPT_TRACE("do not rewrite inner table stmt with cost-based rule");
     // do not rewrite inner table stmt with cost-based rule
-  } else if (stmt->has_window_function() ||
-             stmt->has_rollup() ||
+  } else if (stmt->has_rollup() ||
              stmt->get_semi_infos().count() > 0 ||
              stmt->get_subquery_exprs().count() > 0 ||
              stmt->get_aggr_item_size() <= 0 ||
