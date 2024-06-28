@@ -98,6 +98,7 @@ void ObConnectByOpPump::reset()
     datum_store_.reset();
     datum_store_constructed_ = false;
     hash_table_.reset();
+    use_hash_ = false;
   }
 }
 
