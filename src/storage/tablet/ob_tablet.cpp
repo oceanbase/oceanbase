@@ -6230,12 +6230,7 @@ int ObTablet::build_transfer_tablet_param_current_(
     mig_tablet_param.mds_checkpoint_scn_ = user_data.transfer_scn_;
     mig_tablet_param.report_status_.reset();
 
-
-    bool is_committed = true;
-    ObTabletCreateDeleteMdsUserData user_data;
-    if (OB_FAIL(ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
-      LOG_WARN("failed to get tx data", K(ret), KPC(this));
-    } else if (OB_FAIL(mig_tablet_param.last_persisted_committed_tablet_status_.assign(user_data))) {
+    if (OB_FAIL(mig_tablet_param.last_persisted_committed_tablet_status_.assign(user_data))) {
       LOG_WARN("fail to assign mig tablet param from tablet meta", K(ret), K(user_data));
     } else {
       mig_tablet_param.last_persisted_committed_tablet_status_.data_type_ = ObTabletMdsUserDataType::START_TRANSFER_IN;

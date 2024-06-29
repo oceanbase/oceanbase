@@ -226,6 +226,7 @@ public:
   void reset();
   int assign(const ObMigrationTabletParam &param);
   int build_deleted_tablet_info(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
+  int get_tablet_status_for_transfer(ObTabletCreateDeleteMdsUserData &user_data) const;
 
   // Return the max tablet checkpoint scn which is the max scn among clog_checkpoint_scn,
   // mds_checkpoint_scn and ddl_checkpoint_scn.

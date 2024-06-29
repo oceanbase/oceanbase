@@ -209,10 +209,14 @@ int ObTabletFullMemoryMdsData::scan_all_mds_data_with_op(ObMdsMiniMergeOperator 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletFullMemoryMdsData not init", K(ret));
-  } else if (OB_UNLIKELY(tablet_status_uncommitted_kv_.is_valid() || aux_tablet_info_uncommitted_kv_.is_valid())) {
+  } else if (OB_UNLIKELY(aux_tablet_info_uncommitted_kv_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected valid uncommitted kv", K(ret),
-        K(tablet_status_uncommitted_kv_), K(aux_tablet_info_uncommitted_kv_));
+    LOG_WARN("unexpected valid uncommitted kv", K(ret), K(aux_tablet_info_uncommitted_kv_));
+  } else if (tablet_status_uncommitted_kv_.is_valid()) {
+    LOG_INFO("tablet status uncommitted kv is valid", K(ret), K(tablet_status_uncommitted_kv_));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (!tablet_status_committed_kv_.v_.user_data_.empty() && CLICK_FAIL(op(tablet_status_committed_kv_))) {
     LOG_WARN("failed to dump tablet status", K(ret), K(tablet_status_committed_kv_));
   } else if (!aux_tablet_info_committed_kv_.v_.user_data_.empty() && CLICK_FAIL(op(aux_tablet_info_committed_kv_))) {

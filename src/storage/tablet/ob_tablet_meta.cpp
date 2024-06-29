@@ -1042,6 +1042,33 @@ SCN ObMigrationTabletParam::get_max_tablet_checkpoint_scn() const
   return MAX3(clog_checkpoint_scn_, mds_checkpoint_scn_, ddl_checkpoint_scn_);
 }
 
+int ObMigrationTabletParam::get_tablet_status_for_transfer(ObTabletCreateDeleteMdsUserData &user_data) const
+{
+  int ret = OB_SUCCESS;
+  user_data.reset();
+
+  if (PARAM_VERSION == version_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported for this param version", K(ret), K_(ls_id), K_(tablet_id), K_(version));
+  } else if (PARAM_VERSION_V2 == version_) {
+    // use uncommitted tablet status mds dump kv
+    const ObString &str = mds_data_.tablet_status_uncommitted_kv_.v_.user_data_;
+    int64_t pos = 0;
+    if (OB_UNLIKELY(str.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user data is empty", K(ret), K_(ls_id), K_(tablet_id), "tablet_status_uncommitted_kv", mds_data_.tablet_status_uncommitted_kv_);
+    } else if (OB_FAIL(user_data.deserialize(str.ptr(), str.length(), pos))) {
+      LOG_WARN("failed to deserialize user data", K(ret), K_(ls_id), K_(tablet_id));
+    }
+  } else if (version_ >= PARAM_VERSION_V3) {
+    if (OB_FAIL(user_data.assign(last_persisted_committed_tablet_status_))) {
+      LOG_WARN("fail to assign tablet status", K(ret), K_(ls_id), K_(tablet_id), K_(last_persisted_committed_tablet_status));
+    }
+  }
+
+  return ret;
+}
+
 int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
