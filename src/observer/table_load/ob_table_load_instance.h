@@ -106,10 +106,10 @@ private:
                  KP_(session_info),
                  KPC_(tx_desc),
                  K_(tx_param),
-                 KP_(is_incremental),
-                 KP_(use_insert_into_select_tx),
-                 KP_(is_started),
-                 KP_(has_added_tx_result));
+                 K_(is_incremental),
+                 K_(use_insert_into_select_tx),
+                 K_(is_started),
+                 K_(has_added_tx_result));
   public:
     uint64_t tenant_id_;
     uint64_t table_id_;

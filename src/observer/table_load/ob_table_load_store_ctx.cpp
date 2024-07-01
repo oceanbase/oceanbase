@@ -168,6 +168,10 @@ int ObTableLoadStoreCtx::init(
     }
     if (OB_FAIL(ret)) {
     }
+    // init trans_param_
+    else if (ObDirectLoadMethod::is_incremental(ctx_->param_.method_) && OB_FAIL(init_trans_param())) {
+      LOG_WARN("fail to init trans param", KR(ret));
+    }
     // init trans_allocator_
     else if (OB_FAIL(trans_allocator_.init("TLD_STransPool", ctx_->param_.tenant_id_))) {
       LOG_WARN("fail to init trans allocator", KR(ret));
@@ -221,12 +225,11 @@ int ObTableLoadStoreCtx::init(
       insert_table_param.is_column_store_ = ctx_->schema_.is_column_store_;
       insert_table_param.online_opt_stat_gather_ = ctx_->param_.online_opt_stat_gather_;
       insert_table_param.is_incremental_ = ObDirectLoadMethod::is_incremental(ctx_->param_.method_);
+      insert_table_param.trans_param_ = trans_param_;
       insert_table_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
       insert_table_param.col_descs_ = &(ctx_->schema_.column_descs_);
       insert_table_param.cmp_funcs_ = &(ctx_->schema_.cmp_funcs_);
-      if (insert_table_param.is_incremental_ && OB_FAIL(init_trans_param(insert_table_param.trans_param_))) {
-        LOG_WARN("fail to init trans param", KR(ret));
-      } else if (OB_ISNULL(insert_table_ctx_ =
+      if (OB_ISNULL(insert_table_ctx_ =
                          OB_NEWx(ObDirectLoadInsertTableContext, (&allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to new ObDirectLoadInsertTableContext", KR(ret));
@@ -421,12 +424,12 @@ bool ObTableLoadStoreCtx::check_heart_beat_expired(const uint64_t expired_time_u
   return ObTimeUtil::current_time() > (last_heart_beat_ts_ + expired_time_us);
 }
 
-int ObTableLoadStoreCtx::init_trans_param(ObDirectLoadTransParam &trans_param)
+int ObTableLoadStoreCtx::init_trans_param()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = nullptr;
   transaction::ObTxDesc *tx_desc = nullptr;
-  trans_param.reset();
+  trans_param_.reset();
   if (OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null session info", KR(ret));
@@ -437,10 +440,10 @@ int ObTableLoadStoreCtx::init_trans_param(ObDirectLoadTransParam &trans_param)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null tx desc", KR(ret));
   } else {
-    trans_param.tx_desc_ = tx_desc;
-    trans_param.tx_id_ = tx_desc->get_tx_id();
-    trans_param.tx_seq_ = tx_desc->inc_and_get_tx_seq(0);
-    LOG_INFO("init trans param", K(trans_param));
+    trans_param_.tx_desc_ = tx_desc;
+    trans_param_.tx_id_ = tx_desc->get_tx_id();
+    trans_param_.tx_seq_ = tx_desc->inc_and_get_tx_seq(0);
+    LOG_INFO("init trans param", K(trans_param_));
   }
   return ret;
 }

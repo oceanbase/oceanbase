@@ -20,6 +20,7 @@
 #include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
+#include "storage/direct_load/ob_direct_load_trans_param.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
 
@@ -132,7 +133,7 @@ private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTrans *&trans);
   int init_session_ctx_array();
-  int init_trans_param(ObDirectLoadTransParam &trans_param);
+  int init_trans_param();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
 public:
@@ -146,6 +147,7 @@ public:
   common::ObArray<table::ObTableLoadLSIdAndPartitionId> target_ls_partition_ids_;
   storage::ObDirectLoadTableDataDesc table_data_desc_;
   storage::ObDirectLoadTableDataDesc lob_id_table_data_desc_;
+  storage::ObDirectLoadTransParam trans_param_;
   table::ObTableLoadResultInfo result_info_;
   ObITableLoadTaskScheduler *task_scheduler_;
   ObTableLoadMerger *merger_;

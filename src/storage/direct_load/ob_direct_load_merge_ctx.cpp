@@ -321,6 +321,8 @@ int ObDirectLoadTabletMergeCtx::init(ObDirectLoadMergeCtx *merge_ctx,
       origin_table_param.table_id_ = param.table_id_;
       origin_table_param.ls_id_ = ls_id;
       origin_table_param.tablet_id_ = tablet_id;
+      origin_table_param.tx_id_ = param.trans_param_.tx_id_;
+      origin_table_param.tx_seq_ = param.trans_param_.tx_seq_;
       if (OB_FAIL(origin_table_.init(origin_table_param))) {
         LOG_WARN("fail to init origin table", KR(ret));
       }
@@ -330,6 +332,8 @@ int ObDirectLoadTabletMergeCtx::init(ObDirectLoadMergeCtx *merge_ctx,
       lob_meta_origin_table_param.table_id_ = param.lob_meta_table_id_;
       lob_meta_origin_table_param.ls_id_ = ls_id;
       lob_meta_origin_table_param.tablet_id_ = lob_meta_tablet_id;
+      lob_meta_origin_table_param.tx_id_ = param.trans_param_.tx_id_;
+      lob_meta_origin_table_param.tx_seq_ = param.trans_param_.tx_seq_;
       if (OB_FAIL(lob_meta_origin_table_.init(lob_meta_origin_table_param))) {
         LOG_WARN("fail to init lob meta origin table", KR(ret));
       }
