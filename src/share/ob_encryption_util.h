@@ -256,8 +256,11 @@ enum ObHashAlgorithm {
   OB_HASH_SH256,
   OB_HASH_SH384,
   OB_HASH_SH512,
+  OB_HASH_SM3,
   OB_HASH_MAX
 };
+
+const int64_t OB_SM3_DIGEST_LENGTH = 32;
 
 class ObHashUtil
 {

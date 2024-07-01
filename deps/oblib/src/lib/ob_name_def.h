@@ -660,6 +660,7 @@
 #define N_GET_SUBPROGRAM_VAR "get_subprogram_var"
 #define N_SHADOW_UK_PROJECTOR "shadow_uk_project"
 #define N_RANDOM_BYTES "random_bytes"
+#define N_SM3 "sm3"
 //use capital as 'default now()' flag
 #define N_UPPERCASE_CUR_TIMESTAMP "CURRENT_TIMESTAMP"
 #define N_UPDATE_CURRENT_TIMESTAMP "ON UPDATE CURRENT_TIMESTAMP"

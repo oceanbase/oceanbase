@@ -560,6 +560,9 @@ int ObHashUtil::get_hash_output_len(const ObHashAlgorithm algo, int64_t &output_
     case OB_HASH_SH512:
       output_len = SHA512_DIGEST_LENGTH;
       break;
+    case OB_HASH_SM3:
+      output_len = OB_SM3_DIGEST_LENGTH;
+      break;
     default:
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "cipher type passed");
@@ -604,6 +607,7 @@ const EVP_MD* ObHashUtil::get_hash_evp_md(const ObHashAlgorithm algo)
     case OB_HASH_SH256: return EVP_sha256();
     case OB_HASH_SH384: return EVP_sha384();
     case OB_HASH_SH512: return EVP_sha512();
+    case OB_HASH_SM3: return EVP_sm3();
     default: return NULL;
   }
 }

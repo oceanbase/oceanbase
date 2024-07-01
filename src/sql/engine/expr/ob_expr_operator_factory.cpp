@@ -1002,6 +1002,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprAlignDate4Cmp);
     REG_OP(ObExprInnerTableOptionPrinter);
     REG_OP(ObExprInnerTableSequenceGetter);
+    REG_OP(ObExprSm3);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
