@@ -255,6 +255,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.schema_version_ = 0;
   dml_base_param.write_flag_.set_lob_aux();
   dml_base_param.store_ctx_guard_ = store_ctx_guard;
+  dml_base_param.dml_allocator_ = param.allocator_;
 
   if (OB_FAIL(get_meta_table_dml_param(dml_base_param.table_param_))) {
     LOG_WARN("get_meta_table_dml_param fail", KR(ret));

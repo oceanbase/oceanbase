@@ -2631,11 +2631,9 @@ int ObLSTabletService::insert_rows(
           K(is_heap_table));
     }
   } else {
-    ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
-                            lob_allocator,
                             ObDmlFlag::DF_INSERT);
     ObIAllocator &work_allocator = run_ctx.allocator_;
     void *ptr = nullptr;
@@ -2651,6 +2649,8 @@ int ObLSTabletService::insert_rows(
         const ObRelativeTable &data_table = run_ctx.relative_table_;
         while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
           ObStoreRow reserved_row;
+          // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
+          dml_param.lob_allocator_.reuse();
           // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
           // outside the while loop.
           if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
@@ -2686,7 +2686,6 @@ int ObLSTabletService::insert_rows(
                                                    row_count, rows_info, tbl_rows, afct_num, dup_num))) {
             LOG_WARN("insert to each tablets fail", K(ret));
           }
-          lob_allocator.reuse();
         }
       } else {
         LOG_WARN("Failed to allocate ObRowsInfo", K(ret));
@@ -2699,7 +2698,6 @@ int ObLSTabletService::insert_rows(
     if (nullptr != ptr) {
       work_allocator.free(ptr);
     }
-    lob_allocator.reset();
   }
   if (OB_SUCC(ret)) {
     LOG_DEBUG("succeeded to insert rows", K(ret));
@@ -2823,11 +2821,9 @@ int ObLSTabletService::insert_row(
     LOG_WARN("invalid args", K(ret), K(ctx), K(dml_param),
         K(column_ids), K(duplicated_column_ids), K(row), K(flag));
   } else {
-    ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
-                            lob_allocator,
                             ObDmlFlag::DF_INSERT);
     ObIAllocator &work_allocator = run_ctx.allocator_;
     ObStoreRow &tbl_row = run_ctx.tbl_row_;
@@ -2873,7 +2869,6 @@ int ObLSTabletService::insert_row(
         EVENT_INC(STORAGE_INSERT_ROW_COUNT);
       }
     }
-    lob_allocator.reset();
   }
   return ret;
 }
@@ -2922,11 +2917,9 @@ int ObLSTabletService::update_rows(
         K(column_ids), K(updated_column_ids), KP(row_iter));
   } else {
     timeguard.click("Get");
-    ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
-                            lob_allocator,
                             ObDmlFlag::DF_UPDATE);
     ObIAllocator &work_allocator = run_ctx.allocator_;
     ObStoreRow old_tbl_row;
@@ -2974,6 +2967,8 @@ int ObLSTabletService::update_rows(
         && OB_SUCC(get_next_row_from_iter(row_iter, old_tbl_row, true))
         && OB_SUCC(get_next_row_from_iter(row_iter, new_tbl_row, false))) {
       LOG_DEBUG("get_dml_update_row", KP(row_iter), K(old_tbl_row), K(new_tbl_row));
+      // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
+      dml_param.lob_allocator_.reuse();
       // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
       // outside the while loop.
       if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
@@ -3002,7 +2997,6 @@ int ObLSTabletService::update_rows(
       } else {
         afct_num++;
       }
-      lob_allocator.reuse();
       timeguard.click("Update");
     }
     if (OB_ITER_END == ret) {
@@ -3062,7 +3056,6 @@ int ObLSTabletService::update_rows(
     if (nullptr != old_row_cells) {
       work_allocator.free(old_row_cells);
     }
-    lob_allocator.reset();
     old_tbl_row.row_val_.cells_ = nullptr;
     if (OB_SUCC(ret)) {
       affected_rows = afct_num;
@@ -3101,11 +3094,9 @@ int ObLSTabletService::put_rows(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ctx), K(dml_param), K(column_ids), KP(row_iter));
   } else {
-    ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
-                            lob_allocator,
                             ObDmlFlag::DF_UPDATE);
     ObIAllocator &work_allocator = run_ctx.allocator_;
     ObNewRow *row = nullptr;
@@ -3122,6 +3113,8 @@ int ObLSTabletService::put_rows(
     int64_t cur_time = 0;
     ObTabletHandle tmp_handle;
     while (OB_SUCC(ret) && OB_SUCC(row_iter->get_next_row(row))) {
+      // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
+      dml_param.lob_allocator_.reuse();
       // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
       // outside the while loop.
       if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
@@ -3141,13 +3134,11 @@ int ObLSTabletService::put_rows(
         }
       }
       ++afct_num;
-      lob_allocator.reuse();
     }
 
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
-    lob_allocator.reset();
     if (OB_SUCC(ret)) {
       affected_rows = afct_num;
       EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
@@ -3181,11 +3172,9 @@ int ObLSTabletService::delete_rows(
     LOG_WARN("invalid args", K(ret), K(dml_param), K(column_ids),
         KP(row_iter), K(ctx));
   } else {
-    ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
-                            lob_allocator,
                             ObDmlFlag::DF_DELETE);
     ObNewRow *row = nullptr;
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
@@ -3197,6 +3186,8 @@ int ObLSTabletService::delete_rows(
     int64_t cur_time = 0;
     ObTabletHandle tmp_handle;
     while (OB_SUCC(ret) && OB_SUCC(row_iter->get_next_row(row))) {
+      // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
+      dml_param.lob_allocator_.reuse();
       // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
       // outside the while loop.
       if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
@@ -3214,9 +3205,7 @@ int ObLSTabletService::delete_rows(
       } else {
         ++afct_num;
       }
-      lob_allocator.reuse();
     }
-    lob_allocator.reset();
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
@@ -3261,7 +3250,6 @@ int ObLSTabletService::lock_rows(
     timeguard.click("Get");
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
-                            ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
                             ObDmlFlag::DF_LOCK);
     ObNewRow *row = nullptr;
@@ -3339,7 +3327,6 @@ int ObLSTabletService::lock_row(
   } else {
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
-                            ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
                             ctx.mvcc_acc_ctx_.mem_ctx_->get_query_allocator(),
                             ObDmlFlag::DF_LOCK);
     if (OB_FAIL(prepare_dml_running_ctx(nullptr, nullptr, tablet_handle, run_ctx))) {
@@ -3995,7 +3982,7 @@ int ObLSTabletService::insert_lob_col(
     lob_param.ls_id_ = run_ctx.store_ctx_.ls_id_;
     lob_param.tablet_id_ = run_ctx.relative_table_.get_tablet_id();
     lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(column.col_type_.get_type(), column.col_type_.get_collation_type());
-    lob_param.allocator_ = &run_ctx.lob_allocator_;
+    lob_param.allocator_ = &run_ctx.dml_param_.lob_allocator_;
     lob_param.lob_common_ = lob_common;
     if (OB_NOT_NULL(del_param)) {
       lob_param.handle_size_ = del_param->handle_size_;
@@ -4343,7 +4330,7 @@ int ObLSTabletService::process_delta_lob(
     lob_param.ls_id_ = run_ctx.store_ctx_.ls_id_;
     lob_param.tablet_id_ = run_ctx.relative_table_.get_tablet_id();
     lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(column.col_type_.get_type(), column.col_type_.get_collation_type());
-    lob_param.allocator_ = &run_ctx.lob_allocator_;
+    lob_param.allocator_ = &run_ctx.dml_param_.lob_allocator_;
     // should use old obj lob
     ObLobLocatorV2 old_lob;
     ObString old_disk_lob;
@@ -5333,7 +5320,7 @@ int ObLSTabletService::table_refresh_row(
       for (int64_t i = 0; OB_SUCC(ret) && i < new_row->get_count(); ++i) {
         if (row.cells_[i].is_fixed_double()) {
           new_row->cells_[i].set_scale(row.cells_[i].get_scale());
-        } else if (OB_FAIL(ob_write_obj(run_ctx.lob_allocator_, new_row->cells_[i], row.cells_[i]))) {
+        } else if (OB_FAIL(ob_write_obj(run_ctx.dml_param_.lob_allocator_, new_row->cells_[i], row.cells_[i]))) {
           LOG_WARN("copy ObObj error", K(ret), K(i), K(new_row->cells_[i]));
         }
       }
@@ -5428,7 +5415,7 @@ int ObLSTabletService::delete_lob_col(
     } else if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
       LOG_WARN("set_lob_storage_params fail", K(ret), K(column));
     } else {
-      void *buf = run_ctx.lob_allocator_.alloc(data.length());
+      void *buf = run_ctx.dml_param_.lob_allocator_.alloc(data.length());
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to deep copy lob data.", K(ret), K(data));
@@ -5444,7 +5431,7 @@ int ObLSTabletService::delete_lob_col(
         lob_param.ls_id_ = run_ctx.store_ctx_.ls_id_;
         lob_param.tablet_id_ = run_ctx.relative_table_.get_tablet_id();
         lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(column.col_type_.get_type(), column.col_type_.get_collation_type());
-        lob_param.allocator_ = &run_ctx.lob_allocator_;
+        lob_param.allocator_ = &run_ctx.dml_param_.lob_allocator_;
         lob_param.lob_common_ = lob_common;
         lob_param.handle_size_ = data.length();
         lob_param.byte_size_ = lob_param.lob_common_->get_byte_size(data.length());

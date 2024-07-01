@@ -47,7 +47,6 @@ public:
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
     common::ObIAllocator &allocator,
-    common::ObIAllocator &lob_allocator,
     const blocksstable::ObDmlFlag dml_flag);
   ~ObDMLRunningCtx() {}
 
@@ -82,7 +81,6 @@ public:
   ObStoreCtx &store_ctx_;
   const ObDMLBaseParam &dml_param_;
   common::ObIAllocator &allocator_;
-  common::ObIAllocator &lob_allocator_;
   const blocksstable::ObDmlFlag dml_flag_;
   ObRelativeTable relative_table_;
   const share::schema::ColumnMap *col_map_;

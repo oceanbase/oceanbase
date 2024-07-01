@@ -35,12 +35,10 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
     common::ObIAllocator &allocator,
-    common::ObIAllocator &lob_allocator,
     const blocksstable::ObDmlFlag dml_flag)
   : store_ctx_(store_ctx),
     dml_param_(dml_param),
     allocator_(allocator),
-    lob_allocator_(lob_allocator),
     dml_flag_(dml_flag),
     relative_table_(),
     col_map_(nullptr),

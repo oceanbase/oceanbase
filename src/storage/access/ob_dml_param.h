@@ -188,7 +188,8 @@ struct ObDMLBaseParam
         snapshot_(),
         direct_insert_task_id_(0),
         write_flag_(),
-        check_schema_version_(true)
+        check_schema_version_(true),
+        lob_allocator_(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {
   }
 
@@ -220,6 +221,7 @@ struct ObDMLBaseParam
   // write flag for inner write processing
   concurrent_control::ObWriteFlag write_flag_;
   bool check_schema_version_;
+  mutable ObArenaAllocator lob_allocator_;
   bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0) && nullptr != store_ctx_guard_; }
   bool is_direct_insert() const { return (direct_insert_task_id_ > 0); }
   DECLARE_TO_STRING;
