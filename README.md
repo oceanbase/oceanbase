@@ -87,6 +87,8 @@ obd demo
 
 ## 🐳 Start with docker
 
+**Note**: We provide images on [dockerhub](https://hub.docker.com/r/oceanbase/oceanbase-ce/tags), [quay.io](https://quay.io/repository/oceanbase/oceanbase-ce?tab=tags) and [ghcr.io](https://github.com/oceanbase/docker-images/pkgs/container/oceanbase-ce). If you have problems pulling images from dockerhub, please try the other two registries.
+
 1. Start an OceanBase Database instance:
 
     ```shell
@@ -97,7 +99,7 @@ obd demo
 2. Connect to the OceanBase Database instance:
 
     ```shell
-    docker exec -it oceanbase-ce ob-mysql sys # Connect to the root user of the sys tenant.
+    docker exec -it oceanbase-ce obclient -h127.0.0.1 -P2881 -uroot # Connect to the root user of the sys tenant.
     ```
 
 See also [Docker Readme](https://github.com/oceanbase/docker-images/tree/main/oceanbase-ce) for more details.
