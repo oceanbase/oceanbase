@@ -94,6 +94,12 @@ obd demo
     ```shell
     # Deploy a mini standalone instance.
     docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d oceanbase/oceanbase-ce
+
+    # Deploy a mini standalone instance using image from quay.io.
+    # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d quay.io/oceanbase/oceanbase-ce
+
+    # Deploy a mini standalone instance using image from ghcr.io.
+    # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d ghcr.io/oceanbase/oceanbase-ce
     ```
 
 2. Connect to the OceanBase Database instance:
