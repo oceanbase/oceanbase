@@ -752,7 +752,7 @@ int ObDblinkCtxInSession::get_dblink_conn(uint64_t dblink_id, common::sqlclient:
     // do nothing
   } else if (OB_SUCCESS != (conn->ping())) {
     ret = OB_ERR_DBLINK_SESSION_KILLED;
-    LOG_WARN("connection is invalid", K(ret), K(dblink_conn->usable()), KP(dblink_conn));
+    LOG_WARN("connection is invalid", K(ret), K(conn->usable()), KP(conn));
   } else {
     dblink_conn = conn;
   }
