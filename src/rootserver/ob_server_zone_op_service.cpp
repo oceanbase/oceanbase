@@ -291,14 +291,15 @@ int ObServerZoneOpService::start_servers(
   int ret = OB_SUCCESS;
   ObCheckServerMachineStatusArg rpc_arg;
   ObCheckServerMachineStatusResult rpc_result;
+  ObServerInfoInTable server_info;
   ObTimeoutCtx ctx;
   uint64_t sys_tenant_data_version = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
-  } else if (OB_ISNULL(rpc_proxy_)) {
+  } else if (OB_ISNULL(rpc_proxy_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rpc_proxy_ is null", KR(ret), KP(rpc_proxy_));
+    LOG_WARN("rpc_proxy_ or GCTX.sql_proxy_ is null", KR(ret), KP(rpc_proxy_), KP(GCTX.sql_proxy_));
   } else if (OB_UNLIKELY(servers.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("servers' count is zero", KR(ret), K(servers));
@@ -309,7 +310,10 @@ int ObServerZoneOpService::start_servers(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
       const ObAddr &server = servers.at(i);
-      if (sys_tenant_data_version >= DATA_VERSION_4_2_1_8) {
+      if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, server, server_info))) {
+        // make sure the server is in whitelist, then send rpc
+        LOG_WARN("fail to get server_info", KR(ret), K(server));
+      } else if (sys_tenant_data_version >= DATA_VERSION_4_2_1_8) {
         int64_t timeout = ctx.get_timeout();
         const int64_t ERR_MSG_BUF_LEN = OB_MAX_SERVER_ADDR_SIZE + 150;
         char disk_error_server_err_msg[ERR_MSG_BUF_LEN] = "";
