@@ -70,17 +70,25 @@ obd demo
 
 ## 🐳 使用 docker
 
+**注意**: 我们在 [dockerhub](https://hub.docker.com/r/oceanbase/oceanbase-ce/tags), [quay.io](https://quay.io/repository/oceanbase/oceanbase-ce?tab=tags) 和 [ghcr.io](https://github.com/oceanbase/docker-images/pkgs/container/oceanbase-ce) 提供镜像。如果您在从 dockerhub 拉取镜像时遇到问题，请尝试其他两个镜像库。
+
 1. 启动 OceanBase 数据库实例
 
     ```shell
     # 部署一个mini模式实例
     docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d oceanbase/oceanbase-ce
+
+    # 使用 quay.io 仓库的镜像部署 OceanBase.
+    # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d quay.io/oceanbase/oceanbase-ce
+
+    # 使用 ghcr.io 仓库的镜像部署 OceanBase.
+    # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d ghcr.io/oceanbase/oceanbase-ce
     ```
 
 2. 连接 OceanBase
 
     ```shell
-    docker exec -it oceanbase-ce ob-mysql sys # 连接root用户sys租户
+    docker exec -it oceanbase-ce obclient -h127.0.0.1 -P2881 -uroot # 连接root用户sys租户
     ```
 
 更多信息参考[docker 文档](https://github.com/oceanbase/docker-images/tree/main/oceanbase-ce)。
