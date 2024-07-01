@@ -1950,6 +1950,14 @@ int ObDDLUtil::get_data_information(
                 data_format_version = task.get_data_format_version();
               }
             }
+          } else if (is_complement_data_relying_on_dag(ddl_type)) {
+            SMART_VAR(rootserver::ObColumnRedefinitionTask, task) {
+              if (OB_FAIL(task.deserialize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
+                LOG_WARN("deserialize from msg failed", K(ret));
+              } else {
+                data_format_version = task.get_data_format_version();
+              }
+            }
           } else {
             SMART_VAR(rootserver::ObTableRedefinitionTask, task) {
               if (OB_FAIL(task.deserialize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
