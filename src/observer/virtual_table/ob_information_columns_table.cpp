@@ -823,7 +823,15 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                ObCharset::get_default_charset()));
             break;
-        }
+          }
+        case SRS_ID: {
+            if (!column_schema->is_default_srid()) {
+              cells[cell_idx].set_uint32(column_schema->get_srid());
+            } else {
+              cells[cell_idx].reset();
+            }
+            break;
+          }
         default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
@@ -1161,7 +1169,10 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
           }
         case GENERATION_EXPRESSION: {
             break;
-        }
+          }
+        case SRS_ID: {
+            break;
+          }
       default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),

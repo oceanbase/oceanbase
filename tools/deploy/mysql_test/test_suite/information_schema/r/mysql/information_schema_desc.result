@@ -40,6 +40,7 @@ EXTRA	varchar(4096)	NO
 PRIVILEGES	varchar(200)	NO			
 COLUMN_COMMENT	varchar(2048)	NO			
 GENERATION_EXPRESSION	varchar(262144)	NO			
+SRS_ID	int(10) unsigned	YES		NULL	
 desc global_status;
 Field	Type	Null	Key	Default	Extra
 VARIABLE_NAME	varchar(128)	NO			
@@ -232,7 +233,8 @@ COLUMNS	CREATE VIEW `COLUMNS` AS SELECT TABLE_CATALOG,
                     EXTRA,
                     PRIVILEGES,
                     COLUMN_COMMENT,
-                    GENERATION_EXPRESSION
+                    GENERATION_EXPRESSION,
+                    SRS_ID
   		    FROM OCEANBASE.__ALL_VIRTUAL_INFORMATION_COLUMNS where 0 = sys_privilege_check('table_acc', effective_tenant_id(), table_schema, table_name)	utf8mb4	utf8mb4_general_ci
 show create table  global_status;
 Table	Create Table

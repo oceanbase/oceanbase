@@ -132,3 +132,13 @@ Outputs & filters:
       range_key([gis_point_alias.__pk_increment]), range(MIN ; MAX), 
       range_cond([gis_point_alias.__pk_increment = :0])
 drop table if exists gis_point;
+drop table if exists t_test_srs_id_column;
+CREATE TABLE `t_test_srs_id_column` ( `id` INT PRIMARY KEY, `c1` POINT NOT NULL SRID 4326, `c2` GEOMETRY NOT NULL SRID 4326, `c3` POLYGON NOT NULL SRID 4326, `c4` GEOMETRY NOT NULL );
+SELECT `COLUMN_NAME`, `COLUMN_TYPE` /*!80003 ,`SRS_ID` */ FROM `INFORMATION_SCHEMA`.`COLUMNS` WHERE `TABLE_NAME` = 't_test_srs_id_column';
+COLUMN_NAME	COLUMN_TYPE	SRS_ID
+id	int(11)	NULL
+c1	point	4326
+c2	geometry	4326
+c3	polygon	4326
+c4	geometry	NULL
+drop table t_test_srs_id_column;
