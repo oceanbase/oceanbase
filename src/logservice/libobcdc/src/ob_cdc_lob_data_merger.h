@@ -37,7 +37,7 @@ public:
   virtual void mark_stop_flag() = 0;
 
   virtual int push(ObLobDataOutRowCtxList &task, volatile bool &stop_flag) = 0;
-  virtual void get_task_count(int64_t &log_entry_task_count) const = 0;
+  virtual void get_task_count(int64_t &lob_data_list_task_count) const = 0;
   virtual void print_stat_info() = 0;
 };
 
