@@ -23,9 +23,8 @@ namespace oceanbase
 namespace common
 {
 
-// Transform 64-byte mask to 64-bit mask
-
 OB_DECLARE_AVX512_SPECIFIC_CODE(
+// Transform 64-byte mask to 64-bit mask
 inline static uint64_t bytes64mask_to_bits64mask(
     const uint8_t *bytes64,
     const bool need_flip = false)
@@ -36,6 +35,77 @@ inline static uint64_t bytes64mask_to_bits64mask(
     res = ~res;
   }
   return res;
+}
+
+inline static void bitmap_get_condensed_index(
+    const uint8_t *data,
+    const int32_t size,
+    int32_t *row_ids,
+    int32_t &row_count)
+{
+  int32_t offset = 0;
+  const uint8_t *pos = data;
+  const uint8_t *end_pos = data + size;
+  const uint8_t *end_pos64 = pos + size / 64 * 64;
+  row_count = 0;
+  for (; pos < end_pos64; pos += 64) {
+    uint64_t mask64 = bytes64mask_to_bits64mask(pos);
+    __m512i start_index = _mm512_set1_epi32(offset);
+    __m512i base_index = _mm512_setr_epi32(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
+    base_index = _mm512_add_epi32(base_index, start_index);
+    uint16_t mask16 = mask64 & 0xFFFF;
+    _mm512_mask_compressstoreu_epi32(row_ids + row_count, mask16, base_index);
+    row_count += popcount64(mask16);
+    const __m512i constant16 = _mm512_set1_epi32(16);
+    base_index = _mm512_add_epi32(base_index, constant16);
+    mask16 = (mask64 >> 16) & 0xFFFF;
+    _mm512_mask_compressstoreu_epi32(row_ids + row_count, mask16, base_index);
+    row_count += popcount64(mask16);
+    base_index = _mm512_add_epi32(base_index, constant16);
+    mask16 = (mask64 >> 32) & 0xFFFF;
+    _mm512_mask_compressstoreu_epi32(row_ids + row_count, mask16, base_index);
+    row_count += popcount64(mask16);
+    base_index = _mm512_add_epi32(base_index, constant16);
+    mask16 = mask64 >> 48;
+    _mm512_mask_compressstoreu_epi32(row_ids + row_count, mask16, base_index);
+    row_count += popcount64(mask16);
+
+    offset += 64;
+  }
+  while (pos < end_pos) {
+    if (*pos) {
+      row_ids[row_count++] = pos - data;
+    }
+    ++pos;
+  }
+}
+
+inline static void uint64_mask_to_bits_mask(
+    const uint64_t *data,
+    const int64_t size,
+    uint8_t *skip)
+{
+  const uint64_t *pos = data;
+  const uint64_t *end_pos = data + size;
+  const uint64_t *end_pos64 = data + size / 8 * 8;
+  uint64_t i = 0;
+  const __m512i zero64 = _mm512_setzero_si512();
+
+  while (pos < end_pos64) {
+    __m512i v = _mm512_loadu_si512(pos);
+    skip[i++] |= _mm512_cmp_epi64_mask(v, zero64, 0);
+    pos += 8;
+  }
+
+  uint64_t *skip64 = reinterpret_cast<uint64_t *>(skip);
+
+  while (pos < end_pos) {
+    if (*pos == 0) {
+      i = pos - data;
+      skip64[i / 64] |= 1LU << (i % 64);
+    }
+    ++pos;
+  }
 }
 )
 
@@ -229,7 +299,7 @@ inline static void bitmap_next_valid_idx(
 }
 
 inline static void bitmap_get_row_ids(
-    int64_t *row_ids,
+    int32_t *row_ids,
     int64_t &row_count,
     int64_t &from,
     const int64_t to,
@@ -260,6 +330,32 @@ inline static void bitmap_get_row_ids(
     row_count = limit;
   } else {
     from = to;
+  }
+}
+
+inline static void bitmap_get_condensed_index(
+    const uint8_t *data,
+    const int32_t size,
+    int32_t *row_ids,
+    int32_t &row_count)
+{
+  const uint8_t *pos = data;
+  const uint8_t *end_pos = data + size;
+  const uint8_t *end_pos64 = pos + size / 64 * 64;
+  row_count = 0;
+  for (; pos < end_pos64; pos += 64) {
+    uint64_t mask = bytes64mask_to_bits64mask(pos);
+    while (mask) {
+      uint64_t index = countr_zero64(mask);
+      mask = blsr64(mask);
+      row_ids[row_count++] = pos - data + index;
+    }
+  }
+  while (pos < end_pos) {
+    if (*pos) {
+      row_ids[row_count++] = pos - data;
+    }
+    ++pos;
   }
 }
 
@@ -304,36 +400,6 @@ inline static void uint64_mask_to_bits_mask(
   const uint64_t *pos = data;
   const uint64_t *end_pos = data + size;
   uint64_t i = 0;
-  uint64_t *skip64 = reinterpret_cast<uint64_t *>(skip);
-
-  while (pos < end_pos) {
-    if (*pos == 0) {
-      i = pos - data;
-      skip64[i / 64] |= 1LU << (i % 64);
-    }
-    ++pos;
-  }
-}
-)
-
-OB_DECLARE_AVX512_SPECIFIC_CODE(
-inline static void uint64_mask_to_bits_mask(
-    const uint64_t *data,
-    const int64_t size,
-    uint8_t *skip)
-{
-  const uint64_t *pos = data;
-  const uint64_t *end_pos = data + size;
-  const uint64_t *end_pos64 = data + size / 8 * 8;
-  uint64_t i = 0;
-  const __m512i zero64 = _mm512_setzero_si512();
-
-  while (pos < end_pos64) {
-    __m512i v = _mm512_loadu_si512(pos);
-    skip[i++] |= _mm512_cmp_epi64_mask(v, zero64, 0);
-    pos += 8;
-  }
-
   uint64_t *skip64 = reinterpret_cast<uint64_t *>(skip);
 
   while (pos < end_pos) {
@@ -398,8 +464,8 @@ struct SelectOpImpl
 };
 
 ObBitmap::ObBitmap(ObIAllocator &allocator)
-    : is_inited_(false), valid_bytes_(0), capacity_(0),
-      data_(nullptr), allocator_(allocator)
+  : is_inited_(false), valid_bytes_(0), capacity_(0), data_(nullptr),
+    condensed_cnt_(-1), condensed_idx_(nullptr), allocator_(allocator)
 {}
 
 ObBitmap::~ObBitmap()
@@ -473,7 +539,7 @@ int64_t ObBitmap::next_valid_idx(const int64_t start,
 }
 
 int ObBitmap::get_row_ids(
-    int64_t *row_ids,
+    int32_t *row_ids,
     int64_t &row_count,
     int64_t &from,
     const int64_t to,
@@ -481,9 +547,10 @@ int ObBitmap::get_row_ids(
     const int64_t id_offset) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(from < 0 || to > valid_bytes_ || to < from || limit <= 0)) {
+  if (OB_UNLIKELY(from < 0 || to > valid_bytes_ || to < from || limit <= 0 || from < id_offset)) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN, "Invalid from or to when get row ids", K(ret), K(from), K(to), K_(valid_bytes), K(limit));
+    LIB_LOG(WARN, "Invalid from or to when get row ids", K(ret), K(from), K(to), K_(valid_bytes),
+            K(limit), K(id_offset));
 #if OB_USE_MULTITARGET_CODE
   } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
     common::specific::avx2::bitmap_get_row_ids(row_ids, row_count, from, to, limit, id_offset, data_);
@@ -625,15 +692,14 @@ int ObBitmap::reserve(size_type capacity)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LIB_LOG(WARN, "Failed to alloc memory for bitmap", K(ret), K(new_size));
     } else {
-      if (nullptr != data_) {
-        allocator_.free(data_);
-      }
+      destroy();
       capacity_ = new_size;
       data_ = new_data;
     }
   }
   if (OB_SUCC(ret)) {
     valid_bytes_ = capacity;
+    condensed_cnt_ = -1;
   }
   return ret;
 }
@@ -680,6 +746,7 @@ void ObBitmap::reuse(const bool is_all_true)
   } else {
     MEMSET(static_cast<void*>(data_), 0, valid_bytes_);
   }
+  condensed_cnt_ = -1;
 }
 
 int ObBitmap::set_bitmap_batch(const int64_t offset, const int64_t count, const bool value)
@@ -820,6 +887,33 @@ void ObBitmap::filter(
 #if OB_USE_MULTITARGET_CODE
   }
 #endif
+}
+
+int ObBitmap::generate_condensed_index()
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == condensed_idx_) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = allocator_.alloc(sizeof(int32_t) * capacity()))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LIB_LOG(WARN, "fail to alloc row_ids", K(ret), K(capacity()));
+    } else {
+      condensed_idx_ = reinterpret_cast<int32_t *>(buf);
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+#if OB_USE_MULTITARGET_CODE
+  // enable when avx512 is more efficient
+  //} else if (common::is_arch_supported(ObTargetArch::AVX512)) {
+  //  common::specific::avx512::bitmap_get_condensed_index(data_, valid_bytes_, condensed_idx_, condensed_cnt_);
+  } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
+    common::specific::avx2::bitmap_get_condensed_index(data_, valid_bytes_, condensed_idx_, condensed_cnt_);
+#endif
+  } else {
+    common::specific::normal::bitmap_get_condensed_index(data_, valid_bytes_, condensed_idx_, condensed_cnt_);
+  }
+  return ret;
 }
 
 } //end namespace oceanbase

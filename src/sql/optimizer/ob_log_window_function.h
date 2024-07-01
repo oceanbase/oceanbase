@@ -38,7 +38,9 @@ namespace sql
         rd_sort_keys_cnt_(0),
         rd_pby_sort_cnt_(0),
         wf_aggr_status_expr_(NULL),
-        origin_sort_card_(0.0)
+        origin_sort_card_(0.0),
+        input_rows_mem_bound_ratio_(0.0),
+        estimated_part_cnt_(0.0)
     {}
     virtual ~ObLogWindowFunction() {}
     virtual int get_explain_name_internal(char *buf,
@@ -113,6 +115,12 @@ namespace sql
     int add_win_dist_options(const ObLogicalOperator *op,
                              const ObIArray<ObWinFunRawExpr*> &all_win_funcs,
                              ObWindowDistHint &win_dist_hint);
+    double get_input_rows_mem_bound_ratio() const { return input_rows_mem_bound_ratio_; }
+    double get_estimated_part_cnt() const { return estimated_part_cnt_; }
+    int est_input_rows_mem_bound_ratio();
+    int est_window_function_part_cnt();
+    virtual int compute_property() override;
+    virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   private:
     ObSEArray<ObWinFunRawExpr *, 4, common::ModulePageAllocator, true> win_exprs_;
 
@@ -155,6 +163,9 @@ namespace sql
 
     //for est_cost when use topn sort
     double origin_sort_card_;
+    // for auto memory management
+    double input_rows_mem_bound_ratio_;
+    double estimated_part_cnt_;
   };
 }
 }

@@ -544,7 +544,7 @@ int ObTableScanIterator::sort_sample_ranges()
     STORAGE_LOG(WARN, "Unexpected error for invalid datum utils", K(ret), KPC(scan_param_->table_param_));
   } else if (sample_ranges_.count() > 1 && scan_param_->scan_flag_.is_ordered_scan()) {
     ObDatumComparor<ObDatumRange> comparor(datum_utils, ret, scan_param_->scan_flag_.is_reverse_scan());
-    std::sort(sample_ranges_.begin(), sample_ranges_.end(), comparor);
+    lib::ob_sort(sample_ranges_.begin(), sample_ranges_.end(), comparor);
     if (OB_FAIL(ret)) {
       STORAGE_LOG(WARN, "Failed to sort datum ranges", K(ret), K_(sample_ranges));
     }

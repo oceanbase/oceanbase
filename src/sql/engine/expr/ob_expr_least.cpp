@@ -560,7 +560,8 @@ int ObExprLeastGreatest::calc_oracle(const ObExpr &expr, ObEvalCtx &ctx,
       }
     }
     ObDatum *res_datum = nullptr;
-    if (OB_FAIL(expr.args_[res_idx]->eval(ctx, res_datum))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(expr.args_[res_idx]->eval(ctx, res_datum))) {
       LOG_WARN("eval param value failed", K(ret), K(res_idx));
     } else {
       ObDatum &dst_datum = static_cast<ObDatum &>(expr_datum);

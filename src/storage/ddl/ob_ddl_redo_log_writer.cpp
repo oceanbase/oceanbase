@@ -1232,6 +1232,7 @@ int ObDDLRedoLogWriter::wait_macro_block_log_finish(
     const blocksstable::MacroBlockId &macro_block_id)
 {
   int ret = OB_SUCCESS;
+  int64_t wait_timeout_us = MAX(ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT, GCONF._data_storage_io_timeout * 1);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl redo log writer has not been inited", K(ret));
@@ -1239,7 +1240,7 @@ int ObDDLRedoLogWriter::wait_macro_block_log_finish(
     // remote write no need to wait local handle
   } else if (OB_UNLIKELY(!ddl_redo_handle_.is_valid())) {
     // no redo log has been written yet
-  } else if (OB_FAIL(ddl_redo_handle_.wait())) {
+  } else if (OB_FAIL(ddl_redo_handle_.wait(wait_timeout_us))) {
     LOG_WARN("fail to wait io finish", K(ret));
   } else if (OB_FAIL(ddl_redo_handle_.cb_->get_ret_code())) {
     LOG_WARN("ddl redo callback executed failed", K(ret));
@@ -1573,7 +1574,7 @@ bool ObDDLRedoLogWriterCallback::is_column_group_info_valid() const
   return table_key_.is_column_store_sstable() && row_id_offset_ >= 0;
 }
 
-int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
+int ObDDLRedoLogWriterCallback::write(ObMacroBlockHandle &macro_handle,
                                       const ObLogicMacroBlockId &logic_id,
                                       char *buf,
                                       const int64_t buf_len,

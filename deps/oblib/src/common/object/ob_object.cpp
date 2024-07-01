@@ -1311,7 +1311,8 @@ int ObObj::build_not_strict_default_value(int16_t precision)
     case ObTextType:
     case ObMediumTextType:
     case ObLongTextType:
-    case ObGeometryType: {
+    case ObGeometryType:
+    case ObRoaringBitmapType:{
         ObString null_str;
         set_string(data_type, null_str);
         meta_.set_inrow();
@@ -1383,7 +1384,7 @@ int ObObj::build_not_strict_default_value(int16_t precision)
 int ObObj::deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (ob_is_string_type(src.get_type()) || ob_is_json(src.get_type()) || ob_is_geometry(src.get_type())) {
+  if (ob_is_string_type(src.get_type()) || ob_is_json(src.get_type()) || ob_is_geometry(src.get_type()) || ob_is_roaringbitmap(src.get_type())) {
     ObString src_str = src.get_string();
     if (OB_UNLIKELY(size < (pos + src_str.length()))) {
       ret = OB_BUF_NOT_ENOUGH;
@@ -1470,6 +1471,7 @@ void* ObObj::get_deep_copy_obj_ptr()
   if (ob_is_string_type(this->get_type())
       || ob_is_json(this->get_type())
       || ob_is_geometry(this->get_type())
+      || ob_is_roaringbitmap(this->get_type())
       || ob_is_user_defined_sql_type(this->get_type())
       || ob_is_collection_sql_type(this->get_type())) {
     // val_len_ == 0 is empty string, and it may point to unexpected address
@@ -1782,7 +1784,8 @@ int ObObj::apply(const ObObj &mutation)
                       && org_type != mut_type
                       && !(ObLongTextType == org_type && ObLobType == mut_type)
                       && !(ObJsonType == org_type && ObLobType == mut_type)
-                      && !(ObGeometryType == org_type && ObLobType == mut_type)))) {
+                      && !(ObGeometryType == org_type && ObLobType == mut_type)
+                      && !(ObRoaringBitmapType == org_type && ObLobType == mut_type)))) {
     _OB_LOG(WARN, "type not coincident or invalid type[this->type:%d,mutation.type:%d]",
               org_type, mut_type);
     ret = OB_INVALID_ARGUMENT;
@@ -1899,8 +1902,12 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObJsonType),          // 47, json
   DEF_FUNC_ENTRY(ObGeometryType),      // 48, geometry TODO!!!!!
   DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
-  DEF_FUNC_ENTRY(ObDecimalIntType),     // 50, decimal int
+  DEF_FUNC_ENTRY(ObDecimalIntType),    // 50, decimal int
   DEF_FUNC_ENTRY(ObCollectionSQLType), // 51, collection
+  DEF_FUNC_ENTRY(ObNullType),          // 52, mysql date
+  DEF_FUNC_ENTRY(ObNullType),          // 53, mysql datetime
+  DEF_FUNC_ENTRY(ObRoaringBitmapType), // 54, roaringbitmap
+
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)
@@ -2014,7 +2021,7 @@ int ObObj::print_smart(char *buf, int64_t buf_len, int64_t &pos) const
     if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <=0)) {
       ret = OB_INVALID_ARGUMENT;
     } else if (!(meta_.is_string_or_lob_locator_type() && ObHexStringType != meta_.get_type())
-               && (!meta_.is_json()) && (!meta_.is_geometry())) {
+               && (!meta_.is_json()) && (!meta_.is_geometry()) && (!meta_.is_roaringbitmap())) {
       ret = OBJ_FUNCS[meta_.get_type()].print_json(*this, buf, buf_len, pos, params);
     } else if (OB_FAIL(is_printable(get_string_ptr(), get_string_len(), can_print))) {
     } else if (can_print) {
@@ -2357,6 +2364,25 @@ int ObObj::convert_string_value_charset(ObCharsetType charset_type, ObIAllocator
           set_collation_type(collation_type);
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObObj::get_real_param_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  count = 1;
+  if (ObExtendType == meta_.get_type()) {
+    const ObSqlArrayObj *array_obj = NULL;
+    if (OB_ISNULL(array_obj = reinterpret_cast<const ObSqlArrayObj*>(v_.ext_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(v_.ext_));
+    } else if (array_obj->count_ < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected group_idx", K(ret), K(array_obj->count_));
+    } else {
+      count = array_obj->count_;
     }
   }
   return ret;

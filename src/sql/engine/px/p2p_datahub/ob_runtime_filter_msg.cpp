@@ -581,7 +581,7 @@ int ObRFBloomFilterMsg::might_contain(const ObExpr &expr,
         }
         filter_ctx.check_count_++;
         res.set_int(is_match ? 1 : 0);
-        ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+        filter_ctx.collect_sample_info(!is_match, 1);
       }
     }
   }
@@ -656,7 +656,7 @@ int ObRFBloomFilterMsg::might_contain_batch(
       filter_ctx.filter_count_ += filter_count;
       filter_ctx.check_count_ += total_count;
       filter_ctx.total_count_ += total_count;
-      ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+      filter_ctx.collect_sample_info(filter_count, total_count);
     }
   }
   return ret;
@@ -755,8 +755,26 @@ int ObRFBloomFilterMsg::fill_vec_result(ResVec *res_vec, const ObBitVector &skip
 {
   int ret = OB_SUCCESS;
   bool is_match = true;
-  const int64_t is_match_payload = 1; // for VEC_FIXED set set_payload, always 1
-  if (OB_FAIL(ObBitVector::flip_foreach(
+  static const int64_t is_match_payload = 1; // for set_payload, always 1
+  if (bound.get_all_rows_active()) {
+    for (int64_t i = bound.start(); i < bound.end(); ++i) {
+      (void)bloom_filter_.prefetch_bits_block(hash_values[i]);
+    }
+    for (int64_t i = bound.start(); i < bound.end(); ++i) {
+      (void)bloom_filter_.might_contain(hash_values[i], is_match);
+      if (is_match) {
+        if (ResFormat == VEC_FIXED) {
+          res_vec->set_payload(i, &is_match_payload, sizeof(int64_t));
+        } else {
+          res_vec->set_int(i, is_match_payload);
+        }
+      } else {
+        // already set not match in preset_not_match
+        filter_count += 1;
+      }
+    }
+    total_count += bound.end() - bound.start();
+  } else if (OB_FAIL(ObBitVector::flip_foreach(
           skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
             bloom_filter_.prefetch_bits_block(hash_values[idx]);
             return OB_SUCCESS;
@@ -798,13 +816,6 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
   uint64_t seed = ObExprJoinFilter::JOIN_FILTER_SEED;
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   uint64_t *hash_values = filter_ctx.right_hash_vals_;
-  VectorFormat res_format = expr.get_format(ctx);
-  if (VEC_FIXED == res_format) {
-    IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-    if (OB_FAIL(preset_not_match(res_vec, bound))) {
-      LOG_WARN("failed to preset_not_match", K(ret));
-    }
-  }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
     ObExpr *e = expr.args_[i];
@@ -820,14 +831,9 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (VEC_UNIFORM == res_format) {
-    IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-    ret = fill_vec_result<VEC_UNIFORM, IntegerUniVec>(res_vec, skip, bound, hash_values,
-                                                      total_count, filter_count);
-  } else if (VEC_FIXED == res_format) {
-    IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-    ret = fill_vec_result<VEC_FIXED, IntegerFixedVec>(res_vec, skip, bound, hash_values,
-                                                      total_count, filter_count);
+  } else {
+    ret = bloom_filter_.might_contain_vector(expr, ctx, skip, bound, hash_values, total_count,
+                                             filter_count);
   }
   if (OB_FAIL(ret)) {
   } else {
@@ -835,7 +841,7 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
     filter_ctx.check_count_ += total_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.filter_count_ += filter_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -947,14 +953,9 @@ int ObRFBloomFilterMsg::insert_by_row_vector(
           arg_vec->murmur_hash_v3(*expr, batch_hash_values, *(child_brs->skip_), bound, is_batch_seed ? batch_hash_values : &seed, is_batch_seed);
         }
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < child_brs->size_; ++i) {
-        if (child_brs->skip_->at(i)) {
-          continue;
-        } else if (OB_FAIL(bloom_filter_.put(batch_hash_values[i]))) {
-          LOG_WARN("fail to put  hash value to px bloom filter", K(ret));
-        } else if (is_empty_) {
-          is_empty_ = false;
-        }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(bloom_filter_.put_batch(batch_hash_values, bound, *child_brs->skip_, is_empty_))) {
+        LOG_WARN("failed to push hash value to px bloom filter");
       }
     }
   }
@@ -1552,7 +1553,7 @@ int ObRFRangeFilterMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -1608,7 +1609,7 @@ int ObRFRangeFilterMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -1971,7 +1972,7 @@ int ObRFInFilterMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -2051,7 +2052,7 @@ int ObRFInFilterMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }

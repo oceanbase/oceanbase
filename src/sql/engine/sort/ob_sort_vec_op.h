@@ -19,11 +19,13 @@
 #include "sql/engine/ob_operator.h"
 #include "sql/engine/sort/ob_sort_basic_info.h"
 #include "sql/engine/sort/ob_sort_vec_op_provider.h"
+#include "sql/engine/px/p2p_datahub/ob_pushdown_topn_filter_msg.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
 class ObSortVecSpec : public ObOpSpec
 {
   OB_UNIS_VERSION_V(1);
@@ -31,11 +33,12 @@ class ObSortVecSpec : public ObOpSpec
 public:
   ObSortVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
+  inline bool enable_pd_topn_filter() const { return pd_topn_filter_info_.enabled_; }
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(topn_expr), K_(topk_limit_expr),
                        K_(topk_offset_expr), K_(prefix_pos), K_(minimum_row_count),
                        K_(topk_precision), K_(prefix_pos), K_(is_local_merge_sort),
                        K_(prescan_enabled), K_(enable_encode_sortkey_opt), K_(has_addon),
-                       K_(part_cnt), K_(compress_type));
+                       K_(part_cnt), K_(compress_type), K_(pd_topn_filter_info));
 
 public:
   ObExpr *topn_expr_;
@@ -57,7 +60,8 @@ public:
   bool has_addon_;
   // if use, all_exprs_ is : hash(part_by) + part_by + order_by.
   int64_t part_cnt_;
-  ObCompressorType compress_type_;
+  // pushdown topn filter: pushdown the heap top data to table scan for filtering out data early.
+  ObPushDownTopNFilterInfo pd_topn_filter_info_;
 };
 
 class ObSortVecOp : public ObOperator
@@ -96,6 +100,7 @@ private:
   int init_temp_row_store(const common::ObIArray<ObExpr *> &exprs, const int64_t batch_size,
                           const ObMemAttr &mem_attr, const bool is_sort_key, ObCompressorType compress_type,
                           ObTempRowStore &row_store);
+  void reset_pd_topn_filter_expr_ctx();
 
 private:
   ObSortVecOpProvider sort_op_provider_;

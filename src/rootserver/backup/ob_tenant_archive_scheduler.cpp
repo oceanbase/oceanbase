@@ -182,7 +182,7 @@ static int record_piece_info(const ObDestRoundCheckpointer::GeneratedPiece &piec
         single_ls_desc.round_id_, single_ls_desc.piece_id_, single_ls_desc.ls_id_,
         single_ls_desc.filelist_))) {
         LOG_WARN("failed to get archive file list", K(ret), K(single_ls_desc));
-      } else if (OB_FALSE_IT(std::sort(single_ls_desc.filelist_.begin(), single_ls_desc.filelist_.end()))) {
+      } else if (OB_FALSE_IT(lib::ob_sort(single_ls_desc.filelist_.begin(), single_ls_desc.filelist_.end()))) {
       } else if (OB_FAIL(piece_info_desc.filelist_.push_back(single_ls_desc))) {
         LOG_WARN("failed to push backup single_ls_desc", K(ret), K(single_ls_desc), K(piece_info_desc));
       } else if (OB_FAIL(store.is_single_ls_info_file_exist(single_ls_desc.dest_id_, single_ls_desc.round_id_, single_ls_desc.piece_id_, single_ls_desc.ls_id_, is_exist))) {
@@ -533,6 +533,9 @@ int ObArchiveHandler::check_can_do_archive(bool &can) const
     LOG_WARN("failed to get schema guard", K(ret), K_(tenant_id));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
     LOG_WARN("failed to get tenant info", K(ret), K_(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    can = false;
+    LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), K_(tenant_id));
   } else if (tenant_schema->is_normal()) {
     can = true;
   } else if (tenant_schema->is_creating()) {

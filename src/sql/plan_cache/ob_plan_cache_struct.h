@@ -56,7 +56,8 @@ struct ObPlanCacheKey : public ObILibCacheKey
         db_id_(common::OB_INVALID_ID),
         sessid_(0),
         mode_(PC_TEXT_MODE),
-        flag_(0) {}
+        flag_(0),
+        sys_var_config_hash_val_(0) {}
 
   inline void reset()
   {
@@ -69,6 +70,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
     config_str_.reset();
     flag_ = 0;
     namespace_ = NS_INVALID;
+    sys_var_config_hash_val_ = 0;
   }
 
   virtual inline int deep_copy(common::ObIAllocator &allocator,
@@ -93,6 +95,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
       mode_ = pc_key.mode_;
       namespace_ = pc_key.namespace_;
       flag_ = pc_key.flag_;
+      sys_var_config_hash_val_ = pc_key.sys_var_config_hash_val_;
     }
     return ret;
   }
@@ -111,14 +114,14 @@ struct ObPlanCacheKey : public ObILibCacheKey
   }
   virtual inline uint64_t hash() const
   {
-    uint64_t hash_ret = name_.hash();
+    int ret = common::OB_SUCCESS;
+    uint64_t hash_ret = sys_var_config_hash_val_;
+    hash_ret = name_.hash(hash_ret);
     hash_ret = common::murmurhash(&key_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&db_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
     hash_ret = common::murmurhash(&mode_, sizeof(PlanCacheMode), hash_ret);
     hash_ret = common::murmurhash(&flag_, sizeof(flag_), hash_ret);
-    hash_ret = sys_vars_str_.hash(hash_ret);
-    hash_ret = config_str_.hash(hash_ret);
     hash_ret = common::murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
 
     return hash_ret;
@@ -135,7 +138,8 @@ struct ObPlanCacheKey : public ObILibCacheKey
                    sys_vars_str_ == pc_key.sys_vars_str_ &&
                    config_str_ == pc_key.config_str_ &&
                    flag_ == pc_key.flag_ &&
-                   namespace_ == pc_key.namespace_;
+                   namespace_ == pc_key.namespace_&&
+                   sys_var_config_hash_val_ == pc_key.sys_var_config_hash_val_;
 
     return cmp_ret;
   }
@@ -170,6 +174,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
       uint16_t reserved_ : 13; // reserved
     };
   };
+  uint64_t sys_var_config_hash_val_;
 };
 
 //记录快速化参数后不需要扣参数的原始字符串及相关信息

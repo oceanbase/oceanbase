@@ -14,6 +14,7 @@
 #include <thread>
 #define private public
 #define protected public
+#include "storage/tx/ob_committer_define.h"
 #include "storage/tx/ob_multi_data_source.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"

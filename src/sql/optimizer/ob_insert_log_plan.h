@@ -28,7 +28,8 @@ class ObInsertLogPlan: public ObDelUpdLogPlan
 public:
   ObInsertLogPlan(ObOptimizerContext &ctx, const ObInsertStmt *insert_stmt)
       : ObDelUpdLogPlan(ctx, insert_stmt),
-        is_direct_insert_(false)
+        is_direct_insert_(false),
+        is_insert_overwrite_(false)
   { }
   virtual ~ObInsertLogPlan()
   { }
@@ -50,6 +51,8 @@ public:
   { return insert_up_index_upd_infos_; }
 
   bool is_direct_insert() const { return is_direct_insert_; }
+  void set_is_insert_overwrite(const bool is_insert_overwrite) { is_insert_overwrite_ = is_insert_overwrite; }
+  bool is_insert_overwrite() const { return is_insert_overwrite_; }
 protected:
   int allocate_insert_values_as_top(ObLogicalOperator *&top);
   int candi_allocate_insert(OSGShareInfo *osg_info);
@@ -127,6 +130,7 @@ protected:
   int check_contain_non_onetime_expr(const ObRawExpr *expr, bool &contain);
   int check_contain_non_onetime_expr(const ObIArray<ObRawExpr *> &exprs, bool &contain);
 private:
+  int get_index_part_ids(const ObInsertTableInfo& table_info, const ObTableSchema *&data_table_schema, const ObTableSchema *&index_schema, ObIArray<uint64_t> &index_part_ids);
   int generate_osg_share_info(OSGShareInfo *&info);
   int check_need_online_stats_gather(bool &need_osg);
   int set_is_direct_insert();
@@ -136,6 +140,7 @@ private:
   common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> insert_up_index_upd_infos_;
   common::ObSEArray<ObUniqueConstraintInfo, 8, common::ModulePageAllocator, true> uk_constraint_infos_;
   bool is_direct_insert_;
+  bool is_insert_overwrite_;
 };
 }
 }

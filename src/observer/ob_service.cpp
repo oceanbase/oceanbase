@@ -156,8 +156,8 @@ void ObSchemaReleaseTimeTask::runTimerTask()
   } else if (OB_FAIL(schema_updater_->try_release_schema())) {
     LOG_WARN("ObSchemaReleaseTimeTask failed", K(ret));
   }
-  // we should ignore error to schedule task
   if (OB_FAIL(schedule_())) {
+    // overwrite ret
     LOG_WARN("fail to schedule ObSchemaReleaseTimeTask in runTimerTask", KR(ret));
   }
 }
@@ -1691,13 +1691,13 @@ int ObService::do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg)
       LOG_WARN("can not add ls which local ls is exist", KR(ret), K(arg), K(is_exist));
     } else {
       migration_op_arg.cluster_id_ = GCONF.cluster_id;
-      migration_op_arg.data_src_ = arg.data_source_;
+      migration_op_arg.data_src_ = arg.force_data_source_;
       migration_op_arg.dst_ = arg.dst_;
       migration_op_arg.ls_id_ = arg.ls_id_;
       //TODO(muwei.ym) need check priority in 4.2 RC3
       migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
       migration_op_arg.paxos_replica_number_ = arg.new_paxos_replica_number_;
-      migration_op_arg.src_ = arg.data_source_;
+      migration_op_arg.src_ = arg.dst_;
       migration_op_arg.type_ = ObMigrationOpType::ADD_LS_OP;
       if (OB_FAIL(ls_service->create_ls_for_ha(arg.task_id_, migration_op_arg))) {
         LOG_WARN("failed to create ls for ha", KR(ret), K(arg), K(migration_op_arg));
@@ -3274,7 +3274,9 @@ int ObService::update_tenant_info_cache(
     if (OB_ISNULL(tenant_info_loader)) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "tenant_info_loader should not be null", KR(ret));
-    } else if (OB_FAIL(tenant_info_loader->update_tenant_info_cache(arg.get_ora_rowscn(), arg.get_tenant_info()))) {
+    } else if (OB_FAIL(tenant_info_loader->update_tenant_info_cache(
+                   arg.get_ora_rowscn(), arg.get_tenant_info(), arg.get_finish_data_version(),
+                   arg.get_data_version_barrier_scn()))) {
       COMMON_LOG(WARN, "update_tenant_info_cache failed", KR(ret), K(arg));
     } else if (OB_FAIL(result.init(arg.get_tenant_id()))) {
       LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()));

@@ -138,7 +138,8 @@ public:
                && !ob_is_lob_locator(static_cast<ObObjType>(type_))
                && !ob_is_raw(static_cast<ObObjType>(type_))
                && !ob_is_enum_or_set_type(static_cast<ObObjType>(type_))
-               && !ob_is_geometry(static_cast<ObObjType>(type_))) {
+               && !ob_is_geometry(static_cast<ObObjType>(type_))
+               && !ob_is_roaringbitmap(static_cast<ObObjType>(type_))) {
       set_collation_level(CS_LEVEL_NUMERIC);
       set_collation_type(CS_TYPE_BINARY);
     } else if (ObUserDefinedSQLType == type_ ||
@@ -230,6 +231,14 @@ public:
   OB_INLINE void set_geometry()
   {
     type_ = static_cast<uint8_t>(ObGeometryType);
+    lob_scale_.set_in_row();
+    set_collation_level(CS_LEVEL_IMPLICIT);
+    set_collation_type(CS_TYPE_BINARY);
+  }
+
+  OB_INLINE void set_roaringbitmap()
+  {
+    type_ = static_cast<uint8_t>(ObRoaringBitmapType);
     lob_scale_.set_in_row();
     set_collation_level(CS_LEVEL_IMPLICIT);
     set_collation_type(CS_TYPE_BINARY);
@@ -350,6 +359,7 @@ public:
   { return ob_is_large_text(get_type())
            || ob_is_json_tc(get_type())
            || ob_is_geometry_tc(get_type())
+           || ob_is_roaringbitmap_tc(get_type())
            || ob_is_collection_sql_type(get_type()); }
   OB_INLINE bool is_lob() const { return ob_is_text_tc(get_type()); }
   OB_INLINE bool is_inrow() const { return is_lob() && lob_scale_.is_in_row(); }
@@ -363,6 +373,10 @@ public:
   OB_INLINE bool is_geometry() const { return type_ == static_cast<uint8_t>(ObGeometryType); }
   OB_INLINE bool is_geometry_inrow() const { return is_geometry() && lob_scale_.is_in_row(); }
   OB_INLINE bool is_geometry_outrow() const { return is_geometry() && lob_scale_.is_out_row(); }
+
+  OB_INLINE bool is_roaringbitmap() const { return type_ == static_cast<uint8_t>(ObRoaringBitmapType); }
+  OB_INLINE bool is_roaringbitmap_inrow() const { return is_roaringbitmap() && lob_scale_.is_in_row(); }
+  OB_INLINE bool is_roaringbitmap_outrow() const { return is_roaringbitmap() && lob_scale_.is_out_row(); }
 
   // combination of above functions.
   OB_INLINE bool is_varbinary_or_binary() const { return is_varbinary() || is_binary(); }
@@ -540,10 +554,10 @@ struct ObLobDataOutRowCtx
   };
   ObLobDataOutRowCtx()
     : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
-      del_seq_no_cnt_(0), modified_len_(0), first_meta_offset_(0), chunk_size_(0)
+      del_seq_no_cnt_(0), modified_len_(0), first_meta_offset_(0), chunk_size_(0), reserved_(0)
   {}
   TO_STRING_KV(K_(is_full), K_(op), K_(offset), K_(check_sum), K_(seq_no_st), K_(seq_no_cnt),
-    K_(del_seq_no_cnt), K_(modified_len), K_(first_meta_offset), K_(chunk_size));
+    K_(del_seq_no_cnt), K_(modified_len), K_(first_meta_offset), K_(chunk_size), K_(reserved));
   uint64_t is_full_ : 1;
   uint64_t op_ : 8;
   uint64_t offset_ : 55;
@@ -554,6 +568,9 @@ struct ObLobDataOutRowCtx
   uint64_t modified_len_;
   uint32_t first_meta_offset_ : 24;
   uint32_t chunk_size_ : 8;   // unit is kb
+  // this is 8 bytes aligned, so left 4 byte
+  // and this field is added later when bug is found, and may be a random value
+  uint32_t reserved_;
 
   bool is_diff() const { return OpType::DIFF == op_; }
   int64_t get_real_chunk_size() const;
@@ -976,6 +993,14 @@ public:
            (loc->is_valid()) && (loc->is_mem_loc_ == 0);
   }
 
+  OB_INLINE bool is_inrow_disk_lob_locator() const
+  {
+    // Notice: should be called only when ptr_ is not null
+    ObLobCommon *loc = reinterpret_cast<ObLobCommon *>(ptr_);
+    return has_lob_header_ && (loc != nullptr) && (size_ >= sizeof(ObLobCommon)) &&
+           (loc->is_valid()) && (loc->is_mem_loc_ == 0) && (loc->in_row_);
+  }
+
   OB_INLINE bool is_valid(bool is_assert = true) const
   {
     bool bret = true;
@@ -1299,7 +1324,7 @@ public:
     meta_.set_type_simple(meta.get_type());
     meta_.set_collation_type(meta.get_collation_type());
     if (ObCharType == get_type() || ObVarcharType == get_type() || ob_is_text_tc(get_type())
-        || ob_is_lob_locator(get_type()) || ob_is_json(get_type()) || ob_is_geometry(get_type())) {
+        || ob_is_lob_locator(get_type()) || ob_is_json(get_type()) || ob_is_geometry(get_type()) || ob_is_roaringbitmap(get_type())) {
       meta_.set_collation_level(ObCollationLevel::CS_LEVEL_IMPLICIT);
     } else {
       meta_.set_collation_level(meta.get_collation_level());
@@ -1328,6 +1353,7 @@ public:
       case ObLobType:
       case ObJsonType:
       case ObGeometryType:
+      case ObRoaringBitmapType:
       case ObRawType: {
         obj.meta_.set_collation_level(meta_.get_collation_level());
         obj.meta_.set_scale(meta_.get_scale());
@@ -1477,6 +1503,9 @@ public:
   void set_json_value(const ObObjType type, const char *ptr, const int32_t length);
   void set_geometry_value(const ObObjType type, const ObLobCommon *value, const int32_t length);
   void set_geometry_value(const ObObjType type, const char *ptr, const int32_t length);
+  void set_roaringbitmap_value(const ObObjType type, const ObLobCommon *value, const int32_t length);
+  void set_roaringbitmap_value(const ObObjType type, const char *ptr, const int32_t length);
+
   void set_lob_locator(const ObLobLocator &value);
   void set_lob_locator(const ObObjType type, const ObLobLocator &value);
   inline void set_inrow() { meta_.set_inrow(); }
@@ -1721,6 +1750,7 @@ public:
 
   OB_INLINE bool get_bool() const { return (0 != v_.int64_); }
   inline int64_t get_ext() const;
+  int get_real_param_count(int64_t &count) const;
   OB_INLINE int64_t get_unknown() const { return v_.unknown_; }
   OB_INLINE uint64_t get_bit() const { return v_.uint64_; }
   OB_INLINE uint64_t get_enum() const { return v_.uint64_; }
@@ -1854,6 +1884,9 @@ public:
   OB_INLINE bool is_geometry() const { return meta_.is_geometry(); }
   OB_INLINE bool is_geometry_inrow() const { return meta_.is_geometry_inrow(); }
   OB_INLINE bool is_geometry_outrow() const { return meta_.is_geometry_outrow(); }
+  OB_INLINE bool is_roaringbitmap() const { return meta_.is_roaringbitmap(); }
+  OB_INLINE bool is_roaringbitmap_inrow() const { return meta_.is_roaringbitmap_inrow(); }
+  OB_INLINE bool is_roaringbitmap_outrow() const { return meta_.is_roaringbitmap_outrow(); }
   OB_INLINE bool is_user_defined_sql_type() const { return meta_.is_user_defined_sql_type(); }
   OB_INLINE bool is_xml_sql_type() const {
     return meta_.is_user_defined_sql_type() && meta_.get_subschema_id() == ObXMLSqlType;
@@ -2784,7 +2817,17 @@ inline void ObObj::set_geometry_value(const ObObjType type, const char *ptr, con
   set_lob_value(type, ptr, length);
   meta_.set_collation_type(CS_TYPE_BINARY);
 }
+inline void ObObj::set_roaringbitmap_value(const ObObjType type, const ObLobCommon *value, const int32_t length)
+{
+  set_lob_value(type, value, length);
+  meta_.set_collation_type(CS_TYPE_BINARY);
+}
 
+inline void ObObj::set_roaringbitmap_value(const ObObjType type, const char *ptr, const int32_t length)
+{
+  set_lob_value(type, ptr, length);
+  meta_.set_collation_type(CS_TYPE_BINARY);
+}
 inline void ObObj::set_lob_locator(const ObLobLocator &value)
 {
   meta_.set_type(ObLobType);
@@ -2994,6 +3037,7 @@ inline bool ObObj::need_deep_copy()const
             || ob_is_lob_locator(meta_.get_type())
             || ob_is_json(meta_.get_type())
             || ob_is_geometry(meta_.get_type())
+            || ob_is_roaringbitmap(meta_.get_type())
             || ob_is_raw(meta_.get_type())
             || ob_is_user_defined_sql_type(meta_.get_type())
             || ob_is_collection_sql_type(meta_.get_type())
@@ -3627,7 +3671,8 @@ inline const void *ObObj::get_data_ptr() const
 {
   const void *ret = NULL;
   if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type()) || ob_is_json(get_type())
-      || ob_is_geometry(get_type()) || ob_is_user_defined_sql_type(get_type()) || ob_is_collection_sql_type(get_type())) {
+      || ob_is_geometry(get_type()) || ob_is_user_defined_sql_type(get_type()) || ob_is_collection_sql_type(get_type())
+      || ob_is_roaringbitmap(get_type())) {
     ret = const_cast<char *>(v_.string_);
   } else if (ob_is_number_tc(get_type())) {
     ret = const_cast<uint32_t *>(v_.nmb_digits_);
@@ -3644,7 +3689,8 @@ inline const void *ObObj::get_data_ptr() const
 inline void ObObj::set_data_ptr(void *data_ptr)
 {
   if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type()) || ob_is_json(get_type())
-      || ob_is_geometry(get_type()) || ob_is_user_defined_sql_type(get_type()) || ob_is_collection_sql_type(get_type())) {
+      || ob_is_geometry(get_type()) || ob_is_user_defined_sql_type(get_type()) || ob_is_collection_sql_type(get_type())
+      || ob_is_roaringbitmap(get_type())) {
     v_.string_ = static_cast<char*>(data_ptr);
   } else if (ob_is_number_tc(get_type())) {
     v_.nmb_digits_ = static_cast<uint32_t*>(data_ptr);
@@ -3704,6 +3750,7 @@ inline int64_t ObObj::get_data_length() const
       ob_is_lob_locator(get_type()) ||
       ob_is_json(get_type()) ||
       ob_is_geometry(get_type()) ||
+      ob_is_roaringbitmap(get_type()) ||
       ob_is_user_defined_sql_type(get_type()) ||
       ob_is_collection_sql_type(get_type())) {
     ret = val_len_;
@@ -4256,7 +4303,8 @@ OB_INLINE int64_t ObObj::get_deep_copy_size() const
 {
   int64_t ret = 0;
   if (is_string_type() || is_raw() || ob_is_rowid_tc(get_type()) || is_lob_locator() || is_json()
-      || is_geometry() || is_user_defined_sql_type() || ob_is_decimal_int(get_type())|| is_collection_sql_type()) {
+      || is_geometry() || is_user_defined_sql_type() || ob_is_decimal_int(get_type())|| is_collection_sql_type()
+      || is_roaringbitmap()) {
     ret += val_len_;
   } else if (ob_is_number_tc(get_type())) {
     ret += (sizeof(uint32_t) * nmb_desc_.len_);

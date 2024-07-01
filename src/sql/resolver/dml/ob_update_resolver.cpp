@@ -154,6 +154,8 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("failed to add remove const expr", K(ret));
     } else if (OB_FAIL(resolve_update_constraints())) {
       LOG_WARN("failed to resolve check exprs", K(ret));
+    } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT]))) {
+      LOG_WARN("resolve hints failed", K(ret));
     } else if (OB_FAIL(resolve_where_clause(parse_tree.children_[WHERE]))) {
       LOG_WARN("resolve where clause failed", K(ret));
     } else if (params_.is_batch_stmt_ && OB_FAIL(generate_batched_stmt_info())) {
@@ -162,8 +164,6 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("resolve order clause failed", K(ret));
     } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT], disable_limit_offset))) {
       LOG_WARN("resolve limit clause failed", K(ret));
-    } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT]))) {
-      LOG_WARN("resolve hints failed", K(ret));
     } else if (OB_FAIL(resolve_returning(parse_tree.children_[RETURNING]))) {
       LOG_WARN("resolve returning failed", K(ret));
     } else if (OB_FAIL(try_expand_returning_exprs())) {

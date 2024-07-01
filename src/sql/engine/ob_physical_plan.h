@@ -349,6 +349,8 @@ public:
   inline void set_enable_append(const bool enable_append) { enable_append_ = enable_append; }
   inline bool get_enable_append() const { return enable_append_; }
   inline void set_append_table_id(const uint64_t append_table_id) { append_table_id_ = append_table_id; }
+  inline void set_is_insert_overwrite(const bool is_insert_overwrite) { insert_overwrite_ = is_insert_overwrite; }
+  inline bool get_is_insert_overwrite() const { return insert_overwrite_; }
   inline void set_use_rich_format(const bool v) { use_rich_format_ = v; }
   inline bool get_use_rich_format() const { return use_rich_format_; }
   inline uint64_t get_append_table_id() const { return append_table_id_; }
@@ -377,6 +379,8 @@ public:
   {
     enable_replace_ = enable_replace;
   }
+  inline double get_online_sample_percent() const { return online_sample_percent_; }
+  inline void set_online_sample_percent(double v) { online_sample_percent_ = v; }
 
 public:
   int inc_concurrent_num();
@@ -702,6 +706,8 @@ private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
   bool enable_inc_direct_load_; // for incremental direct load
   bool enable_replace_; // for incremental direct load
+  bool insert_overwrite_; // for insert overwrite
+  double online_sample_percent_; // for incremental direct load
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

@@ -823,7 +823,7 @@ TEST_F(ObQueryRangeTest, single_filed_key_whole_range1)
   OK(query_range.preliminary_extract_query_range(single_range_columns_, NULL, NULL, &exec_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, NULL));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
-  ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,(MIN;MAX)\"}]"));
+  ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)\"}]"));
 }
 
 TEST_F(ObQueryRangeTest, single_filed_key_whole_range2)
@@ -840,7 +840,7 @@ TEST_F(ObQueryRangeTest, single_filed_key_whole_range2)
   OK(query_range.preliminary_extract_query_range(single_range_columns_, exprs, dtc_params, &exec_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
-  ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,(MIN;MAX)\"}]"));
+  ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)\"}]"));
 }
 
 TEST_F(ObQueryRangeTest, double_filed_key_whole_range1)
@@ -856,7 +856,7 @@ TEST_F(ObQueryRangeTest, double_filed_key_whole_range1)
   OK(query_range.preliminary_extract_query_range(double_range_columns_, NULL, dtc_params, &exec_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
-  ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)\"}]"));
+  ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)\"}]"));
 }
 
 TEST_F(ObQueryRangeTest, double_filed_key_whole_range2)
@@ -873,7 +873,7 @@ TEST_F(ObQueryRangeTest, double_filed_key_whole_range2)
   OK(query_range.preliminary_extract_query_range(double_range_columns_, exprs, dtc_params, &exec_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
-  ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,(MIN,MIN;MAX,MAX)\"}]"));
+  ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)\"}]"));
 }
 
 TEST_F(ObQueryRangeTest, range_column_with_like)
@@ -1067,8 +1067,8 @@ TEST_F(ObQueryRangeTest, basic_test)
   except_result(double_range_columns_,
                 params,
                 "(b = 6 and a < 5) or (a > 8 and b = 15)",
-                "[{\"range\":\"table_id:3003,group_idx:0,({\"NULL\":\"NULL\"},MAX;{\"BIGINT\":5},MIN)\"}, "
-                "{\"range\":\"table_id:3003,group_idx:0,({\"BIGINT\":8},MAX;MAX,{\"BIGINT\":15})\"}]",
+                "[{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,({\"NULL\":\"NULL\"},MAX;{\"BIGINT\":5},MIN)\"}, "
+                "{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,({\"BIGINT\":8},MAX;MAX,{\"BIGINT\":15})\"}]",
                 false);
   query_range.reset();
 }

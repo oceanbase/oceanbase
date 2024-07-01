@@ -234,6 +234,7 @@ private:
       ObTablesHandleArray &sstable_handles);
   int check_src_tablet_sstables_(const ObTablet *tablet, ObTablesHandleArray &tables_handle);
   int check_source_minor_end_scn_(
+      const ObTabletBackfillInfo &tablet_info,
       const ObTabletMemberWrapper<ObTabletTableStore> &wrapper,
       const ObTablet *dest_tablet,
       bool &need_fill_minor);
@@ -244,7 +245,10 @@ private:
       const ObTabletMemberWrapper<ObTabletTableStore> &wrapper,
       common::ObArenaAllocator &allocator,
       ObTablesHandleArray &tables_handle);
-  int check_src_memtable_is_empty_(ObTablet *tablet, const share::SCN &transfer_scn);
+  int check_src_memtable_is_empty_(
+      const ObTabletBackfillInfo &tablet_info,
+      ObTablet *tablet,
+      const share::SCN &transfer_scn);
   int build_migration_param_(
       const ObTablet *tablet,
       ObTabletHandle &src_tablet_handle,

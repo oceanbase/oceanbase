@@ -749,8 +749,20 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
         index_arg.index_type_ = INDEX_TYPE_SPATIAL_LOCAL;
       }
     } else if (FTS_KEY == index_keyname_) {
-      // TODO hanxuan
-      ret = OB_NOT_SUPPORTED;
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_3_2_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant data version is less than 4.3.2, create fulltext index on existing table not supported", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.2, fulltext index");
+      } else if (global_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support global fts index now", K(ret));
+      } else {
+        // set type to fts_index_aux first, append other fts arg later
+        index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
+      }
     }
     index_arg.data_table_id_ = data_table_id_;
     index_arg.index_table_id_ = index_table_id_;

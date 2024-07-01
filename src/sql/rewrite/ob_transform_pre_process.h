@@ -27,27 +27,6 @@ namespace sql
 
 typedef std::pair<uint64_t, uint64_t> JoinTableIdPair;
 
-class ObTransformPreProcess: public ObTransformRule
-{
-public:
-  explicit ObTransformPreProcess(ObTransformerCtx *ctx)
-     : ObTransformRule(ctx, TransMethod::POST_ORDER) { }
-  virtual ~ObTransformPreProcess() {}
-
-  virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                                 ObDMLStmt *&stmt,
-                                 bool &trans_happened) override;
-
-  static int transform_expr(ObRawExprFactory &expr_factory,
-                            const ObSQLSessionInfo &session,
-                            ObRawExpr *&expr,
-                            bool &trans_happened);
-private:
-  virtual int need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                             const int64_t current_level,
-                             const ObDMLStmt &stmt,
-                             bool &need_trans) override;
-// used for transform in expr to or exprs
 struct DistinctObjMeta
 {
   ObObjType obj_type_;
@@ -70,8 +49,30 @@ struct DistinctObjMeta
     bool cs_level_equal = lib::is_oracle_mode() ? true : (coll_level_ == other.coll_level_);
     return obj_type_ == other.obj_type_ && coll_type_ == other.coll_type_ && cs_level_equal;
   }
-  TO_STRING_KV(K_(obj_type), K_(coll_type));
+  TO_STRING_KV(K_(obj_type), K_(coll_type), K_(coll_level));
 };
+
+class ObTransformPreProcess: public ObTransformRule
+{
+public:
+  explicit ObTransformPreProcess(ObTransformerCtx *ctx)
+     : ObTransformRule(ctx, TransMethod::POST_ORDER) { }
+  virtual ~ObTransformPreProcess() {}
+
+  virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                 ObDMLStmt *&stmt,
+                                 bool &trans_happened) override;
+
+  static int transform_expr(ObRawExprFactory &expr_factory,
+                            const ObSQLSessionInfo &session,
+                            ObRawExpr *&expr,
+                            bool &trans_happened);
+private:
+  virtual int need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                             const int64_t current_level,
+                             const ObDMLStmt &stmt,
+                             bool &need_trans) override;
+// used for transform in expr to or exprs
 
   /*
    * following functions are used to add all rowkey columns

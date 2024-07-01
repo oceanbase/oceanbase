@@ -46,6 +46,9 @@ public:
     MODIFY_REPLICA = 5,
     MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS = 6,
     DELAY_DROP_TENANT = 7,
+    STANDBY_UPGRADE = 8,
+    STANDBY_TRANSFER = 9,
+    STANDBY_MODIFY_LS = 10,
     MAX_CASE_NAME
   };
 public:
@@ -66,8 +69,12 @@ public:
   bool is_modify_unit() const { return MODIFY_UNIT == case_name_; }
   bool is_modify_ls() const { return MODIFY_LS == case_name_; }
   bool is_modify_replica() const { return MODIFY_REPLICA == case_name_; }
-  bool is_switchover() const { return MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS == case_name_; }
+  bool is_modify_tenant_role_or_switchover() const { return MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS == case_name_; }
   bool is_delay_drop_tenant() const { return DELAY_DROP_TENANT == case_name_; }
+  bool is_standby_upgrade() const { return STANDBY_UPGRADE == case_name_; }
+  bool is_standby_transfer() const { return STANDBY_TRANSFER == case_name_; }
+  bool is_standby_modify_ls() const { return STANDBY_MODIFY_LS == case_name_; }
+  bool is_standby_related() const { return STANDBY_UPGRADE == case_name_ || STANDBY_TRANSFER == case_name_ || STANDBY_MODIFY_LS == case_name_; }
   const ConflictCaseWithClone &get_case_name() const { return case_name_; }
   const char* get_case_name_str() const;
 private:
@@ -175,6 +182,17 @@ public:
   static int check_tenant_not_in_cloning_procedure(
          const uint64_t tenant_id,
          const ObConflictCaseWithClone &case_to_check);
+
+  static int cancel_existed_clone_job_if_need(
+         const uint64_t tenant_id,
+         const ObConflictCaseWithClone &case_to_check);
+
+  // check whether standby tenant is in clonong procedure when replay log
+  static int check_standby_tenant_not_in_cloning_procedure(
+         common::ObMySQLTransaction &trans,
+         const uint64_t tenant_id,
+         bool &is_cloning);
+
   static int check_tenant_has_no_conflict_tasks(const uint64_t tenant_id);
 
   // when update __all_unit, in some case we have to lock __all_unit first and then check clone
@@ -201,7 +219,28 @@ public:
              const uint64_t tenant_id_to_lock,
              ObISQLClient &sql_proxy,
              share::schema::ObTenantStatus &tenant_status);
+  // get tenant current/target data version from __all_core_table
+  // and compatible version in __tenant_parameter
+  static int check_current_and_target_data_version(
+             const uint64_t tenant_id,
+             uint64_t &data_version);
 private:
+  // check whether tenant is in cloning procedure in trans
+  // @params[in]  user_tenant_id, the tenant to check
+  // @params[out] is_tenant_in_cloning, the output
+  //
+  // is_tenant_in_cloning = false if one of conditions below is satisfied
+  //   (1) tenant is not up to version 4.3, clone is not supported
+  //   (2) line with snapshot_id = 0 in __all_tenant_snapshot not exists
+  //   (3) line with snapshot_id = 0 in __all_tenant_snapshot exists but is NORMAL status
+  //       and no snapshot item exists in __all_tenant_snapshot_ls for this tenant
+  static int check_tenant_in_cloning_procedure_in_trans_(
+         const uint64_t user_tenant_id,
+         bool &is_tenant_in_cloning);
+  static int inner_check_tenant_in_cloning_procedure_in_trans_(
+         common::ObMySQLTransaction &trans,
+         const uint64_t tenant_id,
+         bool &is_tenant_in_cloning);
   static int check_tenant_snapshot_simulated_mutex_(ObMySQLTransaction &trans,
                                                     const uint64_t tenant_id,
                                                     share::ObTenantSnapItem &special_item,
@@ -216,18 +255,6 @@ private:
                    const uint64_t tenant_id,
                    const TenantSnapshotOp op,
                    const share::ObTenantSnapItem &special_item);
-  // check whether tenant is in cloning procedure in trans
-  // @params[in]  user_tenant_id, the tenant to check
-  // @params[out] is_tenant_in_cloning, the output
-  //
-  // is_tenant_in_cloning = false if one of conditions below is satisfied
-  //   (1) tenant is not up to version 4.3, clone is not supported
-  //   (2) line with snapshot_id = 0 in __all_tenant_snapshot not exists
-  //   (3) line with snapshot_id = 0 in __all_tenant_snapshot exists but is NORMAL status
-  //       and no snapshot item exists in __all_tenant_snapshot_ls for this tenant
-  static int check_tenant_in_cloning_procedure_in_trans_(
-         const uint64_t user_tenant_id,
-         bool &is_tenant_in_cloning);
   // check whether tenant is upgrading
   // @params[in]  tenant_id, tenant to check
   static int check_tenant_is_in_upgrading_procedure_(const uint64_t tenant_id,
@@ -239,6 +266,9 @@ private:
   static int check_tenant_is_in_modify_ls_procedure_(const uint64_t tenant_id);
   static int check_tenant_is_in_modify_replica_procedure_(const uint64_t tenant_id);
   static int check_tenant_is_in_switchover_procedure_(const uint64_t tenant_id);
+  static int check_standby_tenant_has_no_conflict_tasks_(const uint64_t tenant_id);
+  static int check_standby_tenant_is_in_transfer_procedure_(const uint64_t tenant_id);
+  static int check_standby_tenant_is_in_modify_ls_procedure_(const uint64_t tenant_id);
   static int check_unit_infos_(common::sqlclient::ObMySQLResult &res, const uint64_t tenant_id);
   static int check_snapshot_table_exists_(const uint64_t user_tenant_id, bool &tenant_snapshot_table_exist);
 private:

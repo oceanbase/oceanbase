@@ -183,9 +183,7 @@ int ObResourceManagerProxy::delete_plan(
       //删除非当前使用plan，do nothing
     } else {
       //删除当前使用的plan，把当前所有IO资源置空
-      if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(
-                        tenant_id,
-                        1))) {
+      if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(tenant_id))) {
         LOG_WARN("reset cur plan group directive failed",K(plan), K(ret));
       } else if (OB_FAIL(reset_all_mapping_rules())) {
         LOG_WARN("reset hashmap failed when delete using plan");
@@ -211,8 +209,9 @@ int ObResourceManagerProxy::allocate_consumer_group_id(
     ObSqlString sql;
     const char *tname = OB_ALL_RES_MGR_CONSUMER_GROUP_TNAME;
     if (OB_FAIL(sql.assign_fmt(
-                "SELECT /* ALLOC_MAX_GROUP_ID */ COALESCE(MAX(CONSUMER_GROUP_ID) + 1, 10000) AS NEXT_GROUP_ID FROM %s "
+                "SELECT /* ALLOC_MAX_GROUP_ID */ COALESCE(MAX(CONSUMER_GROUP_ID) + 1, %lu) AS NEXT_GROUP_ID FROM %s "
                 "WHERE TENANT_ID = %ld",
+                USER_RESOURCE_GROUP_START_ID,
                 tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
       LOG_WARN("fail format sql", K(ret));
     } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
@@ -352,8 +351,26 @@ int ObResourceManagerProxy::delete_consumer_group(
 
   if (OB_SUCC(ret)) {
     // 在这里inner sql之后就stop io_control的原因是，无法从内部表读到被删除group的信息
-    if (OB_FAIL(GCTX.cgroup_ctrl_->delete_group_iops(tenant_id, 1, consumer_group))) {
+    uint64_t group_id = 0;
+    share::ObGroupName group_name;
+    group_name.set_value(consumer_group);
+    ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+      ret = OB_INVALID_CONFIG;
+      LOG_WARN("invalid config", K(ret), K(tenant_id));
+    } else if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, group_name, group_id))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        //创建group后立刻删除，可能还没有被刷到存储层或plan未生效，此时不再进行后续操作
+        ret = OB_SUCCESS;
+        LOG_INFO("delete group success with no_releated_io_module", K(consumer_group), K(tenant_id));
+      } else {
+        LOG_WARN("fail get group id", K(ret), K(group_id), K(consumer_group));
+      }
+    } else if (OB_FAIL(GCTX.cgroup_ctrl_->delete_group_iops(tenant_id, consumer_group))) {
       LOG_WARN("fail to stop cur iops isolation", K(ret), K(tenant_id), K(consumer_group));
+    } else if (OB_FAIL(GCTX.cgroup_ctrl_->remove_both_cgroup(
+                   tenant_id, group_id, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+      LOG_WARN("fail to remove group cgroup", K(ret), K(tenant_id), K(consumer_group), K(group_id));
     }
   }
   return ret;
@@ -1146,7 +1163,6 @@ int ObResourceManagerProxy::delete_plan_directive(
     // 在这里inner sql之后就stop的原因是， 无法从内部表读到被删除group的信息
     if (OB_FAIL(GCTX.cgroup_ctrl_->reset_group_iops(
                      tenant_id,
-                     1,
                      group))) {
       LOG_WARN("reset deleted group directive failed", K(ret), K(group));
     }

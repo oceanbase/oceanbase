@@ -191,6 +191,12 @@ OB_INLINE int64_t get_modify_autoinc_version(const int64_t &autoinc_version)
   return 0 == autoinc_version ? OB_INVALID_VERSION : autoinc_version;
 }
 
+OB_INLINE int64_t get_auto_increment_cache_size(const int64_t table_cache_size,
+                                                const int64_t tenant_cache_size)
+{
+  return table_cache_size == 0 ? tenant_cache_size : table_cache_size;
+}
+
 }//end namespace share
 }//end namespace oceanbase
 #endif

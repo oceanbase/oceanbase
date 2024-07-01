@@ -143,6 +143,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
         LOG_WARN("fail to generate build mview replica sql", K(ret));
       }
     } else {
+      ObString partition_names;
       if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
                                                         data_table_id_,
                                                         dest_table_id_,
@@ -154,6 +155,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
                                                         use_heap_table_ddl_plan_,
                                                         true/*use_schema_version_hint_for_src_table*/,
                                                         &col_name_map_,
+                                                        partition_names,
                                                         sql_string))) {
         LOG_WARN("fail to generate build replica sql", K(ret));
       }
@@ -289,8 +291,8 @@ int ObDDLRedefinitionTask::prepare(const ObDDLTaskStatus next_task_status)
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
   }
-  // overwrite ret
   if (OB_FAIL(switch_status(next_task_status, true, ret))) {
+    // overwrite ret
     LOG_WARN("fail to switch status", K(ret));
   }
   return ret;
@@ -1179,7 +1181,7 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
         param.autoinc_desired_count_ = 0;
         param.autoinc_increment_ = 1;
         param.autoinc_offset_ = 1;
-        param.auto_increment_cache_size_ = 1; // TODO(shuangcan): should we use the sysvar on session?
+        param.auto_increment_cache_size_ = 0; // set cache size to 0 to disable prefetch
         param.autoinc_mode_is_order_ = dest_table_schema->is_order_auto_increment_mode();
         param.autoinc_auto_increment_ = dest_table_schema->get_auto_increment();
         param.autoinc_version_ = dest_table_schema->get_truncate_version();
@@ -1324,7 +1326,8 @@ int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status
       param.autoinc_increment_ = 1;
       param.autoinc_offset_ = 1;
       param.global_value_to_sync_ = autoinc_val - 1;
-      param.auto_increment_cache_size_ = 1; // TODO(shuangcan): should we use the sysvar on session?
+      param.auto_increment_cache_size_ = 0; // set cache size to 0 to disable prefetch
+      param.autoinc_mode_is_order_ = new_table_schema->is_order_auto_increment_mode();
       param.autoinc_version_ = new_table_schema->get_truncate_version();
       if (OB_FAIL(auto_inc_service.sync_insert_value_global(param))) {
         LOG_WARN("fail to clear autoinc cache", K(ret), K(param));
@@ -1412,8 +1415,8 @@ int ObDDLRedefinitionTask::fail()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
-  } else if (is_complement_data_relying_on_dag(task_type_) &&
-      OB_FAIL(check_and_cancel_complement_data_dag(all_complement_dag_exit))) {
+  } else if (is_complement_data_relying_on_dag(task_type_)
+      && OB_FAIL(check_and_cancel_complement_data_dag(all_complement_dag_exit))) {
     LOG_WARN("check and cancel complement data dag failed", K(ret));
   } else if (!all_complement_dag_exit) {
     if (REACH_COUNT_INTERVAL(1000L)) {
@@ -1526,7 +1529,8 @@ int ObDDLRedefinitionTask::check_health()
     }
     if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
-      const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
+      // prevent to switch fail if the ddl has already succeed.
+      const ObDDLTaskStatus new_status = ObDDLTaskStatus::SUCCESS != old_status ? ObDDLTaskStatus::FAIL : old_status;
       switch_status(new_status, false, ret);
       LOG_WARN("switch status to build_failed", K(ret), K(old_status), K(new_status));
     }
@@ -1562,26 +1566,11 @@ int ObDDLRedefinitionTask::get_estimated_timeout(const ObTableSchema *dst_table_
 int ObDDLRedefinitionTask::get_orig_all_index_tablet_count(ObSchemaGetterGuard &schema_guard, int64_t &all_tablet_count)
 {
   int ret = OB_SUCCESS;
-  const ObTableSchema *orig_table_schema = nullptr;
   all_tablet_count = 0;
   if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_TASK_GET_ALL_TABLET_COUNT_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, orig_table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(object_id_));
-  } else if (OB_ISNULL(orig_table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(object_id_));
-  } else {
-    const common::ObIArray<ObAuxTableMetaInfo> &orig_index_infos = orig_table_schema->get_simple_index_infos();
-    for (int64_t i = 0; OB_SUCC(ret) && i < orig_index_infos.count(); i++) {
-      int64_t tablet_count = 0;
-      int64_t table_id = orig_index_infos.at(i).table_id_;
-      if (OB_FAIL(ObDDLUtil::get_tablet_count(tenant_id_, table_id, tablet_count))) {
-        LOG_WARN("get tablet count fail", K(ret));
-      } else {
-        all_tablet_count += tablet_count;
-      }
-    }
+  } else if (OB_FAIL(ObDDLUtil::get_all_indexes_tablets_count(schema_guard, tenant_id_, object_id_, all_tablet_count))) {
+    LOG_WARN("get all indexes tablets count failed", K(ret));
   }
   return ret;
 }
@@ -2891,6 +2880,7 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
     }
   }
   if (OB_SUCC(ret)) {
+    int saved_ret = OB_SUCCESS;
     ObAddr unused_leader_addr;
     const int64_t timeout_us = ObDDLUtil::get_default_ddl_rpc_timeout();
     common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> ::const_iterator iter =
@@ -2910,7 +2900,7 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
       } else if (OB_FAIL(ObDDLUtil::get_tablet_paxos_member_list(dst_tenant_id_, dst_tablet_id, paxos_server_list, paxos_member_count))) {
         LOG_WARN("get tablet paxos member list failed", K(ret));
       } else {
-        bool is_dag_exist = false;
+        bool is_tablet_dag_exist = false;
         obrpc::ObDDLBuildSingleReplicaRequestArg arg;
         arg.ls_id_ = src_ls_id;
         arg.dest_ls_id_ = dst_ls_id;
@@ -2922,7 +2912,7 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
         arg.dest_schema_id_ = target_object_id_;
         arg.schema_version_ = schema_version_;
         arg.dest_schema_version_ = dst_schema_version_;
-        arg.snapshot_version_ = snapshot_version_;
+        arg.snapshot_version_ = 1; // to ensure arg valid only.
         arg.ddl_type_ = task_type_;
         arg.task_id_ = task_id_;
         arg.parallelism_ = 1; // to ensure arg valid only.
@@ -2932,19 +2922,21 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
         arg.consumer_group_id_ = 0; // to ensure arg valid only.
         for (int64_t j = 0; OB_SUCC(ret) && j < paxos_server_list.count(); j++) {
           int tmp_ret = OB_SUCCESS;
-          obrpc::Bool dag_exist_in_current_server(true);
+          obrpc::Bool is_replica_dag_exist(true);
           if (OB_TMP_FAIL(root_service->get_rpc_proxy().to(paxos_server_list.at(j))
-            .by(dst_tenant_id_).timeout(timeout_us).check_and_cancel_ddl_complement_dag(arg, dag_exist_in_current_server))) {
-            // consider as dag does not exist in this server.
+            .by(dst_tenant_id_).timeout(timeout_us).check_and_cancel_ddl_complement_dag(arg, is_replica_dag_exist))) {
+            // consider as dag does exist in this server.
+            saved_ret = OB_SUCC(saved_ret) ? tmp_ret : saved_ret;
+            is_tablet_dag_exist = true;
             LOG_WARN("check and cancel ddl complement dag failed", K(ret), K(tmp_ret), K(arg));
-          } else if (dag_exist_in_current_server) {
-            is_dag_exist = true;
+          } else if (is_replica_dag_exist) {
+            is_tablet_dag_exist = true;
             if (REACH_COUNT_INTERVAL(1000L)) {
               LOG_INFO("wait dag exist", "addr", paxos_server_list.at(j), K(arg));
             }
           }
         }
-        if (OB_SUCC(ret) && !is_dag_exist) {
+        if (OB_SUCC(ret) && !is_tablet_dag_exist) {
           if (OB_FAIL(dag_not_exist_tablets.push_back(src_tablet_id))) {
             LOG_WARN("push back failed", K(ret));
           }
@@ -2957,10 +2949,17 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
           LOG_WARN("erase failed", K(ret));
         }
       }
+      ret = OB_SUCC(ret) ? saved_ret : ret;
     }
   }
-  if (OB_SUCC(ret) && check_dag_exit_tablets_map_.empty()) {
-    // all participants have no complement data dag.
+  if (OB_SUCC(ret)) {
+    all_complement_dag_exit = check_dag_exit_tablets_map_.empty() ? true : false;
+    delay_schedule_time_ = 3000L * 1000L; // 3s, to avoid sending too many rpcs to the same replica frequently if retry.
+  } else if (OB_TABLE_NOT_EXIST == ret
+      || OB_TENANT_HAS_BEEN_DROPPED == ret
+      || OB_TENANT_NOT_EXIST == ret
+      || (++check_dag_exit_retry_cnt_ >= 10 /*MAX RETRY COUNT IF FAILED*/)) {
+    ret = OB_SUCCESS;
     all_complement_dag_exit = true;
   }
   return ret;

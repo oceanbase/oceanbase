@@ -21,7 +21,8 @@ namespace storage
 
 class ObDirectLoadSSTableIndexBlockWriter
   : public ObDirectLoadDataBlockWriter<ObDirectLoadSSTableIndexBlock::Header,
-                                       ObDirectLoadSSTableIndexBlock::Entry>
+                                       ObDirectLoadSSTableIndexBlock::Entry,
+                                       true/*align*/>
 {
 public:
   ObDirectLoadSSTableIndexBlockWriter();

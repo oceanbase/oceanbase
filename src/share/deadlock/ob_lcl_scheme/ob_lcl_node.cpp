@@ -900,6 +900,7 @@ ObLCLNode::PushStateTask::PushStateTask(ObLCLNode &node) : expected_executed_ts(
 void ObLCLNode::PushStateTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const int64_t current_ts = ObClockGenerator::getRealClock();
 
   DETECT_TIME_GUARD(100_ms);
@@ -921,13 +922,13 @@ void ObLCLNode::PushStateTask::runTimerTask()
     CLICK();
     (void)lcl_node_.update_lcl_period_if_necessary_with_lock_();
 
-    if (CLICK() && OB_FAIL(lcl_node_.push_state_to_downstreams_with_lock_())) {
+    if (CLICK() && OB_TMP_FAIL(lcl_node_.push_state_to_downstreams_with_lock_())) {
       DETECT_LOG(WARN, "push state to downstreams failed",
-                      K(current_ts), K(expected_executed_ts), K(*this));
+                     K(tmp_ret), K(current_ts), K(expected_executed_ts), K(*this));
     }
 
-    if (CLICK() && OB_FAIL(lcl_node_.register_timer_with_necessary_retry_with_lock_())) {
-      DETECT_LOG(ERROR, "register timer task with retry failed", K(*this));
+    if (CLICK() && OB_TMP_FAIL(lcl_node_.register_timer_with_necessary_retry_with_lock_())) {
+      DETECT_LOG(ERROR, "register timer task with retry failed", K(tmp_ret), K(*this));
     } else {}
   } else {
     // may destory itself here, make sure it is the last action of this function

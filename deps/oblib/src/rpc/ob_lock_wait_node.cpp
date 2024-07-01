@@ -18,27 +18,33 @@ namespace rpc
 {
 
 ObLockWaitNode::ObLockWaitNode() :
-  hold_key_(0), need_wait_(false), addr_(NULL), recv_ts_(0), lock_ts_(0), lock_seq_(0),
+  hold_key_(0), need_wait_(false), request_stat_(), addr_(NULL), recv_ts_(0), lock_ts_(0), lock_seq_(0),
   abs_timeout_(0), tablet_id_(common::OB_INVALID_ID), try_lock_times_(0), sessid_(0),
-  block_sessid_(0), tx_id_(0), holder_tx_id_(0), run_ts_(0), is_standalone_task_(false),
-  last_compact_cnt_(0), total_update_cnt_(0) {}
+  holder_sessid_(0), block_sessid_(0), tx_id_(0), holder_tx_id_(0), run_ts_(0),
+  is_standalone_task_(false), last_compact_cnt_(0), total_update_cnt_(0) {}
 
-void ObLockWaitNode::set(void* addr,
+void ObLockWaitNode::set(void *addr,
                          int64_t hash,
                          int64_t lock_seq,
                          int64_t timeout,
                          uint64_t tablet_id,
                          const int64_t last_compact_cnt,
                          const int64_t total_trans_node_cnt,
-                         const char* key,
+                         const char *key,
+                         const uint32_t sess_id,
+                         const uint32_t holder_sess_id,
                          int64_t tx_id,
-                         int64_t holder_tx_id) {
+                         int64_t holder_tx_id,
+                         const share::ObLSID &ls_id)
+{
   hash_ = hash | 1;
   addr_ = addr;
   lock_ts_ = common::ObTimeUtil::current_time();
   lock_seq_ = lock_seq;
   abs_timeout_ = timeout;
   tablet_id_ = tablet_id;//used for gv$lock_wait_stat
+  sessid_ = sess_id;
+  holder_sessid_ = holder_sess_id;
   tx_id_ = tx_id;//requester used for deadlock detection
   holder_tx_id_ = holder_tx_id; // txn id of lock holder
   last_compact_cnt_ = last_compact_cnt,

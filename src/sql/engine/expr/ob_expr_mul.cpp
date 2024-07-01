@@ -1335,7 +1335,8 @@ int ObExprMul::mul_decimal##RES##_##L##_##R##_oracle_vector(VECTOR_EVAL_FUNC_ARG
 {                                            \
   ObNumStackOnceAlloc tmp_alloc;                                \
   const int64_t scale = expr.args_[0]->datum_meta_.scale_ + expr.args_[1]->datum_meta_.scale_;      \
-  return def_fixed_len_vector_arith_op_func<ObDecimalOracleVectorMulFunc<RES##_t, L##_t, R##_t>>(VECTOR_EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
+  return def_fixed_len_vector_arith_op_func<ObDecimalOracleVectorMulFunc<RES##_t, L##_t, R##_t>,\
+                                            ObArithTypedBase<L##_t, R##_t, RES##_t>>(VECTOR_EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
 }
 
 DECINC_MUL_EVAL_FUNC_ORA_DECL(int32, int32, int32)

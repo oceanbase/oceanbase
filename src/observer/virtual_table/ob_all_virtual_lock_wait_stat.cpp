@@ -139,6 +139,9 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
         case SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->sessid_);
           break;
+        case HOLDER_SESSION_ID:
+          cur_row_.cells_[i].set_int(node_iter_->holder_sessid_);
+          break;
         case BLOCK_SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->block_sessid_);
           break;
@@ -247,6 +250,7 @@ int ObAllVirtualLockWaitStat::get_rowkey_holder(int64_t hash, transaction::ObTra
   int ret = OB_SUCCESS;
   ObLockWaitMgr *lwm = NULL;
   if (OB_ISNULL(lwm = MTL(ObLockWaitMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "MTL(LockWaitMgr) is null");
   } else if (OB_FAIL(lwm->get_hash_holder(hash, holder))){
     SERVER_LOG(WARN, "get rowkey holder from lock wait mgr failed", K(ret), K(hash));

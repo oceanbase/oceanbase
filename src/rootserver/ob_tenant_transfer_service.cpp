@@ -550,7 +550,7 @@ int ObTenantTransferService::lock_table_and_part_(
     part_list.reset();
     ObSimpleTableSchemaV2 *table_schema = NULL;
     ObTransferPartInfo::Compare cmp;
-    std::sort(ordered_part_list.begin(), ordered_part_list.end(), cmp);
+    lib::ob_sort(ordered_part_list.begin(), ordered_part_list.end(), cmp);
 
     ARRAY_FOREACH(ordered_part_list, idx) {
       ObLSID ls_id;
@@ -1419,7 +1419,7 @@ int ObTenantTransferService::unlock_table_and_part_(
     ObSimpleTableSchemaV2 *table_schema = NULL;
     const int64_t timeout_us = GCONF.internal_sql_execute_timeout;
     ObTransferPartInfo::Compare cmp;
-    std::sort(ordered_part_list.begin(), ordered_part_list.end(), cmp);
+    lib::ob_sort(ordered_part_list.begin(), ordered_part_list.end(), cmp);
 
     ARRAY_FOREACH(ordered_part_list, idx) {
       ObTabletID tablet_id;

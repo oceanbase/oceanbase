@@ -20,6 +20,7 @@
 #include "sql/engine/sort/ob_sort_basic_info.h"
 #include "sql/engine/basic/chunk_store/ob_compact_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/px/p2p_datahub/ob_pushdown_topn_filter_msg.h"
 
 namespace oceanbase
 {
@@ -36,7 +37,9 @@ public:
     K_(topn_expr), K_(topk_limit_expr), K_(topk_offset_expr), K_(prefix_pos),
     K_(minimum_row_count), K_(topk_precision), K_(prefix_pos), K_(is_local_merge_sort),
     K_(prescan_enabled), K_(enable_encode_sortkey_opt), K_(part_cnt),
-    K_(compress_type));
+    K_(compress_type), K_(pd_topn_filter_info));
+
+  inline bool enable_pd_topn_filter() const { return pd_topn_filter_info_.enabled_; }
 public:
   ObExpr *topn_expr_;
   ObExpr *topk_limit_expr_;
@@ -59,6 +62,7 @@ public:
   bool enable_encode_sortkey_opt_;
   // if use, all_exprs_ is : hash(part_by) + part_by + order_by.
   int64_t part_cnt_;
+  ObPushDownTopNFilterInfo pd_topn_filter_info_;
 };
 
 class ObSortOp : public ObOperator
@@ -130,6 +134,7 @@ private:
                 int64_t row_count,
                 bool is_batch,
                 int64_t topn_cnt = INT64_MAX);
+  void reset_pd_topn_filter_expr_ctx();
 private:
   ObSortOpImpl sort_impl_;
   ObPrefixSortImpl prefix_sort_impl_;

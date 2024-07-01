@@ -185,6 +185,7 @@ void ObTenantMdsTimer::dump_special_mds_table_status_task()
         (void) mds_table.operate([ls_mds_freezing_scn](MdsTableBase &mds_table)-> int {// with MdsTable's lock protected
           int ret = OB_SUCCESS;
           if (mds_table.get_rec_scn() <= ls_mds_freezing_scn) {
+            // ignore ret
             MDS_LOG_NOTICE(WARN, "dump rec_scn lagging freeze_scn mds_table", K(ls_mds_freezing_scn), K(mds_table));
           }
           return OB_SUCCESS;// keep iterating
@@ -195,6 +196,7 @@ void ObTenantMdsTimer::dump_special_mds_table_status_task()
         (void) mds_table.operate([](MdsTableBase &mds_table)-> int {// with MdsTable's lock protected
           int ret = OB_SUCCESS;
           if (ObClockGenerator::getClock() - mds_table.get_removed_from_t3m_ts() > 1_min) {
+            // ignore ret
             MDS_LOG_NOTICE(WARN, "dump maybe leaked mds_table", K(mds_table));
           }
           return OB_SUCCESS;// keep iterating

@@ -323,8 +323,11 @@ int SimpleServerHelper::freeze(uint64_t tenant_id, ObLSID ls_id, ObTabletID tabl
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
+    const bool need_rewrite_meta = false;
+    const bool is_sync = true;
+    const bool abs_timeout_ts = ObClockGenerator::getClock() + 60LL * 1000LL * 1000LL;
     if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    } else if (OB_FAIL(ls_handle.get_ls()->tablet_freeze(tablet_id, true))) {
+    } else if (OB_FAIL(ls_handle.get_ls()->tablet_freeze(tablet_id, need_rewrite_meta, is_sync, abs_timeout_ts))) {
     }
   }
   return ret;

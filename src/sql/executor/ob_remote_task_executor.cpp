@@ -214,6 +214,7 @@ int ObRemoteTaskExecutor::handle_tx_after_rpc(ObScanner *scanner,
     }
     if (has_transfer_err || OB_FAIL(ret)) {
       if (exec_ctx.use_remote_sql()) {
+        // ignore ret
         LOG_WARN("remote execute use sql fail with transfer_error, tx will rollback", K(ret));
         session->get_trans_result().set_incomplete();
       } else {

@@ -683,17 +683,17 @@ int ObExprLowerUpper::calc_common_vector(
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_lower_upper<TextDiscVec, TextDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrDiscVec, StrDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_lower_upper<TextUniVec, TextDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrUniVec, StrDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_lower_upper<TextContVec, TextDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrContVec, StrDiscVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_lower_upper<TextDiscVec, TextUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrDiscVec, StrUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_lower_upper<TextUniVec, TextUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrUniVec, StrUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_lower_upper<TextContVec, TextUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
+      ret = vector_lower_upper<StrContVec, StrUniVec, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     } else {
       ret = vector_lower_upper<ObVectorBase, ObVectorBase, IsLower>(VECTOR_EVAL_FUNC_ARG_LIST, cs_type);
     }

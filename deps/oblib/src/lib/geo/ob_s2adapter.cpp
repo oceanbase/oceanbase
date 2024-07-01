@@ -243,6 +243,15 @@ int64_t ObS2Adapter::get_cellids(ObS2Cellids &cells, bool is_query)
   return ret;
 }
 
+int64_t ObS2Adapter::get_cellids_and_unrepeated_ancestors(ObS2Cellids &cells, ObS2Cellids &ancestors)
+{
+  INIT_SUCC(ret);
+  if(OB_FAIL(visitor_->get_cellids_and_unrepeated_ancestors(cells, ancestors, need_buffer_, distance_))) {
+    LOG_WARN("fail to get cellid from visitor", K(ret));
+  }
+  return ret;
+}
+
 int64_t ObS2Adapter::get_inner_cover_cellids(ObS2Cellids &cells)
 {
   INIT_SUCC(ret);

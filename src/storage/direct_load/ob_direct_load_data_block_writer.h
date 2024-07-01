@@ -28,7 +28,8 @@ public:
   virtual int write(char *buf, int64_t buf_size, int64_t offset) = 0;
 };
 
-template <typename Header, typename T>
+// align: 是否对齐写. 当前的索引文件必须对齐写, 数据文件可以不对齐写.
+template <typename Header, typename T, bool align = false>
 class ObDirectLoadDataBlockWriter : public ObDirectLoadExternalWriter<T>
 {
 public:
@@ -52,7 +53,7 @@ protected:
   int64_t data_block_size_;
   char *extra_buf_;
   int64_t extra_buf_size_;
-  ObDirectLoadDataBlockEncoder<Header> data_block_writer_;
+  ObDirectLoadDataBlockEncoder<Header, align> data_block_writer_;
   int64_t io_timeout_ms_;
   ObDirectLoadTmpFileIOHandle file_io_handle_;
   int64_t offset_;
@@ -64,8 +65,8 @@ protected:
   DISALLOW_COPY_AND_ASSIGN(ObDirectLoadDataBlockWriter);
 };
 
-template <typename Header, typename T>
-ObDirectLoadDataBlockWriter<Header, T>::ObDirectLoadDataBlockWriter()
+template <typename Header, typename T, bool align>
+ObDirectLoadDataBlockWriter<Header, T, align>::ObDirectLoadDataBlockWriter()
   : data_block_size_(0),
     extra_buf_(nullptr),
     extra_buf_size_(0),
@@ -73,19 +74,20 @@ ObDirectLoadDataBlockWriter<Header, T>::ObDirectLoadDataBlockWriter()
     offset_(0),
     block_count_(0),
     max_block_size_(0),
+    callback_(nullptr),
     is_opened_(false),
     is_inited_(false)
 {
 }
 
-template <typename Header, typename T>
-ObDirectLoadDataBlockWriter<Header, T>::~ObDirectLoadDataBlockWriter()
+template <typename Header, typename T, bool align>
+ObDirectLoadDataBlockWriter<Header, T, align>::~ObDirectLoadDataBlockWriter()
 {
   reset();
 }
 
-template <typename Header, typename T>
-void ObDirectLoadDataBlockWriter<Header, T>::reuse()
+template <typename Header, typename T, bool align>
+void ObDirectLoadDataBlockWriter<Header, T, align>::reuse()
 {
   data_block_writer_.reuse();
   file_io_handle_.reset();
@@ -95,8 +97,8 @@ void ObDirectLoadDataBlockWriter<Header, T>::reuse()
   is_opened_ = false;
 }
 
-template <typename Header, typename T>
-void ObDirectLoadDataBlockWriter<Header, T>::reset()
+template <typename Header, typename T, bool align>
+void ObDirectLoadDataBlockWriter<Header, T, align>::reset()
 {
   data_block_size_ = 0;
   extra_buf_ = nullptr;
@@ -112,14 +114,16 @@ void ObDirectLoadDataBlockWriter<Header, T>::reset()
   is_inited_ = false;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockWriter<Header, T>::init(int64_t data_block_size,
-                                                 common::ObCompressorType compressor_type,
-                                                 char *extra_buf, int64_t extra_buf_size,
-                                                 ObIDirectLoadDataBlockFlushCallback *callback)
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockWriter<Header, T, align>::init(
+  int64_t data_block_size,
+  common::ObCompressorType compressor_type,
+  char *extra_buf,
+  int64_t extra_buf_size,
+  ObIDirectLoadDataBlockFlushCallback *callback)
 {
   int ret = common::OB_SUCCESS;
-  if (IS_INIT) {
+  if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDirectLoadDataBlockWriter init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(data_block_size <= 0 || data_block_size % DIO_ALIGN_SIZE != 0 ||
@@ -141,8 +145,9 @@ int ObDirectLoadDataBlockWriter<Header, T>::init(int64_t data_block_size,
   return ret;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockWriter<Header, T>::open(const ObDirectLoadTmpFileHandle &file_handle)
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockWriter<Header, T, align>::open(
+  const ObDirectLoadTmpFileHandle &file_handle)
 {
   int ret = common::OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -165,8 +170,8 @@ int ObDirectLoadDataBlockWriter<Header, T>::open(const ObDirectLoadTmpFileHandle
   return ret;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockWriter<Header, T>::write_item(const T &item)
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockWriter<Header, T, align>::write_item(const T &item)
 {
   int ret = common::OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -195,8 +200,8 @@ int ObDirectLoadDataBlockWriter<Header, T>::write_item(const T &item)
   return ret;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockWriter<Header, T>::flush_buffer()
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockWriter<Header, T, align>::flush_buffer()
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, external_flush_buffer_time_us);
   int ret = common::OB_SUCCESS;
@@ -205,27 +210,27 @@ int ObDirectLoadDataBlockWriter<Header, T>::flush_buffer()
   } else {
     char *buf = nullptr;
     int64_t buf_size = 0;
-    int64_t align_buf_size = 0;
+    int64_t occupy_size = 0;
     if (OB_FAIL(data_block_writer_.build_data_block(buf, buf_size))) {
       STORAGE_LOG(WARN, "fail to build data block", KR(ret));
-    } else if (FALSE_IT(align_buf_size = ALIGN_UP(buf_size, DIO_ALIGN_SIZE))) {
-    } else if (OB_FAIL(file_io_handle_.aio_write(buf, align_buf_size))) {
-      STORAGE_LOG(WARN, "fail to do aio write tmp file", KR(ret));
-    } else if (nullptr != callback_ && OB_FAIL(callback_->write(buf, align_buf_size, offset_))) {
+    } else if (FALSE_IT(occupy_size = align ? ALIGN_UP(buf_size, DIO_ALIGN_SIZE) : buf_size)) {
+    } else if (OB_FAIL(file_io_handle_.write(buf, occupy_size))) {
+      STORAGE_LOG(WARN, "fail to do write tmp file", KR(ret));
+    } else if (nullptr != callback_ && OB_FAIL(callback_->write(buf, occupy_size, offset_))) {
       STORAGE_LOG(WARN, "fail to callback write", KR(ret));
     } else {
-      OB_TABLE_LOAD_STATISTICS_INC(external_write_bytes, align_buf_size);
+      OB_TABLE_LOAD_STATISTICS_INC(external_write_bytes, occupy_size);
       data_block_writer_.reuse();
-      offset_ += align_buf_size;
+      offset_ += occupy_size;
       ++block_count_;
-      max_block_size_ = MAX(max_block_size_, align_buf_size);
+      max_block_size_ = MAX(max_block_size_, occupy_size);
     }
   }
   return ret;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockWriter<Header, T>::close()
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockWriter<Header, T, align>::close()
 {
   int ret = common::OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -240,6 +245,7 @@ int ObDirectLoadDataBlockWriter<Header, T>::close()
     } else if (OB_FAIL(file_io_handle_.wait())) {
       STORAGE_LOG(WARN, "fail to wait io finish", KR(ret));
     } else {
+      max_block_size_ = ALIGN_UP(max_block_size_, DIO_ALIGN_SIZE); // 这个值目前没什么用了, 这里是为了过参数检查
       is_opened_ = false;
     }
   }

@@ -787,6 +787,7 @@ int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range)
     ObExpr *expr = checker_ctdef_.data_table_rowkey_expr_.at(i);
     ObDatum *col_datum = nullptr;
     if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr in rowkey is nullptr", K(ret), K(i));
     } else if (OB_FAIL(expr->eval(eval_ctx_, col_datum))) {
       LOG_WARN("failed to evaluate expr in rowkey", K(ret), K(i));

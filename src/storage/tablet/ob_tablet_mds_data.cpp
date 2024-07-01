@@ -902,8 +902,8 @@ int ObTabletMdsData::copy_medium_info_list(
     LOG_WARN("failed to assign", K(ret));
   } else {
     // sort first
-    std::sort(array1.begin(), array1.end(), ObTabletDumpedMediumInfo::compare);
-    std::sort(array2.begin(), array2.end(), ObTabletDumpedMediumInfo::compare);
+    lib::ob_sort(array1.begin(), array1.end(), ObTabletDumpedMediumInfo::compare);
+    lib::ob_sort(array2.begin(), array2.end(), ObTabletDumpedMediumInfo::compare);
 
     // merge
     bool contain = false;
@@ -1069,7 +1069,7 @@ int ObTabletMdsData::load_medium_info_list(
       ptr = nullptr;
       LOG_INFO("read empty medium info", K(ret), K(complex_addr));
     } else {
-      std::sort(ptr->medium_info_list_.begin(), ptr->medium_info_list_.end(), ObTabletDumpedMediumInfo::compare);
+      lib::ob_sort(ptr->medium_info_list_.begin(), ptr->medium_info_list_.end(), ObTabletDumpedMediumInfo::compare);
 
       ptr->allocator_ = &allocator;
       ptr->is_inited_ = true;

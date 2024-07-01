@@ -81,7 +81,9 @@ OB_DEF_SERIALIZE_SIZE(ObDASDMLBaseRtDef)
 // add by dkz
 OB_SERIALIZE_MEMBER((ObDASInsRtDef, ObDASDMLBaseRtDef),
                     need_fetch_conflict_,
-                    direct_insert_task_id_);
+                    direct_insert_task_id_,
+                    use_put_,
+                    ddl_task_id_);
 
 
 OB_SERIALIZE_MEMBER((ObDASLockRtDef, ObDASDMLBaseRtDef),

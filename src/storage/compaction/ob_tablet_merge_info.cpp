@@ -231,7 +231,7 @@ int ObTabletMergeInfo::create_sstable(
 
     SMART_VARS_2((ObSSTableMergeRes, res), (ObTabletCreateSSTableParam, param)) {
       if (!is_reused_small_sst
-          && OB_FAIL(sstable_builder_.build_sstable_merge_res(ctx.static_param_.scn_range_.end_scn_, sstable_merge_info_, res))) {
+          && OB_FAIL(sstable_builder_.build_sstable_merge_res(ctx.static_param_, sstable_merge_info_, res))) {
         LOG_WARN("fail to close index builder", K(ret), KPC(sstable), "is_small_sst", sstable->is_small_sstable());
         CTX_SET_DIAGNOSE_LOCATION(ctx);
       } else if (is_reused_small_sst && OB_FAIL(sstable_builder_.build_reused_small_sst_merge_res(sstable->get_macro_read_size(),
@@ -264,6 +264,8 @@ int ObTabletMergeInfo::create_sstable(
           STORAGE_LOG(WARN, "Failed to get sstable", K(ret));
         } else if (OB_FAIL(sstable->deep_copy(ctx.mem_ctx_.get_safe_arena(), new_sstable, true/*transfer macro ref*/))) {
           STORAGE_LOG(WARN, "Failed to deep copy sstable", K(ret));
+        } else if (OB_FAIL(ctx.try_set_upper_trans_version(*sstable))) {
+          LOG_WARN("failed to set upper trans version", K(ret), K(param));
         } else if (OB_FAIL(merge_table_handle.set_sstable(new_sstable, &ctx.mem_ctx_.get_safe_arena()))) {
           STORAGE_LOG(WARN, "Failed to set sstable", K(ret));
         }

@@ -193,6 +193,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_string_type() const { return meta_type_.is_string_type(); }
   inline bool is_json() const { return meta_type_.is_json(); }
   inline bool is_geometry() const { return meta_type_.is_geometry(); }
+  inline bool is_roaringbitmap() const { return meta_type_.is_roaringbitmap(); }
   inline bool is_raw() const { return meta_type_.is_raw(); }
   inline bool is_decimal_int() const { return meta_type_.is_decimal_int(); }
 

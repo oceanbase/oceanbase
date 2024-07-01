@@ -85,7 +85,7 @@ private:
     RowIterator();
     virtual ~RowIterator();
     int init(const ObDirectLoadMergeParam &merge_param,
-             const common::ObTabletID &tablet_id,
+             ObDirectLoadTabletMergeCtx *merge_ctx,
              ObDirectLoadOriginTable *origin_table,
              table::ObTableLoadSqlStatistics *sql_statistics,
              ObDirectLoadLobBuilder &lob_builder,
@@ -94,7 +94,7 @@ private:
              ObDirectLoadInsertTabletContext *insert_tablet_ctx);
     int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
-    ObDirectLoadSSTableDataFuse data_fuse_;
+    ObIStoreRowIterator *data_iter_;
     blocksstable::ObDatumRow datum_row_;
     int64_t rowkey_column_num_;
   };
@@ -125,7 +125,7 @@ private:
     RowIterator();
     virtual ~RowIterator();
     int init(const ObDirectLoadMergeParam &merge_param,
-             const common::ObTabletID &tablet_id,
+             ObDirectLoadTabletMergeCtx *merge_ctx,
              ObDirectLoadOriginTable *origin_table,
              table::ObTableLoadSqlStatistics *sql_statistics,
              ObDirectLoadLobBuilder &lob_builder,
@@ -134,7 +134,7 @@ private:
              ObDirectLoadInsertTabletContext *insert_tablet_ctx);
     int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
-    ObDirectLoadMultipleSSTableDataFuse data_fuse_;
+    ObIStoreRowIterator *data_iter_;
     blocksstable::ObDatumRow datum_row_;
     int64_t rowkey_column_num_;
   };
@@ -243,7 +243,8 @@ private:
   public:
     RowIterator();
     virtual ~RowIterator();
-    int init(const ObDirectLoadMergeParam &merge_param, const common::ObTabletID &tablet_id,
+    int init(const ObDirectLoadMergeParam &merge_param,
+             ObDirectLoadTabletMergeCtx *merge_ctx,
              ObDirectLoadOriginTable *origin_table,
              table::ObTableLoadSqlStatistics *sql_statistics,
              ObDirectLoadLobBuilder &lob_builder,

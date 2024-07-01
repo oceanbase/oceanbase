@@ -34,7 +34,7 @@ struct DictFixBatchDecodeFunc_T
       const char *ref_data, const char *base_data,
       const int64_t fixed_len,
       const int64_t dict_cnt,
-      const int64_t *row_ids, const int64_t row_cap,
+      const int32_t *row_ids, const int64_t row_cap,
       common::ObDatum *datums)
   {
     typedef typename ObEncodingTypeInference<false, REF_BYTE_TAG>::Type RefType;
@@ -63,7 +63,7 @@ struct DictFixBatchDecodeFunc_T<REF_BYTE_TAG, IS_SIGNED_SC, STORE_LEN_TAG, DATUM
       const char *ref_data, const char *base_data,
       const int64_t fixed_len,
       const int64_t dict_cnt,
-      const int64_t *row_ids, const int64_t row_cap,
+      const int32_t *row_ids, const int64_t row_cap,
       common::ObDatum *datums)
   {
     UNUSED(fixed_len);
@@ -93,7 +93,7 @@ struct DictVarBatchDecodeFunc_T
                               const char *base_data,
                               const char *base_data_end,
                               const int64_t dict_cnt,
-                              const int64_t *row_ids, const int64_t row_cap,
+                              const int32_t *row_ids, const int64_t row_cap,
                               common::ObDatum *datums)
   {
     typedef typename ObEncodingByteLenMap<false, REF_BYTE>::Type RefType;
@@ -339,7 +339,7 @@ int ObDictDecoder::decode(const common::ObObjType &obj_type, common::ObDatum &da
   }
 
 int ObDictDecoder::batch_get_bitpacked_refs(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const unsigned char *col_data,
     common::ObDatum *datums) const
@@ -363,7 +363,7 @@ int ObDictDecoder::batch_get_bitpacked_refs(
 }
 
 int ObDictDecoder::batch_get_null_count(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const unsigned char *col_data,
     int64_t &null_count) const
@@ -394,7 +394,7 @@ int ObDictDecoder::batch_get_null_count(
 int ObDictDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -758,7 +758,7 @@ bool ObDictDecoder::fast_string_equal_valid(
 int ObDictDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {
@@ -1504,7 +1504,6 @@ int ObDictDecoder::pushdown_operator(
   } else if (meta_header_->count_ > pd_filter_info.count_ ||
              meta_header_->count_ > col_ctx.micro_block_header_->row_count_ * 0.8) {
   } else {
-    void *buf = nullptr;
     common::ObBitmap *ref_bitmap = nullptr;
     common::ObDatum *datums = nullptr;
     ObSEArray<ObSqlDatumInfo, 16> datum_infos;
@@ -1538,7 +1537,7 @@ int ObDictDecoder::pushdown_operator(
                   datums))) {
         LOG_WARN("Failed to batch decode referenes from dict", K(ret), K(col_ctx));
       } else if (col_ctx.obj_meta_.is_fixed_len_char_type() && nullptr != col_ctx.col_param_ &&
-                 OB_FAIL(storage::pad_on_datums(col_ctx.col_param_->get_accuracy(),
+                OB_FAIL(storage::pad_on_datums(col_ctx.col_param_->get_accuracy(),
                                                 col_ctx.obj_meta_.get_collation_type(),
                                                 *col_ctx.allocator_,
                                                 upper_bound - index,
@@ -1558,6 +1557,41 @@ int ObDictDecoder::pushdown_operator(
       } else {
         filter_applied = true;
       }
+    }
+  }
+  return ret;
+}
+
+// Not used for now because if the block can not be skipped by monotonicy, the performance will descrease.
+// There are two reasons for the decline in performance.
+// 1. check_has_null() need to traverse all refs.
+// 2. check_skip_by_monotonicity() brings redundant comparisons.
+int ObDictDecoder::check_skip_block(
+    const ObColumnDecoderCtx &col_ctx,
+    sql::ObBlackFilterExecutor &filter,
+    sql::PushdownFilterInfo &pd_filter_info,
+    ObBitmap &result_bitmap,
+    sql::ObBoolMask &bool_mask) const
+{
+  int ret = OB_SUCCESS;
+  bool has_null = false;
+  if (!filter.is_monotonic()) {
+  } else if (meta_header_->count_ <= DICT_SKIP_THRESHOLD) {
+    // Do not skip block when dict count is small.
+    // Otherwise, if can not skip block by monotonicity, the performance will decrease.
+  } else if (OB_FAIL(check_has_null(col_ctx, col_ctx.col_header_->length_, has_null))) {
+    LOG_WARN("Failed to check has null", K(ret));
+  } else if (meta_header_->is_sorted_dict()) {
+    ObStorageDatum min_datum = *begin(&col_ctx, col_ctx.col_header_->length_);
+    ObStorageDatum max_datum = *(end(&col_ctx, col_ctx.col_header_->length_) - 1);
+    if (OB_FAIL(check_skip_by_monotonicity(filter,
+                                           min_datum,
+                                           max_datum,
+                                           *pd_filter_info.skip_bit_,
+                                           has_null,
+                                           &result_bitmap,
+                                           bool_mask))) {
+      LOG_WARN("Failed to check can skip by monotonicity", K(ret), K(min_datum), K(max_datum), K(filter));
     }
   }
   return ret;
@@ -1711,7 +1745,7 @@ int ObDictDecoder::batch_read_distinct(
 
 int ObDictDecoder::read_reference(
     const ObColumnDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
 {

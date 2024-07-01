@@ -517,6 +517,8 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
       if (common::OB_ENTRY_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
       }
+    } else if (!ptr_hdl.get_resource_ptr()->get_addr().is_disked()) {
+      ret = OB_EAGAIN; // For non-disked addr tablet, please wait for persist.
     }
   } else if ((nullptr == op && OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory)))
       || (nullptr != op && OB_FAIL(try_get_in_memory_meta_obj_with_filter(key, *op, ptr_hdl, guard, is_in_memory)))) {

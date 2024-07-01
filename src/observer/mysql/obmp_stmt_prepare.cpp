@@ -474,6 +474,7 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
                                                       async_resp_used))) {
             ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
             if (OB_ISNULL(plan_ctx)) {
+              // ignore ret
               LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
             } else {
               LOG_WARN("execute query fail", K(ret), "timeout_timestamp",

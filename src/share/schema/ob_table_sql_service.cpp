@@ -1736,7 +1736,7 @@ int ObTableSqlService::supplement_for_core_table(ObISQLClient &sql_client,
     MEMSET(orig_default_value_buf, 0, value_buf_len);
     lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
     if (!ob_is_string_type(column.get_data_type()) && !ob_is_json(column.get_data_type())
-        && !ob_is_geometry(column.get_data_type())) {
+        && !ob_is_geometry(column.get_data_type()) && !ob_is_roaringbitmap(column.get_data_type())) {
       if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(
           column.get_tenant_id(), column.get_table_id(), compat_mode))) {
         LOG_WARN("fail to get tenant mode", K(ret), K(column));
@@ -1754,7 +1754,7 @@ int ObTableSqlService::supplement_for_core_table(ObISQLClient &sql_client,
   ObString orig_default_value;
   if (OB_SUCC(ret)) {
     if (ob_is_string_type(column.get_data_type()) || ob_is_json(column.get_data_type())
-        || ob_is_geometry(column.get_data_type())) {
+        || ob_is_geometry(column.get_data_type()) || ob_is_roaringbitmap(column.get_data_type())) {
       ObString orig_default_value_str = column.get_orig_default_value().get_string();
       orig_default_value.assign_ptr(orig_default_value_str.ptr(), orig_default_value_str.length());
     } else {
@@ -2994,6 +2994,11 @@ int ObTableSqlService::gen_table_dml(
                  || 0 == strcasecmp(table.get_compress_func_name(), all_compressor_name[ObCompressorType::ZLIB_LITE_COMPRESSOR]))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("zlib_lite_1.0 not support before 4.3", K(ret), K(table));
+  } else if ((data_version < MOCK_DATA_VERSION_4_2_3_0 ||
+                (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_2_0))
+             && OB_UNLIKELY(0 != table.get_auto_increment_cache_size())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("auto increment cache size not support before 4.2.3", K(ret), K(table));
   } else {
   if (data_version < DATA_VERSION_4_2_1_0
       && (!table.get_ttl_definition().empty() || !table.get_kv_attributes().empty())) {
@@ -3001,6 +3006,9 @@ int ObTableSqlService::gen_table_dml(
     LOG_WARN("ttl definition and kv attributes is not supported in version less than 4.2.1",
         "ttl_definition", table.get_ttl_definition().empty(),
         "kv_attributes", table.get_kv_attributes().empty());
+  } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table));
   } else {}
   if (OB_SUCC(ret)) {
     const ObPartitionOption &part_option = table.get_part_option();
@@ -3137,6 +3145,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("max_used_column_group_id", table.get_max_used_column_group_id())))
         || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
+        || ((data_version >= DATA_VERSION_4_3_2_0 || (data_version < DATA_VERSION_4_3_0_0 && data_version >= MOCK_DATA_VERSION_4_2_3_0))
+            && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3172,6 +3182,11 @@ int ObTableSqlService::gen_table_options_dml(
              && OB_UNLIKELY(OB_DEFAULT_LOB_INROW_THRESHOLD != table.get_lob_inrow_threshold())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("lob_inrow_threshold not support before 4.2.1.2", K(ret), K(table));
+  } else if ((data_version < MOCK_DATA_VERSION_4_2_3_0
+        || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_2_0))
+      && (table.get_auto_increment_cache_size() != 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table auto_increment_cache_size not support before 4.2.3", K(ret), K(table));
   } else {}
   if (OB_SUCC(ret)) {
     const ObPartitionOption &part_option = table.get_part_option();
@@ -3203,6 +3218,9 @@ int ObTableSqlService::gen_table_options_dml(
     } else if (data_version < DATA_VERSION_4_1_0_0 && OB_UNLIKELY(table.view_column_filled())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("option is not support before 4.1", K(ret), K(table));
+    } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table));
     } else if (OB_FAIL(check_column_store_valid(table, data_version))) {
       LOG_WARN("fail to check column store valid", KR(ret), K(table));
     } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
@@ -3277,6 +3295,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("max_used_column_group_id", table.get_max_used_column_group_id())))
         || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
+        || ((data_version >= DATA_VERSION_4_3_2_0 || (data_version < DATA_VERSION_4_3_0_0 && data_version >= MOCK_DATA_VERSION_4_2_3_0))
+            && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3316,6 +3336,9 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
              && OB_UNLIKELY((OB_INVALID_VERSION != new_table_schema.get_truncate_version()))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("truncate version is not support before 4.1", K(ret), K(new_table_schema));
+  } else if (not_compat_for_queuing_mode(data_version) && new_table_schema.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(new_table_schema));
   } else if (OB_FAIL(check_column_store_valid(new_table_schema, data_version))) {
     LOG_WARN("fail to check column store valid", KR(ret), K(tenant_id), K(new_table_schema));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
@@ -4223,6 +4246,11 @@ int ObTableSqlService::gen_column_dml(
     LOG_WARN("tenant data version is less than 4.2, skip index feature is not supported",
         K(ret), K(tenant_data_version), K(column));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, skip index");
+  } else if (tenant_data_version < DATA_VERSION_4_3_2_0 &&
+             (ob_is_roaringbitmap(column.get_data_type()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.3.2, roaringbitmap type is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.2, roaringbitmap type");
   } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(column.get_charset_type(),
                                                                     exec_tenant_id))) {
     LOG_WARN("failed to check charset data version valid",  K(column.get_charset_type()), K(ret));
@@ -4233,7 +4261,8 @@ int ObTableSqlService::gen_column_dml(
       column.is_identity_column() ||
       ob_is_string_type(column.get_data_type()) ||
       ob_is_json(column.get_data_type()) ||
-      ob_is_geometry(column.get_data_type())) {
+      ob_is_geometry(column.get_data_type()) ||
+      ob_is_roaringbitmap(column.get_data_type())) {
     //The default value of the generated column is the expression definition of the generated column
     ObString orig_default_value_str = column.get_orig_default_value().get_string();
     ObString cur_default_value_str = column.get_cur_default_value().get_string();

@@ -211,6 +211,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_service.cpp
   table_load/ob_table_load_store_ctx.cpp
   table_load/ob_table_load_store_trans.cpp
+  table_load/ob_table_load_store_trans_px_writer.cpp
   table_load/ob_table_load_store.cpp
   table_load/ob_table_load_struct.cpp
   table_load/ob_table_load_table_compactor.cpp
@@ -431,6 +432,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_storage_ha_error_diagnose.cpp
   virtual_table/ob_all_virtual_storage_ha_perf_diagnose.cpp
   virtual_table/ob_all_virtual_sys_variable_default_value.cpp
+  virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
   virtual_table/ob_all_virtual_compatibility_control.cpp
 )
 

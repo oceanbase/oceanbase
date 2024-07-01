@@ -43,7 +43,7 @@ public:
     common::ObBitmap &result_bitmap) = 0;
   virtual int get_rows(const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const int64_t *row_ids, const char **cell_datas, const int64_t row_cap,
+    const int32_t *row_ids, const char **cell_datas, const int64_t row_cap,
     common::ObIArray<ObSqlDatumInfo> &datum_infos, const int64_t datum_offset = 0) = 0;
   virtual bool can_apply_black(const common::ObIArray<int32_t> &col_offsets) const = 0;
   virtual int filter_black_filter_batch(const sql::ObPushdownFilterExecutor *parent,
@@ -58,7 +58,7 @@ public:
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const char **cell_datas,
       const int64_t vec_offset,

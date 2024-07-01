@@ -138,7 +138,9 @@ int ObIndexTreePrefetcher::init_basic_info(
         LOG_WARN("Unexpected state, index_scanner_ is valid at first scan", K(ret), KPC(this), K(index_scanner_), K(iter_param), K(lbt()));
       } else {
         const ObTablet *cur_tablet = OB_ISNULL(iter_param_->tablet_handle_) ? nullptr : iter_param_->tablet_handle_->get_obj();
-        index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_);
+        index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_,
+          ObRowkeyVectorHelper::can_use_non_datum_rowkey_vector(sstable.is_normal_cg_sstable(), iter_param_->tablet_id_)
+            ? iter_param_->get_rowkey_col_descs() : nullptr);
       }
     } else if (OB_FAIL(init_index_scanner(index_scanner_))) {
       LOG_WARN("Fail to init index_scanner", K(ret));
@@ -282,16 +284,18 @@ int ObIndexTreePrefetcher::lookup_in_index_tree(ObSSTableReadHandle &read_handle
 int ObIndexTreePrefetcher::init_index_scanner(ObIndexBlockRowScanner &index_scanner)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(index_scanner.init(
+  if (OB_ISNULL(iter_param_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
+  } else if (OB_FAIL(index_scanner.init(
       *datum_utils_,
       *access_ctx_->stmt_allocator_,
       access_ctx_->query_flag_,
       sstable_->get_macro_offset(),
-      sstable_->is_normal_cg_sstable()))) {
+      sstable_->is_normal_cg_sstable(),
+      ObRowkeyVectorHelper::can_use_non_datum_rowkey_vector(sstable_->is_normal_cg_sstable(), iter_param_->tablet_id_)
+        ? iter_param_->get_rowkey_col_descs() : nullptr))) {
     LOG_WARN("init index scanner fail", K(ret), KPC(sstable_), KP(sstable_));
-  } else if (OB_ISNULL(iter_param_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
   } else {
     const ObTablet *cur_tablet = OB_ISNULL(iter_param_->tablet_handle_) ? nullptr : iter_param_->tablet_handle_->get_obj();
     index_scanner.set_iter_param(sstable_, cur_tablet);
@@ -315,7 +319,6 @@ bool ObIndexTreePrefetcher::last_handle_hit(const ObMicroIndexInfo &block_info,
     }
   } else if (micro_handle.match(macro_id, offset, size)) {
     EVENT_INC(ObStatEventIds::INDEX_BLOCK_CACHE_HIT);
-    ++access_ctx_->table_store_stat_.index_block_cache_hit_cnt_;
     bret = true;
   }
   return bret;
@@ -387,7 +390,9 @@ int ObIndexTreePrefetcher::check_bloom_filter(
 int ObIndexTreePrefetcher::prefetch_block_data(
     blocksstable::ObMicroIndexInfo &index_block_info,
     ObMicroBlockDataHandle &micro_handle,
-    const bool is_data)
+    const bool is_data,
+    const bool use_multi_block_prefetch,
+    const bool need_submit_io)
 {
   int ret = OB_SUCCESS;
   if (is_rescan() && last_handle_hit(index_block_info, is_data, micro_handle)) {
@@ -397,9 +402,15 @@ int ObIndexTreePrefetcher::prefetch_block_data(
   } else if (OB_FAIL(access_ctx_->micro_block_handle_mgr_.get_micro_block_handle(
                          index_block_info,
                          is_data,
-                         true, /* need submit io */
-                         micro_handle))) {
-    LOG_WARN("Fail to get micro block handle from handle mgr", K(ret));
+                         !is_data || need_submit_io, /* need submit io */
+                         use_multi_block_prefetch,
+                         micro_handle,
+                         cur_level_))) {
+    if (is_data && !need_submit_io && OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("Fail to get micro block handle from handle mgr", K(ret));
+    }
   } else if (is_rescan() && is_data && micro_handle.in_block_state()) {
     last_micro_block_handle_ = micro_handle;
   }
@@ -630,15 +641,19 @@ int ObIndexTreeMultiPrefetcher::multi_prefetch()
                     cur_index_info,
                     cur_index_info.is_data_block(),
                     false, /* need submit io */
-                    next_handle))) {
-          //not in cache yet, stop this rowkey prefetching if it's not the rowkey to be feteched
-          ret = OB_SUCCESS;
-          if (is_rowkey_to_fetched) {
-            if (OB_FAIL(read_handle.micro_handle_->get_micro_block_data(nullptr, index_block_, false))) {
-              LOG_WARN("Fail to get index block data", K(ret), KPC(read_handle.micro_handle_));
+                    false, /* use_multi_block_prefetch */
+                    next_handle,
+                    cur_level_))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            //not in cache yet, stop this rowkey prefetching if it's not the rowkey to be feteched
+            ret = OB_SUCCESS;
+            if (is_rowkey_to_fetched) {
+              if (OB_FAIL(read_handle.micro_handle_->get_micro_block_data(nullptr, index_block_, false))) {
+                LOG_WARN("Fail to get index block data", K(ret), KPC(read_handle.micro_handle_));
+              }
+            } else {
+              stop_prefetch = true;
             }
-          } else {
-            stop_prefetch = true;
           }
         } else if (FALSE_IT(read_handle.set_cur_micro_handle(next_handle))) {
         } else if (OB_FAIL(read_handle.micro_handle_->get_cached_index_block_data(index_block_))) {
@@ -778,6 +793,7 @@ void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::
   reset_tree_handles();
   read_handles_.reset();
   inner_reset();
+  multi_io_params_.reset();
   max_range_prefetching_cnt_ = 0;
   max_micro_handle_cnt_ = 0;
   ObIndexTreePrefetcher::reset();
@@ -791,6 +807,7 @@ void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::
   }
   clean_blockscan_check_info();
   inner_reset();
+  multi_io_params_.reuse();
   ObIndexTreePrefetcher::reuse();
 }
 
@@ -808,6 +825,7 @@ void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::
     micro_data_handles_[i].reset();
   }
   inner_reset();
+  multi_io_params_.reset();
   ObIndexTreePrefetcher::reclaim();
 }
 
@@ -818,6 +836,8 @@ void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::
   is_prefetch_end_ = false;
   is_row_lock_checked_ = false;
   need_check_prefetch_depth_ = false;
+  use_multi_block_prefetch_ = false;
+  need_submit_io_ = true;
   cur_range_fetch_idx_ = 0;
   cur_range_prefetch_idx_ = 0;
   cur_micro_data_fetch_idx_ = -1;
@@ -869,10 +889,10 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::g
   int ret = OB_SUCCESS;
   depth = 0;
   prefetch_depth_ = MIN(2 * prefetch_depth_, DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT);
-  if (need_check_prefetch_depth_ && access_ctx_->limit_param_->offset_ < INT32_MAX && access_ctx_->limit_param_->limit_ < INT32_MAX) {
+  if (need_check_prefetch_depth_) {
     int64_t prefetch_micro_cnt = MAX(1,
-          (access_ctx_->limit_param_->offset_ + access_ctx_->limit_param_->limit_ - access_ctx_->out_cnt_ + \
-          SSTABLE_MICRO_AVG_COUNT - 1) / SSTABLE_MICRO_AVG_COUNT);
+                                     (access_ctx_->limit_param_->offset_ + access_ctx_->limit_param_->limit_ - access_ctx_->out_cnt_ + \
+                                      SSTABLE_MICRO_AVG_COUNT - 1) / SSTABLE_MICRO_AVG_COUNT);
     prefetch_depth_ = MIN(prefetch_depth_, prefetch_micro_cnt);
   }
   depth = min(static_cast<int64_t>(prefetch_depth_),
@@ -954,7 +974,9 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::s
           LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
         } else {
           const ObTablet *cur_tablet = OB_ISNULL(iter_param_->tablet_handle_) ? nullptr : iter_param_->tablet_handle_->get_obj();
-          tree_handles_[level].index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_);
+          tree_handles_[level].index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_,
+            ObRowkeyVectorHelper::can_use_non_datum_rowkey_vector(sstable.is_normal_cg_sstable(), iter_param_->tablet_id_)
+              ? iter_param_->get_rowkey_col_descs() : nullptr);
         }
       } else if (OB_FAIL(init_index_scanner(tree_handles_[level].index_scanner_))) {
         LOG_WARN("Fail to init index_scanner", K(ret), K(level));
@@ -989,7 +1011,9 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::i
       iter_param_->limit_prefetch_ &&
       nullptr != access_ctx_->limit_param_ &&
       access_ctx_->limit_param_->limit_ >= 0 &&
-      access_ctx_->limit_param_->limit_ < 4096;
+      access_ctx_->limit_param_->limit_ < 4096 &&
+      access_ctx_->limit_param_->offset_ < INT32_MAX;
+  use_multi_block_prefetch_ = (iter_param.get_io_read_batch_size() > 0);
   switch (iter_type) {
     case ObStoreRowIterator::IteratorMultiGet:
     case ObStoreRowIterator::IteratorCOMultiGet: {
@@ -1059,6 +1083,13 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::i
     LOG_WARN("Fail to init read_handles", K(ret), K(max_handle_cnt));
   } else if (OB_FAIL(init_tree_handles(max_height))) {
     LOG_WARN("Fail to init tree handles", K(ret), K(max_height));
+  } else if (use_multi_block_prefetch_ &&
+             OB_FAIL(multi_io_params_.init(
+                     iter_param,
+                     max_micro_handle_cnt_,
+                     access_ctx_->query_flag_.is_reverse_scan(),
+                     *access_ctx_->stmt_allocator_))) {
+    LOG_WARN("Fail to init multi io params", K(ret));
   }
   return ret;
 }
@@ -1080,13 +1111,10 @@ template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
 int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::prefetch()
 {
   int ret = OB_SUCCESS;
-  const int32_t prefetch_limit = MAX(2, max_micro_handle_cnt_ / 2);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObIndexTreeMultiPassPrefetcher not init", K(ret));
   } else if (is_prefetch_end_) {
-  } else if (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_ >= prefetch_limit) {
-    // continue current prefetch
   } else if (OB_FAIL(prefetch_index_tree())) {
     if (OB_LIKELY(OB_ITER_END == ret)) {
       is_prefetch_end_ = true;
@@ -1225,7 +1253,9 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected prefetch status", K(ret), K_(cur_level), K_(index_tree_height),
              K_(micro_data_prefetch_idx), K_(cur_micro_data_fetch_idx), K_(max_micro_handle_cnt));
-  } else if (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_ == max_micro_handle_cnt_) {
+  } else if (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_ == max_micro_handle_cnt_ ||
+             (use_multi_block_prefetch_ && prefetch_depth_ > MIN_DATA_READ_BATCH_COUNT &&
+              (max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_)) < MIN_DATA_READ_BATCH_COUNT)) {
     // DataBlock ring buf full
   } else if (OB_FAIL(get_prefetch_depth(prefetch_depth))) {
     LOG_WARN("Fail to get prefetch depth", K(ret));
@@ -1268,7 +1298,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
           } else if (nullptr != sstable_index_filter
                       && can_index_filter_skip(block_info, sample_executor)
                       && OB_FAIL(sstable_index_filter->check_range(iter_param_->read_info_,
-                                  block_info, *(access_ctx_->allocator_)))) {
+                                  block_info, *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
           } else if (block_info.is_filter_always_false()) {
             continue;
@@ -1283,7 +1313,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
             if (OB_UNLIKELY(OB_ITER_END != ret)) {
               LOG_WARN("Fail to check row lock", K(ret), K(block_info), KPC(this));
             }
-          } else if (OB_FAIL(prefetch_block_data(block_info, micro_data_handles_[prefetch_micro_idx]))) {
+          } else if (OB_FAIL(prefetch_data_block(micro_data_prefetch_idx_, block_info, micro_data_handles_[prefetch_micro_idx]))) {
             LOG_WARN("fail to prefetch_block_data", K(ret), K(block_info));
           }
 
@@ -1292,6 +1322,10 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
             micro_data_prefetch_idx_++;
             tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
           }
+        }
+        if (OB_SUCC(ret) && multi_io_params_.count() > 0 &&
+            OB_FAIL(prefetch_multi_data_block(micro_data_prefetch_idx_))) {
+          LOG_WARN("Fail to prefetch multi block", K(ret), K_(micro_data_prefetch_idx), K_(multi_io_params));
         }
       }
       if (OB_SUCC(ret) && 0 < prefetched_cnt) {
@@ -1441,8 +1475,8 @@ public:
     } else if (OB_UNLIKELY(!index_info.is_valid() || !rowkey.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Invalid MicroIndexInfo", K(ret), K(index_info), K(rowkey));
-    } else if (OB_FAIL(index_info.endkey_->compare(rowkey, datum_utils_, cmp_ret, false))) {
-      LOG_WARN("fail to compare rowkey", K(ret), KPC(index_info.endkey_), K(rowkey));
+    } else if (OB_FAIL(index_info.endkey_.compare(rowkey, datum_utils_, cmp_ret, false))) {
+      LOG_WARN("fail to compare rowkey", K(ret), K(index_info.endkey_), K(rowkey));
     }
     return cmp_ret;
   }
@@ -1482,10 +1516,10 @@ OB_INLINE static int binary_check_micro_infos(
           // move to left if the two rightmost endkeys is same(possible in multiple ranges)
           int cmp_ret = 0;
           for (; OB_SUCC(ret) && check_border_idx > start; check_border_idx--) {
-            const ObDatumRowkey *cur_endkey = (micro_infos + check_border_idx)->endkey_;
-            const ObDatumRowkey *prev_endkey = (micro_infos + check_border_idx - 1)->endkey_;
-            if (OB_FAIL(cur_endkey->compare(*prev_endkey, datum_utils, cmp_ret, false))) {
-              LOG_WARN("fail to compare rowkey", K(ret), KPC(cur_endkey), KPC(prev_endkey));
+            const ObCommonDatumRowkey &cur_endkey = (micro_infos + check_border_idx)->endkey_;
+            const ObCommonDatumRowkey &prev_endkey = (micro_infos + check_border_idx - 1)->endkey_;
+            if (OB_FAIL(cur_endkey.compare(prev_endkey, datum_utils, cmp_ret, false))) {
+              LOG_WARN("fail to compare rowkey", K(ret), K(cur_endkey), K(prev_endkey));
             } else if (cmp_ret != 0) {
               break;
             }
@@ -1520,8 +1554,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
     int64_t start_idx = start_pos % max_micro_handle_cnt_;
     int64_t end_idx = end_pos % max_micro_handle_cnt_;
     if (!is_reverse) {
-      if (OB_FAIL(micro_data_infos_[end_idx].endkey_->compare(border_rowkey, datum_utils, cmp_ret, false))) {
-        LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[start_idx].endkey_));
+      if (OB_FAIL(micro_data_infos_[end_idx].endkey_.compare(border_rowkey, datum_utils, cmp_ret, false))) {
+        LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[end_idx].endkey_));
       } else if (cmp_ret < 0) {
         for (int64_t pos = start_pos; pos <= end_pos; pos++) {
           micro_data_infos_[pos % max_micro_handle_cnt_].set_blockscan();
@@ -1538,7 +1572,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
           } else {
             cmp_ret = 0;
             // split to [start_idx, max_micro_handle_cnt_ - 1], [0, end_idx - 1]
-            if (OB_FAIL(micro_data_infos_[max_micro_handle_cnt_ - 1].endkey_->compare(border_rowkey, datum_utils, cmp_ret, false))) {
+            if (OB_FAIL(micro_data_infos_[max_micro_handle_cnt_ - 1].endkey_.compare(border_rowkey, datum_utils, cmp_ret, false))) {
               LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[max_micro_handle_cnt_ - 1]));
             } else if (cmp_ret < 0) {
               for (int64_t idx = start_idx; idx < max_micro_handle_cnt_; idx++) {
@@ -1567,7 +1601,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
         } else {
           cmp_ret = 0;
           // split to [start_idx, max_micro_handle_cnt_ - 1], [0, end_idx]
-          if (OB_FAIL(micro_data_infos_[0].endkey_->compare(border_rowkey, datum_utils, cmp_ret, false))) {
+          if (OB_FAIL(micro_data_infos_[0].endkey_.compare(border_rowkey, datum_utils, cmp_ret, false))) {
             LOG_WARN("Fail to compare endkey", K(ret), K(border_rowkey), K(micro_data_infos_[0]));
           } else if (cmp_ret > 0) {
             for (int64_t idx = start_idx; idx < max_micro_handle_cnt_; idx++) {
@@ -1684,6 +1718,52 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
   return ret;
 }
 
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::prefetch_data_block(
+    const int64_t prefetch_idx,
+    blocksstable::ObMicroIndexInfo &index_block_info,
+    ObMicroBlockDataHandle &micro_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(prefetch_block_data(index_block_info,
+                                  micro_handle,
+                                  true, /* is_data */
+                                  use_multi_block_prefetch_,
+                                  need_submit_io_))) {
+    LOG_WARN("Fail to prefetch data block data", K(ret));
+  } else if (use_multi_block_prefetch_ && micro_handle.need_multi_io()) {
+    bool need_split = true;
+    while (OB_SUCC(ret) && need_split) {
+      if (multi_io_params_.add_micro_data(index_block_info, prefetch_idx, micro_handle, need_split)) {
+        if (OB_FAIL(prefetch_multi_data_block(prefetch_idx + 1))) {
+          LOG_WARN("Fail to prefetch multi block", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::prefetch_multi_data_block(
+    const int64_t max_prefetch_idx)
+{
+  int ret = OB_SUCCESS;
+  if (multi_io_params_.count() > 0) {
+    if (OB_FAIL(access_ctx_->micro_block_handle_mgr_.prefetch_multi_data_block(
+                micro_data_infos_,
+                micro_data_handles_,
+                max_micro_handle_cnt_,
+                max_prefetch_idx,
+                multi_io_params_))) {
+      LOG_WARN("Fail to prefetch multi block", K(ret));
+    } else {
+      multi_io_params_.reuse();
+    }
+  }
+  return ret;
+}
+
 //////////////////////////////////////// ObIndexTreeLevelHandle //////////////////////////////////////////////
 template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
 int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::ObIndexTreeLevelHandle::prefetch(
@@ -1731,7 +1811,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
       } else if (nullptr != sstable_index_filter
                   && prefetcher.can_index_filter_skip(index_info, sample_executor)
                   && OB_FAIL(sstable_index_filter->check_range(prefetcher.iter_param_->read_info_, index_info,
-                                                                *(prefetcher.access_ctx_->allocator_)))) {
+                                                                *(prefetcher.access_ctx_->allocator_),
+                                                                prefetcher.iter_param_->vectorized_enabled_))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
       } else if (index_info.is_filter_always_false()) {
       } else if (nullptr != prefetcher.agg_row_store_ && prefetcher.agg_row_store_->can_agg_index_info(index_info)) {

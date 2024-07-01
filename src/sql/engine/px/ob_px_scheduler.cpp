@@ -136,6 +136,7 @@ void ObPxMsgProc::clean_dtl_interm_result(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(scheduler_)) {
+    // ignore ret
     LOG_WARN("dfo scheduler is null");
   } else {
     scheduler_->clean_dtl_interm_result(ctx);
@@ -298,6 +299,12 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext &ctx,
   return ret;
 }
 
+void ObPxMsgProc::log_warn_sqc_fail(int ret, const ObPxFinishSqcResultMsg &pkt, ObPxSqcMeta *sqc)
+{
+  // Do not change the follow log about px_obdiag_sqc_addr, becacue it will use in obdiag tool
+  LOG_WARN("sqc fail, abort qc", K(pkt), K(ret), "px_obdiag_sqc_addr", sqc->get_exec_addr());
+}
+
 int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinishSqcResultMsg &pkt,
                                         ObPxSqcMeta *sqc, ObDfo *edge)
 {
@@ -407,7 +414,7 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
   if (OB_SUCC(ret)) {
     if (OB_FAIL(pkt.rc_)) {
       DAS_CTX(ctx).get_location_router().save_cur_exec_status(pkt.rc_);
-      LOG_WARN("sqc fail, abort qc", K(pkt), K(ret), "sqc_addr", sqc->get_exec_addr());
+      log_warn_sqc_fail(ret, pkt, sqc);
     } else {
       // pkt rc_ == OB_SUCCESS
       // 处理 dml + px 框架下的affected row
@@ -418,6 +425,10 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
       } else  {
         ctx.get_physical_plan_ctx()->add_affected_rows(pkt.sqc_affected_rows_);
         ctx.get_physical_plan_ctx()->add_px_dml_row_info(pkt.dml_row_info_);
+        ctx.get_physical_plan_ctx()->add_total_memstore_read_row_count(
+          pkt.sqc_memstore_row_read_count_);
+        ctx.get_physical_plan_ctx()->add_total_ssstore_read_row_count(
+          pkt.sqc_ssstore_row_read_count_);
       }
     }
   }
@@ -504,6 +515,18 @@ int ObPxMsgProc::on_piece_msg(
     const ObOptStatsGatherPieceMsg &pkt)
 {
   ObDhPieceMsgProc<ObOptStatsGatherPieceMsg> proc;
+  return proc.on_piece_msg(coord_info_, ctx, pkt);
+}
+
+int ObPxMsgProc::on_piece_msg(ObExecContext &ctx, const SPWinFuncPXPieceMsg &pkt)
+{
+  ObDhPieceMsgProc<SPWinFuncPXPieceMsg> proc;
+  return proc.on_piece_msg(coord_info_, ctx, pkt);
+}
+
+int ObPxMsgProc::on_piece_msg(ObExecContext &ctx, const RDWinFuncPXPieceMsg &pkt)
+{
+  ObDhPieceMsgProc<RDWinFuncPXPieceMsg> proc;
   return proc.on_piece_msg(coord_info_, ctx, pkt);
 }
 

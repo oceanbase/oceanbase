@@ -780,6 +780,14 @@ int ObRawExprDeduceType::visit(ObOpRawExpr &expr)
     expr.set_result_type(result_type);
   } else if (T_OP_ROW == expr.get_expr_type()) {
     expr.set_data_type(ObNullType);
+  // During the prepare phase, some boolean expressions do not undergo recursive type deduction.
+  // T_OP_EQ, T_OP_NSEQ, T_OP_LE, T_OP_LT, T_OP_GE, T_OP_GT, T_OP_NE.
+  } else if (my_session_->is_varparams_sql_prepare() && T_OP_EQ <= expr.get_expr_type() && expr.get_expr_type() <= T_OP_NE) {
+    ObExprResType result_type;
+    result_type.set_tinyint();
+    result_type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
+    result_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+    expr.set_result_type(result_type);
   } else {
     ObExprOperator *op = expr.get_op();
     if (NULL == op) {
@@ -1515,6 +1523,14 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         break;
       }
+      case T_FUN_SYS_RB_BUILD_AGG:
+      case T_FUN_SYS_RB_OR_AGG:
+      case T_FUN_SYS_RB_AND_AGG: {
+        if (OB_FAIL(set_rb_result_type(expr, result_type))) {
+          LOG_WARN("set rb_agg result type failed", K(ret));
+        }
+        break;
+      }
       case T_FUN_GROUP_CONCAT: {
         need_add_cast = true;
         if (OB_FAIL(set_agg_group_concat_result_type(expr, result_type))) {
@@ -1564,6 +1580,9 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         } else if (OB_UNLIKELY(ob_is_geometry(child_expr->get_data_type()))) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Incorrect geometry arguments", K(child_expr->get_data_type()), K(ret));
+        } else if (OB_UNLIKELY(ob_is_roaringbitmap(child_expr->get_data_type()))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Incorrect roaringbitmap arguments", K(child_expr->get_data_type()), K(ret));
         } else if (lib::is_oracle_mode()) {
           ObObjType from_type = child_expr->get_result_type().get_type();
           ObCollationType from_cs_type = child_expr->get_result_type().get_collation_type();
@@ -3259,6 +3278,9 @@ int ObRawExprDeduceType::set_agg_min_max_result_type(ObAggFunRawExpr &expr,
   } else if (OB_UNLIKELY(ob_is_geometry(child_expr->get_data_type()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Incorrect geometry arguments", K(child_expr->get_data_type()), K(ret));
+  } else if (OB_UNLIKELY(ob_is_roaringbitmap(child_expr->get_data_type()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Incorrect roaringbitmap arguments", K(child_expr->get_data_type()), K(ret));
   } else if (OB_UNLIKELY(ob_is_enumset_tc(child_expr->get_data_type()))) {
     // To compatible with MySQL, we need to add cast expression that enumset to varchar
     // to evalute MIN/MAX aggregate functions.
@@ -3341,6 +3363,23 @@ int ObRawExprDeduceType::set_asmvt_result_type(ObAggFunRawExpr &expr,
     result_type.set_collation_type(CS_TYPE_BINARY);
     result_type.set_collation_level(CS_LEVEL_IMPLICIT);
     result_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType]);
+    expr.set_result_type(result_type);
+  }
+  return ret;
+}
+
+int ObRawExprDeduceType::set_rb_result_type(ObAggFunRawExpr &expr,
+                                               ObExprResType& result_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(expr.get_real_param_count() != 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()), K(expr.get_real_param_count()), K(expr));
+  } else {
+    result_type.set_type(ObRoaringBitmapType);
+    result_type.set_collation_type(CS_TYPE_BINARY);
+    result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+    result_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObRoaringBitmapType]);
     expr.set_result_type(result_type);
   }
   return ret;

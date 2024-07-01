@@ -1221,6 +1221,15 @@ bool ObConfigModeItem::set(const char *str)
   return valid;
 }
 
+int ObConfigModeItem::init_mode(ObIConfigMode &mode)
+{
+  int ret = OB_SUCCESS;
+  ObLatchRGuard r_guard(lock_, ObLatchIds::CONFIG_LOCK);
+  if (OB_FAIL(mode.set_value(*this))) {
+    OB_LOG(WARN, "set_value failed", KR(ret));
+  };
+  return ret;
+}
 ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
                                          Scope::ScopeInfo scope_info,
                                          const char *name,

@@ -1026,6 +1026,8 @@ public:
     is_enable_px_fast_reclaim_(false),
     enable_spf_batch_rescan_(false),
     enable_var_assign_use_das_(false),
+    enable_das_keep_order_(false),
+    bloom_filter_ratio_(0),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1069,6 +1071,8 @@ public:
   bool is_enable_px_fast_reclaim_;
   bool enable_spf_batch_rescan_;
   bool enable_var_assign_use_das_;
+  bool enable_das_keep_order_;
+  int bloom_filter_ratio_;
 
 private:
   // current cluster config version_

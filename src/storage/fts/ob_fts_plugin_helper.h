@@ -25,6 +25,8 @@ namespace oceanbase
 namespace storage
 {
 
+class ObAddWord;
+
 class ObFTParser final
 {
 public:
@@ -89,7 +91,7 @@ public:
       const char *fulltext,
       const int64_t fulltext_len,
       int64_t &doc_length,
-      common::ObIArray<ObFTWord> &words) const;
+      ObFTWordMap &words) const;
   const ObFTParser &get_parser_name() const { return parser_name_; }
   void reset();
 
@@ -105,17 +107,8 @@ private:
       const char *fulltext,
       const int64_t fulltext_len,
       common::ObIAllocator &allocator,
-      lib::ObFTParserParam::ObIAddWord &add_word);
-  static bool need_stopword_list(const ObFTParser &parser);
-  static bool need_castdn(const ObFTParser &parser);
-  static bool need_min_max_word(const ObFTParser &parser);
-
-  int alloc_add_word(
-      const ObCollationType &type,
-      common::ObIArray<ObFTWord> &words,
-      lib::ObFTParserParam::ObIAddWord *&add_word) const;
-  void free_add_word(lib::ObFTParserParam::ObIAddWord *&add_word) const;
-
+      ObAddWord &add_word);
+  int set_add_word_flag(const ObFTParser &parser);
 private:
   lib::ObPluginParam plugin_param_;
   common::ObIAllocator *allocator_;

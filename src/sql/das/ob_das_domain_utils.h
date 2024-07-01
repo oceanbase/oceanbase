@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_DAS_DOMAIN_UTILS_H
 #define OCEANBASE_DAS_DOMAIN_UTILS_H
 
+#include "lib/allocator/page_arena.h"
 #include "lib/hash/ob_hashset.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
@@ -56,8 +57,6 @@ public:
       const IntFixedArray &row_projector,
       const ObDASWriteBuffer::DmlRow &dml_row,
       ObDomainIndexRow &domain_rows);
-private:
-  typedef common::hash::ObHashMap<ObFTWord, int64_t> ObFTWordMap;
 private:
   static int segment_and_calc_word_count(
       common::ObIAllocator &allocator,
@@ -126,7 +125,7 @@ protected:
   ObDASWriteBuffer::Iterator &write_iter_;
   const ObDASDMLBaseCtDef *das_ctdef_;
   const ObDASDMLBaseCtDef *main_ctdef_;
-  common::ObIAllocator &allocator_;
+  common::ObArenaAllocator allocator_;
   bool is_update_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDomainDMLIterator);
@@ -178,13 +177,13 @@ private:
     const ObChunkDatumStore::StoredRow *store_row,
     int64_t& multivalue_idx,
     int64_t& multivalue_arr_idx,
-    ObString &multivalue_data) const;
+    ObString &multivalue_data);
 
   int get_multivlaue_json_data_for_update(
     const ObChunkDatumStore::StoredRow *store_row,
     int64_t& multivalue_idx,
     int64_t& multivalue_arr_idx,
-    ObString &multivalue_data) const;
+    ObString &multivalue_data);
 };
 
 
@@ -214,12 +213,12 @@ protected:
       const ObChunkDatumStore::StoredRow *store_row,
       ObString &doc_id,
       ObString &ft,
-      common::ObObjMeta &ft_meta) const;
+      common::ObObjMeta &ft_meta);
   int get_ft_and_doc_id_for_update(
       const ObChunkDatumStore::StoredRow *store_row,
       ObString &doc_id,
       ObString &ft,
-      common::ObObjMeta &ft_meta) const;
+      common::ObObjMeta &ft_meta);
 
 private:
   storage::ObFTParseHelper ft_parse_helper_;

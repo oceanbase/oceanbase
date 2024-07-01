@@ -26,13 +26,15 @@ struct ObDirectLoadMode
 #define OB_DIRECT_LOAD_MODE_DEF(DEF) \
   DEF(INVALID_MODE, = 0)             \
   DEF(LOAD_DATA, = 1)                \
-  DEF(PDML, = 2)                     \
+  DEF(INSERT_INTO, = 2)              \
   DEF(TABLE_LOAD, = 3)               \
+  DEF(INSERT_OVERWRITE,  = 4)        \
   DEF(MAX_MODE, )
 
   DECLARE_ENUM(Type, type, OB_DIRECT_LOAD_MODE_DEF, static);
 
   static bool is_type_valid(const Type type);
+  static bool is_insert_overwrite(const Type type) { return INSERT_OVERWRITE == type; }
 };
 
 struct ObDirectLoadMethod
@@ -64,7 +66,6 @@ struct ObDirectLoadInsertMode
   static bool is_type_valid(const Type type);
   static bool is_valid_for_full_method(const Type type) { return NORMAL == type || OVERWRITE == type; }
   static bool is_valid_for_incremental_method(const Type type) { return NORMAL == type || INC_REPLACE == type; }
-  static bool need_origin_data(const Type type) { return NORMAL == type; }
 };
 
 } // namespace storage

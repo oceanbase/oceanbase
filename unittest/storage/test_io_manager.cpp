@@ -177,12 +177,6 @@ TEST_F(TestIOStruct, IOFlag)
   flag2.set_mode((ObIOMode)88);
   ASSERT_FALSE(flag2.is_valid());
 
-  // test io group
-  flag2 = flag;
-  ASSERT_TRUE(flag2.is_valid());
-  flag2.set_resource_group_id(OB_INVALID_GROUP_ID);
-  ASSERT_FALSE(flag2.is_valid());
-
   // test wait event number
   flag2 = flag;
   ASSERT_TRUE(flag2.is_valid());
@@ -637,7 +631,7 @@ TEST_F(TestIOStruct, Test_Size)
   int64_t trace_size = sizeof(ObCurTraceId::TraceId);
   int64_t fd_size = sizeof(ObIOFd);
 
-  ASSERT_LT(max_callback_size, 256);
+  ASSERT_LT(max_callback_size, 512);
   LOG_INFO("qilu :check size", K(size1), K(size2), K(size3), K(size4), K(size5), K(size6), K(max_callback_size));
   LOG_INFO("qilu :check size", K(size_request), K(size_result), K(size_info), K(size_thread_cond), K(size_flag),
           K(ref_size), K(time_size), K(return_size), K(fd_size), K(trace_size));

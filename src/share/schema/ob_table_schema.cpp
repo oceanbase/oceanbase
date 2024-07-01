@@ -47,6 +47,27 @@ using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 using namespace blocksstable;
 
+const static char * ObTableModeFlagStr[] = {
+    "NORMAL",
+    "QUEUING",
+    "PRIMARY_AUX_VP",
+    "MODERATE",
+    "SUPER",
+    "EXTREME",
+};
+
+const char *table_mode_flag_to_str(const ObTableModeFlag &table_mode)
+{
+  STATIC_ASSERT(static_cast<int64_t>(TABLE_MODE_MAX) == ARRAYSIZEOF(ObTableModeFlagStr), "table mode flag str len is mismatch");
+  const char *str = "";
+  if (is_valid_table_mode_flag(table_mode)) {
+    str = ObTableModeFlagStr[table_mode];
+  } else {
+    str = "invalid_table_mode_flag_type";
+  }
+  return str;
+}
+
 ObColumnIdKey ObGetColumnKey<ObColumnIdKey, ObColumnSchemaV2 *>::operator()(const ObColumnSchemaV2 *column_schema) const
 {
   return ObColumnIdKey(column_schema->get_column_id());
@@ -1905,7 +1926,7 @@ bool ObTableSchema::is_valid() const
                 }
               }
             } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
-                       || ob_is_geometry_tc(column->get_data_type())) {
+                       || ob_is_geometry_tc(column->get_data_type()) || ob_is_roaringbitmap_tc(column->get_data_type())) {
               ObLength max_length = 0;
               max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
               if (max_length < column->get_data_length()) {
@@ -3810,7 +3831,7 @@ int ObTableSchema::sort_column_array_by_column_id()
       }
     }
     if (OB_SUCC(ret)) {
-      std::sort(column_array_, column_array_ + column_cnt_, [](ObColumnSchemaV2 *&lhs, ObColumnSchemaV2 *&rhs) -> bool {
+      lib::ob_sort(column_array_, column_array_ + column_cnt_, [](ObColumnSchemaV2 *&lhs, ObColumnSchemaV2 *&rhs) -> bool {
         return lhs->get_column_id() < rhs->get_column_id();
       });
     }
@@ -5369,7 +5390,7 @@ int ObTableSchema::check_row_length(
         // The full text column in the index only counts the length of one word segment
         row_length += OB_MAX_OBJECT_NAME_LENGTH;
       } else if (ob_is_string_type(col->get_data_type()) || ob_is_json(col->get_data_type())
-                 || ob_is_geometry(col->get_data_type())) {
+                 || ob_is_geometry(col->get_data_type()) || ob_is_roaringbitmap(col->get_data_type())) {
         int64_t length = 0;
         if (OB_FAIL(col->get_byte_length(length, is_oracle_mode, true))) {
           SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret));
@@ -5529,7 +5550,8 @@ int ObTableSchema::has_lob_column(bool &has_lob, const bool check_large /*= fals
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Column schema is NULL", K(ret));
     } else if (ob_is_json_tc(column_schema->get_data_type())
-               || ob_is_geometry_tc(column_schema->get_data_type())) {
+               || ob_is_geometry_tc(column_schema->get_data_type())
+               || ob_is_roaringbitmap_tc(column_schema->get_data_type())) {
       has_lob = true; // cannot know whether a json is lob or not from schema
     } else if (check_large) {
       if (ob_is_large_text(column_schema->get_data_type())) {
@@ -6141,6 +6163,33 @@ bool ObTableSchema::has_generated_and_partkey_column() const
     }
   }
   return result;
+}
+
+int ObTableSchema::check_column_has_multivalue_index_depend(
+  const ObColumnSchemaV2 &data_column_schema,
+  bool &has_func_idx_col_deps) const
+{
+  int ret = OB_SUCCESS;
+  has_func_idx_col_deps = false;
+  const uint64_t tenant_id = get_tenant_id();
+
+  if (data_column_schema.has_generated_column_deps()) {
+    for (ObTableSchema::const_column_iterator iter = column_begin();
+        OB_SUCC(ret) && iter != column_end(); iter++) {
+      const ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret), KPC(this));
+      } else if (column->is_multivalue_generated_column()) {
+        if (column->has_cascaded_column_id(data_column_schema.get_column_id())) {
+          has_func_idx_col_deps = true;
+          break;
+        }
+      }
+    }
+  }
+
+  return ret;
 }
 
 int ObTableSchema::check_functional_index_columns_depend(

@@ -150,6 +150,9 @@ public:
   int get_max_log_info(const ObLSID &id, palf::AccessMode &mode, SCN &scn);
   // get ls from dba_ob_ls
   int is_ls_existing(const ObLSID &id);
+  // check if the source cluster has the same cluster id as current cluster, but they are actually
+  // two different clusters, if so, out param `res` will be true, otherwise false
+  int check_different_cluster_with_same_cluster_id(const int64_t source_cluster_id, bool &res);
 private:
   // check if user or password changed
   bool is_user_changed_(const char *user_name, const char *user_password);

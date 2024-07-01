@@ -298,7 +298,8 @@ int ObIMulModeBase::print_attr(ObStringBuffer& x_buf, uint32_t format_flag)
     is_mysql_key_only = true;
   }
 
-  if (OB_FAIL(get_key(key))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_key(key))) {
     LOG_WARN("fail to print =\" in attr", K(ret));
   } else if (OB_FAIL(get_value(value))) {
     LOG_WARN("fail to print =\" in attr", K(ret));

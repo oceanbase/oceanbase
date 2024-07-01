@@ -1178,6 +1178,8 @@ int ObLogMetaManager::set_column_meta_(
         col_meta->setPrecision(column_schema.get_data_precision());
       } else if (column_schema.is_xmltype()) {
         mysql_type = obmysql::MYSQL_TYPE_ORA_XML;
+      } else if (ObRoaringBitmapType == col_type) {
+        mysql_type = obmysql::MYSQL_TYPE_ROARINGBITMAP;
       }
 
       col_meta->setScale(column_schema.get_data_scale());
@@ -1462,7 +1464,7 @@ int ObLogMetaManager::fill_primary_key_info_(
         "column_name", column_table_schema->get_column_name());
   } else if (valid_pk_num > 0 && OB_FAIL(pks.append(","))) {
     LOG_ERROR("append pks delimeter failed", KR(ret), K(valid_pk_num), K(pks));
-  } else if (pks.append(column_table_schema->get_column_name())) {
+  } else if (OB_FAIL(pks.append(column_table_schema->get_column_name()))) {
     LOG_ERROR("append column_name into pks failed", KR(ret), K(pks), KPC(column_table_schema));
   } else {
     if (OB_SUCC(ret)) {
@@ -1784,11 +1786,11 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
                   const auto *column_schema = table_schema->get_column_schema(column_id);
 
                   if (OB_ISNULL(column_schema)) {
+                    ret = OB_ERR_UNEXPECTED;
                     LOG_ERROR("get column schema fail", K(column_id), K(index), K(column_count),
                         "table_id", table_schema->get_table_id(),
                         "table_name", table_schema->get_table_name(),
                         "table_schame_version", table_schema->get_schema_version());
-                    ret = OB_ERR_UNEXPECTED;
                   } else {
                     if (is_first_uk_column) {
                       is_first_uk_column = false;

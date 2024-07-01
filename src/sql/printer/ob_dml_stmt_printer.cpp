@@ -287,7 +287,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (OB_ISNULL(stmt_) || OB_ISNULL(buf_) || OB_ISNULL(pos_)) {
+  } else if (OB_ISNULL(stmt_) || OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL or buf_ is NULL or pos_ is NULL", K(ret));
   } else {
@@ -482,30 +482,8 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       break;
     }
     case TableItem::VALUES_TABLE: {
-      int64_t column_cnt = stmt_->get_column_size(table_item->table_id_);
-      const ObIArray<ObRawExpr *> &values = table_item->table_values_;
-      if (OB_UNLIKELY(column_cnt <= 0 || values.empty() || values.count() % column_cnt != 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(column_cnt), K(values));
-      } else {
-        DATA_PRINTF("(VALUES ");
-        for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
-          if (i % column_cnt == 0) {
-            if (i == 0) {
-              DATA_PRINTF("ROW(");
-            } else {
-              DATA_PRINTF("), ROW(");
-            }
-          }
-          if (OB_SUCC(ret)) {
-            OZ (expr_printer_.do_print(values.at(i), T_FROM_SCOPE));
-            if (OB_SUCC(ret) && (i + 1) % column_cnt != 0) {
-              DATA_PRINTF(", ");
-            }
-          }
-        }
-        DATA_PRINTF("))");
-        DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+      if (OB_FAIL(print_values_table(*table_item, no_print_alias))) {
+        LOG_WARN("failed to print values table", K(ret));
       }
       break;
     }
@@ -517,6 +495,163 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
     }
   }
 
+  return ret;
+}
+
+int ObDMLStmtPrinter::print_values_table(const TableItem &table_item, bool no_print_alias)
+{
+  int ret = OB_SUCCESS;
+  ObValuesTableDef *table_def = table_item.values_table_def_;
+  if (print_params_.for_dblink_ || lib::is_oracle_mode()) {
+    if (OB_FAIL(print_values_table_to_union_all(table_item, no_print_alias))) {
+      LOG_WARN("failed to print values table for dblink", K(ret));
+    }
+  } else if (OB_UNLIKELY(!table_item.is_values_table()) || OB_ISNULL(table_def)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("values table def should not be NULL", K(ret), KP(table_def));
+  } else {
+    const int64_t column_cnt = table_def->column_cnt_;
+    const int64_t row_cnt = table_def->row_cnt_;
+    const ObIArray<ObRawExpr *> &values = table_def->access_exprs_;
+    if (OB_UNLIKELY(column_cnt <= 0 || values.empty() || values.count() % column_cnt != 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(column_cnt), K(values));
+    } else {
+      DATA_PRINTF("(VALUES ");
+      for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
+        if (i % column_cnt == 0) {
+          if (i == 0) {
+            DATA_PRINTF("ROW(");  // first row
+          } else {
+            DATA_PRINTF("), ROW("); // next row
+          }
+        }
+        if (OB_SUCC(ret)) {
+          OZ (expr_printer_.do_print(values.at(i), T_FROM_SCOPE));
+          if (OB_SUCC(ret) && (i + 1) % column_cnt != 0) {
+            DATA_PRINTF(", ");
+          }
+        }
+      }
+      DATA_PRINTF("))");
+      DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item.alias_name_));
+    }
+  }
+  return ret;
+}
+
+
+int ObDMLStmtPrinter::print_values_table_to_union_all(const TableItem &table_item, bool no_print_alias)
+{
+  int ret = OB_SUCCESS;
+  ObValuesTableDef *table_def = table_item.values_table_def_;
+  if (OB_UNLIKELY(!table_item.is_values_table()) || OB_ISNULL(table_def)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("values table def should not be NULL", K(ret), KP(table_def));
+  } else {
+    int64_t column_cnt = table_def->column_cnt_;
+    int64_t row_cnt = table_def->row_cnt_;
+    if (OB_UNLIKELY(column_cnt <= 0) || OB_UNLIKELY(row_cnt <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(column_cnt), K(row_cnt));
+    } else if (ObValuesTableDef::ACCESS_EXPR == table_def->access_type_ ||
+               ObValuesTableDef::FOLD_ACCESS_EXPR == table_def->access_type_) {
+      const ObIArray<ObRawExpr *> &values = table_def->access_exprs_;
+      if (OB_UNLIKELY(values.count() % column_cnt != 0 || values.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got unexpected param", K(ret));
+      }
+      DATA_PRINTF("(");
+      for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
+        if (i % column_cnt == 0) {
+          if (i == 0) {
+            DATA_PRINTF("SELECT ");
+          } else {
+            DATA_PRINTF(" FROM DUAL UNION ALL SELECT ");
+          }
+        }
+        if (OB_SUCC(ret)) {
+          OZ (expr_printer_.do_print(values.at(i), T_FROM_SCOPE));
+          if (i < column_cnt) {
+            DATA_PRINTF(" AS \"column_%ld\"", i);
+          }
+          if ((i + 1) % column_cnt != 0) {
+            DATA_PRINTF(", ");
+          }
+        }
+      }
+      DATA_PRINTF(" FROM DUAL) \"%.*s\"", LEN_AND_PTR(table_item.alias_name_));
+    } else if (ObValuesTableDef::ACCESS_PARAM == table_def->access_type_) {
+      const int64_t start_idx = table_def->start_param_idx_;
+      const int64_t end_idx = table_def->end_param_idx_;
+      DATA_PRINTF("(");
+      if (param_store_ == NULL) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; i++) {
+          if (i == 0) {
+            DATA_PRINTF("SELECT ");
+          } else {
+            DATA_PRINTF(" FROM DUAL UNION ALL SELECT ");
+          }
+          for (int64_t j = 0; OB_SUCC(ret) && j < column_cnt; j++) {
+            OZ (ObLinkStmtParam::write(buf_, buf_len_, *pos_, start_idx + i * column_cnt + j,
+                                        table_def->column_types_.at(j).get_calc_type()));
+            if (i == 0) {
+              DATA_PRINTF(" AS \"column_%ld\"", j);
+            }
+            if (j + 1 != column_cnt) {
+              DATA_PRINTF(", ");
+            }
+          }
+        }
+      } else if (OB_ISNULL(param_store_) ||
+                 OB_UNLIKELY(start_idx < 0 || end_idx < start_idx) ||
+                 OB_UNLIKELY(start_idx >= param_store_->count() || end_idx >= param_store_->count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(start_idx), K(end_idx));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; i++) {
+          if (i == 0) {
+            DATA_PRINTF("SELECT ");
+          } else {
+            DATA_PRINTF(" FROM DUAL UNION ALL SELECT ");
+          }
+          for (int64_t j = 0; OB_SUCC(ret) && j < column_cnt; j++) {
+            OZ (param_store_->at(start_idx + i * column_cnt + j).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
+            if (i == 0) {
+              DATA_PRINTF(" AS \"column_%ld\"", j);
+            }
+            if (j + 1 != column_cnt) {
+              DATA_PRINTF(", ");
+            }
+          }
+        }
+      }
+      DATA_PRINTF(" FROM DUAL) \"%.*s\"", LEN_AND_PTR(table_item.alias_name_));
+    } else if (ObValuesTableDef::ACCESS_OBJ == table_def->access_type_) {
+      if (OB_UNLIKELY(table_def->access_objs_.count() != column_cnt * row_cnt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got unexpected param", K(ret));
+      }
+      DATA_PRINTF("(");
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; i++) {
+        if (i == 0) {
+          DATA_PRINTF("SELECT ");
+        } else {
+          DATA_PRINTF(" FROM DUAL UNION ALL SELECT ");
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < column_cnt; j++) {
+          OZ (table_def->access_objs_.at(j + i * column_cnt).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
+          if (i == 0) {
+            DATA_PRINTF(" AS \"column_%ld\"", j);
+          }
+          if (j + 1 != column_cnt) {
+            DATA_PRINTF(", ");
+          }
+        }
+      }
+      DATA_PRINTF(" FROM DUAL) \"%.*s\"", LEN_AND_PTR(table_item.alias_name_));
+    }
+  }
   return ret;
 }
 
@@ -1099,6 +1234,10 @@ int ObDMLStmtPrinter::print_mysql_json_return_type(int64_t value, ObDataType dat
           break;
         }
       }
+      break;
+    }
+    case T_ROARINGBITMAP: {
+      DATA_PRINTF("roaringbitmap ");
       break;
     }
     default: {

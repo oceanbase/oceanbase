@@ -283,8 +283,8 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
     if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, alter_table_arg_.inner_sql_exec_addr_))) {
       LOG_WARN("get sys ls leader addr fail", K(ret), K(tenant_id_));
       ret = OB_SUCCESS; // ignore ret
-    } else {
-      set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
+    } else if (OB_FAIL(set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_))) {
+      LOG_WARN("failed to set sql execute addr", K(ret), K(alter_table_arg_.inner_sql_exec_addr_));
     }
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *orig_table_schema = nullptr;
@@ -443,6 +443,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
       }
     }
     if (OB_FAIL(switch_status(next_task_status, true, ret))) {
+      // overwrite ret
       LOG_WARN("fail to switch task status", K(ret));
     }
   }
@@ -563,7 +564,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
             } else {
               create_index_arg.index_type_ = index_schema->get_index_type();
               ObCreateDDLTaskParam param(dst_tenant_id_,
-                                         ObDDLType::DDL_CREATE_INDEX,
+                                         ((DATA_VERSION_4_2_2_0 <= data_format_version_ && data_format_version_ < DATA_VERSION_4_3_0_0) || data_format_version_ >= DATA_VERSION_4_3_2_0) && index_schema->is_storage_local_index_table() && index_schema->is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX,
                                          table_schema,
                                          index_schema,
                                          0/*object_id*/,
@@ -902,11 +903,14 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
             LOG_WARN("get ddl rpc timeout fail", K(ret));
   } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
       execute_ddl_task(alter_table_arg_, objs))) {
-    LOG_WARN("fail to swap original and hidden table state", K(ret));
-    if (OB_TIMEOUT == ret) {
+    int tmp_ret = OB_SUCCESS;
+    bool has_took_effect_succ = false;
+    if (OB_TMP_FAIL(check_take_effect_succ(has_took_effect_succ))) {
+      LOG_WARN("check took effect failed", K(ret), K(tmp_ret), K(target_object_id_));
+    } else if (has_took_effect_succ) {
       ret = OB_SUCCESS;
-      new_status = ObDDLTaskStatus::TAKE_EFFECT;
     }
+    LOG_WARN("swap orig and hidden table state failed", K(ret), K(tmp_ret), K(has_took_effect_succ), K(target_object_id_));
   }
   DEBUG_SYNC(TABLE_REDEFINITION_TAKE_EFFECT);
   if (new_status == next_task_status || OB_FAIL(ret)) {
@@ -929,6 +933,29 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
   return ret;
 }
 
+int ObTableRedefinitionTask::check_take_effect_succ(bool &has_took_effect_succ)
+{
+  int ret = OB_SUCCESS;
+  has_took_effect_succ = false;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(dst_tenant_id_, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(dst_tenant_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema not exist", K(ret), K(target_object_id_));
+  } else if (!table_schema->is_user_hidden_table()) {
+    has_took_effect_succ = true;
+    LOG_INFO("target schema took effect", K(target_object_id_));
+  }
+  return ret;
+}
+
 int ObTableRedefinitionTask::repending(const share::ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
@@ -941,7 +968,7 @@ int ObTableRedefinitionTask::repending(const share::ObDDLTaskStatus next_task_st
     switch (task_type_) {
       case DDL_DIRECT_LOAD:
       case DDL_DIRECT_LOAD_INSERT:
-        if (get_is_do_finish()) {
+        if (get_is_do_finish() || get_is_abort()) {
           if (OB_FAIL(switch_status(next_task_status, true, ret))) {
             LOG_WARN("fail to switch status", K(ret));
           }

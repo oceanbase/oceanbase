@@ -199,7 +199,7 @@ int ObDictColumnEncoder::do_sort_dict_()
   ObCmpFunc cmp_func;
   cmp_func.cmp_func_ = lib::is_oracle_mode()
       ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
-  std::sort(ctx_->ht_->begin(), ctx_->ht_->end(), DictCmp(ret, cmp_func));
+  lib::ob_sort(ctx_->ht_->begin(), ctx_->ht_->end(), DictCmp(ret, cmp_func));
   // calc new dict_ref if dict is sorted
   int64_t i = 0;
   FOREACH(l, *ctx_->ht_) {

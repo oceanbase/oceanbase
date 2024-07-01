@@ -26,6 +26,15 @@ namespace schema
 class ObColumnParam;
 }
 }
+namespace common
+{
+class ObBitmap;
+}
+namespace sql
+{
+struct ObBoolMask;
+class ObBlackFilterExecutor;
+}
 namespace blocksstable
 {
 struct ObStorageDatum;
@@ -77,6 +86,13 @@ int fill_exprs_lob_locator(const ObTableIterParam &iter_param,
                            const int64_t vec_offset,
                            const int64_t row_cap);
 
+int check_skip_by_monotonicity(sql::ObBlackFilterExecutor &filter,
+                               blocksstable::ObStorageDatum &min_datum,
+                               blocksstable::ObStorageDatum &max_datum,
+                               const sql::ObBitVector &skip_bit,
+                               const bool has_null,
+                               ObBitmap *result_bitmap,
+                               sql::ObBoolMask &bool_mask);
 
 int cast_obj(const common::ObObjMeta &src_meta, common::ObIAllocator &cast_allocator, common::ObObj &obj);
 

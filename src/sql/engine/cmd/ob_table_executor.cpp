@@ -252,7 +252,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
 
     //get system variable
     ObObj online_sys_var_obj;
-    if (OB_FAIL(OB_FAIL(my_session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, online_sys_var_obj)))) {
+    if (OB_FAIL(my_session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, online_sys_var_obj))) {
       LOG_WARN("fail to get sys var", K(ret));
     } else {
       online_sys_var = online_sys_var_obj.get_bool();
@@ -883,7 +883,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
           }
         }
       }
-    } else if (DDL_CREATE_INDEX == res.ddl_type_ || DDL_NORMAL_TYPE == res.ddl_type_) {
+    } else if (is_create_index(res.ddl_type_) || DDL_NORMAL_TYPE == res.ddl_type_) {
       // TODO(shuangcan): alter table create index returns DDL_NORMAL_TYPE now, check if we can fix this later
       // 同步等索引建成功
       for (int64_t i = 0; OB_SUCC(ret) && i < add_index_arg_list.size(); ++i) {
@@ -1257,36 +1257,7 @@ int ObAlterTableExecutor::need_check_constraint_validity(obrpc::ObAlterTableArg 
       } else if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
         if (1 != (*iter)->get_column_cnt()) {
           ret = OB_ERR_UNEXPECTED;
-        } else if (OB_INVALID_ID == *(*iter)->cst_col_begin()) {
-          // alter table add column not null.
-          ObTableSchema::const_column_iterator target_col_iter = NULL;
-          ObTableSchema::const_column_iterator cst_col_iter =
-                          alter_table_arg.alter_table_schema_.column_begin();
-          ObString cst_col_name;
-          if (OB_FAIL((*iter)->get_not_null_column_name(cst_col_name))) {
-            LOG_WARN("get not null column name failed", K(ret));
-          } else {
-            for(; NULL == target_col_iter
-                  && cst_col_iter != alter_table_arg.alter_table_schema_.column_end();
-                cst_col_iter++) {
-              if ((*cst_col_iter)->get_column_name_str().length() == cst_col_name.length()
-                  && 0 == (*cst_col_iter)->get_column_name_str().compare(cst_col_name)) {
-                target_col_iter = cst_col_iter;
-              }
-            }
-            if (OB_ISNULL(target_col_iter)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("column schema not found", K(ret),K(alter_table_arg.alter_table_schema_),
-                        K(cst_col_name));
-            } else {
-              const ObObj &cur_default_value = (*target_col_iter)->get_cur_default_value();
-              need_check = cur_default_value.is_null() ||
-                (cur_default_value.is_string_type()
-                  && (0 == cur_default_value.get_string().case_compare(N_NULL)
-                      || 0 == cur_default_value.get_string().case_compare("''")));
-            }
-          }
-        } else {
+        } else if (OB_INVALID_ID != *(*iter)->cst_col_begin()) {
           // alter table modify column not null.
           need_check = (*iter)->is_validated();
         }
@@ -2087,6 +2058,14 @@ int ObTruncateTableExecutor::check_use_parallel_truncate(const obrpc::ObTruncate
   } else {
     use_parallel_truncate = (table_schema->get_autoinc_column_id() == 0 && compat_version >= DATA_VERSION_4_1_0_0)
                             || compat_version >= DATA_VERSION_4_1_0_2;
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (use_parallel_truncate
+             && OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                        ObParallelDDLControlMode::TRUNCATE_TABLE,
+                        tenant_id, use_parallel_truncate))) {
+    LOG_WARN("fail to check whether is parallel truncate table", KR(ret), K(tenant_id));
   }
   return ret;
 }

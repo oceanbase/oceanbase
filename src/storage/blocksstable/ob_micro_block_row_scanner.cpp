@@ -306,7 +306,6 @@ int ObIMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&row)
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(context_)) {
-    ++context_->table_store_stat_.logical_read_cnt_;
     ++context_->table_store_stat_.physical_read_cnt_;
   }
   LOG_DEBUG("get next row", K(ret), KPC(row), K_(macro_id));
@@ -362,7 +361,7 @@ int ObIMicroBlockRowScanner::inner_get_next_row_blockscan(const ObDatumRow *&row
 
 int ObIMicroBlockRowScanner::apply_blockscan(
     storage::ObBlockRowStore *block_row_store,
-    storage::ObTableStoreStat &table_store_stat)
+    storage::ObTableScanStoreStat &table_store_stat)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == block_row_store || !block_row_store->is_valid() || nullptr == reader_)) {
@@ -548,7 +547,7 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
   int ret = OB_SUCCESS;
   int64_t cur_row_index = pd_filter_info.start_;
   int64_t end_row_index = pd_filter_info.start_ + pd_filter_info.count_;
-  int64_t *row_ids = pd_filter_info.row_ids_;
+  int32_t *row_ids = pd_filter_info.row_ids_;
   int64_t row_cap = 0;
   int64_t bitmap_offset = 0;
   const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
@@ -619,7 +618,7 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
 int ObIMicroBlockRowScanner::get_rows_for_old_format(
     const common::ObIArray<int32_t> &col_offsets,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const int64_t vector_offset,
     const char **cell_datas,
@@ -646,7 +645,7 @@ int ObIMicroBlockRowScanner::get_rows_for_old_format(
                                       exprs,
                                       eval_ctx))) {
       LOG_WARN("Failed to copy rows", K(ret), K(row_cap),
-               "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+               "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
     }
   } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
              ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
@@ -685,7 +684,7 @@ int ObIMicroBlockRowScanner::get_rows_for_old_format(
 int ObIMicroBlockRowScanner::get_rows_for_rich_format(
     const common::ObIArray<int32_t> &col_offsets,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const int64_t vector_offset,
     const char **cell_datas,
@@ -707,7 +706,7 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
                                       exprs,
                                       eval_ctx))) {
       LOG_WARN("Failed to copy rows", K(ret), K(row_cap),
-               "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+               "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
     }
   } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
              ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
@@ -886,7 +885,7 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_cg(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(pd_filter_info.filter_->execute(parent, pd_filter_info, this, true))) {
+    } else if (OB_FAIL(pd_filter_info.filter_->execute(parent, pd_filter_info, this, param_->vectorized_enabled_))) {
       LOG_WARN("Fail to filter", K(ret), KPC(pd_filter_info.filter_), K(pd_filter_info.start_), K(pd_filter_info.count_));
     } else {
       access_count = row_count;
@@ -906,7 +905,7 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_cg(
 int ObIMicroBlockRowScanner::get_next_rows(
     const common::ObIArray<int32_t> &cols_projector,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObIArray<ObSqlDatumInfo> &datum_infos,
@@ -948,7 +947,7 @@ int ObIMicroBlockRowScanner::get_next_rows(
 
 int ObIMicroBlockRowScanner::get_aggregate_result(
     const int32_t col_idx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     ObCGAggCells &cg_agg_cells)
 {
@@ -1046,7 +1045,7 @@ int ObIMicroBlockRowScanner::read_distinct(
 
 int ObIMicroBlockRowScanner::read_reference(
     const int32_t group_by_col,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
 {
@@ -1406,9 +1405,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumRow
       LOG_ERROR("row is invalid", KPC(ret_row));
     } else {
       LOG_DEBUG("row is valid", KPC(ret_row));
-      if (OB_NOT_NULL(context_)) {
-        ++context_->table_store_stat_.logical_read_cnt_;
-      }
     }
   } else if (OB_UNLIKELY(OB_SUCCESS == ret || OB_ITER_END == ret)) {
     if (!reverse_scan_ && (last_ < reader_->row_count() - 1) &&

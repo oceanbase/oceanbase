@@ -131,11 +131,8 @@ int ObSSTableRowMultiExister::exist_block_row(ObSSTableReadHandle &read_handle, 
               iter_param_->table_id_,
               read_handle.micro_handle_->macro_block_id_,
               read_handle.rowkey_->get_datum_cnt());
-          if (read_handle.is_bf_contain_) {
-            ++access_ctx_->table_store_stat_.bf_empty_read_cnt_;
-          }
         }
-        ++access_ctx_->table_store_stat_.exist_row_.empty_read_cnt_;
+        ++access_ctx_->table_store_stat_.empty_read_cnt_;
         EVENT_INC(ObStatEventIds::EXIST_ROW_EMPTY_READ);
       } else {
         if (exist) {
@@ -143,7 +140,6 @@ int ObSSTableRowMultiExister::exist_block_row(ObSSTableReadHandle &read_handle, 
         } else {
           store_row.row_flag_.set_flag(ObDmlFlag::DF_DELETE);
         }
-        ++access_ctx_->table_store_stat_.exist_row_.effect_read_cnt_;
         EVENT_INC(ObStatEventIds::EXIST_ROW_EFFECT_READ);
       }
     }

@@ -13,7 +13,8 @@
 #define USING_LOG_PREFIX LIB
 #include "ob_geo_to_s2_visitor.h"
 #include "ob_srs_info.h"
-#include "ob_geo_dispatcher.h"
+#include "lib/hash/ob_hashset.h"
+#include "lib/geo/ob_geo_dispatcher.h"
 
 namespace oceanbase {
 namespace common {
@@ -220,7 +221,8 @@ int ObWkbToS2Visitor::MakeS2Polygon(T_IBIN *geo, S2Polygon *&res)
         LOG_WARN("failed to alloc s2cell", K(ret));
       } else {
         loop->Normalize();
-        if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
           LOG_WARN("failed to add loop", K(ret));
         }
       }
@@ -247,7 +249,8 @@ int ObWkbToS2Visitor::MakeS2Polygon(T_IBIN *geo, S2Polygon *&res)
         LOG_WARN("failed to alloc s2cell", K(ret));
       } else {
         loop->Normalize();
-        if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
           LOG_WARN("failed to add loop", K(ret));
         }
       }
@@ -292,7 +295,8 @@ int ObWkbToS2Visitor::MakeProjS2Polygon(T_IBIN *geo, S2Polygon *&res)
         LOG_WARN("failed to alloc s2cell", K(ret));
       } else {
         loop->Normalize();
-        if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
           LOG_WARN("failed to add loop", K(ret));
         }
       }
@@ -318,7 +322,8 @@ int ObWkbToS2Visitor::MakeProjS2Polygon(T_IBIN *geo, S2Polygon *&res)
         LOG_WARN("failed to alloc s2cell", K(ret));
       } else {
         loop->Normalize();
-        if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(vector_emplace_back(s2poly, loop))) {
           LOG_WARN("failed to add loop", K(ret));
         }
       }
@@ -480,6 +485,82 @@ int64_t ObWkbToS2Visitor::get_cellids(ObS2Cellids &cells, bool is_query, bool ne
     }
     if (OB_SUCC(ret) && has_reset_ && OB_FAIL(cells.push_back(exceedsBoundsCellID))) {
       LOG_WARN("fail to push_back cellid", K(ret));
+    }
+  }
+  return ret;
+}
+
+int64_t ObWkbToS2Visitor::get_cellids_and_unrepeated_ancestors(ObS2Cellids &cells,
+                                                               ObS2Cellids &ancestors,
+                                                               bool need_buffer,
+                                                               S1Angle distance)
+{
+  INIT_SUCC(ret);
+  if (invalid_) {
+    if (OB_FAIL(cells.push_back(exceedsBoundsCellID))) {
+      LOG_WARN("fail to push_back cellid", K(ret));
+    }
+  } else {
+    S2CellUnion cellids;
+    S2RegionCoverer coverer(options_);
+    uint32_t s2v_size = s2v_.size();
+    hash::ObHashSet<uint64_t> cellid_set;
+    if (OB_FAIL(cellid_set.create(128, "CellidSet", "HashNode"))) {
+      LOG_WARN("failed to create cellid set", K(ret));
+    } else if (!cellid_set.created()) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("fail to init cellid set", K(ret));
+    } else {
+      for (int i = 0; i < s2v_size && OB_SUCC(ret); i++) {
+        S2CellUnion tmp = coverer.GetCovering(*s2v_[i]);
+        cellids = cellids.Union(tmp);
+      }
+      if (need_buffer) {
+        const int max_level_diff = 2;
+        cellids.Expand(distance, max_level_diff);
+      }
+      if (s2v_size > 1) {
+        cellids.Normalize();
+      }
+      S2CellId prev_id = S2CellId::None();
+      for (int i = 0; OB_SUCC(ret) && i < cellids.size(); i++) {
+        int hash_ret = cellid_set.exist_refactored(cellids[i].id());
+        if (OB_HASH_NOT_EXIST == hash_ret) {
+          if (OB_FAIL(cellid_set.set_refactored(cellids[i].id()))) {
+            LOG_WARN("failed to add cellid into set", K(ret));
+          } else if (OB_FAIL(cells.push_back(cellids[i].id()))) {
+            LOG_WARN("fail to push_back cellid", K(ret));
+          }
+          if (OB_SUCC(ret)) {
+            int level = cellids[i].level();
+            while (OB_SUCC(ret) && (level -= options_.level_mod()) >= options_.min_level()) {
+              S2CellId ancestor_id = cellids[i].parent(level);
+              if (prev_id != S2CellId::None() && prev_id.level() > level &&
+                  prev_id.parent(level) == ancestor_id) {
+                break;
+              }
+              int ancestor_hash_ret = cellid_set.exist_refactored(ancestor_id.id());
+              if (OB_HASH_NOT_EXIST == ancestor_hash_ret) {
+                if (OB_FAIL(cellid_set.set_refactored(ancestor_id.id()))) {
+                  LOG_WARN("failed to add cellid into set", K(ret));
+                } else if (OB_FAIL(ancestors.push_back(ancestor_id.id()))) {
+                  LOG_WARN("fail to push_back cellid", K(ret));
+                }
+              } else if (OB_HASH_EXIST != ancestor_hash_ret) {
+                ret = ancestor_hash_ret;
+                LOG_WARN("fail to check if key exist", K(ret), K(i));
+              }
+            }
+          }
+        } else if (OB_HASH_EXIST != hash_ret) {
+          ret = hash_ret;
+          LOG_WARN("fail to check if key exist", K(ret), K(i));
+        }
+        prev_id = cellids[i];
+      }
+      if (OB_SUCC(ret) && has_reset_ && OB_FAIL(cells.push_back(exceedsBoundsCellID))) {
+        LOG_WARN("fail to push_back cellid", K(ret));
+      }
     }
   }
   return ret;

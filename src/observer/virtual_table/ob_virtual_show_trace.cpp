@@ -332,7 +332,7 @@ int ObVirtualShowTrace::merge_span_info() {
     // do nothing
   } else {
     ObSEArray<sql::ObFLTShowTraceRec*, 16> tmp_arr;
-    std::sort(&show_trace_arr_.at(0), &show_trace_arr_.at(0) + show_trace_arr_.count(),
+    lib::ob_sort(&show_trace_arr_.at(0), &show_trace_arr_.at(0) + show_trace_arr_.count(),
         [](const sql::ObFLTShowTraceRec* rec1, const sql::ObFLTShowTraceRec* rec2) {
           if (NULL == rec1) {
             return true;
@@ -557,7 +557,8 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
          */
        }
 
-       if (OB_FAIL(tmp_arr.push_back(show_trace_arr_.at(i)))) {
+       if(OB_FAIL(ret)){
+       } else if (OB_FAIL(tmp_arr.push_back(show_trace_arr_.at(i)))) {
          LOG_WARN("failed to push back show trace value", K(ret), K(i));
        }
      } else {
@@ -569,7 +570,7 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
   if (tmp_arr.count() == 0) {
     // skipp sort
   } else {
-    std::sort(&tmp_arr.at(0), &tmp_arr.at(0) + tmp_arr.count(),
+    lib::ob_sort(&tmp_arr.at(0), &tmp_arr.at(0) + tmp_arr.count(),
         [](const sql::ObFLTShowTraceRec *rec1, const sql::ObFLTShowTraceRec *rec2) {
           if (NULL == rec1) {
             return true;
@@ -626,7 +627,8 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
                                     = sql::ObFLTShowTraceRec::trace_formatter::LineType::LT_NODE;
       }
     }
-    if (OB_ISNULL(tmp_arr.at(tmp_arr.count()-1))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_arr.at(tmp_arr.count()-1))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "record ptr is null");
     } else {

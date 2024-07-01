@@ -290,7 +290,7 @@ int ObIWkbGeogCollection::do_visit(ObIGeoVisitor &visitor)
       ObWkbGeogCollection::iterator iter = collection->begin();
       uint64_t total_len = data_.length();
       uint64_t pos = WKB_COMMON_WKB_HEADER_LEN;
-      for ( ; iter != collection->end() && OB_SUCC(ret) && !visitor.is_end(this); iter++) {
+      for ( ; iter != collection->end() && OB_SUCC(ret) && !visitor.is_end(this); ++iter) {
         typename ObWkbGeogCollection::const_pointer sub_ptr = iter.operator->();
          if (pos + WKB_GEO_TYPE_SIZE + WKB_GEO_BO_SIZE > total_len) {
           ret = OB_INVALID_ARGUMENT;
@@ -455,7 +455,7 @@ int ObIWkbGeomCollection::do_visit(ObIGeoVisitor &visitor)
       ObWkbGeomCollection::iterator iter = collection->begin();
       uint64_t total_len = data_.length();
       uint64_t pos = WKB_COMMON_WKB_HEADER_LEN;
-      for ( ; iter != collection->end() && OB_SUCC(ret) && !visitor.is_end(this); iter++) {
+      for ( ; iter != collection->end() && OB_SUCC(ret) && !visitor.is_end(this); ++iter) {
         typename ObWkbGeomCollection::const_pointer sub_ptr = iter.operator->();
         if (pos + WKB_GEO_TYPE_SIZE + WKB_GEO_BO_SIZE > total_len) {
           ret = OB_INVALID_ARGUMENT;

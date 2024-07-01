@@ -251,7 +251,9 @@ DEF_TO_STRING(ObDMLBaseParam)
        K_(spec_seq_no),
        K_(snapshot),
        K_(branch_id),
-       K_(check_schema_version));
+       K_(direct_insert_task_id),
+       K_(check_schema_version),
+       K_(ddl_task_id));
   J_OBJ_END();
   return pos;
 }

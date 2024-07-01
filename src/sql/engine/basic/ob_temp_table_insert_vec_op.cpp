@@ -110,6 +110,7 @@ int ObTempTableInsertVecOp::inner_close()
   }
   int temp_ret = ret;
   if (OB_FAIL(clear_all_interm_res_info())) {
+    // overwrite ret, has temp_ret
     LOG_WARN("failed to clear row store", K(ret));
   }
   ret = temp_ret;
@@ -210,12 +211,13 @@ int ObTempTableInsertVecOp::create_interm_result_info(ObDTLIntermResultInfo *&in
                                           true))) {
       LOG_WARN("failed to create row store.", K(ret));
     } else if (FALSE_IT(interm_res_info = result_info_guard.result_info_)) {
-    } else if (interm_res_info->col_store_->init(MY_SPEC.get_child()->output_,
+    } else if (OB_FAIL(interm_res_info->col_store_->init(MY_SPEC.get_child()->output_,
                                                  MY_SPEC.max_batch_size_,
                                                  mem_attr,
                                                  0 /*mem_limit*/,
                                                  true /*enable_dump*/,
-                                                 false /*reuse_vector_array*/)) {
+                                                 false /*reuse_vector_array*/,
+                                                 MY_SPEC.compress_type_))) {
       LOG_WARN("failed to init the chunk row store.", K(ret));
     } else if (OB_FAIL(all_interm_res_info_.push_back(interm_res_info))) {
       LOG_WARN("failed to push back row store", K(ret));
@@ -269,7 +271,7 @@ int ObTempTableInsertVecOp::insert_interm_result_info()
     } else {
       dtl_int_key.channel_id_ = interm_result_id;
       dtl_int_key.start_time_ = oceanbase::common::ObTimeUtility::current_time();
-      dtl_int_key.time_us_ = phy_plan_ctx->get_timeout_timestamp();
+      dtl_int_key.timeout_ts_ = phy_plan_ctx->get_timeout_timestamp();
       cur_interm_res_info->set_eof(true);
       // The chunk row store does not require managing the dump logic.
       cur_interm_res_info->is_read_ = true;
@@ -316,7 +318,7 @@ int ObTempTableInsertVecOp::clear_all_interm_res_info()
   for (int64_t i = 0; OB_SUCC(ret) && i < all_interm_res_info_.count(); ++i) {
     ObDTLIntermResultInfo *col_store = all_interm_res_info_.at(i);
     if (NULL != col_store) {
-      dtl::ObDTLIntermResultManager::dec_interm_result_ref_count(col_store);
+      MTL(dtl::ObDTLIntermResultManager*)->dec_interm_result_ref_count(col_store);
     }
   }
   all_interm_res_info_.reset();
@@ -382,7 +384,7 @@ int ObTempTableInsertVecOp::process_dump(dtl::ObDTLIntermResultInfo &interm_res_
     for (int64_t i = 0; OB_SUCC(ret) && i < all_interm_res_info_.count(); ++i) {
       // The last block of the last chunk may still need to insert data and should not be dumped.
       bool dump_last_block = i < all_interm_res_info_.count() - 1;
-      if (OB_FAIL(all_interm_res_info_.at(i)->col_store_->dump(false, dump_last_block))) {
+      if (OB_FAIL(all_interm_res_info_.at(i)->col_store_->dump(dump_last_block))) {
         LOG_WARN("failed to dump row store", K(ret));
       } else {
         dump_end_time = oceanbase::common::ObTimeUtility::current_time();

@@ -147,12 +147,12 @@ private:
   // params[in]  tenant_id, specified tenant_id
   // params[in]  ls_id, specified ls_id
   // params[out] orig_paxos_replica_number, orig paxos_replica_number
-  // params[out] data_source_server, data source
+  // params[out] leader_server, data source
   static int construct_default_params_for_add_command_(
          const uint64_t &tenant_id,
          const share::ObLSID &ls_id,
          int64_t &orig_paxos_replica_number,
-         common::ObAddr &data_source_server);
+         common::ObAddr &leader_server);
 
   // execute remove task
   // params[in]  command_arg, arg which contains admin_command

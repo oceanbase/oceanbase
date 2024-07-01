@@ -73,7 +73,22 @@ int quick_add_batch_rows_for_count(IAggregate *agg, RuntimeContext &agg_ctx,
     LOG_WARN("invalid null aggregate", K(ret));
   } else if (!is_single_row_agg) {
     auto &count_agg = *static_cast<CountAggregate<VEC_TC_INTEGER, VEC_TC_INTEGER> *>(agg);
-    if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
+    if (OB_UNLIKELY(agg_ctx.removal_info_.enable_removal_opt_)) {
+      int64_t &count = *reinterpret_cast<int64_t *>(agg_cell);
+      if (!agg_ctx.removal_info_.is_inverse_agg_) {
+        if (row_sel.is_empty()) {
+          count += bound.range_size() - skip.accumulate_bit_cnt(bound);
+        } else {
+          count += row_sel.size();
+        }
+      } else {
+        if (row_sel.is_empty()) {
+          count -= bound.range_size() - skip.accumulate_bit_cnt(bound);
+        } else {
+          count -= row_sel.size();
+        }
+      }
+    } else if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
       for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
         ret =
           count_agg.add_row(agg_ctx, mock_cols, i, agg_col_id, agg_cell, nullptr, fake_calc_info);

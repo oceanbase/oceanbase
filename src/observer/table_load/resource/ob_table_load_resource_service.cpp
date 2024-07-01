@@ -17,6 +17,7 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/schema/ob_table_schema.h"
+#include "share/location_cache/ob_location_struct.h"
 
 namespace oceanbase
 {
@@ -247,7 +248,24 @@ int ObTableLoadResourceService::check_tenant()
   return ret;
 }
 
-int ObTableLoadResourceService::apply_resource(ObDirectLoadResourceApplyArg &arg, ObDirectLoadResourceOpRes &res)
+int ObTableLoadResourceService::get_leader_addr(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    ObAddr &leader)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
+      GCONF.cluster_id, tenant_id, ls_id, leader, GET_LEADER_RETRY_TIMEOUT))) {
+    LOG_WARN("fail to get ls location leader", KR(ret), K(tenant_id), K(ls_id));
+    if (is_location_service_renew_error(ret)) {
+      ret = OB_EAGAIN;
+    }
+  }
+
+  return ret;
+}
+
+int ObTableLoadResourceService::local_apply_resource(ObDirectLoadResourceApplyArg &arg, ObDirectLoadResourceOpRes &res)
 {
   int ret = OB_SUCCESS;
   ObTableLoadResourceService *service = nullptr;
@@ -255,7 +273,7 @@ int ObTableLoadResourceService::apply_resource(ObDirectLoadResourceApplyArg &arg
     ret = OB_ERR_SYS;
     LOG_WARN("null table load resource service", KR(ret));
   } else if(OB_ISNULL(service->resource_manager_)) {
-    ret = OB_ERR_SYS;
+    ret = OB_EAGAIN;
     LOG_WARN("resource_manager_ is null", KR(ret));
   } else {
     ret = service->resource_manager_->apply_resource(arg, res);
@@ -264,7 +282,7 @@ int ObTableLoadResourceService::apply_resource(ObDirectLoadResourceApplyArg &arg
   return ret;
 }
 
-int ObTableLoadResourceService::release_resource(ObDirectLoadResourceReleaseArg &arg)
+int ObTableLoadResourceService::local_release_resource(ObDirectLoadResourceReleaseArg &arg)
 {
   int ret = OB_SUCCESS;
   ObTableLoadResourceService *service = nullptr;
@@ -272,7 +290,7 @@ int ObTableLoadResourceService::release_resource(ObDirectLoadResourceReleaseArg 
     ret = OB_ERR_SYS;
     LOG_WARN("null table load resource service", KR(ret));
   } else if(OB_ISNULL(service->resource_manager_)) {
-    ret = OB_ERR_SYS;
+    ret = OB_EAGAIN;
     LOG_WARN("resource_manager_ is null", KR(ret));
   } else {
     ret = service->resource_manager_->release_resource(arg);
@@ -281,7 +299,7 @@ int ObTableLoadResourceService::release_resource(ObDirectLoadResourceReleaseArg 
   return ret;
 }
 
-int ObTableLoadResourceService::update_resource(ObDirectLoadResourceUpdateArg &arg)
+int ObTableLoadResourceService::local_update_resource(ObDirectLoadResourceUpdateArg &arg)
 {
   int ret = OB_SUCCESS;
   ObTableLoadResourceService *service = nullptr;
@@ -289,10 +307,70 @@ int ObTableLoadResourceService::update_resource(ObDirectLoadResourceUpdateArg &a
     ret = OB_ERR_SYS;
     LOG_WARN("null table load resource service", KR(ret));
   } else if(OB_ISNULL(service->resource_manager_)) {
-    ret = OB_ERR_SYS;
+    ret = OB_EAGAIN;
     LOG_WARN("resource_manager_ is null", KR(ret));
   } else {
     ret = service->resource_manager_->update_resource(arg);
+  }
+
+  return ret;
+}
+
+int ObTableLoadResourceService::apply_resource(ObDirectLoadResourceApplyArg &arg, ObDirectLoadResourceOpRes &res)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(arg), KR(ret));
+  } else {
+    ObAddr leader;
+    if (OB_FAIL(get_leader_addr(arg.tenant_id_, share::SYS_LS, leader))) {
+      LOG_WARN("fail to get leader addr", KR(ret));
+    } else if (ObTableLoadUtils::is_local_addr(leader)) {
+      ret = local_apply_resource(arg, res);
+    } else {
+      TABLE_LOAD_RESOURCE_RPC_CALL(apply_resource, leader, arg, res);
+    }
+  }
+
+  return ret;
+}
+
+int ObTableLoadResourceService::release_resource(ObDirectLoadResourceReleaseArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(arg), KR(ret));
+  } else {
+    ObAddr leader;
+    if (OB_FAIL(get_leader_addr(arg.tenant_id_, share::SYS_LS, leader))) {
+      LOG_WARN("fail to get leader addr", KR(ret));
+    } else if (ObTableLoadUtils::is_local_addr(leader)) {
+      ret = local_release_resource(arg);
+    } else {
+      TABLE_LOAD_RESOURCE_RPC_CALL(release_resource, leader, arg);
+    }
+  }
+
+  return ret;
+}
+
+int ObTableLoadResourceService::update_resource(ObDirectLoadResourceUpdateArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(arg), KR(ret));
+  } else {
+    ObAddr leader;
+    if (OB_FAIL(get_leader_addr(arg.tenant_id_, share::SYS_LS, leader))) {
+      LOG_WARN("fail to get leader addr", KR(ret));
+    } else if (ObTableLoadUtils::is_local_addr(leader)) {
+      ret = local_update_resource(arg);
+    } else {
+      TABLE_LOAD_RESOURCE_RPC_CALL(update_resource, leader, arg);
+    }
   }
 
   return ret;

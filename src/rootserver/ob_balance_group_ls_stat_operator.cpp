@@ -877,7 +877,7 @@ int ObNewTableTabletAllocator::alloc_tablet_for_add_balance_group(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("final ls stat array count unexpected", KR(ret), K(final_ls_stat_array));
     } else {
-      std::sort(final_ls_stat_array.begin(), final_ls_stat_array.end());
+      lib::ob_sort(final_ls_stat_array.begin(), final_ls_stat_array.end());
       for (int64_t alloc_seq = 0; OB_SUCC(ret) && alloc_seq < total_alloc_num; alloc_seq++) {
         int64_t min_ls_tg_idx = 0;
         int64_t min_ls_tg_cnt = final_ls_stat_array.at(0).get_tablet_group_count();

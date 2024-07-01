@@ -35,16 +35,26 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg));
   } else if (session_info.get_ddl_info().is_mview_complete_refresh()) {
-    res.task_id_ = session_info.get_cur_exec_ctx()->get_table_direct_insert_ctx().get_ddl_task_id();
-    share::ObDDLTaskStatus status = share::ObDDLTaskStatus::PREPARE;
-    if (OB_FAIL(ObDDLUtil::get_data_information(arg.tenant_id_,
-        res.task_id_,
-        res.data_format_version_,
-        res.snapshot_version_,
-        status,
-        res.dest_table_id_,
-        res.schema_version_))) {
-      LOG_WARN("fail to get ddl task info", KR(ret), K(arg));
+    ObExecContext *exec_ctx = session_info.get_cur_exec_ctx();
+    const ObPhysicalPlanCtx *plan_ctx = nullptr;
+    const ObPhysicalPlan *plan = nullptr;
+    if (OB_ISNULL(exec_ctx)
+        || OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())
+        || OB_ISNULL(plan = plan_ctx->get_phy_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null physical plan (ctx)", KR(ret), KP(plan_ctx), KP(plan));
+    } else {
+      res.task_id_ = plan->get_ddl_task_id();
+      share::ObDDLTaskStatus status = share::ObDDLTaskStatus::PREPARE;
+      if (OB_FAIL(ObDDLUtil::get_data_information(arg.tenant_id_,
+          res.task_id_,
+          res.data_format_version_,
+          res.snapshot_version_,
+          status,
+          res.dest_table_id_,
+          res.schema_version_))) {
+        LOG_WARN("fail to get ddl task info", KR(ret), K(arg));
+      }
     }
   } else {
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
@@ -64,6 +74,7 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     create_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = session_info.get_local_nls_timestamp_format();
     create_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = session_info.get_local_nls_timestamp_tz_format();
     create_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
+    DEBUG_SYNC(BEFORE_CREATE_HIDDEN_TABLE_IN_LOAD);
     if (OB_FAIL(create_table_arg.tz_info_wrap_.deep_copy(session_info.get_tz_info_wrap()))) {
       LOG_WARN("failed to deep copy tz_info_wrap", KR(ret));
     } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res,

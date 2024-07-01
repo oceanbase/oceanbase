@@ -15,12 +15,12 @@
 #include "lib/ob_define.h"
 #include "lib/ob_name_def.h"
 #include "lib/string/ob_fixed_length_string.h"
-#include "lib/thread_local/ob_tsi_factory.h"
+#include "lib/hash_func/murmur_hash.h"
 namespace oceanbase
 {
 namespace common
 {
-
+class ObIAllocator;
 #define COMMA_FORMAT ", "
 #define WITH_COMMA(format)  (with_comma ? COMMA_FORMAT format: format)
 
@@ -189,40 +189,8 @@ public:
       curr_ = outer_layer;
     }
   }
-  int64_t acquire(char *&buffer)
-  {
-    int64_t buf_len = 0;
-    if (0 == level_) {
-      buffer = local_buf_ + pos_;
-      buf_len = BUF_SIZE - pos_;
-    } else {
-      BufNode *node = NULL;
-      node = list_.head_;
-      if (NULL != node) {
-        list_.head_ = node->pre_;
-      }
-      if ((NULL != node)
-        || (NULL != (node = OB_NEW(BufNode, ObModIds::OB_THREAD_BUFFER)))) {
-        buffer = node->buf_ + node->pos_;
-        node->pre_ = curr_;
-        curr_ = node;
-        buf_len = BUF_SIZE - node->pos_;
-      } else {
-        buffer = NULL;
-      }
-    }
-    return buf_len;
-  }
-  void try_clear_list()
-  {
-    if (0 == level_) {
-      while (NULL != list_.head_) {
-        BufNode *node = list_.head_;
-        list_.head_ = node->pre_;
-        OB_DELETE(BufNode, ObModIds::OB_THREAD_BUFFER, node);
-      }
-    }
-  }
+  int64_t acquire(char *&buffer);
+  void try_clear_list();
 private:
   char local_buf_[BUF_SIZE];
   BufList list_;

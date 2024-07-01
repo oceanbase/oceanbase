@@ -96,6 +96,10 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
             ret = OB_BAD_NULL_ERROR;
             LOG_WARN("dml with ignore not supported in geometry type");
             LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
+        } else if (ob_is_roaringbitmap(row.at(col_idx)->obj_meta_.get_type())) {
+            ret = OB_BAD_NULL_ERROR;
+            LOG_WARN("dml with ignore not supported in roaringbitmap type");
+            LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
         } else if (check_cascaded_reference(row.at(col_idx), row)) {
           //This column is dependent on other columns and cannot be modified again;
           //otherwise, it will necessitate a cascading recalculation of the dependent expression results.
@@ -227,6 +231,7 @@ int ObDMLService::check_rowkey_whether_distinct(const ObExprPtrIArray &row,
           ObExpr *expr = row.at(i);
           ObDatum *col_datum = nullptr;
           if (OB_ISNULL(expr)) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr in rowkey is nullptr", K(ret), K(i));
           } else if (OB_FAIL(expr->eval(eval_ctx, col_datum))) {
             LOG_WARN("failed to evaluate expr in rowkey", K(ret), K(i));

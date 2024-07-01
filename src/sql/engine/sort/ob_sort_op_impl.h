@@ -21,11 +21,14 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/engine/basic/chunk_store/ob_compact_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/sort/ob_pd_topn_sort_filter.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+struct ObPushDownTopNFilterInfo;
 
 struct ObChunkStoreWrapper
 {
@@ -265,7 +268,8 @@ public:
       const common::ObCompressorType compressor_type = common::NONE_COMPRESSOR,
       const ExprFixedArray *exprs = nullptr,
       const int64_t est_rows = 0,
-      const bool use_compact_format = false);
+      const bool use_compact_format = false,
+      const ObPushDownTopNFilterInfo *pd_topn_filter_info = nullptr);
 
   virtual int64_t get_prefix_pos() const { return 0;  }
   // keep initialized, can sort same rows (same cell type, cell count, projector) after reuse.
@@ -869,6 +873,7 @@ protected:
   const ExprFixedArray *sort_exprs_;
   common::ObCompressorType compress_type_;
   bool use_compact_format_;
+  ObPushDownTopNFilter pd_topn_filter_;
 };
 
 class ObInMemoryTopnSortImpl;

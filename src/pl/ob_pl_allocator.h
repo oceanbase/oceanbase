@@ -23,6 +23,7 @@ PL_MOD_DEF(OB_PL_ANY_DATA, "AnyData")
 PL_MOD_DEF(OB_PL_ANY_TYPE, "AnyType")
 PL_MOD_DEF(OB_PL_CODE_GEN, "PlCodeGen")
 PL_MOD_DEF(OB_PL_JIT, "PlJit")
+PL_MOD_DEF(OB_PL_PROFILER, "PlProfiler")
 #endif
 
 

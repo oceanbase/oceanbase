@@ -355,6 +355,7 @@ int ObMPStmtExecute::send_eof_packet_for_arraybinding(ObSQLSessionInfo &session_
   const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
   uint16_t warning_count = 0;
   if (OB_ISNULL(warnings_buf)) {
+    // ignore ret
     LOG_WARN("can not get thread warnings buffer");
   } else {
     warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
@@ -829,6 +830,11 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
     ret = OB_ERR_PREPARE_STMT_CHECKSUM;
     LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_sessid(),
                                         K(ps_stmt_checksum), K(*ps_session_info));
+    LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
+                     "ps stmt checksum fail. ",
+                     "the ps stmt checksum is ", ps_stmt_checksum,
+                     ", but current session stmt checksum is ", ps_session_info->get_ps_stmt_checksum(),
+                     ". current session id is ", session->get_sessid(), ". ");
   }
   if (OB_SUCC(ret)) {
     LOG_TRACE("ps session info",
@@ -1013,7 +1019,8 @@ int ObMPStmtExecute::decode_type_info(const char*& buf, TypeInfo &type_info)
   PS_DEFENSE_CHECK(1)
   {
     uint64_t length = 0;
-    if (OB_FAIL(ObMySQLUtil::get_length(buf, length))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObMySQLUtil::get_length(buf, length))) {
       LOG_WARN("failed to get length", K(ret));
     } else {
       PS_DEFENSE_CHECK(length)
@@ -1026,7 +1033,8 @@ int ObMPStmtExecute::decode_type_info(const char*& buf, TypeInfo &type_info)
   PS_DEFENSE_CHECK(1)
   {
     uint64_t version = 0;
-    if (OB_FAIL(ObMySQLUtil::get_length(buf, version))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObMySQLUtil::get_length(buf, version))) {
       LOG_WARN("failed to get version", K(ret));
     }
   }
@@ -1193,6 +1201,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
                                         async_resp_used))) {
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_ISNULL(plan_ctx)) {
+        // ignore ret
         LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
       } else {
         LOG_WARN("execute query fail", K(ret), "timeout_timestamp",
@@ -1386,6 +1395,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_NOT_NULL(plan_ctx)) {
         audit_record.consistency_level_ = plan_ctx->get_consistency_level();
+        audit_record.total_memstore_read_row_count_ = plan_ctx->get_total_memstore_read_row_count();
+        audit_record.total_ssstore_read_row_count_ = plan_ctx->get_total_ssstore_read_row_count();
       }
     }
 
@@ -1904,8 +1915,6 @@ int ObMPStmtExecute::process()
       retry_ctrl_.set_sys_global_schema_version(sys_version);
       session.partition_hit().reset();
       session.set_pl_can_retry(true);
-      ObLockWaitNode &lock_wait_node  = req_->get_lock_wait_node();
-      lock_wait_node.set_session_info(session.get_sessid());
 
       need_response_error = false;
       need_disconnect = false;

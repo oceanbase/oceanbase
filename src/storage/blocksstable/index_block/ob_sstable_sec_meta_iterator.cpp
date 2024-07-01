@@ -544,7 +544,6 @@ int ObSSTableSecMetaIterator::get_micro_block(
         LOG_WARN("Fail to prefetch with async io", K(ret));
       } else {
         data_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
-        data_handle.need_release_data_buf_ = true;
       }
     }
   } else {

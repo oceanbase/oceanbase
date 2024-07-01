@@ -836,8 +836,8 @@ int ObShardingInfo::is_physically_equal_serverlist(ObIArray<ObAddr> &left_server
     // do nothing
   } else {
     is_equal_serverlist = true;
-    std::sort(&left_server_list.at(0), &left_server_list.at(0) + left_server_list.count());
-    std::sort(&right_server_list.at(0), &right_server_list.at(0) + right_server_list.count());
+    lib::ob_sort(&left_server_list.at(0), &left_server_list.at(0) + left_server_list.count());
+    lib::ob_sort(&right_server_list.at(0), &right_server_list.at(0) + right_server_list.count());
     for (int64_t i = 0; OB_SUCC(ret) && is_equal_serverlist && i < left_server_list.count(); i ++) {
       if (left_server_list.at(i) != right_server_list.at(i)) {
         is_equal_serverlist = false;

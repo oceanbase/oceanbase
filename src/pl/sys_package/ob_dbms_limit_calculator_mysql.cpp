@@ -281,7 +281,7 @@ int ObDBMSLimitCalculator::get_max_value_of_logical_res_(
       }
     }//end for j for get each logical resource of servers
     if (OB_SUCC(ret)) {
-      std::sort(tmp_logical_resource.begin(), tmp_logical_resource.end());
+      lib::ob_sort(tmp_logical_resource.begin(), tmp_logical_resource.end());
       int64_t index = 0;//下标
       while (OB_SUCC(ret) && index < server_cnt) {
         const int64_t logical_index = primary_server_cnt - 1 - index;
@@ -394,6 +394,7 @@ int ObDBMSLimitCalculator::get_server_resource_info_(
       }
     }
     if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      // overwrite ret
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
     } else if (OB_FAIL(ret)) {

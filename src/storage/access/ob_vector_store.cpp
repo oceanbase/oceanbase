@@ -315,7 +315,7 @@ int ObVectorStore::fill_output_rows(
   }
   LOG_TRACE("[Vectorized] vector store copy rows", K(ret),
             K(begin_index), K(end_index), K(row_capacity), K(res),
-            "row_ids", common::ObArrayWrap<const int64_t>(row_ids_, row_capacity),
+            "row_ids", common::ObArrayWrap<const int32_t>(row_ids_, row_capacity),
             KPC(this));
   return ret;
 }
@@ -359,7 +359,10 @@ int ObVectorStore::fill_group_by_rows(
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(group_by_cell_->pad_column_in_group_by(output_cnt))) {
+    LOG_WARN("Failed to pad column in group by", K(ret), K(output_cnt));
+  } else {
     count_ = output_cnt;
     eval_ctx_.set_batch_idx(count_);
     if (OB_FAIL(fill_group_idx(group_idx))) {
@@ -369,7 +372,6 @@ int ObVectorStore::fill_group_by_rows(
       set_end();
       if (!group_by_cell_->is_processing()) {
         begin_index = end_index;
-        ret = OB_ITER_END;
       }
     }
   }
@@ -517,8 +519,8 @@ int64_t ObVectorStore::to_string(char *buf, const int64_t buf_len) const
         J_KV(K(i));
         J_COLON();
         J_KV("new format datums",
-             sql::ToStrVectorHeader(datum_infos_.at(i).expr_->get_vector_header(iter_param_->op_->get_eval_ctx()),
-                                    *datum_infos_.at(i).expr_,
+             sql::ToStrVectorHeader(*datum_infos_.at(i).expr_,
+                                    iter_param_->op_->get_eval_ctx(),
                                     nullptr,
                                     bound));
       }

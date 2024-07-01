@@ -134,7 +134,7 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
           if (OB_FAIL(ob_write_string(*allocator_, tmp, db_name))) {
             LOG_WARN("fail to write db name", K(ret));
           }
-        } else if (is_org) {
+        } else if (is_org || params_.is_resolve_fake_cte_table_) {
           db_name = ObString::make_empty_string();
         } else if (session_info_->get_database_name().empty()) {
           ret = OB_ERR_NO_DB_SELECTED;
@@ -359,6 +359,25 @@ int ObStmtResolver::get_column_schema(const uint64_t table_id,
     if (OB_FAIL(schema_checker_->get_column_schema(session_info_->get_effective_tenant_id(), table_id, column_id, column_schema, hidden, is_link))) {
       SQL_RESV_LOG(WARN, "get_column_schema failed", K(ret), K(session_info_->get_effective_tenant_id()), K(table_id), K(column_id), K(hidden), K(is_link));
     }
+  }
+  return ret;
+}
+
+int ObStmtResolver::check_table_name_equal(const ObString &name1, const ObString &name2, bool &equal)
+{
+  int ret = OB_SUCCESS;
+  ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
+  equal = false;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected session info", K(ret));
+  } else if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
+    LOG_WARN("fail to get name case mode", K(ret));
+  } else if (OB_NAME_CASE_INVALID == case_mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected name case mode", K(ret));
+  } else {
+    equal = ObCharset::case_mode_equal(case_mode, name1, name2);
   }
   return ret;
 }

@@ -17,6 +17,7 @@
 #include "lib/net/ob_addr.h"
 #include "lib/hash/ob_placement_hashset.h"
 #include "lib/container/ob_2d_array.h"
+#include "lib/random/ob_random.h"
 #include "sql/optimizer/ob_table_partition_info.h"
 #include "sql/monitor/ob_exec_stat.h"
 #include "lib/hash_func/murmur_hash.h"
@@ -693,7 +694,8 @@ public:
       root_stmt_(NULL),
       optimizer_features_enable_version_(0),
       udf_flag_(0),
-      has_dblink_(false)
+      has_dblink_(false),
+      injected_random_status_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -739,7 +741,6 @@ public:
     root_stmt_ = NULL;
     udf_flag_ = 0;
     optimizer_features_enable_version_ = 0;
-    has_dblink_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -770,6 +771,11 @@ public:
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
   int add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx);
+  bool get_injected_random_status() const { return injected_random_status_; }
+  void set_injected_random_status(bool injected_random_status) { injected_random_status_ = injected_random_status; }
+  void set_random_plan_seed(uint64_t seed) {rand_gen_.seed(seed);}
+
+
 
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
@@ -836,6 +842,8 @@ public:
     };
   };
   bool has_dblink_;
+  bool injected_random_status_;
+  ObRandom rand_gen_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

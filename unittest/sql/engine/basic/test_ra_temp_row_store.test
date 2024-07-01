@@ -1,0 +1,3 @@
+# Please ensure that there are only two sql, one sql for storage and one sql for verification
+select c1, c2, c3 from t1
+select c1, c2, c3 from t2;

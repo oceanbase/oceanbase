@@ -253,6 +253,7 @@ void ObPLObjectKey::reset()
   db_id_ = common::OB_INVALID_ID;
   key_id_ = common::OB_INVALID_ID;
   sessid_ = 0;
+  mode_ = ObjectMode::NORMAL;
   name_.reset();
   namespace_ = ObLibCacheNameSpace::NS_INVALID;
   sys_vars_str_.reset();
@@ -270,6 +271,7 @@ int ObPLObjectKey::deep_copy(ObIAllocator &allocator, const ObILibCacheKey &othe
     db_id_ = key.db_id_;
     key_id_ = key.key_id_;
     sessid_ = key.sessid_;
+    mode_ = key.mode_;
     namespace_ = key.namespace_;
   }
   return ret;
@@ -290,6 +292,7 @@ uint64_t ObPLObjectKey::hash() const
   uint64_t hash_ret = murmurhash(&db_id_, sizeof(uint64_t), 0);
   hash_ret = murmurhash(&key_id_, sizeof(uint64_t), hash_ret);
   hash_ret = murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
+  hash_ret = murmurhash(&mode_, sizeof(mode_), hash_ret);
   hash_ret = name_.hash(hash_ret);
   hash_ret = murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
   hash_ret = sys_vars_str_.hash(hash_ret);
@@ -302,6 +305,7 @@ bool ObPLObjectKey::is_equal(const ObILibCacheKey &other) const
   bool cmp_ret = db_id_ == key.db_id_ &&
                  key_id_ == key.key_id_ &&
                  sessid_ == key.sessid_ &&
+                 mode_ == key.mode_ &&
                  name_ == key.name_ &&
                  namespace_ == key.namespace_ &&
                  sys_vars_str_ == key.sys_vars_str_;

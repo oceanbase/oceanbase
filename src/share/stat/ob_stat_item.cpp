@@ -346,7 +346,7 @@ int ObStatTopKHist::build_histogram_from_topk_items(ObIAllocator &allocator,
   }
   if (OB_SUCC(ret) && tmp.count() > 0) {
     ObBucketCompare cmp;
-    std::sort(&tmp.at(0),
+    lib::ob_sort(&tmp.at(0),
               &tmp.at(0) + tmp.count(),
               CopyableBucketComparer(cmp));
     if (OB_FAIL(cmp.ret_)) {

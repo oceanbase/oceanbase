@@ -246,7 +246,6 @@ int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(
 
 void ObMemtable::destroy()
 {
-  is_inited_ = false;
   ObTimeGuard time_guard("ObMemtable::destroy()", 100 * 1000);
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -258,6 +257,7 @@ void ObMemtable::destroy()
     STORAGE_LOG(INFO, "memtable destroyed", K(*this));
     time_guard.click();
   }
+  is_inited_ = false;
   mvcc_engine_.destroy();
   time_guard.click();
   query_engine_.destroy();
@@ -1623,9 +1623,6 @@ void ObMemtable::lock_row_on_frozen_stores_on_failure(
       TRANS_LOG(WARN, "sstable conflict will occurred when lock operation",
                 K(ctx), KPC(this), K(writer_dml_flag));
     }
-  } else {
-    // Tip1: mvcc_write guarantee the tnode will not be inserted if error is reported
-    (void)mvcc_engine_.mvcc_undo(value);
   }
   if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
     ret = post_row_write_conflict_(ctx.mvcc_acc_ctx_,
@@ -1927,7 +1924,7 @@ bool ObMemtable::ready_for_flush_()
         set_freeze_state(TabletMemtableFreezeState::READY_FOR_FLUSH);
         if (0 == mt_stat_.ready_for_flush_time_) {
           mt_stat_.ready_for_flush_time_ = ObTimeUtility::current_time();
-        freezer_->get_stat().remove_memtable_info(get_tablet_id());
+          freezer_->get_stat().remove_memtable_info(get_tablet_id());
         }
       }
 
@@ -2655,9 +2652,12 @@ int ObMemtable::multi_set_(
       TRANS_LOG(WARN, "Failed to encode memory table key", K(ret));
     } else {
       ret = rows_info.get_error_code();
-      lock_row_on_frozen_stores_on_failure(blocksstable::ObDmlFlag::DF_INSERT, mtk,
-                                           ret, mvcc_rows[conflict_idx].mvcc_row_,
-                                           context, mvcc_rows[conflict_idx].write_result_);
+      lock_row_on_frozen_stores_on_failure(blocksstable::ObDmlFlag::DF_INSERT,
+                                           mtk,
+                                           ret,
+                                           mvcc_rows[conflict_idx].mvcc_row_,
+                                           context,
+                                           mvcc_rows[conflict_idx].write_result_);
     }
   }
 
@@ -2918,7 +2918,16 @@ int ObMemtable::mvcc_write_(
                                                                        context,
                                                                        value,
                                                                        res))) {
-    lock_row_on_frozen_stores_on_failure(arg.data_->dml_flag_, *key, ret, value, context, res);
+    lock_row_on_frozen_stores_on_failure(arg.data_->dml_flag_,
+                                         *key,
+                                         ret,
+                                         value,
+                                         context,
+                                         res);
+    if (res.has_insert()) {
+      (void)mvcc_engine_.mvcc_undo(value);
+      res.is_mvcc_undo_ = true;
+    }
   } else if (OB_FAIL(mvcc_engine_.ensure_kv(&stored_key, value))) {
     if (res.has_insert()) {
       (void)mvcc_engine_.mvcc_undo(value);
@@ -2989,6 +2998,7 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
               K(conflict_tx_id), K(acc_ctx), K(lock_wait_expire_ts));
   } else if (OB_ISNULL(lock_wait_mgr = MTL_WITH_CHECK_TENANT(ObLockWaitMgr*,
                                                   mem_ctx->get_tenant_id()))) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "can not get tenant lock_wait_mgr MTL", K(mem_ctx->get_tenant_id()));
   } else {
     mem_ctx->add_conflict_trans_id(conflict_tx_id);
@@ -3026,8 +3036,10 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
                                        remote_tx,
                                        last_compact_cnt,
                                        total_trans_node_cnt,
+                                       acc_ctx.tx_desc_->get_assoc_session_id(),
                                        tx_id,
                                        conflict_tx_id,
+                                       get_ls_id(),
                                        recheck_func);
     if (OB_SUCCESS != tmp_ret) {
       TRANS_LOG(WARN, "post_lock after tx conflict failed",

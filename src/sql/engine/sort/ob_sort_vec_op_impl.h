@@ -26,6 +26,7 @@
 #include "sql/engine/sort/ob_sort_vec_op_eager_filter.h"
 #include "sql/engine/sort/ob_sort_vec_op_store_row_factory.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "sql/engine/sort/ob_pd_topn_sort_filter.h"
 
 namespace oceanbase {
 namespace sql {
@@ -87,6 +88,7 @@ public:
   {
     reset();
   }
+  int init_pd_topn_filter_msg(ObSortVecOpContext &ctx);
   int init_vec_ptrs(const common::ObIArray<ObExpr *> &exprs,
                     common::ObFixedArray<ObIVector *, common::ObIAllocator> &vec_ptrs,
                     ObEvalCtx *eval_ctx);
@@ -444,6 +446,7 @@ protected:
   ObSortVecOpEagerFilter<Compare, Store_Row, has_addon> *topn_filter_;
   bool is_topn_filter_enabled_;
   ObCompressorType compress_type_;
+  ObPushDownTopNFilter pd_topn_filter_;
 };
 
 } // end namespace sql

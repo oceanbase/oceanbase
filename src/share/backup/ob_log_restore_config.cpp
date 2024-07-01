@@ -225,6 +225,7 @@ int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(
   int ret = OB_SUCCESS;
   compat_mode = ObCompatibilityMode::OCEANBASE_MODE;
   bool source_is_self = false;
+  bool cluster_id_dup = false;
 
   SMART_VAR(ObLogRestoreProxyUtil, proxy) {
     if (is_empty_) {
@@ -236,6 +237,14 @@ int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("set tenant itself as log restore source is not allowed");
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set tenant itself as log restore source is");
+    } else if (!for_verify && OB_FAIL(proxy.check_different_cluster_with_same_cluster_id(
+                   service_attr_.user_.cluster_id_, cluster_id_dup))) {
+      LOG_WARN("fail to check different cluster with same cluster id", KR(ret),
+               K(service_attr_.user_.cluster_id_));
+    } else if (cluster_id_dup) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("different cluster with same cluster id is not allowed");
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "different cluster with same cluster id is");
     } else if (OB_FAIL(proxy.get_compatibility_mode(service_attr_.user_.tenant_id_, service_attr_.user_.mode_))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get primary compatibility mode failed", K(tenant_id_), K(service_attr_.user_.tenant_id_));

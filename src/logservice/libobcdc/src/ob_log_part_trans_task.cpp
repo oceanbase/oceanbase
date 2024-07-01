@@ -108,6 +108,7 @@ int MutatorRow::parse_columns_(
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key,
     const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
+    const bool is_macroblock_row,
     ColValueList &cols)
 {
   int ret = OB_SUCCESS;
@@ -129,7 +130,7 @@ int MutatorRow::parse_columns_(
     int64_t column_offset = 0;
 
     for (int64_t column_stored_idx = 0; OB_SUCC(ret) && column_stored_idx < datum_row.get_column_count(); column_stored_idx++) {
-      if (dml_flag.is_delete_insert()) {
+      if (is_macroblock_row) {
         // filter extra rowkey column
         if (column_stored_idx >= rowkey_cnt && column_stored_idx < macroblock_row_user_column_idx) continue;
         if (column_stored_idx == macroblock_row_user_column_idx) {
@@ -397,6 +398,11 @@ int MutatorRow::add_column_(
           "old_obj_len", value->get_string_len(),
           "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
           "new_obj_len", cv_node->value_.get_string_len());
+    } else if (value->is_roaringbitmap() && value->get_string_len() > 2 * _M_) { // RoaringBitmap may exceed 2M
+      OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
+          "old_obj_len", value->get_string_len(),
+          "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
+          "new_obj_len", cv_node->value_.get_string_len());
     } else {
       OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ", "old_obj", *value, "new_obj",
           cv_node->value_);
@@ -546,7 +552,9 @@ template<class CDC_INNER_TABLE_SCHEMA>
 int MutatorRow::parse_columns_(
     const bool is_parse_new_col,
     const blocksstable::ObDatumRow &datum_row,
+    const int64_t rowkey_cnt,
     const CDC_INNER_TABLE_SCHEMA &inner_table_schema,
+    const bool is_macroblock_row,
     ColValueList &cols)
 {
   int ret = OB_SUCCESS;
@@ -560,11 +568,25 @@ int MutatorRow::parse_columns_(
     OBLOG_FORMATTER_LOG(DEBUG, "parse_columns_", K(is_parse_new_col), K(datum_row));
 
     // Iterate through all Cells using Cell Reader
+    // The normal row and macroblock row is different:
+    //   Normal Row: [rowkey column | user column]
+    //   MacroBlock Row: [rowkey column | extra rowkey column | user column]
+    // Formatter need to filter the extra rowkey column
+    const int64_t macroblock_row_user_column_idx = rowkey_cnt + OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER;
+    // record the offset of the stored column between column
+    int64_t column_offset = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_row.get_column_count(); i++) {
+      if (is_macroblock_row) {
+        // filter extra rowkey column
+        if (i >= rowkey_cnt && i < macroblock_row_user_column_idx) continue;
+        if (i == macroblock_row_user_column_idx) {
+          column_offset = OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER;
+        }
+      }
       uint64_t column_id = OB_INVALID_ID;
       const ObObj *value = NULL;
       blocksstable::ObStorageDatum &datum = datum_row.storage_datums_[i];
-      column_id = col_des_array[i].col_id_;
+      column_id = col_des_array[i - column_offset].col_id_;
 
       if (OB_FAIL(deep_copy_encoded_column_value_(datum))) {
         LOG_ERROR("deep_copy_encoded_column_value_ failed", KR(ret), "column_stored_idx", i, K(datum), K(is_parse_new_col));
@@ -579,7 +601,7 @@ int MutatorRow::parse_columns_(
           ObObjMeta obj_meta;
           ObObj obj;
 
-          if (OB_FAIL(set_obj_propertie_(column_id, i, table_schema, obj_meta, obj))) {
+          if (OB_FAIL(set_obj_propertie_(column_id, i - column_offset, table_schema, obj_meta, obj))) {
             LOG_ERROR("set_obj_propertie_ failed", K(column_id), K(i), K(obj_meta), K(obj));
           } else if (OB_FAIL(datum.to_obj_enhance(obj, obj_meta))) {
             LOG_ERROR("transfer datum to obj failed", KR(ret), K(datum), K(obj_meta));
@@ -859,6 +881,7 @@ int MacroBlockMutatorRow::parse_cols(
       tz_info_wrap,
       enable_output_hidden_primary_key,
       all_ddl_operation_table_schema_info,
+      true/*is_macroblock_row*/,
       new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(tenant_id), K(table_id), K(obj2str_helper),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -912,12 +935,18 @@ int MacroBlockMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_tab
     if (OB_FAIL(parse_columns_(
         true/*is_parse_new_col*/,
         row_,
+        row_key_.get_obj_cnt(),
         inner_table_schema_info,
+        true/*is_macroblock_row*/,
         new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(table_schema));
     } else {
       // succ
     }
+  }
+
+  if (OB_SUCC(ret)) {
+    cols_parsed_ = true;
   }
 
   return ret;
@@ -1088,6 +1117,7 @@ int MemtableMutatorRow::parse_cols(
         tz_info_wrap,
         enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info,
+        false/*is_macroblock_row*/,
         new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(tenant_id), K(table_id), K(new_row_), K(obj2str_helper),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -1115,6 +1145,7 @@ int MemtableMutatorRow::parse_cols(
         tz_info_wrap,
         enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info,
+        false/*is_macroblock_row*/,
         old_cols_))) {
       LOG_ERROR("parse old columns fail", KR(ret), K(tenant_id), K(table_id), K(old_row_), K(obj2str_helper),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -1177,7 +1208,9 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
     } else if (OB_FAIL(parse_columns_(
         true/*is_parse_new_col*/,
         datum_row,
+        rowkey_.get_obj_cnt(),
         inner_table_schema_info,
+        false/*is_macroblock_row*/,
         new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(new_row_), K(table_schema));
     } else {
@@ -1195,7 +1228,9 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
     } else if (OB_FAIL(parse_columns_(
         false/*is_parse_new_col*/,
         datum_row,
+        rowkey_.get_obj_cnt(),
         inner_table_schema_info,
+        false/*is_macroblock_row*/,
         old_cols_))) {
       LOG_ERROR("parse old columns fail", KR(ret), K(old_row_), K(table_schema));
     } else {

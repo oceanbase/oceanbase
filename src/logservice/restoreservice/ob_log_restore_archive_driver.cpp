@@ -93,6 +93,7 @@ int ObLogRestoreArchiveDriver::do_fetch_log_(ObLS &ls)
           version, max_fetch_lsn, last_fetch_ts, task_count))) {
     LOG_WARN("check need schedule failed", K(ret), K(id));
   } else if (! need_schedule) {
+    LOG_TRACE("no need_schedule in do_fetch_log", K(need_schedule));
   } else if (OB_FAIL(get_fetch_log_base_lsn_(ls, max_fetch_lsn, last_fetch_ts, pre_scn, lsn))) {
     LOG_WARN("get fetch log base lsn failed", K(ret), K(id));
   } else if (OB_FAIL(submit_fetch_log_task_(ls, pre_scn, lsn, task_count, proposal_id, version))) {
@@ -126,6 +127,7 @@ int ObLogRestoreArchiveDriver::check_need_schedule_(ObLS &ls,
   } else if (OB_FAIL(restore_handler->need_schedule(need_schedule, proposal_id, context))) {
     LOG_WARN("get fetch log context failed", K(ret), K(ls));
   } else if (! need_schedule) {
+    LOG_TRACE("no need_schedule in check_need_schedule_", K(need_schedule));
     // do nothing
   } else if (context.max_fetch_scn_ >= global_recovery_scn_) {
     need_schedule = false;
@@ -136,10 +138,12 @@ int ObLogRestoreArchiveDriver::check_need_schedule_(ObLS &ls,
   } else if (FALSE_IT(concurrency = std::min(fetch_log_worker_count, MAX_LS_FETCH_LOG_TASK_CONCURRENCY))) {
   } else if (context.issue_task_num_ >= concurrency) {
     need_schedule = false;
+    LOG_TRACE("concurrency not enough check_need_schedule", K_(context.issue_task_num), K(concurrency));
   } else if (OB_FAIL(check_need_delay_(ls.get_ls_id(), need_delay))) {
     LOG_WARN("check need delay failed", K(ret), K(ls));
   } else if (need_delay) {
     need_schedule = false;
+    LOG_TRACE("need_delay in check_need_schedule", K(need_delay));
   } else {
     version = context.issue_version_;
     lsn = context.max_submit_lsn_;

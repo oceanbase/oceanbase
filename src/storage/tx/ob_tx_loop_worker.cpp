@@ -191,6 +191,8 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
         if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_max_decided_scn(max_decided_scn))) {
           TRANS_LOG(WARN, "get max decided scn failed", KR(tmp_ret), K(min_start_scn));
           max_decided_scn.set_invalid();
+        } else {
+          (void)cur_ls_ptr->update_min_start_scn_info(max_decided_scn);
         }
         min_start_scn = max_decided_scn;
         do_tx_gc_(cur_ls_ptr, min_start_scn, status);
@@ -307,6 +309,7 @@ void ObTxLoopWorker::do_retain_ctx_gc_(ObLS *ls_ptr)
 
   ObTxRetainCtxMgr *retain_ctx_mgr = ls_ptr->get_tx_svr()->get_retain_ctx_mgr();
   if (OB_ISNULL(retain_ctx_mgr)) {
+    // ignore ret
     TRANS_LOG(WARN, "[Tx Loop Worker] retain_ctx_mgr  is not inited", K(ret), K(MTL_ID()),
               K(*ls_ptr));
 

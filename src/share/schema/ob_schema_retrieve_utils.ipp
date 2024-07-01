@@ -1501,6 +1501,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         uint64_t, true, true/*ignore_column_error*/, COLUMN_GROUP_START_ID);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, column_store, table_schema,
         bool, true, true/*ignore_column_error*/, false);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, auto_increment_cache_size, table_schema,
+        int64_t, true, true, 0);
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));
@@ -2891,6 +2893,9 @@ int ObSchemaRetrieveUtils::fill_sequence_schema(
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL(result, order_flag, sequence_schema);
     bool ignore_column_error = false;
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, is_system_generated, sequence_schema, true, ignore_column_error, false);
+    ignore_column_error = true;
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, flag, sequence_schema, uint64_t,
+                                                        true, ignore_column_error, 0);
   }
   return ret;
 }

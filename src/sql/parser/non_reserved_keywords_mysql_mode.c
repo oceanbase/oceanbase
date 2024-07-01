@@ -64,6 +64,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"auto", AUTO},
   {"auto_increment", AUTO_INCREMENT},
   {"auto_increment_mode", AUTO_INCREMENT_MODE},
+  {"auto_increment_cache_size", AUTO_INCREMENT_CACHE_SIZE},
   {"auto_refresh", AUTO_REFRESH},
   {"autoextend_size", AUTOEXTEND_SIZE},
   {"availability", AVAILABILITY},
@@ -618,6 +619,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"outfile", OUTFILE},
   {"outline", OUTLINE},
   {"owner", OWNER},
+  {"overwrite", OVERWRITE},
   {"pack_keys", PACK_KEYS},
   {"page", PAGE},
   {"parameters", PARAMETERS},
@@ -740,6 +742,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"right", RIGHT},
   {"rlike", REGEXP},
   {"role", ROLE},
+  {"roaringbitmap", ROARINGBITMAP},
   {"rollback", ROLLBACK},
   {"rolling", ROLLING},
   {"rollup", ROLLUP},
@@ -1048,6 +1051,9 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"without", WITHOUT},
   {"validation", VALIDATION},
   {"_st_asmvt", _ST_ASMVT},
+  {"rb_build_agg", RB_BUILD_AGG},
+  {"rb_or_agg", RB_OR_AGG},
+  {"rb_and_agg", RB_AND_AGG},
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

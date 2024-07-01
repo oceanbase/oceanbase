@@ -26,7 +26,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 
 int ObIntegerColumnDecoder::decode(const ObColumnCSDecoderCtx &ctx,
-                                   const int64_t row_id,
+                                   const int32_t row_id,
                                    common::ObDatum &datum) const
 {
   int ret = OB_SUCCESS;
@@ -42,7 +42,7 @@ int ObIntegerColumnDecoder::decode(const ObColumnCSDecoderCtx &ctx,
 }
 
 int ObIntegerColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx,
-    const int64_t *row_ids, const int64_t row_cap, common::ObDatum *datums) const
+    const int32_t *row_ids, const int64_t row_cap, common::ObDatum *datums) const
 {
   int ret = OB_SUCCESS;
   const ObIntegerColumnDecoderCtx &integer_ctx = ctx.integer_ctx_;
@@ -70,7 +70,7 @@ int ObIntegerColumnDecoder::decode_vector(
 
 int ObIntegerColumnDecoder::get_null_count(
     const ObColumnCSDecoderCtx &col_ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {
@@ -706,7 +706,7 @@ int ObIntegerColumnDecoder::tranverse_datum_all_op(
 
 int ObIntegerColumnDecoder::get_aggregate_result(
     const ObColumnCSDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObAggCell &agg_cell) const
 {
@@ -719,7 +719,7 @@ int ObIntegerColumnDecoder::get_aggregate_result(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments to get aggregate result", KR(ret), KP(row_ids), K(row_cap));
   } else {
-    const bool is_reverse = row_cap > 1 && row_ids[2] < row_ids[1];
+    const bool is_reverse = row_cap > 1 && row_ids[1] < row_ids[0];
     int64_t row_id_start = is_reverse ? row_ids[row_cap - 1] : row_ids[0];
     if (integer_ctx.has_null_bitmap()) {
       if (OB_FAIL(agg_cell.reserve_bitmap(row_cap))) {

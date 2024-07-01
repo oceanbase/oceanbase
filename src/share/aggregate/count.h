@@ -33,7 +33,6 @@ public:
   CountAggregate() {}
 
   template <typename ColumnFmt>
-  // TODO: impl add_batch_rows, using null mpas to optimize counting logic
   int add_param_batch(RuntimeContext &agg_ctx, const ObBitVector &skip, ObBitVector &pvt_skip,
                       const EvalBound &bound, const RowSelector &row_sel, const int32_t agg_col_id,
                       const int32_t param_id, ColumnFmt &param_vec, char *aggr_cell)
@@ -55,10 +54,19 @@ public:
     if (param_id == agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_.count() - 1) {
       // last param
       int64_t &count = *reinterpret_cast<int64_t *>(aggr_cell);
-      if (row_sel.is_empty()) {
-        for (int i = bound.start(); i < bound.end(); i++) { count += !pvt_skip.at(i); }
+      if (OB_LIKELY(!agg_ctx.removal_info_.enable_removal_opt_)
+          || !agg_ctx.removal_info_.is_inverse_agg_) {
+        if (row_sel.is_empty()) {
+          for (int i = bound.start(); i < bound.end(); i++) { count += !pvt_skip.at(i); }
+        } else {
+          for (int i = 0; i < row_sel.size(); i++) { count += !pvt_skip.at(row_sel.index(i)); }
+        }
       } else {
-        for (int i = 0; i < row_sel.size(); i++) { count += !pvt_skip.at(row_sel.index(i)); }
+        if (row_sel.is_empty()) {
+          for (int i = bound.start(); i < bound.end(); i++) { count -= !pvt_skip.at(i); }
+        } else {
+          for (int i = 0; i < row_sel.size(); i++) { count -= !pvt_skip.at(row_sel.index(i)); }
+        }
       }
     }
     return ret;
@@ -131,6 +139,23 @@ public:
       data++;
     }
     return OB_SUCCESS;
+  }
+
+  template <typename ColumnFmt>
+  int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+                     const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
+  {
+    int ret = OB_SUCCESS;
+    bool is_trans = !agg_ctx.removal_info_.is_inverse_agg_;
+    if (!columns.is_null(row_num)) {
+      int64_t &count = *reinterpret_cast<int64_t *>(agg_cell);
+      if (is_trans) {
+        count++;
+      } else {
+        count--;
+      }
+    }
+    return ret;
   }
   TO_STRING_KV("aggregate", "count");
 };

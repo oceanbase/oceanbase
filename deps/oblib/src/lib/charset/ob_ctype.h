@@ -68,6 +68,7 @@
 #define OB_CS_NONASCII  8192
 #define OB_CS_UNICODE_SUPPLEMENT 16384
 #define OB_CS_LOWER_SORT 32768
+#define OB_CS_CI 65536
 #define OB_CHARSET_UNDEFINED 0
 
 /* Character repertoire flags */

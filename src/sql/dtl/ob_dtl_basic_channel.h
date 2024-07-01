@@ -107,7 +107,10 @@ static DtlWriterType msg_writer_map[] =
   VECTOR_WRITER,  //PX_VECTOR,
   VECTOR_FIXED_WRITER, //PX_FIXED_VECTOR
   VECTOR_ROW_WRITER,  //PX_VECTOR_ROW,
-
+  CONTROL_WRITER, // DH_SP_WINFUNC_PX_PIECE_MSG
+  CONTROL_WRITER, // DH_SP_WINFUNC_PX_WHOLE_MSG
+  CONTROL_WRITER, // DH_RD_WINFUNC_PX_PIECE_MSG
+  CONTROL_WRITER, // DH_RD_WINFUNC_PX_WHOLE_MSG
 };
 
 static_assert(ARRAYSIZEOF(msg_writer_map) == ObDtlMsgType::MAX, "invalid ms_writer_map size");
@@ -344,10 +347,12 @@ public:
   {
     buffer->msg_type() = ObDtlMsgType::PX_VECTOR_ROW;
   }
+  OB_INLINE ObTempRowStore::DtlRowBlock *get_block() { return block_; }
+  OB_INLINE ObDtlLinkedBuffer *get_write_buffer() { return write_buffer_; }
 private:
   DtlWriterType type_;
   ObDtlLinkedBuffer *write_buffer_;
-  ObTempRowStore::RowBlock* block_;
+  ObTempRowStore::DtlRowBlock *block_;
   ObTempRowStore::ShrinkBuffer *block_buffer_;
   RowMeta row_meta_;
   int64_t row_cnt_;
@@ -370,7 +375,7 @@ OB_INLINE int ObDtlVectorRowMsgWriter::try_append_row(const common::ObIArray<ObE
   }
   ObCompactRow *new_row = nullptr;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(block_->add_row(exprs, write_buffer_->get_row_meta(),
+  } else if (OB_FAIL(block_->add_row(*block_buffer_, exprs, write_buffer_->get_row_meta(),
                                      ctx, new_row))) {
     if (OB_BUF_NOT_ENOUGH != ret) {
       SQL_DTL_LOG(WARN, "failed to add row", K(ret));
@@ -402,7 +407,8 @@ OB_INLINE int ObDtlVectorRowMsgWriter::try_append_batch(const common::ObIArray<O
       SQL_DTL_LOG(WARN, "failed init row meta", K(ret));
     }
   }
-  if (OB_FAIL(ObTempRowStore::RowBlock::calc_rows_size(vectors, write_buffer_->get_row_meta(),
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTempRowStore::RowBlock::calc_rows_size(vectors, write_buffer_->get_row_meta(),
                                                        selector, size, row_size_arr))) {
     SQL_DTL_LOG(WARN, "failed to calc size", K(ret));
   } else {
@@ -410,7 +416,7 @@ OB_INLINE int ObDtlVectorRowMsgWriter::try_append_batch(const common::ObIArray<O
     for (int64_t i = 0; i < size; ++i) {
       sum_size += row_size_arr[i];
     }
-    if (OB_FAIL(block_->add_batch(vectors, write_buffer_->get_row_meta(), selector,
+    if (OB_FAIL(block_->add_batch(*block_buffer_, vectors, write_buffer_->get_row_meta(), selector,
                                   size, row_size_arr, sum_size,
                                   new_rows))) {
       if (OB_BUF_NOT_ENOUGH != ret) {
@@ -717,7 +723,7 @@ protected:
   int push_back_send_list();
   int wait_unblocking();
   int switch_buffer(const int64_t min_size, const bool is_eof,
-      const int64_t timeout_ts);
+      const int64_t timeout_ts, ObEvalCtx *eval_ctx);
   int write_msg(const ObDtlMsg &msg, int64_t timeout_ts,
       ObEvalCtx *eval_ctx, bool is_eof);
   int inner_write_msg(const ObDtlMsg &msg, int64_t timeout_ts, ObEvalCtx *eval_ctx, bool is_eof);

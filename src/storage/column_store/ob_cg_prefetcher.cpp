@@ -25,6 +25,7 @@ void ObCGPrefetcher::reset()
   query_range_.reset();
   is_reverse_scan_ = false;
   is_project_without_filter_ = false;
+  need_prewarm_ = false;
   cg_iter_type_ = -1;
   filter_bitmap_ = nullptr;
   micro_data_prewarm_idx_ = 0;
@@ -39,6 +40,7 @@ void ObCGPrefetcher::reuse()
   query_index_range_.reset();
   query_range_.reset();
   is_project_without_filter_ = false;
+  need_prewarm_ = false;
   filter_bitmap_ = nullptr;
   micro_data_prewarm_idx_ = 0;
   cur_micro_data_read_idx_ = -1;
@@ -84,6 +86,15 @@ int ObCGPrefetcher::init(
       LOG_WARN("Fail to open index root", K(ret));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    need_prewarm_ =
+        (ObICGIterator::OB_CG_SCANNER == cg_iter_type_ ||
+         ((ObICGIterator::OB_CG_ROW_SCANNER == cg_iter_type_ || ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_iter_type_) &&
+          is_project_without_filter_)) &&
+        nullptr == cg_agg_cells_ &&
+        nullptr == access_ctx_->limit_param_ ;
+  }
   return ret;
 }
 
@@ -108,6 +119,15 @@ int ObCGPrefetcher::switch_context(
     if (OB_FAIL(open_index_root())) {
       LOG_WARN("Fail to open index root", K(ret));
     }
+  }
+
+  if (OB_SUCC(ret)) {
+    need_prewarm_ =
+        (ObICGIterator::OB_CG_SCANNER == cg_iter_type_ ||
+         ((ObICGIterator::OB_CG_ROW_SCANNER == cg_iter_type_ || ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_iter_type_) &&
+          is_project_without_filter_)) &&
+        nullptr == cg_agg_cells_ &&
+        nullptr == access_ctx_->limit_param_ ;
   }
   return ret;
 }
@@ -190,9 +210,10 @@ int ObCGPrefetcher::locate_in_prefetched_data(bool &found)
   int ret = OB_SUCCESS;
   found = false;
   const ObCSRowId start_row_idx = is_reverse_scan_ ? query_index_range_.end_row_id_ : query_index_range_.start_row_id_;
-  if (micro_data_prewarm_idx_ > 0 && micro_data_prewarm_idx_ > cur_micro_data_fetch_idx_) {
+  int64_t max_data_prefetched_idx = MAX(micro_data_prewarm_idx_, micro_data_prefetch_idx_);
+  if (max_data_prefetched_idx > 0 && max_data_prefetched_idx > cur_micro_data_read_idx_) {
     int cmp_ret = -1;
-    for (int64_t micro_data_idx = MAX(0, cur_micro_data_fetch_idx_); OB_SUCC(ret) && cmp_ret < 0 && micro_data_idx < micro_data_prewarm_idx_; micro_data_idx++) {
+    for (int64_t micro_data_idx = MAX(0, cur_micro_data_read_idx_); OB_SUCC(ret) && cmp_ret < 0 && micro_data_idx < max_data_prefetched_idx; micro_data_idx++) {
       ObMicroIndexInfo &micro_info = micro_data_infos_[micro_data_idx % max_micro_handle_cnt_];
       const ObCSRange &micro_range = micro_info.get_row_range();
       cmp_ret = micro_range.compare(start_row_idx);
@@ -214,9 +235,9 @@ int ObCGPrefetcher::locate_in_prefetched_data(bool &found)
     if (OB_SUCC(ret) && found) {
       cmp_ret = 1;
       is_prefetch_end_ = false;
-      micro_data_prefetch_idx_ = micro_data_prewarm_idx_;
+      micro_data_prefetch_idx_ = max_data_prefetched_idx;
       const ObCSRowId end_row_id = is_reverse_scan_ ? query_index_range_.start_row_id_ : query_index_range_.end_row_id_;
-      for (int64_t micro_data_idx = micro_data_prewarm_idx_ - 1; OB_SUCC(ret) && cmp_ret > 0 && micro_data_idx > cur_micro_data_fetch_idx_; micro_data_idx--) {
+      for (int64_t micro_data_idx = max_data_prefetched_idx - 1; OB_SUCC(ret) && cmp_ret > 0 && micro_data_idx > cur_micro_data_fetch_idx_; micro_data_idx--) {
         const ObCSRange &micro_range = micro_data_infos_[micro_data_idx % max_micro_handle_cnt_].get_row_range();
         cmp_ret = micro_range.compare(end_row_id);
         if (is_reverse_scan_) {
@@ -275,10 +296,11 @@ bool ObCGPrefetcher::locate_back(const ObCSRange &locate_range)
 {
   bool is_locate_back = false;
   if (0 < query_index_range_.end_row_id_) {
+    int micro_index = MAX(0, cur_micro_data_read_idx_);
     if (is_reverse_scan_) {
-      is_locate_back = locate_range.end_row_id_ > query_index_range_.start_row_id_;
+      is_locate_back = locate_range.end_row_id_ > micro_data_infos_[micro_index % max_micro_handle_cnt_].get_row_range().end_row_id_;
     } else {
-      is_locate_back = locate_range.start_row_id_ < query_index_range_.end_row_id_;
+      is_locate_back = locate_range.start_row_id_ < micro_data_infos_[micro_index % max_micro_handle_cnt_].get_row_range().start_row_id_;
     }
   }
   return is_locate_back;
@@ -357,7 +379,9 @@ int ObCGPrefetcher::prefetch_micro_data()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected prefetch status", K(ret), K_(cur_level), K_(index_tree_height),
              K_(micro_data_prefetch_idx), K_(cur_micro_data_read_idx), K_(max_micro_handle_cnt));
-  } else if (micro_data_prefetch_idx_ - cur_micro_data_read_idx_ == max_micro_handle_cnt_) {
+  } else if (micro_data_prefetch_idx_ - cur_micro_data_read_idx_ == max_micro_handle_cnt_ ||
+             (use_multi_block_prefetch_ && prefetch_depth_ > MIN_DATA_READ_BATCH_COUNT &&
+              (max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_)) < MIN_DATA_READ_BATCH_COUNT)) {
     // DataBlock ring buf full
   } else if (OB_FAIL(get_prefetch_depth(prefetch_depth, micro_data_prefetch_idx_))) {
     LOG_WARN("Fail to get prefetch depth", K(ret));
@@ -399,7 +423,8 @@ int ObCGPrefetcher::prefetch_micro_data()
           } else if (nullptr != sstable_index_filter_
                      && can_index_filter_skip(block_info)
                      && OB_FAIL(sstable_index_filter_->check_range(
-                             iter_param_->read_info_, block_info, *(access_ctx_->allocator_)))) {
+                             iter_param_->read_info_, block_info,
+                             *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
           } else if (nullptr != sstable_index_filter_
                      && (block_info.is_filter_always_false() || block_info.is_filter_always_true())) {
@@ -415,7 +440,10 @@ int ObCGPrefetcher::prefetch_micro_data()
             } else {
               LOG_DEBUG("[COLUMNSTORE] success to agg index info", K(ret), K(block_info));
             }
-          } else if (OB_FAIL(prefetch_block_data(block_info, micro_data_handles_[prefetch_micro_idx]))) {
+          } else if (OB_FAIL(prefetch_data_block(
+                      micro_data_prefetch_idx_,
+                      block_info,
+                      micro_data_handles_[prefetch_micro_idx]))) {
             LOG_WARN("fail to prefetch_block_data", K(ret), K(block_info));
           } else {
             prefetched_cnt++;
@@ -426,6 +454,11 @@ int ObCGPrefetcher::prefetch_micro_data()
           if (OB_SUCC(ret) && (0 == compare_range(block_info.get_row_range()))) {
             is_prefetch_end_ = true;
           }
+        }
+
+        if (OB_SUCC(ret) && multi_io_params_.count() > 0 &&
+            OB_FAIL(prefetch_multi_data_block(micro_data_prefetch_idx_))) {
+          LOG_WARN("Fail to prefetch multi block", K(ret), K_(micro_data_prefetch_idx), K_(multi_io_params));
         }
       }
       if (OB_SUCC(ret) && 0 < prefetched_cnt) {
@@ -526,7 +559,8 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
                  && OB_FAIL(prefetcher.sstable_index_filter_->check_range(
                          prefetcher.iter_param_->read_info_,
                          index_info,
-                         *(prefetcher.access_ctx_->allocator_)))) {
+                         *(prefetcher.access_ctx_->allocator_),
+                         prefetcher.iter_param_->vectorized_enabled_))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
         // TODO: skip data block which is always_false/always_true and record the result in filter bitmap
       } else if (OB_FAIL(prefetcher.can_agg_micro_index(index_info, can_agg))) {
@@ -703,11 +737,7 @@ int ObCGPrefetcher::prewarm()
   if (micro_data_prewarm_idx_ < micro_data_prefetch_idx_) {
     micro_data_prewarm_idx_ = micro_data_prefetch_idx_;
   }
-  if (is_prefetch_end_ &&
-      (ObICGIterator::OB_CG_SCANNER == cg_iter_type_ ||
-       (ObICGIterator::OB_CG_ROW_SCANNER == cg_iter_type_ && is_project_without_filter_)) &&
-      nullptr == cg_agg_cells_ &&
-      nullptr == access_ctx_->limit_param_ &&
+  if (is_prefetch_end_ && need_submit_io_ && need_prewarm_ &&
       (index_tree_height_ - 1) == cur_level_ &&
       micro_data_prewarm_idx_ - cur_micro_data_fetch_idx_ < prefetch_limit) {
 
@@ -732,7 +762,8 @@ int ObCGPrefetcher::prewarm()
                    && block_info.has_agg_data()
                    && block_info.is_filter_uncertain()
                    && OB_FAIL(sstable_index_filter_->check_range(
-                           iter_param_->read_info_, block_info, *(access_ctx_->allocator_)))) {
+                           iter_param_->read_info_, block_info,
+                           *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
           LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
         } else if (nullptr != sstable_index_filter_
                    && (block_info.is_filter_always_false() || block_info.is_filter_always_true())) {
@@ -740,13 +771,20 @@ int ObCGPrefetcher::prewarm()
           prefetched_cnt++;
           micro_data_prewarm_idx_++;
           tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
-        } else if (OB_FAIL(prefetch_block_data(block_info, micro_data_handles_[prefetch_micro_idx]))) {
+        } else if (OB_FAIL(prefetch_data_block(
+                    micro_data_prewarm_idx_,
+                    block_info,
+                    micro_data_handles_[prefetch_micro_idx]))) {
           LOG_WARN("fail to prefetch_block_data", K(ret), K(block_info));
         } else {
           prefetched_cnt++;
           micro_data_prewarm_idx_++;
           tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
         }
+      }
+      if (OB_SUCC(ret) && multi_io_params_.count() > 0 &&
+          OB_FAIL(prefetch_multi_data_block(micro_data_prewarm_idx_))) {
+        LOG_WARN("Fail to prefetch multi block", K(ret), K_(micro_data_prewarm_idx), K_(multi_io_params));
       }
     }
 
@@ -755,6 +793,61 @@ int ObCGPrefetcher::prewarm()
                 K_(micro_data_prewarm_idx), K_(total_micro_data_cnt), K(prefetched_cnt), K(prefetch_depth));
       total_micro_data_cnt_ += prefetched_cnt;
     }
+  }
+  return ret;
+}
+
+void ObCGIndexPrefetcher::reset()
+{
+  ObCGPrefetcher::reset();
+  use_multi_block_prefetch_ = false;
+  need_submit_io_ = false;
+}
+
+void ObCGIndexPrefetcher::reuse()
+{
+  ObCGPrefetcher::reuse();
+  use_multi_block_prefetch_ = false;
+  need_submit_io_ = false;
+}
+
+int ObCGIndexPrefetcher::init(
+    const int cg_iter_type,
+    ObSSTable &sstable,
+    const ObTableIterParam &iter_param,
+    ObTableAccessContext &access_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObCGPrefetcher::init(cg_iter_type, sstable, iter_param, access_ctx))) {
+    LOG_WARN("Fail to init cg prefetcher", K(ret));
+  } else {
+    use_multi_block_prefetch_ = false;
+    need_submit_io_ = false;
+  }
+  return ret;
+}
+
+int ObCGIndexPrefetcher::switch_context(
+    const int cg_iter_type,
+    ObSSTable &sstable,
+    const ObTableIterParam &iter_param,
+    ObTableAccessContext &access_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObCGPrefetcher::switch_context(cg_iter_type, sstable, iter_param, access_ctx))) {
+    LOG_WARN("Fail to switch context for cg prefetcher", K(ret));
+  } else {
+    use_multi_block_prefetch_ = false;
+    need_submit_io_ = false;
+  }
+  return ret;
+}
+
+int ObCGIndexPrefetcher::prefetch()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIndexTreeMultiPassPrefetcher::prefetch())) {
+    LOG_WARN("Fail to prefetch", K(ret));
   }
   return ret;
 }

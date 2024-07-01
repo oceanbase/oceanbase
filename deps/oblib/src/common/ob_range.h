@@ -17,6 +17,7 @@
 #include "lib/utility/utility.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "common/ob_string_buf.h"
+#include "share/ob_cluster_version.h"
 
 
 namespace oceanbase
@@ -335,7 +336,8 @@ public:
     struct {
       int64_t group_idx_: 32;
       int64_t is_physical_rowid_range_: 1;
-      int64_t reserved_: 31;
+      int64_t index_ordered_idx_ : 16;  // used for keep order of global index lookup
+      int64_t reserved_: 15;
     };
   };
 
@@ -381,6 +383,29 @@ public:
   inline int32_t get_group_idx() const
   {
     return group_idx_;
+  }
+  inline int32_t get_index_ordered_idx() const
+  {
+    return index_ordered_idx_;
+  }
+
+  // pseudo-column [GROUP_ID], with high 32 bits as group_idx_ and low 32 bits as index_ordered_idx_
+  // when cluster version < 4.3.2, the das keep order optimization is disabled, we should only fill
+  // group_idx to [GROUP_ID] for compatibility.
+  inline int64_t get_group_id() const
+  {
+    return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? group_idx_ :
+        (static_cast<int64_t>(group_idx_) << 32) | (index_ordered_idx_ & 0xffffffff);
+  }
+  // get group_idx from [GROUP_ID]
+  static int64_t get_group_idx(int64_t group_id)
+  {
+    return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? group_id : (group_id >> 32);
+  }
+  // get index_order_idx from [GROUP_ID]
+  static int64_t get_index_ordered_idx(int64_t group_id)
+  {
+    return group_id & 0xffffffff;
   }
 
   int build_range(uint64_t table_id, ObRowkey rowkey)

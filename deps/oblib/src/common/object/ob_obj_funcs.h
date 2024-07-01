@@ -195,6 +195,7 @@ template <>
       case ObGeometryType:
       case ObUserDefinedSQLType:
       case ObCollectionSQLType:
+      case ObRoaringBitmapType:
       default:
         break;
     }
@@ -1595,6 +1596,10 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
 //    and lob locators are removed in table apis. Error may occur if used in other scenes.
 // 2. CS_FUNCS: lob with same content and different lobids will have different crc & hash,
 //    but error occur in farm, not used?
+
+// Todo: @xiyu
+// Check CS_FUNCS of roaringbitmap may not be used?
+
 #define DEF_TEXT_FUNCS(OBJTYPE, TYPE, VTYPE) \
   DEF_TEXT_PRINT_FUNCS(OBJTYPE);             \
   DEF_STRING_CS_FUNCS(OBJTYPE);                 \
@@ -1604,6 +1609,7 @@ DEF_TEXT_FUNCS(ObTinyTextType, string, ObString);
 DEF_TEXT_FUNCS(ObTextType, string, ObString);
 DEF_TEXT_FUNCS(ObMediumTextType, string, ObString);
 DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
+DEF_TEXT_FUNCS(ObRoaringBitmapType, string, ObString);
 
 
 #define DEF_GEO_CS_FUNCS(OBJTYPE)                                    \
@@ -3569,6 +3575,7 @@ inline int64_t obj_val_get_serialize_size<ObCollectionSQLType>(const ObObj &obj)
 }
 
 DEF_UDT_CS_FUNCS(ObCollectionSQLType);
+
 }
 }
 

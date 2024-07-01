@@ -142,6 +142,8 @@ public:
     }
     return ret;
   }
+  OB_INLINE int cap() const
+  { return capacity_; }
   using common::ObFixedArrayImpl<T, common::ObIAllocator>::reset;
 protected:
   using common::ObFixedArrayImpl<T, common::ObIAllocator>::prepare_allocate;

@@ -158,7 +158,7 @@ int ObColumnCSDecoder::decode(const int64_t row_id, common::ObDatum &datum)
 }
 
 int ObColumnCSDecoder::batch_decode(
-  const int64_t *row_ids, const int64_t row_cap, common::ObDatum *datums)
+  const int32_t *row_ids, const int64_t row_cap, common::ObDatum *datums)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == row_ids || nullptr == datums || 0 >= row_cap)) {
@@ -172,7 +172,7 @@ int ObColumnCSDecoder::batch_decode(
   }
 
   LOG_DEBUG("[Batch decode] Batch decoded datums: ", K(ret), K(row_cap), K(*ctx_),
-    K(ObArrayWrap<int64_t>(row_ids, row_cap)), K(ObArrayWrap<ObDatum>(datums, row_cap)));
+    K(ObArrayWrap<int32_t>(row_ids, row_cap)), K(ObArrayWrap<ObDatum>(datums, row_cap)));
   return ret;
 }
 
@@ -192,7 +192,7 @@ int ObColumnCSDecoder::decode_vector(ObVectorDecodeCtx &vector_ctx)
 }
 
 int ObColumnCSDecoder::get_row_count(
-  const int64_t *row_ids, const int64_t row_cap, const bool contains_null, int64_t &count)
+    const int32_t *row_ids, const int64_t row_cap, const bool contains_null, int64_t &count)
 {
   int ret = OB_SUCCESS;
   int64_t null_count = 0;
@@ -1559,7 +1559,7 @@ int ObMicroBlockCSDecoder::filter_black_filter_batch(
 int ObMicroBlockCSDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObIArray<ObSqlDatumInfo> &datum_infos,
@@ -1598,7 +1598,7 @@ int ObMicroBlockCSDecoder::get_rows(
   return ret;
 }
 
-int ObMicroBlockCSDecoder::get_row_count(int32_t col_id, const int64_t *row_ids,
+int ObMicroBlockCSDecoder::get_row_count(int32_t col_id, const int32_t *row_ids,
   const int64_t row_cap, const bool contains_null, const share::schema::ObColumnParam *col_param, int64_t &count)
 {
   UNUSED(col_param);
@@ -1609,7 +1609,7 @@ int ObMicroBlockCSDecoder::get_row_count(int32_t col_id, const int64_t *row_ids,
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(decoders_[col_id].get_row_count(row_ids, row_cap, contains_null, count))) {
     LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(row_cap), "row_ids",
-      common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+      common::ObArrayWrap<const int32_t>(row_ids, row_cap));
   }
   return ret;
 }
@@ -1645,7 +1645,7 @@ int ObMicroBlockCSDecoder::get_column_datum(
 
 bool ObMicroBlockCSDecoder::can_pushdown_decoder(
     const ObColumnCSDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const ObAggCell &agg_cell) const
 {
@@ -1657,7 +1657,7 @@ bool ObMicroBlockCSDecoder::can_pushdown_decoder(
       bool is_col_signed = false;
       const ObObjType store_col_type = integer_ctx.col_header_->get_store_obj_type();
       const bool can_convert = ObCSDecodingUtil::can_convert_to_integer(store_col_type, is_col_signed);
-      const int64_t row_gap = std::abs(row_ids[0] - row_ids[row_cap - 1] + 1);
+      const int64_t row_gap = std::abs(row_ids[0] - row_ids[row_cap - 1]) + 1;
       bret = ((PD_MIN == agg_type || PD_MAX == agg_type) &&
               row_cap == row_gap &&
               can_convert);
@@ -1680,7 +1680,7 @@ int ObMicroBlockCSDecoder::get_aggregate_result(
     const ObTableAccessContext &context,
     const int32_t col_offset,
     const share::schema::ObColumnParam &col_param,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObAggDatumBuf &agg_datum_buf,
     ObAggCell &agg_cell)
@@ -1732,7 +1732,7 @@ int ObMicroBlockCSDecoder::get_aggregate_result(
 
 int ObMicroBlockCSDecoder::get_col_datums(
     int32_t col_id,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *col_datums)
 {
@@ -1751,7 +1751,7 @@ int ObMicroBlockCSDecoder::get_col_datums(
     }
   } else if (OB_FAIL(decoders_[col_id].batch_decode(row_ids, row_cap, col_datums))) {
     LOG_WARN("fail to get datums from decoder", K(ret), K(col_id), K(row_cap),
-             "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+             "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
   }
   return ret;
 }
@@ -1789,7 +1789,7 @@ int ObMicroBlockCSDecoder::read_distinct(
 
 int ObMicroBlockCSDecoder::read_reference(
     const int32_t group_by_col,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
 {
@@ -1807,7 +1807,7 @@ int ObMicroBlockCSDecoder::read_reference(
 }
 
 int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell)
@@ -1847,7 +1847,7 @@ int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
 int ObMicroBlockCSDecoder::get_rows(
     const common::ObIArray<int32_t> &cols,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     const char **cell_datas,
     const int64_t vec_offset,

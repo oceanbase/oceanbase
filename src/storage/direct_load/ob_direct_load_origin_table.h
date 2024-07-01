@@ -27,15 +27,11 @@ public:
   ObDirectLoadOriginTableCreateParam();
   ~ObDirectLoadOriginTableCreateParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_id),
-               K_(tablet_id),
-               K_(ls_id),
-               "insert_mode", ObDirectLoadInsertMode::get_type_string(insert_mode_));
+  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(ls_id));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
-  ObDirectLoadInsertMode::Type insert_mode_;
 };
 
 struct ObDirectLoadOriginTableMeta
@@ -43,15 +39,11 @@ struct ObDirectLoadOriginTableMeta
 public:
   ObDirectLoadOriginTableMeta();
   ~ObDirectLoadOriginTableMeta();
-  TO_STRING_KV(K_(table_id),
-               K_(tablet_id),
-               K_(ls_id),
-               "insert_mode", ObDirectLoadInsertMode::get_type_string(insert_mode_));
+  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(ls_id));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
-  ObDirectLoadInsertMode::Type insert_mode_;
 };
 
 class ObDirectLoadOriginTable
@@ -60,7 +52,12 @@ public:
   ObDirectLoadOriginTable();
   virtual ~ObDirectLoadOriginTable();
   int init(const ObDirectLoadOriginTableCreateParam &param);
-  int scan(const blocksstable::ObDatumRange &key_range, common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter);
+  int scan(
+      const blocksstable::ObDatumRange &key_range,
+      common::ObIAllocator &allocator,
+      ObIStoreRowIterator *&row_iter,
+      bool skip_read_lob);
+  int rescan(const blocksstable::ObDatumRange &key_range, ObIStoreRowIterator *row_iter);
   bool is_valid() const { return is_inited_; }
   const ObDirectLoadOriginTableMeta &get_meta() const {return meta_; }
   const ObTabletHandle &get_tablet_handle() const { return tablet_handle_; }
@@ -85,15 +82,16 @@ class ObDirectLoadOriginTableScanner : public ObIStoreRowIterator
 public:
   ObDirectLoadOriginTableScanner();
   virtual ~ObDirectLoadOriginTableScanner();
-  int init(ObDirectLoadOriginTable *table,
-           const blocksstable::ObDatumRange &query_range);
+  int init(ObDirectLoadOriginTable *table, bool skip_read_lob);
+  int open(const blocksstable::ObDatumRange &query_range);
   int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
 private:
   int init_table_access_param();
-  int init_table_access_ctx();
+  int init_table_access_ctx(bool skip_read_lob);
   int init_get_table_param();
 private:
   common::ObArenaAllocator allocator_;
+  common::ObArenaAllocator stmt_allocator_;
   ObDirectLoadOriginTable *origin_table_;
   ObArray<int32_t> col_ids_;
   share::schema::ObTableSchemaParam schema_param_;

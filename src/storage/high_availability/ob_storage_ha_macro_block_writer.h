@@ -46,6 +46,7 @@ public:
   virtual ~ObStorageHAMacroBlockWriter() {}
   int init(
       const uint64_t tenant_id,
+      const ObDagId &dag_id,
       ObICopyMacroBlockReader *reader,
       ObIndexBlockRebuilder *index_block_rebuilder);
 
@@ -56,11 +57,11 @@ private:
       const blocksstable::ObBufferReader &data);
   bool is_inited_;
   uint64_t tenant_id_;
+  ObDagId dag_id_;
   ObICopyMacroBlockReader *reader_;
   blocksstable::ObSSTableMacroBlockChecker macro_checker_;
   ObIndexBlockRebuilder *index_block_rebuilder_;
 };
-
 
 }
 }

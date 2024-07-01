@@ -37,6 +37,7 @@
 #include "sql/engine/expr/ob_expr_json_schema_valid.h"
 #include "sql/engine/expr/ob_expr_json_schema_validation_report.h"
 #include "sql/engine/expr/ob_expr_json_utils.h"
+#include "sql/engine/expr/ob_expr_get_path.h"
 
 namespace oceanbase
 {
@@ -46,18 +47,18 @@ namespace sql
 
 #define REG_EXTRA_INFO(type, ExtraInfoClass)      \
   do {                                            \
-    static_assert(type > T_INVALID && type < T_MAX_OP, "invalid expr type for extra info"); \
+    static_assert(is_valid_item_type(type), "invalid expr type for extra info"); \
     ALLOC_FUNS_[type] = ObExprExtraInfoFactory::alloc<ExtraInfoClass>; \
   } while(0)
 
-ObExprExtraInfoFactory::AllocExtraInfoFunc ObExprExtraInfoFactory::ALLOC_FUNS_[T_MAX_OP] = { };
+ObExprExtraInfoFactory::AllocExtraInfoFunc ObExprExtraInfoFactory::ALLOC_FUNS_[ObExprExtraInfoFactory::MAX_ITEM_ID] = { };
 
 int ObExprExtraInfoFactory::alloc(common::ObIAllocator &alloc,
                                   const ObExprOperatorType &type,
                                   ObIExprExtraInfo *&extra_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!(type > T_INVALID && type < T_MAX_OP))) {
+  if (OB_UNLIKELY(!is_valid_item_type(type))) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(type));
   } else if (OB_ISNULL(ALLOC_FUNS_[type])) {
@@ -114,6 +115,7 @@ void ObExprExtraInfoFactory::register_expr_extra_infos()
   REG_EXTRA_INFO(T_FUN_SYS_JSON_SCHEMA_VALIDATION_REPORT, ObExprJsonSchemaValidInfo);
   REG_EXTRA_INFO(T_FUN_SYS_JSON_VALUE, ObExprJsonQueryParamInfo);
   REG_EXTRA_INFO(T_FUN_SYS_JSON_QUERY, ObExprJsonQueryParamInfo);
+  REG_EXTRA_INFO(T_PSEUDO_EXTERNAL_FILE_COL, ObDataAccessPathExtraInfo);
 }
 
 } // end namespace sql

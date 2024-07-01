@@ -124,7 +124,7 @@ int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<Ob
           break;
         }
         case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::EXPIRE_TIME: {
-          int64_t expire_time = key.time_us_;
+          int64_t expire_time = key.timeout_ts_;
           cells[cell_idx].set_timestamp(expire_time);
           break;
         }

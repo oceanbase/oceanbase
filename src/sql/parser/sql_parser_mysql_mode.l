@@ -1111,6 +1111,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_SEMI_TO_INNER { return NO_SEMI_TO_INNER; }
 <hint>COALESCE_SQ  { return COALESCE_SQ; }
 <hint>NO_COALESCE_SQ  { return NO_COALESCE_SQ; }
+<hint>WO_PULLUP { return WO_PULLUP; }
+<hint>WITH_PULLUP { return WITH_PULLUP; }
 <hint>GBY_PUSHDOWN { return GBY_PUSHDOWN; }
 <hint>NO_GBY_PUSHDOWN { return NO_GBY_PUSHDOWN; }
 <hint>USE_HASH_DISTINCT { return USE_HASH_DISTINCT; }
@@ -1160,6 +1162,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_AGGR_FIRST_UNNEST { return NO_AGGR_FIRST_UNNEST; }
 <hint>JOIN_FIRST_UNNEST { return JOIN_FIRST_UNNEST; }
 <hint>NO_JOIN_FIRST_UNNEST { return NO_JOIN_FIRST_UNNEST; }
+<hint>COALESCE_AGGR { return COALESCE_AGGR; }
+<hint>NO_COALESCE_AGGR { return NO_COALESCE_AGGR; }
 <hint>OPT_PARAM { return OPT_PARAM; }
 <hint>OB_DDL_SCHEMA_VERSION { return OB_DDL_SCHEMA_VERSION; }
 <hint>DYNAMIC_SAMPLING { return DYNAMIC_SAMPLING; }

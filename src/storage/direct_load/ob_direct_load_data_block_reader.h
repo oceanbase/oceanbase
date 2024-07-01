@@ -22,7 +22,7 @@ namespace oceanbase
 namespace storage
 {
 
-template <typename Header, typename T>
+template <typename Header, typename T, bool align = false>
 class ObDirectLoadDataBlockReader : public ObDirectLoadExternalIterator<T>
 {
 public:
@@ -58,8 +58,8 @@ protected:
   DISALLOW_COPY_AND_ASSIGN(ObDirectLoadDataBlockReader);
 };
 
-template <typename Header, typename T>
-ObDirectLoadDataBlockReader<Header, T>::ObDirectLoadDataBlockReader()
+template <typename Header, typename T, bool align>
+ObDirectLoadDataBlockReader<Header, T, align>::ObDirectLoadDataBlockReader()
   : data_block_size_(0),
     buf_(nullptr),
     buf_capacity_(0),
@@ -74,14 +74,14 @@ ObDirectLoadDataBlockReader<Header, T>::ObDirectLoadDataBlockReader()
 {
 }
 
-template <typename Header, typename T>
-ObDirectLoadDataBlockReader<Header, T>::~ObDirectLoadDataBlockReader()
+template <typename Header, typename T, bool align>
+ObDirectLoadDataBlockReader<Header, T, align>::~ObDirectLoadDataBlockReader()
 {
   reset();
 }
 
-template <typename Header, typename T>
-void ObDirectLoadDataBlockReader<Header, T>::reuse()
+template <typename Header, typename T, bool align>
+void ObDirectLoadDataBlockReader<Header, T, align>::reuse()
 {
   buf_size_ = 0;
   buf_pos_ = 0;
@@ -94,8 +94,8 @@ void ObDirectLoadDataBlockReader<Header, T>::reuse()
   is_opened_ = false;
 }
 
-template <typename Header, typename T>
-void ObDirectLoadDataBlockReader<Header, T>::reset()
+template <typename Header, typename T, bool align>
+void ObDirectLoadDataBlockReader<Header, T, align>::reset()
 {
   data_block_size_ = 0;
   if (buf_ != nullptr) {
@@ -116,9 +116,9 @@ void ObDirectLoadDataBlockReader<Header, T>::reset()
   is_inited_ = false;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockReader<Header, T>::init(int64_t data_block_size,
-                                                 common::ObCompressorType compressor_type)
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockReader<Header, T, align>::init(int64_t data_block_size,
+                                                        common::ObCompressorType compressor_type)
 {
   int ret = common::OB_SUCCESS;
   if (IS_INIT) {
@@ -140,9 +140,9 @@ int ObDirectLoadDataBlockReader<Header, T>::init(int64_t data_block_size,
   return ret;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockReader<Header, T>::open(const ObDirectLoadTmpFileHandle &file_handle,
-                                                 int64_t offset, int64_t size)
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockReader<Header, T, align>::open(
+  const ObDirectLoadTmpFileHandle &file_handle, int64_t offset, int64_t size)
 {
   int ret = common::OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -169,8 +169,8 @@ int ObDirectLoadDataBlockReader<Header, T>::open(const ObDirectLoadTmpFileHandle
   return ret;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockReader<Header, T>::read_next_buffer()
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockReader<Header, T, align>::read_next_buffer()
 {
   int ret = common::OB_SUCCESS;
   if (0 == read_size_) {
@@ -196,16 +196,16 @@ int ObDirectLoadDataBlockReader<Header, T>::read_next_buffer()
   return ret;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockReader<Header, T>::realloc_buf(int64_t size)
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockReader<Header, T, align>::realloc_buf(int64_t size)
 {
   int ret = OB_SUCCESS;
-  int64_t align_size = ALIGN_UP(size, DIO_ALIGN_SIZE);
-  if (buf_capacity_ != align_size && buf_size_ - buf_pos_ <= align_size) {
-    char *tmp_buf = (char *)ob_malloc(align_size, ObMemAttr(MTL_ID(), "TLD_DBReader"));
+  const int64_t buf_size = align ? ALIGN_UP(size, DIO_ALIGN_SIZE) : size;
+  if (buf_capacity_ != buf_size && buf_size_ - buf_pos_ <= buf_size) {
+    char *tmp_buf = (char *)ob_malloc(buf_size, ObMemAttr(MTL_ID(), "TLD_DBReader"));
     if (tmp_buf == nullptr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "fail to alloc mem", K(align_size), KR(ret));
+      STORAGE_LOG(WARN, "fail to alloc mem", K(buf_size), KR(ret));
     } else {
       if (buf_ != nullptr) {
         MEMCPY(tmp_buf, buf_ + buf_pos_, buf_size_ - buf_pos_);
@@ -217,26 +217,26 @@ int ObDirectLoadDataBlockReader<Header, T>::realloc_buf(int64_t size)
       buf_ = tmp_buf;
       buf_size_ = buf_size_ - buf_pos_;
       buf_pos_ = 0;
-      buf_capacity_ = align_size;
+      buf_capacity_ = buf_size;
     }
   }
   return ret;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockReader<Header, T>::switch_next_block()
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockReader<Header, T, align>::switch_next_block()
 {
   int ret = common::OB_SUCCESS;
   int64_t data_size = 0;
   if (OB_FAIL(realloc_buf(data_block_size_))) {
     STORAGE_LOG(WARN, "fail to realloc buf", K(data_block_size_), KR(ret));
-  } else if (buf_size_ - buf_pos_ < DIO_ALIGN_SIZE && OB_FAIL(read_next_buffer())) {
+  } else if (buf_size_ - buf_pos_ <= data_block_reader_.get_header_size() &&
+             OB_FAIL(read_next_buffer())) {
     if (OB_UNLIKELY(common::OB_ITER_END != ret)) {
       STORAGE_LOG(WARN, "fail to read next buffer", KR(ret));
     }
   } else if (OB_FAIL(data_block_reader_.prepare_data_block(buf_ + buf_pos_, buf_size_ - buf_pos_,
                                                            data_size))) {
-
     if (OB_UNLIKELY(common::OB_BUF_NOT_ENOUGH != ret)) {
       STORAGE_LOG(WARN, "fail to prepare data block", KR(ret), K(buf_pos_), K(buf_size_));
     } else {
@@ -248,17 +248,18 @@ int ObDirectLoadDataBlockReader<Header, T>::switch_next_block()
       }
 
       if (OB_FAIL(ret)) {
-        //pass
+        // pass
       } else if (OB_FAIL(read_next_buffer())) {
         STORAGE_LOG(WARN, "fail to read next buffer", KR(ret));
       } else if (OB_FAIL(data_block_reader_.prepare_data_block(buf_ + buf_pos_,
                                                                buf_size_ - buf_pos_, data_size))) {
-        STORAGE_LOG(WARN, "fail to prepare data block", KR(ret), K(buf_pos_), K(buf_size_), K(data_size));
+        STORAGE_LOG(WARN, "fail to prepare data block", KR(ret), K(buf_pos_), K(buf_size_),
+                    K(data_size));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    const int64_t data_block_size = ALIGN_UP(data_size, DIO_ALIGN_SIZE);
+    const int64_t data_block_size = align ? ALIGN_UP(data_size, DIO_ALIGN_SIZE) : data_size;
     buf_pos_ += data_block_size;
     ++block_count_;
     if (OB_FAIL(prepare_read_block())) {
@@ -268,8 +269,8 @@ int ObDirectLoadDataBlockReader<Header, T>::switch_next_block()
   return ret;
 }
 
-template <typename Header, typename T>
-int ObDirectLoadDataBlockReader<Header, T>::get_next_item(const T *&item)
+template <typename Header, typename T, bool align>
+int ObDirectLoadDataBlockReader<Header, T, align>::get_next_item(const T *&item)
 {
   int ret = common::OB_SUCCESS;
   item = nullptr;

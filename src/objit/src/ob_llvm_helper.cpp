@@ -125,7 +125,10 @@ static ObGetIRType OB_IR_TYPE[common::ObMaxType + 1] =
   NULL,                                                    //49.ObUserDefinedSQLType
   NULL,                                                    //50. ObDecimalIntType
   NULL,                                                    //51.ObCollectionSQLType
-  NULL,                                                    //52.ObMaxType
+  reinterpret_cast<ObGetIRType>(ObIRType::getInt32Ty),     //52.ObMySQLDateType
+  reinterpret_cast<ObGetIRType>(ObIRType::getInt64Ty),     //53.ObMySQLDateTimeType
+  NULL,                                                    //54.ObRoaringBitmapType
+  NULL,                                                    //55.ObMaxType
 };
 
 template<typename T, int64_t N>
@@ -659,7 +662,9 @@ int ObLLVMHelper::verify_function(ObLLVMFunction &function)
   } else if (verifyFunction(*function.get_v())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to verify function", K(ret));
-  } else { /*do nothing*/ }
+  } else {
+    jc_->Builder.reset();
+  }
   return ret;
 }
 

@@ -39,6 +39,8 @@ int ObSSTableIndexFilter::init(
     LOG_WARN("Unexpected nullptr read_info", K(ret), KP(read_info), K(is_cg));
   } else if (OB_FAIL(build_skipping_filter_nodes(read_info, pushdown_filter))) {
     LOG_WARN("Fail to build skipping filter node", K(ret));
+  } else if (OB_FAIL(skip_filter_executor_.init(MAX(1, pushdown_filter.get_op().get_batch_size()), allocator))) {
+    LOG_WARN("Failed to init skip filter executor", K(ret));
   } else {
     pushdown_filter_ = &pushdown_filter;
     allocator_ = allocator;
@@ -52,7 +54,8 @@ int ObSSTableIndexFilter::init(
 int ObSSTableIndexFilter::check_range(
     const ObITableReadInfo *read_info,
     blocksstable::ObMicroIndexInfo &index_info,
-    common::ObIAllocator &allocator)
+    common::ObIAllocator &allocator,
+    const bool use_vectorize)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -69,7 +72,7 @@ int ObSSTableIndexFilter::check_range(
     bool can_use_skipping_index_filter = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < skipping_filter_nodes_.count(); ++i) {
       ObSkippingFilterNode &node = skipping_filter_nodes_[i];
-      if (OB_FAIL(is_filtered_by_skipping_index(read_info, index_info, node, allocator))) {
+      if (OB_FAIL(is_filtered_by_skipping_index(read_info, index_info, node, allocator, use_vectorize))) {
         LOG_WARN("Fail to do filter by skipping index", K(ret), K(index_info));
       } else {
         can_use_skipping_index_filter =
@@ -102,7 +105,8 @@ int ObSSTableIndexFilter::is_filtered_by_skipping_index(
     const ObITableReadInfo *read_info,
     blocksstable::ObMicroIndexInfo &index_info,
     ObSkippingFilterNode &node,
-    common::ObIAllocator &allocator)
+    common::ObIAllocator &allocator,
+    const bool use_vectorize)
 {
   int ret = OB_SUCCESS;
   node.is_already_determinate_ = false;
@@ -113,17 +117,17 @@ int ObSSTableIndexFilter::is_filtered_by_skipping_index(
     // There is no need to check skipping index because filter result is contant already.
     node.is_already_determinate_ = true;
   } else {
-    auto *white_filter = static_cast<sql::ObWhiteFilterExecutor *>(node.filter_);
-    const uint32_t col_offset = white_filter->get_col_offsets(is_cg_).at(0);
+    const uint32_t col_offset = node.filter_->get_col_offsets(is_cg_).at(0);
     const uint32_t col_idx = static_cast<uint32_t>(read_info->get_columns_index().at(col_offset));
     const ObObjMeta obj_meta = read_info->get_columns_desc().at(col_offset).col_type_;
     if (OB_FAIL(skip_filter_executor_.falsifiable_pushdown_filter(col_idx,
                                                                   obj_meta,
                                                                   node.skip_index_type_,
                                                                   index_info,
-                                                                  *white_filter,
-                                                                  allocator))) {
-      LOG_WARN("Fail to falsifiable pushdown filter", K(ret), K(white_filter));
+                                                                  *node.filter_,
+                                                                  allocator,
+                                                                  use_vectorize))) {
+      LOG_WARN("Fail to falsifiable pushdown filter", K(ret), K(node.filter_));
     }
   }
   return ret;
@@ -155,12 +159,12 @@ int ObSSTableIndexFilter::extract_skipping_filter_from_tree(
     sql::ObPushdownFilterExecutor &filter)
 {
   int ret = OB_SUCCESS;
-  if (filter.is_filter_white_node()) {
-    auto &white_filter = static_cast<sql::ObWhiteFilterExecutor &>(filter);
+  sql::ObPhysicalFilterExecutor &physical_filter = static_cast<sql::ObPhysicalFilterExecutor &>(filter);
+  if (physical_filter.is_filter_white_node() || static_cast<sql::ObBlackFilterExecutor &>(physical_filter).is_monotonic()) {
     IndexList index_list;
-    if (OB_FAIL(find_skipping_index(read_info, filter, index_list))) {
+    if (OB_FAIL(find_skipping_index(read_info, physical_filter, index_list))) {
       LOG_WARN("Fail to find useful skipping index", K(ret));
-    } else if (OB_FAIL(find_useful_skipping_filter(index_list, filter))) {
+    } else if (OB_FAIL(find_useful_skipping_filter(index_list, physical_filter))) {
       LOG_WARN("Fail to find useful skipping filter", K(ret));
     }
   }
@@ -169,7 +173,7 @@ int ObSSTableIndexFilter::extract_skipping_filter_from_tree(
 
 int ObSSTableIndexFilter::find_skipping_index(
     const ObITableReadInfo* read_info,
-    sql::ObPushdownFilterExecutor &filter,
+    sql::ObPhysicalFilterExecutor &filter,
     IndexList &index_list) const
 {
   int ret = OB_SUCCESS;
@@ -210,7 +214,7 @@ int ObSSTableIndexFilter::find_skipping_index(
 
 int ObSSTableIndexFilter::find_useful_skipping_filter(
     const IndexList &index_list,
-    sql::ObPushdownFilterExecutor &filter)
+    sql::ObPhysicalFilterExecutor &filter)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
@@ -273,38 +277,19 @@ void ObSSTableIndexFilterFactory::destroy_sstable_index_filter(ObSSTableIndexFil
 //////////////////////////////////////// ObSSTableIndexFilterExtracter //////////////////////////////////////////////
 
 int ObSSTableIndexFilterExtracter::extract_skipping_filter(
-    const sql::ObPushdownFilterExecutor &filter,
+    const sql::ObPhysicalFilterExecutor &filter,
     const blocksstable::ObSkipIndexType skip_index_type,
     ObSkippingFilterNode &node)
 {
   int ret = OB_SUCCESS;
   switch (skip_index_type) {
     case blocksstable::ObSkipIndexType::MIN_MAX:
-      if (OB_FAIL(ObSSTableIndexFilterExtracter::extract_min_max_skipping_filter(filter, node))) {
-        LOG_WARN("Fail to extract min max index skipping filter", K(ret), K(skip_index_type));
-      }
+      node.skip_index_type_ = blocksstable::ObSkipIndexType::MIN_MAX;
       break;
     default:
       // There are more skipping index types in the future.
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unepected skip index type", K(ret), K(skip_index_type));
-  }
-  return ret;
-}
-
-int ObSSTableIndexFilterExtracter::extract_min_max_skipping_filter(
-    const sql::ObPushdownFilterExecutor &filter,
-    ObSkippingFilterNode &node)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!filter.is_filter_node())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected not physical filter node", K(ret), K(filter.get_type()));
-  } else if (filter.is_filter_black_node()) {
-    node.set_useless();
-  } else {
-    // min_max skipping index support all types of white filter now,
-    node.skip_index_type_ = blocksstable::ObSkipIndexType::MIN_MAX;
   }
   return ret;
 }

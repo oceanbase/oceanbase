@@ -327,6 +327,10 @@ void ObTableApiSessPool::destroy()
   loop all session node to retire.
   - nodes which have not been visited for more than 5 minutes will be retired.
   - move retired node to retired list.
+  - why do I need to check whether the node is empty ？
+    -- after a node is created, the session may be initialized in init_sess_info() for
+    -- more than SESS_RETIRE_TIME (unit migration scenario).
+    -- If the node is deleted during this time, it will be used after free.
 */
 int ObTableApiSessPool::retire_session_node()
 {
@@ -341,7 +345,7 @@ int ObTableApiSessPool::retire_session_node()
     const int64_t N = arr.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       const ObTableApiSessForeachOp::ObTableApiSessKV &kv = arr.at(i);
-      if (cur_time - kv.node_->get_last_active_ts() >= SESS_RETIRE_TIME) {
+      if (cur_time - kv.node_->get_last_active_ts() >= SESS_RETIRE_TIME && !kv.node_->is_empty()) {
         ObTableApiSessNode *del_node = nullptr;
         if (OB_FAIL(key_node_map_.erase_refactored(kv.key_, &del_node))) {
           if (OB_HASH_NOT_EXIST != ret) {

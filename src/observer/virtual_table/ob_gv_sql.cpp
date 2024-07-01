@@ -268,6 +268,11 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         cells[i].set_null();
       } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(plan->stat_.db_id_);
+      } else if (cache_obj->is_anon() ||
+          cache_obj->is_sfc() ||
+          cache_obj->is_prcr() ||
+          cache_obj->is_pkg()) {
+        cells[i].set_uint64(pl_object->get_stat().db_id_);
       } else {
         cells[i].set_uint64(0);
       }
@@ -900,28 +905,19 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       ObString type_name;
       if (NS_PKG == cache_obj->get_ns()) {
         uint64_t package_id = pl_object->get_stat().pl_schema_id_;
-        if (package_id != common::OB_INVALID_ID && (package_id & common::OB_MOCK_TRIGGER_PACKAGE_ID_MASK) != 0) { // trigger
-          char *buf = NULL;
-          int32_t str_len = (int32_t)std::strlen("TRIGGER");
-          if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(str_len)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            SERVER_LOG(ERROR, "failed to allocate memory", K(ret), K(str_len));
-          } else {
-            MEMCPY(buf, "TRIGGER", str_len);
-            type_name.assign(buf, str_len);
-          }
-        } else if (package_id != common::OB_INVALID_ID && (package_id & common::OB_MOCK_OBJECT_PACAKGE_ID_MASK) != 0) { // udt
-          char *buf = NULL;
-          int32_t str_len = (int32_t)std::strlen("TYPE");
-          if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(str_len)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            SERVER_LOG(ERROR, "failed to allocate memory", K(ret), K(str_len));
-          } else {
-            MEMCPY(buf, "TYPE", str_len);
-            type_name.assign(buf, str_len);
-          }
-        } else if (OB_FAIL(ObPlanCacheObject::type_to_name(cache_obj->get_ns(), *allocator_, type_name))) {
-          SERVER_LOG(ERROR, "failed to get type_name", K(ret));
+        pl::ObPLCacheObjectType pl_cache_type = pl_object->get_stat().type_;
+        bool is_body = pl::ObPLCacheObjectType::PACKAGE_BODY_TYPE == pl_cache_type;
+        if (package_id == common::OB_INVALID_ID) {
+          //do nothing
+        } else if (ObTriggerInfo::is_trigger_package_id(package_id)) {
+          // trigger
+          type_name = is_body ? "TRIGGER BODY" : "TRIGGER";
+        } else if (ObUDTObjectType::is_object_id(package_id)) {
+          //udt
+          type_name = is_body ? "TYPE BODY" : "TYPE";
+        } else {
+          //package
+          type_name = is_body ? "PACKAGE BODY" : "PACKAGE";
         }
       } else if (OB_FAIL(ObPlanCacheObject::type_to_name(cache_obj->get_ns(), *allocator_, type_name))) {
         SERVER_LOG(ERROR, "failed to get type_name", K(ret));

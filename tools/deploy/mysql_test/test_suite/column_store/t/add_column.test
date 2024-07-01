@@ -4,14 +4,18 @@
 
 --disable_query_log
 --disable_warnings
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+alter system set_tp tp_name = "EN_COMPACTION_DISABLE_ROW_COL_SWITCH", error_code = 4016, frequency = 1;
+connection default;
 set @@recyclebin = off;
-drop table if exists t1,t2;
+drop table if exists t1,t2,t3;
 --enable_warnings
 --enable_query_log
 
 create table t1(a int, b varchar(3048), primary key (a), c int) with column group (all columns, each column);
 create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group (all columns, each column);
-
+create table t3(c1 int) with column group (each column);
 sleep 10;
 
 --disable_query_log
@@ -31,9 +35,18 @@ while ($count < 300)
                                   ($count * 10 + 8,$count * 10 + 8, $count * 10 + 8 + 1, concat("abcdefg", $count)),
                                   ($count * 10 + 9,$count * 10 + 9, $count * 10 + 9 + 1, concat("abcdefg", $count)),
                                   ($count * 10 + 10,$count * 10 + 10, $count * 10 + 10+ 1, concat("abcdefg", $count));
+  eval insert into t3(c1) values ($count);
   inc $count;
   inc $count;
 }
+
+--let $count=1
+while ($count < 8)
+{
+  eval insert into t3 select * from t3;
+  inc $count;
+}
+
 --enable_warnings
 --enable_query_log
 select count(*) from t1;
@@ -44,6 +57,7 @@ alter system major freeze;
 --source mysql_test/include/wait_daily_merge.inc
 
 alter table t1 add column c1 int default 0, add column c2 varchar(100);
+alter table t3 add column c2 char(60) default "中文";
 
 --disable_query_log
 --disable_warnings
@@ -117,6 +131,24 @@ select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30
 select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
 select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
 
+--disable_query_log
+SET sql_mode = 'PAD_CHAR_TO_FULL_LENGTH';
+alter system flush plan cache;
+sleep 1;
+--enable_query_log
+
+select count(c2), min(c2), max(c2) from t3 where c1 < 256;
+
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(c2), min(c2), max(c2) from t3 where c1 < 256;
+
+--disable_query_log
+SET sql_mode = '';
+alter system flush plan cache;
+sleep 1;
+--enable_query_log
+
 alter system major freeze;
 --source mysql_test/include/wait_daily_merge.inc
 
@@ -183,7 +215,7 @@ select count(*) from t1;
 select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
 select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
 
-drop table t1,t2;
+drop table t1,t2,t3;
 
 alter system flush plan cache;
 
@@ -353,3 +385,7 @@ set @@recyclebin = on;
 alter system set _pushdown_storage_level = 4;
 alter system set _rowsets_enabled = true;
 alter system flush plan cache;
+connection obsys;
+alter system set_tp tp_name = "EN_COMPACTION_DISABLE_ROW_COL_SWITCH", error_code = 4016, frequency = 0;
+connection default;
+--enable_query_log

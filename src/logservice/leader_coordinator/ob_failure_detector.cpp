@@ -362,6 +362,7 @@ void ObFailureDetector::detect_palf_hang_failure_()
       ATOMIC_SET(&has_add_clog_hang_event_, true);
       LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "clog disk may be hung, add failure event", K(clog_disk_hang_event),
                     K(clog_disk_last_working_time), "hung time", now - clog_disk_last_working_time);
+      LOG_DBA_ERROR_V2(OB_FAILURE_LOG_DISK_HUNG, OB_DISK_HUNG, "clog disk may be hung, add failure event");
     }
   } else {
     if (is_clog_disk_hang) {
@@ -398,6 +399,7 @@ void ObFailureDetector::detect_data_disk_io_failure_()
       ATOMIC_SET(&has_add_data_disk_hang_event_, true);
       LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk may be hung, add failure event", K(data_disk_io_hang_event),
                     K(data_disk_error_start_ts));
+      LOG_DBA_ERROR_V2(OB_FAILURE_DATA_DISK_HUNG, OB_DISK_HUNG, "data disk may be hung, add failure event");
     }
   } else {
     if (ObDeviceHealthStatus::DEVICE_HEALTH_NORMAL != data_disk_status) {
@@ -432,6 +434,7 @@ void ObFailureDetector::detect_palf_disk_full_()
       ATOMIC_SET(&has_add_clog_full_event_, true);
       LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "clog disk is almost full, add failure event",
                     K(clog_disk_full_event), K(now));
+      LOG_DBA_ERROR_V2(OB_LOG_DISK_SPACE_ALMOST_FULL, OB_LOG_OUTOF_DISK_SPACE, "clog disk is almost full, add failure event");
     }
   } else {
     if (!is_disk_enough) {
@@ -505,6 +508,7 @@ void ObFailureDetector::detect_data_disk_full_()
       ATOMIC_SET(&has_add_disk_full_event_, true);
       LOG_DBA_ERROR(OB_USER_OUTOF_DATA_DISK_SPACE, "msg", "data disk is full, add failure event",
                     K(data_disk_full_event), K(now));
+      LOG_DBA_ERROR_V2(OB_FAILURE_OUTOF_DATA_DISK_SPACE, OB_USER_OUTOF_DATA_DISK_SPACE, "data disk is full, add failure event");
     }
   } else {
     if (!is_disk_enough) {

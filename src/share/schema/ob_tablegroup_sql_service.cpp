@@ -98,7 +98,7 @@ int ObTablegroupSqlService::update_tablegroup(ObTablegroupSchema &new_schema,
   }
   // add tablegroup_history
   const bool only_history = true;
-  if (OB_FAIL(add_tablegroup(sql_client, new_schema, only_history))) {
+  if (FAILEDx(add_tablegroup(sql_client, new_schema, only_history))) {
     LOG_WARN("fail to add tablegroup history", K(ret));
   }
 

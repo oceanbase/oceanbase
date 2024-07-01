@@ -247,7 +247,8 @@ int ObMultiPartitionsRangesWarpper::add_range(ObEvalCtx &eval_ctx,
           rowkey_count = ARRAYSIZEOF(share::schema::HIDDEN_PK_COLUMN_IDS);
         }
       }
-      if (OB_FAIL(init_main_table_rowkey(rowkey_count, main_table_rowkey_))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(init_main_table_rowkey(rowkey_count, main_table_rowkey_))) {
         LOG_WARN("Fail to init main table row", K(ret));
       }
     }

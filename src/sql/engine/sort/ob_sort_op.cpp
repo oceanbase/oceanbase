@@ -18,6 +18,7 @@
 #include "sql/engine/window_function/ob_window_function_op.h"
 #include "sql/engine/aggregate/ob_hash_groupby_vec_op.h"
 #include "share/ob_rpc_struct.h"
+#include "sql/engine/expr/ob_expr_topn_filter.h"
 
 namespace oceanbase
 {
@@ -39,7 +40,8 @@ ObSortSpec::ObSortSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type
   is_fetch_with_ties_(false),
   prescan_enabled_(false),
   enable_encode_sortkey_opt_(false),
-  part_cnt_(0)
+  part_cnt_(0),
+  pd_topn_filter_info_(alloc)
 {}
 
 OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
@@ -57,7 +59,8 @@ OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
                     prescan_enabled_,
                     enable_encode_sortkey_opt_,
                     part_cnt_,
-                    compress_type_);
+                    compress_type_,
+                    pd_topn_filter_info_);
 
 ObSortOp::ObSortOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(ctx_, spec, input),
@@ -83,9 +86,23 @@ int ObSortOp::inner_open()
 
 int ObSortOp::inner_rescan()
 {
+  if (MY_SPEC.enable_pd_topn_filter() && !MY_SPEC.pd_topn_filter_info_.is_shuffle_) {
+    // for local topn runtime filter, rescan topn filter expression context
+    reset_pd_topn_filter_expr_ctx();
+  }
   reset();
   iter_end_ = false;
   return ObOperator::inner_rescan();
+}
+
+void ObSortOp::reset_pd_topn_filter_expr_ctx()
+{
+  uint32_t expr_ctx_id = MY_SPEC.pd_topn_filter_info_.expr_ctx_id_;
+  ObExprTopNFilterContext *topn_filter_ctx =
+      static_cast<ObExprTopNFilterContext *>(ctx_.get_expr_op_ctx(expr_ctx_id));
+  if (nullptr != topn_filter_ctx) {
+    topn_filter_ctx->reset_for_rescan();
+  }
 }
 
 void ObSortOp::reset()
@@ -437,10 +454,12 @@ int ObSortOp::init_sort(int64_t tenant_id,
       &ctx_, MY_SPEC.px_est_size_factor_, est_rows, est_rows))) {
     LOG_WARN("failed to get px size", K(ret));
   }
-  OZ(sort_impl_.init(tenant_id, &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_,
-      &eval_ctx_, &ctx_, MY_SPEC.enable_encode_sortkey_opt_, MY_SPEC.is_local_merge_sort_,
-      false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt, MY_SPEC.is_fetch_with_ties_,
-      ObChunkDatumStore::BLOCK_SIZE, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_, est_rows, MY_SPEC.prescan_enabled_));
+  OZ(sort_impl_.init(tenant_id, &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_, &eval_ctx_,
+                     &ctx_, MY_SPEC.enable_encode_sortkey_opt_, MY_SPEC.is_local_merge_sort_,
+                     false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt,
+                     MY_SPEC.is_fetch_with_ties_, ObChunkDatumStore::BLOCK_SIZE,
+                     MY_SPEC.compress_type_, &MY_SPEC.all_exprs_, est_rows,
+                     MY_SPEC.prescan_enabled_, &MY_SPEC.pd_topn_filter_info_));
   if (is_batch) {
     read_batch_func_ = &ObSortOp::sort_impl_next_batch;
   } else {

@@ -22,7 +22,6 @@
 #include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
 
-
 namespace oceanbase
 {
 namespace common
@@ -38,8 +37,8 @@ public:
   ObExternalDataAccessDriver() : storage_type_(common::OB_STORAGE_MAX_TYPE), device_handle_(nullptr) {}
   ~ObExternalDataAccessDriver();
   int init(const common::ObString &location, const ObString &access_info);
-  int open(const common::ObString &url);
-  bool is_opened();
+  int open(const char *url);
+  bool is_opened() const;
   int get_file_size(const common::ObString &url, int64_t &file_size);
 
   int get_file_sizes(const ObString &location, const ObIArray<ObString> &urls, ObIArray<int64_t> &file_sizes);
@@ -48,8 +47,8 @@ public:
                     const common::ObString &pattern,
                     const ObExprRegexpSessionVariables &regexp_vars,
                     common::ObIArray<common::ObString> &file_urls,
+                    common::ObIArray<int64_t> &file_sizes,
                     common::ObIAllocator &allocator);
-  static int resolve_storage_type(const ObString &location, common::ObStorageType &device_type);
   common::ObStorageType get_storage_type() { return storage_type_; }
   void close();
 
@@ -66,13 +65,24 @@ private:
 
 class ObExternalTableRowIterator : public common::ObNewRowIterator {
 public:
-  ObExternalTableRowIterator() : scan_param_(nullptr) {}
-  virtual int init(const storage::ObTableScanParam *scan_param) {
-    scan_param_ = scan_param;
-    return common::OB_SUCCESS;
-  }
+  ObExternalTableRowIterator() :
+    scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL)
+  {}
+  virtual int init(const storage::ObTableScanParam *scan_param);
+protected:
+  int init_exprs(const storage::ObTableScanParam *scan_param);
+  int gen_ip_port(common::ObIAllocator &allocator);
+  int calc_file_partition_list_value(const int64_t part_id, common::ObIAllocator &allocator, common::ObNewRow &value);
+  int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value, const int64_t row_count);
 protected:
   const storage::ObTableScanParam *scan_param_;
+  //external table column exprs
+  common::ObSEArray<ObExpr*, 16> column_exprs_;
+  //hidden columns
+  ObExpr *line_number_expr_;
+  ObExpr *file_id_expr_;
+  ObExpr *file_name_expr_;
+  common::ObString ip_port_;
 };
 
 class ObExternalTableAccessService : public common::ObITabletScan
@@ -144,13 +154,11 @@ public:
                  K(cur_file_name_), K(cur_file_id_), K(cur_line_number_), K(line_count_limit_), K_(part_id), K_(ip_port_len), K_(file_with_url));
   };
 
-  ObCSVTableRowIterator() : bit_vector_cache_(NULL), line_number_expr_(NULL), file_id_expr_(NULL),
-                            file_name_expr_(NULL) {}
+  ObCSVTableRowIterator() : bit_vector_cache_(NULL) {}
   virtual ~ObCSVTableRowIterator();
   virtual int init(const storage::ObTableScanParam *scan_param) override;
   int get_next_row() override;
   int get_next_rows(int64_t &count, int64_t capacity) override;
-  int update_file_partition_list_value(const int64_t part_id);
 
   virtual int get_next_row(ObNewRow *&row) override {
     UNUSED(row);
@@ -172,7 +180,6 @@ private:
   int skip_lines();
   void release_buf();
   void dump_error_log(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs);
-  int init_exprs(const storage::ObTableScanParam *scan_param);
 private:
   ObBitVector *bit_vector_cache_;
   StateValues state_;
@@ -181,15 +188,11 @@ private:
   ObCSVGeneralParser parser_;
   ObExternalDataAccessDriver data_access_driver_;
   ObSqlString url_;
-  ObSEArray<ObExpr*, 16> column_exprs_;
-  ObExpr *line_number_expr_;
-  ObExpr *file_id_expr_;
   ObExpr *file_name_expr_;
 };
 
+
 }
-
-
 }
 
 #endif // OB_EXTERNAL_TABLE_ACCESS_SERVICE_H_

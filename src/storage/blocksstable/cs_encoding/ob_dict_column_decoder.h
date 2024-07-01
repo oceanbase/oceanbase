@@ -30,7 +30,7 @@ public:
   virtual ~ObDictColumnDecoder() {}
   ObDictColumnDecoder(const ObDictColumnDecoder &) = delete;
   ObDictColumnDecoder &operator=(const ObDictColumnDecoder &) = delete;
-  virtual int get_null_count(const ObColumnCSDecoderCtx &ctx, const int64_t *row_ids,
+  virtual int get_null_count(const ObColumnCSDecoderCtx &ctx, const int32_t *row_ids,
     const int64_t row_cap, int64_t &null_count) const override;
 
   virtual int pushdown_operator(
@@ -50,7 +50,7 @@ public:
 
   virtual int get_aggregate_result(
     const ObColumnCSDecoderCtx &col_ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObAggCell &agg_cell) const override;
 
@@ -64,7 +64,7 @@ public:
 
   virtual int read_reference(
     const ObColumnCSDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const override;
 
@@ -98,6 +98,7 @@ public:
 
 protected:
   const static int64_t MAX_STACK_BUF_SIZE = 4 << 10; // 4K
+  const static int64_t CS_DICT_SKIP_THRESHOLD = 32;
   virtual int decode_and_aggregate(
     const ObColumnCSDecoderCtx &ctx,
     const int64_t row_id,
@@ -107,10 +108,18 @@ protected:
     UNUSEDx(ctx, row_id, datum, agg_cell);
     return OB_NOT_SUPPORTED;
   }
+
+  static int check_skip_block(
+    const ObDictColumnDecoderCtx &ctx,
+    sql::ObBlackFilterExecutor &filter,
+    sql::PushdownFilterInfo &pd_filter_info,
+    ObBitmap &result_bitmap,
+    sql::ObBoolMask &bool_mask);
+
   static int extract_ref_and_null_count_(
     const ObConstEncodingRefDesc &ref_desc,
     const int64_t dict_count,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums,
     int64_t &null_count,

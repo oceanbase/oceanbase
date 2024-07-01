@@ -799,10 +799,10 @@ Query Plan
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|5       |6           |
 |3 |│   └─PX BLOCK ITERATOR       |        |5       |6           |
 |4 |│     └─TABLE FULL SCAN       |t2      |5       |6           |
-|5 |└─LIMIT                       |        |1       |6           |
-|6 |  └─PX COORDINATOR MERGE SORT |        |1       |6           |
-|7 |    └─EXCHANGE OUT DISTR      |:EX20000|1       |6           |
-|8 |      └─TOP-N SORT            |        |1       |6           |
+|5 |└─LIMIT                       |        |1       |7           |
+|6 |  └─PX COORDINATOR MERGE SORT |        |2       |7           |
+|7 |    └─EXCHANGE OUT DISTR      |:EX20000|2       |6           |
+|8 |      └─TOP-N SORT            |        |2       |6           |
 |9 |        └─PX BLOCK ITERATOR   |        |5       |6           |
 |10|          └─TABLE FULL SCAN   |t1      |5       |6           |
 ==================================================================
@@ -2035,8 +2035,8 @@ Query Plan
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |5           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |5           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |18          |
-|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
+|5 |├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
+|6 |└─TABLE RANGE SCAN            |t2      |8       |18          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2079,8 +2079,8 @@ Outline Data:
       PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
+      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2105,7 +2105,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:Table DOP
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2117,7 +2117,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2159,8 +2159,8 @@ Query Plan
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |5           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |5           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |18          |
-|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
+|5 |├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
+|6 |└─TABLE RANGE SCAN            |t2      |8       |18          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2203,8 +2203,8 @@ Outline Data:
       PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
+      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2229,7 +2229,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:Table DOP
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2241,7 +2241,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2283,8 +2283,8 @@ Query Plan
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |5           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |5           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |18          |
-|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
+|5 |├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
+|6 |└─TABLE RANGE SCAN            |t2      |8       |18          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2327,8 +2327,8 @@ Outline Data:
       PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
+      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2353,7 +2353,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:Table DOP
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2365,7 +2365,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2407,8 +2407,8 @@ Query Plan
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |5           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |5           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |18          |
-|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
+|5 |├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
+|6 |└─TABLE RANGE SCAN            |t2      |8       |18          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2451,8 +2451,8 @@ Outline Data:
       PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
+      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2477,7 +2477,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:Table DOP
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2489,7 +2489,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2531,9 +2531,9 @@ Query Plan
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |5           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |5           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |18          |
+|5 |├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
 |6 |├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |18          |
-|7 |└─DISTRIBUTED TABLE GET       |t2      |1       |18          |
+|7 |└─TABLE GET                   |t2      |1       |18          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2582,10 +2582,10 @@ Outline Data:
       PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
+      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
-      USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -2610,7 +2610,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:7
       table_dop:1
-      dop_method:Table DOP
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2634,7 +2634,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0

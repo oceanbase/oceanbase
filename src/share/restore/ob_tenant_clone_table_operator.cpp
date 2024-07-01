@@ -18,6 +18,58 @@
 using namespace oceanbase::share;
 using namespace oceanbase::common;
 
+static const char* cancel_clone_job_reason_strs[] = {
+  "by user command",
+  "by standby tenant transfer event",
+  "by standby tenant upgrade event",
+  "by standby tenant alter LS event"
+};
+
+const char* ObCancelCloneJobReason::get_reason_str() const
+{
+  STATIC_ASSERT(ARRAYSIZEOF(cancel_clone_job_reason_strs) == (int64_t)MAX,
+                "cancel_clone_job_reason_strs string array size mismatch enum CancelCloneJobReason count");
+  const char *str = NULL;
+  if (reason_ > INVALID && reason_ < MAX) {
+    str = cancel_clone_job_reason_strs[static_cast<int64_t>(reason_)];
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid CancelCloneJobReason", K_(reason));
+  }
+  return str;
+}
+
+int ObCancelCloneJobReason::init_by_conflict_case(
+    const rootserver::ObConflictCaseWithClone &case_to_check)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!case_to_check.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(case_to_check));
+  } else if (OB_UNLIKELY(!case_to_check.is_standby_related())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("can not init cancel clone job reason by these cases", KR(ret), K(case_to_check));
+  } else {
+    switch (case_to_check.get_case_name()) {
+      case rootserver::ObConflictCaseWithClone::STANDBY_UPGRADE : {
+        reason_ = CancelCloneJobReason::CANCEL_BY_STANDBY_UPGRADE;
+        break;
+      }
+      case rootserver::ObConflictCaseWithClone::ConflictCaseWithClone::STANDBY_TRANSFER : {
+        reason_ = CancelCloneJobReason::CANCEL_BY_STANDBY_TRANSFER;
+        break;
+      }
+      case rootserver::ObConflictCaseWithClone::ConflictCaseWithClone::STANDBY_MODIFY_LS : {
+        reason_ = CancelCloneJobReason::CANCEL_BY_STANDBY_ALTER_LS;
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid conflict case", K(ret), K(case_to_check));
+    }
+  }
+  return ret;
+}
+
 ObTenantCloneStatus &ObTenantCloneStatus::operator=(const ObTenantCloneStatus &status)
 {
   status_ = status.status_;
@@ -253,7 +305,9 @@ ObCloneJob::ObCloneJob() :
   status_(ObTenantCloneStatus::Status::CLONE_MAX_STATUS),
   job_type_(ObTenantCloneJobType::CLONE_JOB_MAX_TYPE),
   ret_code_(OB_SUCCESS),
-  allocator_("CloneJob")
+  allocator_("CloneJob"),
+  data_version_(0),
+  min_cluster_version_(0)
 {}
 
 int ObCloneJob::init(const ObCloneJobInitArg &init_arg)
@@ -323,6 +377,8 @@ int ObCloneJob::init(const ObCloneJobInitArg &init_arg)
     status_ = init_arg.status_;
     job_type_ = init_arg.job_type_;
     ret_code_ = init_arg.ret_code_;
+    data_version_ = init_arg.data_version_;
+    min_cluster_version_ = init_arg.min_cluster_version_;
   }
   return ret;
 }
@@ -352,6 +408,8 @@ int ObCloneJob::assign(const ObCloneJob &other)
     status_ = other.status_;
     job_type_ = other.job_type_;
     ret_code_ = other.ret_code_;
+    data_version_ = other.data_version_;
+    min_cluster_version_ = other.min_cluster_version_;
   }
   return ret;
 }
@@ -375,6 +433,8 @@ void ObCloneJob::reset()
   job_type_ = ObTenantCloneJobType::CLONE_JOB_MAX_TYPE;
   ret_code_ = OB_SUCCESS;
   allocator_.reset();
+  data_version_ = 0;
+  min_cluster_version_ = 0;
 }
 
 bool ObCloneJob::is_valid() const
@@ -1121,6 +1181,7 @@ int ObTenantCloneTableOperator::build_insert_dml_(
 {
   int ret = OB_SUCCESS;
   char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+  bool is_compatible_with_clone_standby_tenant = false;
 
   if (OB_UNLIKELY(!job.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1158,8 +1219,15 @@ int ObTenantCloneTableOperator::build_insert_dml_(
     LOG_WARN("add column failed", KR(ret));
   } else if (OB_FAIL(dml.add_column("job_type", get_job_type_str(job.get_job_type())))) {
     LOG_WARN("add column failed", K(ret));
+  } else if (0 != job.get_data_version()
+             && OB_FAIL(dml.add_column("data_version", job.get_data_version()))) {
+    // data_version not 0 means (sys/meta/user)tenant's data_version must promoted to 4.3.2
+    LOG_WARN("add data_version column failed", KR(ret), K(job));
+  } else if (0 != job.get_min_cluster_version()
+             && OB_FAIL(dml.add_column("min_cluster_version", job.get_min_cluster_version()))) {
+    // min_cluster_version not 0 means (sys/meta/user)tenant's data_version must promoted to 4.3.2
+    LOG_WARN("add min_cluster_version failed", KR(ret), K(job));
   }
-
   return ret;
 }
 
@@ -1186,6 +1254,8 @@ int ObTenantCloneTableOperator::fill_job_from_result_(const ObMySQLResult *resul
   ObString status_str;
   ObString job_type_str;
   int ret_code = OB_SUCCESS;
+  uint64_t data_version = 0;
+  uint64_t min_cluster_version = 0;
   EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", tenant_id, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(*result, "job_id", job_id, int64_t);
   EXTRACT_STRBUF_FIELD_MYSQL(*result, "trace_id", trace_id_buf, sizeof(trace_id_buf), real_length);
@@ -1202,6 +1272,10 @@ int ObTenantCloneTableOperator::fill_job_from_result_(const ObMySQLResult *resul
   EXTRACT_VARCHAR_FIELD_MYSQL(*result, "status", status_str);
   EXTRACT_VARCHAR_FIELD_MYSQL(*result, "job_type", job_type_str);
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "ret_code", ret_code, int);
+  EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "data_version", data_version, uint64_t,
+                                             true/*skip_null_error*/, true/*skip_column_error*/, 0/*default_value*/);
+  EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "min_cluster_version", min_cluster_version, uint64_t,
+                                             true/*skip_null_error*/, true/*skip_column_error*/, 0/*default_value*/);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(trace_id.parse_from_buf(trace_id_buf))) {
       LOG_WARN("fail to parse trace id from buf", KR(ret), K(trace_id_buf));
@@ -1226,6 +1300,8 @@ int ObTenantCloneTableOperator::fill_job_from_result_(const ObMySQLResult *resul
         .status_                     = ObTenantCloneStatus::get_clone_status(status_str),
         .job_type_                   = get_job_type(job_type_str),
         .ret_code_                   = ret_code,
+        .data_version_               = data_version,
+        .min_cluster_version_         = min_cluster_version,
       };
       if (OB_FAIL(job.init(init_arg))) {
         LOG_WARN("fail to init clone job", KR(ret), K(init_arg));

@@ -101,8 +101,8 @@ int ObGroupResultSaveRows::to_expr(bool is_vectorized, int64_t start_pos, int64_
 
 int64_t ObGroupResultSaveRows::cur_group_idx()
 {
-  return start_pos_ >= saved_size_ ?
-      OB_INVALID_INDEX : store_rows_[start_pos_].store_row_->cells()[group_id_idx_].get_int();
+  return start_pos_ >= saved_size_ ? OB_INVALID_INDEX :
+      ObNewRange::get_group_idx(store_rows_[start_pos_].store_row_->cells()[group_id_idx_].get_int());
 }
 
 
@@ -140,7 +140,7 @@ int ObDASGroupFoldIter::set_scan_group(int64_t group_id)
     cur_group_idx_ = group_id;
   }
   if (group_save_rows_.need_check_output_datum_) {
-      reset_expr_datum_ptr();
+    reset_expr_datum_ptr();
   }
   if (cur_group_idx_ >= group_size_) {
     ret = OB_ITER_END;
@@ -277,7 +277,7 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_, storage_count, skip);
       ObDatum *group_idx_batch = group_id_expr_->locate_batch_datums(*group_save_rows_.eval_ctx_);
       for (int64_t i = 0; OB_SUCC(ret) && i < storage_count; i++) {
-        group_idx = group_idx_batch[i].get_int();
+        group_idx = ObNewRange::get_group_idx(group_idx_batch[i].get_int());
         if (group_idx >= cur_group_idx_) {
           if (OB_FAIL(group_save_rows_.save(true, i, storage_count - i))) {
             LOG_WARN("das group fold iter failed to save batch result", K(ret));
@@ -352,7 +352,7 @@ int ObDASGroupFoldIter::inner_get_next_row()
       } else if (OB_FAIL(group_id_expr_->eval(*group_save_rows_.eval_ctx_, group_idx))) {
         LOG_WARN("failed to eval group id", K(ret));
       } else {
-        available_group_idx_ = group_idx->get_int();
+        available_group_idx_ = ObNewRange::get_group_idx(group_idx->get_int());
       }
     } // while end
 

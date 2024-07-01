@@ -35,9 +35,22 @@ class ObTableLoadService
 public:
   static int mtl_init(ObTableLoadService *&service);
   static int check_tenant();
-  static int check_support_direct_load(const uint64_t table_id,
+  // 旁路导入内核获取加表锁后的schema进行检查
+  static int check_support_direct_load(uint64_t table_id,
                                        const storage::ObDirectLoadMethod::Type method,
-                                       const storage::ObDirectLoadInsertMode::Type insert_mode);
+                                       const storage::ObDirectLoadInsertMode::Type insert_mode,
+                                       const storage::ObDirectLoadMode::Type load_mode);
+  // 业务层指定schema_guard进行检查
+  static int check_support_direct_load(share::schema::ObSchemaGetterGuard &schema_guard,
+                                       uint64_t table_id,
+                                       const storage::ObDirectLoadMethod::Type method,
+                                       const storage::ObDirectLoadInsertMode::Type insert_mode,
+                                       const storage::ObDirectLoadMode::Type load_mode);
+  static int check_support_direct_load(share::schema::ObSchemaGetterGuard &schema_guard,
+                                       const share::schema::ObTableSchema *table_schema,
+                                       const storage::ObDirectLoadMethod::Type method,
+                                       const storage::ObDirectLoadInsertMode::Type insert_mode,
+                                       const storage::ObDirectLoadMode::Type load_mode);
   static ObTableLoadTableCtx *alloc_ctx();
   static void free_ctx(ObTableLoadTableCtx *table_ctx);
   static int add_ctx(ObTableLoadTableCtx *table_ctx);
@@ -45,7 +58,6 @@ public:
   // get ctx
   static int get_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTableCtx *&table_ctx);
   // get ctx by table_id
-  static int get_ctx(const ObTableLoadKey &key, ObTableLoadTableCtx *&table_ctx);
   static void put_ctx(ObTableLoadTableCtx *table_ctx);
 
   // for direct load control api

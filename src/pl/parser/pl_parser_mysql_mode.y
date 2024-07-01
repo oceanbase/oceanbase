@@ -254,7 +254,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> sp_param sp_fparam sp_alter_chistics
 %type <node> opt_sp_definer sp_create_chistics sp_create_chistic sp_chistic opt_parentheses user opt_host_name
 %type <node> param_type sp_cparams opt_sp_cparam_list cexpr sp_cparam opt_sp_cparam_with_assign
-%type <ival> opt_sp_inout opt_if_exists
+%type <ival> opt_sp_inout opt_if_exists opt_if_not_exists
 %type <node> call_sp_stmt do_sp_stmt
 %type <node> sp_cond sp_hcond_list sp_hcond
 %type <node> sp_unlabeled_control sp_labeled_control
@@ -579,7 +579,15 @@ call_sp_stmt:
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CALL_STMT, 2, $2, $3);
     }
-  | CALL PROCEDURE sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
+  | CALL PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
+    {
+      if (!parse_ctx->is_inner_parse_) {
+        obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
+        YYERROR; //生成一个语法错误
+      }
+      $$ = $9;
+    }
+  | CALL PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' procedure_body
     {
       if (!parse_ctx->is_inner_parse_) {
         obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
@@ -587,29 +595,21 @@ call_sp_stmt:
       }
       $$ = $8;
     }
-  | CALL PROCEDURE sp_name '(' opt_sp_param_list ')' procedure_body
+  | CALL FUNCTION opt_if_not_exists sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type sp_create_chistics function_body
     {
       if (!parse_ctx->is_inner_parse_) {
         obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
         YYERROR; //生成一个语法错误
       }
-      $$ = $7;
+      $$ = $11;
     }
-  | CALL FUNCTION sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type sp_create_chistics function_body
+  | CALL FUNCTION opt_if_not_exists sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type function_body
     {
       if (!parse_ctx->is_inner_parse_) {
         obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
         YYERROR; //生成一个语法错误
       }
       $$ = $10;
-    }
-  | CALL FUNCTION sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type function_body
-    {
-      if (!parse_ctx->is_inner_parse_) {
-        obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
-        YYERROR; //生成一个语法错误
-      }
-      $$ = $9;
     }
 ;
 
@@ -1068,16 +1068,17 @@ create_trigger_stmt:
 ;
 
 plsql_trigger_source:
-    TRIGGER sp_name trigger_definition
+    TRIGGER opt_if_not_exists sp_name trigger_definition
     {
-      check_ptr($3);
+      check_ptr($4);
       const char *stmt_str = parse_ctx->stmt_str_ + @1.first_column;
-      int32_t str_len = @3.last_column - @1.first_column + 1;
-      $3->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
-      check_ptr($3->str_value_);
-      $3->str_len_ = str_len;
-      $3->pl_str_off_ = @1.first_column;
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_SOURCE, 2, $2, $3);
+      int32_t str_len = @4.last_column - @1.first_column + 1;
+      $4->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+      check_ptr($4->str_value_);
+      $4->str_len_ = str_len;
+      $4->pl_str_off_ = @1.first_column;
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_SOURCE, 2, $3, $4);
+      $$->value_ = $2;
     }
 ;
 
@@ -1152,73 +1153,11 @@ drop_trigger_stmt:
  *
  *****************************************************************************/
 create_procedure_stmt:
-    CREATE opt_sp_definer PROCEDURE sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
-    {
-      check_ptr($9);
-      ParseNode *sp_clause_node = NULL;
-      merge_nodes(sp_clause_node, parse_ctx->mem_pool_, T_SP_CLAUSE_LIST, $8);
-      const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
-      int32_t str_len = @9.last_column - @3.first_column + 1;
-      $9->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
-      check_ptr($9->str_value_);
-      $9->str_len_ = str_len;
-      $9->raw_text_ = $9->str_value_ + @9.first_column - @3.first_column;
-      $9->text_len_ = str_len - (@9.first_column - @3.first_column);
-      if (NULL != $6) {
-        const char *param_str = parse_ctx->stmt_str_ + @5.first_column + 1;
-        int32_t param_len = @7.last_column - @5.last_column - 1;
-        $6->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
-        check_ptr($6->str_value_);
-        $6->str_len_ = param_len;
-      }
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CREATE, 5, $2, $4, $6, sp_clause_node, $9);
-    }
-  | CREATE opt_sp_definer PROCEDURE sp_name '(' opt_sp_param_list ')' procedure_body
-    {
-      check_ptr($8);
-      const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
-      int32_t str_len = @8.last_column - @3.first_column + 1;
-      $8->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
-      check_ptr($8->str_value_);
-      $8->str_len_ = str_len;
-      $8->raw_text_ = $8->str_value_ + @8.first_column - @3.first_column;
-      $8->text_len_ = str_len - (@8.first_column - @3.first_column);
-      if (NULL != $6) {
-        const char *param_str = parse_ctx->stmt_str_ + @5.first_column + 1;
-        int32_t param_len = @7.last_column - @5.last_column - 1;
-        $6->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
-        check_ptr($6->str_value_);
-        $6->str_len_ = param_len;
-      }
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CREATE, 5, $2, $4, $6, NULL, $8);
-    }
-;
-
-create_function_stmt:
-    CREATE opt_sp_definer FUNCTION sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type sp_create_chistics function_body
-    {
-      check_ptr($11);
-      ParseNode *sp_clause_node = NULL;
-      merge_nodes(sp_clause_node, parse_ctx->mem_pool_, T_SP_CLAUSE_LIST, $10);
-      const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
-      int32_t str_len = @11.last_column - @3.first_column + 1;
-      $11->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
-      check_ptr($11->str_value_);
-      $11->str_len_ = str_len;
-      $11->raw_text_ = $11->str_value_ + @11.first_column - @3.first_column;
-      $11->text_len_ = str_len - (@11.first_column - @3.first_column);
-      if (NULL != $6) {
-        const char *param_str = parse_ctx->stmt_str_ + @5.first_column + 1;
-        int32_t param_len = @7.last_column - @5.last_column - 1;
-        $6->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
-        check_ptr($6->str_value_);
-        $6->str_len_ = param_len;
-      }
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SF_CREATE, 6, $2, $4, $6, $9, sp_clause_node, $11);
-    }
-  | CREATE opt_sp_definer FUNCTION sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type function_body
+    CREATE opt_sp_definer PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
     {
       check_ptr($10);
+      ParseNode *sp_clause_node = NULL;
+      merge_nodes(sp_clause_node, parse_ctx->mem_pool_, T_SP_CLAUSE_LIST, $9);
       const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
       int32_t str_len = @10.last_column - @3.first_column + 1;
       $10->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
@@ -1226,14 +1165,80 @@ create_function_stmt:
       $10->str_len_ = str_len;
       $10->raw_text_ = $10->str_value_ + @10.first_column - @3.first_column;
       $10->text_len_ = str_len - (@10.first_column - @3.first_column);
-      if (NULL != $6) {
-        const char *param_str = parse_ctx->stmt_str_ + @5.first_column + 1;
-        int32_t param_len = @7.last_column - @5.last_column - 1;
-        $6->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
-        check_ptr($6->str_value_);
-        $6->str_len_ = param_len;
+      if (NULL != $7) {
+        const char *param_str = parse_ctx->stmt_str_ + @6.first_column + 1;
+        int32_t param_len = @8.last_column - @6.last_column - 1;
+        $7->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
+        check_ptr($7->str_value_);
+        $7->str_len_ = param_len;
       }
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SF_CREATE, 6, $2, $4, $6, $9, NULL, $10);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CREATE, 5, $2, $5, $7, sp_clause_node, $10);
+      $$->value_ = $4;
+    }
+  | CREATE opt_sp_definer PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' procedure_body
+    {
+      check_ptr($9);
+      const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
+      int32_t str_len = @9.last_column - @3.first_column + 1;
+      $9->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+      check_ptr($9->str_value_);
+      $9->str_len_ = str_len;
+      $9->raw_text_ = $9->str_value_ + @9.first_column - @3.first_column;
+      $9->text_len_ = str_len - (@9.first_column - @3.first_column);
+      if (NULL != $7) {
+        const char *param_str = parse_ctx->stmt_str_ + @6.first_column + 1;
+        int32_t param_len = @8.last_column - @6.last_column - 1;
+        $7->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
+        check_ptr($7->str_value_);
+        $7->str_len_ = param_len;
+      }
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CREATE, 5, $2, $5, $7, NULL, $9);
+      $$->value_ = $4;
+    }
+;
+
+create_function_stmt:
+    CREATE opt_sp_definer FUNCTION opt_if_not_exists sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type sp_create_chistics function_body
+    {
+      check_ptr($12);
+      ParseNode *sp_clause_node = NULL;
+      merge_nodes(sp_clause_node, parse_ctx->mem_pool_, T_SP_CLAUSE_LIST, $11);
+      const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
+      int32_t str_len = @12.last_column - @3.first_column + 1;
+      $12->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+      check_ptr($12->str_value_);
+      $12->str_len_ = str_len;
+      $12->raw_text_ = $12->str_value_ + @12.first_column - @3.first_column;
+      $12->text_len_ = str_len - (@12.first_column - @3.first_column);
+      if (NULL != $7) {
+        const char *param_str = parse_ctx->stmt_str_ + @6.first_column + 1;
+        int32_t param_len = @8.last_column - @6.last_column - 1;
+        $7->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
+        check_ptr($7->str_value_);
+        $7->str_len_ = param_len;
+      }
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SF_CREATE, 6, $2, $5, $7, $10, sp_clause_node, $12);
+      $$->value_ = $4;
+    }
+  | CREATE opt_sp_definer FUNCTION opt_if_not_exists sp_name '(' opt_sp_fparam_list ')' RETURNS sp_data_type function_body
+    {
+      check_ptr($11);
+      const char *stmt_str = parse_ctx->stmt_str_ + @3.first_column;
+      int32_t str_len = @11.last_column - @3.first_column + 1;
+      $11->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+      check_ptr($11->str_value_);
+      $11->str_len_ = str_len;
+      $11->raw_text_ = $11->str_value_ + @11.first_column - @3.first_column;
+      $11->text_len_ = str_len - (@11.first_column - @3.first_column);
+      if (NULL != $7) {
+        const char *param_str = parse_ctx->stmt_str_ + @6.first_column + 1;
+        int32_t param_len = @8.last_column - @6.last_column - 1;
+        $7->str_value_ = parse_strndup(param_str, param_len, parse_ctx->mem_pool_);
+        check_ptr($7->str_value_);
+        $7->str_len_ = param_len;
+      }
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SF_CREATE, 6, $2, $5, $7, $10, NULL, $11);
+      $$->value_ = $4;
     }
 ;
 
@@ -1956,6 +1961,11 @@ opt_if_exists:
   | IF EXISTS { $$ = 1; }
 ;
 
+opt_if_not_exists:
+    /*Empty*/ { $$ = 0; }
+  | IF NOT EXISTS { $$ = 1; }
+;
+
 scalar_data_type:
     int_type_i opt_int_length_i %prec LOWER_PARENS
     {
@@ -2290,7 +2300,7 @@ scalar_data_type:
   | pl_obj_access_ref '%' ROWTYPE
   {
     if (parse_ctx->is_for_trigger_ && parse_ctx->is_inner_parse_) {
-      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_ROWTYPE, 1, $1);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_ROWTYPE, 2, $1, NULL);
     } else {
       obpl_mysql_yyerror(&@3, parse_ctx, "Syntax Error\n");
       YYERROR;

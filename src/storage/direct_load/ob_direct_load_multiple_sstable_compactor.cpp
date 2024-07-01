@@ -127,6 +127,7 @@ int ObDirectLoadMultipleSSTableCompactor::check_table_compactable(
   } else {
     const ObDirectLoadMultipleSSTableMeta &table_meta = sstable->get_meta();
     if (OB_UNLIKELY(
+          sstable->get_tablet_id() != param_.tablet_id_ ||
           table_meta.rowkey_column_num_ != param_.table_data_desc_.rowkey_column_num_ ||
           table_meta.column_count_ != param_.table_data_desc_.column_count_ ||
           table_meta.index_block_size_ != param_.table_data_desc_.sstable_index_block_size_ ||
@@ -168,6 +169,7 @@ int ObDirectLoadMultipleSSTableCompactor::get_table(ObIDirectLoadPartitionTable 
   } else {
     ObDirectLoadMultipleSSTable *sstable = nullptr;
     ObDirectLoadMultipleSSTableCreateParam create_param;
+    create_param.tablet_id_ = param_.tablet_id_;
     create_param.rowkey_column_num_ = param_.table_data_desc_.rowkey_column_num_;
     create_param.column_count_ = param_.table_data_desc_.column_count_;
     create_param.index_block_size_ = param_.table_data_desc_.sstable_index_block_size_;

@@ -502,6 +502,9 @@ public:
   int truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res);
+  int generate_aux_index_schema(
+      const obrpc::ObGenerateAuxIndexSchemaArg &arg,
+      obrpc::ObGenerateAuxIndexSchemaRes &result);
   int create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes &res);
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);
@@ -571,12 +574,24 @@ public:
 
   //----Functions for managing routines----
   int create_routine(const obrpc::ObCreateRoutineArg &arg);
+  int create_routine_common(const obrpc::ObCreateRoutineArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int create_routine_with_res(const obrpc::ObCreateRoutineArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int drop_routine(const obrpc::ObDropRoutineArg &arg);
+  int alter_routine_common(const obrpc::ObCreateRoutineArg &arg,
+                           obrpc::ObRoutineDDLRes* res = nullptr);
   int alter_routine(const obrpc::ObCreateRoutineArg &arg);
+  int alter_routine_with_res(const obrpc::ObCreateRoutineArg &arg,
+                             obrpc::ObRoutineDDLRes &res);
   //----End of functions for managing routines----
 
   //----Functions for managing routines----
   int create_udt(const obrpc::ObCreateUDTArg &arg);
+  int create_udt_common(const obrpc::ObCreateUDTArg &arg,
+                        obrpc::ObRoutineDDLRes *res = nullptr);
+  int create_udt_with_res(const obrpc::ObCreateUDTArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int drop_udt(const obrpc::ObDropUDTArg &arg);
   //----End of functions for managing routines----
 
@@ -606,7 +621,15 @@ public:
 
   //----Functions for managing package----
   int create_package(const obrpc::ObCreatePackageArg &arg);
+  int create_package_common(const obrpc::ObCreatePackageArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int create_package_with_res(const obrpc::ObCreatePackageArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int alter_package(const obrpc::ObAlterPackageArg &arg);
+  int alter_package_common(const obrpc::ObAlterPackageArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int alter_package_with_res(const obrpc::ObAlterPackageArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int drop_package(const obrpc::ObDropPackageArg &arg);
   //----End of functions for managing package----
 
@@ -615,6 +638,10 @@ public:
   int create_trigger_with_res(const obrpc::ObCreateTriggerArg &arg,
                               obrpc::ObCreateTriggerRes &res);
   int alter_trigger(const obrpc::ObAlterTriggerArg &arg);
+  int alter_trigger_common(const obrpc::ObAlterTriggerArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int alter_trigger_with_res(const obrpc::ObAlterTriggerArg &arg,
+                             obrpc::ObRoutineDDLRes &res);
   int drop_trigger(const obrpc::ObDropTriggerArg &arg);
   //----End of functions for managing trigger----
 
@@ -894,6 +921,7 @@ private:
   int set_cpu_quota_concurrency_config_();
   int set_enable_trace_log_();
   int disable_dbms_job();
+  int set_bloom_filter_ratio_config_();
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 
   int precheck_interval_part(const obrpc::ObAlterTableArg &arg);

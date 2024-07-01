@@ -1222,7 +1222,7 @@ ObCharsetInfo ob_charset_utf16_bin=
 ObCharsetInfo ob_charset_utf16_general_ci=
 {
   54,0,0,              
-  OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_NONASCII,
+  OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_NONASCII|OB_CS_CI,
   OB_UTF16,             
   OB_UTF16_GENERAL_CI,  
   "UTF-16 Unicode",    

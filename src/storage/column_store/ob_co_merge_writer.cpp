@@ -348,7 +348,6 @@ int ObCOMergeWriter::append_iter_curr_row_or_range()
     }
   } else {
     const ObMacroBlockDesc *macro_desc = nullptr;
-    bool need_rewrite = false;
 
     if (OB_FAIL(iter_->get_curr_macro_block(macro_desc))) {
       STORAGE_LOG(WARN, "Failed to get current micro block", K(ret), KPC(iter_));
@@ -394,7 +393,7 @@ int ObCOMergeWriter::compare(const ObMergeLog &mergelog, int64_t &cmp_ret, const
         skip_curr_row = true;
         break;
       } else if (FALSE_IT(check_iter_range = true)) {
-      } else if (OB_FAIL(iter_->open_curr_range(false))) {
+      } else if (OB_FAIL(iter_->open_curr_range(false /* rewrite */))) {
         STORAGE_LOG(WARN, "failed to open curr range", K(ret), KPC(iter_));
       }
     }
@@ -444,7 +443,7 @@ int ObCOMergeWriter::process_macro_rewrite()
   if (OB_UNLIKELY(iter_->is_macro_block_opened())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected macro block opened", K(ret), KPC(iter_));
-  } else if (OB_FAIL(iter_->open_curr_range(true))) {
+  } else if (OB_FAIL(iter_->open_curr_range(true /* rewrite */))) {
     STORAGE_LOG(WARN, "failed to open iter range", K(ret), KPC(iter_));
   } else if (OB_ISNULL(iter_->get_curr_row())) {
     ret = OB_ERR_UNEXPECTED;
@@ -539,22 +538,24 @@ int ObCOMergeRowWriter::init(const blocksstable::ObDatumRow &default_row,
 int ObCOMergeRowWriter::process(const ObMacroBlockDesc &macro_desc)
 {
   int ret = OB_SUCCESS;
-  bool need_rewrite = false;
-  if (OB_NOT_NULL(progressive_merge_helper_)) {
-    if (OB_FAIL(progressive_merge_helper_->need_rewrite_macro_block(macro_desc, need_rewrite))) {
-      STORAGE_LOG(WARN, "failed to check need_rewrite_macro_block", K(ret), K(macro_desc));
-    } else if (need_rewrite) {
-      progressive_merge_helper_->inc_rewrite_block_cnt();
-    } else if (progressive_merge_helper_->need_check_macro_merge()
-          && OB_FAIL(write_helper_.check_data_macro_block_need_merge(macro_desc, need_rewrite))) {
-      STORAGE_LOG(WARN, "Failed to check data macro block need merge", K(ret), K(macro_desc));
+  ObMacroBlockOp block_op;
+  if (OB_NOT_NULL(progressive_merge_helper_) && progressive_merge_helper_->is_valid()) {
+    if (OB_FAIL(progressive_merge_helper_->check_macro_block_op(macro_desc, block_op))) {
+      STORAGE_LOG(WARN, "failed to check macro operation", K(ret), K(macro_desc));
     }
   }
 
   if (OB_FAIL(ret)) {
-  } else if (need_rewrite) {
+  } else if (block_op.is_rewrite()) {
+    progressive_merge_helper_->inc_rewrite_block_cnt();
     if (OB_FAIL(process_macro_rewrite())) {
       STORAGE_LOG(WARN, "failed to process_macro_rewrite", K(ret));
+    }
+  } else if (block_op.is_reorg()) {
+    if (OB_FAIL(iter_->open_curr_range(false /* rewrite */))) {
+      STORAGE_LOG(WARN, "Failed to open_curr_range", K(ret));
+    } else if (OB_FAIL(append_iter_curr_row_or_range())) {
+      STORAGE_LOG(WARN, "failed to append iter curr row or range", K(ret), KPC(iter_));
     }
   } else if (OB_FAIL(write_helper_.append_macro_block(macro_desc))) {
     STORAGE_LOG(WARN, "failed to append macro block", K(ret), K(macro_desc));

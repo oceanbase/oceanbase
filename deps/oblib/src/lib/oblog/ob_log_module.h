@@ -1281,12 +1281,17 @@ extern const char *ob_strerror(const int oberr);
 } // end namespace common
 } // end namespace oceanbase
 
+#define LOG_PREFIX_TO_STRING_(mod) #mod
+#define LOG_PREFIX_TO_STRING(mod) LOG_PREFIX_TO_STRING_(mod)
+#define LOG_PREFIX_TO_STRING_BRACKET(mod) "[" LOG_PREFIX_TO_STRING(mod) "] "
+#define DBA_LOG_PRINT_INTERVAL (10 * 1000 * 1000)
+
 #define LOG_DBA_ERROR(errcode, args...) \
     do \
     { \
       CHECK_LOG_USER_CONST_FMT(errcode); \
       if (OB_LOG_NEED_TO_PRINT(DBA_ERROR)) { \
-        ::oceanbase::common::OB_PRINT("", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DBA_ERROR), errcode, ob_strerror(errcode), LOG_KVS(args)); \
+        ::oceanbase::common::OB_PRINT(LOG_PREFIX_TO_STRING_BRACKET(USING_LOG_PREFIX), OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DBA_ERROR), errcode, ob_strerror(errcode), LOG_KVS(args)); \
       } \
     } while (0)
 
@@ -1295,11 +1300,56 @@ extern const char *ob_strerror(const int oberr);
     { \
       CHECK_LOG_USER_CONST_FMT(errcode); \
       if (OB_LOG_NEED_TO_PRINT(DBA_WARN)) { \
-        ::oceanbase::common::OB_PRINT("", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DBA_WARN), errcode, ob_strerror(errcode), LOG_KVS(args)); \
+        ::oceanbase::common::OB_PRINT(LOG_PREFIX_TO_STRING_BRACKET(USING_LOG_PREFIX), OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DBA_WARN), errcode, ob_strerror(errcode), LOG_KVS(args)); \
       } \
     } while (0)
 
+#define LOG_DBA_ERROR_BASE(dba_event, print_rd_log, errcode, args...) \
+    do \
+    { \
+      if ((!ObCurTraceId::get_trace_id()->is_default() || REACH_TIME_INTERVAL(DBA_LOG_PRINT_INTERVAL)) && OB_LOG_NEED_TO_PRINT_DBA(DBA_ERROR, false)) { \
+        ::oceanbase::common::OB_PRINT_DBA(LOG_PREFIX_TO_STRING(USING_LOG_PREFIX), LOG_PREFIX_TO_STRING_BRACKET(USING_LOG_PREFIX), \
+                                          dba_event, print_rd_log, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DBA_ERROR), errcode, LOG_VALUES(args)); \
+      } \
+    } while (0)
 
+#define LOG_DBA_WARN_BASE(dba_event, print_rd_log, errcode, args...) \
+    do \
+    { \
+      if ((!ObCurTraceId::get_trace_id()->is_default() || REACH_TIME_INTERVAL(DBA_LOG_PRINT_INTERVAL)) && OB_LOG_NEED_TO_PRINT_DBA(DBA_WARN, false)) { \
+        ::oceanbase::common::OB_PRINT_DBA(LOG_PREFIX_TO_STRING(USING_LOG_PREFIX), LOG_PREFIX_TO_STRING_BRACKET(USING_LOG_PREFIX), \
+                                          dba_event, print_rd_log, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DBA_WARN), errcode, LOG_VALUES(args)); \
+      } \
+    } while (0)
+
+#define LOG_DBA_INFO_BASE(dba_event, print_rd_log, args...) \
+    do \
+    { \
+      if (REACH_TIME_INTERVAL(DBA_LOG_PRINT_INTERVAL) && OB_LOG_NEED_TO_PRINT_DBA(DBA_INFO, false)) { \
+        ::oceanbase::common::OB_PRINT_DBA(LOG_PREFIX_TO_STRING(USING_LOG_PREFIX), LOG_PREFIX_TO_STRING_BRACKET(USING_LOG_PREFIX), \
+                                          dba_event, print_rd_log, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DBA_INFO), OB_SUCCESS, LOG_VALUES(args)); \
+      } \
+    } while (0)
+
+// LOG_DBA_FORCE_PRINT: print both dba log(alert.log) and rd log(observer.log) forcely
+#define LOG_DBA_FORCE_PRINT(level, dba_event, errcode, args...) \
+    do \
+    { \
+      if (OB_LOG_NEED_TO_PRINT_DBA(level, true)) { \
+        ::oceanbase::common::OB_PRINT_DBA(LOG_PREFIX_TO_STRING(USING_LOG_PREFIX), LOG_PREFIX_TO_STRING_BRACKET(USING_LOG_PREFIX), \
+                                          dba_event, true, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(level), errcode, LOG_VALUES(args)); \
+      } \
+    } while (0)
+
+// LOG_DBA_XXX_V2: print both dba log(alert.log) and rd log(observer.log)
+#define LOG_DBA_ERROR_V2(dba_event, errcode, args...) LOG_DBA_ERROR_BASE(dba_event, true, errcode, args)
+#define LOG_DBA_WARN_V2(dba_event, errcode, args...)  LOG_DBA_WARN_BASE(dba_event, true, errcode, args)
+#define LOG_DBA_INFO_V2(dba_event, args...)           LOG_DBA_INFO_BASE(dba_event, true, args)
+
+// LOG_DBA_XXX_: print dba log only(alert.log)
+#define LOG_DBA_ERROR_(dba_event, errcode, args...)   LOG_DBA_ERROR_BASE(dba_event, false, errcode, args)
+#define LOG_DBA_WARN_(dba_event, errcode, args...)    LOG_DBA_WARN_BASE(dba_event, false, errcode, args)
+#define LOG_DBA_INFO_(dba_event, args...)             LOG_DBA_INFO_BASE(dba_event, false, args)
 
 // define USING_LOG_PREFIX in .cpp file to use LOG_ERROR, LOG_WARN ... macros
 //

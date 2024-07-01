@@ -74,6 +74,7 @@ public:
                K_(current),
                K_(end),
                K_(group_size),
+               K_(batch_size),
                K_(reverse_scan),
                K_(state),
                K_(blockscan_state),
@@ -174,6 +175,7 @@ private:
   BlockScanState blockscan_state_;
   int32_t group_by_project_idx_;
   int64_t group_size_;
+  int64_t batch_size_;
   int64_t column_group_cnt_;
   ObCSRowId current_;
   ObCSRowId end_;

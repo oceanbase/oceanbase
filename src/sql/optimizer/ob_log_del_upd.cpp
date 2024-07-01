@@ -1669,3 +1669,11 @@ int ObLogDelUpd::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
   }
   return ret;
 }
+
+int ObLogDelUpd::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = false;
+  inherit_child_ordering_index = -1;
+  return ret;
+}

@@ -211,6 +211,7 @@ private:
   int check_expr_is_need(const ObRawExpr *expr,
       const common::ObIArray<int64_t> &drop_expr_idxs,
       bool &is_need);
+  virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
 private:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 

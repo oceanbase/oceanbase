@@ -39,6 +39,7 @@ public:
   ACT(BLOOM_FILTER_VEC_MSG, )                                                                      \
   ACT(RANGE_FILTER_VEC_MSG, )                                                                      \
   ACT(IN_FILTER_VEC_MSG, )                                                                         \
+  ACT(PD_TOPN_FILTER_MSG, )                                                                           \
   ACT(MAX_TYPE, )
 
   DECLARE_ENUM(ObP2PDatahubMsgType, p2p_datahub_msg_type, P2P_DATAHUB_MSG_TYPE, static);

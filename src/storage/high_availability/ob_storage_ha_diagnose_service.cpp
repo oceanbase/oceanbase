@@ -546,7 +546,7 @@ int ObStorageHADiagService::do_report_()
   if (OB_FAIL(deep_copy_keys_(do_report_keys))) {
     LOG_WARN("failed to copy keys", K(ret), K(do_report_keys));
   } else {
-    std::sort(do_report_keys.begin(), do_report_keys.end());
+    lib::ob_sort(do_report_keys.begin(), do_report_keys.end());
     if (OB_FAIL(report_process_(do_report_keys))) {
       LOG_WARN("failed to do report", K(ret), K(do_report_keys));
     }

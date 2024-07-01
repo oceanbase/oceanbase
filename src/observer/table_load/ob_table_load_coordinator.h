@@ -44,7 +44,8 @@ class ObTableLoadCoordinator
 public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);
   static bool is_ctx_inited(ObTableLoadTableCtx *ctx);
-  static int init_ctx(ObTableLoadTableCtx *ctx, const common::ObIArray<int64_t> &idx_array,
+  static int init_ctx(ObTableLoadTableCtx *ctx,
+                      const common::ObIArray<uint64_t> &column_ids,
                       ObTableLoadExecCtx *exec_ctx);
   static void abort_ctx(ObTableLoadTableCtx *ctx);
   int init();

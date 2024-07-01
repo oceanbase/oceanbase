@@ -609,9 +609,7 @@ void ObChunkDatumStore::reset()
     }
     io_.fd_ = -1;
   }
-  file_size_ = 0;
   n_block_in_file_ = 0;
-
   while (!blocks_.is_empty()) {
     Block *item = blocks_.remove_first();
     mem_hold_ -= item->get_buffer()->mem_size();
@@ -635,6 +633,13 @@ void ObChunkDatumStore::reset()
     }
     allocator_->free(item);
   }
+
+  if(OB_SUCC(ret)) {
+    if (nullptr != callback_) {
+      callback_->dumped(-file_size_);
+    }
+  }
+  file_size_ = 0;
 
   if (NULL != batch_ctx_) {
     allocator_->free(batch_ctx_);

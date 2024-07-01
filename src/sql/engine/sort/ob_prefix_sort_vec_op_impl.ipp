@@ -199,7 +199,7 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::add_immediate_prefix(
                                    enable_encode_sortkey_ && !(part_cnt_ > 0)))) {
     SQL_ENG_LOG(WARN, "init compare failed", K(ret));
   } else {
-    std::sort(im_sk_rows_ + pos, im_sk_rows_ + pos + selector_size_,
+    lib::ob_sort(im_sk_rows_ + pos, im_sk_rows_ + pos + selector_size_,
               CopyableComparer(comp_));
     if (OB_SUCCESS != comp_.ret_) {
       ret = comp_.ret_;

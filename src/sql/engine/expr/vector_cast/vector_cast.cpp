@@ -206,10 +206,11 @@ ObExpr::EvalVectorFunc VectorCasterUtil::get_vector_cast(const VecValueTypeClass
                                                          const ObCastMode cast_mode)
 {
   ObExpr::EvalVectorFunc ret_func = nullptr;
+  ObExpr::EvalFunc temp_func = nullptr;
   if (is_eval_arg_cast) {
     ret_func = CM_IS_EXPLICIT_CAST(cast_mode) ? VECTOR_EVAL_ARG_CAST_FUNCS[in_tc][out_tc][EXPLICIT_CAST_FLAG] :
                                                 VECTOR_EVAL_ARG_CAST_FUNCS[in_tc][out_tc][IMPLICIT_CAST_FLAG];
-  } else if (row_cast_fn == cast_not_expected
+  } else if (row_cast_fn == (temp_func = cast_not_expected)
              || row_cast_fn == cast_not_support
              || row_cast_fn == cast_inconsistent_types
              || row_cast_fn == cast_inconsistent_types_json

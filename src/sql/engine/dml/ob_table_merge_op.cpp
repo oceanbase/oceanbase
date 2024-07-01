@@ -371,7 +371,7 @@ int ObTableMergeOp::check_is_match(bool &is_match)
     if (OB_ISNULL(e)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret));
-    } else if (e->eval(eval_ctx_, datum)) {
+    } else if (OB_FAIL(e->eval(eval_ctx_, datum))) {
       LOG_WARN("failed to evaluate expression", K(ret));
     } else {
       is_match = !datum->is_null();

@@ -28,43 +28,6 @@ class ObObj;
 namespace observer
 {
 
-struct ObTableLoadKey
-{
-public:
-  ObTableLoadKey() : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID) {}
-  ObTableLoadKey(uint64_t tenant_id, uint64_t table_id) : tenant_id_(tenant_id), table_id_(table_id) {}
-  bool is_valid() const
-  {
-    return common::OB_INVALID_ID != tenant_id_ && common::OB_INVALID_ID != table_id_;
-  }
-  bool operator==(const ObTableLoadKey &other) const
-  {
-    return (tenant_id_ == other.tenant_id_ && table_id_ == other.table_id_);
-  }
-  bool operator!=(const ObTableLoadKey &other) const
-  {
-    return !(*this == other);
-  }
-  uint64_t hash() const
-  {
-    uint64_t hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
-    hash_val = common::murmurhash(&table_id_, sizeof(table_id_), hash_val);
-    return hash_val;
-  }
-  int compare(const ObTableLoadKey &other) const
-  {
-    if (tenant_id_ != other.tenant_id_) {
-      return (tenant_id_ > other.tenant_id_ ? 1 : -1);
-    } else {
-      return (table_id_ != other.table_id_ ? (table_id_ > other.table_id_ ? 1 : -1) : 0);
-    }
-  }
-  TO_STRING_KV(K_(tenant_id), K_(table_id));
-public:
-  uint64_t tenant_id_;
-  uint64_t table_id_;
-};
-
 struct ObTableLoadUniqueKey
 {
   OB_UNIS_VERSION(1);
@@ -149,7 +112,9 @@ public:
       write_session_count_(0),
       exe_mode_(ObTableLoadExeMode::MAX_TYPE),
       method_(storage::ObDirectLoadMethod::INVALID_METHOD),
-      insert_mode_(storage::ObDirectLoadInsertMode::INVALID_INSERT_MODE)
+      insert_mode_(storage::ObDirectLoadInsertMode::INVALID_INSERT_MODE),
+      load_mode_(storage::ObDirectLoadMode::INVALID_MODE),
+      compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
   {
   }
 
@@ -175,6 +140,7 @@ public:
            sql::ObLoadDupActionType::LOAD_INVALID_MODE != dup_action_ &&
            storage::ObDirectLoadMethod::is_type_valid(method_) &&
            storage::ObDirectLoadInsertMode::is_type_valid(insert_mode_) &&
+           storage::ObDirectLoadMode::is_type_valid(load_mode_) &&
            (storage::ObDirectLoadMethod::is_full(method_)
               ? storage::ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode_)
               : true) &&
@@ -183,7 +149,8 @@ public:
               : true) &&
            (storage::ObDirectLoadInsertMode::INC_REPLACE == insert_mode_
               ? sql::ObLoadDupActionType::LOAD_REPLACE == dup_action_
-              : true);
+              : true) &&
+           ObCompressorType::INVALID_COMPRESSOR != compressor_type_;
   }
 
   TO_STRING_KV(K_(tenant_id),
@@ -202,7 +169,10 @@ public:
                K_(write_session_count),
                K_(exe_mode),
                "method", storage::ObDirectLoadMethod::get_type_string(method_),
-               "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_));
+               "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
+               "direct_load_mode", storage::ObDirectLoadMode::get_type_string(load_mode_),
+               K_(compressor_type));
+
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -221,6 +191,8 @@ public:
   ObTableLoadExeMode exe_mode_;
   storage::ObDirectLoadMethod::Type method_;
   storage::ObDirectLoadInsertMode::Type insert_mode_;
+  storage::ObDirectLoadMode::Type load_mode_;
+  ObCompressorType compressor_type_;
 };
 
 struct ObTableLoadDDLParam

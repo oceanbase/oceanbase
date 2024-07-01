@@ -3416,7 +3416,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[242].default_value_ = "4096" ;
+      ObSysVars[242].default_value_ = "8192" ;
       ObSysVars[242].info_ = "default lob inrow threshold config" ;
       ObSysVars[242].name_ = "ob_default_lob_inrow_threshold" ;
       ObSysVars[242].data_type_ = ObIntType ;
@@ -5899,13 +5899,54 @@ static struct VarsInit{
     ObSysVars[417].alias_ = "OB_SV_PLSQL_OPTIMIZE_LEVEL" ;
     }();
 
+    [&] (){
+      ObSysVars[418].default_value_ = "" ;
+      ObSysVars[418].info_ = "A list of group members to which a joining member can connect to obtain details of all the current group members" ;
+      ObSysVars[418].name_ = "group_replication_group_seeds" ;
+      ObSysVars[418].data_type_ = ObVarcharType ;
+      ObSysVars[418].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[418].id_ = SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_GROUP_SEEDS] = 418 ;
+      ObSysVars[418].base_value_ = "" ;
+    ObSysVars[418].alias_ = "OB_SV_GROUP_REPLICATION_GROUP_SEEDS" ;
+    }();
+
+    [&] (){
+      ObSysVars[419].default_value_ = "0" ;
+      ObSysVars[419].info_ = "When preparing batches of rows for row-based logging and replication, this variable controls how the rows are searched for matches" ;
+      ObSysVars[419].name_ = "slave_rows_search_algorithms" ;
+      ObSysVars[419].data_type_ = ObIntType ;
+      ObSysVars[419].enum_names_ = "[u'TABLE_SCAN,INDEX_SCAN', u'INDEX_SCAN,HASH_SCAN', u'TABLE_SCAN,HASH_SCAN', u'TABLE_SCAN,INDEX_SCAN,HASH_SCAN']" ;
+      ObSysVars[419].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[419].id_ = SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_ROWS_SEARCH_ALGORITHMS] = 419 ;
+      ObSysVars[419].base_value_ = "0" ;
+    ObSysVars[419].alias_ = "OB_SV_SLAVE_ROWS_SEARCH_ALGORITHMS" ;
+    }();
+
+    [&] (){
+      ObSysVars[420].default_value_ = "0" ;
+      ObSysVars[420].info_ = "Controls the type conversion mode in effect on the replica when using row-based replication" ;
+      ObSysVars[420].name_ = "slave_type_conversions" ;
+      ObSysVars[420].data_type_ = ObIntType ;
+      ObSysVars[420].enum_names_ = "[u'ALL_LOSSY', u'ALL_NON_LOSSY', u'ALL_SIGNED', u'ALL_UNSIGNED']" ;
+      ObSysVars[420].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[420].id_ = SYS_VAR_SLAVE_TYPE_CONVERSIONS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_TYPE_CONVERSIONS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_TYPE_CONVERSIONS] = 420 ;
+      ObSysVars[420].base_value_ = "0" ;
+    ObSysVars[420].alias_ = "OB_SV_SLAVE_TYPE_CONVERSIONS" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 418;
+static int64_t var_amount = 421;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

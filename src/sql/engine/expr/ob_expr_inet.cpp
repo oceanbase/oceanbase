@@ -587,6 +587,7 @@ int ObExprInet6Aton::calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
           ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
           ObSQLMode sql_mode = 0;
           if (OB_ISNULL(session)) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("session is NULL", K(ret));
           } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
             LOG_WARN("get sql mode failed", K(ret));

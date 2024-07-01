@@ -422,6 +422,9 @@ public:
   static int extract_column_exprs(const common::ObIArray<ObRawExpr*> &exprs,
                                   int64_t table_id,
                                   common::ObIArray<ObRawExpr *> &column_exprs);
+  static int extract_column_exprs(const common::ObIArray<ObRawExpr*> &exprs,
+                                  const common::ObIArray<int64_t> &table_ids,
+                                  common::ObIArray<ObRawExpr *> &column_exprs);
   // no need to add cast.
   static int extract_column_exprs(const ObRawExpr *expr,
                                   ObIArray<const ObRawExpr*> &column_exprs);
@@ -595,7 +598,7 @@ public:
                                          ObSQLSessionInfo *session_info,
                                          bool& is_done_replace);
 
-  static int replace_qual_param_if_need(ObRawExpr* qual, ObColumnRefRawExpr *col_expr);
+  static int replace_qual_param_if_need(ObRawExpr* qual, int64_t qual_idx, ObColumnRefRawExpr *col_expr);
 
   static bool need_column_conv(const ColumnItem &column, ObRawExpr &expr);
   static int build_pad_expr(ObRawExprFactory &expr_factory,
@@ -1209,6 +1212,7 @@ public:
   static bool decimal_int_need_cast(const common::ObAccuracy &src_acc,
                                     const common::ObAccuracy &dst_acc);
   static int check_contain_case_when_exprs(const ObRawExpr *raw_expr, bool &contain);
+  static int check_contain_lock_exprs(const ObRawExpr *raw_expr, bool &contain);
   static bool decimal_int_need_cast(const common::ObPrecision src_p, const common::ObScale src_s,
                                     const common::ObPrecision dst_p, const common::ObScale dst_s);
   static int transform_udt_column_value_expr(ObRawExprFactory &expr_factory, ObRawExpr *old_expr, ObRawExpr *&new_expr);

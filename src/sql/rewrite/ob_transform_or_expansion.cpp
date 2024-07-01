@@ -613,6 +613,64 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
   return ret;
 }
 
+int ObTransformOrExpansion::get_joined_table_pushdown_conditions(const TableItem *cur_table,
+                                                                 const ObDMLStmt *trans_stmt,
+                                                                 ObIArray<ObRawExpr *> &pushdown_conds)
+{
+  int ret = OB_SUCCESS;
+  ObSqlBitSet<> table_set;
+  const JoinedTable *cur_join_table = NULL;
+  const TableItem *left_table = NULL;
+  const TableItem *right_table = NULL;
+  bool left_on_null_side = false;
+  bool right_on_null_side = false;
+  if (OB_ISNULL(cur_table) || OB_ISNULL(trans_stmt) || OB_UNLIKELY(!cur_table->is_joined_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected", K(ret), KP(cur_table), K(cur_table->is_joined_table()));
+  } else if (FALSE_IT(cur_join_table = static_cast<const JoinedTable*>(cur_table))) {
+  } else if (!cur_join_table->is_left_join() && !cur_join_table->is_inner_join()) {
+    /* do nothing */
+  } else if (OB_ISNULL(left_table = cur_join_table->left_table_) ||
+             OB_ISNULL(right_table = cur_join_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected", K(ret), KP(left_table), KP(right_table));
+  } else {
+    if (left_table->is_basic_table() || left_table->is_generated_table()) {
+      if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(trans_stmt,
+                                                         left_table->table_id_,
+                                                         left_on_null_side))) {
+        LOG_WARN("failed to check table on null side", K(ret));
+      } else if (!left_on_null_side &&
+                 OB_FAIL(trans_stmt->get_table_rel_ids(*left_table, table_set))) {
+        LOG_WARN("failed to get table rel ids", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && (right_table->is_basic_table() || right_table->is_generated_table())) {
+      if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(trans_stmt,
+                                                         right_table->table_id_,
+                                                         right_on_null_side))) {
+        LOG_WARN("failed to check table on null side", K(ret));
+      } else if (!right_on_null_side &&
+                 OB_FAIL(trans_stmt->get_table_rel_ids(*right_table, table_set))) {
+        LOG_WARN("failed to get table rel ids", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < trans_stmt->get_condition_exprs().count(); i++) {
+      ObRawExpr *cond = NULL;
+      if (OB_ISNULL(cond = trans_stmt->get_condition_exprs().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (!cond->get_relation_ids().is_subset(table_set) ||
+                 cond->has_flag(CNT_SUB_QUERY)) {
+        /* do not push down */
+      } else if (OB_FAIL(pushdown_conds.push_back(cond))) {
+        LOG_WARN("failed to push cond", K(ret));
+      } else { /* do nothing */ }
+    }
+  }
+  return ret;
+}
+
 int ObTransformOrExpansion::create_single_joined_table_stmt(ObDMLStmt *trans_stmt,
                                                             uint64_t joined_table_id,
                                                             TableItem *&view_table,
@@ -620,6 +678,7 @@ int ObTransformOrExpansion::create_single_joined_table_stmt(ObDMLStmt *trans_stm
 {
   int ret = OB_SUCCESS;
   TableItem *cur_table = NULL;
+  ObSEArray<ObRawExpr *, 4> push_conditions;
   view_table = NULL;
   ref_query = NULL;
   if (OB_ISNULL(trans_stmt)) {
@@ -629,7 +688,14 @@ int ObTransformOrExpansion::create_single_joined_table_stmt(ObDMLStmt *trans_stm
     LOG_WARN("failed to get table", K(ret));
   } else if (OB_ISNULL(cur_table)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(cur_table));
+    LOG_WARN("get unexpected", K(ret), KP(cur_table));
+  } else if (OB_FAIL(get_joined_table_pushdown_conditions(cur_table,
+                                                        trans_stmt,
+                                                        push_conditions))) {
+    LOG_WARN("failed to get single joined table condititons", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(trans_stmt->get_condition_exprs(),
+                                                  push_conditions))) {
+    LOG_WARN("failed to remove pushed conditions", K(ret));
   } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
                                                                trans_stmt,
                                                                view_table,
@@ -638,7 +704,8 @@ int ObTransformOrExpansion::create_single_joined_table_stmt(ObDMLStmt *trans_stm
   } else if (OB_FAIL(ObTransformUtils::create_inline_view(ctx_,
                                                           trans_stmt,
                                                           view_table,
-                                                          cur_table))) {
+                                                          cur_table,
+                                                          &push_conditions))) {
     LOG_WARN("failed to create inline view", K(ret));
   } else if (OB_ISNULL(view_table)) {
     ret = OB_ERR_UNEXPECTED;
@@ -753,6 +820,7 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
                                                              left_unique_exprs))) {
     LOG_WARN("faield to get table rel ids", K(ret), K(*right_table));
   } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
   } else if (flag_table->is_generated_table() || flag_table->is_temp_table()) {
     // add const to generate table select
@@ -844,6 +912,7 @@ int ObTransformOrExpansion::recover_flag_temp_table(ObSelectStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(stmt));
   } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
   } else if (!flag_table->is_temp_table()) {
     // do nothing
@@ -1251,15 +1320,10 @@ int ObTransformOrExpansion::convert_expect_ordering(ObDMLStmt *orig_stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected expr", K(ret), K(expr));
       } else if (OB_FALSE_IT(col = static_cast<ObColumnRefRawExpr*>(expr))) {
-      } else if (OB_FAIL(orig_stmt->get_table_item_idx(col->get_table_id(), idx))) {
-        LOG_WARN("failed to get table item idx", K(ret), K(idx), K(table_size));
-      } else if (OB_UNLIKELY(idx < 0 || idx > table_size)
-                 || OB_ISNULL(table = spj_stmt->get_table_item(idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected idx", K(ret), K(idx), K(table_size), K(table));
-      } else if (OB_ISNULL(spj_col = spj_stmt->get_column_expr_by_id(table->table_id_,
+      } else if (OB_ISNULL(spj_col = spj_stmt->get_column_expr_by_id(col->get_table_id(),
                                                                      col->get_column_id()))) {
-        LOG_WARN("failed to get column expr by id", K(ret), K(spj_col));
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column expr by id", K(ret), K(col->get_table_id()), K(col->get_column_id()));
       } else if (OB_FAIL(spj_expect_ordering.push_back(spj_col))) {
         LOG_WARN("failed to push back exprs", K(ret), K(spj_col));
       }

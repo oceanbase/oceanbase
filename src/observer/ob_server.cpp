@@ -15,6 +15,7 @@
 #include "observer/ob_server.h"
 #include <sys/statvfs.h>
 #include "common/log/ob_log_constants.h"
+#include "common/ob_tenant_data_version_mgr.h"
 #include "lib/allocator/ob_libeasy_mem_pool.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/thread/protected_stack_allocator.h"
@@ -259,6 +260,7 @@ int ObServer::parse_mode()
 int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 {
   FLOG_INFO("[OBSERVER_NOTICE] start to init observer");
+  DBA_STEP_RESET(server_start);
   int ret = OB_SUCCESS;
   opts_ = opts;
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
@@ -267,6 +269,12 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   if (OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
   }
+  // set alert log level earlier
+  OB_LOGGER.set_alert_log_level(config_.alert_log_level);
+  LOG_DBA_INFO_V2(OB_SERVER_INIT_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer init begin.");
+
   //check os params
   if (OB_SUCC(ret) && OB_FAIL(check_os_params(GCONF.strict_check_os_params))) {
     LOG_ERROR("check OS params failed", K(GCONF.strict_check_os_params));
@@ -530,10 +538,16 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     set_stop();
     destroy();
     LOG_ERROR("[OBSERVER_NOTICE] fail to init observer", KR(ret));
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "msg", "observer init() has failure", KR(ret));
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_INIT_FAIL, ret,
+                        DBA_STEP_INC_INFO(server_start),
+                        "observer init fail. "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
   } else {
     FLOG_INFO("[OBSERVER_NOTICE] success to init observer", "cluster_id", obrpc::ObRpcNetHandler::CLUSTER_ID,
         "lib::g_runtime_enabled", lib::g_runtime_enabled);
+    LOG_DBA_INFO_V2(OB_SERVER_INIT_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "observer init success.");
   }
   return ret;
 }
@@ -851,6 +865,9 @@ int ObServer::start()
   gctx_.status_ = SS_STARTING;
   // begin to start a observer
   FLOG_INFO("[OBSERVER_NOTICE] start observer begin");
+  LOG_DBA_INFO_V2(OB_SERVER_START_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer start begin.");
 
   if (is_arbitration_mode()) {
 #ifdef OB_BUILD_ARBITRATION
@@ -866,6 +883,9 @@ int ObServer::start()
     }
 #endif
   } else {
+    LOG_DBA_INFO_V2(OB_SERVER_INSTANCE_START_BEGIN,
+                    DBA_STEP_INC_INFO(server_start),
+                    "observer instance start begin.");
     if (OB_FAIL(start_sig_worker_and_handle())) {
       LOG_ERROR("fail to start signal worker", KR(ret));
     }
@@ -1035,9 +1055,17 @@ int ObServer::start()
 
     if (OB_SUCC(ret)) {
       FLOG_INFO("[OBSERVER_NOTICE] server instance start succeed");
+      LOG_DBA_INFO_V2(OB_SERVER_INSTANCE_START_SUCCESS,
+                      DBA_STEP_INC_INFO(server_start),
+                      "observer instance start success.");
       prepare_stop_ = false;
       stop_ = false;
       has_stopped_ = false;
+    } else {
+      LOG_DBA_ERROR_V2(OB_SERVER_INSTANCE_START_FAIL, ret,
+                       DBA_STEP_INC_INFO(server_start),
+                       "observer instance start fail. "
+                       "you may find solutions in previous error logs or seek help from official technicians.");
     }
     // this handler is only used to process tasks during startup. so it can be destroied here.
     startup_accel_handler_.destroy();
@@ -1108,16 +1136,25 @@ int ObServer::start()
 
   if (OB_FAIL(ret)) {
     LOG_ERROR("failure occurs, try to set stop and wait", KR(ret));
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "msg", "observer start() has failure", KR(ret));
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_START_FAIL, ret,
+                        DBA_STEP_INC_INFO(server_start),
+                        "observer start fail, the stop status is ", stop_, ". "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
     set_stop();
     wait();
   } else if (!stop_) {
     GCTX.status_ = SS_SERVING;
     GCTX.start_service_time_ = ObTimeUtility::current_time();
     FLOG_INFO("[OBSERVER_NOTICE] observer start service", "start_service_time", GCTX.start_service_time_);
+    LOG_DBA_INFO_V2(OB_SERVER_START_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "observer start success.");
   } else {
     FLOG_INFO("[OBSERVER_NOTICE] observer is set to stop", KR(ret), K_(stop));
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "msg", "observer start process is interrupted", KR(ret), K_(stop));
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_START_FAIL, ret,
+                        DBA_STEP_INC_INFO(server_start),
+                        "observer start fail, the stop status is ", stop_, ". "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
   }
 
   return ret;
@@ -1150,6 +1187,9 @@ int ObServer::check_if_multi_tenant_synced()
 {
   int ret = OB_SUCCESS;
   bool synced = false;
+  LOG_DBA_INFO_V2(OB_SERVER_WAIT_MULTI_TENANT_SYNCED_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "wait multi tenant synced begin.");
   while (OB_SUCC(ret) && !stop_ && !synced) {
     synced = multi_tenant_.has_synced();
     if (!synced) {
@@ -1157,6 +1197,16 @@ int ObServer::check_if_multi_tenant_synced()
     }
   }
   FLOG_INFO("check if multi tenant synced", KR(ret), K(stop_), K(synced));
+  if (!stop_ && synced) {
+    LOG_DBA_INFO_V2(OB_SERVER_WAIT_MULTI_TENANT_SYNCED_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "wait multi tenant synced success.");
+  } else {
+    LOG_DBA_ERROR_V2(OB_SERVER_WAIT_MULTI_TENANT_SYNCED_FAIL, ret,
+                     DBA_STEP_INC_INFO(server_start),
+                     "wait multi tenant synced fail, server stop status is ", stop_, ". "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  }
   return ret;
 }
 
@@ -1164,6 +1214,9 @@ int ObServer::check_if_schema_ready()
 {
   int ret = OB_SUCCESS;
   bool schema_ready = false;
+  LOG_DBA_INFO_V2(OB_SERVER_WAIT_SCHEMA_READY_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "wait schema ready begin.");
   while (OB_SUCC(ret) && !stop_ && !schema_ready) {
     schema_ready = schema_service_.is_sys_full_schema();
     if (!schema_ready) {
@@ -1171,6 +1224,16 @@ int ObServer::check_if_schema_ready()
     }
   }
   FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready));
+  if (!stop_ && schema_ready) {
+    LOG_DBA_INFO_V2(OB_SERVER_WAIT_SCHEMA_READY_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "wait schema ready success.");
+  } else {
+    LOG_DBA_ERROR_V2(OB_SERVER_WAIT_SCHEMA_READY_FAIL, ret,
+                     DBA_STEP_INC_INFO(server_start),
+                     "wait schema ready fail, server stop status is ", stop_, ". "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  }
   return ret;
 }
 
@@ -1222,6 +1285,7 @@ int ObServer::stop()
   int ret = OB_SUCCESS;
   int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer begin");
+  LOG_DBA_INFO_V2(OB_SERVER_STOP_BEGIN, "observer stop begin.");
 
   FLOG_INFO("begin to stop OB_LOGGER");
   OB_LOGGER.stop();
@@ -1535,7 +1599,10 @@ int ObServer::stop()
   has_stopped_ = true;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer end", KR(ret));
   if (OB_SUCCESS != fail_ret) {
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer stop() has failure", KR(fail_ret));
+    LOG_DBA_ERROR_V2(OB_SERVER_STOP_FAIL, fail_ret, "observer stop fail. "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_SERVER_STOP_SUCCESS, "observer stop success.");
   }
 
   return ret;
@@ -1546,6 +1613,7 @@ int ObServer::wait()
   int ret = OB_SUCCESS;
   int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] wait observer begin");
+  LOG_DBA_INFO_V2(OB_SERVER_WAIT_BEGIN, "observer process wait begin.");
   // wait for stop flag
 
   FLOG_INFO("begin to wait observer setted to stop");
@@ -1800,7 +1868,10 @@ int ObServer::wait()
     gctx_.status_ = SS_STOPPED;
     FLOG_INFO("[OBSERVER_NOTICE] wait observer end", KR(ret));
     if (OB_SUCCESS != fail_ret) {
-      LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer wait() has failure", KR(fail_ret));
+      LOG_DBA_ERROR_V2(OB_SERVER_WAIT_FAIL, fail_ret, "observer process wait fail. "
+                       "you may find solutions in previous error logs or seek help from official technicians.");
+    } else {
+      LOG_DBA_INFO_V2(OB_SERVER_WAIT_SUCCESS, "observer process wait succcess.");
     }
   }
 
@@ -1822,14 +1893,20 @@ int ObServer::init_config()
   int ret = OB_SUCCESS;
   bool has_config_file = true;
 
-  // set dump path
-  const char *dump_path = "etc/observer.config.bin";
-  config_mgr_.set_dump_path(dump_path);
-  if (OB_FILE_NOT_EXIST == (ret = config_mgr_.load_config())) {
-    has_config_file = false;
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(ret)) {
-    LOG_ERROR("load config from file failed", KR(ret));
+  if (OB_FAIL(ODV_MGR.init(true /*enable_compatible_monotonic*/))) {
+    LOG_ERROR("fail to init data_version_mgr", KR(ret));
+  } else if (OB_FAIL(ODV_MGR.load_from_file())) {
+    LOG_ERROR("failed to load data_version_mgr file", KR(ret));
+  } else {
+    // set dump path
+    const char *dump_path = "etc/observer.config.bin";
+    config_mgr_.set_dump_path(dump_path);
+    if (OB_FILE_NOT_EXIST == (ret = config_mgr_.load_config())) {
+      has_config_file = false;
+      ret = OB_SUCCESS;
+    } else if (OB_FAIL(ret)) {
+      LOG_ERROR("load config from file failed", KR(ret));
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1972,15 +2049,22 @@ int ObServer::init_local_ip_and_devname()
     bool has_found = false;
     if (OB_SUCCESS != obsys::ObNetUtil::get_ifname_by_addr(config_.local_ip, if_name, sizeof(if_name), has_found)) {
       // if it is incorrect, then ObServer start but log a error.
-      LOG_DBA_WARN(OB_ERR_OBSERVER_START, "get ifname by local_ip failed, local_ip", config_.local_ip.get_value());
+      LOG_DBA_WARN_V2(OB_SERVER_GET_IFNAME_FAIL, OB_ERR_OBSERVER_START,
+                        "get ifname by local_ip failed. ",
+                        "local_ip is ", config_.local_ip.get_value(),
+                        ". [suggestion] Verify if your local IP address is a virtual one.");
     } else if (false == has_found) {
-      LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "local_ip set failed, please check your local_ip", config_.local_ip.get_value());
+      LOG_DBA_ERROR_V2(OB_SERVER_SET_LOCAL_IP_FAIL, OB_ERR_OBSERVER_START,
+                        "local_ip set failed, please check your local_ip. ",
+                        "local_ip is ", config_.local_ip.get_value(),
+                        ". [suggestion] Verify if your local IP is right. ");
     } else if (0 != strcmp(config_.devname, if_name)) {
       config_.devname.set_value(if_name);
       config_.devname.set_version(start_time_);
       // this is done to ensure the consistency of local_ip and devname.
-      LOG_DBA_WARN(OB_ITEM_NOT_MATCH, "the devname has been rewritten, and the new value comes from local_ip, old value",
-          config_.devname.get_value(), "new value", if_name, "local_ip", config_.local_ip.get_value());
+      LOG_DBA_WARN_V2(OB_SERVER_DEVICE_NAME_MISMATCH, OB_ITEM_NOT_MATCH,
+          "the devname has been rewritten, and the new value comes from local_ip, old value: ",
+          config_.devname.get_value(), " new value: ", if_name, " local_ip: ", config_.local_ip.get_value());
     }
   } else {
     if (config_.use_ipv6) {
@@ -3093,6 +3177,9 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
   bool is_dropped = false;
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  LOG_DBA_INFO_V2(OB_SERVER_CHECK_USER_TENANT_SCHEMA_REFRESHED_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer check user tenant schema refreshed begin.");
 
   for (int64_t i = 0; i < tenant_ids.count()
                       && ObTimeUtility::current_time() < expire_time; ++i) {
@@ -3130,10 +3217,16 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
       }
     }
   }
+  LOG_DBA_INFO_V2(OB_SERVER_CHECK_USER_TENANT_SCHEMA_REFRESHED_FINISH,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer check user tenant schema refreshed finish.");
 }
 
 void ObServer::check_log_replay_over(const ObIArray<uint64_t> &tenant_ids, const int64_t expire_time)
 {
+  LOG_DBA_INFO_V2(OB_SERVER_CHECK_LOG_REPLAY_OVER_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer check log replay over begin.");
   for (int64_t i = 0; i < tenant_ids.count()
                       && ObTimeUtility::current_time() < expire_time; ++i) {
     SCN min_version;
@@ -3157,6 +3250,9 @@ void ObServer::check_log_replay_over(const ObIArray<uint64_t> &tenant_ids, const
       }
     }
   }
+  LOG_DBA_INFO_V2(OB_SERVER_CHECK_LOG_REPLAY_OVER_FINISH,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer check log replay over finish.");
 }
 
 ObServer::ObCTASCleanUpTask::ObCTASCleanUpTask()

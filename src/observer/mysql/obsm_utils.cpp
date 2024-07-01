@@ -94,6 +94,9 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] =
   {EMySQLFieldType::MYSQL_TYPE_COMPLEX,   0, 0}, /* ObUserDefinedSQLType */
   {EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL, 0, 0},                           /* ObDecimalIntType */
   {EMySQLFieldType::MYSQL_TYPE_STRING,     0, 0},   /* ObCollectionSQLType, will cast to string */
+  {EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED,     0, 0},   /* reserved for ObMySQLDateType */
+  {EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED,     0, 0},   /* reserved for ObMySQLDateTimeType */
+  {EMySQLFieldType::MYSQL_TYPE_BLOB,       BLOB_FLAG, 0},                         /* ObRoaringBitmapType */
   /* ObMaxType */
 };
 
@@ -192,7 +195,8 @@ int ObSMUtils::cell_str(
       case ObStringTC:
       // lob locator也会按varchar方式进行encode, 客户端往server端传输数据时,
       // 也是将lob locator按varchar传输, 先编码LobLocator length, 然后再编码整个lob Locator
-      case ObLobTC: {
+      case ObLobTC:
+      case ObRoaringBitmapTC: {
         ret = ObMySQLUtil::varchar_cell_str(buf, len, obj.get_string(), is_oracle_raw, pos);
         break;
       }
@@ -332,6 +336,7 @@ int ObSMUtils::cell_str(
             OB_LOG(WARN, "failed to get udt info", K(ret), K(field));
           }
           if (OB_ISNULL(udt_info)) {
+            // overwrite ret
             // try system udt
             if (0 == field->type_owner_.case_compare(OB_SYS_DATABASE_NAME)
                 || 0 == field->type_owner_.case_compare("SYS")) {

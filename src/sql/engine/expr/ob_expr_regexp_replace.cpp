@@ -525,7 +525,7 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
         res_vec->set_null(i);
       } else {
         // if text is lob type, res_replace only get locator
-        ret = vector_regexp_replace_convert<TextDiscVec, TextDiscVec>(
+        ret = vector_regexp_replace_convert<StrDiscVec, StrDiscVec>(
                                       VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
                                       expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
       }
@@ -618,7 +618,7 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
             res_vec->set_null(i);
           } else {
             // if text is lob type, res_replace only get locator;
-            ret = vector_regexp_replace_convert<TextDiscVec, TextDiscVec>(
+            ret = vector_regexp_replace_convert<StrDiscVec, StrDiscVec>(
                                       VECTOR_EVAL_FUNC_ARG_LIST, text_vec->get_string(i), true,
                                       expr.args_[0]->datum_meta_.cs_type_, out_alloc, tmp_alloc, i);
           }
@@ -661,7 +661,7 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
         } else if (res_replace.empty() && lib::is_oracle_mode()) {
           res_vec->set_null(i);
         } else {
-          ret = vector_regexp_replace_convert<TextDiscVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST,
+          ret = vector_regexp_replace_convert<StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST,
                     res_replace, is_no_pattern_to_replace, res_coll_type, out_alloc, tmp_alloc, i);
         }
       }
@@ -693,17 +693,17 @@ int ObExprRegexpReplace::eval_regexp_replace_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_regexp_replace<TextDiscVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_regexp_replace<StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_regexp_replace<TextUniVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_regexp_replace<StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_regexp_replace<TextContVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_regexp_replace<StrContVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_regexp_replace<TextDiscVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_regexp_replace<StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_regexp_replace<TextUniVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_regexp_replace<StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_regexp_replace<TextContVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_regexp_replace<StrContVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else {
       ret = vector_regexp_replace<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
     }

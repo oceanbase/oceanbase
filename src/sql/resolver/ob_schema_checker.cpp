@@ -1458,7 +1458,7 @@ int ObSchemaChecker::get_trigger_info(const uint64_t tenant_id,
     LOG_WARN("schema checker is not inited", K_(is_inited));
   } else if (OB_FAIL(get_database_id(tenant_id, database_name, db_id))) {
     LOG_WARN("get database id failed", K(ret), K(tenant_id), K(database_name), K(tg_name));
-  } else if (schema_mgr_->get_trigger_info(tenant_id, db_id, tg_name, tg_info)) {
+  } else if (OB_FAIL(schema_mgr_->get_trigger_info(tenant_id, db_id, tg_name, tg_info))) {
     LOG_WARN("get trigger info failed", K(ret), K(tenant_id), K(database_name), K(tg_name));
   }
   return ret;
@@ -1536,7 +1536,7 @@ int ObSchemaChecker::get_package_id(const uint64_t tenant_id,
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K_(is_inited));
   } else if (OB_FAIL(schema_mgr_->get_package_id(
-                      tenant_id, database_id, package_name, PACKAGE_TYPE, compatible_mode, package_id))) {
+                      tenant_id, database_id, package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_id))) {
     LOG_WARN("get package id failed", K(ret));
   } else if (OB_INVALID_ID == package_id) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -1558,7 +1558,7 @@ int ObSchemaChecker::get_package_id(const uint64_t tenant_id,
     LOG_WARN("schema checker is not inited", K_(is_inited));
   } else if (OB_FAIL(get_database_id(tenant_id, database_name, db_id))) {
     LOG_WARN("get database id failed", K(ret));
-  } else if (OB_FAIL(schema_mgr_->get_package_id(tenant_id, db_id, package_name, PACKAGE_TYPE, compatible_mode, package_id))) {
+  } else if (OB_FAIL(schema_mgr_->get_package_id(tenant_id, db_id, package_name, share::schema::PACKAGE_TYPE, compatible_mode, package_id))) {
     LOG_WARN("get package id failed", K(ret));
   } else if (OB_INVALID_ID == package_id) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -1616,7 +1616,7 @@ int ObSchemaChecker::get_package_body_id(const uint64_t tenant_id,
       LOG_WARN("schema checker is not inited", K_(is_inited));
     } else if (OB_FAIL(get_database_id(tenant_id, database_name, db_id))) {
       LOG_WARN("get database id failed", K(ret));
-    } else if (OB_FAIL(schema_mgr_->get_package_id(tenant_id, db_id, package_name, PACKAGE_BODY_TYPE,
+    } else if (OB_FAIL(schema_mgr_->get_package_id(tenant_id, db_id, package_name, share::schema::PACKAGE_BODY_TYPE,
                                                    compatible_mode, package_body_id))) {
       LOG_WARN("get package body id failed", K(ret));
     } else if (OB_INVALID_ID == package_body_id) {

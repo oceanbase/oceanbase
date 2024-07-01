@@ -1206,6 +1206,7 @@ void ObLSRestoreTaskMgr::remove_finished_task_(const ObIArray<ObTaskId> &finish_
     } else {
       const ObIArray<ObTabletID> &tablet_id_array = restored_tg->get_tablet_list();
       ARRAY_FOREACH_NORET(tablet_id_array, i) {
+        // overwite ret
         const ObTabletID &tablet_id = tablet_id_array.at(i);
         // remove from DOING set
         if (OB_FAIL(schedule_tablet_set_.erase_refactored(tablet_id))) {
@@ -1216,6 +1217,7 @@ void ObLSRestoreTaskMgr::remove_finished_task_(const ObIArray<ObTaskId> &finish_
 
     // remove from task map
     if (OB_FAIL(tablet_map_.erase_refactored(task_id))) {
+      // overwrite ret
       LOG_WARN("fail to erase task id", K(ret), K(task_id));
     }
   }

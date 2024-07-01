@@ -21,6 +21,11 @@
 
 namespace oceanbase
 {
+namespace share {
+namespace schema {
+class ObColumnSchemaV2;
+}
+}
 namespace sql
 {
 class ObDataInFileStruct;
@@ -495,18 +500,27 @@ struct ObExternalFileFormat
   enum FormatType {
     INVALID_FORMAT = -1,
     CSV_FORMAT,
+    PARQUET_FORMAT,
     MAX_FORMAT
   };
 
+  enum Options {
+    OPT_REPLACE_INVALID_CHARACTERS = 1 << 0,
+    OPT_BINARY_AS_TEXT = 1 << 1,
+  };
 
   ObExternalFileFormat() : format_type_(INVALID_FORMAT) {}
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
-  int load_from_string(const common::ObString &str, ObIAllocator &allocator);
+  int load_from_string(const common::ObString &str, common::ObIAllocator &allocator);
+  int mock_gen_column_def(const share::schema::ObColumnSchemaV2 &column, common::ObIAllocator &allocator, common::ObString &def);
 
   ObOriginFileFormat origin_file_format_str_;
   FormatType format_type_;
   sql::ObCSVGeneralFormat csv_format_;
+  uint64_t options_;
+
+  static const char *FORMAT_TYPE_STR[];
 };
 
 

@@ -137,6 +137,7 @@ ObDirectLoadMultipleSSTable::~ObDirectLoadMultipleSSTable()
 
 void ObDirectLoadMultipleSSTable::reset()
 {
+  tablet_id_.reset();
   meta_.reset();
   start_key_.reset();
   end_key_.reset();
@@ -154,6 +155,7 @@ int ObDirectLoadMultipleSSTable::init(const ObDirectLoadMultipleSSTableCreatePar
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
+    tablet_id_ = param.tablet_id_;
     meta_.rowkey_column_num_ = param.rowkey_column_num_;
     meta_.column_count_ = param.column_count_;
     meta_.index_block_size_ = param.index_block_size_;
@@ -188,6 +190,7 @@ int ObDirectLoadMultipleSSTable::copy(const ObDirectLoadMultipleSSTable &other)
     LOG_WARN("invalid args", KR(ret), K(other));
   } else {
     reset();
+    tablet_id_ = other.tablet_id_;
     meta_ = other.meta_;
     if (OB_FAIL(start_key_.deep_copy(other.start_key_, allocator_))) {
       LOG_WARN("fail to deep copy rowkey", KR(ret));

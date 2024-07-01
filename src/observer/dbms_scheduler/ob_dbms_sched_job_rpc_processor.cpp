@@ -76,5 +76,47 @@ int ObRpcRunDBMSSchedJobP::process()
   return ret;
 }
 
+int ObRpcStopDBMSSchedJobP::process()
+{
+  int ret = OB_SUCCESS;
+  const ObDBMSSchedStopJobArg &arg = arg_;
+  sql::ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(GCTX.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_mgr_ is null", K(ret));
+  } else {
+    sql::ObSessionGetterGuard guard(*GCTX.session_mgr_, arg.session_id_);
+    if (OB_FAIL(guard.get_session(session))) {
+      LOG_WARN("failed to get session", K(arg));
+    } else if (OB_ISNULL(session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null", K(ret));
+    } else {
+      {
+        ObSQLSessionInfo::LockGuard lock_guard(session->get_thread_data_lock());
+        ObDBMSSchedJobInfo *job_info = session->get_job_info();
+        if (OB_ISNULL(job_info)) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("job_info is null, maybe job end", K(ret), K(arg));
+        } else if (0 != job_info->get_job_name().case_compare(arg.job_name_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("job_info is not expected", K(ret), KPC(job_info), K(arg));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (arg_.rpc_send_time_ <= session->get_sess_create_time()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session maybe reused by later round", K(ret), K(arg), K(session->get_sess_create_time()), KPC(session));
+        } else if (OB_FAIL(GCTX.session_mgr_->kill_session(*session))) {
+          LOG_WARN("failed to kill session", K(ret), K(arg), KPC(session));
+        } else {
+          LOG_INFO("stop job finish", K(arg));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 }
 } // namespace oceanbase

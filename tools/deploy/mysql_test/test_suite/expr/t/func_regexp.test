@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: jiangxiu.wt
+# owner: zongmei.zzm
 # owner group: SQL1
 # description: regexp的测试
 

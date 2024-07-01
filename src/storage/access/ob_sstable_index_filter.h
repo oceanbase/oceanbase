@@ -45,7 +45,7 @@ struct ObSkippingFilterNode
 
   bool is_already_determinate_;
   blocksstable::ObSkipIndexType skip_index_type_;
-  sql::ObPushdownFilterExecutor *filter_;
+  sql::ObPhysicalFilterExecutor *filter_;
 };
 
 class ObSSTableIndexFilter
@@ -73,7 +73,8 @@ public:
   int check_range(
       const ObITableReadInfo *read_info,
       blocksstable::ObMicroIndexInfo &index_info,
-      common::ObIAllocator &allocator);
+      common::ObIAllocator &allocator,
+      const bool use_vectorize);
   /// Check whether we can use skipping index.
   bool can_use_skipping_index() const
   {
@@ -91,7 +92,8 @@ private:
       const ObITableReadInfo *read_info,
       blocksstable::ObMicroIndexInfo &index_info,
       ObSkippingFilterNode &node,
-      common::ObIAllocator &allocator);
+      common::ObIAllocator &allocator,
+      const bool use_vectorize);
   int build_skipping_filter_nodes(
       const ObITableReadInfo* read_info,
       sql::ObPushdownFilterExecutor &filter);
@@ -100,11 +102,11 @@ private:
     sql::ObPushdownFilterExecutor &filter);
   int find_skipping_index(
       const ObITableReadInfo* read_info,
-      sql::ObPushdownFilterExecutor &filter,
+      sql::ObPhysicalFilterExecutor &filter,
       IndexList &index_list) const;
   int find_useful_skipping_filter(
       const IndexList &index_list,
-      sql::ObPushdownFilterExecutor &filter);
+      sql::ObPhysicalFilterExecutor &filter);
 private:
   bool is_inited_;
   bool is_cg_;
@@ -130,12 +132,8 @@ struct ObSSTableIndexFilterExtracter
 {
 public:
   static int extract_skipping_filter(
-      const sql::ObPushdownFilterExecutor &filter,
+      const sql::ObPhysicalFilterExecutor &filter,
       const blocksstable::ObSkipIndexType skip_index_type,
-      ObSkippingFilterNode &node);
-private:
-  static int extract_min_max_skipping_filter(
-      const sql::ObPushdownFilterExecutor &filter,
       ObSkippingFilterNode &node);
 };
 } // namespace storage

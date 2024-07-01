@@ -68,6 +68,12 @@ int ObUniformVector<IS_CONST, BasicOp>::null_last_cmp(VECTOR_ONE_COMPARE_ARGS) c
   return expr.basic_funcs_->null_last_cmp_(this->get_datum(row_idx), ObDatum(r_v, r_len, r_null), cmp_ret);
 }
 
+template<bool IS_CONST, typename BasicOp>
+int ObUniformVector<IS_CONST, BasicOp>::no_null_cmp(VECTOR_NOT_NULL_COMPARE_ARGS) const
+{
+  return expr.basic_funcs_->null_last_cmp_(this->get_datum(row_idx1), this->get_datum(row_idx2), cmp_ret);
+}
+
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_NULL>>;
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_INTEGER>>;
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_UINTEGER>>;
@@ -100,6 +106,7 @@ template class ObUniformVector<true, VectorBasicOp<VEC_TC_DEC_INT64>>;
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_DEC_INT128>>;
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_DEC_INT256>>;
 template class ObUniformVector<true, VectorBasicOp<VEC_TC_DEC_INT512>>;
+template class ObUniformVector<true, VectorBasicOp<VEC_TC_ROARINGBITMAP>>;
 
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_NULL>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_INTEGER>>;
@@ -133,5 +140,6 @@ template class ObUniformVector<false, VectorBasicOp<VEC_TC_DEC_INT64>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_DEC_INT128>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_DEC_INT256>>;
 template class ObUniformVector<false, VectorBasicOp<VEC_TC_DEC_INT512>>;
+template class ObUniformVector<false, VectorBasicOp<VEC_TC_ROARINGBITMAP>>;
 } // end namespace common
 } // end namespace oceanbase

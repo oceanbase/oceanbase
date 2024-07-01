@@ -167,7 +167,7 @@ int ObTransformJoinLimitPushDown::sort_pushdown_helpers(ObSEArray<LimitPushDownH
       return l_helper->get_max_table_id() > r_helper->get_max_table_id();
     }
   };
-  std::sort(helpers.begin(), helpers.end(), cmp_func);
+  lib::ob_sort(helpers.begin(), helpers.end(), cmp_func);
   return ret;
 }
 
@@ -335,12 +335,14 @@ int ObTransformJoinLimitPushDown::split_cartesian_tables(ObSelectStmt *select_st
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(check_contain_correlated_function_table(select_stmt, is_contain))) {
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_function_table(select_stmt,
+                                                                               is_contain))) {
     LOG_WARN("failed to check contain correlated function table", K(ret));
   } else if (is_contain) {
     OPT_TRACE("contain correlated function table, do not push down limit");
-  } else if (OB_FAIL(check_contain_correlated_json_table(select_stmt, is_contain))) {
-    LOG_WARN("failed to check contain correlated function table", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_json_table(select_stmt,
+                                                                           is_contain))) {
+    LOG_WARN("failed to check contain correlated json table", K(ret));
   } else if (is_contain) {
     OPT_TRACE("contain correlated json table, do not push down limit");
   } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_lateral_table(select_stmt,
@@ -363,48 +365,6 @@ int ObTransformJoinLimitPushDown::split_cartesian_tables(ObSelectStmt *select_st
     } else {
       has_cartesian = uf.count_ > 1;
       is_valid = !helpers.empty();
-    }
-  }
-  return ret;
-}
-
-int ObTransformJoinLimitPushDown::check_contain_correlated_function_table(ObDMLStmt *stmt, bool &is_contain)
-{
-  int ret = OB_SUCCESS;
-  is_contain = false;
-  for (int i = 0; OB_SUCC(ret) && !is_contain && i < stmt->get_table_items().count(); ++i) {
-    TableItem *table = stmt->get_table_item(i);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (!table->is_function_table()) {
-      //do nothing
-    } else if (OB_ISNULL(table->function_table_expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (!table->function_table_expr_->get_relation_ids().is_empty()) {
-      is_contain = true;
-    }
-  }
-  return ret;
-}
-
-int ObTransformJoinLimitPushDown::check_contain_correlated_json_table(ObDMLStmt *stmt, bool &is_contain)
-{
-  int ret = OB_SUCCESS;
-  is_contain = false;
-  for (int i = 0; OB_SUCC(ret) && !is_contain && i < stmt->get_table_items().count(); ++i) {
-    TableItem *table = stmt->get_table_item(i);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (!table->is_json_table()) {
-      //do nothing
-    } else if (OB_ISNULL(table->json_table_def_) || OB_ISNULL(table->json_table_def_->doc_expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (!table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
-      is_contain = true;
     }
   }
   return ret;
@@ -447,7 +407,7 @@ int ObTransformJoinLimitPushDown::check_cartesian(ObSelectStmt *stmt,
       } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(cond,
                                                           where_table_ids))) {
         LOG_WARN("failed to extract table ids", K(ret));
-      } else if (OB_FAIL(connect_tables(stmt, where_table_ids, from_tables, uf))) {
+      } else if (OB_FAIL(ObTransformUtils::connect_tables(where_table_ids, from_tables, uf))) {
         LOG_WARN("failed to connect tables", K(ret));
       }
     }
@@ -458,7 +418,7 @@ int ObTransformJoinLimitPushDown::check_cartesian(ObSelectStmt *stmt,
       if (OB_ISNULL(semi)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(connect_tables(stmt, semi->left_table_ids_, from_tables, uf))) {
+      } else if (OB_FAIL(ObTransformUtils::connect_tables(semi->left_table_ids_, from_tables, uf))) {
         LOG_WARN("failed to connect tables", K(ret));
       }
     }
@@ -481,72 +441,11 @@ int ObTransformJoinLimitPushDown::check_cartesian(ObSelectStmt *stmt,
         // do nothing
       } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(expr, orderby_table_ids))) {
         LOG_WARN("failed to collect orderby table sets", K(ret));
-      }  else if (OB_FAIL(connect_tables(stmt, orderby_table_ids, from_tables, uf))) {
+      }  else if (OB_FAIL(ObTransformUtils::connect_tables(orderby_table_ids, from_tables, uf))) {
         LOG_WARN("failed to connect tables", K(ret));
       }
     }
     is_valid = OB_SUCC(ret) && is_cond_valid && is_orderby_valid;
-  }
-  return ret;
-}
-
-int ObTransformJoinLimitPushDown::connect_tables(ObSelectStmt *stmt,
-                                                 const ObIArray<uint64_t> &table_ids,
-                                                 const ObIArray<TableItem *> &from_tables,
-                                                 UnionFind &uf)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<int64_t, 8> indices;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(get_idx_from_table_ids(stmt,
-                                            table_ids,
-                                            from_tables,
-                                            indices))) {
-    LOG_WARN("failed to get indices of from table ids", K(ret));
-  } else if (indices.count() <= 1) {
-    // do nothing
-  } else {
-    // connect tables appeared in a condition
-    // we store table indices instead of table item to leverage the consumption
-    for (int64_t i = 1; OB_SUCC(ret) && i < indices.count(); ++i) {
-      if (OB_FAIL(uf.connect(indices.at(0), indices.at(i)))) {
-        LOG_WARN("failed to connect nodes", K(ret), K(i));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformJoinLimitPushDown::get_idx_from_table_ids(ObSelectStmt *stmt,
-                                                         const ObIArray<uint64_t> &src_table_ids,
-                                                         const ObIArray<TableItem *> &target_tables,
-                                                         ObIArray<int64_t> &indices)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < target_tables.count(); ++i) {
-    TableItem *target_table = target_tables.at(i);
-    if (OB_ISNULL(target_table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < src_table_ids.count(); ++j) {
-      if (src_table_ids.at(j) == target_table->table_id_) {
-        if (OB_FAIL(indices.push_back(i))) {
-          LOG_WARN("failed to push back index", K(ret));
-        }
-        break;
-      } else if (target_table->is_joined_table()) {
-        if (is_contain(static_cast<JoinedTable *>(target_table)->single_table_ids_,
-                       src_table_ids.at(j))) {
-          if (!is_contain(indices, i) && OB_FAIL(indices.push_back(i))) {
-            LOG_WARN("failed to push back index", K(ret));
-          }
-          break;
-        }
-      }
-    }
   }
   return ret;
 }

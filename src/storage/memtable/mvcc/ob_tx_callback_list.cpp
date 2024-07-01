@@ -127,12 +127,14 @@ int ObTxCallbackList::append_callback(ObITransCallback *callback,
       }
       ++appended_;
       ATOMIC_INC(&length_);
-      data_size_ += callback->get_data_size();
+      int64_t data_size = callback->get_data_size();
+      data_size_ += data_size;
       if (repos_lc) {
         log_cursor_ = get_tail();
       }
       if (for_replay) {
         ++logged_;
+        logged_data_size_ += data_size;
         ++synced_;
       }
       // Once callback is appended into callback lists, we can not handle the
@@ -767,7 +769,7 @@ void ObTxCallbackList::update_checksum(const uint64_t checksum, const SCN checks
   LockGuard guard(*this, LOCK_MODE::LOCK_ITERATE);
   if (checksum_scn.is_max()) {
     if (checksum == 0 && id_ > 0) {
-      // only check extends list, because version before 4.3 with 0 may happen
+      // only check extends list, because version before 4.2.4 with 0 may happen
       // and they will be replayed into first list (id_ equals to 0)
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "checksum should not be 0 if checksum_scn is max", KPC(this));
     }

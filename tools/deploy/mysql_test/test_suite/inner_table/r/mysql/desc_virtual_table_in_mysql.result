@@ -1547,6 +1547,8 @@ password_expired	varchar(1)	NO		NULL
 account_locked	varchar(1)	NO		NULL	
 drop_database_link_priv	varchar(1)	NO		NULL	
 create_database_link_priv	varchar(1)	NO		NULL	
+create_role_priv	varchar(1)	NO		NULL	
+drop_role_priv	varchar(1)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from mysql.user;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1592,6 +1594,7 @@ abs_timeout	bigint(20)	NO		NULL
 try_lock_times	bigint(20)	NO		NULL	
 time_after_recv	bigint(20)	NO		NULL	
 session_id	bigint(20)	NO		NULL	
+holder_session_id	bigint(20)	NO		NULL	
 block_session_id	bigint(20)	NO		NULL	
 type	bigint(20)	NO		NULL	
 lock_mode	varchar(8)	NO		NULL	

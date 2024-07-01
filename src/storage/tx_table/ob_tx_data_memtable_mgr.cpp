@@ -215,18 +215,17 @@ int ObTxDataMemtableMgr::freeze()
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "tx data memtable container is not inited.", KR(ret));
-  } else if (get_memtable_count_() <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "there is no tx data memtable.", KR(ret), K(get_memtable_count_()));
   } else {
     MemMgrWLockGuard lock_guard(lock_);
-    if (OB_FAIL(freeze_())) {
+    if (get_memtable_count_() <= 0) {
+      ret = OB_ENTRY_NOT_EXIST;
+      STORAGE_LOG(WARN, "Empty tx data memtable mgr. This ls may offline", KR(ret), K(memtable_head_), K(memtable_tail_));
+    } else if (OB_FAIL(freeze_())) {
       STORAGE_LOG(WARN, "freeze tx data memtable fail.", KR(ret));
     } else {
       // freeze success
     }
   }
-
   return ret;
 }
 

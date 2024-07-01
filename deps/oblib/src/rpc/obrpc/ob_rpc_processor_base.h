@@ -71,7 +71,7 @@ public:
 protected:
   int check_timeout() { return common::OB_SUCCESS; }
   virtual int check_cluster_id();
-
+  int update_data_version();
   virtual int before_process() { return common::OB_SUCCESS; }
   virtual int after_process(int error_code);
 

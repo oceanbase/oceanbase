@@ -184,7 +184,7 @@ ObTransCallbackMgr::RDLockGuard::RDLockGuard(const SpinRWLock &rwlock)
 
 #define CALLBACK_LISTS_FOREACH_(idx, list, CONST)                       \
   CONST ObTxCallbackList *list = &callback_list_;                             \
-  const int list_cnt = (!need_merge_ && callback_lists_) ? MAX_CALLBACK_LIST_COUNT : 1; \
+  const int list_cnt = callback_lists_ ? MAX_CALLBACK_LIST_COUNT : 1; \
   for (int idx = 0; OB_SUCC(ret) && idx < list_cnt;                     \
        list = (list_cnt > 1 ? callback_lists_ + idx : NULL), ++idx)
 
@@ -197,7 +197,7 @@ void ObTransCallbackMgr::reset()
   skip_checksum_ = false;
   callback_list_.reset();
   if (callback_lists_) {
-    int cnt = need_merge_ ? MAX_CALLBACK_LIST_COUNT : MAX_CALLBACK_LIST_COUNT - 1;
+    int cnt = MAX_CALLBACK_LIST_COUNT - 1;
     for (int i = 0; i < cnt; ++i) {
       if (!callback_lists_[i].empty()) {
         TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "txn callback list is broken", K(stat), K(i), K(this));
@@ -223,15 +223,12 @@ void ObTransCallbackMgr::reset()
   parallel_stat_ = 0;
   write_epoch_ = 0;
   write_epoch_start_tid_ = 0;
-  need_merge_ = false;
   for_replay_ = false;
   has_branch_replayed_into_first_list_ = false;
   serial_final_scn_.set_max();
   serial_final_seq_no_.reset();
   serial_sync_scn_.set_min();
   callback_main_list_append_count_ = 0;
-  callback_slave_list_append_count_ = 0;
-  callback_slave_list_merge_count_ = 0;
   callback_remove_for_trans_end_count_ = 0;
   callback_remove_for_remove_memtable_count_ = 0;
   callback_remove_for_fast_commit_count_ = 0;
@@ -354,7 +351,6 @@ int ObTransCallbackMgr::append(ObITransCallback *node)
   }
   const transaction::ObTxSEQ seq_no = node->get_seq_no();
   if (seq_no.support_branch()) {
-    // NEW since version 4.3, select by branch
     int slot = seq_no.get_branch() % MAX_CALLBACK_LIST_COUNT;
     if (slot > 0
         && for_replay_
@@ -405,24 +401,16 @@ int ObTransCallbackMgr::append(ObITransCallback *node)
     } else {
       ret = callback_lists_[slot - 1].append_callback(node, for_replay_, parallel_replay_, is_serial_final_());
     }
+  } else if (!for_replay_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "write by older version", K(ret), K(seq_no), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+    ob_abort();
+#endif
   } else {
-    // OLD before version 4.3
-    // if has parallel select from callback_lists_
-    // don't select main, and merge into main finally
-    const int64_t tid = get_itid() + 1;
-    int slot = tid % MAX_CALLBACK_LIST_COUNT;
-    int64_t stat = ATOMIC_LOAD(&parallel_stat_);
-    if (PARALLEL_STMT == stat) {
-      if (OB_FAIL(!callback_lists_ && extend_callback_lists_(MAX_CALLBACK_LIST_COUNT))) {
-        TRANS_LOG(WARN, "extend callback lists failed", K(ret));
-      } else {
-        ret = callback_lists_[slot].append_callback(node, for_replay_, parallel_replay_, true);
-        add_slave_list_append_cnt();
-      }
-    } else {
-      ret = callback_list_.append_callback(node, for_replay_, parallel_replay_, true);
-      add_main_list_append_cnt();
-    }
+    // for replay, before version 4.2.4
+    ret = callback_list_.append_callback(node, for_replay_, parallel_replay_, true);
+    add_main_list_append_cnt();
   }
   after_append(node, ret);
   return ret;
@@ -431,11 +419,10 @@ int ObTransCallbackMgr::append(ObITransCallback *node)
 void ObTransCallbackMgr::before_append(ObITransCallback *node)
 {
   int64_t size = node->get_data_size();
-
-  int64_t new_size = inc_pending_log_size(size);
-  try_merge_multi_callback_lists(new_size, size, node->is_logging_blocked());
   if (for_replay_) {
     inc_flushed_log_size(size);
+  } else {
+    inc_pending_log_size(size);
   }
 }
 
@@ -443,9 +430,10 @@ void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code
 {
   if (OB_SUCCESS != ret_code) {
     int64_t size = node->get_data_size();
-    inc_pending_log_size(-1 * size);
     if (for_replay_) {
       inc_flushed_log_size(-1 * size);
+    } else {
+      inc_pending_log_size(-1 * size);
     }
   }
 }
@@ -458,7 +446,7 @@ int ObTransCallbackMgr::rollback_to(const ObTxSEQ to_seq_no,
   int ret = OB_SUCCESS;
   int slot = -1;
   remove_cnt = callback_remove_for_rollback_to_count_;
-  if (OB_LIKELY(to_seq_no.support_branch())) { // since 4.3
+  if (OB_LIKELY(to_seq_no.support_branch())) { // since 4.2.4
     // it is a global savepoint, rollback on all list
     if (to_seq_no.get_branch() == 0) {
       CALLBACK_LISTS_FOREACH(idx, list) {
@@ -487,7 +475,13 @@ int ObTransCallbackMgr::rollback_to(const ObTxSEQ to_seq_no,
                   KPC(this), KPC(get_trans_ctx()), K(replay_scn), K(to_seq_no), K(from_seq_no));
       }
     }
-  } else { // before 4.3
+  } else if (!for_replay_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "leader rollback to with old version", K(ret), K(to_seq_no), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+    ob_abort();
+#endif
+  } else { // for replay, before 4.2.4
     ret = callback_list_.remove_callbacks_for_rollback_to(to_seq_no, from_seq_no, replay_scn);
   }
   if (OB_FAIL(ret)) {
@@ -495,40 +489,6 @@ int ObTransCallbackMgr::rollback_to(const ObTxSEQ to_seq_no,
   }
   remove_cnt = callback_remove_for_rollback_to_count_ - remove_cnt;
   return ret;
-}
-
-// merge `callback_lists_` into `callback_list_`
-void ObTransCallbackMgr::merge_multi_callback_lists()
-{
-  int64_t stat = ATOMIC_LOAD(&parallel_stat_);
-  int64_t cnt = 0;
-  if (OB_UNLIKELY(ATOMIC_LOAD(&need_merge_)) && PARALLEL_STMT == stat) {
-    WRLockGuard guard(rwlock_);
-    if (OB_NOT_NULL(callback_lists_)) {
-      for (int64_t i = 0; i < MAX_CALLBACK_LIST_COUNT; ++i) {
-        cnt = callback_list_.concat_callbacks(callback_lists_[i]);
-        add_slave_list_merge_cnt(cnt);
-      }
-    }
-#ifndef NDEBUG
-    TRANS_LOG(INFO, "merge callback lists to callback list", K(stat), K(host_.get_tx_id()));
-#endif
-  }
-}
-
-void ObTransCallbackMgr::force_merge_multi_callback_lists()
-{
-  int64_t cnt = 0;
-  if (OB_UNLIKELY(ATOMIC_LOAD(&need_merge_))) {
-    WRLockGuard guard(rwlock_);
-    if (OB_NOT_NULL(callback_lists_)) {
-      for (int64_t i = 0; i < MAX_CALLBACK_LIST_COUNT; ++i) {
-        cnt = callback_list_.concat_callbacks(callback_lists_[i]);
-        add_slave_list_merge_cnt(cnt);
-      }
-    }
-  }
-  TRANS_LOG(DEBUG, "force merge callback lists to callback list", K(host_.get_tx_id()));
 }
 
 transaction::ObPartTransCtx *ObTransCallbackMgr::get_trans_ctx() const
@@ -549,8 +509,6 @@ void ObTransCallbackMgr::reset_pdml_stat()
       need_retry = false;
     }
   }
-
-  force_merge_multi_callback_lists();
 }
 
 // only for replay
@@ -563,9 +521,6 @@ int ObTransCallbackMgr::remove_callbacks_for_fast_commit(const int16_t callback_
 {
   int ret = OB_SUCCESS;
   RDLockGuard guard(rwlock_);
-  // NOTE:
-  // this can handle both NEW(since 4.3) and compatible with OLD version:
-  // because before 4.3, replay only append to main (the `callback_list_`)
   if (OB_UNLIKELY(callback_list_idx != 0 || is_serial_final_())) {
     ObTxCallbackList *list = get_callback_list_(callback_list_idx, true);
     if (OB_ISNULL(list)) {
@@ -601,8 +556,6 @@ int ObTransCallbackMgr::remove_callbacks_for_fast_commit(const int16_t callback_
 // @scopes: the log's callback-list scopes
 int ObTransCallbackMgr::remove_callbacks_for_fast_commit(const ObCallbackScopeArray &scopes)
 {
-  // this can handle both NEW (since 4.3) and OLD (before 4.3):
-  // before 4.3: scopes must be single and came from the main list
   const share::SCN stop_scn = is_serial_final_() ? share::SCN::invalid_scn() : serial_sync_scn_;
   int ret = OB_SUCCESS;
   ARRAY_FOREACH(scopes, i) {
@@ -623,11 +576,7 @@ int ObTransCallbackMgr::remove_callback_for_uncommited_txn(const memtable::ObMem
   if (OB_ISNULL(memtable_set)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "memtable is null", K(ret));
-  } else if (need_merge_) { // OLD (before 4.3)
-    if (OB_FAIL(callback_list_.remove_callbacks_for_remove_memtable(memtable_set, stop_scn))) {
-      TRANS_LOG(WARN, "fifo remove callback fail", K(ret), KPC(memtable_set));
-    }
-  } else { // NEW (since 4.3)
+  } else {
     CALLBACK_LISTS_FOREACH(idx, list) {
       if (OB_FAIL(list->remove_callbacks_for_remove_memtable(memtable_set, stop_scn))) {
         TRANS_LOG(WARN, "fifo remove callback fail", K(ret), K(idx), KPC(memtable_set));
@@ -643,18 +592,12 @@ int ObTransCallbackMgr::remove_callback_for_uncommited_txn(const memtable::ObMem
 int ObTransCallbackMgr::clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove)
 {
   int ret = OB_SUCCESS;
-  if (need_merge_) { // OLD (before 4.3)
-    if (OB_FAIL(callback_list_.clean_unlog_callbacks(removed_cnt, before_remove))) {
-      TRANS_LOG(WARN, "clean unlog callbacks failed", K(ret));
-    }
-  } else { // NEW (since 4.3)
-    CALLBACK_LISTS_FOREACH(idx, list) {
-      int64_t rm_cnt = 0;
-      if (OB_FAIL(list->clean_unlog_callbacks(rm_cnt, before_remove))) {
-        TRANS_LOG(WARN, "clean unlog callbacks failed", K(ret), K(idx));
-      } else {
-        removed_cnt += rm_cnt;
-      }
+  CALLBACK_LISTS_FOREACH(idx, list) {
+    int64_t rm_cnt = 0;
+    if (OB_FAIL(list->clean_unlog_callbacks(rm_cnt, before_remove))) {
+      TRANS_LOG(WARN, "clean unlog callbacks failed", K(ret), K(idx));
+    } else {
+      removed_cnt += rm_cnt;
     }
   }
   TRANS_LOG(TRACE, "clean callbacks", K(ret), K(removed_cnt));
@@ -668,13 +611,13 @@ int ObTransCallbackMgr::calc_checksum_before_scn(const SCN scn,
   int ret = OB_SUCCESS;
   const share::SCN stop_scn = is_serial_final_() ? share::SCN::max_scn() : serial_sync_scn_;
   const bool is_single_callback_list = ATOMIC_LOAD(&callback_lists_) == NULL;
-  if (need_merge_ || is_single_callback_list) { // OLD (before 4.3) or only single callback_list
+  if (is_single_callback_list) { // only single callback_list
     if (OB_FAIL(callback_list_.tx_calc_checksum_before_scn(stop_scn))) {
       TRANS_LOG(WARN, "calc checksum fail", K(ret));
     } else {
       callback_list_.get_checksum_and_scn(checksum.at(0), checksum_scn.at(0));
     }
-  } else { // new (since 4.3) and multiple callback_list
+  } else { // multiple callback_list
     // reserve space
     if (checksum.count() < MAX_CALLBACK_LIST_COUNT) {
       if (OB_FAIL(checksum.reserve(MAX_CALLBACK_LIST_COUNT))) {
@@ -884,7 +827,7 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
 int ObTransCallbackMgr::fill_log(ObTxFillRedoCtx &ctx, ObITxFillRedoFunctor &func)
 {
   int ret = OB_SUCCESS;
-  if (!ATOMIC_LOAD(&callback_lists_) || need_merge_) {
+  if (!ATOMIC_LOAD(&callback_lists_)) {
     if (OB_UNLIKELY(ctx.list_idx_ > 0)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "list_idx is unexpected", K(ret), K(ctx));
@@ -912,17 +855,17 @@ int ObTransCallbackMgr::fill_from_one_list(ObTxFillRedoCtx &ctx,
                                            ObITxFillRedoFunctor &func)
 {
   int ret = OB_SUCCESS;
-  FILL_LOG_TRACE("from one list", K(ctx), K(need_merge_));
+  FILL_LOG_TRACE("from one list", K(ctx));
   RDLockGuard guard(rwlock_);
   int64_t epoch_from = 0, epoch_to = 0;
-  if (OB_LIKELY(callback_lists_ == NULL) || need_merge_) {
+  if (OB_LIKELY(callback_lists_ == NULL)) {
     epoch_from = callback_list_.get_log_epoch();
     epoch_to = INT64_MAX;
   } else {
     calc_list_fill_log_epoch_(list_idx, epoch_from, epoch_to);
   }
   FILL_LOG_TRACE("start fill list", K(list_idx), K(epoch_from), K(epoch_to), K(ctx));
-  if (!need_merge_ && epoch_from == 0) {
+  if (epoch_from == 0) {
     ret = OB_ITER_END; // can not fill any callback, because of other list has min write epoch
   } else if (epoch_from == INT64_MAX) {
     ret = OB_SUCCESS; // no callback to fill
@@ -1241,7 +1184,6 @@ int ObTransCallbackMgr::update_checksum(const ObIArray<uint64_t> &checksum,
                                         const ObIArray<SCN> &checksum_scn)
 {
   int ret = OB_SUCCESS;
-  // extend callback list if need, this can only happened since 4.3
   if (checksum.count() > 1) {
     OB_ASSERT(checksum.count() == MAX_CALLBACK_LIST_COUNT);
     if (OB_ISNULL(callback_lists_) &&
@@ -1264,33 +1206,18 @@ int64_t ObTransCallbackMgr::inc_pending_log_size(const int64_t size)
     int64_t old_size = ATOMIC_FAA(&pending_log_size_, size);
     new_size = ATOMIC_LOAD(&pending_log_size_);
     if (old_size < 0 || new_size < 0) {
-      ObIMemtableCtx *mt_ctx = NULL;
-      transaction::ObTransCtx *trans_ctx = NULL;
-      if (NULL == (mt_ctx = static_cast<ObIMemtableCtx *>(&host_))) {
-        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mt_ctx is null", K(size), K(old_size), K(new_size), K(host_));
-      } else if (NULL == (trans_ctx = mt_ctx->get_trans_ctx())) {
-        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "trans ctx get failed", K(size), K(old_size), K(new_size), K(*mt_ctx));
-      } else {
-        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "increase remaining data size less than 0!",
-                  K(size), K(old_size), K(new_size), K(*trans_ctx));
-      }
+      ObIMemtableCtx *mt_ctx = static_cast<ObIMemtableCtx *>(&host_);
+      transaction::ObTransCtx *trans_ctx = mt_ctx ? mt_ctx->get_trans_ctx() : NULL;
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "increase remaining data size less than 0!",
+                    K(size), K(old_size), K(new_size), KPC(mt_ctx), KPC(trans_ctx));
     }
   }
   return new_size;
 }
 
-void ObTransCallbackMgr::try_merge_multi_callback_lists(const int64_t new_size, const int64_t size, const bool is_logging_blocked)
-{
-  if (OB_UNLIKELY(need_merge_) && !for_replay_) {
-    int64_t old_size = new_size - size;
-    if (size < 0 || new_size < 0 || old_size < 0) {
-    } else if ((0 != GCONF._private_buffer_size
-                && old_size < GCONF._private_buffer_size
-                && new_size >= GCONF._private_buffer_size)
-               || is_logging_blocked) {
-      // merge the multi callback lists once the immediate logging is satisfied.
-      merge_multi_callback_lists();
-    }
+void ObTransCallbackMgr::inc_flushed_log_size(const int64_t size) {
+  if (!is_parallel_logging_()) {
+    ATOMIC_FAA(&flushed_log_size_, size);
   }
 }
 
@@ -1298,15 +1225,10 @@ int ObTransCallbackMgr::get_memtable_key_arr(ObMemtableKeyArray &memtable_key_ar
 {
   int ret = OB_SUCCESS;
   int fail_at = 0;
-  if (need_merge_) { // OLD (before 4.3)
-    ret = callback_list_.get_memtable_key_arr_w_timeout(memtable_key_arr);
+  CALLBACK_LISTS_FOREACH(idx, list) {
+    fail_at = idx;
+    ret = list->get_memtable_key_arr_w_timeout(memtable_key_arr);
     if (OB_ITER_STOP == ret) { ret = OB_SUCCESS; }
-  } else { // NEW (since 4.3)
-    CALLBACK_LISTS_FOREACH(idx, list) {
-      fail_at = idx;
-      ret = list->get_memtable_key_arr_w_timeout(memtable_key_arr);
-      if (OB_ITER_STOP == ret) { ret = OB_SUCCESS; }
-    }
   }
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "get memtablekey fail", K(ret), K(fail_at), K(memtable_key_arr));
@@ -1314,7 +1236,7 @@ int ObTransCallbackMgr::get_memtable_key_arr(ObMemtableKeyArray &memtable_key_ar
   return ret;
 }
 
-int ObTransCallbackMgr::acquire_callback_list(const bool new_epoch, const bool need_merge)
+int ObTransCallbackMgr::acquire_callback_list(const bool new_epoch)
 {
   int64_t stat = ATOMIC_LOAD(&parallel_stat_);
   int64_t tid = get_itid() + 1;
@@ -1327,11 +1249,6 @@ int ObTransCallbackMgr::acquire_callback_list(const bool new_epoch, const bool n
   } else { // has parallel
     //
     ATOMIC_STORE(&parallel_stat_, PARALLEL_STMT);
-  }
-  // mark callback_list need merge into main
-  // this is compatible with version before 4.3
-  if (ATOMIC_LOAD(&need_merge_) != need_merge) {
-    ATOMIC_STORE(&need_merge_, need_merge);
   }
   int slot = 0;
   // inc write_epoch
@@ -1353,7 +1270,6 @@ int ObTransCallbackMgr::acquire_callback_list(const bool new_epoch, const bool n
 void ObTransCallbackMgr::revert_callback_list()
 {
   int64_t stat = ATOMIC_LOAD(&parallel_stat_);
-  bool need_merge = ATOMIC_LOAD(&need_merge_);
   const int64_t tid = get_itid() + 1;
   const int slot = tid % MAX_CALLBACK_LIST_COUNT;
   // if no parallel til now, all callbacks in main list, no need merge
@@ -1362,15 +1278,6 @@ void ObTransCallbackMgr::revert_callback_list()
       UNUSED(ATOMIC_BCAS(&parallel_stat_, stat, 0));
     } else {
       UNUSED(ATOMIC_BCAS(&parallel_stat_, stat, stat - 1));
-    }
-    need_merge = false;
-  }
-  // compatible with before version 4.3, merge to main list
-  if (need_merge) {
-    WRLockGuard guard(rwlock_);
-    if (OB_NOT_NULL(callback_lists_)) {
-      int64_t cnt = callback_list_.concat_callbacks(callback_lists_[slot]);
-      add_slave_list_merge_cnt(cnt);
     }
   }
 }
@@ -1445,21 +1352,11 @@ int ObTransCallbackMgr::trans_end(const bool commit)
   if (!commit) {
     set_skip_checksum_calc();
   }
-  if (OB_UNLIKELY(ATOMIC_LOAD(&need_merge_))) { // OLD (before 4.3)
-    // If the txn ends abnormally, there may still be tasks in execution. Our
-    // solution is that before the txn resets, all callback_lists need be
-    // cleaned up after blocking new writes (through end_code). So if PDML
-    // exists and some data is cached in callback_lists, we need merge them into
-    // main callback_list
-    merge_multi_callback_lists();
+  if (OB_LIKELY(ATOMIC_LOAD(&callback_lists_) == NULL)) {
     ret = commit ? callback_list_.tx_commit() : callback_list_.tx_abort();
-  } else { // New (since 4.3)
-    if (OB_LIKELY(ATOMIC_LOAD(&callback_lists_) == NULL)) {
-      ret = commit ? callback_list_.tx_commit() : callback_list_.tx_abort();
-    } else {
-      CALLBACK_LISTS_FOREACH(idx, list) {
-        ret = commit ? list->tx_commit() : list->tx_abort();
-      }
+  } else {
+    CALLBACK_LISTS_FOREACH(idx, list) {
+      ret = commit ? list->tx_commit() : list->tx_abort();
     }
   }
   if (OB_SUCC(ret)) {
@@ -1472,7 +1369,7 @@ int ObTransCallbackMgr::calc_checksum_all(ObIArray<uint64_t> &checksum)
 {
   RDLockGuard guard(rwlock_);
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ATOMIC_LOAD(&need_merge_)) || OB_LIKELY(callback_lists_ == NULL)) {
+  if (OB_LIKELY(callback_lists_ == NULL)) {
     callback_list_.tx_calc_checksum_all();
     ret = checksum.push_back(callback_list_.get_checksum());
   } else {
@@ -1487,14 +1384,10 @@ int ObTransCallbackMgr::calc_checksum_all(ObIArray<uint64_t> &checksum)
 void ObTransCallbackMgr::print_callbacks()
 {
   RDLockGuard guard(rwlock_);
-  if (need_merge_) {
-    callback_list_.tx_print_callback();
-  } else {
-    int ret = OB_SUCCESS;
-    CALLBACK_LISTS_FOREACH(idx, list) {
-      _TRANS_LOG(INFO, "print callback at CallbackList[%d]:", idx);
-      list->tx_print_callback();
-    }
+  int ret = OB_SUCCESS;
+  CALLBACK_LISTS_FOREACH(idx, list) {
+    _TRANS_LOG(INFO, "print callback at CallbackList[%d]:", idx);
+    list->tx_print_callback();
   }
 }
 
@@ -1503,11 +1396,7 @@ int ObTransCallbackMgr::get_callback_list_stat(ObIArray<ObTxCallbackListStat> &s
   RDLockGuard guard(rwlock_);
   int ret = OB_SUCCESS;
   if (rwlock_.try_rdlock()) {
-    if (need_merge_) {
-      if (OB_SUCC(stats.prepare_allocate(1))) {
-        ret = callback_list_.get_stat_for_display(stats.at(0));
-      }
-    } else if (OB_SUCC(stats.prepare_allocate(get_callback_list_count()))) {
+    if (OB_SUCC(stats.prepare_allocate(get_callback_list_count()))) {
       CALLBACK_LISTS_FOREACH(idx, list) {
         if (list->get_appended() > 0) {
           ret = list->get_stat_for_display(stats.at(idx));
@@ -1523,13 +1412,9 @@ int ObTransCallbackMgr::get_callback_list_stat(ObIArray<ObTxCallbackListStat> &s
 
 void ObTransCallbackMgr::elr_trans_preparing()
 {
-  if (ATOMIC_LOAD(&need_merge_)) {
-    callback_list_.tx_elr_preparing();
-  } else {
-    int ret = OB_SUCCESS;
-    CALLBACK_LISTS_FOREACH(idx, list) {
-      list->tx_elr_preparing();
-    }
+  int ret = OB_SUCCESS;
+  CALLBACK_LISTS_FOREACH(idx, list) {
+    list->tx_elr_preparing();
   }
 }
 
@@ -1952,6 +1837,7 @@ int ObMvccRowCallback::wakeup_row_waiter_if_need_()
     /*****[for deadlock]*****/
     ObLockWaitMgr *p_lwm = MTL(ObLockWaitMgr *);
     if (OB_ISNULL(p_lwm)) {
+      ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "lock wait mgr is nullptr", K(*this));
     } else {
       p_lwm->reset_hash_holder(get_tablet_id(), key_, ctx_.get_tx_id());
@@ -2163,46 +2049,33 @@ void ObTransCallbackMgr::print_statistics(char *buf, const int64_t buf_len, int6
 {
   common::databuff_printf(buf, buf_len, pos,
                           "callback_list:{"
-                          "cnt=%d need_merge=%d "
-                          "stat:[",
-                          get_callback_list_count(),
-                          need_merge_);
-  if (need_merge_) {
-    common::databuff_printf(buf, buf_len, pos,
-                            "main=%ld, slave=%ld, merge=%ld, ",
-                            get_callback_main_list_append_count(),
-                            get_callback_slave_list_append_count(),
-                            get_callback_slave_list_merge_count());
-  }
-  common::databuff_printf(buf, buf_len, pos,
+                          "cnt=%d stat:["
                           "tx_end=%ld, rollback_to=%ld, "
                           "fast_commit=%ld, remove_memtable=%ld, "
-                          "ext_info_log=%ld]",
+                          "ext_info_log=%ld] "
+                          "detail:[(log_epoch,length,logged,synced,appended,removed,unlog_removed,branch_removed)|",
+                          get_callback_list_count(),
                           get_callback_remove_for_trans_end_count(),
                           get_callback_remove_for_rollback_to_count(),
                           get_callback_remove_for_fast_commit_count(),
                           get_callback_remove_for_remove_memtable_count(),
                           get_callback_ext_info_log_count());
-  if (!need_merge_) {
-    common::databuff_printf(buf, buf_len, pos,
-    " detail:[(log_epoch,length,logged,synced,appended,removed,unlog_removed,branch_removed)|");
-    int ret = OB_SUCCESS;
-    CALLBACK_LISTS_FOREACH_CONST(idx, list) {
-      int64_t a = list->get_length(),
-        b = list->get_logged(),
-        c = list->get_synced(),
-        d = list->get_appended(),
-        e = list->get_removed(),
-        f = list->get_unlog_removed(),
-        g = list->get_branch_removed();
-      if (a || b || c || d || e || f || g) {
-        int64_t log_epoch = list->get_log_epoch();
-        log_epoch = log_epoch == INT64_MAX ? -1 : log_epoch;
-        common::databuff_printf(buf, buf_len, pos, "%d:(%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld)|", idx, log_epoch, a, b, c, d, e, f, g);
-      }
+  int ret = OB_SUCCESS;
+  CALLBACK_LISTS_FOREACH_CONST(idx, list) {
+    int64_t a = list->get_length(),
+      b = list->get_logged(),
+      c = list->get_synced(),
+      d = list->get_appended(),
+      e = list->get_removed(),
+      f = list->get_unlog_removed(),
+      g = list->get_branch_removed();
+    if (a || b || c || d || e || f || g) {
+      int64_t log_epoch = list->get_log_epoch();
+      log_epoch = log_epoch == INT64_MAX ? -1 : log_epoch;
+      common::databuff_printf(buf, buf_len, pos, "%d:(%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld)|", idx, log_epoch, a, b, c, d, e, f, g);
     }
-    common::databuff_printf(buf, buf_len, pos, "]}");
   }
+  common::databuff_printf(buf, buf_len, pos, "]}");
 }
 
 bool ObTransCallbackMgr::find(ObITxCallbackFinder &func)
@@ -2252,7 +2125,7 @@ void ObTransCallbackMgr::check_all_redo_flushed()
 __attribute__((noinline))
 int ObTransCallbackMgr::get_logging_list_count() const
 {
-  return (!need_merge_ && callback_lists_) ? MAX_CALLBACK_LIST_COUNT : 1;
+  return callback_lists_ ? MAX_CALLBACK_LIST_COUNT : 1;
 }
 
 bool ObTransCallbackMgr::pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no,
@@ -2311,6 +2184,34 @@ bool ObTransCallbackMgr::is_logging_blocked(bool &has_pending_log) const
     }
   }
   return all_blocked;
+}
+
+int64_t ObTransCallbackMgr::get_pending_log_size() const
+{
+  if (!is_parallel_logging_()) {
+    return ATOMIC_LOAD(&pending_log_size_);
+  } else {
+    int64_t size = 0;
+    int ret = OB_SUCCESS;
+    CALLBACK_LISTS_FOREACH_CONST(idx, list) {
+      size += list->get_pending_log_size();
+    }
+    return size;
+  }
+}
+
+int64_t ObTransCallbackMgr::get_flushed_log_size() const
+{
+  if (!is_parallel_logging_()) {
+    return ATOMIC_LOAD(&flushed_log_size_);
+  } else {
+    int64_t size = 0;
+    int ret = OB_SUCCESS;
+    CALLBACK_LISTS_FOREACH_CONST(idx, list) {
+      size += list->get_logged_data_size();
+    }
+    return size;
+  }
 }
 
 }; // end namespace mvcc

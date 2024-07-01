@@ -590,7 +590,7 @@ int ObLogResourceCollector::handle(void *data,
       if (OB_ISNULL(task)) {
         LOG_ERROR("ObLogBR task is NULL");
         ret = OB_ERR_UNEXPECTED;
-      } else if (task->get_record_type(record_type)) {
+      } else if (OB_FAIL(task->get_record_type(record_type))) {
         LOG_ERROR("ObLogBR task get_record_type fail", KR(ret));
       } else {
         if (HEARTBEAT == record_type || EBEGIN == record_type || ECOMMIT == record_type) {

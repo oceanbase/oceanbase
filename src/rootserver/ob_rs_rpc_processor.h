@@ -348,6 +348,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_TABLE, ObRpcDropTableP, drop_table(ar
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RENAME_TABLE, ObRpcRenameTableP, rename_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE, ObRpcTruncateTableP, truncate_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE_V2, ObRpcTruncateTableV2P, truncate_table_v2(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_GENERATE_AUX_INDEX_SCHEMA, ObRpcGenerateAuxIndexSchemaP, generate_aux_index_schema(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_INDEX, ObRpcCreateIndexP, create_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_INDEX, ObRpcDropIndexP, drop_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_MLOG, ObRpcCreateMLogP, create_mlog(arg_, result_));
@@ -423,11 +424,14 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_DROP_RESTORE_POINT, ObRpcDropRestorePointP, dr
 //routine ddl
 
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_ROUTINE, ObRpcCreateRoutineP, create_routine(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_ROUTINE_WITH_RES, ObRpcCreateRoutineWithResP, create_routine_with_res(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_ROUTINE, ObRpcDropRoutineP, drop_routine(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_ROUTINE, ObRpcAlterRoutineP, alter_routine(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_ROUTINE_WITH_RES, ObRpcAlterRoutineWithResP, alter_routine_with_res(arg_, result_));
 
 //udt ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_UDT, ObRpcCreateUDTP, create_udt(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_UDT_WITH_RES, ObRpcCreateUDTWithResP, create_udt_with_res(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_UDT, ObRpcDropUDTP, drop_udt(arg_));
 
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_SYNONYM, ObRpcCreateSynonymP, create_synonym(arg_));
@@ -441,12 +445,15 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_USER_DEFINED_FUNCTION, ObRpcDropUserD
 
 //package ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_PACKAGE, ObRpcCreatePackageP, create_package(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_PACKAGE_WITH_RES, ObRpcCreatePackageWithResP, create_package_with_res(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_PACKAGE, ObRpcAlterPackageP, alter_package(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_PACKAGE_WITH_RES, ObRpcAlterPackageWithResP, alter_package_with_res(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_PACKAGE, ObRpcDropPackageP, drop_package(arg_));
 
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TRIGGER, ObRpcCreateTriggerP, create_trigger(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TRIGGER_WITH_RES, ObRpcCreateTriggerWithResP, create_trigger_with_res(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_TRIGGER, ObRpcAlterTriggerP, alter_trigger(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_TRIGGER_WITH_RES, ObRpcAlterTriggerWithResP, alter_trigger_with_res(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_TRIGGER, ObRpcDropTriggerP, drop_trigger(arg_));
 
 //profile ddl

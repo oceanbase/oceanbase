@@ -18,6 +18,7 @@
 #include "share/table/ob_table_load_define.h"
 #include "share/table/ob_table_load_row_array.h"
 #include "sql/session/ob_sql_session_mgr.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
@@ -52,12 +53,23 @@ public:
   DEFINE_GETTER_AND_SETTER(sql::ObLoadDupActionType, dup_action);
   DEFINE_GETTER_AND_SETTER(uint64_t, timeout_us);
   DEFINE_GETTER_AND_SETTER(uint64_t, heartbeat_timeout_us);
+  DEFINE_GETTER_AND_SETTER(storage::ObDirectLoadMethod::Type, method);
+  DEFINE_GETTER_AND_SETTER(storage::ObDirectLoadInsertMode::Type, insert_mode);
 
 #undef DEFINE_GETTER_AND_SETTER
 
-  TO_STRING_KV(K_(client_addr), K_(tenant_id), K_(user_id), K_(database_id), K_(table_id),
-               K_(parallel), K_(max_error_row_count), K_(dup_action), K_(timeout_us),
-               K_(heartbeat_timeout_us));
+  TO_STRING_KV(K_(client_addr),
+               K_(tenant_id),
+               K_(user_id),
+               K_(database_id),
+               K_(table_id),
+               K_(parallel),
+               K_(max_error_row_count),
+               K_(dup_action),
+               K_(timeout_us),
+               K_(heartbeat_timeout_us),
+               "method", storage::ObDirectLoadMethod::get_type_string(method_),
+               "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_));
 
 private:
   ObAddr client_addr_;
@@ -70,6 +82,8 @@ private:
   sql::ObLoadDupActionType dup_action_;
   int64_t timeout_us_;
   int64_t heartbeat_timeout_us_;
+  storage::ObDirectLoadMethod::Type method_;
+  storage::ObDirectLoadInsertMode::Type insert_mode_;
 };
 
 class ObTableLoadClientTask
@@ -107,10 +121,13 @@ private:
                           sql::ObFreeSessionCtx &free_session_ctx);
   int init_exec_ctx(int64_t timeout_us, int64_t heartbeat_timeout_us);
 
-  int get_column_idxs(ObIArray<int64_t> &column_idxs) const;
   int init_instance();
   int commit_instance();
   void destroy_instance();
+  int get_compressor_type(const uint64_t tenant_id,
+                          const uint64_t table_id,
+                          const int64_t parallel,
+                          ObCompressorType &compressor_type);
 
 private:
   class ClientTaskExectueProcessor;

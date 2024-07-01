@@ -293,6 +293,7 @@ int ObMPChangeUser::process()
 
   if (OB_UNLIKELY(need_disconnect) && is_conn_valid()) {
     if (OB_ISNULL(session)) {
+      // ignore ret
       LOG_WARN("will disconnect connection", K(ret), K(session));
     } else {
       LOG_WARN("will disconnect connection", K(ret), KPC(session));

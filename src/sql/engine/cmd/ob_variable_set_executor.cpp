@@ -115,7 +115,7 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
       if (OB_ISNULL(expr_ctx.exec_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("expr_ctx.exec_ctx_ is NULL", K(ret));
-      } else if (password_ctx.init(stmt.get_actual_tenant_id())) {
+      } else if (OB_FAIL(password_ctx.init(stmt.get_actual_tenant_id()))) {
         LOG_WARN("fail to init password ctx", K(ret));
       } else {
         expr_ctx.exec_ctx_->set_sql_proxy(sql_proxy);
@@ -327,25 +327,32 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
                 }
               }
 
-              if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_GLOBAL) {
-                if(set_var.var_name_ == OB_SV_TIME_ZONE) {
-                  if(OB_FAIL(global_variable_timezone_formalize(ctx, value_obj))) {
-                    LOG_WARN("failed to formalize global variables", K(ret));
+              if(OB_SUCC(ret) && OB_FAIL(is_support(set_var))) {
+                if(ret == OB_NOT_SUPPORTED) {
+                  ret = OB_SUCCESS;
+                  LOG_USER_WARN(OB_NOT_SUPPORTED, "This system variable now is mock");
+                }
+              } else {
+                if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_GLOBAL) {
+                  if(set_var.var_name_ == OB_SV_TIME_ZONE) {
+                    if(OB_FAIL(global_variable_timezone_formalize(ctx, value_obj))) {
+                      LOG_WARN("failed to formalize global variables", K(ret));
+                    }
+                  }
+                  if (OB_SUCC(ret) && OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
+                    LOG_WARN("failed to update global variables", K(ret));
+                  } else { }
+                }
+                if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_SESSION) {
+                  if (OB_FAIL(sys_var->session_update(ctx, set_var, value_obj))) {
+                    LOG_WARN("fail to update", K(ret), K(*sys_var), K(set_var), K(value_obj));
                   }
                 }
-                if (OB_SUCC(ret) && OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
-                  LOG_WARN("failed to update global variables", K(ret));
-                } else { }
-              }
-              if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_SESSION) {
-                if (OB_FAIL(sys_var->session_update(ctx, set_var, value_obj))) {
-                  LOG_WARN("fail to update", K(ret), K(*sys_var), K(set_var), K(value_obj));
-                }
-              }
-              //某些变量需要立即更新状态
-              if (OB_SUCC(ret)) {
-                if (OB_FAIL(sys_var->update(ctx, set_var, value_obj))) {
-                  LOG_WARN("update sys var state failed", K(ret), K(set_var));
+                //某些变量需要立即更新状态
+                if (OB_SUCC(ret)) {
+                  if (OB_FAIL(sys_var->update(ctx, set_var, value_obj))) {
+                    LOG_WARN("update sys var state failed", K(ret), K(set_var));
+                  }
                 }
               }
             }
@@ -1364,6 +1371,19 @@ int ObVariableSetExecutor::cascade_set_validate_password(ObExecContext &ctx,
   return ret;
 }
 
+int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
+{
+  int ret = OB_SUCCESS;
+  ObSysVarClassType var_id = SYS_VAR_INVALID;
+ if(SYS_VAR_INVALID == (var_id = ObSysVarFactory::find_sys_var_id_by_name(set_var.var_name_))) {
+    ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
+    LOG_WARN("unknown variable", K(set_var.var_name_), K(ret));
+  } else if (SYS_VAR_DEBUG <= var_id && SYS_VAR_STORED_PROGRAM_CACHE >= var_id) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
+  }
+  return ret;
+}
 #undef DEFINE_CAST_CTX
 
 }/* ns sql*/

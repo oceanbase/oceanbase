@@ -256,7 +256,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
           LOG_WARN("convert text value charset failed", K(ret));
         }
         if (OB_FAIL(ret)){
-        } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
+        } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry() || value.is_roaringbitmap())
                   && OB_FAIL(process_lob_locator_results(value, result))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
         } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type() || value.is_geometry()) &&
@@ -479,7 +479,7 @@ int ObQueryDriver::convert_text_value_charset(common::ObObj& value, sql::ObResul
     charset_type = nchar;
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(convert_text_value_charset(value, charset_type, *allocator, &my_session))) {
+  } else if (OB_FAIL(convert_text_value_charset(value, charset_type, *allocator, &my_session, &result.get_exec_context()))) {
     LOG_WARN("convert lob value fail.", K(ret), K(value));
   }
   return ret;
@@ -615,7 +615,8 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value, sql::ObResultSet &r
                                                  session_.is_client_use_lob_locator(),
                                                  session_.is_client_support_lob_locatorv2(),
                                                  allocator,
-                                                 &result.get_session()))) {
+                                                 &result.get_session(),
+                                                 &result.get_exec_context()))) {
     LOG_WARN("convert lob to longtext fail.", K(ret), K(value));
   }
   return ret;
@@ -625,15 +626,18 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
                                                bool is_use_lob_locator,
                                                bool is_support_outrow_locator_v2,
                                                ObIAllocator *allocator,
-                                               const sql::ObSQLSessionInfo *session_info)
+                                               const sql::ObSQLSessionInfo *session_info,
+                                               sql::ObExecContext *exec_ctx)
 {
   int ret = OB_SUCCESS;
   // 1. if client is_use_lob_locator, return lob locator
   // 2. if client is_use_lob_locator, but not support outrow lob, return lob locator with inrow data
   //    refer to sz/aibo1m
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
-  bool is_lob_type = value.is_lob() || value.is_json() || value.is_geometry() || value.is_lob_locator();
-  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json() && !value.is_geometry();
+  bool is_lob_type = value.is_lob() || value.is_lob_locator()
+                     || value.is_json() || value.is_geometry() || value.is_roaringbitmap() ;
+  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json()
+                                      && !value.is_geometry() && !value.is_roaringbitmap();
   if (!is_lob_type) {
     // not lob types, do nothing
   } else if (value.is_null() || value.is_nop_value()) {
@@ -699,7 +703,7 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
     } else { // lob locator v2
       ObArenaAllocator tmp_alloc("ObLobRead", OB_MALLOC_NORMAL_BLOCK_SIZE, session_info->get_effective_tenant_id());
       ObTextStringIter instr_iter(value);
-      if (OB_FAIL(instr_iter.init(0, session_info, allocator, &tmp_alloc))) {
+      if (OB_FAIL(ObTextStringHelper::build_text_iter(instr_iter, exec_ctx, session_info, allocator, &tmp_alloc))) {
         LOG_WARN("init lob str inter failed", K(ret), K(value));
       } else if (OB_FAIL(instr_iter.get_full_data(data))) {
         LOG_WARN("Lob: init lob str iter failed ", K(value));
@@ -709,6 +713,8 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
           dst_type = ObJsonType;
         } else if (value.is_geometry()) {
           dst_type = ObGeometryType;
+        } else if (value.is_roaringbitmap()) {
+          dst_type = ObRoaringBitmapType;
         }
         // remove has lob header flag
         value.set_lob_value(dst_type, data.ptr(), static_cast<int32_t>(data.length()));
@@ -809,7 +815,8 @@ int ObQueryDriver::convert_lob_value_charset(ObObj& value,
 int ObQueryDriver::convert_text_value_charset(ObObj& value,
                                               ObCharsetType charset_type,
                                               ObIAllocator &allocator,
-                                              const sql::ObSQLSessionInfo *session)
+                                              const sql::ObSQLSessionInfo *session,
+                                              sql::ObExecContext *exec_ctx)
 {
   int ret = OB_SUCCESS;
   ObString raw_str = value.get_string();
@@ -845,7 +852,8 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
                                                 session->is_client_use_lob_locator(),
                                                 session->is_client_support_lob_locatorv2(),
                                                 &allocator,
-                                                session))) {
+                                                session,
+                                                exec_ctx))) {
           LOG_WARN("fail to process lob locator", K(ret), K(value));
         } else if (OB_FAIL(value.get_lob_locatorv2(lob))) {
           LOG_WARN("fail to lob locator v2", K(ret), K(value));
@@ -909,7 +917,7 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
         } else {
           ObLobLocatorV2 loc(raw_str, value.has_lob_header());
           ObTextStringIter str_iter(value);
-          if (OB_FAIL(str_iter.init(0, session, &allocator))) {
+          if (OB_FAIL(ObTextStringHelper::build_text_iter(str_iter, exec_ctx, session, &allocator))) {
             LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
           } else if (OB_FAIL(str_iter.get_full_data(data_str))) {
             LOG_WARN("Lob: get full data failed ", K(ret), K(value));

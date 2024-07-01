@@ -523,11 +523,9 @@ int ObTransService::update_logic_clock_(const int64_t logic_clock, const ObTxDes
 {
   // if logic clock drift too much, disconnect required
   int ret = OB_SUCCESS;
-  int64_t one_day_us = 24L * 3600 * 1000 * 1000;
-  if (logic_clock - ObClockGenerator::getClock() > one_day_us) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "logic clock is fast more than 1 day", KR(ret), K(logic_clock));
-  } else if (check_fallback && (ObClockGenerator::getClock() - logic_clock > one_day_us)) {
+  if (logic_clock - ObClockGenerator::getClock() > 1_day ) {
+    TRANS_LOG(WARN, "logic clock is fast more than 1 day", K(logic_clock), KPC(tx));
+  } else if (check_fallback && (ObClockGenerator::getClock() - logic_clock > 1_day)) {
     TRANS_LOG(WARN, "logic clock is slow more than 1 day", K(logic_clock), KPC(tx));
     if (OB_NOT_NULL(tx)) { tx->print_trace_(); }
   }
@@ -756,15 +754,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
 #define TXN_ENCODE_LOGIC_CLOCK                                          \
   if (OB_SUCC(ret)) {                                                   \
     const int64_t logic_clock = ObSequence::inc_and_get_max_seq_no();   \
-    const int64_t one_day_us = 24L * 3600 * 1000 * 1000;                \
-    const int64_t cur_us = ObClockGenerator::getClock();                \
-    if (cur_us - logic_clock > one_day_us) {                            \
-      ret = OB_ERR_UNEXPECTED;                                          \
-      TRANS_LOG(ERROR, "logic-clock slow than one day", K(ret), K(logic_clock)); \
-    } else if (logic_clock - cur_us > one_day_us) {                     \
-      ret = OB_ERR_UNEXPECTED;                                          \
-      TRANS_LOG(ERROR, "logic-clock fast than one day", K(ret), K(logic_clock)); \
-    } else if (OB_FAIL(encode_i64(buf, len, pos, logic_clock))) {       \
+    if (OB_FAIL(encode_i64(buf, len, pos, logic_clock))) {              \
       TRANS_LOG(WARN, "encode logic clock fail", K(ret));               \
     }                                                                   \
   }

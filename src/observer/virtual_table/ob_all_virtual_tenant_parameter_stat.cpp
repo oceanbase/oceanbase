@@ -16,6 +16,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "common/ob_tenant_data_version_mgr.h"
 
 namespace oceanbase
 {
@@ -270,11 +271,28 @@ int ObAllVirtualTenantParameterStat::fill_row_(common::ObNewRow *&row,
             break;
           }
           case VALUE: {
-            if (0 == ObString("compatible").case_compare(iter->first.str())
-                && !iter->second->value_updated()) {
-              // `compatible` is used for tenant compatibility,
-              // default value should not be used when `compatible` is not loaded yet.
-              cells[i].set_varchar("0.0.0.0");
+            if (0 == ObString("compatible").case_compare(iter->first.str())) {
+              const uint64_t tenant_id = tenant_id_list_.at(cur_tenant_idx_);
+              uint64_t data_version = 0;
+              char *dv_buf = NULL;
+              if (GET_MIN_DATA_VERSION(tenant_id, data_version) != OB_SUCCESS) {
+                // `compatible` is used for tenant compatibility,
+                // default value should not be used when `compatible` is not
+                // loaded yet.
+                cells[i].set_varchar("0.0.0.0");
+              } else if (OB_ISNULL(dv_buf = (char *)allocator_->alloc(OB_SERVER_VERSION_LENGTH))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                SERVER_LOG(ERROR, "fail to alloc buf", K(ret), K(tenant_id),
+                           K(OB_SERVER_VERSION_LENGTH));
+              } else if (OB_INVALID_INDEX ==
+                         VersionUtil::print_version_str(
+                             dv_buf, OB_SERVER_VERSION_LENGTH, data_version)) {
+                ret = OB_INVALID_ARGUMENT;
+                SERVER_LOG(ERROR, "fail to print data_version", K(ret),
+                           K(tenant_id), K(data_version));
+              } else {
+                cells[i].set_varchar(dv_buf);
+              }
             } else {
               if (!is_sys_tenant(effective_tenant_id_) &&
                   (0 == ObString(SSL_EXTERNAL_KMS_INFO).case_compare(iter->first.str()) ||

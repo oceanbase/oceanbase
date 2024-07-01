@@ -247,15 +247,5 @@ int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
   return ret;
 }
 
-void ObMultipleGetMerge::collect_merge_stat(ObTableStoreStat &stat) const
-{
-  stat.multi_get_stat_.call_cnt_++;
-  stat.multi_get_stat_.output_row_cnt_ += access_ctx_->table_store_stat_.output_row_cnt_;
-  if (access_ctx_->query_flag_.is_index_back()) {
-    stat.index_back_stat_.call_cnt_++;
-    stat.index_back_stat_.output_row_cnt_ += access_ctx_->table_store_stat_.output_row_cnt_;
-  }
-}
-
 }
 }

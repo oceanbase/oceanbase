@@ -1324,17 +1324,17 @@ int ObExprLike::eval_like_expr_vector_only_text_vectorized(VECTOR_EVAL_FUNC_ARG_
     VectorFormat text_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_DISCRETE == text_format && VEC_DISCRETE == res_format) {
-      ret = vector_like<TextDiscVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_UNIFORM == text_format && VEC_DISCRETE == res_format) {
-      ret = vector_like<TextUniVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_CONTINUOUS == text_format && VEC_DISCRETE == res_format) {
-      ret = vector_like<TextContVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrContVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_DISCRETE == text_format && VEC_UNIFORM == res_format) {
-      ret = vector_like<TextDiscVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_UNIFORM == text_format && VEC_UNIFORM == res_format) {
-      ret = vector_like<TextUniVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_CONTINUOUS == text_format && VEC_UNIFORM == res_format) {
-      ret = vector_like<TextContVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_like<StrContVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else {
       ret = vector_like<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
     }

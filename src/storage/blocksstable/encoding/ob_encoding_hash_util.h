@@ -301,7 +301,7 @@ public:
 
   int create(const int64_t bucket_num, const int64_t node_num,
              ObEncodingHashTable *&hashtable);
-  int recycle(ObEncodingHashTable *hashtable);
+  int recycle(const bool force_cache, ObEncodingHashTable *hashtable);
 private:
   void clear();
 

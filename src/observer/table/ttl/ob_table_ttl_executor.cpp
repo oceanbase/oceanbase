@@ -350,6 +350,10 @@ int ObTableApiTTLExecutor::process_expire()
           LOG_WARN("fail to check expired", K(ret));
         } else if (is_expired_) { // 过期，删除旧行，写入新行
           LOG_DEBUG("row is expired", K(ret));
+          // Notice: here need to clear the evaluated flag, cause the new_row used in try_insert is the same as old_row in do_delete
+          //   and if we don't clear the evaluated flag, the generated columns in old_row won't refresh and will use the new_row result
+          //   which will cause 4377 when do_delete
+          clear_evaluated_flag();
           if (OB_FAIL(do_delete())) {
             LOG_WARN("fail to delete expired old row", K(ret));
           } else if (OB_FAIL(do_insert())) {
@@ -440,6 +444,9 @@ int ObTableApiTTLExecutor::close()
     ret = OB_SUCCESS == ret ? close_ret : ret;
     // close dml das tasks
     close_ret = ObTableApiModifyExecutor::close();
+    // reset the new row datum ptr
+    const ObExprPtrIArray &new_row_exprs = get_primary_table_insert_row();
+    reset_new_row_datum(new_row_exprs);
   }
 
   return (OB_SUCCESS == ret) ? close_ret : ret;

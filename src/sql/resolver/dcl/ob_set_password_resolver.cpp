@@ -339,8 +339,8 @@ int ObSetPasswordResolver::resolve_oracle_password_strength(common::ObString &us
       OB_ISNULL(schema_checker_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Session info or schema checker should not be NULL", K(ret));
-  } else if (schema_checker_->get_user_info(session_info_->get_effective_tenant_id(),
-    user_name, hostname, user)) {
+  } else if (OB_FAIL(schema_checker_->get_user_info(session_info_->get_effective_tenant_id(),
+                                                    user_name, hostname, user))) {
     LOG_WARN("fail to get user info", K(ret));
   } else {
     int64_t profile_id = user->get_profile_id();

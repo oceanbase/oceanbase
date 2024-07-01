@@ -156,7 +156,8 @@ int ObTableAccessContext::build_lob_locator_helper(const ObStoreCtx &ctx,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "Failed to alloc memory for ObLobLocatorHelper", K(ret));
   } else if (FALSE_IT(lob_locator_helper_ = new (buf) ObLobLocatorHelper())) {
-  } else if (OB_FAIL(lob_locator_helper_->init(table_store_stat_,
+  } else if (OB_FAIL(lob_locator_helper_->init(tablet_id_.id(),
+                                               tablet_id_.id(),
                                                ctx,
                                                ls_id_,
                                                trans_version_range.snapshot_version_))) {
@@ -194,9 +195,6 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     table_scan_stat_ = &scan_param.main_table_scan_stat_;
     limit_param_ = scan_param.limit_param_.is_valid() ? &scan_param.limit_param_ : NULL;
     table_scan_stat_->reset();
-    table_store_stat_.ls_id_ = scan_param.ls_id_;
-    table_store_stat_.tablet_id_ = scan_param.tablet_id_;
-    table_store_stat_.table_id_ = scan_param.index_id_;
     trans_version_range_ = trans_version_range;
     need_scn_ = scan_param.need_scn_;
     range_array_pos_ = &scan_param.range_array_pos_;
@@ -251,9 +249,6 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     trans_version_range_ = trans_version_range;
     ls_id_ = ctx.ls_id_;
     tablet_id_ = ctx.tablet_id_;
-    table_store_stat_.ls_id_ = ctx.ls_id_;
-    table_store_stat_.tablet_id_ = ctx.tablet_id_;
-    table_store_stat_.table_id_ = ctx.tablet_id_.id(); // TODO  (yuanzhe) remove table_id in virtual table
     // handle lob types without ObTableScanParam:
     // 1. use lob locator instead of full lob data
     // 2. without rowkey, since need not send result to dbmslob/client
@@ -292,9 +287,6 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     trans_version_range_ = trans_version_range;
     ls_id_ = ctx.ls_id_;
     tablet_id_ = ctx.tablet_id_;
-    table_store_stat_.ls_id_ = ctx.ls_id_;
-    table_store_stat_.tablet_id_ = ctx.tablet_id_;
-    table_store_stat_.table_id_ = ctx.tablet_id_.id(); // TODO  (yuanzhe) remove table_id in virtual table
     lob_locator_helper_ = nullptr;
     if (!micro_block_handle_mgr_.is_valid()
         && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, query_flag_))) {

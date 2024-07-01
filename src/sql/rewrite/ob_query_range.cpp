@@ -164,7 +164,8 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
                                        const ParamsIArray *params,
                                        const bool phy_rowid_for_table_loc,
                                        const bool ignore_calc_failure,
-                                       const bool use_in_optimization)
+                                       const bool use_in_optimization,
+                                       const int64_t index_prefix/* = -1*/)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -175,14 +176,17 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
   } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObQueryRangeCtx)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc query range context failed", K(ret));
-  } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
+  } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session()) ||
+             OB_ISNULL(exec_ctx->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(exec_ctx));
   } else {
     query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, expr_constraints, params);
     query_range_ctx_->phy_rowid_for_table_loc_ = phy_rowid_for_table_loc;
     query_range_ctx_->ignore_calc_failure_ = ignore_calc_failure;
+    query_range_ctx_->index_prefix_ = index_prefix;
     query_range_ctx_->range_optimizer_max_mem_size_ = exec_ctx->get_my_session()->get_range_optimizer_max_mem_size();
+    query_range_ctx_->cur_datetime_ = exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime();
     if (0 == query_range_ctx_->range_optimizer_max_mem_size_) {
       query_range_ctx_->range_optimizer_max_mem_size_ = INT64_MAX;
     }
@@ -270,12 +274,13 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   ObExecContext *exec_ctx,
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
                                                   const ParamsIArray *params /* = NULL */,
-                                                  const bool use_in_optimization /* = false */)
+                                                  const bool use_in_optimization /* = false */,
+                                                  const int64_t index_prefix/* = -1*/)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
   if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx, expr_constraints, params,
-                                   false, true, use_in_optimization))) {
+                                   false, true, use_in_optimization, index_prefix))) {
     LOG_WARN("init query range context failed", K(ret));
   } else if (OB_ISNULL(query_range_ctx_)) {
     ret = OB_NOT_INIT;
@@ -379,7 +384,7 @@ int ObQueryRange::extract_valid_exprs(const ExprIArray &root_exprs, ObIArray<ObR
           LOG_WARN("failed to append array no dup", K(ret));
         } else {
           int64_t postfix_offset = -1;
-          std::sort(offsets.begin(), offsets.end());
+          lib::ob_sort(offsets.begin(), offsets.end());
           int64_t idx = 0;
           for (; idx < offsets.count(); ++idx) {
             if (postfix_offset != -1) {
@@ -427,7 +432,7 @@ int ObQueryRange::check_cur_expr(const ObRawExpr *cur_expr, ObIArray<int64_t> &o
           LOG_WARN("failed to check and or", K(ret));
         }
       }
-    } else if (cur_expr->is_domain_expr()) {
+    } else if (cur_expr->is_domain_expr() || cur_expr->is_oracle_spatial_expr()) {
       is_valid_expr = true;
     } else if (IS_BASIC_CMP_OP(cmp_type) || T_OP_NE == cmp_type ||
                T_OP_IS == cmp_type || T_OP_IN == cmp_type || T_OP_NOT_IN == cmp_type) {
@@ -740,7 +745,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   const ParamsIArray *params /* = NULL */,
                                                   const bool phy_rowid_for_table_loc /* = false*/,
                                                   const bool ignore_calc_failure /* = true*/,
-                                                  const bool use_in_optimization /* = false */)
+                                                  const bool use_in_optimization /* = false */,
+                                                  const int64_t index_prefix/* = -1*/)
 {
   int ret = OB_SUCCESS;
   ObKeyPartList and_ranges;
@@ -753,7 +759,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
   if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx,
                                    expr_constraints, params, phy_rowid_for_table_loc,
-                                   ignore_calc_failure, use_in_optimization))) {
+                                   ignore_calc_failure, use_in_optimization, index_prefix))) {
     LOG_WARN("init query range context failed", K(ret));
   } else if (OB_ISNULL(query_range_ctx_)) {
     ret = OB_NOT_INIT;
@@ -1425,9 +1431,10 @@ int ObQueryRange::get_const_key_part(const ObRawExpr *l_expr,
                                      const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) || (OB_ISNULL(escape_expr) && T_OP_LIKE == cmp_type)) {
+  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) || (OB_ISNULL(escape_expr) && T_OP_LIKE == cmp_type) ||
+      OB_ISNULL(query_range_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument.", K(ret), KP(l_expr), KP(r_expr));
+    LOG_WARN("invalid argument.", K(ret), KP(l_expr), KP(r_expr), KP(query_range_ctx_));
   } else if (!l_expr->is_immutable_const_expr() || !r_expr->is_immutable_const_expr()) {
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
   } else {
@@ -1454,7 +1461,7 @@ int ObQueryRange::get_const_key_part(const ObRawExpr *l_expr,
       ObObjType compare_type = ObMaxType;
       int64_t eq_cmp = 0;
       ObCastMode cast_mode = CM_WARN_ON_FAIL;
-      ObCastCtx cast_ctx(&allocator_, &dtc_params, cast_mode, cmp_cs_type);
+      ObCastCtx cast_ctx(&allocator_, &dtc_params, query_range_ctx_->cur_datetime_, cast_mode, cmp_cs_type);
       if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(compare_type,
                                                                 l_val.get_type(),
                                                                 r_val.get_type()))) {
@@ -1874,7 +1881,8 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
           }
         }
         if (OB_SUCC(ret) && out_key_part->is_normal_key() && !out_key_part->is_question_mark()) {
-          if (OB_FAIL(out_key_part->cast_value_type(dtc_params, contain_row_, is_bound_modified))) {
+          if (OB_FAIL(out_key_part->cast_value_type(dtc_params, query_range_ctx_->cur_datetime_,
+                                                    contain_row_, is_bound_modified))) {
             LOG_WARN("cast keypart value type failed", K(ret));
           } else {
             // do nothing
@@ -2142,8 +2150,8 @@ int ObQueryRange::check_row_bound(ObKeyPart *key_part,
     LOG_WARN("failed to calculate val", K(ret), K(*const_expr), K(const_val), K(is_valid));
   } else if (!is_valid) {
     // do nothing
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, key_part->pos_,
-                                                const_val, cmp))) {
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, query_range_ctx_->cur_datetime_,
+                                               allocator_, key_part->pos_, const_val, cmp))) {
     LOG_WARN("failed to cast value", K(ret));
   } else if (cmp != 0 || ob_obj_type_class(const_expr->get_data_type()) !=
                          ob_obj_type_class(key_part->pos_.column_type_.get_type())) {
@@ -2223,7 +2231,27 @@ int ObQueryRange::get_basic_query_range(const ObRawExpr *l_expr,
       } else if (l_expr->has_flag(IS_COLUMN) && r_expr->has_flag(IS_COLUMN)) {
         GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
       } else {
-        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        const ObRawExpr *l_inner = ObRawExprUtils::skip_inner_added_expr(l_expr);
+        const ObRawExpr *r_inner = ObRawExprUtils::skip_inner_added_expr(r_expr);
+        if (T_OP_EQ == cmp_type
+                  && ((l_inner->get_expr_type() == T_FUN_SYS_SDO_RELATE && r_inner->is_const_expr())
+                  || (l_inner->is_const_expr() && r_inner->get_expr_type() == T_FUN_SYS_SDO_RELATE))) {
+          bool need_extract = false;
+          const ObRawExpr *const_expr = r_inner->is_const_expr() ? r_inner : l_inner;
+          const ObRawExpr *geo_expr = r_inner->is_const_expr() ? l_inner : r_inner;
+          if (OB_FAIL(can_be_extract_orcl_spatial_range(const_expr, need_extract))) {
+            LOG_WARN("fail to check can extract orcl spatial range.", K(ret));
+          } else if (need_extract) {
+            const ObOpRawExpr *b_expr = static_cast<const ObOpRawExpr *>(geo_expr);
+            if (OB_FAIL(pre_extract_geo_op(b_expr, out_key_part, dtc_params))) {
+              LOG_WARN("fail to pre extract domain op.", K(ret));
+            }
+          } else {
+            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+          }
+        } else {
+          GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        }
       }
     } else if (OB_FAIL(get_row_key_part(l_expr, r_expr, cmp_type, result_type,
                                         out_key_part, dtc_params))) {// 2. row compare
@@ -3123,7 +3151,7 @@ int ObQueryRange::check_const_val_valid(const ObRawExpr *l_expr,
                                         bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
+  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) || OB_ISNULL(query_range_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
@@ -3146,7 +3174,7 @@ int ObQueryRange::check_const_val_valid(const ObRawExpr *l_expr,
       ObObjType compare_type = ObMaxType;
       int64_t eq_cmp = 0;
       ObCastMode cast_mode = CM_WARN_ON_FAIL;
-      ObCastCtx cast_ctx(&allocator_, &dtc_params, cast_mode, cmp_cs_type);
+      ObCastCtx cast_ctx(&allocator_, &dtc_params, query_range_ctx_->cur_datetime_, cast_mode, cmp_cs_type);
       if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(compare_type,
                                                                 l_val.get_type(),
                                                                 r_val.get_type()))) {
@@ -3172,9 +3200,10 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
 {
   int ret = OB_SUCCESS;
   is_val_valid = true;
-  if (OB_ISNULL(in_key) || OB_ISNULL(param_meta) || OB_ISNULL(const_expr)) {
+  if (OB_ISNULL(in_key) || OB_ISNULL(param_meta) || OB_ISNULL(const_expr) ||
+      OB_ISNULL(query_range_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(in_key), K(param_meta), K(const_expr));
+    LOG_WARN("get unexpected null", K(in_key), K(param_meta), K(const_expr), K(query_range_ctx_));
   } else {
     ObObj val;
     bool is_valid = false;
@@ -3197,8 +3226,8 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
     }
     int64_t cmp = 0;
     if (OB_FAIL(ret) || !is_val_valid) {
-    } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_,
-                                                 pos, val, cmp))) {
+    } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, query_range_ctx_->cur_datetime_,
+                                                 allocator_, pos, val, cmp))) {
       LOG_WARN("failed to try cast value type", K(ret));
     } else if (cmp == 0) {
       val.set_collation_type(pos.column_type_.get_collation_type());
@@ -3733,9 +3762,9 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
             contain_geo_filters_ = true;
             out_key_part->id_ = key_part_id;
             out_key_part->pos_ = *key_part_pos;
-            if (op_type == ObDomainOpType::T_GEO_DWITHIN) {
+            if (op_type == ObDomainOpType::T_GEO_DWITHIN || op_type == ObDomainOpType::T_GEO_RELATE) {
               if (OB_FAIL(get_extra_param(expr, extra_item))) {
-                LOG_WARN("failed to get dwithin item", K(ret));
+                LOG_WARN("failed to get extra item", K(ret));
               }
             }
 
@@ -3757,7 +3786,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
             } else if (!is_valid) {
               GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
             } else {
-              if (!const_item->is_immutable_const_expr()) {
+              if (!const_item->is_immutable_const_expr() || (OB_NOT_NULL(extra_item) && !extra_item->is_immutable_const_expr())) {
                 ObObj val;
                 out_key_part->domain_keypart_->domain_op_ = op_type;
                 if (OB_FAIL(get_final_expr_val(const_item, out_key_part->domain_keypart_->const_param_))) {
@@ -3821,7 +3850,7 @@ int ObQueryRange::reset_domain_op_by_param_pos(const bool is_left_column, ObDoma
 bool ObQueryRange::need_extra_param(ObDomainOpType& op_type)
 {
   bool ret_bool = false;
-  if (op_type == ObDomainOpType::T_GEO_DWITHIN) {
+  if (op_type == ObDomainOpType::T_GEO_DWITHIN || op_type == ObDomainOpType::T_GEO_RELATE) {
     ret_bool = true;
   }
   return ret_bool;
@@ -3837,6 +3866,37 @@ bool ObQueryRange::is_single_op(const ObRawExpr *expr_root)
     ret_bool = true;
   }
   return ret_bool;
+}
+
+/*
+oracle spatial expr return varchar, the spatial index is utilized if and only if the const_expr is 'TRUE'.
+if the const is parameterized, it is first assumed to be 'TRUE', with special handling during resolution.
+*/
+int ObQueryRange::can_be_extract_orcl_spatial_range(const ObRawExpr *const_expr, bool& can_extract)
+{
+  INIT_SUCC(ret);
+  can_extract = false;
+  if (OB_ISNULL(const_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Wrong input params to get basic query range",
+             K(ret), KP(const_expr));
+  } else {
+    if (const_expr->is_immutable_const_expr()) {
+      ObObj const_val;
+      bool is_valid = true;
+      if (OB_FAIL(get_calculable_expr_val(const_expr, const_val, is_valid))) {
+        LOG_WARN("failed to get calculable expr val", K(ret));
+      } else if (!is_valid || !ob_is_string_type(const_val.get_type())) {
+        can_extract = false;
+      } else {
+        ObString str = const_val.get_string();
+        can_extract = (str.compare("TRUE") == 0);
+      }
+    } else {
+      can_extract = true;
+    }
+  }
+  return ret;
 }
 
 // op that be rewritten as normal key-part, need to check if can cast
@@ -4023,7 +4083,8 @@ int ObQueryRange::set_normal_key_true_or_false(ObKeyPart *&out_key_part, bool is
 }
 
 
-int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part, const ObDataTypeCastParams &dtc_params)
+int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part,
+                                         const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(out_key_part)) {
@@ -4032,9 +4093,10 @@ int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKey
   } else {
     int64_t cmp = 0;
     ObObj cast_obj = const_param;
-    if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, out_key_part->pos_, cast_obj, cmp))) {
+    if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, out_key_part->pos_, cast_obj, cmp))) {
       LOG_WARN("failed to try cast value type", K(ret));
-    } else if (cmp != 0) {
+    }
+    if (OB_FAIL(ret) || cmp != 0) {
       if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
         LOG_WARN("failed set normal key", K(ret));
       } else if (OB_NOT_NULL(query_range_ctx_)) {
@@ -4056,7 +4118,7 @@ int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&ou
   InParamMeta *new_param_meta = NULL;
   ObExprResType col_res_type;
   uint64_t table_id;
-  if (OB_ISNULL(out_key_part) || OB_ISNULL(j_base)) {
+  if (OB_ISNULL(out_key_part) || OB_ISNULL(j_base) || OB_ISNULL(query_range_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should not be null", K(ret));
   } else if (OB_FALSE_IT(key_pos = &out_key_part->pos_) || OB_FALSE_IT(table_id = out_key_part->id_.table_id_)
@@ -4088,12 +4150,17 @@ int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&ou
         LOG_WARN("get json array element result is null.", K(i), K(ret));
       } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base,
                                                                   col_res_type, val))) {
-        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
         always_true = true;
-      } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, *key_pos, val, cmp))) {
+      } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, query_range_ctx_->cur_datetime_,
+                                                   allocator_, *key_pos, val, cmp))) {
         LOG_WARN("failed to try cast value type", K(ret));
       } else if (cmp != 0) {
-        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
         always_true = true;
       } else {
         val.set_collation_type(col_res_type.get_collation_type());
@@ -4105,7 +4172,9 @@ int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&ou
     if (OB_SUCC(ret) && !always_true) {
       if (OB_UNLIKELY(new_param_meta->vals_.empty())) {
         // all always false
-        GET_ALWAYS_TRUE_OR_FALSE(false, out_key_part);
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, false))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
       } else if (OB_FAIL(out_key_part->in_keypart_->in_params_.push_back(new_param_meta))) {
         LOG_WARN("failed to push back param meta", K(ret));
       } else if (OB_FAIL(out_key_part->formalize_keypart(contain_row_))) {
@@ -4121,13 +4190,15 @@ int ObQueryRange::get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPar
                                           const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(j_base) || OB_ISNULL(out_key_part) || OB_ISNULL(exec_ctx)) {
+  if (OB_ISNULL(j_base) || OB_ISNULL(out_key_part) || OB_ISNULL(exec_ctx) ||
+      OB_ISNULL(exec_ctx->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(ret));
   } else if (j_base->json_type() != common::ObJsonNodeType::J_ARRAY) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get wrong json_type", K(ret));
   } else {
+    int64_t cur_datetime = exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime();
     for (int i = 0; i < j_base->element_count(); ++i) {
       ObKeyPart *tmp_key_part = nullptr;
       ObIJsonBase* tmp_j_base = nullptr;
@@ -4143,12 +4214,18 @@ int ObQueryRange::get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPar
         ObObj val;
         tmp_key_part->id_ = out_key_part->id_;
         tmp_key_part->pos_ = out_key_part->pos_;
-        if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base,
-                                                            tmp_key_part->pos_.column_type_, val))) {
-          if (OB_NOT_NULL(query_range_ctx_)) {
-            query_range_ctx_->cur_expr_is_precise_ = false;
+        ObExprResType& column_type = tmp_key_part->pos_.column_type_;
+        if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base, column_type, val))) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+            LOG_WARN("failed set normal key", K(ret));
+          } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params, cur_datetime))) {
+            LOG_WARN("fail to get member of keyparts", K(ret));
+          } else if (OB_FAIL(key_parts.push_back(tmp_key_part))) {
+            LOG_WARN("fail to push keypart", K(ret));
           }
-        } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params))) {
+          break;
+        } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params, cur_datetime))) {
           LOG_WARN("fail to get member of keyparts", K(ret));
         } else if (OB_FAIL(key_parts.push_back(tmp_key_part))) {
           LOG_WARN("fail to push keypart", K(ret));
@@ -4167,17 +4244,30 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
   int ret = OB_SUCCESS;
   ObIJsonBase* j_base = nullptr;
   ObEvalCtx ctx(*exec_ctx);
-  if (OB_ISNULL(out_key_part)) {
+  if (OB_ISNULL(out_key_part) || OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(ret));
-  } else if (OB_FAIL(ObJsonExprHelper::get_json_val(const_param, exec_ctx,  false, &allocator_, j_base))) {
-    LOG_WARN("fail to get json val", K(ret));
+  } else if (const_param.is_unknown()) {
+    if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+      LOG_WARN("failed set normal key", K(ret));
+    }
+  } else if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(const_param, exec_ctx, false, &allocator_, j_base))) {
+    LOG_WARN("fail to get json val", K(ret), K(const_param));
   } else if (OB_ISNULL(j_base)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("fail to get json base", K(ret));
   } else if (j_base->is_json_scalar(j_base->json_type())) {
-    // if is scalar, equal to member of
-    if (OB_FAIL(get_member_of_keyparts(const_param, out_key_part, dtc_params))) {
+    int64_t cur_datetime = exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime();
+    ObObj cast_obj = const_param;
+    if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx,
+        j_base, out_key_part->pos_.column_type_, cast_obj))) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+        LOG_WARN("failed set normal key", K(ret));
+      } else if (OB_NOT_NULL(query_range_ctx_)) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+      }
+    } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, dtc_params, cur_datetime))) {
       LOG_WARN("fail to get member of keyparts", K(ret));
     }
   } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
@@ -4198,7 +4288,11 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
     }
   } else {
     // must be object, can't extract query range
-    GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+      LOG_WARN("failed set normal key", K(ret));
+    } else if (OB_NOT_NULL(query_range_ctx_)) {
+      query_range_ctx_->cur_expr_is_precise_ = false;
+    }
   }
   return ret;
 }
@@ -4211,10 +4305,34 @@ int ObQueryRange::get_simple_domain_keyparts(const common::ObObj &const_param, c
   int ret = OB_SUCCESS;
   switch(op_type) {
     case ObDomainOpType::T_JSON_MEMBER_OF: {
-      if (OB_FAIL(get_member_of_keyparts(const_param, out_key_part, dtc_params))) {
-        LOG_WARN("fail to get member of keyparts.", K(op_type), K(ret));
-      } else if (OB_NOT_NULL(query_range_ctx_) && !(out_key_part->is_always_false() || out_key_part->is_always_true())) {
-        query_range_ctx_->cur_expr_is_precise_ = true;
+      ObIJsonBase* j_base = nullptr;
+      ObObj cast_obj = const_param;
+      ObExprResType& col_type = out_key_part->pos_.column_type_;
+      if (const_param.is_unknown()) {
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
+      } else {
+        if (ob_is_json(const_param.get_type()) ||
+            ob_is_datetime_tc(col_type.get_type()) ||
+            ob_is_date_tc(col_type.get_type()) ||
+            ob_is_time_tc(col_type.get_type())) {
+          if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(const_param, exec_ctx, false, &allocator_, j_base))) {
+            LOG_WARN("failed cast to json scalar.", K(ret), K(const_param));
+          } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx,
+              j_base, out_key_part->pos_.column_type_, cast_obj))) {
+            LOG_WARN("failed cast to sql scalar.", K(ret), K(const_param));
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+          if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+            LOG_WARN("failed set normal key", K(ret));
+          }
+        } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, dtc_params,
+          exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime()))) {
+          LOG_WARN("fail to get member of keyparts.", K(op_type), K(ret));
+        }
       }
       break;
     }
@@ -4564,7 +4682,7 @@ int ObQueryRange::check_row_in_need_in_optimization(const ObOpRawExpr *b_expr,
         if (offsets.empty()) {
           use_in_optimization = false;
         } else {
-          std::sort(offsets.begin(), offsets.end());
+          lib::ob_sort(offsets.begin(), offsets.end());
           int64_t start_pos = offsets.at(0);
           for (int64_t i = 1; OB_SUCC(ret) && use_in_optimization && i < offsets.count(); ++i) {
             int64_t cur_off = offsets.at(i);
@@ -4693,6 +4811,9 @@ int ObQueryRange::is_key_part(const ObKeyPartId &id, ObKeyPartPos *&pos, bool &i
     if (OB_SUCCESS == map_ret && OB_NOT_NULL(pos) &&
         (max_off == -1 || (max_off != - 1 && pos->offset_ <= max_off))) {
       is_key_part = true;
+      if (query_range_ctx_->index_prefix_ > -1 && pos->offset_ >= query_range_ctx_->index_prefix_) {
+        is_key_part = false;
+      }
       SQL_REWRITE_LOG(DEBUG, "id pair is  key part", K_(id.table_id), K_(id.column_id));
     } else if (OB_HASH_NOT_EXIST != map_ret) {
       ret = map_ret;
@@ -6033,7 +6154,8 @@ int ObQueryRange::union_single_equal_cond(ObExecContext *exec_ctx,
 // do two path and operation
 int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
                                         ObExecContext *exec_ctx,
-                                        const ObDataTypeCastParams &dtc_params)
+                                        const ObDataTypeCastParams &dtc_params,
+                                        const bool& need_geo_rebuild)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -6207,6 +6329,11 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
                 cur1 = cur1_next;
               }
             }
+          } else if (need_geo_rebuild) {
+            // if need geo rebuild, the normal keypart must have or_next_
+            // can't use key_node_is_equal
+            // if it's single geo keypart, already make sure there is no duplicate keypart
+            // if not single geo keypart, will do or_range_graph again
           } else if (cur1->key_node_is_equal(cur2)) {
             if (OB_FAIL(union_single_equal_cond(exec_ctx, dtc_params, cur1, cur2))) {
               LOG_WARN("union single equal cond failed", K(ret));
@@ -6628,7 +6755,7 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
           } else {
             out_key_part = find_false;
           }
-        } else if (OB_FAIL(SMART_CALL(or_single_head_graphs(or_list, exec_ctx, dtc_params)))) {
+        } else if (OB_FAIL(SMART_CALL(or_single_head_graphs(or_list, exec_ctx, dtc_params, need_geo_rebuild)))) {
           LOG_WARN("Or single head graphs failed", K(ret));
         } else {
           bool has_geo_key = false;
@@ -6641,8 +6768,12 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
           // if contain ObGeoKeyPart, need do or_range_graph for deduplication with different spatial filters
           if (!need_geo_rebuild && OB_FAIL(link_or_graphs(or_list, out_key_part))) {
             LOG_WARN("Or single head graphs failed", K(ret));
-          } else if (need_geo_rebuild && OB_FAIL(or_range_graph(or_list, exec_ctx, out_key_part, dtc_params))) {
-            LOG_WARN("Or single head graphs failed", K(ret));
+          } else if (need_geo_rebuild) {
+            if (or_list.get_size() == 1) {
+              out_key_part = or_list.get_first();
+            } else if (OB_FAIL(or_range_graph(or_list, exec_ctx, out_key_part, dtc_params))) {
+              LOG_WARN("Or single head graphs failed", K(ret));
+            }
           } else {
             // do nothing
           }
@@ -6761,10 +6892,15 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
   size_t range_size = sizeof(ObNewRange) + rowkey_size;
   void *range_buffer = nullptr;
   bool contain_phy_rowid_key = false;
-  if (OB_ISNULL(range_buffer = allocator.alloc(range_size))) {
+  int64_t cur_datetime = 0;
+  if (OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null physical plan", K(ret));
+  } else if (OB_ISNULL(range_buffer = allocator.alloc(range_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for ObNewRange failed", K(ret));
   } else {
+    cur_datetime = exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime();
     range = new(range_buffer) ObNewRange();
     start = reinterpret_cast<ObObj*>(static_cast<char*>(range_buffer) + sizeof(ObNewRange));
     end = start + column_count_;
@@ -6803,7 +6939,8 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
         //fast cast with integer value
         cur_val->set_meta_type(cur->pos_.column_type_);
         new(end + i) ObObj(*cur_val);
-      } else if (OB_FAIL(cold_cast_cur_node(cur, allocator, dtc_params, *cur_val, always_false))) {
+      } else if (OB_FAIL(cold_cast_cur_node(cur, allocator, dtc_params,
+                                            cur_datetime, *cur_val, always_false))) {
         LOG_WARN("cold fill cur node failed", K(ret));
       } else if (OB_LIKELY(!always_false)) {
         new(end + i) ObObj(*cur_val);
@@ -6854,6 +6991,7 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
 OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
                                                  ObIAllocator &allocator,
                                                  const ObDataTypeCastParams &dtc_params,
+                                                 const int64_t cur_datetime,
                                                  ObObj &cur_val,
                                                  bool &always_false) const
 {
@@ -6864,6 +7002,7 @@ OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
   } else if (!cur_val.is_min_value() && !cur_val.is_max_value()) {
     ObCastCtx cast_ctx(&allocator,
                        &dtc_params,
+                       cur_datetime,
                        CM_WARN_ON_FAIL,
                        cur->pos_.column_type_.get_collation_type());
     ObExpectType expect_type;
@@ -7555,17 +7694,20 @@ OB_NOINLINE int ObQueryRange::gen_skip_scan_range(ObIAllocator &allocator,
   bool is_get_range = false;
   ObSearchState search_state(allocator);
   ObNewRange *ss_range = NULL;
-  if (OB_ISNULL(ss_root) || OB_UNLIKELY(1 > post_column_count)) {
+  int64_t cur_datetime = 0;
+  if (OB_ISNULL(ss_root) || OB_UNLIKELY(1 > post_column_count) || OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected skip scan range", K(ret), K(ss_root), K(post_column_count));
+    LOG_WARN("unexpected skip scan range", K(ret), K(ss_root), K(post_column_count), K(exec_ctx.get_physical_plan_ctx()));
   } else if (OB_FAIL(search_state.init_search_state(
                post_column_count, true, table_graph_.key_part_head_->id_.table_id_, contain_in_))) {
     LOG_WARN("failed to init postfix search state", K(ret));
+  } else {
+    cur_datetime = exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime();
   }
   for (const ObKeyPart *cur = ss_root; OB_SUCC(ret) && NULL != cur && !search_state.is_empty_range_;
        cur = cur->and_next_) {
     if (OB_FAIL(get_single_key_value(cur, exec_ctx, search_state, dtc_params,
-                                     table_graph_.skip_scan_offset_))) {
+                                     cur_datetime, table_graph_.skip_scan_offset_))) {
       LOG_WARN("get single key value failed", K(ret));
     }
   }
@@ -7590,14 +7732,20 @@ OB_NOINLINE int ObQueryRange::gen_simple_scan_range(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObSearchState search_state(allocator);
-  if (OB_FAIL(search_state.init_search_state(
+  int64_t cur_datetime = 0;
+  if (OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null physical plan ctx", K(ret));
+  } else if (OB_FAIL(search_state.init_search_state(
         column_count_, true, table_graph_.key_part_head_->id_.table_id_, contain_in_))) {
     LOG_WARN("failed to init search state", K(ret));
+  } else {
+    cur_datetime = exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime();
   }
   for (ObKeyPart *cur = table_graph_.key_part_head_;
        OB_SUCC(ret) && NULL != cur && !search_state.is_empty_range_;
        cur = cur->and_next_) {
-    if (OB_FAIL(get_single_key_value(cur, exec_ctx, search_state, dtc_params))) {
+    if (OB_FAIL(get_single_key_value(cur, exec_ctx, search_state, dtc_params, cur_datetime))) {
       LOG_WARN("get single key value failed", K(ret));
     }
   }
@@ -7638,7 +7786,7 @@ if (OB_SUCC(ret) ) { \
         cm |= ObRelationalExprOperator::get_const_cast_mode(T_OP_GE, true);\
       }\
     }\
-    ObCastCtx cast_ctx(&allocator, &dtc_params, cm, expect_type.get_collation_type()); \
+    ObCastCtx cast_ctx(&allocator, &dtc_params, cur_datetime, cm, expect_type.get_collation_type()); \
     if (ObDecimalIntType == expect_type.get_type()) {\
       cast_ctx.res_accuracy_ = &acc;\
     }\
@@ -7686,7 +7834,7 @@ if (OB_SUCC(ret) ) { \
           cm |= ObRelationalExprOperator::get_const_cast_mode(T_OP_LE, true);\
         }\
       }\
-      ObCastCtx cast_ctx(&allocator, &dtc_params, cm, expect_type.get_collation_type()); \
+      ObCastCtx cast_ctx(&allocator, &dtc_params, cur_datetime, cm, expect_type.get_collation_type()); \
       if (ObDecimalIntType == expect_type.get_type()) {\
         cast_ctx.res_accuracy_ = &acc;\
       }\
@@ -7725,6 +7873,7 @@ inline int ObQueryRange::get_single_key_value(const ObKeyPart *key,
                                               ObExecContext &exec_ctx,
                                               ObSearchState &search_state,
                                               const ObDataTypeCastParams &dtc_params,
+                                              const int64_t cur_datetime,
                                               int64_t skip_offset /* default 0 */ ) const
 {
   int ret = OB_SUCCESS;
@@ -8062,9 +8211,9 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
 {
   int ret = OB_SUCCESS;
   bool is_inconsistent_rowid = false;
-  if (OB_ISNULL(root)) {
+  if (OB_ISNULL(root) || OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("root=null ", K(ret));
+    LOG_WARN("root=null ", K(ret), K(root), K(exec_ctx.get_physical_plan_ctx()));
   } else if (root->is_normal_key()) {
     if (root->normal_keypart_->start_.is_unknown()) {
       if (OB_FAIL(get_result_value_with_rowid(*root, root->normal_keypart_->start_, exec_ctx, is_inconsistent_rowid))) {
@@ -8163,6 +8312,7 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
         int64_t cmp = 0;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params,
+                                                     exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime(),
                                                      allocator_,
                                                      cur_param->pos_,
                                                      val,
@@ -8189,7 +8339,8 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
   if (OB_SUCC(ret)) {
     if (root->is_phy_rowid_key_part() || root->is_in_key()) {
       ////physical rowid no need cast, it's will be transformed in table scan phase.
-    } else if (OB_FAIL(root->cast_value_type(dtc_params, contain_row_, is_bound_modified))) {
+    } else if (OB_FAIL(root->cast_value_type(dtc_params, exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime(),
+                                             contain_row_, is_bound_modified))) {
       LOG_WARN("cast value type failed", K(ret));
     }
   }
@@ -9600,6 +9751,10 @@ common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type) const
       rel_type = common::ObDomainOpType::T_GEO_COVEREDBY;
       break;
     }
+    case T_FUN_SYS_SDO_RELATE : {
+      rel_type = common::ObDomainOpType::T_GEO_RELATE;
+      break;
+    }
     default:
       break;
   }
@@ -9647,6 +9802,10 @@ common::ObDomainOpType ObQueryRange::get_domain_op_type(ObItemType type) const
       rel_type = common::ObDomainOpType::T_GEO_INTERSECTS;
       break;
     }
+    case T_FUN_SYS_SDO_RELATE : {
+      rel_type = common::ObDomainOpType::T_GEO_RELATE;
+      break;
+    }
     default:
       break;
   }
@@ -9661,7 +9820,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
   INIT_SUCC(ret);
   common::ObArenaAllocator tmp_alloc(lib::ObLabel("GisIndex"));
   ObS2Cellids cells;
-  ObS2Cellids cells_with_ancestors;
+  ObS2Cellids ancestors;
   ObSpatialMBR mbr_filter(op_type);
   ObGeoType geo_type = ObGeoType::GEOMETRY;
   const ObSrsItem *srs_item = NULL;
@@ -9705,7 +9864,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
     }
   }
   if (s2object == NULL && OB_SUCC(ret)) {
-    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false));
+    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false), true);
     if (OB_ISNULL(s2object)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc s2 object", K(ret));
@@ -9719,10 +9878,8 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
       LOG_WARN("fail to get geo type by wkb", K(ret));
     } else if (OB_FAIL(s2object->init((buffer_geo.empty() ? wkb_str : buffer_geo), srs_bound))) {
       LOG_WARN("Init s2object failed", K(ret));
-    } else if (OB_FAIL(s2object->get_cellids(cells, false))) {
+    } else if (OB_FAIL(s2object->get_cellids_and_unrepeated_ancestors(cells, ancestors))) {
       LOG_WARN("Get cellids from s2object failed", K(ret));
-    } else if (OB_FAIL(s2object->get_cellids(cells_with_ancestors, true))) {
-      LOG_WARN("Get cellids with ancestors from s2object failed", K(ret));
     } else if (OB_FAIL(s2object->get_mbr(mbr_filter))) {
       LOG_WARN("Get mbr from s2object failed", K(ret));
     } else if (OB_FAIL(mbr_filters_.push_back(mbr_filter))) {
@@ -9742,14 +9899,16 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
         query_range_ctx_->cur_expr_is_precise_ = false;
       }
       ObKeyPart *last = out_key_part;
+      bool replace_out_keypart = false;
       // build keypart from cells_with_ancestors
-      for (uint64_t i = 0; OB_SUCC(ret) && i < cells_with_ancestors.size(); i++) {
+      for (uint64_t i = 0; OB_SUCC(ret) && i < ancestors.size(); i++) {
         ObObj val;
-        val.set_uint64(cells_with_ancestors[i]);
+        val.set_uint64(ancestors[i]);
         if (i == 0) {
           if (OB_FAIL(get_domain_equal_keypart(val, val, *out_key_part))) {
             LOG_WARN("get normal cmp keypart failed", K(ret));
           }
+          replace_out_keypart = true;
         } else {
           ObKeyPart *tmp = NULL;
           if (OB_ISNULL((tmp = create_new_key_part()))) {
@@ -9775,21 +9934,55 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
           uint64_t start_id = 0;
           uint64_t end_id = 0;
           ObS2Adapter::get_child_of_cellid(cellid, start_id, end_id);
-          ObKeyPart *tmp = NULL;
-          if (OB_ISNULL((tmp = create_new_key_part()))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_ERROR("alloc memory failed", K(ret));
-          } else {
-            tmp->id_ = out_key_part->id_;
-            tmp->pos_ = out_key_part->pos_;
-            ObObj val_start, val_end;
-            val_start.set_uint64(start_id);
-            val_end.set_uint64(end_id);
-            if (OB_FAIL(get_domain_equal_keypart(val_start, val_end, *tmp))) {
+          ObObj val_start, val_end;
+          val_start.set_uint64(start_id);
+          val_end.set_uint64(end_id);
+          if (!replace_out_keypart) { // if ancestor is empty, replace first keypart
+            if (OB_FAIL(get_domain_equal_keypart(val_start, val_end, *out_key_part))) {
               LOG_WARN("get normal cmp keypart failed", K(ret));
+            }
+            replace_out_keypart = true;
+          } else {
+            ObKeyPart *tmp = NULL;
+            if (OB_ISNULL((tmp = create_new_key_part()))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_ERROR("alloc memory failed", K(ret));
             } else {
-              last->or_next_ = tmp;
-              last = tmp;
+              tmp->id_ = out_key_part->id_;
+              tmp->pos_ = out_key_part->pos_;
+              if (OB_FAIL(get_domain_equal_keypart(val_start, val_end, *tmp))) {
+                LOG_WARN("get normal cmp keypart failed", K(ret));
+              } else {
+                last->or_next_ = tmp;
+                last = tmp;
+              }
+            }
+          }
+        }
+      } else {
+        // build keypart to index child_of_cellid
+        for (uint64_t i = 0; OB_SUCC(ret) && i < cells.size(); i++) {
+          ObObj val;
+          val.set_uint64(cells[i]);
+          if (!replace_out_keypart) { // if ancestor is empty, replace first keypart
+            if (OB_FAIL(get_domain_equal_keypart(val, val, *out_key_part))) {
+              LOG_WARN("get normal cmp keypart failed", K(ret));
+            }
+            replace_out_keypart = true;
+          } else {
+            ObKeyPart *tmp = NULL;
+            if (OB_ISNULL((tmp = create_new_key_part()))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_ERROR("alloc memory failed", K(ret));
+            } else {
+              tmp->id_ = out_key_part->id_;
+              tmp->pos_ = out_key_part->pos_;
+              if (OB_FAIL(get_domain_equal_keypart(val, val, *tmp))) {
+                LOG_WARN("get normal cmp keypart failed", K(ret));
+              } else {
+                last->or_next_ = tmp;
+                last = tmp;
+              }
             }
           }
         }
@@ -9948,33 +10141,6 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
         query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, NULL, NULL);
       }
 
-      ObS2Cellids cells_cover_geo;
-      for (uint64_t i = 0; OB_SUCC(ret) && i < cells_cover_geo.size(); i++) {
-        int hash_ret = cellid_set.exist_refactored(cells_cover_geo[i]);
-        if (OB_HASH_NOT_EXIST == hash_ret) {
-          ObKeyPart *tmp = NULL;
-          if (OB_FAIL(cellid_set.set_refactored(cells_cover_geo[i]))) {
-            LOG_WARN("failed to add cellid into set", K(ret));
-          } else if (OB_ISNULL((tmp = create_new_key_part()))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_ERROR("alloc memory failed", K(ret));
-          } else {
-            ObObj val;
-            val.set_uint64(cells_cover_geo[i]);
-            tmp->id_ = out_key_part->id_;
-            tmp->pos_ = out_key_part->pos_;
-            if (OB_FAIL(get_domain_equal_keypart(val, val, *tmp))) {
-              LOG_WARN("get normal cmp keypart failed", K(ret));
-            } else {
-              last->or_next_ = tmp;
-              last = tmp;
-            }
-          }
-        } else if (OB_HASH_EXIST != hash_ret) {
-          ret = hash_ret;
-          LOG_WARN("fail to check if key exist", K(ret), K(cells_cover_geo[i]), K(i));
-        }
-      }
       // copy temp_result to out_key_part
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(out_key_part->create_normal_key())) {
@@ -9995,7 +10161,8 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
         out_key_part->and_next_ = head->and_next_;
       }
       // clear hashset
-      if (cellid_set.created()) {
+      if (OB_FAIL(ret)) {
+      } else if (cellid_set.created()) {
         int tmp_ret = cellid_set.destroy();
         if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
           LOG_WARN("failed to destory param set", K(ret));
@@ -10010,15 +10177,50 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
   return ret;
 }
 
+int ObQueryRange::get_spatial_relationship_by_mask(ObKeyPart *out_key_part, ObDomainOpType& op_type)
+{
+  INIT_SUCC(ret);
+  if (!ob_is_string_type(out_key_part->domain_keypart_->extra_param_.get_type())) {
+    op_type = ObDomainOpType::T_DOMAIN_OP_END;
+  } else {
+    ObString mask_str(out_key_part->domain_keypart_->extra_param_.get_string());
+    common::ObArenaAllocator temp_allocator(lib::ObLabel("GisIndex"));
+    ObString upper_str;
+    if (OB_FAIL(ob_simple_low_to_up(temp_allocator, mask_str, upper_str))) {
+      LOG_WARN("failed to get upper string", K(ret));
+    } else {
+      char cmp_str[upper_str.length() + 1];
+      cmp_str[upper_str.length()] = '\0';
+      MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
+      if (nullptr != strstr(cmp_str, "ANYINTERACT")) {
+        op_type = ObDomainOpType::T_GEO_INTERSECTS;
+      } else {
+        // other spatial relationsh is not supported yet, no need to continue
+        op_type = ObDomainOpType::T_DOMAIN_OP_END;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObDomainOpType op_type,
                                 ObKeyPart *out_key_part)
 {
   INIT_SUCC(ret);
   ObString wkb_str(wkb.get_string());
+  common::ObDomainOpType new_op_type = op_type;
   if (OB_ISNULL(wkb_str.ptr()) || wkb.is_unknown()) {
     // if this spatial relation function is pushdown filter of nl, wkb_str ptr is not null.
     // set whole range when can not get wkb
     if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
+      LOG_WARN("set keypart whole range failed", K(ret));
+    }
+  } else if (op_type == ObDomainOpType::T_GEO_RELATE
+          && (OB_FAIL(get_spatial_relationship_by_mask(out_key_part, new_op_type)) || new_op_type != ObDomainOpType::T_GEO_INTERSECTS)) {
+    // set whole range when can not get mask of sdo_relate
+    if (OB_FAIL(ret)) {
+      LOG_WARN("get invalid spatial_relationship_by_mask", K(ret), K(new_op_type));
+    } else if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
       LOG_WARN("set keypart whole range failed", K(ret));
     }
   } else {
@@ -10038,16 +10240,16 @@ int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObDomain
       LOG_USER_ERROR(OB_ERR_WRONG_SRID_FOR_COLUMN, static_cast<uint64_t>(input_srid),
         static_cast<uint64_t>(column_info.srid_));
     } else {
-      switch (op_type) {
+      switch (new_op_type) {
         case ObDomainOpType::T_GEO_INTERSECTS:
         case ObDomainOpType::T_GEO_COVERS:
         case ObDomainOpType::T_GEO_DWITHIN:
-          if (OB_FAIL(get_geo_intersects_keypart(input_srid, wkb_str, op_type, out_key_part))) {
+          if (OB_FAIL(get_geo_intersects_keypart(input_srid, wkb_str, new_op_type, out_key_part))) {
             LOG_WARN("failed to get keypart from intersects_keypart", K(ret), K(op_type));
           }
           break;
         case ObDomainOpType::T_GEO_COVEREDBY:
-          if (OB_FAIL(get_geo_coveredby_keypart(input_srid, wkb_str, op_type, out_key_part))) {
+          if (OB_FAIL(get_geo_coveredby_keypart(input_srid, wkb_str, new_op_type, out_key_part))) {
             LOG_WARN("failed to get keypart from intersects_keypart", K(ret), K(op_type));
           }
           break;

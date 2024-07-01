@@ -59,7 +59,8 @@ int ObCGTileScanner::init(
         LOG_WARN("Unexpected cg scanner", K(ret), K(cg_scanner->get_type()));
       } else if (OB_FAIL(cg_scanners_.push_back(cg_scanner))) {
         LOG_WARN("Fail to push back cg scanner", K(ret), K(i), KPC(iter_param));
-      } else if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
+      } else if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type() ||
+                 ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_scanner->get_type()) {
         static_cast<ObCGRowScanner *>(cg_scanner)->set_project_type(project_without_filter);
       }
     }
@@ -113,7 +114,8 @@ int ObCGTileScanner::switch_context(
       } else if (OB_FAIL(cg_scanner->switch_context(
           cg_param, access_ctx, cg_wrapper))) {
         LOG_WARN("Fail to switch context for cg iter", K(ret));
-      } else if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
+      } else if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type() ||
+                 ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_scanner->get_type()) {
         static_cast<ObCGRowScanner *>(cg_scanner)->set_project_type(project_without_filter);
       }
     }

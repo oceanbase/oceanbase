@@ -15,7 +15,6 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_iarray.h"
-#include "storage/ob_table_store_stat_mgr.h"
 #include "storage/blocksstable/ob_datum_range.h"
 
 namespace oceanbase
@@ -27,7 +26,6 @@ struct ObTableAccessParam;
 
 typedef int64_t ObCSRowId;
 const ObCSRowId OB_INVALID_CS_ROW_ID = -1;
-const int64_t OB_CS_SCAN_GROUP_SIZE = 8192;
 const uint32_t OB_CS_INVALID_CG_IDX = INT32_MAX;
 const uint32_t OB_CS_VIRTUAL_CG_IDX = INT32_MAX - 1;
 

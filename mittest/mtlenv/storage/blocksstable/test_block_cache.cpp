@@ -208,16 +208,24 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
 
 
   // multi block io
+  int64_t block_count = 0;
   ObMultiBlockIOParam multi_io_param;
-  multi_io_param.micro_index_infos_ = &micro_idx_infos;
-  multi_io_param.start_index_ = 0;
-  multi_io_param.block_count_ = micro_idx_infos.count();
-  ASSERT_EQ(OB_SUCCESS, data_block_cache_->prefetch(
-      MTL_ID(),
-      data_idx_info.get_macro_id(),
-      multi_io_param,
-      context_.query_flag_.is_use_block_cache(),
-      multi_io_handle));
+  multi_io_param.row_header_ = micro_idx_infos.at(0).row_header_;
+  multi_io_param.micro_infos_.set_allocator(&allocator_);
+  multi_io_param.micro_infos_.prepare_reallocate(micro_idx_infos.count());
+  while (block_count < 16 && block_count < micro_idx_infos.count()) {
+    multi_io_param.micro_infos_[block_count].set(
+        micro_idx_infos.at(block_count).get_block_offset(), micro_idx_infos.at(block_count).get_block_size());
+    multi_io_param.data_cache_size_ += micro_idx_infos.at(block_count).get_block_size();
+    multi_io_param.micro_block_count_++;
+    block_count++;
+  }
+  ASSERT_EQ(OB_SUCCESS, data_block_cache_->prefetch_multi_block(
+          MTL_ID(),
+          data_idx_info.get_macro_id(),
+          multi_io_param,
+          context_.query_flag_.is_use_block_cache(),
+          multi_io_handle));
   ASSERT_EQ(OB_SUCCESS, multi_io_handle.wait());
   const ObMultiBlockIOResult *io_result
       = reinterpret_cast<const ObMultiBlockIOResult *>(multi_io_handle.get_buffer());
@@ -225,8 +233,8 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
 
   int64_t idx = 0;
   ObMicroBlockData data_block_data;
-  while (idx != micro_idx_infos.count()) {
-    ASSERT_EQ(OB_SUCCESS, io_result->get_block_data(idx, data_block_data));
+  while (idx != block_count) {
+    ASSERT_EQ(OB_SUCCESS, io_result->get_block_data(idx, multi_io_param.micro_infos_[idx], data_block_data));
     ASSERT_TRUE(data_block_data.is_valid());
     ASSERT_EQ(ObMicroBlockData::DATA_BLOCK, data_block_data.type_);
     ASSERT_EQ(data_block_data.get_micro_header()->row_count_, micro_idx_infos[idx].get_row_count());

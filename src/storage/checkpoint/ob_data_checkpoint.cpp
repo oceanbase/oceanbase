@@ -910,13 +910,16 @@ int ObDataCheckpoint::freeze_base_on_needs_(const int64_t trace_id,
             need_flush_num * 100 / wait_flush_num > TABLET_FREEZE_PERCENT;
         }
       }
-      if (logstream_freeze) {
-        if (OB_FAIL(ls_->logstream_freeze(trace_id, false /* !is_sync */))) {
+
+      const bool is_sync = false;
+      const bool abs_timeout_ts = 0;  // async freeze do not need
+      if (OB_FAIL(ret)) {
+      } else if (logstream_freeze) {
+        if (OB_FAIL(ls_->logstream_freeze(trace_id, is_sync, abs_timeout_ts))) {
           STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
         }
-      } else if (OB_FAIL(ls_->batch_tablet_freeze(trace_id, need_flush_tablets, false /* !is_sync */))) {
-        STORAGE_LOG(WARN, "batch tablet freeze failed",
-                    K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
+      } else if (OB_FAIL(ls_->tablet_freeze(trace_id, need_flush_tablets, is_sync))) {
+        STORAGE_LOG(WARN, "batch tablet freeze failed", K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
       }
     }
   }

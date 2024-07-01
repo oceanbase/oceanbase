@@ -34,6 +34,18 @@ namespace common
     }
   }
 
+  void ObDiscreteBase::to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+                               const int64_t size, const int64_t col_idx) const
+  {
+    for (int64_t row_idx = 0; row_idx < size; row_idx++) {
+      if (nulls_->at(row_idx)) {
+        stored_rows[row_idx]->set_null(row_meta, col_idx);
+      } else {
+        stored_rows[row_idx]->set_cell_payload(row_meta, col_idx, ptrs_[row_idx], lens_[row_idx]);
+      }
+    }
+  }
+
   DEF_TO_STRING(ObDiscreteBase)
   {
     int64_t pos = 0;

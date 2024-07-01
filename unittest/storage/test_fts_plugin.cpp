@@ -49,33 +49,19 @@ int segment_and_calc_word_count(
 {
   int ret = OB_SUCCESS;
   int64_t doc_length = 0;
-  common::ObSEArray<ObFTWord, 256> words;
   if (OB_ISNULL(helper)
       || OB_UNLIKELY(ObCollationType::CS_TYPE_INVALID == type
                   || ObCollationType::CS_TYPE_EXTENDED_MARK < type)
       || OB_UNLIKELY(!words_count.created())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(helper), K(type), K(words_count.created()));
-  } else if (OB_FAIL(helper->segment(type, fulltext.ptr(), fulltext.length(), doc_length, words))) {
+  } else if (OB_FAIL(helper->segment(type, fulltext.ptr(), fulltext.length(), doc_length, words_count))) {
     LOG_WARN("fail to segment", K(ret), KPC(helper), K(type), K(fulltext));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < words.count(); ++i) {
-      const ObFTWord &ft_word = words.at(i);
-      int64_t word_count = 0;
-      if (OB_FAIL(words_count.get_refactored(ft_word, word_count)) && OB_HASH_NOT_EXIST != ret) {
-        LOG_WARN("fail to get ft word", K(ret), K(ft_word));
-      } else {
-        word_count = OB_HASH_NOT_EXIST == ret ? 1 : ++word_count;
-        if (OB_FAIL(words_count.set_refactored(ft_word, word_count, 1/*overwrite*/))) {
-          LOG_WARN("fail to set ft word and count", K(ret), K(ft_word));
-        }
-      }
-    }
   }
   return ret;
 }
 
-class ObTestAddWord final : public lib::ObFTParserParam::ObIAddWord
+class ObTestAddWord final
 {
 public:
   static const char *TEST_FULLTEXT;
@@ -85,14 +71,16 @@ public:
   static const int64_t FT_MAX_WORD_LEN = 84;
 public:
   ObTestAddWord(const ObCollationType &type, common::ObIAllocator &allocator);
-  virtual ~ObTestAddWord() = default;
-  virtual int operator()(
-      lib::ObFTParserParam *param,
+  ~ObTestAddWord() = default;
+  int check_words(lib::ObITokenIterator *iter);
+  int64_t get_add_word_count() const { return ith_word_; }
+  static int64_t get_word_cnt_without_stopword() { return TEST_WORD_COUNT_WITHOUT_STOPWORD; }
+  VIRTUAL_TO_STRING_KV(K_(ith_word));
+private:
+  int check_ith_word(
       const char *word,
       const int64_t word_len,
-      const int64_t char_cnt) override;
-  virtual int64_t get_add_word_count() const override { return ith_word_; }
-  VIRTUAL_TO_STRING_KV(K_(ith_word));
+      const int64_t char_cnt);
 private:
   bool is_min_max_word(const int64_t c_len) const;
   int casedown_word(const ObFTWord &src, ObFTWord &dst);
@@ -137,8 +125,32 @@ int ObTestAddWord::casedown_word(const ObFTWord &src, ObFTWord &dst)
   return ret;
 }
 
-int ObTestAddWord::operator()(
-      lib::ObFTParserParam *param,
+int ObTestAddWord::check_words(lib::ObITokenIterator *iter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(iter)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(iter));
+  } else {
+    const char *word = nullptr;
+    int64_t word_len = 0;
+    int64_t char_len = 0;
+    int64_t word_freq = 0;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter->get_next_token(word, word_len, char_len, word_freq))) {
+        LOG_WARN("fail to get next token", K(ret), KPC(iter));
+      } else if (OB_FAIL(check_ith_word(word, word_len, char_len))) {
+        LOG_WARN("fail to check ith word", K(ret), KP(word), K(word_len), K(char_len));
+      }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObTestAddWord::check_ith_word(
       const char *word,
       const int64_t word_len,
       const int64_t char_cnt)
@@ -146,9 +158,9 @@ int ObTestAddWord::operator()(
   int ret = OB_SUCCESS;
   ObFTWord src_word(word_len, word, collation_type_);
   ObFTWord dst_word;
-  if (OB_ISNULL(param) || OB_ISNULL(word) || OB_UNLIKELY(0 >= word_len || 0 >= char_cnt)) {
+  if (OB_ISNULL(word) || OB_UNLIKELY(0 >= word_len || 0 >= char_cnt)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(word), KP(param), K(word_len), K(char_cnt));
+    LOG_WARN("invalid arguments", K(ret), KP(word), K(word_len), K(char_cnt));
   } else if (is_min_max_word(char_cnt)) {
     // skip min/max word
   } else if (OB_FAIL(casedown_word(src_word, dst_word))) {
@@ -194,7 +206,6 @@ void TestDefaultFTParser::SetUp()
   ASSERT_EQ(OB_SUCCESS, desc_.init(&plugin_param_));
 
   ft_parser_param_.allocator_ = &allocator_;
-  ft_parser_param_.add_word_ = &add_word_;
   ft_parser_param_.cs_ = common::ObCharset::get_charset(ObCollationType::CS_TYPE_UTF8MB4_BIN);
   ft_parser_param_.parser_version_ = 0x00001;
   ASSERT_TRUE(nullptr != ft_parser_param_.cs_);
@@ -209,54 +220,74 @@ void TestDefaultFTParser::TearDown()
 
 TEST_F(TestDefaultFTParser, test_space_ft_parser_segment)
 {
+  ObSpaceFTParser parser;
   const char *fulltext = ObTestAddWord::TEST_FULLTEXT;
   const int64_t ft_len = strlen(fulltext);
 
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ObSpaceFTParser::segment(nullptr, nullptr, 0));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ObSpaceFTParser::segment(&ft_parser_param_, nullptr, 0));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ObSpaceFTParser::segment(&ft_parser_param_, fulltext, 0));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, ObSpaceFTParser::segment(&ft_parser_param_, fulltext, -1));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parser.init(nullptr));
+
+  ft_parser_param_.fulltext_ = nullptr;
+  ft_parser_param_.ft_length_ = 0;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parser.init(&ft_parser_param_));
+
+  ft_parser_param_.fulltext_ = fulltext;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parser.init(&ft_parser_param_));
+
+  ft_parser_param_.ft_length_ = -1;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parser.init(&ft_parser_param_));
 
   ft_parser_param_.fulltext_ = fulltext;
   ft_parser_param_.ft_length_ = ft_len;
 
   LOG_INFO("before space segment", KCSTRING(fulltext), K(ft_len), K(ft_parser_param_));
-  ASSERT_EQ(OB_SUCCESS, ObSpaceFTParser::segment(&ft_parser_param_, fulltext, ft_len));
+  ASSERT_EQ(OB_SUCCESS, parser.init(&ft_parser_param_));
+  ASSERT_EQ(OB_SUCCESS, add_word_.check_words(&parser));
   LOG_INFO("after space segment", KCSTRING(fulltext), K(ft_len), K(ft_parser_param_));
 }
 
 TEST_F(TestDefaultFTParser, test_space_ft_parser_segment_bug_56324268)
 {
-  common::ObArray<ObFTWord> words;
-  ObAddWordFlag flag;
-  ObAddWord add_word(ObCollationType::CS_TYPE_LATIN1_SWEDISH_CI, flag, allocator_, words);
+  ObSpaceFTParser parser;
   const char *fulltext = "\201 想 将 数据 添加 到 数据库\f\026 ";
   const int64_t ft_len = strlen(fulltext);
 
   ft_parser_param_.fulltext_ = fulltext;
   ft_parser_param_.ft_length_ = ft_len;
-  ft_parser_param_.add_word_ = &add_word;
   ft_parser_param_.cs_ = common::ObCharset::get_charset(ObCollationType::CS_TYPE_LATIN1_SWEDISH_CI);
 
   LOG_INFO("before space segment", KCSTRING(fulltext), K(ft_len), K(ft_parser_param_));
-  ASSERT_EQ(OB_SUCCESS, ObSpaceFTParser::segment(&ft_parser_param_, fulltext, ft_len));
-  LOG_INFO("after space segment", KCSTRING(fulltext), K(words), K(ft_len), K(ft_parser_param_));
+  ASSERT_EQ(OB_SUCCESS, parser.init(&ft_parser_param_));
+  const char *word = nullptr;
+  int64_t word_len = 0;
+  int64_t char_len = 0;
+  int64_t word_freq = 0;
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(parser.get_next_token(word, word_len, char_len, word_freq))) {
+      LOG_WARN("fail to get next token", K(ret), K(parser));
+    } else {
+      LOG_INFO("succeed to get next token", K(ret), K(ObString(word_len, word)), K(char_len));
+    }
+  }
+  LOG_INFO("after space segment", KCSTRING(fulltext), K(ft_len), K(ft_parser_param_));
 }
 
 TEST_F(TestDefaultFTParser, test_default_ft_parser_desc)
 {
-  ASSERT_EQ(OB_INVALID_ARGUMENT, desc_.segment(&ft_parser_param_));
+  ObITokenIterator *iter = nullptr;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, desc_.segment(&ft_parser_param_, iter));
 
   ft_parser_param_.fulltext_ = ObTestAddWord::TEST_FULLTEXT;
   ft_parser_param_.ft_length_ = strlen(ft_parser_param_.fulltext_);
 
-  ASSERT_EQ(OB_SUCCESS, desc_.segment(&ft_parser_param_));
+  ASSERT_EQ(OB_SUCCESS, desc_.segment(&ft_parser_param_, iter));
+  ASSERT_EQ(OB_SUCCESS, add_word_.check_words(iter));
 
   ASSERT_EQ(OB_SUCCESS, desc_.deinit(&plugin_param_));
-  ASSERT_EQ(OB_NOT_INIT, desc_.segment(&ft_parser_param_));
+  ASSERT_EQ(OB_NOT_INIT, desc_.segment(&ft_parser_param_, iter));
 
   ASSERT_EQ(OB_SUCCESS, desc_.init(&plugin_param_));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, desc_.segment(nullptr));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, desc_.segment(nullptr, iter));
 }
 
 class ObTestFTPluginHelper : public ::testing::Test
@@ -442,29 +473,35 @@ void ObTestFTParseHelper::TearDownTestCase()
 
 TEST_F(ObTestFTParseHelper, test_parse_fulltext)
 {
-  common::ObSEArray<ObFTWord, 16> words;
+  ObFTWordMap ft_word_map;
+  ASSERT_EQ(OB_SUCCESS, ft_word_map.create(10, "TestParse"));
   int64_t doc_length = 0;
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
-        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
+        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
 
   ObTestAddWord test_add_word(cs_type_, allocator_);
-  for (int64_t i = 0; i < words.count(); ++i) {
-    ASSERT_TRUE(0 == strncmp(test_add_word.words_without_stopword_[i], words[i].word_.ptr(), words[i].word_.length()));
+  ASSERT_EQ(ObTestAddWord::get_word_cnt_without_stopword(), ft_word_map.size());
+  for (int64_t i = 0; i < ft_word_map.size(); ++i) {
+    int64_t word_cnt = 0;
+    ObFTWord word(strlen(test_add_word.words_without_stopword_[i]), test_add_word.words_without_stopword_[i], cs_type_);
+    ASSERT_EQ(OB_SUCCESS, ft_word_map.get_refactored(word, word_cnt));
+    ASSERT_TRUE(word_cnt >= 1);
   }
 
-  ObFTWordMap ft_word_map;
-  ASSERT_EQ(OB_SUCCESS, ft_word_map.create(words.count(), "TestParse"));
+  ft_word_map.clear();
   ASSERT_EQ(OB_SUCCESS, segment_and_calc_word_count(allocator_, &parse_helper_,
         cs_type_, ObTestAddWord::TEST_FULLTEXT, ft_word_map));
-  ASSERT_EQ(words.count(), ft_word_map.size());
+  ASSERT_EQ(ObTestAddWord::get_word_cnt_without_stopword(), ft_word_map.size());
 
-  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(cs_type_, nullptr, std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT, 0, doc_length, words));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT, -1, doc_length, words));
+  ft_word_map.clear();
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(cs_type_, nullptr, std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT, 0, doc_length, ft_word_map));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT, -1, doc_length, ft_word_map));
 
   parse_helper_.reset();
+  ft_word_map.clear();
   ASSERT_EQ(OB_NOT_INIT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
-        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
+        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
 
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(nullptr, plugin_name_));
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.init(&allocator_, ObString()));
@@ -472,9 +509,9 @@ TEST_F(ObTestFTParseHelper, test_parse_fulltext)
   ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
 
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_INVALID, ObTestAddWord::TEST_FULLTEXT,
-        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
+        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(CS_TYPE_EXTENDED_MARK, ObTestAddWord::TEST_FULLTEXT,
-        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
+        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
 
   ASSERT_EQ(OB_INIT_TWICE, parse_helper_.init(&allocator_, plugin_name_));
 
@@ -484,57 +521,80 @@ TEST_F(ObTestFTParseHelper, test_parse_fulltext)
   parse_helper_.reset();
   ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
-        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
-  for (int64_t i = 0; i < words.count(); ++i) {
-    ASSERT_TRUE(0 == strncmp(test_add_word.words_without_stopword_[i], words[i].word_.ptr(), words[i].word_.length()));
+        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
+  ASSERT_EQ(ObTestAddWord::get_word_cnt_without_stopword(), ft_word_map.size());
+  for (int64_t i = 0; i < ft_word_map.size(); ++i) {
+    int64_t word_cnt = 0;
+    ObFTWord word(strlen(test_add_word.words_without_stopword_[i]), test_add_word.words_without_stopword_[i], cs_type_);
+    ASSERT_EQ(OB_SUCCESS, ft_word_map.get_refactored(word, word_cnt));
+    ASSERT_TRUE(word_cnt >= 1);
+  }
+  parse_helper_.reset();
+  ft_word_map.clear();
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, "beng.1"));
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
+        std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, ft_word_map));
+  ASSERT_EQ(ObTestAddWord::get_word_cnt_without_stopword(), ft_word_map.size());
+  for (int64_t i = 0; i < ft_word_map.size(); ++i) {
+    int64_t word_cnt = 0;
+    ObFTWord word(strlen(test_add_word.words_without_stopword_[i]), test_add_word.words_without_stopword_[i], cs_type_);
+    ASSERT_EQ(OB_SUCCESS, ft_word_map.get_refactored(word, word_cnt));
+    ASSERT_TRUE(word_cnt >= 1);
   }
 }
 
 TEST_F(ObTestFTParseHelper, test_min_and_max_word_len)
 {
-  common::ObSEArray<ObFTWord, 16> words;
+  ObFTWordMap words;
+  ASSERT_EQ(OB_SUCCESS, words.create(10, "TestParse"));
   int64_t doc_length = 0;
 
   // word len = 2;
   const char *word_len_2 = "ab";
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_2, std::strlen(word_len_2), doc_length, words));
-  ASSERT_EQ(0, words.count());
+  ASSERT_EQ(0, words.size());
 
   // word len = 3;
   const char *word_len_3 = "abc";
+  words.clear();
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_3, std::strlen(word_len_3), doc_length, words));
-  ASSERT_EQ(1, words.count());
+  ASSERT_EQ(1, words.size());
 
   // word len = 4;
   const char *word_len_4 = "abcd";
+  words.clear();
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_4, std::strlen(word_len_4), doc_length, words));
-  ASSERT_EQ(1, words.count());
+  ASSERT_EQ(1, words.size());
 
   // word len = 76;
   const char *word_len_76 = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
+  words.clear();
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_76, std::strlen(word_len_76), doc_length, words));
-  ASSERT_EQ(1, words.count());
+  ASSERT_EQ(1, words.size());
 
   // word len = 84;
   const char *word_len_84 = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz123456";
+  words.clear();
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_84, std::strlen(word_len_84), doc_length, words));
-  ASSERT_EQ(1, words.count());
+  ASSERT_EQ(1, words.size());
 
   // word len = 85;
   const char *word_len_85 = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567";
+  words.clear();
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_85, std::strlen(word_len_85), doc_length, words));
-  ASSERT_EQ(0, words.count());
+  ASSERT_EQ(0, words.size());
 }
 
 class ObTestNgramFTParseHelper : public ::testing::Test
 {
 public:
   static const char *name_;
-  static const int64_t TEST_WORD_COUNT = 29;
+  static const int64_t TEST_WORD_COUNT = 27;
   typedef common::hash::ObHashMap<ObFTWord, int64_t> ObFTWordMap;
 public:
   ObTestNgramFTParseHelper();
   virtual ~ObTestNgramFTParseHelper() = default;
+  static int64_t get_word_count() { return TEST_WORD_COUNT; }
 
   static void SetUpTestCase();
   static void TearDownTestCase();
@@ -553,7 +613,7 @@ const char *ObTestNgramFTParseHelper::name_ = "ngram.1";
 
 ObTestNgramFTParseHelper::ObTestNgramFTParseHelper()
   : plugin_name_(STRLEN(name_), name_),
-    ngram_words_{"oc", "ce", "ea", "an", "nb", "ba", "as", "se", "fu", "ul", "ll", "lt", "te", "ex", "xt", "se", "ea", "ar", "rc", "ch", "is", "no", "in", "th", "he", "wo", "or", "rl", "ld"},
+    ngram_words_{"oc", "ce", "ea", "an", "nb", "ba", "as", "se", "fu", "ul", "ll", "lt", "te", "ex", "xt", "ar", "rc", "ch", "is", "no", "in", "th", "he", "wo", "or", "rl", "ld"},
     cs_type_(ObCollationType::CS_TYPE_UTF8MB4_BIN),
     allocator_()
 {
@@ -583,26 +643,33 @@ void ObTestNgramFTParseHelper::TearDownTestCase()
 
 TEST_F(ObTestNgramFTParseHelper, test_parse_fulltext)
 {
+  ObFTWordMap words;
+  ASSERT_EQ(OB_SUCCESS, words.create(10, "TestParse"));
   int64_t doc_length = 0;
-  common::ObSEArray<ObFTWord, 16> words;
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
 
-  for (int64_t i = 0; i < words.count(); ++i) {
-    ASSERT_TRUE(0 == strncmp(ngram_words_[i], words[i].word_.ptr(), words[i].word_.length()));
+  ASSERT_EQ(get_word_count(), words.size());
+  for (int64_t i = 0; i < words.size(); ++i) {
+    int64_t word_cnt = 0;
+    ObFTWord word(strlen(ngram_words_[i]), ngram_words_[i], cs_type_);
+    ASSERT_EQ(OB_SUCCESS, words.get_refactored(word, word_cnt));
+    ASSERT_TRUE(word_cnt >= 1);
   }
 
   ObFTWordMap ft_word_map;
-  ASSERT_EQ(OB_SUCCESS, ft_word_map.create(words.count(), "TestParse"));
+  ASSERT_EQ(OB_SUCCESS, ft_word_map.create(10, "TestParse"));
   ASSERT_EQ(OB_SUCCESS, segment_and_calc_word_count(allocator_, &parse_helper_,
         cs_type_, ObTestAddWord::TEST_FULLTEXT, ft_word_map));
-  ASSERT_EQ(words.count(), ft_word_map.size() + 2);
+  ASSERT_EQ(words.size(), ft_word_map.size());
 
+  words.clear();
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(cs_type_, nullptr, std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT, 0, doc_length, words));
   ASSERT_EQ(OB_INVALID_ARGUMENT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT, -1, doc_length, words));
 
   parse_helper_.reset();
+  words.clear();
   ASSERT_EQ(OB_NOT_INIT, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
 
@@ -620,14 +687,19 @@ TEST_F(ObTestNgramFTParseHelper, test_parse_fulltext)
   ASSERT_EQ(OB_INIT_TWICE, parse_helper_.init(&allocator_, plugin_name_));
 
   parse_helper_.reset();
+  words.clear();
   ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
 
   parse_helper_.reset();
   ASSERT_EQ(OB_SUCCESS, parse_helper_.init(&allocator_, plugin_name_));
   ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, ObTestAddWord::TEST_FULLTEXT,
         std::strlen(ObTestAddWord::TEST_FULLTEXT), doc_length, words));
-  for (int64_t i = 0; i < words.count(); ++i) {
-    ASSERT_TRUE(0 == strncmp(ngram_words_[i], words[i].word_.ptr(), words[i].word_.length()));
+  ASSERT_EQ(get_word_count(), words.size());
+  for (int64_t i = 0; i < words.size(); ++i) {
+    int64_t word_cnt = 0;
+    ObFTWord word(strlen(ngram_words_[i]), ngram_words_[i], cs_type_);
+    ASSERT_EQ(OB_SUCCESS, words.get_refactored(word, word_cnt));
+    ASSERT_TRUE(word_cnt >= 1);
   }
 }
 
@@ -638,7 +710,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_fts_plugin.log");
   OB_LOGGER.set_file_name("test_fts_plugin.log", true);
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("DEBUG");
   oceanbase::storage::ObTestFTPluginHelper::file_name = argv[0];
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

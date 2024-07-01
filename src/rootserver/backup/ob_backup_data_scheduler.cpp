@@ -719,6 +719,9 @@ int ObBackupDataScheduler::check_tenant_status(
     LOG_WARN("[DATA_BACKUP]failed to get schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("[DATA_BACKUP]failed to get tenant info", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    is_valid = false;
+    LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), K(tenant_id));
   } else if (tenant_schema->is_normal()) {
     is_valid = true;
   } else if (tenant_schema->is_creating()) {

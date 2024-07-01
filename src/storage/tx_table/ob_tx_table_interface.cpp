@@ -69,6 +69,7 @@ int ObTxTableGuard::load_tx_op(const transaction::ObTransID &tx_id, ObTxData &tx
                         mini_cache_,
                         true/*skip_cache*/);
     LoadTxOpFunctor functor(tx_data);
+    functor.set_may_exist_undecided_state_in_tx_data_table();
     return tx_table_->check_with_tx_data(arg, functor);
   } else {
     return OB_NOT_INIT;

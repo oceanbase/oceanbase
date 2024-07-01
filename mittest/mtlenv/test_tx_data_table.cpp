@@ -650,10 +650,10 @@ void TestTxDataTable::do_repeat_insert_test() {
   insert_start_scn.convert_for_logservice(ObTimeUtil::current_time_ns());
 
   ObTxData *tx_data = nullptr;
-  int64_t int_tx_id = 0;
   transaction::ObTransID tx_id;
 
-  for (int i = 1; i <= 100; i++) {
+  // 插入10000个tx data，但都是同一个txid的rollback to，所以最后只会保留一个
+  for (int i = 1; i <= 10000; i++) {
     tx_id = transaction::ObTransID(269381);
     tx_data = nullptr;
     ObTxDataGuard tx_data_guard;
@@ -669,8 +669,8 @@ void TestTxDataTable::do_repeat_insert_test() {
     tx_data->state_ = ObTxData::RUNNING;
     int undo_act_num = (rand() & 31) + 1;
     for (int j = 0; j < undo_act_num; j++) {
-      int64_t from = ObRandom::rand(1, 200000);
-      auto to = (from > 100000) ? (from - 100000) : 1;
+      int64_t from = ObRandom::rand(1, 2000000);
+      auto to = (from > 1000000) ? (from - 1000000) : 1;
       transaction::ObUndoAction undo_action(ObTxSEQ(from, 0), ObTxSEQ(to, 0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
@@ -678,8 +678,45 @@ void TestTxDataTable::do_repeat_insert_test() {
     ASSERT_EQ(OB_SUCCESS, tx_data_table_.insert(tx_data));
   }
 
-  memtable_mgr->destroy();
+  // 插入了4个tx data
+  for (int i = 1; i <= 4; i++) {
+    tx_id = transaction::ObTransID(269381 + i);
+    tx_data = nullptr;
+    ObTxDataGuard tx_data_guard;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
+    ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
+    tx_data->tx_id_ = tx_id;
+    tx_data->start_scn_ = insert_start_scn;
+    tx_data->end_scn_ = share::SCN::plus(insert_start_scn, i);
+    tx_data->commit_version_ = tx_data->end_scn_;
+    tx_data->state_ = ObTxData::COMMIT;
+
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.insert(tx_data));
+  }
+
+
+  ObTxDataMemtable *frozen_memtable = nullptr;
+  ObTxDataMemtable *active_memtable = nullptr;
+  check_freeze_(memtable_mgr, frozen_memtable, active_memtable);
+  // 预处理会产生一个特殊行的tx data
+  ASSERT_EQ(OB_SUCCESS, frozen_memtable->pre_process_for_merge());
+
+  // 总计有6个合法的tx data待转储。此时如果试图切7个区间，函数不会报错，但是返回结果里只有一个range
+  ObStoreRange input_range;
+  input_range.set_whole_range();
+  ObSEArray<common::ObStoreRange, 7> range_array;
+  ASSERT_EQ(OB_SUCCESS, frozen_memtable->get_split_ranges(input_range, 7, range_array));
+  ASSERT_EQ(1, range_array.count());
+  STORAGE_LOG(INFO, "output range", K(range_array));
+
+  // 如果试图切6个区间，能顺利切出6个range
+  range_array.reuse();
+  ASSERT_EQ(OB_SUCCESS, frozen_memtable->get_split_ranges(input_range, 6, range_array));
+  ASSERT_EQ(6, range_array.count());
+  STORAGE_LOG(INFO, "output range", K(range_array));
+
+  memtable_mgr->destroy();
 }
 
 void TestTxDataTable::fake_ls_(ObLS &ls)
@@ -739,6 +776,8 @@ TEST_F(TestTxDataTable, undo_status_test) { do_undo_status_test(); }
 
 TEST_F(TestTxDataTable, serialize_test) { do_tx_data_serialize_test(); }
 
+TEST_F(TestTxDataTable, split_range_test) { do_tx_data_serialize_test(); }
+
 // TEST_F(TestTxDataTable, print_leak_slice) { do_print_leak_slice_test(); }
 
 
@@ -752,7 +791,7 @@ int main(int argc, char **argv)
   system("rm -fr run_*");
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_tx_data_table.log", true);
-  logger.set_log_level(OB_LOG_LEVEL_INFO);
+  logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   TRANS_LOG(WARN, "init memory pool error!");
   // OB_LOGGER.set_enable_async_log(false);
 

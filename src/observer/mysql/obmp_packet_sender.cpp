@@ -874,6 +874,7 @@ int ObMPPacketSender::send_eof_packet(const ObSQLSessionInfo &session,
   uint16_t warning_count = 0;
   bool ac = true;
   if (OB_ISNULL(warnings_buf)) {
+    // ignore ret
     LOG_WARN("can not get thread warnings buffer");
   } else {
     warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());

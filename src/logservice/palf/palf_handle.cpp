@@ -327,6 +327,12 @@ int PalfHandle::get_election_leader(common::ObAddr &addr) const
   return palf_handle_impl_->get_election_leader(addr);
 }
 
+int PalfHandle::get_parent(common::ObAddr &parent) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_parent(parent);
+}
+
 int PalfHandle::change_replica_num(const common::ObMemberList &member_list,
                                    const int64_t curr_replica_num,
                                    const int64_t new_replica_num,

@@ -139,7 +139,7 @@ int ObConstDecoder::update_pointer(const char *old_block, const char *cur_block)
 int ObConstDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -273,7 +273,8 @@ int ObConstDecoder::batch_decode_without_dict(
         case ObStringSC:
         case ObTextSC:
         case ObJsonSC:
-        case ObGeometrySC: {
+        case ObGeometrySC:
+        case ObRoaringBitmapSC: {
             for (int64_t i = 1; i < row_cap; ++i) {
               datums[i].pack_ = datums[0].pack_;
               datums[i].ptr_ = datums[0].ptr_;
@@ -301,7 +302,7 @@ int ObConstDecoder::batch_decode_without_dict(
 int ObConstDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {
@@ -876,7 +877,7 @@ int ObConstDecoder::set_res_with_bitset(
 
 template<typename T>
 int ObConstDecoder::extract_ref_and_null_count(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     T len_arr,
     int64_t &null_count,
@@ -994,7 +995,7 @@ int ObConstDecoder::read_distinct(
 
 int ObConstDecoder::read_reference(
     const ObColumnDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
 {

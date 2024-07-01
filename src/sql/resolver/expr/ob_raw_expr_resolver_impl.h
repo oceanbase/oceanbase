@@ -36,6 +36,7 @@ public:
               common::ObIArray<ObUDFInfo> &udf_exprs,
               common::ObIArray<ObOpRawExpr*> &op_exprs,
               common::ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs,
+              common::ObIArray<ObInListInfo> &inlist_infos,
               common::ObIArray<ObMatchFunRawExpr*> &match_exprs);
 
   bool is_contains_assignment() {return is_contains_assignment_;}
@@ -50,16 +51,15 @@ public:
                           pl::ObPLBlockNS *secondary_namespace,
                           pl::ObProcType &proc_type);
   int resolve_func_node_of_obj_access_idents(const ParseNode &func_node, ObQualifiedName &q_name);
-  int check_name_type(
-    ObQualifiedName &q_name, ObStmtScope scope, AccessNameType &type);
+  int check_name_type(ObQualifiedName &q_name, ObStmtScope scope, AccessNameType &type);
   // types and constants
+  int recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr = false);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprResolverImpl);
   // function members
   int try_negate_const(ObRawExpr *&expr, const int64_t neg_cnt, int64_t &remain_reg_cnt);
-  int do_recursive_resolve(const ParseNode *node, ObRawExpr *&expr);
-  int recursive_resolve(const ParseNode *node, ObRawExpr *&expr);
+  int do_recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr = false);
   int process_datatype_or_questionmark(const ParseNode &node, ObRawExpr *&expr);
   int process_system_variable_node(const ParseNode *node, ObRawExpr *&expr);
   int process_char_charset_node(const ParseNode *node, ObRawExpr *&expr);
@@ -68,7 +68,7 @@ private:
   int process_outer_join_symbol_node(const ParseNode *node, ObRawExpr *&expr);
   int process_column_ref_node(const ParseNode *node, ObRawExpr *&expr);
   template<class T>
-  int process_node_with_children(const ParseNode *node, int64_t children_num, T *&raw_expr);
+  int process_node_with_children(const ParseNode *node, int64_t children_num, T *&raw_expr, bool is_root_expr = false);
   int process_any_or_all_node(const ParseNode *node, ObRawExpr *&expr);
   int process_not_node(const ParseNode *node, ObRawExpr *&expr);
   int process_user_var_node(const ParseNode *node, ObRawExpr *&expr);
@@ -80,7 +80,7 @@ private:
   int add_params_to_op_expr(ObRawExpr *op_param_1, ObRawExpr *op_param_2, ObOpRawExpr *op_expr);
   int transform_between_expr(ObRawExpr **btw_params, ObRawExpr *&out_expr, const bool is_not_btw);
   int process_between_node(const ParseNode *node, ObRawExpr *&expr);
-  int process_in_or_not_in_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_in_or_not_in_node(const ParseNode *node, const bool is_root_expr, ObRawExpr *&expr);
   int process_case_node(const ParseNode *node, ObRawExpr *&expr);
   int process_sub_query_node(const ParseNode *node, ObRawExpr *&expr);
   int process_agg_node(const ParseNode *node, ObRawExpr *&expr);
@@ -230,7 +230,11 @@ private:
 
   int resolve_left_node_of_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
   int resolve_right_node_of_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
-
+  int resolve_right_branch_of_in_op(const ParseNode *node,
+                                    const ObItemType op_type,
+                                    const ObRawExpr *left_expr,
+                                    const bool is_root_condition,
+                                    ObRawExpr *&right_expr);
 private:
   // data members
   ObExprResolveContext &ctx_;
@@ -240,7 +244,8 @@ private:
 template <class T>
 int ObRawExprResolverImpl::process_node_with_children(const ParseNode *node,
                                                       int64_t children_num,
-                                                      T *&raw_expr)
+                                                      T *&raw_expr,
+                                                      bool is_root_expr)
 {
   int ret = common::OB_SUCCESS;
   if (OB_ISNULL(node) || OB_ISNULL(node->children_)
@@ -255,7 +260,7 @@ int ObRawExprResolverImpl::process_node_with_children(const ParseNode *node,
       if (OB_ISNULL(node->children_[i])) {
         ret = common::OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(ERROR, "invalid node children", K(ret), K(i), K(node));
-      } else if (OB_FAIL(recursive_resolve(node->children_[i], sub_expr))) {
+      } else if (OB_FAIL(recursive_resolve(node->children_[i], sub_expr, is_root_expr))) {
         SQL_RESV_LOG(WARN, "resolve left child failed", K(ret));
       } else if (OB_FAIL(raw_expr->add_param_expr(sub_expr))) {
         SQL_RESV_LOG(WARN, "fail to set param expr", K(ret), K(sub_expr));

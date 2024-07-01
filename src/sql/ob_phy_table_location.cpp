@@ -213,11 +213,11 @@ int ObPhyTableLocation::assign_from_phy_table_loc_info(const ObCandiTableLoc &ot
  //     //按照指定的direction顺序输出partition顺序.
  //     //目前依赖partition序代表range序.以后做分裂等复杂情况后，就需要依赖part_mgr(schema)来排序
  //     if (is_ascending_direction(other.get_direction())) {
- //       std::sort(&phy_part_loc_info_sorted_list.at(0),
+ //       lib::ob_sort(&phy_part_loc_info_sorted_list.at(0),
  //                 &phy_part_loc_info_sorted_list.at(0) + phy_part_loc_info_sorted_list.count(),
  //                 ObPhyTableLocation::compare_phy_part_loc_info_asc);
  //     } else if (is_descending_direction(other.get_direction())) {
- //       std::sort(&phy_part_loc_info_sorted_list.at(0),
+ //       lib::ob_sort(&phy_part_loc_info_sorted_list.at(0),
  //                 &phy_part_loc_info_sorted_list.at(0) + phy_part_loc_info_sorted_list.count(),
  //                 ObPhyTableLocation::compare_phy_part_loc_info_desc);
  //     } else {

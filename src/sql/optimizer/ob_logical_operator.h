@@ -1754,6 +1754,8 @@ protected:
   static int explain_print_partitions(const ObIArray<ObLogicalOperator::PartInfo> &part_infos,
                                       const bool two_level, char *buf,
                                       int64_t &buf_len, int64_t &pos);
+
+  int check_op_orderding_used_by_parent(bool &used);
 protected:
 
   void add_dist_flag(uint64_t &flags, DistAlgo method) const {
@@ -1771,6 +1773,19 @@ protected:
   void clear_dist_flag(uint64_t &flags) const {
     flags = 0;
   }
+
+  int find_table_scan(ObLogicalOperator* root_op,
+                    uint64_t table_id,
+                    ObLogicalOperator* &scan_op,
+                    bool& table_scan_has_exchange,
+                    bool &has_px_coord);
+
+  int check_sort_key_can_pushdown_to_tsc(
+      ObLogicalOperator *op,
+      common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> &effective_sk_exprs,
+      uint64_t table_id, ObLogicalOperator *&scan_op, bool &table_scan_has_exchange,
+      bool &has_px_coord, int64_t &effective_sk_cnt);
+
 protected:
 
   log_op_def::ObLogOpType type_;
@@ -1819,11 +1834,6 @@ private:
     ObLogicalOperator *op_sort,
     bool &need_remove,
     bool global_order);
-  int find_table_scan(ObLogicalOperator* root_op,
-                      uint64_t table_id,
-                      ObLogicalOperator* &scan_op,
-                      bool& table_scan_has_exchange,
-                      bool &has_px_coord);
   //private function, just used for allocating join filter node.
   int allocate_partition_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                      int64_t &filter_id);
@@ -1864,6 +1874,23 @@ private:
     ObLogicalOperator *scan_node,
     const JoinFilterInfo &info);
 
+  int check_sort_key_can_pushdown_to_tsc_detail(ObLogicalOperator *op,
+                                                ObRawExpr *candidate_sk_expr, uint64_t table_id,
+                                                ObLogicalOperator *&scan_op, bool &find_table_scan,
+                                                bool &table_scan_has_exchange, bool &has_px_coord);
+  int check_sort_key_can_pushdown_to_tsc_for_gby(ObLogicalOperator *op,
+                                                ObRawExpr *candidate_sk_expr, uint64_t table_id,
+                                                ObLogicalOperator *&scan_op, bool &find_table_scan,
+                                                bool &table_scan_has_exchange, bool &has_px_coord);
+  int check_sort_key_can_pushdown_to_tsc_for_winfunc(ObLogicalOperator *op,
+                                                 ObRawExpr *candidate_sk_expr, uint64_t table_id,
+                                                 ObLogicalOperator *&scan_op, bool &find_table_scan,
+                                                 bool &table_scan_has_exchange, bool &has_px_coord);
+  int check_sort_key_can_pushdown_to_tsc_for_join(ObLogicalOperator *op,
+                                                ObRawExpr *candidate_sk_expr, uint64_t table_id,
+                                                ObLogicalOperator *&scan_op, bool &find_table_scan,
+                                                bool &table_scan_has_exchange, bool &has_px_coord);
+
 
   /* manual set dop for each dfo */
   int refine_dop_by_hint();
@@ -1878,6 +1905,7 @@ private:
   int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
   int check_need_parallel_valid(int64_t need_parallel) const;
   virtual int get_card_without_filter(double &card);
+  virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index);
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator

@@ -36,7 +36,8 @@ public:
            const ObStoreCtx &ctx,
            const share::ObLSID &ls_id,
            const int64_t snapshot_version);
-  int init(const ObTableStoreStat &table_store_stat,
+  int init(const uint64_t table_id,
+           const uint64_t tablet_id,
            const ObStoreCtx &ctx,
            const share::ObLSID &ls_id,
            const int64_t snapshot_version);
@@ -58,7 +59,7 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool enable_lob_locator_v2() const { return enable_locator_v2_; }
   TO_STRING_KV(K_(table_id), K_(ls_id), K_(snapshot_version), K_(rowid_version),
-               KPC(rowid_project_), K_(enable_locator_v2), K_(is_inited));
+               KPC(rowid_project_), K_(enable_locator_v2), K_(is_inited), K_(scan_flag));
 private:
   static const int64_t DEFAULT_LOCATOR_OBJ_ARRAY_SIZE = 8;
   static const int64_t LOB_FORCE_INROW_SIZE = 64 * 1024L; // 64K
@@ -79,6 +80,7 @@ private:
                           ObCollationType cs_type,
                           bool is_simple,
                           bool is_systable);
+  bool can_skip_build_mem_lob_locator(const common::ObString &payload);
 private:
   uint64_t table_id_;
   uint64_t tablet_id_;

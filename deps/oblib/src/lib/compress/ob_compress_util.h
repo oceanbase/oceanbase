@@ -83,6 +83,16 @@ const char *const syslog_compress_funcs[] =
   "zstd_1.0",
   "zstd_1.3.8",
 };
+
+const char *const sql_temp_store_compress_funcs[] =
+{
+  "none",
+  "zstd",
+  "lz4",
+  "snappy",
+  "zlib"
+};
+
 } /* namespace common */
 } /* namespace oceanbase */
 

@@ -28,7 +28,7 @@ namespace sql
 {
 
 // The length of array need to be equal to the number of types defined at ObObjType
-static const int32_t CAST_STRING_DEFUALT_LENGTH[53] = {
+static const int32_t CAST_STRING_DEFUALT_LENGTH[ObMaxType + 1] = {
   0, //null
   4, //tinyint
   6, //smallint
@@ -81,6 +81,9 @@ static const int32_t CAST_STRING_DEFUALT_LENGTH[53] = {
   1,//udt
   11, // decimal int
   1,//collection
+  10,//mysql date
+  19,//mysql datetime
+  1,//roaringbitmap
   0//max, invalid type, or count of obj type
 };
 
@@ -137,12 +140,12 @@ public:
                                 sql::ObEvalCtx &ctx,
                                 sql::ObDatum &res_datum);
   virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
+  static int get_cast_type(const bool enable_decimal_int,
+                           const ObExprResType param_type2,
+                           const ObCastMode cast_mode,
+                           ObExprResType &dst_type);
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
-  int get_cast_type(const bool enable_decimal_int,
-                    const ObExprResType param_type2,
-                    const ObCastMode cast_mode,
-                    ObExprResType &dst_type) const;
   int get_explicit_cast_cm(const ObExprResType &src_type,
                            const ObExprResType &dst_type,
                            const ObSQLSessionInfo &session,

@@ -20,6 +20,7 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/ob_phy_operator_type.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/dtl/ob_dtl_linked_buffer.h"
 
 namespace oceanbase {
 namespace sql {
@@ -31,21 +32,64 @@ enum ObSqlWorkAreaType
   MAX_TYPE
 };
 
+class ObSqlProfileExecInfo {
+public:
+  ObSqlProfileExecInfo() : dop_(-1), plan_id_(-1), exec_id_(-1),
+                           session_id_(-1), db_id_(-1), my_session_(nullptr),
+                           disable_auto_mem_mgr_(false) {
+    sql_id_[0] = '\0';
+  }
+  ObSqlProfileExecInfo(const ObSqlProfileExecInfo& other)
+      : dop_(other.dop_), plan_id_(other.plan_id_), exec_id_(other.exec_id_),
+        session_id_(other.session_id_), db_id_(other.db_id_),
+        my_session_(other.my_session_),
+        disable_auto_mem_mgr_(other.disable_auto_mem_mgr_) {
+    if (*(other.get_sql_id()) == '\0') {
+      sql_id_[0] = '\0';
+    } else {
+      MEMCPY(sql_id_, other.get_sql_id(), OB_MAX_SQL_ID_LENGTH);
+      sql_id_[OB_MAX_SQL_ID_LENGTH] = '\0';
+    }
+  }
+  ObSqlProfileExecInfo(ObExecContext *exec_ctx);
+  ObSqlProfileExecInfo(dtl::ObDtlLinkedBuffer *buffer);
+
+  int64_t get_dop() { return dop_; }
+  int64_t get_plan_id() { return plan_id_; }
+  int64_t get_exec_id() { return exec_id_; }
+  int64_t get_session_id() { return session_id_; }
+  uint64_t get_db_id() { return db_id_; }
+  const char *get_sql_id() const { return sql_id_; };
+  ObSQLSessionInfo *get_my_session() { return my_session_; }
+  bool get_disable_auto_mem_mgr() { return disable_auto_mem_mgr_; }
+
+  TO_STRING_KV(K_(dop), K_(plan_id), K_(exec_id), K_(session_id), K_(db_id), K_(sql_id), K_(disable_auto_mem_mgr));
+
+private:
+  int64_t dop_;
+  int64_t plan_id_;
+  int64_t exec_id_;
+  int64_t session_id_;
+  uint64_t db_id_;
+  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  ObSQLSessionInfo *my_session_;
+  bool disable_auto_mem_mgr_;
+};
+
 class ObSqlWorkAreaProfile : public common::ObDLinkBase<ObSqlWorkAreaProfile>
 {
 public:
   ObSqlWorkAreaProfile(ObSqlWorkAreaType type) :
     ObDLinkBase(),
-    random_id_(0), type_(type), op_type_(PHY_INVALID), op_id_(UINT64_MAX), exec_ctx_(nullptr),
+    random_id_(0), type_(type), op_type_(PHY_INVALID), op_id_(UINT64_MAX), exec_info_(),
     min_size_(0), row_count_(0), input_size_(0), bucket_size_(0),
     chunk_size_(0), cache_size_(-1), one_pass_size_(0), expect_size_(OB_INVALID_ID),
-    global_bound_size_(INT64_MAX), dop_(-1), plan_id_(-1), exec_id_(-1), sql_id_(), db_id_(-1),
-    session_id_(-1), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
+    global_bound_size_(INT64_MAX), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
     max_mem_used_(0), mem_used_(0),
-    pre_mem_used_(0), dumped_size_(0), data_ratio_(0.5), active_time_(0), number_pass_(0),
+    pre_mem_used_(0), dumped_size_(0), max_dumped_size_(0), data_ratio_(0.5),
+    active_time_(0), number_pass_(0),
     calc_count_(0), disable_auto_mem_mgr_(false)
   {
-    sql_id_[0] = '\0';
     ObRandom rand;
     random_id_ = rand.get();
   }
@@ -68,12 +112,12 @@ public:
     bucket_size_ = bucket_size;
   }
 
-  int set_exec_info(ObExecContext &exec_ctx);
   OB_INLINE void set_operator_type(ObPhyOperatorType op_type) { op_type_ = op_type; }
   OB_INLINE void set_operator_id(uint64_t op_id) { op_id_ = op_id; }
-  OB_INLINE void set_exec_ctx(ObExecContext *exec_ctx) { exec_ctx_ = exec_ctx; }
-  OB_INLINE ObExecContext* get_exec_ctx() const { return exec_ctx_; }
-  bool has_exec_ctx() { return nullptr != exec_ctx_; }
+  OB_INLINE void set_exec_ctx(ObExecContext *exec_ctx) { exec_info_ = exec_ctx; }
+  OB_INLINE void set_exec_info(const ObSqlProfileExecInfo &exec_info) { exec_info_ = exec_info; }
+  OB_INLINE const ObSqlProfileExecInfo& get_exec_info() const { return exec_info_; }
+  bool has_exec_info() { return exec_info_.get_plan_id() >= 0; }
 
   // one_pass_size = sqrt(cache_size * chunk_size)
   OB_INLINE void init(int64_t cache_size, int64_t chunk_size)
@@ -134,6 +178,7 @@ public:
   int64_t get_max_mem_used() const { return max_mem_used_; }
   int64_t get_mem_used() const { return mem_used_; }
   int64_t get_dumped_size() const { return dumped_size_; }
+  int64_t get_max_dumped_size() const { return max_dumped_size_; }
   int64_t get_data_ratio() const { return data_ratio_; }
   OB_INLINE bool is_registered() const { return OB_NOT_NULL(get_next())
                                                 || OB_NOT_NULL(get_prev()); }
@@ -167,7 +212,7 @@ private:
   ObSqlWorkAreaType type_;
   ObPhyOperatorType op_type_;
   uint64_t op_id_;
-  ObExecContext *exec_ctx_;
+  ObSqlProfileExecInfo exec_info_;
   int64_t min_size_;
   int64_t row_count_;
   int64_t input_size_;
@@ -177,12 +222,6 @@ private:
   int64_t one_pass_size_;
   int64_t expect_size_;
   int64_t global_bound_size_;
-  int64_t dop_;
-  int64_t plan_id_;
-  int64_t exec_id_;
-  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
-  uint64_t db_id_;
-  int64_t session_id_;
   // 取 min(cache_size, global_bound_size)
   // sort场景，在global_bound_size比较大情况下，sort理论上有data和extra内存，data应该是one-pass size
   // 也就是expect_size
@@ -195,6 +234,7 @@ public:
   int64_t mem_used_;
   int64_t pre_mem_used_;
   int64_t dumped_size_;
+  int64_t max_dumped_size_;
   double data_ratio_;
 public:
   // some statistics

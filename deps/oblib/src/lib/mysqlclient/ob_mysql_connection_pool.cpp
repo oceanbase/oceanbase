@@ -680,9 +680,10 @@ void ObMySQLConnectionPool::runTimerTask()
       // - remove invalid server connection pool
       // - close long idle connection
       // - renew tenant_server_conn_pool_map
-      if (OB_FAIL(purge_connection_pool())) {
-        // ignore ret
-        LOG_ERROR("fail to update mysql connection pool", K(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(purge_connection_pool())) {
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+        LOG_ERROR("fail to update mysql connection pool", K(ret), K(tmp_ret));
       }
     }
 
@@ -936,11 +937,9 @@ int ObMySQLConnectionPool::renew_tenant_server_pool_map()
         LOG_WARN("renew_tenant_server_pool_ failed", K(ret), K(tenant_id), K(tenant_idx), K(tenant_array));
       }
     } // end for tenant_array
-
-    if (OB_FAIL(purge_tenant_server_pool_map_(tenant_array))) {
-      //ignore ret
-      LOG_WARN("purge_tenant_server_pool_map_ failed, skip this error", K(ret), K(tenant_array));
-      ret = OB_SUCCESS;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(purge_tenant_server_pool_map_(tenant_array))) {
+      LOG_WARN("purge_tenant_server_pool_map_ failed, skip this error", K(ret), K(tmp_ret), K(tenant_array));
     } else {
       LOG_TRACE("renew tenant_server_conn_pool_map succ");
     }

@@ -1277,6 +1277,7 @@ inline int ObInfoSchemaColumnsTable::init_mem_context()
     if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
+      ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));
     }
   }

@@ -1276,7 +1276,7 @@ int ObTransformConstPropagate::remove_const_exec_param_exprs(ObDMLStmt *stmt,
       LOG_WARN("failed to remove const exec param", K(ret));
     } else if (!is_happened) {
       // do nothing
-    } else if (expr->formalize(ctx_->session_info_)) {
+    } else if (OB_FAIL(expr->formalize(ctx_->session_info_))) {
       LOG_WARN("failed to formalize expr", K(ret));
     } else if (OB_FAIL(expr_ptr.set(expr))) {
       LOG_WARN("failed to update expr", K(ret));
@@ -1493,6 +1493,12 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
                                                         need_cast,
                                                         is_scale_adjust_cast))) {
     LOG_WARN("failed to check need cast expr", K(ret));
+    if (OB_ERR_INVALID_TYPE_FOR_OP == ret) {  // rewrite should not happened instead of failed a error
+      ret = OB_SUCCESS;
+      is_valid = false;
+    } else {
+      LOG_WARN("failed to check need cast expr", K(ret));
+    }
   } else if (!need_cast) {
     // do nothing
   } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
@@ -1515,7 +1521,12 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
     ObObjType cmp_type = ObMaxType;
     int64_t eq_cmp = 0;
     if (OB_FAIL(ret)) {
-      LOG_WARN("failed to cast obj to dest type", K(ret), K(value), K(dst_type.get_type()));
+      if (OB_ERR_INVALID_DATATYPE == ret) {  // rewrite should not happened instead of failed a error
+        ret = OB_SUCCESS;
+        is_valid = false;
+      } else {
+        LOG_WARN("failed to cast obj to dest type", K(ret), K(value), K(dst_type.get_type()));
+      }
     } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
                                                                       value.get_type(),
                                                                       dest_val->get_type()))) {

@@ -119,7 +119,7 @@ int ObSortColumnIdArray::build_sort_array(
       }
     } // end of for
     if (OB_SUCC(ret)) {
-      std::sort(array_.begin(), array_.end());
+      lib::ob_sort(array_.begin(), array_.end());
       LOG_TRACE("success to sort array", KR(ret), K(array_));
       get_func_ = get_func_from_array;
     }

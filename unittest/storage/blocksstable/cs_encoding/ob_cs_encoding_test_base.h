@@ -317,7 +317,7 @@ int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
   sql::ObEvalCtx eval_ctx(exec_context);
   char *buf = nullptr;
   if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator_.alloc(
-      row_cnt * (sizeof(char*)/*ptr_arr*/ + sizeof(uint32_t)/*len_arr*/ + sizeof(int64_t)/*row_ids*/))))) {
+      row_cnt * (sizeof(char*)/*ptr_arr*/ + sizeof(uint32_t)/*len_arr*/ + sizeof(int32_t)/*row_ids*/))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate", K(ret));
   } else {
@@ -325,7 +325,7 @@ int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
     buf += row_cnt * sizeof(char*);
     uint32_t *len_arr = reinterpret_cast<uint32_t*>(buf) ;
     buf += row_cnt * sizeof(uint32_t);
-    int64_t *row_ids = reinterpret_cast<int64_t*>(buf);
+    int32_t *row_ids = reinterpret_cast<int32_t*>(buf);
     bool need_test_column = true;
 
     for (int col_idx = 0; OB_SUCC(ret) && col_idx < ctx_.column_cnt_; col_idx++) {
@@ -347,7 +347,7 @@ int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
         }
       } else if (vector_format == VEC_DISCRETE || vector_format == VEC_UNIFORM) {
         VecValueTypeClass var_tc_arr[] = {VEC_TC_NUMBER, VEC_TC_EXTEND, VEC_TC_STRING, VEC_TC_ENUM_SET_INNER,
-            VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT};
+            VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT, VEC_TC_ROARINGBITMAP};
         VecValueTypeClass *vec = std::find(std::begin(var_tc_arr), std::end(var_tc_arr), vec_tc);
         if (vec == std::end(var_tc_arr)) {
           need_test_column = false;
@@ -355,7 +355,7 @@ int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
       } else if (vector_format == VEC_CONTINUOUS) {
         /* can't test now
         VecValueTypeClass var_tc_arr[] = {VEC_TC_NUMBER, VEC_TC_EXTEND, VEC_TC_STRING, VEC_TC_ENUM_SET_INNER,
-            VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT};
+            VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT, VEC_TC_ROARINGBITMAP};
         VecValueTypeClass *vec = std::find(std::begin(var_tc_arr), std::end(var_tc_arr), vec_tc);
         if (vec == std::end(var_tc_arr)) {
           need_test_column = false;
@@ -373,7 +373,7 @@ int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
           row_cnt, col_meta, vector_format, eval_ctx, col_expr, frame_allocator))) {
         LOG_WARN("fail to generate_column_output_expr", K(ret), K(vec_tc), K(col_meta), K(vector_format));
       } else {
-        for (int64_t row_idx = 0; row_idx < row_cnt; ++row_idx) {
+        for (int32_t row_idx = 0; row_idx < row_cnt; ++row_idx) {
           row_ids[row_idx] = row_idx;
         }
         ObVectorDecodeCtx vector_ctx(ptr_arr, len_arr, row_ids, row_cnt, 0, col_expr.get_vector_header(eval_ctx));
@@ -477,10 +477,10 @@ int ObCSEncodingTestBase::check_get_row_count(const ObMicroBlockHeader *header,
   int ret = OB_SUCCESS;
   ObMicroBlockData full_transformed_data;
   ObMicroBlockCSDecoder decoder;
-  int64_t *row_ids = nullptr;
+  int32_t *row_ids = nullptr;
   if (OB_FAIL(init_cs_decoder(header, desc, full_transformed_data, decoder))) {
     LOG_WARN("fail to init cs_decoder", KR(ret));
-  } else if (OB_ISNULL(row_ids = (int64_t*)allocator_.alloc(header->row_count_ * sizeof(int64_t)))) {
+  } else if (OB_ISNULL(row_ids = (int32_t*)allocator_.alloc(header->row_count_ * sizeof(int32_t)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc", K(ret), KPC(header));
   } else {

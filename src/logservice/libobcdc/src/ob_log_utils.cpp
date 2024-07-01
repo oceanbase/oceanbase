@@ -487,6 +487,10 @@ const char *get_ctype_string(int ctype)
       sc_type = "MYSQL_TYPE_OB_RAW";
       break;
 
+    case oceanbase::obmysql::MYSQL_TYPE_ROARINGBITMAP:
+      sc_type = "MYSQL_TYPE_ROARINGBITMAP";
+      break;
+
     case oceanbase::obmysql::MYSQL_TYPE_NEWDECIMAL:
       sc_type = "MYSQL_TYPE_NEWDECIMAL";
       break;
@@ -619,6 +623,11 @@ bool is_geometry_type(const int ctype)
 bool is_xml_type(const int ctype)
 {
   return (ctype == drcmsg_field_types::DRCMSG_TYPE_ORA_XML);
+}
+
+bool is_roaringbitmap_type(const int ctype)
+{
+  return (ctype == oceanbase::obmysql::MYSQL_TYPE_ROARINGBITMAP);
 }
 
 double get_delay_sec(const int64_t tstamp_ns)
@@ -1549,7 +1558,7 @@ int sort_and_unique_lsn_arr(ObLogLSNArray &lsn_arr)
   palf::LSN prev_lsn;
 
   // sort lsn_arr
-  std::sort(lsn_arr.begin(), lsn_arr.end(), CDCLSNComparator());
+  lib::ob_sort(lsn_arr.begin(), lsn_arr.end(), CDCLSNComparator());
   // get duplicate misslog lsn idx
   for(int64_t idx = 0; OB_SUCC(ret) && idx < lsn_arr.count(); idx++) {
     palf::LSN &cur_lsn = lsn_arr[idx];

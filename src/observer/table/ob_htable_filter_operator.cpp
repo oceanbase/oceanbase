@@ -124,9 +124,9 @@ int ObHTableExplicitColumnTracker::init(const table::ObHTableFilter &htable_filt
     ColumnCount *end = &columns_.at(columns_.count() - 1);
     ++end;
     if (common::ObQueryFlag::Reverse == tracker_scan_order_) {
-      std::sort(&columns_.at(0), end, ColumnCountReverseComparator());
+      lib::ob_sort(&columns_.at(0), end, ColumnCountReverseComparator());
     } else {
-      std::sort(&columns_.at(0), end, ColumnCountComparator());
+      lib::ob_sort(&columns_.at(0), end, ColumnCountComparator());
     }
   }
 

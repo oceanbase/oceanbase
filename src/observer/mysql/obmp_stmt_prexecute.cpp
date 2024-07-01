@@ -62,13 +62,6 @@ using namespace sql;
 using namespace pl;
 namespace observer
 {
-
-#ifdef ERRSIM
-ERRSIM_POINT_DEF(COM_STMT_PREXECUTE_PREPARE_ERROR);
-ERRSIM_POINT_DEF(COM_STMT_PREXECUTE_PS_CURSOR_OPEN_ERROR);
-ERRSIM_POINT_DEF(COM_STMT_PREXECUTE_EXECUTE_ERROR);
-#endif
-
 ObMPStmtPrexecute::ObMPStmtPrexecute(const ObGlobalContext &gctx)
     : ObMPStmtExecute(gctx),
     sql_(),
@@ -251,15 +244,10 @@ int ObMPStmtPrexecute::before_process()
                     LOG_WARN("fail to set session active", K(ret));
                   }
                   if (OB_SUCC(ret)) {
-                    if (
-#ifdef ERRSIM
-                        OB_FAIL(COM_STMT_PREXECUTE_PREPARE_ERROR) ||
-#endif
-                        OB_FAIL(gctx_.sql_engine_->stmt_prepare(sql_,
+                    if (OB_FAIL(gctx_.sql_engine_->stmt_prepare(sql_,
                                                                 get_ctx(),
                                                                 result,
-                                                                false /*is_inner_sql*/))
-                    ) {
+                                                                false /*is_inner_sql*/))) {
                       set_exec_start_timestamp(ObTimeUtility::current_time());
                       int cli_ret = OB_SUCCESS;
                       get_retry_ctrl().test_and_save_retry_state(gctx_,
@@ -373,6 +361,11 @@ int ObMPStmtPrexecute::before_process()
                     ret = OB_ERR_PREPARE_STMT_CHECKSUM;
                     LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_sessid(),
                                                     K(ps_stmt_checksum), K(*ps_session_info));
+                    LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
+                                     "ps stmt checksum fail. ",
+                                     "the ps stmt checksum is ", ps_stmt_checksum,
+                                     ", but current session stmt checksum is ", ps_session_info->get_ps_stmt_checksum(),
+                                     ". current session id is ", session->get_sessid(), ". ");
                 } else {
                   PS_DEFENSE_CHECK(4) // extend_flag
                   {
@@ -487,7 +480,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       get_ctx().cur_sql_ = sql_;
       if (
 #ifdef ERRSIM
-          OB_FAIL(COM_STMT_PREXECUTE_PS_CURSOR_OPEN_ERROR) ||
+          OB_FAIL(common::EventTable::COM_STMT_PREXECUTE_PS_CURSOR_OPEN_ERROR) ||
 #endif
           OB_FAIL(ObSPIService::dbms_dynamic_open(&pl_ctx, *cursor))
       ) {
@@ -568,6 +561,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
           const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
           uint16_t warning_count = 0;
           if (OB_ISNULL(warnings_buf)) {
+            // ignore ret
             LOG_WARN("can not get thread warnings buffer");
           } else {
             warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
@@ -617,17 +611,12 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       ret = tmp_ret;
       LOG_WARN("execute server cursor failed.", K(ret));
     }
-  } else if (
-#ifdef ERRSIM
-      OB_FAIL(COM_STMT_PREXECUTE_EXECUTE_ERROR) ||
-#endif
-      OB_FAIL(gctx_.sql_engine_->stmt_execute(stmt_id_,
-                                              stmt_type_,
-                                              params,
-                                              ctx,
-                                              result,
-                                              false /* is_inner_sql */))
-  ) {
+  } else if (OB_FAIL(gctx_.sql_engine_->stmt_execute(stmt_id_,
+                                                     stmt_type_,
+                                                     params,
+                                                     ctx,
+                                                     result,
+                                                     false /* is_inner_sql */))) {
     set_exec_start_timestamp(ObTimeUtility::current_time());
     if (!THIS_WORKER.need_retry()) {
       int cli_ret = OB_SUCCESS;
@@ -703,6 +692,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     } else if (OB_FAIL(response_result(result, session, force_sync_resp, async_resp_used))) {
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_ISNULL(plan_ctx)) {
+        // ignore ret
         LOG_ERROR("execute query fail, and plan_ctx is NULL", K(ret));
       } else {
         LOG_WARN("execute query fail",

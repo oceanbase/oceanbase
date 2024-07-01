@@ -976,7 +976,7 @@ int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
     if (OB_FAIL(ret)) {
       // avoid overwirte ret
       int temp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (temp_ret = hashtable_factory_.recycle(ht))) {
+      if (OB_SUCCESS != (temp_ret = hashtable_factory_.recycle(true, ht))) {
         LOG_WARN("recycle hashtable failed", K(temp_ret));
       }
     }
@@ -1271,7 +1271,7 @@ void ObMicroBlockCSEncoder::free_encoders_()
   FOREACH(ht, hashtables_)
   {
     // should continue even fail
-    if (OB_FAIL(hashtable_factory_.recycle(*ht))) {
+    if (OB_FAIL(hashtable_factory_.recycle(true, *ht))) {
       LOG_WARN("recycle hashtable failed", K(ret));
     }
   }

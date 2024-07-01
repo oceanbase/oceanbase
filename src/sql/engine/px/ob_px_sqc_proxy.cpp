@@ -164,6 +164,8 @@ int ObPxSQCProxy::setup_loop_proc(ObSqcCtx &sqc_ctx)
         .register_processor(sqc_ctx.init_channel_whole_msg_proc_)
         .register_processor(sqc_ctx.reporting_wf_piece_msg_proc_)
         .register_processor(sqc_ctx.opt_stats_gather_whole_msg_proc_)
+        .register_processor(sqc_ctx.sp_winfunc_whole_msg_proc_)
+        .register_processor(sqc_ctx.rd_winfunc_whole_msg_proc_)
         .register_interrupt_processor(sqc_ctx.interrupt_proc_);
   }
   return ret;
@@ -444,6 +446,8 @@ int ObPxSQCProxy::report(int end_ret) const
   ObPxSqcMeta &sqc = sqc_arg.sqc_;
   ObPxFinishSqcResultMsg finish_msg;
   int64_t affected_rows = 0;
+  int64_t sqc_memstore_row_read_count = 0;
+  int64_t sqc_ssstore_row_read_count = 0;
   // 任意一个 task 失败，则意味着全部 task 失败
   // 第一版暂不支持重试
   int sqc_ret = OB_SUCCESS;
@@ -463,6 +467,8 @@ int ObPxSQCProxy::report(int end_ret) const
       finish_msg.das_retry_rc_ = task.get_das_retry_rc();
     }
     affected_rows += task.get_affected_rows();
+    sqc_memstore_row_read_count += task.get_memstore_read_row_count();
+    sqc_ssstore_row_read_count += task.get_ssstore_read_row_count();
     finish_msg.dml_row_info_.add_px_dml_row_info(task.dml_row_info_);
     finish_msg.temp_table_id_ = task.temp_table_id_;
     if (OB_NOT_NULL(session)) {
@@ -492,6 +498,8 @@ int ObPxSQCProxy::report(int end_ret) const
     sqc_ret = ret;
   }
   finish_msg.sqc_affected_rows_ = affected_rows;
+  finish_msg.sqc_memstore_row_read_count_ = sqc_memstore_row_read_count;
+  finish_msg.sqc_ssstore_row_read_count_ = sqc_ssstore_row_read_count;
   finish_msg.sqc_id_ = sqc.get_sqc_id();
   finish_msg.dfo_id_ = sqc.get_dfo_id();
   finish_msg.rc_ = sqc_ret;

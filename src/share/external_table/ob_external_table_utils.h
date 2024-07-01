@@ -57,6 +57,7 @@ class ObExternalTableUtils {
     PARTITION_ID = 0,
     FILE_URL,
     FILE_ID,
+    ROW_GROUP_NUMBER,
     LINE_NUMBER,
     MAX_EXTERNAL_FILE_SCANKEY
   };

@@ -416,7 +416,7 @@ TEST_F(TestCSCGGroupByScanner, test_decide_group_size)
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init_group_by_info());
   int64_t start = 0;
   int64_t locate_count = row_cnt_;
-  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate(ObCSRange(start, locate_count)));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate_micro_index(ObCSRange(start, locate_count)));
   int64_t group_size = 0;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.decide_group_size(group_size));
   ASSERT_EQ(500, group_size);
@@ -442,7 +442,7 @@ TEST_F(TestCSCGGroupByScanner, test_decide_can_group_by)
 
   int64_t start = 0;
   int64_t locate_count = row_cnt_;
-  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate(ObCSRange(start, locate_count)));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate_micro_index(ObCSRange(start, locate_count)));
   int64_t group_size = 0;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.decide_group_size(group_size));
   ASSERT_EQ(500, group_size);
@@ -473,7 +473,7 @@ TEST_F(TestCSCGGroupByScanner, test_read_distinct)
 
   int64_t start = 0;
   int64_t locate_count = row_cnt_;
-  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate(ObCSRange(start, locate_count)));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate_micro_index(ObCSRange(start, locate_count)));
   int64_t group_size = 0;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.decide_group_size(group_size));
   ASSERT_EQ(500, group_size);
@@ -514,7 +514,7 @@ TEST_F(TestCSCGGroupByScanner, test_read_reference)
 
   int64_t start = 0;
   int64_t locate_count = row_cnt_;
-  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate(ObCSRange(start, locate_count)));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate_micro_index(ObCSRange(start, locate_count)));
   int64_t group_size = 0;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.decide_group_size(group_size));
   ASSERT_EQ(500, group_size);
@@ -560,7 +560,7 @@ TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by)
 
   int64_t start = 0;
   int64_t locate_count = row_cnt_;
-  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate(ObCSRange(start, locate_count)));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate_micro_index(ObCSRange(start, locate_count)));
   int64_t group_size = 0;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.decide_group_size(group_size));
   ASSERT_EQ(500, group_size);
@@ -644,7 +644,7 @@ TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by_with_bitmap)
 
   int64_t start = 0;
   int64_t locate_count = row_cnt_;
-  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate(ObCSRange(start, locate_count)));
+  ASSERT_EQ(OB_SUCCESS, group_by_scanner.locate_micro_index(ObCSRange(start, locate_count)));
   int64_t group_size = 0;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.decide_group_size(group_size));
   ASSERT_EQ(500, group_size);

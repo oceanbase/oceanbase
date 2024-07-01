@@ -276,7 +276,7 @@ struct ObGetTableIdOp
     } else if (OB_ISNULL(plan = dynamic_cast<ObPhysicalPlan *>(entry.second))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null plan", K(ret), K(plan));
-    } else if (plan->get_base_table_version(table_id_, version)) {
+    } else if (OB_FAIL(plan->get_base_table_version(table_id_, version))) {
       LOG_WARN("failed to get base table version", K(ret));
     } else if (version > 0) {
       plan->set_is_expired(true);
@@ -1092,6 +1092,7 @@ int ObPlanCache::get_plan_cache(ObILibCacheCtx &ctx,
   }
   // check the returned error code and whether the plan has expired
   if (OB_FAIL(check_after_get_plan(ret, ctx, guard.cache_obj_))) {
+    // overwrite ret, ret used in check_after_get_plan
     SQL_PC_LOG(TRACE, "failed to check after get plan", K(ret));
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(guard.cache_obj_)) {
@@ -2322,6 +2323,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   // if `use_rich_format()` is used as part of key, added plan's key will be `false + other_info`.
   pc_key.use_rich_vector_format_ = session.initial_use_rich_format();
   pc_key.config_use_rich_format_ = session.config_use_rich_format();
+  pc_key.sys_var_config_hash_val_ = session.get_sys_var_config_hash_val();
   pc_key.is_weak_read_ = is_weak;
   return ret;
 }
@@ -2709,6 +2711,7 @@ void ObPlanCacheEliminationTask::run_free_cache_obj_task()
   int64_t safe_timestamp = INT64_MAX;
   if (observer::ObGlobalReqTimeService::get_instance()
                          .get_global_safe_timestamp(safe_timestamp)) {
+    // ignore ret
     SQL_PC_LOG(ERROR, "failed to get global safe timestamp", K(ret));
   } else if (OB_FAIL(plan_cache_->dump_deleted_objs<DUMP_ALL>(deleted_objs, safe_timestamp))) {
     SQL_PC_LOG(WARN, "failed to traverse hashmap", K(ret));
@@ -2718,6 +2721,7 @@ void ObPlanCacheEliminationTask::run_free_cache_obj_task()
       tot_mem_used += deleted_objs.at(k).mem_used_;
     } // end for
     if (tot_mem_used >= ((plan_cache_->get_mem_limit() / 100) * 30)) {
+      // ignore ret
       LOG_ERROR("Cache Object Memory Leaked Much!!!", K(tot_mem_used),
                 K(plan_cache_->get_mem_limit()), K(deleted_objs), K(safe_timestamp));
     } else if (deleted_objs.count() > 0) {

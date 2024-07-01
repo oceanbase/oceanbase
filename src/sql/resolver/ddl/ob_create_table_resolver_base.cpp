@@ -374,11 +374,19 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
 
     if (OB_SUCC(ret)) {
       // if lob_inrow_threshold not set, used config default_lob_inrow_threshold
+      uint64_t tenant_data_version = 0;
       if (is_set_lob_inrow_threshold_) {
         table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
       } else if (OB_ISNULL(session_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session if NULL", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_2_1_2){
+        // lob_inrow_threshold is added in 421 bp2
+        // so need ensure lob_inrow_threshold is 4096 before 421 bp2 for compat
+        lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+        table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
       } else if (OB_FALSE_IT((lob_inrow_threshold_ = session_info_->get_default_lob_inrow_threshold()))) {
       } else if (lob_inrow_threshold_ < OB_MIN_LOB_INROW_THRESHOLD || lob_inrow_threshold_ > OB_MAX_LOB_INROW_THRESHOLD) {
         ret = OB_INVALID_ARGUMENT;
@@ -395,6 +403,9 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default format or location option for external table");
       }
+    }
+    if (OB_SUCC(ret) && auto_increment_cache_size_ != 0) {
+      table_schema.set_auto_increment_cache_size(auto_increment_cache_size_);
     }
   }
   return ret;

@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_cg_scanner.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
-#include "storage/ob_table_store_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -485,15 +484,15 @@ int ObCGRowScanner::init(
       // TODO: remove these later
     } else if (OB_ISNULL(buf = access_ctx.stmt_allocator_->alloc(sizeof(char *) * sql_batch_size))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc row_ids", K(ret), K(sql_batch_size));
+      LOG_WARN("fail to alloc cell data", K(ret), K(sql_batch_size));
     } else if (FALSE_IT(cell_data_ptrs_ = reinterpret_cast<const char **>(buf))) {
-    } else if (OB_ISNULL(buf = access_ctx.stmt_allocator_->alloc(sizeof(int64_t) * sql_batch_size))) {
+    } else if (OB_ISNULL(buf = access_ctx.stmt_allocator_->alloc(sizeof(int32_t) * sql_batch_size))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc row_ids", K(ret), K(sql_batch_size));
+    } else if (FALSE_IT(row_ids_ = reinterpret_cast<int32_t *>(buf))) {
     } else if (OB_ISNULL(len_array_buf = access_ctx.stmt_allocator_->alloc(sizeof(uint32_t) * sql_batch_size))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc len_array_buf", K(ret), K(sql_batch_size));
-    } else if (FALSE_IT(row_ids_ = reinterpret_cast<int64_t *>(buf))) {
     } else if (FALSE_IT(len_array_ = reinterpret_cast<uint32_t *>(len_array_buf))) {
     } else if (!iter_param.enable_pd_aggregate()) {
       bool need_padding = common::is_pad_char_to_full_length(access_ctx.sql_mode_);
@@ -593,8 +592,8 @@ int ObCGRowScanner::get_next_rows(uint64_t &count, const uint64_t capacity, cons
     if (iter_param_->op_->enable_rich_format_) {
       LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count), K(capacity),
                 "new format datums",
-                sql::ToStrVectorHeader(datum_infos_.at(0).expr_->get_vector_header(iter_param_->op_->get_eval_ctx()),
-                                       *datum_infos_.at(0).expr_,
+                sql::ToStrVectorHeader(*datum_infos_.at(0).expr_,
+                                       iter_param_->op_->get_eval_ctx(),
                                        nullptr,
                                        sql::EvalBound(datum_offset + count, true)));
     } else {
@@ -743,8 +742,8 @@ int ObCGRowScanner::deep_copy_projected_rows(const int64_t datum_offset, const u
     if (iter_param_->op_->enable_rich_format_) {
       LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K(datum_offset), K(count),
                 "new format datums",
-                sql::ToStrVectorHeader(datum_infos_.at(0).expr_->get_vector_header(iter_param_->op_->get_eval_ctx()),
-                                       *datum_infos_.at(0).expr_,
+                sql::ToStrVectorHeader(*datum_infos_.at(0).expr_,
+                                       iter_param_->op_->get_eval_ctx(),
                                        nullptr,
                                        sql::EvalBound(datum_offset + count, true)));
     } else {

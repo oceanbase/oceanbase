@@ -76,6 +76,7 @@ const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
 const int64_t SYS_RESOURCE_GROUP_CNT = SYS_RESOURCE_GROUP_END_ID - SYS_RESOURCE_GROUP_START_ID;
 const uint64_t USER_RESOURCE_OTHER_GROUP_ID = 0;
 const uint64_t OB_INVALID_GROUP_ID = UINT64_MAX;
+static constexpr char BACKGROUND_CGROUP[] = "background";
 
 OB_INLINE bool is_valid_group(const uint64_t group_id)
 {
@@ -320,7 +321,7 @@ public:
 
   TO_STRING_KV(K(is_inited_), K(is_finished_), K(is_canceled_), K(has_estimated_), K(complete_size_), K(offset_), K(size_),
                K(timeout_us_), K(result_ref_cnt_), K(out_ref_cnt_), K(flag_), K(ret_code_), K(tenant_io_mgr_),
-               KP(user_data_buf_), KP(buf_), KP(io_callback_), K(begin_ts_), K(end_ts_));
+               KP(user_data_buf_), KP(buf_), KP(io_callback_), K(begin_ts_), K(end_ts_), K_(time_log));
   DISALLOW_COPY_AND_ASSIGN(ObIOResult);
 
 private:
@@ -348,8 +349,10 @@ private:
   char *user_data_buf_; //actual data buf without cb, allocated by thpe calling layer
   ObIOCallback *io_callback_;
   ObIOFlag flag_;
-  ObIORetCode ret_code_;
   ObThreadCond cond_;
+public:
+  ObIOTimeLog time_log_;
+  ObIORetCode ret_code_;
 };
 
 class ObIORequest : public common::ObDLinkBase<ObIORequest>
@@ -387,7 +390,7 @@ public:
   void dec_ref(const char *msg = nullptr);
 
   TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_),
-               K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K(time_log_), KPC(io_result_));
+               K(trace_id_), K(retry_count_), K(tenant_io_mgr_), KPC(io_result_));
 private:
   friend class ObIOResult;
   friend class ObIOSender;
@@ -414,7 +417,6 @@ private:
   uint64_t tenant_id_;
   ObRefHolder<ObTenantIOManager> tenant_io_mgr_;
   ObIOFd fd_;
-  ObIOTimeLog time_log_;
   ObCurTraceId::TraceId trace_id_;
 };
 

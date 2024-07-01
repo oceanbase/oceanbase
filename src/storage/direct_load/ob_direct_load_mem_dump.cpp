@@ -403,7 +403,7 @@ int ObDirectLoadMemDump::compact_tablet_tables(const ObTabletID &tablet_id)
   if (OB_FAIL(context_ptr_->tables_.get(tablet_id, table_array))) {
     LOG_WARN("fail to get table array", K(tablet_id), KR(ret));
   } else {
-    std::sort(
+    lib::ob_sort(
       table_array.begin(), table_array.end(),
       [](const std::pair<int64_t, ObIDirectLoadPartitionTable *> &a,
          const std::pair<int64_t, ObIDirectLoadPartitionTable *> &b) { return a.first < b.first; });

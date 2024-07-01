@@ -711,7 +711,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([wfsydp.WSJJDM], [wfsydp.WSJWSY]), filter(nil), rowset=16
       access([wfsydp.WSJJDM], [wfsydp.WSJWSY]), partitions(p0)
-      limit(181819), offset(0), is_index_back=false, is_global_index=true, 
+      limit(181819), offset(0), is_index_back=false, is_global_index=true, keep_ordering=true, 
       range_key([wfsydp.WSJJDM], [wfsydp.WSJWSY], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH]), range(666888,MIN,MIN,MIN,MIN ; 666888,MAX,MAX,MAX,
       MAX), 
       range_cond([wfsydp.WSJJDM = '666888'])

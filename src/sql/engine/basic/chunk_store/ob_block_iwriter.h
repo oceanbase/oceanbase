@@ -64,7 +64,7 @@ protected:
   {
     int64_t size = 0;
     if (OB_NOT_NULL(cur_blk_)) {
-      size = cur_blk_->get_buffer()->head_size();
+      size = store_->get_blk_buf().head_size();
     }
     return size;
   }
@@ -72,7 +72,7 @@ protected:
   {
     int64_t remain_size = 0;
     if (OB_NOT_NULL(cur_blk_)) {
-      remain_size = cur_blk_->get_buffer()->remain();
+      remain_size = store_->get_blk_buf().remain();
     }
     return remain_size;
   }
@@ -81,7 +81,7 @@ protected:
   {
     char *res = nullptr;
     if (OB_NOT_NULL(cur_blk_)) {
-      res = cur_blk_->get_buffer()->head();
+      res = store_->get_blk_buf().head();
     }
     return res;
   }
@@ -89,10 +89,10 @@ protected:
   {
     int ret = OB_SUCCESS;
     if (OB_NOT_NULL(cur_blk_)) {
-      last_row_pos_ = cur_blk_->get_buffer()->head();
+      last_row_pos_ = store_->get_blk_buf().head();
       cur_blk_->cnt_ += 1;
       store_->inc_block_id_cnt(1);
-      ret = cur_blk_->get_buffer()->advance(size);
+      ret = store_->get_blk_buf().advance(size);
     }
     return ret;
   }

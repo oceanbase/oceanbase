@@ -203,7 +203,7 @@ int ObPlanCacheValue::assign_udr_infos(ObPlanCacheCtx &pc_ctx)
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tpl_sql_const_cons_.count(); ++i) {
       NotParamInfoList &not_param_list = tpl_sql_const_cons_.at(i);
-      std::sort(not_param_list.begin(), not_param_list.end(),
+      lib::ob_sort(not_param_list.begin(), not_param_list.end(),
               [](NotParamInfo &l, NotParamInfo &r) { return (l.idx_  < r.idx_); });
       for (int64_t j = 0; OB_SUCC(ret) && j < not_param_list.count(); ++j) {
         if (OB_FAIL(ob_write_string(*pc_alloc_,
@@ -240,8 +240,10 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
   } else if (FALSE_IT(mem_attr = pcv_set->get_plan_cache()->get_mem_attr())) {
       // do nothing
   } else if (OB_ISNULL(pc_alloc_ = pcv_set->get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(pcv_set->get_allocator()));
   } else if (OB_ISNULL(pc_malloc_ = pcv_set->get_pc_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(pcv_set->get_pc_allocator()));
   } else if (OB_FAIL(outline_params_wrapper_.set_allocator(pc_alloc_, mem_attr))) {
     LOG_WARN("fail to set outline param wrapper allocator", K(ret));
@@ -313,7 +315,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
           }
         } //for end
         if (OB_SUCC(ret)) {
-          std::sort(not_param_info_.begin(), not_param_info_.end(),
+          lib::ob_sort(not_param_info_.begin(), not_param_info_.end(),
               [](NotParamInfo &l, NotParamInfo &r) { return (l.idx_  < r.idx_); });
         }
       }

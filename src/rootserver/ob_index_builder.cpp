@@ -26,9 +26,11 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_part_mgr_util.h"
+#include "share/schema/ob_table_schema.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_index_builder_util.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "observer/ob_server_struct.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "ob_zone_manager.h"
@@ -442,7 +444,7 @@ int ObIndexBuilder::submit_build_index_task(
   int ret = OB_SUCCESS;
   ObTableLockOwnerID owner_id;
   ObCreateDDLTaskParam param(index_schema->get_tenant_id(),
-                             ObDDLType::DDL_CREATE_INDEX,
+                             ((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_2_0) && index_schema->is_storage_local_index_table() && index_schema->is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX,
                              data_schema,
                              index_schema,
                              0/*object_id*/,
@@ -455,14 +457,20 @@ int ObIndexBuilder::submit_build_index_task(
   if (OB_UNLIKELY(nullptr == data_schema || nullptr == index_schema || tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema is invalid", K(ret), KP(data_schema), KP(index_schema), K(tenant_data_version));
-  } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
-    LOG_WARN("submit create index ddl task failed", K(ret));
-  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
-                                                 task_record.task_id_))) {
-    LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
-  } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
-      *data_schema, inc_data_tablet_ids, del_data_tablet_ids, *index_schema, owner_id, trans))) {
-    LOG_WARN("failed to lock online ddl lock", K(ret));
+  } else {
+    bool is_create_fts_index = share::schema::is_fts_index(create_index_arg.index_type_);
+    if (is_create_fts_index) {
+      param.type_ = ObDDLType::DDL_CREATE_FTS_INDEX;
+    }
+    if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+      LOG_WARN("submit create index ddl task failed", K(ret));
+    } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                   task_record.task_id_))) {
+      LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
+    } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
+        *data_schema, inc_data_tablet_ids, del_data_tablet_ids, *index_schema, owner_id, trans))) {
+      LOG_WARN("failed to lock online ddl lock", K(ret));
+    }
   }
   return ret;
 }
@@ -637,11 +645,7 @@ int ObIndexBuilder::do_create_local_index(
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = table_schema.get_tenant_id();
     uint64_t tenant_data_version = 0;
-    // TODO hanxuan support fulltext index after table created
-    if (share::schema::is_fts_index(create_index_arg.index_type_)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported", K(ret));
-    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
       LOG_WARN("get tenant data version failed", K(ret));
@@ -676,7 +680,11 @@ int ObIndexBuilder::do_create_local_index(
           my_arg.index_schema_.set_index_type(INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE);
         }
       }
-      if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
+      if (OB_FAIL(ret)) {
+      } else if (share::schema::is_fts_index(my_arg.index_type_) &&
+          OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_index_name(my_arg, &allocator))) {
+        LOG_WARN("failed to adjust fts index name", K(ret));
+      } else if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
               my_arg, new_table_schema, allocator, gen_columns))) {
         LOG_WARN("fail to adjust expr index args", K(ret));
       } else if (OB_FAIL(generate_schema(
@@ -887,10 +895,10 @@ int ObIndexBuilder::generate_schema(
         if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(),
                                          tenant_data_version))) {
           LOG_WARN("failed to get tenant data version", K(ret));
-        } else if (tenant_data_version < DATA_VERSION_4_3_1_0) {
+        } else if (tenant_data_version < DATA_VERSION_4_3_2_0) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("tenant data version is less than 4.3.1, fulltext index is not supported", K(ret), K(tenant_data_version));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, fulltext index");
+          LOG_WARN("tenant data version is less than 4.3.2, create fulltext index on existing table is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.2, fulltext index");
         }
       } else if (is_multivalue_index(arg.index_type_)) {
         uint64_t tenant_data_version = 0;
@@ -907,6 +915,7 @@ int ObIndexBuilder::generate_schema(
       if (OB_SUCC(ret)
           && (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
               || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
+              || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == arg.index_type_
               || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == arg.index_type_)) {
         if (OB_FAIL(sql::ObResolverUtils::check_unique_index_cover_partition_column(
                 data_schema, arg))) {
@@ -949,6 +958,10 @@ int ObIndexBuilder::generate_schema(
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("index created direct on large text column should only be fulltext", K(arg.index_type_), K(ret));
+        } else if (ob_is_roaringbitmap_tc(data_column->get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+          LOG_WARN("index created on roaringbitmap column is not supported", K(arg.index_type_), K(ret));
         } else if (ObTimestampTZType == data_column->get_data_type()
                    && arg.is_unique_primary_index()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;

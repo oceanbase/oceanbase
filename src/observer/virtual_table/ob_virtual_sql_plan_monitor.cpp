@@ -493,7 +493,7 @@ int ObVirtualSqlPlanMonitor::extract_tenant_ids()
       if (is_always_false) {
         tenant_id_array_.reset();
       } else {
-        std::sort(tenant_id_array_.begin(), tenant_id_array_.end());
+        lib::ob_sort(tenant_id_array_.begin(), tenant_id_array_.end());
         SERVER_LOG(DEBUG, "get tenant ids from req mgr map", K(tenant_id_array_));
       }
     }
@@ -563,7 +563,7 @@ int ObVirtualSqlPlanMonitor::extract_tenant_ids()
       if (is_always_false) {
         tenant_id_array_.reset();
       } else {
-        std::sort(tenant_id_array_.begin(), tenant_id_array_.end());
+        lib::ob_sort(tenant_id_array_.begin(), tenant_id_array_.end());
         SERVER_LOG(DEBUG, "get tenant ids from req mgr map", K(tenant_id_array_));
       }
     }
@@ -829,19 +829,31 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
         break;
       }
       case WORKAREA_MEM: {
-        cells[cell_idx].set_null();
+        if(need_rt_node_) {
+          int64_t int_value = node.workarea_mem_;
+          cells[cell_idx].set_int(int_value);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case WORKAREA_MAX_MEM: {
-        cells[cell_idx].set_null();
+        int64_t int_value = node.workarea_max_mem_;
+        cells[cell_idx].set_int(int_value);
         break;
       }
       case WORKAREA_TEMPSEG: {
-        cells[cell_idx].set_null();
+        if (need_rt_node_) {
+          int64_t int_value = node.workarea_tempseg_;
+          cells[cell_idx].set_int(int_value);
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       case WORKAREA_MAX_TEMPSEG: {
-        cells[cell_idx].set_null();
+        int64_t int_value = node.workarea_max_tempseg_;
+        cells[cell_idx].set_int(int_value);
         break;
       }
       default: {

@@ -58,6 +58,8 @@ int ObSpatialIndexLookupOp::init(const ObDASScanCtDef *lookup_ctdef,
       }
     }
     is_whole_range_ |= (mbr_filters_->count() == 0);
+    mbr_filter_cnt_ = 0;
+    index_back_cnt_ = 0;
   }
   return ret;
 }
@@ -130,7 +132,7 @@ int ObSpatialIndexLookupOp::save_rowkeys()
         ObObj tmp_obj;
         ObExpr *expr = index_ctdef_->result_output_.at(i);
         if (T_PSEUDO_GROUP_ID == expr->type_) {
-          group_idx = expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_).get_int();
+          group_idx = ObNewRange::get_group_idx(expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_).get_int());
         }
       }
       if (OB_FAIL(lookup_range.build_range(ref_table_id, *idx_row))) {
@@ -140,6 +142,7 @@ int ObSpatialIndexLookupOp::save_rowkeys()
        LOG_WARN("store lookup key range failed", K(ret), K(scan_param_));
       }
       last_rowkey_ = *idx_row;
+      index_back_cnt_++;
       LOG_DEBUG("build data table range", K(ret), K(*idx_row), K(lookup_range), K(scan_param_.key_ranges_.count()));
     }
   }
@@ -195,7 +198,10 @@ int ObSpatialIndexLookupOp::get_next_row()
         if (OB_SUCC(ret) || OB_ITER_END == ret) {
           state_ = DO_LOOKUP;
           index_end_ = (OB_ITER_END == ret);
-          ret = OB_SUCCESS;
+          if (ret == OB_ITER_END) {
+            LOG_INFO("test spatial index back cnt", K(lookup_rowkey_cnt_), K(index_back_cnt_), K(mbr_filter_cnt_));
+            ret = OB_SUCCESS;
+          }
         }
         break;
       }
@@ -251,34 +257,37 @@ int ObSpatialIndexLookupOp::get_next_row()
 int ObSpatialIndexLookupOp::process_data_table_rowkey()
 {
   int ret = OB_SUCCESS;
-  // result_output: rowkey + mbr_expr + transaction_inf_expr
-  int64_t rowkey_cnt = index_ctdef_->result_output_.count() - 1;
-  if (index_ctdef_->trans_info_expr_ != nullptr) {
-    rowkey_cnt = rowkey_cnt - 1;
+  int64_t rowkey_cnt = max_rowkey_cnt_;
+  if (max_rowkey_cnt_ < 0 || OB_ISNULL(obj_ptr_)) {
+    rowkey_cnt = index_ctdef_->result_output_.count() - 1;
+    void *buf = nullptr;
+    if (index_ctdef_->trans_info_expr_ != nullptr) {
+      rowkey_cnt = rowkey_cnt - 1;
+    }
+    max_rowkey_cnt_ = rowkey_cnt;
+    if (OB_ISNULL(allocator_)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObObj) * rowkey_cnt))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate buffer failed", K(ret), K(rowkey_cnt));
+    } else {
+      obj_ptr_ = new(buf) ObObj[rowkey_cnt];
+    }
   }
-  ObObj *obj_ptr = nullptr;
-  void *buf = nullptr;
   ObNewRange lookup_range;
-  ObArenaAllocator tmp_allocator("GisLookup");
-  if (OB_ISNULL(buf = tmp_allocator.alloc(sizeof(ObObj) * rowkey_cnt))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate buffer failed", K(ret), K(rowkey_cnt));
-  } else {
-    obj_ptr = new(buf) ObObj[rowkey_cnt];
-  }
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
     ObExpr *expr = index_ctdef_->result_output_.at(i);
     if (T_PSEUDO_GROUP_ID == expr->type_) {
       // do nothing
     } else {
       ObDatum &col_datum = expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_);
-      if (OB_FAIL(col_datum.to_obj(obj_ptr[i], expr->obj_meta_, expr->obj_datum_map_))) {
+      if (OB_FAIL(col_datum.to_obj(obj_ptr_[i], expr->obj_meta_, expr->obj_datum_map_))) {
         LOG_WARN("convert datum to obj failed", K(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    ObRowkey table_rowkey(obj_ptr, rowkey_cnt);
+    ObRowkey table_rowkey(obj_ptr_, rowkey_cnt);
     ObObj mbr_obj;
     bool pass_through = true;
     ObExpr *mbr_expr = index_ctdef_->result_output_.at(rowkey_cnt);
@@ -289,10 +298,11 @@ int ObSpatialIndexLookupOp::process_data_table_rowkey()
       LOG_WARN("filter mbr failed", K(ret));
     } else if (!is_whole_range_ && pass_through) {
       // not target
+      mbr_filter_cnt_++;
     } else if (OB_FAIL(sorter_.add_item(table_rowkey))) {
       LOG_WARN("filter mbr failed", K(ret));
     } else {
-      LOG_TRACE("add rowkey success", K(table_rowkey), K(obj_ptr), K(obj_ptr[0]), K(rowkey_cnt));
+      LOG_TRACE("geo idx add rowkey success", K(table_rowkey), KP(obj_ptr_), K(obj_ptr_[0]), K(rowkey_cnt));
     }
   }
   return ret;

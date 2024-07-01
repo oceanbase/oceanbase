@@ -373,6 +373,7 @@
 #include "sql/engine/expr/ob_expr_st_buffer.h"
 #include "sql/engine/expr/ob_expr_spatial_cellid.h"
 #include "sql/engine/expr/ob_expr_spatial_mbr.h"
+#include "sql/engine/expr/ob_expr_sdo_relate.h"
 #include "sql/engine/expr/ob_expr_st_geomfromewkb.h"
 #include "sql/engine/expr/ob_expr_st_geomfromwkb.h"
 #include "sql/engine/expr/ob_expr_st_geomfromewkt.h"
@@ -440,8 +441,19 @@
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
+#include "sql/engine/expr/ob_expr_rb_build_empty.h"
+#include "sql/engine/expr/ob_expr_rb_is_empty.h"
+#include "sql/engine/expr/ob_expr_rb_build_varbinary.h"
+#include "sql/engine/expr/ob_expr_rb_to_varbinary.h"
+#include "sql/engine/expr/ob_expr_rb_cardinality.h"
+#include "sql/engine/expr/ob_expr_rb_calc_cardinality.h"
+#include "sql/engine/expr/ob_expr_rb_calc.h"
+#include "sql/engine/expr/ob_expr_rb_to_string.h"
+#include "sql/engine/expr/ob_expr_rb_from_string.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
+#include "sql/engine/expr/ob_expr_topn_filter.h"
+#include "sql/engine/expr/ob_expr_get_path.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1064,7 +1076,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprTransactionId);
     REG_OP(ObExprInnerRowCmpVal);
     REG_OP(ObExprLastRefreshScn);
-    // REG_OP(ObExprTopNFilter);
+    REG_OP(ObExprTopNFilter);
     REG_OP(ObExprPrivSTMakeEnvelope);
     REG_OP(ObExprPrivSTClipByBox2D);
     REG_OP(ObExprPrivSTPointOnSurface);
@@ -1082,6 +1094,28 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCurrentRole);
     REG_OP(ObExprInnerTableOptionPrinter);
     REG_OP(ObExprInnerTableSequenceGetter);
+    REG_OP(ObExprRbBuildEmpty);
+    REG_OP(ObExprRbIsEmpty);
+    REG_OP(ObExprRbBuildVarbinary);
+    REG_OP(ObExprRbToVarbinary);
+    REG_OP(ObExprRbCardinality);
+    REG_OP(ObExprRbAndCardinality);
+    REG_OP(ObExprRbOrCardinality);
+    REG_OP(ObExprRbXorCardinality);
+    REG_OP(ObExprRbAndnotCardinality);
+    REG_OP(ObExprRbAndNull2emptyCardinality);
+    REG_OP(ObExprRbOrNull2emptyCardinality);
+    REG_OP(ObExprRbAndnotNull2emptyCardinality);
+    REG_OP(ObExprRbAnd);
+    REG_OP(ObExprRbOr);
+    REG_OP(ObExprRbXor);
+    REG_OP(ObExprRbAndnot);
+    REG_OP(ObExprRbAndNull2empty);
+    REG_OP(ObExprRbOrNull2empty);
+    REG_OP(ObExprRbAndnotNull2empty);
+    REG_OP(ObExprRbToString);
+    REG_OP(ObExprRbFromString);
+    REG_OP(ObExprGetPath);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1267,8 +1301,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprSysExtractUtc);
   REG_OP_ORCL(ObExprTzOffset);
   REG_OP_ORCL(ObExprFromTz);
-  // REG_OP_ORCL(ObExprSpatialCellid);
-  // REG_OP_ORCL(ObExprSpatialMbr);
+  REG_OP_ORCL(ObExprSpatialCellid);
+  REG_OP_ORCL(ObExprSpatialMbr);
   //label security
   REG_OP_ORCL(ObExprOLSPolicyCreate);
   REG_OP_ORCL(ObExprOLSPolicyAlter);
@@ -1403,10 +1437,12 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprTransactionId);
   REG_OP_ORCL(ObExprInnerRowCmpVal);
   REG_OP_ORCL(ObExprLastRefreshScn);
+  REG_OP_ORCL(ObExprTopNFilter);
   REG_OP_ORCL(ObExprInnerTableOptionPrinter);
   REG_OP_ORCL(ObExprInnerTableSequenceGetter);
   // REG_OP_ORCL(ObExprTopNFilter);
-  // REG_OP_ORCL(ObExprSdoRelate);
+  REG_OP_ORCL(ObExprSdoRelate);
+  REG_OP_ORCL(ObExprGetPath);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

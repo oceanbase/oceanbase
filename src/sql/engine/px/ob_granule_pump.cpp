@@ -260,7 +260,7 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
     }
     if (OB_SUCC(ret) && random_type != GI_RANDOM_NONE) {
       auto compare_fun = [](const ObGITaskInfo &a, const ObGITaskInfo &b) -> bool { return a.hash_value_ > b.hash_value_; };
-      std::sort(gi_task_set_.begin(), gi_task_set_.end(), compare_fun);
+      lib::ob_sort(gi_task_set_.begin(), gi_task_set_.end(), compare_fun);
     }
   }
   return ret;
@@ -900,7 +900,7 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
         (some scenarios do not require order), but the logic is acceptable.
         2. If reverse order is required outside, then the reverse sorting should be done outside on its own.
       */
-      std::sort(scan_ranges.begin(), scan_ranges.end(), ObNewRangeCmp());
+      lib::ob_sort(scan_ranges.begin(), scan_ranges.end(), ObNewRangeCmp());
     }
   }
 
@@ -1287,13 +1287,13 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     LOG_TRACE("handler split dml op task", K(modify_op->get_type()));
     if (OB_FAIL(modify_op->get_single_dml_ctdef(dml_ctdef))) {
       LOG_WARN("get single table loc id failed", K(ret));
-    } else if (split_insert_gi_task(args,
+    } else if (OB_FAIL(split_insert_gi_task(args,
                                     dml_ctdef->das_base_ctdef_.index_tid_,
                                     dml_ctdef->das_base_ctdef_.rowkey_cnt_, // insert对应的row key count
                                     tablet_arrays.at(0),
                                     partition_granule,
                                     total_task_set,
-                                    random_type)){
+                                    random_type))){
       LOG_WARN("failed to prepare pw insert gi task", K(ret));
     } else if (OB_FAIL(taskset_array.push_back(total_task_set))) {
       LOG_WARN("failed to push back task set", K(ret));

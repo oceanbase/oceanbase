@@ -644,6 +644,7 @@ int ObPlanSet::remove_cache_obj_entry(const ObCacheObjID obj_id)
   ObPCVSet *pcv_set = NULL;
   if (OB_ISNULL(get_plan_cache_value())
      || OB_ISNULL(pcv_set = get_plan_cache_value()->get_pcv_set())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(pcv_set));
   } else if (NULL == (pc = get_plan_cache())) {
     LOG_WARN("invalid argument", K(pc));

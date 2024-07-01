@@ -50,7 +50,9 @@ int ObDelUpdLogPlan::compute_dml_parallel()
   max_dml_parallel_ = ObGlobalHint::UNSET_PARALLEL;
   const ObOptimizerContext &opt_ctx = get_optimizer_context();
   const ObSQLSessionInfo *session_info = NULL;
-  if (OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
+  const ObDelUpdStmt *del_upd_stmt = NULL;
+  if (OB_ISNULL(session_info = get_optimizer_context().get_session_info()) ||
+      OB_ISNULL(del_upd_stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_optimizer_context().get_session_info()));
   } else if (!opt_ctx.can_use_pdml()) {
@@ -69,6 +71,13 @@ int ObDelUpdLogPlan::compute_dml_parallel()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected parallel", K(ret), K(dml_parallel), K(opt_ctx.get_parallel_rule()));
     } else {
+      if (del_upd_stmt->is_insert_stmt() &&
+          static_cast<const ObInsertStmt*>(del_upd_stmt)->is_overwrite()) {
+        const int64_t default_insert_overwrite_parallel = 2;
+        if (dml_parallel <= ObGlobalHint::DEFAULT_PARALLEL) {
+          dml_parallel = default_insert_overwrite_parallel;
+        }
+      }
       max_dml_parallel_ = dml_parallel;
       use_pdml_ = (opt_ctx.is_online_ddl() || session_info->get_ddl_info().is_mview_complete_refresh() ||
                   (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&

@@ -631,7 +631,7 @@ int ObTransformSimplifySubquery::try_push_down_outer_join_conds(ObDMLStmt *stmt,
       LOG_WARN("failed to get_push_down_conditions", K(ret), K(join_table));
     } else if (push_down_conds.empty()) {
       /*do nothing*/
-    } else if (ObOptimizerUtil::remove_item(join_table->get_join_conditions(), push_down_conds)) {
+    } else if (OB_FAIL(ObOptimizerUtil::remove_item(join_table->get_join_conditions(), push_down_conds))) {
       LOG_WARN("failed to remove item", K(ret));
     } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
                                                                  stmt,
@@ -1251,7 +1251,7 @@ int ObTransformSimplifySubquery::eliminate_subquery(ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   bool can_be_eliminated = false;
-  if (OB_ISNULL(expr)) {
+  if (OB_ISNULL(expr) || OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr is NULL in eliminate subquery", K(ret));
   } else if (!expr->has_flag(CNT_SUB_QUERY)) {
@@ -1269,7 +1269,10 @@ int ObTransformSimplifySubquery::eliminate_subquery(ObDMLStmt *stmt,
       } else if (OB_ISNULL(subquery = subq_expr->get_ref_stmt())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("Subquery stmt is NULL", K(ret));
-      } else if (subquery->is_contains_assignment() || subquery->is_values_table_query()) {
+      } else if (subquery->is_contains_assignment()) {
+        // do nothing
+      } else if (subquery->is_values_table_query() &&
+                 !ObTransformUtils::is_enable_values_table_rewrite(stmt->get_query_ctx()->optimizer_features_enable_version_)) {
         // do nothing
       } else if (OB_FAIL(subquery_can_be_eliminated_in_exists(expr->get_expr_type(),
                                                               subquery,
@@ -1448,18 +1451,20 @@ int ObTransformSimplifySubquery::groupby_can_be_eliminated_in_any_all(const ObSe
   // 3. 没有limit子句
   // 4. 无聚集函数（select item中）
   // 5. 非常量select item列，全部包含在group exprs中
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
   } else if (0 == stmt->get_table_size() || stmt->is_set_stmt()) {
     // Only non-set stmt will be eliminated and do nothing for other DML stmts:
     // 1. set -> No elimination
     // 2. select 1 + floor(2) (table_size == 0) -> No elimination
+  } else if (stmt->is_values_table_query() &&
+             !ObTransformUtils::is_enable_values_table_rewrite(stmt->get_query_ctx()->optimizer_features_enable_version_)) {
+    /* do nothing */
   } else if (stmt->has_group_by()
              && !stmt->has_having()
              && !stmt->has_limit()
-             && 0 == stmt->get_aggr_item_size()
-             && !stmt->is_values_table_query()) {
+             && 0 == stmt->get_aggr_item_size()) {
     // Check if select list is involved in group exprs
     ObRawExpr *s_expr = NULL;
     bool all_in_group_exprs = true;
@@ -1488,7 +1493,8 @@ int ObTransformSimplifySubquery::eliminate_subquery_in_exists(ObDMLStmt *stmt,
   ObRawExprFactory *expr_factory = NULL;
   ObSelectStmt *subquery = NULL;
   bool add_limit_constraint = false;
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
+  if (OB_ISNULL(expr) || OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
+      OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL pointer Error", KP(expr), KP_(ctx), KP(expr_factory), K(ret));
   } else if (T_OP_EXISTS == expr->get_expr_type() || T_OP_NOT_EXISTS == expr->get_expr_type()) {
@@ -1500,7 +1506,8 @@ int ObTransformSimplifySubquery::eliminate_subquery_in_exists(ObDMLStmt *stmt,
     } else if (OB_ISNULL(subquery = subq_expr->get_ref_stmt())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Subquery stmt is NULL", K(ret));
-    } else if (subquery->is_values_table_query()) { /* do nothing */
+    } else if (subquery->is_values_table_query() &&
+               !ObTransformUtils::is_enable_values_table_rewrite(stmt->get_query_ctx()->optimizer_features_enable_version_)) { /* do nothing */
       //Just in case different parameters hit same plan, firstly we need add const param constraint
     } else if (OB_FAIL(need_add_limit_constraint(expr->get_expr_type(), subquery, add_limit_constraint))){
       LOG_WARN("failed to check limit constraints", K(ret));
@@ -2216,8 +2223,7 @@ int ObTransformSimplifySubquery::check_stmt_can_trans_as_exists(ObSelectStmt *st
   bool contain_rownum = false;
   is_valid = false;
   match_index = false;
-  if (OB_ISNULL(stmt) ||
-      OB_ISNULL(ctx_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child stmt is null", K(ret));
   } else if (OB_FAIL(stmt->has_rownum(contain_rownum))) {
@@ -2262,7 +2268,8 @@ int ObTransformSimplifySubquery::check_stmt_can_trans_as_exists(ObSelectStmt *st
              stmt->is_hierarchical_query() ||
              stmt->has_window_function() ||
              stmt->has_rollup() ||
-             stmt->is_values_table_query()) {
+             (stmt->is_values_table_query() &&
+              !ObTransformUtils::is_enable_values_table_rewrite(stmt->get_query_ctx()->optimizer_features_enable_version_))) {
     LOG_TRACE("stmt not support trans in as exists", K(stmt->is_contains_assignment()),
               K(stmt->is_hierarchical_query()), K(stmt->has_window_function()),
               K(stmt->has_rollup()), K(stmt->is_values_table_query()));
@@ -2557,7 +2564,7 @@ int ObTransformSimplifySubquery::do_trans_empty_table_subquery_as_expr(ObRawExpr
     LOG_WARN("failed to add const param constraints", K(ret));
   } else if (OB_FAIL(conditions.assign(ref_stmt->get_condition_exprs()))) {
     LOG_WARN("failed to assign condition exprs", K(ret));
-  } else if (ObTransformUtils::decorrelate(conditions, query_ref->get_exec_params())) {
+  } else if (OB_FAIL(ObTransformUtils::decorrelate(conditions, query_ref->get_exec_params()))) {
     LOG_WARN("failed to decorrelate condition exprs", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_,
                                                     conditions,

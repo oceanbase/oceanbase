@@ -298,6 +298,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 514	__all_user_proxy_role_info	0	201001	1
 515	__all_user_proxy_role_info_history	0	201001	1
 518	__all_mview_dep	0	201001	1
+519	__all_scheduler_job_run_detail_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -724,6 +725,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12437	__all_virtual_checkpoint_diagnose_memtable_info	2	201001	1
 12438	__all_virtual_checkpoint_diagnose_checkpoint_unit_info	2	201001	1
 12439	__all_virtual_checkpoint_diagnose_info	2	201001	1
+12442	__all_virtual_tenant_scheduler_running_job	2	201001	1
 12443	__all_virtual_routine_privilege	2	201001	1
 12444	__all_virtual_routine_privilege_history	2	201001	1
 12447	__all_virtual_aux_stat	2	201001	1
@@ -749,6 +751,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12481	__all_virtual_tenant_resource_limit	2	201001	1
 12482	__all_virtual_tenant_resource_limit_detail	2	201001	1
 12487	__all_virtual_nic_info	2	201001	1
+12488	__all_virtual_scheduler_job_run_detail_v2	2	201001	1
+12490	__all_virtual_spatial_reference_systems	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1185,6 +1189,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21580	EVENTS	1	201002	1
 21581	V$OB_NIC_INFO	1	201001	1
 21586	GV$OB_NIC_INFO	1	201001	1
+21589	DBA_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
+21590	CDB_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

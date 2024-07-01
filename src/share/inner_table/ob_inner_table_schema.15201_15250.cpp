@@ -590,7 +590,7 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_real_agent_ora_schema(O
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      4000, //column_length
+      65536, //column_length
       2, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -725,7 +725,7 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_real_agent_ora_schema(O
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      4000, //column_length
+      65536, //column_length
       2, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -920,7 +920,7 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_real_agent_ora_schema(O
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      128, //column_length
+      4096, //column_length
       2, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -959,6 +959,36 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_real_agent_ora_schema(O
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("INTERVAL_TS", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("USER_ID", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("DATABASE_ID", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

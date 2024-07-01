@@ -255,7 +255,7 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode &parse_tree, b
       if (is_oracle_mode()){
         /* do nothing */
         LOG_WARN("Failed to resolve child stmt", K(ret));
-      } else if (params_.has_recursive_word_) {
+      } else if (cte_ctx_.has_recursive_word_) {
         ret = OB_ERR_CTE_NEED_QUERY_BLOCKS;  // mysql error: Recursive Common Table Expression 'cte' should have one or
                                              // more non-recursive query blocks followed by one or more recursive ones
         LOG_WARN("Failed to resolve child stmt", K(ret));
@@ -281,7 +281,7 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode &parse_tree, b
   } 
   
   if (OB_SUCC(ret)) {
-    if (!params_.has_cte_param_list_ && 
+    if (!cte_ctx_.has_cte_param_list_ &&
         !left_resolver.cte_ctx_.cte_col_names_.empty()) {
       right_resolver.cte_ctx_.cte_col_names_.reset();
       cte_ctx_.cte_col_names_.reset();
@@ -1045,7 +1045,7 @@ int ObSelectResolver::check_and_mark_aggr_in_having_scope(ObSelectStmt *select_s
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL ptr", K(ret));
-      } else if (ObTransformUtils::extract_aggr_expr(expr, aggrs)) {
+      } else if (OB_FAIL(ObTransformUtils::extract_aggr_expr(expr, aggrs))) {
         LOG_WARN("failed to extrace aggr expr", K(ret));
       } else {
         // having aggr must in inner stmt
@@ -1336,6 +1336,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   if (OB_SUCC(ret) && (start_with != NULL || connect_by != NULL)) {
     select_stmt->set_hierarchical_query(true);
   }
+  OZ( resolve_hints(parse_tree.children_[PARSE_SELECT_HINTS]) );
   /* resolve from clause */
   OZ( resolve_from_clause(parse_tree.children_[PARSE_SELECT_FROM]) );
   /* resolve start with clause */
@@ -1399,7 +1400,6 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
     has_top_limit_ = false;
     select_stmt->set_has_top_limit(NULL != parse_tree.children_[PARSE_SELECT_LIMIT]);
   }
-  OZ( resolve_hints(parse_tree.children_[PARSE_SELECT_HINTS]) );
 
   //bug:
   //由于支持mysql模式下的name window,需要提前解析name window保存下来，然后再解析引用的win expr的表达式,当前实现
@@ -1552,7 +1552,7 @@ int ObSelectResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-  if (OB_SUCC(ret) && !is_oracle_mode() && !params_.has_cte_param_list_) {
+  if (OB_SUCC(ret) && !is_oracle_mode() && !cte_ctx_.has_cte_param_list_) {
     cte_ctx_.cte_col_names_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); i++) {
       if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(select_stmt->get_select_item(i).alias_name_))) {
@@ -2915,23 +2915,13 @@ int ObSelectResolver::resolve_all_generated_table_columns(
     *  但是对于select * from(select c1,c1 from t1)；这样的查询肯定引用了，因此必须在展开*对应的查询时进行一次
     *  检查，如果存在重复列是不允许的；
      */
-    // if the select item is a duplicable column in generated table, skip the check.
-    // else we should set the skip_join_dup parameter to true. 
-    if (OB_FAIL(is_need_check_col_dup(select_item.expr_, need_check_col_dup))) {
-      LOG_WARN("failed to check if need to check col duplicate", K(ret));
-    } else if ((!is_skip || need_check_col_dup)
-      && OB_FAIL(column_namespace_checker_.check_column_exists(table_item,
-                                                               select_item.alias_name_,
-                                                               is_exists, // the return value of is_exists is unused.
-                                                               !table_ref->is_view_stmt()))) { //if is a view stmt, do not pass the duplicated column.
-      LOG_WARN("failed to check column exists", K(ret));
-    } else if (OB_FAIL(resolve_generated_table_column_item(table_item,
-                                                           select_item.alias_name_,
-                                                           col_item,
-                                                           NULL,
-                                                           OB_INVALID_ID,
-                                                           i,
-                                                           is_skip))) {
+    if (OB_FAIL(resolve_generated_table_column_item(table_item,
+                                                    select_item.alias_name_,
+                                                    col_item,
+                                                    NULL,
+                                                    i + OB_APP_MIN_COLUMN_ID,
+                                                    i,
+                                                    is_skip))) {
       LOG_WARN("resolve column item failed", K(ret));
     } else if (column_items != NULL) {
       if (OB_FAIL(column_items->push_back(*col_item))) {
@@ -3514,6 +3504,7 @@ int ObSelectResolver::resolve_cycle_pseudo(const ParseNode *cycle_set_clause,
   ObRawExpr *expr_d_v = nullptr;
   //for pseudo column
   if (OB_ISNULL(cycle_set_clause)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cycle clause must have set pseudo column", K(ret));
   } else if (OB_FAIL(resolve_and_split_sql_expr(*cycle_set_clause,
                                                 r_union_stmt->get_cte_exprs()))) {
@@ -3970,7 +3961,7 @@ int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
           if (OB_ISNULL(first_select_item.expr_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is null", K(ret), K(first_select_item.expr_));
-          } else if (types.push_back(first_select_item.expr_->get_result_type())) {
+          } else if (OB_FAIL(types.push_back(first_select_item.expr_->get_result_type()))) {
             LOG_WARN("fail to push left_type", K(ret));
           }
           while (OB_SUCC(ret) && item_idx < select_item_count) {
@@ -4991,6 +4982,10 @@ int ObSelectResolver::resolve_into_const_node(const ParseNode *node, ObObj &obj)
       obj.set_varchar(node_str);
       obj.set_collation_type(cs_type);
     }
+  } else if (T_HEX_STRING == node->type_) {
+    ObString node_str(node->str_len_, node->str_value_);
+    obj.set_varchar(node_str);
+    obj.set_collation_type(CS_TYPE_BINARY);
   } else if (T_QUESTIONMARK == node->type_) {
     obj.set_unknown(node->value_);
   } else {
@@ -7251,7 +7246,7 @@ int ObSelectResolver::check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr)
       LOG_WARN("argument is should be a const expr", K(ret), KPC(aggr_expr));
     } else if (OB_FAIL(check_separator_exprs.push_back(aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)))) {
       LOG_WARN("failed to push back", K(ret));
-    } else if (get_select_stmt()->get_all_group_by_exprs(all_group_by_exprs)) {
+    } else if (OB_FAIL(get_select_stmt()->get_all_group_by_exprs(all_group_by_exprs))) {
       LOG_WARN("failed to get all group by exprs", K(ret));
     } else if (OB_FAIL(ObGroupByChecker::check_by_expr(params_.param_list_,
                                                        get_select_stmt(),

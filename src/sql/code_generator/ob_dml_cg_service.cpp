@@ -1768,11 +1768,13 @@ int ObDmlCgService::append_all_uk_column_id(ObSchemaGetterGuard *schema_guard,
       // not unique index, skip
     } else {
       ObTableSchema::const_column_iterator iter = index_table_schema->column_begin();
-      for ( ; iter != index_table_schema->column_end(); iter++) {
+      for ( ; OB_SUCC(ret) && iter != index_table_schema->column_end(); iter++) {
         const ObColumnSchemaV2 *column_schema = *iter;
         if (OB_ISNULL(column_schema)) {
-          LOG_WARN("unexpected err", KPC(column_schema));
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), KPC(column_schema));
         } else if (!column_schema->is_index_column()) {
+          // ignore ret
           // skip non index column
         } else if (OB_FAIL(add_var_to_array_no_dup(minimal_column_ids, column_schema->get_column_id()))) {
           LOG_WARN("add column_id to list failed",
@@ -2395,11 +2397,11 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
       ObLogDelUpd &dml_op = static_cast<ObLogDelUpd&>(op);
       // Cg is only needed when the current trans_info_expr_ has a producer operator
     if (has_exist_in_array(dml_op.get_produced_trans_exprs(), index_dml_info.trans_info_expr_)) {
-      if (cg_.generate_rt_expr(*index_dml_info.trans_info_expr_, dml_base_ctdef.trans_info_expr_)) {
+      if (OB_FAIL(cg_.generate_rt_expr(*index_dml_info.trans_info_expr_, dml_base_ctdef.trans_info_expr_))) {
         LOG_WARN("fail to cg trans_info expr", K(ret), KPC(index_dml_info.trans_info_expr_));
       }
     } else {
-      LOG_TRACE("this trans_info_expr not produced", K(ret), K(index_dml_info));
+      LOG_TRACE("this trans_info_expr not produced", K(index_dml_info));
     }
   }
 
@@ -2692,7 +2694,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       }
       trig_ctdef.tg_event_ = dml_event;
       ObTriggerInfo::ActionOrderComparator action_order_com;
-      std::sort(trigger_infos.begin(), trigger_infos.end(), action_order_com);
+      lib::ob_sort(trigger_infos.begin(), trigger_infos.end(), action_order_com);
       if (OB_FAIL(action_order_com.get_ret())) {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("sort error", K(ret));
@@ -3445,6 +3447,7 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
     if (check_parent_table) {
       ObDMLCtDefAllocator<ObForeignKeyCheckerCtdef> fk_allocator(cg_.phy_plan_->get_allocator());
       if (OB_ISNULL(fk_arg.fk_ctdef_ = fk_allocator.alloc())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alocate foreign key ctdef", K(ret));
       } else if (OB_FAIL(generate_fk_check_ctdef(op, name_table_id,
                                                 fk_part_id_expr,
@@ -3510,6 +3513,7 @@ int ObDmlCgService::generate_fk_check_ctdef(const ObLogDelUpd &op,
     } else if (OB_FAIL(cg_.generate_calc_part_id_expr(*part_id_expr_for_lookup, nullptr, rt_part_id_expr))) {
       LOG_WARN("generate rt part_id_expr failed", K(ret), KPC(part_id_expr_for_lookup));
     } else if (OB_ISNULL(rt_part_id_expr)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rt part_id_expr for lookup is null", K(ret));
     } else if (OB_FAIL(constraint_raw_exprs.push_back(part_id_expr_for_lookup))) {
       LOG_WARN("fail to push part_id_expr to constraint_raw_exprs", K(ret));
@@ -3650,6 +3654,7 @@ int ObDmlCgService::generate_fk_scan_part_id_expr(ObLogDelUpd &op,
     } else if (OB_FAIL(cg_.generate_calc_part_id_expr(*part_id_expr_for_lookup, nullptr, rt_part_id_expr))) {
       LOG_WARN("generate rt part_id_expr failed", K(ret), KPC(part_id_expr_for_lookup));
     } else if (OB_ISNULL(rt_part_id_expr)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rt part_id_expr for lookup is null", K(ret));
     } else if (OB_FAIL(constraint_raw_exprs.push_back(part_id_expr_for_lookup))) {
       LOG_WARN("fail to push part_id_expr to constraint_raw_exprs", K(ret));

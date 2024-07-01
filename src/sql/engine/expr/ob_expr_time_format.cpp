@@ -57,7 +57,7 @@ int ObExprTimeFormat::time_to_str_format(const int64_t &time_value, const ObStri
 {
   int ret = OB_SUCCESS;
   ObTime ob_time;
-  if (ObTimeConverter::time_to_ob_time(time_value, ob_time)) {
+  if (OB_FAIL(ObTimeConverter::time_to_ob_time(time_value, ob_time))) {
     LOG_WARN("time to ob time failed", K(ret), K(time_value));
   } else if (OB_ISNULL(format.ptr()) || OB_ISNULL(buf)
             || OB_UNLIKELY(format.length() <= 0 || buf_len <= 0)) {

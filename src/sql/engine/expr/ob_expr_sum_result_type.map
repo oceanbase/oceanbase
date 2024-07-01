@@ -52,6 +52,9 @@ static constexpr ObObjType SUM_RESULT_TYPE[ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType */
     ObMaxType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
+    ObNumberType,      /* ObMySQLDateType */
+    ObNumberType,      /* ObMySQLDateTimeType */
+    ObMaxType,         /* ObRoaringBitmapType */
 };
 
 static_assert(is_array_fully_initialized(SUM_RESULT_TYPE), "SUM_RESULT_TYPE is partially initlized");

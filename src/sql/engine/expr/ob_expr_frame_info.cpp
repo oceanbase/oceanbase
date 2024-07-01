@@ -126,7 +126,7 @@ int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
         }
 
         // copy inner function ptrs
-        if (other.rt_exprs_.at(i).inner_func_cnt_ > 0) {
+        if (OB_SUCC(ret) && other.rt_exprs_.at(i).inner_func_cnt_ > 0) {
           int64_t func_cnt = other.rt_exprs_.at(i).inner_func_cnt_;
           void *funcs_buf = NULL;
           if (OB_ISNULL(funcs_buf = allocator.alloc(sizeof(void *) * func_cnt))) {
@@ -156,7 +156,7 @@ int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
       }
 
       // allocate parents memory for all rt exprs
-      if (rt_exprs_.at(i).parent_cnt_ > 0) {
+      if (OB_SUCC(ret) && rt_exprs_.at(i).parent_cnt_ > 0) {
         ObExpr **parent_buf = NULL;
         int64_t buf_size = rt_exprs_.at(i).parent_cnt_ * sizeof(ObExpr *);
         if (OB_ISNULL(parent_buf = (ObExpr **)allocator.alloc(buf_size))) {

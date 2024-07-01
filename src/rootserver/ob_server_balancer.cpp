@@ -1390,7 +1390,7 @@ int ObServerBalancer::try_balance_single_unit_by_disk(
           LOG_WARN("fail to push back", K(ret));
         } else {
           ServerTotalLoadCmp cmp;
-          std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+          lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
           if (OB_FAIL(cmp.get_ret())) {
             LOG_WARN("fail to sort server loads", K(ret));
           }
@@ -1535,7 +1535,7 @@ int ObServerBalancer::try_balance_single_unit_by_cm(
           LOG_WARN("fail to push back", K(ret));
         } else {
           ServerTotalLoadCmp cmp;
-          std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+          lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
           if (OB_FAIL(cmp.get_ret())) {
             LOG_WARN("fail to sort server loads", K(ret));
           }
@@ -1608,7 +1608,7 @@ int ObServerBalancer::do_balance_sys_tenant_units(
     }
     if (OB_SUCC(ret)) {
       ServerTotalLoadCmp cmp;
-      std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+      lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to sort", K(ret));
       }
@@ -2902,7 +2902,7 @@ int ObServerBalancer::do_amend_inter_ttg_balance(
     }
     if (OB_SUCC(ret)) {
       InterServerLoadCmp cmp;
-      std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+      lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to sort server load ptrs", K(ret));
       } else if (OB_FAIL(sort_server_loads_for_balance(
@@ -3157,9 +3157,9 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_inter_ttg_lo
             LOG_WARN("fail to get excluded servers", K(ret));
           } else if (has_exist_in_array(excluded_servers, left_inter_load.server_)) {
             // ignore this
-          } else if (left_ug->get_inter_ttg_load_value(right_inter_load, left_ug_load_value)) {
+          } else if (OB_FAIL(left_ug->get_inter_ttg_load_value(right_inter_load, left_ug_load_value))) {
             LOG_WARN("fail to get inter ttg load value", K(ret));
-          } else if (right_ug->get_inter_ttg_load_value(right_inter_load, right_ug_load_value)) {
+          } else if (OB_FAIL(right_ug->get_inter_ttg_load_value(right_inter_load, right_ug_load_value))) {
             LOG_WARN("fail to get inter ttg load value", K(ret));
           } else if (left_ug_load_value - right_ug_load_value <= EPSILON) {
             // ignore this, since this almost has no effect for load balance
@@ -3192,7 +3192,7 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_inter_ttg_lo
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(left_inter_load);
-      std::sort(left_inter_load.unitgroup_loads_.begin(),
+      lib::ob_sort(left_inter_load.unitgroup_loads_.begin(),
                 left_inter_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -3201,7 +3201,7 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_inter_ttg_lo
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(right_inter_load);
-      std::sort(right_inter_load.unitgroup_loads_.begin(),
+      lib::ob_sort(right_inter_load.unitgroup_loads_.begin(),
                 right_inter_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -3265,7 +3265,7 @@ int ObServerBalancer::CountBalanceStrategy::try_move_single_ug_balance_inter_ttg
       }
       if (OB_SUCC(ret)) {
         UnitGroupLoadCmp unitgroup_load_cmp(src_inter_load);
-        std::sort(src_inter_load.unitgroup_loads_.begin(),
+        lib::ob_sort(src_inter_load.unitgroup_loads_.begin(),
                   src_inter_load.unitgroup_loads_.end(),
                   unitgroup_load_cmp);
         if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -3274,7 +3274,7 @@ int ObServerBalancer::CountBalanceStrategy::try_move_single_ug_balance_inter_ttg
       }
       if (OB_SUCC(ret)) {
         UnitGroupLoadCmp unitgroup_load_cmp(dst_inter_load);
-        std::sort(dst_inter_load.unitgroup_loads_.begin(),
+        lib::ob_sort(dst_inter_load.unitgroup_loads_.begin(),
                   dst_inter_load.unitgroup_loads_.end(),
                   unitgroup_load_cmp);
         if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -3995,7 +3995,7 @@ int ObServerBalancer::do_migrate_out_collide_unit(
           LOG_WARN("fail to push back", K(ret));
         } else {
           ServerTotalLoadCmp cmp;
-          std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+          lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
           if (OB_FAIL(cmp.get_ret())) {
             LOG_WARN("fail to sort server loads", K(ret));
           }
@@ -4041,7 +4041,7 @@ int ObServerBalancer::pick_vacate_server_load(
     }
     if (OB_SUCC(ret)) {
       ServerTotalLoadCmp cmp;
-      if (FALSE_IT(std::sort(server_load_ptrs_sorted.begin(),
+      if (FALSE_IT(lib::ob_sort(server_load_ptrs_sorted.begin(),
                              server_load_ptrs_sorted.end(),
                              cmp))) {
       } else if (OB_FAIL(cmp.get_ret())) {
@@ -4359,7 +4359,7 @@ int ObServerBalancer::vacate_space_by_single_unit(
           LOG_WARN("fail to push back", K(ret));
         } else {
           ServerTotalLoadCmp cmp;
-          std::sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
+          lib::ob_sort(server_load_ptrs_sorted.begin(), server_load_ptrs_sorted.end(), cmp);
           if (OB_FAIL(cmp.get_ret())) {
             LOG_WARN("fail to sort server loads", K(ret));
           }
@@ -4461,7 +4461,7 @@ int ObServerBalancer::generate_complete_server_loads(
       }
       if (OB_SUCC(ret)) {
         ServerTotalLoadCmp cmp;
-        std::sort(server_loads.begin(), server_loads.end(), cmp);
+        lib::ob_sort(server_loads.begin(), server_loads.end(), cmp);
         if (OB_FAIL(cmp.get_ret())) {
           LOG_WARN("fail to sort", K(ret));
         }
@@ -4589,7 +4589,7 @@ int ObServerBalancer::make_single_wild_server_empty_by_units(
     } else if (OB_FAIL(get_pool_occupation_excluded_dst_servers(
             unit_load, pool_occupation, excluded_servers))) {
       LOG_WARN("fail to get excluded servers", K(ret));
-    } else if (FALSE_IT(std::sort(available_server_loads.begin(),
+    } else if (FALSE_IT(lib::ob_sort(available_server_loads.begin(),
                                   available_server_loads.end(),
                                   cmp))) {
       // sort cannot fail
@@ -4811,7 +4811,7 @@ int ObServerBalancer::make_available_servers_balance_by_disk(
     }
     if (OB_SUCC(ret)) {
       UnitLoadDiskCmp cmp(unit_stat_mgr_);
-      std::sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
+      lib::ob_sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to get ret", K(ret));
       }
@@ -4967,7 +4967,7 @@ int ObServerBalancer::generate_sort_available_servers_disk_statistic(
     }
     if (OB_SUCC(ret)) {
       ServerDiskPercentCmp cmp;
-      std::sort(available_servers_disk_statistic.begin(),
+      lib::ob_sort(available_servers_disk_statistic.begin(),
                 available_servers_disk_statistic.end(),
                 cmp);
       if (OB_FAIL(cmp.get_ret())) {
@@ -5099,7 +5099,7 @@ int ObServerBalancer::make_server_disk_underload_by_unit(
             LOG_WARN("fail to update dst server load", K(ret));
           } else if (OB_FAIL(task_array.push_back(unit_migrate))) {
             LOG_WARN("fail to push back", K(ret));
-          } else if (FALSE_IT(std::sort(under_disk_statistic.begin(),
+          } else if (FALSE_IT(lib::ob_sort(under_disk_statistic.begin(),
                                         under_disk_statistic.end(),
                                         cmp))) {
           } else if (OB_FAIL(cmp.get_ret())) {
@@ -5136,7 +5136,7 @@ int ObServerBalancer::make_server_disk_underload(
     }
     if (OB_SUCC(ret)) {
       UnitLoadDiskCmp cmp(unit_stat_mgr_);
-      std::sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
+      lib::ob_sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to get ret", K(ret));
       }
@@ -6515,7 +6515,7 @@ int ObServerBalancer::CountBalanceStrategy::move_or_exchange_ug_balance_ttg_load
       double tolerance = sum_load / 100;
       // Sort by intra load descending order
       IntraServerLoadCmp cmp;
-      std::sort(server_load_ptrs_sorted.begin(),
+      lib::ob_sort(server_load_ptrs_sorted.begin(),
                 server_load_ptrs_sorted.end(),
                 cmp);
       if (OB_FAIL(cmp.get_ret())) {
@@ -6588,7 +6588,7 @@ int ObServerBalancer::CountBalanceStrategy::do_move_or_exchange_ug_balance_ttg_l
       } else {
         times++;
         IntraServerLoadCmp cmp;
-        std::sort(server_load_ptrs_sorted.begin(),
+        lib::ob_sort(server_load_ptrs_sorted.begin(),
                   server_load_ptrs_sorted.end(),
                   cmp);
         if (OB_FAIL(cmp.get_ret())) {
@@ -6637,7 +6637,7 @@ int ObServerBalancer::CountBalanceStrategy::try_move_ug_balance_ttg_load_foreach
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(max_server_load);
-      std::sort(max_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(max_server_load.unitgroup_loads_.begin(),
                 max_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6646,7 +6646,7 @@ int ObServerBalancer::CountBalanceStrategy::try_move_ug_balance_ttg_load_foreach
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(min_server_load);
-      std::sort(min_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(min_server_load.unitgroup_loads_.begin(),
                 min_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6727,7 +6727,7 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_ttg_load_for
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(max_server_load);
-      std::sort(max_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(max_server_load.unitgroup_loads_.begin(),
                 max_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6736,7 +6736,7 @@ int ObServerBalancer::CountBalanceStrategy::try_exchange_ug_balance_ttg_load_for
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(min_server_load);
-      std::sort(min_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(min_server_load.unitgroup_loads_.begin(),
                 min_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6771,7 +6771,7 @@ int ObServerBalancer::CountBalanceStrategy::make_count_balanced(
     if (OB_SUCC(ret)) {
       // Sort by the number of unitgroups on the server in ascending order
       ServerLoadUgCntCmp cmp;
-      std::sort(server_cnt_ptrs_sorted.begin(),
+      lib::ob_sort(server_cnt_ptrs_sorted.begin(),
                 server_cnt_ptrs_sorted.end(),
                 cmp);
       if (OB_FAIL(cmp.get_ret())) {
@@ -6814,7 +6814,7 @@ int ObServerBalancer::CountBalanceStrategy::do_make_count_balanced(
       } else {
         times++;
         ServerLoadUgCntCmp cmp;
-        std::sort(server_cnt_ptrs_sorted.begin(),
+        lib::ob_sort(server_cnt_ptrs_sorted.begin(),
                   server_cnt_ptrs_sorted.end(),
                   cmp);
         if (OB_FAIL(cmp.get_ret())) {
@@ -6859,7 +6859,7 @@ int ObServerBalancer::CountBalanceStrategy::do_make_count_balanced_foreach(
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(src_server_load);
-      std::sort(src_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(src_server_load.unitgroup_loads_.begin(),
                 src_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -6868,7 +6868,7 @@ int ObServerBalancer::CountBalanceStrategy::do_make_count_balanced_foreach(
     }
     if (OB_SUCC(ret)) {
       UnitGroupLoadCmp unitgroup_load_cmp(dst_server_load);
-      std::sort(dst_server_load.unitgroup_loads_.begin(),
+      lib::ob_sort(dst_server_load.unitgroup_loads_.begin(),
                 dst_server_load.unitgroup_loads_.end(),
                 unitgroup_load_cmp);
       if (OB_FAIL(unitgroup_load_cmp.get_ret())) {
@@ -7945,7 +7945,7 @@ int ObServerBalancer::ZoneServerDiskStatistic::append(
     LOG_WARN("fail to push back", K(ret));
   } else {
     ServerDiskStatisticCmp cmp;
-    std::sort(server_disk_statistic_array_.begin(),
+    lib::ob_sort(server_disk_statistic_array_.begin(),
               server_disk_statistic_array_.end(),
               cmp);
   }
@@ -7979,7 +7979,7 @@ int ObServerBalancer::ZoneServerDiskStatistic::raise_server_disk_use(
       LOG_WARN("server not exist", K(ret), K(server));
     } else {
       ServerDiskStatisticCmp cmp;
-      std::sort(server_disk_statistic_array_.begin(),
+      lib::ob_sort(server_disk_statistic_array_.begin(),
                 server_disk_statistic_array_.end(),
                 cmp);
     }
@@ -8014,7 +8014,7 @@ int ObServerBalancer::ZoneServerDiskStatistic::reduce_server_disk_use(
       LOG_WARN("server not exist", K(ret), K(server));
     } else {
       ServerDiskStatisticCmp cmp;
-      std::sort(server_disk_statistic_array_.begin(),
+      lib::ob_sort(server_disk_statistic_array_.begin(),
                 server_disk_statistic_array_.end(),
                 cmp);
     }

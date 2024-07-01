@@ -288,6 +288,10 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_WARN("Unexpected lob column in shadow partition key", "table_id", data_schema.get_table_id(),
               K(column_id), K(ret));
+        } else if (ob_is_roaringbitmap_tc(const_data_column->get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_WARN("Unexpected roaringbitmap column in shadow partition key", "table_id", data_schema.get_table_id(),
+              K(column_id), K(ret));
         } else if (ob_is_extend(const_data_column->get_data_type())
                    || ob_is_user_defined_sql_type(const_data_column->get_data_type())) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
@@ -433,6 +437,14 @@ int ObIndexBuilderUtil::set_index_table_columns(
                     "column name", sort_item.column_name_,
                     "column length", sort_item.prefix_len_, K(ret));
           }
+        } else if (ob_is_roaringbitmap_tc(data_column->get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+          LOG_WARN("roaringbitmap column cannot be used in key specification", "tenant_id", data_schema.get_tenant_id(),
+                  "database_id", data_schema.get_database_id(),
+                  "table_name", data_schema.get_table_name(),
+                  "column name", sort_item.column_name_,
+                  "column length", sort_item.prefix_len_, K(ret));
         } else if (data_column->is_xmltype()) {
           ret = OB_ERR_XML_INDEX;
           LOG_USER_ERROR(OB_ERR_XML_INDEX, sort_item.column_name_.length(), sort_item.column_name_.ptr());
@@ -507,6 +519,11 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("Lob column should not appear in rowkey position", "data_column", *data_column, K(is_index_column),
                 K(is_rowkey), "order_in_rowkey", data_column->get_order_in_rowkey(),
                 K(row_desc), K(ret));
+          } else if (ob_is_roaringbitmap_tc(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_WARN("roaringbitmap column should not appear in rowkey position", "data_column", *data_column, K(is_index_column),
+                K(is_rowkey), "order_in_rowkey", data_column->get_order_in_rowkey(),
+                K(row_desc), K(ret));
           } else if (ob_is_extend(data_column->get_data_type()) || ob_is_user_defined_sql_type(data_column->get_data_type())) {
             ret = OB_ERR_WRONG_KEY_COLUMN;
             LOG_WARN("udt column should not appear in rowkey position", "data_column", *data_column, K(is_index_column),
@@ -556,6 +573,12 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("Index storing column should not be lob type", "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
+          } else if (ob_is_roaringbitmap_tc(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be roaringbitmap type", "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
           } else if (ob_is_extend(data_column->get_data_type()) || ob_is_user_defined_sql_type(data_column->get_data_type())) {
             ret = OB_ERR_WRONG_KEY_COLUMN;
             LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
@@ -593,6 +616,14 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),
                                                     arg.hidden_store_columns_.at(i).ptr());
             LOG_WARN("Index storing column should not be lob type",
+                "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
+          } else if (ob_is_roaringbitmap_tc(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),
+                                                    arg.hidden_store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be roaringbitmap type",
                 "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
@@ -662,7 +693,7 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
   } else if (is_fts_index(arg.index_type_)) {
     if (OB_FAIL(ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(data_schema))) {
       LOG_WARN("fail to check fts index allowed", K(ret));
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, gen_columns))) {
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, allocator, gen_columns))) {
       LOG_WARN("failed to adjust fts args", K(ret));
     }
   } else if (is_multivalue_index(arg.index_type_)) {
@@ -1103,7 +1134,12 @@ int ObIndexBuilderUtil::adjust_spatial_args(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid arguments", K(ret));
   } else if (OB_FAIL(generate_spatial_columns(sort_items.at(0).column_name_, data_schema, spatial_cols))) {
-    LOG_WARN("generate spatial column failed", K(ret));
+    if (lib::is_oracle_mode() && ret == OB_ERR_COLUMN_DUPLICATE) { // error code adaptation
+      ret = OB_ERR_DOMAIN_COLUMN_DUPLICATE;
+      LOG_WARN("cannot create multiple domain indexes on a column list using same", K(ret));
+    } else {
+      LOG_WARN("generate spatial column failed", K(ret));
+    }
   } else if (OB_UNLIKELY(spatial_cols.count() != 2) ||
              OB_ISNULL(spatial_cols.at(0)) || OB_ISNULL(spatial_cols.at(1))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1172,8 +1208,11 @@ int ObIndexBuilderUtil::generate_spatial_cellid_column(
     } else if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH,
         name_pos, "_%ld", geo_col_id))) {
       LOG_WARN("print column id to col_name_buf failed", K(ret), K(geo_col_id));
-    } else if (OB_FAIL(databuff_printf(cellid_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH,
+    } else if (lib::is_mysql_mode() && OB_FAIL(databuff_printf(cellid_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH,
         def_pos, "SPATIAL_CELLID(`%s`)", col_schema.get_column_name()))) {
+      LOG_WARN("print cellid expr to cellid_expr_def failed", K(ret), K(col_schema.get_column_name()));
+    } else if (lib::is_oracle_mode() && OB_FAIL(databuff_printf(cellid_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH,
+        def_pos, "SPATIAL_CELLID(%s)", col_schema.get_column_name()))) {
       LOG_WARN("print cellid expr to cellid_expr_def failed", K(ret), K(col_schema.get_column_name()));
     } else if (OB_FAIL(column_schema.add_cascaded_column_id(geo_col_id))) {
       LOG_WARN("add cascaded column to generated column failed", K(ret));
@@ -1232,8 +1271,11 @@ int ObIndexBuilderUtil::generate_spatial_mbr_column(
     } else if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH,
         name_pos, "_%ld", geo_col_id))) {
       LOG_WARN("print column id to buffer failed", K(ret), K(geo_col_id));
-    } else if (OB_FAIL(databuff_printf(mbr_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH,
+    } else if (lib::is_mysql_mode() && OB_FAIL(databuff_printf(mbr_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH,
         def_pos, "SPATIAL_MBR(`%s`)", col_schema.get_column_name()))) {
+      LOG_WARN("print mbr expr to mbr_expr_def failed", K(ret), K(col_schema.get_column_name()));
+    } else if (lib::is_oracle_mode() && OB_FAIL(databuff_printf(mbr_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH,
+        def_pos, "SPATIAL_MBR(%s)", col_schema.get_column_name()))) {
       LOG_WARN("print mbr expr to mbr_expr_def failed", K(ret), K(col_schema.get_column_name()));
     } else if (OB_FAIL(column_schema.add_cascaded_column_id(geo_col_id))) {
       LOG_WARN("add cascaded column to generated column failed", K(ret));

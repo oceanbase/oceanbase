@@ -91,7 +91,8 @@ public:
                                          bool is_use_lob_locator,
                                          bool is_support_outrow_locator_v2,
                                          common::ObIAllocator *allocator,
-                                         const sql::ObSQLSessionInfo *session_info);
+                                         const sql::ObSQLSessionInfo *session_info,
+                                         sql::ObExecContext *exec_ctx = nullptr);
   static int convert_string_charset(const common::ObString &in_str, 
                                     const common::ObCollationType in_cs_type,
                                     const common::ObCollationType out_cs_type, 
@@ -102,7 +103,8 @@ public:
   static int convert_text_value_charset(ObObj& value,
                                         ObCharsetType charset_type,
                                         ObIAllocator &allocator,
-                                        const sql::ObSQLSessionInfo *session_info);
+                                        const sql::ObSQLSessionInfo *session_info,
+                                        sql::ObExecContext *exec_ctx = nullptr);
 private:
   int convert_field_charset(common::ObIAllocator& allocator,
       const common::ObCollationType& from_collation,

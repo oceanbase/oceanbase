@@ -322,18 +322,35 @@ int ObTenantConfig::publish_special_config_after_dump()
     LOG_WARN("Invalid config string", K(tenant_id_), K(ret));
   } else if (!(*pp_item)->dump_value_updated()) {
     LOG_INFO("config dump value is not set, no need read", K(tenant_id_), K((*pp_item)->spfile_str()));
-  } else if (!(*pp_item)->set_value((*pp_item)->spfile_str())) {
-    ret = OB_INVALID_CONFIG;
-    LOG_WARN("Invalid config value", K(tenant_id_), K((*pp_item)->spfile_str()), K(ret));
   } else {
-    FLOG_INFO("[COMPATIBLE] read data_version after dump",
-              KR(ret), K_(tenant_id),
-              "version", (*pp_item)->version(),
-              "value", (*pp_item)->str(),
-              "value_updated", (*pp_item)->value_updated(),
-              "dump_version", (*pp_item)->dumped_version(),
-              "dump_value", (*pp_item)->spfile_str(),
-              "dump_value_updated", (*pp_item)->dump_value_updated());
+    uint64_t new_data_version = 0;
+    uint64_t old_data_version = 0;
+    bool value_updated = (*pp_item)->value_updated();
+    if (OB_FAIL(ObClusterVersion::get_version((*pp_item)->spfile_str(), new_data_version))) {
+      LOG_ERROR("parse data_version failed", KR(ret), K((*pp_item)->spfile_str()));
+    } else if (OB_FAIL(ObClusterVersion::get_version((*pp_item)->str(), old_data_version))) {
+      LOG_ERROR("parse data_version failed", KR(ret), K((*pp_item)->str()));
+    } else if (!value_updated && old_data_version != DATA_CURRENT_VERSION) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(ERROR, "unexpected data_version", KR(ret), K(old_data_version));
+    } else if (value_updated && new_data_version <= old_data_version) {
+      LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id_),
+               K(old_data_version), K(new_data_version));
+      // do nothing
+    } else {
+      if (!(*pp_item)->set_value((*pp_item)->spfile_str())) {
+        ret = OB_INVALID_CONFIG;
+        LOG_WARN("Invalid config value", K(tenant_id_), K((*pp_item)->spfile_str()), K(ret));
+      } else {
+        FLOG_INFO("[COMPATIBLE] [DATA_VERSION] read data_version after dump",
+                  KR(ret), K_(tenant_id), "version", (*pp_item)->version(),
+                  "value", (*pp_item)->str(), "value_updated",
+                  (*pp_item)->value_updated(), "dump_version",
+                  (*pp_item)->dumped_version(), "dump_value",
+                  (*pp_item)->spfile_str(), "dump_value_updated",
+                  (*pp_item)->dump_value_updated());
+      }
+    }
   }
   return ret;
 }
@@ -362,6 +379,7 @@ int ObTenantConfig::add_extra_config(const char *config_str,
     buf[config_str_length] = '\0';
     token = STRTOK_R(buf, ",\n", &saveptr);
     const ObString compatible_cfg(COMPATIBLE);
+    const ObString enable_compatible_monotonic_cfg(ENABLE_COMPATIBLE_MONOTONIC);
     while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {
       char *saveptr_one = NULL;
       char *name = NULL;
@@ -404,21 +422,44 @@ int ObTenantConfig::add_extra_config(const char *config_str,
               LOG_WARN("Invalid config string, no such config item", K(name), K(value), K(ret));
             }
             if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
-            } else if (compatible_cfg.case_compare(name) == 0) {
-              if (!(*pp_item)->set_dump_value(value)) {
-                ret = OB_INVALID_CONFIG;
-                LOG_WARN("Invalid config value", K(name), K(value), K(ret));
+            } else if (0 == compatible_cfg.case_compare(name)) {
+              // init tenant and observer reload with -o will use this interface to update tenant's
+              // config. considering the -o situation, we need to ensure the new_data_version won't
+              // go back
+              uint64_t new_data_version = 0;
+              uint64_t old_data_version = 0;
+              if (OB_FAIL(ObClusterVersion::get_version(value, new_data_version))) {
+                LOG_ERROR("parse data_version failed", KR(ret), K(value));
+              } else if (((*pp_item)->value_updated() || (*pp_item)->dump_value_updated()) &&
+                         OB_FAIL(ObClusterVersion::get_version(
+                             (*pp_item)->spfile_str(), old_data_version))) {
+                LOG_ERROR("parse data_version failed", KR(ret), K((*pp_item)->spfile_str()));
+              } else if (new_data_version <= old_data_version) {
+                // do nothing
+                LOG_INFO("[COMPATIBLE] DATA_VERSION no need to update",
+                         K(tenant_id_), K(old_data_version),
+                         K(new_data_version));
               } else {
-                (*pp_item)->set_dump_value_updated();
-                (*pp_item)->set_version(version);
-                FLOG_INFO("[COMPATIBLE] init data_version before dump",
-                          KR(ret), K_(tenant_id),
-                          "version", (*pp_item)->version(),
-                          "value", (*pp_item)->str(),
-                          "value_updated", (*pp_item)->value_updated(),
-                          "dump_version", (*pp_item)->dumped_version(),
-                          "dump_value", (*pp_item)->spfile_str(),
-                          "dump_value_updated", (*pp_item)->dump_value_updated());
+                if (!(*pp_item)->set_dump_value(value)) {
+                  ret = OB_INVALID_CONFIG;
+                  LOG_WARN("Invalid config value", K(name), K(value), K(ret));
+                } else {
+                  (*pp_item)->set_dump_value_updated();
+                  (*pp_item)->set_version(version);
+                  int tmp_ret = 0;
+                  if (OB_TMP_FAIL(ODV_MGR.set(tenant_id_, new_data_version))) {
+                    LOG_WARN("fail to set data_version", KR(tmp_ret),
+                             K(tenant_id_), K(new_data_version));
+                  }
+                  FLOG_INFO("[COMPATIBLE] [DATA_VERSION] init data_version before dump",
+                            KR(ret), K_(tenant_id), "version",
+                            (*pp_item)->version(), "value", (*pp_item)->str(),
+                            "value_updated", (*pp_item)->value_updated(),
+                            "dump_version", (*pp_item)->dumped_version(),
+                            "dump_value", (*pp_item)->spfile_str(),
+                            "dump_value_updated", (*pp_item)->dump_value_updated(),
+                            K(old_data_version), K(new_data_version));
+                }
               }
             } else if (!(*pp_item)->set_value(value)) {
               ret = OB_INVALID_CONFIG;
@@ -434,6 +475,11 @@ int ObTenantConfig::add_extra_config(const char *config_str,
             } else {
               (*pp_item)->set_version(version);
               LOG_INFO("Load tenant config succ", K(name), K(value));
+              if (0 == enable_compatible_monotonic_cfg.case_compare(name)) {
+                ObString v_str((*pp_item)->str());
+                ODV_MGR.set_enable_compatible_monotonic(0 == v_str.case_compare("True") ? true
+                                                                                        : false);
+              }
             }
           }
         }

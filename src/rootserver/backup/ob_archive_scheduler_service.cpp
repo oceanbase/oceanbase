@@ -352,6 +352,8 @@ int ObArchiveSchedulerService::get_all_tenant_ids_(common::ObIArray<uint64_t> &t
       // do nothing
     } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
       LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(tenant_info)) { //skip
+      LOG_INFO("tenant schema is null, skip tenant which may has been dropped", K(tenant_id));
     } else if (tenant_info->is_restore()) {
       // skip restoring tenant
       LOG_INFO("skip tenant which is doing restore", K(tenant_id));

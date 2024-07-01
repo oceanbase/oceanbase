@@ -350,6 +350,7 @@ void ObCommonLSService::try_update_primary_ip_list()
     char passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; //unencrypted password
     uint64_t user_tenant_id = gen_user_tenant_id(tenant_id_);
     bool log_restore_source_exist = true;
+    bool cluster_id_dup = false;
 
     if (OB_FAIL(restore_source_mgr.init(user_tenant_id, proxy_))) {
       LOG_WARN("fail to init restore_source_mgr", K(user_tenant_id));
@@ -398,6 +399,14 @@ void ObCommonLSService::try_update_primary_ip_list()
     } else if ((primary_cluster_id != service_attr.user_.cluster_id_) || (primary_tenant_id != service_attr.user_.tenant_id_)) {
       LOG_WARN("primary cluster_id or tenant_id has been changed",
       K(primary_cluster_id), K_(service_attr.user_.cluster_id), K(primary_tenant_id), K_(service_attr.user_.tenant_id), K(user_tenant_id));
+    } else if (OB_FAIL(restore_proxy_.check_different_cluster_with_same_cluster_id(
+                   service_attr.user_.cluster_id_, cluster_id_dup))) {
+      LOG_WARN("fail to check different cluster with same cluster id", KR(ret),
+               K(service_attr.user_.cluster_id_));
+    } else if (cluster_id_dup) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_ERROR("different cluster with same cluster id is not allowed", KR(ret),
+                K(service_attr.user_.cluster_id_));
     } else {
       // update primary state
       bool cur_primary_state = true;

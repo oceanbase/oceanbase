@@ -106,6 +106,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 %nonassoc   LOWER_COMMA
 %nonassoc   REMAP
 %nonassoc   ',' WITH
+%nonassoc OVERWRITE
 %left	UNION EXCEPT MINUS
 %left	INTERSECT
 %left   JOIN CROSS LEFT FULL RIGHT INNER WINDOW
@@ -177,6 +178,7 @@ PROJECT_PRUNE NO_PROJECT_PRUNE SIMPLIFY_SET NO_SIMPLIFY_SET OUTER_TO_INNER NO_OU
 COALESCE_SQ NO_COALESCE_SQ COUNT_TO_EXISTS NO_COUNT_TO_EXISTS LEFT_TO_ANTI NO_LEFT_TO_ANTI
 ELIMINATE_JOIN NO_ELIMINATE_JOIN PUSH_LIMIT NO_PUSH_LIMIT PULLUP_EXPR NO_PULLUP_EXPR
 WIN_MAGIC NO_WIN_MAGIC AGGR_FIRST_UNNEST NO_AGGR_FIRST_UNNEST JOIN_FIRST_UNNEST NO_JOIN_FIRST_UNNEST
+COALESCE_AGGR NO_COALESCE_AGGR WITH_PULLUP WO_PULLUP
 MV_REWRITE NO_MV_REWRITE
 DECORRELATE NO_DECORRELATE
 // optimize hint
@@ -263,8 +265,8 @@ END_P SET_VAR DELIMITER
 //-----------------------------non_reserved keyword begin-------------------------------------------
         ACCESS ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
         APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
-        ARBITRATION ARRAY ASCII ASIS AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
-        ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH
+        ARBITRATION ARRAY ASCII ASIS AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
+        AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
@@ -336,11 +338,11 @@ END_P SET_VAR DELIMITER
 
         QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK
 
-        REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
+        RB_AND_AGG RB_BUILD_AGG RB_OR_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
-        ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROWS RTREE RUN
+        ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
         RANK READ_ONLY RECOVERY REJECT ROLE
 
@@ -375,6 +377,8 @@ END_P SET_VAR DELIMITER
         YEAR
 
         ZONE ZONE_LIST ZONE_TYPE
+
+        OVERWRITE
 //-----------------------------non_reserved keyword end---------------------------------------------
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
@@ -424,11 +428,12 @@ END_P SET_VAR DELIMITER
 %type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list relation_factor_in_mv_hint_list opt_relation_factor_in_mv_hint_list
 %type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery table_subquery_alias
 %type <node> relation_factor_with_star relation_with_star_list opt_with_star
-%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list
+%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list opt_index_prefix
 %type <node> add_key_or_index_opt add_key_or_index add_unique_key_opt add_unique_key add_constraint_uniq_key_opt add_constraint_uniq_key add_constraint_pri_key_opt add_constraint_pri_key add_primary_key_opt add_primary_key add_spatial_index_opt add_spatial_index
 %type <node> index_hint_definition index_hint_list
 %type <node> intnum_list
 %type <node> qb_name_option qb_name_string qb_name_list multi_qb_name_list
+%type <node> coalesce_strategy_list
 %type <node> join_condition inner_join_type opt_inner outer_join_type opt_outer natural_join_type except_full_outer_join_type opt_full_table_factor
 %type <ival> string_length_i opt_string_length_i opt_string_length_i_v2 opt_int_length_i opt_bit_length_i opt_datetime_fsp_i opt_unsigned_i opt_zerofill_i opt_year_i opt_time_func_fsp_i opt_cast_float_precision
 %type <node> opt_float_precision opt_number_precision
@@ -2644,23 +2649,40 @@ MOD '(' expr ',' expr ')'
     ParseNode *path = NULL;
     ParseNode *data = NULL;
 
-    if (OB_NOT_NULL($3) && $3->num_child_ == 2 && $3->type_ == T_FUN_SYS) {
-      ParseNode* expr_param = $3->children_[1];
-      ParseNode* expr_name = $3->children_[0];
-      if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
-           && expr_param->num_child_ == 2) {
-        path = expr_param->children_[1];
-        data = expr_param->children_[0];
-      } else if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0)
-                  && expr_param->num_child_ == 1
-                  && OB_NOT_NULL(expr_param->children_[0])
-                  && expr_param->children_[0]->num_child_ == 2) {
-        expr_name = expr_param->children_[0]->children_[0];
-        expr_param = expr_param->children_[0]->children_[1];
+    if (OB_NOT_NULL($3)) {
+      if ($3->type_ == T_COLUMN_REF) {
+        data = $3;
+
+        malloc_terminal_node(path, result->malloc_pool_, T_VARCHAR);
+        path->str_value_ = "";
+        path->str_len_ = 0;
+        path->is_hidden_const_ = 1;
+      } else if ($3->type_ == T_FUN_SYS_JSON_VALUE) {
+        path = $3->children_[1];
+        data = $3->children_[0];
+      } else if ($3->num_child_ == 2) {
+        ParseNode* expr_param = $3->children_[1];
+        ParseNode* expr_name = $3->children_[0];
         if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
-           && expr_param->num_child_ == 2) {
+            && expr_param->num_child_ == 2) {
           path = expr_param->children_[1];
           data = expr_param->children_[0];
+        } else if ((OB_NOT_NULL(expr_name->str_value_)
+                   && strcasecmp(expr_name->str_value_, "JSON_UNQUOTE") == 0)
+                   && OB_NOT_NULL(expr_param->children_[0])) {
+          ParseNode* param = expr_param->children_[0];
+          if (param->type_ == T_FUN_SYS_JSON_VALUE) {
+            path = param->children_[1];
+            data = param->children_[0];
+          } else if (expr_param->children_[0]->num_child_ >= 2) {
+            expr_name = expr_param->children_[0]->children_[0];
+            expr_param = expr_param->children_[0]->children_[1];
+            if ((OB_NOT_NULL(expr_name->str_value_) && strcasecmp(expr_name->str_value_, "JSON_EXTRACT") == 0)
+              && expr_param->num_child_ == 2) {
+              path = expr_param->children_[1];
+              data = expr_param->children_[0];
+            }
+          }
         }
       }
     }
@@ -3210,6 +3232,21 @@ MOD '(' expr ',' expr ')'
 | SUM_OPNSIZE '(' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SUM_OPNSIZE, 2, NULL, $3);
+}
+| RB_BUILD_AGG '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_BUILD_AGG, 1, $3);
+  $$->reserved_ = 0;
+}
+| RB_OR_AGG '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_OR_AGG, 1, $3);
+  $$->reserved_ = 0;
+}
+| RB_AND_AGG '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_AND_AGG, 1, $3);
+  $$->reserved_ = 0;
 }
 ;
 
@@ -6310,6 +6347,11 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 7; /* geometrycollection, geometry uses collation type value convey sub geometry type. */
 }
+| ROARINGBITMAP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ROARINGBITMAP);
+  $$->int32_values_[0] = 0; /* length */
+}
 ;
 
 string_list:
@@ -6867,7 +6909,11 @@ table_option
 }
 | table_option  table_option_list_space_seperated
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+  if ($1 != NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+  } else {
+    $$ = $2;
+  }
 }
 ;
 
@@ -6878,7 +6924,11 @@ table_option_list_space_seperated
 }
 | table_option ',' table_option_list
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  if ($1 != NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  } else {
+    $$ = $3;
+  }
 }
 ;
 
@@ -7071,6 +7121,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
 {
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_AUTO_INCREMENT_MODE, 1, $3);
+}
+| AUTO_INCREMENT_CACHE_SIZE opt_equal_mark INTNUM
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_AUTO_INCREMENT_CACHE_SIZE, 1, $3);
 }
 | ENABLE_EXTENDED_ROWID opt_equal_mark BOOL_VALUE
 {
@@ -9265,6 +9320,27 @@ insert_with_opt_hint opt_priority opt_ignore opt_into single_table_insert opt_on
                            $1->children_[1], /* hint */
                            $3 /*ignore node*/);
 }
+| insert_with_opt_hint opt_priority opt_ignore OVERWRITE single_table_insert
+{
+  (void)($2);
+  (void)($4);
+  if (NULL == $5) {
+    yyerror(NULL, result, "invalid single table insert node\n");
+    YYABORT_UNEXPECTED;
+  }
+
+  ParseNode *overwrite_node;
+  malloc_terminal_node(overwrite_node, result->malloc_pool_, T_BOOL);
+  overwrite_node->value_ = 1;
+
+  $5->children_[2] = NULL; /*duplicate key node is null*/
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INSERT, 5,
+                           $5, /*single or multi table insert node*/
+                           $1->children_[0], /* is replacement */
+                           $1->children_[1], /* hint */
+                           $3, /*ignore node*/
+                           overwrite_node);
+}
 | replace_with_opt_hint opt_low_priority opt_ignore opt_into single_table_insert
 {
   (void)($2);
@@ -9410,8 +9486,7 @@ INTO
 {
   $$ = NULL;
 }
-/* empty */
-| {
+| /* empty */ %prec BASIC {
   $$ = NULL;
 }
 ;
@@ -10202,19 +10277,19 @@ field_term_list field_term
 ;
 
 field_term:
-TERMINATED BY STRING_VALUE
+TERMINATED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FIELD_TERMINATED_STR, 1, $3);
 }
-| OPTIONALLY ENCLOSED BY STRING_VALUE
+| OPTIONALLY ENCLOSED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_OPTIONALLY_CLOSED_STR, 1, $4);
 }
-| ENCLOSED BY STRING_VALUE
+| ENCLOSED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CLOSED_STR, 1, $3);
 }
-| ESCAPED BY STRING_VALUE
+| ESCAPED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ESCAPED_STR, 1, $3);
 }
@@ -10290,11 +10365,11 @@ line_term_list line_term
 ;
 
 line_term:
-TERMINATED BY STRING_VALUE
+TERMINATED BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINE_TERMINATED_STR, 1, $3);
 }
-| STARTING BY STRING_VALUE
+| STARTING BY text_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINE_START_STR, 1, $3);
 }
@@ -10883,6 +10958,18 @@ NO_REWRITE opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_DECORRELATE, 1, $2);
 }
+| COALESCE_AGGR opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COALESCE_AGGR, 1, $2);
+}
+| COALESCE_AGGR '(' qb_name_option coalesce_strategy_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COALESCE_AGGR, 2, $3, $4);
+}
+| NO_COALESCE_AGGR opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_COALESCE_AGGR, 1, $2);
+}
 ;
 
 multi_qb_name_list:
@@ -10914,9 +11001,9 @@ qb_name_list:
   ;
 
 optimize_hint:
-INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
+INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 3, $3, $4, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 4, $3, $4, $5,$6);
 }
 | NO_INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
@@ -11144,6 +11231,18 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_COLUMN_STORE_HINT, 2, $3, $4);
 }
 ;
+
+opt_index_prefix:
+INTNUM
+{
+  $$=$1;
+}
+| NEG_SIGN INTNUM
+{
+  $2->value_ = -$2->value_;
+  $$ = $2;
+}
+| /*emtpy*/ {$$ = NULL;};
 
 win_dist_list:
 win_dist_desc
@@ -12606,7 +12705,7 @@ index_hint_definition
 }
 ;
 
-/* diff normal_relation_facotr and dot_relation_factor for relation_factor_in_hint*/
+/* diff normal_relation_factor and dot_relation_factor for relation_factor_in_hint*/
 relation_factor:
 normal_relation_factor
 {
@@ -12839,6 +12938,32 @@ relation_factor_in_hint
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, table_list);
 }
 ;
+
+coalesce_strategy_list:
+WO_PULLUP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VARCHAR);
+  $$->str_value_ = "WO_PULLUP";
+  $$->str_len_ = strlen("WO_PULLUP");
+}
+| WITH_PULLUP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VARCHAR);
+  $$->str_value_ = "WITH_PULLUP";
+  $$->str_len_ = strlen("WITH_PULLUP");
+}
+| WO_PULLUP WITH_PULLUP
+{
+  ParseNode *basic_node = NULL;
+  ParseNode *split_node = NULL;
+  malloc_terminal_node(basic_node, result->malloc_pool_, T_VARCHAR);
+  basic_node->str_value_ = "WO_PULLUP";
+  basic_node->str_len_ = strlen("WO_PULLUP");
+  malloc_terminal_node(split_node, result->malloc_pool_, T_VARCHAR);
+  split_node->str_value_ = "WITH_PULLUP";
+  split_node->str_len_ = strlen("WITH_PULLUP");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, basic_node, split_node);
+}
 
 intnum_list:
 INTNUM relation_sep_option intnum_list
@@ -13833,6 +13958,10 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_PROCEDURE_STATUS, 2, $4, $5); }
 | SHOW FUNCTION STATUS opt_from_or_in_database_clause opt_show_condition
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_FUNCTION_STATUS, 2, $4, $5); }
+| SHOW PROCEDURE CODE relation_factor
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_PROCEDURE_CODE, 1, $4); }
+| SHOW FUNCTION CODE relation_factor
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_FUNCTION_CODE, 1, $4); }
 | SHOW TRIGGERS opt_from_or_in_database_clause opt_show_condition
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_TRIGGERS, 2, $3, $4); }
 | SHOW SERVER STATUS opt_show_condition
@@ -16693,7 +16822,11 @@ alter_table_action
 }
 | alter_table_actions ',' alter_table_action
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  if ($3 != NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  } else {
+    $$ = $1;
+  }
 }
 ;
 
@@ -21582,6 +21715,7 @@ ACCOUNT
 |       AUTOEXTEND_SIZE
 |       AUTO_INCREMENT
 |       AUTO_INCREMENT_MODE
+|       AUTO_INCREMENT_CACHE_SIZE
 |       AUTO_REFRESH
 |       AVG
 |       AVG_ROW_LENGTH
@@ -22082,6 +22216,7 @@ ACCOUNT
 |       RETURNS
 |       REVERSE
 |       REWRITE
+|       ROARINGBITMAP
 |       ROLE
 |       ROLLBACK
 |       ROLLING
@@ -22331,6 +22466,10 @@ ACCOUNT
 |       TRANSFER
 |       SUM_OPNSIZE
 |       VALIDATION
+|       RB_BUILD_AGG
+|       RB_OR_AGG
+|       RB_AND_AGG
+|       OVERWRITE
 ;
 
 unreserved_keyword_special:

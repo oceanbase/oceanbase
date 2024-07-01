@@ -69,6 +69,7 @@ LogConfigMgr::LogConfigMgr()
       last_first_register_time_us_(OB_INVALID_TIMESTAMP),
       child_lock_(common::ObLatchIds::PALF_CM_CHILD_LOCK),
       children_(),
+      log_sync_children_(),
       last_submit_keepalive_time_us_(OB_INVALID_TIMESTAMP),
       log_engine_(NULL),
       sw_(NULL),
@@ -162,6 +163,7 @@ void LogConfigMgr::destroy()
     parent_keepalive_time_us_ = OB_INVALID_TIMESTAMP;
     reset_registering_state_();
     children_.reset();
+    log_sync_children_.reset();
     last_submit_keepalive_time_us_ = OB_INVALID_TIMESTAMP;
     ms_ack_list_.reset();
     resend_config_version_.reset();
@@ -485,6 +487,21 @@ int LogConfigMgr::get_children_list(LogLearnerList &children) const
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(children.deep_copy(children_))) {
+    PALF_LOG(WARN, "deep_copy children_list failed", KR(ret), K_(palf_id), K_(self));
+  } else {
+    //pass
+  }
+  return ret;
+}
+
+// considering log replication performance, we update log_sync_children_ in the background
+int LogConfigMgr::get_log_sync_children_list(LogLearnerList &children) const
+{
+  int ret = OB_SUCCESS;
+  SpinLockGuard gaurd(child_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(children.deep_copy(log_sync_children_))) {
     PALF_LOG(WARN, "deep_copy children_list failed", KR(ret), K_(palf_id), K_(self));
   } else {
     //pass
@@ -2463,7 +2480,7 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
         K_(palf_id), K_(self), K(new_paxos_replica_num), K(paxos_resp_cnt),
         K(new_log_sync_replica_num), K(log_sync_resp_cnt), K(conn_timeout_us));
   } else {
-    std::sort(lsn_array, lsn_array + log_sync_resp_cnt, LSNCompare());
+    lib::ob_sort(lsn_array, lsn_array + log_sync_resp_cnt, LSNCompare());
     committed_end_lsn = lsn_array[new_log_sync_replica_num / 2];
   }
   PALF_LOG(INFO, "sync_get_committed_end_lsn_ finish", K(ret), K_(palf_id), K_(self), K(args),
@@ -2818,18 +2835,14 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
   LogLearnerList retired_children;
   LogLearnerList diff_region_children;
   RegisterReturn reg_ret = INVALID_REG_RET;
-  common::ObMember learner_in_list;
-  const int in_list_ret = all_learnerlist_.get_learner_by_addr(child.get_server(), learner_in_list);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!child.is_valid() || child.register_time_us_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), K_(palf_id), K_(self), K(child));
-  } else if (is_to_leader && (OB_SUCCESS != in_list_ret || learner_in_list.is_migrating())) {
+  } else if (is_to_leader && !all_learnerlist_.contains(child.get_server())) {
     ret = OB_INVALID_ARGUMENT;
-    // Note: do not register parent for migrating learners, because their logs may lag behind its parent
-    PALF_LOG(WARN, "registering child is not in learner list or is migrating", K_(palf_id),
-        K_(self), K(child), K(in_list_ret), K(learner_in_list));
+    PALF_LOG(WARN, "registering child is not in learner list", K_(palf_id), K_(self), K(child));
   } else {
     SpinLockGuard guard(child_lock_);
     int64_t idx = -1;
@@ -2864,6 +2877,8 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
           dst_child.register_time_us_ = child.register_time_us_;
           if (OB_FAIL(children_.add_learner(dst_child))) {
             PALF_LOG(WARN, "handle_register_parent_req failed", KR(ret), K_(palf_id), K_(self), K(is_to_leader), K(dst_child));
+          } else if (OB_FAIL(log_sync_children_.add_learner(dst_child))) {
+            PALF_LOG(WARN, "add_learner failed", KR(ret), K_(palf_id), K_(self), K_(log_sync_children), K(dst_child));
           } else {
             reg_ret = REGISTER_DONE;
           }
@@ -2881,6 +2896,8 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
       dst_child.register_time_us_ = child.register_time_us_;
       if (OB_FAIL(children_.add_learner(dst_child))) {
         PALF_LOG(WARN, "handle_register_parent_req failed", KR(ret), K_(palf_id), K_(self), K(is_to_leader), K(dst_child));
+      } else if (OB_FAIL(log_sync_children_.add_learner(dst_child))) {
+        PALF_LOG(WARN, "add_learner failed", KR(ret), K_(palf_id), K_(self), K_(log_sync_children), K(dst_child));
       } else {
         reg_ret = REGISTER_DONE;
       }
@@ -2970,7 +2987,7 @@ int LogConfigMgr::handle_learner_keepalive_resp(const LogLearner &child)
 // 2. guarantee regions of children are unique
 // for follower:
 // 2. guarantee regions of children are same with region_
-int LogConfigMgr::check_children_health()
+void LogConfigMgr::check_children_health()
 {
   int ret = OB_SUCCESS;
   LogLearnerList dead_children;
@@ -3013,6 +3030,7 @@ int LogConfigMgr::check_children_health()
     }
     // 5. retire removed children
     if (OB_FAIL(submit_retire_children_req_(dead_children, RetireChildReason::CHILD_NOT_ALIVE))) {
+      // overwrite ret
       PALF_LOG(WARN, "submit_retire_children_req failed", KR(ret), K_(palf_id), K_(self), K(dead_children));
     } else if (!is_leader && OB_FAIL(submit_retire_children_req_(diff_region_children,
         RetireChildReason::DIFFERENT_REGION_WITH_PARENT))) {
@@ -3021,8 +3039,22 @@ int LogConfigMgr::check_children_health()
         RetireChildReason::DUPLICATE_REGION_IN_LEADER))) {
       PALF_LOG(WARN, "submit_retire_children_req failed", KR(ret), K_(palf_id), K_(self), K(dup_region_children));
     }
+    // 6. update log_sync_children_
+    {
+      SpinLockGuard guard(child_lock_);
+      log_sync_children_.reset();
+      for (int i = 0; i < children_.get_member_number(); i++) {
+        const LogLearner &learner = children_.get_learner(i);
+        common::ObMember learner_in_list;
+        const int in_list_ret = all_learnerlist_.get_learner_by_addr(learner.get_server(), learner_in_list);
+        if (OB_SUCCESS != in_list_ret || learner_in_list.is_migrating()) {
+          // skip
+        } else if (OB_FAIL(log_sync_children_.add_learner(learner))) {
+          PALF_LOG(WARN, "add_learner failed", KR(ret), K_(palf_id), K_(self), K(learner), K_(log_sync_children));
+        }
+      }
+    }
   }
-  return ret;
 }
 
 int LogConfigMgr::remove_timeout_child_(LogLearnerList &dead_children)

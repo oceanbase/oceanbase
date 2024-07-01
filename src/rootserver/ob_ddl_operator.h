@@ -459,14 +459,16 @@ public:
                          const common::ObString *ddl_stmt_str = NULL,
                          const bool is_truncate_table = false,
                          share::schema::DropTableIdHashSet *drop_table_set = NULL,
-                         const bool is_drop_db = false);
+                         const bool is_drop_db = false,
+                         const bool delete_priv = true);
   virtual int drop_table_for_not_dropped_schema(
       const share::schema::ObTableSchema &table_schema,
       common::ObMySQLTransaction &trans,
       const common::ObString *ddl_stmt_str = NULL,
       const bool is_truncate_table = false,
       share::schema::DropTableIdHashSet *drop_table_set = NULL,
-      const bool is_drop_db = false);
+      const bool is_drop_db = false,
+      const bool delete_priv = true);
   virtual int drop_table_to_recyclebin(const share::schema::ObTableSchema &table_schema,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        common::ObMySQLTransaction &trans,
@@ -813,7 +815,7 @@ public:
                      share::schema::ObErrorInfo &error_info,
                      common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
                      const common::ObString *ddl_stmt_str/*=NULL*/);
-  int alter_package(const share::schema::ObPackageInfo &package_info,
+  int alter_package(share::schema::ObPackageInfo &package_info,
                     ObSchemaGetterGuard &schema_guard,
                     common::ObMySQLTransaction &trans,
                     ObIArray<ObRoutineInfo> &public_routine_infos,

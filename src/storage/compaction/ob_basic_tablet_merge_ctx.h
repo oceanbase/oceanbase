@@ -39,7 +39,7 @@ struct ObStaticMergeParam final
   OB_INLINE const ObLSID &get_ls_id() const { return dag_param_.ls_id_; }
   OB_INLINE const ObTabletID &get_tablet_id() const { return dag_param_.tablet_id_; }
 
-  int cal_minor_merge_param();
+  int cal_minor_merge_param(const bool has_compaction_filter);
   int cal_major_merge_param();
   bool is_build_row_store_from_rowkey_cg() const;
   bool is_build_row_store() const;
@@ -164,6 +164,7 @@ public:
   virtual int update_tablet(
     const blocksstable::ObSSTable &sstable,
     ObTabletHandle &new_tablet_handle);
+  int try_set_upper_trans_version(blocksstable::ObSSTable &sstable);
   int update_tablet_after_merge();
   ObITable::TableType get_merged_table_type(
     const ObStorageColumnGroupSchema *cg_schema,
@@ -221,7 +222,7 @@ protected:
     return OB_SUCCESS;
   }
   virtual int prepare_schema();
-  virtual int cal_merge_param() { return static_param_.cal_minor_merge_param(); }
+  virtual int cal_merge_param() { return static_param_.cal_minor_merge_param(false/*has_compaction_filter*/); }
   int init_parallel_merge_ctx();
   int init_static_param_and_desc();
   int init_read_info();

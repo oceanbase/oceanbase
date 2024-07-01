@@ -721,6 +721,7 @@ void ObDataDictStorage::reset_cb_queue_()
   while (! cb_queue_.empty()) {
     QLink *item = NULL;
     if (OB_ISNULL(item = cb_queue_.pop())) {
+      ret = OB_ERR_UNEXPECTED;
       DDLOG(WARN, "pop item from data_dict_meta persist_callback_queue failed", KR(ret));
     } else {
       allocator_.free(item);

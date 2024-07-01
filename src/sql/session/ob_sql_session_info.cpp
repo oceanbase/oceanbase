@@ -49,6 +49,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/debug/ob_pl_debugger_manager.h"
 #include "pl/sys_package/ob_pl_utl_file.h"
+#include "pl/ob_pl_profiler.h"
 #endif
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/string/ob_hex_utils_base.h"
@@ -155,6 +156,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       plsql_exec_time_(0),
 #ifdef OB_BUILD_ORACLE_PL
       pl_debugger_(NULL),
+      pl_profiler_(NULL),
 #endif
 #ifdef OB_BUILD_SPM
       select_plan_type_(ObSpmCacheCtx::INVALID_TYPE),
@@ -203,7 +205,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       out_bytes_(0),
       current_dblink_sequence_id_(0),
       client_non_standard_(false),
-      is_session_sync_support_(false)
+      is_session_sync_support_(false),
+      job_info_(nullptr)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -330,6 +333,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     plsql_exec_time_ = 0;
 #ifdef OB_BUILD_ORACLE_PL
     pl_debugger_ = NULL;
+    pl_profiler_ = NULL;
 #endif
     pl_attach_session_id_ = 0;
     pl_query_sender_ = NULL;
@@ -399,6 +403,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   is_session_sync_support_ = false;
   need_send_feedback_proxy_info_ = false;
   is_lock_session_ = false;
+  job_info_ = nullptr;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -503,6 +508,17 @@ bool ObSQLSessionInfo::is_in_range_optimization_enabled() const
     bret = tenant_config->_enable_in_range_optimization;
   }
   return bret;
+}
+
+int64_t ObSQLSessionInfo::get_inlist_rewrite_threshold() const
+{
+  int64_t thredhold = INT64_MAX;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    thredhold = tenant_config->_inlist_rewrite_threshold;
+  }
+  return thredhold;
 }
 
 int ObSQLSessionInfo::is_better_inlist_enabled(bool &enabled) const
@@ -696,6 +712,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
 #ifdef OB_BUILD_ORACLE_PL
     // pl debug 功能, pl debug不支持分布式调试，但调用也不会有副作用
     reset_pl_debugger_resource();
+    reset_pl_profiler_resource();
 #endif
     // 非分布式需要的话，分布式也需要，用于清理package的全局变量值
     reset_all_package_state();
@@ -1132,6 +1149,7 @@ ObPsCache *ObSQLSessionInfo::get_ps_cache()
     } else {
       ps_cache_ = MTL(ObPsCache*);
       if (OB_ISNULL(ps_cache_)) {
+        // ignore ret
         LOG_WARN("failed to get ps cache");
       } else if (MTL_ID() != get_effective_tenant_id()) {
         LOG_ERROR("unmatched tenant_id", K(MTL_ID()), K(get_effective_tenant_id()));
@@ -1971,8 +1989,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
         || EXECUTE_PS_GET_PIECE == mode
         || EXECUTE_PS_SEND_LONG_DATA == mode
         || EXECUTE_PS_FETCH == mode
-        || (EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0
-        && audit_record_.plan_id_ == 0)) {
+        || (EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0)) {
       // spi_cursor_open may not use process_record to set audit_record_.sql_
       // so only EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0 do not set sql
       //ps模式对应的sql在协议层中设置, session的current_query_中没值
@@ -2161,7 +2178,64 @@ void ObSQLSessionInfo::reset_pl_debugger_resource()
 {
   free_pl_debugger();
 }
-#endif
+
+int ObSQLSessionInfo::alloc_pl_profiler(int32_t run_id)
+{
+  int ret = OB_SUCCESS;
+
+  ObPLProfiler *profiler = nullptr;
+
+  CK (OB_ISNULL(pl_profiler_));
+  CK (OB_LIKELY(run_id > 0));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(
+                 profiler = OB_NEW(
+                     ObPLProfiler,
+                     ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_PROFILER)),
+                     *this))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("[DBMS_PROFILER] failed to allocate memory for pl profiler", K(ret));
+  } else if (OB_FAIL(profiler->init(run_id))) {
+    profiler->~ObPLProfiler();
+    ob_free(profiler);
+    profiler = nullptr;
+
+    LOG_WARN("[DBMS_PROFILER] failed to init pl profiler", K(ret));
+  } else {
+    pl_profiler_ = profiler;
+  }
+
+  return ret;
+}
+#endif // OB_BUILD_ORACLE_PL
+
+void ObSQLSessionInfo::reset_pl_profiler_resource()
+{
+#ifdef OB_BUILD_ORACLE_PL
+  if (pl_profiler_ != nullptr) {
+    if (OB_NOT_NULL(pl_context_)) {
+      for (int64_t i = pl_context_->get_exec_stack().count() - 1; i >= 0 ; --i) {
+        if (OB_NOT_NULL(pl_context_->get_exec_stack().at(i))
+              && OB_NOT_NULL(pl_context_->get_exec_stack().at(i)->get_profiler_time_stack())) {
+          int ret = OB_SUCCESS;
+
+          ObPLExecState &curr = *pl_context_->get_exec_stack().at(i);
+          if (OB_FAIL(curr.get_profiler_time_stack()->pop_all(*pl_profiler_))) {
+            LOG_WARN("[DBMS_PROFILER] failed to flush profiler time stack",
+                      K(ret), K(i), K(pl_context_->get_exec_stack().count()), K(lbt()));
+          }
+        }
+      }
+    }
+
+    pl_profiler_->~ObPLProfiler();
+    ob_free(pl_profiler_);
+    pl_profiler_ = nullptr;
+  }
+#endif // OB_BUILD_ORACLE_PL
+}
 
 void ObSQLSessionInfo::reset_all_package_changed_info()
 {

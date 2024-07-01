@@ -86,7 +86,8 @@ bool ObAllTenantInfo::is_valid() const
          && tenant_role_.is_valid()
          && switchover_status_.is_valid()
          && log_mode_.is_valid()
-         && is_valid_tenant_scn(sync_scn_, replayable_scn_, standby_scn_, recovery_until_scn_);
+         && is_valid_tenant_scn(sync_scn_, replayable_scn_, standby_scn_, recovery_until_scn_)
+         && restore_data_mode_.is_valid();
 }
 
 int ObAllTenantInfo::init(
@@ -99,7 +100,8 @@ int ObAllTenantInfo::init(
     const SCN &standby_scn,
     const SCN &recovery_until_scn,
     const ObArchiveMode &log_mode,
-    const share::ObLSID &max_ls_id)
+    const share::ObLSID &max_ls_id,
+    const share::ObRestoreDataMode &restore_data_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -112,11 +114,12 @@ int ObAllTenantInfo::init(
                   || !recovery_until_scn.is_valid_and_not_min()
                   || !log_mode.is_valid()
                   || !is_valid_tenant_scn(sync_scn, replayable_scn, standby_scn, recovery_until_scn)
-                  || !max_ls_id.is_valid())) {
+                  || !max_ls_id.is_valid()
+                  || !restore_data_mode.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tenant_role), K(switchover_status),
              K(switchover_epoch), K(sync_scn), K(replayable_scn), K(standby_scn), K(recovery_until_scn),
-             K(log_mode), K(max_ls_id));
+             K(log_mode), K(max_ls_id), K(restore_data_mode));
   } else {
     tenant_id_ = tenant_id;
     tenant_role_ = tenant_role;
@@ -128,6 +131,7 @@ int ObAllTenantInfo::init(
     recovery_until_scn_ = recovery_until_scn;
     log_mode_ = log_mode;
     max_ls_id_ = max_ls_id;
+    restore_data_mode_ = restore_data_mode;
   }
   return ret;
 }
@@ -146,6 +150,7 @@ void ObAllTenantInfo::assign(const ObAllTenantInfo &other)
     recovery_until_scn_ = other.recovery_until_scn_;
     log_mode_ = other.log_mode_;
     max_ls_id_ = other.max_ls_id_;
+    restore_data_mode_ = other.restore_data_mode_;
   }
   return ;
 }
@@ -162,6 +167,11 @@ void ObAllTenantInfo::reset()
   recovery_until_scn_.set_min();
   log_mode_.reset();
   max_ls_id_.reset();
+  // ******** For compatibility **********
+  // Following members are newly added.
+  // They need be reset to the VALID default value.
+  // Consider serialization compatibility for old binary RPC packet.
+  restore_data_mode_ = NORMAL_RESTORE_DATA_MODE;
 }
 
 OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
@@ -169,7 +179,7 @@ OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
                     replayable_scn_,
                     standby_scn_,   // FARM COMPAT WHITELIST
                     recovery_until_scn_, log_mode_,
-                    max_ls_id_);
+                    max_ls_id_, restore_data_mode_);
 
 ObAllTenantInfo& ObAllTenantInfo::operator= (const ObAllTenantInfo &other)
 {

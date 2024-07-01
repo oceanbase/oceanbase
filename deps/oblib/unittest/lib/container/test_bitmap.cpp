@@ -187,7 +187,7 @@ TEST_F(TestObBitmap, get_row_ids)
   for (int64_t i = 4090; i < 4100; ++i) {
     EXPECT_EQ(OB_SUCCESS, bitmap.set(i, true));
   }
-  int64_t *row_ids = reinterpret_cast<int64_t *>(allocator_.alloc(800));
+  int32_t *row_ids = reinterpret_cast<int32_t *>(allocator_.alloc(800));
   int64_t row_count = 0;
   int64_t from = 0;
   EXPECT_EQ(OB_SUCCESS, bitmap.get_row_ids(row_ids, row_count, from, 3000, INT64_MAX));
@@ -211,6 +211,7 @@ TEST_F(TestObBitmap, get_row_ids)
     EXPECT_EQ(4090 + i - 2, row_ids[i]);
   }
 
+  int ret = OB_SUCCESS;
   from = 0;
   EXPECT_EQ(OB_SUCCESS, bitmap.get_row_ids(row_ids, row_count, from, 8193, 10));
   EXPECT_EQ(10, row_count);

@@ -92,6 +92,9 @@ public:
     inline int fill_head(int64_t size);
     inline int fill_tail(int64_t size);
     inline int compact();
+    inline int64_t head_pos() const { return head_; }
+    inline int64_t tail_pos() const { return tail_;}
+    inline void fast_update_head(const int64_t pos) { head_ = pos; }
     TO_STRING_KV(KP_(data), K_(head), K_(tail), K_(cap));
   private:
     char *data_;
@@ -103,8 +106,8 @@ public:
   /*
    * Block, a stucture storing the data uses block id for indexing,
    * the real data starts from the payload.
-   * If the block is in the process of data appending, the tail will occupy one `ShrinkBuffer` size
-   * to record the current writing position information.
+   * If the block is in the process of data appending in dtl, the tail will occupy one
+   * `ShrinkBuffer` size to record the current writing position information.
    * The memory layout is as follows:
    * +------------------------------------------------------------------+
    * | Block Header | Payload                   | ShrinkBuffer(optional)|
@@ -116,9 +119,10 @@ public:
 
     Block() : magic_(MAGIC), block_id_(0), cnt_(0), raw_size_(0) {}
 
+    template <bool WITH_BLK_BUF>
     inline static int64_t min_blk_size(const int64_t size)
     {
-      return sizeof(Block) + sizeof(ShrinkBuffer) + size;
+      return sizeof(Block) + size + (WITH_BLK_BUF ? sizeof(ShrinkBuffer) : 0);
     }
     inline bool contain(const int64_t block_id) const
     {
@@ -126,21 +130,15 @@ public:
     }
     inline int64_t begin() const { return block_id_; }
     inline int64_t end() const { return block_id_ + cnt_; }
-    inline int64_t remain() const { return get_buffer()->remain(); }
     inline int64_t payload_size() const { return raw_size_ - sizeof(Block); }
-    inline ShrinkBuffer* get_buffer()
-    {
-      return static_cast<ShrinkBuffer*>(static_cast<void*>(payload_ + buf_off_));
-    }
-    inline const ShrinkBuffer* get_buffer() const
-    {
-      return static_cast<const ShrinkBuffer*>(static_cast<const void*>(payload_ + buf_off_));
-    }
+    // We put the buffer at the end of the block. This is only used in dtl scenarios
+    // to support the self-explanatory ability of the block.
     inline static char *buffer_position(void *mem, const int64_t size)
     {
       return static_cast<char*>(mem) + size - sizeof(ShrinkBuffer);
     }
-    inline uint64_t checksum() const {
+    inline uint64_t checksum() const
+    {
       ObBatchChecksum bc;
       bc.fill(payload_, raw_size_ - sizeof(Block));
       return bc.calc();
@@ -351,7 +349,7 @@ public:
            uint64_t tenant_id,
            int64_t mem_ctx_id,
            const char *label,
-           common::ObCompressorType compressor_type = NONE_COMPRESSOR,
+           common::ObCompressorType compressor_type,
            const bool enable_trunc = false);
   void reset();
   void reuse();
@@ -398,11 +396,8 @@ public:
   inline int64_t get_max_hold_mem() const { return max_hold_mem_; }
   inline common::DefaultPageAllocator& get_inner_allocator() { return inner_allocator_; }
   inline int64_t has_dumped() const { return block_cnt_on_disk_ > 0; }
-  inline int64_t get_last_buffer_mem_size() const
-  {
-    return nullptr == blk_ ? 0 : blk_->get_buffer()->capacity();
-  }
-  static int init_block_buffer(void* mem, const int64_t size, Block *&block);
+  inline int64_t get_last_buffer_mem_size() const { return blk_buf_.capacity(); }
+  static int init_dtl_block_buffer(void* mem, const int64_t size, Block *&block);
   int append_block(const char *buf, const int64_t size);
   int append_block_payload(const char *buf, const int64_t size, const int64_t cnt);
   int alloc_dir_id();
@@ -412,9 +407,12 @@ public:
   {
     enable_trunc_ = enable_trunc;
   }
+  inline ShrinkBuffer &get_blk_buf() { return blk_buf_; }
   bool is_truncate() { return enable_trunc_; }
   inline int64_t get_cur_file_offset() const { return cur_file_offset_; }
   inline void set_cur_file_offset(int64_t file_offset) { cur_file_offset_ = file_offset; }
+
+  inline bool is_empty_save_block_cnt() const { return saved_block_id_cnt_ == 0; }
   // include index blocks and data blocks
 
   TO_STRING_KV(K_(inited), K_(enable_dump), K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
@@ -491,7 +489,7 @@ private:
   static int get_timeout(int64_t &timeout_ms);
   int alloc_block(Block *&blk, const int64_t min_size, const bool strict_mem_size);
   void *alloc_blk_mem(const int64_t size, common::ObDList<LinkNode> *list);
-  int setup_block(ShrinkBuffer *buf, Block *&blk);
+  int setup_block(ShrinkBuffer &buf, Block *&blk);
   // new block is not needed if %min_size is zero. (finish add row)
   int switch_block(const int64_t min_size, const bool strict_mem_size);
   int add_block_idx(const BlockIndex &bi);
@@ -518,8 +516,34 @@ private:
   void free_mem_list(common::ObDList<LinkNode> &list);
   inline bool has_index_block() const { return index_block_cnt_ > 0; }
   inline int64_t get_block_raw_size(const Block *blk) const
-  { return is_last_block(blk) ? blk->get_buffer()->head_size() : blk->raw_size_; }
+  { return is_last_block(blk) ? blk_buf_.head_size() : blk->raw_size_; }
   inline bool need_compress() const { return compressor_.get_compressor_type() != NONE_COMPRESSOR; }
+  inline ObCompressorType get_compressor_type() const { return compressor_.get_compressor_type(); }
+
+protected:
+  /**
+   * These functions are inserted into different stages of the block, and their main function
+   * is to customize some special operations to meet the needs of different data formats or
+   * scenarios. The overall calling timing of there functions is as follows:
+   * new_blk -> prepare_setup_blk -> blk_add_batch -> blk_is_full -> prepare_blk_for_switch ->
+   * switch_blk -> prepare_blk_for_write -> dump_blk -> prepare_blk_for_read -> read_blk
+   *
+   * `prepare_setup_blk`: called when the block has just initialized the initial meta information.
+   * The block does not yet have any content. You can add some new meta information you need
+   * by overwriting it.
+   */
+  virtual int prepare_setup_blk(Block *blk) { return OB_SUCCESS; }
+  /**
+   * `prepare_blk_for_switch`: The function call occurs when the current block is full and blk
+   * needs to be switched. Before switching, some customized actions will be performed on `blk`,
+   * such as data compaction, etc.
+   */
+  virtual int prepare_blk_for_switch(Block *blk) { return OB_SUCCESS; }
+  /**
+   * `prepare_blk_for_write/read`: These two functions are used in conjunction.
+   * `prepare_blk_for_write` is called before the block is dumped on the disk, and
+   * `prepare_blk_for_read` occurs when the block has just been read from the disk.
+   */
   virtual int prepare_blk_for_write(Block *blk) { return OB_SUCCESS; }
   virtual int prepare_blk_for_read(Block *blk) { return OB_SUCCESS; }
 
@@ -529,6 +553,7 @@ protected:
   Block *blk_; // currently operating block
   // variables related to `block_id`, the total number of `block_id` is the sum of
   // all block's `cnt_`, and it can also be used to count rows.
+  ShrinkBuffer blk_buf_;
   int64_t block_id_cnt_;
   int64_t saved_block_id_cnt_;
   int64_t dumped_block_id_cnt_;
@@ -576,10 +601,7 @@ private:
 inline int ObTempBlockStore::ShrinkBuffer::fill_head(int64_t size)
 {
   int ret = common::OB_SUCCESS;
-  if (size < -head_) {
-    ret = common::OB_INVALID_ARGUMENT;
-    SQL_ENG_LOG(WARN, "invalid argument", K(size), K_(head));
-  } else if (size > remain()) {
+  if (size > remain()) {
     ret = common::OB_BUF_NOT_ENOUGH;
     SQL_ENG_LOG(WARN, "buffer not enough", K(size), "remain", remain());
   } else {
@@ -591,10 +613,7 @@ inline int ObTempBlockStore::ShrinkBuffer::fill_head(int64_t size)
 inline int ObTempBlockStore::ShrinkBuffer::fill_tail(int64_t size)
 {
   int ret = common::OB_SUCCESS;
-  if (size < -tail_size()) {
-    ret = common::OB_INVALID_ARGUMENT;
-    SQL_ENG_LOG(WARN, "invalid argument", K(size), "tail_size", tail_size());
-  } else if (size > remain()) {
+  if (size > remain()) {
     ret = common::OB_BUF_NOT_ENOUGH;
     SQL_ENG_LOG(WARN, "buffer not enough", K(size), "remain", remain());
   } else {
@@ -610,7 +629,7 @@ inline int ObTempBlockStore::ShrinkBuffer::compact()
     ret = common::OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "not inited", K(ret));
   } else {
-    const int64_t tail_data_size = tail_size() - sizeof(ShrinkBuffer);
+    const int64_t tail_data_size = tail_size();
     MEMMOVE(head(), tail(), tail_data_size);
     head_ += tail_data_size;
     tail_ += tail_data_size;

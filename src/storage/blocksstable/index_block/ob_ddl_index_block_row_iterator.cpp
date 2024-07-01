@@ -292,13 +292,13 @@ int ObDDLIndexBlockRowIterator::check_blockscan(const ObDatumRowkey &rowkey, boo
 }
 
 int ObDDLIndexBlockRowIterator::get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                                            const ObDatumRowkey *&endkey)
+                                            ObCommonDatumRowkey &endkey)
 {
   int ret = OB_SUCCESS;
   bool is_start_key = false;
   bool is_end_key = false;
   idx_row_header = nullptr;
-  endkey = nullptr;
+  endkey.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Iter not opened yet", K(ret), KPC(this));
@@ -307,20 +307,20 @@ int ObDDLIndexBlockRowIterator::get_current(const ObIndexBlockRowHeader *&idx_ro
     LOG_WARN("cur tree value is null", K(ret));
   } else {
     idx_row_header = &(cur_tree_value_->header_);
-    endkey = &(cur_tree_value_->block_meta_->end_key_);
+    endkey.set_compact_rowkey(&(cur_tree_value_->block_meta_->end_key_));
   }
   return ret;
 }
 
 int ObDDLIndexBlockRowIterator::inner_get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                                                  const ObDatumRowkey *&endkey,
+                                                  ObCommonDatumRowkey &endkey,
                                                   int64_t &row_offset)
 {
   int ret = OB_SUCCESS;
   bool is_start_key = false;
   bool is_end_key = false;
   idx_row_header = nullptr;
-  endkey = nullptr;
+  endkey.reset();
   row_offset = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -330,14 +330,14 @@ int ObDDLIndexBlockRowIterator::inner_get_current(const ObIndexBlockRowHeader *&
     LOG_WARN("cur tree value is null", K(ret));
   } else {
     idx_row_header = &(cur_tree_value_->header_);
-    endkey = &(cur_tree_value_->block_meta_->end_key_);
+    endkey.set_compact_rowkey(&(cur_tree_value_->block_meta_->end_key_));
     row_offset = cur_tree_value_->co_sstable_row_offset_;
   }
   return ret;
 }
 
 int ObDDLIndexBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                                         const ObDatumRowkey *&endkey,
+                                         ObCommonDatumRowkey &endkey,
                                          bool &is_scan_left_border,
                                          bool &is_scan_right_border,
                                          const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -347,7 +347,7 @@ int ObDDLIndexBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_h
 {
   int ret = OB_SUCCESS;
   idx_row_header = nullptr;
-  endkey = nullptr;
+  endkey.reset();
   is_scan_left_border = false;
   is_scan_right_border = false;
   idx_minor_info = nullptr;
@@ -361,10 +361,10 @@ int ObDDLIndexBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_h
     ret = OB_NOT_INIT;
     LOG_WARN("Iter not opened yet", K(ret), KPC(this));
   } else if (OB_FAIL(inner_get_current(idx_row_header, endkey, co_sstable_row_offset))) {
-    LOG_WARN("read cur idx row failed", K(ret), KPC(idx_row_header), KPC(endkey), K(co_sstable_row_offset));
-  } else if (OB_UNLIKELY(nullptr == idx_row_header || nullptr == endkey)) {
+    LOG_WARN("read cur idx row failed", K(ret), KPC(idx_row_header), K(endkey), K(co_sstable_row_offset));
+  } else if (OB_UNLIKELY(nullptr == idx_row_header || !endkey.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null index block row header/endkey", K(ret), KP(idx_row_header), KP(endkey));
+    LOG_WARN("Unexpected null index block row header/endkey", K(ret), KP(idx_row_header), K(endkey));
   } else if (OB_UNLIKELY((idx_row_header->is_data_index() && !idx_row_header->is_major_node()) ||
                          idx_row_header->is_pre_aggregated() ||
                          !idx_row_header->is_major_node())) {
@@ -631,15 +631,15 @@ int ObDDLSStableAllRangeIterator::check_blockscan(const ObDatumRowkey &rowkey, b
 }
 
 int ObDDLSStableAllRangeIterator::get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                                              const ObDatumRowkey *&endkey)
+                                              ObCommonDatumRowkey &endkey)
 {
-  endkey = cur_index_info_.endkey_;
+  endkey.set_compact_rowkey(cur_index_info_.endkey_);
   idx_row_header = cur_index_info_.idx_row_header_;
   return OB_SUCCESS;
 }
 
 int ObDDLSStableAllRangeIterator::get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                                           const ObDatumRowkey *&endkey,
+                                           ObCommonDatumRowkey &endkey,
                                            bool &is_scan_left_border,
                                            bool &is_scan_right_border,
                                            const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -649,7 +649,7 @@ int ObDDLSStableAllRangeIterator::get_next(const ObIndexBlockRowHeader *&idx_row
 {
   int ret = OB_SUCCESS;
   idx_row_header = nullptr;
-  endkey = nullptr;
+  endkey.reset();
   is_scan_left_border = false;
   is_scan_right_border = false;
   idx_minor_info = nullptr;
@@ -671,7 +671,7 @@ int ObDDLSStableAllRangeIterator::get_next(const ObIndexBlockRowHeader *&idx_row
     LOG_WARN("Unexpected null index block row endkey", K(ret), K(cur_index_info_));
   } else {
     idx_row_header = cur_index_info_.idx_row_header_;
-    endkey = cur_index_info_.endkey_;
+    endkey.set_compact_rowkey(cur_index_info_.endkey_);
     idx_minor_info = cur_index_info_.idx_minor_info_;
     agg_row_buf = cur_index_info_.agg_row_buf_;
     agg_buf_size = cur_index_info_.agg_buf_size_;
@@ -787,15 +787,15 @@ int ObDDLMergeEmptyIterator::check_blockscan(const ObDatumRowkey &rowkey, bool &
 }
 
 int ObDDLMergeEmptyIterator::get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                                         const ObDatumRowkey *&endkey)
+                                         ObCommonDatumRowkey &endkey)
 {
   idx_row_header = nullptr;
-  endkey = nullptr;
+  endkey.reset();
   return OB_SUCCESS;
 }
 
 int ObDDLMergeEmptyIterator::get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                                      const ObDatumRowkey *&endkey,
+                                      ObCommonDatumRowkey &endkey,
                                       bool &is_scan_left_border,
                                       bool &is_scan_right_border,
                                       const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -805,7 +805,7 @@ int ObDDLMergeEmptyIterator::get_next(const ObIndexBlockRowHeader *&idx_row_head
 {
   int ret = OB_SUCCESS;
   idx_row_header = nullptr;
-  endkey = nullptr;
+  endkey.reset();
   is_scan_left_border = false;
   is_scan_right_border = false;
   idx_minor_info = nullptr;
@@ -1517,11 +1517,11 @@ int ObDDLMergeBlockRowIterator::locate_range(const ObDatumRange &range,
 }
 
 int ObDDLMergeBlockRowIterator::get_current(const ObIndexBlockRowHeader *&idx_row_header,
-                                            const ObDatumRowkey *&endkey)
+                                            ObCommonDatumRowkey &endkey)
 {
   int ret = OB_SUCCESS;
   idx_row_header = nullptr;
-  endkey = nullptr;
+  endkey.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Iter not opened yet", K(ret), KPC(this));
@@ -1531,7 +1531,7 @@ int ObDDLMergeBlockRowIterator::get_current(const ObIndexBlockRowHeader *&idx_ro
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid iters count or iter is nll", K(ret), K(iters_));
     } else if (OB_FAIL(iters_.at(0)->get_current(idx_row_header, endkey))) {
-      LOG_WARN("read cur idx row failed", K(ret), KPC(idx_row_header), KPC(endkey), KPC(iters_.at(0)));
+      LOG_WARN("read cur idx row failed", K(ret), KPC(idx_row_header), K(endkey), KPC(iters_.at(0)));
     }
   } else {
     // get next row from loser tree
@@ -1559,7 +1559,7 @@ int ObDDLMergeBlockRowIterator::get_current(const ObIndexBlockRowHeader *&idx_ro
 }
 
 int ObDDLMergeBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                                         const ObDatumRowkey *&endkey,
+                                         ObCommonDatumRowkey &endkey,
                                          bool &is_scan_left_border,
                                          bool &is_scan_right_border,
                                          const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -1569,7 +1569,7 @@ int ObDDLMergeBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_h
 {
   int ret = OB_SUCCESS;
   idx_row_header = nullptr;
-  endkey = nullptr;
+  endkey.reset();
   is_scan_left_border = false;
   is_scan_right_border = false;
   idx_minor_info = nullptr;
@@ -1592,7 +1592,7 @@ int ObDDLMergeBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_h
                                               agg_row_buf,
                                               agg_buf_size,
                                               row_offset))) {
-      LOG_WARN("read cur idx row failed", K(ret), KPC(idx_row_header), KPC(endkey), KPC(iters_.at(0)));
+      LOG_WARN("read cur idx row failed", K(ret), KPC(idx_row_header), K(endkey), KPC(iters_.at(0)));
     }
   } else {
     // get next row from loser tree
@@ -1621,7 +1621,6 @@ int ObDDLMergeBlockRowIterator::supply_consume()
   for (int64_t i = 0; OB_SUCC(ret) && i < consumer_cnt_; ++i) {
     const int64_t iter_idx = consumers_[i];
     const ObIndexBlockRowHeader *idx_row_header = nullptr;
-    const ObDatumRowkey *endkey = nullptr;
     ObIndexBlockRowIterator *cur_iter = iters_.at(iter_idx);
     if (OB_ISNULL(cur_iter)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1657,7 +1656,7 @@ int ObDDLMergeBlockRowIterator::supply_consume()
 }
 
 int ObDDLMergeBlockRowIterator::inner_get_next(const ObIndexBlockRowHeader *&idx_row_header,
-                                               const ObDatumRowkey *&endkey,
+                                               ObCommonDatumRowkey &endkey,
                                                bool &is_scan_left_border,
                                                bool &is_scan_right_border,
                                                const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
@@ -1667,7 +1666,7 @@ int ObDDLMergeBlockRowIterator::inner_get_next(const ObIndexBlockRowHeader *&idx
 {
   int ret = OB_SUCCESS;
   idx_row_header = nullptr;
-  endkey = nullptr;
+  endkey.reset();
   is_scan_left_border = false;
   is_scan_right_border = false;
   idx_minor_info = nullptr;
@@ -1682,7 +1681,7 @@ int ObDDLMergeBlockRowIterator::inner_get_next(const ObIndexBlockRowHeader *&idx
       ret = OB_ITER_END;
     } else {
       idx_row_header = first_index_item_.idx_row_header_;
-      endkey = first_index_item_.rowkey_;
+      endkey.set_compact_rowkey(first_index_item_.rowkey_);
       is_scan_left_border = first_index_item_.is_scan_left_border_;
       is_scan_right_border = first_index_item_.is_scan_right_border_;
       idx_minor_info = first_index_item_.idx_minor_info_;
@@ -1704,7 +1703,7 @@ int ObDDLMergeBlockRowIterator::inner_get_next(const ObIndexBlockRowHeader *&idx
     }
 
     if (OB_SUCC(ret)) {
-      while (OB_SUCC(ret) && !endkey_merger_->empty() && nullptr == endkey) {
+      while (OB_SUCC(ret) && !endkey_merger_->empty() && !endkey.is_valid()) {
         bool skip_iter = false;
         if (OB_FAIL(endkey_merger_->top(top_item))) {
           LOG_WARN("fail to get top item", K(ret));
@@ -1718,9 +1717,9 @@ int ObDDLMergeBlockRowIterator::inner_get_next(const ObIndexBlockRowHeader *&idx
           agg_row_buf = top_item->agg_row_buf_;
           agg_buf_size = top_item->agg_buf_size_;
           row_offset = top_item->row_offset_;
-          if (OB_UNLIKELY(nullptr == idx_row_header || nullptr == endkey || cur_iter_idx >= iters_.count())) {
+          if (OB_UNLIKELY(nullptr == idx_row_header || !endkey.is_valid() || cur_iter_idx >= iters_.count())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("Unexpected null index block row header/endkey", K(ret), KP(idx_row_header), KP(endkey));
+            LOG_WARN("Unexpected null index block row header/endkey", K(ret), KP(idx_row_header), K(endkey));
           } else {
             ObIndexBlockRowIterator *cur_iter = iters_.at(cur_iter_idx);
             if (OB_ISNULL(cur_iter)) {
@@ -1733,8 +1732,8 @@ int ObDDLMergeBlockRowIterator::inner_get_next(const ObIndexBlockRowHeader *&idx
 
           if (OB_SUCC(ret) && !is_reverse_scan_) { // not_reverse_scan can quit early
             int tmp_cmp_ret = 0;
-            if (OB_FAIL(endkey->compare(query_range_.get_end_key(), *datum_utils_, tmp_cmp_ret))) {
-              LOG_WARN("fail to cmp rowkey", K(ret), K(query_range_.get_end_key()), KPC(endkey), KPC(datum_utils_));
+            if (OB_FAIL(endkey.compare(query_range_.get_end_key(), *datum_utils_, tmp_cmp_ret))) {
+              LOG_WARN("fail to cmp rowkey", K(ret), K(query_range_.get_end_key()), K(endkey), KPC(datum_utils_));
             } else if (tmp_cmp_ret >= 0) {
               // reach endkey, stop get_next
               is_iter_finish_ = true;
@@ -1805,7 +1804,7 @@ void ObDDLMergeBlockRowIterator::MergeIndexItem::reset()
 
 int ObDDLMergeBlockRowIterator::MergeIndexItem::init(ObIAllocator *allocator,
                                                      const ObIndexBlockRowHeader *idx_row_header,
-                                                     const ObDatumRowkey *endkey,
+                                                     const ObCommonDatumRowkey &endkey,
                                                      const bool is_scan_left_border,
                                                      const bool is_scan_right_border,
                                                      const ObIndexBlockRowMinorMetaInfo *idx_minor_info,
@@ -1815,9 +1814,9 @@ int ObDDLMergeBlockRowIterator::MergeIndexItem::init(ObIAllocator *allocator,
                                                      const int64_t iter_idx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(allocator) || OB_ISNULL(idx_row_header) || OB_ISNULL(endkey)) {
+  if (OB_ISNULL(allocator) || OB_ISNULL(idx_row_header) || !endkey.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguemen", K(ret), KP(allocator), KP(idx_row_header), KP(endkey), KP(idx_minor_info), KP(agg_row_buf));
+    LOG_WARN("invalid arguemen", K(ret), KP(allocator), KP(idx_row_header), K(endkey), KP(idx_minor_info), KP(agg_row_buf));
   } else {
     item_allocator_ = allocator;
     void *key_buf = nullptr;
@@ -1828,8 +1827,8 @@ int ObDDLMergeBlockRowIterator::MergeIndexItem::init(ObIAllocator *allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObDatumRowkey)));
     } else if (FALSE_IT(rowkey_ = new (key_buf) ObDatumRowkey())) {
-    } else if (OB_FAIL(endkey->deep_copy(*rowkey_, *allocator))) {
-      LOG_WARN("fail to deep copy rowkey", K(ret), KPC(rowkey_), KPC(endkey));
+    } else if (OB_FAIL(endkey.deep_copy(*rowkey_, *allocator))) {
+      LOG_WARN("fail to deep copy rowkey", K(ret), KPC(rowkey_), K(endkey));
     }
 
     if (OB_FAIL(ret)) {
@@ -1900,9 +1899,9 @@ int ObDDLMergeBlockRowIterator::locate_first_endkey()
           if (OB_FAIL(endkey_merger_->top(top_item))) {
             LOG_WARN("fail to get top item", K(ret));
           } else if (OB_LIKELY(endkey_merger_->is_unique_champion())) {
-            if (OB_UNLIKELY(nullptr == top_item->header_ || nullptr == top_item->end_key_ || top_item->iter_idx_ >= iters_.count())) {
+            if (OB_UNLIKELY(nullptr == top_item->header_ || !top_item->end_key_.is_valid() || top_item->iter_idx_ >= iters_.count())) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("Unexpected null index block row header/endkey", K(ret), KP(top_item->header_), KP(top_item->end_key_));
+              LOG_WARN("Unexpected null index block row header/endkey", K(ret), KP(top_item->header_), K(top_item->end_key_));
             } else {
               ObIndexBlockRowIterator *tmp_iter = iters_.at(top_item->iter_idx_);
               if (OB_ISNULL(tmp_iter)) {
@@ -1946,17 +1945,17 @@ int ObDDLMergeBlockRowIterator::locate_first_endkey()
             if (OB_FAIL(endkey_merger_->top(top_item))) {
               LOG_WARN("fail to get top item", K(ret));
             } else if (OB_LIKELY(endkey_merger_->is_unique_champion())) {
-              if (OB_UNLIKELY(nullptr == top_item->header_ || nullptr == top_item->end_key_ || top_item->iter_idx_ >= iters_.count())) {
+              if (OB_UNLIKELY(nullptr == top_item->header_ || !top_item->end_key_.is_valid() || top_item->iter_idx_ >= iters_.count())) {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("Unexpected null index block row header/endkey", K(ret), KP(top_item->end_key_), KP(top_item->header_));
+                LOG_WARN("Unexpected null index block row header/endkey", K(ret), K(top_item->end_key_), KP(top_item->header_));
               } else if (top_item->iter_idx_ == first_index_item_.iter_index_) {
                 // continuous item from same iter, find
                 find = true; //first_index_item_
               } else {
                 int tmp_cmp_ret = 0;
                 // top_item->end_key_ means first_index_item_.start_key
-                if (OB_FAIL(top_item->end_key_->compare(query_range_.get_end_key(), *datum_utils_, tmp_cmp_ret))) {
-                  LOG_WARN("fail to cmp rowkey", K(ret), K(query_range_.get_end_key()), KPC(top_item->end_key_), KPC(datum_utils_));
+                if (OB_FAIL(top_item->end_key_.compare(query_range_.get_end_key(), *datum_utils_, tmp_cmp_ret))) {
+                  LOG_WARN("fail to cmp rowkey", K(ret), K(query_range_.get_end_key()), K(top_item->end_key_), KPC(datum_utils_));
                 } else if (tmp_cmp_ret < 0) {
                   find = true; //first_index_item_
                 } else {
@@ -2124,7 +2123,7 @@ int ObDDLMergeBlockRowIterator::get_index_row_count(const ObDatumRange &range,
       }
     } else {
       int ret = OB_SUCCESS;
-      const ObDatumRowkey *endkey = nullptr;
+      ObCommonDatumRowkey endkey;
       const ObIndexBlockRowHeader *idx_row_header = nullptr;
       const ObIndexBlockRowMinorMetaInfo *idx_minor_info = nullptr;
       const char *idx_data_buf = nullptr;
@@ -2135,10 +2134,10 @@ int ObDDLMergeBlockRowIterator::get_index_row_count(const ObDatumRange &range,
       bool is_scan_right_border = false;
       while (OB_SUCC(ret)) {
         if (OB_FAIL(tmp_merge_iter->get_next(idx_row_header, endkey, is_scan_left_border, is_scan_right_border, idx_minor_info, agg_row_buf, agg_buf_size, row_offset))) {
-          LOG_WARN("get next idx block row failed", K(ret), KP(idx_row_header), KPC(endkey), K(is_reverse_scan_));
-        } else if (OB_UNLIKELY(nullptr == idx_row_header || nullptr == endkey)) {
+          LOG_WARN("get next idx block row failed", K(ret), KP(idx_row_header), K(endkey), K(is_reverse_scan_));
+        } else if (OB_UNLIKELY(nullptr == idx_row_header || !endkey.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected null index block row header/endkey", K(ret), KPC(tmp_merge_iter), KP(idx_row_header), KP(endkey));
+          LOG_WARN("Unexpected null index block row header/endkey", K(ret), KPC(tmp_merge_iter), KP(idx_row_header), K(endkey));
         } else {
           ++index_row_count;
           data_row_count += idx_row_header->get_row_count();

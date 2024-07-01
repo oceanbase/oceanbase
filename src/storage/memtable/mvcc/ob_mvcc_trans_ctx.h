@@ -205,15 +205,12 @@ public:
       parallel_stat_(0),
       write_epoch_(0),
       write_epoch_start_tid_(0),
-      need_merge_(false),
       for_replay_(false),
       has_branch_replayed_into_first_list_(false),
       serial_final_scn_(share::SCN::max_scn()),
       serial_final_seq_no_(),
       serial_sync_scn_(share::SCN::min_scn()),
       callback_main_list_append_count_(0),
-      callback_slave_list_append_count_(0),
-      callback_slave_list_merge_count_(0),
       callback_remove_for_trans_end_count_(0),
       callback_remove_for_remove_memtable_count_(0),
       callback_remove_for_fast_commit_count_(0),
@@ -253,7 +250,7 @@ public:
   int remove_callbacks_for_fast_commit(const ObCallbackScopeArray &callbacks_arr);
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
-  int acquire_callback_list(const bool new_epoch, const bool need_merge);
+  int acquire_callback_list(const bool new_epoch);
   void revert_callback_list();
   int get_tx_seq_replay_idx(const transaction::ObTxSEQ seq) const;
   common::SpinRWLock& get_rwlock() { return rwlock_; }
@@ -275,16 +272,11 @@ public:
   int clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove);
   // when not inc, return -1
   int64_t inc_pending_log_size(const int64_t size);
-  void try_merge_multi_callback_lists(const int64_t new_size, const int64_t size, const bool is_logging_blocked);
-  void inc_flushed_log_size(const int64_t size) {
-    if (!serial_final_scn_.is_valid()) {
-      UNUSED(ATOMIC_FAA(&flushed_log_size_, size));
-    }
-  }
+  void inc_flushed_log_size(const int64_t size);
   void clear_pending_log_size() { ATOMIC_STORE(&pending_log_size_, 0); }
-  int64_t get_pending_log_size() const { return ATOMIC_LOAD(&pending_log_size_); }
+  int64_t get_pending_log_size() const;
   bool pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no, const int64_t limit);
-  int64_t get_flushed_log_size() const { return ATOMIC_LOAD(&flushed_log_size_); }
+  int64_t get_flushed_log_size() const;
   int get_log_guard(const transaction::ObTxSEQ &write_seq,
                     ObCallbackListLogGuard &log_guard,
                     int &cb_list_idx);
@@ -292,17 +284,12 @@ public:
                             const transaction::ObTxSEQ serial_final_seq_no);
   void set_skip_checksum_calc();
   bool skip_checksum_calc() const { return ATOMIC_LOAD(&skip_checksum_); }
-  void merge_multi_callback_lists();
   void reset_pdml_stat();
   bool find(ObITxCallbackFinder &func);
   uint64_t get_main_list_length() const
   { return callback_list_.get_length(); }
   int64_t get_callback_main_list_append_count() const
   { return callback_main_list_append_count_; }
-  int64_t get_callback_slave_list_append_count() const
-  { return callback_slave_list_append_count_; }
-  int64_t get_callback_slave_list_merge_count() const
-  { return callback_slave_list_merge_count_; }
   int64_t get_callback_remove_for_trans_end_count() const
   { return callback_remove_for_trans_end_count_; }
   int64_t get_callback_remove_for_remove_memtable_count() const
@@ -315,10 +302,6 @@ public:
   { return callback_ext_info_log_count_; }
   void add_main_list_append_cnt(int64_t cnt = 1)
   { ATOMIC_AAF(&callback_main_list_append_count_, cnt); }
-  void add_slave_list_append_cnt(int64_t cnt = 1)
-  { ATOMIC_AAF(&callback_slave_list_append_count_, cnt); }
-  void add_slave_list_merge_cnt(int64_t cnt = 1)
-  { ATOMIC_AAF(&callback_slave_list_merge_count_, cnt); }
   void add_tx_end_callback_remove_cnt(int64_t cnt = 1)
   { ATOMIC_AAF(&callback_remove_for_trans_end_count_, cnt); }
   void add_release_memtable_callback_remove_cnt(int64_t cnt = 1)
@@ -330,11 +313,9 @@ public:
   void add_callback_ext_info_log_count(int64_t cnt = 1)
   { ATOMIC_AAF(&callback_ext_info_log_count_, cnt); }
   int get_callback_list_count() const
-  { return  callback_lists_ ? (MAX_CALLBACK_LIST_COUNT + (need_merge_ ? 1 : 0)) : 1; }
+  { return  callback_lists_ ? MAX_CALLBACK_LIST_COUNT : 1; }
   int get_logging_list_count() const;
   ObTxCallbackList *get_callback_list_(const int16_t index, const bool nullable);
-  int is_callback_list_need_merge() const
-  { return need_merge_; }
   bool is_serial_final() const { return is_serial_final_(); }
   bool is_callback_list_append_only(const int idx) const
   {
@@ -347,13 +328,11 @@ public:
                K_(serial_final_seq_no),
                K_(serial_sync_scn),
                KP_(callback_lists),
-               K_(need_merge),
                K_(pending_log_size),
                K_(flushed_log_size),
                K_(for_replay),
                K_(parallel_stat));
 private:
-  void force_merge_multi_callback_lists();
   void update_serial_sync_scn_(const share::SCN scn);
   bool is_serial_final_() const
   {
@@ -404,13 +383,6 @@ private:
   // the first thread is always assigned to first callback-list
   int64_t write_epoch_start_tid_;
   RLOCAL_STATIC(bool, parallel_replay_);
-  // since 4.3, support multi-callback-list logging, extended callback-list(s)
-  // won't do merge, use this to indicate the OLD version.
-  // it was set in write path.
-  // NOTE: this value is default set to false is required
-  // On Follower, in the OLD version, data is replay into single CallbackList
-  // On Leader, if no write after takeover, merge is also not required
-  bool need_merge_;
   bool for_replay_;
   // used to mark that some branch callback replayed in first callback list
   // actually, by default they were replayed into its own callback list by
@@ -429,8 +401,6 @@ private:
   share::SCN serial_sync_scn_;
   // statistics for callback remove
   int64_t callback_main_list_append_count_;
-  int64_t callback_slave_list_append_count_;
-  int64_t callback_slave_list_merge_count_;
   int64_t callback_remove_for_trans_end_count_;
   int64_t callback_remove_for_remove_memtable_count_;
   int64_t callback_remove_for_fast_commit_count_;

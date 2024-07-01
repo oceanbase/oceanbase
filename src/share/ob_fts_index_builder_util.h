@@ -46,12 +46,19 @@ public:
       const obrpc::ObCreateIndexArg &index_arg,
       ObIAllocator *allocator,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
+  static int fts_doc_word_schema_exist(
+      uint64_t tenant_id,
+      uint64_t database_id,
+      ObSchemaGetterGuard &schema_guard,
+      const ObString &index_name,
+      bool &is_exist);
   static int generate_fts_aux_index_name(
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator *allocator);
   static int adjust_fts_args(
       obrpc::ObCreateIndexArg &index_arg,
       ObTableSchema &data_schema, // not const since will add column to data schema
+      ObIAllocator &allocator,
       ObIArray<ObColumnSchemaV2 *> &gen_columns);
   static int set_fts_rowkey_doc_table_columns(
       const obrpc::ObCreateIndexArg &arg,
@@ -75,14 +82,15 @@ private:
       const obrpc::ObCreateIndexArg *index_arg,
       ObTableSchema &data_schema); // not const since will add cascade flag
   static int adjust_fts_arg(
-      obrpc::ObCreateIndexArg *index_arg, // not const since index_arg.index_schema.allocator will be used
+      obrpc::ObCreateIndexArg *index_arg, // not const since index_columns_ will be modified
       const ObTableSchema &data_schema,
+      ObIAllocator &allocator,
       const ObIArray<const ObColumnSchemaV2 *> &fts_cols);
   static int inner_adjust_fts_arg(
       obrpc::ObCreateIndexArg *fts_arg,
       const ObIArray<const ObColumnSchemaV2 *> &fts_cols,
       const int index_column_cnt,
-      ObIAllocator *allocator);
+      ObIAllocator &allocator);
   static int generate_doc_id_column(
       const obrpc::ObCreateIndexArg *index_arg,
       const uint64_t col_id,
@@ -204,12 +212,14 @@ public:
    const sql::ObSQLSessionInfo &session_info,
    ObTableSchema &table_schema,
    sql::ObSchemaChecker *schema_checker,
+   bool force_rebuild,
    ObColumnSchemaV2 *&gen_col,
    ObColumnSchemaV2 *&budy_col);
  static int generate_multivalue_column(
     sql::ObRawExpr &expr,
     ObTableSchema &data_schema,
     ObSchemaGetterGuard *schema_guard,
+    bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&gen_budy_col);
  static int inner_adjust_multivalue_arg(

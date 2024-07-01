@@ -27,6 +27,7 @@ public:
   ObRandom();
   virtual ~ObRandom();
   //get a random int64_t number in [min(a,b), max(a,b)]
+  void seed(const uint64_t seed);
   static int64_t rand(const int64_t a, const int64_t b);
   //get a random int64_t number
   int64_t get();

@@ -83,7 +83,7 @@ int ObTabletLocationRefreshMgr::merge_inc_task_infos(
   if (inc_task_infos_to_merge.count() <= 0) {
     // do nothing
   } else {
-    std::sort(inc_task_infos_to_merge.begin(), inc_task_infos_to_merge.end(), ObTransferRefreshInfo::less_than);
+    lib::ob_sort(inc_task_infos_to_merge.begin(), inc_task_infos_to_merge.end(), ObTransferRefreshInfo::less_than);
     ObArray<ObTransferRefreshInfo> new_tasks;
     ObArray<ObTransferRefreshInfo> changed_tasks;
 
@@ -134,7 +134,7 @@ int ObTabletLocationRefreshMgr::merge_inc_task_infos(
       } else if (OB_FAIL(append(inc_task_infos_, new_tasks))) {
         LOG_WARN("fail to append array", KR(ret), K(new_count));
       } else {
-        std::sort(inc_task_infos_.begin(), inc_task_infos_.end(), ObTransferRefreshInfo::less_than);
+        lib::ob_sort(inc_task_infos_.begin(), inc_task_infos_.end(), ObTransferRefreshInfo::less_than);
         FLOG_INFO("[REFRESH_TABLET_LOCATION] add tasks",
                   KR(ret), K_(tenant_id), K(new_tasks.count()), K(new_tasks));
       }

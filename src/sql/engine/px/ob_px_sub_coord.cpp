@@ -46,6 +46,7 @@
 #include "sql/engine/px/ob_granule_pump.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
+#include "sql/engine/window_function/ob_window_function_vec_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -535,6 +536,27 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
       LOG_DEBUG("debug wf input", K(wf_spec->role_type_), K(sqc.get_task_count()),
                 K(sqc.get_total_task_count()));
     }
+  } else if (root.get_type() == PHY_VEC_SORT) {
+    // TODO XUNSI: if shared topn filter, init the shared topn msg here
+  } else if (root.get_type() == PHY_VEC_WINDOW_FUNCTION) {
+    ObPxSqcMeta &sqc = sqc_arg_.sqc_;
+    ObWindowFunctionVecOpInput *wf_input = NULL;
+    ObOperatorKit *kit = ctx.get_operator_kit(root.id_);
+    ObWindowFunctionVecSpec *wf_spec = reinterpret_cast<ObWindowFunctionVecSpec *>(&root);
+    if (OB_ISNULL(kit) || OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is null", K(ret), K(kit));
+    } else if (FALSE_IT(wf_input = static_cast<ObWindowFunctionVecOpInput *>(kit->input_))) {
+    } else if (wf_spec->is_participator()) {
+      wf_input->set_local_task_count(sqc.get_task_count());
+      wf_input->set_total_task_count(sqc.get_total_task_count());
+      if (OB_FAIL(wf_input->init_wf_participator_shared_info(ctx.get_allocator(),
+                                                             sqc.get_task_count()))) {
+        LOG_WARN("init wf participator shared info failed", K(ret));
+      }
+      LOG_DEBUG("debug wf input", K(wf_spec->role_type_), K(sqc.get_task_count()),
+                K(sqc.get_total_task_count()));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(root.register_to_datahub(ctx))) {
@@ -967,7 +989,7 @@ int ObPxSubCoord::end_ddl(const bool need_commit)
         }
       }
     }
-    FLOG_INFO("end ddl sstable", K(ret), K(need_commit), K(ls_tablet_ids));
+    FLOG_INFO("end ddl", "context_id", ddl_ctrl_.context_id_, K(ret), K(need_commit));
     DEBUG_SYNC(END_DDL_IN_PX_SUBCOORD);
   }
   if (OB_EAGAIN == ret) {

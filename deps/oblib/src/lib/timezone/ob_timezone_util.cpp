@@ -415,7 +415,8 @@ int ObTimezoneUtils::prepare_tz_info(TIME_ZONE_INFO &tz_info)
   }
   /* set maximum end_l as finisher */
   revts[tz_info.revcnt] = end_l;
-  if(!(tz_info.revts = (my_time_t*)ob_malloc(sizeof(my_time_t) * (tz_info.revcnt + 1), "TimeZoneUtils"))
+  if (OB_FAIL(ret)) {
+  } else if(!(tz_info.revts = (my_time_t*)ob_malloc(sizeof(my_time_t) * (tz_info.revcnt + 1), "TimeZoneUtils"))
       || !(tz_info.revtis = (REVT_INFO*)ob_malloc(sizeof(REVT_INFO) * tz_info.revcnt, "TimeZoneUtils"))
     ){
     OB_LOG(ERROR, "ob_malloc for tz_info.revts tz_info.revtis failed");

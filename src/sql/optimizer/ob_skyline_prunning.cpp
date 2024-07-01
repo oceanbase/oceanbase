@@ -86,7 +86,7 @@ int ObIndexBackDim::add_filter_column_ids(const common::ObIArray<uint64_t> &filt
       filter_column_ids_[i] = filter_column_ids.at(i);
     }
     filter_column_cnt_ = filter_column_ids.count();
-    std::sort(filter_column_ids_, filter_column_ids_ + filter_column_cnt_);//do sort, for quick compare
+    lib::ob_sort(filter_column_ids_, filter_column_ids_ + filter_column_cnt_);//do sort, for quick compare
   }
   return ret;
 }
@@ -103,7 +103,7 @@ int ObInterestOrderDim::add_filter_column_ids(const common::ObIArray<uint64_t> &
       filter_column_ids_[i] = filter_column_ids.at(i);
     }
     filter_column_cnt_ = filter_column_ids.count();
-    std::sort(filter_column_ids_, filter_column_ids_ + filter_column_cnt_);//do sort, for quick compare
+    lib::ob_sort(filter_column_ids_, filter_column_ids_ + filter_column_cnt_);//do sort, for quick compare
   }
   return ret;
 }
@@ -390,7 +390,7 @@ int ObQueryRangeDim::add_rowkey_ids(const common::ObIArray<uint64_t> &rowkey_ids
       column_ids_[i] = rowkey_ids.at(i);
     }
     column_cnt_ = rowkey_ids.count();
-    std::sort(column_ids_, column_ids_ + column_cnt_);//do sort, for quick compare
+    lib::ob_sort(column_ids_, column_ids_ + column_cnt_);//do sort, for quick compare
   }
   return ret;
 }

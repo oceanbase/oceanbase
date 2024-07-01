@@ -351,6 +351,14 @@ int ObBackupDataStore::init(
   return ret;
 }
 
+void ObBackupDataStore::reset()
+{
+  ObBackupStore::reset();
+  backup_desc_.reset();
+  backup_set_dest_.reset();
+
+}
+
 int ObBackupDataStore::write_ls_attr(const int64_t turn_id, const ObBackupDataLSAttrDesc &ls_info)
 {
   int ret = OB_SUCCESS;
@@ -756,6 +764,26 @@ int ObBackupDataStore::read_backup_set_info(ObExternBackupSetInfoDesc &backup_se
   return ret;
 }
 
+int ObBackupDataStore::is_backup_set_info_file_exist(bool &is_exist) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_set_info_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get tenant ls attr info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(util.is_exist(full_path.str(), storage_info, is_exist))) {
+    LOG_WARN("failed to check backup set info file exist.", K(ret), K(full_path), K(storage_info));
+  }
+  return ret;
+}
+
 int ObBackupDataStore::write_root_key_info(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -883,7 +911,7 @@ int ObBackupDataStore::get_max_backup_set_file_info(const common::ObString &pass
     } else {
       ObBackupSetDescComparator cmp;
       storage::ObExternBackupSetInfoDesc backup_set_info;
-      std::sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
+      lib::ob_sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
       for (int64_t i = backup_set_desc_array.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
         const share::ObBackupSetDesc &backup_set_desc = backup_set_desc_array.at(i);
         backup_desc_.backup_set_id_ = backup_set_desc.backup_set_id_;
@@ -942,7 +970,7 @@ int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap 
       ObBackupSetDescComparator cmp;
       HEAP_VARS_2((storage::ObExternTenantLocalityInfoDesc, locality_info),
                   (storage::ObExternBackupSetInfoDesc, backup_set_info)) {
-        std::sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
+        lib::ob_sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
         for (int64_t i = backup_set_desc_array.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
           const share::ObBackupSetDesc &backup_set_desc = backup_set_desc_array.at(i);
           backup_desc_.backup_set_id_ = backup_set_desc.backup_set_id_;
@@ -990,6 +1018,45 @@ int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap 
   return ret;
 }
 
+int ObBackupDataStore::get_single_backup_set_sys_time_zone_wrap(common::ObTimeZoneInfoWrap & time_zone_wrap)
+{
+  int ret = OB_SUCCESS;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else {
+    HEAP_VARS_2((storage::ObExternTenantLocalityInfoDesc, locality_info),
+                  (storage::ObExternBackupSetInfoDesc, backup_set_info)) {
+      if (OB_FAIL(read_tenant_locality_info(locality_info))) {
+        LOG_WARN("fail to read backup set info", K(ret), K_(backup_set_dest));
+      } else if (OB_FAIL(read_backup_set_info(backup_set_info))) {
+        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+          LOG_WARN("backup set info not exist", K(ret), K_(backup_set_dest));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to read backup set info", K(ret), K_(backup_set_dest));
+        }
+      } else if (backup_set_info.backup_set_file_.tenant_compatible_ < DATA_VERSION_4_2_0_0) {
+        const char *time_zone = "+08:00";
+        int32_t offset = 0;
+        int ret_more = OB_SUCCESS;
+        bool is_oracle_mode = locality_info.compat_mode_ == lib::Worker::CompatMode::ORACLE;
+        if (OB_FAIL(ObTimeConverter::str_to_offset(time_zone,
+                                                    offset,
+                                                    ret_more,
+                                                    is_oracle_mode))) {
+          LOG_WARN("invalid time zone offset", K(ret), K(time_zone), K(offset), K(is_oracle_mode));
+        } else {
+          time_zone_wrap.set_tz_info_offset(offset);
+        }
+      } else if (OB_FAIL(time_zone_wrap.deep_copy(locality_info.sys_time_zone_wrap_))) {
+        LOG_WARN("failed to deep copy time zone wrap", K(ret), K(locality_info));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_array, 
     const SCN &restore_scn, const ObBackupSetFilter &op,
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
@@ -1006,7 +1073,7 @@ int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_a
     LOG_WARN("fail to get backup set name array", K(ret), K(op));
   } else {
     ObBackupSetDescComparator cmp;
-    std::sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
+    lib::ob_sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_desc_array.count(); ++i) {

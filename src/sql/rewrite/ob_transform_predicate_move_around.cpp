@@ -138,7 +138,7 @@ const static auto cmp_func = [](ObDMLStmt* l_stmt, ObDMLStmt* r_stmt) {
 int ObTransformPredicateMoveAround::adjust_transed_stmts()
 {
   int ret = OB_SUCCESS;
-  std::sort(transed_stmts_.begin(), transed_stmts_.end(), cmp_func);
+  lib::ob_sort(transed_stmts_.begin(), transed_stmts_.end(), cmp_func);
   ObDMLStmt *stmt = NULL;
   for (int64_t i = transed_stmts_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
     if (OB_ISNULL(stmt = transed_stmts_.at(i))) {
@@ -227,7 +227,7 @@ int ObTransformPredicateMoveAround::check_outline_valid_to_transform(const ObDML
         LOG_WARN("get stmt to trans failed", K(ret));
       }
     }
-    std::sort(views.begin(), views.end(), cmp_func);
+    lib::ob_sort(views.begin(), views.end(), cmp_func);
     int tmp_trans_list_loc = ctx_->trans_list_loc_;
     while (OB_SUCC(ret) && i <views.count()) {
       ObDMLStmt *view = views.at(i);

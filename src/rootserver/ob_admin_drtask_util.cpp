@@ -127,7 +127,8 @@ int ObAdminDRTaskUtil::construct_arg_for_add_command_(
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
   share::ObLSID ls_id;
   ObReplicaType replica_type = REPLICA_TYPE_FULL;
-  common::ObAddr data_source_server;
+  common::ObAddr force_data_source_server;
+  common::ObAddr leader_server;
   common::ObAddr target_server;
   int64_t orig_paxos_replica_number = 0;
   int64_t new_paxos_replica_number = 0;
@@ -138,7 +139,7 @@ int ObAdminDRTaskUtil::construct_arg_for_add_command_(
     LOG_WARN("invalid argument", KR(ret), K(command_arg));
   // STEP 1: parse parameters from ob_admin command directly
   } else if (OB_FAIL(parse_params_from_obadmin_command_arg(
-                         command_arg, tenant_id, ls_id, replica_type, data_source_server,
+                         command_arg, tenant_id, ls_id, replica_type, force_data_source_server,
                          target_server, orig_paxos_replica_number, new_paxos_replica_number))) {
     LOG_WARN("fail to parse parameters provided in ob_admin command", KR(ret), K(command_arg));
   } else if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id))) {
@@ -149,23 +150,22 @@ int ObAdminDRTaskUtil::construct_arg_for_add_command_(
              || OB_UNLIKELY(REPLICA_TYPE_FULL != replica_type && REPLICA_TYPE_READONLY != replica_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica_type), K(target_server));
-  // STEP 2: construct orig_paxos_replica_number and data_source_server if not specified by ob_admin command
-  } else if (0 == orig_paxos_replica_number || !data_source_server.is_valid()) {
-    if (OB_FAIL(construct_default_params_for_add_command_(
+  // STEP 2: construct orig_paxos_replica_number and leader_server if not specified by ob_admin command
+  } else if (OB_FAIL(construct_default_params_for_add_command_(
                     tenant_id,
                     ls_id,
                     orig_paxos_replica_number,
-                    data_source_server))) {
-      LOG_WARN("fail to fetch ls info and construct related parameters", KR(ret), K(tenant_id),
-               K(ls_id), K(orig_paxos_replica_number), K(data_source_server));
-    }
+                    leader_server))) {
+    LOG_WARN("fail to fetch ls info and construct related parameters", KR(ret), K(tenant_id),
+               K(ls_id), K(orig_paxos_replica_number), K(leader_server));
   }
 
   if (OB_SUCC(ret)) {
     new_paxos_replica_number = 0 == new_paxos_replica_number
                                ? orig_paxos_replica_number
                                : new_paxos_replica_number;
-    ObReplicaMember data_source_member(data_source_server, 0/*timstamp*/);
+    ObReplicaMember data_source_member(leader_server, 0/*timstamp*/);
+    ObReplicaMember force_data_source_member(force_data_source_server, 0/*timstamp*/);
     ObReplicaMember add_member(target_server, ObTimeUtility::current_time(), replica_type);
     // STEP 3: construct arg
     if (OB_ISNULL(ObCurTraceId::get_trace_id())) {
@@ -179,9 +179,10 @@ int ObAdminDRTaskUtil::construct_arg_for_add_command_(
                       data_source_member,
                       orig_paxos_replica_number,
                       new_paxos_replica_number,
-                      false/*is_skip_change_member_list-not used*/))) {
-      LOG_WARN("fail to init arg", KR(ret), K(tenant_id), K(ls_id), K(add_member),
-               K(data_source_member), K(orig_paxos_replica_number), K(new_paxos_replica_number));
+                      false/*is_skip_change_member_list-not used*/,
+                      force_data_source_member/*force_data_source*/))) {
+      LOG_WARN("fail to init arg", KR(ret), K(tenant_id), K(ls_id), K(add_member), K(data_source_member),
+              K(orig_paxos_replica_number), K(new_paxos_replica_number), K(force_data_source_member));
     }
   }
   return ret;
@@ -191,7 +192,7 @@ int ObAdminDRTaskUtil::construct_default_params_for_add_command_(
     const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
     int64_t &orig_paxos_replica_number,
-    common::ObAddr &data_source_server)
+    common::ObAddr &leader_server)
 {
   int ret = OB_SUCCESS;
   share::ObLSInfo ls_info;
@@ -212,14 +213,12 @@ int ObAdminDRTaskUtil::construct_default_params_for_add_command_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid leader replica", KR(ret), K(ls_info));
   } else {
-    //   If [orig_paxos_replica_number] or [data_source_server] not specified in obadmin command,
+    //   If [orig_paxos_replica_number] not specified in obadmin command,
     //   need to construct from leader_replica, use leader replica as default
     if (0 == orig_paxos_replica_number) {
       orig_paxos_replica_number = leader_replica->get_paxos_replica_number();
     }
-    if (!data_source_server.is_valid()) {
-      data_source_server = leader_replica->get_server();
-    }
+    leader_server = leader_replica->get_server();
   }
   return ret;
 }

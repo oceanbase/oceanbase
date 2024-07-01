@@ -390,8 +390,10 @@ int ObDirectLoadSSTableScanner::read_buffer(uint64_t offset, uint64_t size)
         LOG_WARN("fail to allocate buffer", KR(ret), K(large_buf_size));
       }
     }
-    if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset))) {
-      LOG_WARN("fail to do pread from data file", KR(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset))) {
+        LOG_WARN("fail to do pread from data file", KR(ret));
+      }
     }
   }
   return ret;

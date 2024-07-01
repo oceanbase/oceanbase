@@ -456,7 +456,7 @@ int ObInsertStmt::check_pdml_disabled(const bool is_online_ddl,
   is_pk_auto_inc = false;
   if (!value_from_select()) {
     disable_pdml = true;
-  } else if (is_online_ddl) {
+  } else if (is_online_ddl || is_overwrite()) {
     disable_pdml = false; // keep online ddl use pdml
   } else {
     const common::ObIArray<ObRawExpr*> &column_conv_exprs = get_column_conv_exprs();
@@ -486,7 +486,7 @@ int ObInsertStmt::check_pdml_disabled(const bool is_online_ddl,
       }
     }
   }
-  LOG_TRACE("check insert pdml disabled", K(is_online_ddl), K(disable_pdml), K(is_pk_auto_inc));
+  LOG_TRACE("check insert pdml disabled", K(is_online_ddl), K(disable_pdml), K(is_pk_auto_inc), K(is_overwrite()));
   return ret;
 }
 

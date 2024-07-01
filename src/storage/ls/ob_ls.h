@@ -251,7 +251,7 @@ public:
   { return running_state_.is_stopped(); }
   int64_t get_state_seq() const
   { return ATOMIC_LOAD(&state_seq_); }
-
+  int64_t get_switch_epoch() const { return ATOMIC_LOAD(&switch_epoch_); }
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }
   ObTxTable *get_tx_table() { return &tx_table_; }
@@ -826,6 +826,11 @@ public:
   // @param [out] scheduler: scheduler of this tx_id
   // int get_tx_scheduler(const transaction::ObTransID &tx_id, ObAddr &scheduler) const;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_scheduler, int);
+  // get tx start session_id in ls tx service
+  // @param [in] tx_id: wish to get this tx_id start session_id
+  // @param [out] session_id: session_id of this tx_id
+  // int get_tx_start_session_id(const transaction::ObTransID &tx_id, uint32_t &session_id) const;
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_start_session_id, int);
   // iterate the obj lock op at tx service.
   // int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, iterate_tx_obj_lock_op, int);
@@ -856,46 +861,52 @@ public:
   // ObReplayHandler interface:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
 
-  // ObFreezer interface:
-  // freeze the data of ls:
-  // @param [in] trace_id, for checkpoint diagnose
-  // @param [in] is_sync, only used for wait_freeze_finished()
-  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
-  int logstream_freeze(const int64_t trace_id,
-                       const bool is_sync = false,
-                       const int64_t abs_timeout_ts = INT64_MAX);
-  // tablet freeze
-  // @param [in] is_sync, only used for wait_freeze_finished()
-  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
+  /**
+   * @brief freeze this logstream
+   *
+   * @param[in] trace_id
+   * @param[in] is_sync if is_sync == true, call logstream_freeze_task directly. Or commit an async task to execute
+   * logstream_freeze_task
+   * @param[in] abs_timeout_ts only used when is_sync == true, 0 as default, which means retry for
+   * ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME seconds
+   */
+  int logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t abs_timeout_ts = 0);
+  int logstream_freeze_task(const int64_t trace_id,
+                            const int64_t abs_timeout_ts);
+
   int tablet_freeze(const ObTabletID &tablet_id,
-                    const bool is_sync = false,
-                    const int64_t abs_timeout_ts = INT64_MAX);
-  // tablet_freeze_with_rewrite_meta
-  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
-  int tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id,
-                                      ObFuture<int> *result = nullptr,
-                                      const int64_t abs_timeout_ts = INT64_MAX);
-  int tablet_freeze_task_for_direct_load(const ObTabletID &tablet_id,
-                                         const uint64_t epoch,
-                                         ObFuture<int> *result = nullptr);
-  int sync_tablet_freeze_for_direct_load(const ObTabletID &tablet_id,
-                                         const int64_t max_retry_time = 5LL * 1000LL * 1000LL /*5 seconds*/);
-  void async_tablet_freeze_for_direct_load(const ObTabletID &tablet_id);
-
-  DELEGATE_WITH_RET(ls_freezer_, wait_freeze_finished, int);
-  // batch tablet freeze
-  // @param [in] tablet_ids
-  // @param [in] is_sync
-  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
-  int batch_tablet_freeze(const int64_t trace_id,
-      const ObIArray<ObTabletID> &tablet_ids,
-      const bool is_sync = false,
-      const int64_t abs_timeout_ts = INT64_MAX);
-
+                    const bool is_sync,
+                    const int64_t input_abs_timeout_ts = 0,
+                    const bool need_rewrite_meta = false);
+  /**
+   * @brief freeze one or multiple tablets. if is_sync is true, retry until timeout. or commit an async task and retry
+   * till die
+   *
+   * @param[in] trace_id
+   * @param[in] tablet_ids
+   * @param[in] is_sync if is_sync == true, call tablet_freeze_task directly. Or commit an async task to execute
+   * logstream_freeze_task
+   * @param[in] need_rewrite_meta
+   * @param[in] abs_timeout_ts only used when is_sync == true, 0 as default, which means retry for
+   * ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME seconds
+   */
+  int tablet_freeze(const int64_t trace_id,
+                    const ObIArray<ObTabletID> &tablet_ids,
+                    const bool is_sync,
+                    const int64_t abs_timeout_ts = 0,
+                    const bool need_rewrite_meta = false);
+  int tablet_freeze_task(const int64_t trace_id,
+                         const ObIArray<ObTabletID> &tablet_ids,
+                         const bool need_rewrite_meta,
+                         const bool is_sync,
+                         const int64_t abs_timeout_ts,
+                         const int64_t freeze_epoch);
   // ObTxTable interface
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);
   DELEGATE_WITH_RET(tx_table_, get_upper_trans_version_before_given_scn, int);
   DELEGATE_WITH_RET(tx_table_, generate_virtual_tx_data_row, int);
+  DELEGATE_WITH_RET(tx_table_, get_uncommitted_tx_min_start_scn, int);
+  DELEGATE_WITH_RET(tx_table_, update_min_start_scn_info, void);
   DELEGATE_WITH_RET(tx_table_, dump_single_tx_data_2_text, int);
 
   // ObCheckpointExecutor interface:
@@ -926,14 +937,14 @@ public:
   int build_ha_tablet_new_table_store(
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
-  int try_update_upper_trans_version_and_gc_sstable(
-      compaction::ObCompactionScheduleIterator &iter);
   int build_new_tablet_from_mds_table(
       const int64_t ls_rebuild_seq,
       const common::ObTabletID &tablet_id,
       const int64_t mds_construct_sequence,
       const share::SCN &flush_scn);
-  int try_update_uppder_trans_version();
+  int check_ls_migration_status(
+      bool &ls_is_migration,
+      int64_t &rebuild_seq);
   int diagnose(DiagnoseInfo &info) const;
 
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, replay_reserved_snapshot_log, int);
@@ -945,6 +956,10 @@ public:
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &restore_status,
       bool &allow_read);
+
+private:
+  void record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch);
+  void record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_t epoch);
 
 private:
   // StorageBaseUtil

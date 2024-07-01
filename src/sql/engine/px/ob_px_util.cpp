@@ -111,7 +111,7 @@ int ObPXServerAddrUtil::sort_and_collect_local_file_distribution(
     auto addrcmp = [](const ObExternalFileInfo &l, const ObExternalFileInfo &r) -> bool {
       return l.file_addr_ < r.file_addr_;
     };
-    std::sort(files.get_data(), files.get_data() + files.count(), addrcmp);
+    lib::ob_sort(files.get_data(), files.get_data() + files.count(), addrcmp);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); i++) {
     ObAddr &cur_addr = files.at(i).file_addr_;
@@ -1249,7 +1249,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
     if (OB_SUCC(ret)) {
       try {
         if (!is_virtual_table(ref_table_id)) {
-          std::sort(&dst_locations.at(0),
+          lib::ob_sort(&dst_locations.at(0),
                     &dst_locations.at(0) + dst_locations.count(),
                     ObPXTabletOrderIndexCmp(asc, &tablet_order_map));
         }
@@ -1360,7 +1360,7 @@ int ObPXServerAddrUtil::split_parallel_into_task(const int64_t parallel,
     }
     // 排序，执行时间长的排在前面
     auto compare_fun_long_time_first = [](ObPxSqcTaskCountMeta a, ObPxSqcTaskCountMeta b) -> bool { return a.time_ > b.time_; };
-    std::sort(sqc_task_metas.begin(),
+    lib::ob_sort(sqc_task_metas.begin(),
               sqc_task_metas.end(),
               compare_fun_long_time_first);
     /// 把剩下的线程安排出去
@@ -2212,6 +2212,7 @@ int64_t ObPxTreeSerializer::get_tree_serialize_size(ObOpSpec &root, bool is_full
   for (int32_t i = 0; OB_SUCC(ret) && i < child_cnt; ++i) {
     ObOpSpec *child_op = root.get_child(i);
     if (OB_ISNULL(child_op)) {
+      // ignore ret
       // 这里无法抛出错误，不过在serialize阶段会再次检测是否有null child。
       // 所以是安全的
       LOG_ERROR("null child op", K(i), K(root.get_child_cnt()), K(root.get_type()));
@@ -2733,7 +2734,7 @@ int ObPxAffinityByRandom::do_random(bool use_partition_info, uint64_t tenant_id)
       // So we sort partitions by partition_idx and generate a relative_idx which starts from zero.
       // Then calculate hash value with the relative_idx
       auto part_idx_compare_fun = [](TabletHashValue a, TabletHashValue b) -> bool { return a.tablet_idx_ > b.tablet_idx_; };
-      std::sort(tablet_hash_values_.begin(),
+      lib::ob_sort(tablet_hash_values_.begin(),
                 tablet_hash_values_.end(),
                 part_idx_compare_fun);
       int64_t relative_idx = 0;
@@ -2746,7 +2747,7 @@ int ObPxAffinityByRandom::do_random(bool use_partition_info, uint64_t tenant_id)
 
     // 先打乱所有的序
     auto compare_fun = [](TabletHashValue a, TabletHashValue b) -> bool { return a.hash_value_ > b.hash_value_; };
-    std::sort(tablet_hash_values_.begin(),
+    lib::ob_sort(tablet_hash_values_.begin(),
               tablet_hash_values_.end(),
               compare_fun);
     LOG_TRACE("after sort partition_hash_values randomly", K(tablet_hash_values_), K(this), K(order_partitions_));
@@ -2779,12 +2780,12 @@ int ObPxAffinityByRandom::do_random(bool use_partition_info, uint64_t tenant_id)
     // 保持序
     if (asc_order) {
       auto compare_fun_order_by_part_asc = [](TabletHashValue a, TabletHashValue b) -> bool { return a.tablet_idx_ < b.tablet_idx_; };
-      std::sort(tablet_hash_values_.begin(),
+      lib::ob_sort(tablet_hash_values_.begin(),
                 tablet_hash_values_.end(),
                 compare_fun_order_by_part_asc);
     } else {
       auto compare_fun_order_by_part_desc = [](TabletHashValue a, TabletHashValue b) -> bool { return a.tablet_idx_ > b.tablet_idx_; };
-      std::sort(tablet_hash_values_.begin(),
+      lib::ob_sort(tablet_hash_values_.begin(),
                 tablet_hash_values_.end(),
                 compare_fun_order_by_part_desc);
     }

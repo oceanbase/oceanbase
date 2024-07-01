@@ -96,6 +96,9 @@ int ObLogTenant::init(
     LOG_ERROR("invalid argument", K(tenant_id), K(tenant_name), K(start_tstamp_ns), K(start_seq),
         K(start_schema_version), K(redo_cf_handle));
     ret = OB_INVALID_ARGUMENT;
+  } else if (FALSE_IT(tenant_id_ = tenant_id)) {
+  } else if (FALSE_IT(redo_cf_handle_ = redo_cf_handle)) {
+  } else if (FALSE_IT(lob_storage_cf_handle_ = lob_storage_cf_handle)) {
   } else if (OB_ISNULL(task_queue_ = OB_NEW(ObLogTenantTaskQueue, ObModIds::OB_LOG_TENANT_TASK_QUEUE, *this))) {
     LOG_ERROR("create task queue fail", K(task_queue_));
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -120,7 +123,6 @@ int ObLogTenant::init(
   }
 
   if (OB_SUCC(ret)) {
-    tenant_id_ = tenant_id;
     start_schema_version_ = start_schema_version;
 
     // init to NORMAL state
@@ -143,8 +145,6 @@ int ObLogTenant::init(
     committer_global_heartbeat_ = OB_INVALID_VERSION;
     committer_cur_schema_version_ = start_schema_version;
     committer_next_trans_schema_version_ = start_schema_version;
-    redo_cf_handle_ = redo_cf_handle;
-    lob_storage_cf_handle_ = lob_storage_cf_handle;
     lob_storage_clean_task_.tenant_id_ = tenant_id;
 
     inited_ = true;
@@ -958,6 +958,7 @@ void ObLogTenant::flush_storage()
     }
 
     if (OB_FAIL(store_service->flush(redo_cf_handle_))) {
+      // overwrite ret
       LOG_WARN("flush tenant redo_column_family failed", KR(ret), K_(tenant_id));
     } else {
       LOG_INFO("flush tenant redo column_family succ", K_(tenant_id));

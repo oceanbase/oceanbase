@@ -317,7 +317,7 @@ int ObExprUdtConstruct::eval_sdo_geom_udt_access(ObIAllocator &allocator, const 
       case T_OBJ_SDO_POINT : {
         if (sdo_geo.get_point().is_null()) {
           res.set_null();
-        } else if (pl::ObSdoGeometry::write_sdo_point(sdo_geo.get_point(), alloc, pl_ext)) {
+        } else if (OB_FAIL(pl::ObSdoGeometry::write_sdo_point(sdo_geo.get_point(), alloc, pl_ext))) {
           LOG_WARN("fail to transform sdo point", K(ret));
         } else if (OB_FAIL(ObSqlUdtUtils::cast_pl_record_to_sql_record(allocator,
                                                                         expr_res_alloc,
@@ -334,7 +334,7 @@ int ObExprUdtConstruct::eval_sdo_geom_udt_access(ObIAllocator &allocator, const 
       case T_OBJ_SDO_ELEMINFO_ARRAY : {
         if (sdo_geo.get_elem_info().empty()) {
           res.set_null();
-        } else if (pl::ObSdoGeometry::write_sdo_elem_info(ctx.exec_ctx_, sdo_geo.get_elem_info(), alloc, pl_ext)) {
+        } else if (OB_FAIL(pl::ObSdoGeometry::write_sdo_elem_info(ctx.exec_ctx_, sdo_geo.get_elem_info(), alloc, pl_ext))) {
           LOG_WARN("fail to transform sdo point", K(ret));
         } else if (OB_FAIL(ObSqlUdtUtils::cast_pl_varray_to_sql_varray(expr_res_alloc, res_str, pl_ext))) {
           LOG_WARN("fail to cast udt sdo element", K(ret));
@@ -346,7 +346,7 @@ int ObExprUdtConstruct::eval_sdo_geom_udt_access(ObIAllocator &allocator, const 
       case T_OBJ_SDO_ORDINATE_ARRAY : {
         if (sdo_geo.get_ordinates().empty()) {
           res.set_null();
-        } else if (pl::ObSdoGeometry::write_sdo_ordinate(ctx.exec_ctx_, sdo_geo.get_ordinates(), alloc, pl_ext)) {
+        } else if (OB_FAIL(pl::ObSdoGeometry::write_sdo_ordinate(ctx.exec_ctx_, sdo_geo.get_ordinates(), alloc, pl_ext))) {
           LOG_WARN("fail to transform sdo point", K(ret));
         } else if (OB_FAIL(ObSqlUdtUtils::cast_pl_varray_to_sql_varray(expr_res_alloc, res_str, pl_ext))) {
           LOG_WARN("fail to cast udt sdo element", K(ret));

@@ -77,9 +77,17 @@ inline int ObTransService::init_tx_(ObTxDesc &tx,
   // cluster_version is invalid, need to get it
   if (0 == cluster_version && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tx.cluster_version_))) {
     TRANS_LOG(WARN, "get min data version fail", K(ret), K(tx));
-  } else if (tx.cluster_version_ >= DATA_VERSION_4_3_0_0) {
-    tx.seq_base_ = common::ObSequence::get_max_seq_no() - 1;
+  } else if (tx.cluster_version_ < MOCK_DATA_VERSION_4_2_4_0) {
+    if (tx.cluster_version_ == DATA_VERSION_4_2_1_0) {
+      // FIXME: remove this branch
+      tx.cluster_version_ = MOCK_DATA_VERSION_4_2_4_0;
+      TRANS_LOG(WARN, "NEED_REMOVE_NOTICE:4_2_1_0 data version forced to 4_2_4_0");
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "data version should >= 4_2_4_0", K(ret), K(tx));
+    }
   }
+  tx.seq_base_ = common::ObSequence::get_max_seq_no() - 1;
   return ret;
 }
 
@@ -1095,7 +1103,9 @@ int ObTransService::rollback_to_implicit_savepoint(ObTxDesc &tx,
       }
     }
 
-    if (OB_FAIL(tx_sanity_check_(tx))) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(tx_sanity_check_(tx))) {
     } else {
       ret = rollback_to_global_implicit_savepoint_(tx,
                                                    savepoint,

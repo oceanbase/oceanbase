@@ -66,6 +66,42 @@ enum class ObTxDataSourceType : int64_t
   MAX_TYPE = 100
 };
 
+static const char * to_str_mds_type(const ObTxDataSourceType & mds_type )
+{
+  const char * str = "INVALID";
+  switch(mds_type)
+  {
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, UNKNOWN);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MEM_TABLE);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TABLE_LOCK);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, LS_TABLE);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, DDL_BARRIER);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, DDL_TRANS);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, STANDBY_UPGRADE);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, STANDBY_UPGRADE_DATA_VERSION);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, BEFORE_VERSION_4_1);
+
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TEST1);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TEST2);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TEST3);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, CREATE_TABLET_NEW_MDS);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, DELETE_TABLET_NEW_MDS);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, UNBIND_TABLET_NEW_MDS);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, START_TRANSFER_OUT);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, START_TRANSFER_IN);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, FINISH_TRANSFER_OUT);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, FINISH_TRANSFER_IN);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TRANSFER_TASK);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, START_TRANSFER_OUT_PREPARE);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, START_TRANSFER_OUT_V2);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TRANSFER_MOVE_TX_CTX);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, TRANSFER_DEST_PREPARE);
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, CHANGE_TABLET_TO_TABLE_MDS);
+
+    TRX_ENUM_CASE_TO_STR(ObTxDataSourceType, MAX_TYPE);
+  }
+  return str;
+}
 
 enum class NotifyType : int64_t
 {
@@ -77,6 +113,22 @@ enum class NotifyType : int64_t
   ON_COMMIT = 4,
   ON_ABORT = 5
 };
+
+static const char * to_str_notify_type(const NotifyType & notify_type)
+{
+  const char * str = "INVALID";
+  switch(notify_type)
+  {
+    TRX_ENUM_CASE_TO_STR(NotifyType, UNKNOWN);
+    TRX_ENUM_CASE_TO_STR(NotifyType, REGISTER_SUCC);
+    TRX_ENUM_CASE_TO_STR(NotifyType, ON_REDO);
+    TRX_ENUM_CASE_TO_STR(NotifyType, TX_END);
+    TRX_ENUM_CASE_TO_STR(NotifyType, ON_PREPARE);
+    TRX_ENUM_CASE_TO_STR(NotifyType, ON_COMMIT);
+    TRX_ENUM_CASE_TO_STR(NotifyType, ON_ABORT);
+  }
+  return str;
+}
 
 class ObTxBufferNode
 {
@@ -144,7 +196,12 @@ public:
   }
   storage::mds::BufferCtxNode &get_buffer_ctx_node() const { return buffer_ctx_node_; }
 
-  TO_STRING_KV(K(register_no_), K(has_submitted_), K(has_synced_), K_(type), K(data_.length()));
+  TO_STRING_KV(K(register_no_),
+               K(has_submitted_),
+               K(has_synced_),
+               "type",
+               to_str_mds_type(type_),
+               K(data_.length()));
 
 private:
   uint64_t register_no_;
@@ -261,7 +318,7 @@ public:
   const share::ObLSID &get_ls_id() { return ls_id_; }
   const ObRegisterMdsFlag &get_register_flag() { return register_flag_; }
 
-  TO_STRING_KV(K(mds_str_), K(type_), K(ls_id_), K(register_flag_));
+  TO_STRING_KV(K(mds_str_), "type_", to_str_mds_type(type_), K(ls_id_), K(register_flag_));
 
 private:
   // const char *msd_buf_;

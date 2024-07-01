@@ -19,6 +19,7 @@
 #include "sql/engine/px/datahub/ob_dh_msg_provider.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
 
 namespace oceanbase
 {
@@ -136,7 +137,108 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObWinbufPieceMsgListener);
 };
 
+// piece/whole msg for single part winfunc parallel execution
+// used for ObWindowFunctionVecOp
+// SP stands for Single Partition
+class SPWinFuncPXPieceMsg;
+class SPWinFuncPXWholeMsg;
+typedef ObPieceMsgP<SPWinFuncPXPieceMsg> ObSPWinFuncPXPieceMsgP;
+typedef ObWholeMsgP<SPWinFuncPXWholeMsg> ObSPWinFuncPXWholeMsgP;
 
+class SPWinFuncPXPieceMsgListener;
+class SPWinFuncPXPieceMsgCtx;
+
+class SPWinFuncPXPieceMsg: public ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_SP_WINFUNC_PX_PIECE_MSG>
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  using PieceMsgListener = SPWinFuncPXPieceMsgListener;
+  using PieceMsgCtx = SPWinFuncPXPieceMsgCtx;
+public:
+  SPWinFuncPXPieceMsg(const lib::ObMemAttr &mem_attr) :
+    deserial_allocator_(mem_attr), is_empty_(true), row_meta_(&deserial_allocator_), row_(nullptr)
+  {}
+  SPWinFuncPXPieceMsg():
+    deserial_allocator_(), is_empty_(true), row_meta_(&deserial_allocator_), row_(nullptr) {}
+  ~SPWinFuncPXPieceMsg() = default;
+
+  void reset() { deserial_allocator_.reset(); }
+
+  INHERIT_TO_STRING_KV("meta", ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_SP_WINFUNC_PX_PIECE_MSG>,
+                       K_(op_id));
+
+public:
+  common::ObArenaAllocator deserial_allocator_;
+  bool is_empty_; // wether this piece contains data
+  RowMeta row_meta_; // row meta of compact row
+  ObCompactRow *row_;
+};
+
+class SPWinFuncPXWholeMsg: public ObDatahubWholeMsg<dtl::ObDtlMsgType::DH_SP_WINFUNC_PX_WHOLE_MSG>
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  using WholeMsgProvider = ObWholeMsgProvider<SPWinFuncPXWholeMsg>;
+public:
+  SPWinFuncPXWholeMsg(const common::ObMemAttr &mem_attr) :
+    assign_allocator_(mem_attr), is_empty_(true), row_meta_(&assign_allocator_),
+    row_store_(&assign_allocator_)
+  {}
+
+  SPWinFuncPXWholeMsg():
+    assign_allocator_(), is_empty_(true), row_meta_(), row_store_() {}
+
+  int assign(const SPWinFuncPXWholeMsg &other, common::ObIAllocator *allocator = NULL);
+  void reset()
+  {
+    is_empty_ = true;
+    row_meta_.reset();
+    row_store_.reset();
+  }
+
+  TO_STRING_KV(K_(is_empty), K(row_store_.get_row_cnt()));
+
+public:
+  common::ObArenaAllocator assign_allocator_;
+  bool is_empty_; // wether row_store_ is empty, if so, do not serialize row_store_
+  RowMeta row_meta_; // row meta of stored rows
+  sql::ObTempRowStore row_store_;
+};
+
+class SPWinFuncPXPieceMsgCtx : public ObPieceMsgCtx
+{
+public:
+  SPWinFuncPXPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts, uint64_t tenant_id,
+                         int64_t max_batch_size, const common::ObMemAttr &mem_attr) :
+    ObPieceMsgCtx(op_id, task_cnt, timeout_ts),
+    received_(0), tenant_id_(tenant_id), max_batch_size_(max_batch_size), whole_msg_(mem_attr)
+  {}
+
+  static int alloc_piece_msg_ctx(const SPWinFuncPXPieceMsg &pkt, ObPxCoordInfo &coord_info,
+                                 ObExecContext &ctx, int64_t task_cnt, ObPieceMsgCtx *&msg_ctx);
+
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual void reset_resource() override;
+
+public:
+  int64_t received_; // number of piece msgs received
+  uint64_t tenant_id_;
+  int64_t max_batch_size_;
+  SPWinFuncPXWholeMsg whole_msg_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SPWinFuncPXPieceMsgCtx);
+};
+
+class SPWinFuncPXPieceMsgListener
+{
+public:
+  static int on_message(SPWinFuncPXPieceMsgCtx &ctx, common::ObIArray<ObPxSqcMeta *> &sqcs,
+                        const SPWinFuncPXPieceMsg &pkt);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SPWinFuncPXPieceMsgListener);
+};
 }
 }
 #endif /* __OB_SQL_ENG_PX_DH_WINBUF_H__ */

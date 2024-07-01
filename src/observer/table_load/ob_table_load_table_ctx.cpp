@@ -72,7 +72,7 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDD
     } else if (OB_UNLIKELY(param.column_count_ != (schema_.is_heap_table_
                                                      ? (schema_.store_column_count_ - 1)
                                                      : schema_.store_column_count_))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_SCHEMA_NOT_UPTODATE;
       LOG_WARN("unexpected column count", KR(ret), K(param.column_count_), K(schema_.store_column_count_), K(schema_.is_heap_table_));
     } else if (OB_FAIL(task_allocator_.init("TLD_TaskPool", param_.tenant_id_))) {
       LOG_WARN("fail to init allocator", KR(ret));
@@ -163,7 +163,7 @@ void ObTableLoadTableCtx::unregister_job_stat()
   }
 }
 
-int ObTableLoadTableCtx::init_coordinator_ctx(const ObIArray<int64_t> &idx_array,
+int ObTableLoadTableCtx::init_coordinator_ctx(const ObIArray<uint64_t> &column_ids,
                                               ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
@@ -178,7 +178,7 @@ int ObTableLoadTableCtx::init_coordinator_ctx(const ObIArray<int64_t> &idx_array
     if (OB_ISNULL(coordinator_ctx = OB_NEWx(ObTableLoadCoordinatorCtx, (&allocator_), this))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadCoordinatorCtx", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx->init(idx_array, exec_ctx))) {
+    } else if (OB_FAIL(coordinator_ctx->init(column_ids, exec_ctx))) {
       LOG_WARN("fail to init coordinator ctx", KR(ret));
     } else if (OB_FAIL(coordinator_ctx->set_status_inited())) {
       LOG_WARN("fail to set coordinator status inited", KR(ret));

@@ -420,10 +420,17 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::try_advancing_fetch_idx(
     const int32_t idx = prefetch_idx % INDEX_TREE_PREFETCH_DEPTH;
     ObMicroIndexInfo &index_info = index_block_read_handles_[idx].index_info_;
     bool is_range_end = !is_reverse && index_info.is_right_border();
-    const ObDatumRowkey &endkey = prefetch_idx == fetch_idx_ ? index_scanner_.get_end_key()
-                                                             : *(index_info.endkey_);
+    ObCommonDatumRowkey endkey;
+    if (prefetch_idx == fetch_idx_) {
+      if (OB_FAIL(index_scanner_.get_end_key(endkey))) {
+        LOG_WARN("Failed to get end key", K(ret));
+      }
+    } else {
+      endkey = index_info.endkey_;
+    }
     // For reverse scan, there is no need to judge is_range_end.
-    if (range_idx != index_info.range_idx()) {
+    if (OB_FAIL(ret)) {
+    } else if (range_idx != index_info.range_idx()) {
     } else {
       int cmp_ret = 0;
       if (OB_FAIL(endkey.compare(border_rowkey, *prefetcher.datum_utils_,

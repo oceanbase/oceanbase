@@ -72,6 +72,11 @@ int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err
         0 != std::memcmp(oracle_msg_prefix, external_errmsg,
         std::min(STRLEN(oracle_msg_prefix), STRLEN(external_errmsg)))))) {
       ob_errno = external_errno; // do not map, show user client errno directly.
+    } else if (is_oracle_err
+               && -external_errno >= OB_MIN_RAISE_APPLICATION_ERROR
+               && -external_errno <= OB_MAX_RAISE_APPLICATION_ERROR) {
+      ob_errno = OB_APPLICATION_ERROR_FROM_REMOTE;
+      LOG_USER_ERROR(OB_APPLICATION_ERROR_FROM_REMOTE, (int)STRLEN(external_errmsg), external_errmsg);
     } else {
       int64_t match_count = 0;
       for (int i = 0; i < oceanbase::common::OB_MAX_ERROR_CODE; ++i) {

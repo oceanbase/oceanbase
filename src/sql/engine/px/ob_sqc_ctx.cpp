@@ -36,7 +36,9 @@ ObSqcCtx::ObSqcCtx(ObPxRpcInitSqcArgs &sqc_arg) : msg_loop_(),
       interrupted_(false),
       bf_ch_provider_(sqc_proxy_.get_msg_ready_cond()),
       px_bloom_filter_msg_proc_(msg_proc_),
-      opt_stats_gather_whole_msg_proc_(msg_proc_){}
+      opt_stats_gather_whole_msg_proc_(msg_proc_),
+      sp_winfunc_whole_msg_proc_(msg_proc_),
+      rd_winfunc_whole_msg_proc_(msg_proc_) {}
 
 int ObSqcCtx::add_whole_msg_provider(uint64_t op_id, dtl::ObDtlMsgType msg_type, ObPxDatahubDataProvider &provider)
 {

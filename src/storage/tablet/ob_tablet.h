@@ -344,8 +344,6 @@ public:
   int get_tablet_size(const bool ignore_shared_block, int64_t &meta_size, int64_t &data_size);
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
   int get_ddl_kvs(common::ObIArray<ObDDLKV *> &ddl_kvs) const;
-  int check_need_remove_old_table(const int64_t multi_version_start, bool &need_remove) const;
-  int update_upper_trans_version(ObLS &ls, bool &is_updated);
 
   // memtable operation
   // ATTENTION!!!
@@ -529,7 +527,10 @@ public:
   int check_new_mds_with_cache(const int64_t snapshot_version, const int64_t timeout);
   int check_tablet_status_for_read_all_committed();
   int check_schema_version_with_cache(const int64_t schema_version, const int64_t timeout);
-  int check_snapshot_readable_with_cache(const int64_t snapshot_version, const int64_t timeout);
+  int check_snapshot_readable_with_cache(
+      const int64_t snapshot_version,
+      const int64_t schema_version,
+      const int64_t timeout);
   int set_tablet_status(
       const ObTabletCreateDeleteMdsUserData &tablet_status,
       mds::MdsCtx &ctx);
@@ -611,7 +612,7 @@ private:
   int self_serialize(char *buf, const int64_t len, int64_t &pos) const;
   int64_t get_self_serialize_size() const;
   static int check_schema_version(const ObDDLInfoCache& ddl_info_cache, const int64_t schema_version);
-  static int check_snapshot_readable(const ObDDLInfoCache& ddl_info_cache, const int64_t snapshot_version);
+  static int check_snapshot_readable(const ObDDLInfoCache& ddl_info_cache, const int64_t snapshot_version, const int64_t schema_version);
   int get_column_store_sstable_checksum(common::ObIArray<int64_t> &column_checksums, ObCOSSTableV2 &co_sstable);
 
   logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(bowen.gbw): get log handler from tablet pointer handle

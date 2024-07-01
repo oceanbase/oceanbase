@@ -46,7 +46,7 @@ TEST(TestCgroupCtrl, AddDelete)
   for (int i = 0; i < 4; i++) {
     pthread_join(ts[i], nullptr);
   }
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.remove_tenant_cgroup(1001));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.remove_cgroup(1001));
 }
 
 TEST(TestCgroupCtrl, SetGetValue)
@@ -63,14 +63,14 @@ TEST(TestCgroupCtrl, SetGetValue)
 
   const int32_t cpu_shares = 2048;
   int32_t cpu_shares_v = 0;
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.set_cpu_shares(cpu_shares, 1001));
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.get_cpu_shares(cpu_shares_v, 1001));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.set_both_cpu_shares(1001, cpu_shares));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.get_cpu_shares(1001, cpu_shares_v));
   ASSERT_EQ(cpu_shares, cpu_shares_v);
 
   const int32_t cpu_cfs_quota = 80000;
   int32_t cpu_cfs_quota_v = 0;
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.set_cpu_cfs_quota(cpu_cfs_quota, 1001));
-  ASSERT_EQ(OB_SUCCESS, cg_ctrl.get_cpu_cfs_quota(cpu_cfs_quota_v, 1001));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.set_both_cpu_cfs_quota(1001, cpu_cfs_quota));
+  ASSERT_EQ(OB_SUCCESS, cg_ctrl.get_cpu_cfs_quota(1001, cpu_cfs_quota_v));
   ASSERT_EQ(cpu_cfs_quota, cpu_cfs_quota_v);
 
   for (int i = 0; i < 4; i++) {

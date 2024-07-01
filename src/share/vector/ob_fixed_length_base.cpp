@@ -24,12 +24,36 @@ namespace common
                                   const int64_t size,
                                   const int64_t col_idx) const
   {
-    for (int64_t i = 0; i < size; i++) {
-      int64_t row_idx = selector[i];
+    if (row_meta.fixed_expr_reordered()) {
+      const int64_t offset = row_meta.get_fixed_cell_offset(col_idx);
+      for (int64_t i = 0; i < size; i++) {
+        int64_t row_idx = selector[i];
+        if (nulls_->at(row_idx)) {
+          stored_rows[i]->set_null(row_meta, col_idx);
+        } else {
+          stored_rows[i]->set_fixed_cell_payload(data_ + len_ * row_idx, offset, len_);
+        }
+      }
+    } else {
+      for (int64_t i = 0; i < size; i++) {
+        int64_t row_idx = selector[i];
+        if (nulls_->at(row_idx)) {
+          stored_rows[i]->set_null(row_meta, col_idx);
+        } else {
+          stored_rows[i]->set_cell_payload(row_meta, col_idx, data_ + len_ * row_idx, len_);
+        }
+      }
+    }
+  }
+
+  void ObFixedLengthBase::to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
+                                  const int64_t size, const int64_t col_idx) const
+  {
+    for (int64_t row_idx = 0; row_idx < size; row_idx++) {
       if (nulls_->at(row_idx)) {
-        stored_rows[i]->set_null(row_meta, col_idx);
+        stored_rows[row_idx]->set_null(row_meta, col_idx);
       } else {
-        stored_rows[i]->set_cell_payload(row_meta, col_idx, data_ + len_ * row_idx, len_);
+        stored_rows[row_idx]->set_cell_payload(row_meta, col_idx, data_ + len_ * row_idx, len_);
       }
     }
   }

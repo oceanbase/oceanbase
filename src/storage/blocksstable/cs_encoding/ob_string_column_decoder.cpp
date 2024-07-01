@@ -24,7 +24,7 @@ namespace blocksstable
 {
 
 int ObStringColumnDecoder::decode(
-  const ObColumnCSDecoderCtx &ctx, const int64_t row_id, common::ObDatum &datum) const
+  const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const
 {
   int ret = OB_SUCCESS;
   const ObStringColumnDecoderCtx &string_ctx = ctx.string_ctx_;
@@ -51,7 +51,7 @@ int ObStringColumnDecoder::decode(
 }
 
 int ObStringColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx,
-    const int64_t *row_ids, const int64_t row_cap, common::ObDatum *datums) const
+    const int32_t *row_ids, const int64_t row_cap, common::ObDatum *datums) const
 {
   int ret = OB_SUCCESS;
   const ObStringColumnDecoderCtx &string_ctx = ctx.string_ctx_;
@@ -93,7 +93,7 @@ int ObStringColumnDecoder::decode_vector(
 }
 
 int ObStringColumnDecoder::get_null_count(const ObColumnCSDecoderCtx &col_ctx,
-    const int64_t *row_ids, const int64_t row_cap, int64_t &null_count) const
+    const int32_t *row_ids, const int64_t row_cap, int64_t &null_count) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(row_ids) || row_cap < 1) {

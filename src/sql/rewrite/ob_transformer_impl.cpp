@@ -47,6 +47,7 @@
 #include "sql/rewrite/ob_transform_count_to_exists.h"
 #include "sql/rewrite/ob_transform_expr_pullup.h"
 #include "sql/rewrite/ob_transform_dblink.h"
+#include "sql/rewrite/ob_transform_conditional_aggr_coalesce.h"
 #include "sql/rewrite/ob_transform_mv_rewrite.h"
 #include "sql/rewrite/ob_transform_decorrelate.h"
 #include "common/ob_smart_call.h"
@@ -116,12 +117,80 @@ int ObTransformerImpl::get_stmt_trans_info(ObDMLStmt *stmt, bool is_root)
   return ret;
 }
 
+int ObTransformerImpl::get_random_order_array(uint64_t need_types,
+                                              ObQueryCtx *query_ctx,
+                                              ObArray<uint64_t> &need_types_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(query_ctx));
+  } else {
+    common::ObArray<int> index_array;
+    for (int64_t i = POST_PROCESS + 1; i < TRANSFORM_TYPE_COUNT_PLUS_ONE && OB_SUCC(ret); ++i) {
+      if ((need_types & (1 << i)) != 0) {
+        if (OB_FAIL(index_array.push_back(i))) {
+          LOG_WARN("failed to push back index", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t idx = 1; idx < index_array.count(); ++idx) {
+        int64_t rand_pos = query_ctx->rand_gen_.get(0, idx);
+        if (rand_pos != idx) {
+          std::swap(index_array.at(rand_pos), index_array.at(idx));
+        }
+      }
+
+      LOG_TRACE("the random order will be ",K(index_array));
+      for (int64_t i = 0; i < index_array.count() && OB_SUCC(ret); ++i) {
+        int need_types_pos = index_array.at(i);
+        uint64_t need_types_local = 1u << need_types_pos;
+        if (OB_FAIL(need_types_array.push_back(need_types_local))) {
+          LOG_WARN("failed to push back need types array", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::transform_random_order(ObDMLStmt *&stmt, ObQueryCtx *query_ctx, uint64_t need_types, int iter_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(query_ctx));
+  } else {
+    ObArray<uint64_t> need_types_array;
+    if (OB_FAIL(get_random_order_array(need_types, query_ctx, need_types_array))) {
+      LOG_WARN("failed to get random order array", K(ret));
+    } else {
+      bool any_trans_happened = true;
+      for (int64_t i = 0; i < iter_count && OB_SUCC(ret) && any_trans_happened; ++i) {
+        any_trans_happened = false;
+        for (int64_t j = 0; j < need_types_array.count() && OB_SUCC(ret); ++j) {
+          bool trans_happened = false;
+          if (OB_FAIL(transform_rule_set(stmt, need_types_array.at(j), 1, trans_happened))) {
+            LOG_WARN("failed to transform one rule set", K(ret));
+          } else {
+            any_trans_happened = any_trans_happened || trans_happened;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformerImpl::do_transform(ObDMLStmt *&stmt)
 {
   int ret = OB_SUCCESS;
   uint64_t need_types = ObTransformRule::ALL_TRANSFORM_RULES;
   bool transformation_enabled = true;
-  const ObQueryCtx *query_ctx = NULL;
+  ObQueryCtx *query_ctx = NULL;
+  int iter_count = max_iteration_count_;
+  bool is_outline = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(query_ctx = stmt->get_query_ctx())
       || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -135,9 +204,23 @@ int ObTransformerImpl::do_transform(ObDMLStmt *&stmt)
     LOG_WARN("failed choose rewrite rules for stmt", K(ret));
   } else if (need_types == 0) {
     // do nothing
-  } else if (OB_FAIL(transform_rule_set(stmt, need_types, max_iteration_count_))) {
-    LOG_WARN("failed to transform one rule set", K(ret));
-  } else { /*do nothing*/ }
+  } else {
+    if (!query_ctx->get_injected_random_status()) {
+      is_outline = query_ctx->get_query_hint().has_outline_data();
+      if (is_outline) {
+        iter_count = max(iter_count, query_ctx->get_query_hint().trans_list_.count() + 1);
+      }
+      bool trans_happened = false;
+      if (OB_FAIL(transform_rule_set(stmt, need_types, iter_count, trans_happened))) {
+        LOG_WARN("failed to transform one rule set", K(ret));
+      }
+    } else {
+      //unlikely need_types 特殊处理, 把所有位置取出来重新排序。
+      if (OB_FAIL(transform_random_order(stmt, query_ctx, need_types, iter_count))) {
+        LOG_WARN("failed to transform random order", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -275,12 +358,14 @@ int ObTransformerImpl::do_transform_dblink_read(ObDMLStmt *&stmt)
 int ObTransformerImpl::transform_heuristic_rule(ObDMLStmt *&stmt)
 {
   int ret = OB_SUCCESS;
+  bool trans_happened = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is NULL", K(ret));
   } else if (OB_FAIL(transform_rule_set(stmt,
                                         ObTransformRule::ALL_HEURISTICS_RULES,
-                                        max_iteration_count_))) {
+                                        max_iteration_count_,
+                                        trans_happened))) {
     LOG_WARN("failed to transform one rule set", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -288,9 +373,11 @@ int ObTransformerImpl::transform_heuristic_rule(ObDMLStmt *&stmt)
 
 int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
                                           uint64_t needed_types,
-                                          int64_t iteration_count)
+                                          int64_t iteration_count,
+                                          bool& trans_happened)
 {
   int ret = OB_SUCCESS;
+  trans_happened = false;
   if (0 != (needed_types & needed_transform_types_)) {
     bool need_next_iteration = true;
     int64_t i = 0;
@@ -313,6 +400,7 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
         LOG_WARN("failed to formalize stmt", K(ret));
       } else {
         need_next_iteration = true;
+        trans_happened = true;
       }
       LOG_TRACE("succeed to transform one iteration", K(i), K(need_next_iteration), K(ret));
       OPT_TRACE("-- end ", i, " iteration");
@@ -366,6 +454,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(WIN_MAGIC, ObTransformWinMagic);
     APPLY_RULE_IF_NEEDED(GROUPBY_PUSHDOWN, ObTransformGroupByPushdown);
     APPLY_RULE_IF_NEEDED(GROUPBY_PULLUP, ObTransformGroupByPullup);
+    APPLY_RULE_IF_NEEDED(CONDITIONAL_AGGR_COALESCE, ObTransformConditionalAggrCoalesce);
     APPLY_RULE_IF_NEEDED(FASTMINMAX, ObTransformMinMax);
     APPLY_RULE_IF_NEEDED(PREDICATE_MOVE_AROUND, ObTransformPredicateMoveAround);
     APPLY_RULE_IF_NEEDED(OR_EXPANSION, ObTransformOrExpansion);
@@ -427,6 +516,11 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_ ||
         func.contain_fulltext_search_ || func.contain_dml_with_doc_id_) {
        disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
+    }
+    if (func.contain_dml_with_doc_id_) {
+      uint64_t dml_with_doc_id_enable_list = 0;
+      ObTransformRule::add_trans_type(dml_with_doc_id_enable_list, PREDICATE_MOVE_AROUND);
+      disable_list &= (~dml_with_doc_id_enable_list);
     }
     if (func.contain_sequence_) {
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);

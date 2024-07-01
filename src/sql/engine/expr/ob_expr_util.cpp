@@ -751,6 +751,7 @@ int ObSolidifiedVarsContext::get_local_tz_info(const sql::ObBasicSessionInfo *se
       }
       if (OB_SUCC(ret)) {
         if (OB_ISNULL(local_tz_wrap_ = OB_NEWx(ObTimeZoneInfoWrap, alloc_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc tz wrap failed", K(ret));
         } else if (OB_FAIL(local_tz_wrap_->init_time_zone(local_var->val_.get_string(),
                                         OB_INVALID_VERSION,

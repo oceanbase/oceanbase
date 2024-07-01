@@ -1399,7 +1399,10 @@ int ObLocalDevice::check_space_full(const int64_t required_size) const
         && used_percent >= GCONF.data_disk_usage_limit_percentage) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
       if (REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
-        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "disk is almost full", K(ret), K(required_size), K(used_percent));
+        LOG_DBA_ERROR_V2(OB_SHARE_OUTOF_DISK_SPACE, OB_SERVER_OUTOF_DISK_SPACE,
+                         "disk is almost full. resuired size is ", required_size,
+                         " and used percent is ", used_percent, "%. ",
+                         "[suggestion] Increase the datafile_size or datafile_disk_percentage parameter. ");
       }
     }
   }
@@ -1729,6 +1732,9 @@ int ObLocalDevice::convert_sys_errno()
       break;
     case EAGAIN:
       ret = OB_EAGAIN;
+      break;
+    case ENOSPC:
+      ret = OB_SERVER_OUTOF_DISK_SPACE;
       break;
     default:
       use_warn_log = true;

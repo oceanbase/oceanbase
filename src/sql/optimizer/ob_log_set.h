@@ -125,6 +125,7 @@ public:
   int add_child_ndv(double ndv) { return child_ndv_.push_back(ndv); }
   virtual int get_card_without_filter(double &card) override;
   int append_child_fd_item_set(ObFdItemSet &all_fd_item_set, const ObFdItemSet &child_fd_item_set);
+  virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
 private:
   bool is_distinct_;
   bool is_recursive_union_;

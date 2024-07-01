@@ -20,6 +20,7 @@
 #include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_service.h"
+#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase
 {
@@ -59,36 +60,20 @@ int ObTableDirectLoadBeginExecutor::process()
 {
   int ret = OB_SUCCESS;
   LOG_INFO("table direct load begin", K_(arg));
-  const uint64_t tenant_id = ctx_.get_tenant_id();
-  const uint64_t database_id = ctx_.get_database_id();
-  uint64_t table_id = 0;
+  ObTableLoadClientTaskParam param;
   ObTableLoadClientTask *client_task = nullptr;
   if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
-  } else if (OB_FAIL(ObTableLoadSchema::get_table_id(tenant_id, database_id, arg_.table_name_,
-                                                     table_id))) {
-    LOG_WARN("fail to get table id", KR(ret), K(tenant_id), K(database_id), K_(arg));
-  } else {
-    ObTableLoadClientTaskParam param;
-    param.set_client_addr(ctx_.get_user_client_addr());
-    param.set_tenant_id(tenant_id);
-    param.set_user_id(ctx_.get_user_id());
-    param.set_database_id(database_id);
-    param.set_table_id(table_id);
-    param.set_parallel(arg_.parallel_);
-    param.set_max_error_row_count(arg_.max_error_row_count_);
-    param.set_dup_action(arg_.dup_action_);
-    param.set_timeout_us(arg_.timeout_);
-    param.set_heartbeat_timeout_us(arg_.heartbeat_timeout_);
-    if (OB_FAIL(ObTableLoadClientService::alloc_task(client_task))) {
-      LOG_WARN("fail to alloc client task", KR(ret));
-    } else if (OB_FAIL(client_task->init(param))) {
-      LOG_WARN("fail to init client task", KR(ret), K(param));
-    } else if (OB_FAIL(client_task->start())) {
-      LOG_WARN("fail to start client task", KR(ret));
-    } else if (OB_FAIL(ObTableLoadClientService::add_task(client_task))) {
-      LOG_WARN("fail to add client task", KR(ret));
-    }
+  } else if (OB_FAIL(resolve_param(param))) {
+    LOG_WARN("fail to resolve param", KR(ret));
+  } else if (OB_FAIL(ObTableLoadClientService::alloc_task(client_task))) {
+    LOG_WARN("fail to alloc client task", KR(ret));
+  } else if (OB_FAIL(client_task->init(param))) {
+    LOG_WARN("fail to init client task", KR(ret), K(param));
+  } else if (OB_FAIL(client_task->start())) {
+    LOG_WARN("fail to start client task", KR(ret));
+  } else if (OB_FAIL(ObTableLoadClientService::add_task(client_task))) {
+    LOG_WARN("fail to add client task", KR(ret));
   }
 
   if (OB_SUCC(ret) && !arg_.is_async_) {
@@ -129,6 +114,67 @@ int ObTableDirectLoadBeginExecutor::process()
   if (nullptr != client_task) {
     ObTableLoadClientService::revert_task(client_task);
     client_task = nullptr;
+  }
+  return ret;
+}
+
+int ObTableDirectLoadBeginExecutor::resolve_param(ObTableLoadClientTaskParam &param)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ctx_.get_tenant_id();
+  const uint64_t database_id = ctx_.get_database_id();
+  uint64_t table_id = 0;
+  ObLoadDupActionType dup_action = arg_.dup_action_;
+  ObDirectLoadMethod::Type method = ObDirectLoadMethod::INVALID_METHOD;
+  ObDirectLoadInsertMode::Type insert_mode = ObDirectLoadInsertMode::INVALID_INSERT_MODE;
+  param.reset();
+  if (OB_FAIL(ObTableLoadSchema::get_table_id(tenant_id, database_id, arg_.table_name_,
+                                                     table_id))) {
+    LOG_WARN("fail to get table id", KR(ret), K(tenant_id), K(database_id), K_(arg));
+  } else if (arg_.load_method_.empty()) {
+    method = ObDirectLoadMethod::FULL;
+    insert_mode = ObDirectLoadInsertMode::NORMAL;
+  } else {
+    ObDirectLoadHint::LoadMethod load_method = ObDirectLoadHint::get_load_method_value(arg_.load_method_);
+    switch (load_method) {
+      case ObDirectLoadHint::FULL:
+        method = ObDirectLoadMethod::FULL;
+        insert_mode = ObDirectLoadInsertMode::NORMAL;
+        break;
+      case ObDirectLoadHint::INC:
+        method = ObDirectLoadMethod::INCREMENTAL;
+        insert_mode = ObDirectLoadInsertMode::NORMAL;
+        break;
+      case ObDirectLoadHint::INC_REPLACE:
+        if (OB_UNLIKELY(ObLoadDupActionType::LOAD_STOP_ON_DUP != dup_action)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("replace or ignore for inc_replace load method not supported", KR(ret),
+                   K(arg_.load_method_), K(arg_.dup_action_));
+        } else {
+          dup_action = ObLoadDupActionType::LOAD_REPLACE; //rewrite dup action
+          method = ObDirectLoadMethod::INCREMENTAL;
+          insert_mode = ObDirectLoadInsertMode::INC_REPLACE;
+        }
+        break;
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid load method", KR(ret), K(arg_.load_method_));
+        break;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    param.set_client_addr(ctx_.get_user_client_addr());
+    param.set_tenant_id(tenant_id);
+    param.set_user_id(ctx_.get_user_id());
+    param.set_database_id(database_id);
+    param.set_table_id(table_id);
+    param.set_parallel(arg_.parallel_);
+    param.set_max_error_row_count(arg_.max_error_row_count_);
+    param.set_dup_action(dup_action);
+    param.set_timeout_us(arg_.timeout_);
+    param.set_heartbeat_timeout_us(arg_.heartbeat_timeout_);
+    param.set_method(method);
+    param.set_insert_mode(insert_mode);
   }
   return ret;
 }

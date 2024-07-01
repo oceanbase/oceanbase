@@ -60,7 +60,8 @@ public:
                               const ObArray<ObLength> &lengths,
                               const int64_t size,
                               int64_t &batch_mem_size);
-    int add_batch(const IVectorPtrs &vectors,
+    int add_batch(ShrinkBuffer &buf,
+                  const IVectorPtrs &vectors,
                   const uint16_t *selector,
                   const ObArray<ObLength> &lengths,
                   const int64_t size,
@@ -152,7 +153,8 @@ public:
            const lib::ObMemAttr &mem_attr,
            const int64_t mem_limit,
            const bool enable_dump,
-           const bool reuse_vector_array);
+           const bool reuse_vector_array,
+           const common::ObCompressorType compressor_type);
 
   int init_batch_ctx(const ObExprPtrIArray &exprs);
 
@@ -172,7 +174,7 @@ private:
   inline int ensure_write_blk(const int64_t mem_size)
   {
     int ret = common::OB_SUCCESS;
-    if (NULL == cur_blk_ || mem_size > cur_blk_->remain()) {
+    if (NULL == cur_blk_ || mem_size > blk_buf_.remain()) {
       if (OB_FAIL(new_block(mem_size))) {
         SQL_ENG_LOG(WARN, "fail to new block", K(ret), K(mem_size));
       } else {

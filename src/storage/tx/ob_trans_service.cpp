@@ -439,6 +439,28 @@ int ObTransService::iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_i
   return ret;
 }
 
+int ObTransService::get_trans_start_session_id(const share::ObLSID &ls_id, const ObTransID &tx_id, uint32_t &session_id)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObPartTransCtx *part_ctx = nullptr;
+  ObLSHandle ls_handle;
+  session_id = ObBasicSessionInfo::INVALID_SESSID;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+    TRANS_LOG(WARN, "get ls failed", K(ret), K(ls_id), K(tx_id));
+  } else if (!ls_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "ls is null in ObLSHandle", K(ret), K(ls_id), K(tx_id));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tx_start_session_id(tx_id, session_id))) {
+    TRANS_LOG(WARN, "get ObPartTransCtx by ls_id and tx_id failed", K(ls_id), K(tx_id));
+  }
+  return ret;
+}
 
 int ObTransService::end_1pc_trans(ObTxDesc &trans_desc,
                                   ObITxCallback *endTransCb,
@@ -488,6 +510,7 @@ void ObTransService::handle(void *task)
   ATOMIC_FAA(&output_queue_count_, 1);
 
   if (OB_ISNULL(task)) {
+    // ignore ret
     TRANS_LOG(ERROR, "task is null", KP(task));
   } else {
     trans_task = static_cast<ObTransTask*>(task);
@@ -516,6 +539,7 @@ void ObTransService::handle(void *task)
     } else if (ObTransRetryTaskType::ADVANCE_LS_CKPT_TASK == trans_task->get_task_type()) {
       ObAdvanceLSCkptTask *advance_ckpt_task = static_cast<ObAdvanceLSCkptTask *>(trans_task);
       if (OB_ISNULL(advance_ckpt_task)) {
+        // ignore ret
         TRANS_LOG(WARN, "advance ckpt task is null", KP(advance_ckpt_task));
       } else if (OB_FAIL(advance_ckpt_task->try_advance_ls_ckpt_ts())) {
         TRANS_LOG(WARN, "advance ls ckpt ts failed", K(ret));
@@ -528,6 +552,7 @@ void ObTransService::handle(void *task)
     } else if (ObTransRetryTaskType::STANDBY_CLEANUP_TASK == trans_task->get_task_type()) {
       ObTxStandbyCleanupTask *standby_cleanup_task = static_cast<ObTxStandbyCleanupTask *>(trans_task);
       if (OB_ISNULL(standby_cleanup_task)) {
+        // ignore ret
         TRANS_LOG(WARN, "standby cleanup task is null");
       } else if (OB_FAIL(do_standby_cleanup())) {
         TRANS_LOG(WARN, "do standby cleanup failed", K(ret));

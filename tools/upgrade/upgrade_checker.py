@@ -17,7 +17,7 @@ class UpgradeParams:
 class PasswordMaskingFormatter(logging.Formatter):
   def format(self, record):
     s = super(PasswordMaskingFormatter, self).format(record)
-    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+    return re.sub(r'password="(?:[^"\\]|\\.)*"', 'password="******"', s)
 
 #### --------------start : my_error.py --------------
 class MyError(Exception):
@@ -282,11 +282,8 @@ def get_opt_log_file():
 
 #### --------------start :  do_upgrade_pre.py--------------
 def config_logging_module(log_filenamme):
-  logging.basicConfig(level=logging.INFO,\
-      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
-      datefmt='%Y-%m-%d %H:%M:%S',\
-      filename=log_filenamme,\
-      filemode='w')
+  logger = logging.getLogger('')
+  logger.setLevel(logging.INFO)
   # 定义日志打印格式
   formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
   #######################################
@@ -411,6 +408,9 @@ def check_cluster_status(query_cur):
   (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
   if results[0][0] > 0 :
     fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
+  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
+  if results[0][0] > 0 :
+    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
   logging.info('check cluster status success')
 
 # 5. 检查是否有异常租户(creating，延迟删除，恢复中)

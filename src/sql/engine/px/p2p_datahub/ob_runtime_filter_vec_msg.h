@@ -20,6 +20,7 @@
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
 #include "sql/engine/basic/ob_compact_row.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
+#include "src/sql/engine/px/p2p_datahub/ob_small_hashset.h"
 
 namespace oceanbase
 {
@@ -200,6 +201,9 @@ public:
     int assign(const ObRFInFilterRowStore &other);
     void reset();
     inline ObCompactRow *get_row(int64_t idx) { return serial_rows_.at(idx); }
+    inline uint64_t get_hash_value(int64_t idx, const RowMeta &row_meta) {
+      return serial_rows_.at(idx)->extra_payload<uint64_t>(row_meta);
+    }
     inline int64_t get_row_size(int64_t idx) { return row_sizes_.at(idx); }
     inline int64_t get_row_cnt() const { return serial_rows_.count(); }
     inline int add_row(ObCompactRow *new_row, int64_t row_size);
@@ -240,7 +244,7 @@ public:
         build_row_meta_(&allocator_), cur_row_with_hash_(allocator_), rows_set_(),
         row_store_(allocator_), need_null_cmp_flags_(allocator_), max_in_num_(0),
         hash_funcs_for_insert_(allocator_),query_range_info_(allocator_),
-        query_range_(), is_query_range_ready_(false), query_range_allocator_()
+        query_range_(), is_query_range_ready_(false), query_range_allocator_(), sm_hash_set_()
   {}
   virtual int assign(const ObP2PDatahubMsgBase &);
   virtual int merge(ObP2PDatahubMsgBase &) final;
@@ -313,6 +317,11 @@ private:
       const ObBitVector &skip,
       const EvalBound &bound,
       ObExprJoinFilter::ObExprJoinFilterContext &filter_ctx);
+
+  template <typename ResVec>
+  int do_might_contain_vector_impl(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                                   const EvalBound &bound,
+                                   ObExprJoinFilter::ObExprJoinFilterContext &filter_ctx);
   int prepare_query_ranges();
   int process_query_ranges_with_deduplicate();
   int process_query_ranges_without_deduplicate();
@@ -347,6 +356,7 @@ public:
   bool is_query_range_ready_;             // not need to serialize
   common::ObArenaAllocator query_range_allocator_;
   // ---end---
+  ObSmallHashSet<false> sm_hash_set_;
 };
 
 

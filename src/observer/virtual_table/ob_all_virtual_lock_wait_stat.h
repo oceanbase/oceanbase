@@ -55,6 +55,7 @@ private:
     TRY_LOCK_TIMES,
     TIME_AFTER_RECV,
     SESSION_ID,
+    HOLDER_SESSION_ID,
     BLOCK_SESSION_ID,
     TYPE,
     LMODE,

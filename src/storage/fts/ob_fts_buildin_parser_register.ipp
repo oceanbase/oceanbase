@@ -21,13 +21,13 @@
 
 OB_DECLARE_PLUGIN(whitespace_parser)
 {
-  oceanbase::lib::ObPluginType::OB_FT_PARSER_PLUGIN,        // fulltext parser type
-  "space",                                                  // name
-  OB_PLUGIN_AUTHOR_OCEANBASE,                               // author
-  "This is a default whitespace parser plugin.",            // brief specification
-  0x00001,                                                  // version
-  oceanbase::lib::ObPluginLicenseType::OB_MULAN_V2_LICENSE, // Mulan PubL v2 license
-  &oceanbase::storage::whitespace_parser,                   // default space parser plugin instance
+  oceanbase::lib::ObPluginType::OB_FT_PARSER_PLUGIN,             // fulltext parser type
+  "space",                                                       // name
+  OB_PLUGIN_AUTHOR_OCEANBASE,                                    // author
+  "This is a default whitespace parser plugin.",                 // brief specification
+  0x00001,                                                       // version
+  oceanbase::lib::ObPluginLicenseType::OB_Mulan_PubL_V2_LICENSE, // Mulan PubL v2 license
+  &oceanbase::storage::whitespace_parser,                        // default space parser plugin instance
 };
 
 OB_DECLARE_BUILDIN_PLUGIN_HANDLER(ObBuildInWhitespaceFTParser, whitespace_parser);
@@ -36,28 +36,28 @@ OB_DECLARE_BUILDIN_PLUGIN_HANDLER(ObBuildInWhitespaceFTParser, whitespace_parser
 
 OB_DECLARE_PLUGIN(ngram_parser)
 {
-  oceanbase::lib::ObPluginType::OB_FT_PARSER_PLUGIN,        // fulltext parser type
-  "ngram",                                                  // name
-  OB_PLUGIN_AUTHOR_OCEANBASE,                               // author
-  "This is a ngram fulltext parser plugin.",                // brief specification
-  0x00001,                                                  // version
-  oceanbase::lib::ObPluginLicenseType::OB_MULAN_V2_LICENSE, // Mulan PubL v2 license
-  &oceanbase::storage::ngram_parser,                        // ngram parser plugin instance
+  oceanbase::lib::ObPluginType::OB_FT_PARSER_PLUGIN,             // fulltext parser type
+  "ngram",                                                       // name
+  OB_PLUGIN_AUTHOR_OCEANBASE,                                    // author
+  "This is a ngram fulltext parser plugin.",                     // brief specification
+  0x00001,                                                       // version
+  oceanbase::lib::ObPluginLicenseType::OB_Mulan_PubL_V2_LICENSE, // Mulan PubL v2 license
+  &oceanbase::storage::ngram_parser,                             // ngram parser plugin instance
 };
 
 OB_DECLARE_BUILDIN_PLUGIN_HANDLER(ObBuildInNgramFTParser, ngram_parser);
 
-///////////////////////////////////// Default fulltext parser //////////////////////////////////////////
+///////////////////////////////////// BEng fulltext parser //////////////////////////////////////////
 
 OB_DECLARE_PLUGIN(beng_parser)
 {
-  oceanbase::lib::ObPluginType::OB_FT_PARSER_PLUGIN,        // fulltext parser type
-  "beng",                                                   // name
-  OB_PLUGIN_AUTHOR_OCEANBASE,                               // author
-  "This is a basic english parser plugin.",                 // brief specification
-  0x00001,                                                  // version
-  oceanbase::lib::ObPluginLicenseType::OB_MULAN_V2_LICENSE, // Mulan PubL v2 license
-  &oceanbase::storage::beng_parser,                         // default space parser plugin instance
+  oceanbase::lib::ObPluginType::OB_FT_PARSER_PLUGIN,             // fulltext parser type
+  "beng",                                                        // name
+  OB_PLUGIN_AUTHOR_OCEANBASE,                                    // author
+  "This is a basic english parser plugin.",                      // brief specification
+  0x00001,                                                       // version
+  oceanbase::lib::ObPluginLicenseType::OB_Mulan_PubL_V2_LICENSE, // Mulan PubL v2 license
+  &oceanbase::storage::beng_parser,                              // basic english parser plugin instance
 };
 
 OB_DECLARE_BUILDIN_PLUGIN_HANDLER(ObBuildInBEngFTParser, beng_parser);

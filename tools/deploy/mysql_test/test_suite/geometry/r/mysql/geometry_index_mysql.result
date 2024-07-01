@@ -244,3 +244,12 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 drop table t1;
+drop table if exists spatial_index_dml;
+CREATE TABLE spatial_index_dml (i1 int, i2 int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i1));
+INSERT INTO spatial_index_dml VALUES (1, 2, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+CREATE INDEX idx ON spatial_index_dml (g);
+alter table spatial_index_dml drop column i2;
+select i1, st_astext(g)  from spatial_index_dml;
+i1	st_astext(g)
+1	POINT(0 0)
+drop table spatial_index_dml;

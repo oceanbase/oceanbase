@@ -242,6 +242,7 @@ private:
   virtual int compute_one_row_info() override;
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;
+  virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
 private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> group_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> rollup_exprs_;

@@ -94,7 +94,7 @@ int ObTableLoadCoordinatorCtx::init_partition_location()
   return ret;
 }
 
-int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
+int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
                                     ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
@@ -102,20 +102,22 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadCoordinatorCtx init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(
-               idx_array.count() != ctx_->param_.column_count_ || nullptr == exec_ctx ||
+               column_ids.count() != ctx_->param_.column_count_ || nullptr == exec_ctx ||
                !exec_ctx->is_valid() ||
                (ctx_->param_.online_opt_stat_gather_ && nullptr == exec_ctx->get_exec_ctx()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(idx_array.count()), KPC(exec_ctx));
+    LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(column_ids), KPC(exec_ctx));
   } else {
     if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
                K(ctx_->ddl_param_.dest_table_id_));
     }
-    // init idx array
-    else if (OB_FAIL(idx_array_.assign(idx_array))) {
-      LOG_WARN("failed to assign idx array", KR(ret), K(idx_array));
-    } else if (OB_FAIL(init_partition_location())) {
+    // init column idxs
+    else if (OB_FAIL(init_column_idxs(column_ids))) {
+      LOG_WARN("fail to init column idxs", KR(ret), K(column_ids));
+    }
+    // init partition_location_
+    else if (OB_FAIL(init_partition_location())) {
       LOG_WARN("fail to init partition location", KR(ret));
     }
     // init partition_calc_
@@ -349,6 +351,34 @@ int ObTableLoadCoordinatorCtx::alloc_trans(const ObTableLoadSegmentID &segment_i
       trans_allocator_.free(trans);
       trans = nullptr;
     }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::init_column_idxs(const ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  idx_array_.reset();
+  const ObIArray<ObColDesc> &column_descs = ctx_->schema_.column_descs_;
+  bool found_column = true;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_LIKELY(found_column) && i < column_descs.count(); ++i) {
+    const ObColDesc &col_desc = column_descs.at(i);
+    found_column = (ctx_->schema_.is_heap_table_ && i == 0); // skip hidden pk in heap table
+    // 在源数据的列数组中找到对应的列
+    for (int64_t j = 0; OB_SUCC(ret) && OB_LIKELY(!found_column) && j < column_ids.count(); ++j) {
+      const uint64_t column_id = column_ids.at(j);
+      if (col_desc.col_id_ == column_id) {
+        found_column = true;
+        if (OB_FAIL(idx_array_.push_back(j))) {
+          LOG_WARN("fail to push back column idx", KR(ret), K(idx_array_), K(i), K(col_desc), K(j),
+                   K(column_ids));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(!found_column)) {
+    ret = OB_SCHEMA_NOT_UPTODATE;
+    LOG_WARN("column not found", KR(ret), K(idx_array_), K(column_descs), K(column_ids));
   }
   return ret;
 }

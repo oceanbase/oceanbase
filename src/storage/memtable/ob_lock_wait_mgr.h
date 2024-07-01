@@ -23,6 +23,7 @@
 #include "lib/utility/utility.h"
 #include "ob_memtable_key.h"
 #include "observer/ob_server_struct.h"
+#include "rpc/ob_lock_wait_node.h"
 #include "rpc/ob_request.h"
 #include "share/deadlock/ob_deadlock_detector_common_define.h"
 #include "share/ob_thread_pool.h"
@@ -237,9 +238,11 @@ public:
                 const bool is_remote_sql,
                 const int64_t last_compact_cnt,
                 const int64_t total_trans_node_cnt,
+                const uint32_t sess_id,
                 const transaction::ObTransID &tx_id,
                 const transaction::ObTransID &holder_tx_id,
-                ObFunction<int(bool&, bool&)> &rechecker);
+                const ObLSID &ls_id,
+                ObFunction<int(bool &, bool &)> &rechecker);
   int post_lock(const int tmp_ret,
                 const ObTabletID &tablet_id,
                 const transaction::tablelock::ObLockID &lock_id,
@@ -247,9 +250,11 @@ public:
                 const bool is_remote_sql,
                 const int64_t last_compact_cnt,
                 const int64_t total_trans_node_cnt,
+                const uint32_t sess_id,
                 const transaction::ObTransID &tx_id,
                 const transaction::ObTransID &holder_tx_id,
                 const transaction::tablelock::ObTableLockMode &lock_mode,
+                const ObLSID &ls_id,
                 ObFunction<int(bool &need_wait)> &check_need_wait);
   // when removing the callbacks of uncommitted transaction, we need transfer
   // the conflict dependency from rows to transactions
@@ -398,6 +403,13 @@ public:
   static inline
   bool is_table_lock_hash(const uint64_t hash) { return (hash & ~HASH_MASK) == TABLE_LOCK_FLAG; }
 };
+
+inline void advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat new_stat) {
+  rpc::ObLockWaitNode *node = memtable::ObLockWaitMgr::get_thread_node();
+  if (OB_NOT_NULL(node)) {
+    node->advance_stat(new_stat);
+  }
+}
 
 }; // end namespace memtable
 }; // end namespace oceanbase

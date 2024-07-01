@@ -15,6 +15,7 @@
 #define OCEANBASE_SQL_OB_EXPR_ST_INTERSECTS_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 namespace oceanbase
 {
@@ -33,6 +34,7 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
+  virtual bool need_rt_ctx() const override { return true; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSTIntersects);
 };

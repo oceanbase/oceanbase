@@ -46,6 +46,7 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 
 namespace oceanbase
 {
@@ -67,8 +68,12 @@ class ObDbmsCursorInfo;
 namespace debugger
 {
 class ObPLDebugger;
-}
-#endif
+} // namespace debugger
+
+#endif // OB_BUILD_ORACLE_PL
+
+class ObPLProfiler;
+
 } // namespace pl
 
 namespace obmysql
@@ -644,7 +649,7 @@ public:
             cursor_ids.push_back(cursor_info->get_id());
           }
         }
-        for (int64_t i = 0; i < cursor_ids.count(); i++) {
+        for (int64_t i = 0; i < cursor_ids.count() && OB_SUCC(ret); i++) {
           uint64_t cursor_id = cursor_ids.at(i);
           if (OB_FAIL(session.close_cursor(cursor_id))) {
             SQL_ENG_LOG(WARN, "failed to close cursor",
@@ -925,8 +930,20 @@ public:
 #ifdef OB_BUILD_ORACLE_PL
   inline pl::debugger::ObPLDebugger *get_pl_debugger() const { return pl_debugger_; }
   void set_pl_debugger (pl::debugger::ObPLDebugger *pl_debugger) {pl_debugger_ = pl_debugger; };
+
+  int alloc_pl_profiler(int32_t run_id);
 #endif
   bool is_pl_debug_on();
+  inline pl::ObPLProfiler *get_pl_profiler() const
+  {
+    pl::ObPLProfiler *profiler = nullptr;
+
+#ifdef OB_BUILD_ORACLE_PL
+    profiler = pl_profiler_;
+#endif // OB_BUILD_ORACLE_PL
+
+    return profiler;
+  }
 
   inline void set_pl_attached_id(uint32_t id) { pl_attach_session_id_ = id; }
   inline uint32_t get_pl_attached_id() const { return pl_attach_session_id_; }
@@ -1088,6 +1105,7 @@ public:
     return package_state_map_.erase_refactored(package_id);
   }
   void reset_pl_debugger_resource();
+  void reset_pl_profiler_resource();
   void reset_all_package_changed_info();
   void reset_all_package_state();
   int reset_all_package_state_by_dbms_session(bool need_set_sync_var);
@@ -1209,6 +1227,7 @@ public:
   int is_temp_table_transformation_enabled(bool &transformation_enabled) const;
   int is_groupby_placement_transformation_enabled(bool &transformation_enabled) const;
   bool is_in_range_optimization_enabled() const;
+  int64_t get_inlist_rewrite_threshold() const;
   int is_better_inlist_enabled(bool &enabled) const;
   bool is_index_skip_scan_enabled() const;
   bool is_qualify_filter_enabled() const;
@@ -1477,6 +1496,7 @@ private:
 
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null
+  pl::ObPLProfiler *pl_profiler_;
 #endif
 #ifdef OB_BUILD_SPM
   ObSpmCacheCtx::SpmSelectPlanType select_plan_type_;
@@ -1593,6 +1613,8 @@ public:
   inline int64_t get_out_bytes() const { return ATOMIC_LOAD(&out_bytes_); }
   inline void inc_out_bytes(int64_t out_bytes) { IGNORE_RETURN ATOMIC_FAA(&out_bytes_, out_bytes); }
   bool is_pl_prepare_stage() const;
+  dbms_scheduler::ObDBMSSchedJobInfo *get_job_info() const { return job_info_; }
+  void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
@@ -1624,6 +1646,7 @@ private:
   bool client_non_standard_;
   bool is_session_sync_support_; // session_sync_support flag.
   share::schema::ObUserLoginInfo login_info_;
+  dbms_scheduler::ObDBMSSchedJobInfo *job_info_; // dbms_scheduler related.
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

@@ -24,6 +24,7 @@ public:
   ObCGPrefetcher() :
       is_reverse_scan_(false),
       is_project_without_filter_(false),
+      need_prewarm_(false),
       cg_iter_type_(-1),
       query_index_range_(),
       query_range_(),
@@ -36,8 +37,8 @@ public:
   {}
   virtual ~ObCGPrefetcher()
   {}
-  virtual void reset() override final;
-  virtual void reuse() override final;
+  virtual void reset() override;
+  virtual void reuse() override;
   int init(
       const int cg_iter_type,
       ObSSTable &sstable,
@@ -49,7 +50,7 @@ public:
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx);
   int locate(const ObCSRange &range, const ObCGBitmap *bitmap);
-  virtual int prefetch() override final;
+  virtual int prefetch() override;
   OB_INLINE bool is_empty_range() const
   { return 0 == micro_data_prefetch_idx_ && is_prefetch_end_; }
   virtual bool read_wait() override final
@@ -76,7 +77,7 @@ public:
   void set_cg_agg_cells(ObCGAggCells &cg_agg_cells) { cg_agg_cells_ = &cg_agg_cells; }
   void set_project_type(const bool project_without_filter) { is_project_without_filter_ = project_without_filter; }
   INHERIT_TO_STRING_KV("ObCGPrefetcher", ObIndexTreeMultiPassPrefetcher,
-                       K_(is_reverse_scan), K_(is_project_without_filter),
+                       K_(is_reverse_scan), K_(is_project_without_filter), K_(need_prewarm),
                        K_(query_index_range), K_(query_range), K_(cg_iter_type),
                        K_(micro_data_prewarm_idx), K_(cur_micro_data_read_idx), KP_(filter_bitmap),
                        KP_(cg_agg_cells), KP_(sstable_index_filter));
@@ -111,6 +112,7 @@ private:
 private:
   bool is_reverse_scan_;
   bool is_project_without_filter_;
+  bool need_prewarm_;
   int16_t cg_iter_type_;
   ObStorageDatum datums_[2];
   ObCSRange query_index_range_;
@@ -122,6 +124,28 @@ public:
   int64_t cur_micro_data_read_idx_;
   ObCGAggCells *cg_agg_cells_;
   ObSSTableIndexFilter *sstable_index_filter_;
+};
+
+// ObCGIndexPrefetcher only prefetch micro index info, skip data block
+// 1. disable submit disk io for data block
+// 2. disable multi block prefetch
+// 3. disable prewarm data block
+class ObCGIndexPrefetcher : public ObCGPrefetcher
+{
+public:
+  virtual void reset() override final;
+  virtual void reuse() override final;
+  int init(
+      const int cg_iter_type,
+      ObSSTable &sstable,
+      const ObTableIterParam &iter_param,
+      ObTableAccessContext &access_ctx);
+  int switch_context(
+      const int cg_iter_type,
+      ObSSTable &sstable,
+      const ObTableIterParam &iter_param,
+      ObTableAccessContext &access_ctx);
+  virtual int prefetch() override final;
 };
 
 }

@@ -16,6 +16,7 @@
 #include "lib/container/ob_vector.h"
 #include "sql/parser/parse_node.h"
 #include "sql/resolver/ob_stmt_type.h"
+#include "share/schema/ob_package_info.h"
 
 #define DEF_SIMPLE_EXECUTOR(name)                          \
   class name##Executor                                     \
@@ -37,8 +38,41 @@ class ObCreatePackageStmt;
 class ObAlterPackageStmt;
 class ObDropPackageStmt;
 
-DEF_SIMPLE_EXECUTOR(ObCreatePackage);
-DEF_SIMPLE_EXECUTOR(ObAlterPackage);
+class ObCompilePackageInf
+{
+public:
+  ObCompilePackageInf() {}
+  virtual ~ObCompilePackageInf() {}
+  static int compile_package(sql::ObExecContext &ctx,
+                      uint64_t tenant_id,
+                      const ObString &db_name,
+                      oceanbase::share::schema::ObPackageType type,
+                      const ObString &package_name,
+                      int64_t schema_version);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCompilePackageInf);
+};
+
+class ObCreatePackageExecutor : ObCompilePackageInf
+{
+public:
+  ObCreatePackageExecutor() {}
+  virtual ~ObCreatePackageExecutor() {}
+  int execute(ObExecContext &ctx, ObCreatePackageStmt &stmt);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCreatePackageExecutor);
+};
+
+class ObAlterPackageExecutor : ObCompilePackageInf
+{
+public:
+  ObAlterPackageExecutor() {}
+  virtual ~ObAlterPackageExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterPackageStmt &stmt);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAlterPackageExecutor);
+};
+
 DEF_SIMPLE_EXECUTOR(ObDropPackage);
 }//namespace sql
 }//namespace oceanbase

@@ -22,70 +22,43 @@ namespace oceanbase
 namespace storage
 {
 
-/*static*/ int ObBEngFTParser::segment(
-    lib::ObFTParserParam *param,
-    const char *ft,
-    const int64_t ft_len)
+int ObBEngFTParser::get_next_token(
+    const char *&word,
+    int64_t &word_len,
+    int64_t &char_len,
+    int64_t &word_freq)
 {
   int ret = OB_SUCCESS;
-  ObDatum doc;
-  doc.set_string(ft, ft_len);
-  ObBEngFTParser parser;
-  share::ObITokenStream *token_stream = nullptr;
-  if (OB_ISNULL(param) || OB_ISNULL(param->cs_) || OB_ISNULL(ft) || OB_UNLIKELY(0 >= ft_len)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KPC(param), KP(ft), K(ft_len));
-  } else if (OB_FAIL(parser.init(param))) {
-    LOG_WARN("fail to initialize basic english parser", K(ret), KPC(param));
-  } else if (FALSE_IT(doc.set_string(ft, ft_len))) {
-  } else if (OB_FAIL(parser.segment(doc, token_stream))) {
-    LOG_WARN("fail to segment fulltext by parser", K(ret), KP(ft), K(ft_len));
-  } else if (OB_ISNULL(token_stream)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("token stream is nullptr", K(ret), KP(token_stream));
-  } else {
-    ObDatum token;
-    int64_t token_freq = 0;
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(token_stream->get_next(token, token_freq))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to get next token", K(ret), KPC(token_stream));
-        }
-      } else if (OB_FAIL(add_word(param, param->allocator_, token.ptr_, token.len_))) {
-        LOG_WARN("fail to add word", K(ret), K(token), KPC(param));
-      }
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-  }
-  return ret;
-}
-
-/*static*/ int ObBEngFTParser::add_word(
-    lib::ObFTParserParam *param,
-    common::ObIAllocator *allocator,
-    const char *word,
-    int64_t word_len)
-{
-  int ret = OB_SUCCESS;
+  ObDatum token;
+  int64_t token_freq = 0;
   char *buf = nullptr;
-  if (OB_ISNULL(param)
-      || OB_ISNULL(allocator)
-      || OB_ISNULL(word)
-      || OB_UNLIKELY(0 >= word_len)) {
+  word = nullptr;
+  word_len = 0;
+  char_len = 0;
+  word_freq = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("beng ft parser isn't initialized", K(ret), K(is_inited_));
+  } else if (OB_ISNULL(token_stream_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("token stream is nullptr", K(ret), KP(token_stream_));
+  } else if (OB_FAIL(token_stream_->get_next(token, token_freq))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get next token", K(ret), KPC(token_stream_));
+    }
+  } else if (OB_ISNULL(token.ptr_) || OB_UNLIKELY(0 >= token.len_ || 0 >= token_freq)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KPC(param), KP(allocator), KP(word), K(word_len));
-  } else if (word_len < FT_MIN_WORD_LEN || word_len > FT_MAX_WORD_LEN) {
-    LOG_DEBUG("skip too small or large word", K(ret), K(word_len));
-  } else if (OB_ISNULL(buf = static_cast<char *>(allocator->alloc(word_len)))) {
+    LOG_WARN("invalid arguments", K(ret), KP(token.ptr_), K(token.len_), K(token_freq));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(token.len_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate word memory", K(ret), K(word_len));
-  } else if (FALSE_IT(MEMCPY(buf, word, word_len))) {
-  } else if (OB_FAIL(param->add_word(param, buf, word_len, word_len))) {
-    LOG_WARN("fail to add word", K(ret), KPC(param), K(ObString(word_len, buf)), K(ObString(word_len, word)));
+    LOG_WARN("fail to allocate word memory", K(ret), K(token.len_));
   } else {
-    LOG_DEBUG("succeed to add word", K(ObString(word_len, word)));
+    MEMCPY(buf, token.ptr_, token.len_);
+    word = buf;
+    word_len = token.len_;
+    char_len = token.len_;
+    word_freq = token_freq;
+    LOG_DEBUG("succeed to add word", K(ObString(word_len, word)), K(word_freq));
   }
   return ret;
 }
@@ -103,13 +76,20 @@ int ObBEngFTParser::init(lib::ObFTParserParam *param)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("too large document, english analyzer hasn't be supported", K(ret), K(param->ft_length_));
   } else {
+    doc_.set_string(param->fulltext_, param->ft_length_);
     analysis_ctx_.cs_ = param->cs_;
     analysis_ctx_.filter_stopword_ = false;
     analysis_ctx_.need_grouping_ = false;
     if (OB_FAIL(english_analyzer_.init(analysis_ctx_, *param->allocator_))) {
       LOG_WARN("fail to init english analyzer", K(ret), KPC(param), K(analysis_ctx_));
+    } else if (OB_FAIL(segment(doc_, token_stream_))) {
+      LOG_WARN("fail to segment fulltext by parser", K(ret), KP(param->fulltext_), K(param->ft_length_));
+    } else if (OB_ISNULL(token_stream_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("token stream is nullptr", K(ret), KP(token_stream_));
     } else {
       is_inited_ = true;
+      LOG_DEBUG("succeed to init beng parser", K(ret), K(english_analyzer_), KPC(token_stream_), K(doc_));
     }
   }
   if (OB_FAIL(ret) && OB_UNLIKELY(!is_inited_)) {
@@ -139,6 +119,8 @@ void ObBEngFTParser::reset()
 {
   analysis_ctx_.reset();
   english_analyzer_.reset();
+  doc_.reset();
+  token_stream_ = nullptr;
   is_inited_ = false;
 }
 
@@ -159,20 +141,43 @@ int ObBasicEnglishFTParserDesc::deinit(lib::ObPluginParam *param)
   return OB_SUCCESS;
 }
 
-int ObBasicEnglishFTParserDesc::segment(lib::ObFTParserParam *param) const
+int ObBasicEnglishFTParserDesc::segment(
+    lib::ObFTParserParam *param,
+    lib::ObITokenIterator *&iter) const
 {
   int ret = OB_SUCCESS;
+  void *buf = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("default ft parser desc hasn't be initialized", K(ret), K(is_inited_));
   } else if (OB_ISNULL(param) || OB_ISNULL(param->fulltext_) || OB_UNLIKELY(!param->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(param));
-  } else if (OB_FAIL(ObBEngFTParser::segment(param, param->fulltext_, param->ft_length_))) {
-    LOG_WARN("fail to segment words for fulltext by beng", K(ret), KPC(param),
-        K(param->fulltext_), K(param->ft_length_));
+  } else if (OB_ISNULL(buf = param->allocator_->alloc(sizeof(ObBEngFTParser)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate basic english ft parser", K(ret));
+  } else {
+    ObBEngFTParser *parser = new (buf) ObBEngFTParser(*(param->allocator_));
+    if (OB_FAIL(parser->init(param))) {
+      LOG_WARN("fail to init basic english parser", K(ret), KPC(param));
+    } else {
+      iter = parser;
+    }
   }
   return ret;
+  return ret;
+}
+
+void ObBasicEnglishFTParserDesc::free_token_iter(
+    lib::ObFTParserParam *param,
+    lib::ObITokenIterator *&iter) const
+{
+  if (OB_NOT_NULL(iter)) {
+    abort_unless(nullptr != param);
+    abort_unless(nullptr != param->allocator_);
+    iter->~ObITokenIterator();
+    param->allocator_->free(iter);
+  }
 }
 
 } // end namespace storage

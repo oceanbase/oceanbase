@@ -20,8 +20,36 @@ namespace oceanbase
 {
 namespace sql
 {
-
 class ObDASInsertResult;
+
+typedef common::ObList<ObNewRowIterator *, common::ObIAllocator> ObDuplicatedIterList;
+class ObDASConflictIterator : public common::ObNewRowIterator
+{
+public:
+  ObDASConflictIterator(const ObjMetaFixedArray &output_types,
+                        common::ObIAllocator &alloc)
+    : output_types_(output_types),
+      duplicated_iter_list_(alloc),
+      curr_iter_(duplicated_iter_list_.begin())
+  {
+  }
+
+  ~ObDASConflictIterator() {};
+
+  virtual int get_next_row(common::ObNewRow *&row) override;
+  virtual int get_next_row() override;
+  virtual void reset() override;
+
+  void init_curr_iter()
+  { curr_iter_ = duplicated_iter_list_.begin(); }
+  ObDuplicatedIterList &get_duplicated_iter_array()
+  { return duplicated_iter_list_; }
+private:
+  const ObjMetaFixedArray &output_types_;
+  ObDuplicatedIterList duplicated_iter_list_;
+  ObDuplicatedIterList::iterator curr_iter_;
+};
+
 class ObDASInsertOp : public ObIDASTaskOp
 {
   OB_UNIS_VERSION(1);
@@ -63,6 +91,16 @@ private:
   int insert_row_with_fetch();
   int store_conflict_row(ObDASInsertResult &ins_result);
 
+  int insert_index_with_fetch(ObDMLBaseParam &dml_param,
+                              ObAccessService *as,
+                              common::ObNewRowIterator &dml_iter,
+                              ObDASConflictIterator *result_iter,
+                              const ObDASInsCtDef *ins_ctdef,
+                              ObDASInsRtDef *ins_rtdef,
+                              storage::ObStoreCtxGuard &store_ctx_guard,
+                              const UIntFixedArray *duplicated_column_ids,
+                              common::ObTabletID tablet_id);
+
 private:
   const ObDASInsCtDef *ins_ctdef_;
   ObDASInsRtDef *ins_rtdef_;
@@ -70,34 +108,6 @@ private:
   common::ObNewRowIterator *result_;
   int64_t affected_rows_;  // local execute result, no need to serialize
   bool is_duplicated_;  // local execute result, no need to serialize
-};
-
-typedef common::ObList<ObNewRowIterator *, common::ObIAllocator> ObDuplicatedIterList;
-class ObDASConflictIterator : public common::ObNewRowIterator
-{
-public:
-  ObDASConflictIterator(const ObjMetaFixedArray &output_types,
-                        common::ObIAllocator &alloc)
-    : output_types_(output_types),
-      duplicated_iter_list_(alloc),
-      curr_iter_(duplicated_iter_list_.begin())
-  {
-  }
-
-  ~ObDASConflictIterator() {};
-
-  virtual int get_next_row(common::ObNewRow *&row) override;
-  virtual int get_next_row() override;
-  virtual void reset() override;
-
-  void init_curr_iter()
-  { curr_iter_ = duplicated_iter_list_.begin(); }
-  ObDuplicatedIterList &get_duplicated_iter_array()
-  { return duplicated_iter_list_; }
-private:
-  const ObjMetaFixedArray &output_types_;
-  ObDuplicatedIterList duplicated_iter_list_;
-  ObDuplicatedIterList::iterator curr_iter_;
 };
 
 class ObDASInsertResult : public ObIDASTaskResult, public common::ObNewRowIterator

@@ -187,7 +187,7 @@ int ObTableScanRange::init_rowkeys(const common::ObIArray<common::ObNewRange> &r
         } else if (is_false) {
         } else if (OB_FAIL(datum_rowkey.from_rowkey(rowkey, *allocator_))) {
           STORAGE_LOG(WARN, "Failed to transfer rowkey to datum rowkey", K(ret));
-        } else if (FALSE_IT(datum_rowkey.set_group_idx(ranges.at(i).get_group_idx()))) {
+        } else if (FALSE_IT(datum_rowkey.set_group_idx(ranges.at(i).get_group_id()))) {
         } else if (OB_FAIL(rowkeys_.push_back(datum_rowkey))) {
           STORAGE_LOG(WARN, "Failed to push back datum rowkey", K(ret));
         }
@@ -197,7 +197,7 @@ int ObTableScanRange::init_rowkeys(const common::ObIArray<common::ObNewRange> &r
           status_ = EMPTY;
         } else if (rowkeys_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
           ObDatumComparor<ObDatumRowkey> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
-          std::sort(rowkeys_.begin(), rowkeys_.end(), comparor);
+          lib::ob_sort(rowkeys_.begin(), rowkeys_.end(), comparor);
           if (OB_FAIL(ret)) {
             STORAGE_LOG(WARN, "Failed to sort datum rowkeys", K(ret), K(rowkeys_));
           }
@@ -245,7 +245,7 @@ int ObTableScanRange::init_ranges(const common::ObIArray<common::ObNewRange> &ra
           status_ = EMPTY;
         } else if (ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
           ObDatumComparor<ObDatumRange> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
-          std::sort(ranges_.begin(), ranges_.end(), comparor);
+          lib::ob_sort(ranges_.begin(), ranges_.end(), comparor);
           if (OB_FAIL(ret)) {
             STORAGE_LOG(WARN, "Failed to sort datum ranges", K(ret), K(ranges_));
           }
@@ -292,7 +292,7 @@ int ObTableScanRange::init_ranges_in_skip_scan(const common::ObIArray<common::Ob
         status_ = EMPTY;
       } else if (wrapped_ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
         ObDatumComparor<ObSkipScanWrappedRange> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
-        std::sort(wrapped_ranges_.begin(), wrapped_ranges_.end(), comparor);
+        lib::ob_sort(wrapped_ranges_.begin(), wrapped_ranges_.end(), comparor);
         if (OB_FAIL(ret)) {
           STORAGE_LOG(WARN, "Failed to sort datum ranges", K(ret), K(wrapped_ranges_));
         }

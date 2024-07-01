@@ -17,6 +17,7 @@
 #include "sql/engine/ob_tenant_sql_memory_manager.h"
 #include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "lib/container/ob_iarray.h"
+#include "sql/engine/px/p2p_datahub/ob_pushdown_topn_filter_msg.h"
 
 namespace oceanbase
 {
@@ -715,7 +716,8 @@ int ObSortOpImpl::init(
   const ObCompressorType compress_type /* = NONE_COMPRESS */,
   const ExprFixedArray *exprs /* =nullptr */,
   const int64_t est_rows /* = 0 */,
-  const bool use_compact_format /* =false */)
+  const bool use_compact_format /* =false */,
+  const ObPushDownTopNFilterInfo *pd_topn_filter_info /* =nullptr */)
 {
   int ret = OB_SUCCESS;
   if (is_inited()) {
@@ -767,6 +769,10 @@ int ObSortOpImpl::init(
       LOG_WARN("init row store failed", K(ret));
     } else if (use_heap_sort_ && OB_FAIL(init_topn())) {
       LOG_WARN("init topn failed", K(ret));
+    } else if (use_heap_sort_ && nullptr != pd_topn_filter_info && pd_topn_filter_info->enabled_
+               && OB_FAIL(pd_topn_filter_.init(pd_topn_filter_info, tenant_id, sort_collations,
+                                               exec_ctx, mem_context_))) {
+      LOG_WARN("failed to init pd_topn_filter_");
     } else if (use_partition_topn_sort_ && OB_FAIL(init_partition_topn(est_rows))) {
       LOG_WARN("init partition topn failed", K(ret));
     } else if (batch_size > 0
@@ -932,6 +938,9 @@ void ObSortOpImpl::reset()
   }
   inited_ = false;
   io_event_observer_ = nullptr;
+  if (pd_topn_filter_.enabled()) {
+    pd_topn_filter_.destroy();
+  }
 }
 
 template <typename Input>
@@ -1509,7 +1518,7 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
       bucket_part_cnt++;
     }
     comp_.set_cmp_range(0, part_cnt_ + hash_expr_cnt);
-    std::sort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
+    lib::ob_sort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
     comp_.set_cmp_range(part_cnt_ + hash_expr_cnt, comp_.get_cnt());
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_part_cnt; ++i) {
       int64_t rows_last = rows_idx;
@@ -1529,10 +1538,10 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
           } else {
             enable_encode_sortkey_ = false;
             comp_.enable_encode_sortkey_ = false;
-            std::sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
+            lib::ob_sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
           }
         } else {
-          std::sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
+          lib::ob_sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
         }
       }
     }
@@ -1564,7 +1573,7 @@ int ObSortOpImpl::do_partition_topn_sort() {
     if (OB_SUCC(ret)) {
       //sort heaps which is in the same bucket
       comp_.set_cmp_range(0, part_cnt_ + hash_expr_cnt);
-      std::sort(heap_nodes_.begin() + cur_bucket_cnt,
+      lib::ob_sort(heap_nodes_.begin() + cur_bucket_cnt,
                 heap_nodes_.end(),
                 TopnHeapNodeComparer(comp_));
       //sort rows in heap
@@ -1584,14 +1593,14 @@ int ObSortOpImpl::do_partition_topn_sort() {
             } else {
               enable_encode_sortkey_ = false;
               comp_.enable_encode_sortkey_ = false;
-              std::sort(&heap_rows.at(0), &heap_rows.at(0) + heap_rows.count(), CopyableComparer(comp_));
+              lib::ob_sort(&heap_rows.at(0), &heap_rows.at(0) + heap_rows.count(), CopyableComparer(comp_));
               if (OB_SUCCESS != comp_.ret_) {
                 ret = comp_.ret_;
                 LOG_WARN("compare failed", K(ret));
               }
             }
           } else {
-            std::sort(&heap_rows.at(0), &heap_rows.at(0) + heap_rows.count(), CopyableComparer(comp_));
+            lib::ob_sort(&heap_rows.at(0), &heap_rows.at(0) + heap_rows.count(), CopyableComparer(comp_));
           }
           op_monitor_info_->otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
           op_monitor_info_->otherstat_1_value_ += cur_heap->heap_.count();
@@ -1964,10 +1973,10 @@ int ObSortOpImpl::sort_inmem_data()
         } else {
           enable_encode_sortkey_ = false;
           comp_.enable_encode_sortkey_ = false;
-          std::sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
+          lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
         }
       } else {
-        std::sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
+        lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
       }
       if (OB_SUCCESS != comp_.ret_) {
         ret = comp_.ret_;
@@ -2010,6 +2019,11 @@ int ObSortOpImpl::sort_inmem_data()
           op_monitor_info_->otherstat_1_id_ = ObSqlMonitorStatIds::SORT_SORTED_ROW_COUNT;
           op_monitor_info_->otherstat_1_value_ += 1;
           prev = &rows_->at(i);
+        }
+        if (OB_FAIL(ret)) {
+        } else if (pd_topn_filter_.enabled()
+                   && OB_FAIL(pd_topn_filter_.update_filter_data(*imms_heap_->top()))) {
+          LOG_WARN("failed to update filter data", K(ret));
         }
         heap_iter_begin_ = false;
       }
@@ -2404,6 +2418,12 @@ int ObSortOpImpl::add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
       store_row = new_row;
       LOG_DEBUG("in memory topn sort check add row", KPC(new_row));
     }
+    if (OB_SUCC(ret)) {
+      // the first time reach heap capacity, set_need_update to update topn filter data;
+      if (pd_topn_filter_.enabled()) {
+        pd_topn_filter_.set_need_update(true);
+      }
+    }
   }
 
   return ret;
@@ -2429,6 +2449,11 @@ int ObSortOpImpl::add_heap_sort_batch(const common::ObIArray<ObExpr *> &exprs,
       LOG_WARN("failed to add topn row", K(ret));
     }
     row_count++;
+  }
+  if (OB_SUCC(ret) && pd_topn_filter_.need_update()) {
+    if (OB_FAIL(pd_topn_filter_.update_filter_data(topn_heap_->heap_.top()))) {
+      LOG_WARN("failed to update filter data", K(ret));
+    }
   }
   if (OB_NOT_NULL(append_row_count)) {
     *append_row_count = row_count;
@@ -2544,6 +2569,9 @@ int ObSortOpImpl::adjust_topn_heap(const common::ObIArray<ObExpr*> &exprs,
         LOG_WARN("failed to replace top", K(ret));
       } else {
         store_row = new_row;
+        if (pd_topn_filter_.enabled()) {
+          pd_topn_filter_.set_need_update(true);
+        }
       }
     } else {
       ret = comp_.ret_;
@@ -3119,7 +3147,7 @@ int ObPrefixSortImpl::add_immediate_prefix(const common::ObIArray<ObExpr *> &all
                  exec_ctx_, enable_encode_sortkey_ && !(part_cnt_ > 0)))) {
     LOG_WARN("init compare failed", K(ret));
   } else {
-    std::sort(immediate_prefix_rows_ + pos, immediate_prefix_rows_ + pos + selector_size_,
+    lib::ob_sort(immediate_prefix_rows_ + pos, immediate_prefix_rows_ + pos + selector_size_,
               CopyableComparer(comp_));
     if (OB_SUCCESS != comp_.ret_) {
       ret = comp_.ret_;

@@ -1449,6 +1449,7 @@ int ObTransformGroupByPushdown::get_count_star(ObDMLStmt &stmt,
     LOG_WARN("last select expr is not count(*)", K(ret));
   } else if (OB_ISNULL(col_expr = stmt.get_column_expr_by_id(
                                table_item->table_id_, OB_APP_MIN_COLUMN_ID + N))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get column expr", K(*table_item));
   } else if (!is_outer_join_table) {
     count_column = col_expr;

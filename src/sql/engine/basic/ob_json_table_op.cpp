@@ -2154,6 +2154,9 @@ int RegularCol::check_default_value_inner_mysql(JtScanCtx* ctx,
 {
   INIT_SUCC(ret);
   ObDatum res;
+  char datum_buff[OBJ_DATUM_STRING_RES_SIZE] = {0};
+  res.ptr_ = datum_buff;
+
   ObDatum* tmp_datum = nullptr;
   uint8_t is_type_mismatch = 0;
   ObAccuracy accuracy = col_node.col_info_.data_type_.get_accuracy();
@@ -2161,7 +2164,7 @@ int RegularCol::check_default_value_inner_mysql(JtScanCtx* ctx,
   ObObjType dst_type = expr->datum_meta_.type_;
   ObJsonCastParam cast_param(dst_type, default_expr->datum_meta_.cs_type_, expr->datum_meta_.cs_type_, false);
   cast_param.is_only_check_ = true;
-  cast_param.is_json_table_ = true;
+  cast_param.relaxed_time_convert_ = true;
   cast_param.rt_expr_ = expr;
 
   if (OB_ISNULL(j_base)) {
@@ -2435,7 +2438,7 @@ int JsonTableFunc::cast_to_result(ObRegCol& col_node, JtScanCtx* ctx, bool enabl
   ObJsonCastParam cast_param(dst_type, in_coll_type, dst_coll_type, ascii_type);
   cast_param.is_const_ = ctx->is_const_input_;
   cast_param.is_trunc_ = is_truncate;
-  cast_param.is_json_table_ = true;
+  cast_param.relaxed_time_convert_ = true;
   cast_param.rt_expr_ = expr;
   switch (col_type) {
     case JtColType::COL_TYPE_VALUE: {

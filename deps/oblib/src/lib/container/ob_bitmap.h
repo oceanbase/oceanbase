@@ -98,12 +98,16 @@ public:
   int copy_from(const ObBitmap &bitmap, const int64_t start, const int64_t count);
   void reuse(const bool is_all_true = false);
   int get_row_ids(
-      int64_t *row_ids,
+      int32_t *row_ids,
       int64_t &row_count,
       int64_t &from,
       const int64_t to,
       const int64_t limit,
       const int64_t id_offset = 0) const;
+  int generate_condensed_index();
+  OB_INLINE bool is_index_generated() { return -1 != condensed_cnt_; }
+  OB_INLINE const int32_t *get_condensed_idx() { return condensed_idx_; }
+  OB_INLINE int32_t get_condensed_cnt() { return condensed_cnt_; }
 
   OB_INLINE size_type capacity() const
   {
@@ -154,10 +158,12 @@ private:
 
 private:
   bool is_inited_;
-  int64_t valid_bytes_;
-  int64_t capacity_;
+  int32_t valid_bytes_;
+  int32_t capacity_;
   // Make sure that data_[i] can only be equal to 0x00 or 0x01 when i is from 0 to (valid_bytes_ - 1).
   uint8_t *data_;
+  int32_t condensed_cnt_;
+  int32_t *condensed_idx_;
   ObIAllocator &allocator_;
 };
 
@@ -175,7 +181,15 @@ OB_INLINE void ObBitmap::destroy()
 {
   if (nullptr != data_) {
     allocator_.free(data_);
+    data_ = nullptr;
   }
+  if (nullptr != condensed_idx_) {
+    allocator_.free(condensed_idx_);
+    condensed_idx_ = nullptr;
+  }
+  valid_bytes_ = 0;
+  capacity_ = 0;
+  condensed_cnt_ = -1;
 }
 
 OB_INLINE bool ObBitmap::empty() const

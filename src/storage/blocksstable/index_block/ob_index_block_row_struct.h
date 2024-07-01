@@ -27,6 +27,7 @@ namespace oceanbase
 namespace common
 {
 class ObObj;
+class ObPointerSwizzleNode;
 }
 namespace storage
 {
@@ -262,7 +263,8 @@ public:
   ObMicroIndexInfo()
     : row_header_(nullptr),
       minor_meta_info_(nullptr),
-      endkey_(nullptr),
+      endkey_(),
+      ps_node_(nullptr),
       query_range_(nullptr),
       agg_row_buf_(nullptr),
       agg_buf_size_(0),
@@ -271,14 +273,16 @@ public:
       parent_macro_id_(),
       nested_offset_(0),
       cs_row_range_(),
-      skipping_filter_results_()
+      skipping_filter_results_(),
+      rowkey_col_descs_(nullptr)
   {
   }
   OB_INLINE void reset()
   {
     row_header_ = nullptr;
     minor_meta_info_ = nullptr;
-    endkey_ = nullptr;
+    endkey_.reset();
+    ps_node_ = nullptr;
     query_range_ = nullptr;
     agg_row_buf_ = nullptr;
     agg_buf_size_ = 0;
@@ -288,6 +292,7 @@ public:
     nested_offset_ = 0;
     cs_row_range_.reset();
     skipping_filter_results_.reset();
+    rowkey_col_descs_ = nullptr;
   }
   OB_INLINE bool is_valid() const
   {
@@ -300,7 +305,7 @@ public:
           || nullptr != minor_meta_info_;
       const bool parent_macro_id_valid = !row_header_->is_data_block() || parent_macro_id_.is_valid();
       const bool pre_agg_valid = !row_header_->is_pre_aggregated() || nullptr != agg_row_buf_;
-      bret = minor_meta_info_valid && parent_macro_id_valid && pre_agg_valid && nullptr != endkey_;
+      bret = minor_meta_info_valid && parent_macro_id_valid && pre_agg_valid && endkey_.is_valid();
     }
     return bret;
   }
@@ -528,15 +533,20 @@ public:
       }
     }
   }
-  TO_STRING_KV(KP_(query_range), KPC_(row_header), KPC_(minor_meta_info), KPC_(endkey),
+  OB_INLINE const ObIArray<share::schema::ObColDesc> *get_rowkey_col_descs() const
+  {
+    return rowkey_col_descs_;
+  }
+  TO_STRING_KV(KP_(query_range), KPC_(row_header), KPC_(minor_meta_info), K_(endkey), KP_(ps_node),
       KP_(agg_row_buf), K_(agg_buf_size), K_(flag), K_(range_idx), K_(parent_macro_id),
       K_(nested_offset), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(cs_row_range),
-      K_(skipping_filter_results));
+      K_(skipping_filter_results), KP_(rowkey_col_descs));
 
 public:
   const ObIndexBlockRowHeader *row_header_;
   const ObIndexBlockRowMinorMetaInfo *minor_meta_info_;
-  const ObDatumRowkey *endkey_;
+  ObCommonDatumRowkey endkey_;
+  ObPointerSwizzleNode *ps_node_;
   union {
     const ObDatumRowkey *rowkey_;
     const ObDatumRange *range_;
@@ -570,6 +580,7 @@ public:
   int64_t rowkey_end_idx_;
   ObCSRange cs_row_range_;
   ObSkippingFilterResults skipping_filter_results_;
+  const ObIArray<share::schema::ObColDesc> *rowkey_col_descs_;
 };
 
 

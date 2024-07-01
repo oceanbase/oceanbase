@@ -1910,6 +1910,7 @@ int ObConstraintTask::set_constraint_validated()
   }
   DEBUG_SYNC(CONSTRAINT_SET_VALID);
   if (OB_FAIL(switch_status(ObDDLTaskStatus::SUCCESS, true, ret))) {
+    // overwrite ret
     LOG_WARN("switch status failed", K(ret));
   }
   return ret;

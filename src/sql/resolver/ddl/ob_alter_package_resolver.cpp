@@ -167,7 +167,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
     OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                           db_name,
                                           package_name,
-                                          PACKAGE_TYPE,
+                                          share::schema::PACKAGE_TYPE,
                                           compatible_mode,
                                           package_spec_info));
     OZ (package_spec_ast.init(db_name,
@@ -190,7 +190,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
         OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                               db_name,
                                               package_name,
-                                              PACKAGE_BODY_TYPE,
+                                              share::schema::PACKAGE_BODY_TYPE,
                                               compatible_mode,
                                               package_body_info));
         if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
@@ -206,7 +206,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
         OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                               db_name,
                                               package_name,
-                                              PACKAGE_BODY_TYPE,
+                                              share::schema::PACKAGE_BODY_TYPE,
                                               compatible_mode,
                                               package_body_info));
         if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
@@ -235,8 +235,12 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
     if (OB_FAIL(ret)) {
     } else if (!collect_package_body_info) {
       COLLECT_PACKAGE_INFO(pkg_arg, package_spec_info);
+      if (OB_SUCC(ret) && !has_error) {
+        share::schema::ObErrorInfo error_info;
+        OZ (error_info.delete_error(package_spec_info));
+      }
     } else {
-      bool has_error = false;
+      bool body_has_error = false;
       OZ (package_body_ast.init(db_name,
                                 package_name,
                                 PL_PACKAGE_BODY,
@@ -245,7 +249,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                 OB_INVALID_VERSION,
                                 &package_spec_ast));
       OZ (analyze_package(compiler, &(package_spec_ast.get_body()->get_namespace()),
-                          package_body_ast, db_name, package_body_info, error_info, has_error));
+                          package_body_ast, db_name, package_body_info, error_info, body_has_error));
       if (OB_SUCC(ret)) {
         ObArray<const ObRoutineInfo *> routine_infos;
         OZ (schema_checker_->get_schema_guard()->get_routine_infos_in_package(
@@ -253,7 +257,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
               package_spec_info->get_package_id(),
               routine_infos));
         if (OB_FAIL(ret)) {
-        } else if (!has_error) {
+        } else if (!body_has_error) {
           // if has_error, don't need to update routine route sql
           ObSEArray<ObRoutineInfo, 2> routine_spec_infos;
           ObPLRoutineTable &spec_routine_table = package_spec_ast.get_routine_table();
@@ -274,6 +278,12 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                                                     routine_infos));
           if (OB_FAIL(ret)) {
             pkg_arg.public_routine_infos_.reset();
+          } else {
+            share::schema::ObErrorInfo error_info;
+            if (!has_error) {
+              OZ (error_info.delete_error(package_spec_info));
+            }
+            OZ (error_info.delete_error(package_body_info));
           }
         } else if (0 != package_body_info->get_exec_env().case_compare(pkg_arg.exec_env_)) {
           for (int64_t i = 0; OB_SUCC(ret) && i < routine_infos.count(); ++i) {

@@ -319,7 +319,9 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
     micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
   }
   if (OB_SUCC(ret) && !found) {
-    if (OB_FAIL(cache->prefetch(tenant_id_, macro_id, micro_index_info,
+    if (OB_FAIL(micro_index_info.row_header_->fill_micro_des_meta(true /* deep_copy_key */, micro_handle.des_meta_))) {
+      STORAGE_LOG(WARN, "Failed to fill micro block deserialize meta", K(ret));
+    } else if (OB_FAIL(cache->prefetch(tenant_id_, macro_id, micro_index_info,
             context_.query_flag_.is_use_block_cache(), micro_handle.io_handle_, &allocator_))) {
       STORAGE_LOG(WARN, "Failed to prefetch data micro block", K(ret), K(micro_index_info));
     } else if (ObSSTableMicroBlockState::UNKNOWN_STATE == micro_handle.block_state_) {
@@ -328,7 +330,6 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
       micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
       micro_handle.micro_info_.offset_ = micro_index_info.get_block_offset();
       micro_handle.micro_info_.size_ = micro_index_info.get_block_size();
-      micro_handle.need_release_data_buf_ = true;
     }
   }
   return ret;

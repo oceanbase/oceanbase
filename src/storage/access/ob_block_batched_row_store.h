@@ -83,7 +83,7 @@ protected:
   int64_t batch_size_;
   int64_t row_capacity_;
   const char **cell_data_ptrs_;
-  int64_t *row_ids_;
+  int32_t *row_ids_;
   uint32_t *len_array_;
   sql::ObEvalCtx &eval_ctx_;
 };

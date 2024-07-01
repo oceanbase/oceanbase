@@ -63,6 +63,8 @@
 #include "pl/sys_package/ob_dbms_mview_stats.h"
 #include "pl/sys_package/ob_json_array_type.h"
 #include "pl/sys_package/ob_xml_type.h"
+#include "pl/sys_package/ob_sdo_geom.h"
+#include "pl/sys_package/ob_dbms_profiler.h"
 #endif
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #include "pl/sys_package/ob_dbms_session.h"
@@ -466,6 +468,10 @@
   INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_GEOJSON, "SDO_GEOMETRY_GET_GEOJSON", (ObSdoGeometry::get_geojson))
   //end of sdo_geometry
 
+  //start of sdo_geom
+  INTERFACE_DEF(INTERFACE_SDO_GEOM_DISTANCE, "SDO_GEOM_DISTANCE", (ObSdoGeom::sdo_distance))
+  //end of sdo_geom
+
   //start of xmltype
   INTERFACE_DEF(INTERFACE_XML_TYPE_TRANSFORM, "XML_TYPE_TRANSFORM", (ObXmlType::transform))
   INTERFACE_DEF(INTERFACE_XML_TYPE_GETCLOBVAL, "XML_TYPE_GETCLOBVAL", (ObXmlType::getclobval))
@@ -751,6 +757,18 @@
   INTERFACE_DEF(INTERFACE_DBMS_WR_MODIFY_SNAPSHOT_SETTINGS, "WR_MODIFY_SNAPSHOT_SETTINGS", (ObDbmsWorkloadRepository::modify_snapshot_settings))
   INTERFACE_DEF(INTERFACE_DBMS_GENERATE_ASH_REPORT_TEXT, "GENERATE_ASH_REPORT_TEXT", (ObDbmsWorkloadRepository::generate_ash_report_text))
   // end of dbms_workload_repository
+
+#ifdef OB_BUILD_ORACLE_PL
+  // start of dbms_profiler
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_CHECK_VERSION, "DBMS_PROFILER_CHECK_VERSION", (ObDBMSProfiler::check_version))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_START, "DBMS_PROFILER_START_PROFILER", (ObDBMSProfiler::start_profiler))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_STOP, "DBMS_PROFILER_STOP_PROFILER", (ObDBMSProfiler::stop_profiler))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_CHANGE_STATE, "DBMS_PROFILER_CHANGE_STATE", (ObDBMSProfiler::change_state))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_FLUSH_DATA, "DBMS_PROFILER_FLUSH_DATA", (ObDBMSProfiler::flush_data))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_INIT_OBJECTS, "DBMS_PROFILER_INIT_OBJECTS", (ObDBMSProfiler::init_objects))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_DROP_OBJECTS, "DBMS_PROFILER_DROP_OBJECTS", (ObDBMSProfiler::drop_objects))
+  // end of dbms_profiler
+#endif // OB_BUILD_ORACLE_PL
   /****************************************************************************/
 
   // start of dbms_trusted_certificate_manager
@@ -768,6 +786,7 @@
   // start of dbms_external_table
   INTERFACE_DEF(INTERFACE_DBMS_EXTERNAL_TABLE_AUTO_REFRESH_EXTERNAL_TABLE, "AUTO_REFRESH_EXTERNAL_TABLE", (ObDBMSExternalTable::auto_refresh_external_table))
   //end of dbms_external_table
+
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif
 

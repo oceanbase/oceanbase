@@ -2142,6 +2142,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, -7433, -1, "42000"
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_VECTOR_DIM, -7600, -1, "22000", "Invalid dimension for vector.", "inconsistent dimension: expected %u got %u", 932, "inconsistent dimension", "inconsistent dimension: expected %u got %u");
+DEFINE_ERROR_EXT(OB_ERR_BAD_VEC_INDEX_COLUMN, -7601, -1, "HY000", "Column cannot be part of VECTOR index", "Column '%.*s' cannot be part of VECTOR index");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_ARRAY_TYPE_MISMATCH, -7602, -1, "22000", "array type mismatch found between definition and data", "array type mismatch found between definition(%.*s) and data(%.*s)", 932, "array type mismatch found between definition and data", "array type mismatch found between definition(%.*s) and data(%.*s)");
 
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2619,6 +2621,19 @@ DEFINE_PLS_ERROR_EXT(OB_ERR_NOT_FUNC_NAME, -9765, -1, "HY000", "object 'string' 
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CURSOR_EXPR, -9766, -1, "HY000", "CURSOR expression not allowed", 22902, "CURSOR expression not allowed");
 DEFINE_ORACLE_ERROR_V2_EXT(OB_APPLICATION_ERROR_FROM_REMOTE, -9767, -1, "HY000", "application error from remote", "%.*s", 20000, "application error from remote", "%.*s");
 
+DEFINE_ERROR_EXT(OB_ERR_EVENT_EXIST, -9768, ER_EVENT_ALREADY_EXISTS, "HY000", "Event already exists", "Event '%.*s' already exists");
+DEFINE_ERROR_EXT(OB_ERR_EVENT_NOT_EXIST, -9769, ER_EVENT_DOES_NOT_EXIST, "HY000", "Unknown event", "Unknown '%.*s' event");
+DEFINE_ERROR_EXT(OB_ERR_EVENT_CANT_ALTER, -9770, ER_EVENT_CANT_ALTER, "HY000", "Failed to alter event", "Failed to alter event '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_EVENT_DROP_FAILED, -9771, ER_EVENT_DROP_FAILED, "HY000", "Failed to drop event", "Failed to drop %.*s");
+DEFINE_ERROR(OB_ERR_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG, -9772, ER_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG, "HY000", "INTERVAL is either not positive or too big");
+DEFINE_ERROR(OB_ERR_EVENT_ENDS_BEFORE_STARTS, -9773, ER_EVENT_ENDS_BEFORE_STARTS, "HY000", "ENDS is either invalid or before STARTS");
+DEFINE_ERROR(OB_ERR_EVENT_EXEC_TIME_IN_THE_PAST, -9774, ER_EVENT_EXEC_TIME_IN_THE_PAST, "HY000", "Event execution time is in the past. Event has been disabled");
+DEFINE_ERROR(OB_ERR_EVENT_CANNOT_DELETE, -9775, ER_EVENT_CANNOT_DELETE, "HY000", "Failed to delete the event from mysql.event");
+DEFINE_ERROR(OB_ERR_EVENT_SAME_NAME, -9776, ER_EVENT_SAME_NAME, "HY000", "Same old and new event name");
+DEFINE_ERROR_EXT(OB_ERR_EVENT_DATA_TOO_LONG, -9777, ER_EVENT_DATA_TOO_LONG, "HY000", "Data for column too long", "Data for column '%.*s' too long");
+DEFINE_ERROR(OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST, -9778, ER_EVENT_CANNOT_CREATE_IN_THE_PAST, "HY000", "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation.");
+DEFINE_ERROR(OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST, -9779, ER_EVENT_CANNOT_ALTER_IN_THE_PAST, "HY000", "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future.");
+DEFINE_ERROR(OB_ERR_EVENT_RECURSION_FORBIDDEN, -9780, ER_EVENT_RECURSION_FORBIDDEN, "HY000", "Recursion of EVENT DDL statements is forbidden when body is present");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
@@ -2694,6 +2709,35 @@ DEFINE_ERROR(OB_ERR_FT_COLUMN_NOT_INDEXED, -11014, ER_FT_MATCHING_KEY_NOT_FOUND,
 DEFINE_ERROR_EXT(OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, -11015, ER_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, "HY000", "Can't update table while ctas is being created.", "Can't update table '%s' while '%s' is being created.");
 DEFINE_ERROR(OB_ERR_PS_NO_RECURSION, -11016, ER_PS_NO_RECURSION, "HY000", "The prepared statement contains a stored routine call that refers to that same statement. It\'s not allowed to execute a prepared statement in such a recursive manner");
 DEFINE_ERROR_EXT(OB_ERR_PARTITION_EXCHANGE_PART_TABLE, -11017, ER_PARTITION_EXCHANGE_PART_TABLE, "HY000", "Table to exchange with partition is partitioned", "Table to exchange with partition is partitioned: \'%.*s\'");
+DEFINE_ERROR_EXT(OB_INVALID_EXTERNAL_FILE, -11018, -1, "HY000", "Invalid external file", "Invalid external file: %s");
+
+DEFINE_ERROR_DEP(OB_HDFS_CONNECT_FS_ERROR, -11019, -1, "HY000", "HDFS: could not connect the hdfs file system");
+DEFINE_ERROR_DEP(OB_HDFS_OPEN_FILE_ERROR, -11020, -1, "HY000", "HDFS: could not open file on hdfs");
+DEFINE_ERROR_DEP(OB_HDFS_READ_FILE_ERROR, -11021, -1, "HY000", "HDFS: error reading the file on hdfs");
+DEFINE_ERROR_DEP(OB_HDFS_CREATE_IO_SERVICE_ERROR, -11022, -1, "HY000", "HDFS: unable to create IoService for hdfs");
+DEFINE_ERROR_DEP(OB_HDFS_CREATE_FILE_SYSTEM_ERROR, -11023, -1, "HY000", "HDFS: unable to create hdfs file system");
+DEFINE_ERROR_DEP(OB_HDFS_CONNECT_DEFAULTFS_ERROR, -11024, -1, "HY000", "HDFS: error connecting to the cluster: defaultFS is empty");
+DEFINE_ERROR_DEP(OB_HDFS_LOAD_DEFAULT_RESOURCES_ERROR, -11025, -1, "HY000", "HDFS: could not load hdfs default resources");
+DEFINE_ERROR_DEP(OB_HDFS_VALIDATE_RESOURCES_ERROR, -11026, -1, "HY000", "HDFS: resources is invalid");
+DEFINE_ERROR_DEP(OB_HDFS_LOAD_OBJECT_ERROR, -11027, -1, "HY000", "HDFS: Could not load Options object");
+DEFINE_ERROR_DEP(OB_HDFS_RESOURCE_UNAVAILABLE, -11028, -1, "HY000", "HDFS: resource is unavailable");
+DEFINE_ERROR_DEP(OB_HDFS_FUNC_UNIMPLEMENTED, -11029, -1, "HY000", "HDFS: function is unimplemented");
+DEFINE_ERROR_DEP(OB_HDFS_OPERATION_CANCELED, -11030, -1, "HY000", "HDFS: operation is already canceled");
+DEFINE_ERROR_DEP(OB_HDFS_PERMISSION_DENIED, -11031, -1, "HY000", "HDFS: permission denied");
+DEFINE_ERROR_DEP(OB_HDFS_PATH_NOT_FOUND, -11032, -1, "HY000", "HDFS: path not found");
+DEFINE_ERROR_DEP(OB_HDFS_FILE_ALREADY_EXISTS, -11033, -1, "HY000", "HDFS: file already exists");
+DEFINE_ERROR_DEP(OB_HDFS_PATH_IS_NOT_EMPTY_DIRECTORY, -11034, -1, "HY000", "HDFS: path is not empty directory");
+DEFINE_ERROR_DEP(OB_HDFS_BUSY, -11035, -1, "HY000", "HDFS: io or resource is busy");
+DEFINE_ERROR_DEP(OB_HDFS_AUTHENTICATION_FAILED, -11036, -1, "HY000", "HDFS: authentication failed");
+DEFINE_ERROR_DEP(OB_HDFS_ACCESSCONTROL_ERROR, -11037, -1, "HY000", "HDFS: access control error");
+DEFINE_ERROR_DEP(OB_HDFS_STANDNDBY_ERROR, -11038, -1, "HY000", "HDFS: standby error");
+DEFINE_ERROR_DEP(OB_HDFS_SNAPSHOT_PROTOCOL_ERROR, -11039, -1, "HY000", "HDFS: snapshot protocol error");
+DEFINE_ERROR_DEP(OB_HDFS_INVALID_OFFSET, -11040, -1, "HY000", "HDFS: use invalid offset");
+DEFINE_ERROR_DEP(OB_HDFS_NOT_A_DIRECTORY, -11041, -1, "HY000", "HDFS: not a directory");
+DEFINE_ERROR_DEP(OB_HDFS_MALFORMED_URI, -11042, -1, "HY000", "HDFS: malformed uri");
+DEFINE_ERROR_DEP(OB_HDFS_INVALID_ARGUMENT, -11043, -1, "HY000", "HDFS: invalid argument");
+DEFINE_ERROR_DEP(OB_HDFS_NOT_IMPLEMENT, -11044, -1, "HY000", "HDFS: not implementation");
+DEFINE_ERROR_DEP(OB_HDFS_ERROR, -11045, -1, "HY000", "HDFS error");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

@@ -121,9 +121,9 @@ int ObIteratePrivateVirtualTable::do_open()
     }
     if (OB_SUCC(ret)) {
       if (scan_flag_.is_reverse_scan()) {
-        std::sort(tenants_.begin(), tenants_.end(), std::greater<uint64_t>());
+        lib::ob_sort(tenants_.begin(), tenants_.end(), std::greater<uint64_t>());
       } else {
-        std::sort(tenants_.begin(), tenants_.end());
+        lib::ob_sort(tenants_.begin(), tenants_.end());
       }
       LOG_TRACE("tenant id array", K(tenants_));
     }

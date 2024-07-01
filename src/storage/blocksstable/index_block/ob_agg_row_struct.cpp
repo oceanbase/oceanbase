@@ -83,7 +83,7 @@ int ObAggRowWriter::sort_metas(const ObIArray<ObSkipIndexColMeta> &agg_col_arr,
         LOG_WARN("failed to push back col meta", K(ret), K(i));
       }
     }
-    std::sort(col_meta_list_.begin(), col_meta_list_.end());
+    lib::ob_sort(col_meta_list_.begin(), col_meta_list_.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < column_count_; ++i) {
       LOG_DEBUG("sort", K(i), K(col_meta_list_.at(i).first), K(col_meta_list_.at(i).second));
     }

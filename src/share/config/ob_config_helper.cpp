@@ -453,6 +453,12 @@ bool ObConfigLogLevelChecker::check(const ObConfigItem &t) const
       || OB_SUCCESS == OB_LOGGER.parse_check(tmp_str.ptr(), tmp_str.length()));
 }
 
+bool ObConfigAlertLogLevelChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  return OB_SUCCESS == OB_LOGGER.parse_check_alert(tmp_str.ptr(), tmp_str.length());
+}
+
 bool ObConfigAuditTrailChecker::check(const ObConfigItem &t) const
 {
   common::ObString tmp_string(t.str());
@@ -1055,7 +1061,7 @@ bool ObConfigSQLTlsVersionChecker::check(const ObConfigItem &t) const
          0 == tmp_str.case_compare("TLSV1.3");
 }
 
-int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString &value)
+int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString &value, const char* delim)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(item)) {
@@ -1064,7 +1070,7 @@ int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString
   } else {
     // key
     char *save_ptr = NULL;
-    char *key_ptr = STRTOK_R(item, "=", &save_ptr);
+    char *key_ptr = STRTOK_R(item, delim, &save_ptr);
     ObString tmp_key(key_ptr);
     key = tmp_key.trim();
     // value
@@ -1112,7 +1118,7 @@ int ObModeConfigParserUitl::format_mode_str(const char *src, int64_t src_len, ch
   return ret;
 }
 
-int ObModeConfigParserUitl::get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list)
+int ObModeConfigParserUitl::get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list, const char* delim)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str)) {
@@ -1130,7 +1136,7 @@ int ObModeConfigParserUitl::get_kv_list(char *str, ObIArray<std::pair<ObString, 
       uint64_t len = strlen(token);
       while (len > 0 && token[len - 1] == ' ') token[--len] = '\0';
       // check and set mode
-      if (OB_FAIL(parse_item_to_kv(token, key, value))) {
+      if (OB_FAIL(parse_item_to_kv(token, key, value, delim))) {
         OB_LOG(WARN, "fail to check config item", K(ret));
       } else if (OB_FAIL(kv_list.push_back(std::make_pair(key, value)))) {
         OB_LOG(WARN, "fail to push back key and value pair", K(ret), K(key), K(value));
@@ -1248,6 +1254,72 @@ bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAd
     }
   }
   return is_valid;
+}
+
+bool ObConfigSQLSpillCompressionCodecChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  for (int i = 0; i < ARRAYSIZEOF(common::sql_temp_store_compress_funcs) && !is_valid; ++i) {
+    if (0 == ObString::make_string(sql_temp_store_compress_funcs[i]).case_compare(t.str())) {
+      is_valid = true;
+    }
+  }
+  return is_valid;
+}
+
+bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t len)
+{
+  bool bret = true;
+  ObParallelDDLControlMode ddl_mode;
+  if (OB_ISNULL(str) || OB_ISNULL(arr)) {
+    bret = false;
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Get config item failed", KP(str), KP(arr));
+  } else if (strlen(str) == 0) {
+    // do nothing
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObSEArray<std::pair<ObString, ObString>, 1> kv_list;
+    int64_t str_len = strlen(str);
+    const int64_t buf_len = 3 * str_len; // need replace ',' to ' , '
+    char buf[buf_len];
+    MEMSET(buf, 0, sizeof(buf));
+    MEMCPY(buf, str, str_len);
+    if (OB_TMP_FAIL(ObModeConfigParserUitl::format_mode_str(str, str_len, buf, buf_len))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to format mode str", K(str));
+    } else if (OB_TMP_FAIL(ObModeConfigParserUitl::get_kv_list(buf, kv_list, ":"))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to get kv list", K(str));
+    } else {
+      for (int64_t i = 0; bret && i < kv_list.count(); ++i) {
+        uint8_t mode = MODE_ON;
+        if (kv_list.at(i).second.case_compare("on") == 0) {
+          mode = MODE_ON;
+        } else if (kv_list.at(i).second.case_compare("off") == 0) {
+          mode = MODE_OFF;
+        } else {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown mode type", K(kv_list.at(i).second));
+        }
+        ObParallelDDLControlMode::ObParallelDDLType ddl_type = ObParallelDDLControlMode::MAX_TYPE;
+        if (!bret) {
+          // do nothing
+        } else if (OB_TMP_FAIL(ObParallelDDLControlMode::string_to_ddl_type(kv_list.at(i).first, ddl_type))) {
+          bret = false;
+          OB_LOG_RET(WARN, tmp_ret, "fail to trans string ddl_type", K(kv_list.at(i).first));
+        } else if (OB_TMP_FAIL(ddl_mode.set_parallel_ddl_mode(ddl_type, mode))) {
+          bret = false;
+          OB_LOG_RET(WARN, tmp_ret, "fail to set parallel ddl mode", K(ddl_type), K(mode));
+        }
+      }
+    }
+  }
+  if (bret) {
+    for (uint64_t i = 0; i < 8; ++i) {
+      arr[i] = static_cast<uint8_t>((ddl_mode.get_value() >> (i * 8)) & 0xFF);
+    }
+  }
+  return bret;
 }
 
 } // end of namepace common

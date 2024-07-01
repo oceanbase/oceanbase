@@ -20,7 +20,7 @@ namespace blocksstable
 {
 
 int ObCSVectorDecodingUtil::decode_all_null_vector(
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     sql::VectorHeader &vec_header,
     const int64_t vec_offset)

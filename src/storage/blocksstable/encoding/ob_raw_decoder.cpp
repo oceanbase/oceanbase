@@ -63,7 +63,7 @@ struct RawVarBatchDecodeFunc_T
       const int64_t header_off,
       const int64_t header_len,
       const int64_t header_var_col_cnt,
-      const int64_t *row_ids, const int64_t row_cap,
+      const int32_t *row_ids, const int64_t row_cap,
       common::ObDatum *datums)
   {
     typedef typename ObEncodingByteLenMap<false, ROW_IDX_BYTE>::Type RowIdxType;
@@ -138,7 +138,7 @@ struct RawFixBatchDecodeFunc_T
   static void raw_fix_batch_decode_func(
       const int64_t col_len,
       const char *base_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {
@@ -162,7 +162,7 @@ struct RawFixBatchDecodeFunc_T<IS_SIGNED_SC, STORE_LEN_TAG, DATUM_LEN_TAG, 2>
   static void raw_fix_batch_decode_func(
       const int64_t col_len,
       const char *base_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums)
   {
@@ -353,7 +353,7 @@ int ObRawDecoder::update_pointer(const char *old_block, const char *cur_block)
 int ObRawDecoder::batch_decode(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -403,7 +403,7 @@ bool ObRawDecoder::fast_decode_valid(const ObColumnDecoderCtx &ctx) const
 int ObRawDecoder::batch_decode_fast(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums) const
 {
@@ -447,7 +447,7 @@ int ObRawDecoder::batch_decode_fast(
 int ObRawDecoder::batch_decode_general(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex* row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
     common::ObDatum *datums) const
@@ -860,7 +860,7 @@ int ObRawDecoder::check_fast_filter_valid(
 int ObRawDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {
@@ -1043,7 +1043,7 @@ int ObRawDecoder::fast_datum_comparison_operator(
     ObDatumCmpFuncType cmp_func = filter.cmp_func_;
 
     // OPT: remove this rowid array usage by adding a new batch decode interface？
-    int64_t *row_ids = pd_filter_info.row_ids_;
+    int32_t *row_ids = pd_filter_info.row_ids_;
     int64_t evaluated_row_cnt = 0;
     while (OB_SUCC(ret) && evaluated_row_cnt < pd_filter_info.count_) {
       //decode and evaluate one batch

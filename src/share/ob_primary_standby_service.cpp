@@ -32,6 +32,7 @@
 #include "storage/tx/ob_trans_service.h" //ObTransService
 #include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
 #include "storage/high_availability/ob_transfer_lock_utils.h" // ObMemberListLockUtils
+#include "common/ob_tenant_data_version_mgr.h"
 
 namespace oceanbase
 {
@@ -669,8 +670,42 @@ int ObPrimaryStandbyService::write_upgrade_barrier_log(
     const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
+
+  if (OB_FAIL(write_barrier_log_(transaction::ObTxDataSourceType::STANDBY_UPGRADE,
+                                 trans, tenant_id, data_version))) {
+    LOG_WARN("fail to write upgrade barrier log", K(ret), K(tenant_id), K(data_version));
+  }
+
+  return ret;
+}
+
+int ObPrimaryStandbyService::write_upgrade_data_version_barrier_log(
+    ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const uint64_t data_version)
+{
+  int ret = OB_SUCCESS;
+
+  if (ODV_MGR.is_enable_compatible_monotonic() &&
+          OB_FAIL(write_barrier_log_(transaction::ObTxDataSourceType::STANDBY_UPGRADE_DATA_VERSION,
+                                     trans, tenant_id, data_version))) {
+    LOG_WARN("fail to write upgrade data_version barrier log", K(ret), K(tenant_id),
+             K(data_version));
+  }
+
+  return ret;
+}
+
+int ObPrimaryStandbyService::write_barrier_log_(
+    const transaction::ObTxDataSourceType type,
+    ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const uint64_t data_version)
+{
+  int ret = OB_SUCCESS;
   ObStandbyUpgrade primary_data_version(data_version);
-  observer::ObInnerSQLConnection *inner_conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection());
+  observer::ObInnerSQLConnection *inner_conn =
+      static_cast<observer::ObInnerSQLConnection *>(trans.get_connection());
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
   } else if (OB_ISNULL(inner_conn)) {
@@ -696,11 +731,11 @@ int ObPrimaryStandbyService::write_upgrade_barrier_log(
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("serialize error", KR(ret), K(pos), K(length), K(primary_data_version));
     } else if (OB_FAIL(inner_conn->register_multi_data_source(
-                       tenant_id, SYS_LS, transaction::ObTxDataSourceType::STANDBY_UPGRADE,
-                       buf, length))) {
+                   tenant_id, SYS_LS, type, buf, length))) {
       LOG_WARN("failed to register tx data", KR(ret), K(tenant_id));
     }
-    LOG_INFO("write_upgrade_barrier_log finished", KR(ret), K(tenant_id), K(primary_data_version), K(length), KPHEX(buf, length));
+    LOG_INFO("write_barrier_log finished", KR(ret), K(tenant_id), K(type),
+             K(primary_data_version), K(length), KPHEX(buf, length));
   }
   return ret;
 }

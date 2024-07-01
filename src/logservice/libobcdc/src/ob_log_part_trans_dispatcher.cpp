@@ -172,8 +172,7 @@ int PartTransDispatcher::dispatch_part_trans_task_(PartTransTask &task, volatile
     // not have a corresponding guarantee. Therefore, it is normal for data progress to be rolled back here. But it is
     // dangerous. This problem can only be completely solved when the schema is split within the tenant.
     if (OB_UNLIKELY(prepare_ts < last_dispatch_progress_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("partition dispatch progress is rollback, we should check it", KR(ret),
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "partition dispatch progress is rollback, we should check it",
           K_(tls_id),
           "prepare_ts", NTS_TO_STR(prepare_ts),
           "prepare_lsn", prepare_lsn,

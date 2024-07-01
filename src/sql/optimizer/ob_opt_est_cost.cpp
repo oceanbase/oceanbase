@@ -766,3 +766,10 @@ double ObOptEstCost::calc_pred_cost_per_row(const ObRawExpr *expr,
   GET_COST_MODEL();
   return model->calc_pred_cost_per_row(expr, card, cost);
 }
+
+double ObOptEstCost::cost_values_table(double rows,
+                                       ObIArray<ObRawExpr*> &filters,
+                                       const ObOptimizerContext &opt_ctx)
+{
+  return cost_get_rows(rows, opt_ctx) + cost_quals(rows, filters, opt_ctx);
+}

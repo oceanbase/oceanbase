@@ -107,6 +107,7 @@ int ObPxRepartTransmitOp::do_transmit()
   ObPxRepartTransmitOpInput *trans_input = static_cast<ObPxRepartTransmitOpInput*>(input_);
 
   if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_)) || OB_ISNULL(trans_input)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to op ctx", "op_id", MY_SPEC.id_, "op_type", MY_SPEC.type_,
               KP(trans_input), K(ret));
   } else if (!MY_SPEC.is_repart_exchange()) {

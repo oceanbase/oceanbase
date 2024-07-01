@@ -26,15 +26,22 @@ private:
   using PredFunc = std::function<bool(int64_t)>;
 public:
   ObSqlMemMgrProcessor(ObSqlWorkAreaProfile &profile, ObMonitorNode &op_monitor_info) :
-    profile_(profile), op_monitor_info_(op_monitor_info),
+    profile_(profile), op_monitor_info_(&op_monitor_info),
     sql_mem_mgr_(nullptr), mem_callback_(nullptr), tenant_id_(OB_INVALID_ID),
-    periodic_cnt_(1024),
-    origin_max_mem_size_(0), default_available_mem_size_(0), is_auto_mgr_(false), dir_id_(0),
+    periodic_cnt_(1024), origin_max_mem_size_(0), default_available_mem_size_(0),
+    is_auto_mgr_(false), dir_id_(0),
     dummy_ptr_(nullptr), dummy_alloc_(nullptr)
   {
     // trace memory dump
-    op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::MEMORY_DUMP;
+    op_monitor_info_->otherstat_6_id_ = ObSqlMonitorStatIds::MEMORY_DUMP;
   }
+
+  ObSqlMemMgrProcessor(ObSqlWorkAreaProfile &profile) :
+    profile_(profile), op_monitor_info_(nullptr),
+    sql_mem_mgr_(nullptr), mem_callback_(nullptr), tenant_id_(OB_INVALID_ID),
+    periodic_cnt_(1024), origin_max_mem_size_(0), default_available_mem_size_(0),
+    is_auto_mgr_(false), dir_id_(0),
+    dummy_ptr_(nullptr), dummy_alloc_(nullptr) {}
   virtual ~ObSqlMemMgrProcessor() {}
 
   void set_sql_mem_mgr(ObTenantSqlMemoryManager *sql_mem_mgr)
@@ -60,7 +67,8 @@ public:
     int64_t cache_size,
     const ObPhyOperatorType op_type,
     const uint64_t op_id,
-    ObExecContext *exec_ctx);
+    ObSqlProfileExecInfo exec_info);
+
   void destroy()
   {
     if (0 < profile_.mem_used_ && OB_NOT_NULL(mem_callback_)) {
@@ -102,35 +110,43 @@ public:
   void alloc(int64_t size)
   {
     profile_.delta_size_ += size;
-    update_delta_size(profile_.delta_size_);
+    update_memory_delta_size(profile_.delta_size_);
   }
 
   void free(int64_t size)
   {
     profile_.delta_size_ -= size;
-    update_delta_size(profile_.delta_size_);
+    update_memory_delta_size(profile_.delta_size_);
   }
 
-  void dumped(int64_t size)
+  void dumped(int64_t delta_size)
   {
-    profile_.dumped_size_ += size;
-    op_monitor_info_.otherstat_6_value_ += size;
+    profile_.dumped_size_ += delta_size;
+    if (OB_NOT_NULL(op_monitor_info_)) {
+      op_monitor_info_->otherstat_6_value_ += delta_size;
+      op_monitor_info_->update_tempseg(delta_size);
+    }
+    profile_.max_dumped_size_ = MAX(profile_.max_dumped_size_, profile_.dumped_size_);
     if (OB_NOT_NULL(mem_callback_)) {
-      mem_callback_->dumped(size);
+      mem_callback_->dumped(delta_size);
     }
   }
   int64_t get_dumped_size() const { return profile_.dumped_size_; }
+  int64_t get_max_dumped_size() const { return profile_.max_dumped_size_; }
   void reset_delta_size() { profile_.delta_size_ = 0; }
   int64_t get_mem_used() const { return profile_.mem_used_; }
   int64_t get_delta_size() const { return profile_.delta_size_; }
   int64_t get_data_size() const { return profile_.data_size_ + profile_.delta_size_; }
-  void update_delta_size(int64_t delta_size)
+  void update_memory_delta_size(int64_t delta_size)
   {
     if (delta_size > 0 && delta_size >= UPDATED_DELTA_SIZE) {
       if (OB_NOT_NULL(mem_callback_)) {
         mem_callback_->alloc(delta_size);
       }
       profile_.mem_used_ += delta_size;
+      if (OB_NOT_NULL(op_monitor_info_)) {
+        op_monitor_info_->update_memory(delta_size);
+      }
       if (profile_.max_mem_used_ < profile_.mem_used_) {
         profile_.max_mem_used_ = profile_.mem_used_;
       }
@@ -141,6 +157,9 @@ public:
         mem_callback_->free(-delta_size);
       }
       profile_.mem_used_ += delta_size;
+      if (OB_NOT_NULL(op_monitor_info_)) {
+        op_monitor_info_->update_memory(delta_size);
+      }
       profile_.delta_size_ = 0;
       profile_.data_size_ += delta_size;
     }
@@ -166,7 +185,7 @@ private:
   static const int64_t UPDATED_DELTA_SIZE = 1 * 1024 * 1024;
   static const int64_t EXTEND_RATIO = 10;
   ObSqlWorkAreaProfile &profile_;
-  ObMonitorNode &op_monitor_info_;
+  ObMonitorNode *op_monitor_info_;
   ObTenantSqlMemoryManager *sql_mem_mgr_;
   ObSqlMemoryCallback *mem_callback_;
   uint64_t tenant_id_;
@@ -187,6 +206,20 @@ public:
     const int64_t tenant_id,
     ObExecContext *exec_ctx,
     int64_t &value
+  );
+
+  static int get_workarea_size(
+    const ObSqlWorkAreaType wa_type,
+    const int64_t tenant_id,
+    ObSqlProfileExecInfo &exec_info,
+    int64_t &value
+  );
+
+  static int get_workarea_size(
+    const ObSqlWorkAreaType wa_type,
+    const int64_t tenant_id,
+    int64_t &value,
+    ObSQLSessionInfo *session = nullptr
   );
 };
 

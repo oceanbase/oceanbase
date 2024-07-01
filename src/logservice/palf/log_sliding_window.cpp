@@ -885,7 +885,7 @@ int LogSlidingWindow::try_push_log_to_children_(const int64_t curr_proposal_id,
   common::GlobalLearnerList degraded_learner_list;
   const bool need_presend_log = (state_mgr_->is_leader_active()) ? true : false;
   const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size());
-  if (OB_FAIL(mm_->get_children_list(children_list))) {
+  if (OB_FAIL(mm_->get_log_sync_children_list(children_list))) {
     PALF_LOG(WARN, "get_children_list failed", K(ret), K_(palf_id));
   } else if (children_list.is_valid()
       && OB_FAIL(log_engine_->submit_push_log_req(children_list, PUSH_LOG, curr_proposal_id,
@@ -2229,7 +2229,8 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       // Verifying accum_checksum firstly.
       if (OB_FAIL(checksum_.verify_accum_checksum(log_task_header.data_checksum_,
                                                   log_task_header.accum_checksum_))) {
-        PALF_LOG(ERROR, "verify_accum_checksum failed", K(ret), KPC(this), K(log_id), KPC(log_task));
+        PALF_LOG(ERROR, "verify_accum_checksum failed", KR(ret), KPC(this), K(log_id), KPC(log_task));
+        LOG_DBA_ERROR_V2(OB_LOG_CHECKSUM_MISMATCH, ret, "verify_accum_checksum failed");
       } else {
         // Call fs_cb.
         int tmp_ret = OB_SUCCESS;
@@ -2874,7 +2875,7 @@ int LogSlidingWindow::get_majority_lsn_(const ObMemberList &member_list,
     PALF_LOG(WARN, "match_lsn_map do not reach majority", K(ret), K_(palf_id), K_(self),
         K(member_list), K(replica_num), K(valid_member_cnt));
   } else if (OB_SUCC(ret)) {
-    std::sort(lsn_array, lsn_array + valid_member_cnt, LSNCompare());
+    lib::ob_sort(lsn_array, lsn_array + valid_member_cnt, LSNCompare());
     assert(replica_num / 2 < OB_MAX_MEMBER_NUMBER);
     result_lsn = lsn_array[replica_num / 2];
     if (!result_lsn.is_valid()) {

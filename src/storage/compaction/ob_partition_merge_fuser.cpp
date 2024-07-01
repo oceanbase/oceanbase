@@ -392,7 +392,7 @@ int ObMergeFuserBuilder::build(const ObMergeParameter &merge_param,
     STORAGE_LOG(WARN, "Invalid argument to build MergeFuser", K(merge_param), K(ret));
   } else {
     const ObMergeType merge_type = merge_param.static_param_.get_merge_type();
-    if (is_major_merge_type(merge_type) && !merge_param.get_schema()->is_row_store()) {
+    if (is_major_or_meta_merge_type(merge_type) && !merge_param.get_schema()->is_row_store()) {
       partition_fuser = alloc_helper<ObCOMinorSSTableFuser>(allocator, allocator);
     } else if (is_major_or_meta_merge_type(merge_type)) {
       is_fuse_row_flag = false;

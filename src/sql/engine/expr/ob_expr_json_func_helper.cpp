@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "lib/ob_errno.h"
 #include "share/ob_json_access_utils.h"
+#include "ob_expr_json_utils.h"
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
@@ -108,7 +109,7 @@ int ObJsonExprHelper::get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("input type error", K(val_type));
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *json_datum,
-                expr->datum_meta_, expr->obj_meta_.has_lob_header(), str))) {
+                expr->datum_meta_, expr->obj_meta_.has_lob_header(), str, &ctx.exec_ctx_))) {
     LOG_WARN("fail to get real data.", K(ret), K(str));
   }
   return ret;
@@ -351,7 +352,7 @@ int ObJsonExprHelper::get_json_for_partial_update(
         LOG_WARN("get real data fail", KR(ret), K(json_datum), K(json_expr));
       }
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, json_datum,
-                json_expr.datum_meta_, json_expr.obj_meta_.has_lob_header(), j_str))) {
+                json_expr.datum_meta_, json_expr.obj_meta_.has_lob_header(), j_str, &ctx.exec_ctx_))) {
       LOG_WARN("get real data fail", KR(ret), K(json_datum), K(json_expr));
     }
     if (OB_FAIL(ret)) {
@@ -381,7 +382,27 @@ int ObJsonExprHelper::get_json_for_partial_update(
   return ret;
 }
 
-// ToDo: refine
+int ObJsonExprHelper::refine_range_json_value_const(
+  const common::ObObj &data, ObExecContext *ctx,
+  bool is_bool, common::ObIAllocator *allocator,
+  ObIJsonBase*& j_base, bool to_bin)
+{
+  int ret = OB_SUCCESS;
+  ObObjType val_type = data.get_type();
+  ObCollationType cs_type = data.get_collation_type();
+
+  if (!ObJsonExprHelper::is_convertible_to_json(val_type)) {
+    ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
+  } else if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(data, val_type, allocator,
+                                                                cs_type, j_base, ObConv2JsonParam(to_bin,
+                                                                data.has_lob_header(), false, false, true, true)))) {
+    LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
+  }
+
+  return ret;
+}
+
 int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExecContext *ctx,
                                    bool is_bool, common::ObIAllocator *allocator,
                                    ObIJsonBase*& j_base, bool to_bin)
@@ -1759,6 +1780,48 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
     } else {
       json_node->set_allocator(allocator);
       j_base = json_node;
+    }
+  }
+
+  return ret;
+}
+
+int ObJsonExprHelper::get_sql_scalar_type(
+  ObEvalCtx& ctx,
+  int64_t origin,
+  ObObjType& scalar_type,
+  int32_t& scalar_len,
+  int32_t& precision,
+  int32_t& scale,
+  ObAccuracy& accuracy,
+  ObLengthSemantics& length_semantics)
+{
+  int ret = OB_SUCCESS;
+  ParseNode parse_node;
+  parse_node.value_ = origin;
+
+  scalar_type = static_cast<ObObjType>(parse_node.int16_values_[0]);
+  scalar_len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+
+  if (ob_is_string_tc(scalar_type) && OB_FAIL(ObJsonUtil::get_accuracy_internal(
+    accuracy, ctx, scalar_type, origin, length_semantics))) {
+    LOG_WARN("failed to get accuracy", K(ret));
+  } else if (ob_is_number_or_decimal_int_tc(scalar_type)) {
+    precision = parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX];
+    scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+
+    if (ObNumberType == scalar_type && is_decimal_int_accuracy_valid(precision, scale)) {
+      bool enable_decimalint = false;
+      if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("type_ctx.get_session() is null", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(
+        ctx.exec_ctx_.get_my_session(), enable_decimalint))) {
+        LOG_WARN("fail to check_enable_decimalint_type",
+            K(ret), K(ctx.exec_ctx_.get_my_session()->get_effective_tenant_id()));
+      } else if (enable_decimalint) {
+        scalar_type = ObDecimalIntType;
+      }
     }
   }
 

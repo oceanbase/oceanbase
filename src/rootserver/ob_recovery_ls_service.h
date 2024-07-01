@@ -98,6 +98,9 @@ private:
                      palf::PalfBufferIterator &iterator);
  int process_upgrade_log_(const share::SCN &sync_scn,
      const transaction::ObTxBufferNode &node);
+ int process_upgrade_data_version_log_(const share::SCN &sync_scn,
+                                       const transaction::ObTxBufferNode &node,
+                                       common::ObMySQLTransaction &trans);
  int process_gc_log_(logservice::ObGCLSLog &gc_log,
                      const share::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
@@ -148,7 +151,10 @@ private:
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
  int decompress_log_payload_(const char *in_buf, const int64_t in_buf_len, char *&decompress_buf, int64_t &decompressed_len);
 #endif
-
+ // cancel clone job if clone job exists
+ int try_cancel_clone_job_for_standby_tenant_(const transaction::ObTxBufferNode &node);
+ int check_standby_tenant_not_in_cloning_(common::ObMySQLTransaction &trans);
+ int log_type_conflict_with_clone_procedure_(const transaction::ObTxBufferNode &node, bool &is_conflict);
 private:
   bool inited_;
   uint64_t tenant_id_;

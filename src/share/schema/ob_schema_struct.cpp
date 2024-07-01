@@ -5599,7 +5599,7 @@ int ObBasePartition::set_list_vector_values_with_hex_str(
       // Sort each point in the partition list according to the rules
       if (OB_SUCC(ret)) {
         InnerPartListVectorCmp part_list_vector_op;
-        std::sort(list_row_values_.begin(), list_row_values_.end(), part_list_vector_op);
+        lib::ob_sort(list_row_values_.begin(), list_row_values_.end(), part_list_vector_op);
         if (OB_FAIL(part_list_vector_op.get_ret())) {
           LOG_WARN("fail to sort list row values", K(ret));
         }
@@ -7545,10 +7545,8 @@ int ObPartitionUtils::calc_hash_part_idx(const uint64_t val,
         partition_idx += powN;
       }
     }
-    LOG_TRACE("get hash part idx", K(lbt()), K(ret), K(val), K(part_num), K(N), K(powN), K(partition_idx));
   } else {
     partition_idx = val % part_num;
-    LOG_TRACE("get hash part idx", K(lbt()), K(ret), K(val), K(part_num), K(partition_idx));
   }
   return ret;
 }

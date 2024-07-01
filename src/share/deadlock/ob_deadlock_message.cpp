@@ -23,7 +23,7 @@ using namespace common;
 
 OB_SERIALIZE_MEMBER(ObDeadLockCollectInfoMessage, dest_key_, collected_info_);
 OB_SERIALIZE_MEMBER(ObDeadLockNotifyParentMessage, parent_addr_, parent_key_,
-                                                   src_addr_, src_key_);
+                                                   src_addr_, src_key_, action_);
 
 int ObDeadLockCollectInfoMessage::append(const ObDetectorInnerReportInfo &info)
 {

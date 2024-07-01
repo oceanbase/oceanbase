@@ -58,7 +58,35 @@ class ObTxTable
     TO_STRING_KV(K(val_), K(update_ts_));
   };
 
+  struct CtxMinStartScnInfo
+  {
+    CtxMinStartScnInfo() { reset(); }
+
+    void reset()
+    {
+      min_start_scn_in_ctx_.set_min();
+      keep_alive_scn_.set_min();
+      update_ts_ = 0;
+    }
+
+    CtxMinStartScnInfo &operator= (const CtxMinStartScnInfo &rhs)
+    {
+      min_start_scn_in_ctx_ = rhs.min_start_scn_in_ctx_;
+      keep_alive_scn_ = rhs.keep_alive_scn_;
+      update_ts_ = rhs.update_ts_;
+      return *this;
+    }
+
+    share::SCN min_start_scn_in_ctx_;
+    share::SCN keep_alive_scn_;
+    int64_t update_ts_;
+    common::SpinRWLock lock_;
+
+    TO_STRING_KV(K(min_start_scn_in_ctx_), K(keep_alive_scn_), K(update_ts_));
+  };
+
 public:
+  static int64_t UPDATE_MIN_START_SCN_INTERVAL;
   static const int64_t INVALID_READ_EPOCH = -1;
   static const int64_t CHECK_AND_ONLINE_PRINT_INVERVAL_US = 5 * 1000 * 1000; // 5 seconds
   static const int64_t DEFAULT_TX_RESULT_RETENTION_S = 300L;
@@ -82,8 +110,8 @@ public:
         mini_cache_hit_cnt_(0),
         kv_cache_hit_cnt_(0),
         read_tx_data_table_cnt_(0),
-        recycle_scn_cache_()
-  {}
+        recycle_scn_cache_(),
+        ctx_min_start_scn_info_() {}
 
   ObTxTable(ObTxDataTable &tx_data_table)
       : is_inited_(false),
@@ -95,8 +123,8 @@ public:
         mini_cache_hit_cnt_(0),
         kv_cache_hit_cnt_(0),
         read_tx_data_table_cnt_(0),
-        recycle_scn_cache_()
-  {}
+        recycle_scn_cache_(),
+        ctx_min_start_scn_info_() {}
   ~ObTxTable() {}
 
   int init(ObLS *ls);
@@ -260,10 +288,26 @@ public:
    */
   int get_start_tx_scn(share::SCN &start_tx_scn);
 
+  /**
+   * @brief get min_start_scn of uncommitted tx recorded on TxTable
+   *
+   * @param[out] min_start_scn the minimum start_scn of all uncommitted tx
+   * @param[out] effective_scn min_start_scn is usable only if max_decided_scn is larger than effective_scn
+   */
+  int get_uncommitted_tx_min_start_scn(share::SCN &min_start_scn, share::SCN &effective_scn);
+
+  /**
+   * @brief used for updating ctx_min_start_scn_info
+   */
+  void update_min_start_scn_info(const share::SCN &max_decided_scn);
+
   int generate_virtual_tx_data_row(const transaction::ObTransID tx_id, observer::VirtualTxDataRow &row_data);
   int dump_single_tx_data_2_text(const int64_t tx_id_int, const char *fname);
 
   const char* get_state_string(const int64_t state) const;
+
+  void disable_upper_trans_calculation();
+  void enable_upper_trans_calculation(const share::SCN latest_transfer_scn);
 
   TO_STRING_KV(KP(this),
                K_(is_inited),
@@ -273,7 +317,8 @@ public:
                K_(tx_data_table),
                K_(mini_cache_hit_cnt),
                K_(kv_cache_hit_cnt),
-               K_(read_tx_data_table_cnt));
+               K_(read_tx_data_table_cnt),
+               K_(ctx_min_start_scn_info));
 
 public: // getter & setter
   ObTxDataTable *get_tx_data_table() { return &tx_data_table_; }
@@ -307,6 +352,7 @@ private:
   int load_tx_ctx_table_();
   int offline_tx_ctx_table_();
   int offline_tx_data_table_();
+  void reset_ctx_min_start_scn_info_();
 
   int check_tx_data_in_mini_cache_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_kv_cache_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
@@ -316,6 +362,7 @@ private:
                               const int64_t read_epoch,
                               const bool need_log_error,
                               int &ret);
+
 private:
   static const int64_t LS_TX_CTX_SCHEMA_VERSION = 0;
   static const int64_t LS_TX_CTX_SCHEMA_ROWKEY_CNT = 1;
@@ -333,6 +380,7 @@ private:
   int64_t kv_cache_hit_cnt_;
   int64_t read_tx_data_table_cnt_;
   RecycleSCNCache recycle_scn_cache_;
+  CtxMinStartScnInfo ctx_min_start_scn_info_;
 };
 }  // namespace storage
 }  // namespace oceanbase

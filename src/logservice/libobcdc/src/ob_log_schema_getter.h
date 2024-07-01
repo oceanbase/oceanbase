@@ -651,7 +651,9 @@ private:
       IObLogSchemaGuard &guard,
       const share::schema::ObMultiVersionSchemaService::RefreshSchemaMode refresh_schema_mode,
       int64_t &refreshed_version);
-  int refresh_to_expected_version_(const uint64_t tenant_id,
+  int refresh_to_expected_version_(
+      const uint64_t tenant_id,
+      const bool specify_version_mode,
       const int64_t expected_version,
       const int64_t timeout,
       int64_t &latest_version);

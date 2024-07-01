@@ -432,43 +432,92 @@ int ObTableLoadService::check_tenant()
 int ObTableLoadService::check_support_direct_load(
     const uint64_t table_id,
     const ObDirectLoadMethod::Type method,
-    const ObDirectLoadInsertMode::Type insert_mode)
+    const ObDirectLoadInsertMode::Type insert_mode,
+    const storage::ObDirectLoadMode::Type load_mode)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_ID == table_id ||
-                  !ObDirectLoadMethod::is_type_valid(method) ||
-                  !ObDirectLoadInsertMode::is_type_valid(insert_mode))) {
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(table_id), K(method), K(insert_mode));
+    LOG_WARN("invalid args", KR(ret), K(table_id));
   } else {
     const uint64_t tenant_id = MTL_ID();
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(
+          ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else {
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode);
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
+                                                  uint64_t table_id,
+                                                  const ObDirectLoadMethod::Type method,
+                                                  const ObDirectLoadInsertMode::Type insert_mode,
+                                                  const storage::ObDirectLoadMode::Type load_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_id));
+  } else {
+    const uint64_t tenant_id = MTL_ID();
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table schema is null", KR(ret));
+    } else {
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode);
+    }
+  }
+  return ret;
+}
+
+static const char *InsertOverwritePrefix = "insert overwrite with ";
+static const char *EmptyPrefix = "";
+int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_guard,
+                                                  const ObTableSchema *table_schema,
+                                                  const ObDirectLoadMethod::Type method,
+                                                  const ObDirectLoadInsertMode::Type insert_mode,
+                                                  const storage::ObDirectLoadMode::Type load_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == table_schema ||
+                  !ObDirectLoadMethod::is_type_valid(method) ||
+                  !ObDirectLoadInsertMode::is_type_valid(insert_mode)) ||
+                  !ObDirectLoadMode::is_type_valid(load_mode)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(method), K(insert_mode));
+  } else {
+    const uint64_t tenant_id = MTL_ID();
     bool trigger_enabled = false;
     bool has_udt_column = false;
     bool has_fts_index = false;
     bool has_multivalue_index = false;
     bool has_invisible_column = false;
     bool has_unused_column = false;
-    if (OB_FAIL(
-          ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-    }
     // check if it is a user table
-    else if (!table_schema->is_user_table()) {
+    const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
+
+    if (!table_schema->is_user_table()) {
       ret = OB_NOT_SUPPORTED;
       if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
         LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support oracle temporary table");
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support oracle temporary table", tmp_prefix);
       } else if (table_schema->is_view_table()) {
         LOG_WARN("direct-load does not support view table", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support view table");
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support view table", tmp_prefix);
       } else if (table_schema->is_mlog_table()) {
         LOG_WARN("direct-load does not support materialized view log table", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support materialized view log table");
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support materialized view log table", tmp_prefix);
       } else {
         LOG_WARN("direct-load does not support non-user table", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support non-user table");
+        FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support non-user table", tmp_prefix);
       }
     }
     // check if exists full-text search index
@@ -477,7 +526,7 @@ int ObTableLoadService::check_support_direct_load(
     } else if (has_fts_index) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has full-text search index", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has full-text search index");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has full-text search index", tmp_prefix);
     }
     // check if exists multi-value index
     else if (OB_FAIL(table_schema->check_has_multivalue_index(schema_guard, has_multivalue_index))) {
@@ -485,13 +534,13 @@ int ObTableLoadService::check_support_direct_load(
     } else if (has_multivalue_index) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has multi-value index", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has multi-value index");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has multi-value index", tmp_prefix);
     }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has generated column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has generated column");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has generated column", tmp_prefix);
     }
     // check if the trigger is enabled
     else if (OB_FAIL(table_schema->check_has_trigger_on_table(schema_guard, trigger_enabled))) {
@@ -499,7 +548,7 @@ int ObTableLoadService::check_support_direct_load(
     } else if (trigger_enabled) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table with trigger enabled", KR(ret), K(trigger_enabled));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with trigger enabled");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with trigger enabled", tmp_prefix);
     }
     // check has udt column
     else if (OB_FAIL(ObTableLoadSchema::check_has_udt_column(table_schema, has_udt_column))) {
@@ -507,7 +556,7 @@ int ObTableLoadService::check_support_direct_load(
     } else if (has_udt_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has udt column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has udt column");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has udt column", tmp_prefix);
     }
     // check has invisible column
     else if (OB_FAIL(ObTableLoadSchema::check_has_invisible_column(table_schema, has_invisible_column))) {
@@ -515,7 +564,7 @@ int ObTableLoadService::check_support_direct_load(
     } else if (has_invisible_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has invisible column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has invisible column");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has invisible column", tmp_prefix);
     }
     // check has unused column
     else if (OB_FAIL(ObTableLoadSchema::check_has_unused_column(table_schema, has_unused_column))) {
@@ -523,19 +572,19 @@ int ObTableLoadService::check_support_direct_load(
     } else if (has_unused_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has unused column", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has unused column");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has unused column", tmp_prefix);
     }
     // check if table has mlog
     else if (table_schema->has_mlog_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with materialized view log");
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with materialized view log", tmp_prefix);
     } else if (ObDirectLoadMethod::is_incremental(method)) { // incremental direct-load
       uint64_t compat_version = 0;
-      if (OB_UNLIKELY(ObDirectLoadInsertMode::INC_REPLACE != insert_mode)) {
+      if (!ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("using incremental direct-load without inc_replace is not supported", KR(ret));
-        FORWARD_USER_ERROR_MSG(ret, "using incremental direct-load without inc_replace is not supported");
+        LOG_WARN("using incremental direct-load without inc_replace or normal is not supported", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "using incremental direct-load without inc_replace or normal is not supported");
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
         LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
       } else if (compat_version < DATA_VERSION_4_3_1_0) {
@@ -550,10 +599,23 @@ int ObTableLoadService::check_support_direct_load(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with foreign keys");
-      } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
-        if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
+      }
+    } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
+      if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
+      } else if (ObDirectLoadMode::is_insert_overwrite(load_mode)) {
+        uint64_t compat_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+          LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+        } else if (compat_version < DATA_VERSION_4_3_2_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("version lower than 4.3.2.0 does not support insert overwrite", KR(ret));
+          FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.2.0 does not support insert overwrite");
+        } else if (table_schema->get_foreign_key_infos().count() > 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("insert overwrite with incremental direct-load does not support table with foreign keys", KR(ret));
+          FORWARD_USER_ERROR_MSG(ret, "insert overwrite with direct-load does not support table with foreign keys");
         }
       }
     }
@@ -613,17 +675,9 @@ int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
     } else if (table_ctx->is_assigned_resource()) {
       if (OB_FAIL(service->assigned_task_manager_.delete_assigned_task(release_arg.task_key_))) {
         LOG_WARN("fail to delete_assigned_task", KR(ret), K(release_arg.task_key_));
-      } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id,
-                                                                                     release_arg.tenant_id_,
-                                                                                     share::SYS_LS,
-                                                                                     leader))) {
-        LOG_WARN("fail to get ls location leader", KR(ret), K(release_arg.tenant_id_));
-      } else if (ObTableLoadUtils::is_local_addr(leader)) {
-        if (OB_FAIL(ObTableLoadResourceService::release_resource(release_arg))) {
-          LOG_WARN("fail to release resource", KR(ret));
-        }
-      } else {
-        TABLE_LOAD_RESOURCE_RPC_CALL(release_resource, leader, release_arg);
+      } else if (OB_FAIL(ObTableLoadResourceService::release_resource(release_arg))) {
+        LOG_WARN("fail to release resource", KR(ret));
+        ret = OB_SUCCESS;   // 允许失败，资源管理模块可以回收
       }
     }
   }
@@ -639,19 +693,6 @@ int ObTableLoadService::get_ctx(const ObTableLoadUniqueKey &key, ObTableLoadTabl
     LOG_WARN("null table load service", KR(ret));
   } else {
     ret = service->get_manager().get_table_ctx(key, table_ctx);
-  }
-  return ret;
-}
-
-int ObTableLoadService::get_ctx(const ObTableLoadKey &key, ObTableLoadTableCtx *&table_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadService *service = nullptr;
-  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("null table load service", KR(ret));
-  } else {
-    ret = service->get_manager().get_table_ctx_by_table_id(key.table_id_, table_ctx);
   }
   return ret;
 }

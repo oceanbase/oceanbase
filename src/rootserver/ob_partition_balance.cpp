@@ -339,7 +339,7 @@ int ObPartitionBalance::process_balance_partition_inner_()
       part_group_sum += ls_part_desc_arr.at(ls_idx)->get_part_groups().count();
     }
     while (OB_SUCC(ret)) {
-      std::sort(ls_part_desc_arr.begin(), ls_part_desc_arr.end(), [] (ObLSPartGroupDesc* left, ObLSPartGroupDesc* right) {
+      lib::ob_sort(ls_part_desc_arr.begin(), ls_part_desc_arr.end(), [] (ObLSPartGroupDesc* left, ObLSPartGroupDesc* right) {
         if (left->get_part_groups().count() < right->get_part_groups().count()) {
           return true;
         } else if (left->get_part_groups().count() == right->get_part_groups().count()) {
@@ -471,7 +471,7 @@ int ObPartitionBalance::process_balance_partition_extend_()
     part_group_sum += ls_desc_array_.at(i)->get_partgroup_cnt();
   }
   while (OB_SUCC(ret)) {
-    std::sort(ls_desc_array_.begin(), ls_desc_array_.end(), [] (ObLSDesc *l, ObLSDesc *r) {
+    lib::ob_sort(ls_desc_array_.begin(), ls_desc_array_.end(), [] (ObLSDesc *l, ObLSDesc *r) {
       if (l->get_partgroup_cnt() < r->get_partgroup_cnt()) {
         return true;
       } else if (l->get_partgroup_cnt() == r->get_partgroup_cnt()) {
@@ -571,7 +571,7 @@ int ObPartitionBalance::process_balance_partition_disk_()
     part_size_sum += ls_desc_array_.at(i)->get_data_size();
   }
   while (OB_SUCC(ret)) {
-    std::sort(ls_desc_array_.begin(), ls_desc_array_.end(), [] (ObLSDesc *l, ObLSDesc *r) {
+    lib::ob_sort(ls_desc_array_.begin(), ls_desc_array_.end(), [] (ObLSDesc *l, ObLSDesc *r) {
       if (l->get_data_size() < r->get_data_size()) {
         return true;
       } else if (l->get_data_size() == r->get_data_size()) {
@@ -649,10 +649,10 @@ int ObPartitionBalance::try_swap_part_group_(ObLSDesc &src_ls, ObLSDesc &dest_ls
     if (ls_more->get_part_groups().count() == 0 || ls_less->get_part_groups().count() == 0) {
       continue;
     }
-    std::sort(ls_more->get_part_groups().begin(), ls_more->get_part_groups().end(), [] (ObTransferPartGroup *l, ObTransferPartGroup *r) {
+    lib::ob_sort(ls_more->get_part_groups().begin(), ls_more->get_part_groups().end(), [] (ObTransferPartGroup *l, ObTransferPartGroup *r) {
       return l->get_data_size() < r->get_data_size();
     });
-    std::sort(ls_less->get_part_groups().begin(), ls_less->get_part_groups().end(), [] (ObTransferPartGroup *l, ObTransferPartGroup *r) {
+    lib::ob_sort(ls_less->get_part_groups().begin(), ls_less->get_part_groups().end(), [] (ObTransferPartGroup *l, ObTransferPartGroup *r) {
       return l->get_data_size() < r->get_data_size();
     });
 

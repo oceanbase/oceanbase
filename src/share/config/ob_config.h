@@ -1255,6 +1255,7 @@ private:
   common::ObSArray<ObConfigPair> config_array_;
 };
 
+class ObIConfigMode;
 class ObConfigModeItem: public ObConfigItem
 {
 public:
@@ -1275,6 +1276,8 @@ public:
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_MODE;
   }
+  int init_mode(ObIConfigMode &mode);
+  static const int64_t MAX_MODE_BYTES = 32;
 protected:
   //use current value to do input operation
   bool set(const char *str);
@@ -1297,7 +1300,6 @@ protected:
 
 protected:
   static const uint64_t VALUE_BUF_SIZE = 65536UL;
-  static const int64_t MAX_MODE_BYTES = 32;
   ObConfigParser *parser_;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
@@ -1305,6 +1307,16 @@ protected:
   uint8_t value_[MAX_MODE_BYTES];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigModeItem);
+};
+
+class ObIConfigMode
+{
+public:
+  ObIConfigMode() {}
+  ~ObIConfigMode() {}
+  virtual int set_value(const ObConfigModeItem &mode_item) = 0;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObIConfigMode);
 };
 
 } // namespace common

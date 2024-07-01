@@ -355,7 +355,8 @@ struct ObDynReserveBuf
            || common::ObJsonTC == tc
            || common::ObGeometryTC == tc
            || common::ObUserDefinedSQLTC == tc
-           || common::ObCollectionSQLTC == tc;
+           || common::ObCollectionSQLTC == tc
+           || common::ObRoaringBitmapTC == tc;
   }
 
   ObDynReserveBuf() = default;
@@ -1161,19 +1162,19 @@ typedef ObExprArrayVecStringer VEC_ROWEXPR2STR;
 
 struct ToStrVectorHeader
 {
-  ToStrVectorHeader(const VectorHeader &header, const ObExpr &expr, const ObBitVector *skip,
+  ToStrVectorHeader(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector *skip,
                     const EvalBound &bound) :
-    header_(header), expr_(expr), skip_(skip), bound_(bound)
+    expr_(expr), ctx_(ctx), skip_(skip), bound_(bound)
   {}
   DECLARE_TO_STRING;
 private:
-  const VectorHeader &header_;
   const ObExpr &expr_;
+  ObEvalCtx &ctx_;
   const ObBitVector *skip_;
   const EvalBound &bound_;
 
   template <typename VectorType>
-  int to_string_helper(char *buf, const int64_t buf_len) const;
+  int to_string_helper(const VectorHeader &header, char *buf, const int64_t buf_len) const;
 };
 
 OB_INLINE ObDatum &ObExpr::locate_datum_for_write(ObEvalCtx &ctx) const

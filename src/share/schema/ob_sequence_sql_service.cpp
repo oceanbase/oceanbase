@@ -24,6 +24,7 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_srv_network_frame.h"
+#include "share/ob_autoincrement_service.h"
 
 namespace oceanbase
 {
@@ -215,6 +216,24 @@ int ObSequenceSqlService::replace_sequence(const ObSequenceSchema &sequence_sche
             || OB_FAIL(dml.add_column("schema_version", sequence_schema.get_schema_version()))
             || OB_FAIL(dml.add_gmt_modified())) {
           LOG_WARN("add column failed", K(ret));
+        } else {
+          uint64_t compat_version = 0;
+          if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+          } else if (((compat_version < MOCK_DATA_VERSION_4_2_3_0)
+                      || (compat_version >= DATA_VERSION_4_3_0_0
+                          && compat_version < DATA_VERSION_4_3_2_0))
+                     && sequence_schema.get_flag() != 0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not suppported flag != 0 when tenant's data version is below 4.2.3.0",
+                     KR(ret));
+          } else if ((compat_version >= MOCK_DATA_VERSION_4_2_3_0
+                      && compat_version < DATA_VERSION_4_3_0_0)
+                     || (compat_version >= DATA_VERSION_4_3_2_0)) {
+            if (OB_FAIL(dml.add_column("flag", sequence_schema.get_flag()))) {
+              LOG_WARN("add flag column failed", K(ret));
+            }
+          }
         }
       } else { // rename sequence
         if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
@@ -247,7 +266,6 @@ int ObSequenceSqlService::replace_sequence(const ObSequenceSchema &sequence_sche
                  K(ret));
       }
     }
-
     if (OB_SUCC(ret)) {
       if (alter_start_with && OB_FAIL(alter_sequence_start_with(sequence_schema, *sql_client))) {
         LOG_WARN("alter sequence for start with failed", K(ret));
@@ -435,6 +453,20 @@ int ObSequenceSqlService::add_sequence(common::ObISQLClient &sql_client,
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_order_flag(), "order_flag", "%d");
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_cycle_flag(), "cycle_flag", "%d");
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_is_system_generated(), "is_system_generated", "%d");
+      uint64_t compat_version = 0;
+      if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (((compat_version < MOCK_DATA_VERSION_4_2_3_0)
+                  || (compat_version >= DATA_VERSION_4_3_0_0
+                      && compat_version < DATA_VERSION_4_3_2_0))
+                 && sequence_schema.get_flag() != 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not suppported flag != 0 when tenant's data version is below 4.2.3.0", KR(ret));
+      } else if ((compat_version >= MOCK_DATA_VERSION_4_2_3_0
+                  && compat_version < DATA_VERSION_4_3_0_0)
+                 || (compat_version >= DATA_VERSION_4_3_2_0)) {
+        SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_flag(), "flag", "%ld");
+      }
       if (0 == STRCMP(tname[i], OB_ALL_SEQUENCE_OBJECT_HISTORY_TNAME)) {
         SQL_COL_APPEND_VALUE(sql, values, "false", "is_deleted", "%s");
       }

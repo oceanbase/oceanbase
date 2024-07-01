@@ -70,6 +70,7 @@ struct ObTransformerCtx
     groupby_pushdown_stmts_(),
     is_spm_outline_(false),
     push_down_filters_(),
+    in_accept_transform_(false),
     iteration_level_(0)
   { }
   virtual ~ObTransformerCtx() {}
@@ -131,6 +132,7 @@ struct ObTransformerCtx
   /* end used for hint and outline below */
   bool is_spm_outline_;
   ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
+  bool in_accept_transform_;
   uint64_t iteration_level_;
 };
 
@@ -178,6 +180,7 @@ enum TRANSFORM_TYPE {
   SELECT_EXPR_PULLUP            ,
   PROCESS_DBLINK                ,
   DECORRELATE                   ,
+  CONDITIONAL_AGGR_COALESCE     ,
   MV_REWRITE                    ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
@@ -275,7 +278,9 @@ public:
       (1L << JOIN_LIMIT_PUSHDOWN) |
       (1L << CONST_PROPAGATE) |
       (1L << LEFT_JOIN_TO_ANTI) |
-      (1L << COUNT_TO_EXISTS);
+      (1L << COUNT_TO_EXISTS) |
+      (1L << CONDITIONAL_AGGR_COALESCE) |
+      (1L << SEMI_TO_INNER);
   static const uint64_t ALL_COST_BASED_RULES =
       (1L << OR_EXPANSION) |
       (1L << WIN_MAGIC) |

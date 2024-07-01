@@ -160,7 +160,7 @@ void ObDictValueIterator::build_decode_by_ref_func_()
 
 int ObDictColumnDecoder::get_null_count(
     const ObColumnCSDecoderCtx &col_ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     int64_t &null_count) const
 {
@@ -204,7 +204,7 @@ int ObDictColumnDecoder::get_null_count(
 int ObDictColumnDecoder::extract_ref_and_null_count_(
     const ObConstEncodingRefDesc &ref_desc,
     const int64_t dict_count,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     common::ObDatum *datums,
     int64_t &null_count,
@@ -386,65 +386,103 @@ int ObDictColumnDecoder::pushdown_operator(
           }
           LOG_TRACE("dict black filter pushdown", K(ret), K(ctx), K(filter_applied), K(pd_filter_info));
         } else {
-          for (int64_t index = 0; OB_SUCC(ret) && (index < distinct_ref_cnt); ) {
-            int64_t upper_bound = MIN(index + pd_filter_info.batch_size_, distinct_ref_cnt);
-            const int64_t cur_ref_cnt = upper_bound - index;
-            // use uniform base currently, support new format later
-            //if (enable_rich_format && OB_FAIL(storage::init_exprs_vector_header(filter.get_filter_node().column_exprs_, filter.get_op().get_eval_ctx(), cur_ref_cnt))) {
-            //  LOG_WARN("Failed to init exprs vector header", K(ret));
-            //  break;
-            //}
-            for (int64_t dict_ref = index; dict_ref < upper_bound; dict_ref++) {
-              datums[dict_ref - index].pack_ = dict_ref;
-            }
-            if (col_ctx.is_int_dict_type()) {
-              ConvertUnitToDatumFunc convert_func = convert_uint_to_datum_funcs
-                  [ctx.int_ctx_->meta_.width_/*val_store_width_V*/]
-                  [ObRefStoreWidthV::REF_IN_DATUMS/*ref_store_width_V*/]
-                  [get_width_tag_map()[ctx.datum_len_]/*datum_width_V*/]
-                  [ctx.null_flag_]
-                  [ctx.int_ctx_->meta_.is_decimal_int()];
-              convert_func(ctx, ctx.int_data_, *ctx.int_ctx_, ctx.ref_data_, nullptr, cur_ref_cnt, datums);
-            } else {
-              const uint32_t offset_width = ctx.str_ctx_->meta_.is_fixed_len_string() ?
-                  FIX_STRING_OFFSET_WIDTH_V : ctx.offset_ctx_->meta_.width_;
-              ConvertStringToDatumFunc convert_func = convert_string_to_datum_funcs
-                  [offset_width]
-                  [ObRefStoreWidthV::REF_IN_DATUMS]
-                  [ctx.null_flag_]
-                  [ctx.need_copy_];
-              convert_func(ctx, ctx.str_data_, *ctx.str_ctx_,
-                  ctx.offset_data_, ctx.ref_data_, nullptr, cur_ref_cnt, datums);
-            }
-            if (ctx.obj_meta_.is_fixed_len_char_type() && (nullptr != ctx.col_param_)) {
-              if (OB_FAIL(storage::pad_on_datums(ctx.col_param_->get_accuracy(),
-                  ctx.obj_meta_.get_collation_type(), *ctx.allocator_, cur_ref_cnt, datums))) {
-                LOG_WARN("fail to pad on datums", KR(ret), K(ctx), K(index), K(upper_bound));
+          sql::ObBoolMask bool_mask;
+          if (OB_FAIL(check_skip_block(ctx, filter, pd_filter_info, result_bitmap, bool_mask))) {
+            LOG_WARN("Failed to check whether hit shortcut", KR(ret), K(ctx), K(filter), K(pd_filter_info));
+          } else if (!bool_mask.is_uncertain()) {
+            filter_applied = true;
+            LOG_DEBUG("skip block in dict black filter pushdown", K(result_bitmap.popcnt()));
+          } else {
+            for (int64_t index = 0; OB_SUCC(ret) && (index < distinct_ref_cnt); ) {
+              int64_t upper_bound = MIN(index + pd_filter_info.batch_size_, distinct_ref_cnt);
+              const int64_t cur_ref_cnt = upper_bound - index;
+              // use uniform base currently, support new format later
+              //if (enable_rich_format && OB_FAIL(storage::init_exprs_vector_header(filter.get_filter_node().column_exprs_, filter.get_op().get_eval_ctx(), cur_ref_cnt))) {
+              //  LOG_WARN("Failed to init exprs vector header", K(ret));
+              //  break;
+              //}
+              for (int64_t dict_ref = index; dict_ref < upper_bound; dict_ref++) {
+                datums[dict_ref - index].pack_ = dict_ref;
+              }
+              if (col_ctx.is_int_dict_type()) {
+                ConvertUnitToDatumFunc convert_func = convert_uint_to_datum_funcs
+                    [ctx.int_ctx_->meta_.width_/*val_store_width_V*/]
+                    [ObRefStoreWidthV::REF_IN_DATUMS/*ref_store_width_V*/]
+                    [get_width_tag_map()[ctx.datum_len_]/*datum_width_V*/]
+                    [ctx.null_flag_]
+                    [ctx.int_ctx_->meta_.is_decimal_int()];
+                convert_func(ctx, ctx.int_data_, *ctx.int_ctx_, ctx.ref_data_, nullptr, cur_ref_cnt, datums);
+              } else {
+                const uint32_t offset_width = ctx.str_ctx_->meta_.is_fixed_len_string() ?
+                    FIX_STRING_OFFSET_WIDTH_V : ctx.offset_ctx_->meta_.width_;
+                ConvertStringToDatumFunc convert_func = convert_string_to_datum_funcs
+                    [offset_width]
+                    [ObRefStoreWidthV::REF_IN_DATUMS]
+                    [ctx.null_flag_]
+                    [ctx.need_copy_];
+                convert_func(ctx, ctx.str_data_, *ctx.str_ctx_,
+                    ctx.offset_data_, ctx.ref_data_, nullptr, cur_ref_cnt, datums);
+              }
+              if (ctx.obj_meta_.is_fixed_len_char_type() && (nullptr != ctx.col_param_)) {
+                if (OB_FAIL(storage::pad_on_datums(ctx.col_param_->get_accuracy(),
+                    ctx.obj_meta_.get_collation_type(), *ctx.allocator_, cur_ref_cnt, datums))) {
+                  LOG_WARN("fail to pad on datums", KR(ret), K(ctx), K(index), K(upper_bound));
+                }
+              }
+              if (FAILEDx(filter.filter_batch(nullptr, index, upper_bound, *ref_bitmap))) {
+                LOG_WARN("fail to filter batch", KR(ret), K(index), K(upper_bound));
+              } else {
+                index = upper_bound;
               }
             }
-            if (FAILEDx(filter.filter_batch(nullptr, index, upper_bound, *ref_bitmap))) {
-              LOG_WARN("fail to filter batch", KR(ret), K(index), K(upper_bound));
-            } else {
-              index = upper_bound;
-            }
-          }
 
-          if (OB_SUCC(ret)) {
-            const uint32_t ref_width_size = ctx.ref_ctx_->meta_.get_uint_width_size();
-            if (OB_FAIL(set_res_with_bitmap(*ctx.dict_meta_, ctx.ref_data_,
-                ref_width_size, ref_bitmap, pd_filter_info, datums, parent, result_bitmap))) {
-              LOG_WARN("fail to set result with bitmap", KR(ret), K(ref_width_size), K(pd_filter_info));
-            } else {
-              filter_applied = true;
+            if (OB_SUCC(ret)) {
+              const uint32_t ref_width_size = ctx.ref_ctx_->meta_.get_uint_width_size();
+              if (OB_FAIL(set_res_with_bitmap(*ctx.dict_meta_, ctx.ref_data_,
+                  ref_width_size, ref_bitmap, pd_filter_info, datums, parent, result_bitmap))) {
+                LOG_WARN("fail to set result with bitmap", KR(ret), K(ref_width_size), K(pd_filter_info));
+              } else {
+                filter_applied = true;
+              }
             }
           }
           LOG_TRACE("dict black filter pushdown", K(ret), K(ctx),
-              K(filter_applied), K(pd_filter_info), K(result_bitmap.popcnt()));
+                K(filter_applied), K(pd_filter_info), K(result_bitmap.popcnt()));
         }
       }
     }
   }
 
+  return ret;
+}
+
+int ObDictColumnDecoder::check_skip_block(
+    const ObDictColumnDecoderCtx &ctx,
+    sql::ObBlackFilterExecutor &filter,
+    sql::PushdownFilterInfo &pd_filter_info,
+    ObBitmap &result_bitmap,
+    sql::ObBoolMask &bool_mask)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;
+  const bool has_null = ctx.dict_meta_->has_null();
+  if (!filter.is_monotonic()) {
+  } else if (dict_val_cnt <= CS_DICT_SKIP_THRESHOLD) {
+    // Do not skip block when dict count is small.
+    // Otherwise, if can not skip block by monotonicity, the performance will decrease.
+  } else if (ctx.dict_meta_->is_sorted()) {
+    ObStorageDatum min_datum = *ObDictValueIterator(&ctx, 0);
+    ObStorageDatum max_datum = *(ObDictValueIterator(&ctx, dict_val_cnt) - 1);
+    if (OB_FAIL(check_skip_by_monotonicity(filter,
+                                           min_datum,
+                                           max_datum,
+                                           *pd_filter_info.skip_bit_,
+                                           has_null,
+                                           &result_bitmap,
+                                           bool_mask))) {
+      LOG_WARN("Failed to check can skip by monotonicity", K(ret), K(min_datum), K(max_datum), K(filter));
+    }
+  }
   return ret;
 }
 
@@ -2187,7 +2225,7 @@ int ObDictColumnDecoder::read_distinct(
 
 int ObDictColumnDecoder::read_reference(
     const ObColumnCSDecoderCtx &ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObGroupByCell &group_by_cell) const
 {
@@ -2220,7 +2258,7 @@ int ObDictColumnDecoder::read_reference(
 
 int ObDictColumnDecoder::get_aggregate_result(
     const ObColumnCSDecoderCtx &col_ctx,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_cap,
     storage::ObAggCell &agg_cell) const
 {

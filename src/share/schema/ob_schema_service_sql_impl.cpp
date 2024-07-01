@@ -314,6 +314,7 @@ int ObSchemaServiceSQLImpl::init(
               ObModIds::OB_GEN_SCHEMA_VERSION_MAP, ObModIds::OB_GEN_SCHEMA_VERSION_MAP))) {
   } else {
     if (OB_ISNULL(dblink_proxy)) {
+      // ignore ret
       LOG_WARN("dblink proxy is null");
     }
     mysql_proxy_ = sql_proxy;
@@ -417,7 +418,7 @@ int ObSchemaServiceSQLImpl::get_batch_table_schema(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid schema_version", K(schema_version), K(ret));
   } else {
-    std::sort(table_ids.begin(), table_ids.end(), std::greater<uint64_t>());
+    lib::ob_sort(table_ids.begin(), table_ids.end(), std::greater<uint64_t>());
     // get not core table schemas from __all_table and __all_column
     if (OB_FAIL(get_not_core_table_schemas(schema_status, schema_version, table_ids,
                                            sql_client, allocator, table_schema_array))) {
@@ -661,7 +662,7 @@ int ObSchemaServiceSQLImpl::get_core_table_priorities(
         }
       }
       if (OB_SUCC(ret)) {
-        std::sort(temp_table_schema_ptrs.begin(), temp_table_schema_ptrs.end(), cmp_table_id);
+        lib::ob_sort(temp_table_schema_ptrs.begin(), temp_table_schema_ptrs.end(), cmp_table_id);
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_schema_ptrs.count(); ++i) {
         if (OB_FAIL(core_schemas.push_back(*(temp_table_schema_ptrs.at(i))))) {
@@ -1633,6 +1634,7 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_info(
       const uint64_t table_id = table_ids[i];
       table_schema = ObSchemaRetrieveUtils::find_table_schema(table_id, table_schema_array);
       if (OB_ISNULL(table_schema)) {
+        // ignore ret
         LOG_WARN("fail to find table schema", KR(ret), K(table_id));
         continue; // for compatibility
       } else if (need_column_group(*table_schema)) {
@@ -1644,7 +1646,7 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_info(
         } else {
           // TODO @donglou.zl user table only mock default cg now.
           if (table_schema->get_column_group_count() < 1) {
-            if (table_schema->add_default_column_group()) {
+            if (OB_FAIL(table_schema->add_default_column_group())) {
               LOG_WARN("fail to add default column group", KR(ret), K(tenant_id), K(table_id));
             }
           }
@@ -1856,7 +1858,7 @@ int ObSchemaServiceSQLImpl::fetch_all_constraint_info_ignore_inner_table(
       uint64_t table_id = table_ids[i];
       if (OB_ISNULL(table_schema = ObSchemaRetrieveUtils::find_table_schema(table_id,
                                                                             table_schema_array))) {
-        //ret = OB_ERR_UNEXPECTED;
+        // ignore ret
         LOG_WARN("Failed to find table schema", K(ret), K(table_id));
         // for compatibility
         continue;
@@ -2289,7 +2291,7 @@ int ObSchemaServiceSQLImpl::gen_batch_fetch_array(
       uint64_t table_id = table_ids[i];
       if (OB_ISNULL(table_schema = ObSchemaRetrieveUtils::find_table_schema(
                                    table_id, table_schema_array))) {
-        //ret = OB_ERR_UNEXPECTED;
+        //ignore ret
         LOG_WARN("Failed to find table schema", K(ret), K(table_id));
         // for compatibility
         continue;
@@ -3351,7 +3353,7 @@ int ObSchemaServiceSQLImpl::get_batch_tenants(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   } else {
-    std::sort(schema_keys.begin(), schema_keys.end(), SchemaKey::cmp_with_tenant_id);
+    lib::ob_sort(schema_keys.begin(), schema_keys.end(), SchemaKey::cmp_with_tenant_id);
     // split query to tenant space && split big query
     int64_t begin = 0;
     int64_t end = 0;
@@ -3391,7 +3393,7 @@ int ObSchemaServiceSQLImpl::get_batch_tenants(
     } else if (OB_FAIL(schema_array.reserve(schema_keys.count()))) {\
       LOG_WARN("fail to reserve schema array", KR(ret));           \
     } else {                                                       \
-      std::sort(schema_keys.begin(), schema_keys.end(), SchemaKey::cmp_with_tenant_id); \
+      lib::ob_sort(schema_keys.begin(), schema_keys.end(), SchemaKey::cmp_with_tenant_id); \
       int64_t begin = 0;                                                        \
       int64_t end = 0;                                                          \
       while (OB_SUCCESS == ret && end < schema_keys.count()) {                  \
@@ -3444,7 +3446,7 @@ GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DEFINE(table, ObSimpleTableSchemaV2);
     } else if (OB_FAIL(schema_array.reserve(schema_keys.count()))) {\
       LOG_WARN("fail to reserve schema array", KR(ret));           \
     } else {                                                       \
-      std::sort(schema_keys.begin(), schema_keys.end(), SchemaKey::cmp_with_tenant_id); \
+      lib::ob_sort(schema_keys.begin(), schema_keys.end(), SchemaKey::cmp_with_tenant_id); \
       int64_t begin = 0;                                                        \
       int64_t end = 0;                                                          \
       while (OB_SUCCESS == ret && end < schema_keys.count()) {                  \
@@ -3631,7 +3633,7 @@ int ObSchemaServiceSQLImpl::get_batch_tenants(
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_ids.begin(), tenant_ids.end());
+  lib::ob_sort(tenant_ids.begin(), tenant_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -3669,7 +3671,7 @@ int ObSchemaServiceSQLImpl::get_batch_synonyms(
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_synonym_ids.begin(), tenant_synonym_ids.end());
+  lib::ob_sort(tenant_synonym_ids.begin(), tenant_synonym_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -3813,7 +3815,7 @@ int ObSchemaServiceSQLImpl::get_batch_outlines(
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_outline_ids.begin(), tenant_outline_ids.end());
+  lib::ob_sort(tenant_outline_ids.begin(), tenant_outline_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -3851,7 +3853,7 @@ int ObSchemaServiceSQLImpl::get_batch_routines(
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_routine_ids.begin(), tenant_routine_ids.end());
+  lib::ob_sort(tenant_routine_ids.begin(), tenant_routine_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -3892,7 +3894,7 @@ int ObSchemaServiceSQLImpl::get_batch_udts(
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_udt_ids.begin(), tenant_udt_ids.end());
+  lib::ob_sort(tenant_udt_ids.begin(), tenant_udt_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -3940,7 +3942,7 @@ int ObSchemaServiceSQLImpl::get_batch_users(
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_user_ids.begin(), tenant_user_ids.end());
+  lib::ob_sort(tenant_user_ids.begin(), tenant_user_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -4039,7 +4041,7 @@ int ObSchemaServiceSQLImpl::get_batch_packages(const ObRefreshSchemaStatus &sche
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_package_ids.begin(), tenant_package_ids.end());
+  lib::ob_sort(tenant_package_ids.begin(), tenant_package_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -4076,7 +4078,7 @@ int ObSchemaServiceSQLImpl::get_batch_mock_fk_parent_tables(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   }
-  std::sort(tenant_mock_fk_parent_table_ids.begin(), tenant_mock_fk_parent_table_ids.end());
+  lib::ob_sort(tenant_mock_fk_parent_table_ids.begin(), tenant_mock_fk_parent_table_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -4113,7 +4115,7 @@ int ObSchemaServiceSQLImpl::get_batch_triggers(const ObRefreshSchemaStatus &sche
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_trigger_ids.begin(), tenant_trigger_ids.end());
+  lib::ob_sort(tenant_trigger_ids.begin(), tenant_trigger_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -7534,7 +7536,7 @@ int ObSchemaServiceSQLImpl::get_batch_sequences(
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_sequence_ids.begin(), tenant_sequence_ids.end());
+  lib::ob_sort(tenant_sequence_ids.begin(), tenant_sequence_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -7631,7 +7633,7 @@ int ObSchemaServiceSQLImpl::get_batch_label_se_policys(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   }
-  std::sort(tenant_label_se_policy_ids.begin(), tenant_label_se_policy_ids.end());
+  lib::ob_sort(tenant_label_se_policy_ids.begin(), tenant_label_se_policy_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -7726,7 +7728,7 @@ int ObSchemaServiceSQLImpl::get_batch_profiles(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   }
-  std::sort(tenant_profile_ids.begin(), tenant_profile_ids.end());
+  lib::ob_sort(tenant_profile_ids.begin(), tenant_profile_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -7822,7 +7824,7 @@ int ObSchemaServiceSQLImpl::get_batch_label_se_components(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   }
-  std::sort(tenant_label_se_component_ids.begin(), tenant_label_se_component_ids.end());
+  lib::ob_sort(tenant_label_se_component_ids.begin(), tenant_label_se_component_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -7916,7 +7918,7 @@ int ObSchemaServiceSQLImpl::get_batch_label_se_labels(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   }
-  std::sort(tenant_label_se_label_ids.begin(), tenant_label_se_label_ids.end());
+  lib::ob_sort(tenant_label_se_label_ids.begin(), tenant_label_se_label_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -8010,7 +8012,7 @@ int ObSchemaServiceSQLImpl::get_batch_label_se_user_levels(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   }
-  std::sort(tenant_label_se_user_level_ids.begin(), tenant_label_se_user_level_ids.end());
+  lib::ob_sort(tenant_label_se_user_level_ids.begin(), tenant_label_se_user_level_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -8106,7 +8108,7 @@ int ObSchemaServiceSQLImpl::get_batch_tablespaces(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   }
-  std::sort(tenant_tablespace_ids.begin(), tenant_tablespace_ids.end());
+  lib::ob_sort(tenant_tablespace_ids.begin(), tenant_tablespace_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -8242,7 +8244,7 @@ int ObSchemaServiceSQLImpl::get_batch_udfs(
     LOG_WARN("check inner stat fail");
   }
 
-  std::sort(tenant_udf_ids.begin(), tenant_udf_ids.end());
+  lib::ob_sort(tenant_udf_ids.begin(), tenant_udf_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -8340,7 +8342,7 @@ int ObSchemaServiceSQLImpl::get_batch_keystores(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   }
-  std::sort(tenant_keystore_ids.begin(), tenant_keystore_ids.end());
+  lib::ob_sort(tenant_keystore_ids.begin(), tenant_keystore_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -8436,7 +8438,7 @@ int ObSchemaServiceSQLImpl::get_batch_audits(
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
   }
-  std::sort(tenant_audit_ids.begin(), tenant_audit_ids.end());
+  lib::ob_sort(tenant_audit_ids.begin(), tenant_audit_ids.end());
   // split query to tenant space && split big query
   int64_t begin = 0;
   int64_t end = 0;
@@ -8901,24 +8903,24 @@ int ObSchemaServiceSQLImpl::sort_partition_array(ObPartitionSchema &partition_sc
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("partition array is empty", K(ret), K(partition_schema));
     } else if (partition_schema.is_range_part()) {
-      std::sort(partition_schema.get_part_array(),
+      lib::ob_sort(partition_schema.get_part_array(),
           partition_schema.get_part_array() + partition_num,
           ObBasePartition::range_like_func_less_than);
-      std::sort(partition_schema.get_hidden_part_array(),
+      lib::ob_sort(partition_schema.get_hidden_part_array(),
           partition_schema.get_hidden_part_array() + partition_schema.get_hidden_partition_num(),
           ObBasePartition::range_like_func_less_than);
     } else if (partition_schema.is_hash_like_part()) {
-      std::sort(partition_schema.get_part_array(),
+      lib::ob_sort(partition_schema.get_part_array(),
           partition_schema.get_part_array() + partition_num,
           ObBasePartition::hash_like_func_less_than);
-      std::sort(partition_schema.get_hidden_part_array(),
+      lib::ob_sort(partition_schema.get_hidden_part_array(),
           partition_schema.get_hidden_part_array() + partition_schema.get_hidden_partition_num(),
           ObBasePartition::hash_like_func_less_than);
     } else if (partition_schema.is_list_part()) {
-      std::sort(partition_schema.get_part_array(),
+      lib::ob_sort(partition_schema.get_part_array(),
           partition_schema.get_part_array() + partition_num,
           ObBasePartition::list_part_func_layout);
-      std::sort(partition_schema.get_hidden_part_array(),
+      lib::ob_sort(partition_schema.get_hidden_part_array(),
           partition_schema.get_hidden_part_array() + partition_schema.get_hidden_partition_num(),
           ObBasePartition::list_part_func_layout);
     } else {
@@ -8959,20 +8961,20 @@ int ObSchemaServiceSQLImpl::sort_subpartition_array(ObPartitionSchema &partition
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("subpartition array is empty", K(ret), K(i), K(partition_schema));
         } else if (partition_schema.is_range_subpart()) {
-          std::sort(subpart_array, subpart_array + subpartition_num, ObBasePartition::less_than);
-          std::sort(partition->get_hidden_subpart_array(),
+          lib::ob_sort(subpart_array, subpart_array + subpartition_num, ObBasePartition::less_than);
+          lib::ob_sort(partition->get_hidden_subpart_array(),
                     partition->get_hidden_subpart_array() + partition->get_hidden_subpartition_num(),
                     ObBasePartition::less_than);
         } else if (partition_schema.is_hash_like_subpart()) {
-          std::sort(subpart_array, subpart_array + subpartition_num,
+          lib::ob_sort(subpart_array, subpart_array + subpartition_num,
                     ObSubPartition::hash_like_func_less_than);
-          std::sort(partition->get_hidden_subpart_array(),
+          lib::ob_sort(partition->get_hidden_subpart_array(),
                     partition->get_hidden_subpart_array() + partition->get_hidden_subpartition_num(),
                     ObSubPartition::hash_like_func_less_than);
         } else if (partition_schema.is_list_subpart()) {
-          std::sort(subpart_array, subpart_array + subpartition_num,
+          lib::ob_sort(subpart_array, subpart_array + subpartition_num,
                     ObBasePartition::list_part_func_layout);
-          std::sort(partition->get_hidden_subpart_array(),
+          lib::ob_sort(partition->get_hidden_subpart_array(),
                     partition->get_hidden_subpart_array() + partition->get_hidden_subpartition_num(),
                     ObBasePartition::list_part_func_layout);
         }
@@ -8993,15 +8995,15 @@ int ObSchemaServiceSQLImpl::sort_subpartition_array(ObPartitionSchema &partition
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("def_subpartition array is empty", K(ret), K(partition_schema));
       } else if (partition_schema.is_range_subpart()) {
-        std::sort(partition_schema.get_def_subpart_array(),
+        lib::ob_sort(partition_schema.get_def_subpart_array(),
             partition_schema.get_def_subpart_array() + def_subpartition_num,
             ObBasePartition::less_than);
       } else if (partition_schema.is_hash_like_subpart()) {
-        std::sort(partition_schema.get_def_subpart_array(),
+        lib::ob_sort(partition_schema.get_def_subpart_array(),
             partition_schema.get_def_subpart_array() + def_subpartition_num,
             ObSubPartition::hash_like_func_less_than);
       } else if (partition_schema.is_list_subpart()) {
-        std::sort(partition_schema.get_def_subpart_array(),
+        lib::ob_sort(partition_schema.get_def_subpart_array(),
             partition_schema.get_def_subpart_array() + def_subpartition_num,
             ObBasePartition::list_part_func_layout);
       } else {

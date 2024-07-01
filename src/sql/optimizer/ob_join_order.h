@@ -1095,10 +1095,12 @@ struct EstimateCostInfo {
   public:
     ValuesTablePath()
       : Path(NULL),
-        table_id_(OB_INVALID_ID) {}
+        table_id_(OB_INVALID_ID),
+        table_def_(NULL) {}
     virtual ~ValuesTablePath() { }
     int assign(const ValuesTablePath &other, common::ObIAllocator *allocator);
     virtual int estimate_cost() override;
+    virtual int estimate_row_count();
     virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
       int ret = OB_SUCCESS;
@@ -1109,6 +1111,7 @@ struct EstimateCostInfo {
     }
   public:
     uint64_t table_id_;
+    ObValuesTableDef *table_def_;
   private:
       DISALLOW_COPY_AND_ASSIGN(ValuesTablePath);
   };
@@ -1555,7 +1558,8 @@ struct NullAwareAntiJoinInfo {
                                         const common::ObIArray<ObRawExpr*> &predicates,
                                         ObIArray<ObExprConstraint> &expr_constraints,
                                         int64_t table_id,
-                                        ObQueryRange* &range);
+                                        ObQueryRange* &range,
+                                        int64_t index_id);
 
     int check_enable_better_inlist(int64_t table_id, bool &enable);
 
@@ -2467,6 +2471,14 @@ struct NullAwareAntiJoinInfo {
                                          ObColumnRefRawExpr *col_expr,
                                          ObRawExpr *&new_qual);
 
+    int try_get_json_generated_col_index_expr(ObRawExpr *depend_expr,
+                                              ObColumnRefRawExpr *col_expr,
+                                              ObRawExprCopier& copier,
+                                              ObRawExprFactory& expr_factory,
+                                              ObSQLSessionInfo *session_info,
+                                              ObRawExpr *&qual,
+                                              int64_t qual_pos,
+                                              ObRawExpr *&new_qual);
     int get_range_params(const Path *path,
                          ObIArray<ObRawExpr*> &range_exprs,
                          ObIArray<ObRawExpr*> &all_table_filters);

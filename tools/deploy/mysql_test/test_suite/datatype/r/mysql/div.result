@@ -198561,10 +198561,7 @@ Query Plan
 |5 |        ├─PX PARTITION ITERATOR|                        |14      |5           |
 |6 |        │ └─TABLE FULL SCAN    |table1000_key_pk_parts_2|14      |5           |
 |7 |        └─MATERIAL             |                        |1       |1           |
-|8 |          └─SUBPLAN SCAN       |VIEW2                   |1       |1           |
-|9 |            └─SUBPLAN FILTER   |                        |1       |1           |
-|10|              ├─EXPRESSION     |VALUES_TABLE1           |1       |1           |
-|11|              └─EXPRESSION     |                        |1       |1           |
+|8 |          └─VALUES TABLE ACCESS|VALUES_TABLE1           |1       |1           |
 ===================================================================================
 Outputs & filters:
 -------------------------------------
@@ -198576,23 +198573,17 @@ Outputs & filters:
   3 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)])
   4 - output(nil), filter(nil), rowset=16
-      conds([(T_OP_OR, table1000_key_pk_parts_2.col_double <= VIEW2.column_0, table1000_key_pk_parts_2.col_double IS NULL, VIEW2.column_0 IS NULL)]), nl_params_(nil),
-       use_batch=false
+      conds([(T_OP_OR, table1000_key_pk_parts_2.col_double <= cast(VALUES_TABLE1.column_0, DOUBLE(-1, -1)), table1000_key_pk_parts_2.col_double IS NULL,
+       cast(VALUES_TABLE1.column_0, DOUBLE(-1, -1)) IS NULL)]), nl_params_(nil), use_batch=false
   5 - output([table1000_key_pk_parts_2.col_double]), filter(nil), rowset=16
       force partition granule
   6 - output([table1000_key_pk_parts_2.col_double]), filter(nil), rowset=16
       access([table1000_key_pk_parts_2.col_double]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, 
       range_key([table1000_key_pk_parts_2.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([VIEW2.column_0]), filter(nil), rowset=16
-  8 - output([VIEW2.column_0]), filter(nil), rowset=16
-      access([VIEW2.column_0])
-  9 - output([cast(VALUES_TABLE1.column_0, DOUBLE(-1, -1))]), filter(nil), rowset=16
-      exec_params_(nil), onetime_exprs_([subquery(1)(:1)]), init_plan_idxs_(nil), use_batch=false
- 10 - output([VALUES_TABLE1.column_0]), filter(nil)
-      values({:1})
- 11 - output([Floor(cast(-360448000, DECIMAL(20, 0)) / cast(1458241536, DECIMAL(20, 0)))]), filter(nil)
-      values({Floor(cast(-360448000, DECIMAL(20, 0)) / cast(1458241536, DECIMAL(20, 0)))})
+  7 - output([VALUES_TABLE1.column_0]), filter(nil), rowset=16
+  8 - output([VALUES_TABLE1.column_0]), filter(nil)
+      access([VALUES_TABLE1.column_0])
 SELECT count(*) FROM   table1000_key_pk_parts_2 WHERE  col_double > ALL (VALUES ROW((SELECT Floor(-360448000 / 1458241536) FROM dual)));
 count(*)
 12

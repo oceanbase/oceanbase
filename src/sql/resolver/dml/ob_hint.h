@@ -156,6 +156,9 @@ struct ObOptParamHint
     DEF(ENABLE_RICH_VECTOR_FORMAT,)    \
     DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)   \
     DEF(PRESERVE_ORDER_FOR_PAGINATION,)   \
+    DEF(ENABLE_DAS_KEEP_ORDER,)           \
+    DEF(SPILL_COMPRESSION_CODEC,)   \
+    DEF(INLIST_REWRITE_THRESHOLD,)        \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -211,6 +214,7 @@ struct ObGlobalHint {
 //#define COMPAT_VERSION_4_2_1_BP3  (oceanbase::common::cal_version(4, 2, 1, 3))
 #define COMPAT_VERSION_4_2_1_BP4  (oceanbase::common::cal_version(4, 2, 1, 4))
 #define COMPAT_VERSION_4_2_1_BP5  (oceanbase::common::cal_version(4, 2, 1, 5))
+#define COMPAT_VERSION_4_2_1_BP7  (oceanbase::common::cal_version(4, 2, 1, 7))
 #define COMPAT_VERSION_4_2_1_BP8  (oceanbase::common::cal_version(4, 2, 1, 8))
 #define COMPAT_VERSION_4_2_2      (oceanbase::common::cal_version(4, 2, 2, 0))
 #define COMPAT_VERSION_4_2_3      (oceanbase::common::cal_version(4, 2, 3, 0))
@@ -504,6 +508,7 @@ public:
       HINT_ELIMINATE_JOIN,
       HINT_GROUPBY_PLACEMENT,
       HINT_WIN_MAGIC,
+      HINT_COALESCE_AGGR,
       HINT_MV_REWRITE,
       // optimize hint below
       HINT_OPTIMIZE,    // normal optimize hint
@@ -586,6 +591,7 @@ public:
   bool is_table_dynamic_sampling_hint() const { return T_TABLE_DYNAMIC_SAMPLING == hint_type_; }
   bool is_pq_subquery_hint() const { return T_PQ_SUBQUERY == hint_type_; }
   bool is_decorrelate_hint() const { return T_DECORRELATE == hint_type_; }
+  bool is_coalesce_aggr_hint() const {return HINT_COALESCE_AGGR == hint_class_; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),
@@ -777,6 +783,29 @@ public:
 private:
   common::ObSEArray<TablesInHint, 4, common::ModulePageAllocator, true> table_list_;
 };
+class ObCoalesceAggrHint : public ObTransHint
+{
+public:
+  ObCoalesceAggrHint(ObItemType hint_type)
+    : ObTransHint(hint_type),
+      enable_trans_wo_pullup_(false),
+      enable_trans_with_pullup_(false)
+  {
+    set_hint_class(HINT_COALESCE_AGGR);
+  }
+  int assign(const ObCoalesceAggrHint &other);
+  virtual ~ObCoalesceAggrHint() {}
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  void set_enable_trans_wo_pullup(bool flag) {enable_trans_wo_pullup_ = flag;}
+  void set_enable_trans_with_pullup(bool flag) {enable_trans_with_pullup_ = flag;}
+  bool enable_trans_wo_pullup() const {return enable_trans_wo_pullup_;};
+  bool enable_trans_with_pullup() const {return enable_trans_with_pullup_;};
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(enable_trans_wo_pullup), K_(enable_trans_with_pullup));
+
+private:
+  bool enable_trans_wo_pullup_;
+  bool enable_trans_with_pullup_;
+};
 class ObWinMagicHint : public ObTransHint
 {
 public:
@@ -911,7 +940,8 @@ class ObIndexHint : public ObOptHint
 {
 public:
   ObIndexHint(ObItemType hint_type)
-    : ObOptHint(hint_type)
+    : ObOptHint(hint_type),
+      index_prefix_(-1)
   {
     set_hint_class(HINT_ACCESS_PATH);
   }
@@ -926,14 +956,17 @@ public:
   const ObTableInHint &get_table() const { return table_; }
   ObString &get_index_name() { return index_name_; }
   const ObString &get_index_name() const { return index_name_; }
+  int64_t &get_index_prefix() { return index_prefix_; }
+  const int64_t &get_index_prefix() const { return index_prefix_; }
   bool is_use_index_hint()  const { return T_NO_INDEX_HINT != get_hint_type(); }
   bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type(); }
 
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name), K_(index_prefix));
 
 private:
   ObTableInHint table_;
   common::ObString index_name_;
+  int64_t index_prefix_;
 };
 
 class ObTableParallelHint : public ObOptHint

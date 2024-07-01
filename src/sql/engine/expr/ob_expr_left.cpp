@@ -149,9 +149,9 @@ int calc_left_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
     // res_str会指向s_datum的内存空间，所以下面不能改变res_str指向的字符串
     ObString res_str;
     const ObCollationType arg_cs_type = expr.args_[0]->datum_meta_.cs_type_;
-		if(OB_FAIL(calc_left(res_str, s_datum->get_string(), arg_cs_type, n_datum->get_int()))) {
-			LOG_WARN("failed to calculate left expression", K(ret));
-		} else {
+    if (OB_FAIL(calc_left(res_str, s_datum->get_string(), arg_cs_type, n_datum->get_int()))) {
+      LOG_WARN("failed to calculate left expression", K(ret));
+    } else {
       if (res_str.empty() && is_oracle_mode()) {
         res_datum.set_null();
       } else {

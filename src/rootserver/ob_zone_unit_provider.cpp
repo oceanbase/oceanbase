@@ -153,7 +153,7 @@ int ObAliveZoneUnitsProvider::init(
       }
       if (OB_SUCC(ret)) {
         UnitSortOp unit_sort_operator;
-        std::sort(unit_ptr_array.begin(), unit_ptr_array.end(), unit_sort_operator);
+        lib::ob_sort(unit_ptr_array.begin(), unit_ptr_array.end(), unit_sort_operator);
         if (OB_FAIL(unit_sort_operator.get_ret())) {
           LOG_WARN("fail to sort unit in zone", K(ret));
         } else if (OB_FAIL(all_zone_unit_ptrs_.push_back(unit_ptr_array))) {
@@ -163,7 +163,7 @@ int ObAliveZoneUnitsProvider::init(
     }
     if (OB_SUCC(ret)) {
       ZoneUnitSortOp zone_unit_sort_operator;
-      std::sort(all_zone_unit_ptrs_.begin(), all_zone_unit_ptrs_.end(), zone_unit_sort_operator);
+      lib::ob_sort(all_zone_unit_ptrs_.begin(), all_zone_unit_ptrs_.end(), zone_unit_sort_operator);
       if (OB_FAIL(zone_unit_sort_operator.get_ret())) {
         LOG_WARN("fail to sort zone unit", K(ret));
       }

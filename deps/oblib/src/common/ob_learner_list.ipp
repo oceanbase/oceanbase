@@ -145,7 +145,7 @@ int BaseLearnerList<MAX_SIZE, T>::add_learner(const T &learner)
   } else if (OB_FAIL(learner_array_.push_back(learner))) {
     COMMON_LOG(ERROR, "learner_array_ push back failed", K(ret), K(learner));
   } else {
-    std::sort(learner_array_.begin(), learner_array_.end(), [](const T &a, const T &b){ return a < b;});
+    lib::ob_sort(learner_array_.begin(), learner_array_.end(), [](const T &a, const T &b){ return a < b;});
   }
   return ret;
 }
@@ -365,5 +365,26 @@ int BaseLearnerList<MAX_SIZE, T>::transform_to_string(
   }
   return ret;
 }
+
+template <int64_t MAX_SIZE, typename T>
+int BaseLearnerList<MAX_SIZE, T>::get_addr_array(ObIArray<common::ObAddr> &addr_array) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t number = get_member_number();
+  addr_array.reset();
+  for (int64_t idx = 0; idx < number && OB_SUCC(ret); ++idx) {
+    common::ObAddr server;
+    if (OB_FAIL(get_server_by_index(idx, server))) {
+      COMMON_LOG(WARN, "get_server_by_index failed", K(ret), K(idx));
+    } else if (OB_FAIL(addr_array.push_back(server))) {
+      COMMON_LOG(WARN, "add addr array failed", K(ret), K(server));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    COMMON_LOG(WARN, "BaseLearnerList get_addr_array failed", K(ret));
+  }
+  return ret;
+}
+
 } // namespace common end
 } // namespace oceanbase end

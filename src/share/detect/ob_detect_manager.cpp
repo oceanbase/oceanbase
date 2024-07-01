@@ -686,6 +686,7 @@ int ObDetectManagerThread::detect() {
           MTL_SWITCH(tenant_ids.at(i)) {
             ObDetectManager* dm = MTL(ObDetectManager*);
             if (OB_ISNULL(dm)) {
+              // ignore ret
               LIB_LOG(WARN, "[DM] dm is null", K(tenant_ids.at(i)));
             } else if (OB_FAIL(dm->gather_requests(req_map_, temp_mem_context))) {
               LIB_LOG(WARN, "[DM] failed to gather_requests", K(tenant_ids.at(i)));
@@ -741,6 +742,7 @@ void ObDetectManagerThread::detect_local(const obrpc::ObTaskStateDetectReq *req)
     MTL_SWITCH(detectable_id.tenant_id_) {
       ObDetectManager* dm = MTL(ObDetectManager*);
       if (OB_ISNULL(dm)) {
+        // ignore ret
         LIB_LOG(WARN, "[DM] dm is null", K(detectable_id.tenant_id_));
       } else {
         dm->do_detect_local(detectable_id);
@@ -815,6 +817,7 @@ void ObDetectManagerThread::handle_one_result(const obrpc::ObDetectRpcStatus &rp
       MTL_SWITCH(detectable_id.tenant_id_) {
         ObDetectManager* dm = MTL(ObDetectManager*);
         if (OB_ISNULL(dm)) {
+          // ignore ret
           LIB_LOG(WARN, "[DM] dm is null", K(detectable_id.tenant_id_));
         } else {
           dm->do_handle_one_result(detectable_id, rpc_status);

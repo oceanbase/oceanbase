@@ -36,7 +36,7 @@ typedef void (*ConvertUnitToDatumFunc)(
       const char *data,
       const ObIntegerStreamDecoderCtx &ctx,
       const char *ref_data,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums);
 

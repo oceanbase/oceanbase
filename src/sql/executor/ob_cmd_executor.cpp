@@ -1117,6 +1117,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       LOG_WARN("failed to get schema guard", K(ret));
     }
     if (OB_FAIL(tmp_ret)) {
+      // overwrite ret
       ret = tmp_ret;
     }
   }

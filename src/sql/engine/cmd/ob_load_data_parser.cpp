@@ -18,6 +18,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/string/ob_hex_utils_base.h"
 #include "deps/oblib/src/lib/list/ob_dlist.h"
+#include "share/schema/ob_column_schema.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -28,10 +29,13 @@ namespace sql
 {
 const char INVALID_TERM_CHAR = '\xff';
 
-const char * FORMAT_TYPE_STR[] = {
+const char * ObExternalFileFormat::FORMAT_TYPE_STR[] = {
   "CSV",
+  "PARQUET",
 };
-static_assert(array_elements(FORMAT_TYPE_STR) == ObExternalFileFormat::MAX_FORMAT, "Not enough initializer for ObExternalFileFormat");
+
+static_assert(array_elements(ObExternalFileFormat::FORMAT_TYPE_STR) == ObExternalFileFormat::MAX_FORMAT,
+              "Not enough initializer for ObExternalFileFormat");
 
 int ObCSVGeneralFormat::init_format(const ObDataInFileStruct &format,
                                     int64_t file_column_nums,
@@ -347,7 +351,7 @@ int64_t ObExternalFileFormat::to_string(char *buf, const int64_t buf_len) const
       pos += origin_file_format_str_.to_json_kv_string(buf + pos, buf_len - pos);
       break;
     default:
-      pos = 0;
+      pos += 0;
   }
 
   J_OBJ_END();
@@ -389,6 +393,8 @@ int ObExternalFileFormat::load_from_string(const ObString &str, ObIAllocator &al
           OZ (csv_format_.load_from_json_data(format_type_node, allocator));
           OZ (origin_file_format_str_.load_from_json_data(format_type_node, allocator));
           break;
+        case PARQUET_FORMAT:
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid format type", K(ret), K(format_type_str));
@@ -396,6 +402,45 @@ int ObExternalFileFormat::load_from_string(const ObString &str, ObIAllocator &al
       }
     }
   }
+  return ret;
+}
+
+int ObExternalFileFormat::mock_gen_column_def(
+    const share::schema::ObColumnSchemaV2 &column,
+    ObIAllocator &allocator,
+    ObString &def)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString temp_str;
+  switch (format_type_) {
+    case CSV_FORMAT: {
+      uint64_t file_column_idx = column.get_column_id() - OB_APP_MIN_COLUMN_ID + 1;
+      if (OB_FAIL(temp_str.append_fmt("%s%lu", N_EXTERNAL_FILE_COLUMN_PREFIX, file_column_idx))) {
+        LOG_WARN("fail to append sql str", K(ret));
+      }
+      break;
+    }
+    case PARQUET_FORMAT: {
+      if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
+                                      N_EXTERNAL_FILE_ROW,
+                                      column.get_column_name_str().length(),
+                                      column.get_column_name_str().ptr()))) {
+        LOG_WARN("fail to append sql str", K(ret));
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected format", K(ret), K(format_type_));
+    }
+
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ob_write_string(allocator, temp_str.string(), def))) {
+      LOG_WARN("fail to write string", K(ret));
+    }
+  }
+
   return ret;
 }
 

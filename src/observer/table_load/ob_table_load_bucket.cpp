@@ -40,7 +40,6 @@ int ObTableLoadBucket::init(const ObAddr &leader_addr) {
 
 int ObTableLoadBucket::add_row(const ObTabletID &tablet_id,
                                const ObTableLoadObjRow &obj_row,
-                               int64_t count,
                                int64_t batch_size,
                                bool &flag)
 {

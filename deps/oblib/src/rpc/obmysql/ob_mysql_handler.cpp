@@ -173,7 +173,7 @@ int ObMySQLHandler::process(easy_request_t *r)
               OB_NOT_NULL(pkt.get_cdata()) &&
               pkt.get_clen() > comment_header_len_ &&
               memcmp(pkt.get_cdata(), comment_header_, 9) == comment_header_len_) {
-            if (OB_FAIL(OB_FAIL(parse_head_comment(pkt.get_cdata(), pkt.get_clen())))) {
+            if (OB_FAIL(parse_head_comment(pkt.get_cdata(), pkt.get_clen()))) {
               LOG_WARN("failed to parse head comment", K(ObString(pkt.get_clen(), pkt.get_cdata())), K(ret));
             } else {
               // to resolve dead lock triggled by nested sql between ob cluster

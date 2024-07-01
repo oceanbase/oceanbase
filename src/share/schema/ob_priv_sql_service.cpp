@@ -1219,7 +1219,7 @@ int ObPrivSqlService::grant_revoke_role(
           LOG_WARN("append sql failed, ", K(ret));
         }
       }
-      if (OB_FAIL(sql.append_fmt("(now(6), now(6), %lu, %lu, %lu, %ld, %ld, %lu, %lu)",
+      if (FAILEDx(sql.append_fmt("(now(6), now(6), %lu, %lu, %lu, %ld, %ld, %lu, %lu)",
           ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, user_info.get_tenant_id()),
           ObSchemaUtils::get_extract_schema_id(exec_tenant_id, grantee_id),
           ObSchemaUtils::get_extract_schema_id(exec_tenant_id, role_id),

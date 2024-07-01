@@ -73,7 +73,7 @@ int ObUnitManager::ZoneUnitPtr::assign(const ZoneUnitPtr &other)
 int ObUnitManager::ZoneUnitPtr::sort_by_unit_id_desc()
 {
   UnitGroupIdCmp cmp;
-  std::sort(unit_ptrs_.begin(), unit_ptrs_.end(), cmp);
+  lib::ob_sort(unit_ptrs_.begin(), unit_ptrs_.end(), cmp);
   return cmp.get_ret();
 }
 
@@ -1468,7 +1468,7 @@ int ObUnitManager::do_split_pool_persistent_info(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (ut_operator_.remove_resource_pool(trans, pool->resource_pool_id_)) {
+    } else if (OB_FAIL(ut_operator_.remove_resource_pool(trans, pool->resource_pool_id_))) {
       LOG_WARN("fail to remove resource pool persistent info", K(ret),
                "pool_id", pool->resource_pool_id_);
     } else {} // all persistent infos update finished
@@ -2276,7 +2276,7 @@ int ObUnitManager::get_to_be_deleted_unit_group(
           }
         }
       }
-      std::sort(sorted_unit_group_id_array.begin(), sorted_unit_group_id_array.end());
+      lib::ob_sort(sorted_unit_group_id_array.begin(), sorted_unit_group_id_array.end());
       // then other active unit group id
       for (int64_t i = 0; OB_SUCC(ret) && i < all_unit_group_id_array.count(); ++i) {
         uint64_t ug_id = all_unit_group_id_array.at(i);
@@ -6755,7 +6755,7 @@ int ObUnitManager::shrink_pool_unit_num(
         LOG_WARN("fail to push back", K(ret));
       }
     }
-    std::sort(sort_unit_id_array.begin(), sort_unit_id_array.end());
+    lib::ob_sort(sort_unit_id_array.begin(), sort_unit_id_array.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < sort_unit_id_array.count() - 1; ++i) {
       if (sort_unit_id_array.at(i) == sort_unit_id_array.at(i + 1)) {
         ret = OB_NOT_SUPPORTED;
@@ -7815,7 +7815,7 @@ int ObUnitManager::alter_pool_zone_list(
       } else {}//no more to do
     }
     if (OB_SUCC(ret)) {
-      std::sort(new_zone_list.begin(), new_zone_list.end());
+      lib::ob_sort(new_zone_list.begin(), new_zone_list.end());
       bool is_add_pool_zone = false;
       bool is_remove_pool_zone = false;
       for (int64_t i = 0; i < new_zone_list.count() && OB_SUCC(ret); ++i) {
@@ -8718,8 +8718,8 @@ int ObUnitManager::construct_unit_group_id_for_unit_(
       LOG_WARN("fail to assign source unit group ids", KR(ret), K(source_unit_group_ids));
     } else {
       // construct sorted unit group ids first
-      std::sort(sorted_new_ug_ids.begin(), sorted_new_ug_ids.end());
-      std::sort(sorted_source_ug_ids.begin(), sorted_source_ug_ids.end());
+      lib::ob_sort(sorted_new_ug_ids.begin(), sorted_new_ug_ids.end());
+      lib::ob_sort(sorted_source_ug_ids.begin(), sorted_source_ug_ids.end());
       // for clone tenant, we have to construct unit_group_id for its units
       // the rule to allocate unit_group_id
       //
@@ -8973,7 +8973,7 @@ int ObUnitManager::build_zone_sorted_unit_array_(const share::ObResourcePool *po
     LOG_WARN("fail to assign zone unit array", KR(ret));
   } else {
     UnitZoneOrderCmp cmp_operator;
-    std::sort(zone_sorted_units.begin(), zone_sorted_units.end(), cmp_operator);
+    lib::ob_sort(zone_sorted_units.begin(), zone_sorted_units.end(), cmp_operator);
     // check unit count in each zone
     ObUnit *curr_unit = NULL;
     ObUnit *prev_unit = NULL;

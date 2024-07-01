@@ -41,6 +41,23 @@ namespace sql
 {
 class ObExprObjAccess;
 
+struct ObPLSPITraceIdGuard
+{
+  ObPLSPITraceIdGuard(const ObString &sql,
+                      const ObString &ps_sql,
+                      ObSQLSessionInfo &session,
+                      int &ret,
+                      ObCurTraceId::TraceId *reused_trace_id = nullptr);
+
+  ~ObPLSPITraceIdGuard();
+
+  ObCurTraceId::TraceId origin_trace_id_;
+  const ObString sql_;
+  const ObString ps_sql_;
+  ObSQLSessionInfo& session_;
+  int &ret_;
+};
+
 struct ObSPICursor
 {
   ObSPICursor(ObIAllocator &allocator, sql::ObSQLSessionInfo* session_info) :
@@ -770,7 +787,7 @@ public:
                              int64_t &into_cnt,
                              bool &skip_locked,
                              common::ColumnsFieldArray *field_list = NULL);
-  static int force_refresh_schema(uint64_t tenant_id);
+  static int force_refresh_schema(uint64_t tenant_id, int64_t refresh_version = OB_INVALID_VERSION);
 
   static int spi_update_package_change_info(
     pl::ObPLExecCtx *ctx, uint64_t package_id, uint64_t var_idx);
@@ -794,6 +811,12 @@ public:
 
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
   static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int64_t new_query_start_time);
+
+  static int spi_opaque_assign_null(int64_t opaque_ptr);
+
+  static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
+
+  static int spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
 
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_execute_dblink(ObExecContext &exec_ctx,

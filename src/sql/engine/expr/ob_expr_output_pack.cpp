@@ -325,7 +325,8 @@ int ObExprOutputPack::convert_lob_value_charset(common::ObObj &value,
 int ObExprOutputPack::convert_text_value_charset(common::ObObj& value,
                                                  bool res_has_lob_header,
                                                  common::ObIAllocator &alloc,
-                                                 const ObSQLSessionInfo &my_session)
+                                                 const ObSQLSessionInfo &my_session,
+                                                 sql::ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
   ObCharsetType charset_type = CHARSET_INVALID;
@@ -366,7 +367,7 @@ int ObExprOutputPack::convert_text_value_charset(common::ObObj& value,
           my_session.is_client_use_lob_locator() && lib::is_oracle_mode()) {
         ObLobLocatorV2 lob;
         ObString inrow_data;
-        if (OB_FAIL(process_lob_locator_results(value, alloc, my_session))) {
+        if (OB_FAIL(process_lob_locator_results(value, alloc, my_session, exec_ctx))) {
           LOG_WARN("fail to process lob locator", K(ret), K(value));
         } else if (OB_FAIL(value.get_lob_locatorv2(lob))) {
           LOG_WARN("fail to lob locator v2", K(ret), K(value));
@@ -426,7 +427,7 @@ int ObExprOutputPack::convert_text_value_charset(common::ObObj& value,
         ObString data_str;
         ObLobLocatorV2 loc(raw_str, value.has_lob_header());
         ObTextStringIter str_iter(value);
-        if (OB_FAIL(str_iter.init(0, &my_session, &alloc))) {
+        if (OB_FAIL(ObTextStringHelper::build_text_iter(str_iter, &exec_ctx, &my_session, &alloc))) {
           LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
         } else if (OB_FAIL(str_iter.get_full_data(data_str))) {
           LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
@@ -514,7 +515,8 @@ int ObExprOutputPack::convert_lob_locator_to_longtext(common::ObObj &value,
 
 int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
                                                   common::ObIAllocator &alloc,
-                                                  const ObSQLSessionInfo &my_session)
+                                                  const ObSQLSessionInfo &my_session,
+                                                  sql::ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
   // 1. if client is_use_lob_locator, return lob locator
@@ -523,7 +525,7 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
   bool is_use_lob_locator = my_session.is_client_use_lob_locator();
   bool is_support_outrow_locator_v2 = my_session.is_client_support_lob_locatorv2();
-  if (!(value.is_lob() || value.is_json() || value.is_geometry() ||value.is_lob_locator())) {
+  if (!(value.is_lob() || value.is_json() || value.is_geometry() || value.is_roaringbitmap() || value.is_lob_locator())) {
     // not lob types, do nothing
   } else if (is_use_lob_locator && value.is_lob() && lib::is_oracle_mode()) {
     // if does not have extern header, mock one
@@ -581,7 +583,7 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
       }
     } else { // lob locator v2
       ObTextStringIter instr_iter(value);
-      if (OB_FAIL(instr_iter.init(0, &my_session, &alloc))) {
+      if (OB_FAIL(ObTextStringHelper::build_text_iter(instr_iter, &exec_ctx, &my_session, &alloc))) {
         LOG_WARN("init lob str inter failed", K(ret), K(value));
       } else if (OB_FAIL(instr_iter.get_full_data(data))) {
         LOG_WARN("Lob: init lob str iter failed ", K(value));
@@ -591,6 +593,8 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
           dst_type = ObJsonType;
         } else if (value.is_geometry()) {
           dst_type = ObGeometryType;
+        } else if (value.is_roaringbitmap()) {
+          dst_type = ObRoaringBitmapType;
         }
         // remove has lob header flag
         value.set_lob_value(dst_type, data.ptr(), static_cast<int32_t>(data.length()));
@@ -677,12 +681,12 @@ int ObExprOutputPack::try_encode_row(const ObExpr &expr, ObEvalCtx &ctx,
                   && OB_FAIL(convert_lob_value_charset(obj, alloc, *session))) {
           LOG_WARN("convert lob obj charset failed", K(ret));
         } else if (ob_is_text_tc(obj.get_type())
-                  && OB_FAIL(convert_text_value_charset(obj, expr.obj_meta_.has_lob_header(), alloc, *session))) {
+                  && OB_FAIL(convert_text_value_charset(obj, expr.obj_meta_.has_lob_header(), alloc, *session, ctx.exec_ctx_))) {
           LOG_WARN("convert text obj charset failed", K(ret));
         }
         if (OB_FAIL(ret)) {
-        } else if ((obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry())
-                   && OB_FAIL(process_lob_locator_results(obj, alloc, *session))) {
+        } else if ((obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry() || obj.is_roaringbitmap())
+                   && OB_FAIL(process_lob_locator_results(obj, alloc, *session, ctx.exec_ctx_))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
         } else if ((obj.is_user_defined_sql_type() || obj.is_collection_sql_type() || obj.is_geometry())
                    && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(obj, &alloc, session,

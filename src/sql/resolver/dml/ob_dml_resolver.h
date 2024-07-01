@@ -99,7 +99,9 @@ class ObDMLResolver : public ObStmtResolver
       cte_resolve_level_(0),
       cte_branch_count_(0),
       is_set_left_resolver_(false),
-      is_set_all_(true)
+      is_set_all_(true),
+      has_cte_param_list_(false),
+      has_recursive_word_(false)
     {
 
     }
@@ -130,6 +132,10 @@ class ObDMLResolver : public ObStmtResolver
       left_select_stmt_parse_node_ = node;
       is_set_all_ = all;
     }
+    inline void set_has_param_list(bool has) { has_cte_param_list_ = has; }
+    inline bool check_has_param_list() const { return has_cte_param_list_; }
+    inline void set_has_recursive_word(bool has) { has_recursive_word_ = has; }
+    inline bool check_has_recursive_word() const { return has_recursive_word_; }
     int assign(ObCteResolverCtx &cte_ctx) {
       left_select_stmt_ = cte_ctx.left_select_stmt_;
       left_select_stmt_parse_node_ = cte_ctx.left_select_stmt_parse_node_;
@@ -142,6 +148,8 @@ class ObDMLResolver : public ObStmtResolver
       cte_branch_count_ = cte_ctx.cte_branch_count_;
       is_set_left_resolver_ = cte_ctx.is_set_left_resolver_;
       is_set_all_ = cte_ctx.is_set_all_;
+      has_cte_param_list_ = cte_ctx.has_cte_param_list_;
+      has_recursive_word_ = cte_ctx.has_recursive_word_;
       return cte_col_names_.assign(cte_ctx.cte_col_names_);
     }
     TO_STRING_KV(K_(is_with_clause_resolver),
@@ -149,7 +157,9 @@ class ObDMLResolver : public ObStmtResolver
                  K_(is_recursive_cte),
                  K_(is_cte_subquery),
                  K_(cte_resolve_level),
-                 K_(cte_col_names));
+                 K_(cte_col_names),
+                 K_(has_cte_param_list),
+                 K_(has_recursive_word));
   private:
     ObSelectStmt* left_select_stmt_;
     const ParseNode* left_select_stmt_parse_node_;
@@ -163,6 +173,8 @@ class ObDMLResolver : public ObStmtResolver
     common::ObArray<ObString> cte_col_names_;
     bool is_set_left_resolver_;
     bool is_set_all_;
+    bool has_cte_param_list_;
+    bool has_recursive_word_;
   };
 public:
   explicit ObDMLResolver(ObResolverParams &params);
@@ -201,6 +213,13 @@ public:
   int fill_same_column_to_using(JoinedTable* &joined_table);
   int get_columns_from_table_item(const TableItem *table_item, common::ObIArray<common::ObString> &column_names);
 
+  int resolve_external_table_generated_column(
+      ObQualifiedName &col,
+      const TableItem &table_item,
+      const share::schema::ObTableSchema *table_schema,
+      const share::schema::ObColumnSchemaV2 *column_schema,
+      ObRawExpr *&real_ref_expr,
+      ObRawExpr *&ref_expr);
   int resolve_using_columns(const ParseNode &using_node, common::ObIArray<common::ObString> &column_names);
   int transfer_using_to_on_expr(JoinedTable *&joined_table);
   int resolve_table_column_expr(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
@@ -338,6 +357,7 @@ public:
   ObDMLStmt *get_stmt();
   void set_upper_insert_resolver(ObInsertResolver *insert_resolver) {
     upper_insert_resolver_ = insert_resolver; }
+  int estimate_values_table_stats(ObValuesTableDef &table_def);
 protected:
   int generate_pl_data_type(ObRawExpr *expr, pl::ObPLDataType &pl_data_type);
   int resolve_into_variables(const ParseNode *node,
@@ -383,6 +403,7 @@ protected:
   int set_flashback_info_for_view(ObSelectStmt *select_stmt, TableItem *table_item);
   int resolve_table_drop_oracle_temp_table(TableItem *&table_item);
   int resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
+                                              uint64_t database_id,
                                               const common::ObString &db_name,
                                               const bool &is_db_explicit,
                                               const common::ObString &tbl_name,
@@ -457,6 +478,7 @@ protected:
       ObRawExpr *&doc_id_expr);
   int build_partid_expr(ObRawExpr *&expr, const uint64_t table_id);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
+  virtual int resolve_inlist_info(common::ObIArray<ObInListInfo> &inlist_infos);
   virtual int resolve_aggr_exprs(ObRawExpr *&expr, common::ObIArray<ObAggFunRawExpr*> &aggr_exprs,
                                  const bool need_analyze = true);
   virtual int resolve_win_func_exprs(ObRawExpr *&expr, common::ObIArray<ObWinFunRawExpr*> &win_exprs);
@@ -742,17 +764,18 @@ protected:
   int erase_redundant_generated_table_column_flag(const ObSelectStmt &ref_stmt, const ObRawExpr *ref_expr, ObColumnRefRawExpr &col_expr) const;
 
   // for cte
-  int add_cte_table_to_children(ObChildStmtResolver& child_resolver);
-  int add_parent_cte_table_to_children(ObChildStmtResolver& child_resolver);
+  int add_cte_table_to_children(ObChildStmtResolver& child_resolver, const ObString *cur_rcte_name = NULL);
   void set_non_record(bool record) { with_clause_without_record_ = record; };
   int check_current_CTE_name_exist(const ObString &var_name, bool &dup_name);
   int check_current_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
   int check_parent_CTE_name_exist(const ObString &var_name, bool &dup_name);
   int check_parent_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
+  int check_CTE_name_exist(const ObString &var_name, bool &dup_name);
+  int check_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
   int set_cte_ctx(ObCteResolverCtx &cte_ctx, bool copy_col_name = true, bool in_subquery = false);
   int add_cte_table_item(TableItem *table_item,  bool &dup_name);
-  int get_opt_alias_colnames_for_recursive_cte(ObIArray<ObString>& columns, const ParseNode *parse_tree);
-  int init_cte_resolver(ObSelectResolver &select_resolver, const ParseNode *opt_col_node, ObString& table_name);
+  int get_opt_alias_colnames_for_recursive_cte(ObCteResolverCtx &ctx, const ParseNode *parse_tree);
+  int init_cte_resolver(ObSelectResolver &select_resolver, const ParseNode *opt_col_node, ObString& table_name, bool has_recursive_word);
   int add_fake_schema(ObSelectStmt* left_stmt);
   int resolve_basic_table_without_cte(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_basic_table_with_cte(const ParseNode &parse_tree, TableItem *&table_item);
@@ -761,8 +784,7 @@ protected:
   int resolve_cte_table(const ParseNode &parse_tree, const TableItem *CTE_table_item, TableItem *&table_item);
   int resolve_recursive_cte_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_with_clause_opt_alias_colnames(const ParseNode *parse_tree, TableItem *&table_item);
-  int set_parent_cte();
-  int resolve_with_clause_subquery(const ParseNode &parse_tree, TableItem *&table_item);
+  int resolve_with_clause_subquery(const ParseNode &parse_tree, TableItem *&table_item, bool has_recursive_word);
   int resolve_with_clause(const ParseNode *node, bool same_level = false);
 
   int check_oracle_outer_join_condition(const ObRawExpr *expr);
@@ -843,6 +865,9 @@ protected:
                                       const share::schema::ObTableSchema *table_schema,
                                       common::ObIArray<ObRawExpr*> &check_exprs,
                                       ObIArray<int64_t> *check_flags = NULL);
+  int gen_values_table_column_items(const int64_t column_cnt,
+                                    const ObIArray<ObExprResType> &res_types,
+                                    TableItem &table_item);
   int resolve_match_against_expr(ObMatchFunRawExpr &expr);
 private:
   int resolve_function_table_column_item_udf(const TableItem &table_item,
@@ -930,6 +955,7 @@ private:
   int resolve_eliminate_join_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_win_magic_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_place_group_by_hint(const ParseNode &hint_node, ObTransHint *&hint);
+  int resolve_coalesce_aggr_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_mv_rewrite_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_tb_name_list(const ParseNode *tb_name_list_node, ObIArray<ObSEArray<ObTableInHint, 4>> &tb_name_list);
   int resolve_alloc_ops(const ParseNode &alloc_op_node, ObIArray<ObAllocOpHint> &alloc_op_hints);
@@ -973,18 +999,10 @@ private:
   bool check_expr_has_colref(ObRawExpr *expr);
 
   int resolve_values_table_item(const ParseNode &table_node, TableItem *&table_item);
-  int resolve_table_values_for_select(const ParseNode &table_node,
-                                      ObIArray<ObRawExpr*> &table_values,
-                                      ObIArray<ObExprResType> &res_types,
-                                      int64_t &column_cnt);
-  int resolve_table_values_for_insert(const ParseNode &table_node,
-                                      ObIArray<ObRawExpr*> &table_values,
-                                      ObIArray<ObExprResType> &res_types,
-                                      int64_t &column_cnt);
-
-  int gen_values_table_column_items(const int64_t column_cnt,
-                                    const ObIArray<ObExprResType> &res_types,
-                                    TableItem &table_item);
+  int resolve_values_table_for_select(const ParseNode &table_node,
+                                      ObValuesTableDef &table_values);
+  int resolve_values_table_for_insert(const ParseNode &table_node,
+                                      ObValuesTableDef &table_values);
   int get_values_res_types(const ObIArray<ObExprResType> &cur_values_types,
                            ObIArray<ObExprResType> &res_types);
   int try_add_cast_to_values(const ObIArray<ObExprResType> &res_types,
@@ -1010,6 +1028,8 @@ private:
                                 bool &is_true,
                                 ObIArray<ObExprConstraint> &constraints);
   int add_udt_dependency(const pl::ObUserDefinedType &udt_type);
+  int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
+  int compute_values_table_row_count(ObValuesTableDef &table_def);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

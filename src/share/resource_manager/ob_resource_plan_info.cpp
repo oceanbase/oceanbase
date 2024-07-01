@@ -65,7 +65,6 @@ int ObPlanDirective::assign(const ObPlanDirective &other)
   max_iops_ = other.max_iops_;
   weight_iops_ = other.weight_iops_;
   group_id_ = other.group_id_;
-  level_ = other.level_;
   ret = group_name_.assign(other.group_name_);
   return ret;
 }

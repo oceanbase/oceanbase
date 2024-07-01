@@ -54,6 +54,7 @@ struct ResponseChecker
       proposer->advance_ballot_number_and_reset_related_states_(msg.get_ballot_number(),
                                                                 "receive reject message");
       if (proposer->check_leader()) {
+        // ignore ret
         // 在check leader后可能卡住，做leader prepare时就已经不再是leader了
         // 但是没有关系，正确性是由prepare阶段保证的，check_leader的意义在于尽量避免无谓的leader prepare流程
         LOG_PHASE(WARN, phase, "leader message is rejected cause ballot number", K(msg.get_ballot_number()), K(proposer->prepare_success_ballot_));

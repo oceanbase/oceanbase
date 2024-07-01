@@ -604,6 +604,7 @@ int ObDefaultValueUtils::get_default_type_for_default_function_static(
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(column_schema));
   } else if (column_schema->is_autoincrement()) {
     op = OB_NOT_STRICT_DEFAULT_OP;

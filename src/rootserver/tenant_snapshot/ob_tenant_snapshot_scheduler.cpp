@@ -105,7 +105,6 @@ void ObTenantSnapshotScheduler::do_work()
     idle_time_us_ = DEFAULT_IDLE_TIME;
     bool compatibility_satisfied = false;
     bool status_satisfied = false;
-    ObAllTenantInfo all_tenant_info;
     const uint64_t meta_tenant_id = MTL_ID();
     const uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
     while (!has_set_stop()) {
@@ -122,11 +121,6 @@ void ObTenantSnapshotScheduler::do_work()
         LOG_WARN("check_tenant_status failed", KR(ret), K(user_tenant_id));
       } else if (!status_satisfied) {
         LOG_INFO("tenant status is not valid", K(user_tenant_id), K(status_satisfied));
-      } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(user_tenant_id, GCTX.sql_proxy_,
-                    false/*for_update*/, all_tenant_info))) {
-        LOG_WARN("failed to load tenant info", KR(ret), K(user_tenant_id));
-      } else if (!all_tenant_info.is_primary()) {
-        LOG_INFO("tenant is not primary tenant", K(user_tenant_id));
       } else {
         //*********************************************************************
         //First, check whether creation or deletion jobs exist.
@@ -839,6 +833,8 @@ int ObTenantSnapshotScheduler::check_create_tenant_snapshot_result_(
 
   bool whether_to_commit_trans = false;
   if (OB_SUCC(ret) && ObTenantSnapStatus::CREATING == tenant_snap_item.get_status()) { // majority snapshot has created successful
+    SCN snapshot_scn_to_persist;
+    bool need_persist_scn = true;
     if (need_wait_minority) {
       // considering the performance of tenant cloning is affected by the missing of snapshots,
       // we will wait a small interval as long as possible to make all ls replicas create snapshots successful.
@@ -848,26 +844,35 @@ int ObTenantSnapshotScheduler::check_create_tenant_snapshot_result_(
       clog_start_scn = tmp_clog_start_scn;
       snapshot_scn = tmp_snapshot_scn;
 
-      SCN gts_scn;
-      // TODO: Currently, how to get the maximum scn in ObLSMetaPackage has not yet been solved;
-      //       The end_interval_scn reported by the storage node may be smaller than the actual
-      //       required; We rely on gts when local snapshots are created to determine snapshot scn;
-      if (OB_FAIL(OB_TS_MGR.get_ts_sync(user_tenant_id, GCONF.rpc_timeout, gts_scn))) {
-        LOG_WARN("fail to get gts sync", KR(ret), K(user_tenant_id));
-      } else if (FALSE_IT(snapshot_scn = MAX(snapshot_scn, gts_scn))) {
-      } else if (OB_FAIL(table_op.update_tenant_snap_item(tenant_snapshot_id,
-                                                          ObTenantSnapStatus::CREATING,
-                                                          ObTenantSnapStatus::DECIDED,
-                                                          snapshot_scn,
-                                                          clog_start_scn))) {
-        LOG_WARN("fail to update snapshot status and interval scn",
-            KR(ret), K(user_tenant_id), K(tenant_snapshot_id), K(clog_start_scn), K(snapshot_scn));
+      ObAllTenantInfo tenant_info;
+      if (OB_ISNULL(GCTX.sql_proxy_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", KR(ret));
+      } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                           user_tenant_id, GCTX.sql_proxy_, false/*for update*/, tenant_info))) {
+        LOG_WARN("fail to get tenant info", K(ret), K(user_tenant_id));
+      } else if (OB_FAIL(decide_tenant_snapshot_scn_(table_op, tenant_snapshot_id, tenant_info, snapshot_scn,
+                             snapshot_scn_to_persist, need_persist_scn))) {
+        LOG_WARN("fail to decide snapshot scn to persist", KR(ret), K(tenant_info), K(snapshot_scn));
+      } else if (need_persist_scn && OB_FAIL(table_op.update_tenant_snap_item(
+                                                 tenant_snapshot_id,
+                                                 ObTenantSnapStatus::CREATING,
+                                                 tenant_info.is_standby()
+                                                     ? ObTenantSnapStatus::CREATING/*try next turn for standby tenant*/
+                                                     : ObTenantSnapStatus::DECIDED,
+                                                 snapshot_scn_to_persist,
+                                                 clog_start_scn))) {
+        LOG_WARN("fail to update snapshot status and interval scn", KR(ret), K(tenant_info),
+                 K(tenant_snapshot_id), K(clog_start_scn), K(snapshot_scn_to_persist));
+      } else if (tenant_info.is_standby() && OB_FAIL(check_standby_gts_exceed_snapshot_scn_(
+                     table_op, tenant_info.get_tenant_id(), tenant_snapshot_id, snapshot_scn_to_persist))) {
+        LOG_WARN("fail to check standby tenant gts_scn exceed sync_scn", KR(ret), K(tenant_info));
       } else {
         whether_to_commit_trans = true;
       }
     }
     LOG_INFO("results meet the requirement",
-        KR(ret), K(create_job), K(clog_start_scn), K(snapshot_scn),
+        KR(ret), K(create_job), K(clog_start_scn), K(snapshot_scn), K(snapshot_scn_to_persist),
         K(need_wait_minority), K(whether_to_commit_trans));
   }
 
@@ -879,6 +884,100 @@ int ObTenantSnapshotScheduler::check_create_tenant_snapshot_result_(
     }
   }
 
+  return ret;
+}
+
+int ObTenantSnapshotScheduler::decide_tenant_snapshot_scn_(
+    ObTenantSnapshotTableOperator &table_op,
+    const ObTenantSnapshotID &tenant_snapshot_id,
+    const ObAllTenantInfo &tenant_info,
+    const SCN &snapshot_scn,
+    SCN &output_snapshot_scn,
+    bool &need_persist_scn)
+{
+  int ret = OB_SUCCESS;
+  output_snapshot_scn.reset();
+  need_persist_scn = true;
+
+  if (OB_UNLIKELY(!tenant_info.is_valid())
+      || OB_UNLIKELY(!snapshot_scn.is_valid())
+      || OB_UNLIKELY(!tenant_snapshot_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_info), K(snapshot_scn), K(tenant_snapshot_id));
+  } else if (tenant_info.is_primary()) {
+    SCN gts_scn;
+    // TODO: Currently, how to get the maximum scn in ObLSMetaPackage has not yet been solved;
+    //       The end_interval_scn reported by the storage node may be smaller than the actual
+    //       required; We rely on gts when local snapshots are created to determine snapshot scn;
+    if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_info.get_tenant_id(), GCONF.rpc_timeout, gts_scn))) {
+      LOG_WARN("fail to get gts sync", KR(ret), K(tenant_info));
+    } else {
+      output_snapshot_scn = MAX(snapshot_scn, gts_scn);
+    }
+  } else if (tenant_info.is_standby()) {
+    // get snapshot_scn from inner_table
+    ObTenantSnapItem item;
+    if (OB_UNLIKELY(!table_op.is_inited())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument");
+    } else if (OB_FAIL(table_op.get_tenant_snap_item(tenant_snapshot_id, false/*need_lock*/, item))) {
+      LOG_WARN("fail to get tenant snapshot item", KR(ret), K(tenant_snapshot_id));
+    } else if (item.get_snapshot_scn().is_valid()) {
+      // use snapshot scn in __all_tenant_snapshot table
+      output_snapshot_scn = item.get_snapshot_scn();
+      need_persist_scn = false; // snapshot_scn has already persisted, no need persist again
+    } else {
+      output_snapshot_scn = tenant_info.get_sync_scn();
+    }
+  } else {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("unexpected tenant role", KR(ret), K(tenant_info));
+  }
+  return ret;
+}
+
+int ObTenantSnapshotScheduler::check_standby_gts_exceed_snapshot_scn_(
+    ObTenantSnapshotTableOperator &table_op,
+    const uint64_t &tenant_id,
+    const ObTenantSnapshotID &tenant_snapshot_id,
+    const SCN &snapshot_scn_to_check)
+{
+  int ret = OB_SUCCESS;
+  bool finished = false;
+  SCN gts_scn;
+  if (OB_UNLIKELY(!snapshot_scn_to_check.is_valid())
+      || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(snapshot_scn_to_check), K(tenant_id));
+  } else {
+    const int64_t start_check_time = ObTimeUtility::current_time();
+    const int64_t check_wait_interval = 1 * 1000L * 1000L; // 1s
+    const int64_t sleep_time = 100 * 1000L; // 100ms
+    if (OB_SUCC(ret) && !finished && ObTimeUtility::current_time() - start_check_time < check_wait_interval) {
+      if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id, GCONF.rpc_timeout, gts_scn))) {
+        LOG_WARN("fail to get gts sync", KR(ret), K(tenant_id));
+      } else if (gts_scn < snapshot_scn_to_check) {
+        // need to wait
+        finished = false;
+        LOG_TRACE("standby tenant gts_scn not exceed snapshot_scn, need to wait", K(tenant_id),
+                  K(snapshot_scn_to_check), K(gts_scn));
+        ob_usleep(sleep_time);
+      } else {
+        // good, gts_scn for standby tenant has already exceed sync_scn
+        finished = true;
+        ObTenantSnapItem item;
+        LOG_INFO("standby tenant gts_scn exceeded sync_scn", K(tenant_id), K(snapshot_scn_to_check), K(gts_scn));
+        if (OB_FAIL(table_op.get_tenant_snap_item(tenant_snapshot_id, false/*need_lock*/, item))) {
+          LOG_WARN("fail to get tenant snapshot item", KR(ret), K(tenant_snapshot_id));
+        } else if (OB_FAIL(table_op.update_tenant_snap_item(
+                               item.get_snapshot_name(),
+                               ObTenantSnapStatus::CREATING/*old_status*/,
+                               ObTenantSnapStatus::DECIDED/*new_status*/))) {
+          LOG_WARN("fail to update snapshot status", KR(ret), K(tenant_snapshot_id), K(item));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -1000,7 +1099,6 @@ int ObTenantSnapshotScheduler::finish_create_tenant_snapshot_(
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObTenantSnapshotTableOperator table_op;
-  ObTenantSnapItem item;
   uint64_t data_version = 0;
   ObTenantSnapItem global_lock;
 
@@ -1012,17 +1110,10 @@ int ObTenantSnapshotScheduler::finish_create_tenant_snapshot_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_snapshot_id), K(user_tenant_id),
                                     K(clog_start_scn), K(snapshot_scn), KP(sql_proxy_));
-  } else if (OB_FAIL(ObTenantSnapshotUtil::check_and_get_data_version(user_tenant_id, data_version))) {
-    LOG_WARN("fail to check and get data version or tenant is in upgrading procedure", KR(ret), K(user_tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(user_tenant_id)))) {
     LOG_WARN("failed to start trans", KR(ret), K(user_tenant_id));
   } else if (OB_FAIL(table_op.init(user_tenant_id, &trans))) {
     LOG_WARN("failed to init table op", KR(ret), K(user_tenant_id));
-  } else if (OB_FAIL(table_op.get_tenant_snap_item(tenant_snapshot_id, false, item))) {
-    LOG_WARN("failed to get item", KR(ret), K(tenant_snapshot_id));
-  } else if (item.get_data_version() != data_version) {
-    ret = OB_VERSION_NOT_MATCH;
-    LOG_WARN("data version are not match", KR(ret), K(item), K(data_version));
   } else if (OB_FAIL(table_op.update_tenant_snap_item(tenant_snapshot_id,
                                                       ObTenantSnapStatus::DECIDED,
                                                       ObTenantSnapStatus::NORMAL))) {

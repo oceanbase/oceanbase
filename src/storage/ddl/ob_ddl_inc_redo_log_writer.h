@@ -129,7 +129,7 @@ public:
       const transaction::ObTransID &trans_id);
   void reset();
   int write(
-      const blocksstable::ObMacroBlockHandle &macro_handle,
+      blocksstable::ObMacroBlockHandle &macro_handle,
       const blocksstable::ObLogicMacroBlockId &logic_id,
       char *buf,
       const int64_t buf_len,

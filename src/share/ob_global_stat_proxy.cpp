@@ -265,6 +265,42 @@ int ObGlobalStatProxy::get_target_data_version(
   return ret;
 }
 
+int ObGlobalStatProxy::update_finish_data_version(const uint64_t finish_data_version,
+                                                  const share::SCN &barrier_scn) {
+  int ret = OB_SUCCESS;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem version_item(list, "finish_data_version", finish_data_version);
+  ObGlobalStatItem scn_item(list, "data_version_barrier_scn",
+                            barrier_scn.get_val_for_inner_table_field());
+  bool is_incremental = true;
+  if (!is_valid() || !barrier_scn.is_valid() || finish_data_version <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), "valid", is_valid(), K(barrier_scn), K(finish_data_version));
+  } else if (OB_FAIL(update(list, is_incremental))) {
+    LOG_WARN("update failed", KR(ret), K(list));
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::get_finish_data_version(uint64_t &finish_data_version,
+                                               share::SCN &barrier_scn) {
+  int ret = OB_SUCCESS;
+  finish_data_version = 0;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem version_item(list, "finish_data_version", OB_INVALID_VERSION);
+  ObGlobalStatItem scn_item(list, "data_version_barrier_scn", OB_INVALID_SCN_VAL);
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), "self valid", is_valid());
+  } else if (OB_FAIL(get(list))) {
+    LOG_WARN("get failed", KR(ret));
+  } else {
+    finish_data_version = static_cast<uint64_t>(version_item.value_);
+    barrier_scn.convert_for_inner_table_field(static_cast<uint64_t>(scn_item.value_));
+  }
+  return ret;
+}
+
 int ObGlobalStatProxy::get_target_data_version_ora_rowscn(
   const uint64_t tenant_id,
   share::SCN &target_data_version_ora_rowscn)

@@ -117,6 +117,7 @@ int ObMLogBuilder::MLogColumnUtils::add_sequence_column()
     rowkey_column->set_data_type(ObIntType);
     rowkey_column->set_charset_type(CHARSET_BINARY);
     rowkey_column->set_collation_type(CS_TYPE_BINARY);
+    rowkey_column->set_accuracy(ObAccuracy::MAX_ACCURACY[ObIntType]);
     if (OB_FAIL(rowkey_column->set_column_name(OB_MLOG_SEQ_NO_COLUMN_NAME))) {
       LOG_WARN("failed to set column name", KR(ret));
     } else if (OB_FAIL(mlog_table_column_array_.push_back(rowkey_column))) {
@@ -307,6 +308,7 @@ int ObMLogBuilder::MLogColumnUtils::implicit_add_base_table_part_key_columns(
         ref_column->set_is_hidden(false);
         ref_column->set_rowkey_position(0);
         ref_column->set_index_position(0);
+        ref_column->set_nullable(false);
         ref_column->set_prev_column_id(UINT64_MAX);
         ref_column->set_next_column_id(UINT64_MAX);
         ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
@@ -357,7 +359,7 @@ int ObMLogBuilder::MLogColumnUtils::construct_mlog_table_columns(
       return (a->get_column_id() < b->get_column_id());
     }
   };
-  std::sort(mlog_table_column_array_.begin(), mlog_table_column_array_.end(), ColumnSchemaCmp());
+  lib::ob_sort(mlog_table_column_array_.begin(), mlog_table_column_array_.end(), ColumnSchemaCmp());
 
   for (int64_t i = 0; OB_SUCC(ret) && (i < mlog_table_column_array_.count()); ++i) {
     ObColumnSchemaV2 *column = mlog_table_column_array_.at(i);

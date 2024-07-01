@@ -23,7 +23,7 @@
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/das/ob_das_ref.h"
 #include "sql/das/ob_das_attach_define.h"
-#include "sql/das/ob_text_retrieval_op.h"
+#include "sql/das/ob_das_ir_define.h"
 #include "share/datum/ob_datum_util.h"
 
 #define STORE_DAS_OBJ(obj_store, das_obj, class_name)       \

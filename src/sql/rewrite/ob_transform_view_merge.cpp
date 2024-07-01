@@ -349,7 +349,7 @@ int ObTransformViewMerge::check_semi_right_table_can_be_merged(ObDMLStmt *stmt,
   bool has_rownum = false;
   bool force_merge = false;
   bool force_no_merge = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ref_query)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ref_query) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(ref_query));
   } else if (OB_FAIL(check_hint_allowed_merge(*stmt, 
@@ -372,7 +372,8 @@ int ObTransformViewMerge::check_semi_right_table_can_be_merged(ObDMLStmt *stmt,
              || ref_query->is_hierarchical_query()
              || ref_query->has_ora_rowscn()
              || (lib::is_mysql_mode() && ref_query->has_for_update())
-             || ref_query->is_values_table_query()) {
+             || (ref_query->is_values_table_query() &&
+                 !ObTransformUtils::is_enable_values_table_rewrite(stmt->get_query_ctx()->optimizer_features_enable_version_))) {
     can_be = false;
   } else if (OB_FAIL(ref_query->has_rownum(has_rownum))) {
     LOG_WARN("failed to check has rownum expr", K(ret));
@@ -513,7 +514,7 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
   bool force_no_merge = false;
   bool is_select_expr_valid = false;
   ObSEArray<ObRawExpr*, 8> select_exprs;
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
+  if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt) || OB_ISNULL(parent_stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(check_hint_allowed_merge(*parent_stmt, 
@@ -535,7 +536,8 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
              || child_stmt->has_window_function()
              || child_stmt->has_sequence()
              || child_stmt->has_ora_rowscn()
-             || child_stmt->is_values_table_query()) {
+             || (child_stmt->is_values_table_query() &&
+                 !ObTransformUtils::is_enable_values_table_rewrite(parent_stmt->get_query_ctx()->optimizer_features_enable_version_))) {
     can_be = false;
     OPT_TRACE("not a valid view");
   } else if (!force_merge && parent_stmt->get_table_size() > 1 && child_stmt->get_table_size() > 1 &&

@@ -18,6 +18,7 @@
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "lib/alloc/memory_dump.h"
 #include "lib/alloc/memory_sanity.h"
 #include "lib/alloc/ob_malloc_callback.h"
@@ -102,7 +103,7 @@ int ObTenantCtxAllocator::iter_label(VisitFunc func) const
         }
       }
       if (OB_SUCC(ret)) {
-        std::sort(items, items + item_cnt,
+        lib::ob_sort(items, items + item_cnt,
             [](ItemWrapper &l, ItemWrapper &r)
             {
               return (l.item_->hold_  > r.item_->hold_);
@@ -452,7 +453,9 @@ void ObTenantCtxAllocator::on_free(AObject &obj)
 
   int64_t tenant_id = blk_mgr->get_tenant_id();
   int64_t ctx_id = blk_mgr->get_ctx_id();
-  ObMemAttr attr(tenant_id, obj.label_, ctx_id);
+  char label[lib::AOBJECT_LABEL_SIZE + 1];
+  MEMCPY(label, obj.label_, sizeof(label));
+  ObMemAttr attr(tenant_id, label, ctx_id);
   if (OB_NOT_NULL(malloc_callback)) {
     const int64_t size = obj.alloc_bytes_;
     (*malloc_callback)(attr, -size);
@@ -480,7 +483,6 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
     on_free(*obj);
   }
-
 #ifdef ERRSIM
   const ObErrsimModuleType type = THIS_WORKER.get_module_type();
   if (is_errsim_module(ta.get_tenant_id(), type.type_)) {
@@ -492,7 +494,15 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
       && ObCtxIds::GLIBC != attr.ctx_id_);
   ObMemAttr inner_attr = attr;
-  if (OB_UNLIKELY(is_errsim)) {
+
+  int ret = OB_E(EventTable::EN_4) OB_SUCCESS;
+  if (OB_UNLIKELY(OB_FAIL(ret) || is_errsim)) {
+    AllocFailedCtx &afc = g_alloc_failed_ctx();
+    afc.reason_ = AllocFailedReason::ERRSIM_INJECTION;
+    if (OB_NOT_NULL(obj)) {
+      allocator.free_object(obj);
+      obj = NULL;
+    }
   } else {
     BASIC_TIME_GUARD(time_guard, "ObMalloc");
     DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
@@ -525,8 +535,8 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
       sleep(1);
     }
 #endif
-    const char *msg = is_errsim ? "[ERRSIM] errsim inject memory error" : alloc_failed_msg();
-    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "[OOPS]", "alloc failed reason", KCSTRING(msg));
+    const char *msg = alloc_failed_msg();
+    LOG_DBA_WARN_V2(OB_LIB_ALLOCATE_MEMORY_FAIL, OB_ALLOCATE_MEMORY_FAILED, "[OOPS]: alloc failed reason is that ", msg);
     _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
                 "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
                 inner_attr.tenant_id_, inner_attr.ctx_id_,

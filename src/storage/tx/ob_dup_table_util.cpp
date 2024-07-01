@@ -858,6 +858,7 @@ int ObDupTableLSHandler::check_redo_sync_completed(const ObTransID &tx_id,
             before_prepare_req.set_header(self_addr, lease_addrs[i], self_addr, ls_id_);
             if (before_prepare_req.get_before_prepare_scn_src()
                 <= ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::UNKNOWN) {
+              // ignore ret
               DUP_TABLE_LOG(ERROR, "UNKOWN before prepare src", K(ret), K(tmp_ret),
                             K(before_prepare_req), K(redo_completed_scn), K(tx_id), K(ls_id_));
             }

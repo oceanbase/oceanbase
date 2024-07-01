@@ -92,7 +92,7 @@ int ObCGAggCells::process(
     const ObTableAccessContext &context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
-    const int64_t *row_ids,
+    const int32_t *row_ids,
     const int64_t row_count)
 {
   int ret = OB_SUCCESS;

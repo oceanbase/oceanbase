@@ -583,8 +583,8 @@ TEST_F(TestCGScanner, test_filter)
   pd_filter.datum_buf_ = new (buf3) blocksstable::ObStorageDatum[1]();
   buf3 = allocator_.alloc(sizeof(char *) * pd_filter.batch_size_);
   pd_filter.cell_data_ptrs_ = reinterpret_cast<const char **>(buf3);
-  buf3 = allocator_.alloc(sizeof(int64_t) * pd_filter.batch_size_);
-  pd_filter.row_ids_ = reinterpret_cast<int64_t *>(buf3);
+  buf3 = allocator_.alloc(sizeof(int32_t) * pd_filter.batch_size_);
+  pd_filter.row_ids_ = reinterpret_cast<int32_t *>(buf3);
   pd_filter.skip_bit_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(256)));
   pd_filter.is_inited_ = true;
 

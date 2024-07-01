@@ -27,6 +27,60 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
+class SmallHashSetBatchInsertOP
+{
+public:
+  SmallHashSetBatchInsertOP(ObSmallHashSet<false> &sm_hash_set, uint64_t *batch_hash_values)
+      : sm_hash_set_(sm_hash_set), batch_hash_values_(batch_hash_values)
+  {}
+  OB_INLINE int operator()(int64_t batch_i)
+  {
+    return sm_hash_set_.insert_hash(batch_hash_values_[batch_i]);
+  }
+
+private:
+  ObSmallHashSet<false> &sm_hash_set_;
+  uint64_t *batch_hash_values_;
+};
+
+template<typename ResVec>
+class InFilterProbeOP
+{
+public:
+  InFilterProbeOP(ObSmallHashSet<false> &sm_hash_set, ResVec *res_vec, uint64_t *right_hash_values,
+                  int64_t &total_count, int64_t &filter_count)
+      : sm_hash_set_(sm_hash_set), res_vec_(res_vec), right_hash_values_(right_hash_values),
+        total_count_(total_count), filter_count_(filter_count)
+  {}
+  OB_INLINE int operator()(int64_t batch_i)
+  {
+    bool is_match = false;
+    constexpr int64_t is_match_payload = 1;
+    total_count_ += 1;
+    is_match = sm_hash_set_.test_hash(right_hash_values_[batch_i]);
+    if (!is_match) {
+      filter_count_++;
+      if (std::is_same<ResVec, IntegerUniVec>::value) {
+        res_vec_->set_int(batch_i, 0);
+      }
+    } else {
+      if (std::is_same<ResVec, IntegerUniVec>::value) {
+        res_vec_->set_int(batch_i, 1);
+      } else {
+        res_vec_->set_payload(batch_i, &is_match_payload, sizeof(int64_t));
+      }
+    }
+    return OB_SUCCESS;
+  }
+private:
+  ObSmallHashSet<false> &sm_hash_set_;
+  ResVec *res_vec_;
+  uint64_t *right_hash_values_;
+  int64_t &total_count_;
+  int64_t &filter_count_;
+};
+
+
 template <typename ResVec>
 static int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound);
 
@@ -204,11 +258,15 @@ OB_DEF_DESERIALIZE(ObRFInFilterVecMsg)
         "RFDEInFilter",
         "RFDEInFilter"))) {
       LOG_WARN("fail to init in hash set", K(ret));
+    } else if (OB_FAIL(sm_hash_set_.init(buckets_cnt, tenant_id_))) {
+      LOG_WARN("faield to init small hash set", K(row_cnt));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
       ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, row_store_.get_row(i), nullptr);
       if (OB_FAIL(rows_set_.set_refactored(node))) {
         LOG_WARN("fail to insert in filter node", K(ret));
+      } else if (OB_FAIL(sm_hash_set_.insert_hash(row_store_.get_hash_value(i, build_row_meta_)))) {
+        LOG_WARN("fail to insert hash value into sm_hash_set_", K(ret));
       }
     }
   }
@@ -609,7 +667,7 @@ int ObRFRangeFilterVecMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -668,7 +726,7 @@ int ObRFRangeFilterVecMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -780,7 +838,7 @@ int ObRFRangeFilterVecMsg::do_might_contain_vector(
       filter_ctx.total_count_ += total_count;
       filter_ctx.check_count_ += total_count;
       filter_ctx.filter_count_ += filter_count;
-      ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+      filter_ctx.collect_sample_info(filter_count, total_count);
     }
   }
   return ret;
@@ -1044,6 +1102,8 @@ int ObRFInFilterVecMsg::assign(const ObP2PDatahubMsgBase &msg)
     LOG_WARN("fail to assign row_store_", K(ret));
   } else if (OB_FAIL(rows_set_.create(bucket_cnt * 2, "RFCPInFilter", "RFCPInFilter"))) {
     LOG_WARN("fail to init in hash set", K(ret));
+  } else if (OB_FAIL(sm_hash_set_.init(bucket_cnt, tenant_id_))) {
+    LOG_WARN("failed to init sm_hash_set_", K(other_msg.row_store_.get_row_cnt()));
   } else if (OB_FAIL(hash_funcs_for_insert_.assign(other_msg.hash_funcs_for_insert_))) {
     LOG_WARN("fail to assign hash_funcs_for_insert_", K(ret));
   } else if (OB_FAIL(query_range_info_.assign(other_msg.query_range_info_))) {
@@ -1058,6 +1118,8 @@ int ObRFInFilterVecMsg::assign(const ObP2PDatahubMsgBase &msg)
                               nullptr);
         if (OB_FAIL(rows_set_.set_refactored(node))) {
           LOG_WARN("fail to insert in filter node", K(ret));
+        } else if (OB_FAIL(sm_hash_set_.insert_hash(row_store_.get_hash_value(i, build_row_meta_)))) {
+          LOG_WARN("fail to insert hash value into sm_hash_set_", K(ret));
         }
       }
     }
@@ -1105,6 +1167,13 @@ int ObRFInFilterVecMsg::insert_by_row_vector(
         arg_vec->murmur_hash_v3(*expr, batch_hash_values, *(child_brs->skip_), bound,
                                 is_batch_seed ? batch_hash_values : &seed, is_batch_seed);
       }
+    }
+
+    SmallHashSetBatchInsertOP sm_hash_set_batch_ins_op(sm_hash_set_, batch_hash_values);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(
+                   ObBitVector::flip_foreach(*child_brs->skip_, bound, sm_hash_set_batch_ins_op))) {
+      LOG_WARN("failed insert batch_hash_values into sm_hash_set_");
     }
 
     ObRowWithHash &cur_row = cur_row_with_hash_;
@@ -1348,6 +1417,9 @@ int ObRFInFilterVecMsg::merge(ObP2PDatahubMsgBase &msg)
                             nullptr /*row_with_hash*/);
       if (OB_FAIL(try_merge_node(node, row_size))) {
         LOG_WARN("fail to insert node", K(ret));
+      } else if (OB_FAIL(sm_hash_set_.insert_hash(
+                     other_msg.row_store_.get_hash_value(i, build_row_meta_)))) {
+        LOG_WARN("failed to insert hash value into sm_hash_set_");
       }
     }
   }
@@ -1360,6 +1432,7 @@ int ObRFInFilterVecMsg::reuse()
   is_empty_ = true;
   row_store_.reset();
   rows_set_.reuse();
+  sm_hash_set_.clear();
   (void)reuse_query_range();
   return ret;
 }
@@ -1421,7 +1494,7 @@ int ObRFInFilterVecMsg::might_contain(const ObExpr &expr,
       }
       filter_ctx.check_count_++;
       res.set_int(is_match ? 1 : 0);
-      ObExprJoinFilter::collect_sample_info(&filter_ctx, is_match);
+      filter_ctx.collect_sample_info(!is_match, 1);
     }
   }
   return ret;
@@ -1484,7 +1557,7 @@ int ObRFInFilterVecMsg::do_might_contain_batch(const ObExpr &expr,
     filter_ctx.filter_count_ += filter_count;
     filter_ctx.total_count_ += total_count;
     filter_ctx.check_count_ += total_count;
-    ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+    filter_ctx.collect_sample_info(filter_count, total_count);
   }
   return ret;
 }
@@ -1610,11 +1683,98 @@ int ObRFInFilterVecMsg::do_might_contain_vector(
       filter_ctx.total_count_ += total_count;
       filter_ctx.check_count_ += total_count;
       filter_ctx.filter_count_ += filter_count;
-      ObExprJoinFilter::collect_sample_info_batch(filter_ctx, filter_count, total_count);
+      filter_ctx.collect_sample_info(filter_count, total_count);
     }
   }
   return ret;
 }
+
+template<typename ResVec>
+int ObRFInFilterVecMsg::do_might_contain_vector_impl(
+    const ObExpr &expr,
+    ObEvalCtx &ctx,
+    const ObBitVector &skip,
+    const EvalBound &bound,
+    ObExprJoinFilter::ObExprJoinFilterContext &filter_ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t total_count = 0;
+  int64_t filter_count = 0;
+  uint64_t seed = ObExprJoinFilter::JOIN_FILTER_SEED;
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  uint64_t *right_hash_vals = filter_ctx.right_hash_vals_;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+
+  if (std::is_same<ResVec, IntegerFixedVec>::value) {
+    IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
+    if (OB_FAIL(preset_not_match(res_vec, bound))) {
+      LOG_WARN("failed to preset_not_match", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+    ObExpr *e = expr.args_[i];
+    if (OB_FAIL(e->eval_vector(ctx, skip, bound))) {
+      LOG_WARN("evaluate vector failed", K(ret), K(*e));
+    } else {
+      const bool is_batch_seed = (i > 0);
+      ObIVector *arg_vec = e->get_vector(ctx);
+      if (OB_FAIL(arg_vec->murmur_hash_v3(*e, right_hash_vals, skip,
+          bound, is_batch_seed ? right_hash_vals : &seed, is_batch_seed))) {
+        LOG_WARN("failed to cal hash");
+      }
+    }
+  }
+
+#define IN_FILTER_PROBE_HELPER                                                                     \
+  is_match = sm_hash_set_.test_hash(right_hash_vals[batch_i]);                                     \
+  if (!is_match) {                                                                                 \
+    filter_count++;                                                                                \
+    if (std::is_same<ResVec, IntegerUniVec>::value) {                                              \
+      res_vec->set_int(batch_i, 0);                                                                \
+    }                                                                                              \
+  } else {                                                                                         \
+    if (std::is_same<ResVec, IntegerUniVec>::value) {                                              \
+      res_vec->set_int(batch_i, 1);                                                                \
+    } else {                                                                                       \
+      res_vec->set_payload(batch_i, &is_match_payload, sizeof(int64_t));                           \
+    }                                                                                              \
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+    batch_info_guard.set_batch_size(bound.batch_size());
+    bool is_match = true;
+    const int64_t is_match_payload = 1; // for VEC_FIXED set set_payload, always 1
+    if (bound.get_all_rows_active()) {
+      total_count += bound.end() - bound.start();
+      for (int64_t batch_i = bound.start(); batch_i < bound.end() && OB_SUCC(ret); ++batch_i) {
+        IN_FILTER_PROBE_HELPER
+      }
+    } else {
+      InFilterProbeOP<ResVec> in_filter_probe_op(sm_hash_set_, res_vec, right_hash_vals,
+                                                 total_count, filter_count);
+      (void)ObBitVector::flip_foreach(skip, bound, in_filter_probe_op);
+    }
+    if (OB_SUCC(ret)) {
+      eval_flags.set_all(true);
+      filter_ctx.total_count_ += total_count;
+      filter_ctx.check_count_ += total_count;
+      filter_ctx.filter_count_ += filter_count;
+      filter_ctx.collect_sample_info(filter_count, total_count);
+    }
+  }
+#undef IN_FILTER_PROBE_HELPER
+  return ret;
+}
+
+#define IN_FILTER_DISPATCH_RES_FORMAT(function, res_format)                                        \
+  if (res_format == VEC_FIXED) {                                                                   \
+    ret = function<IntegerFixedVec>(expr, ctx, skip, bound, filter_ctx);                           \
+  } else {                                                                                         \
+    ret = function<IntegerUniVec>(expr, ctx, skip, bound, filter_ctx);                             \
+  }
 
 int ObRFInFilterVecMsg::might_contain_vector(
     const ObExpr &expr,
@@ -1655,8 +1815,9 @@ int ObRFInFilterVecMsg::might_contain_vector(
       filter_ctx.check_count_ += total_count;
       filter_ctx.total_count_ += total_count;
     }
-  } else if (OB_FAIL(do_might_contain_vector(expr, ctx, skip, bound, filter_ctx))) {
-    LOG_WARN("fail to do might contain vector");
+  } else {
+    VectorFormat res_format = expr.get_format(ctx);
+    IN_FILTER_DISPATCH_RES_FORMAT(do_might_contain_vector_impl, res_format);
   }
   return ret;
 }
@@ -1676,7 +1837,6 @@ int ObRFInFilterVecMsg::prepare_storage_white_filter_data(ObDynamicFilterExecuto
     is_data_prepared = true;
   } else {
     for (int64_t i = 0; i < row_store_.get_row_cnt() && OB_SUCC(ret); ++i) {
-      // row_store_.get_row(i)->get_datum(build_row_meta_, col_idx);
       if (OB_FAIL(params.push_back(row_store_.get_row(i)->get_datum(build_row_meta_, col_idx)))) {
         LOG_WARN("failed to push back");
       }
@@ -1697,6 +1857,7 @@ int ObRFInFilterVecMsg::destroy()
   build_row_meta_.reset();
   cur_row_with_hash_.row_.reset();
   rows_set_.destroy();
+  sm_hash_set_.~ObSmallHashSet<false>();
   need_null_cmp_flags_.reset();
   row_store_.reset();
   hash_funcs_for_insert_.reset();

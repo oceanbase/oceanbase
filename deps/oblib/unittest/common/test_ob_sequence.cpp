@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log.h"
+#define private public
 #include "common/storage/ob_sequence.h"
 #include "lib/time/ob_time_utility.h"
 
@@ -67,6 +68,29 @@ TEST_F(TestObSequence, update_max_seq_no)
   seq_no = ObSequence::get_max_seq_no();
   ObSequence::update_max_seq_no(seq_no + 1000000);
   EXPECT_EQ(ObSequence::get_max_seq_no(), seq_no + 1000001);
+
+  // just print error log but update success
+  ObSequence::update_max_seq_no(seq_no + 1_day);
+  EXPECT_EQ(ObSequence::get_max_seq_no(), seq_no + 1_day + 1);
+  TRANS_LOG(INFO, "sequence", K(ObSequence::get_max_seq_no()));
+}
+
+TEST_F(TestObSequence, get_and_inc_max_seq_no)
+{
+  TRANS_LOG(INFO, "called", "func", test_info_->name());
+
+  int64_t seq_no = 0;
+  EXPECT_EQ(OB_SUCCESS, ObSequence::get_and_inc_max_seq_no(1, seq_no));
+  EXPECT_EQ(ObSequence::get_max_seq_no(), seq_no + 1);
+
+  EXPECT_EQ(OB_SUCCESS, ObSequence::get_and_inc_max_seq_no(0, seq_no));
+  EXPECT_EQ(ObSequence::get_max_seq_no(), seq_no);
+
+  EXPECT_NE(OB_SUCCESS, ObSequence::get_and_inc_max_seq_no(-1, seq_no));
+  EXPECT_EQ(ObSequence::get_max_seq_no(), seq_no);
+
+  EXPECT_NE(OB_SUCCESS, ObSequence::get_and_inc_max_seq_no(1_day + 1, seq_no));
+  EXPECT_EQ(ObSequence::get_max_seq_no(), seq_no);
 }
 
 }//end of unittest

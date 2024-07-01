@@ -65,6 +65,12 @@ int ObDiscreteVector<BasicOp>::null_last_cmp(VECTOR_ONE_COMPARE_ARGS) const
   return VecOpUtil::template ns_cmp<false>(expr.obj_meta_, *this, row_idx, r_null, r_v, r_len, cmp_ret);
 }
 
+template<typename BasicOp>
+int ObDiscreteVector<BasicOp>::no_null_cmp(VECTOR_NOT_NULL_COMPARE_ARGS) const
+{
+  return VecOpUtil::Op::cmp(expr.obj_meta_, get_payload(row_idx1), get_length(row_idx1), get_payload(row_idx2), get_length(row_idx2), cmp_ret);
+}
+
 template class ObDiscreteVector<VectorBasicOp<VEC_TC_NUMBER>>;
 template class ObDiscreteVector<VectorBasicOp<VEC_TC_EXTEND>>;
 template class ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>>;
@@ -75,5 +81,6 @@ template class ObDiscreteVector<VectorBasicOp<VEC_TC_LOB>>;
 template class ObDiscreteVector<VectorBasicOp<VEC_TC_JSON>>;
 template class ObDiscreteVector<VectorBasicOp<VEC_TC_GEO>>;
 template class ObDiscreteVector<VectorBasicOp<VEC_TC_UDT>>;
+template class ObDiscreteVector<VectorBasicOp<VEC_TC_ROARINGBITMAP>>;
 } // end namespace common
 } // end namespace oceanbase

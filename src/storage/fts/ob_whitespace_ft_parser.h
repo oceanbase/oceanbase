@@ -23,21 +23,27 @@ namespace oceanbase
 namespace storage
 {
 
-class ObSpaceFTParser final
+class ObSpaceFTParser final : public lib::ObITokenIterator
 {
 public:
-  ObSpaceFTParser() = default;
-  ~ObSpaceFTParser() = default;
-  static int segment(
-      lib::ObFTParserParam *param,
-      const char *fulltext,
-      const int64_t ft_len);
+  ObSpaceFTParser();
+  virtual ~ObSpaceFTParser();
+
+  int init(lib::ObFTParserParam *param);
+  void reset();
+  virtual int get_next_token(
+      const char *&word,
+      int64_t &word_len,
+      int64_t &char_len,
+      int64_t &word_freq) override;
+
+  VIRTUAL_TO_STRING_KV(KP_(cs), KP_(start), KP_(next), KP_(end), K_(is_inited));
 private:
-  static int add_word(
-      lib::ObFTParserParam *param,
-      const char *word,
-      const int64_t word_len,
-      const int64_t char_cnt);
+  const ObCharsetInfo *cs_;
+  const char *start_;
+  const char *next_;
+  const char *end_;
+  bool is_inited_;
 };
 
 class ObWhiteSpaceFTParserDesc final : public lib::ObIFTParserDesc
@@ -47,7 +53,8 @@ public:
   virtual ~ObWhiteSpaceFTParserDesc() = default;
   virtual int init(lib::ObPluginParam *param) override;
   virtual int deinit(lib::ObPluginParam *param) override;
-  virtual int segment(lib::ObFTParserParam *param) const override;
+  virtual int segment(lib::ObFTParserParam *param, lib::ObITokenIterator *&iter) const override;
+  virtual void free_token_iter(lib::ObFTParserParam *param, lib::ObITokenIterator *&iter) const override;
   OB_INLINE void reset() { is_inited_ = false; }
 private:
   bool is_inited_;

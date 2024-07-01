@@ -60,8 +60,10 @@ DEF_TO_STRING(ObVTableScanParam)
        N_WAIT, for_update_wait_timeout_,
        N_FROZEN_VERSION, frozen_version_,
        K_(is_get),
+       K_(pd_storage_flag),
        KPC_(output_exprs),
        KPC_(op_filters),
+       K_(table_scan_opt),
        K_(external_file_format),
        K_(external_file_location));
   J_OBJ_END();

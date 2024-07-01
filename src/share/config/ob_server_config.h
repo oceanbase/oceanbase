@@ -62,6 +62,7 @@ const char* const TENANT_MEMSTORE_LIMIT_PERCENTAGE = "_memstore_limit_percentage
 const char* const _TX_DATA_MEMORY_LIMIT_PERCENTAGE = "_tx_data_memory_limit_percentage";
 const char* const _MDS_MEMORY_LIMIT_PERCENTAGE = "_mds_memory_limit_percentage";
 const char* const COMPATIBLE = "compatible";
+const char* const ENABLE_COMPATIBLE_MONOTONIC = "_enable_compatible_monotonic";
 const char* const WEAK_READ_VERSION_REFRESH_INTERVAL = "weak_read_version_refresh_interval";
 const char* const PARTITION_BALANCE_SCHEDULE_INTERVAL = "partition_balance_schedule_interval";
 const char* const BALANCER_IDLE_TIME = "balancer_idle_time";

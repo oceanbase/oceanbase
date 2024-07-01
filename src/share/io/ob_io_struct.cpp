@@ -427,7 +427,8 @@ void ObIOStatDiff::reset()
 
 /******************             IOUsage              **********************/
 ObIOUsage::ObIOUsage()
-  : io_stats_(),
+  : group_throttled_time_us_(),
+    io_stats_(),
     io_estimators_(),
     group_avg_iops_(),
     group_avg_byte_(),
@@ -454,6 +455,7 @@ int ObIOUsage::init(const int64_t group_num)
              group_avg_iops_.count() != group_num_ ||
              group_avg_byte_.count() != group_num_ ||
              group_avg_rt_us_.count() != group_num_ ||
+             group_throttled_time_us_.count() != group_num_ ||
              doing_request_count_.count() != group_num_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init io usage failed", K(group_num_));
@@ -472,6 +474,7 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
              OB_FAIL(group_avg_iops_.reserve(group_num + 1)) ||
              OB_FAIL(group_avg_byte_.reserve(group_num + 1)) ||
              OB_FAIL(group_avg_rt_us_.reserve(group_num + 1)) ||
+             OB_FAIL(group_throttled_time_us_.reserve(group_num + 1)) ||
              OB_FAIL(doing_request_count_.reserve(group_num + 1))) {
     LOG_WARN("reserver group failed", K(ret), K(group_num));
   } else {
@@ -481,6 +484,7 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
       ObSEArray<double, GROUP_START_NUM> cur_avg_iops;
       ObSEArray<double, GROUP_START_NUM> cur_avg_byte;
       ObSEArray<double, GROUP_START_NUM> cur_avg_rt_us;
+      ObSEArray<int64_t, GROUP_START_NUM> cur_throttled_time_us;
 
       if (OB_FAIL(cur_stat_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
           OB_FAIL(cur_estimators_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
@@ -516,6 +520,8 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
           LOG_WARN("push avg_byte array failed", K(ret), K(i));
         } else if (OB_FAIL(group_avg_rt_us_.push_back(cur_avg_rt_us))) {
           LOG_WARN("push avg_rt array failed", K(ret), K(i));
+        } else if (OB_FAIL(group_throttled_time_us_.push_back(0))) {
+          LOG_WARN("push throttled_time_us array failed", K(ret), K(i));
         } else if (OB_FAIL(doing_request_count_.push_back(0))) {
           LOG_WARN("push group_doing_req failed", K(ret), K(i));
         } else {
@@ -532,8 +538,11 @@ void ObIOUsage::accumulate(ObIOResult &result, ObIORequest &request)
   int32_t io_offset = 0;
   int64_t io_size = 0;
   result.calc_io_offset_and_size(io_size, io_offset);
-  if (request.time_log_.return_ts_ > 0) {
-    const int64_t device_delay = get_io_interval(request.time_log_.return_ts_, request.time_log_.submit_ts_);
+  if (OB_NOT_NULL(request.io_result_)
+      && request.io_result_->time_log_.return_ts_ > 0
+      && request.io_result_->ret_code_.io_ret_ == 0) {
+    const int64_t device_delay = get_io_interval(request.io_result_->time_log_.return_ts_,
+                                                  request.io_result_->time_log_.submit_ts_);
     io_stats_.at(result.get_io_usage_index()).at(static_cast<int>(result.get_mode()))
       .accumulate(1, io_size, device_delay);
   }
@@ -678,12 +687,12 @@ void ObSysIOUsage::accumulate(ObIOResult &result, ObIORequest &request)
 {
   if (OB_UNLIKELY(!request.is_sys_module())) {
     // ignore
-  } else if (request.time_log_.return_ts_ > 0) {
+  } else if (request.io_result_->time_log_.return_ts_ > 0) {
     int32_t io_offset = 0;
     int64_t io_size = 0;
     result.calc_io_offset_and_size(io_size, io_offset);
     const uint64_t idx = result.get_sys_module_id() - SYS_RESOURCE_GROUP_START_ID;
-    const int64_t device_delay = get_io_interval(request.time_log_.return_ts_, request.time_log_.submit_ts_);
+    const int64_t device_delay = get_io_interval(request.io_result_->time_log_.return_ts_, request.io_result_->time_log_.submit_ts_);
     io_stats_.at(idx).at(static_cast<int>(result.get_mode()))
       .accumulate(1, io_size, device_delay);
   }
@@ -835,27 +844,38 @@ void ObIOTuner::run1()
   }
 }
 
-void ObIOTuner::print_sender_status()
+int64_t ObIOTuner::to_string(char *buf, const int64_t len) const
 {
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < io_scheduler_.senders_.count(); ++i) {
+  int64_t pos = 0;
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < io_scheduler_.senders_.count(); ++i) {
     ObIOSender *sender = io_scheduler_.senders_.at(i);
     if (OB_ISNULL(sender)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("io sender is null", K(ret), K(i));
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN_RET(tmp_ret, "io sender is null", K(i));
     } else {
       int64_t reservation_ts = 0;
       int64_t group_limitation_ts = 0;
       int64_t tenant_limitation_ts = 0;
       int64_t proportion_ts = 0;
 
-      ret = sender->get_sender_info(reservation_ts, group_limitation_ts, tenant_limitation_ts, proportion_ts);
-      if (OB_NOT_INIT != ret) {
-        LOG_INFO("[IO STATUS SENDER]", "send_index", sender->sender_index_, "req_count", sender->get_queue_count(),
-                 K(reservation_ts), K(group_limitation_ts), K(tenant_limitation_ts), K(proportion_ts));
+      tmp_ret = sender->get_sender_info(reservation_ts, group_limitation_ts, tenant_limitation_ts, proportion_ts);
+      if (OB_NOT_INIT != tmp_ret) {
+        databuff_printf(buf,
+            len,
+            pos,
+            "send_index: %ld, req_count: %ld, reservation_ts: %ld, group_limitation_ts: %ld, tenant_limitation_ts: "
+            "%ld, proportion_ts: %ld; ",
+            sender->sender_index_,
+            sender->get_queue_count(),
+            reservation_ts,
+            group_limitation_ts,
+            tenant_limitation_ts,
+            proportion_ts);
       }
     }
   }
+  return pos;
 }
 
 int ObIOTuner::try_release_thread()
@@ -879,6 +899,11 @@ int ObIOTuner::try_release_thread()
     }
   }
   return ret;
+}
+
+void ObIOTuner::print_sender_status()
+{
+  LOG_INFO("[IO STATUS SENDER]", K(*this));
 }
 
 void ObIOTuner::print_io_status()
@@ -1200,7 +1225,9 @@ int ObIOSender::enqueue_request(ObIORequest &req)
               LOG_WARN("push new req into phy queue failed", K(ret));
             } else {
               ATOMIC_INC(&sender_req_count_);
-              req.time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time();
+              if (OB_NOT_NULL(req.io_result_)) {
+                req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time();
+              }
               //calc ts_
               if (OB_NOT_NULL(req.tenant_io_mgr_.get_ptr())) {
                 ObTenantIOClock *io_clock = static_cast<ObTenantIOClock *>(req.tenant_io_mgr_.get_ptr()->get_io_clock());
@@ -1231,7 +1258,9 @@ int ObIOSender::enqueue_request(ObIORequest &req)
             req.dec_ref("phyqueue_dec"); //ref for phy_queue
           } else {
             ATOMIC_INC(&sender_req_count_);
-            req.time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time();
+            if (OB_NOT_NULL(req.io_result_)) {
+              req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time();
+            }
           }
         }
         if (OB_SUCC(ret)) {
@@ -2081,7 +2110,9 @@ int ObAsyncIOChannel::submit(ObIORequest &req)
     int64_t io_size = 0;
     req.calc_io_offset_and_size(io_size, io_offset);
     ATOMIC_FAA(&device_channel_->used_io_depth_, get_io_depth(io_size));
-    req.time_log_.submit_ts_ = ObTimeUtility::current_time();
+    if (OB_NOT_NULL(req.io_result_)) {
+      req.io_result_->time_log_.submit_ts_ = ObTimeUtility::fast_current_time();
+    }
     req.inc_ref("os_inc"); // ref for file system
     if (OB_FAIL(device_handle_->io_submit(io_context_, req.control_block_))) {
       ATOMIC_DEC(&submit_count_);
@@ -2100,7 +2131,10 @@ void ObAsyncIOChannel::cancel(ObIORequest &req)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (0 != req.time_log_.submit_ts_ && 0 == req.time_log_.return_ts_) {
+  } else if (OB_ISNULL(req.io_result_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("io result is null", KR(ret), K(req));
+  } else if (0 != req.io_result_->time_log_.submit_ts_ && 0 == req.io_result_->time_log_.return_ts_) {
     // Note: here if ob_io_cancel failed (possibly due to kernel not supporting io_cancel),
     // neither we or the get_events thread would call control.callback_->process(),
     // as we previously set need_callback to false.
@@ -2145,7 +2179,9 @@ void ObAsyncIOChannel::get_events()
       } else {
         RequestHolder holder(req);
         req->dec_ref("os_dec"); // ref for file system
-        req->time_log_.return_ts_ = io_return_time;
+        if (OB_NOT_NULL(req->io_result_)) {
+          req->io_result_->time_log_.return_ts_ = ObTimeUtility::fast_current_time();
+        }
         int64_t io_offset = 0;
         int64_t io_size = 0;
         req->calc_io_offset_and_size(io_size, io_offset);
@@ -2451,13 +2487,15 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
   int64_t io_size = 0;
-  int64_t io_offset = static_cast<int64_t>(req.io_result_->offset_);
+  int64_t io_offset = 0;
   if (OB_ISNULL(device_handle_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("device handle is null", K(ret));
   } else if (OB_ISNULL(req.io_result_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret));
+  } else if (FALSE_IT(io_offset = static_cast<int64_t>(req.io_result_->offset_))) {
+  } else if (FALSE_IT(req.io_result_->time_log_.submit_ts_ = ObTimeUtility::fast_current_time())) {
   } else if (req.get_flag().is_read()) {
     if (OB_FAIL(device_handle_->pread(req.fd_, io_offset, req.io_result_->size_, req.calc_io_buf(), io_size))) {
       LOG_WARN("pread failed", K(ret), K(req));
@@ -2469,6 +2507,9 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported io mode", K(ret), K(req));
+  }
+  if (OB_NOT_NULL(req.io_result_)) {
+    req.io_result_->time_log_.return_ts_ = ObTimeUtility::fast_current_time();
   }
   if (OB_SUCC(ret)) {
     req.io_result_->complete_size_ = static_cast<int32_t>(io_size);
@@ -2759,7 +2800,9 @@ int ObIORunner::push(ObIORequest &req)
       LOG_WARN("Fail to enqueue callback", K(ret));
       req.dec_ref("cb_dec"); // ref for callback queue
     } else {
-      req.time_log_.callback_enqueue_ts_ = ObTimeUtility::fast_current_time();
+      if (OB_NOT_NULL(req.io_result_)) {
+        req.io_result_->time_log_.callback_enqueue_ts_ = ObTimeUtility::fast_current_time();
+      }
       // the request has been pushed in queue, not set return code anymore
       int tmp_ret = OB_SUCCESS;
       ObThreadCondGuard guard(cond_);
@@ -3428,7 +3471,9 @@ void ObIOFaultDetector::set_device_error()
   last_device_error_ts_ = ObTimeUtility::fast_current_time();
   is_device_error_ = true;
   LOG_ERROR_RET(OB_IO_ERROR, "set_disk_error: attention!!!");
-  LOG_DBA_ERROR(OB_DISK_ERROR, "msg", "The disk may be corrupted");
+  LOG_DBA_ERROR_V2(OB_COMMON_DISK_INVALID, OB_DISK_ERROR,
+                    "The disk may be corrupted. ",
+                    "[suggestion] check disk.");
 }
 
 ObIOTracer::ObIOTracer()
@@ -3548,7 +3593,7 @@ int ObIOTracer::trace_request(const ObIORequest *req, const char *msg, const Tra
   return ret;
 }
 
-void ObIOTracer::print_status()
+int64_t ObIOTracer::to_string(char *buf, const int64_t len) const
 {
   struct UpdateFn {
     int operator () (hash::HashMapPair<TraceInfo, int64_t> &entry) {
@@ -3605,6 +3650,7 @@ void ObIOTracer::print_status()
     }
   } sort_fn;
 
+  int64_t pos = 0;
   int ret = OB_SUCCESS;
   CountFn counter;
   if (OB_FAIL(counter.init())) {
@@ -3619,13 +3665,18 @@ void ObIOTracer::print_status()
     } else if (OB_FAIL(counter.bt_count_.foreach_refactored(store_fn))) {
       LOG_WARN("get max backtrace count failed", K(ret));
     } else {
-      std::sort(trace_array.begin(), trace_array.end(), sort_fn);
-      LOG_INFO("[IO STATUS TRACER]", K_(tenant_id), "trace_request_count", counter.req_count_, "distinct_backtrace_count", trace_array.count());
+      lib::ob_sort(trace_array.begin(), trace_array.end(), sort_fn);
+      databuff_printf(buf, len, pos, "trace_request_count: %ld, distinct_backtrace_count: %ld; ", counter.req_count_, trace_array.count());
       const int64_t print_count = min(5, trace_array.count());
       for (int64_t i = 0; OB_SUCC(ret) && i < print_count; ++i) {
         const TraceItem &item = trace_array.at(i);
-        LOG_INFO("[IO STATUS TRACER]", "top", i + 1, "count", item.count_, "ref_log", item.trace_info_.ref_log_, "backtrace", item.trace_info_.bt_str_);
+        databuff_printf(buf, len, pos, "top: %ld, count: %ld, ref_log: %s, backtrace: %s; ", i + 1, item.count_, to_cstring(item.trace_info_.ref_log_), item.trace_info_.bt_str_);
       }
     }
   }
+  return pos;
+}
+void ObIOTracer::print_status()
+{
+  LOG_INFO("[IO STATUS TRACER]", K_(tenant_id), K(*this));
 }

@@ -65,6 +65,7 @@ public:
   int recover_tenant(const obrpc::ObRecoverTenantArg &arg);
 
   int write_upgrade_barrier_log(ObMySQLTransaction &trans, const uint64_t tenant_id, const uint64_t data_version);
+  int write_upgrade_data_version_barrier_log(ObMySQLTransaction &trans, const uint64_t tenant_id, const uint64_t data_version);
 
   /**
    * @description:
@@ -211,6 +212,11 @@ private:
    * @return return code
    */
   int check_ls_restore_status_(const uint64_t tenant_id);
+  int write_barrier_log_(const transaction::ObTxDataSourceType type,
+                         ObMySQLTransaction &trans,
+                         const uint64_t tenant_id,
+                         const uint64_t data_version);
+
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;
   const static int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;

@@ -738,13 +738,13 @@ int ObLogRouteService::add_into_blacklist(
     } else if (OB_ISNULL(router_value)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("router_value is nullptr", KR(ret));
-    } else if (router_value->add_into_blacklist(router_key, svr, svr_service_time,
+    } else if (OB_FAIL(router_value->add_into_blacklist(router_key, svr, svr_service_time,
           ATOMIC_LOAD(&blacklist_survival_time_sec_),
           ATOMIC_LOAD(&blacklist_survival_time_upper_limit_min_),
           ATOMIC_LOAD(&blacklist_survival_time_penalty_period_min_),
           ATOMIC_LOAD(&blacklist_history_overdue_time_min_),
           ATOMIC_LOAD(&blacklist_history_clear_interval_min_),
-          survival_time)) {
+          survival_time))) {
       LOG_WARN("router_value add_into_blacklist failed", KR(ret), K(router_key), K(svr),
           K(svr_service_time), K(survival_time));
     } else {}

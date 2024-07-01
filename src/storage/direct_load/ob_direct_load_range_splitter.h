@@ -83,25 +83,6 @@ private:
   bool is_inited_;
 };
 
-class ObDirectLoadSSTableRangeSplitter
-{
-public:
-  ObDirectLoadSSTableRangeSplitter();
-  ~ObDirectLoadSSTableRangeSplitter();
-  int init(const common::ObIArray<ObDirectLoadSSTable *> &sstable_array,
-           const blocksstable::ObStorageDatumUtils *datum_utils);
-  int split_range(common::ObIArray<blocksstable::ObDatumRange> &range_array,
-                  int64_t max_range_count, common::ObIAllocator &allocator);
-private:
-  int construct_rowkey_iters(const common::ObIArray<ObDirectLoadSSTable *> &sstable_array);
-private:
-  common::ObArenaAllocator allocator_;
-  ObArray<ObIDirectLoadDatumRowkeyIterator *> rowkey_iters_;
-  int64_t total_block_count_;
-  ObDirectLoadRowkeyMergeRangeSplitter rowkey_merge_splitter_;
-  bool is_inited_;
-};
-
 class ObDirectLoadMergeRangeSplitter
 {
 public:

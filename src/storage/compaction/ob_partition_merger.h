@@ -48,6 +48,32 @@ class ObPartitionMergeHelper;
 class ObPartitionMinorMergeHelper;
 class ObTabletMergeInfo;
 
+struct ObMacroBlockOp {
+  enum BlockOp: uint8_t {
+    OP_NONE = 0,
+    OP_REORG = 1,
+    OP_REWRITE = 2
+  };
+
+  ObMacroBlockOp() = default;
+  ~ObMacroBlockOp() = default;
+  OB_INLINE void reset() { block_op_ = OP_NONE; }
+  OB_INLINE bool is_none() const { return block_op_ == OP_NONE; }
+  OB_INLINE bool is_rewrite() const { return block_op_ == OP_REWRITE; }
+  OB_INLINE bool is_reorg() const { return block_op_ == OP_REORG; }
+  OB_INLINE bool is_open() const { return is_reorg() || is_rewrite(); }
+  OB_INLINE void set_rewrite() { block_op_ = OP_REWRITE; }
+  OB_INLINE void set_reorg() { block_op_ = OP_REORG; }
+  OB_INLINE bool is_valid() const { return block_op_ <= OP_REWRITE && block_op_ >= OP_NONE; }
+  const char* get_block_op_str() const;
+
+  TO_STRING_KV("op_type", get_block_op_str());
+
+  BlockOp block_op_;
+private:
+  const static char * block_op_str_[];
+};
+
 class ObDataDescHelper final {
 public:
   static int build(
@@ -65,6 +91,7 @@ public:
       progressive_merge_round_(0),
       rewrite_block_cnt_(0),
       need_rewrite_block_cnt_(0),
+      data_version_(0),
       full_merge_(false),
       check_macro_need_merge_(false),
       is_inited_(false)
@@ -73,17 +100,18 @@ public:
   int init(const ObSSTable &sstable, const ObMergeParameter &merge_param, ObIAllocator &allocator);
   void reset();
   inline bool is_valid() const { return is_inited_; }
-  int need_rewrite_macro_block(const ObMacroBlockDesc &macro_desc, bool &need_rewrite) const;
+  int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op) const;
   inline void inc_rewrite_block_cnt() { rewrite_block_cnt_++; }
   inline bool is_progressive_merge_finish() { return need_rewrite_block_cnt_ == 0 || rewrite_block_cnt_ >= need_rewrite_block_cnt_; }
-  inline bool need_check_macro_merge() const { return check_macro_need_merge_; }
-  TO_STRING_KV(K_(table_idx), K_(progressive_merge_round), K_(rewrite_block_cnt), K_(need_rewrite_block_cnt), K_(full_merge), K_(check_macro_need_merge), K_(is_inited));
+  TO_STRING_KV(K_(table_idx), K_(progressive_merge_round), K_(rewrite_block_cnt), K_(need_rewrite_block_cnt), K_(data_version), K_(full_merge), K_(check_macro_need_merge), K_(is_inited));
 private:
   const static int64_t CG_TABLE_CHECK_REWRITE_CNT_ = 4;
+  const static int64_t DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD = 30;
   const int64_t table_idx_;
   int64_t progressive_merge_round_;
   int64_t rewrite_block_cnt_;
   int64_t need_rewrite_block_cnt_;
+  int64_t data_version_;
   bool full_merge_;
   bool check_macro_need_merge_;
   bool is_inited_;
@@ -148,7 +176,7 @@ protected:
   virtual int process(const blocksstable::ObDatumRow &row);
   virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) = 0;
   virtual int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, int64_t &reuse_row_cnt);
-  virtual int try_rewrite_macro_block(const ObMacroBlockDesc &macro_block, bool &rewrite);
+  virtual int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op);
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters) = 0;
   int check_row_columns(const blocksstable::ObDatumRow &row);
   int try_filter_row(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret);
@@ -184,7 +212,6 @@ protected:
 private:
   virtual int inner_init() override;
   int init_progressive_merge_helper();
-  virtual int try_rewrite_macro_block(const ObMacroBlockDesc &macro_desc, bool &rewrite) override;
   virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) override;
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters) override;
   int merge_micro_block_iter(ObPartitionMergeIter &iter, int64_t &reuse_row_cnt);

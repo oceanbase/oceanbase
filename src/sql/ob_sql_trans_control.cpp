@@ -42,6 +42,7 @@
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
 #include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 
 #ifdef CHECK_SESSION
 #error "redefine macro CHECK_SESSION"
@@ -526,6 +527,7 @@ int ObSqlTransControl::decide_trans_read_interface_specs(
 int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
+  memtable::advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::START);
   DISABLE_SQL_MEMLEAK_GUARD;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
@@ -730,12 +732,13 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
   int ret = OB_SUCCESS;
   ObConsistencyLevel current_consist_level = plan_ctx->get_consistency_level();
   CK (current_consist_level != ObConsistencyLevel::INVALID_CONSISTENCY);
+  const bool contain_inner_table = plan->is_contain_inner_table();
 
   // adjust stmt's consistency level
   if (OB_SUCC(ret)) {
     // Weak read statement with inner table should be converted to strong read.
     // For example, schema refresh statement;
-    if (plan->is_contain_inner_table() ||
+    if (contain_inner_table ||
       (!plan->is_plain_select() && current_consist_level != ObConsistencyLevel::STRONG)) {
       plan_ctx->set_consistency_level(ObConsistencyLevel::STRONG);
     }
@@ -761,6 +764,13 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
                 KR(ret), "trans_id", session->get_tx_id(), "consistency_level", cl);
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE and REPEATABLE-READ isolation level");
     }
+  }
+  if (OB_SUCC(ret)
+      && !plan_ctx->check_consistency_level_validation(contain_inner_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected consistency level", K(ret), K(contain_inner_table),
+                                                    "current_level", current_consist_level,
+                                                    "plan_ctx_level", plan_ctx->get_consistency_level());
   }
 
   return ret;
@@ -1253,6 +1263,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   if (OB_NOT_NULL(session)) {
     session->get_trans_result().reset();
   }
+  memtable::advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::END);
   return ret;
 }
 
@@ -1655,6 +1666,17 @@ int ObSqlTransControl::alloc_branch_id(ObExecContext &exec_ctx, const int64_t co
   CK (OB_NOT_NULL(session));
   CK (OB_NOT_NULL(tx_desc = session->get_tx_desc()));
   OZ (tx_desc->alloc_branch_id(count, branch_id));
+  return ret;
+}
+
+int ObSqlTransControl::reset_trans_for_autocommit_lock_conflict(ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
+  ObTxDesc *tx_desc = NULL;
+  CK (OB_NOT_NULL(session));
+  CK (OB_NOT_NULL(tx_desc = session->get_tx_desc()));
+  OZ (tx_desc->clear_state_for_autocommit_retry());
   return ret;
 }
 

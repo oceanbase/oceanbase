@@ -603,10 +603,42 @@ bool ObRawExpr::is_spatial_expr() const
   return IS_SPATIAL_OP(expr->get_expr_type());
 }
 
+bool ObRawExpr::is_oracle_spatial_expr() const
+{
+  bool ret_bool = false;
+  if (lib::is_oracle_mode() && get_expr_type() == T_OP_EQ) {
+    const ObRawExpr *l_expr = get_param_expr(0);
+    const ObRawExpr *r_expr = get_param_expr(1);
+    if (OB_NOT_NULL(l_expr) && OB_NOT_NULL(r_expr)) {
+      const ObRawExpr *l_inner = ObRawExprUtils::skip_inner_added_expr(l_expr);
+      const ObRawExpr *r_inner = ObRawExprUtils::skip_inner_added_expr(r_expr);
+      const ObRawExpr *const_expr = nullptr;
+      const ObRawExpr *geo_expr = nullptr;
+      if (l_inner->get_expr_type() == T_FUN_SYS_SDO_RELATE && r_inner->is_const_expr()) {
+        geo_expr = l_inner;
+        const_expr = r_inner;
+      } else if (r_inner->get_expr_type() == T_FUN_SYS_SDO_RELATE && l_inner->is_const_expr()) {
+        geo_expr = r_inner;
+        const_expr = l_inner;
+      }
+      if (OB_NOT_NULL(const_expr) && OB_NOT_NULL(geo_expr)) {
+        ret_bool = true;
+      }
+    } // do nothing
+  }
+  return ret_bool;
+}
+
 bool ObRawExpr::is_json_domain_expr() const
 {
   const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
   return IS_JSON_DOMAIN_OP(expr->get_expr_type());
+}
+
+bool ObRawExpr::is_multivalue_expr() const
+{
+  const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
+  return IS_MULTIVALUE_EXPR(expr->get_expr_type());
 }
 
 ObRawExpr* ObRawExpr::get_json_domain_param_expr()
@@ -1069,6 +1101,23 @@ int ObRawExpr::extract_local_session_vars_recursively(ObIArray<const share::sche
         LOG_WARN("unexpected null", K(ret));
       } else if (OB_FAIL(SMART_CALL(get_param_expr(i)->extract_local_session_vars_recursively(var_array)))) {
         LOG_WARN("fail to extract sysvar from params", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExpr::has_exec_param(bool &bool_ret) const
+{
+  int ret = OB_SUCCESS;
+  bool_ret = false;
+  if (is_exec_param_expr()) {
+    bool_ret = true;
+  } else {
+    for (int64_t i = 0; i < get_param_count() && OB_SUCC(ret) && !bool_ret; ++i) {
+      const ObRawExpr *child_expr = get_param_expr(i);
+      if (OB_FAIL(SMART_CALL(child_expr->has_exec_param(bool_ret)))) {
+        LOG_WARN("failed to has_exec_param");
       }
     }
   }
@@ -1967,6 +2016,8 @@ int ObColumnRefRawExpr::assign(const ObRawExpr &other)
       is_unique_key_column_ = tmp.is_unique_key_column_;
       is_mul_key_column_ = tmp.is_mul_key_column_;
       is_strict_json_column_ = tmp.is_strict_json_column_;
+      srs_id_ = tmp.srs_id_;
+      udt_set_id_ = tmp.udt_set_id_;
     }
   }
   return ret;
@@ -2853,6 +2904,25 @@ int ObOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &po
     if (OB_FAIL(BUF_PRINTF("BM25(k1=1.2, b=0.75, epsilon=0.25)"))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
+  } else if (T_OP_PUSHDOWN_TOPN_FILTER == get_expr_type()) {
+    if (OB_FAIL(BUF_PRINTF("TOPN_FILTER("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
+        if (OB_ISNULL(get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param_expr is NULL", K(i), K(ret));
+        } else if (OB_FAIL(get_param_expr(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (i < get_param_count() - 1) {
+          if (OB_FAIL(BUF_PRINTF(", "))) {
+            LOG_WARN("fail to BUF_PRINTF", K(i), K(ret));
+          }
+        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(i), K(ret));
+        }
+      }
+    }
   } else {
     if (OB_FAIL(BUF_PRINTF("(%s", get_type_name(get_expr_type())))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
@@ -2956,6 +3026,15 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
         break;
       }
     }
+  // sort is compare in vectorize format, so only one column can pushdown as
+  // white filter
+  } else if (T_OP_PUSHDOWN_TOPN_FILTER == type_ && 1 == exprs_.count()
+             && T_REF_COLUMN == exprs_.at(0)->get_expr_type()) {
+    // FIXME: @zhouhaiyu.zhy
+    // for now, storage pushdown filter can not process both a < 10 and a is null in one filter
+    // so disable white topn runtime filter
+    // LOG_TRACE("[TopN Filter] push topn filter as white filter");
+    bool_ret = false;
   } else {
     bool_ret = false;
   }
@@ -4120,9 +4199,19 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
       }
     }
     if (OB_ISNULL(r_param_expr)) {
+    } else if (r_param_expr->get_expr_type() == T_REF_COLUMN) {
+      r_column_expr = r_param_expr;
+      r_param_expr = nullptr;
+      if (l_param_expr->is_const_expr()) {
+        ObString path_str = (static_cast<const ObConstRawExpr*>(l_param_expr))->get_value().get_string();
+        bool_ret = path_str.empty();
+      }
     } else if (r_param_expr->is_wrappered_json_extract()) {
       r_column_expr = r_param_expr->get_param_expr(0)->get_param_expr(0);
       r_param_expr = r_param_expr->get_param_expr(0)->get_param_expr(1);
+    } else if (r_param_expr->get_expr_type() == T_FUN_SYS_JSON_VALUE) {
+      r_column_expr = r_param_expr->get_param_expr(0);
+      r_param_expr = r_param_expr->get_param_expr(1);
     } else if (r_param_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
       r_column_expr = r_param_expr->get_param_expr(0);
       r_param_expr = r_param_expr->get_param_expr(1);
@@ -4137,14 +4226,6 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
     }
   } else if (l_expr->get_expr_type() == r_expr->get_expr_type()) {
     bool_ret = l_expr->same_as(*r_expr, check_context);
-  } else if (l_expr->is_wrappered_json_extract()
-              && r_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
-    l_expr = l_expr->get_param_expr(0);
-    bool_ret = l_expr->same_as(*r_expr, check_context);
-  } else if (r_expr->is_wrappered_json_extract()
-              && l_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
-    r_expr = r_expr->get_param_expr(0);
-    bool_ret = l_expr->same_as(*r_expr, check_context);
   }
 
   return bool_ret;
@@ -4156,7 +4237,11 @@ bool ObSysFunRawExpr::inner_same_as(
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
-    if (IS_QUERY_JSON_EXPR(expr.get_expr_type()) || IS_QUERY_JSON_EXPR(get_expr_type())) {
+    if (expr.get_expr_type() ==  T_OP_BOOL && expr.is_domain_json_expr() &&
+        IS_QUERY_JSON_EXPR(get_expr_type())) {
+      const ObRawExpr* right_expr = ObRawExprUtils::skip_inner_added_expr(&expr);
+      bool_ret = inner_json_expr_same_as(*right_expr, check_context);
+    } else if (IS_QUERY_JSON_EXPR(expr.get_expr_type()) || IS_QUERY_JSON_EXPR(get_expr_type())) {
       bool_ret = inner_json_expr_same_as(expr, check_context);
     } else if (check_context != NULL && check_context->ora_numeric_compare_ && expr.is_const_raw_expr()
         && T_FUN_SYS_CAST == get_expr_type() && lib::is_oracle_mode()) {
@@ -6094,6 +6179,7 @@ int ObPseudoColumnRawExpr::assign(const ObRawExpr &other)
       cte_cycle_default_value_ = tmp.cte_cycle_default_value_;
       table_id_ = tmp.table_id_;
       table_name_ = tmp.table_name_;
+      data_access_path_ = tmp.data_access_path_;
     }
   }
   return ret;
@@ -6114,7 +6200,8 @@ bool ObPseudoColumnRawExpr::inner_same_as(const ObRawExpr &expr,
 {
   UNUSED(check_context);
   return type_ == expr.get_expr_type() &&
-         table_id_ == static_cast<const ObPseudoColumnRawExpr&>(expr).get_table_id();
+         table_id_ == static_cast<const ObPseudoColumnRawExpr&>(expr).get_table_id() &&
+         0 == data_access_path_.compare(static_cast<const ObPseudoColumnRawExpr&>(expr).get_data_access_path());
 }
 
 int ObPseudoColumnRawExpr::do_visit(ObRawExprVisitor &visitor)
@@ -6174,6 +6261,7 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
     case T_PSEUDO_EXTERNAL_FILE_URL:
     case T_PSEUDO_PARTITION_LIST_COL:
     case T_PSEUDO_EXTERNAL_FILE_COL:
+    case T_PSEUDO_EXTERNAL_FILE_ROW:
       if (!table_name_.empty() && OB_FAIL(BUF_PRINTF("%.*s.", table_name_.length(), table_name_.ptr()))) {
         LOG_WARN("failed to print table name", K(ret));
       } else if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, expr_name_))) {

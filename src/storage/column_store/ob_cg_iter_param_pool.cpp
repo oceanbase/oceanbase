@@ -200,6 +200,7 @@ int ObCGIterParamPool::fill_virtual_cg_iter_param(
     cg_param.output_exprs_ = output_exprs;
     cg_param.op_ = row_param.op_;
     cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
+    cg_param.table_scan_opt_ = row_param.table_scan_opt_;
     cg_param.tablet_handle_ = row_param.tablet_handle_;
   }
   if (OB_FAIL(ret) && nullptr != output_exprs) {
@@ -266,6 +267,7 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
       cg_param.limit_prefetch_ = row_param.limit_prefetch_;
       //cg_param.ss_rowkey_prefix_cnt_ = 0;
       cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
+      cg_param.table_scan_opt_ = row_param.table_scan_opt_;
       if (nullptr != row_param.cg_read_infos_) {
         if (OB_UNLIKELY(nullptr == row_param.cg_read_infos_->at(cg_pos))) {
           ret = OB_ERR_UNEXPECTED;

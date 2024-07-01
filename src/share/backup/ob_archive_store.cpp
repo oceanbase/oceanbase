@@ -407,6 +407,10 @@ ObArchiveStore::ObArchiveStore()
   : ObBackupStore()
 {}
 
+void ObArchiveStore::reset()
+{
+  ObBackupStore::reset();
+}
 
 // oss://archive/rounds/round_d[dest_id]r[round_id]_start
 int ObArchiveStore::is_round_start_file_exist(const int64_t dest_id, const int64_t round_id, bool &is_exist) const
@@ -534,7 +538,7 @@ int ObArchiveStore::get_round_id(const int64_t dest_id, const SCN &scn, int64_t 
     LOG_WARN("list files failed", K(ret), K(round_prefix), K(backup_dest));
   } else {
     ObArray<int64_t> &result = round_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (result.count() > 0) {
       round_id = result.at(0);
     } else {
@@ -585,7 +589,7 @@ int ObArchiveStore::get_all_round_ids(const int64_t dest_id, ObIArray<int64_t> &
     LOG_WARN("failed to list files", K(ret), K(round_prefix), K(backup_dest));
   } else {
     ObArray<int64_t> &result = round_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (OB_FAIL(roundid_array.assign(result))) {
       LOG_WARN("failed to assign round id array", K(ret));
     }
@@ -613,7 +617,7 @@ int ObArchiveStore::get_all_rounds(const int64_t dest_id, ObIArray<ObRoundEndDes
     LOG_WARN("list files failed", K(ret), K(round_prefix), K(backup_dest));
   } else {
     ObArray<ObRoundEndDesc> &result = round_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (OB_FAIL(rounds.assign(result))) {
       LOG_WARN("failed to assign rounds array", K(ret));
     }
@@ -752,7 +756,7 @@ int ObArchiveStore::get_piece_range(const int64_t dest_id, const int64_t round_i
     LOG_WARN("failed to list files", K(ret), K(piece_prefix), K(backup_dest));
   } else {
     ObArray<int64_t> &result = piece_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (result.count() > 0) {
       min_piece_id = result.at(0);
       max_piece_id = result.at(result.count() - 1);
@@ -812,6 +816,22 @@ int ObArchiveStore::write_single_piece(const int64_t dest_id, const int64_t roun
     LOG_WARN("failed to get single piece file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id));
   } else if (OB_FAIL(write_single_file(full_path.get_ptr(), desc))) {
     LOG_WARN("failed to write single file", K(ret), K(full_path), K(dest_id), K(round_id), K(piece_id));
+  }
+  return ret;
+}
+
+int ObArchiveStore::read_single_piece(ObSinglePieceDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath full_path;
+  const ObBackupDest &dest = get_backup_dest();
+   if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (OB_FAIL(ObArchivePathUtil::get_single_piece_file_info_path(dest, full_path))) {
+    LOG_WARN("fail to get single piece file path", K(ret), K(dest));
+  } else if (OB_FAIL(read_single_file(full_path.get_ptr(), desc))) {
+    LOG_WARN("fail to read single file", K(ret), K(full_path));
   }
   return ret;
 }
@@ -901,6 +921,42 @@ int ObArchiveStore::write_piece_checkpoint(const int64_t dest_id, const int64_t 
       LOG_WARN("failed to init ObArchiveCheckPointMgr", K(ret), K(dir_path));
     } else if (OB_FAIL(mgr.write(desc.checkpoint_scn_.get_val_for_inner_table_field()))) {
       LOG_WARN("failed to write checkpoint info", K(ret), K(desc));
+    }
+  }
+  return ret;
+}
+
+int ObArchiveStore::read_piece_checkpoint(ObPieceCheckpointDesc &desc) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath dir_path;
+  ObBackupPath meta_full_path;
+  const ObBackupDest &dest = get_backup_dest();
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+  LOG_WARN("ObArchiveStore not init", K(ret));
+  } else {
+    ObArchiveCheckpointMgr mgr;
+    uint64_t max_checkpoint_scn = 0;
+    if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_file_path(dest, 0, meta_full_path))) {
+      LOG_WARN("failed to get checkpoint meta file path", K(ret), K(dest));
+    } else if (OB_FAIL(read_single_file(meta_full_path.get_ptr(), desc))) {
+      LOG_WARN("failed to read mate file", K(ret), K(meta_full_path));
+    } else if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_dir_path(dest, dir_path))) {
+      LOG_WARN("failed to get piece checkpoint dir path", K(ret), K(dest));
+    } else if (OB_FAIL(mgr.init(dir_path, OB_STR_CHECKPOINT_FILE_NAME, ObBackupFileSuffix::ARCHIVE, get_storage_info()))) {
+      LOG_WARN("failed to init ObArchiveCheckPointMgr", K(ret), K(dir_path));
+    } else if (OB_FAIL(mgr.read(max_checkpoint_scn))) {
+      LOG_WARN("failed to read checkpoint scn", K(ret), K(max_checkpoint_scn));
+    } else if (0 == max_checkpoint_scn) {
+      //do nothing, archive is not started yet
+    } else if (OB_FAIL(desc.checkpoint_scn_.convert_for_inner_table_field(max_checkpoint_scn))) {
+      LOG_WARN("failed to set checkpoint scn", K(ret), K(max_checkpoint_scn));
+    } else if (OB_FAIL(desc.max_scn_.convert_for_inner_table_field(max_checkpoint_scn))) {
+      LOG_WARN("failed to set max scn", K(ret), K(max_checkpoint_scn));
+    }
+    if (OB_SUCC(ret)) {
+      FLOG_INFO("succeed to read checkpoint desc.", K(desc));
     }
   }
   return ret;
@@ -1115,6 +1171,40 @@ int ObArchiveStore::write_tenant_archive_piece_infos(const int64_t dest_id, cons
   return ret;
 }
 
+int ObArchiveStore::read_tenant_archive_piece_infos(ObTenantArchivePieceInfosDesc &desc) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath full_path;
+  const ObBackupDest &dest = get_backup_dest();
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (OB_FAIL(ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(dest, full_path))) {
+    LOG_WARN("failed to get piece extend info file path", K(ret), K(dest));
+  } else if (OB_FAIL(read_single_file(full_path.get_ptr(), desc))) {
+    LOG_WARN("failed to read piece extend info file", K(ret), K(full_path));
+  }
+  return ret;
+}
+
+int ObArchiveStore::is_tenant_archive_piece_infos_file_exist(bool &is_exist) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  ObBackupPath full_path;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+  const ObBackupDest &dest = get_backup_dest();
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (OB_FAIL(ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(dest, full_path))) {
+    LOG_WARN("failed to get piece extend info file path", K(ret), K(dest));
+  } else if (OB_FAIL(util.is_exist(full_path.get_ptr(), storage_info, is_exist))) {
+    LOG_WARN("failed to check piece extend info file exist.", K(ret), K(full_path), K(storage_info));
+  }
+  return ret;
+}
+
 int ObArchiveStore::is_archive_log_file_exist(const int64_t dest_id, const int64_t round_id,
   const int64_t piece_id, const ObLSID &ls_id, const int64_t file_id, bool &is_exist) const
 {
@@ -1156,7 +1246,7 @@ int ObArchiveStore::get_all_piece_keys(ObIArray<ObPieceKey> &keys)
     LOG_WARN("failed to list files", K(ret), K(piece_prefix), K(backup_dest));
   } else {
     ObArray<ObPieceKey> &result = piece_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (OB_FAIL(keys.assign(result))) {
       LOG_WARN("failed to assign piece key array", K(ret));
     }
@@ -1226,6 +1316,74 @@ int ObArchiveStore::get_whole_piece_info(const int64_t dest_id, const int64_t ro
   } else if (is_empty_piece) {
   } else if (OB_FAIL(read_tenant_archive_piece_infos(dest_id, round_id, piece_id, extend_desc))) {
     LOG_WARN("failed to read piece extend info", K(ret), K(dest_id), K(round_id), K(piece_id));
+  } else if (OB_FAIL(whole_piece_info.current_piece_.assign(single_piece_desc.piece_))) {
+    LOG_WARN("failed to assign piece", K(ret));
+  } else if (OB_FAIL(whole_piece_info.his_frozen_pieces_.assign(extend_desc.his_frozen_pieces_))) {
+    LOG_WARN("failed to assign history frozen pieces", K(ret));
+  }
+  return ret;
+}
+
+int ObArchiveStore::get_single_piece_info(bool &is_empty_piece, ObSinglePieceDesc &single_piece)
+{
+  int ret = OB_SUCCESS;
+  is_empty_piece = false;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (OB_FAIL(read_single_piece(single_piece))) {
+    // not a frozen piece, build single piece info with extend and checkpoint info.
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      ObPieceCheckpointDesc checkpoint_desc;
+      ObTenantArchivePieceInfosDesc extend_desc;
+      ret = OB_SUCCESS;
+      if (OB_FAIL(read_piece_checkpoint(checkpoint_desc))) {
+        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          is_empty_piece = true;
+        } else {
+          LOG_WARN("failed to read piece checkpoint info", K(ret));
+        }
+      } else if (OB_FAIL(read_tenant_archive_piece_infos(extend_desc))) {
+        LOG_WARN("failed to read piece extend info", K(ret));
+      } else {
+        // merge static piece attr with dynamic attr.
+        single_piece.piece_.key_.tenant_id_ = extend_desc.tenant_id_;
+        single_piece.piece_.key_.dest_id_ = extend_desc.dest_id_;
+        single_piece.piece_.key_.round_id_ = extend_desc.round_id_;
+        single_piece.piece_.key_.piece_id_ = extend_desc.piece_id_;
+        single_piece.piece_.incarnation_ = extend_desc.incarnation_;
+        single_piece.piece_.dest_no_ = extend_desc.dest_no_;
+        single_piece.piece_.start_scn_ = extend_desc.start_scn_;
+        single_piece.piece_.checkpoint_scn_ = checkpoint_desc.checkpoint_scn_;
+        single_piece.piece_.max_scn_ = checkpoint_desc.max_scn_;
+        single_piece.piece_.end_scn_ = extend_desc.end_scn_;
+        single_piece.piece_.compatible_ = extend_desc.compatible_;
+        single_piece.piece_.status_.set_active();
+        single_piece.piece_.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE;
+        single_piece.piece_.path_ = extend_desc.path_;
+      }
+    } else {
+       LOG_WARN("failed to get single piece info", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObArchiveStore::get_whole_piece_info(bool &is_empty_piece, ObExternPieceWholeInfo &whole_piece_info)
+{
+  int ret = OB_SUCCESS;
+  ObTenantArchivePieceInfosDesc extend_desc;
+  ObSinglePieceDesc single_piece_desc;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (OB_FAIL(get_single_piece_info(is_empty_piece, single_piece_desc))) {
+    LOG_WARN("failed to get whole piece info", K(ret));
+  } else if (is_empty_piece) {
+  } else if (OB_FAIL(read_tenant_archive_piece_infos(extend_desc))) {
+    LOG_WARN("failed to read piece extend info", K(ret));
   } else if (OB_FAIL(whole_piece_info.current_piece_.assign(single_piece_desc.piece_))) {
     LOG_WARN("failed to assign piece", K(ret));
   } else if (OB_FAIL(whole_piece_info.his_frozen_pieces_.assign(extend_desc.his_frozen_pieces_))) {
@@ -1415,7 +1573,7 @@ int ObArchiveStore::get_file_range_in_piece(const int64_t dest_id, const int64_t
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("file not exist", K(ret), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else {
-    std::sort(filelist.begin(), filelist.end());
+    lib::ob_sort(filelist.begin(), filelist.end());
     min_file_id = filelist.at(0).file_id_;
     max_file_id = filelist.at(filelist.count() - 1).file_id_;
   }
@@ -1518,6 +1676,21 @@ int ObArchiveStore::get_piece_max_checkpoint_scn(const int64_t dest_id, const in
   return ret;
 }
 
+int ObArchiveStore::read_single_ls_info(const ObLSID &ls_id, ObSingleLSInfoDesc &desc) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath full_path;
+  const ObBackupDest &dest = get_backup_dest();
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, ls_id, full_path))) {
+    LOG_WARN("fail to get ls file info path", K(ret), K(dest), K(ls_id));
+  } else if (OB_FAIL(read_single_file(full_path.get_ptr(), desc))) {
+    LOG_WARN("failed to read single file", K(ret), K(full_path));
+  }
+  return ret;
+}
 
 static int parse_piece_file_(ObString &dir_name, int64_t &dest_id, int64_t &round_id, int64_t &piece_id)
 {

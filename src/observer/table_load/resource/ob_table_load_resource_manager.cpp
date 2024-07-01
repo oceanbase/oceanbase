@@ -192,13 +192,13 @@ int ObTableLoadResourceManager::apply_resource(ObDirectLoadResourceApplyArg &arg
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg));
   } else if (OB_UNLIKELY(resource_inited_ == false)) {
-    ret = OB_IN_STOP_STATE;
+    ret = OB_EAGAIN;
     LOG_WARN("ObTableLoadResourceManager is initializing", KR(ret));
   } else {
     ObResourceAssigned assigned_arg;
     lib::ObMutexGuard guard(mutex_);
     if (is_stop_) {
-      ret = OB_IN_STOP_STATE;
+      ret = OB_EAGAIN;
       LOG_WARN("ObTableLoadResourceManager is stop", KR(ret));
     } else if (OB_FAIL(assigned_tasks_.get_refactored(arg.task_key_, assigned_arg))) {
       if (ret == OB_HASH_NOT_EXIST) {
@@ -209,7 +209,7 @@ int ObTableLoadResourceManager::apply_resource(ObDirectLoadResourceApplyArg &arg
           if (OB_FAIL(resource_pool_.get_refactored(apply_unit.addr_, ctx))) {
             LOG_WARN("fail to get refactored", K(apply_unit.addr_));
           } else if (apply_unit.thread_count_ > ctx.thread_remain_ || apply_unit.memory_size_ > ctx.memory_remain_) {
-            ret = OB_RESOURCE_OUT;
+            ret = OB_EAGAIN;
           }
 	      }
         if (OB_SUCC(ret)) {
@@ -280,10 +280,12 @@ int ObTableLoadResourceManager::release_resource(ObDirectLoadResourceReleaseArg 
           }
         }
       }
-      if (OB_FAIL(assigned_tasks_.erase_refactored(arg.task_key_))) {
-        LOG_WARN("fail to erase refactored", K(arg.task_key_));
-      } else {
-        LOG_INFO("ObTableLoadResourceManager::release_resource", K(arg));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(assigned_tasks_.erase_refactored(arg.task_key_))) {
+          LOG_WARN("fail to erase refactored", K(arg.task_key_));
+        } else {
+          LOG_INFO("ObTableLoadResourceManager::release_resource", K(arg));
+        }
       }
     }
   }

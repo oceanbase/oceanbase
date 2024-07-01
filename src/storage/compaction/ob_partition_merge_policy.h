@@ -242,8 +242,21 @@ public:
     INVALID_REASON
   };
 
+  enum AdaptiveCompactionPolicy : uint8 {
+    NORMAL = 0,   // only medium
+    ADVANCED = 1, // medium with meta
+    EXTREME = 2,  // only meta
+    INVALID_POLICY
+  };
+
   static const char *merge_reason_to_str(const int64_t merge_reason);
   static bool is_valid_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
+  static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
+  static bool is_schedule_meta(const share::schema::ObTableModeFlag &mode);
+  static bool take_normal_policy(const share::schema::ObTableModeFlag &mode);
+  static bool take_advanced_policy(const share::schema::ObTableModeFlag &mode);
+  static bool take_extrem_policy(const share::schema::ObTableModeFlag &mode);
 
   static int get_meta_merge_tables(
       const storage::ObGetMergeTablesParam &param,
@@ -254,28 +267,28 @@ public:
   static int get_adaptive_merge_reason(
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &reason);
-
+  static int check_tombstone_reason(
+      const storage::ObTablet &tablet,
+      AdaptiveMergeReason &reason);
 private:
   static int find_adaptive_merge_tables(
         const ObMergeType &merge_type,
         const storage::ObTablet &tablet,
         storage::ObGetMergeTablesResult &result);
-  static int add_meta_merge_result(storage::ObITable *table,
+  static int add_meta_merge_result(
+      storage::ObITable *table,
       const storage::ObStorageMetaHandle &table_meta_handle,
       storage::ObGetMergeTablesResult &result,
       const bool update_snapshot_flag);
 private:
   static int check_load_data_situation(
       const storage::ObTabletStatAnalyzer &analyzer,
-      const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
   static int check_tombstone_situation(
       const storage::ObTabletStatAnalyzer &analyzer,
-      const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
   static int check_ineffecient_read(
       const storage::ObTabletStatAnalyzer &analyzer,
-      const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
   static int check_inc_sstable_row_cnt_percentage(
       const storage::ObTablet &tablet,
@@ -283,12 +296,13 @@ private:
 
 public:
   static constexpr int64_t INC_ROW_COUNT_THRESHOLD = 100L * 1000L; // 10w
-  static constexpr int64_t TOMBSTONE_ROW_COUNT_THRESHOLD = 200L * 1000L; // 20w
+  static constexpr int64_t TOMBSTONE_ROW_COUNT_THRESHOLD = 250L * 1000L; // 25w, the same as ObFastFreezeChecker::TOMBSTONE_DEFAULT_ROW_COUNT
   static constexpr int64_t BASE_ROW_COUNT_THRESHOLD = 10L * 1000L; // 1w
   static constexpr int64_t LOAD_DATA_SCENE_THRESHOLD = 70;
   static constexpr int64_t TOMBSTONE_SCENE_THRESHOLD = 50;
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;
   static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 10000L; // 10k
+  static constexpr int64_t MEDIUM_COOLING_TIME_THRESHOLD_NS = 600_s * 1000; // 1000: set precision from us to ns
 };
 
 class ObCOMajorMergePolicy

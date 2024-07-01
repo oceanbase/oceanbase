@@ -15,7 +15,6 @@
 
 #include "common/object/ob_object.h"
 #include "lib/container/ob_bitmap.h"
-#include "storage/ob_table_store_stat_mgr.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 
 namespace oceanbase
@@ -32,6 +31,7 @@ struct ObTableAccessContext;
 struct ObTableAccessParam;
 struct ObTableIterParam;
 struct ObStoreRow;
+struct ObTableScanStoreStat;
 
 struct ObFilterResult
 {
@@ -73,7 +73,7 @@ public:
   int apply_blockscan(
       blocksstable::ObIMicroBlockRowScanner &micro_scanner,
       const bool can_pushdown,
-      ObTableStoreStat &table_store_stat);
+      ObTableScanStoreStat &table_store_stat);
   int get_filter_result(ObFilterResult &res);
   OB_INLINE sql::ObPushdownFilterExecutor *get_pd_filter()
   { return pd_filter_info_.filter_; }

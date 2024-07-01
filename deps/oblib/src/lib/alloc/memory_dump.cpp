@@ -557,7 +557,7 @@ void ObMemoryDump::handle(void *task)
   } else if (STAT_LABEL == m_task->type_) {
     int tenant_cnt = 0;
     get_tenant_ids(tenant_ids_, MAX_TENANT_CNT, tenant_cnt);
-    std::sort(tenant_ids_, tenant_ids_ + tenant_cnt);
+    lib::ob_sort(tenant_ids_, tenant_ids_ + tenant_cnt);
     w_stat_->tcr_cnt_ = 0;
     w_stat_->malloc_sample_map_.clear();
     int64_t item_used = 0;
@@ -742,7 +742,7 @@ void ObMemoryDump::handle(void *task)
         if (m_task->dump_all_) {
           int tenant_cnt = 0;
           get_tenant_ids(tenant_ids_, MAX_TENANT_CNT, tenant_cnt);
-          std::sort(tenant_ids_, tenant_ids_ + tenant_cnt);
+          lib::ob_sort(tenant_ids_, tenant_ids_ + tenant_cnt);
           for (int tenant_idx = 0; tenant_idx < tenant_cnt; tenant_idx++) {
             uint64_t tenant_id = tenant_ids_[tenant_idx];
             for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
@@ -775,7 +775,7 @@ void ObMemoryDump::handle(void *task)
         }
         LOG_INFO("chunk cnt", K(cnt));
         // sort chunk
-        std::sort(chunks_, chunks_ + cnt);
+        lib::ob_sort(chunks_, chunks_ + cnt);
         // iter chunk
         for (int i = 0; OB_SUCC(ret) && i < cnt; i++) {
           AChunk *chunk = chunks_[i];

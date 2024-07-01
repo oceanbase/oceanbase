@@ -47,6 +47,10 @@
 #include "share/restore/ob_log_restore_source.h"
 #include "storage/ls/ob_ls_get_mod.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "share/backup/ob_archive_path.h"           // ObArchivePathUtil
+#include "src/share/backup/ob_archive_store.h"      // ObArchiveStore
+#include "logservice/archiveservice/ob_archive_file_utils.h"     // ObArchiveFileUtils
+#include "src/share/backup/ob_archive_store.h"      // ObArchiveStore
 
 namespace oceanbase
 {
@@ -54,6 +58,7 @@ using namespace palf;
 namespace logservice
 {
 using namespace oceanbase::share;
+using namespace oceanbase::archive;
 
 const char *restore_comment_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS)] = {
   "Invalid restore status",
@@ -241,11 +246,8 @@ int ObLogRestoreHandler::add_source(logservice::DirArray &array, const SCN &end_
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), KPC(this));
-    /*
   } else if (! is_strong_leader(role_)) {
     // not leader, just skip
-    ret = OB_NOT_MASTER;
-    */
   } else if (OB_UNLIKELY(array.empty() || !end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), K(array), K(end_scn), KPC(this));
@@ -727,6 +729,11 @@ int ObLogRestoreHandler::check_restore_to_newest(share::SCN &end_scn, share::SCN
       share::ObRestoreSourceServiceAttr *service_attr = NULL;
       service_source->get(service_attr, restore_scn);
       ret = check_restore_to_newest_from_service_(*service_attr, end_scn, archive_scn);
+    } else if (share::is_raw_path_log_source_type(source->get_source_type())) {
+      ObRemoteRawPathParent *rawpath_source = dynamic_cast<ObRemoteRawPathParent *>(source);
+      ObLogRawPathPieceContext *rawpath_ctx = NULL;
+      rawpath_source->get(rawpath_ctx, restore_scn);
+      ret = check_restore_to_newest_from_rawpath_(*rawpath_ctx, end_lsn, end_scn, archive_scn);
     } else {
       ret = OB_NOT_SUPPORTED;
     }
@@ -752,7 +759,7 @@ int ObLogRestoreHandler::submit_sorted_task(ObFetchLogTask &task)
   } else if (OB_FAIL(context_.submit_array_.push_back(&task))) {
     CLOG_LOG(WARN, "push back failed", K(ret), K(task));
   } else {
-    std::sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
+    lib::ob_sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
   }
   return ret;
 }
@@ -786,7 +793,7 @@ int ObLogRestoreHandler::get_next_sorted_task(ObFetchLogTask *&task)
     ObFetchLogTask *tmp_task = NULL;
     context_.submit_array_.pop_back(tmp_task);
     context_.submit_array_.at(0) = tmp_task;
-    std::sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
+    lib::ob_sort(context_.submit_array_.begin(), context_.submit_array_.end(), FetchLogTaskCompare());
     task = first;
   }
   return ret;
@@ -940,6 +947,35 @@ int ObLogRestoreHandler::check_restore_to_newest_from_archive_(
     CLOG_LOG(INFO, "end_scn smaller than archive_scn", K(id_), K(archive_scn), K(end_scn));
   } else {
     CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn));
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::check_restore_to_newest_from_rawpath_(ObLogRawPathPieceContext &rawpath_ctx,
+    const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn)
+{
+  int ret = OB_SUCCESS;
+  const ObLSID ls_id(id_);
+
+  if (! rawpath_ctx.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "rawpath ctx is invalid");
+  } else {
+    palf::LSN archive_lsn;
+    if (OB_FAIL(rawpath_ctx.get_max_archive_log(archive_lsn, archive_scn))) {
+      CLOG_LOG(WARN, "fail to get max archive log", K_(id));
+    } else if (archive_lsn <= end_lsn && archive_scn == SCN::min_scn()) {
+      archive_scn = end_scn;
+      CLOG_LOG(INFO, "rewrite archive_scn while end_lsn equals to archive_lsn and archive_scn not got",
+        K(id_), K(archive_lsn), K(archive_scn), K(end_lsn), K(end_scn));
+    } else if (end_scn < archive_scn) {
+      CLOG_LOG(INFO, "end_scn smaller than archive_scn", K_(id), K(end_scn));
+    } else if (end_lsn < archive_lsn) {
+      ret = OB_EAGAIN;
+      CLOG_LOG(INFO, "end_lsn smaller than archive_lsn", K_(id), K(end_lsn));
+    } else {
+      CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn), K(end_lsn));
+    }
   }
   return ret;
 }

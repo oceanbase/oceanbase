@@ -27,6 +27,8 @@ namespace oceanbase
 namespace obrpc
 {
 
+#define OB_LOG_LEVEL_MASK (0x7)
+
 enum ObRpcPriority
 {
   ORPR_UNDEF = 0,
@@ -178,6 +180,7 @@ public:
   int64_t seq_no_;
   int32_t group_id_;
   uint64_t cluster_name_hash_;
+  uint64_t data_version_;
 
 #ifdef ERRSIM
   ObErrsimModuleType module_type_;
@@ -189,12 +192,13 @@ public:
   TO_STRING_KV(K(checksum_), K(pcode_), K(hlen_), K(priority_),
                K(flags_), K(tenant_id_), K(priv_tenant_id_), K(session_id_),
                K(trace_id_), K(timeout_), K_(timestamp), K_(dst_cluster_id), K_(cost_time),
-               K(compressor_type_), K(original_len_), K(src_cluster_id_), K(seq_no_));
+               K(compressor_type_), K(original_len_), K(src_cluster_id_), K(seq_no_),
+               K(data_version_));
 
-  ObRpcPacketHeader() { memset(this, 0, sizeof(*this)); flags_ |= (OB_LOG_LEVEL_NONE & 0x7); }
+  ObRpcPacketHeader() { memset(this, 0, sizeof(*this)); flags_ |= (OB_LOG_LEVEL_NONE & OB_LOG_LEVEL_MASK); }
   static inline int64_t get_encoded_size()
   {
-    return HEADER_SIZE + ObRpcCostTime::get_encoded_size() + 8 /* for seq no */;
+    return HEADER_SIZE + ObRpcCostTime::get_encoded_size() + 8 /* for seq no */ + 8 /* for data version*/;
   }
 
 };
@@ -337,6 +341,7 @@ public:
   inline int32_t get_request_level() const;
   inline void set_group_id(int32_t group_id);
   inline int32_t get_group_id() const;
+  inline uint64_t get_data_version() const;
 
   int encode_ez_header(char *buf, int64_t len, int64_t &pos);
   TO_STRING_KV(K(hdr_), K(chid_), K(clen_), K_(assemble), K_(msg_count), K_(payload));
@@ -707,7 +712,7 @@ const uint64_t *ObRpcPacket::get_trace_id() const
 
 int8_t ObRpcPacket::get_log_level() const
 {
-  return hdr_.flags_ & 0x7;
+  return hdr_.flags_ & OB_LOG_LEVEL_MASK;
 }
 
 void ObRpcPacket::set_trace_id(const uint64_t *trace_id)
@@ -722,7 +727,7 @@ void ObRpcPacket::set_trace_id(const uint64_t *trace_id)
 
 void ObRpcPacket::set_log_level(const int8_t log_level)
 {
-  hdr_.flags_ &= static_cast<uint16_t>(~0x7);   //must set zero first
+  hdr_.flags_ &= static_cast<uint16_t>(~OB_LOG_LEVEL_MASK);   //must set zero first
   hdr_.flags_ |= static_cast<uint16_t>(log_level);
 }
 
@@ -833,6 +838,11 @@ void ObRpcPacket::set_group_id(int32_t group_id)
 int32_t ObRpcPacket::get_group_id() const
 {
   return hdr_.group_id_;
+}
+
+uint64_t ObRpcPacket::get_data_version() const
+{
+  return hdr_.data_version_;
 }
 
 RLOCAL_EXTERN(int, g_pcode);

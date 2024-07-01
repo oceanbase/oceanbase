@@ -214,10 +214,10 @@ class ObLobManager
 public:
   static const int64_t LOB_AUX_TABLE_COUNT = 2; // lob aux table count for each table
   static const int64_t LOB_WITH_OUTROW_CTX_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx);
-  static const int64_t LOB_OUTROW_FULL_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t);
+  static const int64_t LOB_OUTROW_FULL_SIZE = ObLobLocatorV2::DISK_LOB_OUTROW_FULL_SIZE;
   static const uint64_t LOB_READ_BUFFER_LEN = 1024L*1024L; // 1M
   static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K
-  static const uint64_t REMOTE_LOB_QUERY_RETRY_MAX = 10L; // 1M
+  static const uint64_t LOB_QUERY_RETRY_MAX  = 100L; // 100 times
   static const ObLobCommon ZERO_LOB; // static empty lob for zero val
 private:
   explicit ObLobManager(const uint64_t tenant_id)
@@ -270,6 +270,8 @@ public:
   int lob_remote_query_init_ctx(ObLobAccessParam &param,
                                 ObLobQueryArg::QueryType qtype,
                                 void *&ctx);
+  int lob_refresh_location(ObLobAccessParam &param, ObAddr &dst_addr, bool &remote_bret, int last_err, int retry_cnt);
+  int lob_check_tablet_not_exist(ObLobAccessParam &param, uint64_t table_id);
   int lob_remote_query_with_retry(
     ObLobAccessParam &param,
     common::ObAddr& dst_addr,
@@ -382,12 +384,12 @@ private:
                        ObLobPieceInfo& piece_info,
                        ObString& data);
 
+  int batch_delete(ObLobAccessParam& param, ObLobMetaScanIter &iter);
+  int batch_insert(ObLobAccessParam& param, ObLobMetaWriteIter &iter);
   int erase_one_piece(ObLobAccessParam& param,
                       ObLobCtx& lob_ctx,
                       ObLobMetaInfo& meta_info,
                       ObLobPieceInfo& piece_info);
-
-  int batch_delete(ObLobAccessParam& param, ObLobMetaScanIter &iter);
 
   void transform_query_result_charset(const common::ObCollationType& coll_type,
                                       const char* data,
@@ -402,12 +404,12 @@ private:
                          bool &need_out_row);
   int init_out_row_ctx(ObLobAccessParam& param, uint64_t len, ObLobDataOutRowCtx::OpType op);
   int check_handle_size(ObLobAccessParam& param);
-  int erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScanIter &meta_iter, ObLobQueryResult &result, ObString &tmp_buff);
+  int erase_process_meta_info(ObLobAccessParam& param, const int64_t store_chunk_size, ObLobMetaScanIter &meta_iter, ObLobQueryResult &result, ObString &tmp_buff);
   int prepare_for_write(ObLobAccessParam& param,
                         ObString &old_data,
                         bool &need_out_row);
-  int prepare_write_buffers(ObLobAccessParam& param, ObString &remain_buf, ObString &tmp_buf);
   int replace_process_meta_info(ObLobAccessParam& param,
+                                const int64_t store_chunk_size,
                                 ObLobMetaScanIter &meta_iter,
                                 ObLobQueryResult &result,
                                 ObLobQueryIter *iter,
@@ -420,7 +422,6 @@ private:
   int query_remote(ObLobAccessParam& param, ObString& data);
   int getlength_remote(ObLobAccessParam& param, common::ObAddr& dst_addr, uint64_t &len);
   int do_delete_one_piece(ObLobAccessParam& param, ObLobQueryResult &result, ObString &tmp_buff);
-  int prepare_erase_buffer(ObLobAccessParam& param, ObString &tmp_buff);
   int fill_zero(char *ptr, uint64_t length, bool is_char,
                 const ObCollationType coll_type, uint32_t byte_len, uint32_t byte_offset, uint32_t &char_len);
   int prepare_lob_common(ObLobAccessParam& param, bool &alloc_inside);
@@ -431,6 +432,16 @@ private:
               int64_t& result);
   int load_all(ObLobAccessParam &param, ObLobPartialData &partial_data);
   void transform_lob_id(uint64_t src, uint64_t &dst);
+  int append_outrow(ObLobAccessParam& param, ObLobLocatorV2& lob, int64_t append_lob_len, ObString& ori_inrow_data);
+  int append_outrow(ObLobAccessParam& param, bool ori_is_inrow, ObString &data);
+  int fill_outrow_with_zero(ObLobAccessParam& param);
+  int do_fill_outrow_with_zero(
+      ObLobAccessParam& param,
+      const int64_t store_chunk_size,
+      ObLobMetaScanIter &meta_iter,
+      ObLobQueryResult &result,
+      ObString &write_data_buffer);
+
 private:
   static const int64_t DEFAULT_LOB_META_BUCKET_CNT = 1543;
   const uint64_t tenant_id_;

@@ -210,6 +210,8 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::get_tables(
   } else if (OB_UNLIKELY(!is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("direct load external table not closed", KR(ret));
+  } else if (total_row_count_ == 0) {
+    // do nothing
   } else {
     ObDirectLoadExternalTableCreateParam create_param;
     create_param.tablet_id_ = 0; //因为包含了所有的tablet_id，设置为一个无效值

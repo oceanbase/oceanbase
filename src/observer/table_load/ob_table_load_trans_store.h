@@ -74,8 +74,7 @@ public:
 public:
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
-  int write(int32_t session_id, const ObTabletID &tablet_id,
-      const common::ObIArray<common::ObNewRow> &row_array);
+  int px_write(const ObTabletID &tablet_id, const common::ObNewRow &row);
   int flush(int32_t session_id);
   int clean_up(int32_t session_id);
 public:
@@ -89,6 +88,12 @@ private:
   int cast_row(common::ObArenaAllocator &cast_allocator, ObDataTypeCastParams cast_params,
                const common::ObNewRow &row, blocksstable::ObDatumRow &datum_row,
                int32_t session_id);
+  int cast_column(common::ObArenaAllocator &cast_allocator,
+                  ObDataTypeCastParams cast_params,
+                  const share::schema::ObColumnSchemaV2 *column_schema,
+                  const common::ObObj &obj,
+                  blocksstable::ObStorageDatum &datum,
+                  int32_t session_id);
   int handle_autoinc_column(const share::schema::ObColumnSchemaV2 *column_schema,
                             blocksstable::ObStorageDatum &datum,
                             const ObObjTypeClass &tc,
@@ -100,7 +105,6 @@ private:
                                const common::ObTabletID &tablet_id,
                                const table::ObTableLoadSequenceNo &seq_no,
                                const blocksstable::ObDatumRow &datum_row);
-  int check_support_obj(const common::ObObj &obj);
 private:
   ObTableLoadTransStore *const trans_store_;
   ObTableLoadTransCtx *const trans_ctx_;
@@ -129,8 +133,6 @@ private:
   SessionContext *session_ctx_array_;
   int64_t lob_inrow_threshold_; // for incremental direct load
   int64_t ref_count_ CACHE_ALIGNED;
-  bool is_incremental_;
-  bool is_inc_replace_;
   bool is_inited_;
   ObSchemaGetterGuard schema_guard_;
 };

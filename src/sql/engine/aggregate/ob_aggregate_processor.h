@@ -29,6 +29,7 @@
 #include "sql/engine/expr/ob_expr_dll_udf.h"
 #include "sql/engine/expr/ob_rt_datum_arith.h"
 #include "lib/geo/ob_geo_mvt.h"
+#include "lib/roaringbitmap/ob_rb_utils.h"
 
 namespace oceanbase
 {
@@ -693,6 +694,7 @@ public:
   }
   inline void set_in_window_func() { in_window_func_ = true; }
   inline bool has_distinct() const { return has_distinct_; }
+  inline bool has_extra() const { return has_extra_; }
   inline bool has_order_by() const { return has_order_by_; }
 
   RemovalInfo &get_removal_info() { return removal_info_; }
@@ -996,6 +998,13 @@ private:
                         const ObObj *tmp_obj,
                         uint32_t obj_cnt,
                         mvt_agg_result &mvt_res);
+  int get_rb_build_agg_result(const ObAggrInfo &aggr_info,
+                              GroupConcatExtraResult *&extra,
+                              ObDatum &concat_result);
+  int get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
+                             GroupConcatExtraResult *&extra,
+                             ObDatum &concat_result,
+                             ObRbOperation calc_op);
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
   int shadow_truncate_string_for_hist(const ObObjMeta obj_meta,
@@ -1117,7 +1126,11 @@ public:
       case T_FUN_JSON_OBJECTAGG:
       case T_FUN_ORA_JSON_OBJECTAGG:
       case T_FUN_ORA_XMLAGG:
-      case T_FUN_SYS_ST_ASMVT: {
+      case T_FUN_SYS_ST_ASMVT:
+      case T_FUN_SYS_RB_BUILD_AGG:
+      case T_FUN_SYS_RB_OR_AGG:
+      case T_FUN_SYS_RB_AND_AGG:
+      {
         need_id = true;
         break;
       }
@@ -1267,6 +1280,9 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
     case T_FUN_SYS_ST_ASMVT:
+    case T_FUN_SYS_RB_BUILD_AGG:
+    case T_FUN_SYS_RB_OR_AGG:
+    case T_FUN_SYS_RB_AND_AGG:
     {
       need_extra = true;
       break;

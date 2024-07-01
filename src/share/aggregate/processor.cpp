@@ -27,22 +27,31 @@ int Processor::init()
   int ret = OB_SUCCESS;
   if (inited_) {
     LOG_DEBUG("already inited, do nothing");
-  } else if (agg_ctx_.aggr_infos_.count() <= 0) {
-    // do nothing
-  } else if (OB_UNLIKELY(agg_ctx_.aggr_infos_.count() >= MAX_SUPPORTED_AGG_CNT)) {
-    ret = OB_NOT_SUPPORTED;
-    SQL_LOG(WARN, "too many aggregations, not supported", K(ret));
-  } else if (OB_FAIL(aggregates_.reserve(agg_ctx_.aggr_infos_.count()))) {
-    SQL_LOG(WARN, "reserved allocator failed", K(ret));
-  } else if (OB_FAIL(helper::init_aggregates(agg_ctx_, allocator_, aggregates_))) {
-    SQL_LOG(WARN, "init aggregates failed", K(ret));
-  } else if (OB_FAIL(add_one_row_fns_.prepare_allocate(agg_ctx_.aggr_infos_.count()))) {
-    SQL_LOG(WARN, "prepare allocate elements failed", K(ret));
   } else {
-    clear_add_one_row_fns();
-  }
-  if (OB_SUCC(ret)) {
-    inited_ = true;
+    if (OB_ISNULL(row_selector_ = (uint16_t *)allocator_.alloc(
+                    sizeof(uint16_t) * agg_ctx_.eval_ctx_.max_batch_size_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      MEMSET(row_selector_, 0, sizeof(uint16_t) * agg_ctx_.eval_ctx_.max_batch_size_);
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (agg_ctx_.aggr_infos_.count() <= 0) {
+      // do nothing
+    } else if (OB_UNLIKELY(agg_ctx_.aggr_infos_.count() >= MAX_SUPPORTED_AGG_CNT)) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_LOG(WARN, "too many aggregations, not supported", K(ret));
+    } else if (OB_FAIL(aggregates_.reserve(agg_ctx_.aggr_infos_.count()))) {
+      SQL_LOG(WARN, "reserved allocator failed", K(ret));
+    } else if (OB_FAIL(helper::init_aggregates(agg_ctx_, allocator_, aggregates_))) {
+      SQL_LOG(WARN, "init aggregates failed", K(ret));
+    } else if (OB_FAIL(add_one_row_fns_.prepare_allocate(agg_ctx_.aggr_infos_.count()))) {
+      SQL_LOG(WARN, "prepare allocate elements failed", K(ret));
+    } else {
+      clear_add_one_row_fns();
+    }
+    if (OB_SUCC(ret)) { inited_ = true; }
   }
 
   return ret;
@@ -80,6 +89,7 @@ void Processor::destroy()
   }
   fast_single_row_aggregates_.reset();
   allocator_.reset();
+  row_selector_ = nullptr;
   inited_ = false;
 }
 
@@ -313,23 +323,23 @@ int Processor::collect_group_results(const RowMeta &row_meta,
 }
 
 int Processor::setup_rt_info(AggrRowPtr row,
-                             const int32_t row_size)
+                             RuntimeContext &agg_ctx)
 {
   static const int constexpr extra_arr_buf_size = 16;
   int ret = OB_SUCCESS;
-  OB_ASSERT(row_size == agg_ctx_.row_meta().row_size_);
+  int32_t row_size = agg_ctx.row_meta().row_size_;
   char *extra_array_buf = nullptr;
   MEMSET(row, 0, row_size);
-  for (int col_id = 0; col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
-    ObDatumMeta &res_meta = agg_ctx_.aggr_infos_.at(col_id).expr_->datum_meta_;
+  for (int col_id = 0; col_id < agg_ctx.aggr_infos_.count(); col_id++) {
+    ObDatumMeta &res_meta = agg_ctx.aggr_infos_.at(col_id).expr_->datum_meta_;
     VecValueTypeClass res_tc = get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
     char *cell = nullptr;
     int32_t cell_len = 0;
-    agg_ctx_.row_meta().locate_cell_payload(col_id, row, cell, cell_len);
+    agg_ctx.row_meta().locate_cell_payload(col_id, row, cell, cell_len);
     // oracle mode use ObNumber as result type for count aggregation
     // we use int64_t as result type for count aggregation in aggregate row
     // and cast int64_t to ObNumber during `collect_group_result`
-    if (res_tc == VEC_TC_NUMBER && agg_ctx_.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT) {
+    if (res_tc == VEC_TC_NUMBER && agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT) {
       ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
       // set zero number
       d.len_ = 0;
@@ -341,27 +351,19 @@ int Processor::setup_rt_info(AggrRowPtr row,
       *reinterpret_cast<double *>(cell) = double();
     }
   }
-  int extra_size = agg_ctx_.row_meta().extra_cnt_ * sizeof(char *);
-  if (agg_ctx_.row_meta().extra_cnt_ > 0) {
-    if (cur_extra_rt_info_idx_ % extra_arr_buf_size == 0) {
-      cur_extra_rt_info_idx_ = 0;
-      extra_rt_info_buf_ = nullptr;
-      extra_rt_info_buf_ = (char *)agg_ctx_.allocator_.alloc(extra_size * extra_arr_buf_size);
-      if (OB_ISNULL(extra_rt_info_buf_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SQL_LOG(WARN, "allocate memory failed", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
+  int extra_size = agg_ctx.row_meta().extra_cnt_ * sizeof(char *);
+  if (agg_ctx.row_meta().extra_cnt_ > 0) {
+    void *extra_array_buf = agg_ctx.allocator_.alloc(extra_size);
+    if (OB_ISNULL(extra_array_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
     } else {
-      extra_array_buf = extra_rt_info_buf_ + (cur_extra_rt_info_idx_ * extra_size);
-      cur_extra_rt_info_idx_++;
       MEMSET(extra_array_buf, 0, extra_size);
-      if (OB_FAIL(agg_ctx_.agg_extras_.push_back((AggregateExtras)extra_array_buf))) {
+      if (OB_FAIL(agg_ctx.agg_extras_.push_back((AggregateExtras)extra_array_buf))) {
         SQL_LOG(WARN, "push back element failed", K(ret));
       } else {
-        *reinterpret_cast<int32_t *>(row + agg_ctx_.row_meta().extra_idx_offset_) =
-          static_cast<int32_t>(agg_ctx_.agg_extras_.count()) - 1;
+        *reinterpret_cast<int32_t *>(row + agg_ctx.row_meta().extra_idx_offset_) =
+          static_cast<int32_t>(agg_ctx.agg_extras_.count()) - 1;
       }
     }
   }
@@ -386,7 +388,7 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
     sql::EvalBound bound(1, true);
     for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
       if (skip.at(i)) {
-      } else if (OB_FAIL(setup_rt_info(agg_rows[i], get_aggregate_row_size()))) {
+      } else if (OB_FAIL(setup_rt_info(agg_rows[i], agg_ctx_))) {
         SQL_LOG(WARN, "setup runtime info failed", K(ret));
       } else {
         AggrRowPtr row = agg_rows[i];
@@ -581,7 +583,7 @@ int Processor::init_scalar_aggregate_row(ObCompactRow *&row, RowMeta &row_meta,
       row = new(row_buf)ObCompactRow();
       row->init(row_meta);
       AggrRowPtr agg_row = (char *)row->get_extra_payload(row_meta);
-      if (OB_FAIL(setup_rt_info(agg_row, agg_ctx_.row_meta().row_size_))) {
+      if (OB_FAIL(setup_rt_info(agg_row, agg_ctx_))) {
         LOG_WARN("setup rt info failed", K(ret));
       }
     }
@@ -622,7 +624,8 @@ int Processor::add_one_aggregate_row(AggrRowPtr data, const int32_t row_size,
                                      bool push_agg_row /*true*/)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(setup_rt_info(data, row_size))) {
+  UNUSED(row_size);
+  if (OB_FAIL(setup_rt_info(data, agg_ctx_))) {
     SQL_LOG(WARN, "setup runtime info failed", K(ret));
   } else if (push_agg_row && OB_FAIL(agg_ctx_.agg_rows_.push_back(data))) {
     SQL_LOG(WARN, "push back element failed", K(ret));

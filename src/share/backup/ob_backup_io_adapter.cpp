@@ -813,6 +813,9 @@ int ObFileListArrayOp::func(const dirent *entry)
   } else if (OB_ISNULL(entry->d_name)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid list entry, d_name is null");
+  } else if (name_array_.count() >= 1000000) { //temp fix for bug
+    ret = OB_SIZE_OVERFLOW;
+    OB_LOG(WARN, "two many files in the directory", K(name_array_.count()), KR(ret));
   } else {
     const ObString file_name(entry->d_name);
     ObString tmp_file;

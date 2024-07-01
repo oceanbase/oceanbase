@@ -43,7 +43,9 @@ int ObDASDomainUtils::generate_spatial_index_rows(
   uint64_t rowkey_num = das_ctdef.table_param_.get_data_table().get_rowkey_column_num();
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
 
-  if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
+  if (lib::is_oracle_mode() && wkb_str.length() == 0) {
+    // in oracle mode, ignore null value
+  } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
     LOG_WARN("failed to get srid", K(ret), K(wkb_str));
   } else if (srid != 0 &&
       OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
@@ -207,30 +209,16 @@ int ObDASDomainUtils::generate_spatial_index_rows(
     ObFTWordMap &words_count)
 {
   int ret = OB_SUCCESS;
-  common::ObSEArray<ObFTWord, 256> words;
   if (OB_ISNULL(helper)
       || OB_UNLIKELY(ObCollationType::CS_TYPE_INVALID == type
                   || ObCollationType::CS_TYPE_EXTENDED_MARK < type)
       || OB_UNLIKELY(!words_count.created())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(helper), K(type), K(words_count.created()));
-  } else if (OB_FAIL(helper->segment(type, fulltext.ptr(), fulltext.length(), doc_length, words))) {
+  } else if (OB_FAIL(helper->segment(type, fulltext.ptr(), fulltext.length(), doc_length, words_count))) {
     LOG_WARN("fail to segment", K(ret), KPC(helper), K(type), K(fulltext));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < words.count(); ++i) {
-      const ObFTWord &ft_word = words.at(i);
-      int64_t word_count = 0;
-      if (OB_FAIL(words_count.get_refactored(ft_word, word_count)) && OB_HASH_NOT_EXIST != ret) {
-        LOG_WARN("fail to get ft word", K(ret), K(ft_word));
-      } else {
-        word_count = OB_HASH_NOT_EXIST == ret ? 1 : ++word_count;
-        if (OB_FAIL(words_count.set_refactored(ft_word, word_count, 1/*overwrite*/))) {
-          LOG_WARN("fail to set ft word and count", K(ret), K(ft_word));
-        }
-      }
-    }
   }
-  STORAGE_FTS_LOG(DEBUG, "segment and calc word count", K(ret), K(words), K(type));
+  STORAGE_FTS_LOG(DEBUG, "segment and calc word count", K(ret), K(words_count.size()), K(type));
   return ret;
 }
 
@@ -332,29 +320,30 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   bool is_save_rowkey = true;
-
+  bool is_unique_index = das_ctdef.table_param_.get_data_table().get_index_type() == ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
   const int64_t data_table_rowkey_cnt = das_ctdef.table_param_.get_data_table().get_data_table_rowkey_column_num();
   const char* data = nullptr;
   int64_t data_len = 0;
   uint32_t record_num = 0;
 
+  bool is_none_unique_done = false;
+  uint64_t column_num = das_ctdef.column_ids_.count();
+  // -1 : doc id column
+  uint64_t rowkey_column_start = column_num - 1 - data_table_rowkey_cnt;
+  uint64_t rowkey_column_end = column_num - 1;
+
   if (OB_FAIL(get_pure_mutivalue_data(json_str, data, data_len, record_num))) {
     LOG_WARN("failed to parse binary.", K(ret), K(json_str));
-  } else if (record_num == 0) {
+  } else if (record_num == 0 && (is_unique_index && rowkey_column_start == 1)) {
   } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector,
     dml_row, record_num, is_save_rowkey))) {
     LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
   } else {
 
-    uint64_t column_num = das_ctdef.column_ids_.count();
-    // -1 : doc id column
-    uint64_t rowkey_column_start = column_num - 1 - data_table_rowkey_cnt;
-    uint64_t rowkey_column_end = column_num - 1;
-
     ObObj *obj_arr = nullptr;
     int64_t pos = sizeof(uint32_t);
 
-    for (int i = 0; OB_SUCC(ret) && i < record_num ; ++i) {
+    for (int i = 0; OB_SUCC(ret) && (i < record_num || !is_none_unique_done) ; ++i) {
       if (OB_ISNULL(obj_arr = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * column_num)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory for multivalue index row cells", K(ret));
@@ -364,11 +353,12 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
         ObObjMeta col_type = das_ctdef.column_types_.at(j);
         const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
         int64_t projector_idx = row_projector.at(j);
+
         if (multivalue_idx == projector_idx) {
           if (OB_FAIL(obj_arr[j].deserialize(data, data_len, pos))) {
             LOG_WARN("failed to deserialize datum.", K(ret), K(json_str));
           } else {
-            if (ob_is_numeric_type(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
+            if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
               col_type.set_collation_level(CS_LEVEL_NUMERIC);
             } else {
               col_type.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -377,6 +367,7 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
             obj_arr[j].set_collation_level(col_type.get_collation_level());
             obj_arr[j].set_collation_type(col_type.get_collation_type());
             obj_arr[j].set_type(col_type.get_type());
+            is_none_unique_done = true;
           }
         } else if (!is_save_rowkey && (rowkey_column_start >= j && j < rowkey_column_end)) {
           obj_arr[j].set_null();
@@ -484,6 +475,7 @@ void ObDomainDMLIterator::reset()
   row_projector_ = nullptr;
   das_ctdef_ = nullptr;
   main_ctdef_ = nullptr;
+  allocator_.reset();
 }
 
 void ObDomainDMLIterator::set_ctdef(
@@ -520,10 +512,12 @@ int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
   while (OB_SUCC(ret) && !got_row) {
     if (row_idx_ >= rows_.count()) {
       rows_.reuse();
+      allocator_.reuse();
       row_idx_ = 0;
       if (OB_UNLIKELY(!das_ctdef_->table_param_.get_data_table().is_domain_index())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, not domain index", K(ret), K(das_ctdef_->table_param_.get_data_table()));
+
       } else if (FAILEDx(write_iter_.get_next_row(sr))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("get next row from result iterator failed", K(ret));
@@ -562,6 +556,7 @@ int ObDomainDMLIterator::get_next_domain_rows(ObNewRow *&row, int64_t &row_count
     while (OB_SUCC(ret) && !got_row) {
       if (row_idx_ >= rows_.count()) {
         rows_.reuse();
+        allocator_.reuse();
         row_idx_ = 0;
         if (OB_UNLIKELY(!das_ctdef_->table_param_.get_data_table().is_domain_index())) {
           ret = OB_ERR_UNEXPECTED;
@@ -757,7 +752,7 @@ int ObFTDMLIterator::get_ft_and_doc_id(
     const ObChunkDatumStore::StoredRow *store_row,
     ObString &doc_id,
     ObString &ft,
-    common::ObObjMeta &ft_meta) const
+    common::ObObjMeta &ft_meta)
 {
   int ret = OB_SUCCESS;
   const uint64_t doc_id_col_id = das_ctdef_->table_param_.get_data_table().get_doc_id_col_id();
@@ -793,7 +788,7 @@ int ObFTDMLIterator::get_ft_and_doc_id_for_update(
     const ObChunkDatumStore::StoredRow *store_row,
     ObString &doc_id,
     ObString &ft,
-    common::ObObjMeta &ft_meta) const
+    common::ObObjMeta &ft_meta)
 {
   int ret = OB_SUCCESS;
   const uint64_t rowkey_col_cnt = das_ctdef_->table_param_.get_data_table().get_rowkey_column_num();
@@ -863,7 +858,7 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data(
     const ObChunkDatumStore::StoredRow *store_row,
     int64_t& multivalue_idx,
     int64_t& multivalue_arr_idx,
-    ObString &multivalue_data) const
+    ObString &multivalue_data)
 {
   int ret = OB_SUCCESS;
   multivalue_idx = OB_INVALID_ID;
@@ -910,7 +905,7 @@ int ObMultivalueDMLIterator::get_multivlaue_json_data_for_update(
     const ObChunkDatumStore::StoredRow *store_row,
     int64_t& multivalue_idx,
     int64_t& multivalue_arr_idx,
-    ObString &multivalue_data) const
+    ObString &multivalue_data)
 {
   int ret = OB_SUCCESS;
   bool found = false;

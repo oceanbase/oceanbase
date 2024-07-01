@@ -47,6 +47,7 @@
 #include "pl/debug/ob_pl_debugger.h"
 #include "pl/debug/ob_pl_debugger_manager.h"
 #include "pl/opaque/ob_pl_json_type.h"
+#include "pl/ob_pl_profiler.h"
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
@@ -185,6 +186,12 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_add_ref_cursor_refcount));
   jit::ObLLVMHelper::add_symbol(ObString("spi_handle_ref_cursor_refcount"),
                                 (void*)(sql::ObSPIService::spi_handle_ref_cursor_refcount));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_opaque_assign_null"),
+                                (void*)(sql::ObSPIService::spi_opaque_assign_null));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_pl_profiler_before_record"),
+                                (void*)(sql::ObSPIService::spi_pl_profiler_before_record));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_pl_profiler_after_record"),
+                                (void*)(sql::ObSPIService::spi_pl_profiler_after_record));
 
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));
@@ -1768,6 +1775,10 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       }
     }
   }
+  // generate sql_id using paramiterized sql, and overwrite privious sql_id
+  OZ (ObSQLUtils::md5(pc_key, ctx.get_sql_ctx()->sql_id_,
+                      (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_)));
+  OX (ctx.get_my_session()->set_cur_sql_id(ctx.get_sql_ctx()->sql_id_));
   OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
   return ret;
 }
@@ -1831,7 +1842,9 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
 
   OZ (ObPLContext::valid_execute_context(ctx));
 
-  OX (is_forbid_anony_parameter = is_forbid_anony_parameter || ctx.get_my_session()->is_pl_debug_on());
+  OX (is_forbid_anony_parameter = is_forbid_anony_parameter
+                                    || ctx.get_my_session()->is_pl_debug_on()
+                                    || ctx.get_my_session()->get_pl_profiler() != nullptr);
 
   OX (param.set_mem_attr(ctx.get_my_session()->get_effective_tenant_id(),
                          ObModIds::OB_PL_TEMP,
@@ -2291,6 +2304,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_ANON;
     pc_ctx.key_.db_id_ = database_id;
     pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
+    pc_ctx.key_.mode_ = ctx.get_my_session()->get_pl_profiler() != nullptr
+                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 
     if (OB_SUCC(ret)) {
       if (stmt_id != OB_INVALID_ID) {
@@ -2445,6 +2460,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.key_.db_id_ = database_id;
     pc_ctx.key_.key_id_ = routine_id;
     pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
+    pc_ctx.key_.mode_ =  ctx.get_my_session()->get_pl_profiler() != nullptr
+                           ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
@@ -3026,6 +3043,35 @@ int ObPLExecState::final(int ret)
     }
   }
 
+#ifdef OB_BUILD_ORACLE_PL
+  // save profiler time stack data
+  if (OB_NOT_NULL(profiler_time_stack_)) {
+    ObPLProfiler *profiler = nullptr;
+
+    if (OB_NOT_NULL(ctx_.exec_ctx_)
+          && OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())
+          && OB_NOT_NULL(profiler = ctx_.exec_ctx_->get_my_session()->get_pl_profiler())) {
+      int ret = OB_SUCCESS;
+
+      if (OB_FAIL(profiler_time_stack_->pop_all(*profiler))) {
+        LOG_WARN("[DBMS_PROFILER] failed to flush pl profiler time stack", K(ret), K(lbt()));
+      }
+
+      if (is_top_call()) {
+        if (OB_FAIL(profiler->flush_data())) {
+          LOG_WARN("[DBMS_PROFILER] failed to flush pl profiler data", K(ret), K(lbt()));
+        }
+      }
+    }
+
+    profiler_time_stack_->~ObPLProfilerTimeStack();
+    if (OB_NOT_NULL(get_allocator())) {
+      get_allocator()->free(profiler_time_stack_);
+    }
+    profiler_time_stack_ = nullptr;
+  }
+#endif // OB_BUILD_ORACLE_PL
+
   if (OB_NOT_NULL(top_context_)
       && top_context_->get_exec_stack().count() > 0
       && top_context_->get_exec_stack().at(
@@ -3415,8 +3461,9 @@ do {                                                                  \
             ObObjMeta null_meta = get_params().at(i).get_meta();
             get_params().at(i) = params->at(i); // 空值不做cast
             params->at(i).is_null() ? get_params().at(i).set_null_meta(null_meta) : (void)NULL;
-          } else if (params->at(i).get_meta().get_type() == get_params().at(i).get_meta().get_type()
-                     && params->at(i).get_meta().is_numeric_type()) {
+          } else if (lib::is_oracle_mode()
+                       && params->at(i).get_meta().get_type() == get_params().at(i).get_meta().get_type()
+                       && params->at(i).get_meta().is_numeric_type()) {
             ObObj tmp;
             if (pl_type.is_pl_integer_type()) {
               OZ (ObExprPLIntegerChecker::calc(tmp,
@@ -4266,7 +4313,8 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
     : ObPLCacheObject(ns, mem_context), routine_table_(allocator_),
       type_table_(), helper_(allocator_), di_helper_(allocator_),
       can_cached_(true),
-      exec_env_()
+      exec_env_(),
+      profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE))
 {
 #ifndef USE_MCJIT
   int ret = OB_SUCCESS;

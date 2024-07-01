@@ -440,7 +440,7 @@ int ObCompactionDagRanker::sort(
     LOG_WARN("failed to get rank weighed score", K(ret), KPC(rank_helper_), K(dags));
   } else {
     ObCompactionRankScoreCompare comp(ret);
-    std::sort(dags.begin(), dags.end(), comp);
+    lib::ob_sort(dags.begin(), dags.end(), comp);
     if (OB_FAIL(ret)) {
       LOG_ERROR("failed to sort compaction dags", K(ret), K(dags.count()));
 

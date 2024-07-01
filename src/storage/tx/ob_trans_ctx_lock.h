@@ -131,6 +131,7 @@ public:
   ~CtxLockGuard();
   void set(CtxLock &lock, uint8_t mode = MODE::ALL);
   void reset();
+  int64_t get_hold_ts() { return hold_ts_; }
   int64_t get_lock_acquire_used_time() const
   {
     return hold_ts_ - request_ts_;

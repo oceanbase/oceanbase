@@ -324,6 +324,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigLogLevelChecker);
 };
 
+class ObConfigAlertLogLevelChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAlertLogLevelChecker() {}
+  virtual ~ObConfigAlertLogLevelChecker() {};
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAlertLogLevelChecker);
+};
+
 class ObConfigAuditTrailChecker
   : public ObConfigChecker
 {
@@ -735,12 +747,23 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigSQLTlsVersionChecker);
 };
 
+class ObConfigSQLSpillCompressionCodecChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSQLSpillCompressionCodecChecker() {}
+  virtual ~ObConfigSQLSpillCompressionCodecChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSQLSpillCompressionCodecChecker);
+};
+
 class ObModeConfigParserUitl
 {
 public:
-  // parse config item like: "xxx=yyy"
-  static int parse_item_to_kv(char *item, ObString &key, ObString &value);
-  static int get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list);
+  // parse config item like: "xxx=yyy", "xxx:yyy"
+  static int parse_item_to_kv(char *item, ObString &key, ObString &value, const char* delim = "=");
+  static int get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list, const char* delim = "=");
   // format str for split config item
   static int format_mode_str(const char *src, int64_t src_len, char *dst, int64_t dst_len);
 };
@@ -786,6 +809,15 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigTableStoreFormatChecker);
 };
 
+class ObConfigArchiveLagTargetChecker {
+public:
+  ObConfigArchiveLagTargetChecker(){}
+  virtual ~ObConfigArchiveLagTargetChecker(){}
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigArchiveLagTargetChecker);
+};
+
 class ObConfigMigrationChooseSourceChecker
   : public ObConfigChecker
 {
@@ -797,14 +829,20 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigMigrationChooseSourceChecker);
 };
 
-class ObConfigArchiveLagTargetChecker {
+
+class ObParallelDDLControlParser : public ObConfigParser
+{
 public:
-  ObConfigArchiveLagTargetChecker(){}
-  virtual ~ObConfigArchiveLagTargetChecker(){}
-  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+  ObParallelDDLControlParser() {}
+  virtual ~ObParallelDDLControlParser() {}
+  virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
+public:
+  static const uint8_t MODE_ON = 0b00;
+  static const uint8_t MODE_OFF = 0b01;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObConfigArchiveLagTargetChecker);
+  DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlParser);
 };
+
 
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;

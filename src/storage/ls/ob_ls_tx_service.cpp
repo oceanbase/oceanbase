@@ -128,6 +128,35 @@ int ObLSTxService::get_tx_scheduler(const transaction::ObTransID &tx_id,
   return ret;
 }
 
+int ObLSTxService::get_tx_start_session_id(const transaction::ObTransID &tx_id, uint32_t &session_id) const
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret));
+  } else {
+    ObPartTransCtx *ctx;
+    if (OB_FAIL(mgr_->get_tx_ctx_directly_from_hash_map(tx_id, ctx))) {
+      if (OB_TRANS_CTX_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        TRANS_LOG(INFO, "ctx not existed on this LS", K(tx_id), K(ls_id_));
+      } else {
+        TRANS_LOG(WARN, "get ctx failed", K(ret), K(tx_id), K(ls_id_));
+      }
+    } else if (OB_ISNULL(ctx)) {
+      ret = OB_BAD_NULL_ERROR;
+      TRANS_LOG(WARN, "get ctx is null", K(ret), K(tx_id), K(ls_id_));
+    } else {
+      session_id = ctx->get_session_id();
+      if (OB_TMP_FAIL(mgr_->revert_tx_ctx(ctx))) {
+        TRANS_LOG(ERROR, "fail to revert tx", K(ret), K(tmp_ret), K(tx_id), KPC(ctx));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSTxService::revert_tx_ctx(ObTransCtx *ctx) const
 {
   int ret = OB_SUCCESS;
@@ -659,6 +688,7 @@ int ObLSTxService::get_common_checkpoint_info(
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     ObCommonCheckpoint *common_checkpoint = common_checkpoints_[i];
     if (OB_ISNULL(common_checkpoint)) {
+      // ignore ret
       TRANS_LOG(WARN, "the common_checkpoint should not be null", K(i));
     } else {
       ObCommonCheckpointVTInfo info;
@@ -703,9 +733,11 @@ int ObLSTxService::unregister_common_checkpoint(const ObCommonCheckpointType &ty
   } else {
     WLockGuard guard(rwlock_);
     if (OB_ISNULL(common_checkpoints_[type])) {
+      // ignore ret
       STORAGE_LOG(WARN, "common_checkpoint is null, no need unregister", K(type),
                   K(common_checkpoint));
     } else if (common_checkpoints_[type] != common_checkpoint) {
+      ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "common checkpoint not equal, not unregister", K(type),
                   K(common_checkpoints_[type]), K(common_checkpoint));
     } else {

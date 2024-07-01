@@ -691,7 +691,7 @@ int ObExprSubstr::eval_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
         ObTextStringIter input_iter(input_meta.type_, input_meta.cs_type_, str_datum->get_string(), has_lob_header);
         ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
         int64_t total_byte_len = 0;
-        if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
+        if (OB_FAIL(ObTextStringHelper::build_text_iter(input_iter, &ctx.exec_ctx_, NULL/*session*/, &calc_alloc))) {
           LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
         } else if (OB_FAIL(input_iter.get_byte_len(total_byte_len))) {
           LOG_WARN("get input byte len failed", K(ret));
@@ -811,7 +811,7 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
             ObTextStringIter input_iter(input_meta.type_, input_meta.cs_type_, datum_array[j].get_string(), has_lob_header);
             ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &results[j]);
             int64_t total_byte_len = 0;
-            if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
+            if (OB_FAIL(ObTextStringHelper::build_text_iter(input_iter, &ctx.exec_ctx_, NULL/*session*/, &calc_alloc))) {
               LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
             } else if (OB_FAIL(input_iter.get_byte_len(total_byte_len))) {
               LOG_WARN("get input byte len failed", K(ret), K(j));
@@ -982,24 +982,24 @@ int ObExprSubstr::eval_substr_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_substr<TextDiscVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_substr<StrDiscVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_substr<TextUniVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_substr<StrUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_substr<TextContVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_substr<StrContVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_substr<TextDiscVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_substr<StrDiscVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_substr<TextUniVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_substr<StrUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_substr<TextContVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+      ret = vector_substr<StrContVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
     } else {
       ret = vector_substr<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
     }
   }
   if (OB_SUCC(ret)) {
-    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, bound)));
-    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, bound)));
+    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr, ctx, &skip, bound)));
+    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(*expr.args_[0], ctx, &skip, bound)));
   }
   return ret;
 }

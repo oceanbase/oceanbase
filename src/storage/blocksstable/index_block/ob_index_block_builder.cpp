@@ -756,10 +756,10 @@ int ObSSTableIndexBuilder::sort_roots()
   int ret = OB_SUCCESS;
   if (index_store_desc_.get_desc().is_cg()) {
     ObIndexTreeRootCtxCGCompare cmp(ret);
-    std::sort(roots_.begin(), roots_.end(), cmp);
+    lib::ob_sort(roots_.begin(), roots_.end(), cmp);
   } else {
     ObIndexTreeRootCtxCompare cmp(ret, index_store_desc_.get_desc().get_datum_utils());
-    std::sort(roots_.begin(), roots_.end(), cmp);
+    lib::ob_sort(roots_.begin(), roots_.end(), cmp);
   }
   return ret;
 }
@@ -1340,7 +1340,10 @@ int ObBaseIndexBlockBuilder::init(const ObDataStoreDesc &data_store_desc,
     } else {
       if (need_pre_warm() && index_store_desc.get_tablet_id().is_user_tablet()) {
         int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(index_block_pre_warmer_.init())) {
+        if (OB_TMP_FAIL(index_block_pre_warmer_.init(ObRowkeyVectorHelper::can_use_non_datum_rowkey_vector(
+                                                     index_store_desc_->is_cg(), index_store_desc_->get_tablet_id()) ?
+                                                     &index_store_desc_->get_rowkey_col_descs()
+                                                     : nullptr))) {
           STORAGE_LOG(WARN, "Failed to init index block prewarmer", K(tmp_ret));
         }
       }
@@ -2832,7 +2835,7 @@ int ObIndexBlockRebuilder::close()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "rebuilder not inited", K(ret), K_(is_inited));
-  } else if (need_sort_ && FALSE_IT(std::sort(macro_meta_list_->begin(), macro_meta_list_->end(), cmp))) {
+  } else if (need_sort_ && FALSE_IT(lib::ob_sort(macro_meta_list_->begin(), macro_meta_list_->end(), cmp))) {
   } else if (OB_FAIL(ret)) {
     STORAGE_LOG(WARN, "fail to sort meta list", K(ret), KPC(index_store_desc_));
   } else if (macro_meta_list_->count() == 0) {

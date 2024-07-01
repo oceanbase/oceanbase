@@ -47,7 +47,7 @@ public:
   virtual int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override final;
+      ObSSTableWrapper &wrapper) override;
   virtual void reset() override;
   virtual void reuse() override;
   virtual int locate(
@@ -148,7 +148,7 @@ private:
   virtual int inner_fetch_rows(const int64_t row_cap, const int64_t datum_offset);
 
 protected:
-  int64_t *row_ids_;
+  int32_t *row_ids_;
   uint32_t *len_array_;
   // for projection in vectorize, need to remove later
   const char **cell_data_ptrs_;

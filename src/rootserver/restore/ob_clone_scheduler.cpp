@@ -693,6 +693,8 @@ int ObCloneScheduler::clone_wait_tenant_restore_finish(const ObCloneJob &job)
         if (has_set_stop()) {
           ret = OB_CANCELED;
           LOG_WARN("clone scheduler stopped", KR(ret));
+        } else if (OB_FAIL(check_data_version_before_finish_clone_(job.get_source_tenant_id()))) {
+          LOG_WARN("fail to check data version before finish snapshot creation", KR(ret), K(job));
         } else if (OB_FAIL(rpc_proxy_->timeout(timeout).create_tenant_end(arg))) {
           need_wait = true;
           LOG_WARN("fail to create tenant end", KR(ret), K(arg), K(timeout));
@@ -1279,8 +1281,8 @@ int ObCloneScheduler::try_update_job_status_(
   }
   if (OB_SUCC(ret)) {
     work_immediately_ = true;
-    LOG_INFO("[RESTORE] switch job status", KR(ret), K(job), K(next_status));
-    (void)record_rs_event_(job, cur_status, next_status, return_ret);
+    (void)ObTenantCloneUtil::try_to_record_clone_status_change_rs_event(
+          job, cur_status, next_status, return_ret, ObCancelCloneJobReason());
   }
   return ret;
 }
@@ -1394,21 +1396,6 @@ ObTenantCloneStatus ObCloneScheduler::get_user_next_status_(
   return next_status;
 }
 
-void ObCloneScheduler::record_rs_event_(
-     const share::ObCloneJob &job,
-     const share::ObTenantCloneStatus prev_status,
-     const share::ObTenantCloneStatus cur_status,
-     const int ret)
-{
-  const char *prev_status_str = ObTenantCloneStatus::get_clone_status_str(prev_status);
-  const char *cur_status_str = ObTenantCloneStatus::get_clone_status_str(cur_status);
-  ROOTSERVICE_EVENT_ADD("clone", "change_clone_status",
-                        "job_id", job.get_job_id(),
-                        K(ret),
-                        "prev_clone_status", prev_status_str,
-                        "cur_clone_status", cur_status_str);
-}
-
 int ObCloneScheduler::check_sys_tenant_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -1461,9 +1448,9 @@ int ObCloneScheduler::check_meta_tenant_(const uint64_t tenant_id)
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null schema service", KR(ret), KP(GCTX.schema_service_));
-  } else if (GCTX.is_standby_cluster() || GCONF.in_upgrade_mode()) {
+  } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("clone tenant while in standby cluster or in upgrade mode is not allowed", KR(ret));
+    LOG_WARN("clone tenant while in upgrade mode is not allowed", KR(ret));
   } else if (OB_FAIL(ObShareUtil::check_compat_version_for_clone_tenant(tenant_id, compatibility_satisfied))) {
     LOG_WARN("check tenant compatibility failed", KR(ret), K(tenant_id));
   } else if (!compatibility_satisfied) {
@@ -2024,6 +2011,40 @@ int ObCloneScheduler::get_latest_key_id_(
     }
   }
 #endif
+  return ret;
+}
+
+int ObCloneScheduler::check_data_version_before_finish_clone_(
+    const uint64_t source_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObTenantCloneTableOperator clone_op;
+  ObCloneJob clone_job;
+  uint64_t current_min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  uint64_t current_data_version = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == source_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(source_tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(clone_op.init(OB_SYS_TENANT_ID, GCTX.sql_proxy_))) {
+    LOG_WARN("fail to init clone table operator", KR(ret), K(source_tenant_id));
+  } else if (OB_FAIL(clone_op.get_clone_job_by_source_tenant_id(
+                         source_tenant_id, clone_job))) {
+    LOG_WARN("fail to get job", KR(ret), K(source_tenant_id));
+  } else if (clone_job.get_min_cluster_version() != current_min_cluster_version) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("min cluster version has changed, clone tenant should fail", KR(ret),
+             K(source_tenant_id), K(clone_job), K(current_min_cluster_version));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_current_and_target_data_version(
+                         source_tenant_id, current_data_version))) {
+    LOG_WARN("fail to check and get current data version", KR(ret), K(source_tenant_id));
+  } else if (clone_job.get_data_version() != current_data_version) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("data version has changed, clone tenant should fail", KR(ret),
+             K(source_tenant_id), K(clone_job), K(current_data_version));
+  }
   return ret;
 }
 

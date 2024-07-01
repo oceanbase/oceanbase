@@ -30,6 +30,7 @@ namespace storage
 {
   class ObLobQueryIter;
   class ObLobDiffHeader;
+  class ObLobAccessCtx;
 } // namespace storage
 namespace common
 {
@@ -68,7 +69,7 @@ struct ObLobTextIterCtx
     total_access_len_(0), total_byte_len_(0), content_byte_len_(0), content_len_(0),
     reserved_byte_len_(0), reserved_len_(0), accessed_byte_len_(0), accessed_len_(0),
     last_accessed_byte_len_(0), last_accessed_len_(0), iter_count_(0), is_cloned_temporary_(false),
-    is_backward_(false), locator_(locator), lob_query_iter_(NULL)
+    is_backward_(false), locator_(locator), lob_query_iter_(NULL), lob_access_ctx_(nullptr)
   {}
 
   TO_STRING_KV(KP_(alloc), KP_(session), KP_(buff), K_(buff_byte_len), K_(start_offset), K_(total_access_len),
@@ -113,6 +114,7 @@ struct ObLobTextIterCtx
 
   ObLobLocatorV2 locator_;
   storage::ObLobQueryIter *lob_query_iter_;
+  storage::ObLobAccessCtx *lob_access_ctx_;
 };
 
 // wrapper class to handle string/text type input
@@ -151,7 +153,8 @@ public:
   int init(uint32_t buffer_len,
            const sql::ObBasicSessionInfo *session = NULL,
            ObIAllocator *res_allocator = NULL,
-           ObIAllocator *tmp_allocator = NULL);
+           ObIAllocator *tmp_allocator = NULL,
+           storage::ObLobAccessCtx *lob_access_ctx = NULL);
 
   ObTextStringIterState get_next_block(ObString &str);
 

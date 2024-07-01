@@ -14,7 +14,6 @@
 #define OB_STORAGE_OB_STORE_ROW_ITERATOR_H_
 
 #include "storage/ob_i_store.h"
-#include "storage/ob_table_store_stat_mgr.h"
 #include "storage/column_store/ob_i_cg_iterator.h"
 #include "ob_block_row_store.h"
 

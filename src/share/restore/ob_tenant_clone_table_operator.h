@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_TENANT_CLONE_TABLE_OPERATOR_H_
 
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // for ObConflictCaseWithClone
 #include "share/tenant_snapshot/ob_tenant_snapshot_id.h"
 #include "src/share/scn.h"
 
@@ -23,6 +24,43 @@ namespace share
 {
 class ObDMLSqlSplicer;
 class TenantCloneStatusStrPair;
+
+class ObCancelCloneJobReason
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum CancelCloneJobReason
+  {
+    INVALID = -1,
+    CANCEL_BY_USER,
+    CANCEL_BY_STANDBY_TRANSFER,
+    CANCEL_BY_STANDBY_UPGRADE,
+    CANCEL_BY_STANDBY_ALTER_LS,
+    MAX
+  };
+public:
+  ObCancelCloneJobReason() : reason_(INVALID) {}
+  explicit ObCancelCloneJobReason(CancelCloneJobReason reason) : reason_(reason) {}
+
+  int init_by_conflict_case(const rootserver::ObConflictCaseWithClone &case_to_check);
+  ObCancelCloneJobReason &operator=(const CancelCloneJobReason reason) { reason_ = reason; return *this; }
+  ObCancelCloneJobReason &operator=(const ObCancelCloneJobReason &other) { reason_ = other.reason_; return *this; }
+  void reset() { reason_ = INVALID; }
+  void assign(const ObCancelCloneJobReason &other) { reason_ = other.reason_; }
+  bool operator==(const ObCancelCloneJobReason &other) const { return other.reason_ == reason_; }
+  bool operator!=(const ObCancelCloneJobReason &other) const { return other.reason_ != reason_; }
+  bool is_valid() const { return INVALID < reason_ && MAX > reason_; }
+  bool is_cancel_by_user() const { return CANCEL_BY_USER == reason_; }
+  bool is_cancel_by_standby_transfer() const { return CANCEL_BY_STANDBY_TRANSFER == reason_; }
+  bool is_cancel_by_standby_upgrade() const { return CANCEL_BY_STANDBY_UPGRADE == reason_; }
+  bool is_cancel_by_standby_alter_ls() const { return CANCEL_BY_STANDBY_ALTER_LS == reason_; }
+  const CancelCloneJobReason &get_reason() const { return reason_; }
+  const char* get_reason_str() const;
+
+  TO_STRING_KV("reason", get_reason_str());
+private:
+  CancelCloneJobReason reason_;
+};
 
 class ObTenantCloneStatus
 {
@@ -95,8 +133,7 @@ public:
   bool is_sys_valid_snapshot_status_for_fork() const;
   bool is_sys_release_resource_status() const;
   bool is_sys_release_clone_resource_status() const;
-
-  TO_STRING_KV(K_(status));
+  TO_STRING_KV("status", get_clone_status_str(status_));
 
 private:
   Status status_;
@@ -139,6 +176,8 @@ public:
   const ObTenantCloneJobType &get_job_type() const { return job_type_; }
   void set_status(const ObTenantCloneStatus::Status &status) { status_ = status; }
   int get_ret_code() const { return ret_code_; }
+  uint64_t get_data_version() const { return data_version_; }
+  uint64_t get_min_cluster_version() const { return min_cluster_version_; }
 
   struct ObCloneJobInitArg
   {
@@ -158,13 +197,16 @@ public:
     ObTenantCloneStatus status_;
     ObTenantCloneJobType job_type_;
     int ret_code_;
+    uint64_t data_version_;
+    uint64_t min_cluster_version_;
     TO_STRING_KV(K_(trace_id), K_(tenant_id), K_(job_id),
                  K_(source_tenant_id), K_(source_tenant_name),
                  K_(clone_tenant_id), K_(clone_tenant_name),
                  K_(tenant_snapshot_id), K_(tenant_snapshot_name),
                  K_(resource_pool_id), K_(resource_pool_name),
                  K_(unit_config_name), K_(restore_scn),
-                 K_(status), K_(job_type), K_(ret_code));
+                 K_(status), K_(job_type), K_(ret_code),
+                 K_(data_version), K_(min_cluster_version));
   };
   int init(const ObCloneJobInitArg &init_arg);
   int assign(const ObCloneJob &other);
@@ -177,7 +219,8 @@ public:
                K_(tenant_snapshot_id), K_(tenant_snapshot_name),
                K_(resource_pool_id), K_(resource_pool_name),
                K_(unit_config_name), K_(restore_scn),
-               K_(status), K_(job_type), K_(ret_code));
+               K_(status), K_(job_type), K_(ret_code),
+               K_(data_version), K_(min_cluster_version));
 private:
   common::ObCurTraceId::TraceId trace_id_;
   //in sys tenant space, tenant_id_ is OB_SYS_TENANT_ID
@@ -198,6 +241,8 @@ private:
   ObTenantCloneJobType job_type_;
   int ret_code_;
   ObArenaAllocator allocator_;
+  uint64_t data_version_;
+  uint64_t min_cluster_version_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCloneJob);
@@ -207,6 +252,7 @@ class ObTenantCloneTableOperator
 {
 public:
   ObTenantCloneTableOperator();
+  bool is_inited() const { return is_inited_; }
 
   int init(const uint64_t user_tenant_id, ObISQLClient *proxy);
   //get clone job according to source_tenant_id

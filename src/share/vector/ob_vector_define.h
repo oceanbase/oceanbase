@@ -24,6 +24,29 @@ using UniformFormat = ObUniformFormat<false>;
 #define DEFINE_FIXED_VECTOR(vector_name, vec_tc) \
   using vector_name = ObFixedLengthVector<RTCType<vec_tc>, VectorBasicOp<vec_tc>>;
 
+#define FIXED_VEC_LIST           \
+  VEC_TC_INTEGER,                \
+  VEC_TC_UINTEGER,               \
+  VEC_TC_FLOAT,                  \
+  VEC_TC_DOUBLE,                 \
+  VEC_TC_FIXED_DOUBLE,           \
+  VEC_TC_DATETIME,               \
+  VEC_TC_DATE,                   \
+  VEC_TC_TIME,                   \
+  VEC_TC_YEAR,                   \
+  VEC_TC_ENUM_SET,               \
+  VEC_TC_UNKNOWN,                \
+  VEC_TC_BIT,                    \
+  VEC_TC_TIMESTAMP_TZ,           \
+  VEC_TC_TIMESTAMP_TINY,         \
+  VEC_TC_INTERVAL_YM,            \
+  VEC_TC_INTERVAL_DS,            \
+  VEC_TC_DEC_INT32,              \
+  VEC_TC_DEC_INT64,              \
+  VEC_TC_DEC_INT128,             \
+  VEC_TC_DEC_INT256,             \
+  VEC_TC_DEC_INT512
+
 DEFINE_FIXED_VECTOR(IntegerFixedVec, VEC_TC_INTEGER);
 DEFINE_FIXED_VECTOR(UIntegerFixedVec, VEC_TC_UINTEGER);
 DEFINE_FIXED_VECTOR(FloatFixedVec, VEC_TC_FLOAT);
@@ -82,7 +105,7 @@ constexpr bool is_decint_vec(const VecValueTypeClass tc)
 
 DEFINE_CONTINUOUS_VECTOR(NumberContVec, VEC_TC_NUMBER);
 DEFINE_CONTINUOUS_VECTOR(ExtendContVec, VEC_TC_EXTEND);
-DEFINE_CONTINUOUS_VECTOR(TextContVec, VEC_TC_STRING);
+DEFINE_CONTINUOUS_VECTOR(StrContVec, VEC_TC_STRING);
 DEFINE_CONTINUOUS_VECTOR(ESInnerContVec, VEC_TC_ENUM_SET_INNER);
 DEFINE_CONTINUOUS_VECTOR(RawContVec, VEC_TC_RAW);
 DEFINE_CONTINUOUS_VECTOR(RowidContVec, VEC_TC_ROWID);
@@ -90,6 +113,7 @@ DEFINE_CONTINUOUS_VECTOR(LobContVec, VEC_TC_LOB);
 DEFINE_CONTINUOUS_VECTOR(JsonContVec, VEC_TC_JSON);
 DEFINE_CONTINUOUS_VECTOR(GeoContVec, VEC_TC_GEO);
 DEFINE_CONTINUOUS_VECTOR(UdtContVec, VEC_TC_UDT);
+DEFINE_CONTINUOUS_VECTOR(RoaringBitmapContVec, VEC_TC_ROARINGBITMAP);
 #undef DEFINE_CONTINUOUS_VECTOR
 
 constexpr bool is_continuous_vec(const VecValueTypeClass tc)
@@ -103,14 +127,15 @@ constexpr bool is_continuous_vec(const VecValueTypeClass tc)
          || tc == VEC_TC_LOB
          || tc == VEC_TC_JSON
          || tc == VEC_TC_GEO
-         || tc == VEC_TC_UDT);
+         || tc == VEC_TC_UDT
+         || tc == VEC_TC_ROARINGBITMAP);
 }
 
 #define DEFINE_DISCRETE_VECTOR(vector_name, vec_tc) \
   using vector_name = ObDiscreteVector<VectorBasicOp<vec_tc>>;
 DEFINE_DISCRETE_VECTOR(NumberDiscVec, VEC_TC_NUMBER);
 DEFINE_DISCRETE_VECTOR(ExtendDiscVec, VEC_TC_EXTEND);
-DEFINE_DISCRETE_VECTOR(TextDiscVec, VEC_TC_STRING);
+DEFINE_DISCRETE_VECTOR(StrDiscVec, VEC_TC_STRING);
 DEFINE_DISCRETE_VECTOR(ESInnerDiscVec, VEC_TC_ENUM_SET_INNER);
 DEFINE_DISCRETE_VECTOR(RawDiscVec, VEC_TC_RAW);
 DEFINE_DISCRETE_VECTOR(RowidDiscVec, VEC_TC_ROWID);
@@ -118,6 +143,7 @@ DEFINE_DISCRETE_VECTOR(LobDiscVec, VEC_TC_LOB);
 DEFINE_DISCRETE_VECTOR(JsonDiscVec, VEC_TC_JSON);
 DEFINE_DISCRETE_VECTOR(GeoDiscVec, VEC_TC_GEO);
 DEFINE_DISCRETE_VECTOR(UdtDiscVec, VEC_TC_UDT);
+DEFINE_DISCRETE_VECTOR(RoaringBitmapDiscVec, VEC_TC_ROARINGBITMAP);
 #undef DEFINE_DISCRETE_VECTOR
 
 constexpr bool is_discrete_vec(const VecValueTypeClass vec_tc)
@@ -131,7 +157,8 @@ constexpr bool is_discrete_vec(const VecValueTypeClass vec_tc)
           || vec_tc == VEC_TC_LOB
           || vec_tc == VEC_TC_JSON
           || vec_tc == VEC_TC_GEO
-          || vec_tc == VEC_TC_UDT);
+          || vec_tc == VEC_TC_UDT
+          || vec_tc == VEC_TC_ROARINGBITMAP);
 }
 
 #define DEFINE_UNIFORM_VECTOR(vector_name, vec_tc) \
@@ -160,7 +187,7 @@ DEFINE_UNIFORM_VECTOR(DecInt256UniVec, VEC_TC_DEC_INT256);
 DEFINE_UNIFORM_VECTOR(DecInt512UniVec, VEC_TC_DEC_INT512);
 DEFINE_UNIFORM_VECTOR(NumberUniVec, VEC_TC_NUMBER);
 DEFINE_UNIFORM_VECTOR(ExtendUniVec, VEC_TC_EXTEND);
-DEFINE_UNIFORM_VECTOR(TextUniVec, VEC_TC_STRING);
+DEFINE_UNIFORM_VECTOR(StrUniVec, VEC_TC_STRING);
 DEFINE_UNIFORM_VECTOR(ESInnerUniVec, VEC_TC_ENUM_SET_INNER);
 DEFINE_UNIFORM_VECTOR(RawUniVec, VEC_TC_RAW);
 DEFINE_UNIFORM_VECTOR(RowidUniVec, VEC_TC_ROWID);
@@ -168,6 +195,7 @@ DEFINE_UNIFORM_VECTOR(LobUniVec, VEC_TC_LOB);
 DEFINE_UNIFORM_VECTOR(JsonUniVec, VEC_TC_JSON);
 DEFINE_UNIFORM_VECTOR(GeoUniVec, VEC_TC_GEO);
 DEFINE_UNIFORM_VECTOR(UdtUniVec, VEC_TC_UDT);
+DEFINE_UNIFORM_VECTOR(RoaringBitmapUniVec, VEC_TC_ROARINGBITMAP);
 #undef DEFINE_UNIFORM_VECTOR
 
 constexpr bool is_uniform_vec(const VecValueTypeClass tc)
@@ -201,7 +229,7 @@ DEFINE_UNIFORM_CONST_VECTOR(DecInt256UniCVec, VEC_TC_DEC_INT256);
 DEFINE_UNIFORM_CONST_VECTOR(DecInt512UniCVec, VEC_TC_DEC_INT512);
 DEFINE_UNIFORM_CONST_VECTOR(NumberUniCVec, VEC_TC_NUMBER);
 DEFINE_UNIFORM_CONST_VECTOR(ExtendUniCVec, VEC_TC_EXTEND);
-DEFINE_UNIFORM_CONST_VECTOR(TextUniCVec, VEC_TC_STRING);
+DEFINE_UNIFORM_CONST_VECTOR(StrUniCVec, VEC_TC_STRING);
 DEFINE_UNIFORM_CONST_VECTOR(ESInnerUniCVec, VEC_TC_ENUM_SET_INNER);
 DEFINE_UNIFORM_CONST_VECTOR(RawUniCVec, VEC_TC_RAW);
 DEFINE_UNIFORM_CONST_VECTOR(RowidUniCVec, VEC_TC_ROWID);
@@ -209,6 +237,7 @@ DEFINE_UNIFORM_CONST_VECTOR(LobUniCVec, VEC_TC_LOB);
 DEFINE_UNIFORM_CONST_VECTOR(JsonUniCVec, VEC_TC_JSON);
 DEFINE_UNIFORM_CONST_VECTOR(GeoUniCVec, VEC_TC_GEO);
 DEFINE_UNIFORM_CONST_VECTOR(UdtUniCVec, VEC_TC_UDT);
+DEFINE_UNIFORM_CONST_VECTOR(RoaringBitmapUniCVec, VEC_TC_ROARINGBITMAP);
 #undef DEFINE_UNIFORM_CONST_VECTOR
 
 }

@@ -380,7 +380,7 @@ private:
         }
 
         if (OB_SUCC(ret)) {
-          std::sort(cost_arr, cost_arr + candidate_count);
+          lib::ob_sort(cost_arr, cost_arr + candidate_count);
           // use most space-saving encoding type
           const ObCodecCost &best_codec = cost_arr[0];
           for (int64_t i = 0; i < candidate_count; i++) {

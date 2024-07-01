@@ -477,12 +477,18 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
         ObMySQLTransaction trans;
         for (int64_t i = 0; OB_SUCC(ret) && i < source_data.count(); ++i) {
           const ObTxBufferNode &node = source_data.at(i);
-          if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
+          if (OB_FAIL(try_cancel_clone_job_for_standby_tenant_(node))) {
+            LOG_WARN("fail to cancel clone job for standby tenant", KR(ret), K(node));
+          } else if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
             if (OB_FAIL(process_upgrade_log_(sync_scn, node))) {
               LOG_WARN("failed to process_upgrade_log_", KR(ret), K(node));
             }
-          } else if (ObTxDataSourceType::LS_TABLE != node.get_data_source_type()
-                     && ObTxDataSourceType::TRANSFER_TASK != node.get_data_source_type()) {
+          } else if (ObTxDataSourceType::STANDBY_UPGRADE_DATA_VERSION !=
+                         node.get_data_source_type() &&
+                     ObTxDataSourceType::LS_TABLE !=
+                         node.get_data_source_type() &&
+                     ObTxDataSourceType::TRANSFER_TASK !=
+                         node.get_data_source_type()) {
             // nothing
           } else if (! trans.is_started() && OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
             LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
@@ -490,22 +496,27 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
             //can not be there;
           } else if (OB_FAIL(check_valid_to_operator_ls_(sync_scn))) {
             LOG_WARN("failed to check valid to operator ls", KR(ret), K(sync_scn));
+          } else if (ObTxDataSourceType::STANDBY_UPGRADE_DATA_VERSION ==
+                     node.get_data_source_type()) {
+            if (OB_FAIL(process_upgrade_data_version_log_(sync_scn, node, trans))) {
+              LOG_WARN("failed to process_upgrade_data_version_log_", KR(ret), K(node));
+            }
           } else if (ObTxDataSourceType::TRANSFER_TASK == node.get_data_source_type()) {
             if (OB_FAIL(process_ls_transfer_task_in_trans_(node, sync_scn, trans))) {
               LOG_WARN("failed to process ls transfer task", KR(ret), K(node));
             }
-          } else if (OB_FAIL(process_ls_table_in_trans_(node,
-                  sync_scn, trans))) {
+          } else if (OB_FAIL(process_ls_table_in_trans_(node, sync_scn, trans))) {
             //TODO ls recovery is too fast for ls manager, so it maybe failed, while change ls status
             //consider how to retry
-            LOG_WARN("failed to process ls operator", KR(ret), K(node),
-                K(sync_scn));
+            LOG_WARN("failed to process ls operator", KR(ret), K(node), K(sync_scn));
           }
         }// end for
         if (OB_FAIL(ret) || !has_operation) {
         } else if (OB_FAIL(report_sys_ls_recovery_stat_in_trans_(sync_scn, false, trans,
                 "report recovery stat and has multi data source"))) {
           LOG_WARN("failed to report sys ls recovery stat", KR(ret), K(sync_scn));
+        } else if (OB_FAIL(check_standby_tenant_not_in_cloning_(trans))) {
+          LOG_WARN("fail to check standby tenant in cloning", KR(ret));
         }
         ret = ERRSIM_END_TRANS_ERROR ? : ret;
         END_TRANSACTION(trans)
@@ -513,6 +524,81 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
     }
   }  // end while for each tx_log
 
+  return ret;
+}
+
+int ObRecoveryLSService::try_cancel_clone_job_for_standby_tenant_(
+    const transaction::ObTxBufferNode &node)
+{
+  int ret = OB_SUCCESS;
+  bool is_conflict_with_clone = true;
+  if (OB_UNLIKELY(!node.is_valid())
+      || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(node), K_(tenant_id));
+  } else if (OB_FAIL(log_type_conflict_with_clone_procedure_(node, is_conflict_with_clone))) {
+    LOG_WARN("fail to check whether log type is conflict with clone", KR(ret), K(node));
+  } else if (is_conflict_with_clone) {
+    // determine case to check
+    ObConflictCaseWithClone case_to_check;
+    if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
+      case_to_check = ObConflictCaseWithClone::STANDBY_UPGRADE;
+    } else if (ObTxDataSourceType::LS_TABLE == node.get_data_source_type()) {
+      case_to_check = ObConflictCaseWithClone::STANDBY_MODIFY_LS;
+    } else if (ObTxDataSourceType::TRANSFER_TASK == node.get_data_source_type()) {
+      case_to_check = ObConflictCaseWithClone::STANDBY_TRANSFER;
+    } else {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("unexpected log type", KR(ret), K(node));
+    }
+    // cancel clone job if exists
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTenantSnapshotUtil::cancel_existed_clone_job_if_need(tenant_id_, case_to_check))) {
+      LOG_WARN("fail to check tenant whether in cloning ", KR(ret), K_(tenant_id), K(case_to_check));
+    }
+  } else {
+    // only standby upgrade/transfer/ls_alter conflict with standby clone job
+    // So if multi source log not these types, just skip, where is no need to cancel clone job
+    LOG_TRACE("log type is not conflict with clone operation", K(node));
+  }
+  DEBUG_SYNC(AFTER_FIRST_CLONE_CHECK_FOR_STANDBY);
+  return ret;
+}
+
+int ObRecoveryLSService::check_standby_tenant_not_in_cloning_(
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  bool is_cloning = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_standby_tenant_not_in_cloning_procedure(
+                         trans, tenant_id_, is_cloning))) {
+    LOG_WARN("fail to check standby tenant whether in cloning procedure", KR(ret), K_(tenant_id));
+  } else if (is_cloning) {
+    ret = OB_CONFLICT_WITH_CLONE;
+    LOG_WARN("tenant is cloning, can not process balance task", KR(ret), K_(tenant_id), K(is_cloning));
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::log_type_conflict_with_clone_procedure_(
+    const transaction::ObTxBufferNode &node,
+    bool &is_conflict)
+{
+  int ret = OB_SUCCESS;
+  is_conflict = true;
+  if (OB_UNLIKELY(!node.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(node));
+  } else if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()
+             || ObTxDataSourceType::LS_TABLE == node.get_data_source_type()
+             || ObTxDataSourceType::TRANSFER_TASK == node.get_data_source_type()) {
+    is_conflict = true;
+  } else {
+    is_conflict = false;
+  }
   return ret;
 }
 
@@ -568,6 +654,47 @@ int ObRecoveryLSService::process_upgrade_log_(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::process_upgrade_data_version_log_(
+    const share::SCN &sync_scn,
+    const ObTxBufferNode &node,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  uint64_t standby_data_version = 0;
+
+  if (!node.is_valid() || !sync_scn.is_valid() || !trans.is_started()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(node), K(sync_scn), "trans_started",
+             trans.is_started());
+  } else {
+    ObStandbyUpgrade primary_data_version;
+    int64_t pos = 0;
+    if (OB_FAIL(primary_data_version.deserialize(
+            node.get_data_buf().ptr(), node.get_data_buf().length(), pos))) {
+      LOG_WARN("failed to deserialize", KR(ret), K(node),
+               KPHEX(node.get_data_buf().ptr(), node.get_data_buf().length()));
+    } else if (OB_UNLIKELY(pos > node.get_data_buf().length())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get primary_data_version", KR(ret), K(pos),
+               K(node.get_data_buf().length()));
+    } else if (!primary_data_version.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("primary_data_version not valid", KR(ret), K(primary_data_version));
+    } else {
+      const uint64_t primary_data_version_value = primary_data_version.get_data_version();
+      uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
+      ObGlobalStatProxy stat_proxy(trans, exec_tenant_id);
+      if (OB_FAIL(stat_proxy.update_finish_data_version(primary_data_version_value, sync_scn))) {
+        LOG_WARN("fail to update finish_data_version", K(ret), K(tenant_id_), K(sync_scn),
+                  K(primary_data_version_value));
+      }
+    }
+    LOG_INFO("handle upgrade_data_version_log", KR(ret), K(tenant_id_), K(sync_scn),
+             K(primary_data_version));
   }
   return ret;
 }

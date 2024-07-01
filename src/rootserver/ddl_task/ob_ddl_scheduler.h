@@ -363,7 +363,18 @@ private:
       const int64_t consumer_group_id,
       const int32_t sub_task_trace_id,
       const obrpc::ObCreateIndexArg *create_index_arg,
+      const share::ObDDLType task_type,
       const uint64_t tenant_data_version,
+      ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
+  int create_build_fts_index_task(
+      common::ObISQLClient &proxy,
+      const share::schema::ObTableSchema *data_table_schema,
+      const share::schema::ObTableSchema *index_schema,
+      const int64_t parallelism,
+      const int64_t parent_task_id,
+      const int64_t consumer_group_id,
+      const obrpc::ObCreateIndexArg *create_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
   int create_constraint_task(
@@ -491,6 +502,8 @@ private:
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
+  int schedule_build_fts_index_task(
+      const ObDDLTaskRecord &task_record);
   int schedule_build_index_task(
       const ObDDLTaskRecord &task_record);
   int schedule_build_mview_task(const ObDDLTaskRecord &task_record);

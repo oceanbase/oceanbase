@@ -30,7 +30,7 @@ struct ObTableIterParam;
 struct ObTableAccessContext;
 struct ObRowSampleFilter;
 class ObBlockRowStore;
-class ObTableStoreStat;
+class ObTableScanStoreStat;
 class ObCGAggCells;
 }
 namespace blocksstable
@@ -65,7 +65,7 @@ public:
   virtual int get_next_rows();
   virtual int apply_blockscan(
       storage::ObBlockRowStore *block_row_store,
-      storage::ObTableStoreStat &table_store_stat);
+      storage::ObTableScanStoreStat &table_store_stat);
   virtual int set_ignore_shadow_row() { return OB_NOT_SUPPORTED;}
   int end_of_block() const;
   OB_INLINE int get_access_cnt() const { return reverse_scan_ ? (current_ - last_ + 1) : (last_ - current_ + 1);}
@@ -85,7 +85,7 @@ public:
   virtual int get_next_rows(
       const common::ObIArray<int32_t> &cols_projector,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       common::ObIArray<ObSqlDatumInfo> &datums,
@@ -93,7 +93,7 @@ public:
       uint32_t *len_array);
   int get_aggregate_result(
       const int32_t col_idx,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       ObCGAggCells &cg_agg_cells);
   int advance_to_border(
@@ -112,7 +112,7 @@ public:
       storage::ObGroupByCell &group_by_cell) const;
   int read_reference(
       const int32_t group_by_col,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const;
   OB_INLINE void reserve_reader_memory(bool reserve)
@@ -125,7 +125,7 @@ public:
   int get_rows_for_old_format(
       const common::ObIArray<int32_t> &col_offsets,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const int64_t vector_offset,
       const char **cell_datas,
@@ -135,7 +135,7 @@ public:
   int get_rows_for_rich_format(
       const common::ObIArray<int32_t> &col_offsets,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
+      const int32_t *row_ids,
       const int64_t row_cap,
       const int64_t vector_offset,
       const char **cell_datas,
@@ -373,7 +373,7 @@ public:
   void reuse() override;
   virtual int apply_blockscan(
       storage::ObBlockRowStore *block_row_store,
-      storage::ObTableStoreStat &table_store_stat) override final
+      storage::ObTableScanStoreStat &table_store_stat) override final
   {
     UNUSEDx(block_row_store, table_store_stat);
     return OB_NOT_SUPPORTED;

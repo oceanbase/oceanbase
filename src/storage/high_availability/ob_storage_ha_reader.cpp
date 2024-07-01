@@ -277,12 +277,6 @@ int ObCopyMacroBlockObReader::alloc_from_memctx_first(char* &buf)
   int ret = OB_SUCCESS;
   buf = NULL;
   if (OB_ISNULL(buf = reinterpret_cast<char*>(macro_block_mem_context_.alloc()))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc buf from mem ctx", K(ret));
-  }
-
-  if (OB_ISNULL(buf)) {
-    ret = OB_SUCCESS;
     if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator_.alloc(OB_DEFAULT_MACRO_BLOCK_SIZE)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc buf", K(ret));

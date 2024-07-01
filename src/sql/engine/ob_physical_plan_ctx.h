@@ -99,6 +99,8 @@ public:
   virtual ~ObPhysicalPlanCtx();
   void destroy()
   {
+    total_memstore_read_row_count_ = 0;
+    total_ssstore_read_row_count_ = 0;
     // Member variables that need to request additional memory
     // with another allocator should call destroy here.
     subschema_ctx_.destroy();
@@ -172,6 +174,15 @@ public:
   {
     return consistency_level_;
   }
+  bool check_consistency_level_validation(const bool contain_inner_table)
+  {
+    bool bool_ret = true;
+    if (contain_inner_table) {
+      // Statement which contain inner tables should be strong read;
+      bool_ret = (consistency_level_ == ObConsistencyLevel::STRONG);
+    }
+    return bool_ret;
+  }
   void restore_param_store(const int64_t param_count);
   // param store
   int reserve_param_space(int64_t param_count);
@@ -241,6 +252,22 @@ public:
   inline void add_affected_rows(int64_t affected_rows)
   {
     affected_rows_ += affected_rows;
+  }
+  inline void add_total_memstore_read_row_count(int64_t v)
+  {
+    total_memstore_read_row_count_ += v;
+  }
+  inline void add_total_ssstore_read_row_count(int64_t v)
+  {
+    total_ssstore_read_row_count_ += v;
+  }
+  inline int64_t get_total_memstore_read_row_count()
+  {
+    return total_memstore_read_row_count_;
+  }
+  inline int64_t get_total_ssstore_read_row_count()
+  {
+    return total_ssstore_read_row_count_;
   }
   int64_t get_found_rows() const
   {
@@ -647,6 +674,8 @@ private:
   bool hint_xa_trans_stop_check_lock_; // for dblink to stop check stmt lock in xa trans
   bool main_xa_trans_branch_; // for dblink to indicate weather this sql is executed in main_xa_trans_branch
   ObSEArray<uint64_t, 8> dblink_ids_;
+  int64_t total_memstore_read_row_count_;
+  int64_t total_ssstore_read_row_count_;
 };
 
 }

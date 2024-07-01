@@ -73,6 +73,10 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(),              // user defined type in sql
   ObAccuracy(10, 0),         // decimal int
   ObAccuracy(),              // collection type in sql
+  ObAccuracy(10, 0),         // mysql date.
+  ObAccuracy(19, 6),         // mysql datetime.
+  ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // roaringbitmap, roaringbitmap serialized size is possibly to exceed 512M.
+
 };
 
 const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
@@ -129,6 +133,9 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(),              // user defined type in sql
     ObAccuracy(10, 0),         // decimal int
     ObAccuracy(),              // collection type in sql
+    ObAccuracy(10, 0),         // mysql date.
+    ObAccuracy(19, 6),         // mysql datetime.
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // roaringbitmap
   },
   {
     ObAccuracy(),         // null.
@@ -183,6 +190,9 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(),              // user defined type in sql
     ObAccuracy(10, 0),         // decimal int
     ObAccuracy(),              // collection type in sql
+    ObAccuracy(10, 0),         // mysql date.
+    ObAccuracy(19, 6),         // mysql datetime.
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // roaringbitmap
   }
 };
 
@@ -239,6 +249,9 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY[ObMaxType] = {
   ObAccuracy(),              // user defined type in sql
   ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
   ObAccuracy(),              // collection type in sql
+  ObAccuracy(10, 0),         // mysql date.
+  ObAccuracy(19, 6),         // mysql datetime.
+  ObAccuracy(OB_MAX_LONGTEXT_LENGTH),        // roaringbitmap
 };
 
 const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
@@ -295,6 +308,9 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(),              // user defined type in sql
     ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
     ObAccuracy(),  // collection type in sql
+    ObAccuracy(10, 0),         // mysql date.
+    ObAccuracy(19, 6),         // mysql datetime.
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),        // roaringbitmap
   },
   { /* Oracle */
     ObAccuracy(),         // null.
@@ -349,6 +365,9 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(),              // user defined type in sql
     ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
     ObAccuracy(),  // collection type in sql
+    ObAccuracy(10, 0),         // mysql date.
+    ObAccuracy(19, 6),         // mysql datetime.
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),        // roaringbitmap
   }
 };
 
@@ -405,6 +424,9 @@ const ObAccuracy ObAccuracy::DML_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(),              // user defined type in sql
   ObAccuracy(),              // decimal int
   ObAccuracy(),              // collection type in sql
+  ObAccuracy(0, 6),         // mysql date.
+  ObAccuracy(0, 0),         // mysql datetime.
+  ObAccuracy(OB_MAX_LONGTEXT_LENGTH),        // roaringbitmap
 };
 
 const ObAccuracy ObAccuracy::MAX_ACCURACY_OLD[ObMaxType] = {

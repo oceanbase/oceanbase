@@ -49,6 +49,14 @@ int ObExprJsonContains::calc_result_typeN(ObExprResType& type,
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
 
+    for (int64_t i = 0; OB_SUCC(ret) && i < 2; i++) {
+      ObObjType in_type = types_stack[i].get_type();
+      if (!ob_is_string_type(in_type)) {
+      } else if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, i, N_JSON_CONTAINS))) {
+        LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[i].get_type()));
+      }
+    }
+
     // set type for json_path
     if (OB_SUCC(ret) && param_num == 3) {
       if (OB_FAIL(ObJsonExprHelper::is_valid_for_path(types_stack, 2))) {
@@ -70,6 +78,9 @@ int ObExprJsonContains::eval_json_contains(const ObExpr &expr, ObEvalCtx &ctx, O
   if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0,
                                              json_target, is_null_result))) {
     LOG_WARN("get_json_doc failed", K(ret));
+  } else if (!ObJsonExprHelper::is_convertible_to_json(expr.args_[1]->datum_meta_.type_)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_JSON;
+    LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_JSON, 2, N_JSON_CONTAINS);
   } else if (!is_null_result && OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 1,
                                                                        json_candidate, is_null_result))) {
     LOG_WARN("get_json_doc failed", K(ret));

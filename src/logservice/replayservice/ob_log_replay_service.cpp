@@ -752,6 +752,7 @@ share::SCN ObLogReplayService::inner_get_replayable_point_() const
     rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
     share::SCN recovery_until_scn;
     if (OB_ISNULL(tenant_info_loader)) {
+      ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "ObTenantInfoLoader is NULL", K(ret));
     } else if (OB_FAIL(tenant_info_loader->get_recovery_until_scn(recovery_until_scn))) {
       if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
@@ -858,6 +859,7 @@ void ObLogReplayService::process_replay_ret_code_(const int ret_code,
                                  replay_task.replay_hint_, false, cur_ts, ret_code);
       LOG_DBA_ERROR(OB_LOG_REPLAY_ERROR, "msg", "replay task encountered fatal error", "ret", ret_code,
                     K(replay_status), K(replay_task));
+      LOG_DBA_ERROR_V2(OB_LOG_REPLAY_FAIL, ret_code, "replay task encountered fatal error");
     } else {/*do nothing*/}
 
     if (OB_SUCCESS == task_queue.get_err_info_ret_code()) {
@@ -1314,6 +1316,7 @@ int ObLogReplayService::handle_replay_task_(ObReplayServiceReplayTask *task_queu
           ret = OB_ERR_UNEXPECTED;
           CLOG_LOG(ERROR, "do statistics replay cost failed", KPC(replay_task), K(ret));
         } else if (OB_ISNULL(link_to_destroy = task_queue->pop())) {
+          ret = OB_ERR_UNEXPECTED;
           CLOG_LOG(ERROR, "failed to pop task after replay", KPC(replay_task), K(ret));
           //It's impossible to get to this branch. Use on_replay_error to defend it.
           on_replay_error_(*replay_task, ret);

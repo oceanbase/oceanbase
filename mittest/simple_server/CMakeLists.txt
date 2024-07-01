@@ -30,6 +30,11 @@ function(errsim_ha_unittest_observer case)
   target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
 endfunction()
 
+function(ob_freeze_observer case)
+  ob_unittest(${ARGV})
+  target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
+endfunction()
+
 function(ob_offline_observer case case_file)
   add_executable(${case}
     EXCLUDE_FROM_ALL
@@ -66,7 +71,7 @@ ob_unittest_observer(test_balance_operator test_tenant_balance_operator.cpp)
 ob_unittest_observer(test_transfer_partition_task test_transfer_partition_task.cpp)
 ob_unittest_observer(test_mds_table_checkpoint test_mds_table_checkpoint.cpp)
 ob_unittest_observer(test_ob_black_list_service test_ob_black_list_service.cpp)
-ob_unittest_observer(test_ob_minor_freeze test_ob_minor_freeze.cpp)
+ob_unittest_observer(test_ob_queuing_table test_ob_queuing_table.cpp)
 ob_unittest_observer(test_ob_table_lock_service test_ob_table_lock_service.cpp)
 ob_unittest_observer(test_ob_obj_lock_garbage_collector test_ob_obj_lock_garbage_collector.cpp)
 ob_unittest_observer(test_observer_expand_shrink test_observer_expand_shrink.cpp)
@@ -116,6 +121,13 @@ ob_unittest_observer(test_transfer_commit_action test_transfer_with_commit_actio
 ob_unittest_observer(test_transfer_rollback_to test_transfer_between_rollback_to.cpp)
 ob_unittest_observer(test_memtable_new_safe_to_destroy test_memtable_new_safe_to_destroy.cpp)
 ob_unittest_observer(test_tablet_to_ls_cache test_tablet_to_ls_cache.cpp)
+
+####### freeze case #######
+#ob_freeze_observer(test_frequently_freeze freeze/test_frequently_freeze.cpp)
+ob_freeze_observer(test_ob_minor_freeze freeze/test_ob_minor_freeze.cpp)
+####### freeze case #######
+
+
 # TODO(muwei.ym): open later
 ob_ha_unittest_observer(test_transfer_handler storage_ha/test_transfer_handler.cpp)
 ob_ha_unittest_observer(test_transfer_and_restart_basic storage_ha/test_transfer_and_restart_basic.cpp)

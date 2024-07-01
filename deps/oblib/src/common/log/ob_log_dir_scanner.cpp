@@ -257,7 +257,7 @@ int ObLogDirScanner::search_log_dir_(const char *log_dir)
   }
 
   if (OB_SUCC(ret)) {
-    std::sort(log_files.begin(), log_files.end());
+    lib::ob_sort(log_files.begin(), log_files.end());
     ret = check_continuity_(log_files, min_log_id_, max_log_id_);
   }
 
