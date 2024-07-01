@@ -108,18 +108,24 @@ int ObAlterEventExecutor::execute(ObExecContext &ctx, ObAlterEventStmt &stmt)
   } else {
     uint64_t tenant_id = stmt.get_tenant_id();
     bool exist = false;
+    bool start_time_on_past = false;
     ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(GCTX.sql_proxy_, stmt.get_tenant_id()))) {
       LOG_WARN("failed to start trans", KR(ret), K(stmt.get_tenant_id()));
-    } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::check_dbms_sched_job_exist(
+    } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::check_dbms_sched_job_exist_and_start_time_on_past(
       trans,
       stmt.get_tenant_id(),
       stmt.get_event_name(),
-      exist
+      exist,
+      start_time_on_past
     ))) {
       LOG_WARN("check job exist failed", K(stmt.get_event_name()));
     } else if (exist) {
-      if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job(
+      if (stmt.get_start_time() != OB_INVALID_TIMESTAMP && start_time_on_past) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support change started event", K(ret), K(stmt.get_start_time()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify the scheduling time of a event that has already started");
+      } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job(
           trans,
           stmt.get_tenant_id(),
           stmt.get_event_name(),

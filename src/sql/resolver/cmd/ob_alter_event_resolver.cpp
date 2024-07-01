@@ -154,7 +154,10 @@ int ObAlterEventResolver::resolve_alter_event_(const ParseNode *alter_event_node
                     int64_t start_time_us = OB_INVALID_TIMESTAMP;
                     if (OB_FAIL(get_time_us_(start_time_node, start_time_us))) {
                       LOG_WARN("alter event get time us failed", K(ret), KP(start_time_node));
-                    } else {
+                    } else if (start_time_us < ObTimeUtility::current_time()) {
+                      ret = OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST;
+                      LOG_WARN("alter event get time str failed", K(ret), K(start_time_us), K(ObTimeUtility::current_time()));
+                    } {
                       stmt.set_start_time(start_time_us);
                     }
                   } else {

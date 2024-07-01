@@ -302,6 +302,7 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job(
     } else if (-1 != is_enable && OB_FAIL(dml.add_column("enabled", is_enable))) {
       LOG_WARN("add column failed", KR(ret), K(is_enable));
     } else if (OB_INVALID_TIMESTAMP != start_date && (OB_FAIL(dml.add_raw_time_column("start_date", start_date)
+      || OB_FAIL(dml.add_raw_time_column("next_date", start_date))
       || OB_FAIL(dml.add_raw_time_column("end_date", end_date))
       || OB_FAIL(dml.add_column("repeat_interval", repeat_interval))
       || OB_FAIL(dml.add_column("interval_ts", repeat_ts))))) {
@@ -328,20 +329,24 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job(
   return ret;
 }
 
-int ObDBMSSchedJobUtils::check_dbms_sched_job_exist(common::ObISQLClient &sql_client,
-                                                    const uint64_t tenant_id,
-                                                    const ObString &job_name,
-                                                    bool &exist)
+int ObDBMSSchedJobUtils::check_dbms_sched_job_exist_and_start_time_on_past(common::ObISQLClient &sql_client,
+                                        const uint64_t tenant_id,
+                                        const ObString &job_name,
+                                        bool &exist,
+                                        bool &start_time_on_past)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   exist = false;
+  start_time_on_past = false;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
   } else {
-    if (OB_FAIL(sql.append_fmt("select job from %s where job_name = \'%.*s\' and job > 0",
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    if (OB_FAIL(sql.append_fmt("select TIME_TO_USEC (start_date) as time from %s where tenant_id = %ld and job_name = \'%.*s\' and job > 0",
                                                      OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                                                     ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                                      job_name.length(), job_name.ptr()))) {
         LOG_WARN("failed to assign sql", K(ret));
     } else {
@@ -351,6 +356,12 @@ int ObDBMSSchedJobUtils::check_dbms_sched_job_exist(common::ObISQLClient &sql_cl
         } else {
           if (res.get_result() != NULL && OB_SUCCESS == (ret = res.get_result()->next())) {
             exist = true;
+            int64_t time_us = OB_INVALID_TIMESTAMP;
+            sqlclient::ObMySQLResult &result = *res.get_result();
+            EXTRACT_INT_FIELD_MYSQL(result, "time", time_us, uint64_t);
+            if (time_us < ObTimeUtility::current_time()) {
+              start_time_on_past = true;
+            }
           }
           if (OB_FAIL(ret)) {
             if (OB_ITER_END == ret) {

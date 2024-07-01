@@ -289,10 +289,11 @@ public:
                                 const int64_t job_id,
                                 const ObDBMSSchedJobInfo &job_info);
 
-  static int check_dbms_sched_job_exist(common::ObISQLClient &sql_client,
+  static int check_dbms_sched_job_exist_and_start_time_on_past(common::ObISQLClient &sql_client,
                                         const uint64_t tenant_id,
                                         const ObString &job_name,
-                                        bool &exist);
+                                        bool &exist,
+                                        bool &start_time_on_past);
   static int update_dbms_sched_job(common::ObISQLClient &sql_client,
                                    const uint64_t tenant_id,
                                    const ObString &job_name,

@@ -26391,11 +26391,11 @@ static const _error _error_OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST = {
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = ER_EVENT_CANNOT_ALTER_IN_THE_PAST,
       .sqlstate              = "HY000",
-      .str_error             = "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future.",
-      .str_user_error        = "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future.",
+      .str_error             = "Event execution time is in the past. The event was not changed. Specify a time in the future.",
+      .str_user_error        = "Event execution time is in the past. The event was not changed. Specify a time in the future.",
       .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9779, Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future.",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9779, Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future."
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9779, Event execution time is in the past. The event was not changed. Specify a time in the future.",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9779, Event execution time is in the past. The event was not changed. Specify a time in the future."
 };
 static const _error _error_OB_ERR_EVENT_RECURSION_FORBIDDEN = {
       .error_name            = "OB_ERR_EVENT_RECURSION_FORBIDDEN",

@@ -2573,7 +2573,7 @@ DEFINE_ERROR(OB_ERR_EVENT_CANNOT_DELETE, -9775, ER_EVENT_CANNOT_DELETE, "HY000",
 DEFINE_ERROR(OB_ERR_EVENT_SAME_NAME, -9776, ER_EVENT_SAME_NAME, "HY000", "Same old and new event name");
 DEFINE_ERROR_EXT(OB_ERR_EVENT_DATA_TOO_LONG, -9777, ER_EVENT_DATA_TOO_LONG, "HY000", "Data for column too long", "Data for column '%.*s' too long");
 DEFINE_ERROR(OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST, -9778, ER_EVENT_CANNOT_CREATE_IN_THE_PAST, "HY000", "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation.");
-DEFINE_ERROR(OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST, -9779, ER_EVENT_CANNOT_ALTER_IN_THE_PAST, "HY000", "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future.");
+DEFINE_ERROR(OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST, -9779, ER_EVENT_CANNOT_ALTER_IN_THE_PAST, "HY000", "Event execution time is in the past. The event was not changed. Specify a time in the future.");
 DEFINE_ERROR(OB_ERR_EVENT_RECURSION_FORBIDDEN, -9780, ER_EVENT_RECURSION_FORBIDDEN, "HY000", "Recursion of EVENT DDL statements is forbidden when body is present");
 // 余留位置
 ////////////////////////////////////////////////////////////////
