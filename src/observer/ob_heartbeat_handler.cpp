@@ -24,7 +24,7 @@ static const char *OB_DATA_DISK_STATUS_STR[] = {"INVALID", "NORMAL", "ERROR"};
 OB_SERIALIZE_MEMBER(
     ObServerHealthStatus,
     data_disk_status_
-)
+);
 ObServerHealthStatus::ObServerHealthStatus()
     : data_disk_status_(ObDataDiskStatus::DATA_DISK_STATUS_INVALID)
 {
