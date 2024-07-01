@@ -321,27 +321,26 @@ select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 
 
 EXPLAIN select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 =  t2.c1);
 Query Plan
-===================================================
-|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------
-|0 |NESTED-LOOP JOIN   |    |4       |3           |
-|1 |├─TABLE FULL SCAN  |t2  |4       |3           |
-|2 |└─MATERIAL         |    |5       |3           |
-|3 |  └─TABLE FULL SCAN|t1  |5       |3           |
-===================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |NESTED-LOOP JOIN       |    |4       |96          |
+|1 |├─TABLE FULL SCAN      |t1  |5       |3           |
+|2 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-      conds([t1.c1 = t2.c1]), nl_params_(nil), use_batch=false
-  1 - output([t2.c1]), filter(nil), rowset=16
-      access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t2.c1]), range(MIN ; MAX)always true
-  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.c1(:0)]), use_batch=false
+  1 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
       access([t1.c2], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c2]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX), 
+      range_cond([:0 = t2.c1])
 select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 =  t2.c1);
 +------+----+
 | c1   | c2 |
@@ -720,27 +719,26 @@ select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 
 
 EXPLAIN select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 =  t2.c1);
 Query Plan
-===================================================
-|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------
-|0 |NESTED-LOOP JOIN   |    |4       |3           |
-|1 |├─TABLE FULL SCAN  |t2  |4       |3           |
-|2 |└─MATERIAL         |    |5       |3           |
-|3 |  └─TABLE FULL SCAN|t1  |5       |3           |
-===================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |NESTED-LOOP JOIN       |    |4       |83          |
+|1 |├─TABLE FULL SCAN      |t1  |5       |3           |
+|2 |└─DISTRIBUTED TABLE GET|t2  |1       |16          |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-      conds([t1.c1 = t2.c1]), nl_params_(nil), use_batch=false
-  1 - output([t2.c1]), filter(nil), rowset=16
-      access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t2.c1]), range(MIN ; MAX)always true
-  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-  3 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.c1(:0)]), use_batch=true
+  1 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
       access([t1.c2], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c2]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=16
+      access([GROUP_ID]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX), 
+      range_cond([:0 = t2.c1])
 select /*+use_nl(t1, t2)*/ * from t1 where exists (select 1 from t2 where t1.c1 =  t2.c1);
 +------+----+
 | c1   | c2 |
