@@ -349,7 +349,7 @@ void UserMdsNode<K, V>::report_event_(const char (&event_str)[N],
     observer::MdsEventKey key(MTL_ID(),
                               p_mds_row_->p_mds_unit_->p_mds_table_->ls_id_,
                               p_mds_row_->p_mds_unit_->p_mds_table_->tablet_id_);
-    observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+    observer::ObMdsEventBuffer::append(key, event, p_mds_row_->p_mds_unit_->p_mds_table_, file, line, function_name);
   }
 }
 

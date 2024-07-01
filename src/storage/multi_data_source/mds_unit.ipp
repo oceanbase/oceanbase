@@ -203,8 +203,8 @@ int MdsUnit<K, V>::for_each_row(FowEachRowAction action_type, OP &&op)// node ma
       // but destroy mds_row will add row's lock inner destruction, which will resulting deadlock in same thread.
       // so only operations logic behaves like gc should recycle empty row.
       if (FowEachRowAction::RECYCLE == action_type || FowEachRowAction::RESET == action_type) {
-        erase_kv_from_list_if_empty_(&const_cast<KvPair<K, Row<K, V>> &>(kv_row));
         MDS_LOG_SCAN(DEBUG, "scan row to recycle or reset", K(action_type), KPC(p_k));
+        erase_kv_from_list_if_empty_(&const_cast<KvPair<K, Row<K, V>> &>(kv_row));
       }
       return OB_SUCCESS != ret;// keep scanning until meet failure
   });
@@ -597,7 +597,7 @@ void MdsUnit<K, V>::report_event_(const char (&event_str)[N],
     observer::MdsEventKey key(MTL_ID(),
                              MdsUnitBase<K, V>::p_mds_table_->ls_id_,
                              MdsUnitBase<K, V>::p_mds_table_->tablet_id_);
-    observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+    observer::ObMdsEventBuffer::append(key, event, MdsUnitBase<K, V>::p_mds_table_, file, line, function_name);
   }
 }
 

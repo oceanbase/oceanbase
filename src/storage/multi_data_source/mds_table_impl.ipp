@@ -77,7 +77,6 @@ MdsTableImpl<MdsTableType>::~MdsTableImpl() {
   if (OB_FAIL(unregister_from_removed_recorder())) {
     MDS_LOG(ERROR, "fail to unregister from removed_recorder", K(*this));
   }
-  MDS_LOG(INFO, "mds table destructed", K(*this));
 }
 
 template <typename MdsTableImpl>

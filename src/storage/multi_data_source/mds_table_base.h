@@ -194,6 +194,32 @@ protected:
   int unregister_from_mds_table_mgr();// call when marked deleted or released directly
   int unregister_from_removed_recorder();// call when marked deleted
   int merge(const int64_t construct_sequence, const share::SCN &flushing_scn);
+  void report_construct_event_(const char *file = __builtin_FILE(),
+                               const uint32_t line = __builtin_LINE(),
+                               const char *function_name = __builtin_FUNCTION()) {
+    int ret = OB_SUCCESS;
+    observer::MdsEvent event;
+    event.record_thread_info_();
+    event.info_str_.reset();
+    event.event_ = "CONSTRUCTED";
+    observer::MdsEventKey key(MTL_ID(),
+                              ls_id_,
+                              tablet_id_);
+    observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
+  }
+  void report_destruct_event_(const char *file = __builtin_FILE(),
+                              const uint32_t line = __builtin_LINE(),
+                              const char *function_name = __builtin_FUNCTION()) {
+    int ret = OB_SUCCESS;
+    observer::MdsEvent event;
+    event.record_thread_info_();
+    event.info_str_.reset();
+    event.event_ = "DESTRUCTED";
+    observer::MdsEventKey key(MTL_ID(),
+                              ls_id_,
+                              tablet_id_);
+    observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
+  }
   template <int N>
   void report_rec_scn_event_(const char (&event_str)[N],
                              share::SCN old_scn,
@@ -214,7 +240,7 @@ protected:
       observer::MdsEventKey key(MTL_ID(),
                                 ls_id_,
                                 tablet_id_);
-      observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+      observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
     }
   }
   template <int N>
@@ -237,7 +263,7 @@ protected:
       observer::MdsEventKey key(MTL_ID(),
                                 ls_id_,
                                 tablet_id_);
-      observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+      observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
     }
 
     REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, rec_scn_, rec_scn_, flushing_scn_);
@@ -263,7 +289,7 @@ protected:
       observer::MdsEventKey key(MTL_ID(),
                                 ls_id_,
                                 tablet_id_);
-      observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+      observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
     }
 
     REPORT_CHECKPOINT_DIAGNOSE_INFO(update_merge_info_for_checkpoint_unit, this);
@@ -285,7 +311,7 @@ protected:
       observer::MdsEventKey key(MTL_ID(),
                                 ls_id_,
                                 tablet_id_);
-      observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+      observer::ObMdsEventBuffer::append(key, event, this, file, line, function_name);
     }
   }
 protected:

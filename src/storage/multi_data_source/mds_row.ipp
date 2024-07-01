@@ -229,13 +229,15 @@ int MdsRow<K, V>::construct_insert_record_user_mds_node_(MdsRowBase<K, V> *mds_r
   MDS_TG(5_ms);
   bool need_rollback_node = false;
   UserMdsNode<K, V> *new_node = nullptr;
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 && !scn.is_max()) {// write operation on leader after upgrade
-    if (!ctx.get_seq_no().is_valid()) {
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0) {
+    if (!scn.is_max() && !ctx.get_seq_no().is_valid()) {
       ctx.set_seq_no(transaction::ObTxSEQ::MIN_VAL());
       MDS_LOG_SET(WARN, "seq no on mds ctx is invalid, maybe meet old version CLOG, convert to min scn");
     }
-    if (OB_FAIL(sorted_list_.reverse_for_each_node(CheckNodeInSameWriterSeqIncLogicOp(ctx)))) {// can not assert here, cause some modules maynot adapt this logic yet
-      MDS_LOG_SET(WARN, "seq_no is not satisfied inc logic");
+    if (scn.is_max()) {// write operation on leader after upgrade
+      if (OB_FAIL(sorted_list_.reverse_for_each_node(CheckNodeInSameWriterSeqIncLogicOp(ctx)))) {// can not assert here, cause some modules maynot adapt this logic yet
+        MDS_LOG_SET(WARN, "seq_no is not satisfied inc logic");
+      }
     }
   }
 #ifndef UNITTEST_DEBUG
@@ -793,7 +795,7 @@ void MdsRow<K, V>::report_event_(const char (&event_str)[N],
     observer::MdsEventKey key(MTL_ID(),
                               MdsRowBase<K, V>::p_mds_unit_->p_mds_table_->ls_id_,
                               MdsRowBase<K, V>::p_mds_unit_->p_mds_table_->tablet_id_);
-    observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+    observer::ObMdsEventBuffer::append(key, event, MdsRowBase<K, V>::p_mds_unit_->p_mds_table_, file, line, function_name);
   }
 }
 
