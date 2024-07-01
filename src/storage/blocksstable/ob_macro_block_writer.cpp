@@ -904,11 +904,6 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
           if (cur_row_version < last_row_version) {
             ret = OB_ROWKEY_ORDER_ERROR;
             STORAGE_LOG(ERROR, "cur row version is less than last row version, ", K(ret), K(cur_row_version), K(last_row_version));
-            // TODO: @luhaopeng.lhp must delete before merge in master.
-            dump_micro_block(*micro_writer_); // print micro block have output
-            sleep(2);
-
-            ob_abort();
           } else if (cur_row_version == last_row_version) {
             int64_t last_row_sql_seq = last_key_.datums_[sql_sequence_col_idx].get_int();
             if (cur_sql_sequence == last_row_sql_seq) {

@@ -373,6 +373,8 @@ int ObTablet::init_for_first_time_creation(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(try_update_start_scn())) {
+    LOG_WARN("failed to update start scn", K(ret), K(table_store_addr_));
   } else if (OB_FAIL(table_store_cache_.init(table_store_addr_.get_ptr()->get_major_sstables(),
       table_store_addr_.get_ptr()->get_minor_sstables(),
       storage_schema.is_row_store()))) {
@@ -565,6 +567,8 @@ int ObTablet::init_with_migrate_param(
         LOG_WARN("fail to allocate and new rowkey read info", K(ret));
       } else if (OB_FAIL(table_store_addr_.ptr_->init(allocator, *this))) {
         LOG_WARN("fail to init table store", K(ret));
+      } else if (OB_FAIL(try_update_start_scn())) {
+        LOG_WARN("failed to update start scn", K(ret), K(table_store_addr_));
       } else {
         tablet_meta_.extra_medium_info_.reset();
         table_store_addr_.addr_.set_none_addr();
@@ -621,6 +625,8 @@ int ObTablet::init_with_migrate_param(
           LOG_WARN("fail to alloc and new table store object", K(ret), K_(table_store_addr));
         } else if (OB_FAIL(table_store_addr_.ptr_->init(allocator, *this, mds_param, tmp_table_store))) {
           LOG_WARN("fail to init table store", K(ret), K(mds_param));
+        } else if (OB_FAIL(try_update_start_scn())) {
+          LOG_WARN("failed to update start scn", K(ret), K(mds_param), K(table_store_addr_));
         }
       }
 
@@ -703,6 +709,8 @@ int ObTablet::init_for_defragment(
     LOG_WARN("fail to alloc and new table store object", K(ret), K_(table_store_addr));
   } else if (OB_FAIL(table_store_addr_.get_ptr()->init(*allocator_, *this, tables, *old_table_store))) {
     LOG_WARN("fail to init table store", K(ret), K(old_tablet), K(tables));
+  } else if (OB_FAIL(try_update_start_scn())) {
+    LOG_WARN("failed to update start scn", K(ret), K(table_store_addr_));
   } else {
     ddl_kvs_ = ddl_kvs_addr;
     ddl_kv_count_ = ddl_kv_count;
@@ -1298,6 +1306,8 @@ int ObTablet::init_with_mds_sstable(
     LOG_WARN("fail to alloc and new table store object", K(ret), K_(table_store_addr));
   } else if (CLICK_FAIL(table_store_addr_.get_ptr()->init(*allocator_, *this, param, *old_table_store))) {
     LOG_WARN("fail to init table store", K(ret), K(param), KPC(old_table_store));
+  } else if (OB_FAIL(try_update_start_scn())) {
+    LOG_WARN("failed to update start scn", K(ret), K(param), K(table_store_addr_));
   } else if (!is_ls_inner_tablet() && CLICK_FAIL(update_meta_last_persisted_committed_tablet_status_from_sstable(
       param, old_tablet.tablet_meta_.last_persisted_committed_tablet_status_))) {
     LOG_WARN("failed to update last_persisted_committed_tablet_status_ ", K(ret), K(param),
@@ -1397,6 +1407,8 @@ int ObTablet::init_for_compat(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(try_update_start_scn())) {
+    LOG_WARN("failed to update start scn", K(ret), K(table_store_addr_));
   } else if (old_tablet.is_ls_inner_tablet()) {
     tablet_meta_.last_persisted_committed_tablet_status_.tablet_status_ = ObTabletStatus::NORMAL;
     tablet_meta_.last_persisted_committed_tablet_status_.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
@@ -1469,6 +1481,8 @@ int ObTablet::init_empty_shell(
     LOG_WARN("fail to allocate and new rowkey read info", K(ret));
   } else if (OB_FAIL(table_store_addr_.ptr_->init(allocator, *this))) {
     LOG_WARN("fail to init table store", K(ret));
+  } else if (OB_FAIL(try_update_start_scn())) {
+    LOG_WARN("failed to update start scn", K(ret), K(table_store_addr_));
   } else {
     tablet_meta_.extra_medium_info_.reset();
     table_store_addr_.addr_.set_none_addr();
