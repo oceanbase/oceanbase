@@ -142,10 +142,13 @@ public:
     return ret;
   }
   const ObCharStream &next(char &c) override {
+    int ch;
     if (OB_NOT_NULL(file_) && !eos_flag_) {
-      if (EOF == (c = fgetc(file_))) {
+      if (EOF == (ch = fgetc(file_))) {
         c = EOS;
         eos_flag_ = true;
+      } else {
+        c = static_cast<char>(ch);
       }
     } else {
       c = EOS;
