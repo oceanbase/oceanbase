@@ -45,6 +45,7 @@ class ObSQLSessionInfo;
 struct CandidatePlan;
 class OptSystemStat;
 class ObSkylineDim;
+struct ColumnItem;
 
 class ObOptimizerTraceImpl;
 
@@ -57,8 +58,8 @@ inline ObOptimizerTraceImpl** get_local_tracer()
 
 #define TITLE_LINE "------------------------------------------------------"
 
-#define KV(x) " ", #x, " = ", x
-#define KV_(x) " ", #x, " = ", x##_
+#define KV(x) #x, "(", x , ")"
+#define KV_(x) #x, "(", x##_, ")"
 
 #define BEGIN_OPT_TRACE(session, sql_id)                                  \
   ObOptimizerTraceImpl *copy_tracer = NULL;                               \
@@ -67,7 +68,8 @@ inline ObOptimizerTraceImpl** get_local_tracer()
     if (OB_ISNULL(local_tracer) || OB_ISNULL(session)) {                  \
     } else {                                                              \
       copy_tracer = *local_tracer;                                        \
-      if (session->get_optimizer_tracer().enable(sql_id)) {               \
+      if (session->is_user_session() &&                                   \
+          session->get_optimizer_tracer().enable(sql_id)) {               \
         session->get_optimizer_tracer().open();                           \
       }                                                                   \
       *local_tracer = &(session->get_optimizer_tracer());                 \
@@ -79,7 +81,8 @@ inline ObOptimizerTraceImpl** get_local_tracer()
     ObOptimizerTraceImpl** local_tracer = get_local_tracer();             \
     if (OB_ISNULL(local_tracer) || OB_ISNULL(session)) {                  \
     } else {                                                              \
-      if (session->get_optimizer_tracer().enable()) {                     \
+      if (session->is_user_session() &&                                   \
+          session->get_optimizer_tracer().enable()) {                     \
         session->get_optimizer_tracer().close();                          \
       }                                                                   \
       *local_tracer = copy_tracer;                                        \
@@ -96,9 +99,12 @@ inline ObOptimizerTraceImpl** get_local_tracer()
 #define CHECK_TRACE_ENABLED                   \
   CHECK_TRACE if (tracer->enable())           \
 
+#define CHECK_CAN_TRACE_LOG                   \
+  CHECK_TRACE if (tracer->can_trace_log())    \
+
 #define RESUME_OPT_TRACE      \
   do {                        \
-    CHECK_TRACE {             \
+    CHECK_TRACE_ENABLED {             \
       tracer->resume_trace(); \
     }                         \
   } while (0);                \
@@ -110,23 +116,30 @@ inline ObOptimizerTraceImpl** get_local_tracer()
     }                         \
   } while (0);                \
 
+#define RESTART_OPT_TRACE     \
+  do {                        \
+    CHECK_TRACE_ENABLED {     \
+      tracer->restart_trace();\
+    }                         \
+  } while (0);                \
+
 #define OPT_TRACE_BEGIN_SECTION   \
   do {                            \
-    CHECK_TRACE_ENABLED {         \
+    CHECK_CAN_TRACE_LOG {         \
       tracer->increase_section(); \
     }                             \
   } while (0);                    \
 
 #define OPT_TRACE_END_SECTION     \
   do {                            \
-    CHECK_TRACE_ENABLED {         \
+    CHECK_CAN_TRACE_LOG {         \
       tracer->decrease_section(); \
     }                             \
   } while (0);                    \
 
 #define OPT_TRACE(args...)              \
   do {                                  \
-    CHECK_TRACE_ENABLED {               \
+    CHECK_CAN_TRACE_LOG {               \
       tracer->new_line();               \
       SMART_CALL(tracer->append(args)); \
     }                                   \
@@ -134,14 +147,38 @@ inline ObOptimizerTraceImpl** get_local_tracer()
 
 #define OPT_TRACE_TITLE(args...)        \
   do {                                  \
-    CHECK_TRACE_ENABLED {               \
+    CHECK_CAN_TRACE_LOG {               \
       tracer->append_title(args);       \
     }                                   \
   } while (0);                          \
 
+#define BEGIN_OPT_TRACE_EVA_COST                \
+  do {                                          \
+    CHECK_TRACE_ENABLED {                       \
+      if (!tracer->enable_trace_eva_cost()) {   \
+        STOP_OPT_TRACE;                         \
+      } else {                                  \
+        OPT_TRACE_BEGIN_SECTION;                \
+        OPT_TRACE_TITLE("BEGIN EVALUATE COST FOR STMT");  \
+      }                                         \
+    }                                           \
+  } while (0);
+
+#define END_OPT_TRACE_EVA_COST                  \
+  do {                                          \
+    CHECK_TRACE_ENABLED {                       \
+      if (!tracer->enable_trace_eva_cost()) {   \
+        RESUME_OPT_TRACE;                       \
+      } else {                                  \
+        OPT_TRACE_TITLE("END EVALUATE COST FOR STMT");  \
+        OPT_TRACE_END_SECTION;                  \
+      }                                         \
+    }                                           \
+  } while (0);
+
 #define OPT_TRACE_ENV                             \
   do {                                            \
-    CHECK_TRACE_ENABLED {                         \
+    CHECK_CAN_TRACE_LOG {                         \
       tracer->append_title("SYSTEM ENVIRONMENT"); \
       tracer->trace_env();                        \
     }                                             \
@@ -149,7 +186,7 @@ inline ObOptimizerTraceImpl** get_local_tracer()
 
 #define OPT_TRACE_SESSION_INFO                    \
   do {                                            \
-    CHECK_TRACE_ENABLED {                         \
+    CHECK_CAN_TRACE_LOG {                         \
       tracer->append_title("SESSION INFO");       \
       tracer->trace_session_info();               \
     }                                             \
@@ -157,7 +194,7 @@ inline ObOptimizerTraceImpl** get_local_tracer()
 
 #define OPT_TRACE_PARAMETERS                      \
   do {                                            \
-    CHECK_TRACE_ENABLED {                         \
+    CHECK_CAN_TRACE_LOG {                         \
       tracer->append_title("OPTIMIZER PARAMETERS");\
       tracer->trace_parameters();                 \
     }                                             \
@@ -165,31 +202,54 @@ inline ObOptimizerTraceImpl** get_local_tracer()
 
 #define OPT_TRACE_STATIS(stmt, table_metas)       \
   do {                                            \
-    CHECK_TRACE_ENABLED {                         \
+    CHECK_CAN_TRACE_LOG {                         \
       tracer->trace_static(stmt, table_metas);    \
     }                                             \
   } while (0);                                    \
 
 #define OPT_TRACE_TRANSFORM_SQL(stmt)     \
   do {                                    \
-    CHECK_TRACE_ENABLED {                 \
+    CHECK_CAN_TRACE_LOG {                 \
       tracer->trace_trans_sql(stmt);      \
     }                                     \
   } while (0);                            \
 
 #define OPT_TRACE_TIME_USED               \
   do {                                    \
-    CHECK_TRACE_ENABLED {                 \
+    CHECK_CAN_TRACE_LOG {                 \
       tracer->trace_time_used();          \
     }                                     \
   } while (0);                            \
 
 #define OPT_TRACE_MEM_USED                \
   do {                                    \
-    CHECK_TRACE_ENABLED {                 \
+    CHECK_CAN_TRACE_LOG {                 \
       tracer->trace_mem_used();           \
     }                                     \
   } while (0);                            \
+
+#define ENABLE_OPT_TRACE_COST_MODEL               \
+  do {                                            \
+    CHECK_CAN_TRACE_LOG {                         \
+      tracer->set_enable_trace_cost_model(true);  \
+    }                                             \
+  } while(0);                                     \
+
+#define DISABLE_OPT_TRACE_COST_MODEL              \
+  do {                                            \
+    CHECK_CAN_TRACE_LOG {                         \
+      tracer->set_enable_trace_cost_model(false); \
+    }                                             \
+  } while(0);                                     \
+
+#define OPT_TRACE_COST_MODEL(args...)             \
+  do {                                            \
+    CHECK_CAN_TRACE_LOG {                         \
+      if (tracer->enable_trace_cost_model()) {    \
+        OPT_TRACE("  ", args);                    \
+      }                                           \
+    }                                             \
+  } while(0);                                     \
 
 class LogFileAppender {
 public:
@@ -227,15 +287,21 @@ public:
   void close();
   inline bool enable() const { return enable_; }
   bool enable(const common::ObString &sql_id);
+
+  inline bool can_trace_log() const { return enable() && (trace_state_ & 1); }
   inline void set_enable(bool value) { enable_ = value; }
-  inline bool enable_trace_trans_sql() const { return trace_level_ > 1; }
   inline bool enable_trace_time_used() const { return trace_level_ > 0; }
   inline bool enable_trace_mem_used() const { return trace_level_ > 0; }
+  inline bool enable_trace_trans_sql() const { return trace_level_ > 1; }
+  inline void set_enable_trace_cost_model(bool enable) { enable_trace_cost_model_ = enable; }
+  inline bool enable_trace_cost_model() const { return trace_level_ > 2 && enable_trace_cost_model_; }
+  inline bool enable_trace_eva_cost() const { return trace_level_ > 3; }
   inline void increase_section() { ++section_; }
   inline void decrease_section() { if (section_ > 0) --section_; }
   inline void set_session_info(ObSQLSessionInfo* info) { session_info_ = info; }
   void resume_trace();
   void stop_trace();
+  void restart_trace();
 
 /***********************************************/
 ////print basic type
@@ -302,6 +368,11 @@ public:
   typename std::enable_if<std::is_base_of<ObIArray<ObDSResultItem>, T>::value, int>::type
   append(const T& value);
 
+  //for ObIArray<ColumnItem>
+  template <typename T>
+  typename std::enable_if<std::is_base_of<ObIArray<ColumnItem>, T>::value, int>::type
+  append(const T& value);
+
   //template for function append
   template<typename T1, typename T2, typename ...ARGS>
   int append(const T1& value1, const T2& value2, const ARGS&... args);
@@ -331,7 +402,8 @@ private:
   int section_;
   int trace_level_;
   bool enable_;
-  bool trace_state_before_stop_;
+  uint64_t trace_state_;
+  bool enable_trace_cost_model_;
 };
 
 //for class ObRawExpr
@@ -442,6 +514,19 @@ ObOptimizerTraceImpl::append(const T& value)
   for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
     if (OB_FAIL(append(value.at(i)))) {
     } else if (OB_FAIL(new_line())) {
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+typename std::enable_if<std::is_base_of<ObIArray<ColumnItem>, T>::value, int>::type
+ObOptimizerTraceImpl::append(const T& value)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
+    if (OB_FAIL(append(value.at(i).column_name_))) {
+    } else if (i > 0 && OB_FAIL(new_line())) {
     }
   }
   return ret;

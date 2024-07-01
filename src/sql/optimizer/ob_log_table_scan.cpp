@@ -1319,7 +1319,9 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
     // print access
     ObIArray<ObRawExpr*> &access = get_access_exprs();
     if (OB_FAIL(adjust_print_access_info(access))) {
-      LOG_WARN("failed to adjust print access info", K(ret));
+      ret = OB_SUCCESS;
+      //ignore error code for explain
+      EXPLAIN_PRINT_EXPRS(access, type);
     } else {
       EXPLAIN_PRINT_EXPRS(access, type);
     }
@@ -2104,6 +2106,7 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
       param.need_row_count_ = limit_count + offset_count;
       param.need_row_count_ = std::min(param.need_row_count_, get_card());
     }
+    ENABLE_OPT_TRACE_COST_MODEL;
     if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
       LOG_WARN("failed to re est cost error", K(ret));
     } else {
@@ -2113,6 +2116,7 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
       set_card(card);
       LOG_TRACE("push limit into table scan", K(param), K(limit_count), K(part_count), K(card));
     }
+    DISABLE_OPT_TRACE_COST_MODEL;
   }
   return ret;
 }

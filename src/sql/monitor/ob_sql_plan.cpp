@@ -2553,10 +2553,18 @@ const char* ObSqlPlan::get_tree_line(int type)
   int ret = OB_SUCCESS;
   ObCharsetType client_character = ObCharsetType::CHARSET_INVALID;
   ObCharsetType connection_character = ObCharsetType::CHARSET_INVALID;
+  ObCharsetType db_character = ObCharsetType::CHARSET_INVALID;
+  ObCollationType coll_type;
   if (NULL == session_ ||
       OB_FAIL(session_->get_character_set_client(client_character)) ||
-      OB_FAIL(session_->get_character_set_connection(connection_character))) {
+      OB_FAIL(session_->get_character_set_connection(connection_character)) ||
+      OB_FAIL(session_->get_character_set_results(db_character))) {
     return tree_line[type%3];
+  } else if (OB_FALSE_IT(coll_type=session_->get_nls_collation())) {
+  } else if (OB_FALSE_IT(db_character=ObCharset::charset_type_by_coll(coll_type))) {
+  } else if (!(ObCharsetType::CHARSET_BINARY == db_character ||
+            ObCharsetType::CHARSET_UTF8MB4 == db_character)) {
+    return tree_line[3+type%3];
   } else if ((ObCharsetType::CHARSET_BINARY == client_character ||
             ObCharsetType::CHARSET_UTF8MB4 == client_character) &&
             (ObCharsetType::CHARSET_BINARY == connection_character ||

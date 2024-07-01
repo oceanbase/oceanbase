@@ -24,6 +24,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "share/errsim_module/ob_errsim_module_interface_imp.h"
+#include "src/sql/ob_optimizer_trace_impl.h"
 
 using namespace oceanbase::common;
 
@@ -67,6 +68,17 @@ void ObTenantConfig::print() const
     }
   }
   OB_LOG(INFO, "===================== * stop tenant config report * =======================", K(tenant_id_));
+}
+
+void ObTenantConfig::trace_all_config() const
+{
+  ObConfigContainer::const_iterator it = container_.begin();
+  for (; it != container_.end(); ++it) {
+    if (OB_ISNULL(it->second)) {
+    } else if (it->second->case_compare(it->second->default_str()) != 0) {
+      OPT_TRACE("  ", it->first.str(), " = ", it->second->str());
+    }
+  }
 }
 
 int ObTenantConfig::read_config()

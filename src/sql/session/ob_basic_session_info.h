@@ -1419,6 +1419,7 @@ public:
   int get_compatibility_version(uint64_t &compat_version) const;
   int get_security_version(uint64_t &security_version) const;
   int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
+  void trace_all_sys_vars() const;
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,

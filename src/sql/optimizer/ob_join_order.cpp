@@ -5808,6 +5808,8 @@ int AccessPath::estimate_cost()
                                                 adj_cost_is_valid))) {
     LOG_WARN("failed to check adj index cost valid", K(ret));
   } else {
+    ENABLE_OPT_TRACE_COST_MODEL;
+    OPT_TRACE_COST_MODEL("calc cost for index:", index_id_);
     ObOptimizerContext &opt_ctx = parent_->get_plan()->get_optimizer_context();
     if (OB_FAIL(ObOptEstCost::cost_table(est_cost_info_,
                                         parallel_,
@@ -5816,6 +5818,7 @@ int AccessPath::estimate_cost()
       LOG_WARN("failed to get index access info", K(ret));
     } else if (!adj_cost_is_valid) {
       cost_ = storage_est_cost;
+      OPT_TRACE_COST_MODEL(KV_(cost), "=", KV(storage_est_cost));
     } else if (OB_FALSE_IT(est_cost_info_.phy_query_range_row_count_ = stats_phy_query_range_row_count)) {
     } else if (OB_FALSE_IT(est_cost_info_.logical_query_range_row_count_ = stats_logical_query_range_row_count)) {
     } else if (OB_FAIL(ObOptEstCost::cost_table(est_cost_info_,
@@ -5826,9 +5829,11 @@ int AccessPath::estimate_cost()
     } else {
       double rate = opt_stats_cost_percent * 1.0 / 100.0;
       cost_ = storage_est_cost * (1-rate) + stats_est_cost * rate;
+      OPT_TRACE_COST_MODEL(KV_(cost), "=", KV(storage_est_cost), "* (1-", KV(rate), ") +", KV(stats_est_cost), "*", KV(rate));
       est_cost_info_.phy_query_range_row_count_ = opt_phy_query_range_row_count;
       est_cost_info_.logical_query_range_row_count_ = opt_logical_query_range_row_count;
     }
+    DISABLE_OPT_TRACE_COST_MODEL;
   }
   return ret;
 }

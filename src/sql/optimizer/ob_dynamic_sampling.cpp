@@ -538,7 +538,8 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   }
   LOG_TRACE("go to dynamic sample one time", K(sample_block_ratio_), K(ret),
             K(raw_sql_str), K(max_ds_timeout), K(start_time), K(ObTimeUtility::current_time() - start_time));
-  OPT_TRACE("go to dynamic sample one time", max_ds_timeout, start_time, ObTimeUtility::current_time());
+  OPT_TRACE("dynamic sample cost time:", ObTimeUtility::current_time()-start_time,
+            "us, max sample time:", max_ds_timeout, "us");
   return ret;
 }
 
@@ -622,7 +623,7 @@ int ObDynamicSampling::pack(ObSqlString &raw_sql_str)
     LOG_WARN("failed to build query sql stmt", K(ret));
   } else {
     LOG_TRACE("OptStat: dynamic sampling query sql", K(raw_sql_str));
-    OPT_TRACE("OptStat: dynamic sampling query sql", raw_sql_str.string());
+    OPT_TRACE("dynamic sampling query sql:", raw_sql_str.string());
   }
   return ret;
 }

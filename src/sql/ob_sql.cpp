@@ -3796,6 +3796,8 @@ int ObSql::optimize_stmt(
     LOG_TRACE("logical plan", KPC(logical_plan));
     OPT_TRACE_TIME_USED;
     OPT_TRACE_MEM_USED;
+    OPT_TRACE_TITLE("SYSTEM STATS:");
+    OPT_TRACE(logical_plan->get_optimizer_context().get_system_stat());
     OPT_TRACE(logical_plan);
   }
 
