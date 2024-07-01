@@ -339,6 +339,7 @@ public:
   inline pl::ObPLCtx *get_pl_ctx() { return pl_ctx_; }
   inline void set_pl_ctx(pl::ObPLCtx *pl_ctx) { pl_ctx_ = pl_ctx; }
   pl::ObPLPackageGuard* get_package_guard();
+  int get_package_guard(pl::ObPLPackageGuard *&package_guard);
 
   int init_pl_ctx();
 
