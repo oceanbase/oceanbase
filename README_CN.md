@@ -77,6 +77,12 @@ obd demo
     ```shell
     # 部署一个mini模式实例
     docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d oceanbase/oceanbase-ce
+
+    # 使用 quay.io 仓库的镜像部署 OceanBase.
+    # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d quay.io/oceanbase/oceanbase-ce
+
+    # 使用 ghcr.io 仓库的镜像部署 OceanBase.
+    # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d ghcr.io/oceanbase/oceanbase-ce
     ```
 
 2. 连接 OceanBase
