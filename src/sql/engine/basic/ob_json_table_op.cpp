@@ -2069,7 +2069,7 @@ int JtColNode::process_default_value_pre_mysql(JtScanCtx* ctx)
       LOG_WARN("fail to process empty default value", K(ret), K(dst_type));
     } else if (OB_FAIL(JtFuncHelpler::pre_default_value_check_mysql(ctx, emp_val_, *this))) {
       ret = OB_OPERATE_OVERFLOW;
-      databuff_printf(col_str, OB_MAX_COLUMN_NAME_LENGTH, "%s", col_info_.col_name_.ptr());
+      databuff_printf(col_str, OB_MAX_COLUMN_NAME_LENGTH, 0, "%s", col_info_.col_name_.ptr());
       LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "JSON_TABLE", col_str);
     } else {
       is_emp_evaled_ = true;
