@@ -269,9 +269,6 @@ int ObLobManager::build_tmp_delta_lob_locator(ObIAllocator &allocator,
   if (OB_ISNULL(persist) || !persist->is_persist_lob()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid persist lob locator", K(ret), KPC(persist));
-  } else if (persist->has_inrow_data()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("inrow should not build delta lob", K(ret), KPC(persist));
   } else {
     // calc res len
     uint64_t res_len = ObLobLocatorV2::MEM_LOB_COMMON_HEADER_LEN;
