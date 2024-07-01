@@ -1193,6 +1193,18 @@ int ObGeoExprUtils::check_box_intersects(ObGeometry &geo1, ObGeometry &geo2, ObI
   return ret;
 }
 
+ObGeoConstParamCache::~ObGeoConstParamCache()
+{
+    if (OB_NOT_NULL(cached_param1_)) {
+      cached_param1_->destroy_cache();
+      cached_param1_ = nullptr;
+    }
+    if (OB_NOT_NULL(cached_param2_)) {
+      cached_param2_->destroy_cache();
+      cached_param1_ = nullptr;
+    }
+  }
+
 ObGeometry * ObGeoConstParamCache::get_const_param_cache(int arg_idx)
 {
   ObGeometry * res = nullptr;

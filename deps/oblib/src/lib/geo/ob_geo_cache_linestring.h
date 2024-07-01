@@ -35,6 +35,7 @@ public:
   virtual ObGeoCacheType get_cache_type() { return ObGeoCacheType::GEO_LINESTRING_CACHE;}
   virtual int intersects(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res) override;
   virtual ObLineSegments* get_line_segments() { return &line_segments_; }
+  virtual void destroy_cache() { this->~ObCachedGeoLinestring(); }
 private:
   ObRstarTree<ObLineSegment> rtree_;
   ObLineIntersectionAnalyzer *lAnalyzer_;

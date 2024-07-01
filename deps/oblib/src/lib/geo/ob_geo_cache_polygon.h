@@ -36,7 +36,13 @@ public:
   ring_segments_(&seg_mode_arena, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
   poly_count_(0),
   inited_(false) {}
-  ~ObRingsRtree() {}
+  ~ObRingsRtree() {
+    for (int i = 0; i < rtrees_.size(); ++i) {
+      if (OB_NOT_NULL(rtrees_[i])) {
+        rtrees_[i]->~ObRstarTree();
+      }
+    }
+  }
   int get_ring_strat_idx(int p_idx, int &start, int& end);
   ObRtreeVecArena rtrees_arena_;
   ObIntArena int_arena_;
@@ -71,6 +77,7 @@ public:
   virtual int cover(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res) override;
   virtual ObLineSegments* get_line_segments() { return &line_segments_; }
   virtual ObSegments* get_segments() { return &segments_; }
+  virtual void destroy_cache() {this->~ObCachedGeoPolygon();}
 private:
   int get_farthest_point_position(ObVertexes& vertexes, ObPointLocation& farthest_position, bool& has_point_internal);
   int init_line_analyzer();

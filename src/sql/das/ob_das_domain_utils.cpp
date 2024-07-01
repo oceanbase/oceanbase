@@ -624,19 +624,19 @@ int ObSpatialDMLIterator::get_geo_wkb(
     ObObjMeta &geo_meta) const
 {
   int ret = OB_SUCCESS;
-  const uint64_t geo_col_id = das_ctdef_->table_param_.get_data_table().get_spatial_geo_col_id();
-  const bool has_old_row = !main_ctdef_->old_row_projector_.empty();
-  geo_idx = -1;
-  for (int64_t i = 0; OB_SUCC(ret) && i < main_ctdef_->column_ids_.count() && -1 == geo_idx; ++i) {
-    const int64_t projector_idx = has_old_row ? main_ctdef_->old_row_projector_.at(i) : i;
-    if (geo_col_id == main_ctdef_->column_ids_.at(i)) {
-      if (projector_idx >= store_row->cnt_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid index for sr", K(ret), KPC(store_row), K(i), K(main_ctdef_->old_row_projector_));
-      } else {
-        geo_idx = projector_idx;
-        geo_wkb = store_row->cells()[projector_idx].get_string();
+  const uint64_t rowkey_num = das_ctdef_->table_param_.get_data_table().get_rowkey_column_num();
+  geo_idx = row_projector_->at(rowkey_num);
+  if (geo_idx >= store_row->cnt_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index for sr", K(ret), KPC(store_row), K(row_projector_));
+  } else {
+    geo_wkb = store_row->cells()[geo_idx].get_string();
+    bool found = false;
+    uint64_t geo_col_id = das_ctdef_->table_param_.get_data_table().get_spatial_geo_col_id();
+    for (int64_t i = 0; OB_SUCC(ret) && i < main_ctdef_->column_ids_.count() && !found; ++i) {
+      if (geo_col_id == main_ctdef_->column_ids_.at(i)) {
         geo_meta = main_ctdef_->column_types_.at(i);
+        found = true;
       }
     }
   }
