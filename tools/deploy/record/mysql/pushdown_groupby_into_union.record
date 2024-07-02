@@ -1,0 +1,841 @@
+drop table if exists t1,t2,t3;
+create table t1(c1 int, c2 int);
+create table t2(c1 int, c2 int);
+insert into t1 values(1, 1);
+insert into t1 values(2, 1);
+insert into t1 values(1, 2);
+insert into t1 values(3, 2);
+insert into t1 values(2, 3);
+insert into t1 values(3, 3);
+insert into t1 values(4, 3);
+insert into t1 values(3, 4);
+insert into t2 values(1, 1);
+insert into t2 values(2, 1);
+insert into t2 values(NULL, 1);
+insert into t2 values(1, 2);
+insert into t2 values(3, 2);
+insert into t2 values(2, 3);
+insert into t2 values(3, 3);
+insert into t2 values(4, 3);
+insert into t2 values(NULL, 4);
+create view v as
+(
+select * from t1
+union all
+select * from t2
+);
+create view v_distinct as
+(
+select * from t1
+union
+select * from t2
+);
+select sum(c1), count(c1), c2 from v group by c2;
+sum(c1)	count(c1)	c2
+6	4	1
+8	4	2
+18	6	3
+3	1	4
+select /*+no_rewrite*/ sum(c1), count(c1), c2 from v group by c2;
+sum(c1)	count(c1)	c2
+6	4	1
+8	4	2
+18	6	3
+3	1	4
+explain select sum(c1), count(c1), c2 from v group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY          |    |17      |17          |
+|1 |└─SUBPLAN SCAN         |v   |17      |11          |
+|2 |  └─UNION ALL          |    |17      |11          |
+|3 |    ├─HASH GROUP BY    |    |8       |5           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─HASH GROUP BY    |    |9       |6           |
+|6 |      └─TABLE FULL SCAN|t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)], [.c2]), filter(nil), rowset=16
+      group([.c2]), agg_func([T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)])
+  1 - output([.c1], [.c1], [.c2]), filter(nil), rowset=16
+      access([.c1], [.c1], [.c2])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  3 - output([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [t1.c2]), filter(nil), rowset=16
+      group([t1.c2]), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)])
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)], [t2.c2]), filter(nil), rowset=16
+      group([t2.c2]), agg_func([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
+  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select min(c1), max(c1), c2 from v group by c2;
+min(c1)	max(c1)	c2
+1	2	1
+1	3	2
+2	4	3
+3	3	4
+select /*+no_rewrite*/ min(c1), max(c1), c2 from v group by c2;
+min(c1)	max(c1)	c2
+1	2	1
+1	3	2
+2	4	3
+3	3	4
+explain select min(c1), max(c1), c2 from v group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY          |    |17      |16          |
+|1 |└─SUBPLAN SCAN         |v   |17      |11          |
+|2 |  └─UNION ALL          |    |17      |11          |
+|3 |    ├─HASH GROUP BY    |    |8       |5           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─HASH GROUP BY    |    |9       |6           |
+|6 |      └─TABLE FULL SCAN|t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)], [.c2]), filter(nil), rowset=16
+      group([.c2]), agg_func([T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)])
+  1 - output([.c1], [.c1], [.c2]), filter(nil), rowset=16
+      access([.c1], [.c1], [.c2])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  3 - output([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)], [t1.c2]), filter(nil), rowset=16
+      group([t1.c2]), agg_func([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)])
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)], [t2.c2]), filter(nil), rowset=16
+      group([t2.c2]), agg_func([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)])
+  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+min(c1)	max(c1)	sum(c1)	count(c1)	c2
+1	2	6	4	1
+1	3	8	4	2
+2	4	18	6	3
+3	3	3	1	4
+select /*+no_rewrite*/ min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+min(c1)	max(c1)	sum(c1)	count(c1)	c2
+1	2	6	4	1
+1	3	8	4	2
+2	4	18	6	3
+3	3	3	1	4
+explain select min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY          |    |17      |19          |
+|1 |└─SUBPLAN SCAN         |v   |17      |11          |
+|2 |  └─UNION ALL          |    |17      |11          |
+|3 |    ├─HASH GROUP BY    |    |8       |6           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─HASH GROUP BY    |    |9       |6           |
+|6 |      └─TABLE FULL SCAN|t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)], [T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)], [.c2]), filter(nil), rowset=16
+      group([.c2]), agg_func([T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)], [T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)])
+  1 - output([.c1], [.c1], [.c1], [.c1], [.c2]), filter(nil), rowset=16
+      access([.c1], [.c1], [.c1], [.c1], [.c2])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])]), filter(nil), rowset=16
+  3 - output([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [t1.c2]), filter(nil), rowset=16
+      group([t1.c2]), agg_func([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)])
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)], [T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)], [t2.c2]), filter(nil), rowset=16
+      group([t2.c2]), agg_func([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)], [T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
+  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select avg(c1), min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+avg(c1)	min(c1)	max(c1)	sum(c1)	count(c1)	c2
+1.5000	1	2	6	4	1
+2.0000	1	3	8	4	2
+3.0000	2	4	18	6	3
+3.0000	3	3	3	1	4
+select /*+no_rewrite*/ avg(c1), min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+avg(c1)	min(c1)	max(c1)	sum(c1)	count(c1)	c2
+1.5000	1	2	6	4	1
+2.0000	1	3	8	4	2
+3.0000	2	4	18	6	3
+3.0000	3	3	3	1	4
+explain select avg(c1), min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY          |    |17      |19          |
+|1 |└─SUBPLAN SCAN         |v   |17      |11          |
+|2 |  └─UNION ALL          |    |17      |11          |
+|3 |    ├─HASH GROUP BY    |    |8       |6           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─HASH GROUP BY    |    |9       |6           |
+|6 |      └─TABLE FULL SCAN|t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(cast(T_FUN_SUM(.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(.c1), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)],
+       [T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)], [.c2]), filter(nil), rowset=16
+      group([.c2]), agg_func([T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)], [T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)])
+  1 - output([.c1], [.c1], [.c1], [.c1], [.c2]), filter(nil), rowset=16
+      access([.c1], [.c1], [.c1], [.c1], [.c2])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])]), filter(nil), rowset=16
+  3 - output([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [t1.c2]), filter(nil), rowset=16
+      group([t1.c2]), agg_func([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)])
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)], [T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)], [t2.c2]), filter(nil), rowset=16
+      group([t2.c2]), agg_func([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)], [T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
+  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select avg(c1), min(c1), max(c1), sum(c1), count(c1), count(*), c2 from v group by c2;
+avg(c1)	min(c1)	max(c1)	sum(c1)	count(c1)	count(*)	c2
+1.5000	1	2	6	4	5	1
+2.0000	1	3	8	4	4	2
+3.0000	2	4	18	6	6	3
+3.0000	3	3	3	1	2	4
+select /*+no_rewrite*/ avg(c1), min(c1), max(c1), sum(c1), count(c1), count(*), c2 from v group by c2;
+avg(c1)	min(c1)	max(c1)	sum(c1)	count(c1)	count(*)	c2
+1.5000	1	2	6	4	5	1
+2.0000	1	3	8	4	4	2
+3.0000	2	4	18	6	6	3
+3.0000	3	3	3	1	2	4
+explain select avg(c1), min(c1), max(c1), sum(c1), count(c1), count(*), c2 from v group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY          |    |17      |20          |
+|1 |└─SUBPLAN SCAN         |v   |17      |12          |
+|2 |  └─UNION ALL          |    |17      |12          |
+|3 |    ├─HASH GROUP BY    |    |8       |6           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─HASH GROUP BY    |    |9       |6           |
+|6 |      └─TABLE FULL SCAN|t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(cast(T_FUN_SUM(.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(.c1), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)],
+       [T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)], [.c2]), filter(nil), rowset=16
+      group([.c2]), agg_func([T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)], [T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)])
+  1 - output([.c1], [.c1], [.c1], [.c1], [.c1], [.c2]), filter(nil), rowset=16
+      access([.c1], [.c1], [.c1], [.c1], [.c1], [.c2])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])]), filter(nil), rowset=16
+  3 - output([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_COUNT(*)], [t1.c2]), filter(nil), rowset=16
+      group([t1.c2]), agg_func([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_COUNT(*)])
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)], [T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)], [T_FUN_COUNT(*)], [t2.c2]), filter(nil), rowset=16
+      group([t2.c2]), agg_func([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)], [T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)], [T_FUN_COUNT(*)])
+  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1), count(c1), c2 from v_distinct group by c2;
+sum(c1)	count(c1)	c2
+3	2	1
+4	2	2
+9	3	3
+3	1	4
+select /*+no_rewrite*/ sum(c1), count(c1), c2 from v_distinct group by c2;
+sum(c1)	count(c1)	c2
+3	2	1
+4	2	2
+9	3	3
+3	1	4
+explain select sum(c1), count(c1), c2 from v_distinct group by c2;
+Query Plan
+=============================================================
+|ID|OPERATOR               |NAME      |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |HASH GROUP BY          |          |17      |15          |
+|1 |└─SUBPLAN SCAN         |v_distinct|17      |10          |
+|2 |  └─HASH UNION DISTINCT|          |17      |10          |
+|3 |    ├─TABLE FULL SCAN  |t1        |8       |3           |
+|4 |    └─TABLE FULL SCAN  |t2        |9       |3           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v_distinct.c1)], [T_FUN_COUNT(v_distinct.c1)], [v_distinct.c2]), filter(nil), rowset=16
+      group([v_distinct.c2]), agg_func([T_FUN_SUM(v_distinct.c1)], [T_FUN_COUNT(v_distinct.c1)])
+  1 - output([v_distinct.c1], [v_distinct.c2]), filter(nil), rowset=16
+      access([v_distinct.c1], [v_distinct.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select min(c1), max(c1), c2 from v_distinct group by c2;
+min(c1)	max(c1)	c2
+1	2	1
+1	3	2
+2	4	3
+3	3	4
+select /*+no_rewrite*/ min(c1), max(c1), c2 from v_distinct group by c2;
+min(c1)	max(c1)	c2
+1	2	1
+1	3	2
+2	4	3
+3	3	4
+explain select min(c1), max(c1), c2 from v_distinct group by c2;
+Query Plan
+===============================================================
+|ID|OPERATOR                 |NAME      |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY           |          |17      |13          |
+|1 |└─SUBPLAN SCAN           |v_distinct|17      |11          |
+|2 |  └─MERGE UNION DISTINCT |          |17      |11          |
+|3 |    ├─MERGE GROUP BY     |          |8       |5           |
+|4 |    │ └─SORT             |          |8       |4           |
+|5 |    │   └─TABLE FULL SCAN|t1        |8       |3           |
+|6 |    └─MERGE GROUP BY     |          |9       |5           |
+|7 |      └─SORT             |          |9       |4           |
+|8 |        └─TABLE FULL SCAN|t2        |9       |3           |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)], [.c2]), filter(nil), rowset=16
+      group([.c2]), agg_func([T_FUN_MIN(.c1)], [T_FUN_MAX(.c1)])
+  1 - output([.c1], [.c1], [.c2]), filter(nil), rowset=16
+      access([.c1], [.c1], [.c2])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  3 - output([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)], [t1.c2]), filter(nil), rowset=16
+      group([t1.c2]), agg_func([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)])
+  4 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
+      sort_keys([t1.c2, ASC])
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)], [t2.c2]), filter(nil), rowset=16
+      group([t2.c2]), agg_func([T_FUN_MIN(t2.c1)], [T_FUN_MAX(t2.c1)])
+  7 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      sort_keys([t2.c2, ASC])
+  8 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1), count(c1), min(c1), max(c1), c2 from v_distinct group by c2;
+sum(c1)	count(c1)	min(c1)	max(c1)	c2
+3	2	1	2	1
+4	2	1	3	2
+9	3	2	4	3
+3	1	3	3	4
+select /*+no_rewrite*/ sum(c1), count(c1), min(c1), max(c1), c2 from v_distinct group by c2;
+sum(c1)	count(c1)	min(c1)	max(c1)	c2
+3	2	1	2	1
+4	2	1	3	2
+9	3	2	4	3
+3	1	3	3	4
+explain select sum(c1), count(c1), min(c1), max(c1), c2 from v_distinct group by c2;
+Query Plan
+=============================================================
+|ID|OPERATOR               |NAME      |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |HASH GROUP BY          |          |17      |16          |
+|1 |└─SUBPLAN SCAN         |v_distinct|17      |10          |
+|2 |  └─HASH UNION DISTINCT|          |17      |10          |
+|3 |    ├─TABLE FULL SCAN  |t1        |8       |3           |
+|4 |    └─TABLE FULL SCAN  |t2        |9       |3           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v_distinct.c1)], [T_FUN_COUNT(v_distinct.c1)], [T_FUN_MIN(v_distinct.c1)], [T_FUN_MAX(v_distinct.c1)], [v_distinct.c2]), filter(nil), rowset=16
+      group([v_distinct.c2]), agg_func([T_FUN_SUM(v_distinct.c1)], [T_FUN_COUNT(v_distinct.c1)], [T_FUN_MIN(v_distinct.c1)], [T_FUN_MAX(v_distinct.c1)])
+  1 - output([v_distinct.c1], [v_distinct.c2]), filter(nil), rowset=16
+      access([v_distinct.c1], [v_distinct.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(distinct c1), c2 from v group by c2;
+sum(distinct c1)	c2
+4	2
+3	1
+3	4
+9	3
+select /*+no_rewrite*/ sum(distinct c1), c2 from v group by c2;
+sum(distinct c1)	c2
+4	2
+3	1
+3	4
+9	3
+explain select sum(distinct c1), c2 from v group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |MERGE GROUP BY         |    |17      |10          |
+|1 |└─PARTITION SORT       |    |17      |8           |
+|2 |  └─SUBPLAN SCAN       |v   |17      |6           |
+|3 |    └─UNION ALL        |    |17      |6           |
+|4 |      ├─TABLE FULL SCAN|t1  |8       |3           |
+|5 |      └─TABLE FULL SCAN|t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(distinct v.c1)], [v.c2]), filter(nil), rowset=16
+      group([v.c2]), agg_func([T_FUN_SUM(distinct v.c1)])
+  1 - output([v.c2], [v.c1]), filter(nil), rowset=16
+      sort_keys([HASH(v.c2), ASC], [v.c2, ASC])
+  2 - output([v.c1], [v.c2]), filter(nil), rowset=16
+      access([v.c1], [v.c2])
+  3 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1) from (select * from t1 union all select * from t2 order by c2 limit 3) as v_order_limit;
+sum(c1)
+4
+select /*+no_rewrite*/ sum(c1) from (select * from t1 union all select * from t2 order by c2 limit 3) as v_order_limit;
+sum(c1)
+4
+explain select sum(c1) from (select * from t1 union all select * from t2 order by c2 limit 3) as v_order_limit;
+Query Plan
+==================================================================
+|ID|OPERATOR                 |NAME         |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SCALAR GROUP BY          |             |1       |7           |
+|1 |└─SUBPLAN SCAN           |v_order_limit|3       |6           |
+|2 |  └─TOP-N SORT           |             |3       |6           |
+|3 |    └─UNION ALL          |             |6       |6           |
+|4 |      ├─TOP-N SORT       |             |3       |3           |
+|5 |      │ └─TABLE FULL SCAN|t1           |8       |3           |
+|6 |      └─TOP-N SORT       |             |3       |3           |
+|7 |        └─TABLE FULL SCAN|t2           |9       |3           |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v_order_limit.c1)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(v_order_limit.c1)])
+  1 - output([v_order_limit.c1]), filter(nil), rowset=16
+      access([v_order_limit.c1])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+      sort_keys([UNION([2]), ASC]), topn(3)
+  3 - output([UNION([2])], [UNION([1])]), filter(nil), rowset=16
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      sort_keys([t1.c2, ASC]), topn(3)
+  5 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      sort_keys([t2.c2, ASC]), topn(3)
+  7 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1), count(*), min(c2), max(c1), avg(c2) from v;
+sum(c1)	count(*)	min(c2)	max(c1)	avg(c2)
+35	17	1	4	2.2941
+select /*+no_rewrite*/ sum(c1), count(*), min(c2), max(c1), avg(c2) from v;
+sum(c1)	count(*)	min(c2)	max(c1)	avg(c2)
+35	17	1	4	2.2941
+explain select sum(c1), count(*), min(c2), max(c1), avg(c2) from v;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SCALAR GROUP BY        |    |1       |7           |
+|1 |└─SUBPLAN SCAN         |v   |2       |7           |
+|2 |  └─UNION ALL          |    |2       |7           |
+|3 |    ├─SCALAR GROUP BY  |    |1       |4           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─SCALAR GROUP BY  |    |1       |4           |
+|6 |      └─TABLE FULL SCAN|t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)], [T_FUN_MIN(.c2)], [T_FUN_MAX(.c1)], [cast(cast(T_FUN_SUM(.c2), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(.c2),
+       DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(.c1)], [T_FUN_COUNT_SUM(.c1)], [T_FUN_MIN(.c2)], [T_FUN_MAX(.c1)], [T_FUN_SUM(.c2)], [T_FUN_COUNT_SUM(.c2)])
+  1 - output([.c1], [.c1], [.c2], [.c1], [.c2], [.c2]), filter(nil), rowset=16
+      access([.c1], [.c1], [.c2], [.c1], [.c2], [.c2])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])]), filter(nil), rowset=16
+  3 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))], [T_FUN_MIN(T_FUN_MIN(t1.c2))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))],
+       [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))], [T_FUN_MIN(T_FUN_MIN(t1.c2))], [T_FUN_MAX(T_FUN_MAX(t1.c1))],
+       [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))])
+  4 - output([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(*)], [T_FUN_MIN(t1.c2)], [T_FUN_MAX(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(*)], [T_FUN_MIN(t1.c2)], [T_FUN_MAX(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)])
+  5 - output([T_FUN_SUM(T_FUN_SUM(t2.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))], [T_FUN_MIN(T_FUN_MIN(t2.c2))], [T_FUN_MAX(T_FUN_MAX(t2.c1))], [T_FUN_SUM(T_FUN_SUM(t2.c2))],
+       [T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))], [T_FUN_MIN(T_FUN_MIN(t2.c2))], [T_FUN_MAX(T_FUN_MAX(t2.c1))],
+       [T_FUN_SUM(T_FUN_SUM(t2.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))])
+  6 - output([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(*)], [T_FUN_MIN(t2.c2)], [T_FUN_MAX(t2.c1)], [T_FUN_SUM(t2.c2)], [T_FUN_COUNT(t2.c2)]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(*)], [T_FUN_MIN(t2.c2)], [T_FUN_MAX(t2.c1)], [T_FUN_SUM(t2.c2)], [T_FUN_COUNT(t2.c2)])
+select sum(c1), c1, c2 from v group by c2;
+sum(c1)	c1	c2
+6	1	1
+8	1	2
+18	2	3
+3	3	4
+select /*+no_rewrite*/ sum(c1), c1, c2 from v group by c2;
+sum(c1)	c1	c2
+6	1	1
+8	1	2
+18	2	3
+3	3	4
+explain select sum(c1), c1, c2 from v group by c2;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |HASH GROUP BY        |    |17      |11          |
+|1 |└─SUBPLAN SCAN       |v   |17      |6           |
+|2 |  └─UNION ALL        |    |17      |6           |
+|3 |    ├─TABLE FULL SCAN|t1  |8       |3           |
+|4 |    └─TABLE FULL SCAN|t2  |9       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v.c1)], [v.c1], [v.c2]), filter(nil), rowset=16
+      group([v.c2]), agg_func([T_FUN_SUM(v.c1)])
+  1 - output([v.c1], [v.c2]), filter(nil), rowset=16
+      access([v.c1], [v.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1 + c2), count(c1 / c2) from v;
+sum(c1 + c2)	count(c1 / c2)
+69	15
+select /*+no_rewrite*/ sum(c1 + c2), count(c1 / c2) from v;
+sum(c1 + c2)	count(c1 / c2)
+69	15
+explain select sum(c1 + c2), count(c1 / c2) from v;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SCALAR GROUP BY      |    |1       |6           |
+|1 |└─SUBPLAN SCAN       |v   |17      |6           |
+|2 |  └─UNION ALL        |    |17      |6           |
+|3 |    ├─TABLE FULL SCAN|t1  |8       |3           |
+|4 |    └─TABLE FULL SCAN|t2  |9       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v.c1 + v.c2)], [T_FUN_COUNT(cast(v.c1, DECIMAL(11, 0)) / cast(v.c2, DECIMAL(11, 0)))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(v.c1 + v.c2)], [T_FUN_COUNT(cast(v.c1, DECIMAL(11, 0)) / cast(v.c2, DECIMAL(11, 0)))])
+  1 - output([v.c1], [v.c2]), filter(nil), rowset=16
+      access([v.c1], [v.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select * from t2) v2 group by c2;
+sum(c1)	c2
+5	2
+13	3
+12	5
+9	6
+24	7
+3	1
+NULL	4
+select /*+no_rewrite*/ sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select * from t2) v2 group by c2;
+sum(c1)	c2
+5	2
+13	3
+12	5
+9	6
+24	7
+3	1
+NULL	4
+explain select sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select * from t2) v2 group by c2;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |HASH GROUP BY        |    |17      |11          |
+|1 |└─SUBPLAN SCAN       |v2  |17      |6           |
+|2 |  └─UNION ALL        |    |17      |6           |
+|3 |    ├─TABLE FULL SCAN|t1  |8       |3           |
+|4 |    └─TABLE FULL SCAN|t2  |9       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v2.c1)], [v2.c2]), filter(nil), rowset=16
+      group([v2.c2]), agg_func([T_FUN_SUM(v2.c1)])
+  1 - output([v2.c1], [v2.c2]), filter(nil), rowset=16
+      access([v2.c1], [v2.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([t1.c1 * t1.c2], [t1.c1 + t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([cast(t2.c1, BIGINT(20, 0))], [cast(t2.c2, BIGINT(20, 0))]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+sum(c1)	c2
+22	1
+4	2
+9	3
+NULL	4
+select /*+no_rewrite*/ sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+sum(c1)	c2
+22	1
+4	2
+9	3
+NULL	4
+explain select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY          |    |10      |9           |
+|1 |└─SUBPLAN SCAN         |v2  |10      |6           |
+|2 |  └─UNION ALL          |    |10      |6           |
+|3 |    ├─SCALAR GROUP BY  |    |1       |3           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─TABLE FULL SCAN  |t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v2.c1)], [v2.c2]), filter(nil), rowset=16
+      group([v2.c2]), agg_func([T_FUN_SUM(v2.c1)])
+  1 - output([v2.c1], [v2.c2]), filter(nil), rowset=16
+      access([v2.c1], [v2.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [1]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t1.c1))])
+  4 - output([T_FUN_SUM(t1.c1)]), filter(nil), rowset=16
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t1.c1)])
+  5 - output([cast(t2.c1, DECIMAL_INT(33, 0))], [cast(t2.c2, BIGINT(20, 0))]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select c1 + c2, c1 * c2 from t2) v2 group by c2;
+sum(c1)	c2
+7	2
+4	3
+12	5
+19	6
+24	7
+2	1
+NULL	NULL
+6	9
+7	12
+select /*+no_rewrite*/ sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select c1 + c2, c1 * c2 from t2) v2 group by c2;
+sum(c1)	c2
+7	2
+4	3
+12	5
+19	6
+24	7
+2	1
+NULL	NULL
+6	9
+7	12
+explain select sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select c1 + c2, c1 * c2 from t2) v2 group by c2;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |HASH GROUP BY        |    |17      |11          |
+|1 |└─SUBPLAN SCAN       |v2  |17      |6           |
+|2 |  └─UNION ALL        |    |17      |6           |
+|3 |    ├─TABLE FULL SCAN|t1  |8       |3           |
+|4 |    └─TABLE FULL SCAN|t2  |9       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v2.c1)], [v2.c2]), filter(nil), rowset=16
+      group([v2.c2]), agg_func([T_FUN_SUM(v2.c1)])
+  1 - output([v2.c1], [v2.c2]), filter(nil), rowset=16
+      access([v2.c1], [v2.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([t1.c1 * t1.c2], [t1.c1 + t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t2.c1 + t2.c2], [t2.c1 * t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1), c2 from ( (select * from t1) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+sum(c1)	c2
+3	1
+4	2
+9	3
+3	4
+select /*+no_rewrite*/ sum(c1), c2 from ( (select * from t1) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+sum(c1)	c2
+3	1
+4	2
+9	3
+3	4
+explain select sum(c1), c2 from ( (select * from t1) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY          |    |10      |11          |
+|1 |└─SUBPLAN SCAN         |v2  |10      |8           |
+|2 |  └─UNION ALL          |    |10      |8           |
+|3 |    ├─HASH GROUP BY    |    |8       |5           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─TOP-N SORT       |    |2       |3           |
+|6 |      └─TABLE FULL SCAN|t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v2.c1)], [v2.c2]), filter(nil), rowset=16
+      group([v2.c2]), agg_func([T_FUN_SUM(v2.c1)])
+  1 - output([v2.c1], [v2.c2]), filter(nil), rowset=16
+      access([v2.c1], [v2.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([T_FUN_SUM(t1.c1)], [t1.c2]), filter(nil), rowset=16
+      group([t1.c2]), agg_func([T_FUN_SUM(t1.c1)])
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([cast(t2.c1, DECIMAL_INT(33, 0))], [t2.c2]), filter(nil), rowset=16
+      sort_keys([t2.c1, ASC]), topn(2)
+  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+sum(c1)	c2
+3	1
+4	2
+9	3
+3	4
+select /*+no_rewrite*/ sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+sum(c1)	c2
+3	1
+4	2
+9	3
+3	4
+explain select sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY          |    |10      |11          |
+|1 |└─SUBPLAN SCAN         |v2  |10      |8           |
+|2 |  └─UNION ALL          |    |10      |8           |
+|3 |    ├─HASH GROUP BY    |    |8       |5           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─TOP-N SORT       |    |2       |3           |
+|6 |      └─TABLE FULL SCAN|t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v2.c1)], [v2.c2]), filter(nil), rowset=16
+      group([v2.c2]), agg_func([T_FUN_SUM(v2.c1)])
+  1 - output([v2.c1], [v2.c2]), filter(nil), rowset=16
+      access([v2.c1], [v2.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([T_FUN_SUM(t1.c1)], [t1.c2]), filter(nil), rowset=16
+      group([t1.c2]), agg_func([T_FUN_SUM(t1.c1)])
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([cast(t2.c1, DECIMAL_INT(33, 0))], [t2.c2]), filter(nil), rowset=16
+      sort_keys([t2.c1, ASC]), topn(2)
+  6 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+sum(c1)	c2
+22	1
+4	2
+9	3
+NULL	4
+select /*+no_rewrite*/ sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+sum(c1)	c2
+22	1
+4	2
+9	3
+NULL	4
+explain select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY          |    |10      |9           |
+|1 |└─SUBPLAN SCAN         |v2  |10      |6           |
+|2 |  └─UNION ALL          |    |10      |6           |
+|3 |    ├─SCALAR GROUP BY  |    |1       |3           |
+|4 |    │ └─TABLE FULL SCAN|t1  |8       |3           |
+|5 |    └─TABLE FULL SCAN  |t2  |9       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(v2.c1)], [v2.c2]), filter(nil), rowset=16
+      group([v2.c2]), agg_func([T_FUN_SUM(v2.c1)])
+  1 - output([v2.c1], [v2.c2]), filter(nil), rowset=16
+      access([v2.c1], [v2.c2])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
+  3 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [1]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t1.c1))])
+  4 - output([T_FUN_SUM(t1.c1)]), filter(nil), rowset=16
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t1.c1)])
+  5 - output([cast(t2.c1, DECIMAL_INT(33, 0))], [cast(t2.c2, BIGINT(20, 0))]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
