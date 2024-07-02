@@ -1139,7 +1139,7 @@ int ObTableParam::construct_columns_and_projector(
   }
   LOG_DEBUG("Generated main read info", K_(main_read_info));
   read_param_version_ = ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE;
-  if (OB_SUCC(ret) && is_cs && tmp_cg_idxs.count() <= ObCGReadInfo::LOCAL_MAX_CG_READ_INFO_CNT) {
+  if (OB_SUCC(ret) && is_cs && tmp_cg_idxs.count() <= ObCGReadInfo::get_local_max_cg_cnt()) {
     // construct cg read infos
     int64_t cg_cnt = tmp_cg_idxs.count();
     void *tmp_ptr  = nullptr;
